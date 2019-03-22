@@ -1,0 +1,12 @@
+#!/usr/bin/env bash
+
+set -e
+
+function clean {
+  docker rmi $(cat $iidfile)
+}
+
+iidfile=$(mktemp -t docker-iidfile.XXXXXXXXXX)
+docker build --iidfile $iidfile --target demo-env .
+trap clean EXIT
+docker run -it --privileged --rm $(cat $iidfile)
