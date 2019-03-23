@@ -29,6 +29,9 @@ RUN --mount=target=. --mount=target=/root/.cache,type=cache \
   set -x; go build -ldflags "$(cat /tmp/.ldflags)" -o /usr/bin/buildx ./cmd/buildx && \
   file /usr/bin/buildx && file /usr/bin/buildx | egrep "statically linked|Mach-O|Windows"
 
+FROM buildx-build AS integration-tests
+COPY . .
+
 FROM golang:1.12-alpine AS docker-cli-build
 RUN apk add -U git bash coreutils gcc musl-dev
 ENV CGO_ENABLED=0

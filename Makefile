@@ -14,10 +14,13 @@ install: binaries
 lint:
 	./hack/lint
 
+test:
+	./hack/test
+
 validate-vendor:
 	./hack/validate-vendor
 	
-validate-all: lint validate-vendor
+validate-all: lint test validate-vendor
 
 vendor:
 	./hack/update-vendor
