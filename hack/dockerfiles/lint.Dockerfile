@@ -5,6 +5,6 @@ RUN  apk add --no-cache git
 RUN  go get -u gopkg.in/alecthomas/gometalinter.v1 \
   && mv /go/bin/gometalinter.v1 /go/bin/gometalinter \
   && gometalinter --install
-WORKDIR /go/src/github.com/moby/buildkit
+WORKDIR /go/src/github.com/tonistiigi/buildx
 RUN --mount=target=/go/src/github.com/tonistiigi/buildx \
 	gometalinter --config=gometalinter.json ./...

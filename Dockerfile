@@ -10,7 +10,7 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:golang@sha256:6f7d999551dd471b58f70
 
 FROM --platform=$BUILDPLATFORM golang:1.12-alpine AS gobase
 COPY --from=xgo / /
-RUN apk add --no-cache file
+RUN apk add --no-cache file git
 ENV GOFLAGS=-mod=vendor
 WORKDIR /src
 
