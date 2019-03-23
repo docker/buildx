@@ -14,7 +14,12 @@ install: binaries
 lint:
 	./hack/lint
 
+validate-vendor:
+	./hack/validate-vendor
+	
+validate-all: lint validate-vendor
+
 vendor:
 	./hack/update-vendor
 
-.PHONY: vendor lint shell binaries install
+.PHONY: vendor lint shell binaries install binaries-cross validate-all
