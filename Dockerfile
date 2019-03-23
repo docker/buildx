@@ -38,6 +38,17 @@ WORKDIR /go/src/github.com/docker/cli
 RUN git clone git://$REPO . && git checkout $BRANCH
 RUN ./scripts/build/binary
 
+FROM scratch AS binaries-unix
+COPY --from=buildx-build /usr/bin/buildx /
+
+FROM binaries-unix AS binaries-darwin
+FROM binaries-unix AS binaries-linux
+
+FROM scratch AS binaries-windows
+COPY --from=buildx-build /usr/bin/buildx /buildx.exe
+
+FROM binaries-$TARGETOS AS binaries
+
 FROM alpine AS demo-env
 RUN apk add --no-cache iptables tmux
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
@@ -45,6 +56,6 @@ COPY ./hack/demo-env/entrypoint.sh /usr/local/bin
 COPY ./hack/demo-env/tmux.conf /root/.tmux.conf
 COPY --from=dockerd-release /usr/local/bin /usr/local/bin
 COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /usr/local/bin
-COPY --from=buildx-build /usr/bin/buildx /usr/local/bin/
+COPY --from=binaries / /usr/local/bin/
 VOLUME /var/lib/docker
 ENTRYPOINT ["entrypoint.sh"]

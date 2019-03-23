@@ -2,6 +2,7 @@
 
 : ${PREFER_BUILDCTL=}
 : ${PREFER_LEGACY=}
+: ${CLI_PLATFORM=}
 
 newerEqualThan() { # $1=minimum wanted version $2=actual-version
   [ "$1" = "$(printf "$1\n$2" | sort -V | head -n 1)" ]
@@ -19,3 +20,13 @@ else
     buildmode="docker-buildkit";
   fi
 fi
+
+if [ -z "$CLI_PLATFORM" ]; then
+	rawos=$(uname -s)
+	if [ "$rawos" = "Darwin" ]; then
+		CLI_PLATFORM="darwin/amd64"
+	elif uname -s | grep MINGW 2>&1 >/dev/null ; then
+		CLI_PLATFORM="windows/amd64"
+	fi
+fi
+
