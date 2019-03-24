@@ -1,0 +1,53 @@
+#!/usr/bin/env bash
+
+. $(dirname $0)/util
+set -eu -o pipefail
+
+: ${CONTINUOUS_INTEGRATION=}
+: ${BUILDX_NOCACHE=}
+
+progressFlag=""
+if [ "$CONTINUOUS_INTEGRATION" == "true" ]; then progressFlag="--progress=plain"; fi
+
+iid="buildx-tests"
+iidfile=$(mktemp -t docker-iidfile.XXXXXXXXXX)
+set -x
+
+case $buildmode in
+"buildkit")
+  tmpfile=$(mktemp -t docker-iidfile.XXXXXXXXXX)
+  buildctl build $progressFlag --frontend=dockerfile.v0 \
+    --local context=. --local dockerfile=. \
+    --frontend-opt target=integration-tests \
+    --output type=docker,name=$iid,dest=$tmpfile
+  docker load -i $tmpfile
+  rm $tmpfile
+  ;;
+"docker-buildkit")
+  export DOCKER_BUILDKIT=1
+  docker build --iidfile $iidfile --target integration-tests --force-rm .
+  iid=$(cat $iidfile)
+  ;;
+*)
+  echo "docker with buildkit support is required"
+  exit 1
+  ;;
+esac
+
+cacheVolume="buildx-cache"
+if ! docker inspect "$cacheVolume" 2>&1 >/dev/null ; then
+cacheVolume=$(docker create --name=buildx-cache -v /root/.cache -v /go/pkg/mod alpine)
+fi
+
+docker run --rm -v /tmp --volumes-from=$cacheVolume --privileged $iid go test ${TESTFLAGS:--v} ${TESTPKGS:-./...}
+
+if [ -n "$BUILDX_NOCACHE" ]; then
+  docker rm -v $cacheVolume
+fi
+
+case $buildmode in
+"docker-buildkit")
+  rm "$iidfile"
+  docker rmi $iid
+  ;;
+esac
