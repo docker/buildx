@@ -8,6 +8,9 @@ import (
 	"github.com/pkg/errors"
 )
 
+var ErrNotRunning = errors.Errorf("driver not running")
+var ErrNotConnecting = errors.Errorf("driver not connection")
+
 type Logger func(*client.SolveStatus)
 
 type Status int
@@ -25,12 +28,10 @@ type Info struct {
 	Platforms []specs.Platform
 }
 
-var ErrNotRunning = errors.Errorf("driver not running")
-
 type Driver interface {
 	Bootstrap(context.Context, Logger) error
 	Info(context.Context) (Info, error)
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force bool) error
-	Client() (client.Client, error)
+	Client() (*client.Client, error)
 }
