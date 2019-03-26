@@ -94,7 +94,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.Exports = outputs
 
-	d, err := driver.GetDriver(ctx, "buildkit.default", nil, dockerCli.Client())
+	d, err := driver.GetDriver(ctx, "buildx-buildkit-default", nil, dockerCli.Client())
 	if err != nil {
 		return err
 	}

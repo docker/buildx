@@ -60,10 +60,6 @@ COPY ./hack/demo-env/tmux.conf /root/.tmux.conf
 COPY --from=dockerd-release /usr/local/bin /usr/local/bin
 COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /usr/local/bin
 
-# Temporary buildkitd binaries. To be removed.
-COPY --from=moby/buildkit /usr/bin/build* /usr/local/bin
-VOLUME /var/lib/buildkit
-
 WORKDIR /work
 COPY ./hack/demo-env/examples .
 COPY --from=binaries / /usr/local/bin/
