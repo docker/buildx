@@ -15,6 +15,7 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/buildx/driver"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -40,7 +41,20 @@ type Inputs struct {
 	InStream       io.Reader
 }
 
-func Build(ctx context.Context, c *client.Client, opt Options, pw *ProgressWriter) (*client.SolveResponse, error) {
+func Build(ctx context.Context, drivers []driver.Driver, opt Options, pw *ProgressWriter) (*client.SolveResponse, error) {
+	if len(drivers) == 0 {
+		return nil, errors.Errorf("driver required for build")
+	}
+
+	if len(drivers) > 1 {
+		return nil, errors.Errorf("multiple drivers currently not supported")
+	}
+
+	c, err := driver.Boot(ctx, drivers[0], pw.Status())
+	if err != nil {
+		return nil, err
+	}
+
 	so := client.SolveOpt{
 		Frontend:      "dockerfile.v0",
 		FrontendAttrs: map[string]string{},
@@ -142,6 +156,9 @@ func (pw *ProgressWriter) Err() error {
 }
 
 func (pw *ProgressWriter) Status() chan *client.SolveStatus {
+	if pw == nil {
+		return nil
+	}
 	return pw.status
 }
 

@@ -37,7 +37,7 @@ func Register(f Factory) {
 	drivers[f.Name()] = f
 }
 
-func GetDefaultDriver() (Factory, error) {
+func GetDefaultFactory() (Factory, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("no drivers available")
 	}
@@ -53,4 +53,18 @@ func GetDefaultDriver() (Factory, error) {
 		return dd[i].priority < dd[j].priority
 	})
 	return dd[0].f, nil
+}
+
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient) (Driver, error) {
+	if f == nil {
+		var err error
+		f, err = GetDefaultFactory()
+		if err != nil {
+			return nil, err
+		}
+	}
+	return f.New(ctx, InitConfig{
+		Name:      name,
+		DockerAPI: api,
+	})
 }

@@ -7,12 +7,11 @@ import (
 
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
-	bkappdefaults "github.com/moby/buildkit/util/appdefaults"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/buildx/build"
+	"github.com/tonistiigi/buildx/driver"
 )
 
 type buildOptions struct {
@@ -94,8 +93,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.Exports = outputs
 
-	// TODO: temporary
-	c, err := client.New(ctx, bkappdefaults.Address, client.WithFailFast())
+	d, err := driver.GetDriver(ctx, "buildkit.default", nil, dockerCli.Client())
 	if err != nil {
 		return err
 	}
@@ -104,7 +102,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	defer cancel()
 	pw := build.NewProgressWriter(ctx2, os.Stderr, in.progress)
 
-	_, err = build.Build(ctx, c, opts, pw)
+	_, err = build.Build(ctx, []driver.Driver{d}, opts, pw)
 
 	return err
 }

@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/moby/buildkit/client"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -24,14 +23,47 @@ const (
 )
 
 type Info struct {
-	Status    Status
-	Platforms []specs.Platform
+	Status Status
 }
 
 type Driver interface {
 	Bootstrap(context.Context, Logger) error
-	Info(context.Context) (Info, error)
+	Info(context.Context) (*Info, error)
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force bool) error
-	Client() (*client.Client, error)
+	Client(ctx context.Context) (*client.Client, error)
+}
+
+func Boot(ctx context.Context, d Driver, status chan *client.SolveStatus) (*client.Client, error) {
+	try := 0
+	for {
+		info, err := d.Info(ctx)
+		if err != nil {
+			return nil, err
+		}
+		try++
+		if info.Status != Running {
+			if try > 2 {
+				return nil, errors.Errorf("failed to bootstrap %T driver in attempts", d)
+			}
+			if err := d.Bootstrap(ctx, func(s *client.SolveStatus) {
+				if status != nil {
+					status <- s
+				}
+			}); err != nil {
+				return nil, err
+			}
+		}
+
+		c, err := d.Client(ctx)
+		if err != nil {
+			if errors.Cause(err) == ErrNotRunning && try <= 2 {
+				continue
+			}
+			return nil, err
+		}
+		return c, nil
+	}
+
+	return nil, errors.Errorf("boot not implemented")
 }
