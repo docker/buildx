@@ -116,8 +116,8 @@ github.com/docker/cli/cli/version
 github.com/docker/cli/internal/containerizedengine
 github.com/docker/cli/opts
 github.com/docker/cli/types
-github.com/docker/cli/cli/config/credentials
 github.com/docker/cli/cli/connhelper/commandconn
+github.com/docker/cli/cli/config/credentials
 github.com/docker/cli/cli/connhelper/ssh
 github.com/docker/cli/kubernetes
 github.com/docker/cli/cli/manifest/types
@@ -151,6 +151,7 @@ github.com/docker/docker/client
 github.com/docker/docker/api/types
 github.com/docker/docker/api/types/container
 github.com/docker/docker/api/types/network
+github.com/docker/docker/pkg/stdcopy
 github.com/docker/docker/api/types/events
 github.com/docker/docker/api/types/filters
 github.com/docker/docker/api/types/registry
@@ -245,23 +246,24 @@ github.com/konsorten/go-windows-terminal-sequences
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19
 github.com/miekg/pkcs11
-# github.com/moby/buildkit v0.4.1-0.20190322070013-03feb5e28f65
+# github.com/moby/buildkit v0.4.1-0.20190326070013-325bd96b6b62
 github.com/moby/buildkit/client
 github.com/moby/buildkit/session
 github.com/moby/buildkit/session/secrets/secretsprovider
 github.com/moby/buildkit/session/sshforward/sshprovider
-github.com/moby/buildkit/util/progress/progressui
 github.com/moby/buildkit/session/auth/authprovider
 github.com/moby/buildkit/util/appcontext
+github.com/moby/buildkit/identity
+github.com/moby/buildkit/util/progress/progressui
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
 github.com/moby/buildkit/client/buildid
+github.com/moby/buildkit/client/connhelper
 github.com/moby/buildkit/client/llb
 github.com/moby/buildkit/client/ociindex
 github.com/moby/buildkit/frontend/gateway/client
 github.com/moby/buildkit/frontend/gateway/grpcclient
 github.com/moby/buildkit/frontend/gateway/pb
-github.com/moby/buildkit/identity
 github.com/moby/buildkit/session/content
 github.com/moby/buildkit/session/filesync
 github.com/moby/buildkit/session/grpchijack

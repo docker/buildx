@@ -63,7 +63,6 @@ github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853 h1:tTngnoO/B6HQnJ+pK8tN7kEAhmhIfaJOutqq/A4/JTM=
 github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853/go.mod h1:xN/JuLBIz4bjkxNmByTiV1IbhfnYb6oo99phBn4Eqhc=
-github.com/docker/cli v0.0.0-20190131223713-234462756460/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0 h1:E7NTtHfZYV+iu35yZ49AbrxqhMHpiOl3FstDYm38vQ0=
 github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 h1:90ytrX1dbzL7Uf/hHiuWwvywC+gikHv4hkAy4CwRTbs=
@@ -184,8 +183,8 @@ github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19/go.mod h1:WCBAbTOdfhH
 github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452/go.mod h1:QjSHrPWS+BGUVBYkbTZWEnOh3G1DutKwClXU/ABz6AQ=
 github.com/mitchellh/mapstructure v1.1.2 h1:fmNYVwqnSfB9mZU6OS2O6GsXM+wcskZDuKQzvN1EDeE=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
-github.com/moby/buildkit v0.4.1-0.20190322070013-03feb5e28f65 h1:t9GGPuQ85Reqzlnu7Vy7QBb+SrztgASQ5ek8CSEqdyI=
-github.com/moby/buildkit v0.4.1-0.20190322070013-03feb5e28f65/go.mod h1:hxXlABlNvROrpptYGUMgF2V7VrHpjphi23E63UjlVP4=
+github.com/moby/buildkit v0.4.1-0.20190326070013-325bd96b6b62 h1:GulTASjmiroM1LFiX4HX1zo7nQ7vRm3BbzdUou7UMaw=
+github.com/moby/buildkit v0.4.1-0.20190326070013-325bd96b6b62/go.mod h1:CGtUCEvQ3mcP73SmixGWRxEOECm+hCUJsdfNVKPNzVA=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.1 h1:9f412s+6RmYXLWZSEzVVgPGK7C2PphHj5RJrvfx9AWI=
