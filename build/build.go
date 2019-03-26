@@ -3,19 +3,17 @@ package build
 import (
 	"context"
 	"io"
-	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 
-	"github.com/containerd/console"
 	"github.com/containerd/containerd/platforms"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session"
-	"github.com/moby/buildkit/util/progress/progressui"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/buildx/driver"
+	"github.com/tonistiigi/buildx/util/progress"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -41,7 +39,7 @@ type Inputs struct {
 	InStream       io.Reader
 }
 
-func Build(ctx context.Context, drivers []driver.Driver, opt Options, pw *ProgressWriter) (*client.SolveResponse, error) {
+func Build(ctx context.Context, drivers []driver.Driver, opt Options, pw progress.Writer) (*client.SolveResponse, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -50,8 +48,11 @@ func Build(ctx context.Context, drivers []driver.Driver, opt Options, pw *Progre
 		return nil, errors.Errorf("multiple drivers currently not supported")
 	}
 
-	c, err := driver.Boot(ctx, drivers[0], pw.Status())
+	pwOld := pw
+	c, pw, err := driver.Boot(ctx, drivers[0], pw)
 	if err != nil {
+		close(pwOld.Status())
+		<-pwOld.Done()
 		return nil, err
 	}
 
@@ -139,48 +140,6 @@ func Build(ctx context.Context, drivers []driver.Driver, opt Options, pw *Progre
 	}
 
 	return resp, nil
-}
-
-type ProgressWriter struct {
-	status chan *client.SolveStatus
-	done   <-chan struct{}
-	err    error
-}
-
-func (pw *ProgressWriter) Done() <-chan struct{} {
-	return pw.done
-}
-
-func (pw *ProgressWriter) Err() error {
-	return pw.err
-}
-
-func (pw *ProgressWriter) Status() chan *client.SolveStatus {
-	if pw == nil {
-		return nil
-	}
-	return pw.status
-}
-
-func NewProgressWriter(ctx context.Context, out *os.File, mode string) *ProgressWriter {
-	statusCh := make(chan *client.SolveStatus)
-	doneCh := make(chan struct{})
-
-	pw := &ProgressWriter{
-		status: statusCh,
-		done:   doneCh,
-	}
-
-	go func() {
-		var c console.Console
-		if cons, err := console.ConsoleFromFile(out); err == nil && (mode == "auto" || mode == "tty") {
-			c = cons
-		}
-		// not using shared context to not disrupt display but let is finish reporting errors
-		pw.err = progressui.DisplaySolveStatus(ctx, "", c, out, statusCh)
-		close(doneCh)
-	}()
-	return pw
 }
 
 func LoadInputs(inp Inputs, target *client.SolveOpt) error {

@@ -12,6 +12,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/buildx/build"
 	"github.com/tonistiigi/buildx/driver"
+	"github.com/tonistiigi/buildx/util/progress"
 )
 
 type buildOptions struct {
@@ -100,7 +101,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	pw := build.NewProgressWriter(ctx2, os.Stderr, in.progress)
+	pw := progress.NewPrinter(ctx2, os.Stderr, in.progress)
 
 	_, err = build.Build(ctx, []driver.Driver{d}, opts, pw)
 
