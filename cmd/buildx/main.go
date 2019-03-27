@@ -7,6 +7,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/buildx/commands"
 	"github.com/tonistiigi/buildx/version"
+
+	_ "github.com/tonistiigi/buildx/driver/docker"
 )
 
 func main() {
