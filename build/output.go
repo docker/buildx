@@ -5,6 +5,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/containerd/console"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 )
@@ -20,9 +21,9 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(fields) == 1 && fields[0] == s {
+		if len(fields) == 1 && fields[0] == s && !strings.HasPrefix(s, "type=") {
 			outs = append(outs, client.ExportEntry{
-				Type:      "local",
+				Type:      client.ExporterLocal,
 				OutputDir: s,
 			})
 			continue
@@ -51,32 +52,44 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 
 		// handle client side
 		switch out.Type {
-		case "local":
+		case client.ExporterLocal:
 			dest, ok := out.Attrs["dest"]
 			if !ok {
 				return nil, errors.Errorf("dest is required for local output")
 			}
 			out.OutputDir = dest
 			delete(out.Attrs, "dest")
-		case "oci", "dest":
+		case client.ExporterOCI, client.ExporterDocker:
 			dest, ok := out.Attrs["dest"]
 			if !ok {
-				if out.Type != "docker" {
-					return nil, errors.Errorf("dest is required for %s output", out.Type)
-				}
-			} else {
-				if dest == "-" {
-					out.Output = os.Stdout
+				if out.Type != client.ExporterDocker {
+					dest = "-"
 				} else {
-					f, err := os.Open(dest)
-					if err != nil {
-						out.Output = f
-					}
+					return nil, errors.Errorf("loading to docker currently not implemented, specify dest file or -")
 				}
-				delete(out.Attrs, "dest")
 			}
+			if dest == "-" {
+				if _, err := console.ConsoleFromFile(os.Stdout); err == nil {
+					return nil, errors.Errorf("output file is required for %s exporter. refusing to write to console", out.Type)
+				}
+				out.Output = os.Stdout
+			} else if dest != "" {
+				fi, err := os.Stat(dest)
+				if err != nil && !os.IsNotExist(err) {
+					return nil, errors.Wrapf(err, "invalid destination file: %s", dest)
+				}
+				if err == nil && fi.IsDir() {
+					return nil, errors.Errorf("destination file %s is a directory", dest)
+				}
+				f, err := os.Create(dest)
+				if err != nil {
+					return nil, errors.Errorf("failed to open %s", err)
+				}
+				out.Output = f
+			}
+			delete(out.Attrs, "dest")
 		case "registry":
-			out.Type = "iamge"
+			out.Type = client.ExporterImage
 			out.Attrs["push"] = "true"
 		}
 
