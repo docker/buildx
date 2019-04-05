@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/moby/buildkit/client"
@@ -39,7 +40,7 @@ type Inputs struct {
 	InStream       io.Reader
 }
 
-func Build(ctx context.Context, drivers []driver.Driver, opt Options, pw progress.Writer) (*client.SolveResponse, error) {
+func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options, pw progress.Writer) (map[string]*client.SolveResponse, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -56,84 +57,96 @@ func Build(ctx context.Context, drivers []driver.Driver, opt Options, pw progres
 		return nil, err
 	}
 
-	so := client.SolveOpt{
-		Frontend:      "dockerfile.v0",
-		FrontendAttrs: map[string]string{},
-	}
+	withPrefix := len(opt) > 1
 
-	if len(opt.Exports) > 1 {
-		return nil, errors.Errorf("multiple outputs currently unsupported")
-	}
-
-	if len(opt.Tags) > 0 {
-		for i, e := range opt.Exports {
-			switch e.Type {
-			case "image", "oci", "docker":
-				opt.Exports[i].Attrs["name"] = strings.Join(opt.Tags, ",")
-			}
-		}
-	} else {
-		for _, e := range opt.Exports {
-			if e.Type == "image" && e.Attrs["name"] == "" && e.Attrs["push"] != "" {
-				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-					return nil, errors.Errorf("tag is needed when pushing to registry")
-				}
-			}
-		}
-	}
-	// TODO: handle loading to docker daemon
-
-	so.Exports = opt.Exports
-	so.Session = opt.Session
-
-	if err := LoadInputs(opt.Inputs, &so); err != nil {
-		return nil, err
-	}
-
-	if opt.Pull {
-		so.FrontendAttrs["image-resolve-mode"] = "pull"
-	}
-	if opt.Target != "" {
-		so.FrontendAttrs["target"] = opt.Target
-	}
-	if opt.NoCache {
-		so.FrontendAttrs["no-cache"] = ""
-	}
-	for k, v := range opt.BuildArgs {
-		so.FrontendAttrs["build-arg:"+k] = v
-	}
-	for k, v := range opt.Labels {
-		so.FrontendAttrs["label:"+k] = v
-	}
-
-	if len(opt.Platforms) != 0 {
-		pp := make([]string, len(opt.Platforms))
-		for i, p := range opt.Platforms {
-			pp[i] = platforms.Format(p)
-		}
-		so.FrontendAttrs["platform"] = strings.Join(pp, ",")
-	}
+	mw := progress.NewMultiWriter(pw)
 
 	eg, ctx := errgroup.WithContext(ctx)
 
-	var statusCh chan *client.SolveStatus
-	if pw != nil {
-		statusCh = pw.Status()
+	resp := map[string]*client.SolveResponse{}
+	var mu sync.Mutex
+
+	for k, opt := range opt {
+		pw := mw.WithPrefix(k, withPrefix)
+
+		so := client.SolveOpt{
+			Frontend:      "dockerfile.v0",
+			FrontendAttrs: map[string]string{},
+		}
+
+		if len(opt.Exports) > 1 {
+			return nil, errors.Errorf("multiple outputs currently unsupported")
+		}
+
+		if len(opt.Tags) > 0 {
+			for i, e := range opt.Exports {
+				switch e.Type {
+				case "image", "oci", "docker":
+					opt.Exports[i].Attrs["name"] = strings.Join(opt.Tags, ",")
+				}
+			}
+		} else {
+			for _, e := range opt.Exports {
+				if e.Type == "image" && e.Attrs["name"] == "" && e.Attrs["push"] != "" {
+					if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+						return nil, errors.Errorf("tag is needed when pushing to registry")
+					}
+				}
+			}
+		}
+		// TODO: handle loading to docker daemon
+
+		so.Exports = opt.Exports
+		so.Session = opt.Session
+
+		if err := LoadInputs(opt.Inputs, &so); err != nil {
+			return nil, err
+		}
+
+		if opt.Pull {
+			so.FrontendAttrs["image-resolve-mode"] = "pull"
+		}
+		if opt.Target != "" {
+			so.FrontendAttrs["target"] = opt.Target
+		}
+		if opt.NoCache {
+			so.FrontendAttrs["no-cache"] = ""
+		}
+		for k, v := range opt.BuildArgs {
+			so.FrontendAttrs["build-arg:"+k] = v
+		}
+		for k, v := range opt.Labels {
+			so.FrontendAttrs["label:"+k] = v
+		}
+
+		if len(opt.Platforms) != 0 {
+			pp := make([]string, len(opt.Platforms))
+			for i, p := range opt.Platforms {
+				pp[i] = platforms.Format(p)
+			}
+			so.FrontendAttrs["platform"] = strings.Join(pp, ",")
+		}
+
+		var statusCh chan *client.SolveStatus
+		if pw != nil {
+			statusCh = pw.Status()
+			eg.Go(func() error {
+				<-pw.Done()
+				return pw.Err()
+			})
+		}
+
 		eg.Go(func() error {
-			<-pw.Done()
-			return pw.Err()
+			rr, err := c.Solve(ctx, nil, so, statusCh)
+			if err != nil {
+				return err
+			}
+			mu.Lock()
+			resp[k] = rr
+			mu.Unlock()
+			return nil
 		})
 	}
-
-	var resp *client.SolveResponse
-	eg.Go(func() error {
-		var err error
-		resp, err = c.Solve(ctx, nil, so, statusCh)
-		if err != nil {
-			return err
-		}
-		return nil
-	})
 
 	if err := eg.Wait(); err != nil {
 		return nil, err

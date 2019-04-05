@@ -10,12 +10,14 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
+	"github.com/spf13/pflag"
 	"github.com/tonistiigi/buildx/build"
 	"github.com/tonistiigi/buildx/driver"
 	"github.com/tonistiigi/buildx/util/progress"
 )
 
 type buildOptions struct {
+	commonOptions
 	contextPath    string
 	dockerfileName string
 	tags           []string
@@ -34,9 +36,6 @@ type buildOptions struct {
 	// cgroupParent   string
 	// isolation      string
 	// quiet          bool
-	noCache   bool
-	progress  string
-	pull      bool
 	cacheFrom []string
 	// compress    bool
 	// securityOpt []string
@@ -49,6 +48,12 @@ type buildOptions struct {
 	secrets []string
 	ssh     []string
 	outputs []string
+}
+
+type commonOptions struct {
+	noCache  bool
+	progress string
+	pull     bool
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) error {
@@ -94,6 +99,10 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.Exports = outputs
 
+	return buildTargets(ctx, dockerCli, map[string]build.Options{"default": opts}, in.progress)
+}
+
+func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode string) error {
 	d, err := driver.GetDriver(ctx, "buildx-buildkit-default", nil, dockerCli.Client())
 	if err != nil {
 		return err
@@ -101,10 +110,9 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	pw := progress.NewPrinter(ctx2, os.Stderr, in.progress)
+	pw := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
 	_, err = build.Build(ctx, []driver.Driver{d}, opts, pw)
-
 	return err
 }
 
@@ -139,9 +147,7 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	// flags.StringVar(&options.cgroupParent, "cgroup-parent", "", "Optional parent cgroup for the container")
 	// flags.StringVar(&options.isolation, "isolation", "", "Container isolation technology")
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
-	flags.BoolVar(&options.noCache, "no-cache", false, "Do not use cache when building the image")
 	// flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
-	flags.BoolVar(&options.pull, "pull", false, "Always attempt to pull a newer version of the image")
 	flags.StringSliceVar(&options.cacheFrom, "cache-from", []string{}, "Images to consider as cache sources")
 	// flags.BoolVar(&options.compress, "compress", false, "Compress the build context using gzip")
 
@@ -158,16 +164,21 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
 	// flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
-
-	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
-
 	flags.StringArrayVar(&options.secrets, "secret", []string{}, "Secret file to expose to the build: id=mysecret,src=/local/secret")
 
 	flags.StringArrayVar(&options.ssh, "ssh", []string{}, "SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]])")
 
 	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, "Output destination (format: type=local,dest=path)")
 
+	commonFlags(&options.commonOptions, flags)
+
 	return cmd
+}
+
+func commonFlags(options *commonOptions, flags *pflag.FlagSet) {
+	flags.BoolVar(&options.noCache, "no-cache", false, "Do not use cache when building the image")
+	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
+	flags.BoolVar(&options.pull, "pull", false, "Always attempt to pull a newer version of the image")
 }
 
 func listToMap(values []string) map[string]string {

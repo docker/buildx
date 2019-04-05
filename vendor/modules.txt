@@ -93,14 +93,22 @@ github.com/containerd/continuity/syscallx
 github.com/containerd/fifo
 # github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20
 github.com/containerd/typeurl
+# github.com/davecgh/go-spew v1.1.1
+github.com/davecgh/go-spew/spew
 # github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0
+github.com/docker/cli/cli/compose/loader
+github.com/docker/cli/cli/compose/types
 github.com/docker/cli/cli-plugins/manager
 github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli/command
 github.com/docker/cli/cli
+github.com/docker/cli/cli/compose/interpolation
+github.com/docker/cli/cli/compose/schema
+github.com/docker/cli/cli/compose/template
+github.com/docker/cli/opts
 github.com/docker/cli/cli/config
-github.com/docker/cli/cli/connhelper
 github.com/docker/cli/cli/config/configfile
+github.com/docker/cli/cli/connhelper
 github.com/docker/cli/cli/config/types
 github.com/docker/cli/cli/context
 github.com/docker/cli/cli/context/docker
@@ -114,7 +122,6 @@ github.com/docker/cli/cli/streams
 github.com/docker/cli/cli/trust
 github.com/docker/cli/cli/version
 github.com/docker/cli/internal/containerizedengine
-github.com/docker/cli/opts
 github.com/docker/cli/types
 github.com/docker/cli/cli/config/credentials
 github.com/docker/cli/cli/connhelper/commandconn
@@ -152,6 +159,8 @@ github.com/docker/docker/api/types
 github.com/docker/docker/api/types/container
 github.com/docker/docker/api/types/network
 github.com/docker/docker/pkg/stdcopy
+github.com/docker/docker/api/types/mount
+github.com/docker/docker/api/types/versions
 github.com/docker/docker/api/types/events
 github.com/docker/docker/api/types/filters
 github.com/docker/docker/api/types/registry
@@ -163,10 +172,8 @@ github.com/docker/docker/api
 github.com/docker/docker/api/types/image
 github.com/docker/docker/api/types/swarm
 github.com/docker/docker/api/types/time
-github.com/docker/docker/api/types/versions
 github.com/docker/docker/api/types/volume
 github.com/docker/docker/errdefs
-github.com/docker/docker/api/types/mount
 github.com/docker/docker/api/types/blkiodev
 github.com/docker/docker/api/types/strslice
 github.com/docker/docker/pkg/jsonmessage
@@ -186,9 +193,9 @@ github.com/docker/docker-credential-helpers/credentials
 # github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c
 github.com/docker/go/canonical/json
 # github.com/docker/go-connections v0.4.0
+github.com/docker/go-connections/nat
 github.com/docker/go-connections/tlsconfig
 github.com/docker/go-connections/sockets
-github.com/docker/go-connections/nat
 # github.com/docker/go-events v0.0.0-20170721190031-9461782956ad
 github.com/docker/go-events
 # github.com/docker/go-metrics v0.0.0-20170502235133-d466d4f6fd96
@@ -202,8 +209,8 @@ github.com/gofrs/flock
 # github.com/gogo/googleapis v1.1.0
 github.com/gogo/googleapis/google/rpc
 # github.com/gogo/protobuf v1.2.1
-github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/proto
+github.com/gogo/protobuf/gogoproto
 github.com/gogo/protobuf/types
 github.com/gogo/protobuf/sortkeys
 github.com/gogo/protobuf/protoc-gen-gogo/descriptor
@@ -234,6 +241,16 @@ github.com/gregjones/httpcache/diskcache
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 # github.com/hashicorp/go-version v1.1.0
 github.com/hashicorp/go-version
+# github.com/hashicorp/hcl v1.0.0
+github.com/hashicorp/hcl
+github.com/hashicorp/hcl/hcl/ast
+github.com/hashicorp/hcl/hcl/parser
+github.com/hashicorp/hcl/hcl/token
+github.com/hashicorp/hcl/json/parser
+github.com/hashicorp/hcl/hcl/scanner
+github.com/hashicorp/hcl/hcl/strconv
+github.com/hashicorp/hcl/json/scanner
+github.com/hashicorp/hcl/json/token
 # github.com/imdario/mergo v0.3.7
 github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.0.0
@@ -244,19 +261,24 @@ github.com/jaguilar/vt100
 github.com/json-iterator/go
 # github.com/konsorten/go-windows-terminal-sequences v1.0.1
 github.com/konsorten/go-windows-terminal-sequences
+# github.com/mattn/go-shellwords v1.0.5
+github.com/mattn/go-shellwords
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19
 github.com/miekg/pkcs11
+# github.com/mitchellh/mapstructure v1.1.2
+github.com/mitchellh/mapstructure
 # github.com/moby/buildkit v0.4.1-0.20190405144722-cbfb5c476a09
+github.com/moby/buildkit/session/auth/authprovider
 github.com/moby/buildkit/client
 github.com/moby/buildkit/session
 github.com/moby/buildkit/session/secrets/secretsprovider
 github.com/moby/buildkit/session/sshforward/sshprovider
-github.com/moby/buildkit/session/auth/authprovider
 github.com/moby/buildkit/util/appcontext
 github.com/moby/buildkit/identity
 github.com/moby/buildkit/util/progress/progressui
+github.com/moby/buildkit/session/auth
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
 github.com/moby/buildkit/client/buildid
@@ -275,7 +297,6 @@ github.com/moby/buildkit/util/appdefaults
 github.com/moby/buildkit/util/entitlements
 github.com/moby/buildkit/session/secrets
 github.com/moby/buildkit/session/sshforward
-github.com/moby/buildkit/session/auth
 github.com/moby/buildkit/util/system
 github.com/moby/buildkit/util/apicaps/pb
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
@@ -303,6 +324,8 @@ github.com/opentracing/opentracing-go/log
 github.com/peterbourgon/diskv
 # github.com/pkg/errors v0.8.1
 github.com/pkg/errors
+# github.com/pmezard/go-difflib v1.0.0
+github.com/pmezard/go-difflib/difflib
 # github.com/prometheus/client_golang v0.8.0
 github.com/prometheus/client_golang/prometheus
 # github.com/prometheus/client_model v0.0.0-20170216185247-6f3806018612
@@ -322,6 +345,9 @@ github.com/sirupsen/logrus
 github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.3
 github.com/spf13/pflag
+# github.com/stretchr/testify v1.3.0
+github.com/stretchr/testify/require
+github.com/stretchr/testify/assert
 # github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2
 github.com/syndtr/gocapability/capability
 # github.com/theupdateframework/notary v0.6.1
@@ -344,6 +370,12 @@ github.com/tonistiigi/fsutil/types
 github.com/tonistiigi/fsutil
 # github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea
 github.com/tonistiigi/units
+# github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f
+github.com/xeipuuv/gojsonpointer
+# github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415
+github.com/xeipuuv/gojsonreference
+# github.com/xeipuuv/gojsonschema v0.0.0-20160323030313-93e72a773fad
+github.com/xeipuuv/gojsonschema
 # golang.org/x/crypto v0.0.0-20190129210102-ccddf3741a0c
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent

@@ -21,5 +21,6 @@ func NewRootCmd(dockerCli command.Cli) *cobra.Command {
 func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 	cmd.AddCommand(
 		buildCmd(dockerCli),
+		bakeCmd(dockerCli),
 	)
 }

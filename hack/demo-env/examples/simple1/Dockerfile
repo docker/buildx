@@ -1,2 +1,4 @@
 FROM alpine
-RUN touch foo
+RUN apk add --no-cache curl
+WORKDIR /src
+COPY . .
