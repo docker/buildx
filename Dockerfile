@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.0-experimental
 
-ARG DOCKERD_VERSION=18.09
+ARG DOCKERD_VERSION=19.03-rc
 ARG CLI_VERSION=19.03
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
@@ -54,11 +54,13 @@ FROM binaries-$TARGETOS AS binaries
 
 FROM alpine AS demo-env
 RUN apk add --no-cache iptables tmux git
+RUN apt-get update && apt-get install -y iptables tmux git curl vim file
+RUN curl https://get.docker.com/ | CHANNEL=test sh
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 COPY ./hack/demo-env/entrypoint.sh /usr/local/bin
 COPY ./hack/demo-env/tmux.conf /root/.tmux.conf
 COPY --from=dockerd-release /usr/local/bin /usr/local/bin
-COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /usr/local/bin
+#COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /usr/local/bin
 
 WORKDIR /work
 COPY ./hack/demo-env/examples .

@@ -183,8 +183,8 @@ github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19/go.mod h1:WCBAbTOdfhH
 github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452/go.mod h1:QjSHrPWS+BGUVBYkbTZWEnOh3G1DutKwClXU/ABz6AQ=
 github.com/mitchellh/mapstructure v1.1.2 h1:fmNYVwqnSfB9mZU6OS2O6GsXM+wcskZDuKQzvN1EDeE=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
-github.com/moby/buildkit v0.4.1-0.20190326070013-325bd96b6b62 h1:GulTASjmiroM1LFiX4HX1zo7nQ7vRm3BbzdUou7UMaw=
-github.com/moby/buildkit v0.4.1-0.20190326070013-325bd96b6b62/go.mod h1:CGtUCEvQ3mcP73SmixGWRxEOECm+hCUJsdfNVKPNzVA=
+github.com/moby/buildkit v0.4.1-0.20190405144722-cbfb5c476a09 h1:OHOk/ObJ9P40As+zA6PNN8w1ZulvpVQyYtSzkWjDEyQ=
+github.com/moby/buildkit v0.4.1-0.20190405144722-cbfb5c476a09/go.mod h1:ivyIn0/bTW+YAXWeOqMWJ9aHLeac6SKIB4QeGlxzu/Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.1 h1:9f412s+6RmYXLWZSEzVVgPGK7C2PphHj5RJrvfx9AWI=
@@ -251,10 +251,12 @@ github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 h1:b6uOv7YOFK0
 github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2/go.mod h1:hkRG7XYTFWNJGYcbNJQlaLq0fg1yr4J4t/NcTQtrfww=
 github.com/theupdateframework/notary v0.6.1 h1:7wshjstgS9x9F5LuB1L5mBI2xNMObWqjz+cjWoom6l0=
 github.com/theupdateframework/notary v0.6.1/go.mod h1:MOfgIfmox8s7/7fduvB2xyPPMJCrjRLRizA8OFwpnKY=
-github.com/tonistiigi/fsutil v0.0.0-20190319020005-1bdbf124ad49 h1:UFQ7uDVXIH4fFfOb+fISgTl8Ukk0CkGQudHQh980l+0=
-github.com/tonistiigi/fsutil v0.0.0-20190319020005-1bdbf124ad49/go.mod h1:pzh7kdwkDRh+Bx8J30uqaKJ1M4QrSH/um8fcIXeM8rc=
+github.com/tonistiigi/fsutil v0.0.0-20190327153851-3bbb99cdbd76 h1:eGfgYrNUSD448sa4mxH6nQpyZfN39QH0mLB7QaKIjus=
+github.com/tonistiigi/fsutil v0.0.0-20190327153851-3bbb99cdbd76/go.mod h1:pzh7kdwkDRh+Bx8J30uqaKJ1M4QrSH/um8fcIXeM8rc=
 github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea h1:SXhTLE6pb6eld/v/cCndK0AMpt1wiVFb/YYmqB3/QG0=
 github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea/go.mod h1:WPnis/6cRcDZSUvVmezrxJPkiO87ThFYsoUiMwWNDJk=
+github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305 h1:y/1cL5AL2oRcfzz8CAHHhR6kDDfIOT0WEyH5k40sccM=
+github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305/go.mod h1:gXOLibKqQTRAVuVZ9gX7G9Ykky8ll8yb4slxsEMoY0c=
 github.com/uber/jaeger-client-go v0.0.0-20180103221425-e02c85f9069e/go.mod h1:WVhlPFC8FDjOFMMWRy2pZqQJSXxYSwNYOkTr/Z6d3Kk=
 github.com/uber/jaeger-lib v1.2.1/go.mod h1:ComeNDZlWwrWnDv8aPp0Ba6+uUTzImX/AauajbLI56U=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
