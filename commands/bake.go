@@ -28,7 +28,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 			return err
 		}
 		if len(files) == 0 {
-			return errors.Errorf("no compose.yml or dockerbuild.hcl found, speficy build file with -f/--file")
+			return errors.Errorf("no docker-compose.yml or dockerbuild.hcl found, specify build file with -f/--file")
 		}
 		in.files = files
 	}
@@ -61,11 +61,12 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 
 func defaultFiles() ([]string, error) {
 	fns := []string{
-		"compose.yml", // support app
-		"dockerbuild.json",
-		"dockerbuild-override.json",
-		"dockerbuild.hcl",
-		"dockerbuild-override.hcl",
+		"docker-compose.yml",  // support app
+		"docker-compose.yaml", // support app
+		"docker-bake.json",
+		"docker-bake.override.json",
+		"docker-bake.hcl",
+		"docker-bake.override.hcl",
 	}
 	out := make([]string, 0, len(fns))
 	for _, f := range fns {
