@@ -15,11 +15,11 @@ type factory struct {
 }
 
 func (*factory) Name() string {
-	return "docker"
+	return "docker-container"
 }
 
 func (*factory) Usage() string {
-	return "docker"
+	return "docker-container"
 }
 
 func (*factory) Priority() int {
