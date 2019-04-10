@@ -185,8 +185,8 @@ github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19/go.mod h1:WCBAbTOdfhH
 github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452/go.mod h1:QjSHrPWS+BGUVBYkbTZWEnOh3G1DutKwClXU/ABz6AQ=
 github.com/mitchellh/mapstructure v1.1.2 h1:fmNYVwqnSfB9mZU6OS2O6GsXM+wcskZDuKQzvN1EDeE=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
-github.com/moby/buildkit v0.4.1-0.20190405144722-cbfb5c476a09 h1:OHOk/ObJ9P40As+zA6PNN8w1ZulvpVQyYtSzkWjDEyQ=
-github.com/moby/buildkit v0.4.1-0.20190405144722-cbfb5c476a09/go.mod h1:ivyIn0/bTW+YAXWeOqMWJ9aHLeac6SKIB4QeGlxzu/Q=
+github.com/moby/buildkit v0.4.1-0.20190410165125-b4a6a0e3a7d1 h1:e8eXboh2H1zYsGDo/nPuZQReAd2eGEtQV1AFX9BncWo=
+github.com/moby/buildkit v0.4.1-0.20190410165125-b4a6a0e3a7d1/go.mod h1:ivyIn0/bTW+YAXWeOqMWJ9aHLeac6SKIB4QeGlxzu/Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.1 h1:9f412s+6RmYXLWZSEzVVgPGK7C2PphHj5RJrvfx9AWI=

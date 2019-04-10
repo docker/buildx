@@ -269,7 +269,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/miekg/pkcs11
 # github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.4.1-0.20190405144722-cbfb5c476a09
+# github.com/moby/buildkit v0.4.1-0.20190410165125-b4a6a0e3a7d1
 github.com/moby/buildkit/session/auth/authprovider
 github.com/moby/buildkit/client
 github.com/moby/buildkit/session
