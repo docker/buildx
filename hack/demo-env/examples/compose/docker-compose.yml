@@ -1,0 +1,12 @@
+version: "3"
+
+services:
+  db:
+    build: .
+    command: ./entrypoint.sh
+    image: docker.io/tonistiigi/db
+  webapp:
+    build:
+      dockerfile: Dockerfile.webapp
+      args:
+        buildno: 1

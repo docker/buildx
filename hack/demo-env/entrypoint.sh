@@ -2,6 +2,8 @@
 
 dockerdCmd="dockerd -s overlay2 -D"
 
+export DOCKER_BUILDKIT=1
+
 if [ -n "$TMUX_ENTRYPOINT" ]; then
   tmux new -s demo -d
   tmux new-window "$dockerdCmd"
@@ -9,7 +11,7 @@ if [ -n "$TMUX_ENTRYPOINT" ]; then
   tmux a -t demo
 else
   ( $dockerdCmd 2>/var/log/dockerd.log & )
-  exec sh
+  exec ash
 fi
 
 
