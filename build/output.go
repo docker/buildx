@@ -64,8 +64,6 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 			if !ok {
 				if out.Type != client.ExporterDocker {
 					dest = "-"
-				} else {
-					return nil, errors.Errorf("loading to docker currently not implemented, specify dest file or -")
 				}
 			}
 			if dest == "-" {
