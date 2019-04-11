@@ -42,5 +42,5 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		return nil, errors.Wrapf(driver.ErrNotConnecting, err.Error())
 	}
 
-	return &Driver{InitConfig: cfg, version: v}, nil
+	return &Driver{factory: f, InitConfig: cfg, version: v}, nil
 }

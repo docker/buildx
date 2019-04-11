@@ -12,9 +12,8 @@ import (
 	"github.com/tonistiigi/buildx/util/progress"
 )
 
-var buildkitImage = "moby/buildkit:master" // TODO: make this verified and configuratble
-
 type Driver struct {
+	factory driver.Factory
 	driver.InitConfig
 	version dockertypes.Version
 }
@@ -46,3 +45,19 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 		return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", nil)
 	}))
 }
+
+func (d *Driver) Features() map[driver.Feature]bool {
+	return map[driver.Feature]bool{
+		driver.OCIExporter:    false,
+		driver.DockerExporter: false,
+
+		driver.CacheExport:   false,
+		driver.MultiPlatform: false,
+	}
+}
+
+func (d *Driver) Factory() driver.Factory {
+	return d.factory
+}
+
+func (d *Driver) IsDefaultMobyDriver() {}

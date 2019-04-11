@@ -39,7 +39,7 @@ func (*factory) Priority(cfg driver.InitConfig) int {
 	return prioritySupported
 }
 
-func (*factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver, error) {
+func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver, error) {
 	if cfg.DockerAPI == nil {
 		return nil, errors.Errorf("docker driver requires docker API access")
 	}
@@ -49,5 +49,5 @@ func (*factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver, 
 		return nil, errors.Wrapf(driver.ErrNotConnecting, err.Error())
 	}
 
-	return &Driver{InitConfig: cfg, version: v}, nil
+	return &Driver{factory: f, InitConfig: cfg, version: v}, nil
 }

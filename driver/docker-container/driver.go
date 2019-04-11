@@ -24,6 +24,7 @@ var buildkitImage = "moby/buildkit:master" // TODO: make this verified and confi
 
 type Driver struct {
 	driver.InitConfig
+	factory driver.Factory
 	version dockertypes.Version
 }
 
@@ -188,6 +189,20 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	return client.New(ctx, "", client.WithDialer(func(string, time.Duration) (net.Conn, error) {
 		return conn, nil
 	}))
+}
+
+func (d *Driver) Factory() driver.Factory {
+	return d.factory
+}
+
+func (d *Driver) Features() map[driver.Feature]bool {
+	return map[driver.Feature]bool{
+		driver.OCIExporter:    true,
+		driver.DockerExporter: true,
+
+		driver.CacheExport:   true,
+		driver.MultiPlatform: true,
+	}
 }
 
 func demuxConn(c net.Conn) net.Conn {
