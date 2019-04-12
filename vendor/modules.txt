@@ -101,6 +101,7 @@ github.com/docker/cli/cli/compose/types
 github.com/docker/cli/cli-plugins/manager
 github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli/command
+github.com/docker/cli/cli/flags
 github.com/docker/cli/cli
 github.com/docker/cli/cli/compose/interpolation
 github.com/docker/cli/cli/compose/schema
@@ -115,7 +116,6 @@ github.com/docker/cli/cli/context/docker
 github.com/docker/cli/cli/context/kubernetes
 github.com/docker/cli/cli/context/store
 github.com/docker/cli/cli/debug
-github.com/docker/cli/cli/flags
 github.com/docker/cli/cli/manifest/store
 github.com/docker/cli/cli/registry/client
 github.com/docker/cli/cli/streams

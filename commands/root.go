@@ -6,14 +6,17 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func NewRootCmd(dockerCli command.Cli) *cobra.Command {
+func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Command {
 	cmd := &cobra.Command{
 		Short: "Build with BuildKit",
-		Use:   "buildx",
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
-			return plugin.PersistentPreRunE(cmd, args)
-		},
+		Use:   name,
 	}
+	if isPlugin {
+		cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+			return plugin.PersistentPreRunE(cmd, args)
+		}
+	}
+
 	addCommands(cmd, dockerCli)
 	return cmd
 }
