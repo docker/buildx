@@ -7,8 +7,8 @@ import (
 	"github.com/tonistiigi/buildx/driver"
 )
 
-const prioritySupported = 10
-const priorityUnsupported = 99
+const prioritySupported = 30
+const priorityUnsupported = 70
 
 func init() {
 	driver.Register(&factory{})
@@ -18,30 +18,23 @@ type factory struct {
 }
 
 func (*factory) Name() string {
-	return "docker"
+	return "docker-container"
 }
 
 func (*factory) Usage() string {
-	return "docker"
+	return "docker-container"
 }
 
 func (*factory) Priority(cfg driver.InitConfig) int {
 	if cfg.DockerAPI == nil {
 		return priorityUnsupported
 	}
-
-	c, err := cfg.DockerAPI.DialHijack(context.TODO(), "/grpc", "h2c", nil)
-	if err != nil {
-		return priorityUnsupported
-	}
-	c.Close()
-
 	return prioritySupported
 }
 
 func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver, error) {
 	if cfg.DockerAPI == nil {
-		return nil, errors.Errorf("docker driver requires docker API access")
+		return nil, errors.Errorf("%s driver requires docker API access", f.Name())
 	}
 
 	v, err := cfg.DockerAPI.ServerVersion(ctx)

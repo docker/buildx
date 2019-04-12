@@ -153,7 +153,7 @@ github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
 github.com/docker/distribution/metrics
-# github.com/docker/docker v1.14.0-0.20190319215453-e7b5f7dbe98c
+# github.com/docker/docker v1.14.0-0.20190410063227-d9d9eccdc862
 github.com/docker/docker/client
 github.com/docker/docker/api/types
 github.com/docker/docker/api/types/container

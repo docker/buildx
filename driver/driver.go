@@ -27,11 +27,13 @@ type Info struct {
 }
 
 type Driver interface {
+	Factory() Factory
 	Bootstrap(context.Context, progress.Logger) error
 	Info(context.Context) (*Info, error)
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force bool) error
 	Client(ctx context.Context) (*client.Client, error)
+	Features() map[Feature]bool
 }
 
 func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, progress.Writer, error) {

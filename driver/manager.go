@@ -11,7 +11,7 @@ import (
 type Factory interface {
 	Name() string
 	Usage() string
-	Priority() int // take initConfig?
+	Priority(cfg InitConfig) int
 	New(ctx context.Context, cfg InitConfig) (Driver, error)
 }
 
@@ -37,7 +37,7 @@ func Register(f Factory) {
 	drivers[f.Name()] = f
 }
 
-func GetDefaultFactory() (Factory, error) {
+func GetDefaultFactory(ic InitConfig) (Factory, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("no drivers available")
 	}
@@ -47,7 +47,7 @@ func GetDefaultFactory() (Factory, error) {
 	}
 	dd := make([]p, 0, len(drivers))
 	for _, f := range drivers {
-		dd = append(dd, p{f: f, priority: f.Priority()})
+		dd = append(dd, p{f: f, priority: f.Priority(ic)})
 	}
 	sort.Slice(dd, func(i, j int) bool {
 		return dd[i].priority < dd[j].priority
@@ -56,15 +56,16 @@ func GetDefaultFactory() (Factory, error) {
 }
 
 func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient) (Driver, error) {
+	ic := InitConfig{
+		DockerAPI: api,
+		Name:      name,
+	}
 	if f == nil {
 		var err error
-		f, err = GetDefaultFactory()
+		f, err = GetDefaultFactory(ic)
 		if err != nil {
 			return nil, err
 		}
 	}
-	return f.New(ctx, InitConfig{
-		Name:      name,
-		DockerAPI: api,
-	})
+	return f.New(ctx, ic)
 }

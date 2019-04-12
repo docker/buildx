@@ -9,6 +9,7 @@ import (
 	"github.com/tonistiigi/buildx/version"
 
 	_ "github.com/tonistiigi/buildx/driver/docker"
+	_ "github.com/tonistiigi/buildx/driver/docker-container"
 )
 
 func main() {

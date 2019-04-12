@@ -50,7 +50,11 @@ func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options,
 	}
 
 	pwOld := pw
-	c, pw, err := driver.Boot(ctx, drivers[0], pw)
+	d := drivers[0]
+	_, isDefaultMobyDriver := d.(interface {
+		IsDefaultMobyDriver()
+	})
+	c, pw, err := driver.Boot(ctx, d, pw)
 	if err != nil {
 		close(pwOld.Status())
 		<-pwOld.Done()
@@ -74,7 +78,16 @@ func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options,
 			FrontendAttrs: map[string]string{},
 		}
 
-		if len(opt.Exports) > 1 {
+		switch len(opt.Exports) {
+		case 1:
+			// valid
+		case 0:
+			if isDefaultMobyDriver {
+				// backwards compat for docker driver only:
+				// this ensures the build results in a docker image.
+				opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
+			}
+		default:
 			return nil, errors.Errorf("multiple outputs currently unsupported")
 		}
 
@@ -94,6 +107,31 @@ func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options,
 				}
 			}
 		}
+
+		for i, e := range opt.Exports {
+			if e.Type == "oci" && !d.Features()[driver.OCIExporter] {
+				return nil, notSupported(d, driver.OCIExporter)
+			}
+			if e.Type == "docker" {
+				if e.Output == nil {
+					if !isDefaultMobyDriver {
+						return nil, errors.Errorf("loading to docker currently not implemented, specify dest file or -")
+					}
+					e.Type = "image"
+				} else if !d.Features()[driver.DockerExporter] {
+					return nil, notSupported(d, driver.DockerExporter)
+				}
+			}
+			if e.Type == "image" && isDefaultMobyDriver {
+				opt.Exports[i].Type = "moby"
+				if e.Attrs["push"] != "" {
+					if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+						return nil, errors.Errorf("auto-push is currently not implemented for moby driver")
+					}
+				}
+			}
+		}
+
 		// TODO: handle loading to docker daemon
 
 		so.Exports = opt.Exports
@@ -123,6 +161,9 @@ func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options,
 			pp := make([]string, len(opt.Platforms))
 			for i, p := range opt.Platforms {
 				pp[i] = platforms.Format(p)
+			}
+			if len(pp) > 1 && !d.Features()[driver.MultiPlatform] {
+				return nil, notSupported(d, driver.MultiPlatform)
 			}
 			so.FrontendAttrs["platform"] = strings.Join(pp, ",")
 		}
@@ -179,4 +220,8 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) error {
 
 	target.FrontendAttrs["filename"] = filepath.Base(inp.DockerfilePath)
 	return nil
+}
+
+func notSupported(d driver.Driver, f driver.Feature) error {
+	return errors.Errorf("%s feature is currently not supported for %s driver. Please switch to a different driver (eg. \"docker buildx new\")", f, d.Factory().Name())
 }
