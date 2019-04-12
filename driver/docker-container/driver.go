@@ -171,11 +171,28 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 }
 
 func (d *Driver) Stop(ctx context.Context, force bool) error {
-	return errors.Errorf("stop not implemented for %T", d)
+	info, err := d.Info(ctx)
+	if err != nil {
+		return err
+	}
+	if info.Status == driver.Running {
+		return d.DockerAPI.ContainerStop(ctx, d.Name, nil)
+	}
+	return nil
 }
 
 func (d *Driver) Rm(ctx context.Context, force bool) error {
-	return errors.Errorf("rm not implemented for %T", d)
+	info, err := d.Info(ctx)
+	if err != nil {
+		return err
+	}
+	if info.Status != driver.Terminated {
+		return d.DockerAPI.ContainerRemove(ctx, d.Name, dockertypes.ContainerRemoveOptions{
+			RemoveVolumes: true,
+			Force:         true,
+		})
+	}
+	return nil
 }
 
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {

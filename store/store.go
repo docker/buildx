@@ -8,27 +8,13 @@ import (
 	"path/filepath"
 	"regexp"
 	"sort"
-	"strings"
 
 	"github.com/gofrs/flock"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
-type NodeGroup struct {
-	Name     string
-	Driver   string
-	Nodes    []Node
-	Endpoint string
-}
-
-type Node struct {
-	Name      string
-	Endpoint  string
-	Platforms []string
-}
-
-func NewStore(root string) (*Store, error) {
+func New(root string) (*Store, error) {
 	root = filepath.Join(root, "buildx")
 	if err := os.MkdirAll(filepath.Join(root, "instances"), 0700); err != nil {
 		return nil, err
@@ -86,7 +72,7 @@ func (t *Txn) List() ([]*NodeGroup, error) {
 }
 
 func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
-	name, err := validateName(name)
+	name, err := ValidateName(name)
 	if err != nil {
 		return nil, err
 	}
@@ -102,7 +88,7 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 }
 
 func (t *Txn) Save(ng *NodeGroup) error {
-	name, err := validateName(ng.Name)
+	name, err := ValidateName(ng.Name)
 	if err != nil {
 		return err
 	}
@@ -114,7 +100,7 @@ func (t *Txn) Save(ng *NodeGroup) error {
 }
 
 func (t *Txn) Remove(name string) error {
-	name, err := validateName(name)
+	name, err := ValidateName(name)
 	if err != nil {
 		return err
 	}
@@ -215,14 +201,7 @@ type current struct {
 	Global bool
 }
 
-var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\.\-_\+]*$`)
-
-func validateName(s string) (string, error) {
-	if !namePattern.MatchString(s) {
-		return "", errors.Errorf("invalid name %s, name needs to start with a letter and may not contain symbols, except ._-", s)
-	}
-	return strings.ToLower(s), nil
-}
+var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\.\-_]*$`)
 
 func atomicWriteFile(filename string, data []byte, perm os.FileMode) error {
 	f, err := ioutil.TempFile(filepath.Dir(filename), ".tmp-"+filepath.Base(filename))

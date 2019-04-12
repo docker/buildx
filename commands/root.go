@@ -30,6 +30,6 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		lsCmd(dockerCli),
 		useCmd(dockerCli),
 		inspectCmd(dockerCli),
-		viewCmd(dockerCli),
+		stopCmd(dockerCli),
 	)
 }

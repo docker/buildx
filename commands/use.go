@@ -1,10 +1,11 @@
 package commands
 
 import (
-	"fmt"
+	"os"
 
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -13,8 +14,47 @@ type useOptions struct {
 	isDefault bool
 }
 
-func runUse(dockerCli command.Cli, in useOptions) error {
-	fmt.Printf("%+v\n", in)
+func runUse(dockerCli command.Cli, in useOptions, name string) error {
+	txn, release, err := getStore(dockerCli)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	if _, err := txn.NodeGroupByName(name); err != nil {
+		if os.IsNotExist(errors.Cause(err)) {
+			if name == "default" || name == dockerCli.CurrentContext() {
+				ep, err := getCurrentEndpoint(dockerCli)
+				if err != nil {
+					return err
+				}
+				if err := txn.SetCurrent(ep, "", false, false); err != nil {
+					return err
+				}
+				return nil
+			}
+			list, err := dockerCli.ContextStore().ListContexts()
+			if err != nil {
+				return err
+			}
+			for _, l := range list {
+				if l.Name == name {
+					return errors.Errorf("to switch to context %s use `docker context use %s`", name, name)
+				}
+			}
+
+		}
+		return errors.Wrapf(err, "failed to find instance %q", name)
+	}
+
+	ep, err := getCurrentEndpoint(dockerCli)
+	if err != nil {
+		return err
+	}
+	if err := txn.SetCurrent(ep, name, in.isGlobal, in.isDefault); err != nil {
+		return err
+	}
+
 	return nil
 }
 
@@ -26,7 +66,7 @@ func useCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Set the current builder instance",
 		Args:  cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUse(dockerCli, options)
+			return runUse(dockerCli, options, args[0])
 		},
 	}
 

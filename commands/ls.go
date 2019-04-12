@@ -12,8 +12,11 @@ type lsOptions struct {
 }
 
 func runLs(dockerCli command.Cli, in lsOptions) error {
-	fmt.Printf("current config file: %+v\n", dockerCli.ConfigFile().Filename)
-	fmt.Printf("current context: %+v\n", dockerCli.CurrentContext())
+	ep, err := getCurrentEndpoint(dockerCli)
+	fmt.Printf("current endpoint: %+v %v\n", ep, err)
+
+	fmt.Printf("current config file: %+v\n", dockerCli.ConfigFile())
+	fmt.Printf("current config file: %+v\n", dockerCli)
 
 	list, err := dockerCli.ContextStore().ListContexts()
 	if err != nil {
@@ -21,6 +24,20 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	}
 	for i, l := range list {
 		fmt.Printf("context%d: %+v\n", i, l)
+	}
+
+	txn, release, err := getStore(dockerCli)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	ll, err := txn.List()
+	if err != nil {
+		return err
+	}
+	for i, l := range ll {
+		fmt.Printf("store %d: %+v\n", i, l)
 	}
 
 	return nil
