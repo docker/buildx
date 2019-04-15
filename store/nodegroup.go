@@ -100,7 +100,7 @@ func (ng *NodeGroup) nextNodeName() string {
 	i := 0
 	for {
 		name := fmt.Sprintf("%s%d", ng.Name, i)
-		if i := ng.findNode(name); i != -1 {
+		if ii := ng.findNode(name); ii != -1 {
 			i++
 			continue
 		}

@@ -68,7 +68,7 @@ require (
 	github.com/prometheus/client_model v0.0.0-20170216185247-6f3806018612 // indirect
 	github.com/prometheus/common v0.0.0-20180518154759-7600349dcfe1 // indirect
 	github.com/prometheus/procfs v0.0.0-20180612222113-7d6f385de8be // indirect
-	github.com/sirupsen/logrus v1.4.0 // indirect
+	github.com/sirupsen/logrus v1.4.0
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2 // indirect

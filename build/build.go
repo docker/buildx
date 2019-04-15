@@ -149,7 +149,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 				opt.Exports[i].Type = "moby"
 				if e.Attrs["push"] != "" {
 					if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-						return nil, errors.Errorf("auto-push is currently not implemented for moby driver")
+						return nil, errors.Errorf("auto-push is currently not implemented for docker driver")
 					}
 				}
 			}
