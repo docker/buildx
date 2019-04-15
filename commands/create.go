@@ -128,7 +128,11 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	}
 
 	if in.use && ep != "" {
-		if err := txn.SetCurrent(ep, ng.Name, false, false); err != nil {
+		current, err := getCurrentEndpoint(dockerCli)
+		if err != nil {
+			return err
+		}
+		if err := txn.SetCurrent(current, ng.Name, false, false); err != nil {
 			return err
 		}
 	}

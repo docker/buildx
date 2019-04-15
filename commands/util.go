@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/containerd/containerd/platforms"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
 	dopts "github.com/docker/cli/opts"
@@ -148,6 +149,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 		if err != nil {
 			return nil, err
 		}
+		ng.Driver = f.Name()
 	}
 
 	for i, n := range ng.Nodes {
@@ -243,10 +245,52 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli) ([]build.Driv
 	}, nil
 }
 
-// type ngInfo struct {
-// 	ng *store.NodeGroup
-// }
-//
-// func (i *ngInfo) init(ctx context.Context, boot bool) {
-//
-// }
+func loadInfoData(ctx context.Context, d *dinfo) error {
+	if d.di.Driver == nil {
+		return nil
+	}
+	info, err := d.di.Driver.Info(ctx)
+	if err != nil {
+		return err
+	}
+	d.info = info
+	if info.Status == driver.Running {
+		c, err := d.di.Driver.Client(ctx)
+		if err != nil {
+			return err
+		}
+		workers, err := c.ListWorkers(ctx)
+		if err != nil {
+			return errors.Wrap(err, "listing workers")
+		}
+		for _, w := range workers {
+			for _, p := range w.Platforms {
+				d.platforms = append(d.platforms, platforms.Format(p))
+			}
+		}
+	}
+	return nil
+}
+
+func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) error {
+	eg, _ := errgroup.WithContext(ctx)
+
+	dis, err := driversForNodeGroup(ctx, dockerCli, ngi.ng)
+	if err != nil {
+		return err
+	}
+	ngi.drivers = make([]dinfo, len(dis))
+	for i, di := range dis {
+		ngi.drivers[i].di = &di
+		func(d *dinfo) {
+			eg.Go(func() error {
+				if err := loadInfoData(ctx, d); err != nil {
+					d.err = err
+				}
+				return nil
+			})
+		}(&ngi.drivers[i])
+	}
+
+	return eg.Wait()
+}

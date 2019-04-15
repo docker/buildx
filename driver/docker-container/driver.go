@@ -153,7 +153,7 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	if err != nil {
 		if dockerclient.IsErrNotFound(err) {
 			return &driver.Info{
-				Status: driver.Terminated,
+				Status: driver.Inactive,
 			}, nil
 		}
 		return nil, err
@@ -186,7 +186,7 @@ func (d *Driver) Rm(ctx context.Context, force bool) error {
 	if err != nil {
 		return err
 	}
-	if info.Status != driver.Terminated {
+	if info.Status != driver.Inactive {
 		return d.DockerAPI.ContainerRemove(ctx, d.Name, dockertypes.ContainerRemoveOptions{
 			RemoveVolumes: true,
 			Force:         true,
