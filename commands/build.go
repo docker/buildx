@@ -12,7 +12,6 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tonistiigi/buildx/build"
-	"github.com/tonistiigi/buildx/driver"
 	"github.com/tonistiigi/buildx/util/progress"
 )
 
@@ -103,7 +102,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 }
 
 func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode string) error {
-	d, err := driver.GetDriver(ctx, "buildx-buildkit-default", nil, dockerCli.Client())
+	dis, err := getDefaultDrivers(ctx, dockerCli)
 	if err != nil {
 		return err
 	}
@@ -112,7 +111,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	defer cancel()
 	pw := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
-	_, err = build.Build(ctx, []driver.Driver{d}, opts, pw)
+	_, err = build.Build(ctx, dis, opts, pw)
 	return err
 }
 

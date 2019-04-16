@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 
+	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/buildx/driver"
 )
@@ -25,8 +26,8 @@ func (*factory) Usage() string {
 	return "docker-container"
 }
 
-func (*factory) Priority(cfg driver.InitConfig) int {
-	if cfg.DockerAPI == nil {
+func (*factory) Priority(ctx context.Context, api dockerclient.APIClient) int {
+	if api == nil {
 		return priorityUnsupported
 	}
 	return prioritySupported
@@ -43,4 +44,8 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	}
 
 	return &Driver{factory: f, InitConfig: cfg, version: v}, nil
+}
+
+func (f *factory) AllowsInstances() bool {
+	return true
 }

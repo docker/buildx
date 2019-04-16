@@ -40,7 +40,27 @@ type Inputs struct {
 	InStream       io.Reader
 }
 
-func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options, pw progress.Writer) (map[string]*client.SolveResponse, error) {
+type DriverInfo struct {
+	Driver   driver.Driver
+	Name     string
+	Platform []string // TODO: specs.Platform
+	Err      error
+}
+
+func getFirstDriver(drivers []DriverInfo) (driver.Driver, error) {
+	err := errors.Errorf("no drivers found")
+	for _, di := range drivers {
+		if di.Driver != nil {
+			return di.Driver, nil
+		}
+		if di.Err != nil {
+			err = di.Err
+		}
+	}
+	return nil, err
+}
+
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw progress.Writer) (map[string]*client.SolveResponse, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -50,7 +70,10 @@ func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options,
 	}
 
 	pwOld := pw
-	d := drivers[0]
+	d, err := getFirstDriver(drivers)
+	if err != nil {
+		return nil, err
+	}
 	_, isDefaultMobyDriver := d.(interface {
 		IsDefaultMobyDriver()
 	})
@@ -126,7 +149,7 @@ func Build(ctx context.Context, drivers []driver.Driver, opt map[string]Options,
 				opt.Exports[i].Type = "moby"
 				if e.Attrs["push"] != "" {
 					if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-						return nil, errors.Errorf("auto-push is currently not implemented for moby driver")
+						return nil, errors.Errorf("auto-push is currently not implemented for docker driver")
 					}
 				}
 			}

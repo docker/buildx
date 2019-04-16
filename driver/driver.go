@@ -10,17 +10,33 @@ import (
 )
 
 var ErrNotRunning = errors.Errorf("driver not running")
-var ErrNotConnecting = errors.Errorf("driver not connection")
+var ErrNotConnecting = errors.Errorf("driver not connecting")
 
 type Status int
 
 const (
-	Terminated Status = iota
+	Inactive Status = iota
 	Starting
 	Running
 	Stopping
 	Stopped
 )
+
+func (s Status) String() string {
+	switch s {
+	case Inactive:
+		return "inactive"
+	case Starting:
+		return "starting"
+	case Running:
+		return "running"
+	case Stopping:
+		return "stopping"
+	case Stopped:
+		return "stopped"
+	}
+	return "unknown"
+}
 
 type Info struct {
 	Status Status
