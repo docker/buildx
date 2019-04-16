@@ -88,6 +88,7 @@ github.com/docker/go-metrics v0.0.0-20170502235133-d466d4f6fd96 h1:HVQ/BC7Ze+bcV
 github.com/docker/go-metrics v0.0.0-20170502235133-d466d4f6fd96/go.mod h1:/u0gXw0Gay3ceNrsHubL3BtdOL2fHf93USgMTe0W5dI=
 github.com/docker/go-units v0.3.1 h1:QAFdsA6jLCnglbqE6mUsHuPcJlntY94DkxHf4deHKIU=
 github.com/docker/go-units v0.3.1/go.mod h1:fgPhTUdO+D/Jk86RDLlptpiXQzgHJF7gydDDbaIK4Dk=
+github.com/docker/libnetwork v0.0.0-20180913200009-36d3bed0e9f4 h1:PmuO8T1R9jxvOI+Y6+8YBF+um2L6xp6/F52oDeYTZkk=
 github.com/docker/libnetwork v0.0.0-20180913200009-36d3bed0e9f4/go.mod h1:93m0aTqz6z+g32wla4l4WxTrdtvBRmVzYRkYvasA5Z8=
 github.com/docker/libtrust v0.0.0-20150526203908-9cbd2a1374f4 h1:k8TfKGeAcDQFFQOGCQMRN04N4a9YrPlRMMKnzAuvM9Q=
 github.com/docker/libtrust v0.0.0-20150526203908-9cbd2a1374f4/go.mod h1:cyGadeNEkKy96OOhEzfZl+yxihPEzKnqJwvfuSUqbZE=
@@ -187,8 +188,8 @@ github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19/go.mod h1:WCBAbTOdfhH
 github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452/go.mod h1:QjSHrPWS+BGUVBYkbTZWEnOh3G1DutKwClXU/ABz6AQ=
 github.com/mitchellh/mapstructure v1.1.2 h1:fmNYVwqnSfB9mZU6OS2O6GsXM+wcskZDuKQzvN1EDeE=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
-github.com/moby/buildkit v0.4.1-0.20190410165125-b4a6a0e3a7d1 h1:e8eXboh2H1zYsGDo/nPuZQReAd2eGEtQV1AFX9BncWo=
-github.com/moby/buildkit v0.4.1-0.20190410165125-b4a6a0e3a7d1/go.mod h1:ivyIn0/bTW+YAXWeOqMWJ9aHLeac6SKIB4QeGlxzu/Q=
+github.com/moby/buildkit v0.4.1-0.20190410165125-bcd466a748e950507826c30e835b087289aaf384 h1:SsOa4L1rQyJlSUm7fBAspkBNHDgmcUU60WOZPGuTTy4=
+github.com/moby/buildkit v0.4.1-0.20190410165125-bcd466a748e950507826c30e835b087289aaf384/go.mod h1:ivyIn0/bTW+YAXWeOqMWJ9aHLeac6SKIB4QeGlxzu/Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.1 h1:9f412s+6RmYXLWZSEzVVgPGK7C2PphHj5RJrvfx9AWI=
@@ -265,7 +266,9 @@ github.com/uber/jaeger-client-go v0.0.0-20180103221425-e02c85f9069e/go.mod h1:WV
 github.com/uber/jaeger-lib v1.2.1/go.mod h1:ComeNDZlWwrWnDv8aPp0Ba6+uUTzImX/AauajbLI56U=
 github.com/ugorji/go/codec v0.0.0-20181204163529-d75b2dcb6bc8/go.mod h1:VFNgLljTbGfSG7qAOspJ7OScBnGdDN/yBr0sguwnwf0=
 github.com/urfave/cli v0.0.0-20171014202726-7bc6a0acffa5/go.mod h1:70zkFmudgCuE/ngEzBv17Jvp/497gISqfk5gWijbERA=
+github.com/vishvananda/netlink v1.0.0 h1:bqNY2lgheFIu1meHUFSH3d7vG93AFyqg3oGbJCOJgSM=
 github.com/vishvananda/netlink v1.0.0/go.mod h1:+SR5DhBJrl6ZM7CoCKvpw5BKroDKQ+PJqOg65H/2ktk=
+github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc h1:R83G5ikgLMxrBvLh22JhdfI8K6YXEPHx5P03Uu3DRs4=
 github.com/vishvananda/netns v0.0.0-20180720170159-13995c7128cc/go.mod h1:ZjcWmFBXmLKZu9Nxj3WKYEafiSqer2rnvPr0en9UNpI=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f h1:J9EGpcZtP0E/raorCMxlFGSTBrsSlaDGf3jU/qvAE2c=
 github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f/go.mod h1:N2zxlSyiKSe5eX1tZViRH5QA0qijqEDrYZiPEAiq3wU=

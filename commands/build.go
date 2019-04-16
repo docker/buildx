@@ -24,19 +24,19 @@ type buildOptions struct {
 	labels         []string
 	buildArgs      []string
 
-	cacheFrom []string
-	target    string
-	platforms []string
-	secrets   []string
-	ssh       []string
-	outputs   []string
+	cacheFrom   []string
+	target      string
+	platforms   []string
+	secrets     []string
+	ssh         []string
+	outputs     []string
+	imageIDFile string
 
 	// unimplemented
 	extraHosts  []string
 	squash      bool
 	quiet       bool
 	networkMode string
-	imageIDFile string
 
 	// hidden
 	// untrusted   bool
@@ -74,9 +74,6 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if in.networkMode != "default" {
 		return errors.Errorf("network currently not implemented")
 	}
-	if in.imageIDFile != "" {
-		return errors.Errorf("iidfile currently not implemented")
-	}
 
 	ctx := appcontext.Context()
 
@@ -86,12 +83,13 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 			DockerfilePath: in.dockerfileName,
 			InStream:       os.Stdin,
 		},
-		Tags:      in.tags,
-		Labels:    listToMap(in.labels),
-		BuildArgs: listToMap(in.buildArgs),
-		Pull:      in.pull,
-		NoCache:   in.noCache,
-		Target:    in.target,
+		Tags:        in.tags,
+		Labels:      listToMap(in.labels),
+		BuildArgs:   listToMap(in.buildArgs),
+		Pull:        in.pull,
+		NoCache:     in.noCache,
+		Target:      in.target,
+		ImageIDFile: in.imageIDFile,
 	}
 
 	platforms, err := build.ParsePlatformSpecs(in.platforms)
@@ -172,7 +170,6 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	flags.MarkHidden("quiet")
 	flags.MarkHidden("network")
 	flags.MarkHidden("add-host")
-	flags.MarkHidden("iidfile")
 	flags.MarkHidden("squash")
 
 	// hidden flags

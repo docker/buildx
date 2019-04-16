@@ -22,6 +22,7 @@ require (
 	github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853 // indirect
 	github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
+	github.com/docker/distribution v2.7.1-0.20190205005809-0d3efadf0154+incompatible
 	github.com/docker/docker v1.14.0-0.20190410063227-d9d9eccdc862
 	github.com/docker/docker-credential-helpers v0.6.1 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
@@ -56,7 +57,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19 // indirect
-	github.com/moby/buildkit v0.4.1-0.20190410165125-b4a6a0e3a7d1
+	github.com/moby/buildkit v0.4.1-0.20190410165125-bcd466a748e950507826c30e835b087289aaf384
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1
