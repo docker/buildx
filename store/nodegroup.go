@@ -33,6 +33,9 @@ func (ng *NodeGroup) Leave(name string) error {
 func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool) error {
 	i := ng.findNode(name)
 	if i == -1 && !actionAppend {
+		if len(ng.Nodes) > 0 {
+			return errors.Errorf("node %s not found, did you mean to append?", name)
+		}
 		ng.Nodes = nil
 	}
 	if i != -1 {
@@ -87,13 +90,12 @@ func (ng *NodeGroup) validateDuplicates(ep string) error {
 }
 
 func (ng *NodeGroup) findNode(name string) int {
-	i := -1
-	for ii, n := range ng.Nodes {
+	for i, n := range ng.Nodes {
 		if n.Name == name {
-			i = ii
+			return i
 		}
 	}
-	return i
+	return -1
 }
 
 func (ng *NodeGroup) nextNodeName() string {

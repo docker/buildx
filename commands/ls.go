@@ -90,7 +90,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "NAME\tDRIVER/ENDPOINT\tSTATUS\tPLATFORMS\n")
+	fmt.Fprintf(w, "NAME/NODE\tDRIVER/ENDPOINT\tSTATUS\tPLATFORMS\n")
 
 	currentSet := false
 	for _, b := range builders {

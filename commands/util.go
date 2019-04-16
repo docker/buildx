@@ -285,7 +285,8 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 	}
 	ngi.drivers = make([]dinfo, len(dis))
 	for i, di := range dis {
-		ngi.drivers[i].di = &di
+		d := di
+		ngi.drivers[i].di = &d
 		func(d *dinfo) {
 			eg.Go(func() error {
 				if err := loadInfoData(ctx, d); err != nil {

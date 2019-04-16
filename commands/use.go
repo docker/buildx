@@ -39,7 +39,7 @@ func runUse(dockerCli command.Cli, in useOptions, name string) error {
 			}
 			for _, l := range list {
 				if l.Name == name {
-					return errors.Errorf("to switch to context %s use `docker context use %s`", name, name)
+					return errors.Errorf("run `docker context use %s` to switch to context %s", name, name)
 				}
 			}
 

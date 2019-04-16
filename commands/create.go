@@ -29,7 +29,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	ctx := appcontext.Context()
 
 	if in.name == "default" {
-		return errors.Errorf("default is a reserved name and can't be used to identify builder instance")
+		return errors.Errorf("default is a reserved name and cannot be used to identify builder instance")
 	}
 
 	if in.actionLeave {
@@ -88,6 +88,12 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 			}
 		} else {
 			return err
+		}
+	}
+
+	if ng != nil {
+		if in.nodeName == "" && !in.actionAppend {
+			return errors.Errorf("existing instance for %s but no append mode, specify --node to make changes for existing instances", name)
 		}
 	}
 

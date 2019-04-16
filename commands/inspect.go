@@ -77,11 +77,15 @@ func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
 	err = loadNodeGroupData(timeoutCtx, dockerCli, ngi)
 
 	if in.bootstrap {
-		if err := boot(ctx, ngi); err != nil {
+		var ok bool
+		ok, err = boot(ctx, ngi)
+		if err != nil {
 			return err
 		}
-		ngi = &nginfo{ng: ng}
-		err = loadNodeGroupData(ctx, dockerCli, ngi)
+		if ok {
+			ngi = &nginfo{ng: ng}
+			err = loadNodeGroupData(ctx, dockerCli, ngi)
+		}
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
@@ -92,22 +96,24 @@ func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
 	} else if ngi.err != nil {
 		fmt.Fprintf(w, "Error:\t%s\n", ngi.err.Error())
 	}
-	fmt.Fprintln(w, "")
-	fmt.Fprintln(w, "Nodes:")
+	if err == nil {
+		fmt.Fprintln(w, "")
+		fmt.Fprintln(w, "Nodes:")
 
-	for i, n := range ngi.ng.Nodes {
-		if i != 0 {
-			fmt.Fprintln(w, "")
-		}
-		fmt.Fprintf(w, "Name:\t%s\n", n.Name)
-		fmt.Fprintf(w, "Endpoint:\t%s\n", n.Endpoint)
-		if err := ngi.drivers[i].di.Err; err != nil {
-			fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-		} else if err := ngi.drivers[i].err; err != nil {
-			fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-		} else {
-			fmt.Fprintf(w, "Status:\t%s\n", ngi.drivers[i].info.Status)
-			fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(append(n.Platforms, ngi.drivers[i].platforms...), ", "))
+		for i, n := range ngi.ng.Nodes {
+			if i != 0 {
+				fmt.Fprintln(w, "")
+			}
+			fmt.Fprintf(w, "Name:\t%s\n", n.Name)
+			fmt.Fprintf(w, "Endpoint:\t%s\n", n.Endpoint)
+			if err := ngi.drivers[i].di.Err; err != nil {
+				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
+			} else if err := ngi.drivers[i].err; err != nil {
+				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
+			} else {
+				fmt.Fprintf(w, "Status:\t%s\n", ngi.drivers[i].info.Status)
+				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(append(n.Platforms, ngi.drivers[i].platforms...), ", "))
+			}
 		}
 	}
 
@@ -137,7 +143,7 @@ func inspectCmd(dockerCli command.Cli) *cobra.Command {
 	return cmd
 }
 
-func boot(ctx context.Context, ngi *nginfo) error {
+func boot(ctx context.Context, ngi *nginfo) (bool, error) {
 	toBoot := make([]int, 0, len(ngi.drivers))
 	for i, d := range ngi.drivers {
 		if d.err != nil || d.di.Err != nil || d.di.Driver == nil || d.info == nil {
@@ -148,7 +154,7 @@ func boot(ctx context.Context, ngi *nginfo) error {
 		}
 	}
 	if len(toBoot) == 0 {
-		return nil
+		return false, nil
 	}
 
 	pw := progress.NewPrinter(context.TODO(), os.Stderr, "auto")
@@ -171,5 +177,5 @@ func boot(ctx context.Context, ngi *nginfo) error {
 		}(idx)
 	}
 
-	return eg.Wait()
+	return true, eg.Wait()
 }
