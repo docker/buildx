@@ -4,6 +4,7 @@ import (
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
+	imagetoolscmd "github.com/tonistiigi/buildx/commands/imagetools"
 )
 
 func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Command {
@@ -31,5 +32,6 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		useCmd(dockerCli),
 		inspectCmd(dockerCli),
 		stopCmd(dockerCli),
+		imagetoolscmd.RootCmd(dockerCli),
 	)
 }
