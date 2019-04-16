@@ -71,7 +71,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if in.quiet {
 		return errors.Errorf("quiet currently not implemented")
 	}
-	if in.networkMode != "" {
+	if in.networkMode != "default" {
 		return errors.Errorf("network currently not implemented")
 	}
 	if in.imageIDFile != "" {
