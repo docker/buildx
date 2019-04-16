@@ -9,6 +9,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tonistiigi/buildx/build"
@@ -22,7 +23,23 @@ type buildOptions struct {
 	tags           []string
 	labels         []string
 	buildArgs      []string
-	// extraHosts     opts.ListOpts
+
+	cacheFrom []string
+	target    string
+	platforms []string
+	secrets   []string
+	ssh       []string
+	outputs   []string
+
+	// unimplemented
+	extraHosts  []string
+	squash      bool
+	quiet       bool
+	networkMode string
+	imageIDFile string
+
+	// hidden
+	// untrusted   bool
 	// ulimits        *opts.UlimitOpt
 	// memory         opts.MemBytes
 	// memorySwap     opts.MemSwapBytes
@@ -34,19 +51,8 @@ type buildOptions struct {
 	// cpuSetMems     string
 	// cgroupParent   string
 	// isolation      string
-	// quiet          bool
-	cacheFrom []string
 	// compress    bool
 	// securityOpt []string
-	// networkMode string
-	// squash      bool
-	target string
-	// imageIDFile string
-	platforms []string
-	// untrusted   bool
-	secrets []string
-	ssh     []string
-	outputs []string
 }
 
 type commonOptions struct {
@@ -56,6 +62,22 @@ type commonOptions struct {
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) error {
+	if len(in.extraHosts) > 0 {
+		return errors.Errorf("extra hosts currently not implemented")
+	}
+	if in.squash {
+		return errors.Errorf("squash currently not implemented")
+	}
+	if in.quiet {
+		return errors.Errorf("quiet currently not implemented")
+	}
+	if in.networkMode != "" {
+		return errors.Errorf("network currently not implemented")
+	}
+	if in.imageIDFile != "" {
+		return errors.Errorf("iidfile currently not implemented")
+	}
+
 	ctx := appcontext.Context()
 
 	opts := build.Options{
@@ -133,28 +155,57 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Name and optionally a tag in the 'name:tag' format")
 	flags.StringArrayVar(&options.buildArgs, "build-arg", []string{}, "Set build-time variables")
-	// flags.Var(options.ulimits, "ulimit", "Ulimit options")
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
-	// flags.VarP(&options.memory, "memory", "m", "Memory limit")
-	// flags.Var(&options.memorySwap, "memory-swap", "Swap limit equal to memory plus swap: '-1' to enable unlimited swap")
-	// flags.Var(&options.shmSize, "shm-size", "Size of /dev/shm")
-	// flags.Int64VarP(&options.cpuShares, "cpu-shares", "c", 0, "CPU shares (relative weight)")
-	// flags.Int64Var(&options.cpuPeriod, "cpu-period", 0, "Limit the CPU CFS (Completely Fair Scheduler) period")
-	// flags.Int64Var(&options.cpuQuota, "cpu-quota", 0, "Limit the CPU CFS (Completely Fair Scheduler) quota")
-	// flags.StringVar(&options.cpuSetCpus, "cpuset-cpus", "", "CPUs in which to allow execution (0-3, 0,1)")
-	// flags.StringVar(&options.cpuSetMems, "cpuset-mems", "", "MEMs in which to allow execution (0-3, 0,1)")
-	// flags.StringVar(&options.cgroupParent, "cgroup-parent", "", "Optional parent cgroup for the container")
-	// flags.StringVar(&options.isolation, "isolation", "", "Container isolation technology")
-	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
-	// flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
-	flags.StringSliceVar(&options.cacheFrom, "cache-from", []string{}, "Images to consider as cache sources")
-	// flags.BoolVar(&options.compress, "compress", false, "Compress the build context using gzip")
 
-	// flags.StringSliceVar(&options.securityOpt, "security-opt", []string{}, "Security options")
-	// flags.StringVar(&options.networkMode, "network", "default", "Set the networking mode for the RUN instructions during build")
-	// flags.Var(&options.extraHosts, "add-host", "Add a custom host-to-IP mapping (host:ip)")
+	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
+
+	flags.StringSliceVar(&options.cacheFrom, "cache-from", []string{}, "Images to consider as cache sources")
+
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build.")
-	// flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+
+	// not implemented
+	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
+	flags.StringVar(&options.networkMode, "network", "default", "Set the networking mode for the RUN instructions during build")
+	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, "Add a custom host-to-IP mapping (host:ip)")
+	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
+	flags.MarkHidden("quiet")
+	flags.MarkHidden("network")
+	flags.MarkHidden("add-host")
+	flags.MarkHidden("iidfile")
+	flags.MarkHidden("squash")
+
+	// hidden flags
+	var ignore string
+	var ignoreSlice []string
+	var ignoreBool bool
+	var ignoreInt int64
+	flags.StringVar(&ignore, "ulimit", "", "Ulimit options")
+	flags.MarkHidden("ulimit")
+	flags.StringSliceVar(&ignoreSlice, "security-opt", []string{}, "Security options")
+	flags.MarkHidden("security-opt")
+	flags.BoolVar(&ignoreBool, "compress", false, "Compress the build context using gzip")
+	flags.MarkHidden("compress")
+	flags.StringVarP(&ignore, "memory", "m", "", "Memory limit")
+	flags.MarkHidden("memory")
+	flags.StringVar(&ignore, "memory-swap", "", "Swap limit equal to memory plus swap: '-1' to enable unlimited swap")
+	flags.MarkHidden("memory-swap")
+	flags.StringVar(&ignore, "shm-size", "", "Size of /dev/shm")
+	flags.MarkHidden("shm-size")
+	flags.Int64VarP(&ignoreInt, "cpu-shares", "c", 0, "CPU shares (relative weight)")
+	flags.MarkHidden("cpu-shares")
+	flags.Int64Var(&ignoreInt, "cpu-period", 0, "Limit the CPU CFS (Completely Fair Scheduler) period")
+	flags.MarkHidden("cpu-period")
+	flags.Int64Var(&ignoreInt, "cpu-quota", 0, "Limit the CPU CFS (Completely Fair Scheduler) quota")
+	flags.MarkHidden("cpu-quota")
+	flags.StringVar(&ignore, "cpuset-cpus", "", "CPUs in which to allow execution (0-3, 0,1)")
+	flags.MarkHidden("cpuset-cpus")
+	flags.StringVar(&ignore, "cpuset-mems", "", "MEMs in which to allow execution (0-3, 0,1)")
+	flags.MarkHidden("cpuset-mems")
+	flags.StringVar(&ignore, "cgroup-parent", "", "Optional parent cgroup for the container")
+	flags.MarkHidden("cgroup-parent")
+	flags.StringVar(&ignore, "isolation", "", "Container isolation technology")
+	flags.MarkHidden("isolation")
 
 	platformsDefault := []string{}
 	if v := os.Getenv("DOCKER_DEFAULT_PLATFORM"); v != "" {
@@ -162,7 +213,6 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	}
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
-	// flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
 	flags.StringArrayVar(&options.secrets, "secret", []string{}, "Secret file to expose to the build: id=mysecret,src=/local/secret")
 
 	flags.StringArrayVar(&options.ssh, "ssh", []string{}, "SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]])")
