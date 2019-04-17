@@ -127,7 +127,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	defer cancel()
 	pw := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
-	_, err = build.Build(ctx, dis, opts, pw)
+	_, err = build.Build(ctx, dis, opts, dockerAPI(dockerCli), pw)
 	return err
 }
 

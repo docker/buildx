@@ -166,7 +166,7 @@ func boot(ctx context.Context, ngi *nginfo) (bool, error) {
 		func(idx int) {
 			eg.Go(func() error {
 				pw := mw.WithPrefix(ngi.ng.Nodes[idx].Name, len(toBoot) > 1)
-				_, _, err := driver.Boot(ctx, ngi.drivers[idx].di.Driver, pw)
+				_, err := driver.Boot(ctx, ngi.drivers[idx].di.Driver, pw)
 				if err != nil {
 					ngi.drivers[idx].err = err
 				}
