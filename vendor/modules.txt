@@ -154,6 +154,7 @@ github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
 github.com/docker/distribution/metrics
 # github.com/docker/docker v1.14.0-0.20190410063227-d9d9eccdc862
+github.com/docker/docker/pkg/urlutil
 github.com/docker/docker/client
 github.com/docker/docker/api/types
 github.com/docker/docker/api/types/container
@@ -270,12 +271,13 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/miekg/pkcs11
 # github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.4.1-0.20190410165125-b4a6a0e3a7d1
+# github.com/moby/buildkit v0.4.1-0.20190410165125-bcd466a748e950507826c30e835b087289aaf384
 github.com/moby/buildkit/session/auth/authprovider
 github.com/moby/buildkit/client
 github.com/moby/buildkit/session
 github.com/moby/buildkit/session/secrets/secretsprovider
 github.com/moby/buildkit/session/sshforward/sshprovider
+github.com/moby/buildkit/session/upload/uploadprovider
 github.com/moby/buildkit/util/appcontext
 github.com/moby/buildkit/identity
 github.com/moby/buildkit/util/progress/progressui
@@ -298,6 +300,7 @@ github.com/moby/buildkit/util/appdefaults
 github.com/moby/buildkit/util/entitlements
 github.com/moby/buildkit/session/secrets
 github.com/moby/buildkit/session/sshforward
+github.com/moby/buildkit/session/upload
 github.com/moby/buildkit/util/system
 github.com/moby/buildkit/util/apicaps/pb
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd

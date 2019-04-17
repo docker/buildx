@@ -1,16 +1,22 @@
 package build
 
 import (
+	"bufio"
 	"context"
 	"io"
+	"io/ioutil"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 
 	"github.com/containerd/containerd/platforms"
+	"github.com/docker/distribution/reference"
+	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/upload/uploadprovider"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/buildx/driver"
@@ -18,12 +24,20 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+var (
+	errStdinConflict      = errors.New("invalid argument: can't use stdin for both build context and dockerfile")
+	errDockerfileConflict = errors.New("ambiguous Dockerfile source: both stdin and flag correspond to Dockerfiles")
+)
+
 type Options struct {
-	Inputs    Inputs
-	Tags      []string
-	Labels    map[string]string
-	BuildArgs map[string]string
-	Pull      bool
+	Inputs      Inputs
+	Tags        []string
+	Labels      map[string]string
+	BuildArgs   map[string]string
+	Pull        bool
+	ImageIDFile string
+	ExtraHosts  []string
+	NetworkMode string
 
 	NoCache   bool
 	Target    string
@@ -96,9 +110,20 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 	for k, opt := range opt {
 		pw := mw.WithPrefix(k, withPrefix)
 
+		if opt.ImageIDFile != "" {
+			if len(opt.Platforms) != 0 {
+				return nil, errors.Errorf("image ID file cannot be specified when building for multiple platforms")
+			}
+			// Avoid leaving a stale file if we eventually fail
+			if err := os.Remove(opt.ImageIDFile); err != nil && !os.IsNotExist(err) {
+				return nil, errors.Wrap(err, "removing image ID file")
+			}
+		}
+
 		so := client.SolveOpt{
 			Frontend:      "dockerfile.v0",
 			FrontendAttrs: map[string]string{},
+			LocalDirs:     map[string]string{},
 		}
 
 		switch len(opt.Exports) {
@@ -115,10 +140,18 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 		}
 
 		if len(opt.Tags) > 0 {
+			tags := make([]string, len(opt.Tags))
+			for i, tag := range opt.Tags {
+				ref, err := reference.Parse(tag)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid tag %q", tag)
+				}
+				tags[i] = ref.String()
+			}
 			for i, e := range opt.Exports {
 				switch e.Type {
 				case "image", "oci", "docker":
-					opt.Exports[i].Attrs["name"] = strings.Join(opt.Tags, ",")
+					opt.Exports[i].Attrs["name"] = strings.Join(tags, ",")
 				}
 			}
 		} else {
@@ -132,6 +165,9 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 		}
 
 		for i, e := range opt.Exports {
+			if (e.Type == "local" || e.Type == "tar") && opt.ImageIDFile != "" {
+				return nil, errors.Errorf("local and tar exporters are incompatible with image ID file")
+			}
 			if e.Type == "oci" && !d.Features()[driver.OCIExporter] {
 				return nil, notSupported(d, driver.OCIExporter)
 			}
@@ -160,9 +196,11 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 		so.Exports = opt.Exports
 		so.Session = opt.Session
 
-		if err := LoadInputs(opt.Inputs, &so); err != nil {
+		release, err := LoadInputs(opt.Inputs, &so)
+		if err != nil {
 			return nil, err
 		}
+		defer release()
 
 		if opt.Pull {
 			so.FrontendAttrs["image-resolve-mode"] = "pull"
@@ -191,6 +229,20 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 			so.FrontendAttrs["platform"] = strings.Join(pp, ",")
 		}
 
+		switch opt.NetworkMode {
+		case "host", "none":
+			so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
+		case "", "default":
+		default:
+			return nil, errors.Errorf("network mode %q not supported by buildkit", opt.NetworkMode)
+		}
+
+		extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts)
+		if err != nil {
+			return nil, err
+		}
+		so.FrontendAttrs["add-hosts"] = extraHosts
+
 		var statusCh chan *client.SolveStatus
 		if pw != nil {
 			statusCh = pw.Status()
@@ -208,6 +260,9 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 			mu.Lock()
 			resp[k] = rr
 			mu.Unlock()
+			if opt.ImageIDFile != "" {
+				return ioutil.WriteFile(opt.ImageIDFile, []byte(rr.ExporterResponse["containerimage.digest"]), 0644)
+			}
 			return nil
 		})
 	}
@@ -219,30 +274,109 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 	return resp, nil
 }
 
-func LoadInputs(inp Inputs, target *client.SolveOpt) error {
+func createTempDockerfile(r io.Reader) (string, error) {
+	dir, err := ioutil.TempDir("", "dockerfile")
+	if err != nil {
+		return "", err
+	}
+	f, err := os.Create(filepath.Join(dir, "Dockerfile"))
+	if err != nil {
+		return "", err
+	}
+	defer f.Close()
+	if _, err := io.Copy(f, r); err != nil {
+		return "", err
+	}
+	return dir, err
+}
+
+func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
-		return errors.New("please specify build context (e.g. \".\" for the current directory)")
+		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
 
 	// TODO: handle stdin, symlinks, remote contexts, check files exist
 
-	if inp.DockerfilePath == "" {
-		inp.DockerfilePath = filepath.Join(inp.ContextPath, "Dockerfile")
+	var (
+		err              error
+		dockerfileReader io.Reader
+		dockerfileDir    string
+		dockerfileName   = inp.DockerfilePath
+		toRemove         []string
+	)
+
+	switch {
+	case inp.ContextPath == "-":
+		if inp.DockerfilePath == "-" {
+			return nil, errStdinConflict
+		}
+
+		buf := bufio.NewReader(os.Stdin)
+		magic, err := buf.Peek(archiveHeaderSize * 2)
+		if err != nil && err != io.EOF {
+			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
+		}
+
+		if isArchive(magic) {
+			// stdin is context
+			up := uploadprovider.New()
+			target.FrontendAttrs["context"] = up.Add(buf)
+			target.Session = append(target.Session, up)
+		} else {
+			if inp.DockerfilePath != "" {
+				return nil, errDockerfileConflict
+			}
+			// stdin is dockerfile
+			dockerfileReader = buf
+			inp.ContextPath, _ = ioutil.TempDir("", "empty-dir")
+			toRemove = append(toRemove, inp.ContextPath)
+			target.LocalDirs["context"] = inp.ContextPath
+		}
+
+	case isLocalDir(inp.ContextPath):
+		target.LocalDirs["context"] = inp.ContextPath
+		switch inp.DockerfilePath {
+		case "-":
+			dockerfileReader = os.Stdin
+		case "":
+			dockerfileDir = inp.ContextPath
+		default:
+			dockerfileDir = filepath.Dir(inp.DockerfilePath)
+			dockerfileName = filepath.Base(inp.DockerfilePath)
+		}
+
+	case urlutil.IsGitURL(inp.ContextPath), urlutil.IsURL(inp.ContextPath):
+		if inp.DockerfilePath == "-" {
+			return nil, errors.Errorf("Dockerfile from stdin is not supported with remote contexts")
+		}
+		target.FrontendAttrs["context"] = inp.ContextPath
+	default:
+		return nil, errors.Errorf("unable to prepare context: path %q not found", inp.ContextPath)
 	}
 
-	if target.LocalDirs == nil {
-		target.LocalDirs = map[string]string{}
+	if dockerfileReader != nil {
+		dockerfileDir, err = createTempDockerfile(dockerfileReader)
+		if err != nil {
+			return nil, err
+		}
+		toRemove = append(toRemove, dockerfileDir)
 	}
 
-	target.LocalDirs["context"] = inp.ContextPath
-	target.LocalDirs["dockerfile"] = filepath.Dir(inp.DockerfilePath)
+	if dockerfileName == "" {
+		dockerfileName = "Dockerfile"
+	}
+	target.FrontendAttrs["filename"] = dockerfileName
 
-	if target.FrontendAttrs == nil {
-		target.FrontendAttrs = map[string]string{}
+	if dockerfileDir != "" {
+		target.LocalDirs["dockerfile"] = dockerfileDir
 	}
 
-	target.FrontendAttrs["filename"] = filepath.Base(inp.DockerfilePath)
-	return nil
+	release := func() {
+		for _, dir := range toRemove {
+			os.RemoveAll(dir)
+		}
+	}
+	return release, nil
 }
 
 func notSupported(d driver.Driver, f driver.Feature) error {

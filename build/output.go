@@ -37,7 +37,7 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 			if len(parts) != 2 {
 				return nil, errors.Errorf("invalid value %s", field)
 			}
-			key := strings.ToLower(parts[0])
+			key := strings.TrimSpace(strings.ToLower(parts[0]))
 			value := parts[1]
 			switch key {
 			case "type":
