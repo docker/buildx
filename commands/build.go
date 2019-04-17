@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
@@ -33,6 +34,9 @@ type buildOptions struct {
 	imageIDFile string
 	extraHosts  []string
 	networkMode string
+
+	exportPush bool
+	exportLoad bool
 
 	// unimplemented
 	squash bool
@@ -112,6 +116,41 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if err != nil {
 		return err
 	}
+	if in.exportPush {
+		if in.exportLoad {
+			return errors.Errorf("push and load may not be set together at the moment")
+		}
+		if len(outputs) == 0 {
+			outputs = []client.ExportEntry{{
+				Type: "image",
+				Attrs: map[string]string{
+					"push": "true",
+				},
+			}}
+		} else {
+			switch outputs[0].Type {
+			case "image":
+				outputs[0].Attrs["push"] = "true"
+			default:
+				return errors.Errorf("push and %q output can't be used together", outputs[0].Type)
+			}
+		}
+	}
+	if in.exportLoad {
+		if len(outputs) == 0 {
+			outputs = []client.ExportEntry{{
+				Type:  "docker",
+				Attrs: map[string]string{},
+			}}
+		} else {
+			switch outputs[0].Type {
+			case "docker":
+			default:
+				return errors.Errorf("load and %q output can't be used together", outputs[0].Type)
+			}
+		}
+	}
+
 	opts.Exports = outputs
 
 	return buildTargets(ctx, dockerCli, map[string]build.Options{"default": opts}, in.progress)
@@ -146,6 +185,9 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
+
+	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for --output=type=registry")
+	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for --output=type=docker")
 
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Name and optionally a tag in the 'name:tag' format")
 	flags.StringArrayVar(&options.buildArgs, "build-arg", []string{}, "Set build-time variables")

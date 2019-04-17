@@ -20,6 +20,7 @@ import (
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/tonistiigi/buildx/driver"
 	"github.com/tonistiigi/buildx/util/progress"
 	"golang.org/x/sync/errgroup"
@@ -95,6 +96,14 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 	_, isDefaultMobyDriver := d.(interface {
 		IsDefaultMobyDriver()
 	})
+
+	for _, opt := range opt {
+		if !isDefaultMobyDriver && len(opt.Exports) == 0 {
+			logrus.Warnf("No output specified for %s driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", d.Factory().Name())
+			break
+		}
+	}
+
 	c, err := driver.Boot(ctx, d, pw)
 	if err != nil {
 		close(pw.Status())
