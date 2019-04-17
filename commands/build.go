@@ -32,11 +32,11 @@ type buildOptions struct {
 	outputs     []string
 	imageIDFile string
 	extraHosts  []string
+	networkMode string
 
 	// unimplemented
-	squash      bool
-	quiet       bool
-	networkMode string
+	squash bool
+	quiet  bool
 
 	// hidden
 	// untrusted   bool
@@ -68,9 +68,6 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if in.quiet {
 		return errors.Errorf("quiet currently not implemented")
 	}
-	if in.networkMode != "default" {
-		return errors.Errorf("network currently not implemented")
-	}
 
 	ctx := appcontext.Context()
 
@@ -88,6 +85,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 		Target:      in.target,
 		ImageIDFile: in.imageIDFile,
 		ExtraHosts:  in.extraHosts,
+		NetworkMode: in.networkMode,
 	}
 
 	platforms, err := build.ParsePlatformSpecs(in.platforms)
@@ -166,7 +164,6 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
 	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
 	flags.MarkHidden("quiet")
-	flags.MarkHidden("network")
 	flags.MarkHidden("squash")
 
 	// hidden flags

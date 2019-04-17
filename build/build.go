@@ -37,6 +37,7 @@ type Options struct {
 	Pull        bool
 	ImageIDFile string
 	ExtraHosts  []string
+	NetworkMode string
 
 	NoCache   bool
 	Target    string
@@ -226,6 +227,14 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 				return nil, notSupported(d, driver.MultiPlatform)
 			}
 			so.FrontendAttrs["platform"] = strings.Join(pp, ",")
+		}
+
+		switch opt.NetworkMode {
+		case "host", "none":
+			so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
+		case "", "default":
+		default:
+			return nil, errors.Errorf("network mode %q not supported by buildkit", opt.NetworkMode)
 		}
 
 		extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts)
