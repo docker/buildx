@@ -36,6 +36,7 @@ type Options struct {
 	BuildArgs   map[string]string
 	Pull        bool
 	ImageIDFile string
+	ExtraHosts  []string
 
 	NoCache   bool
 	Target    string
@@ -226,6 +227,12 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 			}
 			so.FrontendAttrs["platform"] = strings.Join(pp, ",")
 		}
+
+		extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts)
+		if err != nil {
+			return nil, err
+		}
+		so.FrontendAttrs["add-hosts"] = extraHosts
 
 		var statusCh chan *client.SolveStatus
 		if pw != nil {

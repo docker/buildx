@@ -3,7 +3,11 @@ package build
 import (
 	"archive/tar"
 	"bytes"
+	"net"
 	"os"
+	"strings"
+
+	"github.com/pkg/errors"
 )
 
 // archiveHeaderSize is the number of bytes in an archive header
@@ -31,4 +35,21 @@ func isArchive(header []byte) bool {
 	r := tar.NewReader(bytes.NewBuffer(header))
 	_, err := r.Next()
 	return err == nil
+}
+
+// toBuildkitExtraHosts converts hosts from docker key:value format to buildkit's csv format
+func toBuildkitExtraHosts(inp []string) (string, error) {
+	if len(inp) == 0 {
+		return "", nil
+	}
+	hosts := make([]string, 0, len(inp))
+	for _, h := range inp {
+		parts := strings.Split(h, ":")
+
+		if len(parts) != 2 || parts[0] == "" || net.ParseIP(parts[1]) == nil {
+			return "", errors.Errorf("invalid host %s", h)
+		}
+		hosts = append(hosts, parts[0]+"="+parts[1])
+	}
+	return strings.Join(hosts, ","), nil
 }

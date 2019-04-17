@@ -31,9 +31,9 @@ type buildOptions struct {
 	ssh         []string
 	outputs     []string
 	imageIDFile string
+	extraHosts  []string
 
 	// unimplemented
-	extraHosts  []string
 	squash      bool
 	quiet       bool
 	networkMode string
@@ -62,9 +62,6 @@ type commonOptions struct {
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) error {
-	if len(in.extraHosts) > 0 {
-		return errors.Errorf("extra hosts currently not implemented")
-	}
 	if in.squash {
 		return errors.Errorf("squash currently not implemented")
 	}
@@ -90,6 +87,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 		NoCache:     in.noCache,
 		Target:      in.target,
 		ImageIDFile: in.imageIDFile,
+		ExtraHosts:  in.extraHosts,
 	}
 
 	platforms, err := build.ParsePlatformSpecs(in.platforms)
@@ -169,7 +167,6 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
 	flags.MarkHidden("quiet")
 	flags.MarkHidden("network")
-	flags.MarkHidden("add-host")
 	flags.MarkHidden("squash")
 
 	// hidden flags
