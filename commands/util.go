@@ -299,3 +299,18 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 
 	return eg.Wait()
 }
+
+func dockerAPI(dockerCli command.Cli) *api {
+	return &api{dockerCli: dockerCli}
+}
+
+type api struct {
+	dockerCli command.Cli
+}
+
+func (a *api) DockerAPI(name string) (dockerclient.APIClient, error) {
+	if name == "" {
+		name = a.dockerCli.CurrentContext()
+	}
+	return clientForEndpoint(a.dockerCli, name)
+}

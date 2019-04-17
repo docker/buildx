@@ -139,10 +139,10 @@ github.com/docker/compose-on-kubernetes/api/compose/impersonation
 # github.com/docker/distribution v2.7.1-0.20190205005809-0d3efadf0154+incompatible
 github.com/docker/distribution/reference
 github.com/docker/distribution/digestset
+github.com/docker/distribution/registry/api/errcode
 github.com/docker/distribution/manifest/manifestlist
 github.com/docker/distribution
 github.com/docker/distribution/manifest/schema2
-github.com/docker/distribution/registry/api/errcode
 github.com/docker/distribution/registry/api/v2
 github.com/docker/distribution/registry/client
 github.com/docker/distribution/registry/client/auth
@@ -154,8 +154,8 @@ github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
 github.com/docker/distribution/metrics
 # github.com/docker/docker v1.14.0-0.20190410063227-d9d9eccdc862
-github.com/docker/docker/pkg/urlutil
 github.com/docker/docker/client
+github.com/docker/docker/pkg/urlutil
 github.com/docker/docker/api/types
 github.com/docker/docker/api/types/container
 github.com/docker/docker/api/types/network
@@ -163,21 +163,22 @@ github.com/docker/docker/pkg/stdcopy
 github.com/docker/docker/pkg/namesgenerator
 github.com/docker/docker/api/types/mount
 github.com/docker/docker/api/types/versions
+github.com/docker/docker/api
 github.com/docker/docker/api/types/events
 github.com/docker/docker/api/types/filters
+github.com/docker/docker/api/types/image
 github.com/docker/docker/api/types/registry
+github.com/docker/docker/api/types/swarm
+github.com/docker/docker/api/types/time
+github.com/docker/docker/api/types/volume
+github.com/docker/docker/errdefs
 github.com/docker/docker/pkg/homedir
 github.com/docker/docker/pkg/system
 github.com/docker/docker/pkg/term
 github.com/docker/docker/registry
 github.com/docker/docker/api/types/blkiodev
-github.com/docker/docker/api/types/swarm
-github.com/docker/docker/api
-github.com/docker/docker/api/types/image
-github.com/docker/docker/api/types/time
-github.com/docker/docker/api/types/volume
-github.com/docker/docker/errdefs
 github.com/docker/docker/api/types/strslice
+github.com/docker/docker/api/types/swarm/runtime
 github.com/docker/docker/pkg/jsonmessage
 github.com/docker/docker/pkg/idtools
 github.com/docker/docker/pkg/mount
@@ -186,7 +187,6 @@ github.com/docker/docker/pkg/ioutils
 github.com/docker/docker/pkg/stringid
 github.com/docker/docker/pkg/tarsum
 github.com/docker/docker/registry/resumable
-github.com/docker/docker/api/types/swarm/runtime
 github.com/docker/docker/pkg/fileutils
 github.com/docker/docker/pkg/longpath
 # github.com/docker/docker-credential-helpers v0.6.1
@@ -196,8 +196,8 @@ github.com/docker/docker-credential-helpers/credentials
 github.com/docker/go/canonical/json
 # github.com/docker/go-connections v0.4.0
 github.com/docker/go-connections/nat
-github.com/docker/go-connections/tlsconfig
 github.com/docker/go-connections/sockets
+github.com/docker/go-connections/tlsconfig
 # github.com/docker/go-events v0.0.0-20170721190031-9461782956ad
 github.com/docker/go-events
 # github.com/docker/go-metrics v0.0.0-20170502235133-d466d4f6fd96
@@ -396,10 +396,10 @@ golang.org/x/net/http2
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/trace
+golang.org/x/net/proxy
 golang.org/x/net/http/httpguts
 golang.org/x/net/http2/hpack
 golang.org/x/net/idna
-golang.org/x/net/proxy
 golang.org/x/net/internal/timeseries
 golang.org/x/net/internal/socks
 # golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f

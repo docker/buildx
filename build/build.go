@@ -13,12 +13,14 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution/reference"
+	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/tonistiigi/buildx/driver"
 	"github.com/tonistiigi/buildx/util/progress"
 	"golang.org/x/sync/errgroup"
@@ -61,6 +63,10 @@ type DriverInfo struct {
 	Err      error
 }
 
+type DockerAPI interface {
+	DockerAPI(name string) (dockerclient.APIClient, error)
+}
+
 func getFirstDriver(drivers []DriverInfo) (driver.Driver, error) {
 	err := errors.Errorf("no drivers found")
 	for _, di := range drivers {
@@ -74,7 +80,7 @@ func getFirstDriver(drivers []DriverInfo) (driver.Driver, error) {
 	return nil, err
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw progress.Writer) (map[string]*client.SolveResponse, error) {
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, pw progress.Writer) (map[string]*client.SolveResponse, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -83,7 +89,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 		return nil, errors.Errorf("multiple drivers currently not supported")
 	}
 
-	pwOld := pw
 	d, err := getFirstDriver(drivers)
 	if err != nil {
 		return nil, err
@@ -91,10 +96,18 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 	_, isDefaultMobyDriver := d.(interface {
 		IsDefaultMobyDriver()
 	})
-	c, pw, err := driver.Boot(ctx, d, pw)
+
+	for _, opt := range opt {
+		if !isDefaultMobyDriver && len(opt.Exports) == 0 {
+			logrus.Warnf("No output specified for %s driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", d.Factory().Name())
+			break
+		}
+	}
+
+	c, err := driver.Boot(ctx, d, pw)
 	if err != nil {
-		close(pwOld.Status())
-		<-pwOld.Done()
+		close(pw.Status())
+		<-pw.Done()
 		return nil, err
 	}
 
@@ -173,10 +186,16 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 			}
 			if e.Type == "docker" {
 				if e.Output == nil {
-					if !isDefaultMobyDriver {
-						return nil, errors.Errorf("loading to docker currently not implemented, specify dest file or -")
+					if isDefaultMobyDriver {
+						e.Type = "image"
+					} else {
+						w, cancel, err := newDockerLoader(ctx, docker, e.Attrs["context"], mw)
+						if err != nil {
+							return nil, err
+						}
+						defer cancel()
+						opt.Exports[i].Output = w
 					}
-					e.Type = "image"
 				} else if !d.Features()[driver.DockerExporter] {
 					return nil, notSupported(d, driver.DockerExporter)
 				}
@@ -245,6 +264,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw
 
 		var statusCh chan *client.SolveStatus
 		if pw != nil {
+			pw = progress.ResetTime(pw)
 			statusCh = pw.Status()
 			eg.Go(func() error {
 				<-pw.Done()
@@ -380,5 +400,54 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 }
 
 func notSupported(d driver.Driver, f driver.Feature) error {
-	return errors.Errorf("%s feature is currently not supported for %s driver. Please switch to a different driver (eg. \"docker buildx new\")", f, d.Factory().Name())
+	return errors.Errorf("%s feature is currently not supported for %s driver. Please switch to a different driver (eg. \"docker buildx create\")", f, d.Factory().Name())
+}
+
+func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress.MultiWriter) (io.WriteCloser, func(), error) {
+	c, err := d.DockerAPI(name)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	pr, pw := io.Pipe()
+	started := make(chan struct{})
+	w := &waitingWriter{
+		PipeWriter: pw,
+		f: func() {
+			resp, err := c.ImageLoad(ctx, pr, false)
+			if err != nil {
+				pr.CloseWithError(err)
+				return
+			}
+			prog := mw.WithPrefix("", false)
+			close(started)
+			progress.FromReader(prog, "importing to docker", resp.Body)
+		},
+		started: started,
+	}
+	return w, func() {
+		pr.Close()
+	}, nil
+}
+
+type waitingWriter struct {
+	*io.PipeWriter
+	f       func()
+	once    sync.Once
+	mu      sync.Mutex
+	err     error
+	started chan struct{}
+}
+
+func (w *waitingWriter) Write(dt []byte) (int, error) {
+	w.once.Do(func() {
+		go w.f()
+	})
+	return w.PipeWriter.Write(dt)
+}
+
+func (w *waitingWriter) Close() error {
+	err := w.PipeWriter.Close()
+	<-w.started
+	return err
 }
