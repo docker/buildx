@@ -30,3 +30,29 @@ func Parse(platformsStr []string) ([]specs.Platform, error) {
 	}
 	return out, nil
 }
+
+func Dedupe(in []specs.Platform) []specs.Platform {
+	m := map[string]struct{}{}
+	out := make([]specs.Platform, 0, len(in))
+	for _, p := range in {
+		p := platforms.Normalize(p)
+		key := platforms.Format(p)
+		if _, ok := m[key]; ok {
+			continue
+		}
+		m[key] = struct{}{}
+		out = append(out, p)
+	}
+	return out
+}
+
+func Format(in []specs.Platform) []string {
+	if len(in) == 0 {
+		return nil
+	}
+	out := make([]string, 0, len(in))
+	for _, p := range in {
+		out = append(out, platforms.Format(p))
+	}
+	return out
+}

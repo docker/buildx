@@ -14,6 +14,7 @@ import (
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/buildx/store"
+	"github.com/tonistiigi/buildx/util/platformutil"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -129,7 +130,7 @@ func printngi(w io.Writer, ngi *nginfo) {
 			if err != "" {
 				fmt.Fprintf(w, "  %s\t%s\t%s\n", n.Name, n.Endpoint, err)
 			} else {
-				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, strings.Join(p, ", "))
+				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, strings.Join(platformutil.Format(p), ", "))
 			}
 		}
 	}

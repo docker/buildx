@@ -11,10 +11,12 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/buildx/build"
 	"github.com/tonistiigi/buildx/driver"
 	"github.com/tonistiigi/buildx/store"
+	"github.com/tonistiigi/buildx/util/platformutil"
 	"github.com/tonistiigi/buildx/util/progress"
 	"golang.org/x/sync/errgroup"
 )
@@ -26,7 +28,7 @@ type inspectOptions struct {
 type dinfo struct {
 	di        *build.DriverInfo
 	info      *driver.Info
-	platforms []string
+	platforms []specs.Platform
 	err       error
 }
 
@@ -112,7 +114,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
 			} else {
 				fmt.Fprintf(w, "Status:\t%s\n", ngi.drivers[i].info.Status)
-				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(append(n.Platforms, ngi.drivers[i].platforms...), ", "))
+				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.Format(platformutil.Dedupe(append(n.Platforms, ngi.drivers[i].platforms...))), ", "))
 			}
 		}
 	}

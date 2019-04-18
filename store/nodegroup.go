@@ -3,7 +3,10 @@ package store
 import (
 	"fmt"
 
+	"github.com/containerd/containerd/platforms"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/buildx/util/platformutil"
 )
 
 type NodeGroup struct {
@@ -15,7 +18,7 @@ type NodeGroup struct {
 type Node struct {
 	Name      string
 	Endpoint  string
-	Platforms []string
+	Platforms []specs.Platform
 }
 
 func (ng *NodeGroup) Leave(name string) error {
@@ -38,16 +41,22 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		}
 		ng.Nodes = nil
 	}
+
+	pp, err := platformutil.Parse(platforms)
+	if err != nil {
+		return err
+	}
+
 	if i != -1 {
 		n := ng.Nodes[i]
 		if endpointsSet {
 			n.Endpoint = endpoint
 		}
 		if len(platforms) > 0 {
-			n.Platforms = platforms
+			n.Platforms = pp
 		}
 		ng.Nodes[i] = n
-		if err := ng.validateDuplicates(endpoint); err != nil {
+		if err := ng.validateDuplicates(endpoint, i); err != nil {
 			return err
 		}
 		return nil
@@ -57,7 +66,7 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		name = ng.nextNodeName()
 	}
 
-	name, err := ValidateName(name)
+	name, err = ValidateName(name)
 	if err != nil {
 		return err
 	}
@@ -65,18 +74,17 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 	n := Node{
 		Name:      name,
 		Endpoint:  endpoint,
-		Platforms: platforms,
+		Platforms: pp,
 	}
 	ng.Nodes = append(ng.Nodes, n)
 
-	if err := ng.validateDuplicates(endpoint); err != nil {
+	if err := ng.validateDuplicates(endpoint, len(ng.Nodes)-1); err != nil {
 		return err
 	}
 	return nil
 }
 
-func (ng *NodeGroup) validateDuplicates(ep string) error {
-	// TODO: reset platforms
+func (ng *NodeGroup) validateDuplicates(ep string, idx int) error {
 	i := 0
 	for _, n := range ng.Nodes {
 		if n.Endpoint == ep {
@@ -86,6 +94,19 @@ func (ng *NodeGroup) validateDuplicates(ep string) error {
 	if i > 1 {
 		return errors.Errorf("invalid duplicate endpoint %s", ep)
 	}
+
+	m := map[string]struct{}{}
+	for _, p := range ng.Nodes[idx].Platforms {
+		m[platforms.Format(p)] = struct{}{}
+	}
+
+	for i := range ng.Nodes {
+		if i == idx {
+			continue
+		}
+		ng.Nodes[i].Platforms = filterPlatforms(ng.Nodes[i].Platforms, m)
+	}
+
 	return nil
 }
 
@@ -108,4 +129,14 @@ func (ng *NodeGroup) nextNodeName() string {
 		}
 		return name
 	}
+}
+
+func filterPlatforms(in []specs.Platform, m map[string]struct{}) []specs.Platform {
+	out := make([]specs.Platform, 0, len(in))
+	for _, p := range in {
+		if _, ok := m[platforms.Format(p)]; !ok {
+			out = append(out, p)
+		}
+	}
+	return out
 }

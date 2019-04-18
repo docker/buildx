@@ -59,7 +59,7 @@ type Inputs struct {
 type DriverInfo struct {
 	Driver   driver.Driver
 	Name     string
-	Platform []string // TODO: specs.Platform
+	Platform []specs.Platform
 	Err      error
 }
 
