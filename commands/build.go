@@ -26,6 +26,7 @@ type buildOptions struct {
 	buildArgs      []string
 
 	cacheFrom   []string
+	cacheTo     []string
 	target      string
 	platforms   []string
 	secrets     []string
@@ -153,6 +154,18 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	opts.Exports = outputs
 
+	cacheImports, err := build.ParseCacheEntry(in.cacheFrom)
+	if err != nil {
+		return err
+	}
+	opts.CacheFrom = cacheImports
+
+	cacheExports, err := build.ParseCacheEntry(in.cacheTo)
+	if err != nil {
+		return err
+	}
+	opts.CacheTo = cacheExports
+
 	return buildTargets(ctx, dockerCli, map[string]build.Options{"default": opts}, in.progress)
 }
 
@@ -195,7 +208,8 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
-	flags.StringSliceVar(&options.cacheFrom, "cache-from", []string{}, "Images to consider as cache sources")
+	flags.StringArrayVar(&options.cacheFrom, "cache-from", []string{}, "External cache sources (eg. user/app:cache, type=local,src=path/to/dir)")
+	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, "Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)")
 
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build.")
 

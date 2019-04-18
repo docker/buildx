@@ -210,6 +210,7 @@ type Target struct {
 	Labels     map[string]string `json:"labels,omitempty"`
 	Tags       []string          `json:"tags,omitempty"`
 	CacheFrom  []string          `json:"cache-from,omitempty"`
+	CacheTo    []string          `json:"cache-to,omitempty"`
 	Target     *string           `json:"target,omitempty"`
 	Secrets    []string          `json:"secret,omitempty"`
 	SSH        []string          `json:"ssh,omitempty"`
@@ -251,7 +252,6 @@ func toBuildOpt(t Target) (*build.Options, error) {
 		Tags:      t.Tags,
 		BuildArgs: t.Args,
 		Labels:    t.Labels,
-		// CacheFrom: t.CacheFrom,
 	}
 
 	platforms, err := build.ParsePlatformSpecs(t.Platforms)
@@ -277,6 +277,18 @@ func toBuildOpt(t Target) (*build.Options, error) {
 	if t.Target != nil {
 		bo.Target = *t.Target
 	}
+
+	cacheImports, err := build.ParseCacheEntry(t.CacheFrom)
+	if err != nil {
+		return nil, err
+	}
+	bo.CacheFrom = cacheImports
+
+	cacheExports, err := build.ParseCacheEntry(t.CacheTo)
+	if err != nil {
+		return nil, err
+	}
+	bo.CacheTo = cacheExports
 
 	return bo, nil
 }
@@ -324,6 +336,12 @@ func merge(t1, t2 Target) Target {
 	}
 	if t2.Platforms != nil { // no merge
 		t1.Platforms = t2.Platforms
+	}
+	if len(t2.CacheFrom) > 0 { // no merge
+		t1.CacheFrom = t2.CacheFrom
+	}
+	if len(t2.CacheTo) > 0 { // no merge
+		t1.CacheTo = t2.CacheTo
 	}
 	t1.Inherits = append(t1.Inherits, t2.Inherits...)
 	return t1

@@ -47,6 +47,9 @@ type Options struct {
 	Exports   []client.ExportEntry
 	Session   []session.Attachable
 
+	CacheFrom []client.CacheOptionsEntry
+	CacheTo   []client.CacheOptionsEntry
+
 	// DockerTarget
 }
 
@@ -133,10 +136,27 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			}
 		}
 
+		if v, ok := opt.BuildArgs["BUILDKIT_INLINE_CACHE"]; ok {
+			if v, _ := strconv.ParseBool(v); v {
+				opt.CacheTo = append(opt.CacheTo, client.CacheOptionsEntry{
+					Type:  "inline",
+					Attrs: map[string]string{},
+				})
+			}
+		}
+
+		for _, e := range opt.CacheTo {
+			if e.Type != "inline" && !d.Features()[driver.CacheExport] {
+				return nil, notSupported(d, driver.CacheExport)
+			}
+		}
+
 		so := client.SolveOpt{
 			Frontend:      "dockerfile.v0",
 			FrontendAttrs: map[string]string{},
 			LocalDirs:     map[string]string{},
+			CacheExports:  opt.CacheTo,
+			CacheImports:  opt.CacheFrom,
 		}
 
 		switch len(opt.Exports) {
