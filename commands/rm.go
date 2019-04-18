@@ -27,10 +27,11 @@ func runRm(dockerCli command.Cli, in rmOptions, args []string) error {
 		if err != nil {
 			return err
 		}
-		if err := stop(ctx, dockerCli, ng, true); err != nil {
+		err1 := stop(ctx, dockerCli, ng, true)
+		if err := txn.Remove(ng.Name); err != nil {
 			return err
 		}
-		return txn.Remove(ng.Name)
+		return err1
 	}
 
 	ng, err := getCurrentInstance(txn, dockerCli)
@@ -38,10 +39,11 @@ func runRm(dockerCli command.Cli, in rmOptions, args []string) error {
 		return err
 	}
 	if ng != nil {
-		if err := stop(ctx, dockerCli, ng, true); err != nil {
+		err1 := stop(ctx, dockerCli, ng, true)
+		if err := txn.Remove(ng.Name); err != nil {
 			return err
 		}
-		return txn.Remove(ng.Name)
+		return err1
 	}
 
 	return nil
