@@ -1,10 +1,13 @@
 package imagetools
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 
+	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/images"
+	"github.com/docker/distribution/reference"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -140,6 +143,19 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 		Size:      int64(len(idxBytes)),
 		Digest:    digest.FromBytes(idxBytes),
 	}, nil
+}
+
+func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.Descriptor, dt []byte) error {
+	p, err := r.r.Pusher(ctx, ref.String())
+	if err != nil {
+		return err
+	}
+	cw, err := p.Push(ctx, desc)
+	if err != nil {
+		return err
+	}
+
+	return content.Copy(ctx, cw, bytes.NewReader(dt), desc.Size, desc.Digest)
 }
 
 func (r *Resolver) loadConfig(ctx context.Context, in string, dt []byte) (*ocispec.Image, error) {

@@ -29,11 +29,11 @@ github.com/containerd/console
 # github.com/containerd/containerd v1.3.0-0.20190321141026-ceba56893a76
 github.com/containerd/containerd/platforms
 github.com/containerd/containerd/images
+github.com/containerd/containerd/content
 github.com/containerd/containerd/remotes
 github.com/containerd/containerd/remotes/docker
 github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/log
-github.com/containerd/containerd/content
 github.com/containerd/containerd/content/local
 github.com/containerd/containerd/labels
 github.com/containerd/containerd/reference
