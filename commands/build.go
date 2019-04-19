@@ -14,6 +14,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tonistiigi/buildx/build"
+	"github.com/tonistiigi/buildx/util/platformutil"
 	"github.com/tonistiigi/buildx/util/progress"
 )
 
@@ -93,7 +94,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 		NetworkMode: in.networkMode,
 	}
 
-	platforms, err := build.ParsePlatformSpecs(in.platforms)
+	platforms, err := platformutil.Parse(in.platforms)
 	if err != nil {
 		return err
 	}

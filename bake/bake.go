@@ -8,6 +8,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/buildx/build"
+	"github.com/tonistiigi/buildx/util/platformutil"
 )
 
 func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[string]Target, error) {
@@ -254,7 +255,7 @@ func toBuildOpt(t Target) (*build.Options, error) {
 		Labels:    t.Labels,
 	}
 
-	platforms, err := build.ParsePlatformSpecs(t.Platforms)
+	platforms, err := platformutil.Parse(t.Platforms)
 	if err != nil {
 		return nil, err
 	}

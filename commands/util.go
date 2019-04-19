@@ -5,7 +5,6 @@ import (
 	"os"
 	"path/filepath"
 
-	"github.com/containerd/containerd/platforms"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
 	dopts "github.com/docker/cli/opts"
@@ -14,6 +13,7 @@ import (
 	"github.com/tonistiigi/buildx/build"
 	"github.com/tonistiigi/buildx/driver"
 	"github.com/tonistiigi/buildx/store"
+	"github.com/tonistiigi/buildx/util/platformutil"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -269,9 +269,10 @@ func loadInfoData(ctx context.Context, d *dinfo) error {
 		}
 		for _, w := range workers {
 			for _, p := range w.Platforms {
-				d.platforms = append(d.platforms, platforms.Format(p))
+				d.platforms = append(d.platforms, p)
 			}
 		}
+		d.platforms = platformutil.Dedupe(d.platforms)
 	}
 	return nil
 }
