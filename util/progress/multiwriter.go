@@ -3,14 +3,17 @@ package progress
 import (
 	"context"
 	"strings"
+	"sync"
 
 	"github.com/moby/buildkit/client"
 	"golang.org/x/sync/errgroup"
 )
 
 type MultiWriter struct {
-	w  Writer
-	eg *errgroup.Group
+	w     Writer
+	eg    *errgroup.Group
+	once  sync.Once
+	ready chan struct{}
 }
 
 func (mw *MultiWriter) WithPrefix(pfx string, force bool) Writer {
@@ -21,6 +24,9 @@ func (mw *MultiWriter) WithPrefix(pfx string, force bool) Writer {
 		in:   in,
 	}
 	mw.eg.Go(func() error {
+		mw.once.Do(func() {
+			close(mw.ready)
+		})
 		for {
 			select {
 			case v, ok := <-in:
@@ -77,14 +83,18 @@ func NewMultiWriter(pw Writer) *MultiWriter {
 	}
 	eg, _ := errgroup.WithContext(context.TODO())
 
+	ready := make(chan struct{})
+
 	go func() {
+		<-ready
 		eg.Wait()
 		close(pw.Status())
 	}()
 
 	return &MultiWriter{
-		w:  pw,
-		eg: eg,
+		w:     pw,
+		eg:    eg,
+		ready: ready,
 	}
 }
 

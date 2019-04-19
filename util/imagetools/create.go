@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 
 	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/docker/distribution/reference"
 	"github.com/opencontainers/go-digest"
@@ -152,10 +153,17 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 	}
 	cw, err := p.Push(ctx, desc)
 	if err != nil {
+		if errdefs.IsAlreadyExists(err) {
+			return nil
+		}
 		return err
 	}
 
-	return content.Copy(ctx, cw, bytes.NewReader(dt), desc.Size, desc.Digest)
+	err = content.Copy(ctx, cw, bytes.NewReader(dt), desc.Size, desc.Digest)
+	if errdefs.IsAlreadyExists(err) {
+		return nil
+	}
+	return err
 }
 
 func (r *Resolver) loadConfig(ctx context.Context, in string, dt []byte) (*ocispec.Image, error) {

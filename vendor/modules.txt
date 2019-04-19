@@ -27,12 +27,12 @@ github.com/beorn7/perks/quantile
 # github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50
 github.com/containerd/console
 # github.com/containerd/containerd v1.3.0-0.20190321141026-ceba56893a76
-github.com/containerd/containerd/platforms
 github.com/containerd/containerd/images
+github.com/containerd/containerd/platforms
 github.com/containerd/containerd/content
+github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/remotes
 github.com/containerd/containerd/remotes/docker
-github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/log
 github.com/containerd/containerd/content/local
 github.com/containerd/containerd/labels
@@ -98,6 +98,7 @@ github.com/davecgh/go-spew/spew
 # github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0 => github.com/tiborvass/cli v0.0.0-20190419012645-1ed02c40fe68
 github.com/docker/cli/cli/compose/loader
 github.com/docker/cli/cli/compose/types
+github.com/docker/cli/cli/config/types
 github.com/docker/cli/cli-plugins/manager
 github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli/command
@@ -106,7 +107,6 @@ github.com/docker/cli/cli
 github.com/docker/cli/cli/config
 github.com/docker/cli/cli/context/docker
 github.com/docker/cli/opts
-github.com/docker/cli/cli/config/types
 github.com/docker/cli/cli/compose/interpolation
 github.com/docker/cli/cli/compose/schema
 github.com/docker/cli/cli/compose/template
