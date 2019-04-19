@@ -95,7 +95,7 @@ github.com/containerd/fifo
 github.com/containerd/typeurl
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0
+# github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0 => github.com/tiborvass/cli v0.0.0-20190419012645-1ed02c40fe68
 github.com/docker/cli/cli/compose/loader
 github.com/docker/cli/cli/compose/types
 github.com/docker/cli/cli-plugins/manager
@@ -103,13 +103,13 @@ github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli/command
 github.com/docker/cli/cli/flags
 github.com/docker/cli/cli
+github.com/docker/cli/cli/config
 github.com/docker/cli/cli/context/docker
 github.com/docker/cli/opts
 github.com/docker/cli/cli/config/types
 github.com/docker/cli/cli/compose/interpolation
 github.com/docker/cli/cli/compose/schema
 github.com/docker/cli/cli/compose/template
-github.com/docker/cli/cli/config
 github.com/docker/cli/cli/config/configfile
 github.com/docker/cli/cli/connhelper
 github.com/docker/cli/cli/context
