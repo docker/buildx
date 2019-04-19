@@ -45,12 +45,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		return nil, errors.Errorf("docker driver requires docker API access")
 	}
 
-	v, err := cfg.DockerAPI.ServerVersion(ctx)
-	if err != nil {
-		return nil, errors.Wrapf(driver.ErrNotConnecting, err.Error())
-	}
-
-	return &Driver{factory: f, InitConfig: cfg, version: v}, nil
+	return &Driver{factory: f, InitConfig: cfg}, nil
 }
 
 func (f *factory) AllowsInstances() bool {
