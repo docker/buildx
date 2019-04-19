@@ -137,10 +137,22 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	if err != nil {
 		return err
 	}
-	_ = desc
 
 	if in.dryrun {
 		fmt.Printf("%s\n", dt)
+		return nil
+	}
+
+	// new resolver cause need new auth
+	r = imagetools.New(imagetools.Opt{
+		Auth: dockerCli.ConfigFile(),
+	})
+
+	for _, t := range tags {
+		if err := r.Push(ctx, t, desc, dt); err != nil {
+			return err
+		}
+		fmt.Println(t.String())
 	}
 
 	return nil
