@@ -32,10 +32,10 @@ services:
 	require.Equal(t, []string{"db", "webapp"}, c.Group["default"].Targets)
 
 	require.Equal(t, 2, len(c.Target))
-	require.Equal(t, "./db", c.Target["db"].Context)
+	require.Equal(t, "./db", *c.Target["db"].Context)
 
-	require.Equal(t, "./dir", c.Target["webapp"].Context)
-	require.Equal(t, "Dockerfile-alternate", c.Target["webapp"].Dockerfile)
+	require.Equal(t, "./dir", *c.Target["webapp"].Context)
+	require.Equal(t, "Dockerfile-alternate", *c.Target["webapp"].Dockerfile)
 	require.Equal(t, 1, len(c.Target["webapp"].Args))
 	require.Equal(t, "123", c.Target["webapp"].Args["buildno"])
 }

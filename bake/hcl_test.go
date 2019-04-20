@@ -47,7 +47,7 @@ func TestParseHCL(t *testing.T) {
 	require.Equal(t, []string{"db", "webapp"}, c.Group["default"].Targets)
 
 	require.Equal(t, 4, len(c.Target))
-	require.Equal(t, "./db", c.Target["db"].Context)
+	require.Equal(t, "./db", *c.Target["db"].Context)
 
 	require.Equal(t, 1, len(c.Target["webapp"].Args))
 	require.Equal(t, "123", c.Target["webapp"].Args["buildno"])
