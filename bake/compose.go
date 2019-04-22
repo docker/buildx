@@ -34,9 +34,19 @@ func ParseCompose(dt []byte) (*Config, error) {
 
 		for _, s := range cfg.Services {
 			g.Targets = append(g.Targets, s.Name)
+			var contextPathP *string
+			if s.Build.Context != "" {
+				contextPath := s.Build.Context
+				contextPathP = &contextPath
+			}
+			var dockerfilePathP *string
+			if s.Build.Dockerfile != "" {
+				dockerfilePath := s.Build.Dockerfile
+				dockerfilePathP = &dockerfilePath
+			}
 			t := Target{
-				Context:    s.Build.Context,
-				Dockerfile: s.Build.Dockerfile,
+				Context:    contextPathP,
+				Dockerfile: dockerfilePathP,
 				Labels:     s.Build.Labels,
 				Args:       toMap(s.Build.Args),
 				CacheFrom:  s.Build.CacheFrom,

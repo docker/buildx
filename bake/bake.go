@@ -109,9 +109,9 @@ func (c Config) setOverrides(v []string) error {
 
 		switch keys[1] {
 		case "context":
-			t.Context = parts[1]
+			t.Context = &parts[1]
 		case "dockerfile":
-			t.Dockerfile = parts[1]
+			t.Dockerfile = &parts[1]
 		case "args":
 			if len(keys) != 3 {
 				return errors.Errorf("invalid key %s, args requires name", parts[0])
@@ -170,7 +170,19 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 }
 
 func (c Config) ResolveTarget(name string) (*Target, error) {
-	return c.target(name, map[string]struct{}{})
+	t, err := c.target(name, map[string]struct{}{})
+	if err != nil {
+		return nil, err
+	}
+	if t.Context == nil {
+		s := "."
+		t.Context = &s
+	}
+	if t.Dockerfile == nil {
+		s := "Dockerfile"
+		t.Dockerfile = &s
+	}
+	return t, nil
 }
 
 func (c Config) target(name string, visited map[string]struct{}) (*Target, error) {
@@ -205,8 +217,8 @@ type Group struct {
 
 type Target struct {
 	Inherits   []string          `json:"inherits,omitempty"`
-	Context    string            `json:"context,omitempty"`
-	Dockerfile string            `json:"dockerfile,omitempty"`
+	Context    *string           `json:"context,omitempty"`
+	Dockerfile *string           `json:"dockerfile,omitempty"`
 	Args       map[string]string `json:"args,omitempty"`
 	Labels     map[string]string `json:"labels,omitempty"`
 	Tags       []string          `json:"tags,omitempty"`
@@ -238,17 +250,26 @@ func TargetsToBuildOpt(m map[string]Target) (map[string]build.Options, error) {
 }
 
 func toBuildOpt(t Target) (*build.Options, error) {
-	if t.Context == "-" {
+	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
-	if t.Dockerfile == "-" {
+	if v := t.Dockerfile; v != nil && *v == "-" {
 		return nil, errors.Errorf("dockerfile from stdin not allowed in bake")
+	}
+
+	contextPath := "."
+	if t.Context != nil {
+		contextPath = *t.Context
+	}
+	dockerfilePath := "Dockerfile"
+	if t.Dockerfile != nil {
+		dockerfilePath = *t.Dockerfile
 	}
 
 	bo := &build.Options{
 		Inputs: build.Inputs{
-			ContextPath:    t.Context,
-			DockerfilePath: t.Dockerfile,
+			ContextPath:    contextPath,
+			DockerfilePath: dockerfilePath,
 		},
 		Tags:      t.Tags,
 		BuildArgs: t.Args,
@@ -295,17 +316,14 @@ func toBuildOpt(t Target) (*build.Options, error) {
 }
 
 func defaultTarget() Target {
-	return Target{
-		Context:    ".",
-		Dockerfile: "Dockerfile",
-	}
+	return Target{}
 }
 
 func merge(t1, t2 Target) Target {
-	if t2.Context != "" {
+	if t2.Context != nil {
 		t1.Context = t2.Context
 	}
-	if t2.Dockerfile != "" {
+	if t2.Dockerfile != nil {
 		t1.Dockerfile = t2.Dockerfile
 	}
 	for k, v := range t2.Args {
