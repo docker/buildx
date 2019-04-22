@@ -119,6 +119,10 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 				return err
 			}
 		} else {
+			if dockerCli.CurrentContext() == "default" && dockerCli.DockerEndpoint().TLSData != nil {
+				return errors.Errorf("could not create a builder instance with TLS data loaded from environment. Please use `docker context create <context-name>` to create a context for current environment and then create a builder instance with `docker buildx create <context-name>`")
+			}
+
 			ep, err = getCurrentEndpoint(dockerCli)
 			if err != nil {
 				return err
