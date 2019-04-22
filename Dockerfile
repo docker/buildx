@@ -35,7 +35,8 @@ COPY . .
 FROM golang:1.12-alpine AS docker-cli-build
 RUN apk add -U git bash coreutils gcc musl-dev
 ENV CGO_ENABLED=0
-ARG REPO=github.com/docker/cli
+ARG REPO=github.com/tiborvass/cli
+ARG BRANCH=cli-plugin-aliases
 ARG CLI_VERSION
 WORKDIR /go/src/github.com/docker/cli
 RUN git clone git://$REPO . && git checkout $BRANCH
@@ -58,7 +59,7 @@ RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /u
 COPY ./hack/demo-env/entrypoint.sh /usr/local/bin
 COPY ./hack/demo-env/tmux.conf /root/.tmux.conf
 COPY --from=dockerd-release /usr/local/bin /usr/local/bin
-#COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /usr/local/bin
+COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /usr/local/bin
 
 WORKDIR /work
 COPY ./hack/demo-env/examples .

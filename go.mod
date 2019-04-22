@@ -95,3 +95,5 @@ require (
 )
 
 replace github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
+
+replace github.com/docker/cli => github.com/tiborvass/cli v0.0.0-20190419012645-1ed02c40fe68
