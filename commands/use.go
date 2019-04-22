@@ -23,6 +23,9 @@ func runUse(dockerCli command.Cli, in useOptions, name string) error {
 
 	if _, err := txn.NodeGroupByName(name); err != nil {
 		if os.IsNotExist(errors.Cause(err)) {
+			if name == "default" && name != dockerCli.CurrentContext() {
+				return errors.Errorf("run `docker context use default` to switch to default context")
+			}
 			if name == "default" || name == dockerCli.CurrentContext() {
 				ep, err := getCurrentEndpoint(dockerCli)
 				if err != nil {
