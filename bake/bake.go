@@ -132,6 +132,8 @@ func (c Config) setOverrides(v []string) error {
 			t.Tags = append(t.Tags, parts[1])
 		case "cache-from":
 			t.CacheFrom = append(t.CacheFrom, parts[1])
+		case "cache-to":
+			t.CacheTo = append(t.CacheTo, parts[1])
 		case "target":
 			s := parts[1]
 			t.Target = &s
@@ -141,6 +143,8 @@ func (c Config) setOverrides(v []string) error {
 			t.SSH = append(t.SSH, parts[1])
 		case "platform":
 			t.Platforms = append(t.Platforms, parts[1])
+		case "output":
+			t.Outputs = append(t.Outputs, parts[1])
 		default:
 			return errors.Errorf("unknown key: %s", keys[1])
 		}
@@ -216,18 +220,19 @@ type Group struct {
 }
 
 type Target struct {
-	Inherits   []string          `json:"inherits,omitempty"`
-	Context    *string           `json:"context,omitempty"`
-	Dockerfile *string           `json:"dockerfile,omitempty"`
-	Args       map[string]string `json:"args,omitempty"`
-	Labels     map[string]string `json:"labels,omitempty"`
-	Tags       []string          `json:"tags,omitempty"`
-	CacheFrom  []string          `json:"cache-from,omitempty"`
-	CacheTo    []string          `json:"cache-to,omitempty"`
-	Target     *string           `json:"target,omitempty"`
-	Secrets    []string          `json:"secret,omitempty"`
-	SSH        []string          `json:"ssh,omitempty"`
-	Platforms  []string          `json:"platform,omitempty"`
+	Inherits   []string          `json:"inherits,omitempty" hcl:"inherits,omitempty"`
+	Context    *string           `json:"context,omitempty" hcl:"context,omitempty"`
+	Dockerfile *string           `json:"dockerfile,omitempty" hcl:"dockerfile,omitempty"`
+	Args       map[string]string `json:"args,omitempty" hcl:"args,omitempty"`
+	Labels     map[string]string `json:"labels,omitempty" hcl:"labels,omitempty"`
+	Tags       []string          `json:"tags,omitempty" hcl:"tags,omitempty"`
+	CacheFrom  []string          `json:"cache-from,omitempty"  hcl:"cache-from,omitempty"`
+	CacheTo    []string          `json:"cache-to,omitempty"  hcl:"cache-to,omitempty"`
+	Target     *string           `json:"target,omitempty" hcl:"target,omitempty"`
+	Secrets    []string          `json:"secret,omitempty" hcl:"secret,omitempty"`
+	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,omitempty"`
+	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,omitempty"`
+	Outputs    []string          `json:"output,omitempty" hcl:"output,omitempty"`
 }
 
 func (t *Target) normalize() {
@@ -235,6 +240,9 @@ func (t *Target) normalize() {
 	t.Secrets = removeDupes(t.Secrets)
 	t.SSH = removeDupes(t.SSH)
 	t.Platforms = removeDupes(t.Platforms)
+	t.CacheFrom = removeDupes(t.CacheFrom)
+	t.CacheTo = removeDupes(t.CacheTo)
+	t.Outputs = removeDupes(t.Outputs)
 }
 
 func TargetsToBuildOpt(m map[string]Target) (map[string]build.Options, error) {
@@ -312,6 +320,12 @@ func toBuildOpt(t Target) (*build.Options, error) {
 	}
 	bo.CacheTo = cacheExports
 
+	outputs, err := build.ParseOutputs(t.Outputs)
+	if err != nil {
+		return nil, err
+	}
+	bo.Exports = outputs
+
 	return bo, nil
 }
 
@@ -341,9 +355,6 @@ func merge(t1, t2 Target) Target {
 	if t2.Tags != nil { // no merge
 		t1.Tags = t2.Tags
 	}
-	if t2.CacheFrom != nil {
-		t1.CacheFrom = t2.CacheFrom
-	}
 	if t2.Target != nil {
 		t1.Target = t2.Target
 	}
@@ -356,11 +367,14 @@ func merge(t1, t2 Target) Target {
 	if t2.Platforms != nil { // no merge
 		t1.Platforms = t2.Platforms
 	}
-	if len(t2.CacheFrom) > 0 { // no merge
-		t1.CacheFrom = t2.CacheFrom
+	if t2.CacheFrom != nil { // no merge
+		t1.CacheFrom = append(t1.CacheFrom, t2.CacheFrom...)
 	}
-	if len(t2.CacheTo) > 0 { // no merge
+	if t2.CacheTo != nil { // no merge
 		t1.CacheTo = t2.CacheTo
+	}
+	if t2.Outputs != nil { // no merge
+		t1.Outputs = t2.Outputs
 	}
 	t1.Inherits = append(t1.Inherits, t2.Inherits...)
 	return t1

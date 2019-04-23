@@ -21,29 +21,40 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 		if err != nil {
 			return nil, err
 		}
-		if len(fields) == 1 && fields[0] == s && !strings.HasPrefix(s, "type=") {
-			outs = append(outs, client.ExportEntry{
-				Type:      client.ExporterLocal,
-				OutputDir: s,
-			})
-			continue
-		}
 
 		out := client.ExportEntry{
 			Attrs: map[string]string{},
 		}
-		for _, field := range fields {
-			parts := strings.SplitN(field, "=", 2)
-			if len(parts) != 2 {
-				return nil, errors.Errorf("invalid value %s", field)
+		if len(fields) == 1 && fields[0] == s && !strings.HasPrefix(s, "type=") {
+			if s != "-" {
+				outs = append(outs, client.ExportEntry{
+					Type:      client.ExporterLocal,
+					OutputDir: s,
+				})
+				continue
 			}
-			key := strings.TrimSpace(strings.ToLower(parts[0]))
-			value := parts[1]
-			switch key {
-			case "type":
-				out.Type = value
-			default:
-				out.Attrs[key] = value
+			out = client.ExportEntry{
+				Type: client.ExporterTar,
+				Attrs: map[string]string{
+					"dest": s,
+				},
+			}
+		}
+
+		if out.Type == "" {
+			for _, field := range fields {
+				parts := strings.SplitN(field, "=", 2)
+				if len(parts) != 2 {
+					return nil, errors.Errorf("invalid value %s", field)
+				}
+				key := strings.TrimSpace(strings.ToLower(parts[0]))
+				value := parts[1]
+				switch key {
+				case "type":
+					out.Type = value
+				default:
+					out.Attrs[key] = value
+				}
 			}
 		}
 		if out.Type == "" {
@@ -59,7 +70,7 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 			}
 			out.OutputDir = dest
 			delete(out.Attrs, "dest")
-		case client.ExporterOCI, client.ExporterDocker:
+		case client.ExporterOCI, client.ExporterDocker, client.ExporterTar:
 			dest, ok := out.Attrs["dest"]
 			if !ok {
 				if out.Type != client.ExporterDocker {
