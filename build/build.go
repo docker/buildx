@@ -3,6 +3,7 @@ package build
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"os"
@@ -547,31 +548,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 			var pushNames string
 
-			if multiDriver {
-				for i, e := range opt.Exports {
-					switch e.Type {
-					case "oci", "tar":
-						return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
-					case "image":
-						if e.Attrs["push"] != "" {
-							if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-								pushNames = e.Attrs["name"]
-								if pushNames == "" {
-									return errors.Errorf("tag is needed when pushing to registry")
-								}
-								names, err := toRepoOnly(e.Attrs["name"])
-								if err != nil {
-									return err
-								}
-								e.Attrs["name"] = names
-								e.Attrs["push-by-digest"] = "true"
-								opt.Exports[i].Attrs = e.Attrs
-							}
-						}
-					}
-				}
-			}
-
 			eg.Go(func() error {
 				pw := mw.WithPrefix("default", false)
 				defer close(pw.Status())
@@ -593,7 +569,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				}
 
 				if pushNames != "" {
-					progress.Write(pw, "merging manifest list", func() error {
+					progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
 						descs := make([]specs.Descriptor, 0, len(res))
 
 						for _, r := range res {
@@ -649,7 +625,34 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			})
 
 			for i, dp := range dps {
-				func(i int, dp driverPair) {
+				so := *dp.so
+
+				if multiDriver {
+					for i, e := range so.Exports {
+						switch e.Type {
+						case "oci", "tar":
+							return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
+						case "image":
+							if pushNames == "" && e.Attrs["push"] != "" {
+								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+									pushNames = e.Attrs["name"]
+									if pushNames == "" {
+										return errors.Errorf("tag is needed when pushing to registry")
+									}
+									names, err := toRepoOnly(e.Attrs["name"])
+									if err != nil {
+										return err
+									}
+									e.Attrs["name"] = names
+									e.Attrs["push-by-digest"] = "true"
+									so.Exports[i].Attrs = e.Attrs
+								}
+							}
+						}
+					}
+				}
+
+				func(i int, dp driverPair, so client.SolveOpt) {
 					pw := mw.WithPrefix(k, multiTarget)
 
 					c := clients[dp.driverIndex]
@@ -666,7 +669,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 					eg.Go(func() error {
 						defer wg.Done()
-						rr, err := c.Solve(ctx, nil, *dp.so, statusCh)
+						rr, err := c.Solve(ctx, nil, so, statusCh)
 						if err != nil {
 							return err
 						}
@@ -674,7 +677,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						return nil
 					})
 
-				}(i, dp)
+				}(i, dp, so)
 			}
 
 			return nil
