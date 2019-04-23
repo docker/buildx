@@ -217,7 +217,19 @@ func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClie
 			return dockerclient.NewClientWithOpts(clientOpts...)
 		}
 	}
-	return dockerclient.NewClientWithOpts(dockerclient.WithHost(name))
+
+	ep := docker.Endpoint{
+		EndpointMeta: docker.EndpointMeta{
+			Host: name,
+		},
+	}
+
+	clientOpts, err := ep.ClientOpts()
+	if err != nil {
+		return nil, err
+	}
+
+	return dockerclient.NewClientWithOpts(clientOpts...)
 }
 
 // getDefaultDrivers returns drivers based on current cli config
