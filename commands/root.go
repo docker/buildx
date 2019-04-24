@@ -34,6 +34,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		stopCmd(dockerCli),
 		installCmd(dockerCli),
 		uninstallCmd(dockerCli),
+		versionCmd(dockerCli),
 		imagetoolscmd.RootCmd(dockerCli),
 	)
 }
