@@ -11,4 +11,8 @@ function clean {
 iidfile=$(mktemp -t docker-iidfile.XXXXXXXXXX)
 DOCKER_BUILDKIT=1 docker build --iidfile $iidfile --target demo-env .
 trap clean EXIT
-docker run -it --privileged --rm -e TMUX_ENTRYPOINT=$TMUX $(cat $iidfile)
+SSH=
+if [ -n "$MOUNT_SSH_AUTH_SOCK" ]; then
+	SSH="-v $SSH_AUTH_SOCK:$SSH_AUTH_SOCK -e SSH_AUTH_SOCK"
+fi
+docker run $SSH -it --privileged --rm -e TMUX_ENTRYPOINT=$TMUX $(cat $iidfile)
