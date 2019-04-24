@@ -285,7 +285,7 @@ func isDefaultMobyDriver(d driver.Driver) bool {
 
 func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	defers := make([]func(), 0, 2)
-	release = func() {
+	releaseF := func() {
 		for _, f := range defers {
 			f()
 		}
@@ -293,7 +293,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 
 	defer func() {
 		if err != nil {
-			release()
+			releaseF()
 		}
 	}()
 
@@ -466,7 +466,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 	}
 	so.FrontendAttrs["add-hosts"] = extraHosts
 
-	return &so, release, nil
+	return &so, releaseF, nil
 }
 
 func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, pw progress.Writer) (resp map[string]*client.SolveResponse, err error) {
