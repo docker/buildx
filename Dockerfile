@@ -54,7 +54,7 @@ COPY --from=buildx-build /usr/bin/buildx /buildx.exe
 FROM binaries-$TARGETOS AS binaries
 
 FROM alpine AS demo-env
-RUN apk add --no-cache iptables tmux git vim less
+RUN apk add --no-cache iptables tmux git vim less openssh
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 COPY ./hack/demo-env/entrypoint.sh /usr/local/bin
 COPY ./hack/demo-env/tmux.conf /root/.tmux.conf
