@@ -5,7 +5,6 @@ import (
 	"net"
 	"time"
 
-	dockertypes "github.com/docker/docker/api/types"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/buildx/driver"
@@ -15,7 +14,6 @@ import (
 type Driver struct {
 	factory driver.Factory
 	driver.InitConfig
-	version dockertypes.Version
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {

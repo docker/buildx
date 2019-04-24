@@ -35,35 +35,52 @@ func New(opt Opt) *Resolver {
 	}
 }
 
-func (r *Resolver) Get(ctx context.Context, in string) ([]byte, ocispec.Descriptor, error) {
+func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispec.Descriptor, error) {
 	ref, err := parseRef(in)
 	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return "", ocispec.Descriptor{}, err
 	}
 
 	in, desc, err := r.r.Resolve(ctx, ref.String())
 	if err != nil {
+		return "", ocispec.Descriptor{}, err
+	}
+
+	return in, desc, nil
+}
+
+func (r *Resolver) Get(ctx context.Context, in string) ([]byte, ocispec.Descriptor, error) {
+	in, desc, err := r.Resolve(ctx, in)
+	if err != nil {
 		return nil, ocispec.Descriptor{}, err
 	}
 
-	fetcher, err := r.r.Fetcher(ctx, in)
+	dt, err := r.GetDescriptor(ctx, in, desc)
 	if err != nil {
 		return nil, ocispec.Descriptor{}, err
+	}
+	return dt, desc, nil
+}
+
+func (r *Resolver) GetDescriptor(ctx context.Context, in string, desc ocispec.Descriptor) ([]byte, error) {
+	fetcher, err := r.r.Fetcher(ctx, in)
+	if err != nil {
+		return nil, err
 	}
 
 	rc, err := fetcher.Fetch(ctx, desc)
 	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return nil, err
 	}
 
 	buf := &bytes.Buffer{}
 	_, err = io.Copy(buf, rc)
 	rc.Close()
 	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return nil, err
 	}
 
-	return buf.Bytes(), desc, nil
+	return buf.Bytes(), nil
 }
 
 func parseRef(s string) (reference.Named, error) {

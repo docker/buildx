@@ -25,7 +25,6 @@ var buildkitImage = "moby/buildkit:master" // TODO: make this verified and confi
 type Driver struct {
 	driver.InitConfig
 	factory driver.Factory
-	version dockertypes.Version
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
