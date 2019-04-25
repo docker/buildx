@@ -5,11 +5,11 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/docker/buildx/bake"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/bake"
 )
 
 type bakeOptions struct {

@@ -2,7 +2,7 @@ package version
 
 var (
 	// Package is filled at linking time
-	Package = "github.com/tonistiigi/buildx"
+	Package = "github.com/docker/buildx"
 
 	// Version holds the complete version number. Filled in at linking time.
 	Version = "0.0.0+unknown"

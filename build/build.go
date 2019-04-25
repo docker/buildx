@@ -14,6 +14,9 @@ import (
 
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
+	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/imagetools"
+	"github.com/docker/buildx/util/progress"
 	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/distribution/reference"
 	dockerclient "github.com/docker/docker/client"
@@ -25,9 +28,6 @@ import (
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/tonistiigi/buildx/driver"
-	"github.com/tonistiigi/buildx/util/imagetools"
-	"github.com/tonistiigi/buildx/util/progress"
 	"golang.org/x/sync/errgroup"
 )
 

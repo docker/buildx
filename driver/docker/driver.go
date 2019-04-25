@@ -5,10 +5,10 @@ import (
 	"net"
 	"time"
 
+	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/buildx/driver"
-	"github.com/tonistiigi/buildx/util/progress"
 )
 
 type Driver struct {

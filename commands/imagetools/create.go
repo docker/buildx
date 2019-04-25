@@ -6,6 +6,7 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/appcontext"
@@ -13,7 +14,6 @@ import (
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/util/imagetools"
 	"golang.org/x/sync/errgroup"
 )
 

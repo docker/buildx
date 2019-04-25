@@ -3,9 +3,9 @@ package driver
 import (
 	"context"
 
+	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/buildx/util/progress"
 )
 
 var ErrNotRunning = errors.Errorf("driver not running")

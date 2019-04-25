@@ -8,6 +8,8 @@ import (
 	"os"
 	"time"
 
+	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
@@ -16,8 +18,6 @@ import (
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/buildx/driver"
-	"github.com/tonistiigi/buildx/util/progress"
 )
 
 var buildkitImage = "moby/buildkit:master" // TODO: make this verified and configuratble

@@ -8,16 +8,16 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/util/platformutil"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/build"
-	"github.com/tonistiigi/buildx/driver"
-	"github.com/tonistiigi/buildx/store"
-	"github.com/tonistiigi/buildx/util/platformutil"
-	"github.com/tonistiigi/buildx/util/progress"
 	"golang.org/x/sync/errgroup"
 )
 

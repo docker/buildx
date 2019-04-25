@@ -3,9 +3,9 @@ package docker
 import (
 	"context"
 
+	"github.com/docker/buildx/driver"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/buildx/driver"
 )
 
 const prioritySupported = 30
