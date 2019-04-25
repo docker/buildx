@@ -76,3 +76,5 @@ COPY ./hack/demo-env/examples .
 COPY --from=binaries / /usr/local/bin/
 VOLUME /var/lib/docker
 ENTRYPOINT ["entrypoint.sh"]
+
+FROM binaries
