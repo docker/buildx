@@ -53,6 +53,16 @@ COPY --from=buildx-build /usr/bin/buildx /buildx.exe
 
 FROM binaries-$TARGETOS AS binaries
 
+FROM --platform=$BUILDPLATFORM alpine AS releaser
+WORKDIR /work
+ARG TARGETPLATFORM
+RUN --mount=from=binaries \
+  --mount=source=/tmp/.version,target=/tmp/.version,from=buildx-version \
+  mkdir -p /out && cp buildx* "/out/buildx-$(cat /tmp/.version).$(echo $TARGETPLATFORM | sed 's/\//-/g')$(ls buildx* | sed -e 's/^buildx//')"
+
+FROM scratch AS release
+COPY --from=releaser /out/ /
+
 FROM alpine AS demo-env
 RUN apk add --no-cache iptables tmux git vim less openssh
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
