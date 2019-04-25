@@ -1,0 +1,569 @@
+# buildx - Docker CLI plugin for extended build capabilities with BuildKit
+
+## buildx is Tech Preview
+
+### TL;DR
+
+- Familiar UI from `docker build`
+- Full BuildKit capabilities with container driver
+- Multiple builder instance support
+- Multi-node builds for cross-platform images
+- Compose build support
+- WIP: High-level build constructs (`bake`)
+- TODO: In-container driver support
+
+# Table of Contents
+
+- [Installing](#installing)
+- [Building](#building)
+    + [with Docker 18.09+](#with-docker-1809)
+    + [with buildx or Docker 19.03](#with-buildx-or-docker-1903)
+- [Documentation](#documentation)
+    + [`buildx build [OPTIONS] PATH | URL | -`](#buildx-build-options-path--url---)
+    + [`buildx create [OPTIONS] [CONTEXT|ENDPOINT]`](#buildx-create-options-contextendpoint)
+    + [`buildx use NAME`](#buildx-use-name)
+    + [`buildx inspect [NAME]`](#buildx-inspect-name)
+    + [`buildx ls`](#buildx-ls)
+    + [`buildx stop [NAME]`](#buildx-stop-name)
+    + [`buildx rm [NAME]`](#buildx-rm-name)
+    + [`buildx bake [OPTIONS] [TARGET...]`](#buildx-bake-options-target)
+    + [`buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]`](#buildx-imagetools-create-options-source-source)
+    + [`buildx imagetools inspect NAME`](#buildx-imagetools-inspect-name)
+- [Setting buildx as default builder in Docker 19.03+](#setting-buildx-as-default-builder-in-docker-1903)
+- [Contributing](#contributing)
+
+
+# Installing
+
+Using `buildx` as a docker CLI plugin requires using Docker 19.03.0 beta. A limited set of functionality works with older versions of Docker when invoking the binary directly.
+
+<!---
+
+### Docker Desktop (Edge)
+
+`buildx` is included with Docker Desktop edge builds since 19.03.0-beta3.
+
+For more information see https://docs.docker.com/docker-for-mac/edge-release-notes/
+
+### Docker CE nightly builds
+
+`buildx` comes bundled with the Docker CE nightly builds. 
+https://download.docker.com/linux/static/nightly/
+https://download.docker.com/mac/static/nightly/ 
+
+-->
+
+### Binary release
+
+Download the latest binary release from https://github.com/tonistiigi/buildx/releases/latest and copy it to `~/.docker/cli-plugins` folder with name `docker-buildx`.
+
+
+After installing you can run `docker buildx` to see the new commands.
+
+# Building
+
+### with Docker 18.09+
+```
+$ git clone git://github.com/tonistiigi/buildx && cd buildx
+$ make install
+```
+
+### with buildx or Docker 19.03
+```
+$ export DOCKER_BUILDKIT=1
+$ # choose a platform that matches your architecture
+$ docker build --target=binaries --platform=[darwin,windows,linux,linux/arm64] -o . git://github.com/tonistiigi/buildx
+$ mv buildx ~/.docker/cli-plugins/docker-buildx
+```
+
+# Documentation
+
+### `buildx build [OPTIONS] PATH | URL | -`
+
+The `buildx build` command starts a build using BuildKit. This command is similar to the UI of `docker build` command and takes the same flags and arguments.
+
+Options:
+
+| Flag | Description |
+| --- | --- |
+| --add-host []         | Add a custom host-to-IP mapping (host:ip)
+| --build-arg []    | Set build-time variables
+| --cache-from []   | External cache sources (eg. user/app:cache, type=local,src=path/to/dir)
+| --cache-to []     | Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)
+| --file string              | Name of the Dockerfile (Default is 'PATH/Dockerfile')
+| --iidfile string           | Write the image ID to the file
+| --label []        | Set metadata for an image
+| --load                     | Shorthand for --output=type=docker
+| --network string           | Set the networking mode for the RUN instructions during build (default "default")
+| --no-cache                 | Do not use cache when building the image
+| --output []       | Output destination (format: type=local,dest=path)
+| --platform []     | Set target platform for build
+| --progress string          | Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
+| --pull                     | Always attempt to pull a newer version of the image
+| --push                     | Shorthand for --output=type=registry
+| --secret []       | Secret file to expose to the build: id=mysecret,src=/local/secret
+| --ssh []          | SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]])
+| --tag []          | Name and optionally a tag in the 'name:tag' format
+| --target string            | Set the target build stage to build.
+
+For documentation on most of these flags refer to `docker build` documentation in https://docs.docker.com/engine/reference/commandline/build/ . In here we’ll document a subset of the new flags.
+
+####  ` --platform=value[,value]`
+
+Set the target platform for the build. All `FROM` commands inside the Dockerfile without their own `--platform` flag will pull base images for this platform and this value will also be the platform of the resulting image. The default value will be the current platform of the buildkit daemon. 
+
+When using `docker-container` driver with `buildx`, this flag can accept multiple values as an input separated by a comma. With multiple values the result will be built for all of the specified platforms and joined together into a single manifest list.
+
+If the`Dockerfile` needs to invoke the `RUN` command, the builder needs runtime support for the specified platform. In a clean setup, you can only execute `RUN` commands for your system architecture. If your kernel supports binfmt_misc https://en.wikipedia.org/wiki/Binfmt_misc   launchers for secondary architectures buildx will pick them up automatically. Docker desktop releases come with binfmt_misc automatically configured for `arm64` and `arm` architectures. You can see what runtime platforms your current builder instance supports by running `docker buildx inspect --bootstrap`.
+
+Inside a `Dockerfile`, you can access the current platform value through `TARGETPLATFORM` build argument. Please refer to `docker build` documentation for the full description of automatic platform argument variants https://docs.docker.com/engine/reference/builder/#automatic-platform-args-in-the-global-scope .
+
+The formatting for the platform specifier is defined in https://github.com/containerd/containerd/blob/v1.2.6/platforms/platforms.go#L63  .
+
+Examples:
+```
+docker buildx build --platform=linux/arm64 .
+docker buildx build --platform=linux/amd64,linux/arm64,linux/arm/v7 .
+docker buildx build --platform=darwin .
+```
+
+#### `-o, --output=[PATH,-,type=TYPE[,KEY=VALUE]`
+
+Sets the export action for the build result. In `docker build` all builds finish by creating a container image and exporting it to `docker images`. `buildx` makes this step configurable allowing results to be exported directly to the client, oci image tarballs, registry etc.
+
+Supported exported types are:
+
+##### `local`
+
+The `local` export type writes all result files to a directory on the client. The new files will be owned by the current user. On multi-platform builds, all results will be put in subdirectories by their platform.
+
+Attribute key:
+
+- `dest` - destination directory where files will be written
+
+##### `tar`
+
+The `tar` export type writes all result files as a single tarball on the client. On multi-platform builds all results will be put in subdirectories by their platform.
+
+Attribute key:
+
+- `dest` - destination path where tarball will be written. “-” writes to stdout.
+
+##### `oci`
+
+The `oci` export type writes the result image or manifest list as an OCI image layout tarball https://github.com/opencontainers/image-spec/blob/master/image-layout.md on the client.
+
+Attribute key:
+
+- `dest` - destination path where tarball will be written. “-” writes to stdout.
+
+##### `docker`
+
+The `docker` export type writes the result image as an Docker image specification tarball https://github.com/moby/moby/blob/master/image/spec/v1.2.md on the client. Tarballs created by this exporter are also OCI compatible.
+
+Attribute keys:
+
+- `dest` - destination path where tarball will be written. If not specified the tar will be loaded automatically to the current docker instance.
+- `context` - name for the docker context where to import the result
+
+##### `image`
+
+The `image` exporter writes the build result as an image or a manifest list. When using `docker` driver the image will appear in `docker images`. Optionally image can be automatically pushed to a registry by specifying attributes.
+
+Attribute keys:
+
+- `name` - name (references) for the new image.
+- `push` - boolean to automatically push the image.
+
+##### `registry` 
+
+The `registry` exporter is a shortcut for `type=image,push=true`.
+
+
+
+Buildx with `docker` driver currently only supports local, tarball exporter and image exporter. `docker-container` driver supports all the exporters.
+
+If just the path is specified as a value, `buildx` will use the local exporter with this path as the destination. If the value is “-”, `buildx` will use `tar` exporter and write to `stdout`.
+
+Examples:
+
+```
+docker buildx build -o . .
+docker buildx build -o outdir .
+docker buildx build -o - - > out.tar
+docker buildx build -o type=docker .
+docker buildx build -o type=docker,dest=- . > myimage.tar
+docker buildx build -t tonistiigi/foo -o type=registry 
+````
+
+ #### `--push`
+
+Shorthand for `--output=type=registry` . Will automatically push the build result to registry.
+
+#### `--load`
+
+Shorthand for `--output=type=docker` . Will automatically load the build result to `docker images`.
+
+#### `--cache-from=[NAME|type=TYPE[,KEY=VALUE]]`
+
+Use an external cache source for a build. Supported types are `registry` and `local`. The `registry` source can import cache from a cache manifest or (special) image configuration on the registry. The `local` source can export cache from local files previously exported with `--cache-to`.
+
+If no type is specified, `registry` exporter is used with a specified reference.
+
+`docker` driver currently only supports importing build cache from the registry.
+
+Examples:
+```
+docker buildx build --cache-from=user/app:cache .
+docker buildx build --cache-from=user/app .
+docker buildx build --cache-from=type=registry,ref=user/app .
+docker buildx build --cache-from=type=local,src=path/to/cache .
+```
+
+#### `--cache-to=[NAME|type=TYPE[,KEY=VALUE]]`
+
+Export build cache to an external cache destination. Supported types are `registry`, `local` and `inline`. Registry exports build cache to a cache manifest in the registry, local exports cache to a local directory on the client and inline writes the cache metadata into the image configuration.
+
+`docker` driver currently only supports exporting inline cache metadata to image configuration. Alternatively, `--build-arg BUILDKIT_INLINE_CACHE=1` can be used to trigger inline cache exporter.
+
+Attribute key:
+
+- `mode` - Specifies how many layers are exported with the cache. “min” on only exports layers already in the final build build stage, “max” exports layers for all stages. Metadata is always exported for the whole build.
+
+Examples:
+```
+docker buildx build --cache-to=user/app:cache .
+docker buildx build --cache-to=type=inline .
+docker buildx build --cache-to=type=registry,ref=user/app .
+docker buildx build --cache-to=type=local,src=path/to/cache .
+```
+
+
+### `buildx create [OPTIONS] [CONTEXT|ENDPOINT]`
+
+Create makes a new builder instance pointing to a docker context or endpoint, where context is the name of a context from `docker context ls` and endpoint is the address for docker socket (eg. `DOCKER_HOST` value).
+
+By default, the current docker configuration is used for determining the context/endpoint value.
+
+Builder instances are isolated environments where builds can be invoked. All docker contexts also get the default builder instance.
+
+Options:
+
+| Flag | Description |
+| --- | --- |
+| --append                | Append a node to builder instead of changing it
+| --driver string         | Driver to use (eg. docker-container)
+| --leave                 | Remove a node from builder instead of changing it
+| --name string           | Builder instance name
+| --node string           | Create/modify node with given name
+| --platform stringArray  | Fixed platforms for current node
+| --use                   | Set the current builder instance
+
+#### `--driver DRIVER`
+
+Sets the builder driver to be used. There are two available drivers, each have their own specificities.
+
+- `docker` - Uses the builder that is built into the docker daemon. With this driver, the `--load` flag is implied by default on `buildx build`. However, building multi-platform images or exporting cache is not currently supported.
+
+- `docker-container` - Uses a buildkit container that will be spawned via docker. With this driver, both building multi-platform images and exporting cache are supported. However, images built will not automatically appear in `docker images` (see [`build --load`](#--load)).
+
+#### `--append`
+
+Changes the action of the command to appends a new node to an existing builder specified by `--name`. Buildx will choose an appropriate node for a build based on the platforms it supports.
+
+Example:
+```
+$ docker buildx create mycontext1
+eager_beaver
+$ docker buildx create --name eager_beaver --append mycontext2
+eager_beaver
+```
+
+#### `--leave`
+
+Changes the action of the command to removes a node from a builder. The builder needs to be specified with `--name` and node that is removed is set with `--node`.
+
+Example:
+```
+docker buildx create --name mybuilder --node mybuilder0 --leave
+```
+
+#### `--name NAME`
+
+Specifies the name of the builder to be created or modified. If none is specified, one will be automatically generated.
+
+#### `--node NODE`
+
+Specifies the name of the node to be created or modified. If none is specified, it is the name of the builder it belongs to, with an index number suffix.
+
+#### `--platform PLATFORMS`
+
+Sets the platforms supported by the node. It expects a comma-separated list of platforms of the form OS/architecture/variant. The node will also automatically detect the platforms it supports, but manual values take priority over the detected ones and can be used when multiple nodes support building for the same platform.
+
+Example:
+```
+docker buildx create --platform linux/amd64
+docker buildx create --platform linux/arm64,linux/arm/v8
+```
+
+#### `--use`
+
+Automatically switches the current builder to the newly created one. Equivalent to running `docker buildx use $(docker buildx create ...)`.
+
+### `buildx use NAME`
+
+Switches the current builder instance. Build commands invoked after this command will run on a specified builder. Alternatively, a context name can be used to switch to the default builder of that context.
+
+### `buildx inspect [NAME]`
+
+Shows information about the current or specified builder.
+
+Example:
+```
+Name:   elated_tesla
+Driver: docker-container
+
+Nodes:
+Name:      elated_tesla0
+Endpoint:  unix:///var/run/docker.sock
+Status:    running
+Platforms: linux/amd64
+
+Name:      elated_tesla1
+Endpoint:  ssh://ubuntu@1.2.3.4
+Status:    running
+Platforms: linux/arm64, linux/arm/v7, linux/arm/v6
+```
+
+#### `--bootstrap`
+
+Ensures that the builder is running before inspecting it. If the driver is `docker-container`, then `--bootstrap` starts the buildkit container and waits until it is operational. Bootstrapping is automatically done during build, it is thus not necessary. The same BuildKit container is used during the lifetime of the associated builder node (as displayed in `buildx ls`).
+
+### `buildx ls`
+
+Lists all builder instances and the nodes for each instance
+
+Example:
+
+```
+docker buildx ls
+NAME/NODE       DRIVER/ENDPOINT             STATUS  PLATFORMS
+elated_tesla *  docker-container
+  elated_tesla0 unix:///var/run/docker.sock running linux/amd64
+  elated_tesla1 ssh://ubuntu@1.2.3.4        running linux/arm64, linux/arm/v7, linux/arm/v6
+default         docker
+  default       default                     running linux/amd64
+```
+
+Each builder has one or more nodes associated with it. The current builder’s name is marked with a `*`.
+
+### `buildx stop [NAME]`
+
+Stops the specified or current builder. This will not prevent buildx build to restart the builder. The implementation of stop depends on the driver.
+
+### `buildx rm [NAME]`
+
+Removes the specified or current builder. It is a no-op attempting to remove the default builder.
+
+### `buildx bake [OPTIONS] [TARGET...]`
+
+Bake is a high-level build command.
+
+Each specified target will run in parallel as part of the build.
+
+Options:
+
+| Flag | Description |
+| --- | --- |
+|  -f, --file stringArray  | Build definition file
+|      --no-cache          | Do not use cache when building the image
+|      --print             | Print the options without building
+|      --progress string   | Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
+|      --pull              | Always attempt to pull a newer version of the image
+|      --set stringArray   | Override target value (eg: target.key=value)
+
+#### `-f, --file FILE`
+
+Specifies the bake definition file. The file can be a Docker Compose, JSON or HCL file. If multiple files are specified they are all read and configurations are combined. By default, if no files are specified, the following are parsed:
+docker-compose.yml
+docker-compose.yaml
+docker-bake.json
+docker-bake.override.json
+docker-bake.hcl
+docker-bake.override.hcl
+
+#### `--no-cache`
+
+Same as `build --no-cache`. Do not use cache when building the image.
+
+#### `--print`
+
+Prints the resulting options of the targets desired to be built, in a JSON format, without starting a build.
+
+```
+$ docker buildx bake -f docker-bake.hcl --print db
+{
+   "target": {
+      "db": {
+         "context": "./",
+         "dockerfile": "Dockerfile",
+         "tags": [
+            "docker.io/tiborvass/db"
+         ]
+      }
+   }
+}
+```
+
+#### `--progress`
+
+Same as `build --progress`. Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto").
+
+#### `--pull`
+
+Same as `build --pull`.
+
+#### `--set target.key[.subkey]=value`
+
+Override target configurations from command line.
+
+Example:
+```
+docker buildx bake --set target.args.mybuildarg=value
+docker buildx bake --set target.platform=linux/arm64
+```
+
+#### File definition
+
+In addition to compose files, bake supports a JSON and an equivalent HCL file format for defining build groups and targets.
+
+A target reflects a single docker build invocation with the same options that you would specify for `docker build`. A group is a grouping of targets.
+
+Multiple files can include the same target and final build options will be determined by merging them together. 
+
+In the case of compose files, each service corresponds to a target.
+
+A group can specify its list of targets with the `targets` option. A target can inherit build options by setting the `inherits` option to the list of targets or groups to inherit from.
+
+Note: Design of bake command is work in progress, the user experience may change based on feedback.
+
+
+
+Example HCL defintion:
+
+```
+group “default” {
+	targets = [“db”, “webapp-dev”]
+}
+
+target “webapp-dev” {
+	dockerfile = "Dockerfile.webapp"
+	tags = ["docker.io/username/webapp"]
+}
+
+target “webapp-release” {
+	inherits = [“webapp-dev”]
+	platforms = [“linux/amd64”, “linux/arm64”]
+}
+
+target “db” {
+	dockerfile = "Dockerfile.db"
+	tags = [“docker.io/username/db”]
+}
+```
+
+
+### `buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]`
+
+Imagetools contains commands for working with manifest lists in the registry. These commands are useful for inspecting multi-platform build results.
+
+Create creates a new manifest list based on source manifests. The source manifests can be manifest lists or single platform distribution manifests and must already exist in the registry where the new manifest is created. If only one source is specified create performs a carbon copy.
+
+Options:
+
+| Flag | Description |
+| --- | --- |
+|      --append            | Append to existing manifest
+|      --dry-run           | Show final image instead of pushing
+|  -f, --file stringArray  | Read source descriptor from file
+|  -t, --tag stringArray   | Set reference for new image
+
+#### `--append`
+
+Append appends the new sources to an existing manifest list in the destination.
+
+#### `--dry-run`
+
+Do not push the image, just show it.
+
+#### `-f, --file FILE`
+
+Reads source from files. A source can be a manifest digest, manifest reference or a JSON of OCI descriptor object.
+
+#### `-t, --tag IMAGE`
+
+Name of the image to be created.
+
+Examples:
+
+```
+docker buildx imagetools create --dry-run alpine@sha256:5c40b3c27b9f13c873fefb2139765c56ce97fd50230f1f2d5c91e55dec171907 sha256:c4ba6347b0e4258ce6a6de2401619316f982b7bcc529f73d2a410d0097730204
+
+docker buildx imagetools create -t tonistiigi/myapp -f image1 -f image2 
+```
+
+
+### `buildx imagetools inspect NAME`
+
+Show details of image in the registry.
+
+Example:
+```
+$ docker buildx imagetools inspect alpine
+Name:      docker.io/library/alpine:latest
+MediaType: application/vnd.docker.distribution.manifest.list.v2+json
+Digest:    sha256:28ef97b8686a0b5399129e9b763d5b7e5ff03576aa5580d6f4182a49c5fe1913
+
+Manifests:
+  Name:      docker.io/library/alpine:latest@sha256:5c40b3c27b9f13c873fefb2139765c56ce97fd50230f1f2d5c91e55dec171907
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/amd64
+
+  Name:      docker.io/library/alpine:latest@sha256:c4ba6347b0e4258ce6a6de2401619316f982b7bcc529f73d2a410d0097730204
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/arm/v6
+
+ ...
+```
+
+#### `--raw`
+
+Raw prints the original JSON bytes instead of the formatted output.
+
+
+# Setting buildx as default builder in Docker 19.03+
+
+Running `docker buildx install` sets up `docker builder` command as an alias to `docker buildx`. This results in the ability to have `docker build` use the current buildx builder.
+
+To remove this alias, you can run `docker buildx uninstall`.
+
+
+# Contributing
+
+To enter a demo container environment and experiment, you may run:
+
+```
+$ make shell
+```
+
+To validate PRs before submitting them you should run:
+
+```
+$ make validate-all
+```
+
+To generate new vendored files with go modules run:
+
+```
+$ make vendor
+```
