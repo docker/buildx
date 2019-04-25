@@ -5,10 +5,10 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/platformutil"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/buildx/build"
-	"github.com/tonistiigi/buildx/util/platformutil"
 )
 
 func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[string]Target, error) {

@@ -4,16 +4,16 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/docker/buildx/commands"
+	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli-plugins/manager"
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/commands"
-	"github.com/tonistiigi/buildx/version"
 
-	_ "github.com/tonistiigi/buildx/driver/docker"
-	_ "github.com/tonistiigi/buildx/driver/docker-container"
+	_ "github.com/docker/buildx/driver/docker"
+	_ "github.com/docker/buildx/driver/docker-container"
 )
 
 func main() {

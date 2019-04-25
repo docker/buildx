@@ -4,9 +4,9 @@ import (
 	"fmt"
 
 	"github.com/containerd/containerd/platforms"
+	"github.com/docker/buildx/util/platformutil"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/buildx/util/platformutil"
 )
 
 type NodeGroup struct {

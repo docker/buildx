@@ -3,8 +3,8 @@ package store
 import (
 	"testing"
 
+	"github.com/docker/buildx/util/platformutil"
 	"github.com/stretchr/testify/require"
-	"github.com/tonistiigi/buildx/util/platformutil"
 )
 
 func TestNodeGroupUpdate(t *testing.T) {

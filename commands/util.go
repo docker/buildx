@@ -5,15 +5,15 @@ import (
 	"os"
 	"path/filepath"
 
+	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/buildx/build"
-	"github.com/tonistiigi/buildx/driver"
-	"github.com/tonistiigi/buildx/store"
-	"github.com/tonistiigi/buildx/util/platformutil"
 	"golang.org/x/sync/errgroup"
 )
 

@@ -5,12 +5,12 @@ import (
 	"os"
 
 	"github.com/containerd/containerd/images"
+	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/util/imagetools"
 )
 
 type inspectOptions struct {

@@ -55,7 +55,7 @@ https://download.docker.com/mac/static/nightly/
 
 ### Binary release
 
-Download the latest binary release from https://github.com/tonistiigi/buildx/releases/latest and copy it to `~/.docker/cli-plugins` folder with name `docker-buildx`.
+Download the latest binary release from https://github.com/docker/buildx/releases/latest and copy it to `~/.docker/cli-plugins` folder with name `docker-buildx`.
 
 
 After installing you can run `docker buildx` to see the new commands.
@@ -64,7 +64,7 @@ After installing you can run `docker buildx` to see the new commands.
 
 ### with Docker 18.09+
 ```
-$ git clone git://github.com/tonistiigi/buildx && cd buildx
+$ git clone git://github.com/docker/buildx && cd buildx
 $ make install
 ```
 
@@ -72,7 +72,7 @@ $ make install
 ```
 $ export DOCKER_BUILDKIT=1
 $ # choose a platform that matches your architecture
-$ docker build --target=binaries --platform=[darwin,windows,linux,linux/arm64] -o . git://github.com/tonistiigi/buildx
+$ docker build --target=binaries --platform=[darwin,windows,linux,linux/arm64] -o . git://github.com/docker/buildx
 $ mv buildx ~/.docker/cli-plugins/docker-buildx
 ```
 

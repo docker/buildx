@@ -3,10 +3,10 @@ package commands
 import (
 	"fmt"
 
+	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/version"
 )
 
 func runVersion(dockerCli command.Cli) error {

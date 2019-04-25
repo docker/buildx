@@ -5,6 +5,9 @@ import (
 	"os"
 	"strings"
 
+	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/platformutil"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/client"
@@ -13,9 +16,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/tonistiigi/buildx/build"
-	"github.com/tonistiigi/buildx/util/platformutil"
-	"github.com/tonistiigi/buildx/util/progress"
 )
 
 type buildOptions struct {

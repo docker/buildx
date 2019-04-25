@@ -9,12 +9,12 @@ import (
 	"text/tabwriter"
 	"time"
 
+	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/store"
-	"github.com/tonistiigi/buildx/util/platformutil"
 	"golang.org/x/sync/errgroup"
 )
 

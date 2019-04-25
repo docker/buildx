@@ -3,11 +3,11 @@ package commands
 import (
 	"context"
 
+	"github.com/docker/buildx/store"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/buildx/store"
 )
 
 type rmOptions struct {

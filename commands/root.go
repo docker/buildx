@@ -1,10 +1,10 @@
 package commands
 
 import (
+	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
-	imagetoolscmd "github.com/tonistiigi/buildx/commands/imagetools"
 )
 
 func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Command {
