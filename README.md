@@ -1,6 +1,7 @@
-# buildx - Docker CLI plugin for extended build capabilities with BuildKit
+# buildx
+### Docker CLI plugin for extended build capabilities with BuildKit
 
-## buildx is Tech Preview
+_buildx is Tech Preview_
 
 ### TL;DR
 
