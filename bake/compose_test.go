@@ -39,3 +39,23 @@ services:
 	require.Equal(t, 1, len(c.Target["webapp"].Args))
 	require.Equal(t, "123", c.Target["webapp"].Args["buildno"])
 }
+
+func TestParseComposeTarget(t *testing.T) {
+	var dt = []byte(`
+version: "3.7"
+
+services:
+  db:
+    build:
+      target: db
+  webapp:
+    build:
+      target: webapp
+`)
+
+	c, err := ParseCompose(dt)
+	require.NoError(t, err)
+
+	require.Equal(t, "db", *c.Target["db"].Target)
+	require.Equal(t, "webapp", *c.Target["webapp"].Target)
+}
