@@ -53,7 +53,8 @@ func ParseCompose(dt []byte) (*Config, error) {
 				// TODO: add platforms
 			}
 			if s.Build.Target != "" {
-				t.Target = &s.Build.Target
+				target := s.Build.Target
+				t.Target = &target
 			}
 			if s.Image != "" {
 				t.Tags = []string{s.Image}
