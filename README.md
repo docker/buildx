@@ -43,21 +43,17 @@ _buildx is Tech Preview_
 
 Using `buildx` as a docker CLI plugin requires using Docker 19.03.0 beta. A limited set of functionality works with older versions of Docker when invoking the binary directly.
 
-<!---
-
 ### Docker Desktop (Edge)
 
-`buildx` is included with Docker Desktop edge builds since 19.03.0-beta3.
+`buildx` is included with Docker Desktop Edge builds since 19.03.0-beta3.
 
 For more information see https://docs.docker.com/docker-for-mac/edge-release-notes/
 
 ### Docker CE nightly builds
 
 `buildx` comes bundled with the Docker CE nightly builds. 
-https://download.docker.com/linux/static/nightly/
+<!--https://download.docker.com/linux/static/nightly/-->
 https://download.docker.com/mac/static/nightly/ 
-
--->
 
 ### Binary release
 
