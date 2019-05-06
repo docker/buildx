@@ -317,7 +317,7 @@ Examples:
 docker buildx build --cache-to=user/app:cache .
 docker buildx build --cache-to=type=inline .
 docker buildx build --cache-to=type=registry,ref=user/app .
-docker buildx build --cache-to=type=local,src=path/to/cache .
+docker buildx build --cache-to=type=local,dest=path/to/cache .
 ```
 
 
