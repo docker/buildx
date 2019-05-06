@@ -74,7 +74,7 @@ $ make install
 ```
 $ export DOCKER_BUILDKIT=1
 $ # choose a platform that matches your architecture
-$ docker build --target=binaries --platform=[darwin,windows,linux,linux/arm64] -o . git://github.com/docker/buildx
+$ docker build --platform=[darwin,windows,linux,linux/arm64] -o . git://github.com/docker/buildx
 $ mv buildx ~/.docker/cli-plugins/docker-buildx
 ```
 
