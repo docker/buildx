@@ -241,7 +241,9 @@ Attribute key:
 
 ##### `docker`
 
-The `docker` export type writes the result image as an Docker image specification tarball https://github.com/moby/moby/blob/master/image/spec/v1.2.md on the client. Tarballs created by this exporter are also OCI compatible.
+The `docker` export type writes the single-platform result image as a Docker image specification tarball https://github.com/moby/moby/blob/master/image/spec/v1.2.md on the client. Tarballs created by this exporter are also OCI compatible.
+
+Currently, multi-platform images cannot be exported with the `docker` export type. The most common usecase for multi-platform images is to directly push to a registry (see [`registry`](#registry)).
 
 Attribute keys:
 
@@ -280,11 +282,11 @@ docker buildx build -t tonistiigi/foo -o type=registry
 
  #### `--push`
 
-Shorthand for `--output=type=registry` . Will automatically push the build result to registry.
+Shorthand for [`--output=type=registry`](#registry). Will automatically push the build result to registry.
 
 #### `--load`
 
-Shorthand for `--output=type=docker` . Will automatically load the build result to `docker images`.
+Shorthand for [`--output=type=docker`](#docker). Will automatically load the single-platform build result to `docker images`.
 
 #### `--cache-from=[NAME|type=TYPE[,KEY=VALUE]]`
 
@@ -345,7 +347,7 @@ Options:
 
 Sets the builder driver to be used. There are two available drivers, each have their own specificities.
 
-- `docker` - Uses the builder that is built into the docker daemon. With this driver, the `--load` flag is implied by default on `buildx build`. However, building multi-platform images or exporting cache is not currently supported.
+- `docker` - Uses the builder that is built into the docker daemon. With this driver, the [`--load`](#--load) flag is implied by default on `buildx build`. However, building multi-platform images or exporting cache is not currently supported.
 
 - `docker-container` - Uses a buildkit container that will be spawned via docker. With this driver, both building multi-platform images and exporting cache are supported. However, images built will not automatically appear in `docker images` (see [`build --load`](#--load)).
 
