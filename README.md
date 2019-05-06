@@ -52,8 +52,14 @@ For more information see https://docs.docker.com/docker-for-mac/edge-release-not
 ### Docker CE nightly builds
 
 `buildx` comes bundled with the Docker CE nightly builds. 
-<!--https://download.docker.com/linux/static/nightly/-->
-https://download.docker.com/mac/static/nightly/ 
+- Mac: https://download.docker.com/mac/static/nightly/
+- Linux:
+```
+$ # uncomment next line to uninstall previous Docker CE installation if present
+$ # apt purge docker-ce docker-ce-cli
+$ curl -fsSL https://get.docker.com/ -o docker-install.sh
+$ CHANNEL=nightly sh docker-install.sh
+```
 
 ### Binary release
 
