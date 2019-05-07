@@ -8,6 +8,7 @@ import (
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
+	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution/reference"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
@@ -47,14 +48,11 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 				switch mt {
 				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
 					if descs[i].Platform == nil {
-						cfg, err := r.loadConfig(ctx, in, dt)
+						p, err := r.loadPlatform(ctx, in, dt)
 						if err != nil {
 							return err
 						}
-						descs[i].Platform = &ocispec.Platform{
-							OS:           cfg.OS,
-							Architecture: cfg.Architecture,
-						}
+						descs[i].Platform = p
 					}
 				case images.MediaTypeDockerSchema1Manifest:
 					return errors.Errorf("schema1 manifests are not allowed in manifest lists")
@@ -168,7 +166,7 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 	return err
 }
 
-func (r *Resolver) loadConfig(ctx context.Context, in string, dt []byte) (*ocispec.Image, error) {
+func (r *Resolver) loadPlatform(ctx context.Context, in string, dt []byte) (*ocispec.Platform, error) {
 	var manifest ocispec.Manifest
 	if err := json.Unmarshal(dt, &manifest); err != nil {
 		return nil, errors.WithStack(err)
@@ -179,12 +177,13 @@ func (r *Resolver) loadConfig(ctx context.Context, in string, dt []byte) (*ocisp
 		return nil, err
 	}
 
-	var img ocispec.Image
-	if err := json.Unmarshal(dt, &img); err != nil {
+	var p ocispec.Platform
+	if err := json.Unmarshal(dt, &p); err != nil {
 		return nil, errors.WithStack(err)
 	}
 
-	return &img, nil
+	p = platforms.Normalize(p)
+	return &p, nil
 }
 
 func detectMediaType(dt []byte) (string, error) {
