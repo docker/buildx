@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.0-experimental
+# syntax=docker/dockerfile:1.1-experimental
 
 ARG DOCKERD_VERSION=19.03-rc
 ARG CLI_VERSION=19.03
