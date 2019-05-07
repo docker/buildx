@@ -22,13 +22,20 @@ func Parse(platformsStr []string) ([]specs.Platform, error) {
 			out = append(out, p...)
 			continue
 		}
-		p, err := platforms.Parse(s)
+		p, err := parse(s)
 		if err != nil {
 			return nil, err
 		}
 		out = append(out, platforms.Normalize(p))
 	}
 	return out, nil
+}
+
+func parse(in string) (specs.Platform, error) {
+	if strings.EqualFold(in, "local") {
+		return platforms.DefaultSpec(), nil
+	}
+	return platforms.Parse(in)
 }
 
 func Dedupe(in []specs.Platform) []specs.Platform {
