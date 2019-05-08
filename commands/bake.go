@@ -28,7 +28,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 			return err
 		}
 		if len(files) == 0 {
-			return errors.Errorf("no docker-compose.yml or dockerbuild.hcl found, specify build file with -f/--file")
+			return errors.Errorf("no docker-compose.yml or docker-bake.hcl found, specify build file with -f/--file")
 		}
 		in.files = files
 	}
