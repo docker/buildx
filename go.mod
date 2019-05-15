@@ -14,11 +14,9 @@ require (
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
 	github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50
-	github.com/containerd/containerd v1.3.0-0.20190321141026-ceba56893a76
-	github.com/containerd/continuity v0.0.0-20181203112020-004b46473808 // indirect
+	github.com/containerd/containerd v1.3.0-0.20190426060238-3a3f0aac8819
 	github.com/containerd/fifo v0.0.0-20190226154929-a9fb20d87448 // indirect
 	github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20 // indirect
-	github.com/coreos/go-systemd v0.0.0-20190321100706-95778dfbb74e // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853 // indirect
 	github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
@@ -34,7 +32,6 @@ require (
 	github.com/go-sql-driver/mysql v1.4.1 // indirect
 	github.com/gofrs/flock v0.7.0
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
-	github.com/gogo/googleapis v1.1.0 // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/google/btree v1.0.0 // indirect
 	github.com/google/certificate-transparency-go v1.0.21 // indirect
@@ -57,7 +54,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19 // indirect
-	github.com/moby/buildkit v0.4.1-0.20190410165125-bcd466a748e950507826c30e835b087289aaf384
+	github.com/moby/buildkit v0.5.2-0.20190513182223-f238f1efb04f
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1
@@ -74,7 +71,6 @@ require (
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2 // indirect
 	github.com/stretchr/testify v1.3.0
-	github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2 // indirect
 	github.com/theupdateframework/notary v0.6.1 // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
@@ -83,7 +79,6 @@ require (
 	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
 	golang.org/x/sys v0.0.0-20190322080309-f49334f85ddc // indirect
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
-	google.golang.org/grpc v1.19.1 // indirect
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
 	gopkg.in/gorethink/gorethink.v3 v3.0.5 // indirect

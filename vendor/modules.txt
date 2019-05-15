@@ -1,7 +1,7 @@
 # github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
 github.com/Azure/go-ansiterm/winterm
 github.com/Azure/go-ansiterm
-# github.com/Microsoft/go-winio v0.4.12
+# github.com/Microsoft/go-winio v0.4.13-0.20190408173621-84b4ab48a507
 github.com/Microsoft/go-winio
 # github.com/Microsoft/hcsshim v0.8.6
 github.com/Microsoft/hcsshim
@@ -26,7 +26,7 @@ github.com/agl/ed25519/edwards25519
 github.com/beorn7/perks/quantile
 # github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50
 github.com/containerd/console
-# github.com/containerd/containerd v1.3.0-0.20190321141026-ceba56893a76
+# github.com/containerd/containerd v1.3.0-0.20190426060238-3a3f0aac8819
 github.com/containerd/containerd/images
 github.com/containerd/containerd/platforms
 github.com/containerd/containerd/content
@@ -80,7 +80,7 @@ github.com/containerd/containerd/snapshots/proxy
 github.com/containerd/containerd/api/types/task
 github.com/containerd/containerd/events/exchange
 github.com/containerd/containerd/identifiers
-# github.com/containerd/continuity v0.0.0-20181203112020-004b46473808
+# github.com/containerd/continuity v0.0.0-20190426062206-aaeac12a7ffc
 github.com/containerd/continuity
 github.com/containerd/continuity/pathdriver
 github.com/containerd/continuity/devices
@@ -91,6 +91,8 @@ github.com/containerd/continuity/fs
 github.com/containerd/continuity/syscallx
 # github.com/containerd/fifo v0.0.0-20190226154929-a9fb20d87448
 github.com/containerd/fifo
+# github.com/containerd/ttrpc v0.0.0-20190411181408-699c4e40d1e7
+github.com/containerd/ttrpc
 # github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20
 github.com/containerd/typeurl
 # github.com/davecgh/go-spew v1.1.1
@@ -271,7 +273,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/miekg/pkcs11
 # github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.4.1-0.20190410165125-bcd466a748e950507826c30e835b087289aaf384
+# github.com/moby/buildkit v0.5.2-0.20190513182223-f238f1efb04f
 github.com/moby/buildkit/session/auth/authprovider
 github.com/moby/buildkit/client
 github.com/moby/buildkit/session
@@ -380,7 +382,7 @@ github.com/xeipuuv/gojsonpointer
 github.com/xeipuuv/gojsonreference
 # github.com/xeipuuv/gojsonschema v0.0.0-20160323030313-93e72a773fad
 github.com/xeipuuv/gojsonschema
-# golang.org/x/crypto v0.0.0-20190129210102-ccddf3741a0c
+# golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/terminal
@@ -391,7 +393,7 @@ golang.org/x/crypto/poly1305
 golang.org/x/crypto/ed25519/internal/edwards25519
 golang.org/x/crypto/internal/subtle
 golang.org/x/crypto/pbkdf2
-# golang.org/x/net v0.0.0-20180906233101-161cd47e91fd
+# golang.org/x/net v0.0.0-20190311183353-d8887717615a
 golang.org/x/net/http2
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -408,6 +410,7 @@ golang.org/x/sync/semaphore
 # golang.org/x/sys v0.0.0-20190322080309-f49334f85ddc
 golang.org/x/sys/unix
 golang.org/x/sys/windows
+golang.org/x/sys/cpu
 # golang.org/x/text v0.3.0
 golang.org/x/text/secure/bidirule
 golang.org/x/text/unicode/bidi
@@ -417,7 +420,7 @@ golang.org/x/text/transform
 golang.org/x/time/rate
 # google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
 google.golang.org/genproto/googleapis/rpc/status
-# google.golang.org/grpc v1.19.1
+# google.golang.org/grpc v1.20.1
 google.golang.org/grpc
 google.golang.org/grpc/credentials
 google.golang.org/grpc/health
@@ -433,6 +436,7 @@ google.golang.org/grpc/encoding/proto
 google.golang.org/grpc/grpclog
 google.golang.org/grpc/internal
 google.golang.org/grpc/internal/backoff
+google.golang.org/grpc/internal/balancerload
 google.golang.org/grpc/internal/binarylog
 google.golang.org/grpc/internal/channelz
 google.golang.org/grpc/internal/envconfig

@@ -3,6 +3,7 @@ package bake
 import (
 	"context"
 	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/docker/buildx/build"
@@ -290,7 +291,7 @@ func toBuildOpt(t Target) (*build.Options, error) {
 	}
 	bo.Platforms = platforms
 
-	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider())
+	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(os.Stderr))
 
 	secrets, err := build.ParseSecretSpecs(t.Secrets)
 	if err != nil {

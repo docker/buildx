@@ -100,7 +100,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.Platforms = platforms
 
-	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider())
+	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(os.Stderr))
 
 	secrets, err := build.ParseSecretSpecs(in.secrets)
 	if err != nil {
