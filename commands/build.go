@@ -254,6 +254,10 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	flags.MarkHidden("cgroup-parent")
 	flags.StringVar(&ignore, "isolation", "", "Container isolation technology")
 	flags.MarkHidden("isolation")
+	flags.BoolVar(&ignoreBool, "rm", true, "Remove intermediate containers after a successful build")
+	flags.MarkHidden("rm")
+	flags.BoolVar(&ignoreBool, "force-rm", false, "Always remove intermediate containers")
+	flags.MarkHidden("force-rm")
 
 	platformsDefault := []string{}
 	if v := os.Getenv("DOCKER_DEFAULT_PLATFORM"); v != "" {
