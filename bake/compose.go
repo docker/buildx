@@ -1,6 +1,8 @@
 package bake
 
 import (
+	"fmt"
+
 	"github.com/docker/cli/cli/compose/loader"
 	composetypes "github.com/docker/cli/cli/compose/types"
 )
@@ -33,7 +35,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 		var g Group
 
 		for _, s := range cfg.Services {
-			g.Targets = append(g.Targets, s.Name)
+
 			var contextPathP *string
 			if s.Build.Context != "" {
 				contextPath := s.Build.Context
@@ -44,6 +46,15 @@ func ParseCompose(dt []byte) (*Config, error) {
 				dockerfilePath := s.Build.Dockerfile
 				dockerfilePathP = &dockerfilePath
 			}
+			// Check if there's actually a dockerfile mentioned
+			if dockerfilePathP == nil && contextPathP == nil {
+				// if not make sure they're setting an image or it's invalid d-c.yml
+				if s.Image == "" {
+					return nil, fmt.Errorf("Compose file invalid: Service %s has neither an image nor a build context specified. At least one must be provided.", s.Name)
+				}
+				break
+			}
+			g.Targets = append(g.Targets, s.Name)
 			t := Target{
 				Context:    contextPathP,
 				Dockerfile: dockerfilePathP,
