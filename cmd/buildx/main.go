@@ -16,6 +16,8 @@ import (
 	_ "github.com/docker/buildx/driver/docker-container"
 )
 
+var experimental string
+
 func main() {
 	if os.Getenv("DOCKER_CLI_PLUGIN_ORIGINAL_CLI_COMMAND") == "" {
 		if len(os.Args) < 2 || os.Args[1] != manager.MetadataSubcommandName {
@@ -41,5 +43,6 @@ func main() {
 			SchemaVersion: "0.1.0",
 			Vendor:        "Docker Inc.",
 			Version:       version.Version,
+			Experimental:  experimental != "",
 		})
 }
