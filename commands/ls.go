@@ -43,7 +43,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 		builders[i] = &nginfo{ng: ng}
 	}
 
-	list, err := dockerCli.ContextStore().ListContexts()
+	list, err := dockerCli.ContextStore().List()
 	if err != nil {
 		return err
 	}
