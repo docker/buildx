@@ -42,7 +42,7 @@ func getCurrentEndpoint(dockerCli command.Cli) (string, error) {
 
 // getDockerEndpoint returns docker endpoint string for given context
 func getDockerEndpoint(dockerCli command.Cli, name string) (string, error) {
-	list, err := dockerCli.ContextStore().ListContexts()
+	list, err := dockerCli.ContextStore().List()
 	if err != nil {
 		return "", err
 	}
@@ -111,7 +111,7 @@ func getNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.No
 		name = dockerCli.CurrentContext()
 	}
 
-	list, err := dockerCli.ContextStore().ListContexts()
+	list, err := dockerCli.ContextStore().List()
 	if err != nil {
 		return nil, err
 	}
@@ -194,7 +194,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 
 // clientForEndpoint returns a docker client for an endpoint
 func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClient, error) {
-	list, err := dockerCli.ContextStore().ListContexts()
+	list, err := dockerCli.ContextStore().List()
 	if err != nil {
 		return nil, err
 	}

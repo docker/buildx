@@ -36,7 +36,7 @@ func runUse(dockerCli command.Cli, in useOptions, name string) error {
 				}
 				return nil
 			}
-			list, err := dockerCli.ContextStore().ListContexts()
+			list, err := dockerCli.ContextStore().List()
 			if err != nil {
 				return err
 			}
