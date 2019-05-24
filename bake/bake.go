@@ -4,10 +4,12 @@ import (
 	"context"
 	"io/ioutil"
 	"os"
+	"path"
 	"strings"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/platformutil"
+	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 )
@@ -275,6 +277,10 @@ func toBuildOpt(t Target) (*build.Options, error) {
 		dockerfilePath = *t.Dockerfile
 	}
 
+	if !isRemoteResource(contextPath) && !path.IsAbs(dockerfilePath) {
+		dockerfilePath = path.Join(contextPath, dockerfilePath)
+	}
+
 	bo := &build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    contextPath,
@@ -393,4 +399,8 @@ func removeDupes(s []string) []string {
 		i++
 	}
 	return s[:i]
+}
+
+func isRemoteResource(str string) bool {
+	return urlutil.IsGitURL(str) || urlutil.IsURL(str)
 }
