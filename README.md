@@ -79,8 +79,7 @@ $ make install
 ### with buildx or Docker 19.03
 ```
 $ export DOCKER_BUILDKIT=1
-$ # choose a platform that matches your architecture
-$ docker build --platform=[darwin,windows,linux,linux/arm64] -o . git://github.com/docker/buildx
+$ docker build --platform=local -o . git://github.com/docker/buildx
 $ mv buildx ~/.docker/cli-plugins/docker-buildx
 ```
 
