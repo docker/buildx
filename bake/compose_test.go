@@ -53,7 +53,6 @@ services:
 	c, err := ParseCompose(dt)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Group))
-
 }
 
 func TestParseComposeTarget(t *testing.T) {
@@ -78,7 +77,7 @@ services:
 	require.Equal(t, "webapp", *c.Target["webapp"].Target)
 }
 
-func TestBogusCompose(t *testing.T) {
+func TestComposeBuildWithoutContext(t *testing.T) {
 	var dt = []byte(`
 version: "3.7"
 
@@ -92,6 +91,27 @@ services:
       target: webapp
 `)
 
+	c, err := ParseCompose(dt)
+	require.NoError(t, err)
+	require.Equal(t, "db", *c.Target["db"].Target)
+	require.Equal(t, "webapp", *c.Target["webapp"].Target)
+}
+
+func TestBogusCompose(t *testing.T) {
+	var dt = []byte(`
+version: "3.7"
+
+services:
+  db:
+    labels:
+      - "foo"
+  webapp:
+    build:
+      context: .
+      target: webapp
+`)
+
 	_, err := ParseCompose(dt)
 	require.Error(t, err)
+	require.Contains(t, err.Error(), "has neither an image nor a build context specified. At least one must be provided")
 }
