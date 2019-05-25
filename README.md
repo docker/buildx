@@ -639,20 +639,5 @@ To remove this alias, you can run `docker buildx uninstall`.
 
 # Contributing
 
-To enter a demo container environment and experiment, you may run:
-
-```
-$ make shell
-```
-
-To validate PRs before submitting them you should run:
-
-```
-$ make validate-all
-```
-
-To generate new vendored files with go modules run:
-
-```
-$ make vendor
-```
+Want to contribute to Buildx? Awesome! You can find information about
+contributing to this project in the [CONTRIBUTING.md](/.github/CONTRIBUTING.md)

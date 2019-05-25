@@ -25,4 +25,7 @@ validate-all: lint test validate-vendor
 vendor:
 	./hack/update-vendor
 
-.PHONY: vendor lint shell binaries install binaries-cross validate-all
+generate-authors:
+	./hack/generate-authors
+
+.PHONY: vendor lint shell binaries install binaries-cross validate-all generate-authors
