@@ -85,3 +85,7 @@ func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.API
 	}
 	return f.New(ctx, ic)
 }
+
+func GetFactories() map[string]Factory {
+	return drivers
+}
