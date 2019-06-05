@@ -154,6 +154,11 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 func createCmd(dockerCli command.Cli) *cobra.Command {
 	var options createOptions
 
+	var drivers []string
+	for s := range driver.GetFactories() {
+		drivers = append(drivers, s)
+	}
+
 	cmd := &cobra.Command{
 		Use:   "create [OPTIONS] [CONTEXT|ENDPOINT]",
 		Short: "Create a new builder instance",
@@ -166,7 +171,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags := cmd.Flags()
 
 	flags.StringVar(&options.name, "name", "", "Builder instance name")
-	flags.StringVar(&options.driver, "driver", "", "Driver to use (eg. docker-container)")
+	flags.StringVar(&options.driver, "driver", "", fmt.Sprintf("Driver to use (available: %v)", drivers))
 	flags.StringVar(&options.nodeName, "node", "", "Create/modify node with given name")
 	flags.StringArrayVar(&options.platform, "platform", []string{}, "Fixed platforms for current node")
 
