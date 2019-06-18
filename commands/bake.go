@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/docker/buildx/bake"
 	"github.com/docker/cli/cli/command"
@@ -23,9 +24,20 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 	ctx := appcontext.Context()
 
 	if len(in.files) == 0 {
-		files, err := defaultFiles()
-		if err != nil {
-			return err
+		var files []string
+		composeFileVar, ok := os.LookupEnv("COMPOSE_FILE")
+		if ok {
+			composePathSeparator, ok := os.LookupEnv("COMPOSE_PATH_SEPARATOR")
+			if !ok {
+				composePathSeparator = ","
+			}
+			files = strings.Split(composeFileVar, composePathSeparator)
+		} else {
+			defaultFiles, err := defaultFiles()
+			if err != nil {
+				return err
+			}
+			files = defaultFiles
 		}
 		if len(files) == 0 {
 			return errors.Errorf("no docker-compose.yml or docker-bake.hcl found, specify build file with -f/--file")
