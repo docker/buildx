@@ -65,6 +65,10 @@ $ CHANNEL=nightly sh docker-install.sh
 
 Download the latest binary release from https://github.com/docker/buildx/releases/latest and copy it to `~/.docker/cli-plugins` folder with name `docker-buildx`.
 
+Change the permission to execute:
+```sh
+chmod a+x ~/.docker/cli-plugins/docker-buildx
+```
 
 After installing you can run `docker buildx` to see the new commands.
 
