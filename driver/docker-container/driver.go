@@ -59,10 +59,16 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	}); err != nil {
 		return err
 	}
+
+	cfg := &container.Config{
+		Image: buildkitImage,
+	}
+	if d.InitConfig.BuildkitFlags != nil {
+		cfg.Cmd = d.InitConfig.BuildkitFlags
+	}
+
 	if err := l.Wrap("creating container "+d.Name, func() error {
-		_, err := d.DockerAPI.ContainerCreate(ctx, &container.Config{
-			Image: buildkitImage,
-		}, &container.HostConfig{
+		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, &container.HostConfig{
 			Privileged: true,
 		}, &network.NetworkingConfig{}, d.Name)
 		if err != nil {

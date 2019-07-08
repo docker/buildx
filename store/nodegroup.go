@@ -19,6 +19,7 @@ type Node struct {
 	Name      string
 	Endpoint  string
 	Platforms []specs.Platform
+	Flags     []string
 }
 
 func (ng *NodeGroup) Leave(name string) error {
@@ -33,7 +34,7 @@ func (ng *NodeGroup) Leave(name string) error {
 	return nil
 }
 
-func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool) error {
+func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool, flags []string) error {
 	i := ng.findNode(name)
 	if i == -1 && !actionAppend {
 		if len(ng.Nodes) > 0 {
@@ -55,6 +56,9 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		if len(platforms) > 0 {
 			n.Platforms = pp
 		}
+		if flags != nil {
+			n.Flags = flags
+		}
 		ng.Nodes[i] = n
 		if err := ng.validateDuplicates(endpoint, i); err != nil {
 			return err
@@ -75,6 +79,7 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		Name:      name,
 		Endpoint:  endpoint,
 		Platforms: pp,
+		Flags:     flags,
 	}
 	ng.Nodes = append(ng.Nodes, n)
 
