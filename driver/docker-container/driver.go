@@ -63,7 +63,8 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		_, err := d.DockerAPI.ContainerCreate(ctx, &container.Config{
 			Image: buildkitImage,
 		}, &container.HostConfig{
-			Privileged: true,
+			Privileged:  true,
+			NetworkMode: "host",
 		}, &network.NetworkingConfig{}, d.Name)
 		if err != nil {
 			return err
