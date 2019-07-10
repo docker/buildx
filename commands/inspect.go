@@ -114,6 +114,9 @@ func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
 			} else {
 				fmt.Fprintf(w, "Status:\t%s\n", ngi.drivers[i].info.Status)
+				if len(n.Flags) > 0 {
+					fmt.Fprintf(w, "Flags:\t%s\n", strings.Join(n.Flags, " "))
+				}
 				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.Format(platformutil.Dedupe(append(n.Platforms, ngi.drivers[i].platforms...))), ", "))
 			}
 		}

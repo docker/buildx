@@ -35,6 +35,7 @@ require (
 	github.com/gogo/protobuf v1.2.1 // indirect
 	github.com/google/certificate-transparency-go v1.0.21 // indirect
 	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf // indirect
+	github.com/google/shlex v0.0.0-20150127133951-6f45313302b9
 	github.com/gorilla/mux v1.7.0 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-version v1.1.0 // indirect

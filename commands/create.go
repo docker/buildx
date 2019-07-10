@@ -8,6 +8,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/google/shlex"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -22,6 +23,7 @@ type createOptions struct {
 	actionAppend bool
 	actionLeave  bool
 	use          bool
+	flags        string
 	// upgrade      bool // perform upgrade of the driver
 }
 
@@ -107,6 +109,14 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		ng.Driver = driverName
 	}
 
+	var flags []string
+	if in.flags != "" {
+		flags, err = shlex.Split(in.flags)
+		if err != nil {
+			return errors.Wrap(err, "failed to parse buildkit flags")
+		}
+	}
+
 	var ep string
 	if in.actionLeave {
 		if err := ng.Leave(in.nodeName); err != nil {
@@ -128,7 +138,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 				return err
 			}
 		}
-		if err := ng.Update(in.nodeName, ep, in.platform, len(args) > 0, in.actionAppend); err != nil {
+		if err := ng.Update(in.nodeName, ep, in.platform, len(args) > 0, in.actionAppend, flags); err != nil {
 			return err
 		}
 	}
@@ -173,6 +183,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.name, "name", "", "Builder instance name")
 	flags.StringVar(&options.driver, "driver", "", fmt.Sprintf("Driver to use (available: %v)", drivers))
 	flags.StringVar(&options.nodeName, "node", "", "Create/modify node with given name")
+	flags.StringVar(&options.flags, "buildkitd-flags", "", "Flags for buildkitd daemon")
 	flags.StringArrayVar(&options.platform, "platform", []string{}, "Fixed platforms for current node")
 
 	flags.BoolVar(&options.actionAppend, "append", false, "Append a node to builder instead of changing it")

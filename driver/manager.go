@@ -23,10 +23,10 @@ type BuildkitConfig struct {
 
 type InitConfig struct {
 	// This object needs updates to be generic for different drivers
-	Name           string
-	DockerAPI      dockerclient.APIClient
-	BuildkitConfig BuildkitConfig
-	Meta           map[string]interface{}
+	Name          string
+	DockerAPI     dockerclient.APIClient
+	BuildkitFlags []string
+	Meta          map[string]interface{}
 }
 
 var drivers map[string]Factory
@@ -71,10 +71,11 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, flags []string) (Driver, error) {
 	ic := InitConfig{
-		DockerAPI: api,
-		Name:      name,
+		DockerAPI:     api,
+		Name:          name,
+		BuildkitFlags: flags,
 	}
 	if f == nil {
 		var err error
