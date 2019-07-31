@@ -1,6 +1,8 @@
 package docker
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"io"
 	"io/ioutil"
@@ -73,6 +75,15 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		}, &network.NetworkingConfig{}, d.Name)
 		if err != nil {
 			return err
+		}
+		if f := d.InitConfig.ConfigFile; f != "" {
+			buf, err := readFileToTar(f)
+			if err != nil {
+				return err
+			}
+			if err := d.DockerAPI.CopyToContainer(ctx, d.Name, "/", buf, dockertypes.CopyToContainerOptions{}); err != nil {
+				return err
+			}
 		}
 		if err := d.start(ctx, l); err != nil {
 			return err
@@ -244,4 +255,27 @@ type demux struct {
 
 func (d *demux) Read(dt []byte) (int, error) {
 	return d.Reader.Read(dt)
+}
+
+func readFileToTar(fn string) (*bytes.Buffer, error) {
+	buf := bytes.NewBuffer(nil)
+	tw := tar.NewWriter(buf)
+	dt, err := ioutil.ReadFile(fn)
+	if err != nil {
+		return nil, err
+	}
+	if err := tw.WriteHeader(&tar.Header{
+		Name: "/etc/buildkit/buildkitd.toml",
+		Size: int64(len(dt)),
+		Mode: 0644,
+	}); err != nil {
+		return nil, err
+	}
+	if _, err := tw.Write(dt); err != nil {
+		return nil, err
+	}
+	if err := tw.Close(); err != nil {
+		return nil, err
+	}
+	return buf, nil
 }

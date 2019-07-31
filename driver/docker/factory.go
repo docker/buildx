@@ -44,6 +44,9 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	if cfg.DockerAPI == nil {
 		return nil, errors.Errorf("docker driver requires docker API access")
 	}
+	if cfg.ConfigFile != "" {
+		return nil, errors.Errorf("setting config file is not supported for docker driver, use dockerd configuration file")
+	}
 
 	return &Driver{factory: f, InitConfig: cfg}, nil
 }

@@ -24,6 +24,7 @@ type createOptions struct {
 	actionLeave  bool
 	use          bool
 	flags        string
+	configFile   string
 	// upgrade      bool // perform upgrade of the driver
 }
 
@@ -138,7 +139,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 				return err
 			}
 		}
-		if err := ng.Update(in.nodeName, ep, in.platform, len(args) > 0, in.actionAppend, flags); err != nil {
+		if err := ng.Update(in.nodeName, ep, in.platform, len(args) > 0, in.actionAppend, flags, in.configFile); err != nil {
 			return err
 		}
 	}
@@ -184,6 +185,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.driver, "driver", "", fmt.Sprintf("Driver to use (available: %v)", drivers))
 	flags.StringVar(&options.nodeName, "node", "", "Create/modify node with given name")
 	flags.StringVar(&options.flags, "buildkitd-flags", "", "Flags for buildkitd daemon")
+	flags.StringVar(&options.configFile, "config", "", "BuildKit config file")
 	flags.StringArrayVar(&options.platform, "platform", []string{}, "Fixed platforms for current node")
 
 	flags.BoolVar(&options.actionAppend, "append", false, "Append a node to builder instead of changing it")

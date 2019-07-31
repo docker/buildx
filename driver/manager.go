@@ -26,6 +26,7 @@ type InitConfig struct {
 	Name          string
 	DockerAPI     dockerclient.APIClient
 	BuildkitFlags []string
+	ConfigFile    string
 	Meta          map[string]interface{}
 }
 
@@ -71,11 +72,12 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, flags []string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, flags []string, config string) (Driver, error) {
 	ic := InitConfig{
 		DockerAPI:     api,
 		Name:          name,
 		BuildkitFlags: flags,
+		ConfigFile:    config,
 	}
 	if f == nil {
 		var err error
