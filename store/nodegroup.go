@@ -16,10 +16,11 @@ type NodeGroup struct {
 }
 
 type Node struct {
-	Name      string
-	Endpoint  string
-	Platforms []specs.Platform
-	Flags     []string
+	Name       string
+	Endpoint   string
+	Platforms  []specs.Platform
+	Flags      []string
+	ConfigFile string
 }
 
 func (ng *NodeGroup) Leave(name string) error {
@@ -34,7 +35,7 @@ func (ng *NodeGroup) Leave(name string) error {
 	return nil
 }
 
-func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool, flags []string) error {
+func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool, flags []string, configFile string) error {
 	i := ng.findNode(name)
 	if i == -1 && !actionAppend {
 		if len(ng.Nodes) > 0 {
@@ -76,10 +77,11 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 	}
 
 	n := Node{
-		Name:      name,
-		Endpoint:  endpoint,
-		Platforms: pp,
-		Flags:     flags,
+		Name:       name,
+		Endpoint:   endpoint,
+		Platforms:  pp,
+		ConfigFile: configFile,
+		Flags:      flags,
 	}
 	ng.Nodes = append(ng.Nodes, n)
 
