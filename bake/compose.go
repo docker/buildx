@@ -2,7 +2,9 @@ package bake
 
 import (
 	"fmt"
+	"os"
 	"reflect"
+	"strings"
 
 	"github.com/docker/cli/cli/compose/loader"
 	composetypes "github.com/docker/cli/cli/compose/types"
@@ -19,7 +21,20 @@ func parseCompose(dt []byte) (*composetypes.Config, error) {
 				Config: parsed,
 			},
 		},
+		Environment: envMap(os.Environ()),
 	})
+}
+
+func envMap(env []string) map[string]string {
+	result := make(map[string]string, len(env))
+	for _, s := range env {
+		kv := strings.SplitN(s, "=", 2)
+		if len(kv) != 2 {
+			continue
+		}
+		result[kv[0]] = kv[1]
+	}
+	return result
 }
 
 func ParseCompose(dt []byte) (*Config, error) {
