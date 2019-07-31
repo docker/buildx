@@ -84,8 +84,8 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 			InStream:       os.Stdin,
 		},
 		Tags:        in.tags,
-		Labels:      listToMap(in.labels),
-		BuildArgs:   listToMap(in.buildArgs),
+		Labels:      listToMap(in.labels, false),
+		BuildArgs:   listToMap(in.buildArgs, true),
 		Pull:        in.pull,
 		NoCache:     in.noCache,
 		Target:      in.target,
@@ -282,12 +282,16 @@ func commonFlags(options *commonOptions, flags *pflag.FlagSet) {
 	flags.BoolVar(&options.pull, "pull", false, "Always attempt to pull a newer version of the image")
 }
 
-func listToMap(values []string) map[string]string {
+func listToMap(values []string, defaultEnv bool) map[string]string {
 	result := make(map[string]string, len(values))
 	for _, value := range values {
 		kv := strings.SplitN(value, "=", 2)
 		if len(kv) == 1 {
-			result[kv[0]] = ""
+			if defaultEnv {
+				result[kv[0]] = os.Getenv(kv[0])
+			} else {
+				result[kv[0]] = ""
+			}
 		} else {
 			result[kv[0]] = kv[1]
 		}

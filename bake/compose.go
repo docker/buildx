@@ -101,6 +101,8 @@ func toMap(in composetypes.MappingWithEquals) map[string]string {
 	for k, v := range in {
 		if v != nil {
 			m[k] = *v
+		} else {
+			m[k] = os.Getenv(k)
 		}
 	}
 	return m
