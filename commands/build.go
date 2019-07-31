@@ -44,6 +44,8 @@ type buildOptions struct {
 	squash bool
 	quiet  bool
 
+	allow []string
+
 	// hidden
 	// untrusted   bool
 	// ulimits        *opts.UlimitOpt
@@ -167,6 +169,12 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.CacheTo = cacheExports
 
+	allow, err := build.ParseEntitlements(in.allow)
+	if err != nil {
+		return err
+	}
+	opts.Allow = allow
+
 	return buildTargets(ctx, dockerCli, map[string]build.Options{"default": opts}, in.progress)
 }
 
@@ -213,6 +221,8 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, "Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)")
 
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build.")
+
+	flags.StringSliceVar(&options.allow, "allow", []string{}, "Allow extra privileged entitlement, e.g. network.host, security.insecure")
 
 	// not implemented
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")

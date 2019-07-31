@@ -24,6 +24,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
+	"github.com/moby/buildkit/util/entitlements"
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -55,6 +56,7 @@ type Options struct {
 	CacheFrom []client.CacheOptionsEntry
 	CacheTo   []client.CacheOptionsEntry
 
+	Allow []entitlements.Entitlement
 	// DockerTarget
 }
 
@@ -324,11 +326,12 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 	}
 
 	so := client.SolveOpt{
-		Frontend:      "dockerfile.v0",
-		FrontendAttrs: map[string]string{},
-		LocalDirs:     map[string]string{},
-		CacheExports:  opt.CacheTo,
-		CacheImports:  opt.CacheFrom,
+		Frontend:            "dockerfile.v0",
+		FrontendAttrs:       map[string]string{},
+		LocalDirs:           map[string]string{},
+		CacheExports:        opt.CacheTo,
+		CacheImports:        opt.CacheFrom,
+		AllowedEntitlements: opt.Allow,
 	}
 
 	if multiDriver {
@@ -454,6 +457,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 	switch opt.NetworkMode {
 	case "host", "none":
 		so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
+		so.AllowedEntitlements = append(so.AllowedEntitlements, entitlements.EntitlementNetworkHost)
 	case "", "default":
 	default:
 		return nil, nil, errors.Errorf("network mode %q not supported by buildkit", opt.NetworkMode)
