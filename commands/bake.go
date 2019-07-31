@@ -51,7 +51,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 		return nil
 	}
 
-	bo, err := bake.TargetsToBuildOpt(m)
+	bo, err := bake.TargetsToBuildOpt(m, in.noCache, in.pull)
 	if err != nil {
 		return err
 	}

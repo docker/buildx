@@ -248,10 +248,10 @@ func (t *Target) normalize() {
 	t.Outputs = removeDupes(t.Outputs)
 }
 
-func TargetsToBuildOpt(m map[string]Target) (map[string]build.Options, error) {
+func TargetsToBuildOpt(m map[string]Target, noCache, pull bool) (map[string]build.Options, error) {
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
-		bo, err := toBuildOpt(v)
+		bo, err := toBuildOpt(v, noCache, pull)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +260,7 @@ func TargetsToBuildOpt(m map[string]Target) (map[string]build.Options, error) {
 	return m2, nil
 }
 
-func toBuildOpt(t Target) (*build.Options, error) {
+func toBuildOpt(t Target, noCache, pull bool) (*build.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -289,6 +289,8 @@ func toBuildOpt(t Target) (*build.Options, error) {
 		Tags:      t.Tags,
 		BuildArgs: t.Args,
 		Labels:    t.Labels,
+		NoCache:   noCache,
+		Pull:      pull,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)
