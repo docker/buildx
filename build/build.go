@@ -395,12 +395,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 				if isDefaultMobyDriver {
 					e.Type = "image"
 				} else {
-					w, cancel, err := dl(e.Attrs["context"])
-					if err != nil {
-						return nil, nil, err
-					}
-					defers = append(defers, cancel)
-					opt.Exports[i].Output = w
+					opt.Exports[i].Output = dl(e.Attrs["context"])
 				}
 			} else if !d.Features()[driver.DockerExporter] {
 				return nil, nil, notSupported(d, driver.DockerExporter)
@@ -524,13 +519,14 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		for i, dp := range m[k] {
 			d := drivers[dp.driverIndex].Driver
 			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(d, multiDriver, opt, func(name string) (io.WriteCloser, func(), error) {
-				return newDockerLoader(ctx, docker, name, mw)
+			loadCtx, cancel := context.WithCancel(ctx)
+			so, release, err := toSolveOpt(d, multiDriver, opt, func(name string) func(map[string]string) (io.WriteCloser, error) {
+				return newDockerLoader(loadCtx, docker, name, mw)
 			})
 			if err != nil {
 				return nil, err
 			}
-			defers = append(defers, release)
+			defers = append(defers, release, cancel)
 			m[k][i].so = so
 		}
 	}
@@ -807,33 +803,40 @@ func notSupported(d driver.Driver, f driver.Feature) error {
 	return errors.Errorf("%s feature is currently not supported for %s driver. Please switch to a different driver (eg. \"docker buildx create --use\")", f, d.Factory().Name())
 }
 
-type dockerLoadCallback func(name string) (io.WriteCloser, func(), error)
+type dockerLoadCallback func(name string) func(map[string]string) (io.WriteCloser, error)
 
-func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress.MultiWriter) (io.WriteCloser, func(), error) {
-	c, err := d.DockerAPI(name)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	pr, pw := io.Pipe()
-	started := make(chan struct{})
-	w := &waitingWriter{
-		PipeWriter: pw,
-		f: func() {
-			resp, err := c.ImageLoad(ctx, pr, false)
-			if err != nil {
-				pr.CloseWithError(err)
-				return
+func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress.MultiWriter) func(map[string]string) (io.WriteCloser, error) {
+	return func(m map[string]string) (io.WriteCloser, error) {
+		done := make(chan struct{})
+		c, err := d.DockerAPI(name)
+		if err != nil {
+			return nil, err
+		}
+		pr, pw := io.Pipe()
+		started := make(chan struct{})
+		w := &waitingWriter{
+			PipeWriter: pw,
+			f: func() {
+				resp, err := c.ImageLoad(ctx, pr, false)
+				if err != nil {
+					pr.CloseWithError(err)
+					return
+				}
+				prog := mw.WithPrefix("", false)
+				close(started)
+				progress.FromReader(prog, "importing to docker", resp.Body)
+			},
+			started: started,
+		}
+		go func() {
+			select {
+			case <-ctx.Done():
+				pr.Close()
+			case <-done:
 			}
-			prog := mw.WithPrefix("", false)
-			close(started)
-			progress.FromReader(prog, "importing to docker", resp.Body)
-		},
-		started: started,
+		}()
+		return w, nil
 	}
-	return w, func() {
-		pr.Close()
-	}, nil
 }
 
 type waitingWriter struct {
