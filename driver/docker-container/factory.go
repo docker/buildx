@@ -45,8 +45,10 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if v == "host" {
 				d.InitConfig.BuildkitFlags = append(d.InitConfig.BuildkitFlags, "--allow-insecure-entitlement=network.host")
 			}
+		case "image":
+			d.image = v
 		default:
-			return nil, errors.Errorf("invalid driver option %s for docker-container driver")
+			return nil, errors.Errorf("invalid driver option %s for docker-container driver", k)
 		}
 	}
 

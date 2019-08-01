@@ -22,12 +22,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-var buildkitImage = "moby/buildkit:master" // TODO: make this verified and configuratble
+var defaultBuildkitImage = "moby/buildkit:buildx-stable-1" // TODO: make this verified
 
 type Driver struct {
 	driver.InitConfig
 	factory driver.Factory
 	netMode string
+	image   string
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
@@ -52,8 +53,12 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 }
 
 func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
-	if err := l.Wrap("pulling image "+buildkitImage, func() error {
-		rc, err := d.DockerAPI.ImageCreate(ctx, buildkitImage, types.ImageCreateOptions{})
+	imageName := defaultBuildkitImage
+	if d.image != "" {
+		imageName = d.image
+	}
+	if err := l.Wrap("pulling image "+imageName, func() error {
+		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, types.ImageCreateOptions{})
 		if err != nil {
 			return err
 		}
@@ -64,7 +69,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	}
 
 	cfg := &container.Config{
-		Image: buildkitImage,
+		Image: imageName,
 	}
 	if d.InitConfig.BuildkitFlags != nil {
 		cfg.Cmd = d.InitConfig.BuildkitFlags
