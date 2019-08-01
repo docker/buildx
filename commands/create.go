@@ -1,8 +1,10 @@
 package commands
 
 import (
+	"encoding/csv"
 	"fmt"
 	"os"
+	"strings"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
@@ -25,6 +27,7 @@ type createOptions struct {
 	use          bool
 	flags        string
 	configFile   string
+	driverOpts   []string
 	// upgrade      bool // perform upgrade of the driver
 }
 
@@ -139,7 +142,11 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 				return err
 			}
 		}
-		if err := ng.Update(in.nodeName, ep, in.platform, len(args) > 0, in.actionAppend, flags, in.configFile); err != nil {
+		m, err := csvToMap(in.driverOpts)
+		if err != nil {
+			return err
+		}
+		if err := ng.Update(in.nodeName, ep, in.platform, len(args) > 0, in.actionAppend, flags, in.configFile, m); err != nil {
 			return err
 		}
 	}
@@ -187,6 +194,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.flags, "buildkitd-flags", "", "Flags for buildkitd daemon")
 	flags.StringVar(&options.configFile, "config", "", "BuildKit config file")
 	flags.StringArrayVar(&options.platform, "platform", []string{}, "Fixed platforms for current node")
+	flags.StringArrayVar(&options.driverOpts, "driver-opt", []string{}, "Options for the driver")
 
 	flags.BoolVar(&options.actionAppend, "append", false, "Append a node to builder instead of changing it")
 	flags.BoolVar(&options.actionLeave, "leave", false, "Remove a node from builder instead of changing it")
@@ -195,4 +203,23 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	_ = flags
 
 	return cmd
+}
+
+func csvToMap(in []string) (map[string]string, error) {
+	m := make(map[string]string, len(in))
+	for _, s := range in {
+		csvReader := csv.NewReader(strings.NewReader(s))
+		fields, err := csvReader.Read()
+		if err != nil {
+			return nil, err
+		}
+		for _, v := range fields {
+			p := strings.SplitN(v, "=", 2)
+			if len(p) != 2 {
+				return nil, errors.Errorf("invalid value %q, expecting k=v", v)
+			}
+			m[p[0]] = p[1]
+		}
+	}
+	return m, nil
 }

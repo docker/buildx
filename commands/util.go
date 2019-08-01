@@ -174,7 +174,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				// TODO: replace the following line with dockerclient.WithAPIVersionNegotiation option in clientForEndpoint
 				dockerapi.NegotiateAPIVersion(ctx)
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, n.Flags, n.ConfigFile)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, n.Flags, n.ConfigFile, n.DriverOpts)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -251,7 +251,7 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli) ([]build.Driv
 		return driversForNodeGroup(ctx, dockerCli, ng)
 	}
 
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), nil, "")
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), nil, "", nil)
 	if err != nil {
 		return nil, err
 	}
