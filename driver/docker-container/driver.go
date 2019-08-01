@@ -27,6 +27,7 @@ var buildkitImage = "moby/buildkit:master" // TODO: make this verified and confi
 type Driver struct {
 	driver.InitConfig
 	factory driver.Factory
+	netMode string
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
@@ -70,9 +71,13 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	}
 
 	if err := l.Wrap("creating container "+d.Name, func() error {
-		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, &container.HostConfig{
+		hc := &container.HostConfig{
 			Privileged: true,
-		}, &network.NetworkingConfig{}, d.Name)
+		}
+		if d.netMode != "" {
+			hc.NetworkMode = container.NetworkMode(d.netMode)
+		}
+		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, d.Name)
 		if err != nil {
 			return err
 		}

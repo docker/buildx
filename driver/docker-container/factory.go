@@ -37,8 +37,20 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	if cfg.DockerAPI == nil {
 		return nil, errors.Errorf("%s driver requires docker API access", f.Name())
 	}
+	d := &Driver{factory: f, InitConfig: cfg}
+	for k, v := range cfg.DriverOpts {
+		switch k {
+		case "network":
+			d.netMode = v
+			if v == "host" {
+				d.InitConfig.BuildkitFlags = append(d.InitConfig.BuildkitFlags, "--allow-insecure-entitlement=network.host")
+			}
+		default:
+			return nil, errors.Errorf("invalid driver option %s for docker-container driver")
+		}
+	}
 
-	return &Driver{factory: f, InitConfig: cfg}, nil
+	return d, nil
 }
 
 func (f *factory) AllowsInstances() bool {
