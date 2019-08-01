@@ -331,21 +331,16 @@ Options:
 
 | Flag | Description |
 | --- | --- |
-| --append                | Append a node to builder instead of changing it
-| --driver string         | Driver to use (eg. docker-container)
-| --leave                 | Remove a node from builder instead of changing it
-| --name string           | Builder instance name
-| --node string           | Create/modify node with given name
-| --platform stringArray  | Fixed platforms for current node
-| --use                   | Set the current builder instance
-
-#### `--driver DRIVER`
-
-Sets the builder driver to be used. There are two available drivers, each have their own specificities.
-
-- `docker` - Uses the builder that is built into the docker daemon. With this driver, the [`--load`](#--load) flag is implied by default on `buildx build`. However, building multi-platform images or exporting cache is not currently supported.
-
-- `docker-container` - Uses a buildkit container that will be spawned via docker. With this driver, both building multi-platform images and exporting cache are supported. However, images built will not automatically appear in `docker images` (see [`build --load`](#--load)).
+| --append                 | Append a node to builder instead of changing it
+| --buildkitd-flags string | Flags for buildkitd daemon
+| --config string          | BuildKit config file
+| --driver string          | Driver to use (eg. docker-container)
+| --driver-opt stringArray | Options for the driver
+| --leave                  | Remove a node from builder instead of changing it
+| --name string            | Builder instance name
+| --node string            | Create/modify node with given name
+| --platform stringArray   | Fixed platforms for current node
+| --use                    | Set the current builder instance
 
 #### `--append`
 
@@ -358,6 +353,41 @@ eager_beaver
 $ docker buildx create --name eager_beaver --append mycontext2
 eager_beaver
 ```
+
+#### `--buildkitd-flags FLAGS`
+
+Adds flags when starting the buildkitd daemon. They take precedence over the configuration file specified by `--config`. See `buildkitd --help` for the available flags.
+
+Example:
+```
+--buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
+```
+
+#### `--config FILE`
+
+Specifies the configuration file for the buildkitd daemon to use. The configuration can be overridden by `--buildkitd-flags`. See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
+
+#### `--driver DRIVER`
+
+Sets the builder driver to be used. There are two available drivers, each have their own specificities.
+
+- `docker` - Uses the builder that is built into the docker daemon. With this driver, the [`--load`](#--load) flag is implied by default on `buildx build`. However, building multi-platform images or exporting cache is not currently supported.
+
+- `docker-container` - Uses a buildkit container that will be spawned via docker. With this driver, both building multi-platform images and exporting cache are supported. However, images built will not automatically appear in `docker images` (see [`build --load`](#--load)).
+
+
+#### `--driver-opt OPTIONS`
+
+Passes additional driver-specific options. Details for each driver:
+
+- `docker` - No driver options
+- `docker-container`
+  - `image` - Sets the container image to be used for running buildkit.
+  - `network` - Sets the network mode for running the buildkit container.
+  - Example:
+    ```
+    --driver docker-container --driver-opt image=moby/buildkit:master,network=host
+    ```
 
 #### `--leave`
 
