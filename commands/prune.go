@@ -3,13 +3,11 @@ package commands
 import (
 	"context"
 	"fmt"
-	"strings"
 
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/opts"
-	"github.com/docker/docker/api/types"
-	units "github.com/docker/go-units"
+	"github.com/moby/buildkit/client"
 	"github.com/spf13/cobra"
 )
 
@@ -25,38 +23,22 @@ const (
 	allCacheWarning = `WARNING! This will remove all build cache. Are you sure you want to continue?`
 )
 
-func runPrune(dockerCli command.Cli, options pruneOptions) (spaceReclaimed uint64, output string, err error) {
+func runPrune(dockerCli command.Cli, options pruneOptions) error {
+	fmt.Println("ASDF These are the options present: ", options)
 	pruneFilters := options.filter.Value()
 	pruneFilters = command.PruneFilters(dockerCli, pruneFilters)
-
-	warning := normalWarning
-	if options.all {
-		warning = allCacheWarning
-	}
-	if !options.force && !command.PromptForConfirmation(dockerCli.In(), dockerCli.Out(), warning) {
-		return 0, "", nil
-	}
-
-	report, err := dockerCli.Client().BuildCachePrune(context.Background(), types.BuildCachePruneOptions{
-		All:         options.all,
-		KeepStorage: options.keepStorage.Value(),
-		Filters:     pruneFilters,
-	})
+	fmt.Println("ASDF: These are the prune filters: ", pruneFilters)
+	buildClient, err := client.New(context.Background(), "", nil)
 	if err != nil {
-		return 0, "", err
+		fmt.Println("there was an error: ", err)
 	}
+	ch := make(chan client.UsageInfo)
+	buildClient.Prune(context.Background(), ch)
+	close(ch)
+	res := <-ch
+	fmt.Println("Total reclaimed Space: ", res.Size)
 
-	if len(report.CachesDeleted) > 0 {
-		var sb strings.Builder
-		sb.WriteString("Deleted build cache objects:\n")
-		for _, id := range report.CachesDeleted {
-			sb.WriteString(id)
-			sb.WriteByte('\n')
-		}
-		output = sb.String()
-	}
-
-	return report.SpaceReclaimed, output, nil
+	return nil
 }
 
 func pruneCmd(dockerCli command.Cli) *cobra.Command {
@@ -67,15 +49,7 @@ func pruneCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Remove build cache ",
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			spaceReclaimed, output, err := runPrune(dockerCli, options)
-			if err != nil {
-				return err
-			}
-			if output != "" {
-				fmt.Fprintln(dockerCli.Out(), output)
-			}
-			fmt.Fprintln(dockerCli.Out(), "Total reclaimed space:", units.HumanSize(float64(spaceReclaimed)))
-			return nil
+			return runPrune(dockerCli, options)
 		},
 		Annotations: map[string]string{"version": "1.00"},
 	}
