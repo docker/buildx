@@ -500,12 +500,17 @@ Options:
 
 | Flag | Description |
 | --- | --- |
+|  --allow stringArray     | Allow extra privileged entitlement, e.g. network.host, security.insecure
 |  -f, --file stringArray  | Build definition file
 |      --no-cache          | Do not use cache when building the image
 |      --print             | Print the options without building
 |      --progress string   | Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
 |      --pull              | Always attempt to pull a newer version of the image
 |      --set stringArray   | Override target value (eg: target.key=value)
+
+#### `--allow=ENTITLEMENT`
+
+Same as [`build --allow`](#--allowentitlement).
 
 #### `-f, --file FILE`
 

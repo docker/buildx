@@ -44,8 +44,6 @@ type buildOptions struct {
 	squash bool
 	quiet  bool
 
-	allow []string
-
 	// hidden
 	// untrusted   bool
 	// ulimits        *opts.UlimitOpt
@@ -67,6 +65,7 @@ type commonOptions struct {
 	noCache  bool
 	progress string
 	pull     bool
+	allow    []string
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) error {
@@ -222,8 +221,6 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build.")
 
-	flags.StringSliceVar(&options.allow, "allow", []string{}, "Allow extra privileged entitlement, e.g. network.host, security.insecure")
-
 	// not implemented
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 	flags.StringVar(&options.networkMode, "network", "default", "Set the networking mode for the RUN instructions during build")
@@ -287,6 +284,7 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 }
 
 func commonFlags(options *commonOptions, flags *pflag.FlagSet) {
+	flags.StringSliceVar(&options.allow, "allow", []string{}, "Allow extra privileged entitlement, e.g. network.host, security.insecure")
 	flags.BoolVar(&options.noCache, "no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
 	flags.BoolVar(&options.pull, "pull", false, "Always attempt to pull a newer version of the image")

@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/docker/buildx/bake"
+	"github.com/docker/buildx/build"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
@@ -51,7 +52,12 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 		return nil
 	}
 
-	bo, err := bake.TargetsToBuildOpt(m, in.noCache, in.pull)
+	allow, err := build.ParseEntitlements(in.allow)
+	if err != nil {
+		return err
+	}
+
+	bo, err := bake.TargetsToBuildOpt(m, in.noCache, in.pull, allow)
 	if err != nil {
 		return err
 	}

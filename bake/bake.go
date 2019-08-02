@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/session/auth/authprovider"
+	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
 )
 
@@ -248,10 +249,10 @@ func (t *Target) normalize() {
 	t.Outputs = removeDupes(t.Outputs)
 }
 
-func TargetsToBuildOpt(m map[string]Target, noCache, pull bool) (map[string]build.Options, error) {
+func TargetsToBuildOpt(m map[string]Target, noCache, pull bool, allow []entitlements.Entitlement) (map[string]build.Options, error) {
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
-		bo, err := toBuildOpt(v, noCache, pull)
+		bo, err := toBuildOpt(v, noCache, pull, allow)
 		if err != nil {
 			return nil, err
 		}
@@ -260,7 +261,7 @@ func TargetsToBuildOpt(m map[string]Target, noCache, pull bool) (map[string]buil
 	return m2, nil
 }
 
-func toBuildOpt(t Target, noCache, pull bool) (*build.Options, error) {
+func toBuildOpt(t Target, noCache, pull bool, allow []entitlements.Entitlement) (*build.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -291,6 +292,7 @@ func toBuildOpt(t Target, noCache, pull bool) (*build.Options, error) {
 		Labels:    t.Labels,
 		NoCache:   noCache,
 		Pull:      pull,
+		Allow:     allow,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)
