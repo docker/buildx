@@ -184,8 +184,6 @@ github.com/mitchellh/mapstructure v1.1.2 h1:fmNYVwqnSfB9mZU6OS2O6GsXM+wcskZDuKQz
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
 github.com/moby/buildkit v0.5.1 h1:a2JHgsMuN/KGafhNK+AxmAIIov9itJTT4z3TyFTSE4c=
 github.com/moby/buildkit v0.5.1/go.mod h1:MlzfF7dLLq+tMiE5Dt8qD2iwXvZa1OnwWxMZX/wjBWs=
-github.com/moby/buildkit v0.5.2-0.20190513182223-f238f1efb04f h1:gNiytoQ3/71JJKWbLPtxoInde5kBRpvqH6EbUf12JDU=
-github.com/moby/buildkit v0.5.2-0.20190513182223-f238f1efb04f/go.mod h1:RozsxlEOjPuX/zKKrd0ZS76dlVNZu4qAff+vj7hR/qs=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/reflect2 v1.0.1 h1:9f412s+6RmYXLWZSEzVVgPGK7C2PphHj5RJrvfx9AWI=

@@ -46,7 +46,6 @@ type conn struct {
 
 	closedOnce sync.Once
 	readMu     sync.Mutex
-	writeMu    sync.Mutex
 	err        error
 	closeCh    chan struct{}
 }
@@ -80,8 +79,6 @@ func (c *conn) Read(b []byte) (n int, err error) {
 }
 
 func (c *conn) Write(b []byte) (int, error) {
-	c.writeMu.Lock()
-	defer c.writeMu.Unlock()
 	m := &controlapi.BytesMessage{Data: b}
 	if err := c.stream.SendMsg(m); err != nil {
 		return 0, err
@@ -96,9 +93,7 @@ func (c *conn) Close() (err error) {
 		}()
 
 		if cs, ok := c.stream.(grpc.ClientStream); ok {
-			c.writeMu.Lock()
 			err = cs.CloseSend()
-			c.writeMu.Unlock()
 			if err != nil {
 				return
 			}
@@ -111,7 +106,6 @@ func (c *conn) Close() (err error) {
 			err = c.stream.RecvMsg(m)
 			if err != nil {
 				if err != io.EOF {
-					c.readMu.Unlock()
 					return
 				}
 				err = nil
