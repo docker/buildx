@@ -12,10 +12,12 @@ import (
 )
 
 type pruneOptions struct {
-	force       bool
-	all         bool
-	filter      opts.FilterOpt
-	keepStorage opts.MemBytes
+	all          bool
+	filter       opts.FilterOpt
+	keepStorage  opts.MemBytes
+	keepDuration opts.DurationOpt
+	force        bool
+	verbose      bool
 }
 
 const (
@@ -23,15 +25,22 @@ const (
 	allCacheWarning = `WARNING! This will remove all build cache. Are you sure you want to continue?`
 )
 
-func runPrune(dockerCli command.Cli, options pruneOptions) error {
-	fmt.Println("ASDF These are the options present: ", options)
-	pruneFilters := options.filter.Value()
-	pruneFilters = command.PruneFilters(dockerCli, pruneFilters)
-	fmt.Println("ASDF: These are the prune filters: ", pruneFilters)
-	buildClient, err := client.New(context.Background(), "", nil)
+func runPrune(dockerCli command.Cli, opts pruneOptions) error {
+
+	warning := normalWarning
+	if opts.all {
+		warning = allCacheWarning
+	}
+
+	if !opts.force && !command.PromptForConfirmation(dockerCli.In(), dockerCli.Out(), warning) {
+		return nil
+	}
+
+	buildClient, err := client.New(context.Background(), "", opts)
 	if err != nil {
 		fmt.Println("there was an error: ", err)
 	}
+
 	ch := make(chan client.UsageInfo)
 	buildClient.Prune(context.Background(), ch)
 	close(ch)
@@ -55,10 +64,12 @@ func pruneCmd(dockerCli command.Cli) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.BoolVarP(&options.force, "force", "f", false, "Do not prompt for confirmation")
+	flags.Var(&options.keepDuration, "keep-duration", "Keep data newer than a certain limit")
 	flags.BoolVarP(&options.all, "all", "a", false, "Remove all unused images, not just dangling ones")
 	flags.Var(&options.filter, "filter", "Provide filter values (e.g. 'unused-for=24h')")
 	flags.Var(&options.keepStorage, "keep-storage", "Amount of disk space to keep for cache")
+	flags.BoolVar(&options.verbose, "verbose", false, "Provide a more verbose output")
+	flags.BoolVar(&options.force, "force", false, "Skip the warning messages")
 
 	return cmd
 }
