@@ -371,7 +371,7 @@ eager_beaver
 
 #### `--buildkitd-flags FLAGS`
 
-Adds flags when starting the buildkitd daemon. They take precedence over the configuration file specified by `--config`. See `buildkitd --help` for the available flags.
+Adds flags when starting the buildkitd daemon. They take precedence over the configuration file specified by [`--config`](#--config-file). See `buildkitd --help` for the available flags.
 
 Example:
 ```
@@ -380,7 +380,7 @@ Example:
 
 #### `--config FILE`
 
-Specifies the configuration file for the buildkitd daemon to use. The configuration can be overridden by `--buildkitd-flags`. See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
+Specifies the configuration file for the buildkitd daemon to use. The configuration can be overridden by [`--buildkitd-flags`](#--buildkitd-flags-flags). See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
 #### `--driver DRIVER`
 
