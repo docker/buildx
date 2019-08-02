@@ -165,6 +165,7 @@ Options:
 | Flag | Description |
 | --- | --- |
 | --add-host []         | Add a custom host-to-IP mapping (host:ip)
+| --allow []        | Allow extra privileged entitlement, e.g. network.host, security.insecure
 | --build-arg []    | Set build-time variables
 | --cache-from []   | External cache sources (eg. user/app:cache, type=local,src=path/to/dir)
 | --cache-to []     | Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)
@@ -318,6 +319,20 @@ docker buildx build --cache-to=type=registry,ref=user/app .
 docker buildx build --cache-to=type=local,dest=path/to/cache .
 ```
 
+#### `--allow=ENTITLEMENT`
+
+Allow extra privileged entitlement. List of entitlements:
+
+- `network.host` - Allows executions with host networking.
+- `security.insecure` - Allows executions without sandbox. See [related Dockerfile extensions](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/experimental.md#run---securityinsecuresandbox).
+
+For entitlements to be enabled, the `buildkitd` daemon also needs to allow them with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](#--buildkitd-flags-flags))
+
+Example:
+```
+$ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
+$ docker buildx build --allow security.insecure .
+```
 
 ### `buildx create [OPTIONS] [CONTEXT|ENDPOINT]`
 
@@ -356,7 +371,7 @@ eager_beaver
 
 #### `--buildkitd-flags FLAGS`
 
-Adds flags when starting the buildkitd daemon. They take precedence over the configuration file specified by `--config`. See `buildkitd --help` for the available flags.
+Adds flags when starting the buildkitd daemon. They take precedence over the configuration file specified by [`--config`](#--config-file). See `buildkitd --help` for the available flags.
 
 Example:
 ```
@@ -365,7 +380,7 @@ Example:
 
 #### `--config FILE`
 
-Specifies the configuration file for the buildkitd daemon to use. The configuration can be overridden by `--buildkitd-flags`. See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
+Specifies the configuration file for the buildkitd daemon to use. The configuration can be overridden by [`--buildkitd-flags`](#--buildkitd-flags-flags). See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
 #### `--driver DRIVER`
 
