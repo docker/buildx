@@ -577,23 +577,23 @@ Note: Design of bake command is work in progress, the user experience may change
 Example HCL defintion:
 
 ```
-group “default” {
-	targets = [“db”, “webapp-dev”]
+group "default" {
+	targets = ["db", "webapp-dev"]
 }
 
-target “webapp-dev” {
+target "webapp-dev" {
 	dockerfile = "Dockerfile.webapp"
 	tags = ["docker.io/username/webapp"]
 }
 
-target “webapp-release” {
-	inherits = [“webapp-dev”]
-	platforms = [“linux/amd64”, “linux/arm64”]
+target "webapp-release" {
+	inherits = ["webapp-dev"]
+	platforms = ["linux/amd64", "linux/arm64"]
 }
 
-target “db” {
+target "db" {
 	dockerfile = "Dockerfile.db"
-	tags = [“docker.io/username/db”]
+	tags = ["docker.io/username/db"]
 }
 ```
 
