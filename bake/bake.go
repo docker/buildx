@@ -77,7 +77,20 @@ func mergeConfig(c1, c2 Config) Config {
 		if c1.Group == nil {
 			c1.Group = map[string]Group{}
 		}
-		c1.Group[k] = g
+		if g1, exists := c1.Group[k]; exists {
+		nextTarget:
+			for _, t := range g.Targets {
+				for _, t2 := range g1.Targets {
+					if t == t2 {
+						continue nextTarget
+					}
+				}
+				g1.Targets = append(g1.Targets, t)
+			}
+			c1.Group[k] = g1
+		} else {
+			c1.Group[k] = g
+		}
 	}
 
 	for k, t := range c2.Target {

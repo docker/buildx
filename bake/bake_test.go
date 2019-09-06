@@ -59,11 +59,30 @@ services:
 `), 0600)
 	require.NoError(t, err)
 
-	ctx := context.TODO()
+	fp2 := filepath.Join(tmpdir, "docker-compose2.yml")
+	err = ioutil.WriteFile(fp2, []byte(`
+version: "3"
 
-	m, err := ReadTargets(ctx, []string{fp}, []string{"default"}, nil)
+services:
+  newservice:
+    build: .
+  webapp:
+    build:
+      args:
+        buildno2: 12
+`), 0600)
 	require.NoError(t, err)
 
+	ctx := context.TODO()
+
+	m, err := ReadTargets(ctx, []string{fp, fp2}, []string{"default"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 3, len(m))
+	_, ok := m["newservice"]
+	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
 	require.Equal(t, ".", *m["webapp"].Context)
+	require.Equal(t, "1", m["webapp"].Args["buildno"])
+	require.Equal(t, "12", m["webapp"].Args["buildno2"])
 }
