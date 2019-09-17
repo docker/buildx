@@ -287,7 +287,7 @@ Shorthand for [`--output=type=docker`](#docker). Will automatically load the sin
 
 #### `--cache-from=[NAME|type=TYPE[,KEY=VALUE]]`
 
-Use an external cache source for a build. Supported types are `registry` and `local`. The `registry` source can import cache from a cache manifest or (special) image configuration on the registry. The `local` source can export cache from local files previously exported with `--cache-to`.
+Use an external cache source for a build. Supported types are `registry` and `local`. The `registry` source can import cache from a cache manifest or (special) image configuration on the registry. The `local` source can import cache from local files previously exported with `--cache-to`.
 
 If no type is specified, `registry` exporter is used with a specified reference.
 
