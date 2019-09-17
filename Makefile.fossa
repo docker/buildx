@@ -1,0 +1,18 @@
+REPO_PATH?=docker/buildx
+BUILD_ANALYZER?=docker/fossa-analyzer
+FOSSA_OPTS?=--option all-tags:true --option allow-unresolved:true --no-ansi
+
+fossa-analyze:
+	docker run -i --rm -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
+		-v $(CURDIR)/$*:/go/src/github.com/$(REPO_PATH) \
+		-w /go/src/github.com/$(REPO_PATH) \
+		-e GO111MODULE=on \
+		$(BUILD_ANALYZER) analyze $(FOSSA_OPTS) --branch $(BRANCH_NAME)
+
+# This command is used to run the fossa test command
+fossa-test:
+	docker run -i --rm -e FOSSA_API_KEY=$(FOSSA_API_KEY) \
+		-v $(CURDIR)/$*:/go/src/github.com/$(REPO_PATH) \
+		-w /go/src/github.com/$(REPO_PATH) \
+		-e GO111MODULE=on \
+		$(BUILD_ANALYZER) test --debug
