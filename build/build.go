@@ -735,7 +735,7 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 			return nil, errStdinConflict
 		}
 
-		buf := bufio.NewReader(os.Stdin)
+		buf := bufio.NewReader(inp.InStream)
 		magic, err := buf.Peek(archiveHeaderSize * 2)
 		if err != nil && err != io.EOF {
 			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
@@ -761,7 +761,7 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 		target.LocalDirs["context"] = inp.ContextPath
 		switch inp.DockerfilePath {
 		case "-":
-			dockerfileReader = os.Stdin
+			dockerfileReader = inp.InStream
 		case "":
 			dockerfileDir = inp.ContextPath
 		default:
