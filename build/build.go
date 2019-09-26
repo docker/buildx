@@ -784,6 +784,7 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 			return nil, err
 		}
 		toRemove = append(toRemove, dockerfileDir)
+		dockerfileName = "Dockerfile"
 	}
 
 	if dockerfileName == "" {
