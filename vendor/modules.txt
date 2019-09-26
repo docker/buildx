@@ -27,7 +27,7 @@ github.com/agl/ed25519/edwards25519
 github.com/beorn7/perks/quantile
 # github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50
 github.com/containerd/console
-# github.com/containerd/containerd v1.3.0-0.20190426060238-3a3f0aac8819
+# github.com/containerd/containerd v1.3.0-0.20190507210959-7c1e88399ec0
 github.com/containerd/containerd/images
 github.com/containerd/containerd/platforms
 github.com/containerd/containerd/content
@@ -40,6 +40,7 @@ github.com/containerd/containerd/containers
 github.com/containerd/containerd/oci
 github.com/containerd/containerd/labels
 github.com/containerd/containerd/reference
+github.com/containerd/containerd/remotes/docker/schema1
 github.com/containerd/containerd/version
 github.com/containerd/containerd/filters
 github.com/containerd/containerd/sys
@@ -50,6 +51,7 @@ github.com/containerd/containerd/mount
 github.com/containerd/containerd/namespaces
 github.com/containerd/containerd/snapshots
 github.com/containerd/containerd
+github.com/containerd/containerd/archive/compression
 github.com/containerd/containerd/api/services/containers/v1
 github.com/containerd/containerd/api/services/diff/v1
 github.com/containerd/containerd/api/services/events/v1
@@ -62,7 +64,6 @@ github.com/containerd/containerd/api/services/tasks/v1
 github.com/containerd/containerd/api/services/version/v1
 github.com/containerd/containerd/api/types
 github.com/containerd/containerd/archive
-github.com/containerd/containerd/archive/compression
 github.com/containerd/containerd/cio
 github.com/containerd/containerd/defaults
 github.com/containerd/containerd/diff
@@ -73,7 +74,6 @@ github.com/containerd/containerd/leases
 github.com/containerd/containerd/leases/proxy
 github.com/containerd/containerd/pkg/dialer
 github.com/containerd/containerd/plugin
-github.com/containerd/containerd/remotes/docker/schema1
 github.com/containerd/containerd/rootfs
 github.com/containerd/containerd/runtime/linux/runctypes
 github.com/containerd/containerd/runtime/v2/runc/options
@@ -81,7 +81,7 @@ github.com/containerd/containerd/snapshots/proxy
 github.com/containerd/containerd/api/types/task
 github.com/containerd/containerd/events/exchange
 github.com/containerd/containerd/identifiers
-# github.com/containerd/continuity v0.0.0-20190426062206-aaeac12a7ffc
+# github.com/containerd/continuity v0.0.0-20190827140505-75bee3e2ccb6
 github.com/containerd/continuity
 github.com/containerd/continuity/fs
 github.com/containerd/continuity/pathdriver
@@ -259,7 +259,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/miekg/pkcs11
 # github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.5.2-0.20190513182223-f238f1efb04f
+# github.com/moby/buildkit v0.6.2-0.20190921002054-ae10b292fefb
 github.com/moby/buildkit/session/auth/authprovider
 github.com/moby/buildkit/client
 github.com/moby/buildkit/session
@@ -303,7 +303,7 @@ github.com/opencontainers/go-digest
 github.com/opencontainers/image-spec/specs-go/v1
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/identity
-# github.com/opencontainers/runc v1.0.1-0.20190307181833-2b18fe1d885e
+# github.com/opencontainers/runc v1.0.0-rc8
 github.com/opencontainers/runc/libcontainer/user
 github.com/opencontainers/runc/libcontainer/system
 # github.com/opencontainers/runtime-spec v1.0.1
@@ -355,7 +355,7 @@ github.com/theupdateframework/notary/trustmanager/yubikey
 github.com/theupdateframework/notary/tuf
 github.com/theupdateframework/notary/tuf/utils
 github.com/theupdateframework/notary/tuf/validation
-# github.com/tonistiigi/fsutil v0.0.0-20190327153851-3bbb99cdbd76
+# github.com/tonistiigi/fsutil v0.0.0-20190819224149-3d2716dd0a4d
 github.com/tonistiigi/fsutil/types
 github.com/tonistiigi/fsutil
 # github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea
