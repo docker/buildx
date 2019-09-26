@@ -541,7 +541,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 	multiTarget := len(opt) > 1
 
 	for k, opt := range opt {
-		err := func() error {
+		err := func(k string) error {
 			opt := opt
 			dps := m[k]
 			multiDriver := len(m[k]) > 1
@@ -685,7 +685,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			}
 
 			return nil
-		}()
+		}(k)
 		if err != nil {
 			return nil, err
 		}
