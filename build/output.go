@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/csv"
+	"io"
 	"os"
 	"strings"
 
@@ -81,7 +82,7 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 				if _, err := console.ConsoleFromFile(os.Stdout); err == nil {
 					return nil, errors.Errorf("output file is required for %s exporter. refusing to write to console", out.Type)
 				}
-				out.Output = os.Stdout
+				out.Output = wrapWriteCloser(os.Stdout)
 			} else if dest != "" {
 				fi, err := os.Stat(dest)
 				if err != nil && !os.IsNotExist(err) {
@@ -94,7 +95,7 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 				if err != nil {
 					return nil, errors.Errorf("failed to open %s", err)
 				}
-				out.Output = f
+				out.Output = wrapWriteCloser(f)
 			}
 			delete(out.Attrs, "dest")
 		case "registry":
@@ -105,4 +106,10 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 		outs = append(outs, out)
 	}
 	return outs, nil
+}
+
+func wrapWriteCloser(wc io.WriteCloser) func(map[string]string) (io.WriteCloser, error) {
+	return func(map[string]string) (io.WriteCloser, error) {
+		return wc, nil
+	}
 }

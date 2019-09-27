@@ -400,7 +400,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 						return nil, nil, err
 					}
 					defers = append(defers, cancel)
-					opt.Exports[i].Output = w
+					opt.Exports[i].Output = wrapWriteCloser(w)
 				}
 			} else if !d.Features()[driver.DockerExporter] {
 				return nil, nil, notSupported(d, driver.DockerExporter)
