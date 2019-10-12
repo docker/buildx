@@ -57,8 +57,6 @@ Change the permission to execute:
 chmod a+x ~/.docker/cli-plugins/docker-buildx
 ```
 
-After installing you can run `docker buildx` to see the new commands.
-
 # Building
 
 ### with Docker 18.09+
@@ -80,7 +78,7 @@ $ mv buildx ~/.docker/cli-plugins/docker-buildx
 
 Buildx is a Docker CLI plugin that extends the `docker build` command with the full support of the features provided by [Moby BuildKit](https://github.com/moby/buildkit) builder toolkit. It provides the same user experience as `docker build` with many new features like creating scoped builder instances and building against multiple nodes concurrently.
 
-After installation, buildx can be accessed through the `docker buildx` command.  `docker buildx build` is the command for starting a new build.
+After installation, buildx can be accessed through the `docker buildx` command with Docker 19.03.  `docker buildx build` is the command for starting a new build. With Docker versions older than 19.03 buildx binary can be called directly to access the `docker buildx` subcommands.
 
 ```
 $ docker buildx build .
