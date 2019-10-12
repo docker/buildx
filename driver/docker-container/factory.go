@@ -2,6 +2,8 @@ package docker
 
 import (
 	"context"
+	"fmt"
+	"strings"
 
 	"github.com/docker/buildx/driver"
 	dockerclient "github.com/docker/docker/client"
@@ -39,14 +41,20 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	}
 	d := &Driver{factory: f, InitConfig: cfg}
 	for k, v := range cfg.DriverOpts {
-		switch k {
-		case "network":
+		switch {
+		case k == "network":
 			d.netMode = v
 			if v == "host" {
 				d.InitConfig.BuildkitFlags = append(d.InitConfig.BuildkitFlags, "--allow-insecure-entitlement=network.host")
 			}
-		case "image":
+		case k == "image":
 			d.image = v
+		case strings.HasPrefix(k, "env."):
+			envName := strings.TrimPrefix(k, "env.")
+			if envName == "" {
+				return nil, errors.Errorf("invalid env option %q, expecting env.FOO=bar", k)
+			}
+			d.env = append(d.env, fmt.Sprintf("%s=%s", envName, v))
 		default:
 			return nil, errors.Errorf("invalid driver option %s for docker-container driver", k)
 		}
