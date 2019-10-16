@@ -566,7 +566,11 @@ docker buildx bake --set target.args.mybuildarg=value
 docker buildx bake --set target.platform=linux/arm64
 docker buildx bake --set foo*.args.mybuildarg=value	# overrides build arg for all targets starting with 'foo'
 docker buildx bake --set *.platform=linux/arm64		# overrides platform for all targets
+docker buildx bake --set foo*.no-cache                  # bypass caching only for targets starting with 'foo'
 ```
+
+Complete list of overridable fields:
+	args, cache-from, cache-to, context, dockerfile, labels, no-cache, output, platform, pull, secrets, ssh, tags, target
 
 #### File definition
 
@@ -607,6 +611,8 @@ target "db" {
 }
 ```
 
+Complete list of valid target fields:
+	args, cache-from, cache-to, context, dockerfile, inherits, labels, no-cache, output, platform, pull, secrets, ssh, tags, target
 
 ### `buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]`
 
