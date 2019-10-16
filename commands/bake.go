@@ -37,7 +37,17 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 		targets = []string{"default"}
 	}
 
-	m, err := bake.ReadTargets(ctx, in.files, targets, in.overrides)
+	overrides := in.overrides
+	if in.exportPush {
+		if in.exportLoad {
+			return errors.Errorf("push and load may not be set together at the moment")
+		}
+		overrides = append(overrides, "*.output=type=registry")
+	} else if in.exportLoad {
+		overrides = append(overrides, "*.output=type=docker")
+	}
+
+	m, err := bake.ReadTargets(ctx, in.files, targets, overrides)
 	if err != nil {
 		return err
 	}
@@ -100,6 +110,8 @@ func bakeCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
 	flags.StringArrayVar(&options.overrides, "set", nil, "Override target value (eg: targetpattern.key=value)")
+	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for --set=*.output=type=registry")
+	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for --set=*.output=type=docker")
 
 	commonFlags(&options.commonOptions, flags)
 

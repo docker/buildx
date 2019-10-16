@@ -507,10 +507,12 @@ Options:
 | Flag | Description |
 | --- | --- |
 |  -f, --file stringArray  | Build definition file
+|      --load              | Shorthand for --set=*.output=type=docker
 |      --no-cache          | Do not use cache when building the image
 |      --print             | Print the options without building
 |      --progress string   | Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
 |      --pull              | Always attempt to pull a newer version of the image
+|      --push              | Shorthand for --set=*.output=type=registry
 |      --set stringArray   | Override target value (eg: targetpattern.key=value)
 
 #### `-f, --file FILE`
