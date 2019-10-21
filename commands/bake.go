@@ -56,7 +56,9 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 		return err
 	}
 
-	return buildTargets(ctx, dockerCli, bo, in.progress)
+	contextPathHash, _ := os.Getwd()
+
+	return buildTargets(ctx, dockerCli, bo, in.progress, contextPathHash)
 }
 
 func defaultFiles() ([]string, error) {

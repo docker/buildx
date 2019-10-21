@@ -11,9 +11,11 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
+	"github.com/docker/cli/cli/context/kubernetes"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -133,7 +135,7 @@ func getNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.No
 }
 
 // driversForNodeGroup returns drivers for a nodegroup instance
-func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup) ([]build.DriverInfo, error) {
+func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, contextPathHash string) ([]build.DriverInfo, error) {
 	eg, _ := errgroup.WithContext(ctx)
 
 	dis := make([]build.DriverInfo, len(ng.Nodes))
@@ -174,7 +176,18 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				// TODO: replace the following line with dockerclient.WithAPIVersionNegotiation option in clientForEndpoint
 				dockerapi.NegotiateAPIVersion(ctx)
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, n.Flags, n.ConfigFile, n.DriverOpts)
+				contextStore := dockerCli.ContextStore()
+				kcc, err := kubernetes.ConfigFromContext(n.Endpoint, contextStore)
+				if err != nil {
+					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
+					// try again with name="default".
+					// FIXME: n should retain real context name.
+					kcc, err = kubernetes.ConfigFromContext("default", contextStore)
+					if err != nil {
+						logrus.Error(err)
+					}
+				}
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, kcc, n.Flags, n.ConfigFile, n.DriverOpts, contextPathHash)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -235,7 +248,7 @@ func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClie
 }
 
 // getDefaultDrivers returns drivers based on current cli config
-func getDefaultDrivers(ctx context.Context, dockerCli command.Cli) ([]build.DriverInfo, error) {
+func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, contextPathHash string) ([]build.DriverInfo, error) {
 	txn, release, err := getStore(dockerCli)
 	if err != nil {
 		return nil, err
@@ -248,10 +261,10 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli) ([]build.Driv
 	}
 
 	if ng != nil {
-		return driversForNodeGroup(ctx, dockerCli, ng)
+		return driversForNodeGroup(ctx, dockerCli, ng, contextPathHash)
 	}
 
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), nil, "", nil)
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), nil, nil, "", nil, contextPathHash)
 	if err != nil {
 		return nil, err
 	}
@@ -294,7 +307,7 @@ func loadInfoData(ctx context.Context, d *dinfo) error {
 func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) error {
 	eg, _ := errgroup.WithContext(ctx)
 
-	dis, err := driversForNodeGroup(ctx, dockerCli, ngi.ng)
+	dis, err := driversForNodeGroup(ctx, dockerCli, ngi.ng, "")
 	if err != nil {
 		return err
 	}

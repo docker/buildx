@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/docker/buildx/build"
@@ -175,11 +176,17 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.Allow = allow
 
-	return buildTargets(ctx, dockerCli, map[string]build.Options{"default": opts}, in.progress)
+	// key string used for kubernetes "sticky" mode
+	contextPathHash, err := filepath.Abs(in.contextPath)
+	if err != nil {
+		contextPathHash = in.contextPath
+	}
+
+	return buildTargets(ctx, dockerCli, map[string]build.Options{"default": opts}, in.progress, contextPathHash)
 }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode string) error {
-	dis, err := getDefaultDrivers(ctx, dockerCli)
+func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash string) error {
+	dis, err := getDefaultDrivers(ctx, dockerCli, contextPathHash)
 	if err != nil {
 		return err
 	}

@@ -11,7 +11,7 @@ _buildx is Tech Preview_
 - Multi-node builds for cross-platform images
 - Compose build support
 - WIP: High-level build constructs (`bake`)
-- TODO: In-container driver support
+- In-container driver support (both Docker and Kubernetes)
 
 # Table of Contents
 
@@ -394,12 +394,18 @@ Passes additional driver-specific options. Details for each driver:
 
 - `docker` - No driver options
 - `docker-container`
-  - `image` - Sets the container image to be used for running buildkit.
-  - `network` - Sets the network mode for running the buildkit container.
+  - `image=IMAGE` - Sets the container image to be used for running buildkit.
+  - `network=NETMODE` - Sets the network mode for running the buildkit container.
   - Example:
     ```
     --driver docker-container --driver-opt image=moby/buildkit:master,network=host
     ```
+- `kubernetes`
+  - `image=IMAGE` - Sets the container image to be used for running buildkit.
+  - `namespace=NS` - Sets the Kubernetes namespace. Defaults to the current namespace.
+  - `replicas=N` - Sets the number of `Pod` replicas. Defaults to 1.
+  - `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
+  - `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
 
 #### `--leave`
 
