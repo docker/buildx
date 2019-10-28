@@ -30,7 +30,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
 	}
 
 	if in.raw {
-		fmt.Printf("%s\n", dt)
+		fmt.Printf("%s", dt) // avoid newline to keep digest
 		return nil
 	}
 
