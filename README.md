@@ -208,6 +208,21 @@ docker buildx build --platform=darwin .
 
 Sets the export action for the build result. In `docker build` all builds finish by creating a container image and exporting it to `docker images`. `buildx` makes this step configurable allowing results to be exported directly to the client, oci image tarballs, registry etc.
 
+Buildx with `docker` driver currently only supports local, tarball exporter and image exporter. `docker-container` driver supports all the exporters.
+
+If just the path is specified as a value, `buildx` will use the local exporter with this path as the destination. If the value is “-”, `buildx` will use `tar` exporter and write to `stdout`.
+
+Examples:
+
+```
+docker buildx build -o . .
+docker buildx build -o outdir .
+docker buildx build -o - - > out.tar
+docker buildx build -o type=docker .
+docker buildx build -o type=docker,dest=- . > myimage.tar
+docker buildx build -t tonistiigi/foo -o type=registry 
+````
+
 Supported exported types are:
 
 ##### `local`
@@ -259,23 +274,7 @@ Attribute keys:
 The `registry` exporter is a shortcut for `type=image,push=true`.
 
 
-
-Buildx with `docker` driver currently only supports local, tarball exporter and image exporter. `docker-container` driver supports all the exporters.
-
-If just the path is specified as a value, `buildx` will use the local exporter with this path as the destination. If the value is “-”, `buildx` will use `tar` exporter and write to `stdout`.
-
-Examples:
-
-```
-docker buildx build -o . .
-docker buildx build -o outdir .
-docker buildx build -o - - > out.tar
-docker buildx build -o type=docker .
-docker buildx build -o type=docker,dest=- . > myimage.tar
-docker buildx build -t tonistiigi/foo -o type=registry 
-````
-
- #### `--push`
+#### `--push`
 
 Shorthand for [`--output=type=registry`](#registry). Will automatically push the build result to registry.
 
