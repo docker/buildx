@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 
+	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
@@ -39,6 +40,8 @@ func (s Status) String() string {
 
 type Info struct {
 	Status Status
+	// DynamicNodes must be empty if the actual nodes are statically listed in the store
+	DynamicNodes []store.Node
 }
 
 type Driver interface {

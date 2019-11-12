@@ -9,10 +9,10 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/kubernetes/execconn"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
+	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -94,13 +94,26 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 			Status: driver.Inactive,
 		}, nil
 	}
-	if depl.Status.ReadyReplicas > 0 {
+	if depl.Status.ReadyReplicas <= 0 {
 		return &driver.Info{
-			Status: driver.Running,
+			Status: driver.Stopped,
 		}, nil
 	}
+	pods, err := podchooser.ListRunningPods(d.podClient, depl)
+	if err != nil {
+		return nil, err
+	}
+	var dynNodes []store.Node
+	for _, p := range pods {
+		node := store.Node{
+			Name: p.Name,
+			// Other fields are unset (TODO: detect real platforms)
+		}
+		dynNodes = append(dynNodes, node)
+	}
 	return &driver.Info{
-		Status: driver.Stopped,
+		Status:       driver.Running,
+		DynamicNodes: dynNodes,
 	}, nil
 }
 
@@ -126,7 +139,6 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
-	logrus.Infof("Using pod %q", pod.Name)
 	if len(pod.Spec.Containers) == 0 {
 		return nil, errors.Errorf("pod %s does not have any container", pod.Name)
 	}

@@ -325,7 +325,30 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 		}(&ngi.drivers[i])
 	}
 
-	return eg.Wait()
+	if eg.Wait(); err != nil {
+		return err
+	}
+	for _, di := range ngi.drivers {
+		// dynamic nodes are used in Kubernetes driver.
+		// Kubernetes pods are dynamically mapped to BuildKit Nodes.
+		if di.info != nil && len(di.info.DynamicNodes) > 0 {
+			var drivers []dinfo
+			for i := 0; i < len(di.info.DynamicNodes); i++ {
+				// all []dinfo share *build.DriverInfo and *driver.Info
+				diClone := di
+				if pl := di.info.DynamicNodes[i].Platforms; len(pl) > 0 {
+					diClone.platforms = pl
+				}
+				drivers = append(drivers, di)
+			}
+			// not append (remove the static nodes in the store)
+			ngi.ng.Nodes = di.info.DynamicNodes
+			ngi.ng.Dynamic = true
+			ngi.drivers = drivers
+			return nil
+		}
+	}
+	return nil
 }
 
 func dockerAPI(dockerCli command.Cli) *api {
