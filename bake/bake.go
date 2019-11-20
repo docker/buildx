@@ -107,16 +107,17 @@ func mergeConfig(c1, c2 Config) Config {
 
 func (c Config) setOverrides(v []string) error {
 	for _, v := range v {
+
 		parts := strings.SplitN(v, "=", 2)
-		if len(parts) != 2 {
-			return errors.Errorf("invalid override %s, expected target.name=value", v)
-		}
 		keys := strings.SplitN(parts[0], ".", 3)
 		if len(keys) < 2 {
 			return errors.Errorf("invalid override key %s, expected target.name", parts[0])
 		}
 
 		name := keys[0]
+		if len(parts) != 2 && keys[1] != "args" {
+			return errors.Errorf("invalid override %s, expected target.name=value", v)
+		}
 
 		t, ok := c.Target[name]
 		if !ok {
@@ -135,7 +136,14 @@ func (c Config) setOverrides(v []string) error {
 			if t.Args == nil {
 				t.Args = map[string]string{}
 			}
-			t.Args[keys[2]] = parts[1]
+			if len(parts) < 2 {
+				v, ok := os.LookupEnv(keys[2])
+				if ok {
+					t.Args[keys[2]] = v
+				}
+			} else {
+				t.Args[keys[2]] = parts[1]
+			}
 		case "labels":
 			if len(keys) != 3 {
 				return errors.Errorf("invalid key %s, lanels requires name", parts[0])

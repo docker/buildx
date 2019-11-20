@@ -29,11 +29,50 @@ target "webapp" {
 
 	ctx := context.TODO()
 
-	m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, nil)
-	require.NoError(t, err)
+	t.Run("NoOverrides", func(t *testing.T) {
+		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, nil)
+		require.NoError(t, err)
 
-	require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
-	require.Equal(t, ".", *m["webapp"].Context)
+		require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
+		require.Equal(t, ".", *m["webapp"].Context)
+	})
+
+	t.Run("ArgsOverrides", func(t *testing.T) {
+		os.Setenv("VAR_FROMENV"+t.Name(), "fromEnv")
+		defer os.Unsetenv("VAR_FROM_ENV" + t.Name())
+
+		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{
+			"webapp.args.VAR_UNSET",
+			"webapp.args.VAR_EMPTY=",
+			"webapp.args.VAR_SET=bananas",
+			"webapp.args.VAR_FROMENV" + t.Name(),
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
+		require.Equal(t, ".", *m["webapp"].Context)
+
+		_, isSet := m["webapp"].Args["VAR_UNSET"]
+		require.False(t, isSet, m["webapp"].Args["VAR_UNSET"])
+
+		_, isSet = m["webapp"].Args["VAR_EMPTY"]
+		require.True(t, isSet, m["webapp"].Args["VAR_EMPTY"])
+
+		require.Equal(t, m["webapp"].Args["VAR_SET"], "bananas")
+
+		require.Equal(t, m["webapp"].Args["VAR_FROMENV"+t.Name()], "fromEnv")
+	})
+
+	t.Run("ContextOverride", func(t *testing.T) {
+		_, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.context"})
+		require.NotNil(t, err)
+
+		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.context=foo"})
+		require.NoError(t, err)
+
+		require.Equal(t, "foo", *m["webapp"].Context)
+	})
+
 }
 
 func TestReadTargetsCompose(t *testing.T) {
