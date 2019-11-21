@@ -27,16 +27,22 @@ require (
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-metrics v0.0.0-20170502235133-d466d4f6fd96 // indirect
 	github.com/docker/libtrust v0.0.0-20150526203908-9cbd2a1374f4 // indirect
+	github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c // indirect
+	github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484 // indirect
 	github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-sql-driver/mysql v1.4.1 // indirect
 	github.com/gofrs/flock v0.7.0
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
+	github.com/google/btree v1.0.0 // indirect
 	github.com/google/certificate-transparency-go v1.0.21 // indirect
 	github.com/google/gofuzz v0.0.0-20170612174753-24818f796faf // indirect
 	github.com/google/shlex v0.0.0-20150127133951-6f45313302b9
+	github.com/googleapis/gnostic v0.3.1 // indirect
+	github.com/gophercloud/gophercloud v0.6.0 // indirect
 	github.com/gorilla/mux v1.7.0 // indirect
+	github.com/gregjones/httpcache v0.0.0-20190611155906-901d90724c79 // indirect
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-version v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0
@@ -58,11 +64,13 @@ require (
 	github.com/opencontainers/go-digest v1.0.0-rc1
 	github.com/opencontainers/image-spec v1.0.1
 	github.com/opencontainers/runtime-spec v1.0.1 // indirect
+	github.com/peterbourgon/diskv v2.0.1+incompatible // indirect
 	github.com/pkg/errors v0.8.1
 	github.com/prometheus/client_golang v0.8.0 // indirect
 	github.com/prometheus/client_model v0.0.0-20170216185247-6f3806018612 // indirect
 	github.com/prometheus/common v0.0.0-20180518154759-7600349dcfe1 // indirect
 	github.com/prometheus/procfs v0.0.0-20180612222113-7d6f385de8be // indirect
+	github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 	github.com/sirupsen/logrus v1.4.0
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3
@@ -80,9 +88,9 @@ require (
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
 	gopkg.in/gorethink/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
-	k8s.io/api v0.0.0-20180712090710-2d6f90ab1293 // indirect
-	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d // indirect
-	k8s.io/client-go v2.0.0-alpha.0.0.20180806134042-1f13a808da65+incompatible // indirect
+	k8s.io/api v0.0.0-20180712090710-2d6f90ab1293
+	k8s.io/apimachinery v0.0.0-20180621070125-103fd098999d
+	k8s.io/client-go v2.0.0-alpha.0.0.20180806134042-1f13a808da65+incompatible
 	vbom.ml/util v0.0.0-20180919145318-efcd4e0f9787 // indirect
 )
 

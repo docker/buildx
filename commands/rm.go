@@ -65,7 +65,7 @@ func rmCmd(dockerCli command.Cli) *cobra.Command {
 }
 
 func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, rm bool) error {
-	dis, err := driversForNodeGroup(ctx, dockerCli, ng)
+	dis, err := driversForNodeGroup(ctx, dockerCli, ng, "")
 	if err != nil {
 		return err
 	}
@@ -88,7 +88,7 @@ func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, rm bo
 }
 
 func stopCurrent(ctx context.Context, dockerCli command.Cli, rm bool) error {
-	dis, err := getDefaultDrivers(ctx, dockerCli)
+	dis, err := getDefaultDrivers(ctx, dockerCli, "")
 	if err != nil {
 		return err
 	}

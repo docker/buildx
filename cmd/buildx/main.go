@@ -12,8 +12,14 @@ import (
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/spf13/cobra"
 
+	// FIXME: "k8s.io/client-go/plugin/pkg/client/auth/azure" is excluded because of compilation error
+	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
+	_ "k8s.io/client-go/plugin/pkg/client/auth/openstack"
+
 	_ "github.com/docker/buildx/driver/docker"
 	_ "github.com/docker/buildx/driver/docker-container"
+	_ "github.com/docker/buildx/driver/kubernetes"
 )
 
 var experimental string

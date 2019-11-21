@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
@@ -21,8 +22,6 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 )
-
-var defaultBuildkitImage = "moby/buildkit:buildx-stable-1" // TODO: make this verified
 
 type Driver struct {
 	driver.InitConfig
@@ -54,7 +53,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 }
 
 func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
-	imageName := defaultBuildkitImage
+	imageName := bkimage.DefaultImage
 	if d.image != "" {
 		imageName = d.image
 	}

@@ -10,9 +10,10 @@ import (
 )
 
 type NodeGroup struct {
-	Name   string
-	Driver string
-	Nodes  []Node
+	Name    string
+	Driver  string
+	Nodes   []Node
+	Dynamic bool
 }
 
 type Node struct {
@@ -25,6 +26,9 @@ type Node struct {
 }
 
 func (ng *NodeGroup) Leave(name string) error {
+	if ng.Dynamic {
+		return errors.New("dynamic node group does not support Leave")
+	}
 	i := ng.findNode(name)
 	if i == -1 {
 		return errors.Errorf("node %q not found for %s", name, ng.Name)
@@ -37,6 +41,9 @@ func (ng *NodeGroup) Leave(name string) error {
 }
 
 func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool, flags []string, configFile string, do map[string]string) error {
+	if ng.Dynamic {
+		return errors.New("dynamic node group does not support Update")
+	}
 	i := ng.findNode(name)
 	if i == -1 && !actionAppend {
 		if len(ng.Nodes) > 0 {

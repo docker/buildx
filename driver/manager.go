@@ -6,6 +6,7 @@ import (
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Factory interface {
@@ -23,11 +24,14 @@ type BuildkitConfig struct {
 
 type InitConfig struct {
 	// This object needs updates to be generic for different drivers
-	Name          string
-	DockerAPI     dockerclient.APIClient
-	BuildkitFlags []string
-	ConfigFile    string
-	DriverOpts    map[string]string
+	Name             string
+	DockerAPI        dockerclient.APIClient
+	KubeClientConfig clientcmd.ClientConfig
+	BuildkitFlags    []string
+	ConfigFile       string
+	DriverOpts       map[string]string
+	// ContextPathHash can be used for determining pods in the driver instance
+	ContextPathHash string
 }
 
 var drivers map[string]Factory
@@ -72,13 +76,15 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, flags []string, config string, do map[string]string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, kcc clientcmd.ClientConfig, flags []string, config string, do map[string]string, contextPathHash string) (Driver, error) {
 	ic := InitConfig{
-		DockerAPI:     api,
-		Name:          name,
-		BuildkitFlags: flags,
-		ConfigFile:    config,
-		DriverOpts:    do,
+		DockerAPI:        api,
+		KubeClientConfig: kcc,
+		Name:             name,
+		BuildkitFlags:    flags,
+		ConfigFile:       config,
+		DriverOpts:       do,
+		ContextPathHash:  contextPathHash,
 	}
 	if f == nil {
 		var err error
