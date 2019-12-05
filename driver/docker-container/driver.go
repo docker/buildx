@@ -57,7 +57,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	if d.image != "" {
 		imageName = d.image
 	}
-	env := d.env
+
 	if err := l.Wrap("pulling image "+imageName, func() error {
 		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, types.ImageCreateOptions{})
 		if err != nil {
@@ -66,12 +66,18 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		_, err = io.Copy(ioutil.Discard, rc)
 		return err
 	}); err != nil {
-		return err
+		// image pulling failed, check if it exists in local image store.
+		// if not, return pulling error. otherwise log it.
+		_, _, errInspect := d.DockerAPI.ImageInspectWithRaw(ctx, imageName)
+		if errInspect != nil {
+			return err
+		}
+		l.Wrap("pulling failed, using local image "+imageName, func() error { return nil })
 	}
 
 	cfg := &container.Config{
 		Image: imageName,
-		Env:   env,
+		Env:   d.env,
 	}
 	if d.InitConfig.BuildkitFlags != nil {
 		cfg.Cmd = d.InitConfig.BuildkitFlags
