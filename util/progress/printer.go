@@ -30,7 +30,7 @@ func (p *printer) Status() chan *client.SolveStatus {
 	return p.status
 }
 
-func NewPrinter(ctx context.Context, out *os.File, mode string) Writer {
+func NewPrinter(ctx context.Context, out console.File, mode string) Writer {
 	statusCh := make(chan *client.SolveStatus)
 	doneCh := make(chan struct{})
 
