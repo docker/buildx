@@ -27,7 +27,7 @@ github.com/agl/ed25519
 github.com/agl/ed25519/edwards25519
 # github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973
 github.com/beorn7/perks/quantile
-# github.com/containerd/console v0.0.0-20181022165439-0650fd9eeb50
+# github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
 github.com/containerd/console
 # github.com/containerd/containerd v1.3.0-0.20190507210959-7c1e88399ec0
 github.com/containerd/containerd/images
@@ -86,9 +86,9 @@ github.com/containerd/containerd/identifiers
 # github.com/containerd/continuity v0.0.0-20190827140505-75bee3e2ccb6
 github.com/containerd/continuity
 github.com/containerd/continuity/fs
-github.com/containerd/continuity/pathdriver
 github.com/containerd/continuity/devices
 github.com/containerd/continuity/driver
+github.com/containerd/continuity/pathdriver
 github.com/containerd/continuity/proto
 github.com/containerd/continuity/sysx
 github.com/containerd/continuity/syscallx
@@ -152,7 +152,7 @@ github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
 github.com/docker/distribution/metrics
-# github.com/docker/docker v1.14.0-0.20190410063227-3998dffb806f3887f804b813069f59bc14a7f3c1
+# github.com/docker/docker v1.14.0-0.20190410063227-3998dffb806f3887f804b813069f59bc14a7f3c1 => github.com/docker/docker v0.7.3-0.20191210192822-1347481b9eb5
 github.com/docker/docker/pkg/urlutil
 github.com/docker/docker/client
 github.com/docker/docker/api/types
@@ -179,13 +179,13 @@ github.com/docker/docker/api/types/blkiodev
 github.com/docker/docker/api/types/strslice
 github.com/docker/docker/api/types/swarm/runtime
 github.com/docker/docker/pkg/jsonmessage
-github.com/docker/docker/pkg/idtools
 github.com/docker/docker/pkg/mount
 github.com/docker/docker/pkg/term/windows
 github.com/docker/docker/pkg/ioutils
 github.com/docker/docker/pkg/stringid
 github.com/docker/docker/pkg/tarsum
 github.com/docker/docker/registry/resumable
+github.com/docker/docker/rootless
 github.com/docker/docker/pkg/fileutils
 github.com/docker/docker/pkg/longpath
 # github.com/docker/docker-credential-helpers v0.6.1
@@ -423,7 +423,7 @@ golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20190322080309-f49334f85ddc
+# golang.org/x/sys v0.0.0-20191120155948-bd437916bb0e
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/cpu
