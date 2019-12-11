@@ -3,24 +3,26 @@ cloud.google.com/go/compute/metadata
 # github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78
 github.com/Azure/go-ansiterm/winterm
 github.com/Azure/go-ansiterm
-# github.com/Microsoft/go-winio v0.4.14
+# github.com/Microsoft/go-winio v0.4.15-0.20190919025122-fc70bd9a86b5
 github.com/Microsoft/go-winio
 github.com/Microsoft/go-winio/pkg/guid
-# github.com/Microsoft/hcsshim v0.8.6
+# github.com/Microsoft/hcsshim v0.8.7
 github.com/Microsoft/hcsshim/osversion
 github.com/Microsoft/hcsshim
-github.com/Microsoft/hcsshim/internal/guid
 github.com/Microsoft/hcsshim/internal/hcs
 github.com/Microsoft/hcsshim/internal/hcserror
 github.com/Microsoft/hcsshim/internal/hns
 github.com/Microsoft/hcsshim/internal/mergemaps
 github.com/Microsoft/hcsshim/internal/schema1
 github.com/Microsoft/hcsshim/internal/wclayer
-github.com/Microsoft/hcsshim/internal/guestrequest
+github.com/Microsoft/hcsshim/internal/cow
 github.com/Microsoft/hcsshim/internal/interop
+github.com/Microsoft/hcsshim/internal/log
 github.com/Microsoft/hcsshim/internal/logfields
-github.com/Microsoft/hcsshim/internal/timeout
+github.com/Microsoft/hcsshim/internal/oc
 github.com/Microsoft/hcsshim/internal/schema2
+github.com/Microsoft/hcsshim/internal/timeout
+github.com/Microsoft/hcsshim/internal/vmcompute
 github.com/Microsoft/hcsshim/internal/longpath
 github.com/Microsoft/hcsshim/internal/safefile
 # github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
@@ -28,6 +30,8 @@ github.com/agl/ed25519
 github.com/agl/ed25519/edwards25519
 # github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973
 github.com/beorn7/perks/quantile
+# github.com/containerd/cgroups v0.0.0-20190919134610-bf292b21730f
+github.com/containerd/cgroups/stats/v1
 # github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
 github.com/containerd/console
 # github.com/containerd/containerd v1.4.0-0.20191014053712-acdcf13d5eaf
@@ -197,7 +201,7 @@ github.com/docker/go-connections/tlsconfig
 github.com/docker/go-events
 # github.com/docker/go-metrics v0.0.0-20170502235133-d466d4f6fd96
 github.com/docker/go-metrics
-# github.com/docker/go-units v0.3.1
+# github.com/docker/go-units v0.4.0
 github.com/docker/go-units
 # github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c
 github.com/docker/spdystream
@@ -249,6 +253,8 @@ github.com/gregjones/httpcache/diskcache
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 # github.com/hashicorp/go-version v1.1.0
 github.com/hashicorp/go-version
+# github.com/hashicorp/golang-lru v0.5.1
+github.com/hashicorp/golang-lru/simplelru
 # github.com/hashicorp/hcl v1.0.0
 github.com/hashicorp/hcl
 github.com/hashicorp/hcl/hcl/ast
@@ -344,9 +350,10 @@ github.com/prometheus/client_model/go
 github.com/prometheus/common/expfmt
 github.com/prometheus/common/model
 github.com/prometheus/common/internal/bitbucket.org/ww/goautoneg
-# github.com/prometheus/procfs v0.0.3
+# github.com/prometheus/procfs v0.0.5
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
+github.com/prometheus/procfs/internal/util
 # github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 github.com/serialx/hashring
 # github.com/sirupsen/logrus v1.4.1
@@ -384,8 +391,14 @@ github.com/tonistiigi/units
 github.com/xeipuuv/gojsonpointer
 # github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415
 github.com/xeipuuv/gojsonreference
-# github.com/xeipuuv/gojsonschema v0.0.0-20160323030313-93e72a773fad
+# github.com/xeipuuv/gojsonschema v0.0.0-20180618132009-1d523034197f
 github.com/xeipuuv/gojsonschema
+# go.opencensus.io v0.22.0
+go.opencensus.io/trace
+go.opencensus.io/internal
+go.opencensus.io/trace/internal
+go.opencensus.io/trace/tracestate
+go.opencensus.io
 # golang.org/x/crypto v0.0.0-20190308221718-c2843e01d9a2
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
@@ -421,14 +434,14 @@ golang.org/x/sync/semaphore
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/cpu
-# golang.org/x/text v0.3.0
+# golang.org/x/text v0.3.2
 golang.org/x/text/secure/bidirule
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
 golang.org/x/text/transform
 # golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 golang.org/x/time/rate
-# google.golang.org/appengine v1.1.0
+# google.golang.org/appengine v1.4.0
 google.golang.org/appengine
 google.golang.org/appengine/urlfetch
 google.golang.org/appengine/internal
@@ -439,7 +452,7 @@ google.golang.org/appengine/internal/base
 google.golang.org/appengine/internal/datastore
 google.golang.org/appengine/internal/log
 google.golang.org/appengine/internal/remote_api
-# google.golang.org/genproto v0.0.0-20180817151627-c66870c02cf8
+# google.golang.org/genproto v0.0.0-20190425155659-357c62f0e4bb
 google.golang.org/genproto/googleapis/rpc/status
 # google.golang.org/grpc v1.23.0
 google.golang.org/grpc
