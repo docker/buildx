@@ -17,7 +17,7 @@ require (
 	github.com/containerd/containerd v1.4.0-0.20191014053712-acdcf13d5eaf
 	github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20 // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853 // indirect
-	github.com/docker/cli v1.14.0-0.20190523191156-ab688a9a79a1
+	github.com/docker/cli v0.0.0-20191010210043-06f34ba50786
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
 	github.com/docker/distribution v2.7.1-0.20190205005809-0d3efadf0154+incompatible
 	github.com/docker/docker v1.14.0-0.20190410063227-3998dffb806f3887f804b813069f59bc14a7f3c1

@@ -80,8 +80,8 @@ github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853 h1:tTngnoO/B
 github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853/go.mod h1:xN/JuLBIz4bjkxNmByTiV1IbhfnYb6oo99phBn4Eqhc=
 github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0 h1:E7NTtHfZYV+iu35yZ49AbrxqhMHpiOl3FstDYm38vQ0=
 github.com/docker/cli v0.0.0-20190321234815-f40f9c240ab0/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
-github.com/docker/cli v1.14.0-0.20190523191156-ab688a9a79a1 h1:Va5DmtF6dHEy+IjKQEkOkTVKmGSPysDDSf8Md0w0RXg=
-github.com/docker/cli v1.14.0-0.20190523191156-ab688a9a79a1/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
+github.com/docker/cli v0.0.0-20191010210043-06f34ba50786 h1:pxYpNKywpPwY4ZchdnguI7AiAu9rlv6S05iV4y+6srQ=
+github.com/docker/cli v0.0.0-20191010210043-06f34ba50786/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 h1:90ytrX1dbzL7Uf/hHiuWwvywC+gikHv4hkAy4CwRTbs=
 github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496/go.mod h1:iT2pYfi580XlpaV4KmK0T6+4/9+XoKmk/fhoDod1emE=
 github.com/docker/distribution v2.7.1-0.20190205005809-0d3efadf0154+incompatible h1:dvc1KSkIYTVjZgHf/CTC2diTYC8PzhaA5sFISRfNVrE=
