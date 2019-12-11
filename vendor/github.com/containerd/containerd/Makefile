@@ -17,7 +17,7 @@
 ROOTDIR=$(dir $(abspath $(lastword $(MAKEFILE_LIST))))
 
 # Base path used to install.
-DESTDIR=/usr/local
+DESTDIR ?= /usr/local
 
 # Used to populate variables in version package.
 VERSION=$(shell git describe --match 'v[0-9]*' --dirty='.m' --always)
@@ -111,17 +111,17 @@ GO_GCFLAGS=$(shell				\
 BINARIES=$(addprefix bin/,$(COMMANDS))
 
 # Flags passed to `go test`
-TESTFLAGS ?= -v $(TESTFLAGS_RACE)
+TESTFLAGS ?= $(TESTFLAGS_RACE)
 TESTFLAGS_PARALLEL ?= 8
 
-.PHONY: clean all AUTHORS build binaries test integration generate protos checkprotos coverage ci check help install uninstall vendor release mandir install-man
+.PHONY: clean all AUTHORS build binaries test integration generate protos checkprotos coverage ci check help install uninstall vendor release mandir install-man genman
 .DEFAULT: default
 
 all: binaries
 
 check: proto-fmt ## run all linters
 	@echo "$(WHALE) $@"
-	gometalinter --config .gometalinter.json ./...
+	GOGC=75 golangci-lint run
 
 ci: check binaries checkprotos coverage coverage-integration ## to be used by the CI
 
@@ -194,10 +194,6 @@ bin/containerd-shim-runc-v2: cmd/containerd-shim-runc-v2 FORCE # set !cgo and om
 	@echo "$(WHALE) bin/containerd-shim-runc-v2"
 	@CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/containerd-shim-runc-v2 ${SHIM_GO_LDFLAGS} ${GO_TAGS} ./cmd/containerd-shim-runc-v2
 
-bin/containerd-shim-runhcs-v1: cmd/containerd-shim-runhcs-v1 FORCE # set !cgo and omit pie for a static shim build: https://github.com/golang/go/issues/17789#issuecomment-258542220
-	@echo "$(WHALE) bin/containerd-shim-runhcs-v1${BINARY_SUFFIX}"
-	@CGO_ENABLED=0 go build ${GO_BUILD_FLAGS} -o bin/containerd-shim-runhcs-v1${BINARY_SUFFIX} ${SHIM_GO_LDFLAGS} ${GO_TAGS} ./cmd/containerd-shim-runhcs-v1
-
 binaries: $(BINARIES) ## build binaries
 	@echo "$(WHALE) $@"
 
@@ -207,8 +203,19 @@ man: mandir $(addprefix man/,$(MANPAGES))
 mandir:
 	@mkdir -p man
 
+# Kept for backwards compatability
+genman: man/containerd.1 man/ctr.1
+
+man/containerd.1: FORCE
+	@echo "$(WHALE) $@"
+	go run cmd/gen-manpages/main.go containerd man/
+
+man/ctr.1: FORCE
+	@echo "$(WHALE) $@"
+	go run cmd/gen-manpages/main.go ctr man/
+
 man/%: docs/man/%.md FORCE
-	@echo "$(WHALE) $<"
+	@echo "$(WHALE) $@"
 	go-md2man -in "$<" -out "$@"
 
 define installmanpage
@@ -220,12 +227,21 @@ install-man:
 	@echo "$(WHALE) $@"
 	$(foreach manpage,$(addprefix man/,$(MANPAGES)), $(call installmanpage,$(manpage),$(subst .,,$(suffix $(manpage))),$(notdir $(manpage))))
 
-release: $(BINARIES)
+releases/$(RELEASE).tar.gz: $(BINARIES)
 	@echo "$(WHALE) $@"
 	@rm -rf releases/$(RELEASE) releases/$(RELEASE).tar.gz
 	@install -d releases/$(RELEASE)/bin
 	@install $(BINARIES) releases/$(RELEASE)/bin
-	@cd releases/$(RELEASE) && tar -czf ../$(RELEASE).tar.gz *
+	@tar -czf releases/$(RELEASE).tar.gz -C releases/$(RELEASE) bin
+	@rm -rf releases/$(RELEASE)
+
+release: $(BINARIES) releases/$(RELEASE).tar.gz
+	@echo "$(WHALE) $@"
+	@cd releases && sha256sum $(RELEASE).tar.gz >$(RELEASE).tar.gz.sha256sum
+
+cri-release: $(BINARIES) releases/$(RELEASE).tar.gz
+	@echo "$(WHALE) $@"
+	@VERSION=$(VERSION:v%=%) script/release/release-cri
 
 clean: ## clean up binaries
 	@echo "$(WHALE) $@"
@@ -286,7 +302,7 @@ root-coverage: ## generate coverage profiles for unit tests that require root
 
 vendor:
 	@echo "$(WHALE) $@"
-	@vndr
+	@vndr -whitelist github.com/urfave/cli/autocomplete/
 
 help: ## this help
 	@awk 'BEGIN {FS = ":.*?## "} /^[a-zA-Z_-]+:.*?## / {printf "\033[36m%-30s\033[0m %s\n", $$1, $$2}' $(MAKEFILE_LIST) | sort

@@ -14,8 +14,7 @@ require (
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
 	github.com/containerd/console v0.0.0-20191206165004-02ecf6a7291e
-	github.com/containerd/containerd v1.3.0-0.20190507210959-7c1e88399ec0
-	github.com/containerd/fifo v0.0.0-20190226154929-a9fb20d87448 // indirect
+	github.com/containerd/containerd v1.4.0-0.20191014053712-acdcf13d5eaf
 	github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20 // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853 // indirect
 	github.com/docker/cli v1.14.0-0.20190523191156-ab688a9a79a1
@@ -32,6 +31,7 @@ require (
 	github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 // indirect
 	github.com/ghodss/yaml v1.0.0 // indirect
 	github.com/go-sql-driver/mysql v1.4.1 // indirect
+	github.com/godbus/dbus v4.1.0+incompatible // indirect
 	github.com/gofrs/flock v0.7.0
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/gogo/protobuf v1.2.1 // indirect
@@ -46,7 +46,6 @@ require (
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
 	github.com/hashicorp/go-version v1.1.0 // indirect
 	github.com/hashicorp/hcl v1.0.0
-	github.com/imdario/mergo v0.3.7 // indirect
 	github.com/inconshreveable/mousetrap v1.0.0 // indirect
 	github.com/jinzhu/gorm v1.9.2 // indirect
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a // indirect
@@ -58,7 +57,7 @@ require (
 	github.com/mattn/go-sqlite3 v1.10.0 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.1 // indirect
 	github.com/miekg/pkcs11 v0.0.0-20190322140431-074fd7a1ed19 // indirect
-	github.com/moby/buildkit v0.6.2-0.20190921002054-ae10b292fefb
+	github.com/moby/buildkit v0.6.2-0.20191022011428-4f4e03067523
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.1 // indirect
 	github.com/opencontainers/go-digest v1.0.0-rc1
@@ -69,9 +68,8 @@ require (
 	github.com/prometheus/client_golang v0.8.0 // indirect
 	github.com/prometheus/client_model v0.0.0-20170216185247-6f3806018612 // indirect
 	github.com/prometheus/common v0.0.0-20180518154759-7600349dcfe1 // indirect
-	github.com/prometheus/procfs v0.0.0-20180612222113-7d6f385de8be // indirect
 	github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
-	github.com/sirupsen/logrus v1.4.0
+	github.com/sirupsen/logrus v1.4.1
 	github.com/spf13/cobra v0.0.3
 	github.com/spf13/pflag v1.0.3
 	github.com/spf13/viper v1.3.2 // indirect
@@ -81,7 +79,7 @@ require (
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v0.0.0-20160323030313-93e72a773fad // indirect
 	github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1 // indirect
-	golang.org/x/sync v0.0.0-20180314180146-1d60e4601c6f
+	golang.org/x/sync v0.0.0-20190423024810-112230192c58
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4 // indirect
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
