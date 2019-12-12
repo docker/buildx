@@ -17,10 +17,10 @@ require (
 	github.com/containerd/containerd v1.4.0-0.20191014053712-acdcf13d5eaf
 	github.com/containerd/typeurl v0.0.0-20190228175220-2a93cfde8c20 // indirect
 	github.com/denisenkom/go-mssqldb v0.0.0-20190315220205-a8ed825ac853 // indirect
-	github.com/docker/cli v0.0.0-20191010210043-06f34ba50786
+	github.com/docker/cli v1.14.0-0.20191010210043-06f34ba50786
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
 	github.com/docker/distribution v2.7.1-0.20190205005809-0d3efadf0154+incompatible
-	github.com/docker/docker v1.14.0-0.20190410063227-3998dffb806f3887f804b813069f59bc14a7f3c1
+	github.com/docker/docker v1.14.0-0.20191210192822-1347481b9eb5
 	github.com/docker/docker-credential-helpers v0.6.1 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
@@ -89,5 +89,3 @@ require (
 )
 
 replace github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
-
-replace github.com/docker/docker v1.14.0-0.20190410063227-3998dffb806f3887f804b813069f59bc14a7f3c1 => github.com/docker/docker v0.7.3-0.20191210192822-1347481b9eb5
