@@ -305,7 +305,10 @@ func listToMap(values []string, defaultEnv bool) map[string]string {
 		kv := strings.SplitN(value, "=", 2)
 		if len(kv) == 1 {
 			if defaultEnv {
-				result[kv[0]] = os.Getenv(kv[0])
+				v, ok := os.LookupEnv(kv[0])
+				if ok {
+					result[kv[0]] = v
+				}
 			} else {
 				result[kv[0]] = ""
 			}
