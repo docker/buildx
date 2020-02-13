@@ -14,8 +14,8 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-const prioritySupported = 30
-const priorityUnsupported = 70
+const prioritySupported = 40
+const priorityUnsupported = 80
 
 func init() {
 	driver.Register(&factory{})
