@@ -14,11 +14,10 @@ import (
 	"time"
 
 	"github.com/docker/distribution/registry/client/transport"
-	"github.com/docker/go-connections/tlsconfig"
-	"github.com/sirupsen/logrus"
-
 	"github.com/docker/docker/pkg/homedir"
 	"github.com/docker/docker/rootless"
+	"github.com/docker/go-connections/tlsconfig"
+	"github.com/sirupsen/logrus"
 )
 
 var (
@@ -70,7 +69,7 @@ func hasFile(files []os.FileInfo, name string) bool {
 // provided TLS configuration.
 func ReadCertsDirectory(tlsConfig *tls.Config, directory string) error {
 	fs, err := ioutil.ReadDir(directory)
-	if err != nil && !os.IsNotExist(err) && !os.IsPermission(err) {
+	if err != nil && !os.IsNotExist(err) {
 		return err
 	}
 

@@ -10,6 +10,7 @@ import (
 	"github.com/docker/cli/cli/config/configfile"
 	"github.com/docker/cli/cli/config/credentials"
 	"github.com/docker/cli/cli/config/types"
+	"github.com/docker/docker/pkg/homedir"
 	"github.com/pkg/errors"
 )
 
@@ -27,10 +28,7 @@ var (
 
 func init() {
 	if configDir == "" {
-		homedir, err := os.UserHomeDir()
-		if err == nil {
-			configDir = filepath.Join(homedir, configFileDir)
-		}
+		configDir = filepath.Join(homedir.Get(), configFileDir)
 	}
 }
 
@@ -114,7 +112,7 @@ func Load(configDir string) (*configfile.ConfigFile, error) {
 	}
 	confFile := filepath.Join(homedir, oldConfigfile)
 	if _, err := os.Stat(confFile); err != nil {
-		return configFile, nil //missing file is not an error
+		return configFile, nil // missing file is not an error
 	}
 	file, err := os.Open(confFile)
 	if err != nil {

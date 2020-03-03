@@ -11,6 +11,7 @@ var UnsupportedProperties = []string{
 	"build",
 	"cap_add",
 	"cap_drop",
+	"cgroupns_mode",
 	"cgroup_parent",
 	"devices",
 	"domainname",
@@ -103,7 +104,7 @@ type Config struct {
 	Volumes  map[string]VolumeConfig    `yaml:",omitempty" json:"volumes,omitempty"`
 	Secrets  map[string]SecretConfig    `yaml:",omitempty" json:"secrets,omitempty"`
 	Configs  map[string]ConfigObjConfig `yaml:",omitempty" json:"configs,omitempty"`
-	Extras   map[string]interface{}     `yaml:",inline", json:"-"`
+	Extras   map[string]interface{}     `yaml:",inline" json:"-"`
 }
 
 // MarshalJSON makes Config implement json.Marshaler
@@ -159,6 +160,7 @@ type ServiceConfig struct {
 	Build           BuildConfig                      `yaml:",omitempty" json:"build,omitempty"`
 	CapAdd          []string                         `mapstructure:"cap_add" yaml:"cap_add,omitempty" json:"cap_add,omitempty"`
 	CapDrop         []string                         `mapstructure:"cap_drop" yaml:"cap_drop,omitempty" json:"cap_drop,omitempty"`
+	CgroupNSMode    string                           `mapstructure:"cgroupns_mode" yaml:"cgroupns_mode,omitempty" json:"cgroupns_mode,omitempty"`
 	CgroupParent    string                           `mapstructure:"cgroup_parent" yaml:"cgroup_parent,omitempty" json:"cgroup_parent,omitempty"`
 	Command         ShellCommand                     `yaml:",omitempty" json:"command,omitempty"`
 	Configs         []ServiceConfigObjConfig         `yaml:",omitempty" json:"configs,omitempty"`
