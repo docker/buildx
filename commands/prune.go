@@ -21,6 +21,7 @@ import (
 )
 
 type pruneOptions struct {
+	builderOptions
 	all         bool
 	filter      opts.FilterOpt
 	keepStorage opts.MemBytes
@@ -53,7 +54,7 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 		return nil
 	}
 
-	dis, err := getDefaultDrivers(ctx, dockerCli, "")
+	dis, err := getInstanceOrDefault(ctx, dockerCli, opts.builder, "")
 	if err != nil {
 		return err
 	}

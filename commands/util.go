@@ -247,6 +247,27 @@ func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClie
 	return dockerclient.NewClientWithOpts(clientOpts...)
 }
 
+func getInstanceOrDefault(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
+	if instance != "" {
+		return getInstanceByName(ctx, dockerCli, instance, contextPathHash)
+	}
+	return getDefaultDrivers(ctx, dockerCli, contextPathHash)
+}
+
+func getInstanceByName(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
+	txn, release, err := getStore(dockerCli)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	ng, err := txn.NodeGroupByName(instance)
+	if err != nil {
+		return nil, err
+	}
+	return driversForNodeGroup(ctx, dockerCli, ng, contextPathHash)
+}
+
 // getDefaultDrivers returns drivers based on current cli config
 func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, contextPathHash string) ([]build.DriverInfo, error) {
 	txn, release, err := getStore(dockerCli)

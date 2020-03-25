@@ -18,6 +18,7 @@ import (
 )
 
 type duOptions struct {
+	builderOptions
 	filter  opts.FilterOpt
 	verbose bool
 }
@@ -30,7 +31,7 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 		return err
 	}
 
-	dis, err := getDefaultDrivers(ctx, dockerCli, "")
+	dis, err := getInstanceOrDefault(ctx, dockerCli, opts.builder, "")
 	if err != nil {
 		return err
 	}
@@ -111,6 +112,7 @@ func duCmd(dockerCli command.Cli) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
+	builderFlags(&options.builderOptions, flags)
 	flags.Var(&options.filter, "filter", "Provide filter values")
 	flags.BoolVar(&options.verbose, "verbose", false, "Provide a more verbose output")
 
