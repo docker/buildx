@@ -387,6 +387,8 @@ Sets the builder driver to be used. There are two available drivers, each have t
 
 - `docker-container` - Uses a buildkit container that will be spawned via docker. With this driver, both building multi-platform images and exporting cache are supported. However, images built will not automatically appear in `docker images` (see [`build --load`](#--load)).
 
+- `kubernetes` - Uses a kubernetes pods. With this driver , you can spin up pods with defined buildkit container image to build your images. 
+
 
 #### `--driver-opt OPTIONS`
 
