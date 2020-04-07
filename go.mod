@@ -53,6 +53,7 @@ require (
 	github.com/spf13/viper v1.3.2 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/theupdateframework/notary v0.6.1 // indirect
+	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea
 	github.com/xlab/handysort v0.0.0-20150421192137-fb3537ed64a1 // indirect
 	golang.org/x/sync v0.0.0-20190911185100-cd5d95a43a6e
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
