@@ -1,12 +1,15 @@
 package bake
 
 import (
+	"os"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 )
 
 func TestParseHCL(t *testing.T) {
+	os.Setenv("IAMCROSS", "true")
+
 	var dt = []byte(`
 	group "default" {
 		targets = ["db", "webapp"]
@@ -35,7 +38,7 @@ func TestParseHCL(t *testing.T) {
 	target "webapp-plus" {
 		inherits = ["webapp", "cross"]
 		args = {
-			IAMCROSS = "true"
+			IAMCROSS = "${IAMCROSS}"
 		}
 	}
 	`)
@@ -58,4 +61,8 @@ func TestParseHCL(t *testing.T) {
 	require.Equal(t, c.Targets[2].Name, "cross")
 	require.Equal(t, 2, len(c.Targets[2].Platforms))
 	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Targets[2].Platforms)
+
+	require.Equal(t, c.Targets[3].Name, "webapp-plus")
+	require.Equal(t, 1, len(c.Targets[3].Args))
+	require.Equal(t, map[string]string{"IAMCROSS": "true"}, c.Targets[3].Args)
 }
