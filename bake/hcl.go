@@ -11,9 +11,8 @@ import (
 	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
 
-// Collection of functions expected to be generally useful in cty-using
-// applications, which HCL supports. This set of functions will be available to
-// be called in HCL files.
+// Collection of generally useful functions in cty-using applications, which
+// HCL supports. These functions are available for use in HCL files.
 var (
 	functions = map[string]function.Function{
 		"absolute":               stdlib.AbsoluteFunc,
@@ -64,11 +63,35 @@ var (
 	}
 )
 
+// Used in the first pass of decoding instead of the Config struct to disallow
+// interpolation while parsing variable blocks.
+type staticConfig struct {
+	Variables []*Variable `hcl:"variable,block"`
+	Remain    hcl.Body    `hcl:",remain"`
+}
+
 func ParseHCL(dt []byte, fn string) (*Config, error) {
+	var sc staticConfig
+
+	// Decode only variable blocks without interpolation.
+	if err := hclsimple.Decode(fn, dt, nil, &sc); err != nil {
+		return nil, err
+	}
+
 	variables := make(map[string]cty.Value)
+
+	// Set all variables to their default value if defined.
+	for _, variable := range sc.Variables {
+		variables[variable.Name] = cty.StringVal(variable.Default)
+	}
+
+	// Override default with values from environment.
 	for _, env := range os.Environ() {
 		parts := strings.SplitN(env, "=", 2)
-		variables[parts[0]] = cty.StringVal(parts[1])
+		name, value := parts[0], parts[1]
+		if _, ok := variables[name]; ok {
+			variables[name] = cty.StringVal(value)
+		}
 	}
 
 	ctx := &hcl.EvalContext{
@@ -77,6 +100,8 @@ func ParseHCL(dt []byte, fn string) (*Config, error) {
 	}
 
 	var c Config
+
+	// Decode with variables and functions.
 	if err := hclsimple.Decode(fn, dt, ctx, &c); err != nil {
 		return nil, err
 	}

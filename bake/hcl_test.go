@@ -8,9 +8,13 @@ import (
 )
 
 func TestParseHCL(t *testing.T) {
-	os.Setenv("IAMCROSS", "true")
+	os.Setenv("BUILD_NUMBER", "456")
 
 	var dt = []byte(`
+	variable "BUILD_NUMBER" {
+		default = "123"
+	}
+
 	group "default" {
 		targets = ["db", "webapp"]
 	}
@@ -24,7 +28,7 @@ func TestParseHCL(t *testing.T) {
 		context = "./dir"
 		dockerfile = "Dockerfile-alternate"
 		args = {
-			buildno = "123"
+			buildno = "${BUILD_NUMBER}"
 		}
 	}
 
@@ -38,7 +42,7 @@ func TestParseHCL(t *testing.T) {
 	target "webapp-plus" {
 		inherits = ["webapp", "cross"]
 		args = {
-			IAMCROSS = "${IAMCROSS}"
+			IAMCROSS = "true"
 		}
 	}
 	`)
@@ -56,7 +60,7 @@ func TestParseHCL(t *testing.T) {
 
 	require.Equal(t, c.Targets[1].Name, "webapp")
 	require.Equal(t, 1, len(c.Targets[1].Args))
-	require.Equal(t, "123", c.Targets[1].Args["buildno"])
+	require.Equal(t, "456", c.Targets[1].Args["buildno"])
 
 	require.Equal(t, c.Targets[2].Name, "cross")
 	require.Equal(t, 2, len(c.Targets[2].Platforms))

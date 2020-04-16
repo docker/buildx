@@ -70,8 +70,9 @@ func ParseFile(fn string) (*Config, error) {
 }
 
 type Config struct {
-	Groups  []*Group  `hcl:"group,block"`
-	Targets []*Target `hcl:"target,block"`
+	Variables []*Variable `json:"-" hcl:"variable,block"`
+	Groups    []*Group    `json:"groups" hcl:"group,block"`
+	Targets   []*Target   `json:"targets" hcl:"target,block"`
 }
 
 func mergeConfig(c1, c2 Config) Config {
@@ -314,6 +315,11 @@ func (c Config) target(name string, visited map[string]struct{}, overrides map[s
 	}
 	tt.normalize()
 	return tt, nil
+}
+
+type Variable struct {
+	Name    string `json:"-" hcl:"name,label"`
+	Default string `json:"default,omitempty" hcl:"default,optional"`
 }
 
 type Group struct {
