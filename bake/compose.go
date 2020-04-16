@@ -46,10 +46,10 @@ func ParseCompose(dt []byte) (*Config, error) {
 	var c Config
 	var zeroBuildConfig composetypes.BuildConfig
 	if len(cfg.Services) > 0 {
-		c.Group = map[string]Group{}
-		c.Target = map[string]Target{}
+		c.Groups = []*Group{}
+		c.Targets = []*Target{}
 
-		var g Group
+		g := &Group{Name: "default"}
 
 		for _, s := range cfg.Services {
 
@@ -72,7 +72,8 @@ func ParseCompose(dt []byte) (*Config, error) {
 				dockerfilePathP = &dockerfilePath
 			}
 			g.Targets = append(g.Targets, s.Name)
-			t := Target{
+			t := &Target{
+				Name:       s.Name,
 				Context:    contextPathP,
 				Dockerfile: dockerfilePathP,
 				Labels:     s.Build.Labels,
@@ -87,9 +88,9 @@ func ParseCompose(dt []byte) (*Config, error) {
 			if s.Image != "" {
 				t.Tags = []string{s.Image}
 			}
-			c.Target[s.Name] = t
+			c.Targets = append(c.Targets, t)
 		}
-		c.Group["default"] = g
+		c.Groups = append(c.Groups, g)
 
 	}
 

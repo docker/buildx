@@ -40,18 +40,22 @@ func TestParseHCL(t *testing.T) {
 	}
 	`)
 
-	c, err := ParseHCL(dt)
+	c, err := ParseHCL(dt, "docker-bake.hcl")
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(c.Group))
-	require.Equal(t, []string{"db", "webapp"}, c.Group["default"].Targets)
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	require.Equal(t, []string{"db", "webapp"}, c.Groups[0].Targets)
 
-	require.Equal(t, 4, len(c.Target))
-	require.Equal(t, "./db", *c.Target["db"].Context)
+	require.Equal(t, 4, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "db")
+	require.Equal(t, "./db", *c.Targets[0].Context)
 
-	require.Equal(t, 1, len(c.Target["webapp"].Args))
-	require.Equal(t, "123", c.Target["webapp"].Args["buildno"])
+	require.Equal(t, c.Targets[1].Name, "webapp")
+	require.Equal(t, 1, len(c.Targets[1].Args))
+	require.Equal(t, "123", c.Targets[1].Args["buildno"])
 
-	require.Equal(t, 2, len(c.Target["cross"].Platforms))
-	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Target["cross"].Platforms)
+	require.Equal(t, c.Targets[2].Name, "cross")
+	require.Equal(t, 2, len(c.Targets[2].Platforms))
+	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Targets[2].Platforms)
 }
