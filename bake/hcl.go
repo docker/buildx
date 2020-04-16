@@ -5,7 +5,9 @@ import (
 	"strings"
 
 	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/ext/userfunc"
 	"github.com/hashicorp/hcl/v2/hclsimple"
+	"github.com/hashicorp/hcl/v2/hclsyntax"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	"github.com/zclconf/go-cty/cty/function/stdlib"
@@ -14,7 +16,7 @@ import (
 // Collection of generally useful functions in cty-using applications, which
 // HCL supports. These functions are available for use in HCL files.
 var (
-	functions = map[string]function.Function{
+	stdlibFunctions = map[string]function.Function{
 		"absolute":               stdlib.AbsoluteFunc,
 		"add":                    stdlib.AddFunc,
 		"and":                    stdlib.AndFunc,
@@ -71,6 +73,21 @@ type staticConfig struct {
 }
 
 func ParseHCL(dt []byte, fn string) (*Config, error) {
+	// Decode user defined functions.
+	file, diags := hclsyntax.ParseConfig(dt, fn, hcl.Pos{Line: 1, Column: 1})
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	userFunctions, _, diags := userfunc.DecodeUserFunctions(file.Body, "function", func() *hcl.EvalContext {
+		return &hcl.EvalContext{
+			Functions: stdlibFunctions,
+		}
+	})
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
 	var sc staticConfig
 
 	// Decode only variable blocks without interpolation.
@@ -78,9 +95,8 @@ func ParseHCL(dt []byte, fn string) (*Config, error) {
 		return nil, err
 	}
 
-	variables := make(map[string]cty.Value)
-
 	// Set all variables to their default value if defined.
+	variables := make(map[string]cty.Value)
 	for _, variable := range sc.Variables {
 		variables[variable.Name] = cty.StringVal(variable.Default)
 	}
@@ -92,6 +108,14 @@ func ParseHCL(dt []byte, fn string) (*Config, error) {
 		if _, ok := variables[name]; ok {
 			variables[name] = cty.StringVal(value)
 		}
+	}
+
+	functions := make(map[string]function.Function)
+	for k, v := range stdlibFunctions {
+		functions[k] = v
+	}
+	for k, v := range userFunctions {
+		functions[k] = v
 	}
 
 	ctx := &hcl.EvalContext{

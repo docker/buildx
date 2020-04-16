@@ -614,13 +614,10 @@ target "db" {
 Complete list of valid target fields:
 	args, cache-from, cache-to, context, dockerfile, inherits, labels, no-cache, output, platform, pull, secrets, ssh, tags, target
 
-#### HCL variable interpolation
+#### HCL variables and functions
 
-Similar to how Terraform provides a way to
-[define variables](https://www.terraform.io/docs/configuration/variables.html#declaring-an-input-variable),
-the HCL file format also supports variable block definitions. These can be used
-to define variables with values provided by the current environment or a
-default value when unset.
+Similar to how Terraform provides a way to [define variables](https://www.terraform.io/docs/configuration/variables.html#declaring-an-input-variable), the HCL file format also supports variable block definitions. These can be used to define variables with values provided by the current environment or a default value when unset.
+
 
 
 Example of using interpolation to tag an image with the git sha:
@@ -662,6 +659,78 @@ $ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
          "tags": [
             "docker.io/username/webapp:985e9e9"
          ]
+      }
+   }
+}
+```
+
+
+A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hcl.go#L19-L65) provided by [go-cty](https://github.com/zclconf/go-cty/tree/master/cty/function/stdlib) are avaialble for use in HCL files. In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/hcl2/ext/userfunc) are also supported.
+
+
+
+Example of using the `add` function:
+
+```
+$ cat <<'EOF' > docker-bake.hcl
+variable "TAG" {
+	default = "latest"
+}
+
+group "default" {
+	targets = ["webapp"]
+}
+
+target "webapp" {
+	args = {
+		buildno = "${add(123, 1)}"
+	}
+}
+EOF
+
+$ docker buildx bake --print webapp
+{
+   "target": {
+      "webapp": {
+         "context": ".",
+         "dockerfile": "Dockerfile",
+         "args": {
+            "buildno": "124"
+         }
+      }
+   }
+}
+```
+
+Example of defining an `increment` function:
+
+```
+$ cat <<'EOF' > docker-bake.hcl
+function "increment" {
+	params = [number]
+	result = number + 1
+}
+
+group "default" {
+	targets = ["webapp"]
+}
+
+target "webapp" {
+	args = {
+		buildno = "${increment(123)}"
+	}
+}
+EOF
+
+$ docker buildx bake --print webapp
+{
+   "target": {
+      "webapp": {
+         "context": ".",
+         "dockerfile": "Dockerfile",
+         "args": {
+            "buildno": "124"
+         }
       }
    }
 }

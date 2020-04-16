@@ -93,6 +93,36 @@ func TestParseHCL(t *testing.T) {
 		require.Equal(t, "124", c.Targets[0].Args["buildno"])
 	})
 
+	t.Run("WithUserDefinedFunctions", func(t *testing.T) {
+		dt := []byte(`
+		function "increment" {
+			params = [number]
+			result = number + 1
+		}
+
+		group "default" {
+			targets = ["webapp"]
+		}
+
+		target "webapp" {
+			args = {
+				buildno = "${increment(123)}"
+			}
+		}
+		`)
+
+		c, err := ParseHCL(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(c.Groups))
+		require.Equal(t, "default", c.Groups[0].Name)
+		require.Equal(t, []string{"webapp"}, c.Groups[0].Targets)
+
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, c.Targets[0].Name, "webapp")
+		require.Equal(t, "124", c.Targets[0].Args["buildno"])
+	})
+
 	t.Run("WithVariables", func(t *testing.T) {
 		dt := []byte(`
 		variable "BUILD_NUMBER" {

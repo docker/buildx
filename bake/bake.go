@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/docker/pkg/urlutil"
+	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 )
@@ -73,6 +74,7 @@ type Config struct {
 	Variables []*Variable `json:"-" hcl:"variable,block"`
 	Groups    []*Group    `json:"groups" hcl:"group,block"`
 	Targets   []*Target   `json:"targets" hcl:"target,block"`
+	Remain    hcl.Body    `json:"-" hcl:",remain"`
 }
 
 func mergeConfig(c1, c2 Config) Config {
