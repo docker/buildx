@@ -23,13 +23,14 @@ func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[s
 		}
 		c = mergeConfig(c, *cfg)
 	}
-	if err := c.setOverrides(overrides); err != nil {
+	o, err := c.newOverrides(overrides)
+	if err != nil {
 		return nil, err
 	}
 	m := map[string]Target{}
 	for _, n := range targets {
 		for _, n := range c.ResolveGroup(n) {
-			t, err := c.ResolveTarget(n)
+			t, err := c.ResolveTarget(n, o)
 			if err != nil {
 				return nil, err
 			}
@@ -105,23 +106,24 @@ func mergeConfig(c1, c2 Config) Config {
 	return c1
 }
 
-func (c Config) setOverrides(v []string) error {
+func (c Config) newOverrides(v []string) (map[string]Target, error) {
+	m := map[string]Target{}
 	for _, v := range v {
 
 		parts := strings.SplitN(v, "=", 2)
 		keys := strings.SplitN(parts[0], ".", 3)
 		if len(keys) < 2 {
-			return errors.Errorf("invalid override key %s, expected target.name", parts[0])
+			return nil, errors.Errorf("invalid override key %s, expected target.name", parts[0])
 		}
 
 		name := keys[0]
 		if len(parts) != 2 && keys[1] != "args" {
-			return errors.Errorf("invalid override %s, expected target.name=value", v)
+			return nil, errors.Errorf("invalid override %s, expected target.name=value", v)
 		}
 
-		t, ok := c.Target[name]
-		if !ok {
-			return errors.Errorf("unknown target %s", name)
+		t := m[name]
+		if _, ok := c.Target[name]; !ok {
+			return nil, errors.Errorf("unknown target %s", name)
 		}
 
 		switch keys[1] {
@@ -131,7 +133,7 @@ func (c Config) setOverrides(v []string) error {
 			t.Dockerfile = &parts[1]
 		case "args":
 			if len(keys) != 3 {
-				return errors.Errorf("invalid key %s, args requires name", parts[0])
+				return nil, errors.Errorf("invalid key %s, args requires name", parts[0])
 			}
 			if t.Args == nil {
 				t.Args = map[string]string{}
@@ -146,7 +148,7 @@ func (c Config) setOverrides(v []string) error {
 			}
 		case "labels":
 			if len(keys) != 3 {
-				return errors.Errorf("invalid key %s, lanels requires name", parts[0])
+				return nil, errors.Errorf("invalid key %s, lanels requires name", parts[0])
 			}
 			if t.Labels == nil {
 				t.Labels = map[string]string{}
@@ -170,11 +172,11 @@ func (c Config) setOverrides(v []string) error {
 		case "output":
 			t.Outputs = append(t.Outputs, parts[1])
 		default:
-			return errors.Errorf("unknown key: %s", keys[1])
+			return nil, errors.Errorf("unknown key: %s", keys[1])
 		}
-		c.Target[name] = t
+		m[name] = t
 	}
-	return nil
+	return m, nil
 }
 
 func (c Config) ResolveGroup(name string) []string {
@@ -197,8 +199,8 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 	return targets
 }
 
-func (c Config) ResolveTarget(name string) (*Target, error) {
-	t, err := c.target(name, map[string]struct{}{})
+func (c Config) ResolveTarget(name string, overrides map[string]Target) (*Target, error) {
+	t, err := c.target(name, map[string]struct{}{}, overrides)
 	if err != nil {
 		return nil, err
 	}
@@ -213,7 +215,7 @@ func (c Config) ResolveTarget(name string) (*Target, error) {
 	return t, nil
 }
 
-func (c Config) target(name string, visited map[string]struct{}) (*Target, error) {
+func (c Config) target(name string, visited map[string]struct{}, overrides map[string]Target) (*Target, error) {
 	if _, ok := visited[name]; ok {
 		return nil, nil
 	}
@@ -224,7 +226,7 @@ func (c Config) target(name string, visited map[string]struct{}) (*Target, error
 	}
 	var tt Target
 	for _, name := range t.Inherits {
-		t, err := c.target(name, visited)
+		t, err := c.target(name, visited, overrides)
 		if err != nil {
 			return nil, err
 		}
@@ -233,7 +235,7 @@ func (c Config) target(name string, visited map[string]struct{}) (*Target, error
 		}
 	}
 	t.Inherits = nil
-	tt = merge(merge(defaultTarget(), t), tt)
+	tt = merge(merge(merge(defaultTarget(), tt), t), overrides[name])
 	tt.normalize()
 	return &tt, nil
 }
