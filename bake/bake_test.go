@@ -49,7 +49,7 @@ target "webapp" {
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
 		_, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"})
 		require.NotNil(t, err)
-		require.Equal(t, err.Error(), "unknown target nosuchtarget")
+		require.Equal(t, err.Error(), "could not find any target matching 'nosuchtarget'")
 	})
 
 	t.Run("ArgsOverrides", func(t *testing.T) {

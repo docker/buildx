@@ -99,7 +99,7 @@ func bakeCmd(dockerCli command.Cli) *cobra.Command {
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
-	flags.StringArrayVar(&options.overrides, "set", nil, "Override target value (eg: target.key=value)")
+	flags.StringArrayVar(&options.overrides, "set", nil, "Override target value (eg: targetpattern.key=value)")
 
 	commonFlags(&options.commonOptions, flags)
 
