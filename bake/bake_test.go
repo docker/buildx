@@ -18,10 +18,10 @@ func TestReadTargets(t *testing.T) {
 
 	fp := filepath.Join(tmpdir, "config.hcl")
 	err = ioutil.WriteFile(fp, []byte(`
-target "dep" {
+target "webDEP" {
 	args {
-		VAR_INHERITED = "dep"
-		VAR_BOTH = "dep"
+		VAR_INHERITED = "webDEP"
+		VAR_BOTH = "webDEP"
 	}
 }
 
@@ -30,7 +30,7 @@ target "webapp" {
 	args {
 		VAR_BOTH = "webapp"
 	}
-	inherits = ["dep"]
+	inherits = ["webDEP"]
 }`), 0600)
 	require.NoError(t, err)
 
@@ -43,7 +43,7 @@ target "webapp" {
 
 		require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
 		require.Equal(t, ".", *m["webapp"].Context)
-		require.Equal(t, "dep", m["webapp"].Args["VAR_INHERITED"])
+		require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
 	})
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
@@ -87,8 +87,8 @@ target "webapp" {
 		// building leaf but overriding parent fields
 		t.Run("parent", func(t *testing.T) {
 			m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{
-				"dep.args.VAR_INHERITED=override",
-				"dep.args.VAR_BOTH=override",
+				"webDEP.args.VAR_INHERITED=override",
+				"webDEP.args.VAR_BOTH=override",
 			})
 			require.NoError(t, err)
 			require.Equal(t, m["webapp"].Args["VAR_INHERITED"], "override")
@@ -106,6 +106,66 @@ target "webapp" {
 		require.Equal(t, "foo", *m["webapp"].Context)
 	})
 
+	t.Run("PatternOverride", func(t *testing.T) {
+		// same check for two cases
+		multiTargetCheck := func(t *testing.T, m map[string]Target, err error) {
+			require.NoError(t, err)
+			require.Equal(t, 2, len(m))
+			require.Equal(t, "foo", *m["webapp"].Dockerfile)
+			require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
+			require.Equal(t, "foo", *m["webDEP"].Dockerfile)
+			require.Equal(t, "webDEP", m["webDEP"].Args["VAR_INHERITED"])
+		}
+
+		cases := []struct {
+			name      string
+			targets   []string
+			overrides []string
+			check     func(*testing.T, map[string]Target, error)
+		}{
+			{
+				name:      "multi target single pattern",
+				targets:   []string{"webapp", "webDEP"},
+				overrides: []string{"web*.dockerfile=foo"},
+				check:     multiTargetCheck,
+			},
+			{
+				name:      "multi target multi pattern",
+				targets:   []string{"webapp", "webDEP"},
+				overrides: []string{"web*.dockerfile=foo", "*.args.VAR_BOTH=bar"},
+				check:     multiTargetCheck,
+			},
+			{
+				name:      "single target",
+				targets:   []string{"webapp"},
+				overrides: []string{"web*.dockerfile=foo"},
+				check: func(t *testing.T, m map[string]Target, err error) {
+					require.NoError(t, err)
+					require.Equal(t, 1, len(m))
+					require.Equal(t, "foo", *m["webapp"].Dockerfile)
+					require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
+				},
+			},
+			{
+				name:      "nomatch",
+				targets:   []string{"webapp"},
+				overrides: []string{"nomatch*.dockerfile=foo"},
+				check: func(t *testing.T, m map[string]Target, err error) {
+					// NOTE: I am unsure whether failing to match should always error out
+					// instead of simply skipping that override.
+					// Let's enforce the error and we can relax it later if users complain.
+					require.NotNil(t, err)
+					require.Equal(t, err.Error(), "could not find any target matching 'nomatch*'")
+				},
+			},
+		}
+		for _, test := range cases {
+			t.Run(test.name, func(t *testing.T) {
+				m, err := ReadTargets(ctx, []string{fp}, test.targets, test.overrides)
+				test.check(t, m, err)
+			})
+		}
+	})
 }
 
 func TestReadTargetsCompose(t *testing.T) {
