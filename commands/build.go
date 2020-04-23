@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/flagutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
@@ -62,9 +63,9 @@ type buildOptions struct {
 }
 
 type commonOptions struct {
-	noCache    bool
+	noCache    *bool
 	progress   string
-	pull       bool
+	pull       *bool
 	exportPush bool
 	exportLoad bool
 }
@@ -79,6 +80,15 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	ctx := appcontext.Context()
 
+	noCache := false
+	if in.noCache != nil {
+		noCache = *in.noCache
+	}
+	pull := false
+	if in.pull != nil {
+		pull = *in.pull
+	}
+
 	opts := build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    in.contextPath,
@@ -88,8 +98,8 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 		Tags:        in.tags,
 		Labels:      listToMap(in.labels, false),
 		BuildArgs:   listToMap(in.buildArgs, true),
-		Pull:        in.pull,
-		NoCache:     in.noCache,
+		Pull:        pull,
+		NoCache:     noCache,
 		Target:      in.target,
 		ImageIDFile: in.imageIDFile,
 		ExtraHosts:  in.extraHosts,
@@ -293,9 +303,9 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 }
 
 func commonFlags(options *commonOptions, flags *pflag.FlagSet) {
-	flags.BoolVar(&options.noCache, "no-cache", false, "Do not use cache when building the image")
+	flags.Var(flagutil.Tristate(options.noCache), "no-cache", "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
-	flags.BoolVar(&options.pull, "pull", false, "Always attempt to pull a newer version of the image")
+	flags.Var(flagutil.Tristate(options.pull), "pull", "Always attempt to pull a newer version of the image")
 }
 
 func listToMap(values []string, defaultEnv bool) map[string]string {

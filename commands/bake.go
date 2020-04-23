@@ -46,6 +46,12 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 	} else if in.exportLoad {
 		overrides = append(overrides, "*.output=type=docker")
 	}
+	if in.noCache != nil {
+		overrides = append(overrides, fmt.Sprintf("*.no-cache=%t", *in.noCache))
+	}
+	if in.pull != nil {
+		overrides = append(overrides, fmt.Sprintf("*.pull=%t", *in.pull))
+	}
 
 	m, err := bake.ReadTargets(ctx, in.files, targets, overrides)
 	if err != nil {
@@ -61,7 +67,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 		return nil
 	}
 
-	bo, err := bake.TargetsToBuildOpt(m, in.noCache, in.pull)
+	bo, err := bake.TargetsToBuildOpt(m)
 	if err != nil {
 		return err
 	}

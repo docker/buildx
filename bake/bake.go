@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"strconv"
 	"strings"
 
 	"github.com/docker/buildx/build"
@@ -194,6 +195,18 @@ func (c Config) newOverrides(v []string) (map[string]Target, error) {
 				t.Platforms = append(t.Platforms, parts[1])
 			case "output":
 				t.Outputs = append(t.Outputs, parts[1])
+			case "no-cache":
+				noCache, err := strconv.ParseBool(parts[1])
+				if err != nil {
+					return nil, errors.Errorf("invalid value %s for boolean key no-cache", parts[1])
+				}
+				t.NoCache = noCache
+			case "pull":
+				pull, err := strconv.ParseBool(parts[1])
+				if err != nil {
+					return nil, errors.Errorf("invalid value %s for boolean key pull", parts[1])
+				}
+				t.Pull = pull
 			default:
 				return nil, errors.Errorf("unknown key: %s", keys[1])
 			}
@@ -270,7 +283,9 @@ type Group struct {
 }
 
 type Target struct {
-	Inherits   []string          `json:"inherits,omitempty" hcl:"inherits,omitempty"`
+	// Inherits is the only field that cannot be overridden with --set
+	Inherits []string `json:"inherits,omitempty" hcl:"inherits,omitempty"`
+
 	Context    *string           `json:"context,omitempty" hcl:"context,omitempty"`
 	Dockerfile *string           `json:"dockerfile,omitempty" hcl:"dockerfile,omitempty"`
 	Args       map[string]string `json:"args,omitempty" hcl:"args,omitempty"`
@@ -283,6 +298,9 @@ type Target struct {
 	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,omitempty"`
 	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,omitempty"`
 	Outputs    []string          `json:"output,omitempty" hcl:"output,omitempty"`
+	Pull       bool              `json:"pull,omitempty": hcl:"pull,omitempty"`
+	NoCache    bool              `json:"no-cache,omitempty": hcl:"no-cache,omitempty"`
+	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
 
 func (t *Target) normalize() {
@@ -295,10 +313,10 @@ func (t *Target) normalize() {
 	t.Outputs = removeDupes(t.Outputs)
 }
 
-func TargetsToBuildOpt(m map[string]Target, noCache, pull bool) (map[string]build.Options, error) {
+func TargetsToBuildOpt(m map[string]Target) (map[string]build.Options, error) {
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
-		bo, err := toBuildOpt(v, noCache, pull)
+		bo, err := toBuildOpt(v)
 		if err != nil {
 			return nil, err
 		}
@@ -307,7 +325,7 @@ func TargetsToBuildOpt(m map[string]Target, noCache, pull bool) (map[string]buil
 	return m2, nil
 }
 
-func toBuildOpt(t Target, noCache, pull bool) (*build.Options, error) {
+func toBuildOpt(t Target) (*build.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -336,8 +354,8 @@ func toBuildOpt(t Target, noCache, pull bool) (*build.Options, error) {
 		Tags:      t.Tags,
 		BuildArgs: t.Args,
 		Labels:    t.Labels,
-		NoCache:   noCache,
-		Pull:      pull,
+		NoCache:   t.NoCache,
+		Pull:      t.Pull,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)
