@@ -38,9 +38,6 @@ type buildOptions struct {
 	extraHosts  []string
 	networkMode string
 
-	exportPush bool
-	exportLoad bool
-
 	// unimplemented
 	squash bool
 	quiet  bool
@@ -65,9 +62,11 @@ type buildOptions struct {
 }
 
 type commonOptions struct {
-	noCache  bool
-	progress string
-	pull     bool
+	noCache    bool
+	progress   string
+	pull       bool
+	exportPush bool
+	exportLoad bool
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) error {

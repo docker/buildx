@@ -106,6 +106,26 @@ func mergeConfig(c1, c2 Config) Config {
 	return c1
 }
 
+func (c Config) expandTargets(pattern string) ([]string, error) {
+	if _, ok := c.Target[pattern]; ok {
+		return []string{pattern}, nil
+	}
+	var names []string
+	for name := range c.Target {
+		ok, err := path.Match(pattern, name)
+		if err != nil {
+			return nil, errors.Wrapf(err, "could not match targets with '%s'", pattern)
+		}
+		if ok {
+			names = append(names, name)
+		}
+	}
+	if len(names) == 0 {
+		return nil, errors.Errorf("could not find any target matching '%s'", pattern)
+	}
+	return names, nil
+}
+
 func (c Config) newOverrides(v []string) (map[string]Target, error) {
 	m := map[string]Target{}
 	for _, v := range v {
@@ -116,65 +136,69 @@ func (c Config) newOverrides(v []string) (map[string]Target, error) {
 			return nil, errors.Errorf("invalid override key %s, expected target.name", parts[0])
 		}
 
-		name := keys[0]
+		pattern := keys[0]
 		if len(parts) != 2 && keys[1] != "args" {
 			return nil, errors.Errorf("invalid override %s, expected target.name=value", v)
 		}
 
-		t := m[name]
-		if _, ok := c.Target[name]; !ok {
-			return nil, errors.Errorf("unknown target %s", name)
+		names, err := c.expandTargets(pattern)
+		if err != nil {
+			return nil, err
 		}
 
-		switch keys[1] {
-		case "context":
-			t.Context = &parts[1]
-		case "dockerfile":
-			t.Dockerfile = &parts[1]
-		case "args":
-			if len(keys) != 3 {
-				return nil, errors.Errorf("invalid key %s, args requires name", parts[0])
-			}
-			if t.Args == nil {
-				t.Args = map[string]string{}
-			}
-			if len(parts) < 2 {
-				v, ok := os.LookupEnv(keys[2])
-				if ok {
-					t.Args[keys[2]] = v
+		for _, name := range names {
+			t := m[name]
+
+			switch keys[1] {
+			case "context":
+				t.Context = &parts[1]
+			case "dockerfile":
+				t.Dockerfile = &parts[1]
+			case "args":
+				if len(keys) != 3 {
+					return nil, errors.Errorf("invalid key %s, args requires name", parts[0])
 				}
-			} else {
-				t.Args[keys[2]] = parts[1]
+				if t.Args == nil {
+					t.Args = map[string]string{}
+				}
+				if len(parts) < 2 {
+					v, ok := os.LookupEnv(keys[2])
+					if ok {
+						t.Args[keys[2]] = v
+					}
+				} else {
+					t.Args[keys[2]] = parts[1]
+				}
+			case "labels":
+				if len(keys) != 3 {
+					return nil, errors.Errorf("invalid key %s, lanels requires name", parts[0])
+				}
+				if t.Labels == nil {
+					t.Labels = map[string]string{}
+				}
+				t.Labels[keys[2]] = parts[1]
+			case "tags":
+				t.Tags = append(t.Tags, parts[1])
+			case "cache-from":
+				t.CacheFrom = append(t.CacheFrom, parts[1])
+			case "cache-to":
+				t.CacheTo = append(t.CacheTo, parts[1])
+			case "target":
+				s := parts[1]
+				t.Target = &s
+			case "secrets":
+				t.Secrets = append(t.Secrets, parts[1])
+			case "ssh":
+				t.SSH = append(t.SSH, parts[1])
+			case "platform":
+				t.Platforms = append(t.Platforms, parts[1])
+			case "output":
+				t.Outputs = append(t.Outputs, parts[1])
+			default:
+				return nil, errors.Errorf("unknown key: %s", keys[1])
 			}
-		case "labels":
-			if len(keys) != 3 {
-				return nil, errors.Errorf("invalid key %s, lanels requires name", parts[0])
-			}
-			if t.Labels == nil {
-				t.Labels = map[string]string{}
-			}
-			t.Labels[keys[2]] = parts[1]
-		case "tags":
-			t.Tags = append(t.Tags, parts[1])
-		case "cache-from":
-			t.CacheFrom = append(t.CacheFrom, parts[1])
-		case "cache-to":
-			t.CacheTo = append(t.CacheTo, parts[1])
-		case "target":
-			s := parts[1]
-			t.Target = &s
-		case "secrets":
-			t.Secrets = append(t.Secrets, parts[1])
-		case "ssh":
-			t.SSH = append(t.SSH, parts[1])
-		case "platform":
-			t.Platforms = append(t.Platforms, parts[1])
-		case "output":
-			t.Outputs = append(t.Outputs, parts[1])
-		default:
-			return nil, errors.Errorf("unknown key: %s", keys[1])
+			m[name] = t
 		}
-		m[name] = t
 	}
 	return m, nil
 }
