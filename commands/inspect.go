@@ -117,7 +117,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
 				if len(n.Flags) > 0 {
 					fmt.Fprintf(w, "Flags:\t%s\n", strings.Join(n.Flags, " "))
 				}
-				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.Format(platformutil.Dedupe(append(n.Platforms, ngi.drivers[i].platforms...))), ", "))
+				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Platforms, ngi.drivers[i].platforms), ", "))
 			}
 		}
 	}

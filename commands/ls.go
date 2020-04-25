@@ -126,11 +126,10 @@ func printngi(w io.Writer, ngi *nginfo) {
 			if d.info != nil {
 				status = d.info.Status.String()
 			}
-			p := append(n.Platforms, d.platforms...)
 			if err != "" {
 				fmt.Fprintf(w, "  %s\t%s\t%s\n", n.Name, n.Endpoint, err)
 			} else {
-				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, strings.Join(platformutil.Format(p), ", "))
+				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, strings.Join(platformutil.FormatInGroups(n.Platforms, d.platforms), ", "))
 			}
 		}
 	}
