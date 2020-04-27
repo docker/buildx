@@ -99,7 +99,7 @@ func defaultFiles() ([]string, error) {
 	return out, nil
 }
 
-func bakeCmd(dockerCli command.Cli) *cobra.Command {
+func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options bakeOptions
 
 	cmd := &cobra.Command{

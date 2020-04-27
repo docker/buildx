@@ -21,7 +21,7 @@ import (
 )
 
 type pruneOptions struct {
-	builderOptions
+	builder     string
 	all         bool
 	filter      opts.FilterOpt
 	keepStorage opts.MemBytes
@@ -124,7 +124,7 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 	return nil
 }
 
-func pruneCmd(dockerCli command.Cli) *cobra.Command {
+func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	options := pruneOptions{filter: opts.NewFilterOpt()}
 
 	cmd := &cobra.Command{
@@ -132,6 +132,7 @@ func pruneCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Remove build cache ",
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.builder = rootOpts.builder
 			return runPrune(dockerCli, options)
 		},
 		Annotations: map[string]string{"version": "1.00"},

@@ -12,21 +12,22 @@ import (
 type useOptions struct {
 	isGlobal  bool
 	isDefault bool
+	builder   string
 }
 
-func runUse(dockerCli command.Cli, in useOptions, name string) error {
+func runUse(dockerCli command.Cli, in useOptions) error {
 	txn, release, err := getStore(dockerCli)
 	if err != nil {
 		return err
 	}
 	defer release()
 
-	if _, err := txn.NodeGroupByName(name); err != nil {
+	if _, err := txn.NodeGroupByName(in.builder); err != nil {
 		if os.IsNotExist(errors.Cause(err)) {
-			if name == "default" && name != dockerCli.CurrentContext() {
+			if in.builder == "default" && in.builder != dockerCli.CurrentContext() {
 				return errors.Errorf("run `docker context use default` to switch to default context")
 			}
-			if name == "default" || name == dockerCli.CurrentContext() {
+			if in.builder == "default" || in.builder == dockerCli.CurrentContext() {
 				ep, err := getCurrentEndpoint(dockerCli)
 				if err != nil {
 					return err
@@ -41,35 +42,39 @@ func runUse(dockerCli command.Cli, in useOptions, name string) error {
 				return err
 			}
 			for _, l := range list {
-				if l.Name == name {
-					return errors.Errorf("run `docker context use %s` to switch to context %s", name, name)
+				if l.Name == in.builder {
+					return errors.Errorf("run `docker context use %s` to switch to context %s", in.builder, in.builder)
 				}
 			}
 
 		}
-		return errors.Wrapf(err, "failed to find instance %q", name)
+		return errors.Wrapf(err, "failed to find instance %q", in.builder)
 	}
 
 	ep, err := getCurrentEndpoint(dockerCli)
 	if err != nil {
 		return err
 	}
-	if err := txn.SetCurrent(ep, name, in.isGlobal, in.isDefault); err != nil {
+	if err := txn.SetCurrent(ep, in.builder, in.isGlobal, in.isDefault); err != nil {
 		return err
 	}
 
 	return nil
 }
 
-func useCmd(dockerCli command.Cli) *cobra.Command {
+func useCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options useOptions
 
 	cmd := &cobra.Command{
 		Use:   "use [OPTIONS] NAME",
 		Short: "Set the current builder instance",
-		Args:  cli.ExactArgs(1),
+		Args:  cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runUse(dockerCli, options, args[0])
+			options.builder = rootOpts.builder
+			if len(args) > 0 {
+				options.builder = args[0]
+			}
+			return runUse(dockerCli, options)
 		},
 	}
 

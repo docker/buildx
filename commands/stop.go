@@ -8,9 +8,10 @@ import (
 )
 
 type stopOptions struct {
+	builder string
 }
 
-func runStop(dockerCli command.Cli, in stopOptions, args []string) error {
+func runStop(dockerCli command.Cli, in stopOptions) error {
 	ctx := appcontext.Context()
 
 	txn, release, err := getStore(dockerCli)
@@ -19,8 +20,8 @@ func runStop(dockerCli command.Cli, in stopOptions, args []string) error {
 	}
 	defer release()
 
-	if len(args) > 0 {
-		ng, err := getNodeGroup(txn, dockerCli, args[0])
+	if in.builder != "" {
+		ng, err := getNodeGroup(txn, dockerCli, in.builder)
 		if err != nil {
 			return err
 		}
@@ -41,7 +42,7 @@ func runStop(dockerCli command.Cli, in stopOptions, args []string) error {
 	return stopCurrent(ctx, dockerCli, false)
 }
 
-func stopCmd(dockerCli command.Cli) *cobra.Command {
+func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options stopOptions
 
 	cmd := &cobra.Command{
@@ -49,7 +50,11 @@ func stopCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Stop builder instance",
 		Args:  cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runStop(dockerCli, options, args)
+			options.builder = rootOpts.builder
+			if len(args) > 0 {
+				options.builder = args[0]
+			}
+			return runStop(dockerCli, options)
 		},
 	}
 

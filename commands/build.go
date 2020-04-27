@@ -63,13 +63,12 @@ type buildOptions struct {
 }
 
 type commonOptions struct {
-	builderOptions
+	builder    string
 	noCache    *bool
 	progress   string
 	pull       *bool
 	exportPush bool
 	exportLoad bool
-	builder    string
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) error {
@@ -210,7 +209,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	return err
 }
 
-func buildCmd(dockerCli command.Cli) *cobra.Command {
+func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options buildOptions
 
 	cmd := &cobra.Command{
@@ -220,6 +219,7 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.contextPath = args[0]
+			options.builder = rootOpts.builder
 			return runBuild(dockerCli, options)
 		},
 	}
@@ -305,7 +305,6 @@ func buildCmd(dockerCli command.Cli) *cobra.Command {
 }
 
 func commonBuildFlags(options *commonOptions, flags *pflag.FlagSet) {
-	builderFlags(&options.builderOptions, flags)
 	flags.Var(flagutil.Tristate(options.noCache), "no-cache", "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
 	flags.Var(flagutil.Tristate(options.pull), "pull", "Always attempt to pull a newer version of the image")

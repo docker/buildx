@@ -11,9 +11,10 @@ import (
 )
 
 type rmOptions struct {
+	builder string
 }
 
-func runRm(dockerCli command.Cli, in rmOptions, args []string) error {
+func runRm(dockerCli command.Cli, in rmOptions) error {
 	ctx := appcontext.Context()
 
 	txn, release, err := getStore(dockerCli)
@@ -22,8 +23,8 @@ func runRm(dockerCli command.Cli, in rmOptions, args []string) error {
 	}
 	defer release()
 
-	if len(args) > 0 {
-		ng, err := getNodeGroup(txn, dockerCli, args[0])
+	if in.builder != "" {
+		ng, err := getNodeGroup(txn, dockerCli, in.builder)
 		if err != nil {
 			return err
 		}
@@ -49,7 +50,7 @@ func runRm(dockerCli command.Cli, in rmOptions, args []string) error {
 	return nil
 }
 
-func rmCmd(dockerCli command.Cli) *cobra.Command {
+func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options rmOptions
 
 	cmd := &cobra.Command{
@@ -57,7 +58,11 @@ func rmCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Remove a builder instance",
 		Args:  cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runRm(dockerCli, options, args)
+			options.builder = rootOpts.builder
+			if len(args) > 0 {
+				options.builder = args[0]
+			}
+			return runRm(dockerCli, options)
 		},
 	}
 
