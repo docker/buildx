@@ -74,7 +74,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 
 	contextPathHash, _ := os.Getwd()
 
-	return buildTargets(ctx, dockerCli, bo, in.progress, contextPathHash)
+	return buildTargets(ctx, dockerCli, bo, in.progress, contextPathHash, in.builder)
 }
 
 func defaultFiles() ([]string, error) {
@@ -99,7 +99,7 @@ func defaultFiles() ([]string, error) {
 	return out, nil
 }
 
-func bakeCmd(dockerCli command.Cli) *cobra.Command {
+func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options bakeOptions
 
 	cmd := &cobra.Command{
@@ -119,7 +119,7 @@ func bakeCmd(dockerCli command.Cli) *cobra.Command {
 	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for --set=*.output=type=registry")
 	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for --set=*.output=type=docker")
 
-	commonFlags(&options.commonOptions, flags)
+	commonBuildFlags(&options.commonOptions, flags)
 
 	return cmd
 }

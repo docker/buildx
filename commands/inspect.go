@@ -23,6 +23,7 @@ import (
 
 type inspectOptions struct {
 	bootstrap bool
+	builder   string
 }
 
 type dinfo struct {
@@ -38,7 +39,7 @@ type nginfo struct {
 	err     error
 }
 
-func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
+func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	ctx := appcontext.Context()
 
 	txn, release, err := getStore(dockerCli)
@@ -49,8 +50,8 @@ func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
 
 	var ng *store.NodeGroup
 
-	if len(args) > 0 {
-		ng, err = getNodeGroup(txn, dockerCli, args[0])
+	if in.builder != "" {
+		ng, err = getNodeGroup(txn, dockerCli, in.builder)
 		if err != nil {
 			return err
 		}
@@ -127,7 +128,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions, args []string) error {
 	return nil
 }
 
-func inspectCmd(dockerCli command.Cli) *cobra.Command {
+func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options inspectOptions
 
 	cmd := &cobra.Command{
@@ -135,7 +136,11 @@ func inspectCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Inspect current builder instance",
 		Args:  cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runInspect(dockerCli, options, args)
+			options.builder = rootOpts.builder
+			if len(args) > 0 {
+				options.builder = args[0]
+			}
+			return runInspect(dockerCli, options)
 		},
 	}
 

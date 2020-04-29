@@ -18,6 +18,7 @@ import (
 )
 
 type duOptions struct {
+	builder string
 	filter  opts.FilterOpt
 	verbose bool
 }
@@ -30,7 +31,7 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 		return err
 	}
 
-	dis, err := getDefaultDrivers(ctx, dockerCli, "")
+	dis, err := getInstanceOrDefault(ctx, dockerCli, opts.builder, "")
 	if err != nil {
 		return err
 	}
@@ -97,7 +98,7 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 	return nil
 }
 
-func duCmd(dockerCli command.Cli) *cobra.Command {
+func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	options := duOptions{filter: opts.NewFilterOpt()}
 
 	cmd := &cobra.Command{
@@ -105,6 +106,7 @@ func duCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Disk usage",
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.builder = rootOpts.builder
 			return runDiskUsage(dockerCli, options)
 		},
 		Annotations: map[string]string{"version": "1.00"},
