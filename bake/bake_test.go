@@ -19,7 +19,7 @@ func TestReadTargets(t *testing.T) {
 	fp := filepath.Join(tmpdir, "config.hcl")
 	err = ioutil.WriteFile(fp, []byte(`
 target "webDEP" {
-	args {
+	args = {
 		VAR_INHERITED = "webDEP"
 		VAR_BOTH = "webDEP"
 	}
@@ -27,7 +27,7 @@ target "webDEP" {
 
 target "webapp" {
 	dockerfile = "Dockerfile.webapp"
-	args {
+	args = {
 		VAR_BOTH = "webapp"
 	}
 	inherits = ["webDEP"]
@@ -108,7 +108,7 @@ target "webapp" {
 
 	t.Run("PatternOverride", func(t *testing.T) {
 		// same check for two cases
-		multiTargetCheck := func(t *testing.T, m map[string]Target, err error) {
+		multiTargetCheck := func(t *testing.T, m map[string]*Target, err error) {
 			require.NoError(t, err)
 			require.Equal(t, 2, len(m))
 			require.Equal(t, "foo", *m["webapp"].Dockerfile)
@@ -121,7 +121,7 @@ target "webapp" {
 			name      string
 			targets   []string
 			overrides []string
-			check     func(*testing.T, map[string]Target, error)
+			check     func(*testing.T, map[string]*Target, error)
 		}{
 			{
 				name:      "multi target single pattern",
@@ -139,7 +139,7 @@ target "webapp" {
 				name:      "single target",
 				targets:   []string{"webapp"},
 				overrides: []string{"web*.dockerfile=foo"},
-				check: func(t *testing.T, m map[string]Target, err error) {
+				check: func(t *testing.T, m map[string]*Target, err error) {
 					require.NoError(t, err)
 					require.Equal(t, 1, len(m))
 					require.Equal(t, "foo", *m["webapp"].Dockerfile)
@@ -150,7 +150,7 @@ target "webapp" {
 				name:      "nomatch",
 				targets:   []string{"webapp"},
 				overrides: []string{"nomatch*.dockerfile=foo"},
-				check: func(t *testing.T, m map[string]Target, err error) {
+				check: func(t *testing.T, m map[string]*Target, err error) {
 					// NOTE: I am unsure whether failing to match should always error out
 					// instead of simply skipping that override.
 					// Let's enforce the error and we can relax it later if users complain.

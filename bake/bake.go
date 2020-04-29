@@ -11,11 +11,12 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/docker/pkg/urlutil"
+	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 )
 
-func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[string]Target, error) {
+func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[string]*Target, error) {
 	var c Config
 	for _, f := range files {
 		cfg, err := ParseFile(f)
@@ -28,7 +29,7 @@ func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[s
 	if err != nil {
 		return nil, err
 	}
-	m := map[string]Target{}
+	m := map[string]*Target{}
 	for _, n := range targets {
 		for _, n := range c.ResolveGroup(n) {
 			t, err := c.ResolveTarget(n, o)
@@ -36,7 +37,7 @@ func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[s
 				return nil, err
 			}
 			if t != nil {
-				m[n] = *t
+				m[n] = t
 			}
 		}
 	}
@@ -55,12 +56,12 @@ func ParseFile(fn string) (*Config, error) {
 	}
 
 	if strings.HasSuffix(fnl, ".json") || strings.HasSuffix(fnl, ".hcl") {
-		return ParseHCL(dt)
+		return ParseHCL(dt, fn)
 	}
 
 	cfg, err := ParseCompose(dt)
 	if err != nil {
-		cfg, err2 := ParseHCL(dt)
+		cfg, err2 := ParseHCL(dt, fn)
 		if err2 != nil {
 			return nil, errors.Errorf("failed to parse %s: parsing yaml: %s, parsing hcl: %s", fn, err.Error(), err2.Error())
 		}
@@ -70,55 +71,78 @@ func ParseFile(fn string) (*Config, error) {
 }
 
 type Config struct {
-	Group  map[string]Group
-	Target map[string]Target
+	Variables []*Variable `json:"-" hcl:"variable,block"`
+	Groups    []*Group    `json:"groups" hcl:"group,block"`
+	Targets   []*Target   `json:"targets" hcl:"target,block"`
+	Remain    hcl.Body    `json:"-" hcl:",remain"`
 }
 
 func mergeConfig(c1, c2 Config) Config {
-	for k, g := range c2.Group {
-		if c1.Group == nil {
-			c1.Group = map[string]Group{}
-		}
-		if g1, exists := c1.Group[k]; exists {
-		nextTarget:
-			for _, t := range g.Targets {
-				for _, t2 := range g1.Targets {
-					if t == t2 {
-						continue nextTarget
-					}
-				}
-				g1.Targets = append(g1.Targets, t)
-			}
-			c1.Group[k] = g1
-		} else {
-			c1.Group[k] = g
-		}
+	if c1.Groups == nil {
+		c1.Groups = []*Group{}
 	}
 
-	for k, t := range c2.Target {
-		if c1.Target == nil {
-			c1.Target = map[string]Target{}
+	for _, g2 := range c2.Groups {
+		var g1 *Group
+		for _, g := range c1.Groups {
+			if g2.Name == g.Name {
+				g1 = g
+				break
+			}
 		}
-		if base, ok := c1.Target[k]; ok {
-			t = merge(base, t)
+		if g1 == nil {
+			c1.Groups = append(c1.Groups, g2)
+			continue
 		}
-		c1.Target[k] = t
+
+	nextTarget:
+		for _, t2 := range g2.Targets {
+			for _, t1 := range g1.Targets {
+				if t1 == t2 {
+					continue nextTarget
+				}
+			}
+			g1.Targets = append(g1.Targets, t2)
+		}
+		c1.Groups = append(c1.Groups, g1)
 	}
+
+	if c1.Targets == nil {
+		c1.Targets = []*Target{}
+	}
+
+	for _, t2 := range c2.Targets {
+		var t1 *Target
+		for _, t := range c1.Targets {
+			if t2.Name == t.Name {
+				t1 = t
+				break
+			}
+		}
+		if t1 != nil {
+			t2 = merge(t1, t2)
+		}
+		c1.Targets = append(c1.Targets, t2)
+	}
+
 	return c1
 }
 
 func (c Config) expandTargets(pattern string) ([]string, error) {
-	if _, ok := c.Target[pattern]; ok {
-		return []string{pattern}, nil
+	for _, target := range c.Targets {
+		if target.Name == pattern {
+			return []string{pattern}, nil
+		}
 	}
+
 	var names []string
-	for name := range c.Target {
-		ok, err := path.Match(pattern, name)
+	for _, target := range c.Targets {
+		ok, err := path.Match(pattern, target.Name)
 		if err != nil {
 			return nil, errors.Wrapf(err, "could not match targets with '%s'", pattern)
 		}
 		if ok {
-			names = append(names, name)
+			names = append(names, target.Name)
 		}
 	}
 	if len(names) == 0 {
@@ -127,8 +151,8 @@ func (c Config) expandTargets(pattern string) ([]string, error) {
 	return names, nil
 }
 
-func (c Config) newOverrides(v []string) (map[string]Target, error) {
-	m := map[string]Target{}
+func (c Config) newOverrides(v []string) (map[string]*Target, error) {
+	m := map[string]*Target{}
 	for _, v := range v {
 
 		parts := strings.SplitN(v, "=", 2)
@@ -148,7 +172,10 @@ func (c Config) newOverrides(v []string) (map[string]Target, error) {
 		}
 
 		for _, name := range names {
-			t := m[name]
+			t, ok := m[name]
+			if !ok {
+				t = &Target{}
+			}
 
 			switch keys[1] {
 			case "context":
@@ -224,8 +251,14 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 	if _, ok := visited[name]; ok {
 		return nil
 	}
-	g, ok := c.Group[name]
-	if !ok {
+	var g *Group
+	for _, group := range c.Groups {
+		if group.Name == name {
+			g = group
+			break
+		}
+	}
+	if g == nil {
 		return []string{name}
 	}
 	visited[name] = struct{}{}
@@ -236,7 +269,7 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 	return targets
 }
 
-func (c Config) ResolveTarget(name string, overrides map[string]Target) (*Target, error) {
+func (c Config) ResolveTarget(name string, overrides map[string]*Target) (*Target, error) {
 	t, err := c.target(name, map[string]struct{}{}, overrides)
 	if err != nil {
 		return nil, err
@@ -252,54 +285,71 @@ func (c Config) ResolveTarget(name string, overrides map[string]Target) (*Target
 	return t, nil
 }
 
-func (c Config) target(name string, visited map[string]struct{}, overrides map[string]Target) (*Target, error) {
+func (c Config) target(name string, visited map[string]struct{}, overrides map[string]*Target) (*Target, error) {
 	if _, ok := visited[name]; ok {
 		return nil, nil
 	}
 	visited[name] = struct{}{}
-	t, ok := c.Target[name]
-	if !ok {
+	var t *Target
+	for _, target := range c.Targets {
+		if target.Name == name {
+			t = target
+			break
+		}
+	}
+	if t == nil {
 		return nil, errors.Errorf("failed to find target %s", name)
 	}
-	var tt Target
+	tt := &Target{}
 	for _, name := range t.Inherits {
 		t, err := c.target(name, visited, overrides)
 		if err != nil {
 			return nil, err
 		}
 		if t != nil {
-			tt = merge(tt, *t)
+			tt = merge(tt, t)
 		}
 	}
 	t.Inherits = nil
-	tt = merge(merge(merge(defaultTarget(), tt), t), overrides[name])
+	tt = merge(merge(defaultTarget(), tt), t)
+	if override, ok := overrides[name]; ok {
+		tt = merge(tt, override)
+	}
 	tt.normalize()
-	return &tt, nil
+	return tt, nil
+}
+
+type Variable struct {
+	Name    string `json:"-" hcl:"name,label"`
+	Default string `json:"default,omitempty" hcl:"default,optional"`
 }
 
 type Group struct {
-	Targets []string
+	Name    string   `json:"-" hcl:"name,label"`
+	Targets []string `json:"targets" hcl:"targets"`
 	// Target // TODO?
 }
 
 type Target struct {
-	// Inherits is the only field that cannot be overridden with --set
-	Inherits []string `json:"inherits,omitempty" hcl:"inherits,omitempty"`
+	Name string `json:"-" hcl:"name,label"`
 
-	Context    *string           `json:"context,omitempty" hcl:"context,omitempty"`
-	Dockerfile *string           `json:"dockerfile,omitempty" hcl:"dockerfile,omitempty"`
-	Args       map[string]string `json:"args,omitempty" hcl:"args,omitempty"`
-	Labels     map[string]string `json:"labels,omitempty" hcl:"labels,omitempty"`
-	Tags       []string          `json:"tags,omitempty" hcl:"tags,omitempty"`
-	CacheFrom  []string          `json:"cache-from,omitempty"  hcl:"cache-from,omitempty"`
-	CacheTo    []string          `json:"cache-to,omitempty"  hcl:"cache-to,omitempty"`
-	Target     *string           `json:"target,omitempty" hcl:"target,omitempty"`
-	Secrets    []string          `json:"secret,omitempty" hcl:"secret,omitempty"`
-	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,omitempty"`
-	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,omitempty"`
-	Outputs    []string          `json:"output,omitempty" hcl:"output,omitempty"`
-	Pull       bool              `json:"pull,omitempty": hcl:"pull,omitempty"`
-	NoCache    bool              `json:"no-cache,omitempty": hcl:"no-cache,omitempty"`
+	// Inherits is the only field that cannot be overridden with --set
+	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional"`
+
+	Context    *string           `json:"context,omitempty" hcl:"context,optional"`
+	Dockerfile *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
+	Args       map[string]string `json:"args,omitempty" hcl:"args,optional"`
+	Labels     map[string]string `json:"labels,omitempty" hcl:"labels,optional"`
+	Tags       []string          `json:"tags,omitempty" hcl:"tags,optional"`
+	CacheFrom  []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional"`
+	CacheTo    []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional"`
+	Target     *string           `json:"target,omitempty" hcl:"target,optional"`
+	Secrets    []string          `json:"secret,omitempty" hcl:"secret,optional"`
+	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
+	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
+	Outputs    []string          `json:"output,omitempty" hcl:"output,optional"`
+	Pull       bool              `json:"pull,omitempty": hcl:"pull,optional"`
+	NoCache    bool              `json:"no-cache,omitempty": hcl:"no-cache,optional"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
 
@@ -313,7 +363,7 @@ func (t *Target) normalize() {
 	t.Outputs = removeDupes(t.Outputs)
 }
 
-func TargetsToBuildOpt(m map[string]Target) (map[string]build.Options, error) {
+func TargetsToBuildOpt(m map[string]*Target) (map[string]build.Options, error) {
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
 		bo, err := toBuildOpt(v)
@@ -325,7 +375,7 @@ func TargetsToBuildOpt(m map[string]Target) (map[string]build.Options, error) {
 	return m2, nil
 }
 
-func toBuildOpt(t Target) (*build.Options, error) {
+func toBuildOpt(t *Target) (*build.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -403,11 +453,11 @@ func toBuildOpt(t Target) (*build.Options, error) {
 	return bo, nil
 }
 
-func defaultTarget() Target {
-	return Target{}
+func defaultTarget() *Target {
+	return &Target{}
 }
 
-func merge(t1, t2 Target) Target {
+func merge(t1, t2 *Target) *Target {
 	if t2.Context != nil {
 		t1.Context = t2.Context
 	}

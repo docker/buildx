@@ -59,7 +59,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 	}
 
 	if in.printOnly {
-		dt, err := json.MarshalIndent(map[string]map[string]bake.Target{"target": m}, "", "   ")
+		dt, err := json.MarshalIndent(map[string]map[string]*bake.Target{"target": m}, "", "   ")
 		if err != nil {
 			return err
 		}

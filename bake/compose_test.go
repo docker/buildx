@@ -27,17 +27,23 @@ services:
 	c, err := ParseCompose(dt)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(c.Group))
-	sort.Strings(c.Group["default"].Targets)
-	require.Equal(t, []string{"db", "webapp"}, c.Group["default"].Targets)
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, c.Groups[0].Name, "default")
+	sort.Strings(c.Groups[0].Targets)
+	require.Equal(t, []string{"db", "webapp"}, c.Groups[0].Targets)
 
-	require.Equal(t, 2, len(c.Target))
-	require.Equal(t, "./db", *c.Target["db"].Context)
+	require.Equal(t, 2, len(c.Targets))
+	sort.Slice(c.Targets, func(i, j int) bool {
+		return c.Targets[i].Name < c.Targets[j].Name
+	})
+	require.Equal(t, "db", c.Targets[0].Name)
+	require.Equal(t, "./db", *c.Targets[0].Context)
 
-	require.Equal(t, "./dir", *c.Target["webapp"].Context)
-	require.Equal(t, "Dockerfile-alternate", *c.Target["webapp"].Dockerfile)
-	require.Equal(t, 1, len(c.Target["webapp"].Args))
-	require.Equal(t, "123", c.Target["webapp"].Args["buildno"])
+	require.Equal(t, "webapp", c.Targets[1].Name)
+	require.Equal(t, "./dir", *c.Targets[1].Context)
+	require.Equal(t, "Dockerfile-alternate", *c.Targets[1].Dockerfile)
+	require.Equal(t, 1, len(c.Targets[1].Args))
+	require.Equal(t, "123", c.Targets[1].Args["buildno"])
 }
 
 func TestNoBuildOutOfTreeService(t *testing.T) {
@@ -52,7 +58,7 @@ services:
 `)
 	c, err := ParseCompose(dt)
 	require.NoError(t, err)
-	require.Equal(t, 1, len(c.Group))
+	require.Equal(t, 1, len(c.Groups))
 }
 
 func TestParseComposeTarget(t *testing.T) {
@@ -73,8 +79,14 @@ services:
 	c, err := ParseCompose(dt)
 	require.NoError(t, err)
 
-	require.Equal(t, "db", *c.Target["db"].Target)
-	require.Equal(t, "webapp", *c.Target["webapp"].Target)
+	require.Equal(t, 2, len(c.Targets))
+	sort.Slice(c.Targets, func(i, j int) bool {
+		return c.Targets[i].Name < c.Targets[j].Name
+	})
+	require.Equal(t, "db", c.Targets[0].Name)
+	require.Equal(t, "db", *c.Targets[0].Target)
+	require.Equal(t, "webapp", c.Targets[1].Name)
+	require.Equal(t, "webapp", *c.Targets[1].Target)
 }
 
 func TestComposeBuildWithoutContext(t *testing.T) {
@@ -93,8 +105,14 @@ services:
 
 	c, err := ParseCompose(dt)
 	require.NoError(t, err)
-	require.Equal(t, "db", *c.Target["db"].Target)
-	require.Equal(t, "webapp", *c.Target["webapp"].Target)
+	require.Equal(t, 2, len(c.Targets))
+	sort.Slice(c.Targets, func(i, j int) bool {
+		return c.Targets[i].Name < c.Targets[j].Name
+	})
+	require.Equal(t, c.Targets[0].Name, "db")
+	require.Equal(t, "db", *c.Targets[0].Target)
+	require.Equal(t, c.Targets[1].Name, "webapp")
+	require.Equal(t, "webapp", *c.Targets[1].Target)
 }
 
 func TestBogusCompose(t *testing.T) {
