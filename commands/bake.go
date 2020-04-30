@@ -106,12 +106,14 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Use:     "bake [OPTIONS] [TARGET...]",
 		Aliases: []string{"f"},
 		Short:   "Build from a file",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			return runBake(dockerCli, args, options)
-		},
 	}
 
 	flags := cmd.Flags()
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		handleUnsetFlags(flags, &options)
+		return runBake(dockerCli, args, options)
+	}
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")

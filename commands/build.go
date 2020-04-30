@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/build"
-	"github.com/docker/buildx/util/flagutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
@@ -69,6 +68,18 @@ type commonOptions struct {
 	pull       *bool
 	exportPush bool
 	exportLoad bool
+}
+
+func (o *commonOptions) Unset(s string) error {
+	switch s {
+	case "pull":
+		o.noCache = nil
+	case "no-cache":
+		o.pull = nil
+	default:
+		return errors.Errorf("cannot unset flag %q", s)
+	}
+	return nil
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) error {
@@ -209,6 +220,21 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	return err
 }
 
+type unsetter interface {
+	Unset(flagName string) error
+}
+
+func handleUnsetFlags(flags *pflag.FlagSet, options unsetter) error {
+	for _, name := range []string{"pull", "no-cache"} {
+		if !flags.Lookup(name).Changed {
+			if err := options.Unset(name); err != nil {
+				return err
+			}
+		}
+	}
+	return nil
+}
+
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options buildOptions
 
@@ -217,14 +243,16 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Aliases: []string{"b"},
 		Short:   "Start a build",
 		Args:    cli.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			options.contextPath = args[0]
-			options.builder = rootOpts.builder
-			return runBuild(dockerCli, options)
-		},
 	}
 
 	flags := cmd.Flags()
+
+	cmd.RunE = func(cmd *cobra.Command, args []string) error {
+		options.contextPath = args[0]
+		options.builder = rootOpts.builder
+		handleUnsetFlags(flags, &options)
+		return runBuild(dockerCli, options)
+	}
 
 	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for --output=type=registry")
 	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for --output=type=docker")
@@ -305,9 +333,9 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 }
 
 func commonBuildFlags(options *commonOptions, flags *pflag.FlagSet) {
-	flags.Var(flagutil.Tristate(options.noCache), "no-cache", "Do not use cache when building the image")
+	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
-	flags.Var(flagutil.Tristate(options.pull), "pull", "Always attempt to pull a newer version of the image")
+	options.pull = flags.Bool("pull", false, "Always attempt to pull a newer version of the image")
 }
 
 func listToMap(values []string, defaultEnv bool) map[string]string {
