@@ -70,18 +70,6 @@ type commonOptions struct {
 	exportLoad bool
 }
 
-func (o *commonOptions) Unset(s string) error {
-	switch s {
-	case "pull":
-		o.noCache = nil
-	case "no-cache":
-		o.pull = nil
-	default:
-		return errors.Errorf("cannot unset flag %q", s)
-	}
-	return nil
-}
-
 func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if in.squash {
 		return errors.Errorf("squash currently not implemented")
@@ -220,21 +208,6 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	return err
 }
 
-type unsetter interface {
-	Unset(flagName string) error
-}
-
-func handleUnsetFlags(flags *pflag.FlagSet, options unsetter) error {
-	for _, name := range []string{"pull", "no-cache"} {
-		if !flags.Lookup(name).Changed {
-			if err := options.Unset(name); err != nil {
-				return err
-			}
-		}
-	}
-	return nil
-}
-
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options buildOptions
 
@@ -243,16 +216,14 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Aliases: []string{"b"},
 		Short:   "Start a build",
 		Args:    cli.ExactArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			options.contextPath = args[0]
+			options.builder = rootOpts.builder
+			return runBuild(dockerCli, options)
+		},
 	}
 
 	flags := cmd.Flags()
-
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		options.contextPath = args[0]
-		options.builder = rootOpts.builder
-		handleUnsetFlags(flags, &options)
-		return runBuild(dockerCli, options)
-	}
 
 	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for --output=type=registry")
 	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for --output=type=docker")

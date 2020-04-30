@@ -106,14 +106,19 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Use:     "bake [OPTIONS] [TARGET...]",
 		Aliases: []string{"f"},
 		Short:   "Build from a file",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			// reset to nil to avoid override is unset
+			if !cmd.Flags().Lookup("no-cache").Changed {
+				options.noCache = nil
+			}
+			if !cmd.Flags().Lookup("pull").Changed {
+				options.pull = nil
+			}
+			return runBake(dockerCli, args, options)
+		},
 	}
 
 	flags := cmd.Flags()
-
-	cmd.RunE = func(cmd *cobra.Command, args []string) error {
-		handleUnsetFlags(flags, &options)
-		return runBake(dockerCli, args, options)
-	}
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
