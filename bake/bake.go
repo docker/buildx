@@ -227,13 +227,13 @@ func (c Config) newOverrides(v []string) (map[string]*Target, error) {
 				if err != nil {
 					return nil, errors.Errorf("invalid value %s for boolean key no-cache", parts[1])
 				}
-				t.NoCache = noCache
+				t.NoCache = &noCache
 			case "pull":
 				pull, err := strconv.ParseBool(parts[1])
 				if err != nil {
 					return nil, errors.Errorf("invalid value %s for boolean key pull", parts[1])
 				}
-				t.Pull = pull
+				t.Pull = &pull
 			default:
 				return nil, errors.Errorf("unknown key: %s", keys[1])
 			}
@@ -348,8 +348,8 @@ type Target struct {
 	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
 	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
 	Outputs    []string          `json:"output,omitempty" hcl:"output,optional"`
-	Pull       bool              `json:"pull,omitempty": hcl:"pull,optional"`
-	NoCache    bool              `json:"no-cache,omitempty": hcl:"no-cache,optional"`
+	Pull       *bool             `json:"pull,omitempty" hcl:"pull,optional"`
+	NoCache    *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
 
@@ -396,6 +396,15 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 		dockerfilePath = path.Join(contextPath, dockerfilePath)
 	}
 
+	noCache := false
+	if t.NoCache != nil {
+		noCache = *t.NoCache
+	}
+	pull := false
+	if t.Pull != nil {
+		pull = *t.Pull
+	}
+
 	bo := &build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    contextPath,
@@ -404,8 +413,8 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 		Tags:      t.Tags,
 		BuildArgs: t.Args,
 		Labels:    t.Labels,
-		NoCache:   t.NoCache,
-		Pull:      t.Pull,
+		NoCache:   noCache,
+		Pull:      pull,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)
@@ -499,6 +508,12 @@ func merge(t1, t2 *Target) *Target {
 	}
 	if t2.Outputs != nil { // no merge
 		t1.Outputs = t2.Outputs
+	}
+	if t2.Pull != nil {
+		t1.Pull = t2.Pull
+	}
+	if t2.NoCache != nil {
+		t1.NoCache = t2.NoCache
 	}
 	t1.Inherits = append(t1.Inherits, t2.Inherits...)
 	return t1

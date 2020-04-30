@@ -23,6 +23,7 @@ target "webDEP" {
 		VAR_INHERITED = "webDEP"
 		VAR_BOTH = "webDEP"
 	}
+	no-cache = true
 }
 
 target "webapp" {
@@ -44,6 +45,8 @@ target "webapp" {
 		require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
 		require.Equal(t, ".", *m["webapp"].Context)
 		require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
+		require.Equal(t, true, *m["webapp"].NoCache)
+		require.Nil(t, m["webapp"].Pull)
 	})
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
@@ -104,6 +107,18 @@ target "webapp" {
 		require.NoError(t, err)
 
 		require.Equal(t, "foo", *m["webapp"].Context)
+	})
+
+	t.Run("NoCacheOverride", func(t *testing.T) {
+		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"})
+		require.NoError(t, err)
+		require.Equal(t, false, *m["webapp"].NoCache)
+	})
+
+	t.Run("PullOverride", func(t *testing.T) {
+		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.pull=false"})
+		require.NoError(t, err)
+		require.Equal(t, false, *m["webapp"].Pull)
 	})
 
 	t.Run("PatternOverride", func(t *testing.T) {

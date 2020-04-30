@@ -7,7 +7,6 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/build"
-	"github.com/docker/buildx/util/flagutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
@@ -305,9 +304,9 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 }
 
 func commonBuildFlags(options *commonOptions, flags *pflag.FlagSet) {
-	flags.Var(flagutil.Tristate(options.noCache), "no-cache", "Do not use cache when building the image")
+	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
-	flags.Var(flagutil.Tristate(options.pull), "pull", "Always attempt to pull a newer version of the image")
+	options.pull = flags.Bool("pull", false, "Always attempt to pull a newer version of the image")
 }
 
 func listToMap(values []string, defaultEnv bool) map[string]string {
