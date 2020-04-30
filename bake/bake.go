@@ -348,8 +348,8 @@ type Target struct {
 	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
 	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
 	Outputs    []string          `json:"output,omitempty" hcl:"output,optional"`
-	Pull       bool              `json:"pull,omitempty": hcl:"pull,optional"`
-	NoCache    bool              `json:"no-cache,omitempty": hcl:"no-cache,optional"`
+	Pull       bool              `json:"pull,omitempty" hcl:"pull,optional"`
+	NoCache    bool              `json:"no-cache,omitempty" hcl:"no-cache,optional"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
 
