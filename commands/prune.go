@@ -143,7 +143,7 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.Var(&options.filter, "filter", "Provide filter values (e.g. 'until=24h')")
 	flags.Var(&options.keepStorage, "keep-storage", "Amount of disk space to keep for cache")
 	flags.BoolVar(&options.verbose, "verbose", false, "Provide a more verbose output")
-	flags.BoolVar(&options.force, "force", false, "Skip the warning messages")
+	flags.BoolVarP(&options.force, "force", "f", false, "Do not prompt for confirmation")
 
 	return cmd
 }
