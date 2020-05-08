@@ -8,6 +8,7 @@ import (
 	"github.com/hashicorp/hcl/v2/ext/userfunc"
 	"github.com/hashicorp/hcl/v2/hclsimple"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
+	"github.com/hashicorp/hcl/v2/json"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	"github.com/zclconf/go-cty/cty/function/stdlib"
@@ -103,10 +104,20 @@ type staticConfig struct {
 }
 
 func ParseHCL(dt []byte, fn string) (*Config, error) {
-	// Decode user defined functions.
-	file, diags := hclsyntax.ParseConfig(dt, fn, hcl.Pos{Line: 1, Column: 1})
-	if diags.HasErrors() {
-		return nil, diags
+	// Decode user defined functions, first parsing as hcl and falling back to
+	// json, returning errors based on the file suffix.
+	file, hcldiags := hclsyntax.ParseConfig(dt, fn, hcl.Pos{Line: 1, Column: 1})
+	if hcldiags.HasErrors() {
+		var jsondiags hcl.Diagnostics
+		file, jsondiags = json.Parse(dt, fn)
+		if jsondiags.HasErrors() {
+			fnl := strings.ToLower(fn)
+			if strings.HasSuffix(fnl, ".json") {
+				return nil, jsondiags
+			} else {
+				return nil, hcldiags
+			}
+		}
 	}
 
 	userFunctions, _, diags := userfunc.DecodeUserFunctions(file.Body, "function", func() *hcl.EvalContext {

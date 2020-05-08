@@ -72,8 +72,8 @@ func ParseFile(fn string) (*Config, error) {
 
 type Config struct {
 	Variables []*Variable `json:"-" hcl:"variable,block"`
-	Groups    []*Group    `json:"groups" hcl:"group,block"`
-	Targets   []*Target   `json:"targets" hcl:"target,block"`
+	Groups    []*Group    `json:"group" hcl:"group,block"`
+	Targets   []*Target   `json:"target" hcl:"target,block"`
 	Remain    hcl.Body    `json:"-" hcl:",remain"`
 }
 

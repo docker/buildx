@@ -68,6 +68,66 @@ func TestParseHCL(t *testing.T) {
 		require.Equal(t, map[string]string{"IAMCROSS": "true"}, c.Targets[3].Args)
 	})
 
+	t.Run("BasicInJSON", func(t *testing.T) {
+		dt := []byte(`
+		{
+			"group": {
+				"default": {
+					"targets": ["db", "webapp"]
+				}
+			},
+			"target": {
+				"db": {
+					"context": "./db",
+					"tags": ["docker.io/tonistiigi/db"]
+				},
+				"webapp": {
+					"context": "./dir",
+					"dockerfile": "Dockerfile-alternate",
+					"args": {
+						"buildno": "123"
+					}
+				},
+				"cross": {
+					"platforms": [
+						"linux/amd64",
+						"linux/arm64"
+					]
+				},
+				"webapp-plus": {
+					"inherits": ["webapp", "cross"],
+					"args": {
+						"IAMCROSS": "true"
+					}
+				}
+			}
+		}
+		`)
+
+		c, err := ParseHCL(dt, "docker-bake.json")
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(c.Groups))
+		require.Equal(t, "default", c.Groups[0].Name)
+		require.Equal(t, []string{"db", "webapp"}, c.Groups[0].Targets)
+
+		require.Equal(t, 4, len(c.Targets))
+		require.Equal(t, c.Targets[0].Name, "db")
+		require.Equal(t, "./db", *c.Targets[0].Context)
+
+		require.Equal(t, c.Targets[1].Name, "webapp")
+		require.Equal(t, 1, len(c.Targets[1].Args))
+		require.Equal(t, "123", c.Targets[1].Args["buildno"])
+
+		require.Equal(t, c.Targets[2].Name, "cross")
+		require.Equal(t, 2, len(c.Targets[2].Platforms))
+		require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Targets[2].Platforms)
+
+		require.Equal(t, c.Targets[3].Name, "webapp-plus")
+		require.Equal(t, 1, len(c.Targets[3].Args))
+		require.Equal(t, map[string]string{"IAMCROSS": "true"}, c.Targets[3].Args)
+	})
+
 	t.Run("WithFunctions", func(t *testing.T) {
 		dt := []byte(`
 		group "default" {
