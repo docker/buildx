@@ -817,20 +817,27 @@ func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress
 	}
 
 	pr, pw := io.Pipe()
-	started := make(chan struct{})
-	w := &waitingWriter{
+	done := make(chan struct{})
+
+	ctx, cancel := context.WithCancel(ctx)
+	var w *waitingWriter
+	w = &waitingWriter{
 		PipeWriter: pw,
 		f: func() {
 			resp, err := c.ImageLoad(ctx, pr, false)
+			defer close(done)
 			if err != nil {
 				pr.CloseWithError(err)
+				w.mu.Lock()
+				w.err = err
+				w.mu.Unlock()
 				return
 			}
 			prog := mw.WithPrefix("", false)
-			close(started)
 			progress.FromReader(prog, "importing to docker", resp.Body)
 		},
-		started: started,
+		done:   done,
+		cancel: cancel,
 	}
 	return w, func() {
 		pr.Close()
@@ -839,11 +846,12 @@ func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress
 
 type waitingWriter struct {
 	*io.PipeWriter
-	f       func()
-	once    sync.Once
-	mu      sync.Mutex
-	err     error
-	started chan struct{}
+	f      func()
+	once   sync.Once
+	mu     sync.Mutex
+	err    error
+	done   chan struct{}
+	cancel func()
 }
 
 func (w *waitingWriter) Write(dt []byte) (int, error) {
@@ -855,6 +863,11 @@ func (w *waitingWriter) Write(dt []byte) (int, error) {
 
 func (w *waitingWriter) Close() error {
 	err := w.PipeWriter.Close()
-	<-w.started
+	<-w.done
+	if err == nil {
+		w.mu.Lock()
+		defer w.mu.Unlock()
+		return w.err
+	}
 	return err
 }
