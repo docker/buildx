@@ -14,7 +14,8 @@ env:
 
 script:
   - make binaries validate-all && TARGETPLATFORM="${CROSS_PLATFORMS}" ./hack/cross
-  - for i in ./out/*; do shasum --binary -a 256 "$i" >> "$i.sha256"; done
+  - for i in ./release-out/*; do if [ -f "${i}" ]; then shasum --binary -a 256 "${i}" | tee -a "${i}.sha256"; fi; done; ls -laR ./release-out; ls -laR ./bin;
+  - for i in ./bin/*; do if [ -f "${i}" ]; then shasum --binary -a 256 "${i}" | tee -a "${i}.sha256"; fi; done; ls -laR ./release-out; ls -laR ./bin;
 
 deploy:
   - provider: script
