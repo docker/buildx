@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/containerd/containerd/pkg/seed"
 	"github.com/docker/buildx/commands"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli-plugins/manager"
@@ -23,6 +24,10 @@ import (
 )
 
 var experimental string
+
+func init() {
+	seed.WithTimeAndRand()
+}
 
 func main() {
 	if os.Getenv("DOCKER_CLI_PLUGIN_ORIGINAL_CLI_COMMAND") == "" {
