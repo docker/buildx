@@ -49,6 +49,7 @@ github.com/containerd/containerd/filters
 github.com/containerd/containerd/images
 github.com/containerd/containerd/labels
 github.com/containerd/containerd/log
+github.com/containerd/containerd/pkg/seed
 github.com/containerd/containerd/platforms
 github.com/containerd/containerd/reference
 github.com/containerd/containerd/remotes
