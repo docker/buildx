@@ -180,7 +180,7 @@ Options:
 | --pull                     | Always attempt to pull a newer version of the image
 | --push                     | Shorthand for --output=type=registry
 | --secret []       | Secret file to expose to the build: id=mysecret,src=/local/secret
-| --ssh []          | SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]])
+| --ssh []          | SSH agent socket or keys to expose to the build (format: default\|&#60;id&#62;[=&#60;socket&#62;\|&#60;key&#62;[,&#60;key&#62;]])
 | --tag []          | Name and optionally a tag in the 'name:tag' format
 | --target string            | Set the target build stage to build.
 
