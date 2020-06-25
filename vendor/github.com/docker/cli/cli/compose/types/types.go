@@ -9,8 +9,6 @@ import (
 // UnsupportedProperties not yet supported by this implementation of the compose file
 var UnsupportedProperties = []string{
 	"build",
-	"cap_add",
-	"cap_drop",
 	"cgroupns_mode",
 	"cgroup_parent",
 	"devices",
@@ -25,7 +23,6 @@ var UnsupportedProperties = []string{
 	"restart",
 	"security_opt",
 	"shm_size",
-	"ulimits",
 	"userns_mode",
 }
 
@@ -221,6 +218,7 @@ type BuildConfig struct {
 	Args       MappingWithEquals `yaml:",omitempty" json:"args,omitempty"`
 	Labels     Labels            `yaml:",omitempty" json:"labels,omitempty"`
 	CacheFrom  StringList        `mapstructure:"cache_from" yaml:"cache_from,omitempty" json:"cache_from,omitempty"`
+	ExtraHosts HostsList         `mapstructure:"extra_hosts" yaml:"extra_hosts,omitempty" json:"extra_hosts,omitempty"`
 	Network    string            `yaml:",omitempty" json:"network,omitempty"`
 	Target     string            `yaml:",omitempty" json:"target,omitempty"`
 }
@@ -301,11 +299,19 @@ type UpdateConfig struct {
 
 // Resources the resource limits and reservations
 type Resources struct {
-	Limits       *Resource `yaml:",omitempty" json:"limits,omitempty"`
-	Reservations *Resource `yaml:",omitempty" json:"reservations,omitempty"`
+	Limits       *ResourceLimit `yaml:",omitempty" json:"limits,omitempty"`
+	Reservations *Resource      `yaml:",omitempty" json:"reservations,omitempty"`
 }
 
-// Resource is a resource to be limited or reserved
+// ResourceLimit is a resource to be limited
+type ResourceLimit struct {
+	// TODO: types to convert from units and ratios
+	NanoCPUs    string    `mapstructure:"cpus" yaml:"cpus,omitempty" json:"cpus,omitempty"`
+	MemoryBytes UnitBytes `mapstructure:"memory" yaml:"memory,omitempty" json:"memory,omitempty"`
+	Pids        int64     `mapstructure:"pids" yaml:"pids,omitempty" json:"pids,omitempty"`
+}
+
+// Resource is a resource to be reserved
 type Resource struct {
 	// TODO: types to convert from units and ratios
 	NanoCPUs         string            `mapstructure:"cpus" yaml:"cpus,omitempty" json:"cpus,omitempty"`

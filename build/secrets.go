@@ -10,7 +10,7 @@ import (
 )
 
 func ParseSecretSpecs(sl []string) (session.Attachable, error) {
-	fs := make([]secretsprovider.FileSource, 0, len(sl))
+	fs := make([]secretsprovider.Source, 0, len(sl))
 	for _, v := range sl {
 		s, err := parseSecret(v)
 		if err != nil {
@@ -18,21 +18,21 @@ func ParseSecretSpecs(sl []string) (session.Attachable, error) {
 		}
 		fs = append(fs, *s)
 	}
-	store, err := secretsprovider.NewFileStore(fs)
+	store, err := secretsprovider.NewStore(fs)
 	if err != nil {
 		return nil, err
 	}
 	return secretsprovider.NewSecretProvider(store), nil
 }
 
-func parseSecret(value string) (*secretsprovider.FileSource, error) {
+func parseSecret(value string) (*secretsprovider.Source, error) {
 	csvReader := csv.NewReader(strings.NewReader(value))
 	fields, err := csvReader.Read()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse csv secret")
 	}
 
-	fs := secretsprovider.FileSource{}
+	fs := secretsprovider.Source{}
 
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)

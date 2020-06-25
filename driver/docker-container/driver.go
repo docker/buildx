@@ -263,7 +263,7 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 
 	conn = demuxConn(conn)
 
-	return client.New(ctx, "", client.WithDialer(func(string, time.Duration) (net.Conn, error) {
+	return client.New(ctx, "", client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return conn, nil
 	}))
 }
