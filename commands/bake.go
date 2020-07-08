@@ -114,6 +114,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			if !cmd.Flags().Lookup("pull").Changed {
 				options.pull = nil
 			}
+			options.commonOptions.builder = rootOpts.builder
 			return runBake(dockerCli, args, options)
 		},
 	}
