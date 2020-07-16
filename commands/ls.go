@@ -30,7 +30,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	}
 	defer release()
 
-	ctx, cancel := context.WithTimeout(ctx, 7*time.Second)
+	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
 	ll, err := txn.List()
