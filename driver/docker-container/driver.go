@@ -44,7 +44,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 			if err := d.start(ctx, sub); err != nil {
 				return err
 			}
-			if err := d.wait(ctx); err != nil {
+			if err := d.wait(ctx, sub); err != nil {
 				return err
 			}
 			return nil
@@ -106,7 +106,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err := d.start(ctx, l); err != nil {
 			return err
 		}
-		if err := d.wait(ctx); err != nil {
+		if err := d.wait(ctx, l); err != nil {
 			return err
 		}
 		return nil
@@ -116,11 +116,22 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	return nil
 }
 
-func (d *Driver) wait(ctx context.Context) error {
+func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 	try := 0
 	for {
-		if err := d.run(ctx, []string{"buildctl", "debug", "workers"}); err != nil {
+		bufStdout := &bytes.Buffer{}
+		bufStderr := &bytes.Buffer{}
+		if err := d.run(ctx, []string{"buildctl", "debug", "workers"}, bufStdout, bufStderr); err != nil {
 			if try > 10 {
+				if err != nil {
+					d.copyLogs(context.TODO(), l)
+					if bufStdout.Len() != 0 {
+						l.Log(1, bufStdout.Bytes())
+					}
+					if bufStderr.Len() != 0 {
+						l.Log(2, bufStderr.Bytes())
+					}
+				}
 				return err
 			}
 			select {
@@ -133,6 +144,21 @@ func (d *Driver) wait(ctx context.Context) error {
 		}
 		return nil
 	}
+}
+
+func (d *Driver) copyLogs(ctx context.Context, l progress.SubLogger) error {
+	rc, err := d.DockerAPI.ContainerLogs(ctx, d.Name, types.ContainerLogsOptions{
+		ShowStdout: true, ShowStderr: true,
+	})
+	if err != nil {
+		return err
+	}
+	stdout := &logWriter{logger: l, stream: 1}
+	stderr := &logWriter{logger: l, stream: 2}
+	if _, err := stdcopy.StdCopy(stdout, stderr, rc); err != nil {
+		return err
+	}
+	return rc.Close()
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
@@ -159,12 +185,12 @@ func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, erro
 	return execID, resp.Conn, nil
 }
 
-func (d *Driver) run(ctx context.Context, cmd []string) error {
+func (d *Driver) run(ctx context.Context, cmd []string, stdout, stderr io.Writer) (err error) {
 	id, conn, err := d.exec(ctx, cmd)
 	if err != nil {
 		return err
 	}
-	if _, err := io.Copy(ioutil.Discard, conn); err != nil {
+	if _, err := stdcopy.StdCopy(stdout, stderr, conn); err != nil {
 		return err
 	}
 	conn.Close()
@@ -259,7 +285,7 @@ func (d *Driver) Features() map[driver.Feature]bool {
 func demuxConn(c net.Conn) net.Conn {
 	pr, pw := io.Pipe()
 	// TODO: rewrite parser with Reader() to avoid goroutine switch
-	go stdcopy.StdCopy(pw, os.Stdout, c)
+	go stdcopy.StdCopy(pw, os.Stderr, c)
 	return &demux{
 		Conn:   c,
 		Reader: pr,
@@ -296,4 +322,14 @@ func readFileToTar(fn string) (*bytes.Buffer, error) {
 		return nil, err
 	}
 	return buf, nil
+}
+
+type logWriter struct {
+	logger progress.SubLogger
+	stream int
+}
+
+func (l *logWriter) Write(dt []byte) (int, error) {
+	l.logger.Log(l.stream, dt)
+	return len(dt), nil
 }
