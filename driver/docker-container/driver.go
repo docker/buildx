@@ -117,12 +117,12 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 }
 
 func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
-	try := 0
+	try := 1
 	for {
 		bufStdout := &bytes.Buffer{}
 		bufStderr := &bytes.Buffer{}
 		if err := d.run(ctx, []string{"buildctl", "debug", "workers"}, bufStdout, bufStderr); err != nil {
-			if try > 10 {
+			if try > 15 {
 				if err != nil {
 					d.copyLogs(context.TODO(), l)
 					if bufStdout.Len() != 0 {
@@ -137,7 +137,7 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(time.Duration(100+try*20) * time.Millisecond):
+			case <-time.After(time.Duration(try*120) * time.Millisecond):
 				try++
 				continue
 			}
