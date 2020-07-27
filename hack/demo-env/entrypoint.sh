@@ -10,7 +10,7 @@ if [ -n "$TMUX_ENTRYPOINT" ]; then
   tmux new-window
   tmux a -t demo
 else
-  ( $dockerdCmd 2>/var/log/dockerd.log & )
+  ( $dockerdCmd &>/var/log/dockerd.log & )
   exec ash
 fi
 
