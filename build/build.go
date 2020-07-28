@@ -382,6 +382,15 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 		}
 	}
 
+	// cacheonly is a fake exporter to opt out of default behaviors
+	exports := make([]client.ExportEntry, 0, len(opt.Exports))
+	for _, e := range opt.Exports {
+		if e.Type != "cacheonly" {
+			exports = append(exports, e)
+		}
+	}
+	opt.Exports = exports
+
 	// set up exporters
 	for i, e := range opt.Exports {
 		if (e.Type == "local" || e.Type == "tar") && opt.ImageIDFile != "" {
