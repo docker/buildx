@@ -343,13 +343,11 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 		IsDefaultMobyDriver()
 	})
 
-	noDefaultLoad, _ := strconv.ParseBool(os.Getenv("BUILDX_NO_DEFAULT_LOAD"))
-
 	switch len(opt.Exports) {
 	case 1:
 		// valid
 	case 0:
-		if isDefaultMobyDriver && !noDefaultLoad {
+		if isDefaultMobyDriver && !noDefaultLoad() {
 			// backwards compat for docker driver only:
 			// this ensures the build results in a docker image.
 			opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
@@ -502,7 +500,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}
 
-	if noMobyDriver != nil {
+	if noMobyDriver != nil && !noDefaultLoad() {
 		for _, opt := range opt {
 			if len(opt.Exports) == 0 {
 				logrus.Warnf("No output specified for %s driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", noMobyDriver.Factory().Name())
@@ -853,6 +851,15 @@ func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress
 	return w, func() {
 		pr.Close()
 	}, nil
+}
+
+func noDefaultLoad() bool {
+	v := os.Getenv("BUILDX_NO_DEFAULT_LOAD")
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		logrus.Warnf("invalid non-bool value for BUILDX_NO_DEFAULT_LOAD: %s", v)
+	}
+	return b
 }
 
 type waitingWriter struct {
