@@ -343,11 +343,13 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 		IsDefaultMobyDriver()
 	})
 
+	noDefaultLoad, _ := strconv.ParseBool(os.Getenv("BUILDX_NO_DEFAULT_LOAD"))
+
 	switch len(opt.Exports) {
 	case 1:
 		// valid
 	case 0:
-		if isDefaultMobyDriver {
+		if isDefaultMobyDriver && !noDefaultLoad {
 			// backwards compat for docker driver only:
 			// this ensures the build results in a docker image.
 			opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
@@ -381,6 +383,15 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 			}
 		}
 	}
+
+	// cacheonly is a fake exporter to opt out of default behaviors
+	exports := make([]client.ExportEntry, 0, len(opt.Exports))
+	for _, e := range opt.Exports {
+		if e.Type != "cacheonly" {
+			exports = append(exports, e)
+		}
+	}
+	opt.Exports = exports
 
 	// set up exporters
 	for i, e := range opt.Exports {
