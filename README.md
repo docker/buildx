@@ -277,7 +277,7 @@ The `registry` exporter is a shortcut for `type=image,push=true`.
 
 #### `--push`
 
-Shorthand for [`--output=type=registry`](#registry). Will automatically push the build result to registry.
+Shorthand for [`--output=type=registry`](#registry). Will automatically push the build result to registry. To use this option, you need to create the builder by `docker buildx create` command.
 
 #### `--load`
 
