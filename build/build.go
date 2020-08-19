@@ -331,6 +331,12 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 		AllowedEntitlements: opt.Allow,
 	}
 
+	if v, ok := opt.BuildArgs["BUILDKIT_MULTI_PLATFORM"]; ok {
+		if v, _ := strconv.ParseBool(v); v {
+			so.FrontendAttrs["multi-platform"] = "true"
+		}
+	}
+
 	if multiDriver {
 		// force creation of manifest list
 		so.FrontendAttrs["multi-platform"] = "true"
