@@ -74,7 +74,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 
 	ngi := &nginfo{ng: ng}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
 	err = loadNodeGroupData(timeoutCtx, dockerCli, ngi)
