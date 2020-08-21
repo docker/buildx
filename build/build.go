@@ -300,9 +300,6 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 	}()
 
 	if opt.ImageIDFile != "" {
-		if multiDriver || len(opt.Platforms) != 0 {
-			return nil, nil, errors.Errorf("image ID file cannot be specified when building for multiple platforms")
-		}
 		// Avoid leaving a stale file if we eventually fail
 		if err := os.Remove(opt.ImageIDFile); err != nil && !os.IsNotExist(err) {
 			return nil, nil, errors.Wrap(err, "removing image ID file")
