@@ -225,7 +225,7 @@ github.com/inconshreveable/mousetrap
 github.com/jaguilar/vt100
 # github.com/json-iterator/go v1.1.7
 github.com/json-iterator/go
-# github.com/konsorten/go-windows-terminal-sequences v1.0.2
+# github.com/konsorten/go-windows-terminal-sequences v1.0.3
 github.com/konsorten/go-windows-terminal-sequences
 # github.com/mattn/go-shellwords v1.0.5
 github.com/mattn/go-shellwords
@@ -307,7 +307,7 @@ github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
 # github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 github.com/serialx/hashring
-# github.com/sirupsen/logrus v1.4.2
+# github.com/sirupsen/logrus v1.6.0
 github.com/sirupsen/logrus
 # github.com/spf13/cobra v1.0.0
 github.com/spf13/cobra
