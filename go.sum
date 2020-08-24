@@ -336,8 +336,8 @@ github.com/mitchellh/hashstructure v0.0.0-20170609045927-2bca23e0e452/go.mod h1:
 github.com/mitchellh/mapstructure v1.1.2 h1:fmNYVwqnSfB9mZU6OS2O6GsXM+wcskZDuKQzvN1EDeE=
 github.com/mitchellh/mapstructure v1.1.2/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
 github.com/mitchellh/osext v0.0.0-20151018003038-5e2d6d41470f/go.mod h1:OkQIRizQZAeMln+1tSwduZz7+Af5oFlKirV/MSYes2A=
-github.com/moby/buildkit v0.7.0 h1:5T41l8i0f+OqHvRThh2NKVXiLpclXYmgO8QePoyIJrw=
-github.com/moby/buildkit v0.7.0/go.mod h1:zOhLO1TiQepuSfzoNDQ542IGJQy0CHr79T4MOJvaewY=
+github.com/moby/buildkit v0.7.2 h1:wp4R0QMXSqwjTJKhhWlJNOCSQ/OVPnsCf3N8rs09+vQ=
+github.com/moby/buildkit v0.7.2/go.mod h1:D3DN/Nl4DyMH1LkwpRUJuoghqdigdXd1A6HXt5aZS40=
 github.com/modern-go/concurrent v0.0.0-20180228061459-e0a39a4cb421/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd h1:TRLaZ9cD/w8PVh93nsPXa1VrQ6jlwL5oN8l14QlcNfg=
 github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd/go.mod h1:6dJC0mAP4ikYIbvyc7fijjWJddQyLn8Ig3JB5CqoB9Q=
@@ -480,8 +480,8 @@ github.com/syndtr/gocapability v0.0.0-20180916011248-d98352740cb2/go.mod h1:hkRG
 github.com/theupdateframework/notary v0.6.1 h1:7wshjstgS9x9F5LuB1L5mBI2xNMObWqjz+cjWoom6l0=
 github.com/theupdateframework/notary v0.6.1/go.mod h1:MOfgIfmox8s7/7fduvB2xyPPMJCrjRLRizA8OFwpnKY=
 github.com/tmc/grpc-websocket-proxy v0.0.0-20190109142713-0ad062ec5ee5/go.mod h1:ncp9v5uamzpCO7NfCPTXjqaC+bZgJeR0sMTm6dMHP7U=
-github.com/tonistiigi/fsutil v0.0.0-20200225063759-013a9fe6aee2 h1:RCy9Kde5WFuCrGYznzS1dFANTwqvAzFDoih8L3sE0UY=
-github.com/tonistiigi/fsutil v0.0.0-20200225063759-013a9fe6aee2/go.mod h1:0G1sLZ/0ttFf09xvh7GR4AEECnjifHRNJN/sYbLianU=
+github.com/tonistiigi/fsutil v0.0.0-20200326231323-c2c7d7b0e144 h1:6RY1EKxCnPQShPM46xFDHta2JSOd+YKCgHyyBHtKuo8=
+github.com/tonistiigi/fsutil v0.0.0-20200326231323-c2c7d7b0e144/go.mod h1:0G1sLZ/0ttFf09xvh7GR4AEECnjifHRNJN/sYbLianU=
 github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea h1:SXhTLE6pb6eld/v/cCndK0AMpt1wiVFb/YYmqB3/QG0=
 github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea/go.mod h1:WPnis/6cRcDZSUvVmezrxJPkiO87ThFYsoUiMwWNDJk=
 github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305 h1:y/1cL5AL2oRcfzz8CAHHhR6kDDfIOT0WEyH5k40sccM=
