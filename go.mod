@@ -3,7 +3,6 @@ module github.com/docker/buildx
 require (
 	github.com/Azure/go-ansiterm v0.0.0-20170929234023-d6e3b3328b78 // indirect
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
-	github.com/beorn7/perks v0.0.0-20180321164747-3a771d992973 // indirect
 	github.com/bitly/go-hostpool v0.0.0-20171023180738-a3a6125de932 // indirect
 	github.com/bugsnag/bugsnag-go v1.4.1 // indirect
 	github.com/bugsnag/panicwrap v1.2.0 // indirect
@@ -45,12 +44,10 @@ require (
 	github.com/opencontainers/image-spec v1.0.1
 	github.com/opencontainers/selinux v1.3.3 // indirect
 	github.com/pkg/errors v0.9.1
-	github.com/prometheus/common v0.0.0-20180518154759-7600349dcfe1 // indirect
 	github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 	github.com/sirupsen/logrus v1.4.2
-	github.com/spf13/cobra v0.0.3
+	github.com/spf13/cobra v1.0.0
 	github.com/spf13/pflag v1.0.5
-	github.com/spf13/viper v1.3.2 // indirect
 	github.com/stretchr/testify v1.4.0
 	github.com/theupdateframework/notary v0.6.1 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea
