@@ -23,7 +23,7 @@ require (
 	github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484 // indirect
 	github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 // indirect
 	github.com/go-sql-driver/mysql v1.4.1 // indirect
-	github.com/gofrs/flock v0.7.0
+	github.com/gofrs/flock v0.7.2
 	github.com/gofrs/uuid v3.2.0+incompatible // indirect
 	github.com/google/certificate-transparency-go v1.0.21 // indirect
 	github.com/google/shlex v0.0.0-20150127133951-6f45313302b9

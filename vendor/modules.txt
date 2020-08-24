@@ -164,7 +164,7 @@ github.com/docker/go-units
 # github.com/docker/spdystream v0.0.0-20181023171402-6480d4af844c
 github.com/docker/spdystream
 github.com/docker/spdystream/spdy
-# github.com/gofrs/flock v0.7.0
+# github.com/gofrs/flock v0.7.2
 github.com/gofrs/flock
 # github.com/gogo/googleapis v1.3.2
 github.com/gogo/googleapis/google/rpc
