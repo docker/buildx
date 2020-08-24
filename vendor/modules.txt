@@ -208,7 +208,7 @@ github.com/gorilla/mux
 github.com/grpc-ecosystem/grpc-opentracing/go/otgrpc
 # github.com/hashicorp/golang-lru v0.5.1
 github.com/hashicorp/golang-lru/simplelru
-# github.com/hashicorp/hcl/v2 v2.4.0
+# github.com/hashicorp/hcl/v2 v2.6.0
 github.com/hashicorp/hcl/v2
 github.com/hashicorp/hcl/v2/ext/customdecode
 github.com/hashicorp/hcl/v2/ext/userfunc
