@@ -416,7 +416,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 			opt.Exports[i].Type = "moby"
 			if e.Attrs["push"] != "" {
 				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-					return nil, nil, errors.Errorf("auto-push is currently not implemented for docker driver")
+					return nil, nil, errors.Errorf("auto-push is currently not implemented for docker driver, please create a new builder instance")
 				}
 			}
 		}
