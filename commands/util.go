@@ -177,7 +177,9 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				dockerapi.NegotiateAPIVersion(ctx)
 
 				contextStore := dockerCli.ContextStore()
-				kcc, err := kubernetes.ConfigFromContext(n.Endpoint, contextStore)
+
+				var kcc driver.KubeClientConfig
+				kcc, err = kubernetes.ConfigFromContext(n.Endpoint, contextStore)
 				if err != nil {
 					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
 					// try again with name="default".
@@ -187,6 +189,10 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 						logrus.Error(err)
 					}
 				}
+				if kcc == nil {
+					kcc = driver.KubeClientConfigInCluster{}
+				}
+
 				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, kcc, n.Flags, n.ConfigFile, n.DriverOpts, contextPathHash)
 				if err != nil {
 					di.Err = err

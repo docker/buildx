@@ -2,11 +2,14 @@ package driver
 
 import (
 	"context"
+	"io/ioutil"
 	"sort"
+	"strings"
+
+	"k8s.io/client-go/rest"
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 type Factory interface {
@@ -22,11 +25,30 @@ type BuildkitConfig struct {
 	// Rootless bool
 }
 
+type KubeClientConfig interface {
+	ClientConfig() (*rest.Config, error)
+	Namespace() (string, bool, error)
+}
+
+type KubeClientConfigInCluster struct{}
+
+func (k KubeClientConfigInCluster) ClientConfig() (*rest.Config, error) {
+	return rest.InClusterConfig()
+}
+
+func (k KubeClientConfigInCluster) Namespace() (string, bool, error) {
+	namespace, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(string(namespace)), true, nil
+}
+
 type InitConfig struct {
 	// This object needs updates to be generic for different drivers
 	Name             string
 	DockerAPI        dockerclient.APIClient
-	KubeClientConfig clientcmd.ClientConfig
+	KubeClientConfig KubeClientConfig
 	BuildkitFlags    []string
 	ConfigFile       string
 	DriverOpts       map[string]string
@@ -76,7 +98,7 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, kcc clientcmd.ClientConfig, flags []string, config string, do map[string]string, contextPathHash string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, kcc KubeClientConfig, flags []string, config string, do map[string]string, contextPathHash string) (Driver, error) {
 	ic := InitConfig{
 		DockerAPI:        api,
 		KubeClientConfig: kcc,
