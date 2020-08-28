@@ -9,6 +9,7 @@ import (
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
+	"github.com/docker/buildx/util/platformutil"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/kubernetes"
@@ -90,6 +91,24 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 				return nil, err
 			}
 			deploymentOpt.Image = bkimage.DefaultRootlessImage
+		case "platform":
+			if v != "" {
+				platforms, err := platformutil.Parse(strings.Split(v, ","))
+				if err != nil {
+					return nil, err
+				}
+				deploymentOpt.Platforms = platforms
+			}
+		case "nodeselector":
+			kvs := strings.Split(strings.Trim(v, `"`), ",")
+			s := map[string]string{}
+			for i := range kvs {
+				kv := strings.Split(kvs[i], "=")
+				if len(kv) == 2 {
+					s[kv[0]] = kv[1]
+				}
+			}
+			deploymentOpt.NodeSelector = s
 		case "loadbalance":
 			switch v {
 			case LoadbalanceSticky:

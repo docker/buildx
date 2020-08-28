@@ -1,6 +1,10 @@
 package manifest
 
 import (
+	"strings"
+
+	"github.com/docker/buildx/util/platformutil"
+	v1 "github.com/opencontainers/image-spec/specs-go/v1"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -13,28 +17,38 @@ type DeploymentOpt struct {
 	Replicas      int
 	BuildkitFlags []string
 	Rootless      bool
+	NodeSelector  map[string]string
+	Platforms     []v1.Platform
 }
 
 const (
-	containerName = "buildkitd"
+	containerName      = "buildkitd"
+	AnnotationPlatform = "buildx.docker.com/platform"
 )
 
 func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 	labels := map[string]string{
 		"app": opt.Name,
 	}
+	annotations := map[string]string{}
 	replicas := int32(opt.Replicas)
 	privileged := true
 	args := opt.BuildkitFlags
+
+	if len(opt.Platforms) > 0 {
+		annotations[AnnotationPlatform] = strings.Join(platformutil.Format(opt.Platforms), ",")
+	}
+
 	d := &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(),
 			Kind:       "Deployment",
 		},
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace: opt.Namespace,
-			Name:      opt.Name,
-			Labels:    labels,
+			Namespace:   opt.Namespace,
+			Name:        opt.Name,
+			Labels:      labels,
+			Annotations: annotations,
 		},
 		Spec: appsv1.DeploymentSpec{
 			Replicas: &replicas,
@@ -43,7 +57,8 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 			},
 			Template: corev1.PodTemplateSpec{
 				ObjectMeta: metav1.ObjectMeta{
-					Labels: labels,
+					Labels:      labels,
+					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
@@ -72,6 +87,11 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 			return nil, err
 		}
 	}
+
+	if len(opt.NodeSelector) > 0 {
+		d.Spec.Template.Spec.NodeSelector = opt.NodeSelector
+	}
+
 	return d, nil
 }
 

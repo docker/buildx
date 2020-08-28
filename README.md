@@ -411,6 +411,7 @@ Passes additional driver-specific options. Details for each driver:
   - `image=IMAGE` - Sets the container image to be used for running buildkit.
   - `namespace=NS` - Sets the Kubernetes namespace. Defaults to the current namespace.
   - `replicas=N` - Sets the number of `Pod` replicas. Defaults to 1.
+  - `nodeselector="label1=value1,label2=value2"` - Sets the kv of `Pod` nodeSelector. No Defaults. Example `nodeselector=kubernetes.io/arch=arm64`
   - `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
   - `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
 

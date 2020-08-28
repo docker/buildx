@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
@@ -192,8 +193,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				if kcc == nil {
 					kcc = driver.KubeClientConfigInCluster{}
 				}
-
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, kcc, n.Flags, n.ConfigFile, n.DriverOpts, contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, kcc, n.Flags, n.ConfigFile, assignDriverOptsByDriverInfo(n.DriverOpts, di), contextPathHash)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -209,6 +209,20 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 	}
 
 	return dis, nil
+}
+
+// pass platform as driver opts to provide for some drive, like kubernetes
+func assignDriverOptsByDriverInfo(opts map[string]string, driveInfo build.DriverInfo) map[string]string {
+	m := map[string]string{}
+
+	if len(driveInfo.Platform) > 0 {
+		m["platform"] = strings.Join(platformutil.Format(driveInfo.Platform), ",")
+	}
+
+	for key := range opts {
+		m[key] = opts[key]
+	}
+	return m
 }
 
 // clientForEndpoint returns a docker client for an endpoint
@@ -355,24 +369,28 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 	if eg.Wait(); err != nil {
 		return err
 	}
-	for _, di := range ngi.drivers {
-		// dynamic nodes are used in Kubernetes driver.
-		// Kubernetes pods are dynamically mapped to BuildKit Nodes.
-		if di.info != nil && len(di.info.DynamicNodes) > 0 {
-			var drivers []dinfo
-			for i := 0; i < len(di.info.DynamicNodes); i++ {
-				// all []dinfo share *build.DriverInfo and *driver.Info
-				diClone := di
-				if pl := di.info.DynamicNodes[i].Platforms; len(pl) > 0 {
-					diClone.platforms = pl
+
+	// skip when multi drivers
+	if len(ngi.drivers) == 1 {
+		for _, di := range ngi.drivers {
+			// dynamic nodes are used in Kubernetes driver.
+			// Kubernetes pods are dynamically mapped to BuildKit Nodes.
+			if di.info != nil && len(di.info.DynamicNodes) > 0 {
+				var drivers []dinfo
+				for i := 0; i < len(di.info.DynamicNodes); i++ {
+					// all []dinfo share *build.DriverInfo and *driver.Info
+					diClone := di
+					if pl := di.info.DynamicNodes[i].Platforms; len(pl) > 0 {
+						diClone.platforms = pl
+					}
+					drivers = append(drivers, di)
 				}
-				drivers = append(drivers, di)
+				// not append (remove the static nodes in the store)
+				ngi.ng.Nodes = di.info.DynamicNodes
+				ngi.ng.Dynamic = true
+				ngi.drivers = drivers
+				return nil
 			}
-			// not append (remove the static nodes in the store)
-			ngi.ng.Nodes = di.info.DynamicNodes
-			ngi.ng.Dynamic = true
-			ngi.drivers = drivers
-			return nil
 		}
 	}
 	return nil

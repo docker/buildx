@@ -4,12 +4,15 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"strings"
 	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/kubernetes/execconn"
+	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
 	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
@@ -109,6 +112,16 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 			Name: p.Name,
 			// Other fields are unset (TODO: detect real platforms)
 		}
+
+		if p.Annotations != nil {
+			if p, ok := p.Annotations[manifest.AnnotationPlatform]; ok {
+				ps, err := platformutil.Parse(strings.Split(p, ","))
+				if err == nil {
+					node.Platforms = ps
+				}
+			}
+		}
+
 		dynNodes = append(dynNodes, node)
 	}
 	return &driver.Info{
