@@ -22,11 +22,11 @@ else
 fi
 
 if [ -z "$CLI_PLATFORM" ]; then
-	rawos=$(uname -s)
-	if [ "$rawos" = "Darwin" ]; then
-		CLI_PLATFORM="darwin/amd64"
-	elif uname -s | grep MINGW > /dev/null 2>&1 ; then
-		CLI_PLATFORM="windows/amd64"
-	fi
+  rawos=$(uname -s)
+  if [ "$rawos" = "Darwin" ]; then
+    CLI_PLATFORM="darwin/amd64"
+  elif uname -s | grep MINGW > /dev/null 2>&1 ; then
+    CLI_PLATFORM="windows/amd64"
+  fi
 fi
 
