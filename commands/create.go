@@ -142,6 +142,12 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 				return err
 			}
 		}
+
+		if in.driver == "kubernetes" {
+			// naming endpoint to make --append works
+			ep = fmt.Sprintf("%s://%s?deployment=%s", in.driver, in.name, in.nodeName)
+		}
+
 		m, err := csvToMap(in.driverOpts)
 		if err != nil {
 			return err
