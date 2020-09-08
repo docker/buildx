@@ -22,12 +22,25 @@ import (
 
 // getStore returns current builder instance store
 func getStore(dockerCli command.Cli) (*store.Txn, func(), error) {
-	dir := filepath.Dir(dockerCli.ConfigFile().Filename)
-	s, err := store.New(dir)
+	s, err := store.New(getConfigStorePath(dockerCli))
 	if err != nil {
 		return nil, nil, err
 	}
 	return s.Txn()
+}
+
+// getConfigStorePath will look for correct configuration store path;
+// if `$BUILDX_CONFIG` is set - use it, otherwise use parent directory
+// of Docker config file (i.e. `${DOCKER_CONFIG}/buildx`)
+func getConfigStorePath(dockerCli command.Cli) string {
+	if buildxConfig := os.Getenv("BUILDX_CONFIG"); buildxConfig != "" {
+		logrus.Debugf("using config store %q based in \"$BUILDX_CONFIG\" environment variable", buildxConfig)
+		return buildxConfig
+	}
+
+	buildxConfig := filepath.Join(filepath.Dir(dockerCli.ConfigFile().Filename), "buildx")
+	logrus.Debugf("using default config store %q", buildxConfig)
+	return buildxConfig
 }
 
 // getCurrentEndpoint returns the current default endpoint value
