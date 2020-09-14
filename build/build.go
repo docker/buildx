@@ -851,7 +851,10 @@ func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress
 }
 
 func noDefaultLoad() bool {
-	v := os.Getenv("BUILDX_NO_DEFAULT_LOAD")
+	v, ok := os.LookupEnv("BUILDX_NO_DEFAULT_LOAD")
+	if !ok {
+		return false
+	}
 	b, err := strconv.ParseBool(v)
 	if err != nil {
 		logrus.Warnf("invalid non-bool value for BUILDX_NO_DEFAULT_LOAD: %s", v)
