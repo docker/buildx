@@ -2,8 +2,8 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build riscv64
+// +build darwin,amd64,!go1.12
 
-package cpu
+package unix
 
-const cacheLineSize = 32
+//sys  Getdirentries(fd int, buf []byte, basep *uintptr) (n int, err error) = SYS_GETDIRENTRIES64

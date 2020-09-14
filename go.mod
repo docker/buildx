@@ -70,4 +70,7 @@ replace github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402
 // protobuf: corresponds to containerd
 replace github.com/golang/protobuf => github.com/golang/protobuf v1.3.5
 
+// latest x/sys fails to build containerd/console
+replace golang.org/x/sys => golang.org/x/sys v0.0.0-20200728102440-3e129f6d46b1
+
 go 1.13

@@ -2,8 +2,10 @@
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
-// +build riscv64
+// +build darwin,arm,!go1.12
 
-package cpu
+package unix
 
-const cacheLineSize = 32
+func Getdirentries(fd int, buf []byte, basep *uintptr) (n int, err error) {
+	return 0, ENOSYS
+}
