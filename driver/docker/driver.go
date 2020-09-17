@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"net"
-	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
@@ -39,7 +38,7 @@ func (d *Driver) Rm(ctx context.Context, force bool) error {
 }
 
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
-	return client.New(ctx, "", client.WithDialer(func(string, time.Duration) (net.Conn, error) {
+	return client.New(ctx, "", client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", nil)
 	}))
 }
