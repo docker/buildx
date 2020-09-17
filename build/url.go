@@ -14,7 +14,7 @@ import (
 )
 
 func createTempDockerfileFromURL(ctx context.Context, d driver.Driver, url string, pw progress.Writer) (string, error) {
-	c, err := d.Client(ctx)
+	c, err := driver.Boot(ctx, d, pw)
 	if err != nil {
 		return "", err
 	}

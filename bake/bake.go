@@ -5,6 +5,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -12,14 +13,55 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/docker/pkg/urlutil"
 	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 )
 
-func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[string]*Target, error) {
+var httpPrefix = regexp.MustCompile(`^https?://`)
+var gitURLPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
+
+type File struct {
+	Name string
+	Data []byte
+}
+
+func defaultFilenames() []string {
+	return []string{
+		"docker-compose.yml",  // support app
+		"docker-compose.yaml", // support app
+		"docker-bake.json",
+		"docker-bake.override.json",
+		"docker-bake.hcl",
+		"docker-bake.override.hcl",
+	}
+}
+
+func ReadLocalFiles(names []string) ([]File, error) {
+	isDefault := false
+	if len(names) == 0 {
+		isDefault = true
+		names = defaultFilenames()
+	}
+	out := make([]File, 0, len(names))
+
+	for _, n := range names {
+		dt, err := ioutil.ReadFile(n)
+		if err != nil {
+			if isDefault && errors.Is(err, os.ErrNotExist) {
+				continue
+			}
+			return nil, err
+		}
+		out = append(out, File{Name: n, Data: dt})
+	}
+	return out, nil
+}
+
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string) (map[string]*Target, error) {
 	var c Config
 	for _, f := range files {
-		cfg, err := ParseFile(f)
+		cfg, err := ParseFile(f.Data, f.Name)
 		if err != nil {
 			return nil, err
 		}
@@ -44,12 +86,7 @@ func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[s
 	return m, nil
 }
 
-func ParseFile(fn string) (*Config, error) {
-	dt, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return nil, err
-	}
-
+func ParseFile(dt []byte, fn string) (*Config, error) {
 	fnl := strings.ToLower(fn)
 	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
 		return ParseCompose(dt)
@@ -350,6 +387,7 @@ type Target struct {
 	Outputs    []string          `json:"output,omitempty" hcl:"output,optional"`
 	Pull       *bool             `json:"pull,omitempty" hcl:"pull,optional"`
 	NoCache    *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
+
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
 
@@ -363,10 +401,10 @@ func (t *Target) normalize() {
 	t.Outputs = removeDupes(t.Outputs)
 }
 
-func TargetsToBuildOpt(m map[string]*Target) (map[string]build.Options, error) {
+func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
-		bo, err := toBuildOpt(v)
+		bo, err := toBuildOpt(v, inp)
 		if err != nil {
 			return nil, err
 		}
@@ -375,7 +413,19 @@ func TargetsToBuildOpt(m map[string]*Target) (map[string]build.Options, error) {
 	return m2, nil
 }
 
-func toBuildOpt(t *Target) (*build.Options, error) {
+func updateContext(t *build.Inputs, inp *Input) {
+	if inp == nil || inp.State == nil {
+		return
+	}
+	if t.ContextPath == "." {
+		t.ContextPath = inp.URL
+		return
+	}
+	st := llb.Scratch().File(llb.Copy(*inp.State, t.ContextPath, "/"), llb.WithCustomNamef("set context to %s", t.ContextPath))
+	t.ContextState = &st
+}
+
+func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -387,6 +437,7 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 	if t.Context != nil {
 		contextPath = *t.Context
 	}
+	contextPath = path.Clean(contextPath)
 	dockerfilePath := "Dockerfile"
 	if t.Dockerfile != nil {
 		dockerfilePath = *t.Dockerfile
@@ -405,11 +456,14 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 		pull = *t.Pull
 	}
 
+	bi := build.Inputs{
+		ContextPath:    contextPath,
+		DockerfilePath: dockerfilePath,
+	}
+	updateContext(&bi, inp)
+
 	bo := &build.Options{
-		Inputs: build.Inputs{
-			ContextPath:    contextPath,
-			DockerfilePath: dockerfilePath,
-		},
+		Inputs:    bi,
 		Tags:      t.Tags,
 		BuildArgs: t.Args,
 		Labels:    t.Labels,

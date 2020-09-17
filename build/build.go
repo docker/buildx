@@ -22,6 +22,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/util/entitlements"
@@ -64,6 +65,7 @@ type Inputs struct {
 	ContextPath    string
 	DockerfilePath string
 	InStream       io.Reader
+	ContextState   *llb.State
 }
 
 type DriverInfo struct {
@@ -723,6 +725,12 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 	)
 
 	switch {
+	case inp.ContextState != nil:
+		if target.FrontendInputs == nil {
+			target.FrontendInputs = make(map[string]llb.State)
+		}
+		target.FrontendInputs["context"] = *inp.ContextState
+		target.FrontendInputs["dockerfile"] = *inp.ContextState
 	case inp.ContextPath == "-":
 		if inp.DockerfilePath == "-" {
 			return nil, errStdinConflict
@@ -789,6 +797,7 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 		toRemove = append(toRemove, dockerfileDir)
 		dockerfileName = "Dockerfile"
 		target.FrontendAttrs["dockerfilekey"] = "dockerfile"
+		delete(target.FrontendInputs, "dockerfile")
 	}
 
 	if dockerfileName == "" {
