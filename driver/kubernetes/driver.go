@@ -46,10 +46,10 @@ type Driver struct {
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
-		_, err := d.deploymentClient.Get(d.deployment.Name, metav1.GetOptions{})
+		_, err := d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
 		if err != nil {
 			// TODO: return err if err != ErrNotFound
-			_, err = d.deploymentClient.Create(d.deployment)
+			_, err = d.deploymentClient.Create(ctx, d.deployment, metav1.CreateOptions{})
 			if err != nil {
 				return errors.Wrapf(err, "error while calling deploymentClient.Create for %q", d.deployment.Name)
 			}
@@ -72,7 +72,7 @@ func (d *Driver) wait(ctx context.Context) error {
 		depl *appsv1.Deployment
 	)
 	for try := 0; try < 100; try++ {
-		depl, err = d.deploymentClient.Get(d.deployment.Name, metav1.GetOptions{})
+		depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
 		if err == nil {
 			if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
 				return nil
@@ -90,7 +90,7 @@ func (d *Driver) wait(ctx context.Context) error {
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
-	depl, err := d.deploymentClient.Get(d.deployment.Name, metav1.GetOptions{})
+	depl, err := d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
 	if err != nil {
 		// TODO: return err if err != ErrNotFound
 		return &driver.Info{
@@ -102,7 +102,7 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 			Status: driver.Stopped,
 		}, nil
 	}
-	pods, err := podchooser.ListRunningPods(d.podClient, depl)
+	pods, err := podchooser.ListRunningPods(ctx, d.podClient, depl)
 	if err != nil {
 		return nil, err
 	}
@@ -136,7 +136,7 @@ func (d *Driver) Stop(ctx context.Context, force bool) error {
 }
 
 func (d *Driver) Rm(ctx context.Context, force bool) error {
-	if err := d.deploymentClient.Delete(d.deployment.Name, nil); err != nil {
+	if err := d.deploymentClient.Delete(ctx, d.deployment.Name, metav1.DeleteOptions{}); err != nil {
 		return errors.Wrapf(err, "error while calling deploymentClient.Delete for %q", d.deployment.Name)
 	}
 	return nil
