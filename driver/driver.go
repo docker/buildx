@@ -71,11 +71,7 @@ func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, er
 			if try > 2 {
 				return nil, errors.Errorf("failed to bootstrap %T driver in attempts", d)
 			}
-			if err := d.Bootstrap(ctx, func(s *client.SolveStatus) {
-				if pw != nil {
-					pw.Status() <- s
-				}
-			}); err != nil {
+			if err := d.Bootstrap(ctx, pw.Write); err != nil {
 				return nil, err
 			}
 		}

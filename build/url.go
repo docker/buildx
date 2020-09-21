@@ -60,7 +60,7 @@ func createTempDockerfileFromURL(ctx context.Context, d driver.Driver, url strin
 		}
 		out = dir
 		return nil, nil
-	}, pw.Status())
+	}, progress.NewChannel(pw))
 
 	if err != nil {
 		return "", err

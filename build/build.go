@@ -173,7 +173,6 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 }
 
 func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
-
 	availablePlatforms := map[string]int{}
 	for i, d := range drivers {
 		for _, p := range d.Platform {
@@ -479,7 +478,7 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 	return &so, releaseF, nil
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, pw progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -506,10 +505,8 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}
 
-	m, clients, err := resolveDrivers(ctx, drivers, auth, opt, pw)
+	m, clients, err := resolveDrivers(ctx, drivers, auth, opt, w)
 	if err != nil {
-		close(pw.Status())
-		<-pw.Done()
 		return nil, err
 	}
 
@@ -522,7 +519,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}()
 
-	mw := progress.NewMultiWriter(pw)
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for k, opt := range opt {
@@ -530,8 +526,8 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		for i, dp := range m[k] {
 			d := drivers[dp.driverIndex].Driver
 			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, pw, func(name string) (io.WriteCloser, func(), error) {
-				return newDockerLoader(ctx, docker, name, mw)
+			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, w, func(name string) (io.WriteCloser, func(), error) {
+				return newDockerLoader(ctx, docker, name, w)
 			})
 			if err != nil {
 				return nil, err
@@ -559,8 +555,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			var pushNames string
 
 			eg.Go(func() error {
-				pw := mw.WithPrefix("default", false)
-				defer close(pw.Status())
+				pw := progress.WithPrefix(w, "default", false)
 				wg.Wait()
 				select {
 				case <-ctx.Done():
@@ -663,23 +658,15 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				}
 
 				func(i int, dp driverPair, so client.SolveOpt) {
-					pw := mw.WithPrefix(k, multiTarget)
+					pw := progress.WithPrefix(w, k, multiTarget)
 
 					c := clients[dp.driverIndex]
 
-					var statusCh chan *client.SolveStatus
-					if pw != nil {
-						pw = progress.ResetTime(pw)
-						statusCh = pw.Status()
-						eg.Go(func() error {
-							<-pw.Done()
-							return pw.Err()
-						})
-					}
+					pw = progress.ResetTime(pw)
 
 					eg.Go(func() error {
 						defer wg.Done()
-						rr, err := c.Solve(ctx, nil, so, statusCh)
+						rr, err := c.Solve(ctx, nil, so, progress.NewChannel(pw))
 						if err != nil {
 							return err
 						}
@@ -829,7 +816,7 @@ func notSupported(d driver.Driver, f driver.Feature) error {
 
 type dockerLoadCallback func(name string) (io.WriteCloser, func(), error)
 
-func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress.MultiWriter) (io.WriteCloser, func(), error) {
+func newDockerLoader(ctx context.Context, d DockerAPI, name string, status progress.Writer) (io.WriteCloser, func(), error) {
 	c, err := d.DockerAPI(name)
 	if err != nil {
 		return nil, nil, err
@@ -852,7 +839,7 @@ func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress
 				w.mu.Unlock()
 				return
 			}
-			prog := mw.WithPrefix("", false)
+			prog := progress.WithPrefix(status, "", false)
 			progress.FromReader(prog, "importing to docker", resp.Body)
 		},
 		done:   done,

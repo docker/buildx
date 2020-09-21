@@ -171,25 +171,27 @@ func boot(ctx context.Context, ngi *nginfo, dockerCli command.Cli) (bool, error)
 		return false, nil
 	}
 
-	pw := progress.NewPrinter(context.TODO(), os.Stderr, "auto")
-
-	mw := progress.NewMultiWriter(pw)
+	printer := progress.NewPrinter(context.TODO(), os.Stderr, "auto")
 
 	eg, _ := errgroup.WithContext(ctx)
 	for _, idx := range toBoot {
 		func(idx int) {
 			eg.Go(func() error {
-				pw := mw.WithPrefix(ngi.ng.Nodes[idx].Name, len(toBoot) > 1)
+				pw := progress.WithPrefix(printer, ngi.ng.Nodes[idx].Name, len(toBoot) > 1)
 				_, err := driver.Boot(ctx, ngi.drivers[idx].di.Driver, pw)
 				if err != nil {
 					ngi.drivers[idx].err = err
 				}
-				close(pw.Status())
-				<-pw.Done()
 				return nil
 			})
 		}(idx)
 	}
 
-	return true, eg.Wait()
+	err := eg.Wait()
+	err1 := printer.Wait()
+	if err == nil {
+		err = err1
+	}
+
+	return true, err
 }
