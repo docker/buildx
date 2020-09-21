@@ -285,7 +285,7 @@ func isDefaultMobyDriver(d driver.Driver) bool {
 	return ok
 }
 
-func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
 		for _, f := range defers {
@@ -425,7 +425,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 	so.Exports = opt.Exports
 	so.Session = opt.Session
 
-	releaseLoad, err := LoadInputs(opt.Inputs, &so)
+	releaseLoad, err := LoadInputs(ctx, d, opt.Inputs, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -530,7 +530,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		for i, dp := range m[k] {
 			d := drivers[dp.driverIndex].Driver
 			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(d, multiDriver, opt, func(name string) (io.WriteCloser, func(), error) {
+			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, pw, func(name string) (io.WriteCloser, func(), error) {
 				return newDockerLoader(ctx, docker, name, mw)
 			})
 			if err != nil {
@@ -720,7 +720,7 @@ func createTempDockerfile(r io.Reader) (string, error) {
 	return dir, err
 }
 
-func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
+func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
@@ -746,21 +746,22 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 		if err != nil && err != io.EOF {
 			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
 		}
-
-		if isArchive(magic) {
-			// stdin is context
-			up := uploadprovider.New()
-			target.FrontendAttrs["context"] = up.Add(buf)
-			target.Session = append(target.Session, up)
-		} else {
-			if inp.DockerfilePath != "" {
-				return nil, errDockerfileConflict
+		if !(err == io.EOF && len(magic) == 0) {
+			if isArchive(magic) {
+				// stdin is context
+				up := uploadprovider.New()
+				target.FrontendAttrs["context"] = up.Add(buf)
+				target.Session = append(target.Session, up)
+			} else {
+				if inp.DockerfilePath != "" {
+					return nil, errDockerfileConflict
+				}
+				// stdin is dockerfile
+				dockerfileReader = buf
+				inp.ContextPath, _ = ioutil.TempDir("", "empty-dir")
+				toRemove = append(toRemove, inp.ContextPath)
+				target.LocalDirs["context"] = inp.ContextPath
 			}
-			// stdin is dockerfile
-			dockerfileReader = buf
-			inp.ContextPath, _ = ioutil.TempDir("", "empty-dir")
-			toRemove = append(toRemove, inp.ContextPath)
-			target.LocalDirs["context"] = inp.ContextPath
 		}
 
 	case isLocalDir(inp.ContextPath):
@@ -791,6 +792,16 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 		}
 		toRemove = append(toRemove, dockerfileDir)
 		dockerfileName = "Dockerfile"
+		target.FrontendAttrs["dockerfilekey"] = "dockerfile"
+	}
+	if urlutil.IsURL(inp.DockerfilePath) {
+		dockerfileDir, err = createTempDockerfileFromURL(ctx, d, inp.DockerfilePath, pw)
+		if err != nil {
+			return nil, err
+		}
+		toRemove = append(toRemove, dockerfileDir)
+		dockerfileName = "Dockerfile"
+		target.FrontendAttrs["dockerfilekey"] = "dockerfile"
 	}
 
 	if dockerfileName == "" {
