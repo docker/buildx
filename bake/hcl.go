@@ -107,6 +107,20 @@ type staticConfig struct {
 }
 
 func ParseHCL(dt []byte, fn string) (_ *Config, err error) {
+	if strings.HasSuffix(fn, ".json") || strings.HasSuffix(fn, ".hcl") {
+		return parseHCL(dt, fn)
+	}
+	cfg, err := parseHCL(dt, fn+".hcl")
+	if err != nil {
+		cfg2, err2 := parseHCL(dt, fn+".json")
+		if err2 == nil {
+			return cfg2, nil
+		}
+	}
+	return cfg, err
+}
+
+func parseHCL(dt []byte, fn string) (_ *Config, err error) {
 	defer func() {
 		err = formatHCLError(dt, err)
 	}()
@@ -192,15 +206,17 @@ func formatHCLError(dt []byte, err error) error {
 		if d.Severity != hcl.DiagError {
 			continue
 		}
-		src := errdefs.Source{
-			Info: &pb.SourceInfo{
-				Filename: d.Subject.Filename,
-				Data:     dt,
-			},
-			Ranges: []*pb.Range{toErrRange(d.Subject)},
+		if d.Subject != nil {
+			src := errdefs.Source{
+				Info: &pb.SourceInfo{
+					Filename: d.Subject.Filename,
+					Data:     dt,
+				},
+				Ranges: []*pb.Range{toErrRange(d.Subject)},
+			}
+			err = errdefs.WithSource(err, src)
+			break
 		}
-		err = errdefs.WithSource(err, src)
-		break
 	}
 	return err
 }
