@@ -15,6 +15,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -75,7 +76,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 		return errors.Errorf("squash currently not implemented")
 	}
 	if in.quiet {
-		return errors.Errorf("quiet currently not implemented")
+		logrus.Warnf("quiet currently not implemented")
 	}
 
 	ctx := appcontext.Context()
