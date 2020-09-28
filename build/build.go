@@ -62,10 +62,11 @@ type Options struct {
 }
 
 type Inputs struct {
-	ContextPath    string
-	DockerfilePath string
-	InStream       io.Reader
-	ContextState   *llb.State
+	ContextPath      string
+	DockerfilePath   string
+	InStream         io.Reader
+	ContextState     *llb.State
+	DockerfileInline string
 }
 
 type DriverInfo struct {
@@ -778,6 +779,10 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 		target.FrontendAttrs["context"] = inp.ContextPath
 	default:
 		return nil, errors.Errorf("unable to prepare context: path %q not found", inp.ContextPath)
+	}
+
+	if inp.DockerfileInline != "" {
+		dockerfileReader = strings.NewReader(inp.DockerfileInline)
 	}
 
 	if dockerfileReader != nil {

@@ -373,20 +373,21 @@ type Target struct {
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional"`
 
-	Context    *string           `json:"context,omitempty" hcl:"context,optional"`
-	Dockerfile *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
-	Args       map[string]string `json:"args,omitempty" hcl:"args,optional"`
-	Labels     map[string]string `json:"labels,omitempty" hcl:"labels,optional"`
-	Tags       []string          `json:"tags,omitempty" hcl:"tags,optional"`
-	CacheFrom  []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional"`
-	CacheTo    []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional"`
-	Target     *string           `json:"target,omitempty" hcl:"target,optional"`
-	Secrets    []string          `json:"secret,omitempty" hcl:"secret,optional"`
-	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
-	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
-	Outputs    []string          `json:"output,omitempty" hcl:"output,optional"`
-	Pull       *bool             `json:"pull,omitempty" hcl:"pull,optional"`
-	NoCache    *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
+	Context          *string           `json:"context,omitempty" hcl:"context,optional"`
+	Dockerfile       *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
+	DockerfileInline *string           `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional"`
+	Args             map[string]string `json:"args,omitempty" hcl:"args,optional"`
+	Labels           map[string]string `json:"labels,omitempty" hcl:"labels,optional"`
+	Tags             []string          `json:"tags,omitempty" hcl:"tags,optional"`
+	CacheFrom        []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional"`
+	CacheTo          []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional"`
+	Target           *string           `json:"target,omitempty" hcl:"target,optional"`
+	Secrets          []string          `json:"secret,omitempty" hcl:"secret,optional"`
+	SSH              []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
+	Platforms        []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
+	Outputs          []string          `json:"output,omitempty" hcl:"output,optional"`
+	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional"`
+	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
 
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
@@ -460,6 +461,9 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		ContextPath:    contextPath,
 		DockerfilePath: dockerfilePath,
 	}
+	if t.DockerfileInline != nil {
+		bi.DockerfileInline = *t.DockerfileInline
+	}
 	updateContext(&bi, inp)
 
 	bo := &build.Options{
@@ -526,6 +530,9 @@ func merge(t1, t2 *Target) *Target {
 	}
 	if t2.Dockerfile != nil {
 		t1.Dockerfile = t2.Dockerfile
+	}
+	if t2.DockerfileInline != nil {
+		t1.DockerfileInline = t2.DockerfileInline
 	}
 	for k, v := range t2.Args {
 		if t1.Args == nil {
