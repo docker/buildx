@@ -109,7 +109,6 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.builder = rootOpts.builder
 			return runDiskUsage(dockerCli, options)
 		},
-		Annotations: map[string]string{"version": "1.00"},
 	}
 
 	flags := cmd.Flags()
