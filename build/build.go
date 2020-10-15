@@ -280,13 +280,6 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func isDefaultMobyDriver(d driver.Driver) bool {
-	_, ok := d.(interface {
-		IsDefaultMobyDriver()
-	})
-	return ok
-}
-
 func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
@@ -338,15 +331,11 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		so.FrontendAttrs["multi-platform"] = "true"
 	}
 
-	_, isDefaultMobyDriver := d.(interface {
-		IsDefaultMobyDriver()
-	})
-
 	switch len(opt.Exports) {
 	case 1:
 		// valid
 	case 0:
-		if isDefaultMobyDriver && !noDefaultLoad() {
+		if d.IsMobyDriver() && !noDefaultLoad() {
 			// backwards compat for docker driver only:
 			// this ensures the build results in a docker image.
 			opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
@@ -400,7 +389,7 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		}
 		if e.Type == "docker" {
 			if e.Output == nil {
-				if isDefaultMobyDriver {
+				if d.IsMobyDriver() {
 					e.Type = "image"
 				} else {
 					w, cancel, err := dl(e.Attrs["context"])
@@ -414,7 +403,7 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 				return nil, nil, notSupported(d, driver.DockerExporter)
 			}
 		}
-		if e.Type == "image" && isDefaultMobyDriver {
+		if e.Type == "image" && d.IsMobyDriver() {
 			opt.Exports[i].Type = "moby"
 			if e.Attrs["push"] != "" {
 				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
@@ -493,7 +482,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 	var noMobyDriver driver.Driver
 	for _, d := range drivers {
-		if !isDefaultMobyDriver(d.Driver) {
+		if !d.Driver.IsMobyDriver() {
 			noMobyDriver = d.Driver
 			break
 		}

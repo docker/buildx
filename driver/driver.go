@@ -57,6 +57,7 @@ type Driver interface {
 	Rm(ctx context.Context, force bool) error
 	Client(ctx context.Context) (*client.Client, error)
 	Features() map[Feature]bool
+	IsMobyDriver() bool
 }
 
 func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, error) {

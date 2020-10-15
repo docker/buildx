@@ -57,4 +57,6 @@ func (d *Driver) Factory() driver.Factory {
 	return d.factory
 }
 
-func (d *Driver) IsDefaultMobyDriver() {}
+func (d *Driver) IsMobyDriver() bool {
+	return true
+}
