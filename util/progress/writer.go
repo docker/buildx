@@ -39,16 +39,18 @@ func Write(w Writer, name string, f func() error) {
 	})
 }
 
-func NewChannel(w Writer) chan *client.SolveStatus {
+func NewChannel(w Writer) (chan *client.SolveStatus, chan struct{}) {
 	ch := make(chan *client.SolveStatus)
+	done := make(chan struct{})
 	go func() {
 		for {
 			v, ok := <-ch
 			if !ok {
+				close(done)
 				return
 			}
 			w.Write(v)
 		}
 	}()
-	return ch
+	return ch, done
 }

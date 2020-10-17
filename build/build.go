@@ -658,7 +658,9 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 					eg.Go(func() error {
 						defer wg.Done()
-						rr, err := c.Solve(ctx, nil, so, progress.NewChannel(pw))
+						ch, done := progress.NewChannel(pw)
+						defer func() { <-done }()
+						rr, err := c.Solve(ctx, nil, so, ch)
 						if err != nil {
 							return err
 						}

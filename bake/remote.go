@@ -48,6 +48,8 @@ func ReadRemoteFiles(ctx context.Context, dis []build.DriverInfo, url string, na
 		return nil, nil, err
 	}
 
+	ch, done := progress.NewChannel(pw)
+	defer func() { <-done }()
 	_, err = c.Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		def, err := st.Marshal(ctx)
 		if err != nil {
@@ -71,7 +73,7 @@ func ReadRemoteFiles(ctx context.Context, dis []build.DriverInfo, url string, na
 			files, err = filesFromRef(ctx, ref, names)
 		}
 		return nil, err
-	}, progress.NewChannel(pw))
+	}, ch)
 
 	if err != nil {
 		return nil, nil, err
