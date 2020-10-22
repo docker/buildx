@@ -93,7 +93,7 @@ func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, rm bo
 }
 
 func stopCurrent(ctx context.Context, dockerCli command.Cli, rm bool) error {
-	dis, err := getDefaultDrivers(ctx, dockerCli, "")
+	dis, err := getDefaultDrivers(ctx, dockerCli, false, "")
 	if err != nil {
 		return err
 	}
