@@ -526,6 +526,9 @@ func removeDupes(s []string) []string {
 		if _, ok := seen[v]; ok {
 			continue
 		}
+		if v == "" {
+			continue
+		}
 		seen[v] = struct{}{}
 		s[i] = v
 		i++
