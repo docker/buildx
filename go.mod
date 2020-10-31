@@ -59,8 +59,6 @@ require (
 	k8s.io/client-go v0.19.0
 )
 
-replace github.com/docker/docker => github.com/docker/docker v17.12.0-ce-rc1.0.20200310163718-4634ce647cf2+incompatible
-
 replace github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
 
 // protobuf: corresponds to containerd (through buildkit)

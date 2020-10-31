@@ -90,7 +90,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
 		}
-		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, d.Name)
+		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
 		if err != nil {
 			return err
 		}
