@@ -1,5 +1,7 @@
 module github.com/docker/buildx
 
+go 1.13
+
 require (
 	github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412 // indirect
 	github.com/bitly/go-hostpool v0.0.0-20171023180738-a3a6125de932 // indirect
@@ -59,15 +61,14 @@ require (
 	k8s.io/client-go v0.19.0
 )
 
-replace github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
+replace (
+	// protobuf: corresponds to containerd (through buildkit)
+	github.com/golang/protobuf => github.com/golang/protobuf v1.3.5
+	github.com/jaguilar/vt100 => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
 
-// protobuf: corresponds to containerd (through buildkit)
-replace github.com/golang/protobuf => github.com/golang/protobuf v1.3.5
+	// latest x/sys fails to build containerd/console
+	golang.org/x/sys => golang.org/x/sys v0.0.0-20200728102440-3e129f6d46b1
 
-// latest x/sys fails to build containerd/console
-replace golang.org/x/sys => golang.org/x/sys v0.0.0-20200728102440-3e129f6d46b1
-
-// genproto: corresponds to containerd (through buildkit)
-replace google.golang.org/genproto => google.golang.org/genproto v0.0.0-20200224152610-e50cd9704f63
-
-go 1.13
+	// genproto: corresponds to containerd (through buildkit)
+	google.golang.org/genproto => google.golang.org/genproto v0.0.0-20200224152610-e50cd9704f63
+)
