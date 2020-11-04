@@ -79,12 +79,14 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 
 	err = loadNodeGroupData(timeoutCtx, dockerCli, ngi)
 
+	var bootNgi *nginfo
 	if in.bootstrap {
 		var ok bool
 		ok, err = boot(ctx, ngi, dockerCli)
 		if err != nil {
 			return err
 		}
+		bootNgi = ngi
 		if ok {
 			ngi = &nginfo{ng: ng}
 			err = loadNodeGroupData(ctx, dockerCli, ngi)
@@ -113,6 +115,8 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
 			} else if err := ngi.drivers[i].err; err != nil {
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
+			} else if bootNgi != nil && len(bootNgi.drivers) > i && bootNgi.drivers[i].err != nil {
+				fmt.Fprintf(w, "Error:\t%s\n", bootNgi.drivers[i].err.Error())
 			} else {
 				fmt.Fprintf(w, "Status:\t%s\n", ngi.drivers[i].info.Status)
 				if len(n.Flags) > 0 {
