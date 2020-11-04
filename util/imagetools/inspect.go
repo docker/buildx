@@ -3,6 +3,8 @@ package imagetools
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
+	"encoding/json"
 	"io"
 	"net/http"
 
@@ -106,4 +108,24 @@ func toCredentialsFunc(a Auth) func(string) (string, string, error) {
 		}
 		return ac.Username, ac.Password, nil
 	}
+}
+
+func RegistryAuthForRef(ref string, a Auth) (string, error) {
+	r, err := parseRef(ref)
+	if err != nil {
+		return "", err
+	}
+	host := reference.Domain(r)
+	if host == "docker.io" {
+		host = "https://index.docker.io/v1/"
+	}
+	ac, err := a.GetAuthConfig(host)
+	if err != nil {
+		return "", err
+	}
+	buf, err := json.Marshal(ac)
+	if err != nil {
+		return "", err
+	}
+	return base64.URLEncoding.EncodeToString(buf), nil
 }

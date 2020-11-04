@@ -44,7 +44,7 @@ type Driver struct {
 	podChooser       podchooser.PodChooser
 }
 
-func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
+func (d *Driver) Bootstrap(ctx context.Context, auth driver.Auth, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
 		_, err := d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
 		if err != nil {

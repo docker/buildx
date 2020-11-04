@@ -5,6 +5,7 @@ import (
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
+	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 )
@@ -44,9 +45,13 @@ type Info struct {
 	DynamicNodes []store.Node
 }
 
+type Auth interface {
+	GetAuthConfig(registryHostname string) (clitypes.AuthConfig, error)
+}
+
 type Driver interface {
 	Factory() Factory
-	Bootstrap(context.Context, progress.Logger) error
+	Bootstrap(context.Context, Auth, progress.Logger) error
 	Info(context.Context) (*Info, error)
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force bool) error
@@ -54,7 +59,7 @@ type Driver interface {
 	Features() map[Feature]bool
 }
 
-func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, error) {
+func Boot(ctx context.Context, d Driver, auth Auth, pw progress.Writer) (*client.Client, error) {
 	try := 0
 	for {
 		info, err := d.Info(ctx)
@@ -66,7 +71,7 @@ func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, er
 			if try > 2 {
 				return nil, errors.Errorf("failed to bootstrap %T driver in attempts", d)
 			}
-			if err := d.Bootstrap(ctx, func(s *client.SolveStatus) {
+			if err := d.Bootstrap(ctx, auth, func(s *client.SolveStatus) {
 				if pw != nil {
 					pw.Status() <- s
 				}
