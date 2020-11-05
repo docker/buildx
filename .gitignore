@@ -1,2 +1,31 @@
 bin
 cross-out
+
+### mac
+.DS_Store
+
+### Goland IDEA
+.idea/
+
+### gorelease
+dist/
+
+### VS Code
+.vscode/
+.vscode/*
+!.vscode/settings.json
+!.vscode/tasks.json
+!.vscode/launch.json
+!.vscode/extensions.json
+
+### vim
+# Swap
+[._]*.s[a-v][a-z]
+[._]*.sw[a-p]
+[._]s[a-rt-v][a-z]
+[._]ss[a-gi-z]
+[._]sw[a-p]
+
+# Session
+Session.vim
+
