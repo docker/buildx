@@ -281,10 +281,29 @@ func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClie
 }
 
 func getInstanceOrDefault(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
+	var defaultOnly bool
+
+	if instance == "default" && instance != dockerCli.CurrentContext() {
+		return nil, errors.Errorf("use `docker --context=default buildx` to switch to default context")
+	}
+	if instance == "default" || instance == dockerCli.CurrentContext() {
+		instance = ""
+		defaultOnly = true
+	}
+	list, err := dockerCli.ContextStore().List()
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range list {
+		if l.Name == instance {
+			return nil, errors.Errorf("use `docker --context=%s buildx` to switch to context %s", instance, instance)
+		}
+	}
+
 	if instance != "" {
 		return getInstanceByName(ctx, dockerCli, instance, contextPathHash)
 	}
-	return getDefaultDrivers(ctx, dockerCli, contextPathHash)
+	return getDefaultDrivers(ctx, dockerCli, defaultOnly, contextPathHash)
 }
 
 func getInstanceByName(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
@@ -302,20 +321,22 @@ func getInstanceByName(ctx context.Context, dockerCli command.Cli, instance, con
 }
 
 // getDefaultDrivers returns drivers based on current cli config
-func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, contextPathHash string) ([]build.DriverInfo, error) {
+func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly bool, contextPathHash string) ([]build.DriverInfo, error) {
 	txn, release, err := getStore(dockerCli)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
 
-	ng, err := getCurrentInstance(txn, dockerCli)
-	if err != nil {
-		return nil, err
-	}
+	if !defaultOnly {
+		ng, err := getCurrentInstance(txn, dockerCli)
+		if err != nil {
+			return nil, err
+		}
 
-	if ng != nil {
-		return driversForNodeGroup(ctx, dockerCli, ng, contextPathHash)
+		if ng != nil {
+			return driversForNodeGroup(ctx, dockerCli, ng, contextPathHash)
+		}
 	}
 
 	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), nil, nil, "", nil, contextPathHash)
