@@ -15,7 +15,7 @@ type Driver struct {
 	driver.InitConfig
 }
 
-func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
+func (d *Driver) Bootstrap(ctx context.Context, _ driver.Auth, l progress.Logger) error {
 	return nil
 }
 

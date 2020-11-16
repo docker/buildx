@@ -12,6 +12,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
+	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
@@ -31,12 +32,12 @@ type Driver struct {
 	env     []string
 }
 
-func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
+func (d *Driver) Bootstrap(ctx context.Context, auth driver.Auth, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
 		_, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 		if err != nil {
 			if dockerclient.IsErrNotFound(err) {
-				return d.create(ctx, sub)
+				return d.create(ctx, auth, sub)
 			}
 			return err
 		}
@@ -52,14 +53,20 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	})
 }
 
-func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
+func (d *Driver) create(ctx context.Context, auth driver.Auth, l progress.SubLogger) error {
 	imageName := bkimage.DefaultImage
 	if d.image != "" {
 		imageName = d.image
 	}
 
 	if err := l.Wrap("pulling image "+imageName, func() error {
-		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, types.ImageCreateOptions{})
+		ra, err := imagetools.RegistryAuthForRef(imageName, auth)
+		if err != nil {
+			return err
+		}
+		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, types.ImageCreateOptions{
+			RegistryAuth: ra,
+		})
 		if err != nil {
 			return err
 		}

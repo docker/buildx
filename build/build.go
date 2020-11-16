@@ -127,7 +127,7 @@ func allIndexes(l int) []int {
 	return out
 }
 
-func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, pw progress.Writer) ([]*client.Client, error) {
+func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, auth Auth, pw progress.Writer) ([]*client.Client, error) {
 	clients := make([]*client.Client, len(drivers))
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -135,7 +135,7 @@ func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, pw prog
 	for _, i := range idxs {
 		func(i int) {
 			eg.Go(func() error {
-				c, err := driver.Boot(ctx, drivers[i].Driver, pw)
+				c, err := driver.Boot(ctx, drivers[i].Driver, auth, pw)
 				if err != nil {
 					return err
 				}
@@ -172,7 +172,7 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 	return m
 }
 
-func resolveDrivers(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
 
 	availablePlatforms := map[string]int{}
 	for i, d := range drivers {
@@ -199,7 +199,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, opt map[string]Op
 		for k, opt := range opt {
 			m[k] = []driverPair{{driverIndex: 0, platforms: opt.Platforms}}
 		}
-		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), pw)
+		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), auth, pw)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -209,7 +209,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, opt map[string]Op
 	// map based on existing platforms
 	if !undetectedPlatform {
 		m := splitToDriverPairs(availablePlatforms, opt)
-		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), pw)
+		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), auth, pw)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -217,7 +217,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, opt map[string]Op
 	}
 
 	// boot all drivers in k
-	clients, err := ensureBooted(ctx, drivers, allIndexes(len(drivers)), pw)
+	clients, err := ensureBooted(ctx, drivers, allIndexes(len(drivers)), auth, pw)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -506,7 +506,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}
 
-	m, clients, err := resolveDrivers(ctx, drivers, opt, pw)
+	m, clients, err := resolveDrivers(ctx, drivers, auth, opt, pw)
 	if err != nil {
 		close(pw.Status())
 		<-pw.Done()
