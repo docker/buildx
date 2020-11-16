@@ -47,6 +47,9 @@ type Driver struct {
 func (d *Driver) IsMobyDriver() bool {
 	return false
 }
+func (d *Driver) Config() driver.InitConfig {
+	return d.InitConfig
+}
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
