@@ -52,6 +52,7 @@ type InitConfig struct {
 	BuildkitFlags    []string
 	ConfigFile       string
 	DriverOpts       map[string]string
+	Auth             Auth
 	// ContextPathHash can be used for determining pods in the driver instance
 	ContextPathHash string
 }
@@ -98,7 +99,7 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, kcc KubeClientConfig, flags []string, config string, do map[string]string, contextPathHash string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, config string, do map[string]string, contextPathHash string) (Driver, error) {
 	ic := InitConfig{
 		DockerAPI:        api,
 		KubeClientConfig: kcc,
@@ -106,6 +107,7 @@ func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.API
 		BuildkitFlags:    flags,
 		ConfigFile:       config,
 		DriverOpts:       do,
+		Auth:             auth,
 		ContextPathHash:  contextPathHash,
 	}
 	if f == nil {

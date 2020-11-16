@@ -127,7 +127,7 @@ func allIndexes(l int) []int {
 	return out
 }
 
-func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, auth Auth, pw progress.Writer) ([]*client.Client, error) {
+func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, pw progress.Writer) ([]*client.Client, error) {
 	clients := make([]*client.Client, len(drivers))
 
 	eg, ctx := errgroup.WithContext(ctx)
@@ -135,7 +135,7 @@ func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, auth Au
 	for _, i := range idxs {
 		func(i int) {
 			eg.Go(func() error {
-				c, err := driver.Boot(ctx, drivers[i].Driver, auth, pw)
+				c, err := driver.Boot(ctx, drivers[i].Driver, pw)
 				if err != nil {
 					return err
 				}
@@ -199,7 +199,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 		for k, opt := range opt {
 			m[k] = []driverPair{{driverIndex: 0, platforms: opt.Platforms}}
 		}
-		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), auth, pw)
+		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), pw)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -209,7 +209,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 	// map based on existing platforms
 	if !undetectedPlatform {
 		m := splitToDriverPairs(availablePlatforms, opt)
-		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), auth, pw)
+		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), pw)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -217,7 +217,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 	}
 
 	// boot all drivers in k
-	clients, err := ensureBooted(ctx, drivers, allIndexes(len(drivers)), auth, pw)
+	clients, err := ensureBooted(ctx, drivers, allIndexes(len(drivers)), pw)
 	if err != nil {
 		return nil, nil, err
 	}
