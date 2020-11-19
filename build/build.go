@@ -796,11 +796,13 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 	if dockerfileName == "" {
 		dockerfileName = "Dockerfile"
 	}
-	target.FrontendAttrs["filename"] = dockerfileName
 
 	if dockerfileDir != "" {
 		target.LocalDirs["dockerfile"] = dockerfileDir
+		dockerfileName = handleLowercaseDockerfile(dockerfileDir, dockerfileName)
 	}
+
+	target.FrontendAttrs["filename"] = dockerfileName
 
 	release := func() {
 		for _, dir := range toRemove {
@@ -888,4 +890,35 @@ func (w *waitingWriter) Close() error {
 		return w.err
 	}
 	return err
+}
+
+// handle https://github.com/moby/moby/pull/10858
+func handleLowercaseDockerfile(dir, p string) string {
+	if filepath.Base(p) != "Dockerfile" {
+		return p
+	}
+
+	f, err := os.Open(filepath.Dir(filepath.Join(dir, p)))
+	if err != nil {
+		return p
+	}
+
+	names, err := f.Readdirnames(-1)
+	if err != nil {
+		return p
+	}
+
+	foundLowerCase := false
+	for _, n := range names {
+		if n == "Dockerfile" {
+			return p
+		}
+		if n == "dockerfile" {
+			foundLowerCase = true
+		}
+	}
+	if foundLowerCase {
+		return filepath.Join(filepath.Dir(p), "dockerfile")
+	}
+	return p
 }
