@@ -93,6 +93,7 @@ func (d *Driver) create(ctx context.Context, auth driver.Auth, l progress.SubLog
 	if err := l.Wrap("creating container "+d.Name, func() error {
 		hc := &container.HostConfig{
 			Privileged: true,
+			UsernsMode: "host",
 		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
