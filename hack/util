@@ -1,5 +1,6 @@
 #!/usr/bin/env sh
 
+: ${CI=}
 : ${PREFER_BUILDCTL=}
 : ${PREFER_LEGACY=}
 : ${CLI_PLATFORM=}
@@ -7,6 +8,11 @@
 newerEqualThan() { # $1=minimum wanted version $2=actual-version
   [ "$1" = "$(printf "$1\n$2" | sort -V | head -n 1)" ]
 }
+
+progressFlag=""
+if [ "$CI" = "true" ]; then
+  progressFlag="--progress=plain"
+fi
 
 buildmode="legacy"
 if [ "$PREFER_BUILDCTL" = "1" ]; then
@@ -21,6 +27,22 @@ else
   fi
 fi
 
+buildxCmd() {
+  if docker buildx version >/dev/null 2>&1; then
+    set -x
+    docker buildx "$@" $progressFlag
+  elif buildx version >/dev/null 2>&1; then
+    set -x
+    buildx "$@" $progressFlag
+  elif docker version >/dev/null 2>&1; then
+    set -x
+    DOCKER_BUILDKIT=1 docker "$@" $progressFlag
+  else
+    echo >&2 "ERROR: Please enable DOCKER_BUILDKIT or install standalone buildx"
+    exit 1
+  fi
+}
+
 if [ -z "$CLI_PLATFORM" ]; then
   if [ "$(uname -s)" = "Darwin" ]; then
       arch="$(uname -m)"
@@ -32,4 +54,3 @@ if [ -z "$CLI_PLATFORM" ]; then
     CLI_PLATFORM="windows/amd64"
   fi
 fi
-

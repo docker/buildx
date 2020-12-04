@@ -1,20 +1,34 @@
-dist: bionic
 sudo: required
-
-install:
-  - docker run --name buildkit --rm -d --privileged -p 1234:1234 $REPO_SLUG_ORIGIN --addr tcp://0.0.0.0:1234
-  - sudo docker cp buildkit:/usr/bin/buildctl /usr/bin/
-  - export BUILDKIT_HOST=tcp://0.0.0.0:1234
+language: minimal
 
 env:
   global:
+    - DOCKER_CHANNEL="stable"
+    - DOCKER_CLI_EXPERIMENTAL="enabled"
     - PLATFORMS="linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/s390x,linux/ppc64le"
     - CROSS_PLATFORMS="${PLATFORMS},darwin/amd64,windows/amd64"
     - PREFER_BUILDCTL="1"
 
-script:
-  - make binaries validate-all && TARGETPLATFORM="${CROSS_PLATFORMS}" ./hack/cross
+before_install:
+  # update docker
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg | sudo apt-key add -
+  - sudo add-apt-repository "deb [arch=amd64] https://download.docker.com/linux/ubuntu $(lsb_release -cs) $DOCKER_CHANNEL"
+  - sudo apt-get update
+  - sudo apt-get -y -o Dpkg::Options::="--force-confnew" install docker-ce docker-ce-cli
+  # check
+  - sudo systemctl restart docker
+  - docker info
 
+install:
+  - docker buildx create --name builder --driver docker-container --driver-opt image=$REPO_SLUG_ORIGIN --use
+  - docker run --rm --privileged tonistiigi/binfmt:latest --install all
+  - docker run --name buildkit --rm -d --privileged -p 1234:1234 $REPO_SLUG_ORIGIN --addr tcp://0.0.0.0:1234
+  - sudo docker cp buildkit:/usr/bin/buildctl /usr/bin/
+  - export BUILDKIT_HOST=tcp://0.0.0.0:1234
+
+script:
+  - make binaries validate-all
+  - TARGETPLATFORM="${CROSS_PLATFORMS}" ./hack/cross
 
 deploy:
   - provider: script
@@ -30,6 +44,6 @@ deploy:
     skip_cleanup: true
     file_glob: true
     on:
-     repo: docker/buildx
-     tags: true
-     condition: $TRAVIS_TAG =~ ^v[0-9]
+      repo: docker/buildx
+      tags: true
+      condition: $TRAVIS_TAG =~ ^v[0-9]

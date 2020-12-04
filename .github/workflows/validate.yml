@@ -1,0 +1,38 @@
+name: validate
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'master'
+    tags:
+      - 'v*'
+  pull_request:
+    branches:
+      - 'master'
+
+env:
+  REPO_SLUG_ORIGIN: "moby/buildkit:master"
+
+jobs:
+  validate:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        target:
+          - lint
+          - validate-vendor
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          driver-opts: image=${{ env.REPO_SLUG_ORIGIN }}
+      -
+        name: Run
+        run: |
+          make ${{ matrix.target }}
