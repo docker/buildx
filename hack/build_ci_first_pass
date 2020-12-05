@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+
+TYP=$1
+
+. $(dirname $0)/util
+set -e
+
+usage() {
+  echo "usage: ./hack/build_ci_first_pass <binaries>"
+  exit 1
+}
+
+if [ -z "$TYP" ]; then
+  usage
+fi
+
+importCacheFlags=""
+exportCacheFlags=""
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+  if [ -n "$cacheRefFrom" ]; then
+    importCacheFlags="--cache-from=type=local,src=$cacheRefFrom"
+  fi
+  if [ -n "$cacheRefTo" ]; then
+    exportCacheFlags="--cache-to=type=local,dest=$cacheRefTo"
+  fi
+fi
+
+case $TYP in
+  "binaries")
+    buildxCmd build $importCacheFlags $exportCacheFlags \
+      --target "binaries" \
+      $currentcontext
+    ;;
+  *)
+    echo >&2 "Unknown type $TYP"
+    exit 1
+    ;;
+esac

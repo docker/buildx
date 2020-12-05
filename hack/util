@@ -4,6 +4,9 @@
 : ${PREFER_BUILDCTL=}
 : ${PREFER_LEGACY=}
 : ${CLI_PLATFORM=}
+: ${GITHUB_ACTIONS=}
+: ${CACHEDIR_FROM=}
+: ${CACHEDIR_TO=}
 
 newerEqualThan() { # $1=minimum wanted version $2=actual-version
   [ "$1" = "$(printf "$1\n$2" | sort -V | head -n 1)" ]
@@ -53,4 +56,20 @@ if [ -z "$CLI_PLATFORM" ]; then
   elif uname -s | grep MINGW > /dev/null 2>&1 ; then
     CLI_PLATFORM="windows/amd64"
   fi
+fi
+
+cacheType=""
+cacheRefFrom=""
+cacheRefTo=""
+currentref=""
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+  currentref="git://github.com/$GITHUB_REPOSITORY#$GITHUB_REF"
+  cacheType="local"
+  cacheRefFrom="$CACHEDIR_FROM"
+  cacheRefTo="$CACHEDIR_TO"
+fi
+
+currentcontext="."
+if [ -n "$currentref" ]; then
+  currentcontext="--build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 $currentref"
 fi
