@@ -111,6 +111,9 @@ func toCredentialsFunc(a Auth) func(string) (string, string, error) {
 }
 
 func RegistryAuthForRef(ref string, a Auth) (string, error) {
+	if a == nil {
+		return "", nil
+	}
 	r, err := parseRef(ref)
 	if err != nil {
 		return "", err

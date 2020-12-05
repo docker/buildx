@@ -32,12 +32,12 @@ type Driver struct {
 	env     []string
 }
 
-func (d *Driver) Bootstrap(ctx context.Context, auth driver.Auth, l progress.Logger) error {
+func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
 		_, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 		if err != nil {
 			if dockerclient.IsErrNotFound(err) {
-				return d.create(ctx, auth, sub)
+				return d.create(ctx, sub)
 			}
 			return err
 		}
@@ -53,14 +53,14 @@ func (d *Driver) Bootstrap(ctx context.Context, auth driver.Auth, l progress.Log
 	})
 }
 
-func (d *Driver) create(ctx context.Context, auth driver.Auth, l progress.SubLogger) error {
+func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	imageName := bkimage.DefaultImage
 	if d.image != "" {
 		imageName = d.image
 	}
 
 	if err := l.Wrap("pulling image "+imageName, func() error {
-		ra, err := imagetools.RegistryAuthForRef(imageName, auth)
+		ra, err := imagetools.RegistryAuthForRef(imageName, d.Auth)
 		if err != nil {
 			return err
 		}
