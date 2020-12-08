@@ -745,6 +745,43 @@ $ docker buildx bake --print webapp
 }
 ```
 
+Example of only adding tags if a variable is not empty using an `notequal` function:
+
+```
+$ cat <<'EOF' > docker-bake.hcl
+variable "TAG" {default="" }
+
+group "default" {
+	targets = [
+		"webapp",
+	]
+}
+
+target "webapp" {
+	context="."
+	dockerfile="Dockerfile"
+	tags = [
+		"my-image:latest",
+		notequal("",TAG) ? "my-image:${TAG}": "",
+	]
+}
+EOF
+
+$ docker buildx bake --print webapp
+{
+   "target": {
+      "webapp": {
+         "context": ".",
+         "dockerfile": "Dockerfile",
+         "tags": [
+            "my-image:latest"
+         ]
+      }
+   }
+}
+```
+
+
 ### `buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]`
 
 Imagetools contains commands for working with manifest lists in the registry. These commands are useful for inspecting multi-platform build results.

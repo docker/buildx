@@ -31,6 +31,7 @@ var (
 		"csvdecode":              stdlib.CSVDecodeFunc,
 		"coalesce":               stdlib.CoalesceFunc,
 		"coalescelist":           stdlib.CoalesceListFunc,
+		"compact":                stdlib.CompactFunc,
 		"concat":                 stdlib.ConcatFunc,
 		"contains":               stdlib.ContainsFunc,
 		"distinct":               stdlib.DistinctFunc,
