@@ -5,10 +5,12 @@ import (
 	"io/ioutil"
 	"sort"
 	"strings"
+	"sync"
 
 	"k8s.io/client-go/rest"
 
 	dockerclient "github.com/docker/docker/client"
+	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 )
 
@@ -117,9 +119,27 @@ func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.API
 			return nil, err
 		}
 	}
-	return f.New(ctx, ic)
+	d, err := f.New(ctx, ic)
+	if err != nil {
+		return nil, err
+	}
+	return &cachedDriver{Driver: d}, nil
 }
 
 func GetFactories() map[string]Factory {
 	return drivers
+}
+
+type cachedDriver struct {
+	Driver
+	client *client.Client
+	err    error
+	once   sync.Once
+}
+
+func (d *cachedDriver) Client(ctx context.Context) (*client.Client, error) {
+	d.once.Do(func() {
+		d.client, d.err = d.Driver.Client(ctx)
+	})
+	return d.client, d.err
 }

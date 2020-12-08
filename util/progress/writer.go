@@ -9,13 +9,10 @@ import (
 )
 
 type Writer interface {
-	Done() <-chan struct{}
-	Err() error
-	Status() chan *client.SolveStatus
+	Write(*client.SolveStatus)
 }
 
 func Write(w Writer, name string, f func() error) {
-	status := w.Status()
 	dgst := digest.FromBytes([]byte(identity.NewID()))
 	tm := time.Now()
 
@@ -25,9 +22,9 @@ func Write(w Writer, name string, f func() error) {
 		Started: &tm,
 	}
 
-	status <- &client.SolveStatus{
+	w.Write(&client.SolveStatus{
 		Vertexes: []*client.Vertex{&vtx},
-	}
+	})
 
 	err := f()
 
@@ -37,7 +34,23 @@ func Write(w Writer, name string, f func() error) {
 	if err != nil {
 		vtx2.Error = err.Error()
 	}
-	status <- &client.SolveStatus{
+	w.Write(&client.SolveStatus{
 		Vertexes: []*client.Vertex{&vtx2},
-	}
+	})
+}
+
+func NewChannel(w Writer) (chan *client.SolveStatus, chan struct{}) {
+	ch := make(chan *client.SolveStatus)
+	done := make(chan struct{})
+	go func() {
+		for {
+			v, ok := <-ch
+			if !ok {
+				close(done)
+				return
+			}
+			w.Write(v)
+		}
+	}()
+	return ch, done
 }

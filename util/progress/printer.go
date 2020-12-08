@@ -9,32 +9,27 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 )
 
-type printer struct {
+type Printer struct {
 	status chan *client.SolveStatus
 	done   <-chan struct{}
 	err    error
 }
 
-func (p *printer) Done() <-chan struct{} {
-	return p.done
-}
-
-func (p *printer) Err() error {
+func (p *Printer) Wait() error {
+	close(p.status)
+	<-p.done
 	return p.err
 }
 
-func (p *printer) Status() chan *client.SolveStatus {
-	if p == nil {
-		return nil
-	}
-	return p.status
+func (p *Printer) Write(s *client.SolveStatus) {
+	p.status <- s
 }
 
-func NewPrinter(ctx context.Context, out console.File, mode string) Writer {
+func NewPrinter(ctx context.Context, out console.File, mode string) *Printer {
 	statusCh := make(chan *client.SolveStatus)
 	doneCh := make(chan struct{})
 
-	pw := &printer{
+	pw := &Printer{
 		status: statusCh,
 		done:   doneCh,
 	}

@@ -1,11 +1,14 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
 
 	"github.com/docker/buildx/bake"
+	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
@@ -19,18 +22,16 @@ type bakeOptions struct {
 	commonOptions
 }
 
-func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
+func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error) {
 	ctx := appcontext.Context()
 
-	if len(in.files) == 0 {
-		files, err := defaultFiles()
-		if err != nil {
-			return err
+	var url string
+
+	if len(targets) > 0 {
+		if bake.IsRemoteURL(targets[0]) {
+			url = targets[0]
+			targets = targets[1:]
 		}
-		if len(files) == 0 {
-			return errors.Errorf("no docker-compose.yml or docker-bake.hcl found, specify build file with -f/--file")
-		}
-		in.files = files
 	}
 
 	if len(targets) == 0 {
@@ -52,8 +53,38 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 	if in.pull != nil {
 		overrides = append(overrides, fmt.Sprintf("*.pull=%t", *in.pull))
 	}
+	contextPathHash, _ := os.Getwd()
 
-	m, err := bake.ReadTargets(ctx, in.files, targets, overrides)
+	ctx2, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	printer := progress.NewPrinter(ctx2, os.Stderr, in.progress)
+
+	defer func() {
+		if printer != nil {
+			err1 := printer.Wait()
+			if err == nil {
+				err = err1
+			}
+		}
+	}()
+
+	dis, err := getInstanceOrDefault(ctx, dockerCli, in.builder, contextPathHash)
+	if err != nil {
+		return err
+	}
+
+	var files []bake.File
+	var inp *bake.Input
+	if url != "" {
+		files, inp, err = bake.ReadRemoteFiles(ctx, dis, url, in.files, printer)
+	} else {
+		files, err = bake.ReadLocalFiles(in.files)
+	}
+	if err != nil {
+		return err
+	}
+
+	m, err := bake.ReadTargets(ctx, files, targets, overrides)
 	if err != nil {
 		return err
 	}
@@ -63,40 +94,22 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) error {
 		if err != nil {
 			return err
 		}
+		err = printer.Wait()
+		printer = nil
+		if err != nil {
+			return err
+		}
 		fmt.Fprintln(dockerCli.Out(), string(dt))
 		return nil
 	}
 
-	bo, err := bake.TargetsToBuildOpt(m)
+	bo, err := bake.TargetsToBuildOpt(m, inp)
 	if err != nil {
 		return err
 	}
 
-	contextPathHash, _ := os.Getwd()
-
-	return buildTargets(ctx, dockerCli, bo, in.progress, contextPathHash, in.builder)
-}
-
-func defaultFiles() ([]string, error) {
-	fns := []string{
-		"docker-compose.yml",  // support app
-		"docker-compose.yaml", // support app
-		"docker-bake.json",
-		"docker-bake.override.json",
-		"docker-bake.hcl",
-		"docker-bake.override.hcl",
-	}
-	out := make([]string, 0, len(fns))
-	for _, f := range fns {
-		if _, err := os.Stat(f); err != nil {
-			if os.IsNotExist(errors.Cause(err)) {
-				continue
-			}
-			return nil, err
-		}
-		out = append(out, f)
-	}
-	return out, nil
+	_, err = build.Build(ctx, dis, bo, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
+	return err
 }
 
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {

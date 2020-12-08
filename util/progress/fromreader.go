@@ -11,7 +11,6 @@ import (
 )
 
 func FromReader(w Writer, name string, rc io.ReadCloser) {
-	status := w.Status()
 	dgst := digest.FromBytes([]byte(identity.NewID()))
 	tm := time.Now()
 
@@ -21,9 +20,9 @@ func FromReader(w Writer, name string, rc io.ReadCloser) {
 		Started: &tm,
 	}
 
-	status <- &client.SolveStatus{
+	w.Write(&client.SolveStatus{
 		Vertexes: []*client.Vertex{&vtx},
-	}
+	})
 
 	_, err := io.Copy(ioutil.Discard, rc)
 
@@ -33,8 +32,7 @@ func FromReader(w Writer, name string, rc io.ReadCloser) {
 	if err != nil {
 		vtx2.Error = err.Error()
 	}
-	status <- &client.SolveStatus{
+	w.Write(&client.SolveStatus{
 		Vertexes: []*client.Vertex{&vtx2},
-	}
-	close(status)
+	})
 }

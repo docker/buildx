@@ -22,6 +22,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/util/entitlements"
@@ -61,9 +62,11 @@ type Options struct {
 }
 
 type Inputs struct {
-	ContextPath    string
-	DockerfilePath string
-	InStream       io.Reader
+	ContextPath      string
+	DockerfilePath   string
+	InStream         io.Reader
+	ContextState     *llb.State
+	DockerfileInline string
 }
 
 type DriverInfo struct {
@@ -173,7 +176,6 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 }
 
 func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
-
 	availablePlatforms := map[string]int{}
 	for i, d := range drivers {
 		for _, p := range d.Platform {
@@ -278,14 +280,7 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func isDefaultMobyDriver(d driver.Driver) bool {
-	_, ok := d.(interface {
-		IsDefaultMobyDriver()
-	})
-	return ok
-}
-
-func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
 		for _, f := range defers {
@@ -336,15 +331,11 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 		so.FrontendAttrs["multi-platform"] = "true"
 	}
 
-	_, isDefaultMobyDriver := d.(interface {
-		IsDefaultMobyDriver()
-	})
-
 	switch len(opt.Exports) {
 	case 1:
 		// valid
 	case 0:
-		if isDefaultMobyDriver && !noDefaultLoad() {
+		if d.IsMobyDriver() && !noDefaultLoad() {
 			// backwards compat for docker driver only:
 			// this ensures the build results in a docker image.
 			opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
@@ -398,7 +389,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 		}
 		if e.Type == "docker" {
 			if e.Output == nil {
-				if isDefaultMobyDriver {
+				if d.IsMobyDriver() {
 					e.Type = "image"
 				} else {
 					w, cancel, err := dl(e.Attrs["context"])
@@ -412,7 +403,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 				return nil, nil, notSupported(d, driver.DockerExporter)
 			}
 		}
-		if e.Type == "image" && isDefaultMobyDriver {
+		if e.Type == "image" && d.IsMobyDriver() {
 			opt.Exports[i].Type = "moby"
 			if e.Attrs["push"] != "" {
 				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
@@ -425,7 +416,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 	so.Exports = opt.Exports
 	so.Session = opt.Session
 
-	releaseLoad, err := LoadInputs(opt.Inputs, &so)
+	releaseLoad, err := LoadInputs(ctx, d, opt.Inputs, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -479,7 +470,7 @@ func toSolveOpt(d driver.Driver, multiDriver bool, opt Options, dl dockerLoadCal
 	return &so, releaseF, nil
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, pw progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -491,7 +482,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 	var noMobyDriver driver.Driver
 	for _, d := range drivers {
-		if !isDefaultMobyDriver(d.Driver) {
+		if !d.Driver.IsMobyDriver() {
 			noMobyDriver = d.Driver
 			break
 		}
@@ -506,10 +497,8 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}
 
-	m, clients, err := resolveDrivers(ctx, drivers, auth, opt, pw)
+	m, clients, err := resolveDrivers(ctx, drivers, auth, opt, w)
 	if err != nil {
-		close(pw.Status())
-		<-pw.Done()
 		return nil, err
 	}
 
@@ -522,7 +511,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}()
 
-	mw := progress.NewMultiWriter(pw)
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for k, opt := range opt {
@@ -530,8 +518,8 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		for i, dp := range m[k] {
 			d := drivers[dp.driverIndex].Driver
 			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(d, multiDriver, opt, func(name string) (io.WriteCloser, func(), error) {
-				return newDockerLoader(ctx, docker, name, mw)
+			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, w, func(name string) (io.WriteCloser, func(), error) {
+				return newDockerLoader(ctx, docker, name, w)
 			})
 			if err != nil {
 				return nil, err
@@ -559,8 +547,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			var pushNames string
 
 			eg.Go(func() error {
-				pw := mw.WithPrefix("default", false)
-				defer close(pw.Status())
+				pw := progress.WithPrefix(w, "default", false)
 				wg.Wait()
 				select {
 				case <-ctx.Done():
@@ -663,23 +650,17 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				}
 
 				func(i int, dp driverPair, so client.SolveOpt) {
-					pw := mw.WithPrefix(k, multiTarget)
+					pw := progress.WithPrefix(w, k, multiTarget)
 
 					c := clients[dp.driverIndex]
 
-					var statusCh chan *client.SolveStatus
-					if pw != nil {
-						pw = progress.ResetTime(pw)
-						statusCh = pw.Status()
-						eg.Go(func() error {
-							<-pw.Done()
-							return pw.Err()
-						})
-					}
+					pw = progress.ResetTime(pw)
 
 					eg.Go(func() error {
 						defer wg.Done()
-						rr, err := c.Solve(ctx, nil, so, statusCh)
+						ch, done := progress.NewChannel(pw)
+						defer func() { <-done }()
+						rr, err := c.Solve(ctx, nil, so, ch)
 						if err != nil {
 							return err
 						}
@@ -720,7 +701,7 @@ func createTempDockerfile(r io.Reader) (string, error) {
 	return dir, err
 }
 
-func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
+func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
@@ -736,6 +717,12 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 	)
 
 	switch {
+	case inp.ContextState != nil:
+		if target.FrontendInputs == nil {
+			target.FrontendInputs = make(map[string]llb.State)
+		}
+		target.FrontendInputs["context"] = *inp.ContextState
+		target.FrontendInputs["dockerfile"] = *inp.ContextState
 	case inp.ContextPath == "-":
 		if inp.DockerfilePath == "-" {
 			return nil, errStdinConflict
@@ -746,21 +733,22 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 		if err != nil && err != io.EOF {
 			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
 		}
-
-		if isArchive(magic) {
-			// stdin is context
-			up := uploadprovider.New()
-			target.FrontendAttrs["context"] = up.Add(buf)
-			target.Session = append(target.Session, up)
-		} else {
-			if inp.DockerfilePath != "" {
-				return nil, errDockerfileConflict
+		if !(err == io.EOF && len(magic) == 0) {
+			if isArchive(magic) {
+				// stdin is context
+				up := uploadprovider.New()
+				target.FrontendAttrs["context"] = up.Add(buf)
+				target.Session = append(target.Session, up)
+			} else {
+				if inp.DockerfilePath != "" {
+					return nil, errDockerfileConflict
+				}
+				// stdin is dockerfile
+				dockerfileReader = buf
+				inp.ContextPath, _ = ioutil.TempDir("", "empty-dir")
+				toRemove = append(toRemove, inp.ContextPath)
+				target.LocalDirs["context"] = inp.ContextPath
 			}
-			// stdin is dockerfile
-			dockerfileReader = buf
-			inp.ContextPath, _ = ioutil.TempDir("", "empty-dir")
-			toRemove = append(toRemove, inp.ContextPath)
-			target.LocalDirs["context"] = inp.ContextPath
 		}
 
 	case isLocalDir(inp.ContextPath):
@@ -784,6 +772,10 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 		return nil, errors.Errorf("unable to prepare context: path %q not found", inp.ContextPath)
 	}
 
+	if inp.DockerfileInline != "" {
+		dockerfileReader = strings.NewReader(inp.DockerfileInline)
+	}
+
 	if dockerfileReader != nil {
 		dockerfileDir, err = createTempDockerfile(dockerfileReader)
 		if err != nil {
@@ -791,6 +783,17 @@ func LoadInputs(inp Inputs, target *client.SolveOpt) (func(), error) {
 		}
 		toRemove = append(toRemove, dockerfileDir)
 		dockerfileName = "Dockerfile"
+		target.FrontendAttrs["dockerfilekey"] = "dockerfile"
+	}
+	if urlutil.IsURL(inp.DockerfilePath) {
+		dockerfileDir, err = createTempDockerfileFromURL(ctx, d, inp.DockerfilePath, pw)
+		if err != nil {
+			return nil, err
+		}
+		toRemove = append(toRemove, dockerfileDir)
+		dockerfileName = "Dockerfile"
+		target.FrontendAttrs["dockerfilekey"] = "dockerfile"
+		delete(target.FrontendInputs, "dockerfile")
 	}
 
 	if dockerfileName == "" {
@@ -818,7 +821,7 @@ func notSupported(d driver.Driver, f driver.Feature) error {
 
 type dockerLoadCallback func(name string) (io.WriteCloser, func(), error)
 
-func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress.MultiWriter) (io.WriteCloser, func(), error) {
+func newDockerLoader(ctx context.Context, d DockerAPI, name string, status progress.Writer) (io.WriteCloser, func(), error) {
 	c, err := d.DockerAPI(name)
 	if err != nil {
 		return nil, nil, err
@@ -841,7 +844,7 @@ func newDockerLoader(ctx context.Context, d DockerAPI, name string, mw *progress
 				w.mu.Unlock()
 				return
 			}
-			prog := mw.WithPrefix("", false)
+			prog := progress.WithPrefix(status, "", false)
 			progress.FromReader(prog, "importing to docker", resp.Body)
 		},
 		done:   done,
