@@ -7,7 +7,7 @@ import (
 )
 
 // Termios is the Unix API for terminal I/O.
-type Termios unix.Termios
+type Termios = unix.Termios
 
 // MakeRaw puts the terminal connected to the given file descriptor into raw
 // mode and returns the previous state of the terminal so that it can be
@@ -18,8 +18,7 @@ func MakeRaw(fd uintptr) (*State, error) {
 		return nil, err
 	}
 
-	var oldState State
-	oldState.termios = Termios(*termios)
+	oldState := State{termios: *termios}
 
 	termios.Iflag &^= (unix.IGNBRK | unix.BRKINT | unix.PARMRK | unix.ISTRIP | unix.INLCR | unix.IGNCR | unix.ICRNL | unix.IXON)
 	termios.Oflag &^= unix.OPOST

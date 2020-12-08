@@ -26,6 +26,7 @@ import (
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/util/entitlements"
+	"github.com/moby/buildkit/util/progress/progresswriter"
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -526,6 +527,15 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			}
 			defers = append(defers, release)
 			m[k][i].so = so
+		}
+		for _, at := range opt.Session {
+			if s, ok := at.(interface {
+				SetLogger(progresswriter.Logger)
+			}); ok {
+				s.SetLogger(func(s *client.SolveStatus) {
+					w.Write(s)
+				})
+			}
 		}
 	}
 

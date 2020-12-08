@@ -11,9 +11,9 @@ func tcget(fd uintptr) (*Termios, error) {
 	if err != nil {
 		return nil, err
 	}
-	return (*Termios)(p), nil
+	return p, nil
 }
 
 func tcset(fd uintptr, p *Termios) error {
-	return unix.IoctlSetTermios(int(fd), setTermios, (*unix.Termios)(p))
+	return unix.IoctlSetTermios(int(fd), setTermios, p)
 }
