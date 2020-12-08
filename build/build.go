@@ -327,6 +327,12 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		AllowedEntitlements: opt.Allow,
 	}
 
+	if v, ok := opt.BuildArgs["BUILDKIT_MULTI_PLATFORM"]; ok {
+		if v, _ := strconv.ParseBool(v); v {
+			so.FrontendAttrs["multi-platform"] = "true"
+		}
+	}
+
 	if multiDriver {
 		// force creation of manifest list
 		so.FrontendAttrs["multi-platform"] = "true"
