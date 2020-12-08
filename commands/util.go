@@ -203,9 +203,23 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 						logrus.Error(err)
 					}
 				}
+
+				tryToUseKubeConfigInCluster := false
 				if kcc == nil {
-					kcc = driver.KubeClientConfigInCluster{}
+					tryToUseKubeConfigInCluster = true
+				} else {
+					if _, err := kcc.ClientConfig(); err != nil {
+						tryToUseKubeConfigInCluster = true
+					}
 				}
+				if tryToUseKubeConfigInCluster {
+					kccInCluster := driver.KubeClientConfigInCluster{}
+					if _, err := kccInCluster.ClientConfig(); err == nil {
+						logrus.Debug("using kube config in cluster")
+						kcc = kccInCluster
+					}
+				}
+
 				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, dockerCli.ConfigFile(), kcc, n.Flags, n.ConfigFile, assignDriverOptsByDriverInfo(n.DriverOpts, di), contextPathHash)
 				if err != nil {
 					di.Err = err
