@@ -3,6 +3,7 @@ package build
 import (
 	"bufio"
 	"context"
+	"encoding/json"
 	"fmt"
 	"io"
 	"io/ioutil"
@@ -11,6 +12,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
@@ -19,7 +21,9 @@ import (
 	"github.com/docker/buildx/util/progress"
 	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/distribution/reference"
+	"github.com/docker/docker/api/types"
 	dockerclient "github.com/docker/docker/client"
+	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
@@ -414,7 +418,9 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 			opt.Exports[i].Type = "moby"
 			if e.Attrs["push"] != "" {
 				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-					return nil, nil, errors.Errorf("auto-push is currently not implemented for docker driver, please create a new builder instance")
+					if ok, _ := strconv.ParseBool(e.Attrs["push-by-digest"]); ok {
+						return nil, nil, errors.Errorf("push-by-digest is currently not implemented for docker driver, please create a new builder instance")
+					}
 				}
 			}
 		}
@@ -522,8 +528,12 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 	for k, opt := range opt {
 		multiDriver := len(m[k]) > 1
+		hasMobyDriver := false
 		for i, dp := range m[k] {
 			d := drivers[dp.driverIndex].Driver
+			if d.IsMobyDriver() {
+				hasMobyDriver = true
+			}
 			opt.Platforms = dp.platforms
 			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, w, func(name string) (io.WriteCloser, func(), error) {
 				return newDockerLoader(ctx, docker, name, w)
@@ -541,6 +551,19 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				s.SetLogger(func(s *client.SolveStatus) {
 					w.Write(s)
 				})
+			}
+		}
+
+		// validate for multi-node push
+		if hasMobyDriver && multiDriver {
+			for _, dp := range m[k] {
+				for _, e := range dp.so.Exports {
+					if e.Type == "moby" {
+						if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+							return nil, errors.Errorf("multi-node push can't currently be performed with the docker driver, please switch to a different driver")
+						}
+					}
+				}
 			}
 		}
 	}
@@ -681,6 +704,28 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 							return err
 						}
 						res[i] = rr
+
+						d := drivers[dp.driverIndex].Driver
+						if d.IsMobyDriver() {
+							for _, e := range so.Exports {
+								if e.Type == "moby" && e.Attrs["push"] != "" {
+									if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+										pushNames = e.Attrs["name"]
+										if pushNames == "" {
+											return errors.Errorf("tag is needed when pushing to registry")
+										}
+										pw := progress.ResetTime(pw)
+										for _, name := range strings.Split(pushNames, ",") {
+											if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
+												return pushWithMoby(ctx, d, name, l)
+											}); err != nil {
+												return err
+											}
+										}
+									}
+								}
+							}
+						}
 						return nil
 					})
 
@@ -699,6 +744,86 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 	}
 
 	return resp, nil
+}
+
+func pushWithMoby(ctx context.Context, d driver.Driver, name string, l progress.SubLogger) error {
+	api := d.Config().DockerAPI
+	if api == nil {
+		return errors.Errorf("invalid empty Docker API reference") // should never happen
+	}
+	creds, err := imagetools.RegistryAuthForRef(name, d.Config().Auth)
+	if err != nil {
+		return err
+	}
+
+	rc, err := api.ImagePush(ctx, name, types.ImagePushOptions{
+		RegistryAuth: creds,
+	})
+	if err != nil {
+		return err
+	}
+
+	started := map[string]*client.VertexStatus{}
+
+	defer func() {
+		for _, st := range started {
+			if st.Completed == nil {
+				now := time.Now()
+				st.Completed = &now
+				l.SetStatus(st)
+			}
+		}
+	}()
+
+	dec := json.NewDecoder(rc)
+	var parsedError error
+	for {
+		var jm jsonmessage.JSONMessage
+		if err := dec.Decode(&jm); err != nil {
+			if parsedError != nil {
+				return parsedError
+			}
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		if jm.ID != "" {
+			id := "pushing layer " + jm.ID
+			st, ok := started[id]
+			if !ok {
+				if jm.Progress != nil || jm.Status == "Pushed" {
+					now := time.Now()
+					st = &client.VertexStatus{
+						ID:      id,
+						Started: &now,
+					}
+					started[id] = st
+				} else {
+					continue
+				}
+			}
+			st.Timestamp = time.Now()
+			if jm.Progress != nil {
+				st.Current = jm.Progress.Current
+				st.Total = jm.Progress.Total
+			}
+			if jm.Error != nil {
+				now := time.Now()
+				st.Completed = &now
+			}
+			if jm.Status == "Pushed" {
+				now := time.Now()
+				st.Completed = &now
+				st.Current = st.Total
+			}
+			l.SetStatus(st)
+		}
+		if jm.Error != nil {
+			parsedError = jm.Error
+		}
+	}
+	return nil
 }
 
 func createTempDockerfile(r io.Reader) (string, error) {

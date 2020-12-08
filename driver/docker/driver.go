@@ -47,9 +47,8 @@ func (d *Driver) Features() map[driver.Feature]bool {
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    false,
 		driver.DockerExporter: false,
-
-		driver.CacheExport:   false,
-		driver.MultiPlatform: false,
+		driver.CacheExport:    false,
+		driver.MultiPlatform:  false,
 	}
 }
 
@@ -59,4 +58,8 @@ func (d *Driver) Factory() driver.Factory {
 
 func (d *Driver) IsMobyDriver() bool {
 	return true
+}
+
+func (d *Driver) Config() driver.InitConfig {
+	return d.InitConfig
 }
