@@ -749,17 +749,17 @@ variable "TAG" {default="" }
 
 group "default" {
 	targets = [
-    "webapp",
-  ]
+		"webapp",
+	]
 }
 
 target "webapp" {
-  context="."
-  dockerfile="Dockerfile"
-  tags = [
-      "my-image:latest",
-      notequal("",TAG) ? "my-image:${TAG}": "",
-  ]
+	context="."
+	dockerfile="Dockerfile"
+	tags = [
+		"my-image:latest",
+		notequal("",TAG) ? "my-image:${TAG}": "",
+	]
 }
 EOF
 
