@@ -4,7 +4,6 @@ import (
 	"context"
 	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
@@ -220,7 +219,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, dockerCli.ConfigFile(), kcc, n.Flags, n.ConfigFile, assignDriverOptsByDriverInfo(n.DriverOpts, di), contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, dockerCli.ConfigFile(), kcc, n.Flags, n.ConfigFile, n.DriverOpts, n.Platforms, contextPathHash)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -236,20 +235,6 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 	}
 
 	return dis, nil
-}
-
-// pass platform as driver opts to provide for some drive, like kubernetes
-func assignDriverOptsByDriverInfo(opts map[string]string, driveInfo build.DriverInfo) map[string]string {
-	m := map[string]string{}
-
-	if len(driveInfo.Platform) > 0 {
-		m["platform"] = strings.Join(platformutil.Format(driveInfo.Platform), ",")
-	}
-
-	for key := range opts {
-		m[key] = opts[key]
-	}
-	return m
 }
 
 // clientForEndpoint returns a docker client for an endpoint
@@ -353,7 +338,7 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly b
 		}
 	}
 
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), dockerCli.ConfigFile(), nil, nil, "", nil, contextPathHash)
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), dockerCli.ConfigFile(), nil, nil, "", nil, nil, contextPathHash)
 	if err != nil {
 		return nil, err
 	}
