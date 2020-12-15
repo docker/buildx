@@ -1,6 +1,6 @@
-# syntax=docker/dockerfile:1.1-experimental
+# syntax=docker/dockerfile:1.2
 
-ARG DOCKERD_VERSION=19.03-rc
+ARG DOCKERD_VERSION=19.03
 ARG CLI_VERSION=19.03
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
