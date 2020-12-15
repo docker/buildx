@@ -11,6 +11,7 @@ import (
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -55,6 +56,7 @@ type InitConfig struct {
 	ConfigFile       string
 	DriverOpts       map[string]string
 	Auth             Auth
+	Platforms        []specs.Platform
 	// ContextPathHash can be used for determining pods in the driver instance
 	ContextPathHash string
 }
@@ -101,7 +103,7 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, config string, do map[string]string, contextPathHash string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, config string, do map[string]string, platforms []specs.Platform, contextPathHash string) (Driver, error) {
 	ic := InitConfig{
 		DockerAPI:        api,
 		KubeClientConfig: kcc,
@@ -110,6 +112,7 @@ func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.API
 		ConfigFile:       config,
 		DriverOpts:       do,
 		Auth:             auth,
+		Platforms:        platforms,
 		ContextPathHash:  contextPathHash,
 	}
 	if f == nil {
