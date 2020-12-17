@@ -315,7 +315,7 @@ Export build cache to an external cache destination. Supported types are `regist
 
 Attribute key:
 
-- `mode` - Specifies how many layers are exported with the cache. “min” on only exports layers already in the final build build stage, “max” exports layers for all stages. Metadata is always exported for the whole build.
+- `mode` - Specifies how many layers are exported with the cache. “min” on only exports layers already in the final build stage, “max” exports layers for all stages. Metadata is always exported for the whole build.
 
 Examples:
 ```
