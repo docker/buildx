@@ -3,6 +3,7 @@ package commands
 import (
 	"encoding/csv"
 	"fmt"
+	"net/url"
 	"os"
 	"strings"
 
@@ -145,7 +146,14 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 
 		if in.driver == "kubernetes" {
 			// naming endpoint to make --append works
-			ep = fmt.Sprintf("%s://%s?deployment=%s", in.driver, in.name, in.nodeName)
+			ep = (&url.URL{
+				Scheme: in.driver,
+				Path:   "/" + in.name,
+				RawQuery: (&url.Values{
+					"deployment": {in.nodeName},
+					"kubeconfig": {os.Getenv("KUBECONFIG")},
+				}).Encode(),
+			}).String()
 		}
 
 		m, err := csvToMap(in.driverOpts)

@@ -2,8 +2,10 @@ package commands
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
@@ -12,11 +14,13 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
 	"github.com/docker/cli/cli/context/kubernetes"
+	ctxstore "github.com/docker/cli/cli/context/store"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // getStore returns current builder instance store
@@ -192,12 +196,12 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				contextStore := dockerCli.ContextStore()
 
 				var kcc driver.KubeClientConfig
-				kcc, err = kubernetes.ConfigFromContext(n.Endpoint, contextStore)
+				kcc, err = configFromContext(n.Endpoint, contextStore)
 				if err != nil {
 					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
 					// try again with name="default".
 					// FIXME: n should retain real context name.
-					kcc, err = kubernetes.ConfigFromContext("default", contextStore)
+					kcc, err = configFromContext("default", contextStore)
 					if err != nil {
 						logrus.Error(err)
 					}
@@ -235,6 +239,21 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 	}
 
 	return dis, nil
+}
+
+func configFromContext(endpointName string, s ctxstore.Reader) (clientcmd.ClientConfig, error) {
+	if strings.HasPrefix(endpointName, "kubernetes://") {
+		u, _ := url.Parse(endpointName)
+
+		if kubeconfig := u.Query().Get("kubeconfig"); kubeconfig != "" {
+			clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+				&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
+				&clientcmd.ConfigOverrides{},
+			)
+			return clientConfig, nil
+		}
+	}
+	return kubernetes.ConfigFromContext(endpointName, s)
 }
 
 // clientForEndpoint returns a docker client for an endpoint
