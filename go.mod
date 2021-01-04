@@ -24,11 +24,12 @@ require (
 	github.com/erikstmartin/go-testdb v0.0.0-20160219214506-8d10e4a1bae5 // indirect
 	github.com/fvbommel/sortorder v1.0.1 // indirect
 	github.com/gofrs/flock v0.7.3
-	github.com/gofrs/uuid v3.2.0+incompatible // indirect
+	github.com/gofrs/uuid v3.3.0+incompatible // indirect
 	github.com/google/certificate-transparency-go v1.0.21 // indirect
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed // indirect
-	github.com/hashicorp/hcl/v2 v2.6.0
+	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
+	github.com/hashicorp/hcl/v2 v2.8.1
 	github.com/jinzhu/gorm v1.9.2 // indirect
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a // indirect
 	github.com/jinzhu/now v1.0.0 // indirect
@@ -48,8 +49,8 @@ require (
 	github.com/theupdateframework/notary v0.6.1 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
-	github.com/zclconf/go-cty v1.4.0
-	golang.org/x/sync v0.0.0-20200625203802-6e8e738ad208
+	github.com/zclconf/go-cty v1.7.1
+	golang.org/x/sync v0.0.0-20201020160332-67f06af15bc9
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
 	gopkg.in/gorethink/gorethink.v3 v3.0.5 // indirect
