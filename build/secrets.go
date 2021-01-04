@@ -34,6 +34,7 @@ func parseSecret(value string) (*secretsprovider.Source, error) {
 
 	fs := secretsprovider.Source{}
 
+	var typ string
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		key := strings.ToLower(parts[0])
@@ -45,16 +46,23 @@ func parseSecret(value string) (*secretsprovider.Source, error) {
 		value := parts[1]
 		switch key {
 		case "type":
-			if value != "file" {
+			if value != "file" && value != "env" {
 				return nil, errors.Errorf("unsupported secret type %q", value)
 			}
+			typ = value
 		case "id":
 			fs.ID = value
 		case "source", "src":
 			fs.FilePath = value
+		case "env":
+			fs.Env = value
 		default:
 			return nil, errors.Errorf("unexpected key '%s' in '%s'", key, field)
 		}
+	}
+	if typ == "env" && fs.Env == "" {
+		fs.Env = fs.FilePath
+		fs.FilePath = ""
 	}
 	return &fs, nil
 }
