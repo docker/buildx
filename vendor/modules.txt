@@ -231,12 +231,14 @@ github.com/hashicorp/hcl/v2/hclsimple
 github.com/hashicorp/hcl/v2/hclsyntax
 github.com/hashicorp/hcl/v2/hclwrite
 github.com/hashicorp/hcl/v2/json
-# github.com/imdario/mergo v0.3.9
+# github.com/imdario/mergo v0.3.11
 github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.0.0
 github.com/inconshreveable/mousetrap
 # github.com/jaguilar/vt100 v0.0.0-20150826170717-2703a27b14ea => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
 github.com/jaguilar/vt100
+# github.com/joho/godotenv v1.3.0
+github.com/joho/godotenv
 # github.com/json-iterator/go v1.1.10
 github.com/json-iterator/go
 # github.com/matttproud/golang_protobuf_extensions v1.0.1
