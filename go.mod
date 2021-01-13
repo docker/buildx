@@ -43,7 +43,7 @@ require (
 	github.com/prometheus/client_golang v1.7.1 // indirect
 	github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 	github.com/sirupsen/logrus v1.7.0
-	github.com/spf13/cobra v1.0.0
+	github.com/spf13/cobra v1.1.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.5.1
 	github.com/theupdateframework/notary v0.6.1 // indirect
