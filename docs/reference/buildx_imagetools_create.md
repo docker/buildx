@@ -51,10 +51,10 @@ or a JSON of OCI descriptor object.
 
 Use the `-t` or `--tag` flag to set the name of the image to be created.
 
-Examples:
+**Examples**
 
 ```console
-docker buildx imagetools create --dry-run alpine@sha256:5c40b3c27b9f13c873fefb2139765c56ce97fd50230f1f2d5c91e55dec171907 sha256:c4ba6347b0e4258ce6a6de2401619316f982b7bcc529f73d2a410d0097730204
+$ docker buildx imagetools create --dry-run alpine@sha256:5c40b3c27b9f13c873fefb2139765c56ce97fd50230f1f2d5c91e55dec171907 sha256:c4ba6347b0e4258ce6a6de2401619316f982b7bcc529f73d2a410d0097730204
 
-docker buildx imagetools create -t tonistiigi/myapp -f image1 -f image2 
+$ docker buildx imagetools create -t tonistiigi/myapp -f image1 -f image2
 ```

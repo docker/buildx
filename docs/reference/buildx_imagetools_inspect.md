@@ -34,6 +34,7 @@ Manifests:
  ...
 ```
 
-### `--raw`
+### Show original, unformatted JSON manifest (--raw)
 
-Raw prints the original JSON bytes instead of the formatted output.
+Use the `--raw` option to print the original JSON bytes instead of the formatted
+output.

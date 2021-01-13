@@ -135,14 +135,14 @@ Same as `build --pull`.
 Override target configurations from command line. The pattern matching syntax is
 defined in https://golang.org/pkg/path/#Match.
 
-Example:
+**Examples**
 
 ```console
-docker buildx bake --set target.args.mybuildarg=value
-docker buildx bake --set target.platform=linux/arm64
-docker buildx bake --set foo*.args.mybuildarg=value # overrides build arg for all targets starting with 'foo'
-docker buildx bake --set *.platform=linux/arm64     # overrides platform for all targets
-docker buildx bake --set foo*.no-cache              # bypass caching only for targets starting with 'foo'
+$ docker buildx bake --set target.args.mybuildarg=value
+$ docker buildx bake --set target.platform=linux/arm64
+$ docker buildx bake --set foo*.args.mybuildarg=value # overrides build arg for all targets starting with 'foo'
+$ docker buildx bake --set *.platform=linux/arm64     # overrides platform for all targets
+$ docker buildx bake --set foo*.no-cache              # bypass caching only for targets starting with 'foo'
 ```
 
 Complete list of overridable fields:
@@ -170,7 +170,7 @@ Note: Design of bake command is work in progress, the user experience may change
 based on feedback.
 
 
-Example HCL definition:
+**Example HCL definition**
 
 ```hcl
 group "default" {
@@ -194,8 +194,9 @@ target "db" {
 ```
 
 Complete list of valid target fields:
-args, cache-from, cache-to, context, dockerfile, inherits, labels, no-cache,
-output, platform, pull, secrets, ssh, tags, target
+
+`args`, `cache-from`, `cache-to`, `context`, `dockerfile`, `inherits`, `labels`,
+`no-cache`, `output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`
 
 ### HCL variables and functions
 

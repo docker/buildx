@@ -76,12 +76,12 @@ for the full description of automatic platform argument variants .
 The formatting for the platform specifier is defined in the [containerd source
 code](https://github.com/containerd/containerd/blob/v1.4.3/platforms/platforms.go#L63).
 
-Examples:
+**Examples**
 
 ```console
-docker buildx build --platform=linux/arm64 .
-docker buildx build --platform=linux/amd64,linux/arm64,linux/arm/v7 .
-docker buildx build --platform=darwin .
+$ docker buildx build --platform=linux/arm64 .
+$ docker buildx build --platform=linux/amd64,linux/arm64,linux/arm/v7 .
+$ docker buildx build --platform=darwin .
 ```
 
 ### Set the export action for the build result (-o, --output)
@@ -102,15 +102,15 @@ If just the path is specified as a value, `buildx` will use the local exporter
 with this path as the destination. If the value is "-", `buildx` will use `tar`
 exporter and write to `stdout`.
 
-Examples:
+**Examples**
 
 ```console
-docker buildx build -o . .
-docker buildx build -o outdir .
-docker buildx build -o - - > out.tar
-docker buildx build -o type=docker .
-docker buildx build -o type=docker,dest=- . > myimage.tar
-docker buildx build -t tonistiigi/foo -o type=registry
+$ docker buildx build -o . .
+$ docker buildx build -o outdir .
+$ docker buildx build -o - - > out.tar
+$ docker buildx build -o type=docker .
+$ docker buildx build -o type=docker,dest=- . > myimage.tar
+$ docker buildx build -t tonistiigi/foo -o type=registry
 ```
 
 Supported exported types are:
@@ -201,13 +201,13 @@ If no type is specified, `registry` exporter is used with a specified reference.
 
 `docker` driver currently only supports importing build cache from the registry.
 
-Examples:
+**Examples**
 
 ```console
-docker buildx build --cache-from=user/app:cache .
-docker buildx build --cache-from=user/app .
-docker buildx build --cache-from=type=registry,ref=user/app .
-docker buildx build --cache-from=type=local,src=path/to/cache .
+$ docker buildx build --cache-from=user/app:cache .
+$ docker buildx build --cache-from=user/app .
+$ docker buildx build --cache-from=type=registry,ref=user/app .
+$ docker buildx build --cache-from=type=local,src=path/to/cache .
 ```
 
 ### Export build cache to an external cache destination (--cache-to)
@@ -231,18 +231,18 @@ Attribute key:
 exports layers already in the final build stage, “max” exports layers for
 all stages. Metadata is always exported for the whole build.
 
-Examples:
+**Examples**
 
 ```console
-docker buildx build --cache-to=user/app:cache .
-docker buildx build --cache-to=type=inline .
-docker buildx build --cache-to=type=registry,ref=user/app .
-docker buildx build --cache-to=type=local,dest=path/to/cache .
+$ docker buildx build --cache-to=user/app:cache .
+$ docker buildx build --cache-to=type=inline .
+$ docker buildx build --cache-to=type=registry,ref=user/app .
+$ docker buildx build --cache-to=type=local,dest=path/to/cache .
 ```
 
 ### Allow extra privileged entitlement (--allow)
 
-```console
+```
 --allow=ENTITLEMENT
 ```
 
@@ -255,7 +255,7 @@ Allow extra privileged entitlement. List of entitlements:
 For entitlements to be enabled, the `buildkitd` daemon also needs to allow them
 with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#--buildkitd-flags-flags))
 
-Examples:
+**Examples**
 
 ```console
 $ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'

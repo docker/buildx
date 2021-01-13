@@ -13,7 +13,7 @@ Options:
 
 Lists all builder instances and the nodes for each instance
 
-Example:
+**Example**
 
 ```console
 $ docker buildx ls

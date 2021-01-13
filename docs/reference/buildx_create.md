@@ -39,7 +39,7 @@ The `--append` flag changes the action of the command to append a new node to an
 existing builder specified by `--name`. Buildx will choose an appropriate node
 for a build based on the platforms it supports.
 
-Example:
+**Examples**
 
 ```console
 $ docker buildx create mycontext1
@@ -59,9 +59,9 @@ Adds flags when starting the buildkitd daemon. They take precedence over the
 configuration file specified by [`--config`](#--config-file). See `buildkitd --help`
 for the available flags.
 
-Example:
+**Example**
 
-```console
+```
 --buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
 ```
 
@@ -127,10 +127,10 @@ The `--leave` flag changes the action of the command to remove a node from a
 builder. The builder needs to be specified with `--name` and node that is removed
 is set with `--node`.
 
-Example:
+**Examples**
 
 ```console
-docker buildx create --name mybuilder --node mybuilder0 --leave
+$ docker buildx create --name mybuilder --node mybuilder0 --leave
 ```
 
 ### Specify the name of the builder (--name)
@@ -164,11 +164,11 @@ will also automatically detect the platforms it supports, but manual values take
 priority over the detected ones and can be used when multiple nodes support
 building for the same platform.
 
-Example:
+**Examples**
 
 ```console
-docker buildx create --platform linux/amd64
-docker buildx create --platform linux/arm64,linux/arm/v8
+$ docker buildx create --platform linux/amd64
+$ docker buildx create --platform linux/arm64,linux/arm/v8
 ```
 
 ### Automatically switch to the newly created builder
