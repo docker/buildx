@@ -1,4 +1,13 @@
-# `buildx rm [NAME]`
+# buildx rm
+
+```
+Usage:  docker buildx rm [NAME]
+
+Remove a builder instance
+
+Options:
+      --builder string   Override the configured builder instance
+```
 
 ## Description
 

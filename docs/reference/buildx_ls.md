@@ -1,4 +1,13 @@
-# `buildx ls`
+# buildx ls
+
+```
+Usage:  docker buildx ls
+
+List builder instances
+
+Options:
+      --builder string   Override the configured builder instance
+```
 
 ## Description
 

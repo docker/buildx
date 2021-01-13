@@ -1,32 +1,36 @@
-# `buildx build [OPTIONS] PATH | URL | -`
+# buildx build
 
-The `buildx build` command starts a build using BuildKit. This command is similar
-to the UI of `docker build` command and takes the same flags and arguments.
+```
+Usage:  docker buildx build [OPTIONS] PATH | URL | -
+
+Start a build
+
+Aliases:
+  build, b
 
 Options:
-
-| Flag | Description |
-| --- | --- |
-| --add-host []         | Add a custom host-to-IP mapping (host:ip)
-| --allow []        | Allow extra privileged entitlement, e.g. network.host, security.insecure
-| --build-arg []    | Set build-time variables
-| --cache-from []   | External cache sources (eg. user/app:cache, type=local,src=path/to/dir)
-| --cache-to []     | Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)
-| --file string              | Name of the Dockerfile (Default is 'PATH/Dockerfile')
-| --iidfile string           | Write the image ID to the file
-| --label []        | Set metadata for an image
-| --load                     | Shorthand for --output=type=docker
-| --network string           | Set the networking mode for the RUN instructions during build (default "default")
-| --no-cache                 | Do not use cache when building the image
-| --output []       | Output destination (format: type=local,dest=path)
-| --platform []     | Set target platform for build
-| --progress string          | Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
-| --pull                     | Always attempt to pull a newer version of the image
-| --push                     | Shorthand for --output=type=registry
-| --secret []       | Secret file to expose to the build: id=mysecret,src=/local/secret
-| --ssh []          | SSH agent socket or keys to expose to the build (format: default\|&#60;id&#62;[=&#60;socket&#62;\|&#60;key&#62;[,&#60;key&#62;]])
-| --tag []          | Name and optionally a tag in the 'name:tag' format
-| --target string            | Set the target build stage to build.
+      --add-host strings         Add a custom host-to-IP mapping (host:ip)
+      --allow strings            Allow extra privileged entitlement, e.g. network.host, security.insecure
+      --build-arg stringArray    Set build-time variables
+      --builder string           Override the configured builder instance
+      --cache-from stringArray   External cache sources (eg. user/app:cache, type=local,src=path/to/dir)
+      --cache-to stringArray     Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)
+  -f, --file string              Name of the Dockerfile (Default is 'PATH/Dockerfile')
+      --iidfile string           Write the image ID to the file
+      --label stringArray        Set metadata for an image
+      --load                     Shorthand for --output=type=docker
+      --network string           Set the networking mode for the RUN instructions during build (default "default")
+      --no-cache                 Do not use cache when building the image
+  -o, --output stringArray       Output destination (format: type=local,dest=path)
+      --platform stringArray     Set target platform for build
+      --progress string          Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
+      --pull                     Always attempt to pull a newer version of the image
+      --push                     Shorthand for --output=type=registry
+      --secret stringArray       Secret file to expose to the build: id=mysecret,src=/local/secret
+      --ssh stringArray          SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]])
+  -t, --tag stringArray          Name and optionally a tag in the 'name:tag' format
+      --target string            Set the target build stage to build.
+```
 
 ## Description
 

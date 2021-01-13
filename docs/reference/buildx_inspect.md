@@ -1,4 +1,14 @@
-# `buildx inspect [NAME]`
+# buildx inspect
+
+```
+Usage:  docker buildx inspect [NAME]
+
+Inspect current builder instance
+
+Options:
+      --bootstrap        Ensure builder has booted before inspecting
+      --builder string   Override the configured builder instance
+```
 
 ## Description
 

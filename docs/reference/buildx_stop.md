@@ -1,4 +1,13 @@
-# `buildx stop [NAME]`
+# buildx stop
+
+```
+Usage:  docker buildx stop [NAME]
+
+Stop builder instance
+
+Options:
+      --builder string   Override the configured builder instance
+```
 
 ## Description
 

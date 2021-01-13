@@ -1,22 +1,24 @@
-# `buildx bake [OPTIONS] [TARGET...]`
+# buildx bake
 
-Bake is a high-level build command.
+```
+Usage:  docker buildx bake [OPTIONS] [TARGET...]
 
-Each specified target will run in parallel as part of the build.
+Build from a file
+
+Aliases:
+  bake, f
 
 Options:
-
-| Flag | Description |
-| --- | --- |
-|  -f, --file stringArray  | Build definition file
-|      --load              | Shorthand for --set=*.output=type=docker
-|      --no-cache          | Do not use cache when building the image
-|      --print             | Print the options without building
-|      --progress string   | Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
-|      --pull              | Always attempt to pull a newer version of the image
-|      --push              | Shorthand for --set=*.output=type=registry
-|      --set stringArray   | Override target value (eg: targetpattern.key=value)
-
+      --builder string     Override the configured builder instance
+  -f, --file stringArray   Build definition file
+      --load               Shorthand for --set=*.output=type=docker
+      --no-cache           Do not use cache when building the image
+      --print              Print the options without building
+      --progress string    Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
+      --pull               Always attempt to pull a newer version of the image
+      --push               Shorthand for --set=*.output=type=registry
+      --set stringArray    Override target value (eg: targetpattern.key=value)
+```
 
 ## Description
 

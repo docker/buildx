@@ -1,19 +1,23 @@
-# `buildx create [OPTIONS] [CONTEXT|ENDPOINT]`
+# buildx create
+
+```
+Usage:  docker buildx create [OPTIONS] [CONTEXT|ENDPOINT]
+
+Create a new builder instance
 
 Options:
-
-| Flag | Description |
-| --- | --- |
-| --append                 | Append a node to builder instead of changing it
-| --buildkitd-flags string | Flags for buildkitd daemon
-| --config string          | BuildKit config file
-| --driver string          | Driver to use (eg. docker-container)
-| --driver-opt stringArray | Options for the driver
-| --leave                  | Remove a node from builder instead of changing it
-| --name string            | Builder instance name
-| --node string            | Create/modify node with given name
-| --platform stringArray   | Fixed platforms for current node
-| --use                    | Set the current builder instance
+      --append                   Append a node to builder instead of changing it
+      --builder string           Override the configured builder instance
+      --buildkitd-flags string   Flags for buildkitd daemon
+      --config string            BuildKit config file
+      --driver string            Driver to use (available: [docker docker-container kubernetes])
+      --driver-opt stringArray   Options for the driver
+      --leave                    Remove a node from builder instead of changing it
+      --name string              Builder instance name
+      --node string              Create/modify node with given name
+      --platform stringArray     Fixed platforms for current node
+      --use                      Set the current builder instance
+```
 
 ## Description
 

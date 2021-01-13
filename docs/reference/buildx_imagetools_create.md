@@ -1,13 +1,17 @@
-# `buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]`
+# buildx imagetools create
+
+```
+Usage:  docker buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]
+
+Create a new image based on source images
 
 Options:
-
-| Flag | Description |
-| --- | --- |
-|      --append            | Append to existing manifest
-|      --dry-run           | Show final image instead of pushing
-|  -f, --file stringArray  | Read source descriptor from file
-|  -t, --tag stringArray   | Set reference for new image
+      --append             Append to existing manifest
+      --builder string     Override the configured builder instance
+      --dry-run            Show final image instead of pushing
+  -f, --file stringArray   Read source descriptor from file
+  -t, --tag stringArray    Set reference for new image
+```
 
 ## Description
 

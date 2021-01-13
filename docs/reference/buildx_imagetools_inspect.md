@@ -1,4 +1,14 @@
-# `buildx imagetools inspect NAME`
+# buildx imagetools inspect
+
+```
+Usage:  docker buildx imagetools inspect [OPTIONS] NAME
+
+Show details of image in the registry
+
+Options:
+      --builder string   Override the configured builder instance
+      --raw              Show original JSON manifest
+```
 
 ## Description
 
