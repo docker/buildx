@@ -25,12 +25,12 @@ Options:
 Bake is a high-level build command. Each specified target will run in parallel
 as part of the build.
 
+## Examples
 
-### `-f, --file FILE`
+### Specify a build definition file (-f, --file)
 
-Specifies the bake definition file. The file can be a Docker Compose, JSON or HCL
-file. If multiple files are specified they are all read and configurations are
-combined. By default, if no files are specified, the following are parsed:
+By default, `buildx bake` looks for build definition files in the current directory,
+the following are parsed:
 
 - `docker-compose.yml`
 - `docker-compose.yaml`
@@ -39,11 +39,48 @@ combined. By default, if no files are specified, the following are parsed:
 - `docker-bake.hcl`
 - `docker-bake.override.hcl`
 
-### `--no-cache`
+Use the `-f` / `--file` option to specify the build definition file to use. The
+file can be a Docker Compose, JSON or HCL file. If multiple files are specified
+they are all read and configurations are combined.
+
+The following example uses a Docker Compose file named `docker-compose.dev.yaml`
+as build definition file, and builds all targets in the file:
+
+```console
+$ docker buildx bake -f docker-compose.dev.yaml
+
+[+] Building 66.3s (30/30) FINISHED
+ => [frontend internal] load build definition from Dockerfile  0.1s
+ => => transferring dockerfile: 36B                            0.0s
+ => [backend internal] load build definition from Dockerfile   0.2s
+ => => transferring dockerfile: 3.73kB                         0.0s
+ => [database internal] load build definition from Dockerfile  0.1s
+ => => transferring dockerfile: 5.77kB                         0.0s
+ ...
+```
+
+Pass the names of the targets to build, to build only specific target(s). The
+following example builds the `backend` and `database` targets that are defined
+in the `docker-compose.dev.yaml` file, skipping the build for the `frontend`
+target:
+
+```console
+$ docker buildx bake -f docker-compose.dev.yaml backend database
+
+[+] Building 2.4s (13/13) FINISHED
+ => [backend internal] load build definition from Dockerfile  0.1s
+ => => transferring dockerfile: 81B                           0.0s
+ => [database internal] load build definition from Dockerfile 0.2s
+ => => transferring dockerfile: 36B                           0.0s
+ => [backend internal] load .dockerignore                     0.3s
+ ...
+```
+
+### Do not use cache when building the image (--no-cache)
 
 Same as `build --no-cache`. Do not use cache when building the image.
 
-### `--print`
+### Print the options without building (--print)
 
 Prints the resulting options of the targets desired to be built, in a JSON format,
 without starting a build.
@@ -63,16 +100,37 @@ $ docker buildx bake -f docker-bake.hcl --print db
 }
 ```
 
-### `--progress`
+### Set type of progress output (--progress)
 
 Same as `build --progress`. Set type of progress output (auto, plain, tty). Use
 plain to show container output (default "auto").
 
-### `--pull`
+The following example uses `plain` output during the build:
+
+```console
+$ docker buildx bake --progress=plain
+
+#2 [backend internal] load build definition from Dockerfile.test
+#2 sha256:de70cb0bb6ed8044f7b9b1b53b67f624e2ccfb93d96bb48b70c1fba562489618
+#2 ...
+
+#1 [database internal] load build definition from Dockerfile.test
+#1 sha256:453cb50abd941762900a1212657a35fc4aad107f5d180b0ee9d93d6b74481bce
+#1 transferring dockerfile: 36B done
+#1 DONE 0.1s
+...
+```
+
+
+### Always attempt to pull a newer version of the image (--pull)
 
 Same as `build --pull`.
 
-### `--set targetpattern.key[.subkey]=value`
+### Override target configurations from command line (--set)
+
+```
+--set targetpattern.key[.subkey]=value
+```
 
 Override target configurations from command line. The pattern matching syntax is
 defined in https://golang.org/pkg/path/#Match.

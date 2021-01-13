@@ -41,7 +41,13 @@ For documentation on most of these flags refer to the [`docker build`
 documentation](https://docs.docker.com/engine/reference/commandline/build/). In
 here we’ll document a subset of the new flags.
 
-### `--platform=value[,value]`
+## Examples
+
+### Set the target platforms for the build (--platform)
+
+```
+--platform=value[,value]
+```
 
 Set the target platform for the build. All `FROM` commands inside the Dockerfile
 without their own `--platform` flag will pull base images for this platform and
@@ -78,7 +84,11 @@ docker buildx build --platform=linux/amd64,linux/arm64,linux/arm/v7 .
 docker buildx build --platform=darwin .
 ```
 
-### `-o, --output=[PATH,-,type=TYPE[,KEY=VALUE]`
+### Set the export action for the build result (-o, --output)
+
+```
+-o, --output=[PATH,-,type=TYPE[,KEY=VALUE]
+```
 
 Sets the export action for the build result. In `docker build` all builds finish
 by creating a container image and exporting it to `docker images`. `buildx` makes
@@ -166,17 +176,21 @@ Attribute keys:
 The `registry` exporter is a shortcut for `type=image,push=true`.
 
 
-### `--push`
+### Push the build result to a registry (--push)
 
 Shorthand for [`--output=type=registry`](#registry). Will automatically push the
 build result to registry.
 
-### `--load`
+### Load the single-platform build result to `docker images` (--load)
 
 Shorthand for [`--output=type=docker`](#docker). Will automatically load the
 single-platform build result to `docker images`.
 
-### `--cache-from=[NAME|type=TYPE[,KEY=VALUE]]`
+### Use an external cache source for a build (--cache-from)
+
+```
+--cache-from=[NAME|type=TYPE[,KEY=VALUE]]
+```
 
 Use an external cache source for a build. Supported types are `registry` and `local`.
 The `registry` source can import cache from a cache manifest or (special) image
@@ -196,7 +210,11 @@ docker buildx build --cache-from=type=registry,ref=user/app .
 docker buildx build --cache-from=type=local,src=path/to/cache .
 ```
 
-### `--cache-to=[NAME|type=TYPE[,KEY=VALUE]]`
+### Export build cache to an external cache destination (--cache-to)
+
+```
+--cache-to=[NAME|type=TYPE[,KEY=VALUE]]
+```
 
 Export build cache to an external cache destination. Supported types are `registry`,
 `local` and `inline`. Registry exports build cache to a cache manifest in the
@@ -222,7 +240,11 @@ docker buildx build --cache-to=type=registry,ref=user/app .
 docker buildx build --cache-to=type=local,dest=path/to/cache .
 ```
 
-### `--allow=ENTITLEMENT`
+### Allow extra privileged entitlement (--allow)
+
+```console
+--allow=ENTITLEMENT
+```
 
 Allow extra privileged entitlement. List of entitlements:
 

@@ -23,22 +23,33 @@ manifests can be manifest lists or single platform distribution manifests and
 must already exist in the registry where the new manifest is created. If only
 one source is specified create performs a carbon copy.
 
-### `--append`
+## Examples
 
-Append appends the new sources to an existing manifest list in the destination.
+### Append new sources to an existing manifest list (--append)
 
-### `--dry-run`
+Use the `--append` flag to append the new sources to an existing manifest list
+in the destination.
 
-Do not push the image, just show it.
+### Show final image instead of pushing (--dry-run)
 
-### `-f, --file FILE`
+Use the `--dry-run` flag to not push the image, just show it.
+
+### Read source descriptor from a file (-f, --file)
+
+```
+-f FILE or --file FILE
+```
 
 Reads source from files. A source can be a manifest digest, manifest reference,
 or a JSON of OCI descriptor object.
 
-### `-t, --tag IMAGE`
+### Set reference for new image  (-t, --tag)
 
-Name of the image to be created.
+```
+-t IMAGE or --tag IMAGE
+```
+
+Use the `-t` or `--tag` flag to set the name of the image to be created.
 
 Examples:
 

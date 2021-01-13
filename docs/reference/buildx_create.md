@@ -31,11 +31,13 @@ context/endpoint value.
 Builder instances are isolated environments where builds can be invoked. All
 docker contexts also get the default builder instance.
 
-### `--append`
+## Examples
 
-Changes the action of the command to appends a new node to an existing builder
-specified by `--name`. Buildx will choose an appropriate node for a build based
-on the platforms it supports.
+### Append a new node to an existing builder (--append)
+
+The `--append` flag changes the action of the command to append a new node to an
+existing builder specified by `--name`. Buildx will choose an appropriate node
+for a build based on the platforms it supports.
 
 Example:
 
@@ -47,7 +49,11 @@ $ docker buildx create --name eager_beaver --append mycontext2
 eager_beaver
 ```
 
-### `--buildkitd-flags FLAGS`
+### Specify options for the buildkitd daemon (--buildkitd-flags)
+
+```
+--buildkitd-flags FLAGS
+```
 
 Adds flags when starting the buildkitd daemon. They take precedence over the
 configuration file specified by [`--config`](#--config-file). See `buildkitd --help`
@@ -59,13 +65,21 @@ Example:
 --buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
 ```
 
-### `--config FILE`
+### Specify a configuration file for the buildkitd daemon (--config)
+
+```
+--config FILE
+```
 
 Specifies the configuration file for the buildkitd daemon to use. The configuration
 can be overridden by [`--buildkitd-flags`](#--buildkitd-flags-flags).
 See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
-### `--driver DRIVER`
+### Set the builder driver to use (--driver)
+
+```
+--driver DRIVER
+```
 
 Sets the builder driver to be used. There are two available drivers, each have
 their own specificities.
@@ -82,7 +96,11 @@ their own specificities.
   with defined buildkit container image to build your images.
 
 
-### `--driver-opt OPTIONS`
+### Set additional driver-specific options (--driver-opt)
+
+```
+--driver-opt OPTIONS
+```
 
 Passes additional driver-specific options. Details for each driver:
 
@@ -103,10 +121,11 @@ Passes additional driver-specific options. Details for each driver:
     - `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
     - `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
 
-### `--leave`
+### Remove a node from a builder (--leave)
 
-Changes the action of the command to removes a node from a builder. The builder
-needs to be specified with `--name` and node that is removed is set with `--node`.
+The `--leave` flag changes the action of the command to remove a node from a
+builder. The builder needs to be specified with `--name` and node that is removed
+is set with `--node`.
 
 Example:
 
@@ -114,23 +133,36 @@ Example:
 docker buildx create --name mybuilder --node mybuilder0 --leave
 ```
 
-### `--name NAME`
+### Specify the name of the builder (--name)
 
-Specifies the name of the builder to be created or modified. If none is specified,
-one will be automatically generated.
+```
+--name NAME
+```
 
-### `--node NODE`
+The `--name` flag specifies the name of the builder to be created or modified.
+If none is specified, one will be automatically generated.
 
-Specifies the name of the node to be created or modified. If none is specified,
-it is the name of the builder it belongs to, with an index number suffix.
+### Specify the name of the node (--node)
 
-### `--platform PLATFORMS`
+```
+--node NODE
+```
 
-Sets the platforms supported by the node. It expects a comma-separated list of
-platforms of the form OS/architecture/variant. The node will also automatically
-detect the platforms it supports, but manual values take priority over the
-detected ones and can be used when multiple nodes support building for the same
-platform.
+The `--node` flag specifies the name of the node to be created or modified. If
+none is specified, it is the name of the builder it belongs to, with an index
+number suffix.
+
+### Set the platforms supported by the node
+
+```
+--platform PLATFORMS
+```
+
+The `--platform` flag sets the platforms supported by the node. It expects a
+comma-separated list of platforms of the form OS/architecture/variant. The node
+will also automatically detect the platforms it supports, but manual values take
+priority over the detected ones and can be used when multiple nodes support
+building for the same platform.
 
 Example:
 
@@ -139,7 +171,7 @@ docker buildx create --platform linux/amd64
 docker buildx create --platform linux/arm64,linux/arm/v8
 ```
 
-### `--use`
+### Automatically switch to the newly created builder
 
-Automatically switches the current builder to the newly created one. Equivalent
-to running `docker buildx use $(docker buildx create ...)`.
+The `--use` flag automatically switches the current builder to the newly created
+one. Equivalent to running `docker buildx use $(docker buildx create ...)`.
