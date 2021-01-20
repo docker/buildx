@@ -95,6 +95,7 @@ var (
 		"rsadecrypt":             crypto.RsaDecryptFunc,
 		"sethaselement":          stdlib.SetHasElementFunc,
 		"setintersection":        stdlib.SetIntersectionFunc,
+		"setproduct":             stdlib.SetProductFunc,
 		"setsubtract":            stdlib.SetSubtractFunc,
 		"setsymmetricdifference": stdlib.SetSymmetricDifferenceFunc,
 		"setunion":               stdlib.SetUnionFunc,
