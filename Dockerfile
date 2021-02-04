@@ -8,7 +8,17 @@ FROM docker:$DOCKERD_VERSION AS dockerd-release
 # xgo is a helper for golang cross-compilation
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:golang@sha256:6f7d999551dd471b58f70716754290495690efa8421e0a1fcf18eb11d0c0a537 AS xgo
 
-FROM --platform=$BUILDPLATFORM golang:1.13-alpine AS gobase
+FROM --platform=$BUILDPLATFORM golang:1.13-alpine AS gostable
+FROM --platform=$BUILDPLATFORM golang:1.16-rc-alpine AS gorc
+
+FROM gostable AS go-linux
+FROM gostable AS go-windows
+FROM gostable AS go-darwin-amd64
+FROM gorc AS go-darwin-arm64
+FROM go-darwin-${TARGETARCH} AS go-darwin
+
+
+FROM go-${TARGETOS} AS gobase
 COPY --from=xgo / /
 RUN apk add --no-cache file git
 ENV GOFLAGS=-mod=vendor
