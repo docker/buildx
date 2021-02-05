@@ -12,7 +12,7 @@ cross:
 
 install: binaries
 	mkdir -p ~/.docker/cli-plugins
-	cp bin/buildx ~/.docker/cli-plugins/docker-buildx
+	install bin/buildx ~/.docker/cli-plugins/docker-buildx
 
 lint:
 	./hack/lint
