@@ -167,15 +167,6 @@ func parseHCL(dt []byte, fn string) (_ *Config, err error) {
 		}
 	}
 
-	userFunctions, _, diags := userfunc.DecodeUserFunctions(file.Body, "function", func() *hcl.EvalContext {
-		return &hcl.EvalContext{
-			Functions: stdlibFunctions,
-		}
-	})
-	if diags.HasErrors() {
-		return nil, diags
-	}
-
 	var sc staticConfig
 
 	// Decode only variable blocks without interpolation.
@@ -187,6 +178,16 @@ func parseHCL(dt []byte, fn string) (_ *Config, err error) {
 	variables := make(map[string]cty.Value)
 	for _, variable := range sc.Variables {
 		variables[variable.Name] = cty.StringVal(variable.Default)
+	}
+
+	userFunctions, _, diags := userfunc.DecodeUserFunctions(file.Body, "function", func() *hcl.EvalContext {
+		return &hcl.EvalContext{
+			Functions: stdlibFunctions,
+			Variables: variables,
+		}
+	})
+	if diags.HasErrors() {
+		return nil, diags
 	}
 
 	// Override default with values from environment.
