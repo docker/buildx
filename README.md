@@ -121,7 +121,7 @@ When invoking a build, the `--platform` flag can be used to specify the target p
 
 Multi-platform images can be built by mainly three different strategies that are all supported by buildx and Dockerfiles. You can use the QEMU emulation support in the kernel, build on multiple native nodes using the same builder instance or use a stage in Dockerfile to cross-compile to different architectures.
 
-QEMU is the easiest way to get started if your node already supports it (e.g. if you are using Docker Desktop). It requires no changes to your Dockerfile and BuildKit will automatically detect the secondary architectures that are available. When BuildKit needs to run a binary for a different architecture it will automatically load it through a binary registered in the binfmt_misc handler. For QEMU binaries registered with binfmt_misc on the host OS to work transparently inside containers they must be registed with the fix_binary flag. This requires a kernel >= 4.8 and binfmt-support >= 2.1.7. You can check for proper registration by checking if `F` is among the flags in `/proc/sys/fs/binfmt_misc/qemu-*`. While Docker Desktop comes preconfigured with binfmt_misc support for additional platforms, for other installations it likely needs to be installed using [`tonistiigi/binfmt`](https://github.com/tonistiigi/binfmt) image.
+QEMU is the easiest way to get started if your node already supports it (e.g. if you are using Docker Desktop). It requires no changes to your Dockerfile and BuildKit will automatically detect the secondary architectures that are available. When BuildKit needs to run a binary for a different architecture it will automatically load it through a binary registered in the binfmt_misc handler. For QEMU binaries registered with binfmt_misc on the host OS to work transparently inside containers they must be registered with the fix_binary flag. This requires a kernel >= 4.8 and binfmt-support >= 2.1.7. You can check for proper registration by checking if `F` is among the flags in `/proc/sys/fs/binfmt_misc/qemu-*`. While Docker Desktop comes preconfigured with binfmt_misc support for additional platforms, for other installations it likely needs to be installed using [`tonistiigi/binfmt`](https://github.com/tonistiigi/binfmt) image.
 
 ```
 $ docker run --privileged --rm tonistiigi/binfmt --install all
@@ -597,7 +597,7 @@ Note: Design of bake command is work in progress, the user experience may change
 
 
 
-Example HCL defintion:
+Example HCL definition:
 
 ```
 group "default" {
@@ -674,7 +674,7 @@ $ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
 ```
 
 
-A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hcl.go#L19-L65) provided by [go-cty](https://github.com/zclconf/go-cty/tree/master/cty/function/stdlib) are avaialble for use in HCL files. In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/hcl2/ext/userfunc) are also supported.
+A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hcl.go#L19-L65) provided by [go-cty](https://github.com/zclconf/go-cty/tree/master/cty/function/stdlib) are available for use in HCL files. In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/hcl2/ext/userfunc) are also supported.
 
 
 
