@@ -465,9 +465,11 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 
 	// setup networkmode
 	switch opt.NetworkMode {
-	case "host", "none":
+	case "host":
 		so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
 		so.AllowedEntitlements = append(so.AllowedEntitlements, entitlements.EntitlementNetworkHost)
+	case "none":
+		so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
 	case "", "default":
 	default:
 		return nil, nil, errors.Errorf("network mode %q not supported by buildkit", opt.NetworkMode)
