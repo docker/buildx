@@ -118,7 +118,7 @@ jobs:
         run: |
           make cross
         env:
-          TARGETPLATFORM: ${{ env.PLATFORMS }},darwin/amd64,windows/amd64
+          TARGETPLATFORM: ${{ env.PLATFORMS }},darwin/amd64,darwin/arm64,windows/amd64
           CACHEDIR_FROM: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
 
   binaries:
@@ -160,7 +160,7 @@ jobs:
         run: |
           ./hack/release "${{ steps.prep.outputs.tag }}" release-out
         env:
-          PLATFORMS: ${{ env.PLATFORMS }},darwin/amd64,windows/amd64
+          PLATFORMS: ${{ env.PLATFORMS }},darwin/amd64,darwin/arm64,windows/amd64
           CACHEDIR_FROM: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
       -
         name: Move artifacts
