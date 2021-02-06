@@ -2,6 +2,7 @@ package build
 
 import (
 	"encoding/csv"
+	"os"
 	"strings"
 
 	"github.com/moby/buildkit/client"
@@ -45,6 +46,9 @@ func ParseCacheEntry(in []string) ([]client.CacheOptionsEntry, error) {
 		if im.Type == "" {
 			return nil, errors.Errorf("type required form> %q", in)
 		}
+		if !addGithubToken(&im) {
+			continue
+		}
 		imports = append(imports, im)
 	}
 	return imports, nil
@@ -57,4 +61,21 @@ func isRefOnlyFormat(in []string) bool {
 		}
 	}
 	return true
+}
+
+func addGithubToken(ci *client.CacheOptionsEntry) bool {
+	if ci.Type != "gha" {
+		return true
+	}
+	if _, ok := ci.Attrs["token"]; !ok {
+		if v, ok := os.LookupEnv("ACTIONS_RUNTIME_TOKEN"); ok {
+			ci.Attrs["token"] = v
+		}
+	}
+	if _, ok := ci.Attrs["url"]; !ok {
+		if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
+			ci.Attrs["url"] = v
+		}
+	}
+	return ci.Attrs["token"] != "" && ci.Attrs["url"] != ""
 }
