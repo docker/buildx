@@ -788,6 +788,7 @@ func (e *ObjectConsExpr) walkChildNodes(w internalWalkFunc) {
 func (e *ObjectConsExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 	var vals map[string]cty.Value
 	var diags hcl.Diagnostics
+	var marks []cty.ValueMarks
 
 	// This will get set to true if we fail to produce any of our keys,
 	// either because they are actually unknown or if the evaluation produces
@@ -825,18 +826,8 @@ func (e *ObjectConsExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics
 			continue
 		}
 
-		if key.IsMarked() {
-			diags = append(diags, &hcl.Diagnostic{
-				Severity:    hcl.DiagError,
-				Summary:     "Marked value as key",
-				Detail:      "Can't use a marked value as a key.",
-				Subject:     item.ValueExpr.Range().Ptr(),
-				Expression:  item.KeyExpr,
-				EvalContext: ctx,
-			})
-			known = false
-			continue
-		}
+		key, keyMarks := key.Unmark()
+		marks = append(marks, keyMarks)
 
 		var err error
 		key, err = convert.Convert(key, cty.String)
@@ -867,7 +858,7 @@ func (e *ObjectConsExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics
 		return cty.DynamicVal, diags
 	}
 
-	return cty.ObjectVal(vals), diags
+	return cty.ObjectVal(vals).WithMarks(marks...), diags
 }
 
 func (e *ObjectConsExpr) Range() hcl.Range {
@@ -997,6 +988,7 @@ type ForExpr struct {
 
 func (e *ForExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 	var diags hcl.Diagnostics
+	var marks []cty.ValueMarks
 
 	collVal, collDiags := e.CollExpr.Value(ctx)
 	diags = append(diags, collDiags...)
@@ -1018,7 +1010,8 @@ func (e *ForExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 	}
 	// Unmark collection before checking for iterability, because marked
 	// values cannot be iterated
-	collVal, marks := collVal.Unmark()
+	collVal, collMarks := collVal.Unmark()
+	marks = append(marks, collMarks)
 	if !collVal.CanIterateElements() {
 		diags = append(diags, &hcl.Diagnostic{
 			Severity: hcl.DiagError,
@@ -1143,7 +1136,11 @@ func (e *ForExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 					continue
 				}
 
-				if include.False() {
+				// Extract and merge marks from the include expression into the
+				// main set of marks
+				includeUnmarked, includeMarks := include.Unmark()
+				marks = append(marks, includeMarks)
+				if includeUnmarked.False() {
 					// Skip this element
 					continue
 				}
@@ -1188,18 +1185,8 @@ func (e *ForExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 				continue
 			}
 
-			if key.IsMarked() {
-				diags = append(diags, &hcl.Diagnostic{
-					Severity:    hcl.DiagError,
-					Summary:     "Invalid object key",
-					Detail:      "Marked values cannot be used as object keys.",
-					Subject:     e.KeyExpr.Range().Ptr(),
-					Context:     &e.SrcRange,
-					Expression:  e.KeyExpr,
-					EvalContext: childCtx,
-				})
-				continue
-			}
+			key, keyMarks := key.Unmark()
+			marks = append(marks, keyMarks)
 
 			val, valDiags := e.ValExpr.Value(childCtx)
 			diags = append(diags, valDiags...)
@@ -1239,7 +1226,7 @@ func (e *ForExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 			}
 		}
 
-		return cty.ObjectVal(vals).WithMarks(marks), diags
+		return cty.ObjectVal(vals).WithMarks(marks...), diags
 
 	} else {
 		// Producing a tuple
@@ -1300,7 +1287,11 @@ func (e *ForExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 					continue
 				}
 
-				if include.False() {
+				// Extract and merge marks from the include expression into the
+				// main set of marks
+				includeUnmarked, includeMarks := include.Unmark()
+				marks = append(marks, includeMarks)
+				if includeUnmarked.False() {
 					// Skip this element
 					continue
 				}
@@ -1315,7 +1306,7 @@ func (e *ForExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 			return cty.DynamicVal, diags
 		}
 
-		return cty.TupleVal(vals).WithMarks(marks), diags
+		return cty.TupleVal(vals).WithMarks(marks...), diags
 	}
 }
 
@@ -1452,6 +1443,9 @@ func (e *SplatExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 		return cty.UnknownVal(ty), diags
 	}
 
+	// Unmark the collection, and save the marks to apply to the returned
+	// collection result
+	sourceVal, marks := sourceVal.Unmark()
 	vals := make([]cty.Value, 0, sourceVal.LengthInt())
 	it := sourceVal.ElementIterator()
 	if ctx == nil {
@@ -1486,9 +1480,9 @@ func (e *SplatExpr) Value(ctx *hcl.EvalContext) (cty.Value, hcl.Diagnostics) {
 			diags = append(diags, tyDiags...)
 			return cty.ListValEmpty(ty.ElementType()), diags
 		}
-		return cty.ListVal(vals), diags
+		return cty.ListVal(vals).WithMarks(marks), diags
 	default:
-		return cty.TupleVal(vals), diags
+		return cty.TupleVal(vals).WithMarks(marks), diags
 	}
 }
 
