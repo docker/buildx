@@ -1,7 +1,6 @@
 package bake
 
 import (
-	"os"
 	"strings"
 
 	"github.com/hashicorp/go-cty-funcs/cidr"
@@ -190,9 +189,11 @@ func parseHCL(dt []byte, fn string) (_ *Config, err error) {
 	}
 
 	// Override default with values from environment.
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
-		name, value := parts[0], parts[1]
+	envs, err := readEnv()
+	if err != nil {
+		return nil, err
+	}
+	for name, value := range envs {
 		if _, ok := variables[name]; ok {
 			variables[name] = cty.StringVal(value)
 		}

@@ -1,0 +1,22 @@
+# syntax = docker/dockerfile:experimental
+
+FROM --platform=${BUILDPLATFORM} golang:1.15.5 AS builder
+
+WORKDIR /go/src
+
+COPY ./ ./
+
+ARG GOPROXY
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod go mod download
+
+ARG TARGETARCH
+RUN --mount=type=cache,id=gomod,target=/go/pkg/mod CGO_ENABLED=0 GOARCH=${TARGETARCH} go build -o /go/bin/docker-buildx-${TARGETARCH} ./cmd/buildx;
+
+FROM docker
+
+RUN apk add --no-cache make
+
+ARG TARGETARCH
+COPY --from=builder /go/bin/docker-buildx-${TARGETARCH} /root/.docker/cli-plugins/docker-buildx
+
+ENV DOCKER_CLI_EXPERIMENTAL=enabled
