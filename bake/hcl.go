@@ -12,9 +12,9 @@ import (
 	"github.com/hashicorp/hcl/v2/ext/tryfunc"
 	"github.com/hashicorp/hcl/v2/ext/typeexpr"
 	"github.com/hashicorp/hcl/v2/ext/userfunc"
-	"github.com/hashicorp/hcl/v2/hclsimple"
+	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
-	"github.com/hashicorp/hcl/v2/json"
+	hcljson "github.com/hashicorp/hcl/v2/json"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/zclconf/go-cty/cty"
@@ -127,51 +127,66 @@ var (
 
 // Used in the first pass of decoding instead of the Config struct to disallow
 // interpolation while parsing variable blocks.
-type staticConfig struct {
+type StaticConfig struct {
 	Variables []*Variable `hcl:"variable,block"`
 	Remain    hcl.Body    `hcl:",remain"`
 }
 
-func ParseHCL(dt []byte, fn string) (_ *Config, err error) {
-	if strings.HasSuffix(fn, ".json") || strings.HasSuffix(fn, ".hcl") {
-		return parseHCL(dt, fn)
+func mergeStaticConfig(scs []*StaticConfig) *StaticConfig {
+	if len(scs) == 0 {
+		return nil
 	}
-	cfg, err := parseHCL(dt, fn+".hcl")
-	if err != nil {
-		cfg2, err2 := parseHCL(dt, fn+".json")
-		if err2 == nil {
-			return cfg2, nil
-		}
+	sc := scs[0]
+	for _, s := range scs[1:] {
+		sc.Variables = append(sc.Variables, s.Variables...)
 	}
-	return cfg, err
+	return sc
 }
 
-func parseHCL(dt []byte, fn string) (_ *Config, err error) {
+func ParseHCLFile(dt []byte, fn string) (*hcl.File, *StaticConfig, error) {
+	if strings.HasSuffix(fn, ".json") || strings.HasSuffix(fn, ".hcl") {
+		return parseHCLFile(dt, fn)
+	}
+	f, sc, err := parseHCLFile(dt, fn+".hcl")
+	if err != nil {
+		f, sc, err2 := parseHCLFile(dt, fn+".json")
+		if err2 == nil {
+			return f, sc, nil
+		}
+	}
+	return f, sc, err
+}
+
+func parseHCLFile(dt []byte, fn string) (f *hcl.File, _ *StaticConfig, err error) {
 	defer func() {
 		err = formatHCLError(dt, err)
 	}()
 
 	// Decode user defined functions, first parsing as hcl and falling back to
 	// json, returning errors based on the file suffix.
-	file, hcldiags := hclsyntax.ParseConfig(dt, fn, hcl.Pos{Line: 1, Column: 1})
+	f, hcldiags := hclsyntax.ParseConfig(dt, fn, hcl.Pos{Line: 1, Column: 1})
 	if hcldiags.HasErrors() {
 		var jsondiags hcl.Diagnostics
-		file, jsondiags = json.Parse(dt, fn)
+		f, jsondiags = hcljson.Parse(dt, fn)
 		if jsondiags.HasErrors() {
 			fnl := strings.ToLower(fn)
 			if strings.HasSuffix(fnl, ".json") {
-				return nil, jsondiags
+				return nil, nil, jsondiags
 			}
-			return nil, hcldiags
+			return nil, nil, hcldiags
 		}
 	}
 
-	var sc staticConfig
-
+	var sc StaticConfig
 	// Decode only variable blocks without interpolation.
-	if err := hclsimple.Decode(fn, dt, nil, &sc); err != nil {
-		return nil, err
+	if err := gohcl.DecodeBody(f.Body, nil, &sc); err != nil {
+		return nil, nil, err
 	}
+
+	return f, &sc, nil
+}
+
+func ParseHCL(b hcl.Body, sc *StaticConfig) (_ *Config, err error) {
 
 	// Set all variables to their default value if defined.
 	variables := make(map[string]cty.Value)
@@ -179,7 +194,7 @@ func parseHCL(dt []byte, fn string) (_ *Config, err error) {
 		variables[variable.Name] = cty.StringVal(variable.Default)
 	}
 
-	userFunctions, _, diags := userfunc.DecodeUserFunctions(file.Body, "function", func() *hcl.EvalContext {
+	userFunctions, _, diags := userfunc.DecodeUserFunctions(b, "function", func() *hcl.EvalContext {
 		return &hcl.EvalContext{
 			Functions: stdlibFunctions,
 			Variables: variables,
@@ -214,7 +229,7 @@ func parseHCL(dt []byte, fn string) (_ *Config, err error) {
 	var c Config
 
 	// Decode with variables and functions.
-	if err := hclsimple.Decode(fn, dt, ctx, &c); err != nil {
+	if err := gohcl.DecodeBody(b, ctx, &c); err != nil {
 		return nil, err
 	}
 	return &c, nil
