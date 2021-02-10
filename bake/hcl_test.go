@@ -250,4 +250,36 @@ func TestParseHCL(t *testing.T) {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "docker-bake.hcl:7,17-37: Variables not allowed; Variables may not be used here.")
 	})
+
+	t.Run("WithVariablesInFunctions", func(t *testing.T) {
+		dt := []byte(`
+		variable "REPO" {
+			default = "user/repo"
+		}
+		function "tag" {
+			params = [tag]
+			result = ["${REPO}:${tag}"]
+		}
+
+		target "webapp" {
+			tags = tag("v1")
+		}
+		`)
+
+		c, err := ParseHCL(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, c.Targets[0].Name, "webapp")
+		require.Equal(t, []string{"user/repo:v1"}, c.Targets[0].Tags)
+
+		os.Setenv("REPO", "docker/buildx")
+
+		c, err = ParseHCL(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, c.Targets[0].Name, "webapp")
+		require.Equal(t, []string{"docker/buildx:v1"}, c.Targets[0].Tags)
+	})
 }
