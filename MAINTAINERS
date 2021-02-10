@@ -150,6 +150,8 @@ made through a pull request.
 	[Org.Maintainers]
 
 		people = [
+			"akihirosuda",
+			"crazy-max",
 			"tiborvass",
 			"tonistiigi",
 		]
@@ -175,6 +177,16 @@ made through a pull request.
 # A reference list of all people associated with the project.
 # All other sections should refer to people by their canonical key
 # in the people section.
+
+	[people.akihirosuda]
+	Name = "Akihiro Suda"
+	Email = "akihiro.suda.cz@hco.ntt.co.jp"
+	GitHub = "AkihiroSuda"
+
+	[people.crazy-max]
+	Name = "Kevin Alvarez"
+	Email = "contact@crazymax.dev"
+	GitHub = "crazy-max"
 
 	[people.thajeztah]
 	Name = "Sebastiaan van Stijn"
