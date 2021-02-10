@@ -223,32 +223,6 @@ func TestHCLWithVariables(t *testing.T) {
 	require.Equal(t, "456", c.Targets[0].Args["buildno"])
 }
 
-func TesstHCLWithIncorrectVariables(t *testing.T) {
-	dt := []byte(`
-		variable "DEFAULT_BUILD_NUMBER" {
-			default = "1"
-		}
-
-		variable "BUILD_NUMBER" {
-			default = "${DEFAULT_BUILD_NUMBER}"
-		}
-
-		group "default" {
-			targets = ["webapp"]
-		}
-
-		target "webapp" {
-			args = {
-				buildno = "${BUILD_NUMBER}"
-			}
-		}
-		`)
-
-	_, err := ParseFile(dt, "docker-bake.hcl")
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "docker-bake.hcl:7,17-37: Variables not allowed; Variables may not be used here.")
-}
-
 func TestHCLWithVariablesInFunctions(t *testing.T) {
 	dt := []byte(`
 		variable "REPO" {
@@ -322,4 +296,122 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 	require.Equal(t, c.Targets[0].Name, "app")
 	require.Equal(t, "pre-def", c.Targets[0].Args["v1"])
 	require.Equal(t, "def-post", c.Targets[0].Args["v2"])
+}
+
+func TestHCLVarsWithVars(t *testing.T) {
+	os.Unsetenv("FOO")
+	dt := []byte(`
+		variable "FOO" {
+			default = upper("${BASE}def")
+		}
+		variable "BAR" {
+			default = "-${FOO}-"
+		}
+		target "app" {
+			args = {
+				v1 = "pre-${BAR}"
+			}
+		}
+		`)
+	dt2 := []byte(`
+		variable "BASE" {
+			default = "abc"
+		}
+		target "app" {
+			args = {
+				v2 = "${FOO}-post"
+			}
+		}
+		`)
+
+	c, err := parseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+		{Data: dt2, Name: "c2.hcl"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "pre--ABCDEF-", c.Targets[0].Args["v1"])
+	require.Equal(t, "ABCDEF-post", c.Targets[0].Args["v2"])
+
+	os.Setenv("BASE", "new")
+
+	c, err = parseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+		{Data: dt2, Name: "c2.hcl"},
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "pre--NEWDEF-", c.Targets[0].Args["v1"])
+	require.Equal(t, "NEWDEF-post", c.Targets[0].Args["v2"])
+}
+
+func TestHCLTypedVariables(t *testing.T) {
+	os.Unsetenv("FOO")
+	dt := []byte(`
+		variable "FOO" {
+			default = 3
+		}
+		variable "IS_FOO" {
+			default = true
+		}
+		target "app" {
+			args = {
+				v1 = FOO > 5 ? "higher" : "lower" 
+				v2 = IS_FOO ? "yes" : "no"
+			}
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "lower", c.Targets[0].Args["v1"])
+	require.Equal(t, "yes", c.Targets[0].Args["v2"])
+
+	os.Setenv("FOO", "5.1")
+	os.Setenv("IS_FOO", "0")
+
+	c, err = ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "higher", c.Targets[0].Args["v1"])
+	require.Equal(t, "no", c.Targets[0].Args["v2"])
+
+	os.Setenv("FOO", "NaN")
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to parse FOO as number")
+
+	os.Setenv("FOO", "0")
+	os.Setenv("IS_FOO", "maybe")
+
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "failed to parse IS_FOO as bool")
+}
+
+func TestHCLVariableCycle(t *testing.T) {
+	dt := []byte(`
+		variable "FOO" {
+			default = BAR
+		}
+		variable "FOO2" {
+			default = FOO
+		}
+		variable "BAR" {
+			default = FOO
+		}
+		target "app" {}
+		`)
+
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "variable cycle not allowed")
 }

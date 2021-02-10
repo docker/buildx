@@ -402,8 +402,8 @@ func (c Config) target(name string, visited map[string]struct{}, overrides map[s
 }
 
 type Variable struct {
-	Name    string `json:"-" hcl:"name,label"`
-	Default string `json:"default,omitempty" hcl:"default,optional"`
+	Name    string         `json:"-" hcl:"name,label"`
+	Default *hcl.Attribute `json:"default,omitempty" hcl:"default,optional"`
 }
 
 type Group struct {

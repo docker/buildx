@@ -1,7 +1,10 @@
 package bake
 
 import (
+	"math"
+	"math/big"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/hashicorp/go-cty-funcs/cidr"
@@ -17,6 +20,7 @@ import (
 	hcljson "github.com/hashicorp/hcl/v2/json"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	"github.com/zclconf/go-cty/cty/function/stdlib"
@@ -125,11 +129,14 @@ var (
 	}
 )
 
-// Used in the first pass of decoding instead of the Config struct to disallow
-// interpolation while parsing variable blocks.
 type StaticConfig struct {
 	Variables []*Variable `hcl:"variable,block"`
 	Remain    hcl.Body    `hcl:",remain"`
+
+	defaults map[string]*hcl.Attribute
+	env      map[string]string
+	values   map[string]cty.Value
+	progress map[string]struct{}
 }
 
 func mergeStaticConfig(scs []*StaticConfig) *StaticConfig {
@@ -141,6 +148,118 @@ func mergeStaticConfig(scs []*StaticConfig) *StaticConfig {
 		sc.Variables = append(sc.Variables, s.Variables...)
 	}
 	return sc
+}
+
+func (sc *StaticConfig) Values(withEnv bool) (map[string]cty.Value, error) {
+	sc.defaults = map[string]*hcl.Attribute{}
+	for _, v := range sc.Variables {
+		sc.defaults[v.Name] = v.Default
+	}
+
+	sc.env = map[string]string{}
+	if withEnv {
+		// Override default with values from environment.
+		for _, v := range os.Environ() {
+			parts := strings.SplitN(v, "=", 2)
+			name, value := parts[0], parts[1]
+			sc.env[name] = value
+		}
+	}
+
+	sc.values = map[string]cty.Value{}
+	sc.progress = map[string]struct{}{}
+
+	for k := range sc.defaults {
+		if _, err := sc.resolveValue(k); err != nil {
+			return nil, err
+		}
+	}
+	return sc.values, nil
+}
+
+func (sc *StaticConfig) resolveValue(name string) (v *cty.Value, err error) {
+	if v, ok := sc.values[name]; ok {
+		return &v, nil
+	}
+	if _, ok := sc.progress[name]; ok {
+		return nil, errors.Errorf("variable cycle not allowed")
+	}
+	sc.progress[name] = struct{}{}
+
+	defer func() {
+		if v != nil {
+			sc.values[name] = *v
+		}
+	}()
+
+	def, ok := sc.defaults[name]
+
+	if !ok {
+		return nil, errors.Errorf("undefined variable %q", name)
+	}
+
+	if def == nil {
+		v := cty.StringVal(sc.env[name])
+		return &v, nil
+	}
+
+	ectx := &hcl.EvalContext{
+		Variables: map[string]cty.Value{},
+		Functions: stdlibFunctions, // user functions not possible atm
+	}
+	for _, v := range def.Expr.Variables() {
+		value, err := sc.resolveValue(v.RootName())
+		if err != nil {
+			var diags hcl.Diagnostics
+			if !errors.As(err, &diags) {
+				return nil, err
+			}
+			r := v.SourceRange()
+			return nil, hcl.Diagnostics{
+				&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Invalid expression",
+					Detail:   err.Error(),
+					Subject:  &r,
+					Context:  &r,
+				},
+			}
+		}
+		ectx.Variables[v.RootName()] = *value
+	}
+
+	vv, diags := def.Expr.Value(ectx)
+	if diags.HasErrors() {
+		return nil, diags
+	}
+
+	if envv, ok := sc.env[name]; ok {
+		if vv.Type().Equals(cty.Bool) {
+			b, err := strconv.ParseBool(envv)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to parse %s as bool", name)
+			}
+			v := cty.BoolVal(b)
+			return &v, nil
+		} else if vv.Type().Equals(cty.String) {
+			v := cty.StringVal(envv)
+			return &v, nil
+		} else if vv.Type().Equals(cty.Number) {
+			n, err := strconv.ParseFloat(envv, 64)
+			if err == nil && (math.IsNaN(n) || math.IsInf(n, 0)) {
+				err = errors.Errorf("invalid number value")
+			}
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to parse %s as number", name)
+			}
+			v := cty.NumberVal(big.NewFloat(n))
+			return &v, nil
+		} else {
+			// TODO: support lists with csv values
+			return nil, errors.Errorf("unsupported type %s for variable %s", v.Type(), name)
+		}
+	}
+	return &vv, nil
 }
 
 func ParseHCLFile(dt []byte, fn string) (*hcl.File, *StaticConfig, error) {
@@ -188,10 +307,10 @@ func parseHCLFile(dt []byte, fn string) (f *hcl.File, _ *StaticConfig, err error
 
 func ParseHCL(b hcl.Body, sc *StaticConfig) (_ *Config, err error) {
 
-	// Set all variables to their default value if defined.
-	variables := make(map[string]cty.Value)
-	for _, variable := range sc.Variables {
-		variables[variable.Name] = cty.StringVal(variable.Default)
+	// evaluate variables
+	variables, err := sc.Values(true)
+	if err != nil {
+		return nil, err
 	}
 
 	userFunctions, _, diags := userfunc.DecodeUserFunctions(b, "function", func() *hcl.EvalContext {
@@ -202,15 +321,6 @@ func ParseHCL(b hcl.Body, sc *StaticConfig) (_ *Config, err error) {
 	})
 	if diags.HasErrors() {
 		return nil, diags
-	}
-
-	// Override default with values from environment.
-	for _, env := range os.Environ() {
-		parts := strings.SplitN(env, "=", 2)
-		name, value := parts[0], parts[1]
-		if _, ok := variables[name]; ok {
-			variables[name] = cty.StringVal(value)
-		}
 	}
 
 	functions := make(map[string]function.Function)
