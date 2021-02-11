@@ -133,6 +133,8 @@ type StaticConfig struct {
 	Variables []*Variable `hcl:"variable,block"`
 	Remain    hcl.Body    `hcl:",remain"`
 
+	attrs hcl.Attributes
+
 	defaults map[string]*hcl.Attribute
 	env      map[string]string
 	values   map[string]cty.Value
@@ -146,6 +148,9 @@ func mergeStaticConfig(scs []*StaticConfig) *StaticConfig {
 	sc := scs[0]
 	for _, s := range scs[1:] {
 		sc.Variables = append(sc.Variables, s.Variables...)
+		for k, v := range s.attrs {
+			sc.attrs[k] = v
+		}
 	}
 	return sc
 }
@@ -168,6 +173,12 @@ func (sc *StaticConfig) Values(withEnv bool) (map[string]cty.Value, error) {
 
 	sc.values = map[string]cty.Value{}
 	sc.progress = map[string]struct{}{}
+
+	for k := range sc.attrs {
+		if _, err := sc.resolveValue(k); err != nil {
+			return nil, err
+		}
+	}
 
 	for k := range sc.defaults {
 		if _, err := sc.resolveValue(k); err != nil {
@@ -192,10 +203,12 @@ func (sc *StaticConfig) resolveValue(name string) (v *cty.Value, err error) {
 		}
 	}()
 
-	def, ok := sc.defaults[name]
-
+	def, ok := sc.attrs[name]
 	if !ok {
-		return nil, errors.Errorf("undefined variable %q", name)
+		def, ok = sc.defaults[name]
+		if !ok {
+			return nil, errors.Errorf("undefined variable %q", name)
+		}
 	}
 
 	if def == nil {
@@ -233,7 +246,9 @@ func (sc *StaticConfig) resolveValue(name string) (v *cty.Value, err error) {
 		return nil, diags
 	}
 
-	if envv, ok := sc.env[name]; ok {
+	_, isVar := sc.defaults[name]
+
+	if envv, ok := sc.env[name]; ok && isVar {
 		if vv.Type().Equals(cty.Bool) {
 			b, err := strconv.ParseBool(envv)
 			if err != nil {
@@ -301,6 +316,16 @@ func parseHCLFile(dt []byte, fn string) (f *hcl.File, _ *StaticConfig, err error
 	if err := gohcl.DecodeBody(f.Body, nil, &sc); err != nil {
 		return nil, nil, err
 	}
+
+	attrs, diags := f.Body.JustAttributes()
+	if diags.HasErrors() {
+		for _, d := range diags {
+			if d.Detail != "Blocks are not allowed here." {
+				return nil, nil, diags
+			}
+		}
+	}
+	sc.attrs = attrs
 
 	return f, &sc, nil
 }

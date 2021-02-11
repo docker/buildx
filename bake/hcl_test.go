@@ -415,3 +415,90 @@ func TestHCLVariableCycle(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "variable cycle not allowed")
 }
+
+func TestHCLAttrs(t *testing.T) {
+	dt := []byte(`
+		FOO="abc"
+		BAR="attr-${FOO}def"
+		target "app" {
+			args = {
+				"v1": BAR
+			}
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "attr-abcdef", c.Targets[0].Args["v1"])
+
+	// env does not apply if no variable
+	os.Setenv("FOO", "bar")
+	c, err = ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "attr-abcdef", c.Targets[0].Args["v1"])
+	// attr-multifile
+}
+
+func TestHCLAttrsCustomType(t *testing.T) {
+	dt := []byte(`
+		platforms=["linux/arm64", "linux/amd64"]
+		target "app" {
+			platforms = platforms
+			args = {
+				"v1": platforms[0]
+			}
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, []string{"linux/arm64", "linux/amd64"}, c.Targets[0].Platforms)
+	require.Equal(t, "linux/arm64", c.Targets[0].Args["v1"])
+}
+
+func TestHCLMultiFileAttrs(t *testing.T) {
+	os.Unsetenv("FOO")
+	dt := []byte(`
+		variable "FOO" {
+			default = "abc"
+		}
+		target "app" {
+			args = {
+				v1 = "pre-${FOO}"
+			}
+		}
+		`)
+	dt2 := []byte(`
+		FOO="def"
+		`)
+
+	c, err := parseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+		{Data: dt2, Name: "c2.hcl"},
+	})
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "pre-def", c.Targets[0].Args["v1"])
+
+	os.Setenv("FOO", "ghi")
+
+	c, err = parseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+		{Data: dt2, Name: "c2.hcl"},
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "pre-ghi", c.Targets[0].Args["v1"])
+}
