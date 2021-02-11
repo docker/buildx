@@ -502,3 +502,14 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	require.Equal(t, c.Targets[0].Name, "app")
 	require.Equal(t, "pre-ghi", c.Targets[0].Args["v1"])
 }
+
+func TestJSONAttributes(t *testing.T) {
+	dt := []byte(`{"FOO": "abc", "variable": {"BAR": {"default": "def"}}, "target": { "app": { "args": {"v1": "pre-${FOO}-${BAR}"}} } }`)
+
+	c, err := ParseFile(dt, "docker-bake.json")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "pre-abc-def", c.Targets[0].Args["v1"])
+}
