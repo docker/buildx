@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.0-experimental
 
-FROM golang:1.13-alpine
+FROM golang:1.16-alpine
 RUN apk add --no-cache git yamllint
 RUN go get -u gopkg.in/alecthomas/gometalinter.v1 \
   && mv /go/bin/gometalinter.v1 /go/bin/gometalinter \
