@@ -21,7 +21,7 @@ type Input struct {
 }
 
 func ReadRemoteFiles(ctx context.Context, dis []build.DriverInfo, url string, names []string, pw progress.Writer) ([]File, *Input, error) {
-	st, filename, ok := detectHttpContext(url)
+	st, filename, ok := detectHTTPContext(url)
 	if !ok {
 		st, ok = detectGitContext(url)
 		if !ok {
@@ -83,7 +83,7 @@ func ReadRemoteFiles(ctx context.Context, dis []build.DriverInfo, url string, na
 }
 
 func IsRemoteURL(url string) bool {
-	if _, _, ok := detectHttpContext(url); ok {
+	if _, _, ok := detectHTTPContext(url); ok {
 		return true
 	}
 	if _, ok := detectGitContext(url); ok {
@@ -92,7 +92,7 @@ func IsRemoteURL(url string) bool {
 	return false
 }
 
-func detectHttpContext(url string) (*llb.State, string, bool) {
+func detectHTTPContext(url string) (*llb.State, string, bool) {
 	if httpPrefix.MatchString(url) {
 		httpContext := llb.HTTP(url, llb.Filename("context"), llb.WithCustomName("[internal] load remote build context"))
 		return &httpContext, "context", true
