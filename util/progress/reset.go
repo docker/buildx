@@ -55,6 +55,6 @@ type pw struct {
 	status chan *client.SolveStatus
 }
 
-func (p *pw) Status() chan *client.SolveStatus {
-	return p.status
+func (w *pw) Status() chan *client.SolveStatus {
+	return w.status
 }

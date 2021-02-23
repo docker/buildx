@@ -168,7 +168,7 @@ func parseSources(in []string) ([]*src, error) {
 	for i, in := range in {
 		s, err := parseSource(in)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to parse source %q, valid sources are digests, refereces and descriptors", in)
+			return nil, errors.Wrapf(err, "failed to parse source %q, valid sources are digests, references and descriptors", in)
 		}
 		out[i] = s
 	}

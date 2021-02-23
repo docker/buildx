@@ -161,9 +161,8 @@ func parseHCL(dt []byte, fn string) (_ *Config, err error) {
 			fnl := strings.ToLower(fn)
 			if strings.HasSuffix(fnl, ".json") {
 				return nil, jsondiags
-			} else {
-				return nil, hcldiags
 			}
+			return nil, hcldiags
 		}
 	}
 

@@ -1,12 +1,10 @@
-# syntax=docker/dockerfile:1.0-experimental
+# syntax=docker/dockerfile:1.2
 
-FROM golang:1.13-alpine
-RUN apk add --no-cache git yamllint
-RUN go get -u gopkg.in/alecthomas/gometalinter.v1 \
-  && mv /go/bin/gometalinter.v1 /go/bin/gometalinter \
-  && gometalinter --install
+FROM golang:1.16-alpine
+RUN apk add --no-cache gcc musl-dev yamllint
+RUN wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s v1.36.0
 WORKDIR /go/src/github.com/docker/buildx
-RUN --mount=target=/go/src/github.com/docker/buildx \
-  gometalinter --config=gometalinter.json ./...
-RUN --mount=target=/go/src/github.com/docker/buildx \
+RUN --mount=target=/go/src/github.com/docker/buildx --mount=target=/root/.cache,type=cache \
+  golangci-lint run
+RUN --mount=target=/go/src/github.com/docker/buildx --mount=target=/root/.cache,type=cache \
   yamllint -c .yamllint.yml --strict .

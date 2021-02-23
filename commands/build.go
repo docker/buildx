@@ -63,11 +63,14 @@ type buildOptions struct {
 }
 
 type commonOptions struct {
-	builder    string
-	noCache    *bool
-	progress   string
-	pull       *bool
+	builder  string
+	noCache  *bool
+	progress string
+	pull     *bool
+	// golangci-lint#826
+	// nolint:structcheck
 	exportPush bool
+	// nolint:structcheck
 	exportLoad bool
 }
 
