@@ -44,7 +44,7 @@ func TestParseHCL(t *testing.T) {
 		}
 		`)
 
-		c, err := ParseHCL(dt, "docker-bake.hcl")
+		c, err := ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Groups))
@@ -104,7 +104,7 @@ func TestParseHCL(t *testing.T) {
 		}
 		`)
 
-		c, err := ParseHCL(dt, "docker-bake.json")
+		c, err := ParseFile(dt, "docker-bake.json")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Groups))
@@ -141,7 +141,7 @@ func TestParseHCL(t *testing.T) {
 		}
 		`)
 
-		c, err := ParseHCL(dt, "docker-bake.hcl")
+		c, err := ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Groups))
@@ -171,7 +171,7 @@ func TestParseHCL(t *testing.T) {
 		}
 		`)
 
-		c, err := ParseHCL(dt, "docker-bake.hcl")
+		c, err := ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Groups))
@@ -200,7 +200,7 @@ func TestParseHCL(t *testing.T) {
 		}
 		`)
 
-		c, err := ParseHCL(dt, "docker-bake.hcl")
+		c, err := ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Groups))
@@ -213,7 +213,7 @@ func TestParseHCL(t *testing.T) {
 
 		os.Setenv("BUILD_NUMBER", "456")
 
-		c, err = ParseHCL(dt, "docker-bake.hcl")
+		c, err = ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Groups))
@@ -246,7 +246,7 @@ func TestParseHCL(t *testing.T) {
 		}
 		`)
 
-		_, err := ParseHCL(dt, "docker-bake.hcl")
+		_, err := ParseFile(dt, "docker-bake.hcl")
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "docker-bake.hcl:7,17-37: Variables not allowed; Variables may not be used here.")
 	})
@@ -266,7 +266,7 @@ func TestParseHCL(t *testing.T) {
 		}
 		`)
 
-		c, err := ParseHCL(dt, "docker-bake.hcl")
+		c, err := ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Targets))
@@ -275,11 +275,54 @@ func TestParseHCL(t *testing.T) {
 
 		os.Setenv("REPO", "docker/buildx")
 
-		c, err = ParseHCL(dt, "docker-bake.hcl")
+		c, err = ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 
 		require.Equal(t, 1, len(c.Targets))
 		require.Equal(t, c.Targets[0].Name, "webapp")
 		require.Equal(t, []string{"docker/buildx:v1"}, c.Targets[0].Tags)
+	})
+
+	t.Run("MultiFileSharedVariables", func(t *testing.T) {
+		dt := []byte(`
+		variable "FOO" {
+			default = "abc"
+		}
+		target "app" {
+			args = {
+				v1 = "pre-${FOO}"
+			}
+		}
+		`)
+		dt2 := []byte(`
+		target "app" {
+			args = {
+				v2 = "${FOO}-post"
+			}
+		}
+		`)
+
+		c, err := parseFiles([]File{
+			{Data: dt, Name: "c1.hcl"},
+			{Data: dt2, Name: "c2.hcl"},
+		})
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, c.Targets[0].Name, "app")
+		require.Equal(t, "pre-abc", c.Targets[0].Args["v1"])
+		require.Equal(t, "abc-post", c.Targets[0].Args["v2"])
+
+		os.Setenv("FOO", "def")
+
+		c, err = parseFiles([]File{
+			{Data: dt, Name: "c1.hcl"},
+			{Data: dt2, Name: "c2.hcl"},
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, c.Targets[0].Name, "app")
+		require.Equal(t, "pre-def", c.Targets[0].Args["v1"])
+		require.Equal(t, "def-post", c.Targets[0].Args["v2"])
 	})
 }

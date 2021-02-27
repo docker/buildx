@@ -59,14 +59,11 @@ func ReadLocalFiles(names []string) ([]File, error) {
 }
 
 func ReadTargets(ctx context.Context, files []File, targets, overrides []string) (map[string]*Target, error) {
-	var c Config
-	for _, f := range files {
-		cfg, err := ParseFile(f.Data, f.Name)
-		if err != nil {
-			return nil, err
-		}
-		c = mergeConfig(c, *cfg)
+	c, err := parseFiles(files)
+	if err != nil {
+		return nil, err
 	}
+
 	o, err := c.newOverrides(overrides)
 	if err != nil {
 		return nil, err
@@ -86,25 +83,73 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string)
 	return m, nil
 }
 
+func parseFiles(files []File) (*Config, error) {
+	var c Config
+	var fs []*hcl.File
+	var scs []*StaticConfig
+	for _, f := range files {
+		cfg, f, sc, err := parseFile(f.Data, f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if cfg != nil {
+			c = mergeConfig(c, *cfg)
+		} else {
+			fs = append(fs, f)
+			scs = append(scs, sc)
+		}
+	}
+
+	if len(fs) > 0 {
+		cfg, err := ParseHCL(hcl.MergeFiles(fs), mergeStaticConfig(scs))
+		if err != nil {
+			return nil, err
+		}
+		c = mergeConfig(c, dedupeConfig(*cfg))
+	}
+	return &c, nil
+}
+
+func dedupeConfig(c Config) Config {
+	c2 := c
+	c2.Targets = make([]*Target, 0, len(c2.Targets))
+	m := map[string]*Target{}
+	for _, t := range c.Targets {
+		if t2, ok := m[t.Name]; ok {
+			merge(t2, t)
+		} else {
+			m[t.Name] = t
+			c2.Targets = append(c2.Targets, t)
+		}
+	}
+	return c2
+}
+
 func ParseFile(dt []byte, fn string) (*Config, error) {
+	return parseFiles([]File{{Data: dt, Name: fn}})
+}
+
+func parseFile(dt []byte, fn string) (*Config, *hcl.File, *StaticConfig, error) {
 	fnl := strings.ToLower(fn)
 	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
-		return ParseCompose(dt)
+		c, err := ParseCompose(dt)
+		return c, nil, nil, err
 	}
 
 	if strings.HasSuffix(fnl, ".json") || strings.HasSuffix(fnl, ".hcl") {
-		return ParseHCL(dt, fn)
+		f, sc, err := ParseHCLFile(dt, fn)
+		return nil, f, sc, err
 	}
 
 	cfg, err := ParseCompose(dt)
 	if err != nil {
-		cfg, err2 := ParseHCL(dt, fn)
+		f, sc, err2 := ParseHCLFile(dt, fn)
 		if err2 != nil {
-			return nil, errors.Errorf("failed to parse %s: parsing yaml: %s, parsing hcl: %s", fn, err.Error(), err2.Error())
+			return nil, nil, nil, errors.Errorf("failed to parse %s: parsing yaml: %s, parsing hcl: %s", fn, err.Error(), err2.Error())
 		}
-		return cfg, nil
+		return nil, f, sc, nil
 	}
-	return cfg, nil
+	return cfg, nil, nil, nil
 }
 
 type Config struct {
