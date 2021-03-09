@@ -2,11 +2,20 @@ package progress
 
 import (
 	"context"
+	"io"
+	"io/ioutil"
 	"os"
 
 	"github.com/containerd/console"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
+)
+
+const (
+	PrinterModeAuto  = "auto"
+	PrinterModeTty   = "tty"
+	PrinterModePlain = "plain"
+	PrinterModeQuiet = "quiet"
 )
 
 type Printer struct {
@@ -34,17 +43,23 @@ func NewPrinter(ctx context.Context, out console.File, mode string) *Printer {
 		done:   doneCh,
 	}
 
-	if v := os.Getenv("BUILDKIT_PROGRESS"); v != "" && mode == "auto" {
+	if v := os.Getenv("BUILDKIT_PROGRESS"); v != "" && mode == PrinterModeAuto {
 		mode = v
 	}
 
 	go func() {
 		var c console.Console
-		if cons, err := console.ConsoleFromFile(out); err == nil && (mode == "auto" || mode == "tty") {
-			c = cons
+		var w io.Writer = out
+		switch mode {
+		case PrinterModeQuiet:
+			w = ioutil.Discard
+		case PrinterModeAuto, PrinterModeTty:
+			if cons, err := console.ConsoleFromFile(out); err == nil {
+				c = cons
+			}
 		}
 		// not using shared context to not disrupt display but let is finish reporting errors
-		pw.err = progressui.DisplaySolveStatus(ctx, "", c, out, statusCh)
+		pw.err = progressui.DisplaySolveStatus(ctx, "", c, w, statusCh)
 		close(doneCh)
 	}()
 	return pw
