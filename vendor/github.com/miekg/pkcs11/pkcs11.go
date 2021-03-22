@@ -997,11 +997,11 @@ func (c *Ctx) GetOperationState(sh SessionHandle) ([]byte, error) {
 		statelen C.CK_ULONG
 	)
 	e := C.GetOperationState(c.ctx, C.CK_SESSION_HANDLE(sh), &state, &statelen)
+	defer C.free(unsafe.Pointer(state))
 	if toError(e) != nil {
 		return nil, toError(e)
 	}
 	b := C.GoBytes(unsafe.Pointer(state), C.int(statelen))
-	C.free(unsafe.Pointer(state))
 	return b, nil
 }
 
