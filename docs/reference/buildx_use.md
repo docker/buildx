@@ -1,15 +1,22 @@
 # buildx use
 
 ```
-Usage:  docker buildx use [OPTIONS] NAME
+docker buildx use [OPTIONS] NAME
+```
 
+<!---MARKER_GEN_START-->
 Set the current builder instance
 
-Options:
-      --builder string   Override the configured builder instance
-      --default          Set builder as default for current context
-      --global           Builder persists context changes
-```
+### Options
+
+| Name | Description |
+| --- | --- |
+| `--builder string` | Override the configured builder instance |
+| `--default` | Set builder as default for current context |
+| `--global` | Builder persists context changes |
+
+
+<!---MARKER_GEN_END-->
 
 ## Description
 

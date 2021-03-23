@@ -1,17 +1,14 @@
 # buildx version
 
 ```
-Usage:  docker buildx version
-
-Show buildx version information
-
-Options:
-      --builder string   Override the configured builder instance
+docker buildx version
 ```
 
-## Description
+<!---MARKER_GEN_START-->
+Show buildx version information 
 
-Show buildx version information
+
+<!---MARKER_GEN_END-->
 
 ## Examples
 

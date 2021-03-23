@@ -1,13 +1,14 @@
 # buildx ls
 
 ```
-Usage:  docker buildx ls
+docker buildx ls
+```
 
+<!---MARKER_GEN_START-->
 List builder instances
 
-Options:
-      --builder string   Override the configured builder instance
-```
+
+<!---MARKER_GEN_END-->
 
 ## Description
 

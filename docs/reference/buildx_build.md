@@ -1,36 +1,44 @@
 # buildx build
 
 ```
-Usage:  docker buildx build [OPTIONS] PATH | URL | -
+docker buildx build [OPTIONS] PATH | URL | -
+```
 
+<!---MARKER_GEN_START-->
 Start a build
 
-Aliases:
-  build, b
+### Aliases
 
-Options:
-      --add-host strings         Add a custom host-to-IP mapping (host:ip)
-      --allow strings            Allow extra privileged entitlement, e.g. network.host, security.insecure
-      --build-arg stringArray    Set build-time variables
-      --builder string           Override the configured builder instance
-      --cache-from stringArray   External cache sources (eg. user/app:cache, type=local,src=path/to/dir)
-      --cache-to stringArray     Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)
-  -f, --file string              Name of the Dockerfile (Default is 'PATH/Dockerfile')
-      --iidfile string           Write the image ID to the file
-      --label stringArray        Set metadata for an image
-      --load                     Shorthand for --output=type=docker
-      --network string           Set the networking mode for the RUN instructions during build (default "default")
-      --no-cache                 Do not use cache when building the image
-  -o, --output stringArray       Output destination (format: type=local,dest=path)
-      --platform stringArray     Set target platform for build
-      --progress string          Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
-      --pull                     Always attempt to pull a newer version of the image
-      --push                     Shorthand for --output=type=registry
-      --secret stringArray       Secret file to expose to the build: id=mysecret,src=/local/secret
-      --ssh stringArray          SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]])
-  -t, --tag stringArray          Name and optionally a tag in the 'name:tag' format
-      --target string            Set the target build stage to build.
-```
+`build`, `b`
+
+### Options
+
+| Name | Description |
+| --- | --- |
+| `--add-host stringSlice` | Add a custom host-to-IP mapping (host:ip) |
+| [`--allow stringSlice`](#allow) | Allow extra privileged entitlement, e.g. network.host, security.insecure |
+| `--build-arg stringArray` | Set build-time variables |
+| `--builder string` | Override the configured builder instance |
+| [`--cache-from stringArray`](#cache-from) | External cache sources (eg. user/app:cache, type=local,src=path/to/dir) |
+| [`--cache-to stringArray`](#cache-to) | Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir) |
+| `-f`, `--file string` | Name of the Dockerfile (Default is 'PATH/Dockerfile') |
+| `--iidfile string` | Write the image ID to the file |
+| `--label stringArray` | Set metadata for an image |
+| [`--load`](#load) | Shorthand for --output=type=docker |
+| `--network string` | Set the networking mode for the RUN instructions during build |
+| `--no-cache` | Do not use cache when building the image |
+| [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: type=local,dest=path) |
+| [`--platform stringArray`](#platform) | Set target platform for build |
+| `--progress string` | Set type of progress output (auto, plain, tty). Use plain to show container output |
+| `--pull` | Always attempt to pull a newer version of the image |
+| [`--push`](#push) | Shorthand for --output=type=registry |
+| `--secret stringArray` | Secret file to expose to the build: id=mysecret,src=/local/secret |
+| `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]]) |
+| `-t`, `--tag stringArray` | Name and optionally a tag in the 'name:tag' format |
+| `--target string` | Set the target build stage to build. |
+
+
+<!---MARKER_GEN_END-->
 
 ## Description
 
@@ -43,7 +51,7 @@ here we’ll document a subset of the new flags.
 
 ## Examples
 
-### Set the target platforms for the build (--platform)
+### <a name="platform"></a> Set the target platforms for the build (--platform)
 
 ```
 --platform=value[,value]
@@ -84,7 +92,7 @@ $ docker buildx build --platform=linux/amd64,linux/arm64,linux/arm/v7 .
 $ docker buildx build --platform=darwin .
 ```
 
-### Set the export action for the build result (-o, --output)
+### <a name="output"></a> Set the export action for the build result (-o, --output)
 
 ```
 -o, --output=[PATH,-,type=TYPE[,KEY=VALUE]
@@ -176,17 +184,17 @@ Attribute keys:
 The `registry` exporter is a shortcut for `type=image,push=true`.
 
 
-### Push the build result to a registry (--push)
+### <a name="push"></a> Push the build result to a registry (--push)
 
 Shorthand for [`--output=type=registry`](#registry). Will automatically push the
 build result to registry.
 
-### Load the single-platform build result to `docker images` (--load)
+### <a name="load"></a> Load the single-platform build result to `docker images` (--load)
 
 Shorthand for [`--output=type=docker`](#docker). Will automatically load the
 single-platform build result to `docker images`.
 
-### Use an external cache source for a build (--cache-from)
+### <a name="cache-from"></a> Use an external cache source for a build (--cache-from)
 
 ```
 --cache-from=[NAME|type=TYPE[,KEY=VALUE]]
@@ -210,7 +218,7 @@ $ docker buildx build --cache-from=type=registry,ref=user/app .
 $ docker buildx build --cache-from=type=local,src=path/to/cache .
 ```
 
-### Export build cache to an external cache destination (--cache-to)
+### <a name="cache-to"></a> Export build cache to an external cache destination (--cache-to)
 
 ```
 --cache-to=[NAME|type=TYPE[,KEY=VALUE]]
@@ -240,7 +248,7 @@ $ docker buildx build --cache-to=type=registry,ref=user/app .
 $ docker buildx build --cache-to=type=local,dest=path/to/cache .
 ```
 
-### Allow extra privileged entitlement (--allow)
+### <a name="allow"></a> Allow extra privileged entitlement (--allow)
 
 ```
 --allow=ENTITLEMENT

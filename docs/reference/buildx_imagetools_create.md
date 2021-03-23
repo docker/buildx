@@ -1,17 +1,24 @@
 # buildx imagetools create
 
 ```
-Usage:  docker buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]
+docker buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]
+```
 
+<!---MARKER_GEN_START-->
 Create a new image based on source images
 
-Options:
-      --append             Append to existing manifest
-      --builder string     Override the configured builder instance
-      --dry-run            Show final image instead of pushing
-  -f, --file stringArray   Read source descriptor from file
-  -t, --tag stringArray    Set reference for new image
-```
+### Options
+
+| Name | Description |
+| --- | --- |
+| [`--append`](#append) | Append to existing manifest |
+| `--builder string` | Override the configured builder instance |
+| [`--dry-run`](#dry-run) | Show final image instead of pushing |
+| [`-f`](#file), [`--file stringArray`](#file) | Read source descriptor from file |
+| [`-t`](#tag), [`--tag stringArray`](#tag) | Set reference for new image |
+
+
+<!---MARKER_GEN_END-->
 
 ## Description
 
@@ -25,16 +32,16 @@ one source is specified create performs a carbon copy.
 
 ## Examples
 
-### Append new sources to an existing manifest list (--append)
+### <a name="append"></a> Append new sources to an existing manifest list (--append)
 
 Use the `--append` flag to append the new sources to an existing manifest list
 in the destination.
 
-### Show final image instead of pushing (--dry-run)
+### <a name="dry-run"></a> Show final image instead of pushing (--dry-run)
 
 Use the `--dry-run` flag to not push the image, just show it.
 
-### Read source descriptor from a file (-f, --file)
+### <a name="file"></a> Read source descriptor from a file (-f, --file)
 
 ```
 -f FILE or --file FILE
@@ -43,7 +50,7 @@ Use the `--dry-run` flag to not push the image, just show it.
 Reads source from files. A source can be a manifest digest, manifest reference,
 or a JSON of OCI descriptor object.
 
-### Set reference for new image  (-t, --tag)
+### <a name="tag"></a> Set reference for new image  (-t, --tag)
 
 ```
 -t IMAGE or --tag IMAGE

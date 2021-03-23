@@ -1,13 +1,14 @@
 # buildx stop
 
 ```
-Usage:  docker buildx stop [NAME]
+docker buildx stop [NAME]
+```
 
+<!---MARKER_GEN_START-->
 Stop builder instance
 
-Options:
-      --builder string   Override the configured builder instance
-```
+
+<!---MARKER_GEN_END-->
 
 ## Description
 

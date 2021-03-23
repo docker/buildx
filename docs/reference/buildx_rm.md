@@ -1,13 +1,14 @@
 # buildx rm
 
 ```
-Usage:  docker buildx rm [NAME]
+docker buildx rm [NAME]
+```
 
+<!---MARKER_GEN_START-->
 Remove a builder instance
 
-Options:
-      --builder string   Override the configured builder instance
-```
+
+<!---MARKER_GEN_END-->
 
 ## Description
 

@@ -1,14 +1,21 @@
 # buildx inspect
 
 ```
-Usage:  docker buildx inspect [NAME]
+docker buildx inspect [NAME]
+```
 
+<!---MARKER_GEN_START-->
 Inspect current builder instance
 
-Options:
-      --bootstrap        Ensure builder has booted before inspecting
-      --builder string   Override the configured builder instance
-```
+### Options
+
+| Name | Description |
+| --- | --- |
+| [`--bootstrap`](#bootstrap) | Ensure builder has booted before inspecting |
+| `--builder string` | Override the configured builder instance |
+
+
+<!---MARKER_GEN_END-->
 
 ## Description
 
@@ -41,7 +48,7 @@ Status:    running
 Platforms: linux/arm64, linux/arm/v7, linux/arm/v6
 ```
 
-### Ensure that the builder is running before inspecting (--bootstrap)
+### <a name="bootstrap"></a> Ensure that the builder is running before inspecting (--bootstrap)
 
 Use the `--bootstrap` option to ensures that the builder is running before
 inspecting it. If the driver is `docker-container`, then `--bootstrap` starts

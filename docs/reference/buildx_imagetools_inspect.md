@@ -1,14 +1,21 @@
 # buildx imagetools inspect
 
 ```
-Usage:  docker buildx imagetools inspect [OPTIONS] NAME
+docker buildx imagetools inspect [OPTIONS] NAME
+```
 
+<!---MARKER_GEN_START-->
 Show details of image in the registry
 
-Options:
-      --builder string   Override the configured builder instance
-      --raw              Show original JSON manifest
-```
+### Options
+
+| Name | Description |
+| --- | --- |
+| `--builder string` | Override the configured builder instance |
+| [`--raw`](#raw) | Show original JSON manifest |
+
+
+<!---MARKER_GEN_END-->
 
 ## Description
 
@@ -34,7 +41,7 @@ Manifests:
  ...
 ```
 
-### Show original, unformatted JSON manifest (--raw)
+### <a name="raw"></a> Show original, unformatted JSON manifest (--raw)
 
 Use the `--raw` option to print the original JSON bytes instead of the formatted
 output.

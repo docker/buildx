@@ -1,24 +1,32 @@
 # buildx bake
 
 ```
-Usage:  docker buildx bake [OPTIONS] [TARGET...]
+docker buildx bake [OPTIONS] [TARGET...]
+```
 
+<!---MARKER_GEN_START-->
 Build from a file
 
-Aliases:
-  bake, f
+### Aliases
 
-Options:
-      --builder string     Override the configured builder instance
-  -f, --file stringArray   Build definition file
-      --load               Shorthand for --set=*.output=type=docker
-      --no-cache           Do not use cache when building the image
-      --print              Print the options without building
-      --progress string    Set type of progress output (auto, plain, tty). Use plain to show container output (default "auto")
-      --pull               Always attempt to pull a newer version of the image
-      --push               Shorthand for --set=*.output=type=registry
-      --set stringArray    Override target value (eg: targetpattern.key=value)
-```
+`bake`, `f`
+
+### Options
+
+| Name | Description |
+| --- | --- |
+| `--builder string` | Override the configured builder instance |
+| [`-f`](#file), [`--file stringArray`](#file) | Build definition file |
+| `--load` | Shorthand for --set=*.output=type=docker |
+| [`--no-cache`](#no-cache) | Do not use cache when building the image |
+| [`--print`](#print) | Print the options without building |
+| [`--progress string`](#progress) | Set type of progress output (auto, plain, tty). Use plain to show container output |
+| [`--pull`](#pull) | Always attempt to pull a newer version of the image |
+| `--push` | Shorthand for --set=*.output=type=registry |
+| [`--set stringArray`](#set) | Override target value (eg: targetpattern.key=value) |
+
+
+<!---MARKER_GEN_END-->
 
 ## Description
 
@@ -27,7 +35,7 @@ as part of the build.
 
 ## Examples
 
-### Specify a build definition file (-f, --file)
+### <a name="file"></a> Specify a build definition file (-f, --file)
 
 By default, `buildx bake` looks for build definition files in the current directory,
 the following are parsed:
@@ -76,11 +84,11 @@ $ docker buildx bake -f docker-compose.dev.yaml backend database
  ...
 ```
 
-### Do not use cache when building the image (--no-cache)
+### <a name="no-cache"></a> Do not use cache when building the image (--no-cache)
 
 Same as `build --no-cache`. Do not use cache when building the image.
 
-### Print the options without building (--print)
+### <a name="print"></a> Print the options without building (--print)
 
 Prints the resulting options of the targets desired to be built, in a JSON format,
 without starting a build.
@@ -100,7 +108,7 @@ $ docker buildx bake -f docker-bake.hcl --print db
 }
 ```
 
-### Set type of progress output (--progress)
+### <a name="progress"></a> Set type of progress output (--progress)
 
 Same as `build --progress`. Set type of progress output (auto, plain, tty). Use
 plain to show container output (default "auto").
@@ -122,11 +130,11 @@ $ docker buildx bake --progress=plain
 ```
 
 
-### Always attempt to pull a newer version of the image (--pull)
+### <a name="pull"></a> Always attempt to pull a newer version of the image (--pull)
 
 Same as `build --pull`.
 
-### Override target configurations from command line (--set)
+### <a name="set"></a> Override target configurations from command line (--set)
 
 ```
 --set targetpattern.key[.subkey]=value

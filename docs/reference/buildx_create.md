@@ -1,23 +1,31 @@
 # buildx create
 
 ```
-Usage:  docker buildx create [OPTIONS] [CONTEXT|ENDPOINT]
+docker buildx create [OPTIONS] [CONTEXT|ENDPOINT]
+```
 
+<!---MARKER_GEN_START-->
 Create a new builder instance
 
-Options:
-      --append                   Append a node to builder instead of changing it
-      --builder string           Override the configured builder instance
-      --buildkitd-flags string   Flags for buildkitd daemon
-      --config string            BuildKit config file
-      --driver string            Driver to use (available: [docker docker-container kubernetes])
-      --driver-opt stringArray   Options for the driver
-      --leave                    Remove a node from builder instead of changing it
-      --name string              Builder instance name
-      --node string              Create/modify node with given name
-      --platform stringArray     Fixed platforms for current node
-      --use                      Set the current builder instance
-```
+### Options
+
+| Name | Description |
+| --- | --- |
+| [`--append`](#append) | Append a node to builder instead of changing it |
+| `--builder string` | Override the configured builder instance |
+| [`--buildkitd-flags string`](#buildkitd-flags) | Flags for buildkitd daemon |
+| [`--config string`](#config) | BuildKit config file |
+| [`--driver string`](#driver) | Driver to use (available: []) |
+| [`--driver-opt stringArray`](#driver-opt) | Options for the driver |
+| [`--leave`](#leave) | Remove a node from builder instead of changing it |
+| [`--name string`](#name) | Builder instance name |
+| [`--node string`](#node) | Create/modify node with given name |
+| [`--platform stringArray`](#platform) | Fixed platforms for current node |
+| [`--use`](#use) | Set the current builder instance |
+
+
+<!---MARKER_GEN_END-->
+
 
 ## Description
 
@@ -33,7 +41,7 @@ docker contexts also get the default builder instance.
 
 ## Examples
 
-### Append a new node to an existing builder (--append)
+### <a name="append"></a> Append a new node to an existing builder (--append)
 
 The `--append` flag changes the action of the command to append a new node to an
 existing builder specified by `--name`. Buildx will choose an appropriate node
@@ -49,7 +57,7 @@ $ docker buildx create --name eager_beaver --append mycontext2
 eager_beaver
 ```
 
-### Specify options for the buildkitd daemon (--buildkitd-flags)
+### <a name="buildkitd-flags"></a> Specify options for the buildkitd daemon (--buildkitd-flags)
 
 ```
 --buildkitd-flags FLAGS
@@ -65,7 +73,7 @@ for the available flags.
 --buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
 ```
 
-### Specify a configuration file for the buildkitd daemon (--config)
+### <a name="config"></a> Specify a configuration file for the buildkitd daemon (--config)
 
 ```
 --config FILE
@@ -75,7 +83,7 @@ Specifies the configuration file for the buildkitd daemon to use. The configurat
 can be overridden by [`--buildkitd-flags`](#--buildkitd-flags-flags).
 See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
-### Set the builder driver to use (--driver)
+### <a name="driver"></a> Set the builder driver to use (--driver)
 
 ```
 --driver DRIVER
@@ -96,7 +104,7 @@ their own specificities.
   with defined buildkit container image to build your images.
 
 
-### Set additional driver-specific options (--driver-opt)
+### <a name="driver-opt"></a> Set additional driver-specific options (--driver-opt)
 
 ```
 --driver-opt OPTIONS
@@ -121,7 +129,7 @@ Passes additional driver-specific options. Details for each driver:
     - `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
     - `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
 
-### Remove a node from a builder (--leave)
+### <a name="leave"></a> Remove a node from a builder (--leave)
 
 The `--leave` flag changes the action of the command to remove a node from a
 builder. The builder needs to be specified with `--name` and node that is removed
@@ -133,7 +141,7 @@ is set with `--node`.
 $ docker buildx create --name mybuilder --node mybuilder0 --leave
 ```
 
-### Specify the name of the builder (--name)
+### <a name="name"></a> Specify the name of the builder (--name)
 
 ```
 --name NAME
@@ -142,7 +150,7 @@ $ docker buildx create --name mybuilder --node mybuilder0 --leave
 The `--name` flag specifies the name of the builder to be created or modified.
 If none is specified, one will be automatically generated.
 
-### Specify the name of the node (--node)
+### <a name="node"></a> Specify the name of the node (--node)
 
 ```
 --node NODE
@@ -152,7 +160,7 @@ The `--node` flag specifies the name of the node to be created or modified. If
 none is specified, it is the name of the builder it belongs to, with an index
 number suffix.
 
-### Set the platforms supported by the node
+### <a name="platform"></a> Set the platforms supported by the node
 
 ```
 --platform PLATFORMS
@@ -171,7 +179,7 @@ $ docker buildx create --platform linux/amd64
 $ docker buildx create --platform linux/arm64,linux/arm/v8
 ```
 
-### Automatically switch to the newly created builder
+### <a name="use"></a> Automatically switch to the newly created builder
 
 The `--use` flag automatically switches the current builder to the newly created
 one. Equivalent to running `docker buildx use $(docker buildx create ...)`.

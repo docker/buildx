@@ -1,17 +1,22 @@
 # buildx imagetools
 
 ```
-Usage:  docker buildx imagetools [OPTIONS] COMMAND
+docker buildx imagetools [OPTIONS] COMMAND
+```
 
+<!---MARKER_GEN_START-->
 Commands to work on images in registry
 
-Options:
-      --builder string   Override the configured builder instance
+### Subcommands
 
-Commands:
-  create      Create a new image based on source images
-  inspect     Show details of image in the registry
-```
+| Name | Description |
+| --- | --- |
+| [`create`](buildx_imagetools_create.md) | Create a new image based on source images |
+| [`inspect`](buildx_imagetools_inspect.md) | Show details of image in the registry |
+
+
+
+<!---MARKER_GEN_END-->
 
 ## Description
 
