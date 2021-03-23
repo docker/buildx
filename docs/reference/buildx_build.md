@@ -15,13 +15,13 @@ Start a build
 
 | Name | Description |
 | --- | --- |
-| `--add-host stringSlice` | Add a custom host-to-IP mapping (host:ip) |
+| [`--add-host stringSlice`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | Add a custom host-to-IP mapping (host:ip) |
 | [`--allow stringSlice`](#allow) | Allow extra privileged entitlement, e.g. network.host, security.insecure |
-| `--build-arg stringArray` | Set build-time variables |
+| [`--build-arg stringArray`](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) | Set build-time variables |
 | `--builder string` | Override the configured builder instance |
 | [`--cache-from stringArray`](#cache-from) | External cache sources (eg. user/app:cache, type=local,src=path/to/dir) |
 | [`--cache-to stringArray`](#cache-to) | Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir) |
-| `-f`, `--file string` | Name of the Dockerfile (Default is 'PATH/Dockerfile') |
+| [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file string`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | Name of the Dockerfile (Default is 'PATH/Dockerfile') |
 | `--iidfile string` | Write the image ID to the file |
 | `--label stringArray` | Set metadata for an image |
 | [`--load`](#load) | Shorthand for --output=type=docker |
@@ -34,8 +34,8 @@ Start a build
 | [`--push`](#push) | Shorthand for --output=type=registry |
 | `--secret stringArray` | Secret file to expose to the build: id=mysecret,src=/local/secret |
 | `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]]) |
-| `-t`, `--tag stringArray` | Name and optionally a tag in the 'name:tag' format |
-| `--target string` | Set the target build stage to build. |
+| [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag in the 'name:tag' format |
+| [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build. |
 
 
 <!---MARKER_GEN_END-->
