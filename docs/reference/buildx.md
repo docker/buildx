@@ -19,12 +19,12 @@ Build with BuildKit
 | [`inspect`](buildx_inspect.md) | Inspect current builder instance |
 | [`install`](buildx_install.md) | Install buildx as a 'docker builder' alias |
 | [`ls`](buildx_ls.md) | List builder instances |
-| [`prune`](buildx_prune.md) | Remove build cache  |
+| [`prune`](buildx_prune.md) | Remove build cache |
 | [`rm`](buildx_rm.md) | Remove a builder instance |
 | [`stop`](buildx_stop.md) | Stop builder instance |
 | [`uninstall`](buildx_uninstall.md) | Uninstall the 'docker builder' alias |
 | [`use`](buildx_use.md) | Set the current builder instance |
-| [`version`](buildx_version.md) | Show buildx version information  |
+| [`version`](buildx_version.md) | Show buildx version information |
 
 
 

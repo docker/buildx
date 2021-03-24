@@ -5,7 +5,7 @@ docker buildx version
 ```
 
 <!---MARKER_GEN_START-->
-Show buildx version information 
+Show buildx version information
 
 
 <!---MARKER_GEN_END-->
