@@ -38,7 +38,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
 	// case images.MediaTypeDockerSchema2Manifest, specs.MediaTypeImageManifest:
 	// TODO: handle distribution manifest and schema1
 	case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-		imagetools.PrintManifestList(dt, desc, name, os.Stdout)
+		return imagetools.PrintManifestList(dt, desc, name, os.Stdout)
 	default:
 		fmt.Printf("%s\n", dt)
 	}
