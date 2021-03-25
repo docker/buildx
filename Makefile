@@ -23,12 +23,18 @@ test:
 validate-vendor:
 	./hack/validate-vendor
 	
-validate-all: lint test validate-vendor
+validate-docs:
+	./hack/validate-docs
+	
+validate-all: lint test validate-vendor validate-docs
 
 vendor:
 	./hack/update-vendor
 
+docs:
+	./hack/update-docs
+
 generate-authors:
 	./hack/generate-authors
 
-.PHONY: vendor lint shell binaries install binaries-cross validate-all generate-authors
+.PHONY: vendor lint shell binaries install binaries-cross validate-all generate-authors validate-docs docs

@@ -23,6 +23,7 @@ jobs:
         target:
           - lint
           - validate-vendor
+          - validate-docs
     steps:
       -
         name: Checkout
