@@ -513,3 +513,56 @@ func TestJSONAttributes(t *testing.T) {
 	require.Equal(t, c.Targets[0].Name, "app")
 	require.Equal(t, "pre-abc-def", c.Targets[0].Args["v1"])
 }
+
+func TestJSONFunctions(t *testing.T) {
+	dt := []byte(`{
+	"FOO": "abc",
+	"function": {
+		"myfunc": {
+			"params": ["inp"],
+			"result": "<${upper(inp)}-${FOO}>"
+		}
+	},
+	"target": {
+		"app": {
+			"args": {
+				"v1": "pre-${myfunc(\"foo\")}"
+			}
+		}
+	}}`)
+
+	c, err := ParseFile(dt, "docker-bake.json")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "pre-<FOO-abc>", c.Targets[0].Args["v1"])
+}
+
+func TestHCLFunctionInAttr(t *testing.T) {
+	dt := []byte(`
+	function "brace" {
+		params = [inp]
+		result = "[${inp}]"
+	}
+	function "myupper" {
+		params = [val]
+		result = "${upper(val)} <> ${brace(v2)}"
+	}
+
+		v1=myupper("foo")
+		v2=lower("BAZ")
+		target "app" {
+			args = {
+				"v1": v1
+			}
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "FOO <> [baz]", c.Targets[0].Args["v1"])
+}
