@@ -5,7 +5,7 @@ docker buildx prune
 ```
 
 <!---MARKER_GEN_START-->
-Remove build cache 
+Remove build cache
 
 ### Options
 

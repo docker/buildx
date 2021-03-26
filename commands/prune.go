@@ -129,7 +129,7 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "prune",
-		Short: "Remove build cache ",
+		Short: "Remove build cache",
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder

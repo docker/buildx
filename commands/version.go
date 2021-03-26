@@ -17,7 +17,7 @@ func runVersion(dockerCli command.Cli) error {
 func versionCmd(dockerCli command.Cli) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "version",
-		Short: "Show buildx version information ",
+		Short: "Show buildx version information",
 		Args:  cli.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVersion(dockerCli)
