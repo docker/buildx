@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -124,7 +125,15 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.Session = append(opts.Session, secrets)
 
-	ssh, err := build.ParseSSHSpecs(in.ssh)
+	sshSpecs := in.ssh
+	if len(sshSpecs) == 0 {
+		defaultSock := os.Getenv("SSH_AUTH_SOCK")
+		if defaultSock != "" {
+			sshSpecs = []string{fmt.Sprintf("default=%s", defaultSock)}
+		}
+	}
+
+	ssh, err := build.ParseSSHSpecs(sshSpecs)
 	if err != nil {
 		return err
 	}
