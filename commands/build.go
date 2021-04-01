@@ -124,7 +124,11 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 	opts.Session = append(opts.Session, secrets)
 
-	ssh, err := build.ParseSSHSpecs(in.ssh)
+	sshSpecs := in.ssh
+	if len(sshSpecs) == 0 && build.IsGitSSH(in.contextPath) {
+		sshSpecs = []string{"default"}
+	}
+	ssh, err := build.ParseSSHSpecs(sshSpecs)
 	if err != nil {
 		return err
 	}
