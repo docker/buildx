@@ -534,7 +534,11 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	bo.Session = append(bo.Session, secrets)
 
-	ssh, err := build.ParseSSHSpecs(t.SSH)
+	sshSpecs := t.SSH
+	if len(sshSpecs) == 0 && build.IsGitSSH(contextPath) {
+		sshSpecs = []string{"default"}
+	}
+	ssh, err := build.ParseSSHSpecs(sshSpecs)
 	if err != nil {
 		return nil, err
 	}

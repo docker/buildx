@@ -46,7 +46,7 @@ github.com/cespare/xxhash/v2
 github.com/containerd/cgroups/stats/v1
 # github.com/containerd/console v1.0.1
 github.com/containerd/console
-# github.com/containerd/containerd v1.5.0-beta.3.0.20210309150730-ddf6594fbeed
+# github.com/containerd/containerd v1.5.0-beta.4
 github.com/containerd/containerd/api/services/content/v1
 github.com/containerd/containerd/archive/compression
 github.com/containerd/containerd/content
@@ -75,7 +75,7 @@ github.com/containerd/continuity/sysx
 github.com/containerd/typeurl
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
-# github.com/docker/cli v20.10.3-0.20210127070556-d26bdfd4ea23+incompatible
+# github.com/docker/cli v20.10.5+incompatible
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/manager
 github.com/docker/cli/cli-plugins/plugin
@@ -124,7 +124,7 @@ github.com/docker/distribution/registry/client/transport
 github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
-# github.com/docker/docker v20.10.0-beta1.0.20201110211921-af34b94a78a1+incompatible
+# github.com/docker/docker v20.10.5+incompatible
 github.com/docker/docker/api
 github.com/docker/docker/api/types
 github.com/docker/docker/api/types/blkiodev
@@ -254,7 +254,7 @@ github.com/miekg/pkcs11
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.1.2
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.8.2-0.20210322063634-8effd45b99b8
+# github.com/moby/buildkit v0.8.2-0.20210401015549-df49b648c8bf
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
 github.com/moby/buildkit/client
@@ -287,6 +287,7 @@ github.com/moby/buildkit/util/appcontext
 github.com/moby/buildkit/util/appdefaults
 github.com/moby/buildkit/util/entitlements
 github.com/moby/buildkit/util/flightcontrol
+github.com/moby/buildkit/util/gitutil
 github.com/moby/buildkit/util/grpcerrors
 github.com/moby/buildkit/util/progress
 github.com/moby/buildkit/util/progress/progressui
@@ -298,7 +299,7 @@ github.com/moby/buildkit/util/system
 github.com/moby/sys/mount
 # github.com/moby/sys/mountinfo v0.4.1
 github.com/moby/sys/mountinfo
-# github.com/moby/term v0.0.0-20200915141129-7f0af18e79f2
+# github.com/moby/term v0.0.0-20201110203204-bea5bbe245bf
 github.com/moby/term
 github.com/moby/term/windows
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
@@ -420,7 +421,7 @@ golang.org/x/oauth2/jwt
 # golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.0.0-20210124154548-22da62e12c0c
+# golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
 golang.org/x/sys/internal/unsafeheader

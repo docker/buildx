@@ -5,6 +5,7 @@ import (
 
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
+	"github.com/moby/buildkit/util/gitutil"
 )
 
 func ParseSSHSpecs(sl []string) (session.Attachable, error) {
@@ -28,4 +29,10 @@ func parseSSH(value string) (*sshprovider.AgentConfig, error) {
 		cfg.Paths = strings.Split(parts[1], ",")
 	}
 	return &cfg, nil
+}
+
+// IsGitSSH returns true if the given repo URL is accessed over ssh
+func IsGitSSH(url string) bool {
+	_, gitProtocol := gitutil.ParseProtocol(url)
+	return gitProtocol == gitutil.SSHProtocol
 }
