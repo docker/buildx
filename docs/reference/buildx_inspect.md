@@ -50,9 +50,9 @@ Platforms: linux/arm64, linux/arm/v7, linux/arm/v6
 
 ### <a name="bootstrap"></a> Ensure that the builder is running before inspecting (--bootstrap)
 
-Use the `--bootstrap` option to ensures that the builder is running before
+Use the `--bootstrap` option to ensure that the builder is running before
 inspecting it. If the driver is `docker-container`, then `--bootstrap` starts
 the buildkit container and waits until it is operational. Bootstrapping is
-automatically done during build, it is thus not necessary. The same BuildKit
+automatically done during build, and therefore not necessary. The same BuildKit
 container is used during the lifetime of the associated builder node (as
 displayed in `buildx ls`).

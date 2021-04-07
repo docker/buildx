@@ -96,7 +96,7 @@ Buildx will always build using the BuildKit engine and does not require `DOCKER_
 
 Buildx build command supports the features available for `docker build` including the new features in Docker 19.03 such as outputs configuration, inline build caching or specifying target platform. In addition, buildx supports new features not yet available for regular `docker build` like building manifest lists, distributed caching, exporting build results to OCI image tarballs etc.
 
-Buildx is supposed to be flexible and can be run in different configurations that are exposed through a driver concept. Currently, we support a "docker" driver that uses the BuildKit library bundled into the docker daemon binary, and a "docker-container" driver that automatically launches BuildKit inside a Docker container. We plan to add more drivers in the future, for example, one that would allow running buildx inside an (unprivileged) container.
+Buildx is supposed to be flexible and can be run in different configurations that are exposed through a driver concept. Currently, we support a "docker" driver that uses the BuildKit library bundled into the Docker daemon binary, and a "docker-container" driver that automatically launches BuildKit inside a Docker container. We plan to add more drivers in the future, for example, one that would allow running buildx inside an (unprivileged) container.
 
 The user experience of using buildx is very similar across drivers, but there are some features that are not currently supported by the "docker" driver, because the BuildKit library bundled into docker daemon currently uses a different storage component. In contrast, all images built with "docker" driver are automatically added to the "docker images" view by default, whereas when using other drivers the method for outputting an image needs to be selected with `--output`.
 
@@ -109,7 +109,7 @@ Buildx allows you to create new instances of isolated builders. This can be used
 
 New instances can be created with `docker buildx create` command. This will create a new builder instance with a single node based on your current configuration. To use a remote node you can specify the `DOCKER_HOST` or remote context name while creating the new builder. After creating a new instance you can manage its lifecycle with the `inspect`, `stop` and `rm` commands and list all available builders with `ls`. After creating a new builder you can also append new nodes to it.
 
-To switch between different builders use `docker buildx use <name>`. After running this command the build commands would automatically keep using this builder.
+To switch between different builders, use `docker buildx use <name>`. After running this command the build commands would automatically keep using this builder.
 
 Docker 19.03 also features a new `docker context` command that can be used for giving names for remote Docker API endpoints. Buildx integrates with `docker context` so that all of your contexts automatically get a default builder instance. While creating a new builder instance or when adding a node to it you can also set the context name as the target.
 
