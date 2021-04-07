@@ -45,7 +45,7 @@ Start a build
 The `buildx build` command starts a build using BuildKit. This command is similar
 to the UI of `docker build` command and takes the same flags and arguments.
 
-For documentation on most of these flags refer to the [`docker build`
+For documentation on most of these flags, refer to the [`docker build`
 documentation](https://docs.docker.com/engine/reference/commandline/build/). In
 here we’ll document a subset of the new flags.
 
@@ -67,12 +67,12 @@ values as an input separated by a comma. With multiple values the result will be
 built for all of the specified platforms and joined together into a single manifest
 list.
 
-If the`Dockerfile` needs to invoke the `RUN` command, the builder needs runtime
+If the `Dockerfile` needs to invoke the `RUN` command, the builder needs runtime
 support for the specified platform. In a clean setup, you can only execute `RUN`
 commands for your system architecture.
 If your kernel supports [`binfmt_misc`](https://en.wikipedia.org/wiki/Binfmt_misc)
-launchers for secondary architectures buildx will pick them up automatically.
-Docker desktop releases come with binfmt_misc automatically configured for `arm64`
+launchers for secondary architectures, buildx will pick them up automatically.
+Docker desktop releases come with `binfmt_misc` automatically configured for `arm64`
 and `arm` architectures. You can see what runtime platforms your current builder
 instance supports by running `docker buildx inspect --bootstrap`.
 
@@ -171,7 +171,7 @@ tar will be loaded automatically to the current docker instance.
 #### `image`
 
 The `image` exporter writes the build result as an image or a manifest list. When
-using `docker` driver the image will appear in `docker images`. Optionally image
+using `docker` driver the image will appear in `docker images`. Optionally, image
 can be automatically pushed to a registry by specifying attributes.
 
 Attribute keys:

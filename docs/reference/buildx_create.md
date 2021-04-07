@@ -33,11 +33,11 @@ Create makes a new builder instance pointing to a docker context or endpoint,
 where context is the name of a context from `docker context ls` and endpoint is
 the address for docker socket (eg. `DOCKER_HOST` value).
 
-By default, the current docker configuration is used for determining the
+By default, the current Docker configuration is used for determining the
 context/endpoint value.
 
 Builder instances are isolated environments where builds can be invoked. All
-docker contexts also get the default builder instance.
+Docker contexts also get the default builder instance.
 
 ## Examples
 
