@@ -1,4 +1,4 @@
-# buildx use
+#  buildx use
 
 ```
 docker buildx use [OPTIONS] NAME
