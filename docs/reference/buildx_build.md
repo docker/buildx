@@ -1,4 +1,4 @@
-# buildx build
+#  buildx build
 
 ```
 docker buildx build [OPTIONS] PATH | URL | -
