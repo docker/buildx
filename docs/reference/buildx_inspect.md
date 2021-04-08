@@ -1,4 +1,4 @@
-# buildx inspect
+#  buildx inspect
 
 ```
 docker buildx inspect [NAME]
