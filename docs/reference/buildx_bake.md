@@ -1,4 +1,4 @@
-# buildx bake
+  buildx bake
 
 ```
 docker buildx bake [OPTIONS] [TARGET...]
