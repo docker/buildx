@@ -1,4 +1,4 @@
-# buildx imagetools inspect
+ # buildx imagetools inspect
 
 ```
 docker buildx imagetools inspect [OPTIONS] NAME

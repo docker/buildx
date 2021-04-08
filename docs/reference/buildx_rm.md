@@ -1,4 +1,4 @@
-# buildx rm
+#  buildx rm
 
 ```
 docker buildx rm [NAME]
