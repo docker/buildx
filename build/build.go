@@ -27,8 +27,10 @@ import (
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
+	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/progress/progresswriter"
 	"github.com/opencontainers/go-digest"
@@ -110,6 +112,7 @@ type driverPair struct {
 	driverIndex int
 	platforms   []specs.Platform
 	so          *client.SolveOpt
+	bopts       gateway.BuildOpts
 }
 
 func driverIndexes(m map[string][]driverPair) []int {
@@ -181,6 +184,39 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 }
 
 func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+	dps, clients, err := resolveDriversBase(ctx, drivers, auth, opt, pw)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	bopts := make([]gateway.BuildOpts, len(clients))
+
+	eg, ctx := errgroup.WithContext(ctx)
+	for i, c := range clients {
+		func(i int, c *client.Client) {
+			eg.Go(func() error {
+				clients[i].Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+					bopts[i] = c.BuildOpts()
+					return nil, nil
+				}, nil)
+				return nil
+			})
+		}(i, c)
+	}
+
+	if err := eg.Wait(); err != nil {
+		return nil, nil, err
+	}
+	for key := range dps {
+		for i, dp := range dps[key] {
+			dps[key][i].bopts = bopts[dp.driverIndex]
+		}
+	}
+
+	return dps, clients, nil
+}
+
+func resolveDriversBase(ctx context.Context, drivers []DriverInfo, auth Auth, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
 	availablePlatforms := map[string]int{}
 	for i, d := range drivers {
 		for _, p := range d.Platform {
@@ -245,6 +281,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 				workers[i] = ww
 				return nil
 			})
+
 		}(i)
 	}
 
@@ -285,7 +322,7 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, bopts gateway.BuildOpts, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
 		for _, f := range defers {
@@ -322,12 +359,32 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		}
 	}
 
+	cacheTo := make([]client.CacheOptionsEntry, 0, len(opt.CacheTo))
+	for _, e := range opt.CacheTo {
+		if e.Type == "gha" {
+			if !bopts.LLBCaps.Contains(apicaps.CapID("cache.gha")) {
+				continue
+			}
+		}
+		cacheTo = append(cacheTo, e)
+	}
+
+	cacheFrom := make([]client.CacheOptionsEntry, 0, len(opt.CacheFrom))
+	for _, e := range opt.CacheFrom {
+		if e.Type == "gha" {
+			if !bopts.LLBCaps.Contains(apicaps.CapID("cache.gha")) {
+				continue
+			}
+		}
+		cacheFrom = append(cacheFrom, e)
+	}
+
 	so := client.SolveOpt{
 		Frontend:            "dockerfile.v0",
 		FrontendAttrs:       map[string]string{},
 		LocalDirs:           map[string]string{},
-		CacheExports:        opt.CacheTo,
-		CacheImports:        opt.CacheFrom,
+		CacheExports:        cacheTo,
+		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
 	}
 
@@ -537,7 +594,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				hasMobyDriver = true
 			}
 			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, w, func(name string) (io.WriteCloser, func(), error) {
+			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, dp.bopts, w, func(name string) (io.WriteCloser, func(), error) {
 				return newDockerLoader(ctx, docker, name, w)
 			})
 			if err != nil {
