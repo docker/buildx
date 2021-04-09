@@ -1,4 +1,4 @@
-package build
+package buildflags
 
 import (
 	"github.com/moby/buildkit/util/entitlements"

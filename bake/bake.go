@@ -10,6 +10,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/docker/pkg/urlutil"
 	hcl "github.com/hashicorp/hcl/v2"
@@ -528,17 +529,17 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(os.Stderr))
 
-	secrets, err := build.ParseSecretSpecs(t.Secrets)
+	secrets, err := buildflags.ParseSecretSpecs(t.Secrets)
 	if err != nil {
 		return nil, err
 	}
 	bo.Session = append(bo.Session, secrets)
 
 	sshSpecs := t.SSH
-	if len(sshSpecs) == 0 && build.IsGitSSH(contextPath) {
+	if len(sshSpecs) == 0 && buildflags.IsGitSSH(contextPath) {
 		sshSpecs = []string{"default"}
 	}
-	ssh, err := build.ParseSSHSpecs(sshSpecs)
+	ssh, err := buildflags.ParseSSHSpecs(sshSpecs)
 	if err != nil {
 		return nil, err
 	}
@@ -548,19 +549,19 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		bo.Target = *t.Target
 	}
 
-	cacheImports, err := build.ParseCacheEntry(t.CacheFrom)
+	cacheImports, err := buildflags.ParseCacheEntry(t.CacheFrom)
 	if err != nil {
 		return nil, err
 	}
 	bo.CacheFrom = cacheImports
 
-	cacheExports, err := build.ParseCacheEntry(t.CacheTo)
+	cacheExports, err := buildflags.ParseCacheEntry(t.CacheTo)
 	if err != nil {
 		return nil, err
 	}
 	bo.CacheTo = cacheExports
 
-	outputs, err := build.ParseOutputs(t.Outputs)
+	outputs, err := buildflags.ParseOutputs(t.Outputs)
 	if err != nil {
 		return nil, err
 	}

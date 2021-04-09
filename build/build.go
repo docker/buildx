@@ -1125,3 +1125,9 @@ func handleLowercaseDockerfile(dir, p string) string {
 	}
 	return p
 }
+
+func wrapWriteCloser(wc io.WriteCloser) func(map[string]string) (io.WriteCloser, error) {
+	return func(map[string]string) (io.WriteCloser, error) {
+		return wc, nil
+	}
+}
