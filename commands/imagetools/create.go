@@ -118,7 +118,15 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 						return err
 					}
 					srcs[i].Ref = nil
-					srcs[i].Desc = desc
+					if srcs[i].Desc.Digest == "" {
+						srcs[i].Desc = desc
+					} else {
+						var err error
+						srcs[i].Desc, err = mergeDesc(desc, srcs[i].Desc)
+						if err != nil {
+							return err
+						}
+					}
 					return nil
 				})
 			}(i)
@@ -237,4 +245,20 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	_ = flags
 
 	return cmd
+}
+
+func mergeDesc(d1, d2 ocispec.Descriptor) (ocispec.Descriptor, error) {
+	if d2.Size != 0 && d1.Size != d2.Size {
+		return ocispec.Descriptor{}, errors.Errorf("invalid size mismatch for %s, %d != %d", d1.Digest, d2.Size, d1.Size)
+	}
+	if d2.MediaType != "" {
+		d1.MediaType = d2.MediaType
+	}
+	if len(d2.Annotations) != 0 {
+		d1.Annotations = d2.Annotations // no merge so support removes
+	}
+	if d2.Platform != nil {
+		d1.Platform = d2.Platform // missing items filled in later from image config
+	}
+	return d1, nil
 }
