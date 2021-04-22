@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
@@ -118,23 +119,23 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(os.Stderr))
 
-	secrets, err := build.ParseSecretSpecs(in.secrets)
+	secrets, err := buildflags.ParseSecretSpecs(in.secrets)
 	if err != nil {
 		return err
 	}
 	opts.Session = append(opts.Session, secrets)
 
 	sshSpecs := in.ssh
-	if len(sshSpecs) == 0 && build.IsGitSSH(in.contextPath) {
+	if len(sshSpecs) == 0 && buildflags.IsGitSSH(in.contextPath) {
 		sshSpecs = []string{"default"}
 	}
-	ssh, err := build.ParseSSHSpecs(sshSpecs)
+	ssh, err := buildflags.ParseSSHSpecs(sshSpecs)
 	if err != nil {
 		return err
 	}
 	opts.Session = append(opts.Session, ssh)
 
-	outputs, err := build.ParseOutputs(in.outputs)
+	outputs, err := buildflags.ParseOutputs(in.outputs)
 	if err != nil {
 		return err
 	}
@@ -175,19 +176,19 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	opts.Exports = outputs
 
-	cacheImports, err := build.ParseCacheEntry(in.cacheFrom)
+	cacheImports, err := buildflags.ParseCacheEntry(in.cacheFrom)
 	if err != nil {
 		return err
 	}
 	opts.CacheFrom = cacheImports
 
-	cacheExports, err := build.ParseCacheEntry(in.cacheTo)
+	cacheExports, err := buildflags.ParseCacheEntry(in.cacheTo)
 	if err != nil {
 		return err
 	}
 	opts.CacheTo = cacheExports
 
-	allow, err := build.ParseEntitlements(in.allow)
+	allow, err := buildflags.ParseEntitlements(in.allow)
 	if err != nil {
 		return err
 	}

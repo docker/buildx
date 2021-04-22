@@ -1,4 +1,4 @@
-package build
+package buildflags
 
 import (
 	"encoding/csv"
