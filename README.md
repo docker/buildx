@@ -14,7 +14,7 @@ Key features:
 - Multiple builder instance support
 - Multi-node builds for cross-platform images
 - Compose build support
-- WIP: High-level build constructs (`bake`)
+- High-level build constructs (`bake`)
 - In-container driver support (both Docker and Kubernetes)
 
 # Table of Contents
@@ -158,6 +158,8 @@ BuildKit has great support for efficiently handling multiple concurrent build re
 Currently, the bake command supports building images from compose files, similar to `compose build` but allowing all the services to be built concurrently as part of a single request.
 
 There is also support for custom build rules from HCL/JSON files allowing better code reuse and different target groups. The design of bake is in very early stages and we are looking for feedback from users.
+
+[`buildx bake` Reference Docs](docs/reference/buildx_bake.md)
 
 # Setting buildx as default builder in Docker 19.03+
 
