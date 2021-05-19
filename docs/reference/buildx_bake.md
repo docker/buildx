@@ -33,6 +33,10 @@ Build from a file
 Bake is a high-level build command. Each specified target will run in parallel
 as part of the build.
 
+Read [High-level build options](https://github.com/docker/buildx#high-level-build-options) for introduction.
+
+Please note that `buildx bake` command may receive backwards incompatible features in the future if needed. We are looking for feedback on improving the command and extending the functionality further.
+
 ## Examples
 
 ### <a name="file"></a> Specify a build definition file (-f, --file)

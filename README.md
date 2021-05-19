@@ -14,7 +14,7 @@ Key features:
 - Multiple builder instance support
 - Multi-node builds for cross-platform images
 - Compose build support
-- WIP: High-level build constructs (`bake`)
+- High-level build constructs (`bake`)
 - In-container driver support (both Docker and Kubernetes)
 
 # Table of Contents
@@ -45,12 +45,11 @@ Key features:
 
 # Installing
 
-Using `buildx` as a docker CLI plugin requires using Docker 19.03. A limited set of functionality works with older versions of Docker when invoking the binary directly.
+Using `buildx` as a docker CLI plugin requires using Docker 19.03 or newer. A limited set of functionality works with older versions of Docker when invoking the binary directly.
 
-### Docker CE
+### Docker
 
-`buildx` comes bundled with Docker CE starting with 19.03, but requires experimental mode to be enabled on the Docker CLI.
-To enable it, `"experimental": "enabled"` can be added to the CLI configuration file `~/.docker/config.json`. An alternative is to set the `DOCKER_CLI_EXPERIMENTAL=enabled` environment variable.
+`buildx` comes bundled with Docker Desktop and in latest Docker CE packages.
 
 ### Binary release
 
@@ -63,18 +62,19 @@ chmod a+x ~/.docker/cli-plugins/docker-buildx
 
 # Building
 
-### with Docker 18.09+
-```
-$ git clone git://github.com/docker/buildx && cd buildx
-$ make install
-```
 
-### with buildx or Docker 19.03
+### with buildx or Docker 19.03+
 ```
 $ export DOCKER_BUILDKIT=1
 $ docker build --platform=local -o . git://github.com/docker/buildx
 $ mkdir -p ~/.docker/cli-plugins
 $ mv buildx ~/.docker/cli-plugins/docker-buildx
+```
+
+### with Docker 18.09+
+```
+$ git clone git://github.com/docker/buildx && cd buildx
+$ make install
 ```
 
 # Getting started
@@ -158,6 +158,8 @@ BuildKit has great support for efficiently handling multiple concurrent build re
 Currently, the bake command supports building images from compose files, similar to `compose build` but allowing all the services to be built concurrently as part of a single request.
 
 There is also support for custom build rules from HCL/JSON files allowing better code reuse and different target groups. The design of bake is in very early stages and we are looking for feedback from users.
+
+[`buildx bake` Reference Docs](docs/reference/buildx_bake.md)
 
 # Setting buildx as default builder in Docker 19.03+
 
