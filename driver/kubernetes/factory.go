@@ -85,6 +85,14 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if err != nil {
 				return nil, err
 			}
+		case "requests.cpu":
+			deploymentOpt.RequestsCPU = v
+		case "requests.memory":
+			deploymentOpt.RequestsMemory = v
+		case "limits.cpu":
+			deploymentOpt.LimitsCPU = v
+		case "limits.memory":
+			deploymentOpt.LimitsMemory = v
 		case "rootless":
 			deploymentOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
