@@ -92,7 +92,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			}
 			deploymentOpt.Image = bkimage.DefaultRootlessImage
 		case "nodeselector":
-			kvs := strings.Split(strings.Trim(v, `"`), ",")
+			kvs := strings.Split(strings.Trim(v, `"`), ";")
 			s := map[string]string{}
 			for i := range kvs {
 				kv := strings.Split(kvs[i], "=")
