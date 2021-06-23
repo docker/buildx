@@ -407,6 +407,13 @@ type Variable struct {
 	Default *hcl.Attribute `json:"default,omitempty" hcl:"default,optional"`
 }
 
+type Function struct {
+	Name     string         `json:"-" hcl:"name,label"`
+	Params   *hcl.Attribute `json:"params,omitempty" hcl:"params"`
+	Variadic *hcl.Attribute `json:"variadic_param,omitempty" hcl:"variadic_params"`
+	Result   *hcl.Attribute `json:"result,omitempty" hcl:"result"`
+}
+
 type Group struct {
 	Name    string   `json:"-" hcl:"name,label"`
 	Targets []string `json:"targets" hcl:"targets"`

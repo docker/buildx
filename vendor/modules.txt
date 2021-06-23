@@ -227,7 +227,6 @@ github.com/hashicorp/hcl/v2
 github.com/hashicorp/hcl/v2/ext/customdecode
 github.com/hashicorp/hcl/v2/ext/tryfunc
 github.com/hashicorp/hcl/v2/ext/typeexpr
-github.com/hashicorp/hcl/v2/ext/userfunc
 github.com/hashicorp/hcl/v2/gohcl
 github.com/hashicorp/hcl/v2/hclsyntax
 github.com/hashicorp/hcl/v2/hclwrite
