@@ -2,6 +2,7 @@ package bake
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"os"
 	"path"
@@ -9,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
@@ -60,7 +62,7 @@ func ReadLocalFiles(names []string) ([]File, error) {
 }
 
 func ReadTargets(ctx context.Context, files []File, targets, overrides []string) (map[string]*Target, error) {
-	c, err := parseFiles(files)
+	c, err := ParseFiles(files)
 	if err != nil {
 		return nil, err
 	}
@@ -84,29 +86,43 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string)
 	return m, nil
 }
 
-func parseFiles(files []File) (*Config, error) {
+func ParseFiles(files []File) (_ *Config, err error) {
+	defer func() {
+		err = formatHCLError(err, files)
+	}()
+
 	var c Config
 	var fs []*hcl.File
-	var scs []*StaticConfig
 	for _, f := range files {
-		cfg, f, sc, err := parseFile(f.Data, f.Name)
-		if err != nil {
-			return nil, err
-		}
-		if cfg != nil {
+		cfg, isCompose, composeErr := ParseComposeFile(f.Data, f.Name)
+		if isCompose {
+			if composeErr != nil {
+				return nil, composeErr
+			}
 			c = mergeConfig(c, *cfg)
-		} else {
-			fs = append(fs, f)
-			scs = append(scs, sc)
+			c = dedupeConfig(c)
+		}
+		if !isCompose {
+			hf, isHCL, err := ParseHCLFile(f.Data, f.Name)
+			if isHCL {
+				if err != nil {
+					return nil, err
+				}
+				fs = append(fs, hf)
+			} else if composeErr != nil {
+				return nil, fmt.Errorf("failed to parse %s: parsing yaml: %v, parsing hcl: %w", f.Name, composeErr, err)
+			} else {
+				return nil, err
+			}
 		}
 	}
 
 	if len(fs) > 0 {
-		cfg, err := ParseHCL(hcl.MergeFiles(fs), mergeStaticConfig(scs))
-		if err != nil {
+		if err := hclparser.Parse(hcl.MergeFiles(fs), hclparser.Opt{
+			LookupVar: os.LookupEnv,
+		}, &c); err.HasErrors() {
 			return nil, err
 		}
-		c = mergeConfig(c, dedupeConfig(*cfg))
 	}
 	return &c, nil
 }
@@ -117,7 +133,7 @@ func dedupeConfig(c Config) Config {
 	m := map[string]*Target{}
 	for _, t := range c.Targets {
 		if t2, ok := m[t.Name]; ok {
-			merge(t2, t)
+			t2.Merge(t)
 		} else {
 			m[t.Name] = t
 			c2.Targets = append(c2.Targets, t)
@@ -127,37 +143,25 @@ func dedupeConfig(c Config) Config {
 }
 
 func ParseFile(dt []byte, fn string) (*Config, error) {
-	return parseFiles([]File{{Data: dt, Name: fn}})
+	return ParseFiles([]File{{Data: dt, Name: fn}})
 }
 
-func parseFile(dt []byte, fn string) (*Config, *hcl.File, *StaticConfig, error) {
+func ParseComposeFile(dt []byte, fn string) (*Config, bool, error) {
 	fnl := strings.ToLower(fn)
 	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
-		c, err := ParseCompose(dt)
-		return c, nil, nil, err
+		cfg, err := ParseCompose(dt)
+		return cfg, true, err
 	}
-
 	if strings.HasSuffix(fnl, ".json") || strings.HasSuffix(fnl, ".hcl") {
-		f, sc, err := ParseHCLFile(dt, fn)
-		return nil, f, sc, err
+		return nil, false, nil
 	}
-
 	cfg, err := ParseCompose(dt)
-	if err != nil {
-		f, sc, err2 := ParseHCLFile(dt, fn)
-		if err2 != nil {
-			return nil, nil, nil, errors.Errorf("failed to parse %s: parsing yaml: %s, parsing hcl: %s", fn, err.Error(), err2.Error())
-		}
-		return nil, f, sc, nil
-	}
-	return cfg, nil, nil, nil
+	return cfg, err == nil, err
 }
 
 type Config struct {
-	Variables []*Variable `json:"-" hcl:"variable,block"`
-	Groups    []*Group    `json:"group" hcl:"group,block"`
-	Targets   []*Target   `json:"target" hcl:"target,block"`
-	Remain    hcl.Body    `json:"-" hcl:",remain"`
+	Groups  []*Group  `json:"group" hcl:"group,block"`
+	Targets []*Target `json:"target" hcl:"target,block"`
 }
 
 func mergeConfig(c1, c2 Config) Config {
@@ -203,7 +207,8 @@ func mergeConfig(c1, c2 Config) Config {
 			}
 		}
 		if t1 != nil {
-			t2 = merge(t1, t2)
+			t1.Merge(t2)
+			t2 = t1
 		}
 		c1.Targets = append(c1.Targets, t2)
 	}
@@ -390,28 +395,19 @@ func (c Config) target(name string, visited map[string]struct{}, overrides map[s
 			return nil, err
 		}
 		if t != nil {
-			tt = merge(tt, t)
+			tt.Merge(t)
 		}
 	}
 	t.Inherits = nil
-	tt = merge(merge(defaultTarget(), tt), t)
+	m := defaultTarget()
+	m.Merge(tt)
+	m.Merge(t)
+	tt = m
 	if override, ok := overrides[name]; ok {
-		tt = merge(tt, override)
+		tt.Merge(override)
 	}
 	tt.normalize()
 	return tt, nil
-}
-
-type Variable struct {
-	Name    string         `json:"-" hcl:"name,label"`
-	Default *hcl.Attribute `json:"default,omitempty" hcl:"default,optional"`
-}
-
-type Function struct {
-	Name     string         `json:"-" hcl:"name,label"`
-	Params   *hcl.Attribute `json:"params,omitempty" hcl:"params"`
-	Variadic *hcl.Attribute `json:"variadic_param,omitempty" hcl:"variadic_params"`
-	Result   *hcl.Attribute `json:"result,omitempty" hcl:"result"`
 }
 
 type Group struct {
@@ -453,6 +449,61 @@ func (t *Target) normalize() {
 	t.CacheFrom = removeDupes(t.CacheFrom)
 	t.CacheTo = removeDupes(t.CacheTo)
 	t.Outputs = removeDupes(t.Outputs)
+}
+
+func (t *Target) Merge(t2 *Target) {
+	if t2.Context != nil {
+		t.Context = t2.Context
+	}
+	if t2.Dockerfile != nil {
+		t.Dockerfile = t2.Dockerfile
+	}
+	if t2.DockerfileInline != nil {
+		t.DockerfileInline = t2.DockerfileInline
+	}
+	for k, v := range t2.Args {
+		if t.Args == nil {
+			t.Args = map[string]string{}
+		}
+		t.Args[k] = v
+	}
+	for k, v := range t2.Labels {
+		if t.Labels == nil {
+			t.Labels = map[string]string{}
+		}
+		t.Labels[k] = v
+	}
+	if t2.Tags != nil { // no merge
+		t.Tags = t2.Tags
+	}
+	if t2.Target != nil {
+		t.Target = t2.Target
+	}
+	if t2.Secrets != nil { // merge
+		t.Secrets = append(t.Secrets, t2.Secrets...)
+	}
+	if t2.SSH != nil { // merge
+		t.SSH = append(t.SSH, t2.SSH...)
+	}
+	if t2.Platforms != nil { // no merge
+		t.Platforms = t2.Platforms
+	}
+	if t2.CacheFrom != nil { // merge
+		t.CacheFrom = append(t.CacheFrom, t2.CacheFrom...)
+	}
+	if t2.CacheTo != nil { // no merge
+		t.CacheTo = t2.CacheTo
+	}
+	if t2.Outputs != nil { // no merge
+		t.Outputs = t2.Outputs
+	}
+	if t2.Pull != nil {
+		t.Pull = t2.Pull
+	}
+	if t2.NoCache != nil {
+		t.NoCache = t2.NoCache
+	}
+	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
@@ -579,62 +630,6 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 func defaultTarget() *Target {
 	return &Target{}
-}
-
-func merge(t1, t2 *Target) *Target {
-	if t2.Context != nil {
-		t1.Context = t2.Context
-	}
-	if t2.Dockerfile != nil {
-		t1.Dockerfile = t2.Dockerfile
-	}
-	if t2.DockerfileInline != nil {
-		t1.DockerfileInline = t2.DockerfileInline
-	}
-	for k, v := range t2.Args {
-		if t1.Args == nil {
-			t1.Args = map[string]string{}
-		}
-		t1.Args[k] = v
-	}
-	for k, v := range t2.Labels {
-		if t1.Labels == nil {
-			t1.Labels = map[string]string{}
-		}
-		t1.Labels[k] = v
-	}
-	if t2.Tags != nil { // no merge
-		t1.Tags = t2.Tags
-	}
-	if t2.Target != nil {
-		t1.Target = t2.Target
-	}
-	if t2.Secrets != nil { // merge
-		t1.Secrets = append(t1.Secrets, t2.Secrets...)
-	}
-	if t2.SSH != nil { // merge
-		t1.SSH = append(t1.SSH, t2.SSH...)
-	}
-	if t2.Platforms != nil { // no merge
-		t1.Platforms = t2.Platforms
-	}
-	if t2.CacheFrom != nil { // no merge
-		t1.CacheFrom = append(t1.CacheFrom, t2.CacheFrom...)
-	}
-	if t2.CacheTo != nil { // no merge
-		t1.CacheTo = t2.CacheTo
-	}
-	if t2.Outputs != nil { // no merge
-		t1.Outputs = t2.Outputs
-	}
-	if t2.Pull != nil {
-		t1.Pull = t2.Pull
-	}
-	if t2.NoCache != nil {
-		t1.NoCache = t2.NoCache
-	}
-	t1.Inherits = append(t1.Inherits, t2.Inherits...)
-	return t1
 }
 
 func removeDupes(s []string) []string {

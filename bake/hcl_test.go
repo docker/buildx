@@ -44,7 +44,6 @@ func TestHCLBasic(t *testing.T) {
 
 	c, err := ParseFile(dt, "docker-bake.hcl")
 	require.NoError(t, err)
-
 	require.Equal(t, 1, len(c.Groups))
 	require.Equal(t, "default", c.Groups[0].Name)
 	require.Equal(t, []string{"db", "webapp"}, c.Groups[0].Targets)
@@ -274,7 +273,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 		}
 		`)
 
-	c, err := parseFiles([]File{
+	c, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	})
@@ -286,7 +285,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 
 	os.Setenv("FOO", "def")
 
-	c, err = parseFiles([]File{
+	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	})
@@ -324,7 +323,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 		}
 		`)
 
-	c, err := parseFiles([]File{
+	c, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	})
@@ -336,7 +335,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 
 	os.Setenv("BASE", "new")
 
-	c, err = parseFiles([]File{
+	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	})
@@ -481,7 +480,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 		FOO="def"
 		`)
 
-	c, err := parseFiles([]File{
+	c, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	})
@@ -492,7 +491,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 
 	os.Setenv("FOO", "ghi")
 
-	c, err = parseFiles([]File{
+	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	})
