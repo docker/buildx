@@ -565,3 +565,37 @@ func TestHCLFunctionInAttr(t *testing.T) {
 	require.Equal(t, c.Targets[0].Name, "app")
 	require.Equal(t, "FOO <> [baz]", c.Targets[0].Args["v1"])
 }
+
+func TestHCLCombineCompose(t *testing.T) {
+	dt := []byte(`
+		target "app" {
+			context = "dir"
+			args = {
+				v1 = "foo"
+			}
+		}
+		`)
+	dt2 := []byte(`
+version: "3"
+
+services:
+  app:
+    build:
+      dockerfile: Dockerfile-alternate
+      args:
+        v2: "bar"
+`)
+
+	c, err := ParseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+		{Data: dt2, Name: "c2.yml"},
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "foo", c.Targets[0].Args["v1"])
+	require.Equal(t, "bar", c.Targets[0].Args["v2"])
+	require.Equal(t, "dir", *c.Targets[0].Context)
+	require.Equal(t, "Dockerfile-alternate", *c.Targets[0].Dockerfile)
+}

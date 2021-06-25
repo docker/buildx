@@ -435,9 +435,21 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 			continue
 		}
 
-		setLabel(vv, b.Labels[0])
+		lblIndex := setLabel(vv, b.Labels[0])
 
 		oldValue, exists := t.values[b.Labels[0]]
+		if !exists && lblIndex != -1 {
+			if v.Elem().Field(t.idx).Type().Kind() == reflect.Slice {
+				for i := 0; i < v.Elem().Field(t.idx).Len(); i++ {
+					if b.Labels[0] == v.Elem().Field(t.idx).Index(i).Elem().Field(lblIndex).String() {
+						exists = true
+						oldValue = value{Value: v.Elem().Field(t.idx).Index(i), idx: i}
+						break
+					}
+				}
+			}
+
+		}
 		if exists {
 			if m := oldValue.Value.MethodByName("Merge"); m.IsValid() {
 				m.Call([]reflect.Value{vv})
@@ -460,15 +472,16 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 	return nil
 }
 
-func setLabel(v reflect.Value, lbl string) {
+func setLabel(v reflect.Value, lbl string) int {
 	// cache field index?
 	numFields := v.Elem().Type().NumField()
 	for i := 0; i < numFields; i++ {
 		for _, t := range strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",") {
 			if t == "label" {
 				v.Elem().Field(i).Set(reflect.ValueOf(lbl))
-				return
+				return i
 			}
 		}
 	}
+	return -1
 }
