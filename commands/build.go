@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
@@ -15,6 +16,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -62,11 +64,14 @@ type buildOptions struct {
 }
 
 type commonOptions struct {
-	builder    string
-	noCache    *bool
-	progress   string
-	pull       *bool
+	builder  string
+	noCache  *bool
+	progress string
+	pull     *bool
+	// golangci-lint#826
+	// nolint:structcheck
 	exportPush bool
+	// nolint:structcheck
 	exportLoad bool
 }
 
@@ -75,7 +80,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 		return errors.Errorf("squash currently not implemented")
 	}
 	if in.quiet {
-		return errors.Errorf("quiet currently not implemented")
+		logrus.Warnf("quiet currently not implemented")
 	}
 
 	ctx := appcontext.Context()
@@ -114,19 +119,23 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(os.Stderr))
 
-	secrets, err := build.ParseSecretSpecs(in.secrets)
+	secrets, err := buildflags.ParseSecretSpecs(in.secrets)
 	if err != nil {
 		return err
 	}
 	opts.Session = append(opts.Session, secrets)
 
-	ssh, err := build.ParseSSHSpecs(in.ssh)
+	sshSpecs := in.ssh
+	if len(sshSpecs) == 0 && buildflags.IsGitSSH(in.contextPath) {
+		sshSpecs = []string{"default"}
+	}
+	ssh, err := buildflags.ParseSSHSpecs(sshSpecs)
 	if err != nil {
 		return err
 	}
 	opts.Session = append(opts.Session, ssh)
 
-	outputs, err := build.ParseOutputs(in.outputs)
+	outputs, err := buildflags.ParseOutputs(in.outputs)
 	if err != nil {
 		return err
 	}
@@ -167,19 +176,19 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 
 	opts.Exports = outputs
 
-	cacheImports, err := build.ParseCacheEntry(in.cacheFrom)
+	cacheImports, err := buildflags.ParseCacheEntry(in.cacheFrom)
 	if err != nil {
 		return err
 	}
 	opts.CacheFrom = cacheImports
 
-	cacheExports, err := build.ParseCacheEntry(in.cacheTo)
+	cacheExports, err := buildflags.ParseCacheEntry(in.cacheTo)
 	if err != nil {
 		return err
 	}
 	opts.CacheTo = cacheExports
 
-	allow, err := build.ParseEntitlements(in.allow)
+	allow, err := buildflags.ParseEntitlements(in.allow)
 	if err != nil {
 		return err
 	}
@@ -202,9 +211,14 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	pw := progress.NewPrinter(ctx2, os.Stderr, progressMode)
+	printer := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
-	_, err = build.Build(ctx, dis, opts, dockerAPI(dockerCli), dockerCli.ConfigFile(), pw)
+	_, err = build.Build(ctx, dis, opts, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
+	err1 := printer.Wait()
+	if err == nil {
+		err = err1
+	}
+
 	return err
 }
 
@@ -229,8 +243,12 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for --output=type=docker")
 
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Name and optionally a tag in the 'name:tag' format")
+	flags.SetAnnotation("tag", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t"})
 	flags.StringArrayVar(&options.buildArgs, "build-arg", []string{}, "Set build-time variables")
+	flags.SetAnnotation("build-arg", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg"})
+
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", "Name of the Dockerfile (Default is 'PATH/Dockerfile')")
+	flags.SetAnnotation("file", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f"})
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
@@ -238,6 +256,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, "Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir)")
 
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build.")
+	flags.SetAnnotation("target", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target"})
 
 	flags.StringSliceVar(&options.allow, "allow", []string{}, "Allow extra privileged entitlement, e.g. network.host, security.insecure")
 
@@ -245,6 +264,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 	flags.StringVar(&options.networkMode, "network", "default", "Set the networking mode for the RUN instructions during build")
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, "Add a custom host-to-IP mapping (host:ip)")
+	flags.SetAnnotation("add-host", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host"})
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
 	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
 	flags.MarkHidden("quiet")
@@ -305,7 +325,13 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 func commonBuildFlags(options *commonOptions, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
-	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (auto, plain, tty). Use plain to show container output")
+
+	defaultProgress, ok := os.LookupEnv("BUILDX_PROGRESS_DEFAULT")
+	if !ok {
+		defaultProgress = "auto"
+	}
+	flags.StringVar(&options.progress, "progress", defaultProgress, "Set type of progress output (auto, plain, tty). Use plain to show container output")
+
 	options.pull = flags.Bool("pull", false, "Always attempt to pull a newer version of the image")
 }
 

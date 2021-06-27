@@ -92,7 +92,11 @@ func NewLabeledStore(root string, ls LabelStore) (content.Store, error) {
 }
 
 func (s *store) Info(ctx context.Context, dgst digest.Digest) (content.Info, error) {
-	p := s.blobPath(dgst)
+	p, err := s.blobPath(dgst)
+	if err != nil {
+		return content.Info{}, errors.Wrapf(err, "calculating blob info path")
+	}
+
 	fi, err := os.Stat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -123,26 +127,17 @@ func (s *store) info(dgst digest.Digest, fi os.FileInfo, labels map[string]strin
 
 // ReaderAt returns an io.ReaderAt for the blob.
 func (s *store) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (content.ReaderAt, error) {
-	p := s.blobPath(desc.Digest)
-	fi, err := os.Stat(p)
+	p, err := s.blobPath(desc.Digest)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-
-		return nil, errors.Wrapf(errdefs.ErrNotFound, "blob %s expected at %s", desc.Digest, p)
+		return nil, errors.Wrapf(err, "calculating blob path for ReaderAt")
 	}
 
-	fp, err := os.Open(p)
+	reader, err := OpenReader(p)
 	if err != nil {
-		if !os.IsNotExist(err) {
-			return nil, err
-		}
-
-		return nil, errors.Wrapf(errdefs.ErrNotFound, "blob %s expected at %s", desc.Digest, p)
+		return nil, errors.Wrapf(err, "blob %s expected at %s", desc.Digest, p)
 	}
 
-	return sizeReaderAt{size: fi.Size(), fp: fp}, nil
+	return reader, nil
 }
 
 // Delete removes a blob by its digest.
@@ -150,7 +145,12 @@ func (s *store) ReaderAt(ctx context.Context, desc ocispec.Descriptor) (content.
 // While this is safe to do concurrently, safe exist-removal logic must hold
 // some global lock on the store.
 func (s *store) Delete(ctx context.Context, dgst digest.Digest) error {
-	if err := os.RemoveAll(s.blobPath(dgst)); err != nil {
+	bp, err := s.blobPath(dgst)
+	if err != nil {
+		return errors.Wrapf(err, "calculating blob path for delete")
+	}
+
+	if err := os.RemoveAll(bp); err != nil {
 		if !os.IsNotExist(err) {
 			return err
 		}
@@ -166,7 +166,11 @@ func (s *store) Update(ctx context.Context, info content.Info, fieldpaths ...str
 		return content.Info{}, errors.Wrapf(errdefs.ErrFailedPrecondition, "update not supported on immutable content store")
 	}
 
-	p := s.blobPath(info.Digest)
+	p, err := s.blobPath(info.Digest)
+	if err != nil {
+		return content.Info{}, errors.Wrapf(err, "calculating blob path for update")
+	}
+
 	fi, err := os.Stat(p)
 	if err != nil {
 		if os.IsNotExist(err) {
@@ -224,9 +228,14 @@ func (s *store) Update(ctx context.Context, info content.Info, fieldpaths ...str
 	return info, nil
 }
 
-func (s *store) Walk(ctx context.Context, fn content.WalkFunc, filters ...string) error {
-	// TODO: Support filters
+func (s *store) Walk(ctx context.Context, fn content.WalkFunc, fs ...string) error {
 	root := filepath.Join(s.root, "blobs")
+
+	filter, err := filters.ParseAll(fs...)
+	if err != nil {
+		return err
+	}
+
 	var alg digest.Algorithm
 	return filepath.Walk(root, func(path string, fi os.FileInfo, err error) error {
 		if err != nil {
@@ -270,7 +279,12 @@ func (s *store) Walk(ctx context.Context, fn content.WalkFunc, filters ...string
 				return err
 			}
 		}
-		return fn(s.info(dgst, fi, labels))
+
+		info := s.info(dgst, fi, labels)
+		if !filter.Match(content.AdaptInfo(info)) {
+			return nil
+		}
+		return fn(info)
 	})
 }
 
@@ -512,7 +526,10 @@ func (s *store) writer(ctx context.Context, ref string, total int64, expected di
 	// TODO(stevvooe): Need to actually store expected here. We have
 	// code in the service that shouldn't be dealing with this.
 	if expected != "" {
-		p := s.blobPath(expected)
+		p, err := s.blobPath(expected)
+		if err != nil {
+			return nil, errors.Wrap(err, "calculating expected blob path for writer")
+		}
 		if _, err := os.Stat(p); err == nil {
 			return nil, errors.Wrapf(errdefs.ErrAlreadyExists, "content %v", expected)
 		}
@@ -607,11 +624,17 @@ func (s *store) Abort(ctx context.Context, ref string) error {
 	return nil
 }
 
-func (s *store) blobPath(dgst digest.Digest) string {
-	return filepath.Join(s.root, "blobs", dgst.Algorithm().String(), dgst.Hex())
+func (s *store) blobPath(dgst digest.Digest) (string, error) {
+	if err := dgst.Validate(); err != nil {
+		return "", errors.Wrapf(errdefs.ErrInvalidArgument, "cannot calculate blob path from invalid digest: %v", err)
+	}
+
+	return filepath.Join(s.root, "blobs", dgst.Algorithm().String(), dgst.Hex()), nil
 }
 
 func (s *store) ingestRoot(ref string) string {
+	// we take a digest of the ref to keep the ingest paths constant length.
+	// Note that this is not the current or potential digest of incoming content.
 	dgst := digest.FromString(ref)
 	return filepath.Join(s.root, "ingest", dgst.Hex())
 }

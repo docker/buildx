@@ -9,7 +9,8 @@ import (
 	"github.com/docker/cli/cli/command"
 	cliconfig "github.com/docker/cli/cli/config"
 	cliflags "github.com/docker/cli/cli/flags"
-	"github.com/docker/docker/pkg/term"
+	"github.com/moby/term"
+	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -35,6 +36,9 @@ func setupCommonRootCommand(rootCmd *cobra.Command) (*cliflags.ClientOptions, *p
 	cobra.AddTemplateFunc("vendorAndVersion", vendorAndVersion)
 	cobra.AddTemplateFunc("invalidPluginReason", invalidPluginReason)
 	cobra.AddTemplateFunc("isPlugin", isPlugin)
+	cobra.AddTemplateFunc("isExperimental", isExperimental)
+	cobra.AddTemplateFunc("hasAdditionalHelp", hasAdditionalHelp)
+	cobra.AddTemplateFunc("additionalHelp", additionalHelp)
 	cobra.AddTemplateFunc("decoratedName", decoratedName)
 
 	rootCmd.SetUsageTemplate(usageTemplate)
@@ -45,6 +49,8 @@ func setupCommonRootCommand(rootCmd *cobra.Command) (*cliflags.ClientOptions, *p
 	rootCmd.PersistentFlags().BoolP("help", "h", false, "Print usage")
 	rootCmd.PersistentFlags().MarkShorthandDeprecated("help", "please use --help")
 	rootCmd.PersistentFlags().Lookup("help").Hidden = true
+
+	rootCmd.Annotations = map[string]string{"additionalHelp": "To get more help with docker, check out our guides at https://docs.docker.com/go/guides/"}
 
 	return opts, flags, helpCommand
 }
@@ -184,11 +190,35 @@ var helpCommand = &cobra.Command{
 		if cmd == nil || e != nil || len(args) > 0 {
 			return errors.Errorf("unknown help topic: %v", strings.Join(args, " "))
 		}
-
 		helpFunc := cmd.HelpFunc()
 		helpFunc(cmd, args)
 		return nil
 	},
+}
+
+func isExperimental(cmd *cobra.Command) bool {
+	if _, ok := cmd.Annotations["experimentalCLI"]; ok {
+		return true
+	}
+	var experimental bool
+	cmd.VisitParents(func(cmd *cobra.Command) {
+		if _, ok := cmd.Annotations["experimentalCLI"]; ok {
+			experimental = true
+		}
+	})
+	return experimental
+}
+
+func additionalHelp(cmd *cobra.Command) string {
+	if additionalHelp, ok := cmd.Annotations["additionalHelp"]; ok {
+		style := aec.EmptyBuilder.Bold().ANSI
+		return style.Apply(additionalHelp)
+	}
+	return ""
+}
+
+func hasAdditionalHelp(cmd *cobra.Command) bool {
+	return additionalHelp(cmd) != ""
 }
 
 func isPlugin(cmd *cobra.Command) bool {
@@ -282,11 +312,20 @@ func invalidPluginReason(cmd *cobra.Command) string {
 
 var usageTemplate = `Usage:
 
-{{- if not .HasSubCommands}}	{{.UseLine}}{{end}}
-{{- if .HasSubCommands}}	{{ .CommandPath}}{{- if .HasAvailableFlags}} [OPTIONS]{{end}} COMMAND{{end}}
+{{- if not .HasSubCommands}}  {{.UseLine}}{{end}}
+{{- if .HasSubCommands}}  {{ .CommandPath}}{{- if .HasAvailableFlags}} [OPTIONS]{{end}} COMMAND{{end}}
 
 {{if ne .Long ""}}{{ .Long | trim }}{{ else }}{{ .Short | trim }}{{end}}
+{{- if isExperimental .}}
 
+EXPERIMENTAL:
+  {{.CommandPath}} is an experimental feature.
+  Experimental features provide early access to product functionality. These
+  features may change between releases without warning, or can be removed from a
+  future release. Learn more about experimental features in our documentation:
+  https://docs.docker.com/go/experimental/
+
+{{- end}}
 {{- if gt .Aliases 0}}
 
 Aliases:
@@ -336,6 +375,10 @@ Invalid Plugins:
 {{- if .HasSubCommands }}
 
 Run '{{.CommandPath}} COMMAND --help' for more information on a command.
+{{- end}}
+{{- if hasAdditionalHelp .}}
+
+{{ additionalHelp . }}
 {{- end}}
 `
 

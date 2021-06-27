@@ -47,13 +47,16 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 
 				switch mt {
 				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+					p := descs[i].Platform
 					if descs[i].Platform == nil {
-						p, err := r.loadPlatform(ctx, in, dt)
-						if err != nil {
+						p = &ocispec.Platform{}
+					}
+					if p.OS == "" || p.Architecture == "" {
+						if err := r.loadPlatform(ctx, p, in, dt); err != nil {
 							return err
 						}
-						descs[i].Platform = p
 					}
+					descs[i].Platform = p
 				case images.MediaTypeDockerSchema1Manifest:
 					return errors.Errorf("schema1 manifests are not allowed in manifest lists")
 				}
@@ -166,24 +169,35 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 	return err
 }
 
-func (r *Resolver) loadPlatform(ctx context.Context, in string, dt []byte) (*ocispec.Platform, error) {
+func (r *Resolver) loadPlatform(ctx context.Context, p2 *ocispec.Platform, in string, dt []byte) error {
 	var manifest ocispec.Manifest
 	if err := json.Unmarshal(dt, &manifest); err != nil {
-		return nil, errors.WithStack(err)
+		return errors.WithStack(err)
 	}
 
 	dt, err := r.GetDescriptor(ctx, in, manifest.Config)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	var p ocispec.Platform
 	if err := json.Unmarshal(dt, &p); err != nil {
-		return nil, errors.WithStack(err)
+		return errors.WithStack(err)
 	}
 
 	p = platforms.Normalize(p)
-	return &p, nil
+
+	if p2.Architecture == "" {
+		p2.Architecture = p.Architecture
+		if p2.Variant == "" {
+			p2.Variant = p.Variant
+		}
+	}
+	if p2.OS == "" {
+		p2.OS = p.OS
+	}
+
+	return nil
 }
 
 func detectMediaType(dt []byte) (string, error) {

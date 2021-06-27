@@ -4,12 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"errors"
-	"os"
-	"strconv"
 	"strings"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/Microsoft/hcsshim/internal/cow"
 	"github.com/Microsoft/hcsshim/internal/log"
@@ -21,27 +18,6 @@ import (
 	"go.opencensus.io/trace"
 )
 
-// currentContainerStarts is used to limit the number of concurrent container
-// starts.
-var currentContainerStarts containerStarts
-
-type containerStarts struct {
-	maxParallel int
-	inProgress  int
-	sync.Mutex
-}
-
-func init() {
-	mpsS := os.Getenv("HCSSHIM_MAX_PARALLEL_START")
-	if len(mpsS) > 0 {
-		mpsI, err := strconv.Atoi(mpsS)
-		if err != nil || mpsI < 0 {
-			return
-		}
-		currentContainerStarts.maxParallel = mpsI
-	}
-}
-
 type System struct {
 	handleLock     sync.RWMutex
 	handle         vmcompute.HcsSystem
@@ -52,8 +28,7 @@ type System struct {
 	waitBlock      chan struct{}
 	waitError      error
 	exitError      error
-
-	os, typ string
+	os, typ        string
 }
 
 func newSystem(id string) *System {
@@ -213,32 +188,6 @@ func (computeSystem *System) Start(ctx context.Context) (err error) {
 
 	if computeSystem.handle == 0 {
 		return makeSystemError(computeSystem, operation, "", ErrAlreadyClosed, nil)
-	}
-
-	// This is a very simple backoff-retry loop to limit the number
-	// of parallel container starts if environment variable
-	// HCSSHIM_MAX_PARALLEL_START is set to a positive integer.
-	// It should generally only be used as a workaround to various
-	// platform issues that exist between RS1 and RS4 as of Aug 2018
-	if currentContainerStarts.maxParallel > 0 {
-		for {
-			currentContainerStarts.Lock()
-			if currentContainerStarts.inProgress < currentContainerStarts.maxParallel {
-				currentContainerStarts.inProgress++
-				currentContainerStarts.Unlock()
-				break
-			}
-			if currentContainerStarts.inProgress == currentContainerStarts.maxParallel {
-				currentContainerStarts.Unlock()
-				time.Sleep(100 * time.Millisecond)
-			}
-		}
-		// Make sure we decrement the count when we are done.
-		defer func() {
-			currentContainerStarts.Lock()
-			currentContainerStarts.inProgress--
-			currentContainerStarts.Unlock()
-		}()
 	}
 
 	resultJSON, err := vmcompute.HcsStartComputeSystem(ctx, computeSystem.handle, "")
@@ -451,6 +400,38 @@ func (computeSystem *System) Resume(ctx context.Context) (err error) {
 
 	resultJSON, err := vmcompute.HcsResumeComputeSystem(ctx, computeSystem.handle, "")
 	events, err := processAsyncHcsResult(ctx, err, resultJSON, computeSystem.callbackNumber, hcsNotificationSystemResumeCompleted, &timeout.SystemResume)
+	if err != nil {
+		return makeSystemError(computeSystem, operation, "", err, events)
+	}
+
+	return nil
+}
+
+// Save the compute system
+func (computeSystem *System) Save(ctx context.Context, options interface{}) (err error) {
+	operation := "hcsshim::System::Save"
+
+	// hcsSaveComputeSystemContext is an async peration. Start the outer span
+	// here to measure the full save time.
+	ctx, span := trace.StartSpan(ctx, operation)
+	defer span.End()
+	defer func() { oc.SetSpanStatus(span, err) }()
+	span.AddAttributes(trace.StringAttribute("cid", computeSystem.id))
+
+	saveOptions, err := json.Marshal(options)
+	if err != nil {
+		return err
+	}
+
+	computeSystem.handleLock.RLock()
+	defer computeSystem.handleLock.RUnlock()
+
+	if computeSystem.handle == 0 {
+		return makeSystemError(computeSystem, operation, "", ErrAlreadyClosed, nil)
+	}
+
+	result, err := vmcompute.HcsSaveComputeSystem(ctx, computeSystem.handle, string(saveOptions))
+	events, err := processAsyncHcsResult(ctx, err, result, computeSystem.callbackNumber, hcsNotificationSystemSaveCompleted, &timeout.SystemSave)
 	if err != nil {
 		return makeSystemError(computeSystem, operation, "", err, events)
 	}

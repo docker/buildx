@@ -45,7 +45,7 @@ func (r dockerFetcher) Fetch(ctx context.Context, desc ocispec.Descriptor) (io.R
 		return nil, errors.Wrap(errdefs.ErrNotFound, "no pull hosts")
 	}
 
-	ctx, err := contextWithRepositoryScope(ctx, r.refspec, false)
+	ctx, err := ContextWithRepositoryScope(ctx, r.refspec, false)
 	if err != nil {
 		return nil, err
 	}
@@ -98,6 +98,9 @@ func (r dockerFetcher) Fetch(ctx context.Context, desc ocispec.Descriptor) (io.R
 			var firstErr error
 			for _, host := range r.hosts {
 				req := r.request(host, http.MethodGet, "manifests", desc.Digest.String())
+				if err := req.addNamespace(r.refspec.Hostname()); err != nil {
+					return nil, err
+				}
 
 				rc, err := r.open(ctx, req, desc.MediaType, offset)
 				if err != nil {
@@ -118,6 +121,9 @@ func (r dockerFetcher) Fetch(ctx context.Context, desc ocispec.Descriptor) (io.R
 		var firstErr error
 		for _, host := range r.hosts {
 			req := r.request(host, http.MethodGet, "blobs", desc.Digest.String())
+			if err := req.addNamespace(r.refspec.Hostname()); err != nil {
+				return nil, err
+			}
 
 			rc, err := r.open(ctx, req, desc.MediaType, offset)
 			if err != nil {

@@ -5,10 +5,13 @@ import (
 	"io/ioutil"
 	"sort"
 	"strings"
+	"sync"
 
 	"k8s.io/client-go/rest"
 
 	dockerclient "github.com/docker/docker/client"
+	"github.com/moby/buildkit/client"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -52,6 +55,8 @@ type InitConfig struct {
 	BuildkitFlags    []string
 	ConfigFile       string
 	DriverOpts       map[string]string
+	Auth             Auth
+	Platforms        []specs.Platform
 	// ContextPathHash can be used for determining pods in the driver instance
 	ContextPathHash string
 }
@@ -98,7 +103,7 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, kcc KubeClientConfig, flags []string, config string, do map[string]string, contextPathHash string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, config string, do map[string]string, platforms []specs.Platform, contextPathHash string) (Driver, error) {
 	ic := InitConfig{
 		DockerAPI:        api,
 		KubeClientConfig: kcc,
@@ -106,6 +111,8 @@ func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.API
 		BuildkitFlags:    flags,
 		ConfigFile:       config,
 		DriverOpts:       do,
+		Auth:             auth,
+		Platforms:        platforms,
 		ContextPathHash:  contextPathHash,
 	}
 	if f == nil {
@@ -115,9 +122,27 @@ func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.API
 			return nil, err
 		}
 	}
-	return f.New(ctx, ic)
+	d, err := f.New(ctx, ic)
+	if err != nil {
+		return nil, err
+	}
+	return &cachedDriver{Driver: d}, nil
 }
 
 func GetFactories() map[string]Factory {
 	return drivers
+}
+
+type cachedDriver struct {
+	Driver
+	client *client.Client
+	err    error
+	once   sync.Once
+}
+
+func (d *cachedDriver) Client(ctx context.Context) (*client.Client, error) {
+	d.once.Do(func() {
+		d.client, d.err = d.Driver.Client(ctx)
+	})
+	return d.client, d.err
 }

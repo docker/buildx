@@ -1,25 +1,41 @@
 #!/usr/bin/env sh
 
+: ${CI=}
 : ${PREFER_BUILDCTL=}
 : ${PREFER_LEGACY=}
 : ${CLI_PLATFORM=}
+: ${GITHUB_ACTIONS=}
+: ${CACHEDIR_FROM=}
+: ${CACHEDIR_TO=}
 
-newerEqualThan() { # $1=minimum wanted version $2=actual-version
-  [ "$1" = "$(printf "$1\n$2" | sort -V | head -n 1)" ]
-}
-
-buildmode="legacy"
 if [ "$PREFER_BUILDCTL" = "1" ]; then
-  buildmode="buildkit";
-else
-  serverVersion=$(docker info --format '{{.ServerVersion}}')
-  experimental=$(docker info --format '{{.ExperimentalBuild}}')
-  if [ "$PREFER_LEGACY" != "1" ] && ( newerEqualThan "18.09" $serverVersion || \
-    ( newerEqualThan "18.06" $serverVersion && [ "true" = "$experimental" ] ) || \
-    [ "$DOCKER_BUILDKIT" = "1" ]); then
-    buildmode="docker-buildkit";
-  fi
+  echo >&2 "WARNING: PREFER_BUILDCTL is no longer supported. Ignoring."
 fi
+
+if [ "$PREFER_LEGACY" = "1" ]; then
+  echo >&2 "WARNING: PREFER_LEGACY is no longer supported. Ignoring."
+fi
+
+progressFlag=""
+if [ "$CI" = "true" ]; then
+  progressFlag="--progress=plain"
+fi
+
+buildxCmd() {
+  if docker buildx version >/dev/null 2>&1; then
+    set -x
+    docker buildx "$@" $progressFlag
+  elif buildx version >/dev/null 2>&1; then
+    set -x
+    buildx "$@" $progressFlag
+  elif docker version >/dev/null 2>&1; then
+    set -x
+    DOCKER_BUILDKIT=1 docker "$@" $progressFlag
+  else
+    echo >&2 "ERROR: Please enable DOCKER_BUILDKIT or install standalone buildx"
+    exit 1
+  fi
+}
 
 if [ -z "$CLI_PLATFORM" ]; then
   if [ "$(uname -s)" = "Darwin" ]; then
@@ -33,3 +49,18 @@ if [ -z "$CLI_PLATFORM" ]; then
   fi
 fi
 
+cacheType=""
+cacheRefFrom=""
+cacheRefTo=""
+currentref=""
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+  currentref="git://github.com/$GITHUB_REPOSITORY#$GITHUB_REF"
+  cacheType="local"
+  cacheRefFrom="$CACHEDIR_FROM"
+  cacheRefTo="$CACHEDIR_TO"
+fi
+
+currentcontext="."
+if [ -n "$currentref" ]; then
+  currentcontext="--build-arg BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 $currentref"
+fi

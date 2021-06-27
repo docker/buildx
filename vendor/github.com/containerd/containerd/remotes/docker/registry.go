@@ -56,6 +56,7 @@ const (
 	// Reserved for future capabilities (i.e. search, catalog, remove)
 )
 
+// Has checks whether the capabilities list has the provide capability
 func (c HostCapabilities) Has(t HostCapabilities) bool {
 	return c&t == t
 }
@@ -70,6 +71,16 @@ type RegistryHost struct {
 	Scheme       string
 	Path         string
 	Capabilities HostCapabilities
+	Header       http.Header
+}
+
+func (h RegistryHost) isProxy(refhost string) bool {
+	if refhost != h.Host {
+		if refhost != "docker.io" || h.Host != "registry-1.docker.io" {
+			return true
+		}
+	}
+	return false
 }
 
 // RegistryHosts fetches the registry hosts for a given namespace,

@@ -25,7 +25,7 @@ type RandomPodChooser struct {
 }
 
 func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) {
-	pods, err := ListRunningPods(pc.PodClient, pc.Deployment)
+	pods, err := ListRunningPods(ctx, pc.PodClient, pc.Deployment)
 	if err != nil {
 		return nil, err
 	}
@@ -46,7 +46,7 @@ type StickyPodChooser struct {
 }
 
 func (pc *StickyPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) {
-	pods, err := ListRunningPods(pc.PodClient, pc.Deployment)
+	pods, err := ListRunningPods(ctx, pc.PodClient, pc.Deployment)
 	if err != nil {
 		return nil, err
 	}
@@ -70,7 +70,7 @@ func (pc *StickyPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 	return podMap[chosen], nil
 }
 
-func ListRunningPods(client clientcorev1.PodInterface, depl *appsv1.Deployment) ([]*corev1.Pod, error) {
+func ListRunningPods(ctx context.Context, client clientcorev1.PodInterface, depl *appsv1.Deployment) ([]*corev1.Pod, error) {
 	selector, err := metav1.LabelSelectorAsSelector(depl.Spec.Selector)
 	if err != nil {
 		return nil, err
@@ -78,7 +78,7 @@ func ListRunningPods(client clientcorev1.PodInterface, depl *appsv1.Deployment) 
 	listOpts := metav1.ListOptions{
 		LabelSelector: selector.String(),
 	}
-	podList, err := client.List(listOpts)
+	podList, err := client.List(ctx, listOpts)
 	if err != nil {
 		return nil, err
 	}

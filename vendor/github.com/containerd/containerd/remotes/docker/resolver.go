@@ -22,6 +22,7 @@ import (
 	"io"
 	"io/ioutil"
 	"net/http"
+	"net/url"
 	"path"
 	"strings"
 
@@ -40,10 +41,6 @@ import (
 )
 
 var (
-	// ErrNoToken is returned if a request is successful but the body does not
-	// contain an authorization token.
-	ErrNoToken = errors.New("authorization server did not include a token in the response")
-
 	// ErrInvalidAuthorization is used when credentials are passed to a server but
 	// those credentials are rejected.
 	ErrInvalidAuthorization = errors.New("authorization failed")
@@ -222,18 +219,13 @@ func (r *countingReader) Read(p []byte) (int, error) {
 var _ remotes.Resolver = &dockerResolver{}
 
 func (r *dockerResolver) Resolve(ctx context.Context, ref string) (string, ocispec.Descriptor, error) {
-	refspec, err := reference.Parse(ref)
+	base, err := r.resolveDockerBase(ref)
 	if err != nil {
 		return "", ocispec.Descriptor{}, err
 	}
-
+	refspec := base.refspec
 	if refspec.Object == "" {
 		return "", ocispec.Descriptor{}, reference.ErrObjectRequired
-	}
-
-	base, err := r.base(refspec)
-	if err != nil {
-		return "", ocispec.Descriptor{}, err
 	}
 
 	var (
@@ -266,7 +258,7 @@ func (r *dockerResolver) Resolve(ctx context.Context, ref string) (string, ocisp
 		return "", ocispec.Descriptor{}, errors.Wrap(errdefs.ErrNotFound, "no resolve hosts")
 	}
 
-	ctx, err = contextWithRepositoryScope(ctx, refspec, false)
+	ctx, err = ContextWithRepositoryScope(ctx, refspec, false)
 	if err != nil {
 		return "", ocispec.Descriptor{}, err
 	}
@@ -276,6 +268,10 @@ func (r *dockerResolver) Resolve(ctx context.Context, ref string) (string, ocisp
 			ctx := log.WithLogger(ctx, log.G(ctx).WithField("host", host.Host))
 
 			req := base.request(host, http.MethodHead, u...)
+			if err := req.addNamespace(base.refspec.Hostname()); err != nil {
+				return "", ocispec.Descriptor{}, err
+			}
+
 			for key, value := range r.resolveHeader {
 				req.header[key] = append(req.header[key], value...)
 			}
@@ -283,7 +279,7 @@ func (r *dockerResolver) Resolve(ctx context.Context, ref string) (string, ocisp
 			log.G(ctx).Debug("resolving")
 			resp, err := req.doWithRetries(ctx, nil)
 			if err != nil {
-				if errors.Cause(err) == ErrInvalidAuthorization {
+				if errors.Is(err, ErrInvalidAuthorization) {
 					err = errors.Wrapf(err, "pull access denied, repository does not exist or may require authorization")
 				}
 				// Store the error for referencing later
@@ -323,6 +319,10 @@ func (r *dockerResolver) Resolve(ctx context.Context, ref string) (string, ocisp
 				log.G(ctx).Debug("no Docker-Content-Digest header, fetching manifest instead")
 
 				req = base.request(host, http.MethodGet, u...)
+				if err := req.addNamespace(base.refspec.Hostname()); err != nil {
+					return "", ocispec.Descriptor{}, err
+				}
+
 				for key, value := range r.resolveHeader {
 					req.header[key] = append(req.header[key], value...)
 				}
@@ -382,12 +382,7 @@ func (r *dockerResolver) Resolve(ctx context.Context, ref string) (string, ocisp
 }
 
 func (r *dockerResolver) Fetcher(ctx context.Context, ref string) (remotes.Fetcher, error) {
-	refspec, err := reference.Parse(ref)
-	if err != nil {
-		return nil, err
-	}
-
-	base, err := r.base(refspec)
+	base, err := r.resolveDockerBase(ref)
 	if err != nil {
 		return nil, err
 	}
@@ -398,28 +393,32 @@ func (r *dockerResolver) Fetcher(ctx context.Context, ref string) (remotes.Fetch
 }
 
 func (r *dockerResolver) Pusher(ctx context.Context, ref string) (remotes.Pusher, error) {
-	refspec, err := reference.Parse(ref)
-	if err != nil {
-		return nil, err
-	}
-
-	base, err := r.base(refspec)
+	base, err := r.resolveDockerBase(ref)
 	if err != nil {
 		return nil, err
 	}
 
 	return dockerPusher{
 		dockerBase: base,
-		object:     refspec.Object,
+		object:     base.refspec.Object,
 		tracker:    r.tracker,
 	}, nil
 }
 
+func (r *dockerResolver) resolveDockerBase(ref string) (*dockerBase, error) {
+	refspec, err := reference.Parse(ref)
+	if err != nil {
+		return nil, err
+	}
+
+	return r.base(refspec)
+}
+
 type dockerBase struct {
-	refspec   reference.Spec
-	namespace string
-	hosts     []RegistryHost
-	header    http.Header
+	refspec    reference.Spec
+	repository string
+	hosts      []RegistryHost
+	header     http.Header
 }
 
 func (r *dockerResolver) base(refspec reference.Spec) (*dockerBase, error) {
@@ -429,10 +428,10 @@ func (r *dockerResolver) base(refspec reference.Spec) (*dockerBase, error) {
 		return nil, err
 	}
 	return &dockerBase{
-		refspec:   refspec,
-		namespace: strings.TrimPrefix(refspec.Locator, host+"/"),
-		hosts:     hosts,
-		header:    r.header,
+		refspec:    refspec,
+		repository: strings.TrimPrefix(refspec.Locator, host+"/"),
+		hosts:      hosts,
+		header:     r.header,
 	}, nil
 }
 
@@ -446,11 +445,15 @@ func (r *dockerBase) filterHosts(caps HostCapabilities) (hosts []RegistryHost) {
 }
 
 func (r *dockerBase) request(host RegistryHost, method string, ps ...string) *request {
-	header := http.Header{}
-	for key, value := range r.header {
+	header := r.header.Clone()
+	if header == nil {
+		header = http.Header{}
+	}
+
+	for key, value := range host.Header {
 		header[key] = append(header[key], value...)
 	}
-	parts := append([]string{"/", host.Path, r.namespace}, ps...)
+	parts := append([]string{"/", host.Path, r.repository}, ps...)
 	p := path.Join(parts...)
 	// Join strips trailing slash, re-add ending "/" if included
 	if len(parts) > 0 && strings.HasSuffix(parts[len(parts)-1], "/") {
@@ -475,6 +478,29 @@ func (r *request) authorize(ctx context.Context, req *http.Request) error {
 	return nil
 }
 
+func (r *request) addNamespace(ns string) (err error) {
+	if !r.host.isProxy(ns) {
+		return nil
+	}
+	var q url.Values
+	// Parse query
+	if i := strings.IndexByte(r.path, '?'); i > 0 {
+		r.path = r.path[:i+1]
+		q, err = url.ParseQuery(r.path[i+1:])
+		if err != nil {
+			return
+		}
+	} else {
+		r.path = r.path + "?"
+		q = url.Values{}
+	}
+	q.Add("ns", ns)
+
+	r.path = r.path + q.Encode()
+
+	return
+}
+
 type request struct {
 	method string
 	path   string
@@ -490,7 +516,10 @@ func (r *request) do(ctx context.Context) (*http.Response, error) {
 	if err != nil {
 		return nil, err
 	}
-	req.Header = r.header
+	req.Header = http.Header{} // headers need to be copied to avoid concurrent map access
+	for k, v := range r.header {
+		req.Header[k] = v
+	}
 	if r.body != nil {
 		body, err := r.body()
 		if err != nil {

@@ -12,6 +12,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
+	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
@@ -29,6 +30,14 @@ type Driver struct {
 	netMode string
 	image   string
 	env     []string
+}
+
+func (d *Driver) IsMobyDriver() bool {
+	return false
+}
+
+func (d *Driver) Config() driver.InitConfig {
+	return d.InitConfig
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
@@ -59,7 +68,13 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	}
 
 	if err := l.Wrap("pulling image "+imageName, func() error {
-		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, types.ImageCreateOptions{})
+		ra, err := imagetools.RegistryAuthForRef(imageName, d.Auth)
+		if err != nil {
+			return err
+		}
+		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, types.ImageCreateOptions{
+			RegistryAuth: ra,
+		})
 		if err != nil {
 			return err
 		}
@@ -86,11 +101,12 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	if err := l.Wrap("creating container "+d.Name, func() error {
 		hc := &container.HostConfig{
 			Privileged: true,
+			UsernsMode: "host",
 		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
 		}
-		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, d.Name)
+		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
 		if err != nil {
 			return err
 		}
@@ -263,7 +279,7 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 
 	conn = demuxConn(conn)
 
-	return client.New(ctx, "", client.WithDialer(func(string, time.Duration) (net.Conn, error) {
+	return client.New(ctx, "", client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return conn, nil
 	}))
 }

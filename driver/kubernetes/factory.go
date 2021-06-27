@@ -9,7 +9,6 @@ import (
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
-	"github.com/docker/buildx/util/platformutil"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/kubernetes"
@@ -71,6 +70,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		Replicas:      1,
 		BuildkitFlags: cfg.BuildkitFlags,
 		Rootless:      false,
+		Platforms:     cfg.Platforms,
 	}
 	loadbalance := LoadbalanceSticky
 	imageOverride := ""
@@ -85,20 +85,20 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if err != nil {
 				return nil, err
 			}
+		case "requests.cpu":
+			deploymentOpt.RequestsCPU = v
+		case "requests.memory":
+			deploymentOpt.RequestsMemory = v
+		case "limits.cpu":
+			deploymentOpt.LimitsCPU = v
+		case "limits.memory":
+			deploymentOpt.LimitsMemory = v
 		case "rootless":
 			deploymentOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
 				return nil, err
 			}
 			deploymentOpt.Image = bkimage.DefaultRootlessImage
-		case "platform":
-			if v != "" {
-				platforms, err := platformutil.Parse(strings.Split(v, ","))
-				if err != nil {
-					return nil, err
-				}
-				deploymentOpt.Platforms = platforms
-			}
 		case "nodeselector":
 			kvs := strings.Split(strings.Trim(v, `"`), ",")
 			s := map[string]string{}

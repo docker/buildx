@@ -2,9 +2,7 @@ package bake
 
 import (
 	"context"
-	"io/ioutil"
 	"os"
-	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -12,12 +10,10 @@ import (
 
 func TestReadTargets(t *testing.T) {
 	t.Parallel()
-	tmpdir, err := ioutil.TempDir("", "bake")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpdir)
 
-	fp := filepath.Join(tmpdir, "config.hcl")
-	err = ioutil.WriteFile(fp, []byte(`
+	fp := File{
+		Name: "config.hcl",
+		Data: []byte(`
 target "webDEP" {
 	args = {
 		VAR_INHERITED = "webDEP"
@@ -32,13 +28,13 @@ target "webapp" {
 		VAR_BOTH = "webapp"
 	}
 	inherits = ["webDEP"]
-}`), 0600)
-	require.NoError(t, err)
+}`),
+	}
 
 	ctx := context.TODO()
 
 	t.Run("NoOverrides", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, nil)
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
 
@@ -50,7 +46,7 @@ target "webapp" {
 	})
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
-		_, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"})
+		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"})
 		require.NotNil(t, err)
 		require.Equal(t, err.Error(), "could not find any target matching 'nosuchtarget'")
 	})
@@ -60,7 +56,7 @@ target "webapp" {
 			os.Setenv("VAR_FROMENV"+t.Name(), "fromEnv")
 			defer os.Unsetenv("VAR_FROM_ENV" + t.Name())
 
-			m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{
+			m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webapp.args.VAR_UNSET",
 				"webapp.args.VAR_EMPTY=",
 				"webapp.args.VAR_SET=bananas",
@@ -89,7 +85,7 @@ target "webapp" {
 
 		// building leaf but overriding parent fields
 		t.Run("parent", func(t *testing.T) {
-			m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{
+			m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webDEP.args.VAR_INHERITED=override",
 				"webDEP.args.VAR_BOTH=override",
 			})
@@ -100,23 +96,23 @@ target "webapp" {
 	})
 
 	t.Run("ContextOverride", func(t *testing.T) {
-		_, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.context"})
+		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"})
 		require.NotNil(t, err)
 
-		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.context=foo"})
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"})
 		require.NoError(t, err)
 
 		require.Equal(t, "foo", *m["webapp"].Context)
 	})
 
 	t.Run("NoCacheOverride", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"})
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"})
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].NoCache)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []string{fp}, []string{"webapp"}, []string{"webapp.pull=false"})
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"})
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].Pull)
 	})
@@ -176,7 +172,7 @@ target "webapp" {
 		}
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
-				m, err := ReadTargets(ctx, []string{fp}, test.targets, test.overrides)
+				m, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides)
 				test.check(t, m, err)
 			})
 		}
@@ -185,14 +181,11 @@ target "webapp" {
 
 func TestReadTargetsCompose(t *testing.T) {
 	t.Parallel()
-	tmpdir, err := ioutil.TempDir("", "bake")
-	require.NoError(t, err)
-	defer os.RemoveAll(tmpdir)
 
-	fp := filepath.Join(tmpdir, "docker-compose.yml")
-	err = ioutil.WriteFile(fp, []byte(`
-version: "3"
-
+	fp := File{
+		Name: "docker-compose.yml",
+		Data: []byte(
+			`version: "3"
 services:
   db:
     build: .
@@ -203,13 +196,13 @@ services:
       dockerfile: Dockerfile.webapp
       args:
         buildno: 1
-`), 0600)
-	require.NoError(t, err)
+`),
+	}
 
-	fp2 := filepath.Join(tmpdir, "docker-compose2.yml")
-	err = ioutil.WriteFile(fp2, []byte(`
-version: "3"
-
+	fp2 := File{
+		Name: "docker-compose2.yml",
+		Data: []byte(
+			`version: "3"
 services:
   newservice:
     build: .
@@ -217,12 +210,12 @@ services:
     build:
       args:
         buildno2: 12
-`), 0600)
-	require.NoError(t, err)
+`),
+	}
 
 	ctx := context.TODO()
 
-	m, err := ReadTargets(ctx, []string{fp, fp2}, []string{"default"}, nil)
+	m, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(m))

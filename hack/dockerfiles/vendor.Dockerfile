@@ -1,5 +1,6 @@
-# syntax = docker/dockerfile:1.0-experimental
-FROM golang:1.13-alpine AS vendored
+# syntax = docker/dockerfile:1.2
+
+FROM golang:1.16-alpine AS vendored
 RUN  apk add --no-cache git rsync
 WORKDIR /src
 RUN --mount=target=/context \

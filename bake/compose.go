@@ -56,7 +56,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 			if reflect.DeepEqual(s.Build, zeroBuildConfig) {
 				// if not make sure they're setting an image or it's invalid d-c.yml
 				if s.Image == "" {
-					return nil, fmt.Errorf("compose file invalid: service %s has neither an image nor a build context specified. At least one must be provided.", s.Name)
+					return nil, fmt.Errorf("compose file invalid: service %s has neither an image nor a build context specified. At least one must be provided", s.Name)
 				}
 				continue
 			}

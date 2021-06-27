@@ -109,7 +109,6 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.builder = rootOpts.builder
 			return runDiskUsage(dockerCli, options)
 		},
-		Annotations: map[string]string{"version": "1.00"},
 	}
 
 	flags := cmd.Flags()
@@ -185,8 +184,6 @@ func printSummary(tw *tabwriter.Writer, dus [][]*client.UsageInfo) {
 			}
 		}
 	}
-
-	tw = tabwriter.NewWriter(os.Stdout, 1, 8, 1, '\t', 0)
 
 	if shared > 0 {
 		fmt.Fprintf(tw, "Shared:\t%.2f\n", units.Bytes(shared))

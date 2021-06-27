@@ -5,26 +5,66 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"regexp"
 	"strconv"
 	"strings"
 
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/docker/pkg/urlutil"
 	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 )
 
-func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[string]*Target, error) {
-	var c Config
-	for _, f := range files {
-		cfg, err := ParseFile(f)
+var httpPrefix = regexp.MustCompile(`^https?://`)
+var gitURLPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
+
+type File struct {
+	Name string
+	Data []byte
+}
+
+func defaultFilenames() []string {
+	return []string{
+		"docker-compose.yml",  // support app
+		"docker-compose.yaml", // support app
+		"docker-bake.json",
+		"docker-bake.override.json",
+		"docker-bake.hcl",
+		"docker-bake.override.hcl",
+	}
+}
+
+func ReadLocalFiles(names []string) ([]File, error) {
+	isDefault := false
+	if len(names) == 0 {
+		isDefault = true
+		names = defaultFilenames()
+	}
+	out := make([]File, 0, len(names))
+
+	for _, n := range names {
+		dt, err := ioutil.ReadFile(n)
 		if err != nil {
+			if isDefault && errors.Is(err, os.ErrNotExist) {
+				continue
+			}
 			return nil, err
 		}
-		c = mergeConfig(c, *cfg)
+		out = append(out, File{Name: n, Data: dt})
 	}
+	return out, nil
+}
+
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string) (map[string]*Target, error) {
+	c, err := parseFiles(files)
+	if err != nil {
+		return nil, err
+	}
+
 	o, err := c.newOverrides(overrides)
 	if err != nil {
 		return nil, err
@@ -44,30 +84,73 @@ func ReadTargets(ctx context.Context, files, targets, overrides []string) (map[s
 	return m, nil
 }
 
-func ParseFile(fn string) (*Config, error) {
-	dt, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return nil, err
+func parseFiles(files []File) (*Config, error) {
+	var c Config
+	var fs []*hcl.File
+	var scs []*StaticConfig
+	for _, f := range files {
+		cfg, f, sc, err := parseFile(f.Data, f.Name)
+		if err != nil {
+			return nil, err
+		}
+		if cfg != nil {
+			c = mergeConfig(c, *cfg)
+		} else {
+			fs = append(fs, f)
+			scs = append(scs, sc)
+		}
 	}
 
+	if len(fs) > 0 {
+		cfg, err := ParseHCL(hcl.MergeFiles(fs), mergeStaticConfig(scs))
+		if err != nil {
+			return nil, err
+		}
+		c = mergeConfig(c, dedupeConfig(*cfg))
+	}
+	return &c, nil
+}
+
+func dedupeConfig(c Config) Config {
+	c2 := c
+	c2.Targets = make([]*Target, 0, len(c2.Targets))
+	m := map[string]*Target{}
+	for _, t := range c.Targets {
+		if t2, ok := m[t.Name]; ok {
+			merge(t2, t)
+		} else {
+			m[t.Name] = t
+			c2.Targets = append(c2.Targets, t)
+		}
+	}
+	return c2
+}
+
+func ParseFile(dt []byte, fn string) (*Config, error) {
+	return parseFiles([]File{{Data: dt, Name: fn}})
+}
+
+func parseFile(dt []byte, fn string) (*Config, *hcl.File, *StaticConfig, error) {
 	fnl := strings.ToLower(fn)
 	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
-		return ParseCompose(dt)
+		c, err := ParseCompose(dt)
+		return c, nil, nil, err
 	}
 
 	if strings.HasSuffix(fnl, ".json") || strings.HasSuffix(fnl, ".hcl") {
-		return ParseHCL(dt, fn)
+		f, sc, err := ParseHCLFile(dt, fn)
+		return nil, f, sc, err
 	}
 
 	cfg, err := ParseCompose(dt)
 	if err != nil {
-		cfg, err2 := ParseHCL(dt, fn)
+		f, sc, err2 := ParseHCLFile(dt, fn)
 		if err2 != nil {
-			return nil, errors.Errorf("failed to parse %s: parsing yaml: %s, parsing hcl: %s", fn, err.Error(), err2.Error())
+			return nil, nil, nil, errors.Errorf("failed to parse %s: parsing yaml: %s, parsing hcl: %s", fn, err.Error(), err2.Error())
 		}
-		return cfg, nil
+		return nil, f, sc, nil
 	}
-	return cfg, nil
+	return cfg, nil, nil, nil
 }
 
 type Config struct {
@@ -320,8 +403,15 @@ func (c Config) target(name string, visited map[string]struct{}, overrides map[s
 }
 
 type Variable struct {
-	Name    string `json:"-" hcl:"name,label"`
-	Default string `json:"default,omitempty" hcl:"default,optional"`
+	Name    string         `json:"-" hcl:"name,label"`
+	Default *hcl.Attribute `json:"default,omitempty" hcl:"default,optional"`
+}
+
+type Function struct {
+	Name     string         `json:"-" hcl:"name,label"`
+	Params   *hcl.Attribute `json:"params,omitempty" hcl:"params"`
+	Variadic *hcl.Attribute `json:"variadic_param,omitempty" hcl:"variadic_params"`
+	Result   *hcl.Attribute `json:"result,omitempty" hcl:"result"`
 }
 
 type Group struct {
@@ -336,20 +426,22 @@ type Target struct {
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional"`
 
-	Context    *string           `json:"context,omitempty" hcl:"context,optional"`
-	Dockerfile *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
-	Args       map[string]string `json:"args,omitempty" hcl:"args,optional"`
-	Labels     map[string]string `json:"labels,omitempty" hcl:"labels,optional"`
-	Tags       []string          `json:"tags,omitempty" hcl:"tags,optional"`
-	CacheFrom  []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional"`
-	CacheTo    []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional"`
-	Target     *string           `json:"target,omitempty" hcl:"target,optional"`
-	Secrets    []string          `json:"secret,omitempty" hcl:"secret,optional"`
-	SSH        []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
-	Platforms  []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
-	Outputs    []string          `json:"output,omitempty" hcl:"output,optional"`
-	Pull       *bool             `json:"pull,omitempty" hcl:"pull,optional"`
-	NoCache    *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
+	Context          *string           `json:"context,omitempty" hcl:"context,optional"`
+	Dockerfile       *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
+	DockerfileInline *string           `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional"`
+	Args             map[string]string `json:"args,omitempty" hcl:"args,optional"`
+	Labels           map[string]string `json:"labels,omitempty" hcl:"labels,optional"`
+	Tags             []string          `json:"tags,omitempty" hcl:"tags,optional"`
+	CacheFrom        []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional"`
+	CacheTo          []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional"`
+	Target           *string           `json:"target,omitempty" hcl:"target,optional"`
+	Secrets          []string          `json:"secret,omitempty" hcl:"secret,optional"`
+	SSH              []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
+	Platforms        []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
+	Outputs          []string          `json:"output,omitempty" hcl:"output,optional"`
+	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional"`
+	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
+
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
 
@@ -363,10 +455,10 @@ func (t *Target) normalize() {
 	t.Outputs = removeDupes(t.Outputs)
 }
 
-func TargetsToBuildOpt(m map[string]*Target) (map[string]build.Options, error) {
+func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
-		bo, err := toBuildOpt(v)
+		bo, err := toBuildOpt(v, inp)
 		if err != nil {
 			return nil, err
 		}
@@ -375,7 +467,19 @@ func TargetsToBuildOpt(m map[string]*Target) (map[string]build.Options, error) {
 	return m2, nil
 }
 
-func toBuildOpt(t *Target) (*build.Options, error) {
+func updateContext(t *build.Inputs, inp *Input) {
+	if inp == nil || inp.State == nil {
+		return
+	}
+	if t.ContextPath == "." {
+		t.ContextPath = inp.URL
+		return
+	}
+	st := llb.Scratch().File(llb.Copy(*inp.State, t.ContextPath, "/"), llb.WithCustomNamef("set context to %s", t.ContextPath))
+	t.ContextState = &st
+}
+
+func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -387,6 +491,7 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 	if t.Context != nil {
 		contextPath = *t.Context
 	}
+	contextPath = path.Clean(contextPath)
 	dockerfilePath := "Dockerfile"
 	if t.Dockerfile != nil {
 		dockerfilePath = *t.Dockerfile
@@ -405,11 +510,17 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 		pull = *t.Pull
 	}
 
+	bi := build.Inputs{
+		ContextPath:    contextPath,
+		DockerfilePath: dockerfilePath,
+	}
+	if t.DockerfileInline != nil {
+		bi.DockerfileInline = *t.DockerfileInline
+	}
+	updateContext(&bi, inp)
+
 	bo := &build.Options{
-		Inputs: build.Inputs{
-			ContextPath:    contextPath,
-			DockerfilePath: dockerfilePath,
-		},
+		Inputs:    bi,
 		Tags:      t.Tags,
 		BuildArgs: t.Args,
 		Labels:    t.Labels,
@@ -425,13 +536,17 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 
 	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(os.Stderr))
 
-	secrets, err := build.ParseSecretSpecs(t.Secrets)
+	secrets, err := buildflags.ParseSecretSpecs(t.Secrets)
 	if err != nil {
 		return nil, err
 	}
 	bo.Session = append(bo.Session, secrets)
 
-	ssh, err := build.ParseSSHSpecs(t.SSH)
+	sshSpecs := t.SSH
+	if len(sshSpecs) == 0 && buildflags.IsGitSSH(contextPath) {
+		sshSpecs = []string{"default"}
+	}
+	ssh, err := buildflags.ParseSSHSpecs(sshSpecs)
 	if err != nil {
 		return nil, err
 	}
@@ -441,19 +556,19 @@ func toBuildOpt(t *Target) (*build.Options, error) {
 		bo.Target = *t.Target
 	}
 
-	cacheImports, err := build.ParseCacheEntry(t.CacheFrom)
+	cacheImports, err := buildflags.ParseCacheEntry(t.CacheFrom)
 	if err != nil {
 		return nil, err
 	}
 	bo.CacheFrom = cacheImports
 
-	cacheExports, err := build.ParseCacheEntry(t.CacheTo)
+	cacheExports, err := buildflags.ParseCacheEntry(t.CacheTo)
 	if err != nil {
 		return nil, err
 	}
 	bo.CacheTo = cacheExports
 
-	outputs, err := build.ParseOutputs(t.Outputs)
+	outputs, err := buildflags.ParseOutputs(t.Outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -472,6 +587,9 @@ func merge(t1, t2 *Target) *Target {
 	}
 	if t2.Dockerfile != nil {
 		t1.Dockerfile = t2.Dockerfile
+	}
+	if t2.DockerfileInline != nil {
+		t1.DockerfileInline = t2.DockerfileInline
 	}
 	for k, v := range t2.Args {
 		if t1.Args == nil {
@@ -524,6 +642,9 @@ func removeDupes(s []string) []string {
 	seen := make(map[string]struct{}, len(s))
 	for _, v := range s {
 		if _, ok := seen[v]; ok {
+			continue
+		}
+		if v == "" {
 			continue
 		}
 		seen[v] = struct{}{}

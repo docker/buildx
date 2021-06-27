@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,21 +14,36 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
 	"github.com/docker/cli/cli/context/kubernetes"
+	ctxstore "github.com/docker/cli/cli/context/store"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"k8s.io/client-go/tools/clientcmd"
 )
 
 // getStore returns current builder instance store
 func getStore(dockerCli command.Cli) (*store.Txn, func(), error) {
-	dir := filepath.Dir(dockerCli.ConfigFile().Filename)
-	s, err := store.New(dir)
+	s, err := store.New(getConfigStorePath(dockerCli))
 	if err != nil {
 		return nil, nil, err
 	}
 	return s.Txn()
+}
+
+// getConfigStorePath will look for correct configuration store path;
+// if `$BUILDX_CONFIG` is set - use it, otherwise use parent directory
+// of Docker config file (i.e. `${DOCKER_CONFIG}/buildx`)
+func getConfigStorePath(dockerCli command.Cli) string {
+	if buildxConfig := os.Getenv("BUILDX_CONFIG"); buildxConfig != "" {
+		logrus.Debugf("using config store %q based in \"$BUILDX_CONFIG\" environment variable", buildxConfig)
+		return buildxConfig
+	}
+
+	buildxConfig := filepath.Join(filepath.Dir(dockerCli.ConfigFile().Filename), "buildx")
+	logrus.Debugf("using default config store %q", buildxConfig)
+	return buildxConfig
 }
 
 // getCurrentEndpoint returns the current default endpoint value
@@ -180,20 +196,34 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				contextStore := dockerCli.ContextStore()
 
 				var kcc driver.KubeClientConfig
-				kcc, err = kubernetes.ConfigFromContext(n.Endpoint, contextStore)
+				kcc, err = configFromContext(n.Endpoint, contextStore)
 				if err != nil {
 					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
 					// try again with name="default".
 					// FIXME: n should retain real context name.
-					kcc, err = kubernetes.ConfigFromContext("default", contextStore)
+					kcc, err = configFromContext("default", contextStore)
 					if err != nil {
 						logrus.Error(err)
 					}
 				}
+
+				tryToUseKubeConfigInCluster := false
 				if kcc == nil {
-					kcc = driver.KubeClientConfigInCluster{}
+					tryToUseKubeConfigInCluster = true
+				} else {
+					if _, err := kcc.ClientConfig(); err != nil {
+						tryToUseKubeConfigInCluster = true
+					}
 				}
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, kcc, n.Flags, n.ConfigFile, assignDriverOptsByDriverInfo(n.DriverOpts, di), contextPathHash)
+				if tryToUseKubeConfigInCluster {
+					kccInCluster := driver.KubeClientConfigInCluster{}
+					if _, err := kccInCluster.ClientConfig(); err == nil {
+						logrus.Debug("using kube config in cluster")
+						kcc = kccInCluster
+					}
+				}
+
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, dockerCli.ConfigFile(), kcc, n.Flags, n.ConfigFile, n.DriverOpts, n.Platforms, contextPathHash)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -211,18 +241,19 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 	return dis, nil
 }
 
-// pass platform as driver opts to provide for some drive, like kubernetes
-func assignDriverOptsByDriverInfo(opts map[string]string, driveInfo build.DriverInfo) map[string]string {
-	m := map[string]string{}
+func configFromContext(endpointName string, s ctxstore.Reader) (clientcmd.ClientConfig, error) {
+	if strings.HasPrefix(endpointName, "kubernetes://") {
+		u, _ := url.Parse(endpointName)
 
-	if len(driveInfo.Platform) > 0 {
-		m["platform"] = strings.Join(platformutil.Format(driveInfo.Platform), ",")
+		if kubeconfig := u.Query().Get("kubeconfig"); kubeconfig != "" {
+			clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+				&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
+				&clientcmd.ConfigOverrides{},
+			)
+			return clientConfig, nil
+		}
 	}
-
-	for key := range opts {
-		m[key] = opts[key]
-	}
-	return m
+	return kubernetes.ConfigFromContext(endpointName, s)
 }
 
 // clientForEndpoint returns a docker client for an endpoint
@@ -268,10 +299,29 @@ func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClie
 }
 
 func getInstanceOrDefault(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
+	var defaultOnly bool
+
+	if instance == "default" && instance != dockerCli.CurrentContext() {
+		return nil, errors.Errorf("use `docker --context=default buildx` to switch to default context")
+	}
+	if instance == "default" || instance == dockerCli.CurrentContext() {
+		instance = ""
+		defaultOnly = true
+	}
+	list, err := dockerCli.ContextStore().List()
+	if err != nil {
+		return nil, err
+	}
+	for _, l := range list {
+		if l.Name == instance {
+			return nil, errors.Errorf("use `docker --context=%s buildx` to switch to context %s", instance, instance)
+		}
+	}
+
 	if instance != "" {
 		return getInstanceByName(ctx, dockerCli, instance, contextPathHash)
 	}
-	return getDefaultDrivers(ctx, dockerCli, contextPathHash)
+	return getDefaultDrivers(ctx, dockerCli, defaultOnly, contextPathHash)
 }
 
 func getInstanceByName(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
@@ -289,23 +339,25 @@ func getInstanceByName(ctx context.Context, dockerCli command.Cli, instance, con
 }
 
 // getDefaultDrivers returns drivers based on current cli config
-func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, contextPathHash string) ([]build.DriverInfo, error) {
+func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly bool, contextPathHash string) ([]build.DriverInfo, error) {
 	txn, release, err := getStore(dockerCli)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
 
-	ng, err := getCurrentInstance(txn, dockerCli)
-	if err != nil {
-		return nil, err
+	if !defaultOnly {
+		ng, err := getCurrentInstance(txn, dockerCli)
+		if err != nil {
+			return nil, err
+		}
+
+		if ng != nil {
+			return driversForNodeGroup(ctx, dockerCli, ng, contextPathHash)
+		}
 	}
 
-	if ng != nil {
-		return driversForNodeGroup(ctx, dockerCli, ng, contextPathHash)
-	}
-
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), nil, nil, "", nil, contextPathHash)
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), dockerCli.ConfigFile(), nil, nil, "", nil, nil, contextPathHash)
 	if err != nil {
 		return nil, err
 	}
@@ -370,13 +422,24 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 		return err
 	}
 
-	// skip when multi drivers
-	if len(ngi.drivers) == 1 {
+	kubernetesDriverCount := 0
+
+	for _, di := range ngi.drivers {
+		if di.info != nil && len(di.info.DynamicNodes) > 0 {
+			kubernetesDriverCount++
+		}
+	}
+
+	isAllKubernetesDrivers := len(ngi.drivers) == kubernetesDriverCount
+
+	if isAllKubernetesDrivers {
+		var drivers []dinfo
+		var dynamicNodes []store.Node
+
 		for _, di := range ngi.drivers {
 			// dynamic nodes are used in Kubernetes driver.
 			// Kubernetes pods are dynamically mapped to BuildKit Nodes.
 			if di.info != nil && len(di.info.DynamicNodes) > 0 {
-				var drivers []dinfo
 				for i := 0; i < len(di.info.DynamicNodes); i++ {
 					// all []dinfo share *build.DriverInfo and *driver.Info
 					diClone := di
@@ -385,14 +448,16 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 					}
 					drivers = append(drivers, di)
 				}
-				// not append (remove the static nodes in the store)
-				ngi.ng.Nodes = di.info.DynamicNodes
-				ngi.ng.Dynamic = true
-				ngi.drivers = drivers
-				return nil
+				dynamicNodes = append(dynamicNodes, di.info.DynamicNodes...)
 			}
 		}
+
+		// not append (remove the static nodes in the store)
+		ngi.ng.Nodes = dynamicNodes
+		ngi.drivers = drivers
+		ngi.ng.Dynamic = true
 	}
+
 	return nil
 }
 

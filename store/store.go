@@ -15,7 +15,6 @@ import (
 )
 
 func New(root string) (*Store, error) {
-	root = filepath.Join(root, "buildx")
 	if err := os.MkdirAll(filepath.Join(root, "instances"), 0700); err != nil {
 		return nil, err
 	}

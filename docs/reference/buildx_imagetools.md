@@ -1,0 +1,24 @@
+# buildx imagetools
+
+```
+docker buildx imagetools [OPTIONS] COMMAND
+```
+
+<!---MARKER_GEN_START-->
+Commands to work on images in registry
+
+### Subcommands
+
+| Name | Description |
+| --- | --- |
+| [`create`](buildx_imagetools_create.md) | Create a new image based on source images |
+| [`inspect`](buildx_imagetools_inspect.md) | Show details of image in the registry |
+
+
+
+<!---MARKER_GEN_END-->
+
+## Description
+
+Imagetools contains commands for working with manifest lists in the registry.
+These commands are useful for inspecting multi-platform build results.
