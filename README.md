@@ -49,7 +49,7 @@ Using `buildx` as a docker CLI plugin requires using Docker 19.03 or newer. A li
 
 ### Docker
 
-`buildx` comes bundled by default with Docker Desktop, and with Docker CE packages starting with 19.03, but may not be present in all repackaged versions for Linux distributions (in which case follow the 'Binary release' instructions below). 
+`buildx` comes bundled by default with Docker Desktop (and with Docker CE packages) starting with 19.03, but may not be present in all repackaged versions for Linux distributions (in which case follow the 'Binary release' instructions below). 
 When it is included, it requires experimental mode to be enabled on the Docker CLI.
 To enable it, add `"experimental": "enabled"` to the CLI configuration file `~/.docker/config.json`, or set the `DOCKER_CLI_EXPERIMENTAL=enabled` environment variable.
 
