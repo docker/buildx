@@ -49,7 +49,7 @@ Using `buildx` as a docker CLI plugin requires using Docker 19.03 or newer. A li
 
 ### Docker
 
-`buildx` comes bundled with Docker Desktop and in latest Docker CE packages.
+`buildx` comes bundled with Docker Desktop and in latest Docker CE packages, but may not be included in all Linux distros (in which case follow the binary release instructions).
 
 ### Binary release
 
