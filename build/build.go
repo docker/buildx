@@ -456,6 +456,9 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 			return nil, nil, notSupported(d, driver.OCIExporter)
 		}
 		if e.Type == "docker" {
+			if len(opt.Platforms) > 1 {
+				return nil, nil, errors.Errorf("docker exporter does not currently support exporting manifest lists")
+			}
 			if e.Output == nil {
 				if d.IsMobyDriver() {
 					e.Type = "image"
