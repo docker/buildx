@@ -5,11 +5,11 @@ ARG CLI_VERSION=19.03
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
 
-# xgo is a helper for golang cross-compilation
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:golang@sha256:6f7d999551dd471b58f70716754290495690efa8421e0a1fcf18eb11d0c0a537 AS xgo
+# xx is a helper for cross-compilation
+FROM --platform=$BUILDPLATFORM tonistiigi/xx@sha256:21a61be4744f6531cb5f33b0e6f40ede41fa3a1b8c82d5946178f80cc84bfc04 AS xx
 
 FROM --platform=$BUILDPLATFORM golang:1.16-alpine AS gobase
-COPY --from=xgo / /
+COPY --from=xx / /
 RUN apk add --no-cache file git
 ENV GOFLAGS=-mod=vendor
 WORKDIR /src
@@ -26,8 +26,8 @@ ARG TARGETPLATFORM
 RUN --mount=target=. --mount=target=/root/.cache,type=cache \
   --mount=target=/go/pkg/mod,type=cache \
   --mount=source=/tmp/.ldflags,target=/tmp/.ldflags,from=buildx-version \
-  set -x; go build -ldflags "$(cat /tmp/.ldflags)" -o /usr/bin/buildx ./cmd/buildx && \
-  file /usr/bin/buildx && file /usr/bin/buildx | egrep "statically linked|Mach-O|Windows"
+  set -x; xx-go build -ldflags "$(cat /tmp/.ldflags)" -o /usr/bin/buildx ./cmd/buildx && \
+  xx-verify --static /usr/bin/buildx
 
 FROM buildx-build AS integration-tests
 COPY . .
