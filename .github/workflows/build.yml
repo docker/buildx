@@ -14,7 +14,7 @@ on:
 env:
   REPO_SLUG_ORIGIN: "moby/buildkit:master"
   CACHEKEY_BINARIES: "binaries"
-  PLATFORMS: "linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/s390x,linux/ppc64le"
+  PLATFORMS: "linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/s390x,linux/ppc64le,linux/riscv64"
 
 jobs:
   base:

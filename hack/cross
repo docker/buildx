@@ -3,7 +3,7 @@
 . $(dirname $0)/util
 set -e
 
-: ${TARGETPLATFORM=linux/amd64,linux/arm/v7,linux/arm64,darwin/amd64,windows/amd64,linux/ppc64le,linux/s390x}
+: ${TARGETPLATFORM=linux/amd64,linux/arm/v7,linux/arm64,darwin/amd64,windows/amd64,linux/ppc64le,linux/s390x,linux/riscv64}
 : ${EXPORT_LOCAL=}
 
 importCacheFlags=""
