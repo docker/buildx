@@ -25,6 +25,7 @@ Start a build
 | `--iidfile string` | Write the image ID to the file |
 | `--label stringArray` | Set metadata for an image |
 | [`--load`](#load) | Shorthand for --output=type=docker |
+| `--metadata-file string` | Write build result metadata to the file |
 | `--network string` | Set the networking mode for the RUN instructions during build |
 | `--no-cache` | Do not use cache when building the image |
 | [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: type=local,dest=path) |
