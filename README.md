@@ -20,25 +20,28 @@ Key features:
 # Table of Contents
 
 - [Installing](#installing)
+  - [Docker](#docker)
+  - [Binary release](#binary-release)
+  - [From `Dockerfile`](#from-dockerfile)
 - [Building](#building)
-    + [with Docker 18.09+](#with-docker-1809)
-    + [with buildx or Docker 19.03](#with-buildx-or-docker-1903)
+  - [with Docker 18.09+](#with-docker-1809)
+  - [with buildx or Docker 19.03](#with-buildx-or-docker-1903)
 - [Getting started](#getting-started)
-  * [Building with buildx](#building-with-buildx)
-  * [Working with builder instances](#working-with-builder-instances)
-  * [Building multi-platform images](#building-multi-platform-images)
-  * [High-level build options](#high-level-build-options)
-- [Documentation](#documentation)
-    + [`buildx build [OPTIONS] PATH | URL | -`](docs/reference/buildx_build.md)
-    + [`buildx create [OPTIONS] [CONTEXT|ENDPOINT]`](docs/reference/buildx_create.md)
-    + [`buildx use NAME`](docs/reference/buildx_use.md)
-    + [`buildx inspect [NAME]`](docs/reference/buildx_inspect.md)
-    + [`buildx ls`](docs/reference/buildx_ls.md)
-    + [`buildx stop [NAME]`](docs/reference/buildx_stop.md)
-    + [`buildx rm [NAME]`](docs/reference/buildx_rm.md)
-    + [`buildx bake [OPTIONS] [TARGET...]`](docs/reference/buildx_bake.md)
-    + [`buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]`](docs/reference/buildx_imagetools_create.md)
-    + [`buildx imagetools inspect NAME`](docs/reference/buildx_imagetools_inspect.md)
+  - [Building with buildx](#building-with-buildx)
+  - [Working with builder instances](#working-with-builder-instances)
+  - [Building multi-platform images](#building-multi-platform-images)
+  - [High-level build options](#high-level-build-options)
+- [Documentation](docs/reference)
+  - [`buildx build [OPTIONS] PATH | URL | -`](docs/reference/buildx_build.md)
+  - [`buildx create [OPTIONS] [CONTEXT|ENDPOINT]`](docs/reference/buildx_create.md)
+  - [`buildx use NAME`](docs/reference/buildx_use.md)
+  - [`buildx inspect [NAME]`](docs/reference/buildx_inspect.md)
+  - [`buildx ls`](docs/reference/buildx_ls.md)
+  - [`buildx stop [NAME]`](docs/reference/buildx_stop.md)
+  - [`buildx rm [NAME]`](docs/reference/buildx_rm.md)
+  - [`buildx bake [OPTIONS] [TARGET...]`](docs/reference/buildx_bake.md)
+  - [`buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]`](docs/reference/buildx_imagetools_create.md)
+  - [`buildx imagetools inspect NAME`](docs/reference/buildx_imagetools_inspect.md)
 - [Setting buildx as default builder in Docker 19.03+](#setting-buildx-as-default-builder-in-docker-1903)
 - [Contributing](#contributing)
 
@@ -59,6 +62,17 @@ Change the permission to execute:
 ```sh
 chmod a+x ~/.docker/cli-plugins/docker-buildx
 ```
+
+### From `Dockerfile`
+
+Here is how to use buildx inside a Dockerfile through the [`docker/buildx-bin`](https://hub.docker.com/r/docker/buildx-bin) image:
+
+```Dockerfile
+FROM docker
+COPY --from=docker/buildx-bin:latest /buildx /usr/libexec/docker/cli-plugins/docker-buildx
+RUN docker buildx version
+```
+
 
 # Building
 
