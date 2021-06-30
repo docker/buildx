@@ -2,13 +2,13 @@ package store
 
 import (
 	"encoding/json"
-	"io"
 	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
 	"sort"
 
+	"github.com/docker/docker/pkg/ioutils"
 	"github.com/gofrs/flock"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
@@ -95,7 +95,7 @@ func (t *Txn) Save(ng *NodeGroup) error {
 	if err != nil {
 		return err
 	}
-	return atomicWriteFile(filepath.Join(t.s.root, "instances", name), dt, 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, "instances", name), dt, 0600)
 }
 
 func (t *Txn) Remove(name string) error {
@@ -116,14 +116,14 @@ func (t *Txn) SetCurrent(key, name string, global, def bool) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600); err != nil {
+	if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600); err != nil {
 		return err
 	}
 
 	h := toHash(key)
 
 	if def {
-		if err := atomicWriteFile(filepath.Join(t.s.root, "defaults", h), []byte(name), 0600); err != nil {
+		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "defaults", h), []byte(name), 0600); err != nil {
 			return err
 		}
 	} else {
@@ -137,7 +137,7 @@ func (t *Txn) reset(key string) error {
 	if err != nil {
 		return err
 	}
-	if err := atomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600); err != nil {
+	if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600); err != nil {
 		return err
 	}
 	return nil
@@ -201,35 +201,6 @@ type current struct {
 }
 
 var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\.\-_]*$`)
-
-func atomicWriteFile(filename string, data []byte, perm os.FileMode) error {
-	f, err := ioutil.TempFile(filepath.Dir(filename), ".tmp-"+filepath.Base(filename))
-	if err != nil {
-		return err
-	}
-	err = os.Chmod(f.Name(), perm)
-	if err != nil {
-		f.Close()
-		return err
-	}
-	n, err := f.Write(data)
-	if err == nil && n < len(data) {
-		f.Close()
-		return io.ErrShortWrite
-	}
-	if err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Sync(); err != nil {
-		f.Close()
-		return err
-	}
-	if err := f.Close(); err != nil {
-		return err
-	}
-	return os.Rename(f.Name(), filename)
-}
 
 func toHash(in string) string {
 	return digest.FromBytes([]byte(in)).Hex()[:20]
