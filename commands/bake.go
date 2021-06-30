@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -90,7 +91,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}
 
 	if in.printOnly {
-		dt, err := json.MarshalIndent(map[string]map[string]*bake.Target{"target": m}, "", "   ")
+		dt, err := json.MarshalIndent(map[string]map[string]*bake.Target{"target": m}, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -108,7 +109,25 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return err
 	}
 
-	_, err = build.Build(ctx, dis, bo, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
+	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
+	if err != nil {
+		return err
+	}
+
+	if len(in.metadataFile) > 0 && resp != nil {
+		mdata := map[string]map[string]string{}
+		for k, r := range resp {
+			mdata[k] = r.ExporterResponse
+		}
+		mdatab, err := json.MarshalIndent(mdata, "", "  ")
+		if err != nil {
+			return err
+		}
+		if err := ioutils.AtomicWriteFile(in.metadataFile, mdatab, 0644); err != nil {
+			return err
+		}
+	}
+
 	return err
 }
 

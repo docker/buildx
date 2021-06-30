@@ -18,6 +18,7 @@ Build from a file
 | `--builder string` | Override the configured builder instance |
 | [`-f`](#file), [`--file stringArray`](#file) | Build definition file |
 | `--load` | Shorthand for --set=*.output=type=docker |
+| `--metadata-file string` | Write build result metadata to the file |
 | [`--no-cache`](#no-cache) | Do not use cache when building the image |
 | [`--print`](#print) | Print the options without building |
 | [`--progress string`](#progress) | Set type of progress output (auto, plain, tty). Use plain to show container output |
