@@ -204,6 +204,7 @@ jobs:
           push: ${{ github.event_name != 'pull_request' }}
           cache-from: type=local,src=/tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
           platforms: ${{ env.PLATFORMS }},darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
+          build-args: BUILDKIT_CONTEXT_KEEP_GIT_DIR=1
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
       -
