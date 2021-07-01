@@ -69,7 +69,7 @@ Here is how to use buildx inside a Dockerfile through the [`docker/buildx-bin`](
 
 ```Dockerfile
 FROM docker
-COPY --from=docker/buildx-bin:latest /buildx /usr/libexec/docker/cli-plugins/docker-buildx
+COPY --from=docker/buildx-bin:master /buildx /usr/libexec/docker/cli-plugins/docker-buildx
 RUN docker buildx version
 ```
 
