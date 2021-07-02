@@ -1,21 +1,11 @@
 #!/usr/bin/env bash
 
-TAG=$1
-OUT=$2
+OUT=${1:-release-out}
 
 . $(dirname $0)/util
 set -eu -o pipefail
 
 : ${PLATFORMS=linux/amd64}
-
-usage() {
-  echo "usage: ./hack/release <tag> <out>"
-  exit 1
-}
-
-if [ -z "$TAG" ] || [ -z "$OUT" ]; then
-  usage
-fi
 
 importCacheFlags=""
 if [[ -n "$cacheRefFrom" ]] && [[ "$cacheType" = "local" ]]; then
@@ -29,3 +19,10 @@ buildxCmd build $importCacheFlags \
   --platform "$PLATFORMS" \
   --output "type=local,dest=$OUT" \
   $currentcontext
+
+# wrap binaries
+{ set +x; } 2>/dev/null
+if [[ $PLATFORMS =~ "," ]]; then
+  mv -f ./$OUT/**/* ./$OUT/
+  find ./$OUT -type d -empty -delete
+fi
