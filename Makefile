@@ -25,7 +25,7 @@ validate-vendor:
 	
 validate-docs:
 	./hack/validate-docs
-	
+
 validate-all: lint test validate-vendor validate-docs
 
 vendor:
@@ -34,7 +34,10 @@ vendor:
 docs:
 	./hack/update-docs
 
+yamldocs: ## generate documentation YAML files consumed by docs repo
+	./hack/generate-yamldocs
+
 generate-authors:
 	./hack/generate-authors
 
-.PHONY: vendor lint shell binaries install binaries-cross validate-all generate-authors validate-docs docs
+.PHONY: vendor lint shell binaries install binaries-cross validate-all generate-authors validate-docs docs yamldocs

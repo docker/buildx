@@ -1,0 +1,10 @@
+#!/usr/bin/env bash
+
+. "$(dirname "$0")"/util
+set -eu
+
+buildxCmd build \
+  --output "type=local,dest=./bin/docs/" \
+  --file "./hack/dockerfiles/yamldocs.Dockerfile" \
+  --progress=plain \
+  .
