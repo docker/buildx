@@ -21,6 +21,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 )
 
@@ -279,9 +280,16 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 
 	conn = demuxConn(conn)
 
+	exp, err := detect.Exporter()
+	if err != nil {
+		return nil, err
+	}
+
+	td, _ := exp.(client.TracerDelegate)
+
 	return client.New(ctx, "", client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return conn, nil
-	}))
+	}), client.WithTracerDelegate(td))
 }
 
 func (d *Driver) Factory() driver.Factory {

@@ -15,6 +15,11 @@ import (
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/stack"
+	"github.com/moby/buildkit/util/tracing/detect"
+	"go.opentelemetry.io/otel"
+
+	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
+	_ "github.com/moby/buildkit/util/tracing/env"
 
 	// FIXME: "k8s.io/client-go/plugin/pkg/client/auth/azure" is excluded because of compilation error
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -31,6 +36,10 @@ var experimental string
 func init() {
 	seed.WithTimeAndRand()
 	stack.SetVersionInfo(version.Version, version.Revision)
+
+	detect.ServiceName = "buildx"
+	// do not log tracing errors to stdio
+	otel.SetErrorHandler(skipErrors{})
 }
 
 func main() {
@@ -90,3 +99,7 @@ func main() {
 		os.Exit(1)
 	}
 }
+
+type skipErrors struct{}
+
+func (skipErrors) Handle(err error) {}

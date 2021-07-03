@@ -9,6 +9,7 @@ import (
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/util/appcontext"
@@ -25,6 +26,14 @@ type bakeOptions struct {
 
 func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error) {
 	ctx := appcontext.Context()
+
+	ctx, end, err := tracing.TraceCurrentCommand(ctx, "bake")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		end(err)
+	}()
 
 	var url string
 

@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/pkg/ioutils"
@@ -80,7 +81,7 @@ type commonOptions struct {
 	exportLoad bool
 }
 
-func runBuild(dockerCli command.Cli, in buildOptions) error {
+func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	if in.squash {
 		return errors.Errorf("squash currently not implemented")
 	}
@@ -89,6 +90,14 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	}
 
 	ctx := appcontext.Context()
+
+	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
+	if err != nil {
+		return err
+	}
+	defer func() {
+		end(err)
+	}()
 
 	noCache := false
 	if in.noCache != nil {
