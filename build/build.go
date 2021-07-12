@@ -33,10 +33,12 @@ import (
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/progress/progresswriter"
+	"github.com/moby/buildkit/util/tracing"
 	"github.com/opencontainers/go-digest"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -191,6 +193,8 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 
 	bopts := make([]gateway.BuildOpts, len(clients))
 
+	span, ctx := tracing.StartSpan(ctx, "load buildkit capabilities", trace.WithSpanKind(trace.SpanKindInternal))
+
 	eg, ctx := errgroup.WithContext(ctx)
 	for i, c := range clients {
 		func(i int, c *client.Client) {
@@ -204,7 +208,10 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 		}(i, c)
 	}
 
-	if err := eg.Wait(); err != nil {
+	err = eg.Wait()
+	span.RecordError(err)
+	span.End()
+	if err != nil {
 		return nil, nil, err
 	}
 	for key := range dps {
@@ -641,13 +648,25 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			dps := m[k]
 			multiDriver := len(m[k]) > 1
 
+			var span trace.Span
+			ctx := ctx
+			if multiTarget {
+				span, ctx = tracing.StartSpan(ctx, k)
+			}
+
 			res := make([]*client.SolveResponse, len(dps))
 			wg := &sync.WaitGroup{}
 			wg.Add(len(dps))
 
 			var pushNames string
 
-			eg.Go(func() error {
+			eg.Go(func() (err error) {
+				defer func() {
+					if span != nil {
+						span.RecordError(err)
+						span.End()
+					}
+				}()
 				pw := progress.WithPrefix(w, "default", false)
 				wg.Wait()
 				select {

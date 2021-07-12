@@ -15,6 +15,7 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -169,9 +170,17 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	exp, err := detect.Exporter()
+	if err != nil {
+		return nil, err
+	}
+
+	td, _ := exp.(client.TracerDelegate)
+
 	return client.New(ctx, "", client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return conn, nil
-	}))
+	}), client.WithTracerDelegate(td))
 }
 
 func (d *Driver) Factory() driver.Factory {

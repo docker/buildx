@@ -78,7 +78,7 @@ func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, er
 			}
 		}
 
-		c, err := d.Client(context.TODO())
+		c, err := d.Client(ctx)
 		if err != nil {
 			if errors.Cause(err) == ErrNotRunning && try <= 2 {
 				continue
