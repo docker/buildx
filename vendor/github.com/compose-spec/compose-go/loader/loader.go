@@ -1,7 +1,25 @@
+/*
+   Copyright 2020 The Compose Specification Authors.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package loader
 
 import (
 	"fmt"
+	"io/ioutil"
+	"os"
 	"path"
 	"path/filepath"
 	"reflect"
@@ -9,15 +27,14 @@ import (
 	"strings"
 	"time"
 
-	interp "github.com/docker/cli/cli/compose/interpolation"
-	"github.com/docker/cli/cli/compose/schema"
-	"github.com/docker/cli/cli/compose/template"
-	"github.com/docker/cli/cli/compose/types"
-	"github.com/docker/cli/opts"
-	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/go-connections/nat"
+	interp "github.com/compose-spec/compose-go/interpolation"
+	"github.com/compose-spec/compose-go/schema"
+	"github.com/compose-spec/compose-go/template"
+	"github.com/compose-spec/compose-go/types"
 	units "github.com/docker/go-units"
-	"github.com/google/shlex"
+	"github.com/imdario/mergo"
+	"github.com/joho/godotenv"
+	shellwords "github.com/mattn/go-shellwords"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -30,10 +47,54 @@ type Options struct {
 	SkipValidation bool
 	// Skip interpolation
 	SkipInterpolation bool
+	// Skip normalization
+	SkipNormalization bool
+	// Skip consistency check
+	SkipConsistencyCheck bool
+	// Skip extends
+	SkipExtends bool
 	// Interpolation options
 	Interpolate *interp.Options
 	// Discard 'env_file' entries after resolving to 'environment' section
 	discardEnvFiles bool
+	// Set project name
+	Name string
+}
+
+// serviceRef identifies a reference to a service. It's used to detect cyclic
+// references in "extends".
+type serviceRef struct {
+	filename string
+	service  string
+}
+
+type cycleTracker struct {
+	loaded []serviceRef
+}
+
+func (ct *cycleTracker) Add(filename, service string) error {
+	toAdd := serviceRef{filename: filename, service: service}
+	for _, loaded := range ct.loaded {
+		if toAdd == loaded {
+			// Create an error message of the form:
+			// Circular reference:
+			//   service-a in docker-compose.yml
+			//   extends service-b in docker-compose.yml
+			//   extends service-a in docker-compose.yml
+			errLines := []string{
+				"Circular reference:",
+				fmt.Sprintf("  %s in %s", ct.loaded[0].service, ct.loaded[0].filename),
+			}
+			for _, service := range append(ct.loaded[1:], toAdd) {
+				errLines = append(errLines, fmt.Sprintf("  extends %s in %s", service.service, service.filename))
+			}
+
+			return errors.New(strings.Join(errLines, "\n"))
+		}
+	}
+
+	ct.loaded = append(ct.loaded, toAdd)
+	return nil
 }
 
 // WithDiscardEnvFiles sets the Options to discard the `env_file` section after resolving to
@@ -61,7 +122,7 @@ func ParseYAML(source []byte) (map[string]interface{}, error) {
 }
 
 // Load reads a ConfigDetails and returns a fully loaded configuration
-func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.Config, error) {
+func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.Project, error) {
 	if len(configDetails.ConfigFiles) < 1 {
 		return nil, errors.Errorf("No files specified")
 	}
@@ -79,40 +140,30 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 	}
 
 	configs := []*types.Config{}
-	var err error
-
-	for _, file := range configDetails.ConfigFiles {
+	for i, file := range configDetails.ConfigFiles {
 		configDict := file.Config
-		version := schema.Version(configDict)
-		if configDetails.Version == "" {
-			configDetails.Version = version
-		}
-		if configDetails.Version != version {
-			return nil, errors.Errorf("version mismatched between two composefiles : %v and %v", configDetails.Version, version)
-		}
-
-		if err := validateForbidden(configDict); err != nil {
-			return nil, err
-		}
-
-		if !opts.SkipInterpolation {
-			configDict, err = interpolateConfig(configDict, *opts.Interpolate)
+		if configDict == nil {
+			dict, err := parseConfig(file.Content, opts)
 			if err != nil {
 				return nil, err
 			}
+			configDict = dict
+			file.Config = dict
+			configDetails.ConfigFiles[i] = file
 		}
 
 		if !opts.SkipValidation {
-			if err := schema.Validate(configDict, configDetails.Version); err != nil {
+			if err := schema.Validate(configDict); err != nil {
 				return nil, err
 			}
 		}
 
-		cfg, err := loadSections(configDict, configDetails)
+		configDict = groupXFieldsIntoExtensions(configDict)
+
+		cfg, err := loadSections(file.Filename, configDict, configDetails, opts)
 		if err != nil {
 			return nil, err
 		}
-		cfg.Filename = file.Filename
 		if opts.discardEnvFiles {
 			for i := range cfg.Services {
 				cfg.Services[i].EnvFile = nil
@@ -122,73 +173,112 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 		configs = append(configs, cfg)
 	}
 
-	return merge(configs)
-}
-
-func validateForbidden(configDict map[string]interface{}) error {
-	servicesDict, ok := configDict["services"].(map[string]interface{})
-	if !ok {
-		return nil
-	}
-	forbidden := getProperties(servicesDict, types.ForbiddenProperties)
-	if len(forbidden) > 0 {
-		return &ForbiddenPropertiesError{Properties: forbidden}
-	}
-	return nil
-}
-
-func loadSections(config map[string]interface{}, configDetails types.ConfigDetails) (*types.Config, error) {
-	var err error
-	cfg := types.Config{
-		Version: schema.Version(config),
+	model, err := merge(configs)
+	if err != nil {
+		return nil, err
 	}
 
-	var loaders = []struct {
-		key string
-		fnc func(config map[string]interface{}) error
-	}{
-		{
-			key: "services",
-			fnc: func(config map[string]interface{}) error {
-				cfg.Services, err = LoadServices(config, configDetails.WorkingDir, configDetails.LookupEnv)
-				return err
-			},
-		},
-		{
-			key: "networks",
-			fnc: func(config map[string]interface{}) error {
-				cfg.Networks, err = LoadNetworks(config, configDetails.Version)
-				return err
-			},
-		},
-		{
-			key: "volumes",
-			fnc: func(config map[string]interface{}) error {
-				cfg.Volumes, err = LoadVolumes(config, configDetails.Version)
-				return err
-			},
-		},
-		{
-			key: "secrets",
-			fnc: func(config map[string]interface{}) error {
-				cfg.Secrets, err = LoadSecrets(config, configDetails)
-				return err
-			},
-		},
-		{
-			key: "configs",
-			fnc: func(config map[string]interface{}) error {
-				cfg.Configs, err = LoadConfigObjs(config, configDetails)
-				return err
-			},
-		},
+	for _, s := range model.Services {
+		var newEnvFiles types.StringList
+		for _, ef := range s.EnvFile {
+			newEnvFiles = append(newEnvFiles, absPath(configDetails.WorkingDir, ef))
+		}
+		s.EnvFile = newEnvFiles
 	}
-	for _, loader := range loaders {
-		if err := loader.fnc(getSection(config, loader.key)); err != nil {
+
+	project := &types.Project{
+		Name:        opts.Name,
+		WorkingDir:  configDetails.WorkingDir,
+		Services:    model.Services,
+		Networks:    model.Networks,
+		Volumes:     model.Volumes,
+		Secrets:     model.Secrets,
+		Configs:     model.Configs,
+		Environment: configDetails.Environment,
+		Extensions:  model.Extensions,
+	}
+
+	if !opts.SkipNormalization {
+		err = normalize(project)
+		if err != nil {
 			return nil, err
 		}
 	}
-	cfg.Extras = getExtras(config)
+
+	if !opts.SkipConsistencyCheck {
+		err = checkConsistency(project)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	return project, nil
+}
+
+func parseConfig(b []byte, opts *Options) (map[string]interface{}, error) {
+	if !opts.SkipInterpolation {
+		substitute, err := opts.Interpolate.Substitute(string(b), template.Mapping(opts.Interpolate.LookupValue))
+		if err != nil {
+			return nil, err
+		}
+		b = []byte(substitute)
+	}
+
+	return ParseYAML(b)
+}
+
+func groupXFieldsIntoExtensions(dict map[string]interface{}) map[string]interface{} {
+	extras := map[string]interface{}{}
+	for key, value := range dict {
+		if strings.HasPrefix(key, "x-") {
+			extras[key] = value
+			delete(dict, key)
+		}
+		if d, ok := value.(map[string]interface{}); ok {
+			dict[key] = groupXFieldsIntoExtensions(d)
+		}
+	}
+	if len(extras) > 0 {
+		dict["extensions"] = extras
+	}
+	return dict
+}
+
+func loadSections(filename string, config map[string]interface{}, configDetails types.ConfigDetails, opts *Options) (*types.Config, error) {
+	var err error
+	cfg := types.Config{
+		Filename: filename,
+	}
+
+	cfg.Services, err = LoadServices(filename, getSection(config, "services"), configDetails.WorkingDir, configDetails.LookupEnv, opts)
+	if err != nil {
+		return nil, err
+	}
+
+	cfg.Networks, err = LoadNetworks(getSection(config, "networks"), configDetails.Version)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Volumes, err = LoadVolumes(getSection(config, "volumes"))
+	if err != nil {
+		return nil, err
+	}
+	cfg.Secrets, err = LoadSecrets(getSection(config, "secrets"), configDetails)
+	if err != nil {
+		return nil, err
+	}
+	cfg.Configs, err = LoadConfigObjs(getSection(config, "configs"), configDetails)
+	if err != nil {
+		return nil, err
+	}
+	extensions := getSection(config, "extensions")
+	if len(extensions) > 0 {
+		cfg.Extensions = extensions
+	}
+	if err != nil {
+		return nil, err
+	}
+
 	return &cfg, nil
 }
 
@@ -200,65 +290,6 @@ func getSection(config map[string]interface{}, key string) map[string]interface{
 	return section.(map[string]interface{})
 }
 
-// GetUnsupportedProperties returns the list of any unsupported properties that are
-// used in the Compose files.
-func GetUnsupportedProperties(configDicts ...map[string]interface{}) []string {
-	unsupported := map[string]bool{}
-
-	for _, configDict := range configDicts {
-		for _, service := range getServices(configDict) {
-			serviceDict := service.(map[string]interface{})
-			for _, property := range types.UnsupportedProperties {
-				if _, isSet := serviceDict[property]; isSet {
-					unsupported[property] = true
-				}
-			}
-		}
-	}
-
-	return sortedKeys(unsupported)
-}
-
-func sortedKeys(set map[string]bool) []string {
-	var keys []string
-	for key := range set {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-	return keys
-}
-
-// GetDeprecatedProperties returns the list of any deprecated properties that
-// are used in the compose files.
-func GetDeprecatedProperties(configDicts ...map[string]interface{}) map[string]string {
-	deprecated := map[string]string{}
-
-	for _, configDict := range configDicts {
-		deprecatedProperties := getProperties(getServices(configDict), types.DeprecatedProperties)
-		for key, value := range deprecatedProperties {
-			deprecated[key] = value
-		}
-	}
-
-	return deprecated
-}
-
-func getProperties(services map[string]interface{}, propertyMap map[string]string) map[string]string {
-	output := map[string]string{}
-
-	for _, service := range services {
-		if serviceDict, ok := service.(map[string]interface{}); ok {
-			for property, description := range propertyMap {
-				if _, isSet := serviceDict[property]; isSet {
-					output[property] = description
-				}
-			}
-		}
-	}
-
-	return output
-}
-
 // ForbiddenPropertiesError is returned when there are properties in the Compose
 // file that are forbidden.
 type ForbiddenPropertiesError struct {
@@ -267,16 +298,6 @@ type ForbiddenPropertiesError struct {
 
 func (e *ForbiddenPropertiesError) Error() string {
 	return "Configuration contains forbidden properties"
-}
-
-func getServices(configDict map[string]interface{}) map[string]interface{} {
-	if services, ok := configDict["services"]; ok {
-		if servicesDict, ok := services.(map[string]interface{}); ok {
-			return servicesDict
-		}
-	}
-
-	return map[string]interface{}{}
 }
 
 // Transform converts the source into the target struct with compose types transformer
@@ -328,6 +349,9 @@ func createTransformHook(additionalTransformers ...Transformer) mapstructure.Dec
 		reflect.TypeOf(types.ServiceVolumeConfig{}):              transformServiceVolumeConfig,
 		reflect.TypeOf(types.BuildConfig{}):                      transformBuildConfig,
 		reflect.TypeOf(types.Duration(0)):                        transformStringToDuration,
+		reflect.TypeOf(types.DependsOnConfig{}):                  transformDependsOnConfig,
+		reflect.TypeOf(types.ExtendsConfig{}):                    transformExtendsConfig,
+		reflect.TypeOf(types.DeviceRequest{}):                    transformServiceDeviceRequest,
 	}
 
 	for _, transformer := range additionalTransformers {
@@ -367,7 +391,7 @@ func convertToStringKeysRecursive(value interface{}, keyPrefix string) (interfac
 		return dict, nil
 	}
 	if list, ok := value.([]interface{}); ok {
-		var convertedList []interface{}
+		convertedList := []interface{}{}
 		for index, entry := range list {
 			newKeyPrefix := fmt.Sprintf("%s[%d]", keyPrefix, index)
 			convertedEntry, err := convertToStringKeysRecursive(entry, newKeyPrefix)
@@ -393,18 +417,93 @@ func formatInvalidKeyError(keyPrefix string, key interface{}) error {
 
 // LoadServices produces a ServiceConfig map from a compose file Dict
 // the servicesDict is not validated if directly used. Use Load() to enable validation
-func LoadServices(servicesDict map[string]interface{}, workingDir string, lookupEnv template.Mapping) ([]types.ServiceConfig, error) {
+func LoadServices(filename string, servicesDict map[string]interface{}, workingDir string, lookupEnv template.Mapping, opts *Options) ([]types.ServiceConfig, error) {
 	var services []types.ServiceConfig
 
-	for name, serviceDef := range servicesDict {
-		serviceConfig, err := LoadService(name, serviceDef.(map[string]interface{}), workingDir, lookupEnv)
+	for name := range servicesDict {
+		serviceConfig, err := loadServiceWithExtends(filename, name, servicesDict, workingDir, lookupEnv, opts, &cycleTracker{})
 		if err != nil {
 			return nil, err
 		}
+
 		services = append(services, *serviceConfig)
 	}
 
 	return services, nil
+}
+
+func loadServiceWithExtends(filename, name string, servicesDict map[string]interface{}, workingDir string, lookupEnv template.Mapping, opts *Options, ct *cycleTracker) (*types.ServiceConfig, error) {
+	if err := ct.Add(filename, name); err != nil {
+		return nil, err
+	}
+
+	serviceConfig, err := LoadService(name, servicesDict[name].(map[string]interface{}), workingDir, lookupEnv)
+	if err != nil {
+		return nil, err
+	}
+
+	if serviceConfig.Extends != nil && !opts.SkipExtends {
+		baseServiceName := *serviceConfig.Extends["service"]
+		var baseService *types.ServiceConfig
+		if file := serviceConfig.Extends["file"]; file == nil {
+			baseService, err = loadServiceWithExtends(filename, baseServiceName, servicesDict, workingDir, lookupEnv, opts, ct)
+			if err != nil {
+				return nil, err
+			}
+		} else {
+			// Resolve the path to the imported file, and load it.
+			baseFilePath := absPath(workingDir, *file)
+
+			bytes, err := ioutil.ReadFile(baseFilePath)
+			if err != nil {
+				return nil, err
+			}
+
+			if !opts.SkipInterpolation {
+				substitute, err := opts.Interpolate.Substitute(string(bytes), template.Mapping(opts.Interpolate.LookupValue))
+				if err != nil {
+					return nil, err
+				}
+				bytes = []byte(substitute)
+			}
+
+			baseFile, err := ParseYAML(bytes)
+			if err != nil {
+				return nil, err
+			}
+
+			baseFileServices := getSection(baseFile, "services")
+			baseService, err = loadServiceWithExtends(baseFilePath, baseServiceName, baseFileServices, filepath.Dir(baseFilePath), lookupEnv, opts, ct)
+			if err != nil {
+				return nil, err
+			}
+
+			// Make paths relative to the importing Compose file. Note that we
+			// make the paths relative to `*file` rather than `baseFilePath` so
+			// that the resulting paths won't be absolute if `*file` isn't an
+			// absolute path.
+			baseFileParent := filepath.Dir(*file)
+			if baseService.Build != nil {
+				// Note that the Dockerfile is always defined relative to the
+				// build context, so there's no need to update the Dockerfile field.
+				baseService.Build.Context = absPath(baseFileParent, baseService.Build.Context)
+			}
+
+			for i, vol := range baseService.Volumes {
+				if vol.Type != types.VolumeTypeBind {
+					continue
+				}
+				baseService.Volumes[i].Source = absPath(baseFileParent, vol.Source)
+			}
+		}
+
+		if err := mergo.Merge(baseService, serviceConfig, mergo.WithAppendSlice, mergo.WithOverride, mergo.WithTransformers(serviceSpecials)); err != nil {
+			return nil, errors.Wrapf(err, "cannot merge service %s", name)
+		}
+		serviceConfig = baseService
+	}
+
+	return serviceConfig, nil
 }
 
 // LoadService produces a single ServiceConfig from a compose file Dict
@@ -424,62 +523,34 @@ func LoadService(name string, serviceDict map[string]interface{}, workingDir str
 		return nil, err
 	}
 
-	serviceConfig.Extras = getExtras(serviceDict)
-
 	return serviceConfig, nil
 }
 
-func loadExtras(name string, source map[string]interface{}) map[string]interface{} {
-	if dict, ok := source[name].(map[string]interface{}); ok {
-		return getExtras(dict)
-	}
-	return nil
-}
-
-func getExtras(dict map[string]interface{}) map[string]interface{} {
-	extras := map[string]interface{}{}
-	for key, value := range dict {
-		if strings.HasPrefix(key, "x-") {
-			extras[key] = value
-		}
-	}
-	if len(extras) == 0 {
-		return nil
-	}
-	return extras
-}
-
-func updateEnvironment(environment map[string]*string, vars map[string]*string, lookupEnv template.Mapping) {
-	for k, v := range vars {
-		interpolatedV, ok := lookupEnv(k)
-		if (v == nil || *v == "") && ok {
-			// lookupEnv is prioritized over vars
-			environment[k] = &interpolatedV
-		} else {
-			environment[k] = v
-		}
-	}
-}
-
 func resolveEnvironment(serviceConfig *types.ServiceConfig, workingDir string, lookupEnv template.Mapping) error {
-	environment := make(map[string]*string)
+	environment := types.MappingWithEquals{}
 
 	if len(serviceConfig.EnvFile) > 0 {
-		var envVars []string
-
 		for _, file := range serviceConfig.EnvFile {
 			filePath := absPath(workingDir, file)
-			fileVars, err := opts.ParseEnvFile(filePath)
+			file, err := os.Open(filePath)
 			if err != nil {
 				return err
 			}
-			envVars = append(envVars, fileVars...)
+			defer file.Close()
+			fileVars, err := godotenv.Parse(file)
+			if err != nil {
+				return err
+			}
+			env := types.MappingWithEquals{}
+			for k, v := range fileVars {
+				v := v
+				env[k] = &v
+			}
+			environment.OverrideBy(env.Resolve(lookupEnv).RemoveEmpty())
 		}
-		updateEnvironment(environment,
-			opts.ConvertKVStringsToMapWithNil(envVars), lookupEnv)
 	}
 
-	updateEnvironment(environment, serviceConfig.Environment, lookupEnv)
+	environment.OverrideBy(serviceConfig.Environment.Resolve(lookupEnv))
 	serviceConfig.Environment = environment
 	return nil
 }
@@ -513,12 +584,12 @@ func resolveVolumePaths(volumes []types.ServiceVolumeConfig, workingDir string, 
 // TODO: make this more robust
 func expandUser(path string, lookupEnv template.Mapping) string {
 	if strings.HasPrefix(path, "~") {
-		home, ok := lookupEnv("HOME")
-		if !ok {
+		home, err := os.UserHomeDir()
+		if err != nil {
 			logrus.Warn("cannot expand '~', because the environment lacks HOME")
 			return path
 		}
-		return strings.Replace(path, "~", home, 1)
+		return filepath.Join(home, path[1:])
 	}
 	return path
 }
@@ -529,8 +600,12 @@ func transformUlimits(data interface{}) (interface{}, error) {
 		return types.UlimitsConfig{Single: value}, nil
 	case map[string]interface{}:
 		ulimit := types.UlimitsConfig{}
-		ulimit.Soft = value["soft"].(int)
-		ulimit.Hard = value["hard"].(int)
+		if v, ok := value["soft"]; ok {
+			ulimit.Soft = v.(int)
+		}
+		if v, ok := value["hard"]; ok {
+			ulimit.Hard = v.(int)
+		}
 		return ulimit, nil
 	default:
 		return data, errors.Errorf("invalid type %T for ulimits", value)
@@ -554,15 +629,12 @@ func LoadNetworks(source map[string]interface{}, version string) (map[string]typ
 			if network.Name != "" {
 				return nil, errors.Errorf("network %s: network.external.name and network.name conflict; only use network.name", name)
 			}
-			if versions.GreaterThanOrEqualTo(version, "3.5") {
-				logrus.Warnf("network %s: network.external.name is deprecated in favor of network.name", name)
-			}
+			logrus.Warnf("network %s: network.external.name is deprecated in favor of network.name", name)
 			network.Name = network.External.Name
 			network.External.Name = ""
 		case network.Name == "":
 			network.Name = name
 		}
-		network.Extras = loadExtras(name, source)
 		networks[name] = network
 	}
 	return networks, nil
@@ -576,7 +648,7 @@ func externalVolumeError(volume, key string) error {
 
 // LoadVolumes produces a VolumeConfig map from a compose file Dict
 // the source Dict is not validated if directly used. Use Load() to enable validation
-func LoadVolumes(source map[string]interface{}, version string) (map[string]types.VolumeConfig, error) {
+func LoadVolumes(source map[string]interface{}) (map[string]types.VolumeConfig, error) {
 	volumes := make(map[string]types.VolumeConfig)
 	if err := Transform(source, &volumes); err != nil {
 		return volumes, err
@@ -597,15 +669,12 @@ func LoadVolumes(source map[string]interface{}, version string) (map[string]type
 			if volume.Name != "" {
 				return nil, errors.Errorf("volume %s: volume.external.name and volume.name conflict; only use volume.name", name)
 			}
-			if versions.GreaterThanOrEqualTo(version, "3.4") {
-				logrus.Warnf("volume %s: volume.external.name is deprecated in favor of volume.name", name)
-			}
+			logrus.Warnf("volume %s: volume.external.name is deprecated in favor of volume.name", name)
 			volume.Name = volume.External.Name
 			volume.External.Name = ""
 		case volume.Name == "":
 			volume.Name = name
 		}
-		volume.Extras = loadExtras(name, source)
 		volumes[name] = volume
 	}
 	return volumes, nil
@@ -624,7 +693,6 @@ func LoadSecrets(source map[string]interface{}, details types.ConfigDetails) (ma
 			return nil, err
 		}
 		secretConfig := types.SecretConfig(obj)
-		secretConfig.Extras = loadExtras(name, source)
 		secrets[name] = secretConfig
 	}
 	return secrets, nil
@@ -643,7 +711,6 @@ func LoadConfigObjs(source map[string]interface{}, details types.ConfigDetails) 
 			return nil, err
 		}
 		configConfig := types.ConfigObjConfig(obj)
-		configConfig.Extras = loadExtras(name, source)
 		configs[name] = configConfig
 	}
 	return configs, nil
@@ -658,9 +725,7 @@ func loadFileObjectConfig(name string, objType string, obj types.FileObjectConfi
 			if obj.Name != "" {
 				return obj, errors.Errorf("%[1]s %[2]s: %[1]s.external.name and %[1]s.name conflict; only use %[1]s.name", objType, name)
 			}
-			if versions.GreaterThanOrEqualTo(details.Version, "3.5") {
-				logrus.Warnf("%[1]s %[2]s: %[1]s.external.name is deprecated in favor of %[1]s.name", objType, name)
-			}
+			logrus.Warnf("%[1]s %[2]s: %[1]s.external.name is deprecated in favor of %[1]s.name", objType, name)
 			obj.Name = obj.External.Name
 			obj.External.Name = ""
 		} else {
@@ -681,6 +746,10 @@ func loadFileObjectConfig(name string, objType string, obj types.FileObjectConfi
 }
 
 func absPath(workingDir string, filePath string) string {
+	if strings.HasPrefix(filePath, "~") {
+		home, _ := os.UserHomeDir()
+		return filepath.Join(home, filePath[1:])
+	}
 	if filepath.IsAbs(filePath) {
 		return filePath
 	}
@@ -719,19 +788,23 @@ var transformServicePort TransformerFunc = func(data interface{}) (interface{}, 
 		for _, entry := range entries {
 			switch value := entry.(type) {
 			case int:
-				v, err := toServicePortConfigs(fmt.Sprint(value))
+				parsed, err := types.ParsePortConfig(fmt.Sprint(value))
 				if err != nil {
 					return data, err
 				}
-				ports = append(ports, v...)
+				for _, v := range parsed {
+					ports = append(ports, v)
+				}
 			case string:
-				v, err := toServicePortConfigs(value)
+				parsed, err := types.ParsePortConfig(value)
 				if err != nil {
 					return data, err
 				}
-				ports = append(ports, v...)
+				for _, v := range parsed {
+					ports = append(ports, v)
+				}
 			case map[string]interface{}:
-				ports = append(ports, value)
+				ports = append(ports, groupXFieldsIntoExtensions(value))
 			default:
 				return data, errors.Errorf("invalid type %T for port", value)
 			}
@@ -742,12 +815,36 @@ var transformServicePort TransformerFunc = func(data interface{}) (interface{}, 
 	}
 }
 
+var transformServiceDeviceRequest TransformerFunc = func(data interface{}) (interface{}, error) {
+	switch value := data.(type) {
+	case map[string]interface{}:
+		count, ok := value["count"]
+		if ok {
+			switch val := count.(type) {
+			case int:
+				return value, nil
+			case string:
+				if strings.ToLower(val) == "all" {
+					value["count"] = -1
+					return value, nil
+				}
+				return data, errors.Errorf("invalid string value for 'count' (the only value allowed is 'all')")
+			default:
+				return data, errors.Errorf("invalid type %T for device count", val)
+			}
+		}
+		return data, nil
+	default:
+		return data, errors.Errorf("invalid type %T for resource reservation", value)
+	}
+}
+
 var transformStringSourceMap TransformerFunc = func(data interface{}) (interface{}, error) {
 	switch value := data.(type) {
 	case string:
 		return map[string]interface{}{"source": value}, nil
 	case map[string]interface{}:
-		return data, nil
+		return groupXFieldsIntoExtensions(data.(map[string]interface{})), nil
 	default:
 		return data, errors.Errorf("invalid type %T for secret", value)
 	}
@@ -758,10 +855,39 @@ var transformBuildConfig TransformerFunc = func(data interface{}) (interface{}, 
 	case string:
 		return map[string]interface{}{"context": value}, nil
 	case map[string]interface{}:
-		return data, nil
+		return groupXFieldsIntoExtensions(data.(map[string]interface{})), nil
 	default:
 		return data, errors.Errorf("invalid type %T for service build", value)
 	}
+}
+
+var transformDependsOnConfig TransformerFunc = func(data interface{}) (interface{}, error) {
+	switch value := data.(type) {
+	case []interface{}:
+		transformed := map[string]interface{}{}
+		for _, serviceIntf := range value {
+			service, ok := serviceIntf.(string)
+			if !ok {
+				return data, errors.Errorf("invalid type %T for service depends_on element. Expected string.", value)
+			}
+			transformed[service] = map[string]interface{}{"condition": types.ServiceConditionStarted}
+		}
+		return transformed, nil
+	case map[string]interface{}:
+		return groupXFieldsIntoExtensions(data.(map[string]interface{})), nil
+	default:
+		return data, errors.Errorf("invalid type %T for service depends_on", value)
+	}
+}
+
+var transformExtendsConfig TransformerFunc = func(data interface{}) (interface{}, error) {
+	switch data.(type) {
+	case string:
+		data = map[string]interface{}{
+			"service": data,
+		}
+	}
+	return transformMappingOrListFunc("=", true)(data)
 }
 
 var transformServiceVolumeConfig TransformerFunc = func(data interface{}) (interface{}, error) {
@@ -769,7 +895,7 @@ var transformServiceVolumeConfig TransformerFunc = func(data interface{}) (inter
 	case string:
 		return ParseVolume(value)
 	case map[string]interface{}:
-		return data, nil
+		return groupXFieldsIntoExtensions(data.(map[string]interface{})), nil
 	default:
 		return data, errors.Errorf("invalid type %T for service volume", value)
 	}
@@ -853,7 +979,7 @@ func transformMappingOrList(mappingOrList interface{}, sep string, allowNil bool
 
 var transformShellCommand TransformerFunc = func(value interface{}) (interface{}, error) {
 	if str, ok := value.(string); ok {
-		return shlex.Split(str)
+		return shellwords.Parse(str)
 	}
 	return value, nil
 }
@@ -890,39 +1016,6 @@ var transformStringToDuration TransformerFunc = func(value interface{}) (interfa
 	default:
 		return value, errors.Errorf("invalid type %T for duration", value)
 	}
-}
-
-func toServicePortConfigs(value string) ([]interface{}, error) {
-	var portConfigs []interface{}
-
-	ports, portBindings, err := nat.ParsePortSpecs([]string{value})
-	if err != nil {
-		return nil, err
-	}
-	// We need to sort the key of the ports to make sure it is consistent
-	keys := []string{}
-	for port := range ports {
-		keys = append(keys, string(port))
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
-		// Reuse ConvertPortToPortConfig so that it is consistent
-		portConfig, err := opts.ConvertPortToPortConfig(nat.Port(key), portBindings)
-		if err != nil {
-			return nil, err
-		}
-		for _, p := range portConfig {
-			portConfigs = append(portConfigs, types.ServicePortConfig{
-				Protocol:  string(p.Protocol),
-				Target:    p.TargetPort,
-				Published: p.PublishedPort,
-				Mode:      string(p.PublishMode),
-			})
-		}
-	}
-
-	return portConfigs, nil
 }
 
 func toMapStringString(value map[string]interface{}, allowNil bool) map[string]interface{} {

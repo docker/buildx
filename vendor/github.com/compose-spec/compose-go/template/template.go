@@ -1,3 +1,19 @@
+/*
+   Copyright 2020 The Compose Specification Authors.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package template
 
 import (
@@ -95,21 +111,21 @@ func Substitute(template string, mapping Mapping) (string, error) {
 
 // ExtractVariables returns a map of all the variables defined in the specified
 // composefile (dict representation) and their default value if any.
-func ExtractVariables(configDict map[string]interface{}, pattern *regexp.Regexp) map[string]string {
+func ExtractVariables(configDict map[string]interface{}, pattern *regexp.Regexp) map[string]Variable {
 	if pattern == nil {
 		pattern = defaultPattern
 	}
 	return recurseExtract(configDict, pattern)
 }
 
-func recurseExtract(value interface{}, pattern *regexp.Regexp) map[string]string {
-	m := map[string]string{}
+func recurseExtract(value interface{}, pattern *regexp.Regexp) map[string]Variable {
+	m := map[string]Variable{}
 
 	switch value := value.(type) {
 	case string:
 		if values, is := extractVariable(value, pattern); is {
 			for _, v := range values {
-				m[v.name] = v.value
+				m[v.Name] = v
 			}
 		}
 	case map[string]interface{}:
@@ -124,7 +140,7 @@ func recurseExtract(value interface{}, pattern *regexp.Regexp) map[string]string
 		for _, elem := range value {
 			if values, is := extractVariable(elem, pattern); is {
 				for _, v := range values {
-					m[v.name] = v.value
+					m[v.Name] = v
 				}
 			}
 		}
@@ -133,21 +149,22 @@ func recurseExtract(value interface{}, pattern *regexp.Regexp) map[string]string
 	return m
 }
 
-type extractedValue struct {
-	name  string
-	value string
+type Variable struct {
+	Name         string
+	DefaultValue string
+	Required     bool
 }
 
-func extractVariable(value interface{}, pattern *regexp.Regexp) ([]extractedValue, bool) {
+func extractVariable(value interface{}, pattern *regexp.Regexp) ([]Variable, bool) {
 	sValue, ok := value.(string)
 	if !ok {
-		return []extractedValue{}, false
+		return []Variable{}, false
 	}
 	matches := pattern.FindAllStringSubmatch(sValue, -1)
 	if len(matches) == 0 {
-		return []extractedValue{}, false
+		return []Variable{}, false
 	}
-	values := []extractedValue{}
+	values := []Variable{}
 	for _, match := range matches {
 		groups := matchGroups(match, pattern)
 		if escaped := groups["escaped"]; escaped != "" {
@@ -159,17 +176,24 @@ func extractVariable(value interface{}, pattern *regexp.Regexp) ([]extractedValu
 		}
 		name := val
 		var defaultValue string
+		var required bool
 		switch {
 		case strings.Contains(val, ":?"):
 			name, _ = partition(val, ":?")
+			required = true
 		case strings.Contains(val, "?"):
 			name, _ = partition(val, "?")
+			required = true
 		case strings.Contains(val, ":-"):
 			name, defaultValue = partition(val, ":-")
 		case strings.Contains(val, "-"):
 			name, defaultValue = partition(val, "-")
 		}
-		values = append(values, extractedValue{name: name, value: defaultValue})
+		values = append(values, Variable{
+			Name:         name,
+			DefaultValue: defaultValue,
+			Required:     required,
+		})
 	}
 	return values, len(values) > 0
 }

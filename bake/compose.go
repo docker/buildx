@@ -6,22 +6,25 @@ import (
 	"reflect"
 	"strings"
 
-	"github.com/docker/cli/cli/compose/loader"
-	composetypes "github.com/docker/cli/cli/compose/types"
+	"github.com/compose-spec/compose-go/loader"
+	compose "github.com/compose-spec/compose-go/types"
 )
 
-func parseCompose(dt []byte) (*composetypes.Config, error) {
-	parsed, err := loader.ParseYAML([]byte(dt))
+func parseCompose(dt []byte) (*compose.Project, error) {
+	config, err := loader.ParseYAML(dt)
 	if err != nil {
 		return nil, err
 	}
-	return loader.Load(composetypes.ConfigDetails{
-		ConfigFiles: []composetypes.ConfigFile{
+
+	return loader.Load(compose.ConfigDetails{
+		ConfigFiles: []compose.ConfigFile{
 			{
-				Config: parsed,
+				Config: config,
 			},
 		},
 		Environment: envMap(os.Environ()),
+	}, func(options *loader.Options) {
+		options.SkipNormalization = true
 	})
 }
 
@@ -44,7 +47,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 	}
 
 	var c Config
-	var zeroBuildConfig composetypes.BuildConfig
+	var zeroBuildConfig compose.BuildConfig
 	if len(cfg.Services) > 0 {
 		c.Groups = []*Group{}
 		c.Targets = []*Target{}
@@ -53,7 +56,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 
 		for _, s := range cfg.Services {
 
-			if reflect.DeepEqual(s.Build, zeroBuildConfig) {
+			if s.Build == nil || reflect.DeepEqual(s.Build, zeroBuildConfig) {
 				// if not make sure they're setting an image or it's invalid d-c.yml
 				if s.Image == "" {
 					return nil, fmt.Errorf("compose file invalid: service %s has neither an image nor a build context specified. At least one must be provided", s.Name)
@@ -97,7 +100,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 	return &c, nil
 }
 
-func toMap(in composetypes.MappingWithEquals) map[string]string {
+func toMap(in compose.MappingWithEquals) map[string]string {
 	m := map[string]string{}
 	for k, v := range in {
 		if v != nil {

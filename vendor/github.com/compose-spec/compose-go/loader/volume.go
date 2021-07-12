@@ -1,3 +1,19 @@
+/*
+   Copyright 2020 The Compose Specification Authors.
+
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
 package loader
 
 import (
@@ -5,8 +21,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/docker/cli/cli/compose/types"
-	"github.com/docker/docker/api/types/mount"
+	"github.com/compose-spec/compose-go/types"
 	"github.com/pkg/errors"
 )
 
@@ -21,7 +36,7 @@ func ParseVolume(spec string) (types.ServiceVolumeConfig, error) {
 		return volume, errors.New("invalid empty volume spec")
 	case 1, 2:
 		volume.Target = spec
-		volume.Type = string(mount.TypeVolume)
+		volume.Type = string(types.VolumeTypeVolume)
 		return volume, nil
 	}
 
@@ -85,9 +100,18 @@ func populateFieldFromBuffer(char rune, buffer []rune, volume *types.ServiceVolu
 	return nil
 }
 
+var Propagations = []string{
+	types.PropagationRPrivate,
+	types.PropagationPrivate,
+	types.PropagationRShared,
+	types.PropagationShared,
+	types.PropagationRSlave,
+	types.PropagationSlave,
+}
+
 func isBindOption(option string) bool {
-	for _, propagation := range mount.Propagations {
-		if mount.Propagation(option) == propagation {
+	for _, propagation := range Propagations {
+		if option == propagation {
 			return true
 		}
 	}
@@ -95,24 +119,29 @@ func isBindOption(option string) bool {
 }
 
 func populateType(volume *types.ServiceVolumeConfig) {
-	switch {
-	// Anonymous volume
-	case volume.Source == "":
-		volume.Type = string(mount.TypeVolume)
-	case isFilePath(volume.Source):
-		volume.Type = string(mount.TypeBind)
-	default:
-		volume.Type = string(mount.TypeVolume)
+	if isFilePath(volume.Source) {
+		volume.Type = types.VolumeTypeBind
+		if volume.Bind == nil {
+			volume.Bind = &types.ServiceVolumeBind{}
+		}
+		// For backward compatibility with docker-compose legacy, using short notation involves
+		// bind will create missing host path
+		volume.Bind.CreateHostPath = true
+	} else {
+		volume.Type = types.VolumeTypeVolume
+		if volume.Volume == nil {
+			volume.Volume = &types.ServiceVolumeVolume{}
+		}
 	}
 }
 
 func isFilePath(source string) bool {
+	if source == "" {
+		return false
+	}
 	switch source[0] {
 	case '.', '/', '~':
 		return true
-	}
-	if len([]rune(source)) == 1 {
-		return false
 	}
 
 	// windows named pipes

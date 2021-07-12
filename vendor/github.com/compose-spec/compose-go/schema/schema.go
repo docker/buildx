@@ -1,14 +1,30 @@
-package schema
+/*
+   Copyright 2020 The Compose Specification Authors.
 
-//go:generate esc -o bindata.go -pkg schema -ignore .*\.go -private -modtime=1518458244 data
+   Licensed under the Apache License, Version 2.0 (the "License");
+   you may not use this file except in compliance with the License.
+   You may obtain a copy of the License at
+
+       http://www.apache.org/licenses/LICENSE-2.0
+
+   Unless required by applicable law or agreed to in writing, software
+   distributed under the License is distributed on an "AS IS" BASIS,
+   WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+   See the License for the specific language governing permissions and
+   limitations under the License.
+*/
+
+package schema
 
 import (
 	"fmt"
 	"strings"
 	"time"
 
-	"github.com/pkg/errors"
 	"github.com/xeipuuv/gojsonschema"
+
+	// Enable support for embedded static resources
+	_ "embed"
 )
 
 const (
@@ -40,32 +56,13 @@ func init() {
 	gojsonschema.FormatCheckers.Add("duration", durationFormatChecker{})
 }
 
-// Version returns the version of the config, defaulting to version 1.0
-func Version(config map[string]interface{}) string {
-	version, ok := config[versionField]
-	if !ok {
-		return defaultVersion
-	}
-	return normalizeVersion(fmt.Sprintf("%v", version))
-}
-
-func normalizeVersion(version string) string {
-	switch version {
-	case "3":
-		return "3.0"
-	default:
-		return version
-	}
-}
+// Schema is the compose-spec JSON schema
+//go:embed compose-spec.json
+var Schema string
 
 // Validate uses the jsonschema to validate the configuration
-func Validate(config map[string]interface{}, version string) error {
-	schemaData, err := _escFSByte(false, fmt.Sprintf("/data/config_schema_v%s.json", version))
-	if err != nil {
-		return errors.Errorf("unsupported Compose file version: %s", version)
-	}
-
-	schemaLoader := gojsonschema.NewStringLoader(string(schemaData))
+func Validate(config map[string]interface{}) error {
+	schemaLoader := gojsonschema.NewStringLoader(Schema)
 	dataLoader := gojsonschema.NewGoLoader(config)
 
 	result, err := gojsonschema.Validate(schemaLoader, dataLoader)
