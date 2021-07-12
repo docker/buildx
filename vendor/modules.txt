@@ -42,6 +42,13 @@ github.com/apparentlymart/go-textseg/v12/textseg
 github.com/beorn7/perks/quantile
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
+# github.com/compose-spec/compose-go v0.0.0-20210706130854-69459d4976b5
+github.com/compose-spec/compose-go/errdefs
+github.com/compose-spec/compose-go/interpolation
+github.com/compose-spec/compose-go/loader
+github.com/compose-spec/compose-go/schema
+github.com/compose-spec/compose-go/template
+github.com/compose-spec/compose-go/types
 # github.com/containerd/cgroups v0.0.0-20210114181951-8a68de567b68
 github.com/containerd/cgroups/stats/v1
 # github.com/containerd/console v1.0.1
@@ -75,16 +82,14 @@ github.com/containerd/continuity/sysx
 github.com/containerd/typeurl
 # github.com/davecgh/go-spew v1.1.1
 github.com/davecgh/go-spew/spew
+# github.com/distribution/distribution/v3 v3.0.0-20210316161203-a01c71e2477e
+github.com/distribution/distribution/v3/digestset
+github.com/distribution/distribution/v3/reference
 # github.com/docker/cli v20.10.5+incompatible
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/manager
 github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli/command
-github.com/docker/cli/cli/compose/interpolation
-github.com/docker/cli/cli/compose/loader
-github.com/docker/cli/cli/compose/schema
-github.com/docker/cli/cli/compose/template
-github.com/docker/cli/cli/compose/types
 github.com/docker/cli/cli/config
 github.com/docker/cli/cli/config/configfile
 github.com/docker/cli/cli/config/credentials
@@ -195,7 +200,7 @@ github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/struct
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/google/go-cmp v0.5.4
+# github.com/google/go-cmp v0.5.5
 github.com/google/go-cmp/cmp
 github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
@@ -232,12 +237,14 @@ github.com/hashicorp/hcl/v2/hclparse
 github.com/hashicorp/hcl/v2/hclsyntax
 github.com/hashicorp/hcl/v2/hclwrite
 github.com/hashicorp/hcl/v2/json
-# github.com/imdario/mergo v0.3.11
+# github.com/imdario/mergo v0.3.12
 github.com/imdario/mergo
 # github.com/inconshreveable/mousetrap v1.0.0
 github.com/inconshreveable/mousetrap
 # github.com/jaguilar/vt100 v0.0.0-20150826170717-2703a27b14ea => github.com/tonistiigi/vt100 v0.0.0-20190402012908-ad4c4a574305
 github.com/jaguilar/vt100
+# github.com/joho/godotenv v1.3.0
+github.com/joho/godotenv
 # github.com/json-iterator/go v1.1.10
 github.com/json-iterator/go
 # github.com/klauspost/compress v1.11.3
@@ -246,13 +253,15 @@ github.com/klauspost/compress/huff0
 github.com/klauspost/compress/snappy
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
+# github.com/mattn/go-shellwords v1.0.12
+github.com/mattn/go-shellwords
 # github.com/matttproud/golang_protobuf_extensions v1.0.2-0.20181231171920-c182affec369
 github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/miekg/pkcs11 v1.0.3
 github.com/miekg/pkcs11
 # github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7
 github.com/mitchellh/go-wordwrap
-# github.com/mitchellh/mapstructure v1.1.2
+# github.com/mitchellh/mapstructure v1.4.1
 github.com/mitchellh/mapstructure
 # github.com/moby/buildkit v0.8.2-0.20210401015549-df49b648c8bf
 github.com/moby/buildkit/api/services/control
@@ -337,7 +346,7 @@ github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
 # github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 github.com/serialx/hashring
-# github.com/sirupsen/logrus v1.7.0
+# github.com/sirupsen/logrus v1.8.1
 github.com/sirupsen/logrus
 # github.com/spf13/cobra v1.1.1
 github.com/spf13/cobra
@@ -418,7 +427,7 @@ golang.org/x/oauth2/google
 golang.org/x/oauth2/internal
 golang.org/x/oauth2/jws
 golang.org/x/oauth2/jwt
-# golang.org/x/sync v0.0.0-20201207232520-09787c993a3a
+# golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 # golang.org/x/sys v0.0.0-20210320140829-1e4c9ba3b0c4

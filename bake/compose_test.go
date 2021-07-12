@@ -9,8 +9,6 @@ import (
 
 func TestParseCompose(t *testing.T) {
 	var dt = []byte(`
-version: "3"
-
 services:
   db:
     build: ./db
@@ -48,8 +46,6 @@ services:
 
 func TestNoBuildOutOfTreeService(t *testing.T) {
 	var dt = []byte(`
-version: "3.7"
-
 services:
     external:
         image: "verycooldb:1337"
@@ -63,8 +59,6 @@ services:
 
 func TestParseComposeTarget(t *testing.T) {
 	var dt = []byte(`
-version: "3.7"
-
 services:
   db:
     build:
@@ -91,8 +85,6 @@ services:
 
 func TestComposeBuildWithoutContext(t *testing.T) {
 	var dt = []byte(`
-version: "3.7"
-
 services:
   db:
     build:
@@ -117,8 +109,6 @@ services:
 
 func TestBogusCompose(t *testing.T) {
 	var dt = []byte(`
-version: "3.7"
-
 services:
   db:
     labels:
@@ -131,5 +121,66 @@ services:
 
 	_, err := ParseCompose(dt)
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "has neither an image nor a build context specified. At least one must be provided")
+	require.Contains(t, err.Error(), "has neither an image nor a build context specified: invalid compose project")
+}
+
+func TestAdvancedNetwork(t *testing.T) {
+	var dt = []byte(`
+services:
+  db:
+    networks:
+      - example.com
+    build:
+      context: ./db
+      target: db
+
+networks:
+  example.com:
+    name: example.com
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 10.5.0.0/24
+          ip_range: 10.5.0.0/24
+          gateway: 10.5.0.254
+`)
+
+	_, err := ParseCompose(dt)
+	require.NoError(t, err)
+}
+
+func TestDependsOnList(t *testing.T) {
+	var dt = []byte(`
+version: "3.8"
+
+services:
+  example-container:
+    image: example/fails:latest
+    build:
+      context: .
+      dockerfile: Dockerfile
+    depends_on:
+      other-container:
+        condition: service_healthy
+    networks:
+      default:
+        aliases:
+          - integration-tests
+
+  other-container:
+    image: example/other:latest
+    healthcheck:
+      test: ["CMD", "echo", "success"]
+      retries: 5
+      interval: 5s
+      timeout: 10s
+      start_period: 5s
+
+networks:
+  default:
+    name: test-net
+`)
+
+	_, err := ParseCompose(dt)
+	require.NoError(t, err)
 }
