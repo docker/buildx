@@ -34,7 +34,7 @@ target "webapp" {
 	ctx := context.TODO()
 
 	t.Run("NoOverrides", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil)
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
 
@@ -46,7 +46,7 @@ target "webapp" {
 	})
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
-		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"})
+		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"}, nil)
 		require.NotNil(t, err)
 		require.Equal(t, err.Error(), "could not find any target matching 'nosuchtarget'")
 	})
@@ -63,7 +63,7 @@ target "webapp" {
 				"webapp.args.VAR_FROMENV" + t.Name(),
 				"webapp.args.VAR_INHERITED=override",
 				// not overriding VAR_BOTH on purpose
-			})
+			}, nil)
 			require.NoError(t, err)
 
 			require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
@@ -88,7 +88,7 @@ target "webapp" {
 			m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webDEP.args.VAR_INHERITED=override",
 				"webDEP.args.VAR_BOTH=override",
-			})
+			}, nil)
 			require.NoError(t, err)
 			require.Equal(t, m["webapp"].Args["VAR_INHERITED"], "override")
 			require.Equal(t, m["webapp"].Args["VAR_BOTH"], "webapp")
@@ -96,23 +96,23 @@ target "webapp" {
 	})
 
 	t.Run("ContextOverride", func(t *testing.T) {
-		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"})
+		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil)
 		require.NotNil(t, err)
 
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"})
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil)
 		require.NoError(t, err)
 
 		require.Equal(t, "foo", *m["webapp"].Context)
 	})
 
 	t.Run("NoCacheOverride", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"})
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].NoCache)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"})
+		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].Pull)
 	})
@@ -172,7 +172,7 @@ target "webapp" {
 		}
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
-				m, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides)
+				m, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides, nil)
 				test.check(t, m, err)
 			})
 		}
@@ -215,7 +215,7 @@ services:
 
 	ctx := context.TODO()
 
-	m, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil)
+	m, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(m))
@@ -225,4 +225,29 @@ services:
 	require.Equal(t, ".", *m["webapp"].Context)
 	require.Equal(t, "1", m["webapp"].Args["buildno"])
 	require.Equal(t, "12", m["webapp"].Args["buildno2"])
+}
+
+func TestHCLCwdPrefix(t *testing.T) {
+
+	fp := File{
+		Name: "docker-bake.hc",
+		Data: []byte(
+			`target "app" {
+				context = "cwd://foo"
+				dockerfile = "test"
+			}`),
+	}
+	ctx := context.TODO()
+	m, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m))
+	_, ok := m["app"]
+	require.True(t, ok)
+
+	_, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, "test", *m["app"].Dockerfile)
+	require.Equal(t, "foo", *m["app"].Context)
 }

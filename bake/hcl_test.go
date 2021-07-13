@@ -276,7 +276,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 	c, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
@@ -288,7 +288,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -326,7 +326,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 	c, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
@@ -338,7 +338,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -483,7 +483,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	c, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	})
+	}, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
@@ -494,7 +494,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -589,7 +589,7 @@ services:
 	c, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.yml"},
-	})
+	}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -598,4 +598,25 @@ services:
 	require.Equal(t, "bar", c.Targets[0].Args["v2"])
 	require.Equal(t, "dir", *c.Targets[0].Context)
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[0].Dockerfile)
+}
+
+func TestHCLBuiltinVars(t *testing.T) {
+	dt := []byte(`
+		target "app" {
+			context = BAKE_CMD_CONTEXT
+			dockerfile = "test"
+		}
+		`)
+
+	c, err := ParseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+	}, map[string]string{
+		"BAKE_CMD_CONTEXT": "foo",
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "foo", *c.Targets[0].Context)
+	require.Equal(t, "test", *c.Targets[0].Dockerfile)
 }

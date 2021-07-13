@@ -17,6 +17,7 @@ import (
 
 type Opt struct {
 	LookupVar func(string) (string, bool)
+	Vars      map[string]string
 }
 
 type variable struct {
@@ -178,7 +179,7 @@ func (p *parser) resolveValue(name string) (err error) {
 	}()
 
 	def, ok := p.attrs[name]
-	if !ok {
+	if _, builtin := p.opt.Vars[name]; !ok && !builtin {
 		vr, ok := p.vars[name]
 		if !ok {
 			return errors.Errorf("undefined variable %q", name)
@@ -187,7 +188,10 @@ func (p *parser) resolveValue(name string) (err error) {
 	}
 
 	if def == nil {
-		val, _ := p.opt.LookupVar(name)
+		val, ok := p.opt.Vars[name]
+		if !ok {
+			val, _ = p.opt.LookupVar(name)
+		}
 		vv := cty.StringVal(val)
 		v = &vv
 		return
@@ -242,6 +246,9 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 	for _, bs := range schema.Blocks {
 		reserved[bs.Type] = struct{}{}
+	}
+	for k := range opt.Vars {
+		reserved[k] = struct{}{}
 	}
 
 	var defs inputs
@@ -302,6 +309,10 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		p.attrs[v.Name] = v
 	}
 	delete(p.attrs, "function")
+
+	for k := range p.opt.Vars {
+		_ = p.resolveValue(k)
+	}
 
 	for k := range p.attrs {
 		if err := p.resolveValue(k); err != nil {
