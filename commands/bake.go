@@ -36,11 +36,19 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}()
 
 	var url string
+	cmdContext := "cwd://"
 
 	if len(targets) > 0 {
 		if bake.IsRemoteURL(targets[0]) {
 			url = targets[0]
 			targets = targets[1:]
+			if len(targets) > 0 {
+				if bake.IsRemoteURL(targets[0]) {
+					cmdContext = targets[0]
+					targets = targets[1:]
+
+				}
+			}
 		}
 	}
 
@@ -85,6 +93,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 
 	var files []bake.File
 	var inp *bake.Input
+
 	if url != "" {
 		files, inp, err = bake.ReadRemoteFiles(ctx, dis, url, in.files, printer)
 	} else {
@@ -94,7 +103,15 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return err
 	}
 
-	m, err := bake.ReadTargets(ctx, files, targets, overrides)
+	m, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
+		"BAKE_CMD_CONTEXT": cmdContext,
+	})
+	if err != nil {
+		return err
+	}
+
+	// this function can update target context string from the input so call before printOnly check
+	bo, err := bake.TargetsToBuildOpt(m, inp)
 	if err != nil {
 		return err
 	}
@@ -111,11 +128,6 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		}
 		fmt.Fprintln(dockerCli.Out(), string(dt))
 		return nil
-	}
-
-	bo, err := bake.TargetsToBuildOpt(m, inp)
-	if err != nil {
-		return err
 	}
 
 	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
