@@ -17,13 +17,17 @@ import (
 	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/appdefaults"
 	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 )
+
+const volumeStateSuffix = "_state"
 
 type Driver struct {
 	driver.InitConfig
@@ -103,6 +107,13 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		hc := &container.HostConfig{
 			Privileged: true,
 			UsernsMode: "host",
+			Mounts: []mount.Mount{
+				{
+					Type:   mount.TypeVolume,
+					Source: d.Name + volumeStateSuffix,
+					Target: appdefaults.Root,
+				},
+			},
 		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
@@ -226,7 +237,7 @@ func (d *Driver) start(ctx context.Context, l progress.SubLogger) error {
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
-	container, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
+	ctn, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 	if err != nil {
 		if dockerclient.IsErrNotFound(err) {
 			return &driver.Info{
@@ -236,7 +247,7 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 		return nil, err
 	}
 
-	if container.State.Running {
+	if ctn.State.Running {
 		return &driver.Info{
 			Status: driver.Running,
 		}, nil
@@ -258,16 +269,21 @@ func (d *Driver) Stop(ctx context.Context, force bool) error {
 	return nil
 }
 
-func (d *Driver) Rm(ctx context.Context, force bool) error {
+func (d *Driver) Rm(ctx context.Context, force bool, rmVolume bool) error {
 	info, err := d.Info(ctx)
 	if err != nil {
 		return err
 	}
 	if info.Status != driver.Inactive {
-		return d.DockerAPI.ContainerRemove(ctx, d.Name, dockertypes.ContainerRemoveOptions{
+		if err := d.DockerAPI.ContainerRemove(ctx, d.Name, dockertypes.ContainerRemoveOptions{
 			RemoveVolumes: true,
-			Force:         true,
-		})
+			Force:         force,
+		}); err != nil {
+			return err
+		}
+		if rmVolume {
+			return d.DockerAPI.VolumeRemove(ctx, d.Name+volumeStateSuffix, false)
+		}
 	}
 	return nil
 }

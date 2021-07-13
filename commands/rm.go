@@ -11,7 +11,8 @@ import (
 )
 
 type rmOptions struct {
-	builder string
+	builder   string
+	keepState bool
 }
 
 func runRm(dockerCli command.Cli, in rmOptions) error {
@@ -28,7 +29,7 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		if err != nil {
 			return err
 		}
-		err1 := stop(ctx, dockerCli, ng, true)
+		err1 := rm(ctx, dockerCli, ng, in.keepState)
 		if err := txn.Remove(ng.Name); err != nil {
 			return err
 		}
@@ -40,7 +41,7 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		return err
 	}
 	if ng != nil {
-		err1 := stop(ctx, dockerCli, ng, true)
+		err1 := rm(ctx, dockerCli, ng, in.keepState)
 		if err := txn.Remove(ng.Name); err != nil {
 			return err
 		}
@@ -66,10 +67,13 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		},
 	}
 
+	flags := cmd.Flags()
+	flags.BoolVar(&options.keepState, "keep-state", false, "Keep BuildKit state")
+
 	return cmd
 }
 
-func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, rm bool) error {
+func rm(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, keepState bool) error {
 	dis, err := driversForNodeGroup(ctx, dockerCli, ng, "")
 	if err != nil {
 		return err
@@ -79,33 +83,8 @@ func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, rm bo
 			if err := di.Driver.Stop(ctx, true); err != nil {
 				return err
 			}
-			if rm {
-				if err := di.Driver.Rm(ctx, true); err != nil {
-					return err
-				}
-			}
-		}
-		if di.Err != nil {
-			err = di.Err
-		}
-	}
-	return err
-}
-
-func stopCurrent(ctx context.Context, dockerCli command.Cli, rm bool) error {
-	dis, err := getDefaultDrivers(ctx, dockerCli, false, "")
-	if err != nil {
-		return err
-	}
-	for _, di := range dis {
-		if di.Driver != nil {
-			if err := di.Driver.Stop(ctx, true); err != nil {
+			if err := di.Driver.Rm(ctx, true, !keepState); err != nil {
 				return err
-			}
-			if rm {
-				if err := di.Driver.Rm(ctx, true); err != nil {
-					return err
-				}
 			}
 		}
 		if di.Err != nil {

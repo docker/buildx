@@ -1,6 +1,9 @@
 package commands
 
 import (
+	"context"
+
+	"github.com/docker/buildx/store"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
@@ -25,7 +28,7 @@ func runStop(dockerCli command.Cli, in stopOptions) error {
 		if err != nil {
 			return err
 		}
-		if err := stop(ctx, dockerCli, ng, false); err != nil {
+		if err := stop(ctx, dockerCli, ng); err != nil {
 			return err
 		}
 		return nil
@@ -36,10 +39,10 @@ func runStop(dockerCli command.Cli, in stopOptions) error {
 		return err
 	}
 	if ng != nil {
-		return stop(ctx, dockerCli, ng, false)
+		return stop(ctx, dockerCli, ng)
 	}
 
-	return stopCurrent(ctx, dockerCli, false)
+	return stopCurrent(ctx, dockerCli)
 }
 
 func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -65,4 +68,40 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	_ = flags
 
 	return cmd
+}
+
+func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup) error {
+	dis, err := driversForNodeGroup(ctx, dockerCli, ng, "")
+	if err != nil {
+		return err
+	}
+	for _, di := range dis {
+		if di.Driver != nil {
+			if err := di.Driver.Stop(ctx, true); err != nil {
+				return err
+			}
+		}
+		if di.Err != nil {
+			err = di.Err
+		}
+	}
+	return err
+}
+
+func stopCurrent(ctx context.Context, dockerCli command.Cli) error {
+	dis, err := getDefaultDrivers(ctx, dockerCli, false, "")
+	if err != nil {
+		return err
+	}
+	for _, di := range dis {
+		if di.Driver != nil {
+			if err := di.Driver.Stop(ctx, true); err != nil {
+				return err
+			}
+		}
+		if di.Err != nil {
+			err = di.Err
+		}
+	}
+	return err
 }
