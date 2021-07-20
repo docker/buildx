@@ -264,7 +264,7 @@ $ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
 ```
 
 
-A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hcl.go#L19-L65)
+A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hclparser/stdlib.go)
 provided by [go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib)
 are available for use in HCL files. In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/main/ext/userfunc)
 are also supported.
