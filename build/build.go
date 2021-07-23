@@ -197,6 +197,10 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for i, c := range clients {
+		if c == nil {
+			continue
+		}
+
 		func(i int, c *client.Client) {
 			eg.Go(func() error {
 				clients[i].Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
