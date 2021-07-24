@@ -1,0 +1,60 @@
+name: testing-builder
+
+on: push
+
+jobs:
+  builder:
+    runs-on: ubuntu-latest
+
+    strategy:
+      matrix:
+        driver:
+          - docker-container
+          - kubernetes
+        mode:
+          - single-node
+          - multiple-nodes
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Setup golang
+        uses: actions/setup-go@v2
+        with:
+          go-version: '1.16.x'
+
+      - name: Build buildx
+        run: go build -o  ~/.docker/cli-plugins/docker-buildx ./cmd/buildx
+
+      - name: Setup env
+        run: |-
+          case ${{ matrix.driver }} in
+            kubernetes)
+              curl -sfL https://get.k3s.io | K3S_KUBECONFIG_MODE="644" sh -s -;
+              ;;
+            docker-container)
+              docker run --rm --privileged tonistiigi/binfmt:latest --install all;
+              ;;
+          esac
+
+      - name: Setup builder
+        run: sh ./testings/builder/${{ matrix.driver }}/${{ matrix.mode }}.sh
+        env:
+          KUBECONFIG: /etc/rancher/k3s/k3s.yaml
+
+      - name: Build single platform to local registry
+        uses: docker/build-push-action@v2
+        with:
+          context: ./testings/builder
+          push: false
+          platforms: linux/amd64
+          tags: localhost/name/app:latest-amd64
+
+      - name: Build multiple platforms to local registry
+        uses: docker/build-push-action@v2
+        with:
+          context: ./testings/builder
+          push: false
+          platforms: linux/amd64,linux/arm64
+          tags: localhost/name/app:latest
