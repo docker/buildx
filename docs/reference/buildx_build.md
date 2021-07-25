@@ -30,7 +30,7 @@ Start a build
 | `--no-cache` | Do not use cache when building the image |
 | [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: type=local,dest=path) |
 | [`--platform stringArray`](#platform) | Set target platform for build |
-| `--progress string` | Set type of progress output (auto, plain, tty). Use plain to show container output |
+| [`--progress string`](#progress) | Set type of progress output (auto, plain, tty). Use plain to show container output |
 | `--pull` | Always attempt to pull a newer version of the image |
 | [`--push`](#push) | Shorthand for --output=type=registry |
 | `--secret stringArray` | Secret file to expose to the build: id=mysecret,src=/local/secret |
@@ -91,6 +91,33 @@ code](https://github.com/containerd/containerd/blob/v1.4.3/platforms/platforms.g
 $ docker buildx build --platform=linux/arm64 .
 $ docker buildx build --platform=linux/amd64,linux/arm64,linux/arm/v7 .
 $ docker buildx build --platform=darwin .
+```
+
+### <a name="progress"></a> Set type of progress output (--progress)
+
+```
+--progress=VALUE
+```
+
+Set type of progress output (auto, plain, tty). Use plain to show container
+output (default "auto").
+
+> You can also use the `BUILDKIT_PROGRESS` environment variable to set
+> its value.
+
+The following example uses `plain` output during the build:
+
+```console
+$ docker buildx build --load --progress=plain .
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 227B 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 129B 0.0s done
+#2 DONE 0.0s
+...
 ```
 
 ### <a name="output"></a> Set the export action for the build result (-o, --output)
