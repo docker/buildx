@@ -115,8 +115,10 @@ $ docker buildx bake -f docker-bake.hcl --print db
 
 ### <a name="progress"></a> Set type of progress output (--progress)
 
-Same as `build --progress`. Set type of progress output (auto, plain, tty). Use
-plain to show container output (default "auto").
+Same as [`build --progress`](buildx_build.md#progress). Set type of progress
+output (auto, plain, tty). Use plain to show container output (default "auto").
+
+> You can also use the `BUILDKIT_PROGRESS` environment variable to set its value.
 
 The following example uses `plain` output during the build:
 
