@@ -1,3 +1,5 @@
+// +build openbsd
+
 /*
    Copyright The containerd Authors.
 
@@ -14,4 +16,18 @@
    limitations under the License.
 */
 
-package v1
+package local
+
+import (
+	"os"
+	"syscall"
+	"time"
+)
+
+func getATime(fi os.FileInfo) time.Time {
+	if st, ok := fi.Sys().(*syscall.Stat_t); ok {
+		return time.Unix(int64(st.Atim.Sec), int64(st.Atim.Nsec)) //nolint: unconvert // int64 conversions ensure the line compiles for 32-bit systems as well.
+	}
+
+	return fi.ModTime()
+}
