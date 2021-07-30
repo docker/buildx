@@ -138,8 +138,8 @@ github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e/go.mod h1:yMWuSON
 github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGXZJjfX53e64911xZQV5JYwmTeXPW+k8Sc=
 github.com/cncf/udpa/go v0.0.0-20201120205902-5459f2c99403/go.mod h1:WmhPx2Nbnhtbo57+VJT5O0JRkEi1Wbu0z5j0R8u5Hbk=
 github.com/cockroachdb/datadriven v0.0.0-20190809214429-80d97fb3cbaa/go.mod h1:zn76sxSg3SzpJ0PPJaLDCu+Bu0Lg3sKTORVIj19EIF8=
-github.com/compose-spec/compose-go v0.0.0-20210706130854-69459d4976b5 h1:PpI72CT1bcVPNZyqI1HI8UhQVRVtqLb2tdwi5WphN3c=
-github.com/compose-spec/compose-go v0.0.0-20210706130854-69459d4976b5/go.mod h1:5V65rPnTvvQagtoMxTneJ2QicLq6ZRQQ7fOgPN226fo=
+github.com/compose-spec/compose-go v0.0.0-20210729195839-de56f4f0cb3c h1:lSR4wokZlq+Q8uJpgZuFMs3VoLaYVV07cJOZHa1zRBg=
+github.com/compose-spec/compose-go v0.0.0-20210729195839-de56f4f0cb3c/go.mod h1:5V65rPnTvvQagtoMxTneJ2QicLq6ZRQQ7fOgPN226fo=
 github.com/containerd/aufs v0.0.0-20200908144142-dab0cbea06f4/go.mod h1:nukgQABAEopAHvB6j7cnP5zJ+/3aVcE7hCYqvIwAHyE=
 github.com/containerd/aufs v0.0.0-20201003224125-76a6863f2989/go.mod h1:AkGGQs9NM2vtYHaUen+NljV0/baGCAPELGm2q9ZXpWU=
 github.com/containerd/aufs v0.0.0-20210316121734-20793ff83c97/go.mod h1:kL5kd6KM5TzQjR79jljyi4olc1Vrx6XBlcyj3gNv2PU=
