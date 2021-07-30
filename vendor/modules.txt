@@ -23,7 +23,7 @@ github.com/beorn7/perks/quantile
 github.com/cenkalti/backoff/v4
 # github.com/cespare/xxhash/v2 v2.1.1
 github.com/cespare/xxhash/v2
-# github.com/compose-spec/compose-go v0.0.0-20210706130854-69459d4976b5
+# github.com/compose-spec/compose-go v0.0.0-20210729195839-de56f4f0cb3c
 github.com/compose-spec/compose-go/errdefs
 github.com/compose-spec/compose-go/interpolation
 github.com/compose-spec/compose-go/loader

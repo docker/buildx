@@ -1,6 +1,7 @@
 package bake
 
 import (
+	"os"
 	"sort"
 	"testing"
 
@@ -105,6 +106,35 @@ services:
 	require.Equal(t, "db", *c.Targets[0].Target)
 	require.Equal(t, c.Targets[1].Name, "webapp")
 	require.Equal(t, "webapp", *c.Targets[1].Target)
+}
+
+func TestBuildArgEnvCompose(t *testing.T) {
+	var dt = []byte(`
+version: "3.8"
+services:
+  example:
+    image: example
+    build:
+      context: .
+      dockerfile: Dockerfile
+      args:
+        FOO:
+        BAR: $ZZZ_BAR
+        BRB: FOO
+`)
+
+	os.Setenv("FOO", "bar")
+	defer os.Unsetenv("FOO")
+	os.Setenv("BAR", "foo")
+	defer os.Unsetenv("BAR")
+	os.Setenv("ZZZ_BAR", "zzz_foo")
+	defer os.Unsetenv("ZZZ_BAR")
+
+	c, err := ParseCompose(dt)
+	require.NoError(t, err)
+	require.Equal(t, c.Targets[0].Args["FOO"], "bar")
+	require.Equal(t, c.Targets[0].Args["BAR"], "zzz_foo")
+	require.Equal(t, c.Targets[0].Args["BRB"], "FOO")
 }
 
 func TestBogusCompose(t *testing.T) {

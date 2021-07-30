@@ -11,15 +11,10 @@ import (
 )
 
 func parseCompose(dt []byte) (*compose.Project, error) {
-	config, err := loader.ParseYAML(dt)
-	if err != nil {
-		return nil, err
-	}
-
 	return loader.Load(compose.ConfigDetails{
 		ConfigFiles: []compose.ConfigFile{
 			{
-				Config: config,
+				Content: dt,
 			},
 		},
 		Environment: envMap(os.Environ()),
@@ -80,8 +75,11 @@ func ParseCompose(dt []byte) (*Config, error) {
 				Context:    contextPathP,
 				Dockerfile: dockerfilePathP,
 				Labels:     s.Build.Labels,
-				Args:       toMap(s.Build.Args),
-				CacheFrom:  s.Build.CacheFrom,
+				Args: flatten(s.Build.Args.Resolve(func(val string) (string, bool) {
+					val, ok := cfg.Environment[val]
+					return val, ok
+				})),
+				CacheFrom: s.Build.CacheFrom,
 				// TODO: add platforms
 			}
 			if s.Build.Target != "" {
@@ -100,14 +98,16 @@ func ParseCompose(dt []byte) (*Config, error) {
 	return &c, nil
 }
 
-func toMap(in compose.MappingWithEquals) map[string]string {
-	m := map[string]string{}
-	for k, v := range in {
-		if v != nil {
-			m[k] = *v
-		} else {
-			m[k] = os.Getenv(k)
-		}
+func flatten(in compose.MappingWithEquals) compose.Mapping {
+	if len(in) == 0 {
+		return nil
 	}
-	return m
+	out := compose.Mapping{}
+	for k, v := range in {
+		if v == nil {
+			continue
+		}
+		out[k] = *v
+	}
+	return out
 }

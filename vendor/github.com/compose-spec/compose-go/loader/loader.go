@@ -217,14 +217,33 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 
 func parseConfig(b []byte, opts *Options) (map[string]interface{}, error) {
 	if !opts.SkipInterpolation {
-		substitute, err := opts.Interpolate.Substitute(string(b), template.Mapping(opts.Interpolate.LookupValue))
+		withoutComments, err := removeYamlComments(b)
 		if err != nil {
 			return nil, err
 		}
-		b = []byte(substitute)
+
+		substituted, err := opts.Interpolate.Substitute(string(withoutComments), template.Mapping(opts.Interpolate.LookupValue))
+		if err != nil {
+			return nil, err
+		}
+		b = []byte(substituted)
 	}
 
 	return ParseYAML(b)
+}
+
+// removeYamlComments drop all comments from the yaml file, so we don't try to apply string substitutions on irrelevant places
+func removeYamlComments(b []byte) ([]byte, error) {
+	var cfg interface{}
+	err := yaml.Unmarshal(b, &cfg)
+	if err != nil {
+		return nil, err
+	}
+	b, err = yaml.Marshal(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return b, nil
 }
 
 func groupXFieldsIntoExtensions(dict map[string]interface{}) map[string]interface{} {
