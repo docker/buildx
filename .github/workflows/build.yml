@@ -164,6 +164,7 @@ jobs:
           ./hack/release ${{ env.RELEASE_OUT }}
         env:
           PLATFORMS: ${{ env.PLATFORMS }},darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
+          CHECKSUMS: 1
           CACHEDIR_FROM: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
       -
         name: Upload artifacts
