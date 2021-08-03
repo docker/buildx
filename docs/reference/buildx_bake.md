@@ -34,16 +34,19 @@ Build from a file
 Bake is a high-level build command. Each specified target will run in parallel
 as part of the build.
 
-Read [High-level build options](https://github.com/docker/buildx#high-level-build-options) for introduction.
+Read [High-level build options](https://github.com/docker/buildx#high-level-build-options)
+for introduction.
 
-Please note that `buildx bake` command may receive backwards incompatible features in the future if needed. We are looking for feedback on improving the command and extending the functionality further.
+Please note that `buildx bake` command may receive backwards incompatible
+features in the future if needed. We are looking for feedback on improving the
+command and extending the functionality further.
 
 ## Examples
 
 ### <a name="file"></a> Specify a build definition file (-f, --file)
 
-By default, `buildx bake` looks for build definition files in the current directory,
-the following are parsed:
+By default, `buildx bake` looks for build definition files in the current
+directory, the following are parsed:
 
 - `docker-compose.yml`
 - `docker-compose.yaml`
@@ -89,27 +92,132 @@ $ docker buildx bake -f docker-compose.dev.yaml backend database
  ...
 ```
 
+You can also use a remote `git` bake definition:
+
+```console
+$ docker buildx bake "git://github.com/docker/cli#master" --print
+#1 [internal] load git source git://github.com/docker/cli#master
+#1 0.686 2776a6d694f988c0c1df61cad4bfac0f54e481c8       refs/heads/master
+#1 CACHED
+{
+  "target": {
+    "binary": {
+      "context": "git://github.com/docker/cli#master",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "BASE_VARIANT": "alpine",
+        "GO_STRIP": "",
+        "VERSION": ""
+      },
+      "target": "binary",
+      "platforms": [
+        "local"
+      ],
+      "output": [
+        "build"
+      ]
+    }
+  }
+}
+```
+
+As you can see the context is fixed to `git://github.com/docker/cli` even if
+[no context is actually defined](https://github.com/docker/cli/blob/2776a6d694f988c0c1df61cad4bfac0f54e481c8/docker-bake.hcl#L17-L26)
+in the definition.
+
+If you want to access the main context for bake command from a bake file
+that has been imported remotely, you can use the `BAKE_CMD_CONTEXT` builtin var:
+
+```console
+$ cat https://raw.githubusercontent.com/tonistiigi/buildx/remote-test/docker-bake.hcl
+target "default" {
+  context = BAKE_CMD_CONTEXT
+  dockerfile-inline = <<EOT
+FROM alpine
+WORKDIR /src
+COPY . .
+RUN ls -l && stop
+EOT
+}
+```
+
+```console
+$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" --print
+{
+  "target": {
+    "default": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "dockerfile-inline": "FROM alpine\nWORKDIR /src\nCOPY . .\nRUN ls -l \u0026\u0026 stop\n"
+    }
+  }
+}
+```
+
+```console
+$ touch foo bar
+$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test"
+...
+ > [4/4] RUN ls -l && stop:
+#8 0.101 total 0
+#8 0.102 -rw-r--r--    1 root     root             0 Jul 27 18:47 bar
+#8 0.102 -rw-r--r--    1 root     root             0 Jul 27 18:47 foo
+#8 0.102 /bin/sh: stop: not found
+```
+
+```console
+$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#master" --print
+#1 [internal] load git source git://github.com/tonistiigi/buildx#remote-test
+#1 0.401 577303add004dd7efeb13434d69ea030d35f7888       refs/heads/remote-test
+#1 CACHED
+{
+  "target": {
+    "default": {
+      "context": "git://github.com/docker/cli#master",
+      "dockerfile": "Dockerfile",
+      "dockerfile-inline": "FROM alpine\nWORKDIR /src\nCOPY . .\nRUN ls -l \u0026\u0026 stop\n"
+    }
+  }
+}
+```
+
+```console
+$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#master"
+...
+ > [4/4] RUN ls -l && stop:
+#8 0.136 drwxrwxrwx    5 root     root          4096 Jul 27 18:31 kubernetes
+#8 0.136 drwxrwxrwx    3 root     root          4096 Jul 27 18:31 man
+#8 0.136 drwxrwxrwx    2 root     root          4096 Jul 27 18:31 opts
+#8 0.136 -rw-rw-rw-    1 root     root          1893 Jul 27 18:31 poule.yml
+#8 0.136 drwxrwxrwx    7 root     root          4096 Jul 27 18:31 scripts
+#8 0.136 drwxrwxrwx    3 root     root          4096 Jul 27 18:31 service
+#8 0.136 drwxrwxrwx    2 root     root          4096 Jul 27 18:31 templates
+#8 0.136 drwxrwxrwx   10 root     root          4096 Jul 27 18:31 vendor
+#8 0.136 -rwxrwxrwx    1 root     root          9620 Jul 27 18:31 vendor.conf
+#8 0.136 /bin/sh: stop: not found
+```
+
 ### <a name="no-cache"></a> Do not use cache when building the image (--no-cache)
 
 Same as `build --no-cache`. Do not use cache when building the image.
 
 ### <a name="print"></a> Print the options without building (--print)
 
-Prints the resulting options of the targets desired to be built, in a JSON format,
-without starting a build.
+Prints the resulting options of the targets desired to be built, in a JSON
+format, without starting a build.
 
 ```console
 $ docker buildx bake -f docker-bake.hcl --print db
 {
-   "target": {
-      "db": {
-         "context": "./",
-         "dockerfile": "Dockerfile",
-         "tags": [
-            "docker.io/tiborvass/db"
-         ]
-      }
-   }
+  "target": {
+    "db": {
+      "context": "./",
+      "dockerfile": "Dockerfile",
+      "tags": [
+        "docker.io/tiborvass/db"
+      ]
+    }
+  }
 }
 ```
 
@@ -147,8 +255,9 @@ Same as `build --pull`.
 --set targetpattern.key[.subkey]=value
 ```
 
-Override target configurations from command line. The pattern matching syntax is
-defined in https://golang.org/pkg/path/#Match.
+Override target configurations from command line. The pattern matching syntax
+is defined in https://golang.org/pkg/path/#Match.
+
 
 **Examples**
 
@@ -161,8 +270,8 @@ $ docker buildx bake --set foo*.no-cache              # bypass caching only for 
 ```
 
 Complete list of overridable fields:
-args, cache-from, cache-to, context, dockerfile, labels, no-cache, output, platform,
-pull, secrets, ssh, tags, target
+`args`, `cache-from`, `cache-to`, `context`, `dockerfile`, `labels`, `no-cache`,
+`output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`
 
 ### File definition
 
@@ -213,18 +322,87 @@ Complete list of valid target fields:
 `args`, `cache-from`, `cache-to`, `context`, `dockerfile`, `inherits`, `labels`,
 `no-cache`, `output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`
 
+### Global scope attributes
+
+You can define global scope attributes in HCL/JSON and use them for code reuse
+and setting values for variables. This means you can do a "data-only" HCL file
+with the values you want to set/override and use it in the list of regular
+output files.
+
+```hcl
+# docker-bake.hcl
+variable "FOO" {
+    default = "abc"
+}
+
+target "app" {
+    args = {
+        v1 = "pre-${FOO}"
+    }
+}
+```
+
+You can use this file directly:
+
+```console
+$ docker buildx bake --print app
+{
+  "target": {
+    "app": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "v1": "pre-abc"
+      }
+    }
+  }
+}
+```
+
+Or create an override configuration file:
+
+```hcl
+# env.hcl
+WHOAMI="myuser"
+FOO="def-${WHOAMI}"
+```
+
+And invoke bake together with both of the files:
+
+```console
+$ docker buildx bake -f docker-bake.hcl -f env.hcl --print app
+{
+  "target": {
+    "app": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "v1": "pre-def-myuser"
+      }
+    }
+  }
+}
+```
+
 ### HCL variables and functions
 
 Similar to how Terraform provides a way to [define variables](https://www.terraform.io/docs/configuration/variables.html#declaring-an-input-variable),
 the HCL file format also supports variable block definitions. These can be used
-to define variables with values provided by the current environment, or a default
-value when unset.
+to define variables with values provided by the current environment, or a
+default value when unset.
 
+A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hclparser/stdlib.go)
+provided by [go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib)
+are available for use in HCL files. In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/main/ext/userfunc)
+are also supported.
 
-Example of using interpolation to tag an image with the git sha:
+#### Using interpolation to tag an image with the git sha
 
-```console
-$ cat <<'EOF' > docker-bake.hcl
+Bake supports variable blocks which are assigned to matching environment
+variables or default values.
+
+```hcl
+# docker-bake.hcl
 variable "TAG" {
     default = "latest"
 }
@@ -236,45 +414,45 @@ group "default" {
 target "webapp" {
     tags = ["docker.io/username/webapp:${TAG}"]
 }
-EOF
+```
 
+```console
 $ docker buildx bake --print webapp
 {
-   "target": {
-      "webapp": {
-         "context": ".",
-         "dockerfile": "Dockerfile",
-         "tags": [
-            "docker.io/username/webapp:latest"
-         ]
-      }
-   }
-}
-
-$ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
-{
-   "target": {
-      "webapp": {
-         "context": ".",
-         "dockerfile": "Dockerfile",
-         "tags": [
-            "docker.io/username/webapp:985e9e9"
-         ]
-      }
-   }
+  "target": {
+    "webapp": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "tags": [
+        "docker.io/username/webapp:latest"
+      ]
+    }
+  }
 }
 ```
 
-
-A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hclparser/stdlib.go)
-provided by [go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib)
-are available for use in HCL files. In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/main/ext/userfunc)
-are also supported.
-
-Example of using the `add` function:
-
 ```console
-$ cat <<'EOF' > docker-bake.hcl
+$ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
+{
+  "target": {
+    "webapp": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "tags": [
+        "docker.io/username/webapp:985e9e9"
+      ]
+    }
+  }
+}
+```
+
+#### Using the `add` function
+
+You can use [`go-cty` stdlib functions]([go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib)).
+Here we are using the `add` function.
+
+```hcl
+# docker-bake.hcl
 variable "TAG" {
     default = "latest"
 }
@@ -288,26 +466,30 @@ target "webapp" {
         buildno = "${add(123, 1)}"
     }
 }
-EOF
+```
 
+```console
 $ docker buildx bake --print webapp
 {
-   "target": {
-      "webapp": {
-         "context": ".",
-         "dockerfile": "Dockerfile",
-         "args": {
-            "buildno": "124"
-         }
+  "target": {
+    "webapp": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "buildno": "124"
       }
-   }
+    }
+  }
 }
 ```
 
-Example of defining an `increment` function:
+#### Defining an `increment` function
 
-```console
-$ cat <<'EOF' > docker-bake.hcl
+It also supports [user defined functions](https://github.com/hashicorp/hcl/tree/main/ext/userfunc).
+The following example defines a simple an `increment` function.
+
+```hcl
+# docker-bake.hcl
 function "increment" {
     params = [number]
     result = number + 1
@@ -322,27 +504,30 @@ target "webapp" {
         buildno = "${increment(123)}"
     }
 }
-EOF
+```
 
+```console
 $ docker buildx bake --print webapp
 {
-   "target": {
-      "webapp": {
-         "context": ".",
-         "dockerfile": "Dockerfile",
-         "args": {
-            "buildno": "124"
-         }
+  "target": {
+    "webapp": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "buildno": "124"
       }
-   }
+    }
+  }
 }
 ```
 
-Example of only adding tags if a variable is not empty using an `notequal`
-function:
+#### Only adding tags if a variable is not empty using an `notequal`
 
-```console
-$ cat <<'EOF' > docker-bake.hcl
+Here we are using the conditional `notequal` function which is just for
+symmetry with the `equal` one.
+
+```hcl
+# docker-bake.hcl
 variable "TAG" {default="" }
 
 group "default" {
@@ -359,18 +544,145 @@ target "webapp" {
         notequal("",TAG) ? "my-image:${TAG}": "",
     ]
 }
-EOF
+```
 
+```console
 $ docker buildx bake --print webapp
 {
-   "target": {
-      "webapp": {
-         "context": ".",
-         "dockerfile": "Dockerfile",
-         "tags": [
-            "my-image:latest"
-         ]
+  "target": {
+    "webapp": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "tags": [
+        "my-image:latest"
+      ]
+    }
+  }
+}
+```
+
+#### Using variables in functions
+
+You can refer variables to other variables like the target blocks can. Stdlib
+functions can also be called but user functions can't at the moment.
+
+```hcl
+# docker-bake.hcl
+variable "REPO" {
+    default = "user/repo"
+}
+
+function "tag" {
+    params = [tag]
+    result = ["${REPO}:${tag}"]
+}
+
+target "webapp" {
+    tags = tag("v1")
+}
+```
+
+```console
+$ docker buildx bake --print webapp
+{
+  "target": {
+    "webapp": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "tags": [
+        "user/repo:v1"
+      ]
+    }
+  }
+}
+```
+
+#### Using variables in variables across files
+
+When multiple files are specified, one file can use variables defined in
+another file.
+
+```hcl
+# docker-bake1.hcl
+variable "FOO" {
+    default = upper("${BASE}def")
+}
+
+variable "BAR" {
+    default = "-${FOO}-"
+}
+
+target "app" {
+    args = {
+        v1 = "pre-${BAR}"
+    }
+}
+```
+
+```hcl
+# docker-bake2.hcl
+variable "BASE" {
+    default = "abc"
+}
+
+target "app" {
+    args = {
+        v2 = "${FOO}-post"
+    }
+}
+```
+
+```console
+$ docker buildx bake -f docker-bake1.hcl -f docker-bake2.hcl --print app
+{
+  "target": {
+    "app": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "v1": "pre--ABCDEF-",
+        "v2": "ABCDEF-post"
       }
-   }
+    }
+  }
+}
+```
+
+#### Using typed variables
+
+Non-string variables are also accepted. The value passed with env is parsed
+into suitable type first.
+
+```hcl
+# docker-bake.hcl
+variable "FOO" {
+    default = 3
+}
+
+variable "IS_FOO" {
+    default = true
+}
+
+target "app" {
+    args = {
+        v1 = FOO > 5 ? "higher" : "lower" 
+        v2 = IS_FOO ? "yes" : "no"
+    }
+}
+```
+
+```console
+$ docker buildx bake --print app
+{
+  "target": {
+    "app": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "v1": "lower",
+        "v2": "yes"
+      }
+    }
+  }
 }
 ```
