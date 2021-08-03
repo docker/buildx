@@ -1,12 +1,15 @@
 package hclparser
 
 import (
+	"os"
+
 	"github.com/hashicorp/go-cty-funcs/cidr"
 	"github.com/hashicorp/go-cty-funcs/crypto"
 	"github.com/hashicorp/go-cty-funcs/encoding"
 	"github.com/hashicorp/go-cty-funcs/uuid"
 	"github.com/hashicorp/hcl/v2/ext/tryfunc"
 	"github.com/hashicorp/hcl/v2/ext/typeexpr"
+	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
@@ -38,6 +41,7 @@ var stdlibFunctions = map[string]function.Function{
 	"distinct":               stdlib.DistinctFunc,
 	"divide":                 stdlib.DivideFunc,
 	"element":                stdlib.ElementFunc,
+	"env":                    EnvFunc,
 	"equal":                  stdlib.EqualFunc,
 	"flatten":                stdlib.FlattenFunc,
 	"floor":                  stdlib.FloorFunc,
@@ -109,3 +113,18 @@ var stdlibFunctions = map[string]function.Function{
 	"values":                 stdlib.ValuesFunc,
 	"zipmap":                 stdlib.ZipmapFunc,
 }
+
+// EnvFunc is a function that retrieves the value of the environment
+// variable named by the key.
+var EnvFunc = function.New(&function.Spec{
+	Params: []function.Parameter{
+		{
+			Name: "key",
+			Type: cty.String,
+		},
+	},
+	Type: function.StaticReturnType(cty.String),
+	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+		return cty.StringVal(os.Getenv(args[0].AsString())), nil
+	},
+})
