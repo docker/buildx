@@ -38,8 +38,14 @@ Start a build
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag in the 'name:tag' format |
 | [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build. |
 
-
 <!---MARKER_GEN_END-->
+
+### Option Types
+
+| Type | Example | Description |
+| --- | --- | --- |
+| stringSlice | `--allow network.host,security.insecure` | single option, values separated by commas |
+| stringArray | `-t image:0.1 -t image:latest` | multiple instances of the option, one for each value |
 
 ## Description
 
