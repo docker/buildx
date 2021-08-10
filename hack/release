@@ -6,6 +6,7 @@ OUT=${1:-release-out}
 set -eu -o pipefail
 
 : ${PLATFORMS=linux/amd64}
+: ${CHECKSUMS=}
 
 importCacheFlags=""
 if [[ -n "$cacheRefFrom" ]] && [[ "$cacheType" = "local" ]]; then
@@ -25,4 +26,12 @@ buildxCmd build $importCacheFlags \
 if [[ $PLATFORMS =~ "," ]]; then
   mv -f ./$OUT/**/* ./$OUT/
   find ./$OUT -type d -empty -delete
+fi
+
+if [ -n "$CHECKSUMS" ]; then
+  if ! type shasum > /dev/null 2>&1; then
+    echo >&2 "ERROR: shasum is required"
+    exit 1
+  fi
+  find ./$OUT/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/# #' > ./$OUT/checksums.txt
 fi
