@@ -132,6 +132,8 @@ Passes additional driver-specific options. Details for each driver:
     - `nodeselector="label1=value1,label2=value2"` - Sets the kv of `Pod` nodeSelector. No Defaults. Example `nodeselector=kubernetes.io/arch=arm64`
     - `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
     - `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
+    - `qemu.install=(true|false)` - Install QEMU emulation for multi platforms support.
+    - `qemu.image=IMAGE` - Sets the QEMU emulation image. Defaults to `tonistiigi/binfmt:latest`
 
 ### <a name="leave"></a> Remove a node from a builder (--leave)
 

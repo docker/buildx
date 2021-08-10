@@ -18,6 +18,8 @@ import (
 	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
+	corev1 "k8s.io/api/core/v1"
+	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
 	clientappsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
@@ -39,15 +41,18 @@ type Driver struct {
 	factory          driver.Factory
 	minReplicas      int
 	deployment       *appsv1.Deployment
+	configMap        *corev1.ConfigMap
 	clientset        *kubernetes.Clientset
 	deploymentClient clientappsv1.DeploymentInterface
 	podClient        clientcorev1.PodInterface
+	configMapClient  clientcorev1.ConfigMapInterface
 	podChooser       podchooser.PodChooser
 }
 
 func (d *Driver) IsMobyDriver() bool {
 	return false
 }
+
 func (d *Driver) Config() driver.InitConfig {
 	return d.InitConfig
 }
@@ -56,7 +61,24 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
 		_, err := d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
 		if err != nil {
-			// TODO: return err if err != ErrNotFound
+			if !apierrors.IsNotFound(err) {
+				return errors.Wrapf(err, "error for bootstrap %q", d.deployment.Name)
+			}
+
+			if d.configMap != nil {
+				// create ConfigMap first if exists
+				_, err = d.configMapClient.Create(ctx, d.configMap, metav1.CreateOptions{})
+				if err != nil {
+					if !apierrors.IsAlreadyExists(err) {
+						return errors.Wrapf(err, "error while calling configMapClient.Create for %q", d.configMap.Name)
+					}
+					_, err = d.configMapClient.Update(ctx, d.configMap, metav1.UpdateOptions{})
+					if err != nil {
+						return errors.Wrapf(err, "error while calling configMapClient.Update for %q", d.configMap.Name)
+					}
+				}
+			}
+
 			_, err = d.deploymentClient.Create(ctx, d.deployment, metav1.CreateOptions{})
 			if err != nil {
 				return errors.Wrapf(err, "error while calling deploymentClient.Create for %q", d.deployment.Name)
@@ -145,7 +167,16 @@ func (d *Driver) Stop(ctx context.Context, force bool) error {
 
 func (d *Driver) Rm(ctx context.Context, force bool, rmVolume bool) error {
 	if err := d.deploymentClient.Delete(ctx, d.deployment.Name, metav1.DeleteOptions{}); err != nil {
-		return errors.Wrapf(err, "error while calling deploymentClient.Delete for %q", d.deployment.Name)
+		if !apierrors.IsNotFound(err) {
+			return errors.Wrapf(err, "error while calling deploymentClient.Delete for %q", d.deployment.Name)
+		}
+	}
+	if d.configMap != nil {
+		if err := d.configMapClient.Delete(ctx, d.configMap.Name, metav1.DeleteOptions{}); err != nil {
+			if !apierrors.IsNotFound(err) {
+				return errors.Wrapf(err, "error while calling configMapClient.Delete for %q", d.configMap.Name)
+			}
+		}
 	}
 	return nil
 }

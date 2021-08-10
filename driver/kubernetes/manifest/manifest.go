@@ -12,11 +12,23 @@ import (
 )
 
 type DeploymentOpt struct {
-	Namespace      string
-	Name           string
-	Image          string
-	Replicas       int
-	BuildkitFlags  []string
+	Namespace string
+	Name      string
+	Image     string
+	Replicas  int
+
+	// Qemu
+	Qemu struct {
+		// when true, will install binfmt
+		Install bool
+		Image   string
+	}
+
+	BuildkitFlags []string
+	// BuildkitConfig
+	// when not empty, will create configmap with buildkit.toml and mounted
+	BuildkitConfig []byte
+
 	Rootless       bool
 	NodeSelector   map[string]string
 	RequestsCPU    string
@@ -31,7 +43,7 @@ const (
 	AnnotationPlatform = "buildx.docker.com/platform"
 )
 
-func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
+func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c *corev1.ConfigMap, err error) {
 	labels := map[string]string{
 		"app": opt.Name,
 	}
@@ -44,7 +56,7 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 		annotations[AnnotationPlatform] = strings.Join(platformutil.Format(opt.Platforms), ",")
 	}
 
-	d := &appsv1.Deployment{
+	d = &appsv1.Deployment{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(),
 			Kind:       "Deployment",
@@ -91,9 +103,56 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 			},
 		},
 	}
+
+	if len(opt.BuildkitConfig) > 0 {
+		c = &corev1.ConfigMap{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: corev1.SchemeGroupVersion.String(),
+				Kind:       "ConfigMap",
+			},
+			ObjectMeta: metav1.ObjectMeta{
+				Namespace:   opt.Namespace,
+				Name:        opt.Name + "-config",
+				Annotations: annotations,
+			},
+			Data: map[string]string{
+				"buildkitd.toml": string(opt.BuildkitConfig),
+			},
+		}
+
+		d.Spec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{{
+			Name:      "config",
+			MountPath: "/etc/buildkit",
+		}}
+
+		d.Spec.Template.Spec.Volumes = []corev1.Volume{{
+			Name: "config",
+			VolumeSource: corev1.VolumeSource{
+				ConfigMap: &corev1.ConfigMapVolumeSource{
+					LocalObjectReference: corev1.LocalObjectReference{
+						Name: c.Name,
+					},
+				},
+			},
+		}}
+	}
+
+	if opt.Qemu.Install {
+		d.Spec.Template.Spec.InitContainers = []corev1.Container{
+			{
+				Name:  "qemu",
+				Image: opt.Qemu.Image,
+				Args:  []string{"--install", "all"},
+				SecurityContext: &corev1.SecurityContext{
+					Privileged: &privileged,
+				},
+			},
+		}
+	}
+
 	if opt.Rootless {
 		if err := toRootless(d); err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -104,7 +163,7 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 	if opt.RequestsCPU != "" {
 		reqCPU, err := resource.ParseQuantity(opt.RequestsCPU)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = reqCPU
 	}
@@ -112,7 +171,7 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 	if opt.RequestsMemory != "" {
 		reqMemory, err := resource.ParseQuantity(opt.RequestsMemory)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = reqMemory
 	}
@@ -120,7 +179,7 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 	if opt.LimitsCPU != "" {
 		limCPU, err := resource.ParseQuantity(opt.LimitsCPU)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = limCPU
 	}
@@ -128,12 +187,12 @@ func NewDeployment(opt *DeploymentOpt) (*appsv1.Deployment, error) {
 	if opt.LimitsMemory != "" {
 		limMemory, err := resource.ParseQuantity(opt.LimitsMemory)
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
 		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = limMemory
 	}
 
-	return d, nil
+	return
 }
 
 func toRootless(d *appsv1.Deployment) error {

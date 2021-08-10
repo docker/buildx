@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"os"
 	"strconv"
 	"strings"
 
@@ -59,11 +60,13 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	if err != nil {
 		return nil, err
 	}
+
 	d := &Driver{
 		factory:    f,
 		InitConfig: cfg,
 		clientset:  clientset,
 	}
+
 	deploymentOpt := &manifest.DeploymentOpt{
 		Name:          deploymentName,
 		Image:         bkimage.DefaultImage,
@@ -72,12 +75,25 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		Rootless:      false,
 		Platforms:     cfg.Platforms,
 	}
+
+	deploymentOpt.Qemu.Image = bkimage.QemuImage
+
+	if cfg.ConfigFile != "" {
+		buildkitConfig, err := os.ReadFile(cfg.ConfigFile)
+		if err != nil {
+			return nil, err
+		}
+		deploymentOpt.BuildkitConfig = buildkitConfig
+	}
+
 	loadbalance := LoadbalanceSticky
-	imageOverride := ""
+
 	for k, v := range cfg.DriverOpts {
 		switch k {
 		case "image":
-			imageOverride = v
+			if v != "" {
+				deploymentOpt.Image = v
+			}
 		case "namespace":
 			namespace = v
 		case "replicas":
@@ -117,20 +133,31 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 				return nil, errors.Errorf("invalid loadbalance %q", v)
 			}
 			loadbalance = v
+		case "qemu.install":
+			deploymentOpt.Qemu.Install, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
+			}
+		case "qemu.image":
+			if v != "" {
+				deploymentOpt.Qemu.Image = v
+			}
 		default:
 			return nil, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
 		}
 	}
-	if imageOverride != "" {
-		deploymentOpt.Image = imageOverride
-	}
-	d.deployment, err = manifest.NewDeployment(deploymentOpt)
+
+	d.deployment, d.configMap, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
 		return nil, err
 	}
+
 	d.minReplicas = deploymentOpt.Replicas
+
 	d.deploymentClient = clientset.AppsV1().Deployments(namespace)
 	d.podClient = clientset.CoreV1().Pods(namespace)
+	d.configMapClient = clientset.CoreV1().ConfigMaps(namespace)
+
 	switch loadbalance {
 	case LoadbalanceSticky:
 		d.podChooser = &podchooser.StickyPodChooser{
