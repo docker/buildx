@@ -8,35 +8,17 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/docker/buildx/build"
-	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/platformutil"
-	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/spf13/cobra"
-	"golang.org/x/sync/errgroup"
 )
 
 type inspectOptions struct {
 	bootstrap bool
 	builder   string
-}
-
-type dinfo struct {
-	di        *build.DriverInfo
-	info      *driver.Info
-	platforms []specs.Platform
-	err       error
-}
-
-type nginfo struct {
-	ng      *store.NodeGroup
-	drivers []dinfo
-	err     error
 }
 
 func runInspect(dockerCli command.Cli, in inspectOptions) error {
@@ -82,7 +64,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	var bootNgi *nginfo
 	if in.bootstrap {
 		var ok bool
-		ok, err = boot(ctx, ngi, dockerCli)
+		ok, err = boot(ctx, ngi)
 		if err != nil {
 			return err
 		}
@@ -155,43 +137,4 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	_ = flags
 
 	return cmd
-}
-
-func boot(ctx context.Context, ngi *nginfo, dockerCli command.Cli) (bool, error) {
-	toBoot := make([]int, 0, len(ngi.drivers))
-	for i, d := range ngi.drivers {
-		if d.err != nil || d.di.Err != nil || d.di.Driver == nil || d.info == nil {
-			continue
-		}
-		if d.info.Status != driver.Running {
-			toBoot = append(toBoot, i)
-		}
-	}
-	if len(toBoot) == 0 {
-		return false, nil
-	}
-
-	printer := progress.NewPrinter(context.TODO(), os.Stderr, "auto")
-
-	eg, _ := errgroup.WithContext(ctx)
-	for _, idx := range toBoot {
-		func(idx int) {
-			eg.Go(func() error {
-				pw := progress.WithPrefix(printer, ngi.ng.Nodes[idx].Name, len(toBoot) > 1)
-				_, err := driver.Boot(ctx, ngi.drivers[idx].di.Driver, pw)
-				if err != nil {
-					ngi.drivers[idx].err = err
-				}
-				return nil
-			})
-		}(idx)
-	}
-
-	err := eg.Wait()
-	err1 := printer.Wait()
-	if err == nil {
-		err = err1
-	}
-
-	return true, err
 }

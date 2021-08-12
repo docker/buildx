@@ -11,12 +11,14 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/platformutil"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
 	"github.com/docker/cli/cli/context/kubernetes"
 	ctxstore "github.com/docker/cli/cli/context/store"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -474,4 +476,56 @@ func (a *api) DockerAPI(name string) (dockerclient.APIClient, error) {
 		name = a.dockerCli.CurrentContext()
 	}
 	return clientForEndpoint(a.dockerCli, name)
+}
+
+type dinfo struct {
+	di        *build.DriverInfo
+	info      *driver.Info
+	platforms []specs.Platform
+	err       error
+}
+
+type nginfo struct {
+	ng      *store.NodeGroup
+	drivers []dinfo
+	err     error
+}
+
+func boot(ctx context.Context, ngi *nginfo) (bool, error) {
+	toBoot := make([]int, 0, len(ngi.drivers))
+	for i, d := range ngi.drivers {
+		if d.err != nil || d.di.Err != nil || d.di.Driver == nil || d.info == nil {
+			continue
+		}
+		if d.info.Status != driver.Running {
+			toBoot = append(toBoot, i)
+		}
+	}
+	if len(toBoot) == 0 {
+		return false, nil
+	}
+
+	printer := progress.NewPrinter(context.TODO(), os.Stderr, "auto")
+
+	eg, _ := errgroup.WithContext(ctx)
+	for _, idx := range toBoot {
+		func(idx int) {
+			eg.Go(func() error {
+				pw := progress.WithPrefix(printer, ngi.ng.Nodes[idx].Name, len(toBoot) > 1)
+				_, err := driver.Boot(ctx, ngi.drivers[idx].di.Driver, pw)
+				if err != nil {
+					ngi.drivers[idx].err = err
+				}
+				return nil
+			})
+		}(idx)
+	}
+
+	err := eg.Wait()
+	err1 := printer.Wait()
+	if err == nil {
+		err = err1
+	}
+
+	return true, err
 }
