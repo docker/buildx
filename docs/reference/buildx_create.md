@@ -92,17 +92,30 @@ See an [example buildkitd configuration file](https://github.com/moby/buildkit/b
 Sets the builder driver to be used. There are two available drivers, each have
 their own specificities.
 
-- `docker` - Uses the builder that is built into the docker daemon. With this
-  driver, the [`--load`](buildx_build.md#--load) flag is implied by default on
-  `buildx build`. However, building multi-platform images or exporting cache is
-  not currently supported.
-- `docker-container` - Uses a buildkit container that will be spawned via docker.
-  With this driver, both building multi-platform images and exporting cache are
-  supported. However, images built will not automatically appear in `docker images`
-  (see [`build --load`](buildx_build.md#--load)).
-- `kubernetes` - Uses a kubernetes pods. With this driver, you can spin up pods
-  with defined buildkit container image to build your images.
+#### `docker` driver
 
+Uses the builder that is built into the docker daemon. With this driver,
+the [`--load`](buildx_build.md#--load) flag is implied by default on
+`buildx build`. However, building multi-platform images or exporting cache is
+not currently supported.
+
+#### `docker-container` driver
+
+Uses a BuildKit container that will be spawned via docker. With this driver,
+both building multi-platform images and exporting cache are supported.
+
+Unlike `docker` driver, built images will not automatically appear in
+`docker images` and [`build --load`](buildx_build.md#--load) needs to be used
+to achieve that.
+
+#### `kubernetes` driver
+
+Uses a kubernetes pods. With this driver, you can spin up pods with defined
+BuildKit container image to build your images.
+
+Unlike `docker` driver, built images will not automatically appear in
+`docker images` and [`build --load`](buildx_build.md#--load) needs to be used
+to achieve that.
 
 ### <a name="driver-opt"></a> Set additional driver-specific options (--driver-opt)
 
