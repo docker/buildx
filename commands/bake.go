@@ -36,6 +36,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}()
 
 	var url string
+	var noTarget bool
 	cmdContext := "cwd://"
 
 	if len(targets) > 0 {
@@ -54,6 +55,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 
 	if len(targets) == 0 {
 		targets = []string{"default"}
+		noTarget = true
 	}
 
 	overrides := in.overrides
@@ -103,7 +105,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return err
 	}
 
-	m, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
+	t, g, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
 		"BAKE_CMD_CONTEXT": cmdContext,
 	})
 	if err != nil {
@@ -111,13 +113,32 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}
 
 	// this function can update target context string from the input so call before printOnly check
-	bo, err := bake.TargetsToBuildOpt(m, inp)
+	bo, err := bake.TargetsToBuildOpt(t, inp)
 	if err != nil {
 		return err
 	}
 
 	if in.printOnly {
-		dt, err := json.MarshalIndent(map[string]map[string]*bake.Target{"target": m}, "", "  ")
+		defGroup := map[string][]string{
+			"default": targets,
+		}
+		if noTarget {
+			for _, group := range g {
+				if group.Name != "default" {
+					continue
+				}
+				defGroup = map[string][]string{
+					"default": group.Targets,
+				}
+			}
+		}
+		dt, err := json.MarshalIndent(struct {
+			Group  map[string][]string     `json:"group,omitempty"`
+			Target map[string]*bake.Target `json:"target"`
+		}{
+			defGroup,
+			t,
+		}, "", "  ")
 		if err != nil {
 			return err
 		}

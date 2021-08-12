@@ -34,7 +34,7 @@ target "webapp" {
 	ctx := context.TODO()
 
 	t.Run("NoOverrides", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil)
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
 
@@ -46,7 +46,7 @@ target "webapp" {
 	})
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
-		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"}, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"}, nil)
 		require.NotNil(t, err)
 		require.Equal(t, err.Error(), "could not find any target matching 'nosuchtarget'")
 	})
@@ -56,7 +56,7 @@ target "webapp" {
 			os.Setenv("VAR_FROMENV"+t.Name(), "fromEnv")
 			defer os.Unsetenv("VAR_FROM_ENV" + t.Name())
 
-			m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webapp.args.VAR_UNSET",
 				"webapp.args.VAR_EMPTY=",
 				"webapp.args.VAR_SET=bananas",
@@ -85,7 +85,7 @@ target "webapp" {
 
 		// building leaf but overriding parent fields
 		t.Run("parent", func(t *testing.T) {
-			m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webDEP.args.VAR_INHERITED=override",
 				"webDEP.args.VAR_BOTH=override",
 			}, nil)
@@ -96,23 +96,23 @@ target "webapp" {
 	})
 
 	t.Run("ContextOverride", func(t *testing.T) {
-		_, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil)
 		require.NotNil(t, err)
 
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil)
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil)
 		require.NoError(t, err)
 
 		require.Equal(t, "foo", *m["webapp"].Context)
 	})
 
 	t.Run("NoCacheOverride", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil)
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].NoCache)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
-		m, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil)
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].Pull)
 	})
@@ -172,7 +172,7 @@ target "webapp" {
 		}
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
-				m, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides, nil)
+				m, _, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides, nil)
 				test.check(t, m, err)
 			})
 		}
@@ -215,7 +215,7 @@ services:
 
 	ctx := context.TODO()
 
-	m, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
+	m, _, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(m))
@@ -238,7 +238,7 @@ func TestHCLCwdPrefix(t *testing.T) {
 			}`),
 	}
 	ctx := context.TODO()
-	m, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))

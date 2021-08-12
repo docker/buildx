@@ -100,6 +100,11 @@ $ docker buildx bake "git://github.com/docker/cli#master" --print
 #1 0.686 2776a6d694f988c0c1df61cad4bfac0f54e481c8       refs/heads/master
 #1 CACHED
 {
+  "group": {
+    "default": [
+      "binary"
+    ]
+  },
   "target": {
     "binary": {
       "context": "git://github.com/docker/cli#master",
@@ -144,6 +149,11 @@ EOT
 ```console
 $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" --print
 {
+  "group": {
+    "default": [
+      "default"
+    ]
+  },
   "target": {
     "default": {
       "context": ".",
@@ -171,6 +181,11 @@ $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://git
 #1 0.401 577303add004dd7efeb13434d69ea030d35f7888       refs/heads/remote-test
 #1 CACHED
 {
+  "group": {
+    "default": [
+      "default"
+    ]
+  },
   "target": {
     "default": {
       "context": "git://github.com/docker/cli#master",
@@ -209,6 +224,11 @@ format, without starting a build.
 ```console
 $ docker buildx bake -f docker-bake.hcl --print db
 {
+  "group": {
+    "default": [
+      "db"
+    ]
+  },
   "target": {
     "db": {
       "context": "./",
@@ -347,6 +367,11 @@ You can use this file directly:
 ```console
 $ docker buildx bake --print app
 {
+  "group": {
+    "default": [
+      "app"
+    ]
+  },
   "target": {
     "app": {
       "context": ".",
@@ -372,6 +397,11 @@ And invoke bake together with both of the files:
 ```console
 $ docker buildx bake -f docker-bake.hcl -f env.hcl --print app
 {
+  "group": {
+    "default": [
+      "app"
+    ]
+  },
   "target": {
     "app": {
       "context": ".",
@@ -419,6 +449,11 @@ target "webapp" {
 ```console
 $ docker buildx bake --print webapp
 {
+  "group": {
+    "default": [
+      "webapp"
+    ]
+  },
   "target": {
     "webapp": {
       "context": ".",
@@ -434,6 +469,11 @@ $ docker buildx bake --print webapp
 ```console
 $ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
 {
+  "group": {
+    "default": [
+      "webapp"
+    ]
+  },
   "target": {
     "webapp": {
       "context": ".",
@@ -471,6 +511,11 @@ target "webapp" {
 ```console
 $ docker buildx bake --print webapp
 {
+  "group": {
+    "default": [
+      "webapp"
+    ]
+  },
   "target": {
     "webapp": {
       "context": ".",
@@ -509,6 +554,11 @@ target "webapp" {
 ```console
 $ docker buildx bake --print webapp
 {
+  "group": {
+    "default": [
+      "webapp"
+    ]
+  },
   "target": {
     "webapp": {
       "context": ".",
@@ -549,6 +599,11 @@ target "webapp" {
 ```console
 $ docker buildx bake --print webapp
 {
+  "group": {
+    "default": [
+      "webapp"
+    ]
+  },
   "target": {
     "webapp": {
       "context": ".",
@@ -585,6 +640,11 @@ target "webapp" {
 ```console
 $ docker buildx bake --print webapp
 {
+  "group": {
+    "default": [
+      "webapp"
+    ]
+  },
   "target": {
     "webapp": {
       "context": ".",
@@ -635,6 +695,11 @@ target "app" {
 ```console
 $ docker buildx bake -f docker-bake1.hcl -f docker-bake2.hcl --print app
 {
+  "group": {
+    "default": [
+      "app"
+    ]
+  },
   "target": {
     "app": {
       "context": ".",
@@ -674,6 +739,11 @@ target "app" {
 ```console
 $ docker buildx bake --print app
 {
+  "group": {
+    "default": [
+      "app"
+    ]
+  },
   "target": {
     "app": {
       "context": ".",
