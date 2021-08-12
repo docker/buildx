@@ -1,11 +1,13 @@
 package commands
 
 import (
+	"context"
 	"encoding/csv"
 	"fmt"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
@@ -29,6 +31,7 @@ type createOptions struct {
 	flags        string
 	configFile   string
 	driverOpts   []string
+	bootstrap    bool
 	// upgrade      bool // perform upgrade of the driver
 }
 
@@ -179,6 +182,21 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
+	ngi := &nginfo{ng: ng}
+
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
+
+	if err = loadNodeGroupData(timeoutCtx, dockerCli, ngi); err != nil {
+		return err
+	}
+
+	if in.bootstrap {
+		if _, err = boot(ctx, ngi); err != nil {
+			return err
+		}
+	}
+
 	fmt.Printf("%s\n", ng.Name)
 	return nil
 }
@@ -209,6 +227,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.configFile, "config", "", "BuildKit config file")
 	flags.StringArrayVar(&options.platform, "platform", []string{}, "Fixed platforms for current node")
 	flags.StringArrayVar(&options.driverOpts, "driver-opt", []string{}, "Options for the driver")
+	flags.BoolVar(&options.bootstrap, "bootstrap", false, "Boot builder after creation")
 
 	flags.BoolVar(&options.actionAppend, "append", false, "Append a node to builder instead of changing it")
 	flags.BoolVar(&options.actionLeave, "leave", false, "Remove a node from builder instead of changing it")
