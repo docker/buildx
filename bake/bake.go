@@ -61,29 +61,29 @@ func ReadLocalFiles(names []string) ([]File, error) {
 	return out, nil
 }
 
-func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, error) {
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, []*Group, error) {
 	c, err := ParseFiles(files, defaults)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	o, err := c.newOverrides(overrides)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	m := map[string]*Target{}
 	for _, n := range targets {
 		for _, n := range c.ResolveGroup(n) {
 			t, err := c.ResolveTarget(n, o)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			if t != nil {
 				m[n] = t
 			}
 		}
 	}
-	return m, nil
+	return m, c.Groups, nil
 }
 
 func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error) {
