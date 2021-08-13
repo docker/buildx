@@ -214,3 +214,70 @@ networks:
 	_, err := ParseCompose(dt)
 	require.NoError(t, err)
 }
+
+func TestComposeExt(t *testing.T) {
+	var dt = []byte(`
+services:
+  addon:
+    image: ct-addon:bar
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      cache_from:
+        - user/app:cache
+      args:
+        CT_ECR: foo
+        CT_TAG: bar
+      x-bake:
+        tags:
+          - ct-addon:foo
+          - ct-addon:alp
+        platforms:
+          - linux/amd64
+          - linux/arm64
+        cache-from:
+          - type=local,src=path/to/cache
+        cache-to: local,dest=path/to/cache
+        pull: true
+
+  aws:
+    image: ct-fake-aws:bar
+    build:
+      dockerfile: ./aws.Dockerfile
+      args:
+        CT_ECR: foo
+        CT_TAG: bar
+      x-bake:
+        secret:
+          - id=mysecret,src=/local/secret
+          - id=mysecret2,src=/local/secret2
+        ssh: default
+        platforms: linux/arm64
+        output: type=docker
+        no-cache: true
+`)
+
+	c, err := ParseCompose(dt)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(c.Targets))
+	sort.Slice(c.Targets, func(i, j int) bool {
+		return c.Targets[i].Name < c.Targets[j].Name
+	})
+	require.Equal(t, c.Targets[0].Args, map[string]string{"CT_ECR": "foo", "CT_TAG": "bar"})
+	require.Equal(t, c.Targets[0].Tags, []string{"ct-addon:foo", "ct-addon:alp"})
+	require.Equal(t, c.Targets[0].Platforms, []string{"linux/amd64", "linux/arm64"})
+	require.Equal(t, c.Targets[0].CacheFrom, []string{"type=local,src=path/to/cache"})
+	require.Equal(t, c.Targets[0].CacheTo, []string{"local,dest=path/to/cache"})
+	require.Equal(t, c.Targets[0].Pull, newBool(true))
+	require.Equal(t, c.Targets[1].Tags, []string{"ct-fake-aws:bar"})
+	require.Equal(t, c.Targets[1].Secrets, []string{"id=mysecret,src=/local/secret", "id=mysecret2,src=/local/secret2"})
+	require.Equal(t, c.Targets[1].SSH, []string{"default"})
+	require.Equal(t, c.Targets[1].Platforms, []string{"linux/arm64"})
+	require.Equal(t, c.Targets[1].Outputs, []string{"type=docker"})
+	require.Equal(t, c.Targets[1].NoCache, newBool(true))
+}
+
+func newBool(val bool) *bool {
+	b := val
+	return &b
+}
