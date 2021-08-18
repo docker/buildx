@@ -1,4 +1,4 @@
-# syntax = docker/dockerfile:1.2
+# syntax=docker/dockerfile:1.3
 
 FROM golang:1.16-alpine AS docsgen
 WORKDIR /src

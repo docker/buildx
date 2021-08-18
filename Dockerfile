@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.2
+# syntax=docker/dockerfile:1.3
 
 ARG DOCKERD_VERSION=19.03
 ARG CLI_VERSION=19.03
