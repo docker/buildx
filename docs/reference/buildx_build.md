@@ -34,7 +34,7 @@ Start a build
 | `--pull` | Always attempt to pull a newer version of the image |
 | [`--push`](#push) | Shorthand for --output=type=registry |
 | `--secret stringArray` | Secret file to expose to the build: id=mysecret,src=/local/secret |
-| `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]]) |
+| `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag in the 'name:tag' format |
 | [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build. |
 
