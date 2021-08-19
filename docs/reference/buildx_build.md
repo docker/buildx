@@ -33,6 +33,7 @@ Start a build
 | [`--progress string`](#progress) | Set type of progress output (auto, plain, tty). Use plain to show container output |
 | `--pull` | Always attempt to pull a newer version of the image |
 | [`--push`](#push) | Shorthand for --output=type=registry |
+| `-q`, `--quiet` | Suppress the build output and print image ID on success |
 | `--secret stringArray` | Secret file to expose to the build: id=mysecret,src=/local/secret |
 | `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: default|<id>[=<socket>|<key>[,<key>]]) |
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag in the 'name:tag' format |
