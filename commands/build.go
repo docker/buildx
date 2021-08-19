@@ -19,7 +19,6 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -44,10 +43,10 @@ type buildOptions struct {
 	imageIDFile string
 	extraHosts  []string
 	networkMode string
+	quiet       bool
 
 	// unimplemented
 	squash bool
-	quiet  bool
 
 	allow []string
 
@@ -85,10 +84,6 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	if in.squash {
 		return errors.Errorf("squash currently not implemented")
 	}
-	if in.quiet {
-		logrus.Warnf("quiet currently not implemented")
-	}
-
 	ctx := appcontext.Context()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
@@ -108,6 +103,12 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		pull = *in.pull
 	}
 
+	if in.quiet && in.progress != "auto" && in.progress != "quiet" {
+		return errors.Errorf("progress=%s and quiet cannot be used together", in.progress)
+	} else if in.quiet {
+		in.progress = "quiet"
+	}
+
 	opts := build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    in.contextPath,
@@ -121,6 +122,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		NoCache:     noCache,
 		Target:      in.target,
 		ImageIDFile: in.imageIDFile,
+		Quiet:       in.quiet,
 		ExtraHosts:  in.extraHosts,
 		NetworkMode: in.networkMode,
 	}
@@ -225,6 +227,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
+
 	printer := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
 	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
@@ -287,14 +290,14 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringSliceVar(&options.allow, "allow", []string{}, "Allow extra privileged entitlement, e.g. network.host, security.insecure")
 
-	// not implemented
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 	flags.StringVar(&options.networkMode, "network", "default", "Set the networking mode for the RUN instructions during build")
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, "Add a custom host-to-IP mapping (host:ip)")
 	flags.SetAnnotation("add-host", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host"})
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+
+	// not implemented
 	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
-	flags.MarkHidden("quiet")
 	flags.MarkHidden("squash")
 
 	// hidden flags

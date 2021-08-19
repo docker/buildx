@@ -22,10 +22,10 @@ test:
 
 validate-vendor:
 	./hack/validate-vendor
-	
+
 validate-docs:
 	./hack/validate-docs
-	
+
 validate-all: lint test validate-vendor validate-docs
 
 vendor:
