@@ -61,7 +61,7 @@ type Driver interface {
 	Config() InitConfig
 }
 
-func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, error) {
+func Boot(ctx, clientContext context.Context, d Driver, pw progress.Writer) (*client.Client, error) {
 	try := 0
 	for {
 		info, err := d.Info(ctx)
@@ -78,7 +78,7 @@ func Boot(ctx context.Context, d Driver, pw progress.Writer) (*client.Client, er
 			}
 		}
 
-		c, err := d.Client(ctx)
+		c, err := d.Client(clientContext)
 		if err != nil {
 			if errors.Cause(err) == ErrNotRunning && try <= 2 {
 				continue
