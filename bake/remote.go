@@ -43,7 +43,7 @@ func ReadRemoteFiles(ctx context.Context, dis []build.DriverInfo, url string, na
 		return nil, nil, nil
 	}
 
-	c, err := driver.Boot(ctx, di.Driver, pw)
+	c, err := driver.Boot(ctx, ctx, di.Driver, pw)
 	if err != nil {
 		return nil, nil, err
 	}
