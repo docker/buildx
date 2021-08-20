@@ -143,12 +143,13 @@ func allIndexes(l int) []int {
 func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, pw progress.Writer) ([]*client.Client, error) {
 	clients := make([]*client.Client, len(drivers))
 
+	baseCtx := ctx
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for _, i := range idxs {
 		func(i int) {
 			eg.Go(func() error {
-				c, err := driver.Boot(ctx, drivers[i].Driver, pw)
+				c, err := driver.Boot(ctx, baseCtx, drivers[i].Driver, pw)
 				if err != nil {
 					return err
 				}
