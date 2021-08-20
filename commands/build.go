@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -122,7 +123,6 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		NoCache:     noCache,
 		Target:      in.target,
 		ImageIDFile: in.imageIDFile,
-		Quiet:       in.quiet,
 		ExtraHosts:  in.extraHosts,
 		NetworkMode: in.networkMode,
 	}
@@ -216,13 +216,21 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		contextPathHash = in.contextPath
 	}
 
-	return buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
-}
-
-func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) error {
-	dis, err := getInstanceOrDefault(ctx, dockerCli, instance, contextPathHash)
+	imageID, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
 	if err != nil {
 		return err
+	}
+
+	if in.quiet {
+		fmt.Println(imageID)
+	}
+	return nil
+}
+
+func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) (imageID string, err error) {
+	dis, err := getInstanceOrDefault(ctx, dockerCli, instance, contextPathHash)
+	if err != nil {
+		return "", err
 	}
 
 	ctx2, cancel := context.WithCancel(context.TODO())
@@ -236,20 +244,20 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 		err = err1
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if len(metadataFile) > 0 && resp != nil {
 		mdatab, err := json.MarshalIndent(resp[defaultTargetName].ExporterResponse, "", "  ")
 		if err != nil {
-			return err
+			return "", err
 		}
 		if err := ioutils.AtomicWriteFile(metadataFile, mdatab, 0644); err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	return err
+	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], err
 }
 
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {

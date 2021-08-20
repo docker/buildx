@@ -54,7 +54,6 @@ type Options struct {
 	BuildArgs   map[string]string
 	Pull        bool
 	ImageIDFile string
-	Quiet       bool
 	ExtraHosts  []string
 	NetworkMode string
 
@@ -685,9 +684,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				respMu.Unlock()
 				if len(res) == 1 {
 					digest := res[0].ExporterResponse["containerimage.digest"]
-					if opt.Quiet {
-						fmt.Println(digest)
-					}
 					if opt.ImageIDFile != "" {
 						return ioutil.WriteFile(opt.ImageIDFile, []byte(digest), 0644)
 					}
@@ -717,9 +713,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 							dt, desc, err := itpull.Combine(ctx, names[0], descs)
 							if err != nil {
 								return err
-							}
-							if opt.Quiet {
-								fmt.Println(desc.Digest)
 							}
 							if opt.ImageIDFile != "" {
 								return ioutil.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644)
