@@ -507,12 +507,13 @@ func boot(ctx context.Context, ngi *nginfo) (bool, error) {
 
 	printer := progress.NewPrinter(context.TODO(), os.Stderr, "auto")
 
+	baseCtx := ctx
 	eg, _ := errgroup.WithContext(ctx)
 	for _, idx := range toBoot {
 		func(idx int) {
 			eg.Go(func() error {
 				pw := progress.WithPrefix(printer, ngi.ng.Nodes[idx].Name, len(toBoot) > 1)
-				_, err := driver.Boot(ctx, ngi.drivers[idx].di.Driver, pw)
+				_, err := driver.Boot(ctx, baseCtx, ngi.drivers[idx].di.Driver, pw)
 				if err != nil {
 					ngi.drivers[idx].err = err
 				}
