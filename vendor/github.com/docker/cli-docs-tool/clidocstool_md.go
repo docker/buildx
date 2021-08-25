@@ -1,46 +1,39 @@
-package main
+// Copyright 2021 cli-docs-tool authors
+//
+// Licensed under the Apache License, Version 2.0 (the "License");
+// you may not use this file except in compliance with the License.
+// You may obtain a copy of the License at
+//
+//    http://www.apache.org/licenses/LICENSE-2.0
+//
+// Unless required by applicable law or agreed to in writing, software
+// distributed under the License is distributed on an "AS IS" BASIS,
+// WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+// See the License for the specific language governing permissions and
+// limitations under the License.
+
+package clidocstool
 
 import (
+	"bytes"
 	"fmt"
 	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
 	"strings"
+	"text/template"
 
-	"github.com/docker/buildx/commands"
-	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-const descriptionSourcePath = "docs/reference/"
-
-func generateDocs(opts *options) error {
-	dockerCLI, err := command.NewDockerCli()
-	if err != nil {
-		return err
-	}
-	cmd := &cobra.Command{
-		Use:   "docker [OPTIONS] COMMAND [ARG...]",
-		Short: "The base command for the Docker CLI.",
-	}
-	cmd.AddCommand(commands.NewRootCmd("buildx", true, dockerCLI))
-	return genCmd(cmd, opts.target)
-}
-
-func getMDFilename(cmd *cobra.Command) string {
-	name := cmd.CommandPath()
-	if i := strings.Index(name, " "); i >= 0 {
-		name = name[i+1:]
-	}
-	return strings.ReplaceAll(name, " ", "_") + ".md"
-}
-
-func genCmd(cmd *cobra.Command, dir string) error {
+// GenMarkdownTree will generate a markdown page for this command and all
+// descendants in the directory given.
+func GenMarkdownTree(cmd *cobra.Command, dir string) error {
 	for _, c := range cmd.Commands() {
-		if err := genCmd(c, dir); err != nil {
+		if err := GenMarkdownTree(c, dir); err != nil {
 			return err
 		}
 	}
@@ -48,23 +41,42 @@ func genCmd(cmd *cobra.Command, dir string) error {
 		return nil
 	}
 
-	mdFile := getMDFilename(cmd)
+	log.Printf("INFO: Generating Markdown for %q", cmd.CommandPath())
+	mdFile := mdFilename(cmd)
 	fullPath := filepath.Join(dir, mdFile)
+
+	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+		var icBuf bytes.Buffer
+		icTpl, err := template.New("ic").Option("missingkey=error").Parse(`# {{ .Command }}
+
+<!---MARKER_GEN_START-->
+<!---MARKER_GEN_END-->
+
+`)
+		if err != nil {
+			return err
+		}
+		if err = icTpl.Execute(&icBuf, struct {
+			Command string
+		}{
+			Command: cmd.CommandPath(),
+		}); err != nil {
+			return err
+		}
+		if err = ioutil.WriteFile(fullPath, icBuf.Bytes(), 0644); err != nil {
+			return err
+		}
+	}
 
 	content, err := ioutil.ReadFile(fullPath)
 	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return errors.Wrapf(err, "%s does not exist", mdFile)
-		}
+		return err
 	}
 
 	cs := string(content)
 
-	markerStart := "<!---MARKER_GEN_START-->"
-	markerEnd := "<!---MARKER_GEN_END-->"
-
-	start := strings.Index(cs, markerStart)
-	end := strings.Index(cs, markerEnd)
+	start := strings.Index(cs, "<!---MARKER_GEN_START-->")
+	end := strings.Index(cs, "<!---MARKER_GEN_END-->")
 
 	if start == -1 {
 		return errors.Errorf("no start marker in %s", mdFile)
@@ -73,11 +85,11 @@ func genCmd(cmd *cobra.Command, dir string) error {
 		return errors.Errorf("no end marker in %s", mdFile)
 	}
 
-	out, err := cmdOutput(cmd, cs)
+	out, err := mdCmdOutput(cmd, cs)
 	if err != nil {
 		return err
 	}
-	cont := cs[:start] + markerStart + "\n" + out + "\n" + cs[end:]
+	cont := cs[:start] + "<!---MARKER_GEN_START-->" + "\n" + out + "\n" + cs[end:]
 
 	fi, err := os.Stat(fullPath)
 	if err != nil {
@@ -86,11 +98,19 @@ func genCmd(cmd *cobra.Command, dir string) error {
 	if err := ioutil.WriteFile(fullPath, []byte(cont), fi.Mode()); err != nil {
 		return errors.Wrapf(err, "failed to write %s", fullPath)
 	}
-	log.Printf("updated %s", fullPath)
+
 	return nil
 }
 
-func makeLink(txt, link string, f *pflag.Flag, isAnchor bool) string {
+func mdFilename(cmd *cobra.Command) string {
+	name := cmd.CommandPath()
+	if i := strings.Index(name, " "); i >= 0 {
+		name = name[i+1:]
+	}
+	return strings.ReplaceAll(name, " ", "_") + ".md"
+}
+
+func mdMakeLink(txt, link string, f *pflag.Flag, isAnchor bool) string {
 	link = "#" + link
 	annotations, ok := f.Annotations["docs.external.url"]
 	if ok && len(annotations) > 0 {
@@ -104,7 +124,7 @@ func makeLink(txt, link string, f *pflag.Flag, isAnchor bool) string {
 	return "[" + txt + "](" + link + ")"
 }
 
-func cmdOutput(cmd *cobra.Command, old string) (string, error) {
+func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 	b := &strings.Builder{}
 
 	desc := cmd.Short
@@ -128,7 +148,7 @@ func cmdOutput(cmd *cobra.Command, old string) (string, error) {
 		fmt.Fprint(b, "| Name | Description |\n")
 		fmt.Fprint(b, "| --- | --- |\n")
 		for _, c := range cmd.Commands() {
-			fmt.Fprintf(b, "| [`%s`](%s) | %s |\n", c.Name(), getMDFilename(c), c.Short)
+			fmt.Fprintf(b, "| [`%s`](%s) | %s |\n", c.Name(), mdFilename(c), c.Short)
 		}
 		fmt.Fprint(b, "\n\n")
 	}
@@ -150,7 +170,7 @@ func cmdOutput(cmd *cobra.Command, old string) (string, error) {
 			fmt.Fprint(b, "| ")
 			if f.Shorthand != "" {
 				name := "`-" + f.Shorthand + "`"
-				name = makeLink(name, f.Name, f, isLink)
+				name = mdMakeLink(name, f.Name, f, isLink)
 				fmt.Fprintf(b, "%s, ", name)
 			}
 			name := "`--" + f.Name
@@ -158,41 +178,11 @@ func cmdOutput(cmd *cobra.Command, old string) (string, error) {
 				name += " " + f.Value.Type()
 			}
 			name += "`"
-			name = makeLink(name, f.Name, f, isLink)
+			name = mdMakeLink(name, f.Name, f, isLink)
 			fmt.Fprintf(b, "%s | %s |\n", name, f.Usage)
 		})
 		fmt.Fprintln(b, "")
 	}
 
 	return b.String(), nil
-}
-
-type options struct {
-	target string
-}
-
-func parseArgs() (*options, error) {
-	opts := &options{}
-	flags := pflag.NewFlagSet(os.Args[0], pflag.ContinueOnError)
-	flags.StringVar(&opts.target, "target", descriptionSourcePath, "Docs directory")
-	err := flags.Parse(os.Args[1:])
-	return opts, err
-}
-
-func main() {
-	if err := run(); err != nil {
-		log.Printf("error: %+v", err)
-		os.Exit(1)
-	}
-}
-
-func run() error {
-	opts, err := parseArgs()
-	if err != nil {
-		return err
-	}
-	if err := generateDocs(opts); err != nil {
-		return err
-	}
-	return nil
 }

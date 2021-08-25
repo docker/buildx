@@ -1,0 +1,23 @@
+command: docker buildx stop
+short: Stop builder instance
+long: |-
+  Stops the specified or current builder. This will not prevent buildx build to
+  restart the builder. The implementation of stop depends on the driver.
+usage: docker buildx stop [NAME]
+pname: docker buildx
+plink: docker_buildx.yaml
+inherited_options:
+- option: builder
+  value_type: string
+  description: Override the configured builder instance
+  deprecated: false
+  experimental: false
+  experimentalcli: false
+  kubernetes: false
+  swarm: false
+deprecated: false
+experimental: false
+experimentalcli: false
+kubernetes: false
+swarm: false
+
