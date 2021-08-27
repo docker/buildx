@@ -22,12 +22,19 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/appdefaults"
 	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 )
 
-const volumeStateSuffix = "_state"
+const (
+	volumeStateSuffix = "_state"
+
+	// containerStateDir is the location where buildkitd inside the container
+	// stores its state. The container driver creates a Linux container, so
+	// this should match the location for Linux, as defined in:
+	// https://github.com/moby/buildkit/blob/v0.9.0/util/appdefaults/appdefaults_unix.go#L11-L15
+	containerBuildKitRootDir = "/var/lib/buildkit"
+)
 
 type Driver struct {
 	driver.InitConfig
@@ -111,7 +118,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				{
 					Type:   mount.TypeVolume,
 					Source: d.Name + volumeStateSuffix,
-					Target: appdefaults.Root,
+					Target: containerBuildKitRootDir,
 				},
 			},
 		}
