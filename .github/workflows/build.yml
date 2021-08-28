@@ -5,11 +5,13 @@ on:
   push:
     branches:
       - 'master'
+      - 'v[0-9]*'
     tags:
       - 'v*'
   pull_request:
     branches:
       - 'master'
+      - 'v[0-9]*'
 
 env:
   REPO_SLUG: "docker/buildx-bin"
