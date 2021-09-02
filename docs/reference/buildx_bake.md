@@ -861,3 +861,10 @@ Complete list of valid fields for `x-bake`:
 
 `tags`, `cache-from`, `cache-to`, `secret`, `ssh`, `platforms`, `output`,
 `pull`, `no-cache`
+
+### Built-in variables
+
+* `BAKE_CMD_CONTEXT` can be used to access the main `context` for bake command
+from a bake file that has been [imported remotely](#file).
+* `BAKE_LOCAL_PLATFORM` returns the current platform's default platform
+specification (e.g. `linux/amd64`).
