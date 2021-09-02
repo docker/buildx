@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/progress"
@@ -106,7 +107,10 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}
 
 	t, g, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
-		"BAKE_CMD_CONTEXT": cmdContext,
+		// Don't forget to update documentation if you add a new
+		// built-in variable: docs/reference/buildx_bake.md#built-in-variables
+		"BAKE_CMD_CONTEXT":    cmdContext,
+		"BAKE_LOCAL_PLATFORM": platforms.DefaultString(),
 	})
 	if err != nil {
 		return err
