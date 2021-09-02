@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1.3
 
+ARG GO_VERSION=1.17.0
 ARG DOCKERD_VERSION=19.03
 ARG CLI_VERSION=19.03
 
@@ -8,17 +9,9 @@ FROM docker:$DOCKERD_VERSION AS dockerd-release
 # xx is a helper for cross-compilation
 FROM --platform=$BUILDPLATFORM tonistiigi/xx@sha256:21a61be4744f6531cb5f33b0e6f40ede41fa3a1b8c82d5946178f80cc84bfc04 AS xx
 
-FROM --platform=$BUILDPLATFORM golang:1.16-alpine AS golatest
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golatest
 
-FROM golatest AS go-linux
-FROM golatest AS go-darwin
-FROM golatest AS go-windows-amd64
-FROM golatest AS go-windows-386
-FROM golatest AS go-windows-arm
-FROM --platform=$BUILDPLATFORM golang:1.17beta1-alpine AS go-windows-arm64
-FROM go-windows-${TARGETARCH} AS go-windows
-
-FROM go-${TARGETOS} AS gobase
+FROM golatest AS gobase
 COPY --from=xx / /
 RUN apk add --no-cache file git
 ENV GOFLAGS=-mod=vendor
