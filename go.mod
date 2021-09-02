@@ -12,6 +12,7 @@ require (
 	github.com/containerd/console v1.0.2
 	github.com/containerd/containerd v1.5.5
 	github.com/docker/cli v20.10.7+incompatible
+	github.com/docker/cli-docs-tool v0.1.0
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v20.10.7+incompatible
@@ -37,7 +38,7 @@ require (
 	github.com/pkg/errors v0.9.1
 	github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 	github.com/sirupsen/logrus v1.8.1
-	github.com/spf13/cobra v1.1.1
+	github.com/spf13/cobra v1.2.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	github.com/theupdateframework/notary v0.6.1 // indirect

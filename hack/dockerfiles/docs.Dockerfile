@@ -4,7 +4,7 @@ FROM golang:1.16-alpine AS docsgen
 WORKDIR /src
 RUN --mount=target=. \
   --mount=target=/root/.cache,type=cache \
-  go build -mod=vendor -o /out/docsgen ./docs/docsgen
+  go build -mod=vendor -o /out/docsgen ./docs/generate.go
 
 FROM alpine AS gen
 RUN apk add --no-cache rsync git
