@@ -1,6 +1,8 @@
 # syntax=docker/dockerfile:1.3
 
-FROM golang:1.16-alpine AS docsgen
+ARG GO_VERSION=1.17.0
+
+FROM golang:${GO_VERSION}-alpine AS docsgen
 WORKDIR /src
 RUN --mount=target=. \
   --mount=target=/root/.cache,type=cache \

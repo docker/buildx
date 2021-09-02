@@ -47,6 +47,7 @@ require (
 	go.opentelemetry.io/otel v1.0.0-RC1
 	go.opentelemetry.io/otel/trace v1.0.0-RC1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
+	golang.org/x/sys v0.0.0-20210630005230-0f9fa26af87c // indirect
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
 	gopkg.in/gorethink/gorethink.v3 v3.0.5 // indirect
