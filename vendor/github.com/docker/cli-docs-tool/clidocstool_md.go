@@ -179,10 +179,14 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 			}
 			name += "`"
 			name = mdMakeLink(name, f.Name, f, isLink)
-			fmt.Fprintf(b, "%s | %s |\n", name, f.Usage)
+			fmt.Fprintf(b, "%s | %s |\n", mdEscapePipe(name), mdEscapePipe(f.Usage))
 		})
 		fmt.Fprintln(b, "")
 	}
 
 	return b.String(), nil
+}
+
+func mdEscapePipe(s string) string {
+	return strings.ReplaceAll(s, `|`, `\|`)
 }
