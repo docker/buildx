@@ -1,6 +1,13 @@
 # This file lists all individuals having contributed content to the repository.
-# For how it is generated, see `hack/generate-authors`.
+# For how it is generated, see hack/dockerfiles/authors.Dockerfile.
 
+CrazyMax <github@crazymax.dev>
+CrazyMax <github@crazymax.dev> <1951866+crazy-max@users.noreply.github.com>
+CrazyMax <github@crazymax.dev> <crazy-max@users.noreply.github.com>
+Sebastiaan van Stijn <github@gone.nl>
+Sebastiaan van Stijn <github@gone.nl> <thaJeztah@users.noreply.github.com>
 Tibor Vass <tibor@docker.com>
 Tibor Vass <tibor@docker.com> <tiborvass@users.noreply.github.com>
 Tõnis Tiigi <tonistiigi@gmail.com>
+Ulysses Souza <ulyssessouza@gmail.com>
+Wang Jinglei <morlay.null@gmail.com>

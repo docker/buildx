@@ -16,61 +16,15 @@ on:
 env:
   REPO_SLUG: "docker/buildx-bin"
   REPO_SLUG_ORIGIN: "moby/buildkit:master"
-  CACHEKEY_BINARIES: "binaries"
-  PLATFORMS: "linux/amd64,linux/arm/v6,linux/arm/v7,linux/arm64,linux/s390x,linux/ppc64le,linux/riscv64"
+  RELEASE_OUT: "./release-out"
 
 jobs:
-  base:
+  build:
     runs-on: ubuntu-latest
     steps:
       -
         name: Checkout
         uses: actions/checkout@v2
-      -
-        name: Cache ${{ env.CACHEKEY_BINARIES }}
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-          key: ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-        with:
-          driver-opts: image=${{ env.REPO_SLUG_ORIGIN }}
-      -
-        name: Build ${{ env.CACHEKEY_BINARIES }}
-        run: |
-          ./hack/build_ci_first_pass binaries
-        env:
-          CACHEDIR_FROM: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-          CACHEDIR_TO: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}-new
-      -
-        # FIXME: Temp fix for https://github.com/moby/buildkit/issues/1850
-        name: Move cache
-        run: |
-          rm -rf /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-          mv /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}-new /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-
-  test:
-    runs-on: ubuntu-latest
-    needs: [base]
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v2
-      -
-        name: Cache ${{ env.CACHEKEY_BINARIES }}
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-          key: ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1
@@ -83,91 +37,15 @@ jobs:
         name: Test
         run: |
           make test
-        env:
-          TEST_COVERAGE: 1
-          TESTFLAGS: -v --parallel=6 --timeout=20m
-          CACHEDIR_FROM: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
       -
         name: Send to Codecov
         uses: codecov/codecov-action@v2
         with:
           file: ./coverage/coverage.txt
-
-  cross:
-    runs-on: ubuntu-latest
-    needs: [base]
-    steps:
       -
-        name: Checkout
-        uses: actions/checkout@v2
-      -
-        name: Cache ${{ env.CACHEKEY_BINARIES }}
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-          key: ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-        with:
-          driver-opts: image=${{ env.REPO_SLUG_ORIGIN }}
-      -
-        name: Cross
+        name: Build binaries
         run: |
-          make cross
-        env:
-          TARGETPLATFORM: ${{ env.PLATFORMS }},darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
-          CACHEDIR_FROM: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-
-  binaries:
-    runs-on: ubuntu-latest
-    needs: [test, cross]
-    env:
-      RELEASE_OUT: ./release-out
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v2
-      -
-        name: Prepare
-        id: prep
-        run: |
-          TAG=pr
-          if [[ $GITHUB_REF == refs/tags/v* ]]; then
-            TAG=${GITHUB_REF#refs/tags/}
-          elif [[ $GITHUB_REF == refs/heads/* ]]; then
-            TAG=$(echo ${GITHUB_REF#refs/heads/} | sed -r 's#/+#-#g')
-          fi
-          echo ::set-output name=tag::${TAG}
-      -
-        name: Cache ${{ env.CACHEKEY_BINARIES }}
-        uses: actions/cache@v2
-        with:
-          path: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-          key: ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-${{ github.sha }}
-          restore-keys: |
-            ${{ runner.os }}-buildx-${{ env.CACHEKEY_BINARIES }}-
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
-        with:
-          driver-opts: image=${{ env.REPO_SLUG_ORIGIN }}
-      -
-        name: Build ${{ steps.prep.outputs.tag }}
-        run: |
-          ./hack/release ${{ env.RELEASE_OUT }}
-        env:
-          PLATFORMS: ${{ env.PLATFORMS }},darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
-          CHECKSUMS: 1
-          CACHEDIR_FROM: /tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
+          make release
       -
         name: Upload artifacts
         uses: actions/upload-artifact@v2
@@ -186,6 +64,7 @@ jobs:
             type=ref,event=branch
             type=ref,event=pr
             type=semver,pattern={{version}}
+          bake-target: meta-helper
       -
         name: Login to DockerHub
         if: github.event_name != 'pull_request'
@@ -195,15 +74,13 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
         name: Build and push image
-        uses: docker/build-push-action@v2
+        uses: docker/bake-action@v1
         with:
-          context: .
-          target: binaries
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.meta.outputs.bake-file }}
+          targets: image-cross
           push: ${{ github.event_name != 'pull_request' }}
-          cache-from: type=local,src=/tmp/.buildx-cache/${{ env.CACHEKEY_BINARIES }}
-          platforms: ${{ env.PLATFORMS }},darwin/amd64,darwin/arm64,windows/amd64,windows/arm64
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -213,4 +90,3 @@ jobs:
         with:
           draft: true
           files: ${{ env.RELEASE_OUT }}/*
-          name: ${{ steps.prep.outputs.tag }}

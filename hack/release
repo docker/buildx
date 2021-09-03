@@ -1,37 +1,20 @@
 #!/usr/bin/env bash
 
-OUT=${1:-release-out}
-
-. $(dirname $0)/util
 set -eu -o pipefail
 
-: ${PLATFORMS=linux/amd64}
-: ${CHECKSUMS=}
+: ${BUILDX_CMD=docker buildx}
+: ${RELEASE_OUT=./release-out}
 
-importCacheFlags=""
-if [[ -n "$cacheRefFrom" ]] && [[ "$cacheType" = "local" ]]; then
-  for ref in $cacheRefFrom; do
-    importCacheFlags="$importCacheFlags--cache-from=type=local,src=$ref "
-  done
-fi
-
-buildxCmd build $importCacheFlags \
-  --target "release" \
-  --platform "$PLATFORMS" \
-  --output "type=local,dest=$OUT" \
-  $currentcontext
+# release
+(set -x ; ${BUILDX_CMD} bake --set "*.output=$RELEASE_OUT" release)
 
 # wrap binaries
-{ set +x; } 2>/dev/null
-if [[ $PLATFORMS =~ "," ]]; then
-  mv -f ./$OUT/**/* ./$OUT/
-  find ./$OUT -type d -empty -delete
-fi
+mv -f ./${RELEASE_OUT}/**/* ./${RELEASE_OUT}/
+find ./${RELEASE_OUT} -type d -empty -delete
 
-if [ -n "$CHECKSUMS" ]; then
-  if ! type shasum > /dev/null 2>&1; then
-    echo >&2 "ERROR: shasum is required"
-    exit 1
-  fi
-  find ./$OUT/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/# #' > ./$OUT/checksums.txt
+# checksums
+if ! type shasum > /dev/null 2>&1; then
+  echo >&2 "ERROR: shasum is required"
+  exit 1
 fi
+find ./${RELEASE_OUT}/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/# #' > ./${RELEASE_OUT}/checksums.txt

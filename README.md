@@ -26,8 +26,6 @@ Key features:
   - [From `Dockerfile`](#from-dockerfile)
 - [Set buildx as the default builder](#set-buildx-as-the-default-builder)
 - [Building](#building)
-  - [with Docker 18.09+](#with-docker-1809)
-  - [with buildx or Docker 19.03](#with-buildx-or-docker-1903)
 - [Getting started](#getting-started)
   - [Building with buildx](#building-with-buildx)
   - [Working with builder instances](#working-with-builder-instances)
@@ -90,25 +88,25 @@ RUN docker buildx version
 # Set buildx as the default builder
 
 Running the command [`docker buildx install`](docs/reference/buildx_install.md)
-sets up docker builder command as an alias to `docker buildx`. This results in
-the ability to have `docker build` use the current buildx builder.
+sets up docker builder command as an alias to `docker buildx build`. This
+results in the ability to have `docker build` use the current buildx builder.
 
 To remove this alias, run [`docker buildx uninstall`](docs/reference/buildx_uninstall.md).
 
 # Building
 
-## With buildx or Docker 19.03+
-
 ```console
-$ export DOCKER_BUILDKIT=1
-$ docker build --platform=local -o . git://github.com/docker/buildx
+# Buildx 0.6+
+$ docker buildx bake "git://github.com/docker/buildx"
+$ mkdir -p ~/.docker/cli-plugins
+$ mv ./bin/buildx ~/.docker/cli-plugins/docker-buildx
+
+# Docker 19.03+
+$ DOCKER_BUILDKIT=1 docker build --platform=local -o . "git://github.com/docker/buildx"
 $ mkdir -p ~/.docker/cli-plugins
 $ mv buildx ~/.docker/cli-plugins/docker-buildx
-```
 
-## With Docker 18.09+
-
-```console
+# Local 
 $ git clone git://github.com/docker/buildx && cd buildx
 $ make install
 ```
