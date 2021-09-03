@@ -13,7 +13,3 @@ else
   ( $dockerdCmd &>/var/log/dockerd.log & )
   exec ash
 fi
-
-
-
-

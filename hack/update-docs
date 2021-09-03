@@ -1,16 +1,11 @@
 #!/usr/bin/env bash
 
-. $(dirname $0)/util
-set -eu
+set -eu -o pipefail
+
+: ${BUILDX_CMD=docker buildx}
 
 output=$(mktemp -d -t buildx-output.XXXXXXXXXX)
-
-buildxCmd build \
-  --target "update" \
-  --output "type=local,dest=$output" \
-  --file "./hack/dockerfiles/docs.Dockerfile" \
-  .
-
+(set -x ; ${BUILDX_CMD} bake --set "*.output=$output" update-docs)
 rm -rf ./docs/reference/*
 cp -R "$output"/out/* ./docs/
 rm -rf $output

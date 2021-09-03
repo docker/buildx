@@ -2,17 +2,18 @@
 
 set -e
 
+: ${BUILDX_CMD=docker buildx}
 : ${TMUX=}
 
 function clean {
-  docker rmi $(cat $iidfile)
+  docker rmi $iid
 }
 
-iidfile=$(mktemp -t docker-iidfile.XXXXXXXXXX)
-DOCKER_BUILDKIT=1 docker build --iidfile $iidfile --target demo-env .
+iid=buildx-shell
+(set -x ; ${BUILDX_CMD} build --output "type=docker,name=$iid" --target shell .)
 trap clean EXIT
 SSH=
 if [ -n "$MOUNT_SSH_AUTH_SOCK" ]; then
-	SSH="-v $SSH_AUTH_SOCK:$SSH_AUTH_SOCK -e SSH_AUTH_SOCK"
+  SSH="-v $SSH_AUTH_SOCK:$SSH_AUTH_SOCK -e SSH_AUTH_SOCK"
 fi
-docker run $SSH -it --privileged --rm -e TMUX_ENTRYPOINT=$TMUX $(cat $iidfile)
+docker run $SSH -it --privileged --rm -e TMUX_ENTRYPOINT=$TMUX $iid

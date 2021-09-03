@@ -1,8 +1,7 @@
 # syntax=docker/dockerfile:1.3
 
 ARG GO_VERSION=1.17.0
-ARG DOCKERD_VERSION=19.03
-ARG CLI_VERSION=19.03
+ARG DOCKERD_VERSION=20.10.8
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
 
@@ -26,24 +25,22 @@ RUN --mount=target=. \
 FROM gobase AS buildx-build
 ENV CGO_ENABLED=0
 ARG TARGETPLATFORM
-RUN --mount=target=. --mount=target=/root/.cache,type=cache \
-  --mount=target=/go/pkg/mod,type=cache \
-  --mount=source=/tmp/.ldflags,target=/tmp/.ldflags,from=buildx-version \
+RUN --mount=type=bind,target=. \
+  --mount=type=cache,target=/root/.cache \
+  --mount=type=cache,target=/go/pkg/mod \
+  --mount=type=bind,source=/tmp/.ldflags,target=/tmp/.ldflags,from=buildx-version \
   set -x; xx-go build -ldflags "$(cat /tmp/.ldflags)" -o /usr/bin/buildx ./cmd/buildx && \
   xx-verify --static /usr/bin/buildx
 
-FROM buildx-build AS integration-tests
-COPY . .
+FROM buildx-build AS test
+RUN --mount=type=bind,target=. \
+  --mount=type=cache,target=/root/.cache \
+  --mount=type=cache,target=/go/pkg/mod \
+  go test -v -coverprofile=/tmp/coverage.txt -covermode=atomic ./... && \
+  go tool cover -func=/tmp/coverage.txt
 
-# FROM golang:1.12-alpine AS docker-cli-build
-# RUN apk add -U git bash coreutils gcc musl-dev
-# ENV CGO_ENABLED=0
-# ARG REPO=github.com/tiborvass/cli
-# ARG BRANCH=cli-plugin-aliases
-# ARG CLI_VERSION
-# WORKDIR /go/src/github.com/docker/cli
-# RUN git clone git://$REPO . && git checkout $BRANCH
-# RUN ./scripts/build/binary
+FROM scratch AS test-coverage
+COPY --from=test /tmp/coverage.txt /coverage.txt
 
 FROM scratch AS binaries-unix
 COPY --from=buildx-build /usr/bin/buildx /
@@ -56,24 +53,25 @@ COPY --from=buildx-build /usr/bin/buildx /buildx.exe
 
 FROM binaries-$TARGETOS AS binaries
 
+# Release
 FROM --platform=$BUILDPLATFORM alpine AS releaser
 WORKDIR /work
 ARG TARGETPLATFORM
 RUN --mount=from=binaries \
-  --mount=source=/tmp/.version,target=/tmp/.version,from=buildx-version \
+  --mount=type=bind,source=/tmp/.version,target=/tmp/.version,from=buildx-version \
   mkdir -p /out && cp buildx* "/out/buildx-$(cat /tmp/.version).$(echo $TARGETPLATFORM | sed 's/\//-/g')$(ls buildx* | sed -e 's/^buildx//')"
 
 FROM scratch AS release
 COPY --from=releaser /out/ /
 
-FROM alpine AS demo-env
+# Shell
+FROM docker:$DOCKERD_VERSION AS dockerd-release
+FROM alpine AS shell
 RUN apk add --no-cache iptables tmux git vim less openssh
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 COPY ./hack/demo-env/entrypoint.sh /usr/local/bin
 COPY ./hack/demo-env/tmux.conf /root/.tmux.conf
 COPY --from=dockerd-release /usr/local/bin /usr/local/bin
-#COPY --from=docker-cli-build /go/src/github.com/docker/cli/build/docker /usr/local/bin
-
 WORKDIR /work
 COPY ./hack/demo-env/examples .
 COPY --from=binaries / /usr/local/bin/

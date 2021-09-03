@@ -1,6 +1,0 @@
-#!/usr/bin/env bash
-
-. $(dirname $0)/util
-set -eu
-
-buildxCmd build --file ./hack/dockerfiles/lint.Dockerfile .

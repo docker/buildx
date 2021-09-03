@@ -1,32 +1,48 @@
+ifneq (, $(BUILDX_BIN))
+	export BUILDX_CMD = $(BUILDX_BIN)
+else ifneq (, $(shell docker buildx version))
+	export BUILDX_CMD = docker buildx
+else ifneq (, $(shell which buildx))
+	export BUILDX_CMD = $(which buildx)
+else
+	$(error "Buildx is required: https://github.com/docker/buildx#installing")
+endif
+
+export BIN_OUT = ./bin
+export RELEASE_OUT = ./release-out
+
 shell:
 	./hack/shell
 
 binaries:
-	./hack/binaries
+	$(BUILDX_CMD) bake binaries
 
 binaries-cross:
-	EXPORT_LOCAL=cross-out ./hack/cross
-
-cross:
-	./hack/cross
+	$(BUILDX_CMD) bake binaries-cross
 
 install: binaries
 	mkdir -p ~/.docker/cli-plugins
 	install bin/buildx ~/.docker/cli-plugins/docker-buildx
 
-lint:
-	./hack/lint
-
-test:
-	./hack/test
-
-validate-vendor:
-	./hack/validate-vendor
-
-validate-docs:
-	./hack/validate-docs
+release:
+	./hack/release
 
 validate-all: lint test validate-vendor validate-docs
+
+lint:
+	$(BUILDX_CMD) bake lint
+
+test:
+	$(BUILDX_CMD) bake test
+
+validate-vendor:
+	$(BUILDX_CMD) bake validate-vendor
+
+validate-docs:
+	$(BUILDX_CMD) bake validate-docs
+
+validate-authors:
+	$(BUILDX_CMD) bake validate-authors
 
 vendor:
 	./hack/update-vendor
@@ -34,7 +50,7 @@ vendor:
 docs:
 	./hack/update-docs
 
-generate-authors:
-	./hack/generate-authors
+authors:
+	$(BUILDX_CMD) bake update-authors
 
-.PHONY: vendor lint shell binaries install binaries-cross validate-all generate-authors validate-docs docs
+.PHONY: shell binaries binaries-cross install release validate-all lint validate-vendor validate-docs validate-authors vendor docs authors

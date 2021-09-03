@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.3-labs
 
 ARG GO_VERSION=1.17.0
 
@@ -13,19 +13,28 @@ RUN apk add --no-cache rsync git
 WORKDIR /src
 COPY --from=docsgen /out/docsgen /usr/bin
 RUN --mount=target=/context \
-  --mount=target=.,type=tmpfs,readwrite  \
-  rsync -a /context/. . && \
-  docsgen && \
-  mkdir /out && cp -r docs/reference /out
+  --mount=target=.,type=tmpfs <<EOT
+set -e
+rsync -a /context/. .
+docsgen
+mkdir /out
+cp -r docs/reference /out
+EOT
 
 FROM scratch AS update
 COPY --from=gen /out /out
 
 FROM gen AS validate
 RUN --mount=target=/context \
-  --mount=target=.,type=tmpfs,readwrite  \
-  rsync -a /context/. . && \
-  git add -A && \
-  rm -rf docs/reference/* && \
-  cp -rf /out/* ./docs/ && \
-  ./hack/validate-docs check
+  --mount=target=.,type=tmpfs <<EOT
+set -e
+rsync -a /context/. .
+git add -A
+rm -rf docs/reference/*
+cp -rf /out/* ./docs/
+if [ -n "$(git status --porcelain -- docs/reference)" ]; then
+  echo >&2 'ERROR: Docs result differs. Please update with "make docs"'
+  git status --porcelain -- docs/reference
+  exit 1
+fi
+EOT
