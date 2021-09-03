@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -19,7 +20,6 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -44,10 +44,10 @@ type buildOptions struct {
 	imageIDFile string
 	extraHosts  []string
 	networkMode string
+	quiet       bool
 
 	// unimplemented
 	squash bool
-	quiet  bool
 
 	allow []string
 
@@ -85,10 +85,6 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	if in.squash {
 		return errors.Errorf("squash currently not implemented")
 	}
-	if in.quiet {
-		logrus.Warnf("quiet currently not implemented")
-	}
-
 	ctx := appcontext.Context()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
@@ -106,6 +102,12 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	pull := false
 	if in.pull != nil {
 		pull = *in.pull
+	}
+
+	if in.quiet && in.progress != "auto" && in.progress != "quiet" {
+		return errors.Errorf("progress=%s and quiet cannot be used together", in.progress)
+	} else if in.quiet {
+		in.progress = "quiet"
 	}
 
 	opts := build.Options{
@@ -214,17 +216,26 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		contextPathHash = in.contextPath
 	}
 
-	return buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
-}
-
-func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) error {
-	dis, err := getInstanceOrDefault(ctx, dockerCli, instance, contextPathHash)
+	imageID, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
 	if err != nil {
 		return err
 	}
 
+	if in.quiet {
+		fmt.Println(imageID)
+	}
+	return nil
+}
+
+func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) (imageID string, err error) {
+	dis, err := getInstanceOrDefault(ctx, dockerCli, instance, contextPathHash)
+	if err != nil {
+		return "", err
+	}
+
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
+
 	printer := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
 	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
@@ -233,20 +244,20 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 		err = err1
 	}
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	if len(metadataFile) > 0 && resp != nil {
 		mdatab, err := json.MarshalIndent(resp[defaultTargetName].ExporterResponse, "", "  ")
 		if err != nil {
-			return err
+			return "", err
 		}
 		if err := ioutils.AtomicWriteFile(metadataFile, mdatab, 0644); err != nil {
-			return err
+			return "", err
 		}
 	}
 
-	return err
+	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], err
 }
 
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -287,14 +298,14 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringSliceVar(&options.allow, "allow", []string{}, "Allow extra privileged entitlement, e.g. network.host, security.insecure")
 
-	// not implemented
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 	flags.StringVar(&options.networkMode, "network", "default", "Set the networking mode for the RUN instructions during build")
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, "Add a custom host-to-IP mapping (host:ip)")
 	flags.SetAnnotation("add-host", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host"})
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+
+	// not implemented
 	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
-	flags.MarkHidden("quiet")
 	flags.MarkHidden("squash")
 
 	// hidden flags
