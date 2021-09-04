@@ -2,9 +2,11 @@
 
 ARG GO_VERSION=1.17.0
 
-FROM golang:${GO_VERSION}-alpine AS vendored
-RUN  apk add --no-cache git rsync
+FROM golang:${GO_VERSION}-alpine AS base
+RUN apk add --no-cache git rsync
 WORKDIR /src
+
+FROM base AS vendored
 RUN --mount=target=/context \
   --mount=target=.,type=tmpfs  \
   --mount=target=/go/pkg/mod,type=cache <<EOT
@@ -33,3 +35,10 @@ if [ -n "$(git status --porcelain -- go.mod go.sum vendor)" ]; then
   exit 1
 fi
 EOT
+
+FROM psampaz/go-mod-outdated:v0.8.0 AS go-mod-outdated
+FROM base AS outdated
+RUN --mount=target=.,ro \
+  --mount=target=/go/pkg/mod,type=cache \
+  --mount=from=go-mod-outdated,source=/home/go-mod-outdated,target=/usr/bin/go-mod-outdated \
+  go list -mod=readonly -u -m -json all | go-mod-outdated -update -direct
