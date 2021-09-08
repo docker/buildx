@@ -76,6 +76,13 @@ target "update-authors" {
   output = ["."]
 }
 
+target "mod-outdated" {
+  inherits = ["_common"]
+  dockerfile = "./hack/dockerfiles/vendor.Dockerfile"
+  target = "outdated"
+  output = ["type=cacheonly"]
+}
+
 target "test" {
   inherits = ["_common"]
   target = "test-coverage"

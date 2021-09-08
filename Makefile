@@ -53,4 +53,7 @@ docs:
 authors:
 	$(BUILDX_CMD) bake update-authors
 
+mod-outdated:
+	$(BUILDX_CMD) bake mod-outdated
+
 .PHONY: shell binaries binaries-cross install release validate-all lint validate-vendor validate-docs validate-authors vendor docs authors
