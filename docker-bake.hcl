@@ -7,6 +7,9 @@ variable "BIN_OUT" {
 variable "RELEASE_OUT" {
   default = "./release-out"
 }
+variable "DOCS_FORMATS" {
+  default = "md"
+}
 
 // Special target: https://github.com/docker/metadata-action#bake-definition
 target "meta-helper" {
@@ -43,6 +46,9 @@ target "validate-vendor" {
 
 target "validate-docs" {
   inherits = ["_common"]
+  args = {
+    FORMATS = DOCS_FORMATS
+  }
   dockerfile = "./hack/dockerfiles/docs.Dockerfile"
   target = "validate"
   output = ["type=cacheonly"]
@@ -64,6 +70,9 @@ target "update-vendor" {
 
 target "update-docs" {
   inherits = ["_common"]
+  args = {
+    FORMATS = DOCS_FORMATS
+  }
   dockerfile = "./hack/dockerfiles/docs.Dockerfile"
   target = "update"
   output = ["./docs/reference"]
