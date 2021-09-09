@@ -1,6 +1,5 @@
 ignore: |
   /vendor
-  /docs/reference
 
 extends: default
 

@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1.3-labs
 
 ARG GO_VERSION=1.17.0
+ARG FORMATS=md,yaml
 
 FROM golang:${GO_VERSION}-alpine AS docsgen
 WORKDIR /src
@@ -12,11 +13,12 @@ FROM alpine AS gen
 RUN apk add --no-cache rsync git
 WORKDIR /src
 COPY --from=docsgen /out/docsgen /usr/bin
+ARG FORMATS
 RUN --mount=target=/context \
   --mount=target=.,type=tmpfs <<EOT
 set -e
 rsync -a /context/. .
-docsgen
+docsgen --formats "$FORMATS" --source "docs/reference"
 mkdir /out
 cp -r docs/reference /out
 EOT
