@@ -65,7 +65,7 @@ eager_beaver
 ```
 
 Adds flags when starting the buildkitd daemon. They take precedence over the
-configuration file specified by [`--config`](#--config-file). See `buildkitd --help`
+configuration file specified by [`--config`](#config). See `buildkitd --help`
 for the available flags.
 
 **Example**
@@ -81,7 +81,7 @@ for the available flags.
 ```
 
 Specifies the configuration file for the buildkitd daemon to use. The configuration
-can be overridden by [`--buildkitd-flags`](#--buildkitd-flags-flags).
+can be overridden by [`--buildkitd-flags`](#buildkitd-flags).
 See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
 ### <a name="driver"></a> Set the builder driver to use (--driver)
@@ -96,7 +96,7 @@ their own specificities.
 #### `docker` driver
 
 Uses the builder that is built into the docker daemon. With this driver,
-the [`--load`](buildx_build.md#--load) flag is implied by default on
+the [`--load`](buildx_build.md#load) flag is implied by default on
 `buildx build`. However, building multi-platform images or exporting cache is
 not currently supported.
 
@@ -106,7 +106,7 @@ Uses a BuildKit container that will be spawned via docker. With this driver,
 both building multi-platform images and exporting cache are supported.
 
 Unlike `docker` driver, built images will not automatically appear in
-`docker images` and [`build --load`](buildx_build.md#--load) needs to be used
+`docker images` and [`build --load`](buildx_build.md#load) needs to be used
 to achieve that.
 
 #### `kubernetes` driver
@@ -115,7 +115,7 @@ Uses a kubernetes pods. With this driver, you can spin up pods with defined
 BuildKit container image to build your images.
 
 Unlike `docker` driver, built images will not automatically appear in
-`docker images` and [`build --load`](buildx_build.md#--load) needs to be used
+`docker images` and [`build --load`](buildx_build.md#load) needs to be used
 to achieve that.
 
 ### <a name="driver-opt"></a> Set additional driver-specific options (--driver-opt)
