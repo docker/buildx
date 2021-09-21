@@ -246,14 +246,15 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 func configFromContext(endpointName string, s ctxstore.Reader) (clientcmd.ClientConfig, error) {
 	if strings.HasPrefix(endpointName, "kubernetes://") {
 		u, _ := url.Parse(endpointName)
-
 		if kubeconfig := u.Query().Get("kubeconfig"); kubeconfig != "" {
-			clientConfig := clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
-				&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeconfig},
-				&clientcmd.ConfigOverrides{},
-			)
-			return clientConfig, nil
+			_ = os.Setenv(clientcmd.RecommendedConfigPathEnvVar, kubeconfig)
 		}
+		rules := clientcmd.NewDefaultClientConfigLoadingRules()
+		apiConfig, err := rules.Load()
+		if err != nil {
+			return nil, err
+		}
+		return clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{}), nil
 	}
 	return kubernetes.ConfigFromContext(endpointName, s)
 }
