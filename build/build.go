@@ -411,6 +411,10 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		so.FrontendAttrs["multi-platform"] = "true"
 	}
 
+	if v, ok := opt.BuildArgs["BUILDKIT_SANDBOX_HOSTNAME"]; ok {
+		so.FrontendAttrs["hostname"] = v
+	}
+
 	switch len(opt.Exports) {
 	case 1:
 		// valid

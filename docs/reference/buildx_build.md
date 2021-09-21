@@ -317,3 +317,11 @@ with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_cre
 $ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
 $ docker buildx build --allow security.insecure .
 ```
+
+### Built-in build args
+
+Special build-time variables (`--build-arg`) for BuildKit are available:
+
+* `BUILDKIT_INLINE_CACHE=<bool>` [exports inline cache metadata](#cache-to) to image configuration or not
+* `BUILDKIT_MULTI_PLATFORM=<bool>` opts into determnistic output regardless of multi-platform output or not
+* `BUILDKIT_SANDBOX_HOSTNAME=<string>` sets the hostname at build-time (default `buildkitsandbox`) 
