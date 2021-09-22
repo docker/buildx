@@ -64,7 +64,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		if in.exportLoad {
 			return errors.Errorf("push and load may not be set together at the moment")
 		}
-		overrides = append(overrides, "*.output=type=registry")
+		overrides = append(overrides, "*.push=true")
 	} else if in.exportLoad {
 		overrides = append(overrides, "*.output=type=docker")
 	}

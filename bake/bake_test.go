@@ -179,6 +179,51 @@ target "webapp" {
 	})
 }
 
+func TestPushOverride(t *testing.T) {
+	t.Parallel()
+
+	fp := File{
+		Name: "docker-bake.hc",
+		Data: []byte(
+			`target "app" {
+				output = ["type=image,compression=zstd"]
+			}`),
+	}
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m["app"].Outputs))
+	require.Equal(t, "type=image,compression=zstd,push=true", m["app"].Outputs[0])
+
+	fp = File{
+		Name: "docker-bake.hc",
+		Data: []byte(
+			`target "app" {
+				output = ["type=image,compression=zstd"]
+			}`),
+	}
+	ctx = context.TODO()
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.push=false"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m["app"].Outputs))
+	require.Equal(t, "type=image,compression=zstd,push=false", m["app"].Outputs[0])
+
+	fp = File{
+		Name: "docker-bake.hc",
+		Data: []byte(
+			`target "app" {
+			}`),
+	}
+	ctx = context.TODO()
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m["app"].Outputs))
+	require.Equal(t, "type=image,push=true", m["app"].Outputs[0])
+}
+
 func TestReadTargetsCompose(t *testing.T) {
 	t.Parallel()
 
@@ -228,7 +273,6 @@ services:
 }
 
 func TestHCLCwdPrefix(t *testing.T) {
-
 	fp := File{
 		Name: "docker-bake.hc",
 		Data: []byte(
