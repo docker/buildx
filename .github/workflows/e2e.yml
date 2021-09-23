@@ -1,0 +1,100 @@
+name: e2e
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'master'
+      - 'v[0-9]*'
+  pull_request:
+    branches:
+      - 'master'
+      - 'v[0-9]*'
+
+jobs:
+  driver:
+    runs-on: ubuntu-20.04
+    strategy:
+      fail-fast: false
+      matrix:
+        driver:
+          - docker
+          - docker-container
+          - kubernetes
+        buildkit:
+          - moby/buildkit:buildx-stable-1
+          - moby/buildkit:master
+        buildkit-cfg:
+          - bkcfg-false
+          - bkcfg-true
+        multi-node:
+          - mnode-false
+          - mnode-true
+        platforms:
+          - linux/amd64,linux/arm64
+        include:
+          - driver: kubernetes
+            driver-opt: qemu.install=true
+        exclude:
+          - driver: docker
+            multi-node: mnode-true
+          - driver: docker
+            buildkit-cfg: bkcfg-true
+          - driver: docker-container
+            multi-node: mnode-true
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+        if: matrix.driver == 'docker' || matrix.driver == 'docker-container'
+      -
+        name: Install buildx
+        run: |
+          make install
+          docker buildx version
+      -
+        name: Init env vars
+        run: |
+          # BuildKit cfg
+          if [ "${{ matrix.buildkit-cfg }}" = "bkcfg-true" ]; then
+            cat > "/tmp/buildkitd.toml" <<EOL
+          [worker.oci]
+            max-parallelism = 2
+          EOL
+            echo "BUILDKIT_CFG=/tmp/buildkitd.toml" >> $GITHUB_ENV
+          fi
+          # Multi node
+          if [ "${{ matrix.multi-node }}" = "mnode-true" ]; then
+            echo "MULTI_NODE=1" >> $GITHUB_ENV
+          else
+            echo "MULTI_NODE=0" >> $GITHUB_ENV
+          fi
+      -
+        name: Install k3s
+        if: matrix.driver == 'kubernetes'
+        uses: debianmaster/actions-k3s@v1.0.3
+        id: k3s
+        with:
+          version: v1.21.2-k3s1
+      -
+        name: Config k3s
+        if: matrix.driver == 'kubernetes'
+        run: |
+          (set -x ; cat ${{ steps.k3s.outputs.kubeconfig }})
+      -
+        name: Check k3s nodes
+        if: matrix.driver == 'kubernetes'
+        run: |
+          kubectl get nodes
+      -
+        name: Test
+        run: |
+          make test-driver
+        env:
+          BUILDKIT_IMAGE: ${{ matrix.buildkit }}
+          DRIVER: ${{ matrix.driver }}
+          DRIVER_OPT: ${{ matrix.driver-opt }}
+          PLATFORMS: ${{ matrix.platforms }}

@@ -44,6 +44,9 @@ validate-docs:
 validate-authors:
 	$(BUILDX_CMD) bake validate-authors
 
+test-driver:
+	./hack/test-driver
+
 vendor:
 	./hack/update-vendor
 

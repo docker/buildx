@@ -1,0 +1,99 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+: ${BUILDX_CMD=docker buildx}
+: ${BUILDKIT_IMAGE=moby/buildkit:buildx-stable-1}
+: ${BUILDKIT_CFG=}
+: ${DRIVER=docker-container}
+: ${DRIVER_OPT=}
+: ${MULTI_NODE=0}
+: ${PLATFORMS=linux/amd64,linux/arm64}
+
+function clean {
+  rm -rf "$context"
+  ${BUILDX_CMD} rm "$builderName"
+}
+
+context=$(mktemp -d -t buildx-output.XXXXXXXXXX)
+dockerfile=${context}/Dockerfile
+trap clean EXIT
+
+builderName=buildx-test-$(openssl rand -hex 16)
+buildPlatformFlag=
+if [ "$DRIVER" = "docker" ]; then
+  builderName=default
+else
+  buildPlatformFlag=--platform="${PLATFORMS}"
+fi
+
+driverOpt=image=${BUILDKIT_IMAGE}
+if [ -n "$DRIVER_OPT" ]; then
+  driverOpt=$driverOpt,$DRIVER_OPT
+fi
+
+# create builder except for docker driver
+if [ "$DRIVER" != "docker" ]; then
+  if [ "${MULTI_NODE}" = "1" ]; then
+    firstNode=1
+    for platform in ${PLATFORMS//,/ }; do
+      createFlags=""
+      if [ -f "$BUILDKIT_CFG" ]; then
+        createFlags="$createFlags --config=${BUILDKIT_CFG}"
+      fi
+      if [ "$firstNode" = "0" ]; then
+        createFlags="$createFlags --append"
+      fi
+      (
+        set -x
+        ${BUILDX_CMD} create ${createFlags} \
+          --name="${builderName}" \
+          --node="${builderName}-${platform/\//-}" \
+          --driver="${DRIVER}" \
+          --platform="${platform}"
+      )
+      firstNode=0
+    done
+  else
+    createFlags=""
+    if [ -f "$BUILDKIT_CFG" ]; then
+      createFlags="$createFlags --config=${BUILDKIT_CFG}"
+    fi
+    (
+      set -x
+      ${BUILDX_CMD} create ${createFlags} \
+        --name="${builderName}" \
+        --driver="${DRIVER}" \
+        --platform="${PLATFORMS}"
+    )
+  fi
+fi
+
+# multi-platform not supported by docker driver
+buildPlatformFlag=
+if [ "$DRIVER" != "docker" ]; then
+  buildPlatformFlag=--platform="${PLATFORMS}"
+fi
+
+set -x
+
+# inspect and bootstrap
+${BUILDX_CMD} inspect --bootstrap --builder="${builderName}"
+
+# create dockerfile
+cat > "${dockerfile}" <<EOL
+FROM busybox as build
+ARG TARGETPLATFORM
+ARG BUILDPLATFORM
+RUN echo "I am running on \$BUILDPLATFORM, building for \$TARGETPLATFORM" > /log
+FROM busybox
+COPY --from=build /log /log
+RUN cat /log
+RUN uname -a
+EOL
+
+# build
+${BUILDX_CMD} build ${buildPlatformFlag} \
+  --output="type=cacheonly" \
+  --builder="${builderName}" \
+  "${context}"
