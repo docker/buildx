@@ -38,7 +38,7 @@ github.com/compose-spec/compose-go/loader
 github.com/compose-spec/compose-go/schema
 github.com/compose-spec/compose-go/template
 github.com/compose-spec/compose-go/types
-# github.com/containerd/console v1.0.2
+# github.com/containerd/console v1.0.3
 ## explicit
 github.com/containerd/console
 # github.com/containerd/containerd v1.5.5
@@ -73,7 +73,7 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/distribution/v3 v3.0.0-20210316161203-a01c71e2477e
 github.com/distribution/distribution/v3/digestset
 github.com/distribution/distribution/v3/reference
-# github.com/docker/cli v20.10.7+incompatible => github.com/docker/cli v20.10.3-0.20210702143511-f782d1355eff+incompatible
+# github.com/docker/cli v20.10.8+incompatible => github.com/docker/cli v20.10.3-0.20210702143511-f782d1355eff+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/manager
@@ -203,8 +203,6 @@ github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
-# github.com/golang/snappy v0.0.4-0.20210608040537-544b4180ac70
-github.com/golang/snappy
 # github.com/google/certificate-transparency-go v1.0.21
 ## explicit
 # github.com/google/go-cmp v0.5.6
@@ -220,9 +218,10 @@ github.com/google/gofuzz
 github.com/google/shlex
 # github.com/google/uuid v1.2.0
 github.com/google/uuid
-# github.com/googleapis/gnostic v0.4.1
+# github.com/googleapis/gnostic v0.5.5
 github.com/googleapis/gnostic/compiler
 github.com/googleapis/gnostic/extensions
+github.com/googleapis/gnostic/jsonschema
 github.com/googleapis/gnostic/openapiv2
 # github.com/gorilla/mux v1.8.0
 github.com/gorilla/mux
@@ -265,9 +264,11 @@ github.com/joho/godotenv
 github.com/json-iterator/go
 # github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 ## explicit
-# github.com/klauspost/compress v1.12.3
+# github.com/klauspost/compress v1.13.5
+github.com/klauspost/compress
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
+github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/mattn/go-shellwords v1.0.12
@@ -280,7 +281,7 @@ github.com/miekg/pkcs11
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.4.1
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.9.1-0.20210921052901-44891f4cb975
+# github.com/moby/buildkit v0.9.1-0.20210927192002-23c8affb1ffe
 ## explicit
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -348,7 +349,7 @@ github.com/morikuni/aec
 # github.com/opencontainers/go-digest v1.0.0
 ## explicit
 github.com/opencontainers/go-digest
-# github.com/opencontainers/image-spec v1.0.1
+# github.com/opencontainers/image-spec v1.0.2-0.20210819154149-5ad6f50d6283
 ## explicit
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
@@ -491,7 +492,7 @@ golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/net v0.0.0-20210405180319-a5a99cb37ef4
+# golang.org/x/net v0.0.0-20210520170846-37e1c6afe023
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
 golang.org/x/net/http/httpguts
@@ -522,12 +523,12 @@ golang.org/x/sys/unix
 golang.org/x/sys/windows
 # golang.org/x/term v0.0.0-20210220032956-6a3ed077a48d
 golang.org/x/term
-# golang.org/x/text v0.3.5
+# golang.org/x/text v0.3.6
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# golang.org/x/time v0.0.0-20210220033141-f8bda1e9f3ba
+# golang.org/x/time v0.0.0-20210723032227-1f47c861a9ac
 golang.org/x/time/rate
 # google.golang.org/appengine v1.6.7
 google.golang.org/appengine
@@ -545,7 +546,7 @@ google.golang.org/genproto/googleapis/api/httpbody
 google.golang.org/genproto/googleapis/rpc/errdetails
 google.golang.org/genproto/googleapis/rpc/status
 google.golang.org/genproto/protobuf/field_mask
-# google.golang.org/grpc v1.39.0
+# google.golang.org/grpc v1.40.0
 google.golang.org/grpc
 google.golang.org/grpc/attributes
 google.golang.org/grpc/backoff
@@ -640,7 +641,7 @@ gopkg.in/inf.v0
 gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.0-20210107192922-496545a6307b
 gopkg.in/yaml.v3
-# k8s.io/api v0.21.2
+# k8s.io/api v0.22.1
 ## explicit
 k8s.io/api/admissionregistration/v1
 k8s.io/api/admissionregistration/v1beta1
@@ -685,7 +686,7 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apimachinery v0.21.2
+# k8s.io/apimachinery v0.22.1
 ## explicit
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/api/meta
@@ -727,7 +728,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/client-go v0.21.2
+# k8s.io/client-go v0.22.1
 ## explicit
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
 k8s.io/client-go/applyconfigurations/admissionregistration/v1beta1
@@ -817,6 +818,8 @@ k8s.io/client-go/kubernetes/typed/storage/v1
 k8s.io/client-go/kubernetes/typed/storage/v1alpha1
 k8s.io/client-go/kubernetes/typed/storage/v1beta1
 k8s.io/client-go/pkg/apis/clientauthentication
+k8s.io/client-go/pkg/apis/clientauthentication/install
+k8s.io/client-go/pkg/apis/clientauthentication/v1
 k8s.io/client-go/pkg/apis/clientauthentication/v1alpha1
 k8s.io/client-go/pkg/apis/clientauthentication/v1beta1
 k8s.io/client-go/pkg/version
@@ -845,11 +848,11 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/jsonpath
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/workqueue
-# k8s.io/klog/v2 v2.8.0
+# k8s.io/klog/v2 v2.9.0
 k8s.io/klog/v2
-# k8s.io/utils v0.0.0-20201110183641-67b214c5f920
+# k8s.io/utils v0.0.0-20210707171843-4b05e18ac7d9
 k8s.io/utils/integer
-# sigs.k8s.io/structured-merge-diff/v4 v4.1.0
+# sigs.k8s.io/structured-merge-diff/v4 v4.1.2
 sigs.k8s.io/structured-merge-diff/v4/fieldpath
 sigs.k8s.io/structured-merge-diff/v4/schema
 sigs.k8s.io/structured-merge-diff/v4/typed
