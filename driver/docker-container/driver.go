@@ -38,10 +38,11 @@ const (
 
 type Driver struct {
 	driver.InitConfig
-	factory driver.Factory
-	netMode string
-	image   string
-	env     []string
+	factory      driver.Factory
+	netMode      string
+	image        string
+	cgroupParent string
+	env          []string
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -124,6 +125,11 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
+		}
+		if info, err := d.DockerAPI.Info(ctx); err == nil && info.CgroupDriver == "cgroupfs" {
+			if d.cgroupParent != "" {
+				hc.CgroupParent = d.cgroupParent
+			}
 		}
 		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
 		if err != nil {
