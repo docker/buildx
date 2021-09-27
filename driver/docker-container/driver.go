@@ -127,6 +127,9 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
 		}
 		if info, err := d.DockerAPI.Info(ctx); err == nil && info.CgroupDriver == "cgroupfs" {
+			// Place all buildkit containers inside this cgroup by default so limits can be attached
+			// to all build activity on the host.
+			hc.CgroupParent = "/docker/buildx"
 			if d.cgroupParent != "" {
 				hc.CgroupParent = d.cgroupParent
 			}
