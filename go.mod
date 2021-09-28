@@ -9,9 +9,9 @@ require (
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
 	github.com/compose-spec/compose-go v0.0.0-20210729195839-de56f4f0cb3c
-	github.com/containerd/console v1.0.2
+	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.5.5
-	github.com/docker/cli v20.10.7+incompatible
+	github.com/docker/cli v20.10.8+incompatible
 	github.com/docker/cli-docs-tool v0.1.1
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
 	github.com/docker/distribution v2.7.1+incompatible
@@ -30,9 +30,9 @@ require (
 	github.com/jinzhu/gorm v1.9.2 // indirect
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a // indirect
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
-	github.com/moby/buildkit v0.9.1-0.20210921052901-44891f4cb975
+	github.com/moby/buildkit v0.9.1-0.20210927192002-23c8affb1ffe
 	github.com/opencontainers/go-digest v1.0.0
-	github.com/opencontainers/image-spec v1.0.1
+	github.com/opencontainers/image-spec v1.0.2-0.20210819154149-5ad6f50d6283
 	github.com/pkg/errors v0.9.1
 	github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 	github.com/sirupsen/logrus v1.8.1
@@ -48,9 +48,9 @@ require (
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
 	gopkg.in/gorethink/gorethink.v3 v3.0.5 // indirect
-	k8s.io/api v0.21.2
-	k8s.io/apimachinery v0.21.2
-	k8s.io/client-go v0.21.2
+	k8s.io/api v0.22.1
+	k8s.io/apimachinery v0.22.1
+	k8s.io/client-go v0.22.1
 )
 
 replace (
