@@ -50,6 +50,7 @@ if [ "$DRIVER" != "docker" ]; then
           --name="${builderName}" \
           --node="${builderName}-${platform/\//-}" \
           --driver="${DRIVER}" \
+          --driver-opt="${driverOpt}" \
           --platform="${platform}"
       )
       firstNode=0
@@ -64,6 +65,7 @@ if [ "$DRIVER" != "docker" ]; then
       ${BUILDX_CMD} create ${createFlags} \
         --name="${builderName}" \
         --driver="${DRIVER}" \
+        --driver-opt="${driverOpt}" \
         --platform="${PLATFORMS}"
     )
   fi
