@@ -31,8 +31,8 @@ type File struct {
 }
 
 type Override struct {
-	Key   string
-	Value string
+	Value    string
+	ArrValue []string
 }
 
 func defaultFilenames() []string {
@@ -246,8 +246,8 @@ func (c Config) expandTargets(pattern string) ([]string, error) {
 	return names, nil
 }
 
-func (c Config) newOverrides(v []string) (map[string][]Override, error) {
-	m := map[string][]Override{}
+func (c Config) newOverrides(v []string) (map[string]map[string]Override, error) {
+	m := map[string]map[string]Override{}
 	for _, v := range v {
 
 		parts := strings.SplitN(v, "=", 2)
@@ -269,16 +269,19 @@ func (c Config) newOverrides(v []string) (map[string][]Override, error) {
 		kk := strings.SplitN(parts[0], ".", 2)
 
 		for _, name := range names {
-			t := m[name]
+			t, ok := m[name]
+			if !ok {
+				t = map[string]Override{}
+				m[name] = t
+			}
 
-			o := Override{
-				Key: kk[1],
-			}
-			if len(parts) == 2 {
-				o.Value = parts[1]
-			}
+			o := t[kk[1]]
 
 			switch keys[1] {
+			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh":
+				if len(parts) == 2 {
+					o.ArrValue = append(o.ArrValue, parts[1])
+				}
 			case "args":
 				if len(keys) != 3 {
 					return nil, errors.Errorf("invalid key %s, args requires name", parts[0])
@@ -290,11 +293,14 @@ func (c Config) newOverrides(v []string) (map[string][]Override, error) {
 					}
 					o.Value = v
 				}
+				fallthrough
+			default:
+				if len(parts) == 2 {
+					o.Value = parts[1]
+				}
 			}
 
-			t = append(t, o)
-
-			m[name] = t
+			t[kk[1]] = o
 		}
 	}
 	return m, nil
@@ -326,7 +332,7 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 	return targets
 }
 
-func (c Config) ResolveTarget(name string, overrides map[string][]Override) (*Target, error) {
+func (c Config) ResolveTarget(name string, overrides map[string]map[string]Override) (*Target, error) {
 	t, err := c.target(name, map[string]struct{}{}, overrides)
 	if err != nil {
 		return nil, err
@@ -342,7 +348,7 @@ func (c Config) ResolveTarget(name string, overrides map[string][]Override) (*Ta
 	return t, nil
 }
 
-func (c Config) target(name string, visited map[string]struct{}, overrides map[string][]Override) (*Target, error) {
+func (c Config) target(name string, visited map[string]struct{}, overrides map[string]map[string]Override) (*Target, error) {
 	if _, ok := visited[name]; ok {
 		return nil, nil
 	}
@@ -476,10 +482,10 @@ func (t *Target) Merge(t2 *Target) {
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
-func (t *Target) AddOverrides(overrides []Override) error {
-	for _, o := range overrides {
+func (t *Target) AddOverrides(overrides map[string]Override) error {
+	for key, o := range overrides {
 		value := o.Value
-		keys := strings.SplitN(o.Key, ".", 2)
+		keys := strings.SplitN(key, ".", 2)
 		switch keys[0] {
 		case "context":
 			t.Context = &value
@@ -503,21 +509,21 @@ func (t *Target) AddOverrides(overrides []Override) error {
 			}
 			t.Labels[keys[1]] = value
 		case "tags":
-			t.Tags = append(t.Tags, value)
+			t.Tags = o.ArrValue
 		case "cache-from":
-			t.CacheFrom = append(t.CacheFrom, value)
+			t.CacheFrom = o.ArrValue
 		case "cache-to":
-			t.CacheTo = append(t.CacheTo, value)
+			t.CacheTo = o.ArrValue
 		case "target":
 			t.Target = &value
 		case "secrets":
-			t.Secrets = append(t.Secrets, value)
+			t.Secrets = o.ArrValue
 		case "ssh":
-			t.SSH = append(t.SSH, value)
+			t.SSH = o.ArrValue
 		case "platform":
-			t.Platforms = append(t.Platforms, value)
+			t.Platforms = o.ArrValue
 		case "output":
-			t.Outputs = append(t.Outputs, value)
+			t.Outputs = o.ArrValue
 		case "no-cache":
 			noCache, err := strconv.ParseBool(value)
 			if err != nil {
