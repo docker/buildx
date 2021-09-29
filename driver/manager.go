@@ -129,8 +129,15 @@ func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.API
 	return &cachedDriver{Driver: d}, nil
 }
 
-func GetFactories() map[string]Factory {
-	return drivers
+func GetFactories() []Factory {
+	ds := make([]Factory, 0, len(drivers))
+	for _, d := range drivers {
+		ds = append(ds, d)
+	}
+	sort.Slice(ds, func(i, j int) bool {
+		return ds[i].Name() < ds[j].Name()
+	})
+	return ds
 }
 
 type cachedDriver struct {

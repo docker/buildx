@@ -15,28 +15,28 @@ Start a build
 
 | Name | Description |
 | --- | --- |
-| [`--add-host stringSlice`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | Add a custom host-to-IP mapping (host:ip) |
-| [`--allow stringSlice`](#allow) | Allow extra privileged entitlement, e.g. network.host, security.insecure |
+| [`--add-host stringSlice`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | Add a custom host-to-IP mapping (format: `host:ip`) |
+| [`--allow stringSlice`](#allow) | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`) |
 | [`--build-arg stringArray`](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) | Set build-time variables |
 | `--builder string` | Override the configured builder instance |
-| [`--cache-from stringArray`](#cache-from) | External cache sources (eg. user/app:cache, type=local,src=path/to/dir) |
-| [`--cache-to stringArray`](#cache-to) | Cache export destinations (eg. user/app:cache, type=local,dest=path/to/dir) |
-| [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file string`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | Name of the Dockerfile (Default is 'PATH/Dockerfile') |
+| [`--cache-from stringArray`](#cache-from) | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`) |
+| [`--cache-to stringArray`](#cache-to) | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
+| [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file string`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | Name of the Dockerfile (default: `PATH/Dockerfile`) |
 | `--iidfile string` | Write the image ID to the file |
 | `--label stringArray` | Set metadata for an image |
-| [`--load`](#load) | Shorthand for --output=type=docker |
+| [`--load`](#load) | Shorthand for `--output=type=docker` |
 | `--metadata-file string` | Write build result metadata to the file |
 | `--network string` | Set the networking mode for the RUN instructions during build |
 | `--no-cache` | Do not use cache when building the image |
-| [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: type=local,dest=path) |
+| [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: `type=local,dest=path`) |
 | [`--platform stringArray`](#platform) | Set target platform for build |
-| [`--progress string`](#progress) | Set type of progress output (auto, plain, tty). Use plain to show container output |
+| [`--progress string`](#progress) | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
 | `--pull` | Always attempt to pull a newer version of the image |
-| [`--push`](#push) | Shorthand for --output=type=registry |
+| [`--push`](#push) | Shorthand for `--output=type=registry` |
 | `-q`, `--quiet` | Suppress the build output and print image ID on success |
-| `--secret stringArray` | Secret file to expose to the build: id=mysecret,src=/local/secret |
+| `--secret stringArray` | Secret file to expose to the build (format: `id=mysecret,src=/local/secret`) |
 | `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
-| [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag in the 'name:tag' format |
+| [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag (format: `name:tag`) |
 | [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build. |
 
 

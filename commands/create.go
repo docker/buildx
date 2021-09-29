@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/csv"
 	"fmt"
@@ -204,9 +205,12 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 func createCmd(dockerCli command.Cli) *cobra.Command {
 	var options createOptions
 
-	var drivers []string
-	for s := range driver.GetFactories() {
-		drivers = append(drivers, s)
+	var drivers bytes.Buffer
+	for _, d := range driver.GetFactories() {
+		if len(drivers.String()) > 0 {
+			drivers.WriteString(", ")
+		}
+		drivers.WriteString(fmt.Sprintf("`%s`", d.Name()))
 	}
 
 	cmd := &cobra.Command{
@@ -221,7 +225,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags := cmd.Flags()
 
 	flags.StringVar(&options.name, "name", "", "Builder instance name")
-	flags.StringVar(&options.driver, "driver", "", fmt.Sprintf("Driver to use (available: %v)", drivers))
+	flags.StringVar(&options.driver, "driver", "", fmt.Sprintf("Driver to use (available: %s)", drivers.String()))
 	flags.StringVar(&options.nodeName, "node", "", "Create/modify node with given name")
 	flags.StringVar(&options.flags, "buildkitd-flags", "", "Flags for buildkitd daemon")
 	flags.StringVar(&options.configFile, "config", "", "BuildKit config file")
