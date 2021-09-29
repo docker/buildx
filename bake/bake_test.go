@@ -274,7 +274,7 @@ services:
 
 func TestHCLCwdPrefix(t *testing.T) {
 	fp := File{
-		Name: "docker-bake.hc",
+		Name: "docker-bake.hcl",
 		Data: []byte(
 			`target "app" {
 				context = "cwd://foo"
@@ -294,4 +294,33 @@ func TestHCLCwdPrefix(t *testing.T) {
 
 	require.Equal(t, "test", *m["app"].Dockerfile)
 	require.Equal(t, "foo", *m["app"].Context)
+}
+
+func TestOverrideMerge(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				platforms = ["linux/amd64"]
+				output = ["foo"]
+			}`),
+	}
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{
+		"app.platform=linux/arm",
+		"app.platform=linux/ppc64le",
+		"app.output=type=registry",
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m))
+	_, ok := m["app"]
+	require.True(t, ok)
+
+	_, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"linux/arm", "linux/ppc64le"}, m["app"].Platforms)
+	require.Equal(t, 1, len(m["app"].Outputs))
+	require.Equal(t, "type=registry", m["app"].Outputs[0])
 }
