@@ -49,6 +49,8 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			}
 		case k == "image":
 			d.image = v
+		case k == "cgroup-parent":
+			d.cgroupParent = v
 		case strings.HasPrefix(k, "env."):
 			envName := strings.TrimPrefix(k, "env.")
 			if envName == "" {
