@@ -281,7 +281,7 @@ github.com/miekg/pkcs11
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.4.1
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.9.1-0.20210927192002-23c8affb1ffe
+# github.com/moby/buildkit v0.9.1-0.20211008210008-ba673bbdab4f
 ## explicit
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
