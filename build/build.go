@@ -20,6 +20,7 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	clitypes "github.com/docker/cli/cli/config/types"
+	"github.com/docker/cli/opts"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	dockerclient "github.com/docker/docker/client"
@@ -56,6 +57,7 @@ type Options struct {
 	ImageIDFile string
 	ExtraHosts  []string
 	NetworkMode string
+	Ulimits     *opts.UlimitOpt
 
 	NoCache   bool
 	Target    string
@@ -553,6 +555,14 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		return nil, nil, err
 	}
 	so.FrontendAttrs["add-hosts"] = extraHosts
+
+	// setup ulimits
+	ulimits, err := toBuildkitUlimits(opt.Ulimits)
+	if err != nil {
+		return nil, nil, err
+	} else if len(ulimits) > 0 {
+		so.FrontendAttrs["ulimit"] = ulimits
+	}
 
 	return &so, releaseF, nil
 }

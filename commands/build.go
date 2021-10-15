@@ -15,7 +15,9 @@ import (
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/opts"
 	"github.com/docker/docker/pkg/ioutils"
+	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
@@ -45,6 +47,7 @@ type buildOptions struct {
 	extraHosts  []string
 	networkMode string
 	quiet       bool
+	ulimits     *opts.UlimitOpt
 
 	// unimplemented
 	squash bool
@@ -53,7 +56,6 @@ type buildOptions struct {
 
 	// hidden
 	// untrusted   bool
-	// ulimits        *opts.UlimitOpt
 	// memory         opts.MemBytes
 	// memorySwap     opts.MemSwapBytes
 	// shmSize        opts.MemBytes
@@ -125,6 +127,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		ImageIDFile: in.imageIDFile,
 		ExtraHosts:  in.extraHosts,
 		NetworkMode: in.networkMode,
+		Ulimits:     in.ulimits,
 	}
 
 	platforms, err := platformutil.Parse(in.platforms)
@@ -260,8 +263,15 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], err
 }
 
+func newBuildOptions() buildOptions {
+	ulimits := make(map[string]*units.Ulimit)
+	return buildOptions{
+		ulimits: opts.NewUlimitOpt(&ulimits),
+	}
+}
+
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
-	var options buildOptions
+	options := newBuildOptions()
 
 	cmd := &cobra.Command{
 		Use:     "build [OPTIONS] PATH | URL | -",
@@ -303,6 +313,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, "Add a custom host-to-IP mapping (format: `host:ip`)")
 	flags.SetAnnotation("add-host", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host"})
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
 	// not implemented
 	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
@@ -313,8 +324,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var ignoreSlice []string
 	var ignoreBool bool
 	var ignoreInt int64
-	flags.StringVar(&ignore, "ulimit", "", "Ulimit options")
-	flags.MarkHidden("ulimit")
 	flags.StringSliceVar(&ignoreSlice, "security-opt", []string{}, "Security options")
 	flags.MarkHidden("security-opt")
 	flags.BoolVar(&ignoreBool, "compress", false, "Compress the build context using gzip")
