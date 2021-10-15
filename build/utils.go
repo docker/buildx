@@ -7,6 +7,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/docker/cli/opts"
 	"github.com/pkg/errors"
 )
 
@@ -52,4 +53,16 @@ func toBuildkitExtraHosts(inp []string) (string, error) {
 		hosts = append(hosts, parts[0]+"="+parts[1])
 	}
 	return strings.Join(hosts, ","), nil
+}
+
+// toBuildkitUlimits converts ulimits from docker type=soft:hard format to buildkit's csv format
+func toBuildkitUlimits(inp *opts.UlimitOpt) (string, error) {
+	if inp == nil || len(inp.GetList()) == 0 {
+		return "", nil
+	}
+	ulimits := make([]string, 0, len(inp.GetList()))
+	for _, ulimit := range inp.GetList() {
+		ulimits = append(ulimits, ulimit.String())
+	}
+	return strings.Join(ulimits, ","), nil
 }

@@ -38,6 +38,7 @@ Start a build
 | `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag (format: `name:tag`) |
 | [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build. |
+| [`--ulimit ulimit`](#ulimit) | Ulimit options |
 
 
 <!---MARKER_GEN_END-->
@@ -317,3 +318,18 @@ with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_cre
 $ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
 $ docker buildx build --allow security.insecure .
 ```
+
+### <a name="ulimit"></a> Set ulimits (--ulimit)
+
+`--ulimit` is specified with a soft and hard limit as such:
+`<type>=<soft limit>[:<hard limit>]`, for example:
+
+```console
+$ docker buildx build --ulimit nofile=1024:1024 .
+```
+
+> **Note**
+>
+> If you do not provide a `hard limit`, the `soft limit` is used
+> for both values. If no `ulimits` are set, they are inherited from
+> the default `ulimits` set on the daemon.
