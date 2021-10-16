@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.3-labs
 
-ARG GO_VERSION=1.17.0
+ARG GO_VERSION=1.17
 ARG FORMATS=md,yaml
 
 FROM golang:${GO_VERSION}-alpine AS docsgen

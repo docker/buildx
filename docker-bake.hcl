@@ -1,5 +1,5 @@
 variable "GO_VERSION" {
-  default = "1.17.0"
+  default = "1.17"
 }
 variable "BIN_OUT" {
   default = "./bin"
