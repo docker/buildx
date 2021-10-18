@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1.3
 
-ARG GO_VERSION=1.17.0
+ARG GO_VERSION=1.17
 ARG DOCKERD_VERSION=20.10.8
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
