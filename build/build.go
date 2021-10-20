@@ -57,6 +57,7 @@ type Options struct {
 	ImageIDFile string
 	ExtraHosts  []string
 	NetworkMode string
+	ShmSize     opts.MemBytes
 	Ulimits     *opts.UlimitOpt
 
 	NoCache   bool
@@ -555,6 +556,11 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		return nil, nil, err
 	}
 	so.FrontendAttrs["add-hosts"] = extraHosts
+
+	// setup shm size
+	if opt.ShmSize.Value() > 0 {
+		so.FrontendAttrs["shm-size"] = strconv.FormatInt(opt.ShmSize.Value(), 10)
+	}
 
 	// setup ulimits
 	ulimits, err := toBuildkitUlimits(opt.Ulimits)

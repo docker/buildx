@@ -47,6 +47,7 @@ type buildOptions struct {
 	extraHosts  []string
 	networkMode string
 	quiet       bool
+	shmSize     opts.MemBytes
 	ulimits     *opts.UlimitOpt
 
 	// unimplemented
@@ -127,6 +128,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		ImageIDFile: in.imageIDFile,
 		ExtraHosts:  in.extraHosts,
 		NetworkMode: in.networkMode,
+		ShmSize:     in.shmSize,
 		Ulimits:     in.ulimits,
 	}
 
@@ -313,6 +315,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, "Add a custom host-to-IP mapping (format: `host:ip`)")
 	flags.SetAnnotation("add-host", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host"})
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.Var(&options.shmSize, "shm-size", "Size of `/dev/shm`")
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
 	// not implemented
@@ -332,8 +335,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.MarkHidden("memory")
 	flags.StringVar(&ignore, "memory-swap", "", "Swap limit equal to memory plus swap: `-1` to enable unlimited swap")
 	flags.MarkHidden("memory-swap")
-	flags.StringVar(&ignore, "shm-size", "", "Size of `/dev/shm`")
-	flags.MarkHidden("shm-size")
 	flags.Int64VarP(&ignoreInt, "cpu-shares", "c", 0, "CPU shares (relative weight)")
 	flags.MarkHidden("cpu-shares")
 	flags.Int64Var(&ignoreInt, "cpu-period", 0, "Limit the CPU CFS (Completely Fair Scheduler) period")

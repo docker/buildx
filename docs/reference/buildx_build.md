@@ -35,6 +35,7 @@ Start a build
 | [`--push`](#push) | Shorthand for `--output=type=registry` |
 | `-q`, `--quiet` | Suppress the build output and print image ID on success |
 | `--secret stringArray` | Secret file to expose to the build (format: `id=mysecret,src=/local/secret`) |
+| [`--shm-size bytes`](#shm-size) | Size of `/dev/shm` |
 | `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag (format: `name:tag`) |
 | [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build. |
@@ -318,6 +319,12 @@ with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_cre
 $ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
 $ docker buildx build --allow security.insecure .
 ```
+
+### <a name="shm-size"></a> Size of `/dev/shm` (--shm-size)
+
+The format is `<number><unit>`. `number` must be greater than `0`. Unit is
+optional and can be `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`
+(gigabytes). If you omit the unit, the system uses bytes.
 
 ### <a name="ulimit"></a> Set ulimits (--ulimit)
 
