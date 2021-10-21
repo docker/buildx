@@ -217,8 +217,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 	}
 
 	err = eg.Wait()
-	span.RecordError(err)
-	span.End()
+	tracing.FinishWithError(span, err)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -684,8 +683,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			eg.Go(func() (err error) {
 				defer func() {
 					if span != nil {
-						span.RecordError(err)
-						span.End()
+						tracing.FinishWithError(span, err)
 					}
 				}()
 				pw := progress.WithPrefix(w, "default", false)
