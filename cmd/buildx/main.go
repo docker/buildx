@@ -16,6 +16,7 @@ import (
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/stack"
 	"github.com/moby/buildkit/util/tracing/detect"
+	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel"
 
 	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
@@ -36,7 +37,7 @@ var experimental string
 func init() {
 	seed.WithTimeAndRand()
 	stack.SetVersionInfo(version.Version, version.Revision)
-
+	logrus.SetFormatter(&logrus.TextFormatter{DisableTimestamp: true})
 	detect.ServiceName = "buildx"
 	// do not log tracing errors to stdio
 	otel.SetErrorHandler(skipErrors{})
