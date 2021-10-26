@@ -22,6 +22,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -50,9 +51,6 @@ type buildOptions struct {
 	target      string
 	ulimits     *dockeropts.UlimitOpt
 	commonOptions
-
-	// unimplemented
-	squash bool
 }
 
 type commonOptions struct {
@@ -70,9 +68,6 @@ type commonOptions struct {
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
-	if in.squash {
-		return errors.Errorf("squash currently not implemented")
-	}
 	ctx := appcontext.Context()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
@@ -268,6 +263,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.contextPath = args[0]
 			options.builder = rootOpts.builder
+			cmd.Flags().VisitAll(checkWarnedFlags)
 			return runBuild(dockerCli, options)
 		},
 	}
@@ -324,10 +320,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
-	// not implemented
-	flags.BoolVar(&options.squash, "squash", false, "Squash newly built layers into a single new layer")
-	flags.MarkHidden("squash")
-
 	// hidden flags
 	var ignore string
 	var ignoreSlice []string
@@ -336,15 +328,22 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringVar(&ignore, "cgroup-parent", "", "Optional parent cgroup for the container")
 	flags.MarkHidden("cgroup-parent")
+	//flags.SetAnnotation("cgroup-parent", "flag-warn", []string{"cgroup-parent is not implemented."})
 
 	flags.BoolVar(&ignoreBool, "compress", false, "Compress the build context using gzip")
 	flags.MarkHidden("compress")
 
 	flags.StringVar(&ignore, "isolation", "", "Container isolation technology")
 	flags.MarkHidden("isolation")
+	flags.SetAnnotation("isolation", "flag-warn", []string{"isolation flag is deprecated with BuildKit."})
 
 	flags.StringSliceVar(&ignoreSlice, "security-opt", []string{}, "Security options")
 	flags.MarkHidden("security-opt")
+	flags.SetAnnotation("security-opt", "flag-warn", []string{`security-opt flag is deprecated. "RUN --security=insecure" should be used with BuildKit.`})
+
+	flags.BoolVar(&ignoreBool, "squash", false, "Squash newly built layers into a single new layer")
+	flags.MarkHidden("squash")
+	flags.SetAnnotation("squash", "flag-warn", []string{"experimental flag squash is removed with BuildKit. You should squash inside build using a multi-stage Dockerfile for efficiency."})
 
 	flags.StringVarP(&ignore, "memory", "m", "", "Memory limit")
 	flags.MarkHidden("memory")
@@ -382,6 +381,19 @@ func commonBuildFlags(options *commonOptions, flags *pflag.FlagSet) {
 	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output")
 	options.pull = flags.Bool("pull", false, "Always attempt to pull a newer version of the image")
 	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to the file")
+}
+
+func checkWarnedFlags(f *pflag.Flag) {
+	if !f.Changed {
+		return
+	}
+	for t, m := range f.Annotations {
+		switch t {
+		case "flag-warn":
+			logrus.Warn(m[0])
+			break
+		}
+	}
 }
 
 func listToMap(values []string, defaultEnv bool) map[string]string {

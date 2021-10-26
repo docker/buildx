@@ -131,11 +131,6 @@ Passes additional driver-specific options. Details for each driver:
     - `image=IMAGE` - Sets the container image to be used for running buildkit.
     - `network=NETMODE` - Sets the network mode for running the buildkit container.
     - `cgroup-parent=CGROUP` - Sets the cgroup parent of the buildkit container if docker is using the "cgroupfs" driver. Defaults to `/docker/buildx`.
-    - Example:
-
-      ```console
-      --driver docker-container --driver-opt image=moby/buildkit:master,network=host
-      ```
 - `kubernetes`
     - `image=IMAGE` - Sets the container image to be used for running buildkit.
     - `namespace=NS` - Sets the Kubernetes namespace. Defaults to the current namespace.
@@ -149,6 +144,30 @@ Passes additional driver-specific options. Details for each driver:
     - `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
     - `qemu.install=(true|false)` - Install QEMU emulation for multi platforms support.
     - `qemu.image=IMAGE` - Sets the QEMU emulation image. Defaults to `tonistiigi/binfmt:latest`
+
+**Examples**
+
+#### Use a custom network
+
+```console
+$ docker network create foonet
+$ docker buildx create --name builder --driver docker-container --driver-opt network=foonet --use
+$ docker buildx inspect --bootstrap
+$ docker inspect buildx_buildkit_builder0 --format={{.NetworkSettings.Networks}}
+map[foonet:0xc00018c0c0]
+```
+
+#### OpenTelemetry support
+
+To capture the trace to [Jaeger](https://github.com/jaegertracing/jaeger), set
+`JAEGER_TRACE` environment variable to the collection address using the `driver-opt`:
+
+```console
+$ docker run -d --name jaeger -p 6831:6831/udp -p 16686:16686 jaegertracing/all-in-one
+$ docker buildx create --name builder --driver docker-container --driver-opt network=host --driver-opt env.JAEGER_TRACE=localhost:6831 --use
+$ docker buildx inspect --bootstrap
+# buildx command should be traced at http://127.0.0.1:16686/
+```
 
 ### <a name="leave"></a> Remove a node from a builder (--leave)
 
