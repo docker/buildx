@@ -12,7 +12,8 @@ import (
 
 func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Command {
 	cmd := &cobra.Command{
-		Short: "Build with BuildKit",
+		Short: "Docker Buildx",
+		Long:  `Extended build capabilities with BuildKit`,
 		Use:   name,
 	}
 	if isPlugin {

@@ -546,7 +546,7 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
 	case "", "default":
 	default:
-		return nil, nil, errors.Errorf("network mode %q not supported by buildkit", opt.NetworkMode)
+		return nil, nil, errors.Errorf("network mode %q not supported by buildkit. You can define a custom network for your builder using the network driver-opt in buildx create.", opt.NetworkMode)
 	}
 
 	// setup extrahosts
