@@ -20,8 +20,8 @@ import (
 
 type bakeOptions struct {
 	files     []string
-	printOnly bool
 	overrides []string
+	printOnly bool
 	commonOptions
 }
 
@@ -200,10 +200,10 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags := cmd.Flags()
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
-	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
-	flags.StringArrayVar(&options.overrides, "set", nil, "Override target value (e.g., `targetpattern.key=value`)")
-	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for `--set=*.output=type=registry`")
 	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for `--set=*.output=type=docker`")
+	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
+	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for `--set=*.output=type=registry`")
+	flags.StringArrayVar(&options.overrides, "set", nil, "Override target value (e.g., `targetpattern.key=value`)")
 
 	commonBuildFlags(&options.commonOptions, flags)
 
