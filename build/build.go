@@ -49,28 +49,25 @@ var (
 )
 
 type Options struct {
-	Inputs      Inputs
-	Tags        []string
-	Labels      map[string]string
+	Inputs Inputs
+
+	Allow       []entitlements.Entitlement
 	BuildArgs   map[string]string
-	Pull        bool
-	ImageIDFile string
+	CacheFrom   []client.CacheOptionsEntry
+	CacheTo     []client.CacheOptionsEntry
+	Exports     []client.ExportEntry
 	ExtraHosts  []string
+	ImageIDFile string
+	Labels      map[string]string
 	NetworkMode string
+	NoCache     bool
+	Platforms   []specs.Platform
+	Pull        bool
+	Session     []session.Attachable
 	ShmSize     opts.MemBytes
+	Tags        []string
+	Target      string
 	Ulimits     *opts.UlimitOpt
-
-	NoCache   bool
-	Target    string
-	Platforms []specs.Platform
-	Exports   []client.ExportEntry
-	Session   []session.Attachable
-
-	CacheFrom []client.CacheOptionsEntry
-	CacheTo   []client.CacheOptionsEntry
-
-	Allow []entitlements.Entitlement
-	// DockerTarget
 }
 
 type Inputs struct {
