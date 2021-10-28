@@ -33,23 +33,24 @@ type buildOptions struct {
 	contextPath    string
 	dockerfileName string
 
-	allow       []string
-	buildArgs   []string
-	cacheFrom   []string
-	cacheTo     []string
-	extraHosts  []string
-	imageIDFile string
-	labels      []string
-	networkMode string
-	outputs     []string
-	platforms   []string
-	quiet       bool
-	secrets     []string
-	shmSize     dockeropts.MemBytes
-	ssh         []string
-	tags        []string
-	target      string
-	ulimits     *dockeropts.UlimitOpt
+	allow        []string
+	buildArgs    []string
+	cacheFrom    []string
+	cacheTo      []string
+	cgroupParent string
+	extraHosts   []string
+	imageIDFile  string
+	labels       []string
+	networkMode  string
+	outputs      []string
+	platforms    []string
+	quiet        bool
+	secrets      []string
+	shmSize      dockeropts.MemBytes
+	ssh          []string
+	tags         []string
+	target       string
+	ulimits      *dockeropts.UlimitOpt
 	commonOptions
 }
 
@@ -287,6 +288,9 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, "Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`)")
 
+	flags.StringVar(&options.cgroupParent, "cgroup-parent", "", "Optional parent cgroup for the container")
+	flags.SetAnnotation("cgroup-parent", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent"})
+
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", "Name of the Dockerfile (default: `PATH/Dockerfile`)")
 	flags.SetAnnotation("file", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f"})
 
@@ -325,10 +329,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var ignoreSlice []string
 	var ignoreBool bool
 	var ignoreInt int64
-
-	flags.StringVar(&ignore, "cgroup-parent", "", "Optional parent cgroup for the container")
-	flags.MarkHidden("cgroup-parent")
-	//flags.SetAnnotation("cgroup-parent", "flag-warn", []string{"cgroup-parent is not implemented."})
 
 	flags.BoolVar(&ignoreBool, "compress", false, "Compress the build context using gzip")
 	flags.MarkHidden("compress")

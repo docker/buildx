@@ -21,6 +21,7 @@ Start a build
 | `--builder string` | Override the configured builder instance |
 | [`--cache-from stringArray`](#cache-from) | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`) |
 | [`--cache-to stringArray`](#cache-to) | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
+| [`--cgroup-parent string`](https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent) | Optional parent cgroup for the container |
 | [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file string`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | Name of the Dockerfile (default: `PATH/Dockerfile`) |
 | `--iidfile string` | Write the image ID to the file |
 | `--label stringArray` | Set metadata for an image |
