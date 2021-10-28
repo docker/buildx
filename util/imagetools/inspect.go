@@ -24,17 +24,20 @@ type Opt struct {
 }
 
 type Resolver struct {
-	r remotes.Resolver
+	auth docker.Authorizer
 }
 
 func New(opt Opt) *Resolver {
-	resolver := docker.NewResolver(docker.ResolverOptions{
-		Client:      http.DefaultClient,
-		Credentials: toCredentialsFunc(opt.Auth),
-	})
 	return &Resolver{
-		r: resolver,
+		auth: docker.NewDockerAuthorizer(docker.WithAuthCreds(toCredentialsFunc(opt.Auth)), docker.WithAuthClient(http.DefaultClient)),
 	}
+}
+
+func (r *Resolver) resolver() remotes.Resolver {
+	return docker.NewResolver(docker.ResolverOptions{
+		Authorizer: r.auth,
+		Client:     http.DefaultClient,
+	})
 }
 
 func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispec.Descriptor, error) {
@@ -43,7 +46,7 @@ func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispec.Desc
 		return "", ocispec.Descriptor{}, err
 	}
 
-	in, desc, err := r.r.Resolve(ctx, ref.String())
+	in, desc, err := r.resolver().Resolve(ctx, ref.String())
 	if err != nil {
 		return "", ocispec.Descriptor{}, err
 	}
@@ -65,7 +68,7 @@ func (r *Resolver) Get(ctx context.Context, in string) ([]byte, ocispec.Descript
 }
 
 func (r *Resolver) GetDescriptor(ctx context.Context, in string, desc ocispec.Descriptor) ([]byte, error) {
-	fetcher, err := r.r.Fetcher(ctx, in)
+	fetcher, err := r.resolver().Fetcher(ctx, in)
 	if err != nil {
 		return nil, err
 	}
