@@ -55,6 +55,7 @@ github.com/containerd/containerd/images
 github.com/containerd/containerd/labels
 github.com/containerd/containerd/log
 github.com/containerd/containerd/pkg/seed
+github.com/containerd/containerd/pkg/userns
 github.com/containerd/containerd/platforms
 github.com/containerd/containerd/reference
 github.com/containerd/containerd/remotes
@@ -143,12 +144,15 @@ github.com/docker/docker/api/types/versions
 github.com/docker/docker/api/types/volume
 github.com/docker/docker/client
 github.com/docker/docker/errdefs
+github.com/docker/docker/pkg/archive
 github.com/docker/docker/pkg/fileutils
 github.com/docker/docker/pkg/homedir
+github.com/docker/docker/pkg/idtools
 github.com/docker/docker/pkg/ioutils
 github.com/docker/docker/pkg/jsonmessage
 github.com/docker/docker/pkg/longpath
 github.com/docker/docker/pkg/namesgenerator
+github.com/docker/docker/pkg/pools
 github.com/docker/docker/pkg/stdcopy
 github.com/docker/docker/pkg/stringid
 github.com/docker/docker/pkg/system
@@ -354,6 +358,11 @@ github.com/opencontainers/go-digest
 ## explicit
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
+# github.com/opencontainers/runc v1.0.1
+github.com/opencontainers/runc/libcontainer/user
+# github.com/pelletier/go-toml v1.9.4
+## explicit
+github.com/pelletier/go-toml
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors

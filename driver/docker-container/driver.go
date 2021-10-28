@@ -1,7 +1,6 @@
 package docker
 
 import (
-	"archive/tar"
 	"bytes"
 	"context"
 	"io"
@@ -12,6 +11,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/docker/api/types"
@@ -20,6 +20,8 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	dockerclient "github.com/docker/docker/client"
+	dockerarchive "github.com/docker/docker/pkg/archive"
+	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/detect"
@@ -28,12 +30,6 @@ import (
 
 const (
 	volumeStateSuffix = "_state"
-
-	// containerStateDir is the location where buildkitd inside the container
-	// stores its state. The container driver creates a Linux container, so
-	// this should match the location for Linux, as defined in:
-	// https://github.com/moby/buildkit/blob/v0.9.0/util/appdefaults/appdefaults_unix.go#L11-L15
-	containerBuildKitRootDir = "/var/lib/buildkit"
 )
 
 type Driver struct {
@@ -119,7 +115,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				{
 					Type:   mount.TypeVolume,
 					Source: d.Name + volumeStateSuffix,
-					Target: containerBuildKitRootDir,
+					Target: confutil.DefaultBuildKitStateDir,
 				},
 			},
 		}
@@ -139,11 +135,12 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			return err
 		}
 		if f := d.InitConfig.ConfigFile; f != "" {
-			buf, err := readFileToTar(f)
+			configFiles, err := confutil.LoadConfigFiles(f)
 			if err != nil {
 				return err
 			}
-			if err := d.DockerAPI.CopyToContainer(ctx, d.Name, "/", buf, dockertypes.CopyToContainerOptions{}); err != nil {
+			defer os.RemoveAll(configFiles)
+			if err := d.copyToContainer(ctx, configFiles, "/"); err != nil {
 				return err
 			}
 		}
@@ -203,6 +200,17 @@ func (d *Driver) copyLogs(ctx context.Context, l progress.SubLogger) error {
 		return err
 	}
 	return rc.Close()
+}
+
+func (d *Driver) copyToContainer(ctx context.Context, srcPath string, dstDir string) error {
+	srcArchive, err := dockerarchive.TarWithOptions(srcPath, &dockerarchive.TarOptions{
+		ChownOpts: &idtools.Identity{UID: 0, GID: 0},
+	})
+	if err != nil {
+		return err
+	}
+	defer srcArchive.Close()
+	return d.DockerAPI.CopyToContainer(ctx, d.Name, dstDir, srcArchive, dockertypes.CopyToContainerOptions{})
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
@@ -364,29 +372,6 @@ type demux struct {
 
 func (d *demux) Read(dt []byte) (int, error) {
 	return d.Reader.Read(dt)
-}
-
-func readFileToTar(fn string) (*bytes.Buffer, error) {
-	buf := bytes.NewBuffer(nil)
-	tw := tar.NewWriter(buf)
-	dt, err := ioutil.ReadFile(fn)
-	if err != nil {
-		return nil, err
-	}
-	if err := tw.WriteHeader(&tar.Header{
-		Name: "/etc/buildkit/buildkitd.toml",
-		Size: int64(len(dt)),
-		Mode: 0644,
-	}); err != nil {
-		return nil, err
-	}
-	if _, err := tw.Write(dt); err != nil {
-		return nil, err
-	}
-	if err := tw.Close(); err != nil {
-		return nil, err
-	}
-	return buf, nil
 }
 
 type logWriter struct {
