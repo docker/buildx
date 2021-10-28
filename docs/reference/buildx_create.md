@@ -84,6 +84,11 @@ Specifies the configuration file for the buildkitd daemon to use. The configurat
 can be overridden by [`--buildkitd-flags`](#buildkitd-flags).
 See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
+Note that if you create a `docker-container` builder and have specified
+certificates for registries in the `buildkitd.toml` configuration, the files
+will be copied into the container under `/etc/buildkit/certs` and configuration
+will be updated to reflect that.
+
 ### <a name="driver"></a> Set the builder driver to use (--driver)
 
 ```
