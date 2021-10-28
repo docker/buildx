@@ -150,7 +150,7 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.Descriptor, dt []byte) error {
 	ref = reference.TagNameOnly(ref)
 
-	p, err := r.r.Pusher(ctx, ref.String())
+	p, err := r.resolver().Pusher(ctx, ref.String())
 	if err != nil {
 		return err
 	}
