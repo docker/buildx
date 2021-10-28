@@ -49,28 +49,26 @@ var (
 )
 
 type Options struct {
-	Inputs      Inputs
-	Tags        []string
-	Labels      map[string]string
-	BuildArgs   map[string]string
-	Pull        bool
-	ImageIDFile string
-	ExtraHosts  []string
-	NetworkMode string
-	ShmSize     opts.MemBytes
-	Ulimits     *opts.UlimitOpt
+	Inputs Inputs
 
-	NoCache   bool
-	Target    string
-	Platforms []specs.Platform
-	Exports   []client.ExportEntry
-	Session   []session.Attachable
-
-	CacheFrom []client.CacheOptionsEntry
-	CacheTo   []client.CacheOptionsEntry
-
-	Allow []entitlements.Entitlement
-	// DockerTarget
+	Allow        []entitlements.Entitlement
+	BuildArgs    map[string]string
+	CacheFrom    []client.CacheOptionsEntry
+	CacheTo      []client.CacheOptionsEntry
+	CgroupParent string
+	Exports      []client.ExportEntry
+	ExtraHosts   []string
+	ImageIDFile  string
+	Labels       map[string]string
+	NetworkMode  string
+	NoCache      bool
+	Platforms    []specs.Platform
+	Pull         bool
+	Session      []session.Attachable
+	ShmSize      opts.MemBytes
+	Tags         []string
+	Target       string
+	Ulimits      *opts.UlimitOpt
 }
 
 type Inputs struct {
@@ -400,6 +398,10 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		CacheExports:        cacheTo,
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
+	}
+
+	if opt.CgroupParent != "" {
+		so.FrontendAttrs["cgroup-parent"] = opt.CgroupParent
 	}
 
 	if v, ok := opt.BuildArgs["BUILDKIT_MULTI_PLATFORM"]; ok {
