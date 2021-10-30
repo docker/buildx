@@ -4,12 +4,12 @@ import (
 	"context"
 	"net/url"
 	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
@@ -27,25 +27,11 @@ import (
 
 // getStore returns current builder instance store
 func getStore(dockerCli command.Cli) (*store.Txn, func(), error) {
-	s, err := store.New(getConfigStorePath(dockerCli))
+	s, err := store.New(confutil.ConfigDir(dockerCli))
 	if err != nil {
 		return nil, nil, err
 	}
 	return s.Txn()
-}
-
-// getConfigStorePath will look for correct configuration store path;
-// if `$BUILDX_CONFIG` is set - use it, otherwise use parent directory
-// of Docker config file (i.e. `${DOCKER_CONFIG}/buildx`)
-func getConfigStorePath(dockerCli command.Cli) string {
-	if buildxConfig := os.Getenv("BUILDX_CONFIG"); buildxConfig != "" {
-		logrus.Debugf("using config store %q based in \"$BUILDX_CONFIG\" environment variable", buildxConfig)
-		return buildxConfig
-	}
-
-	buildxConfig := filepath.Join(filepath.Dir(dockerCli.ConfigFile().Filename), "buildx")
-	logrus.Debugf("using default config store %q", buildxConfig)
-	return buildxConfig
 }
 
 // getCurrentEndpoint returns the current default endpoint value

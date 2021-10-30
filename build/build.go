@@ -3,6 +3,8 @@ package build
 import (
 	"bufio"
 	"context"
+	"crypto/rand"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -334,7 +336,7 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, bopts gateway.BuildOpts, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
 		for _, f := range defers {
@@ -511,6 +513,13 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 	}
 	defers = append(defers, releaseLoad)
 
+	if sharedKey := so.LocalDirs["context"]; sharedKey != "" {
+		if p, err := filepath.Abs(sharedKey); err == nil {
+			sharedKey = filepath.Base(p)
+		}
+		so.SharedKey = sharedKey + ":" + tryNodeIdentifier(configDir)
+	}
+
 	if opt.Pull {
 		so.FrontendAttrs["image-resolve-mode"] = "pull"
 	}
@@ -574,7 +583,7 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 	return &so, releaseF, nil
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -626,7 +635,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				hasMobyDriver = true
 			}
 			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, dp.bopts, w, func(name string) (io.WriteCloser, func(), error) {
+			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, dp.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
 				return newDockerLoader(ctx, docker, name, w)
 			})
 			if err != nil {
@@ -1174,4 +1183,29 @@ func wrapWriteCloser(wc io.WriteCloser) func(map[string]string) (io.WriteCloser,
 	return func(map[string]string) (io.WriteCloser, error) {
 		return wc, nil
 	}
+}
+
+var nodeIdentifierMu sync.Mutex
+
+func tryNodeIdentifier(configDir string) (out string) {
+	nodeIdentifierMu.Lock()
+	defer nodeIdentifierMu.Unlock()
+	sessionFile := filepath.Join(configDir, ".buildNodeID")
+	if _, err := os.Lstat(sessionFile); err != nil {
+		if os.IsNotExist(err) { // create a new file with stored randomness
+			b := make([]byte, 8)
+			if _, err := rand.Read(b); err != nil {
+				return out
+			}
+			if err := ioutil.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0600); err != nil {
+				return out
+			}
+		}
+	}
+
+	dt, err := ioutil.ReadFile(sessionFile)
+	if err == nil {
+		return string(dt)
+	}
+	return
 }
