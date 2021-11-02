@@ -21,9 +21,10 @@ type Input struct {
 }
 
 func ReadRemoteFiles(ctx context.Context, dis []build.DriverInfo, url string, names []string, pw progress.Writer) ([]File, *Input, error) {
-	st, filename, ok := detectHTTPContext(url)
+	var filename string
+	st, ok := detectGitContext(url)
 	if !ok {
-		st, ok = detectGitContext(url)
+		st, filename, ok = detectHTTPContext(url)
 		if !ok {
 			return nil, nil, errors.Errorf("not url context")
 		}
