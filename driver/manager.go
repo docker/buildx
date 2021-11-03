@@ -53,7 +53,7 @@ type InitConfig struct {
 	DockerAPI        dockerclient.APIClient
 	KubeClientConfig KubeClientConfig
 	BuildkitFlags    []string
-	ConfigFile       string
+	Files            map[string][]byte
 	DriverOpts       map[string]string
 	Auth             Auth
 	Platforms        []specs.Platform
@@ -103,17 +103,17 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, config string, do map[string]string, platforms []specs.Platform, contextPathHash string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string) (Driver, error) {
 	ic := InitConfig{
 		DockerAPI:        api,
 		KubeClientConfig: kcc,
 		Name:             name,
 		BuildkitFlags:    flags,
-		ConfigFile:       config,
 		DriverOpts:       do,
 		Auth:             auth,
 		Platforms:        platforms,
 		ContextPathHash:  contextPathHash,
+		Files:            files,
 	}
 	if f == nil {
 		var err error

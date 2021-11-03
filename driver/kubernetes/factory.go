@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"strings"
 
@@ -78,12 +77,8 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
 
-	if cfg.ConfigFile != "" {
-		buildkitConfig, err := os.ReadFile(cfg.ConfigFile)
-		if err != nil {
-			return nil, err
-		}
-		deploymentOpt.BuildkitConfig = buildkitConfig
+	if cfg, ok := cfg.Files["buildkitd.toml"]; ok {
+		deploymentOpt.BuildkitConfig = cfg
 	}
 
 	loadbalance := LoadbalanceSticky
