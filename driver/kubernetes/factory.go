@@ -73,13 +73,10 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		BuildkitFlags: cfg.BuildkitFlags,
 		Rootless:      false,
 		Platforms:     cfg.Platforms,
+		ConfigFiles:   cfg.Files,
 	}
 
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
-
-	if cfg, ok := cfg.Files["buildkitd.toml"]; ok {
-		deploymentOpt.BuildkitConfig = cfg
-	}
 
 	loadbalance := LoadbalanceSticky
 
@@ -142,7 +139,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		}
 	}
 
-	d.deployment, d.configMap, err = manifest.NewDeployment(deploymentOpt)
+	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
 		return nil, err
 	}

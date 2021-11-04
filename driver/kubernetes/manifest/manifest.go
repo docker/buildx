@@ -1,6 +1,8 @@
 package manifest
 
 import (
+	"fmt"
+	"path"
 	"strings"
 
 	"github.com/docker/buildx/util/platformutil"
@@ -25,9 +27,8 @@ type DeploymentOpt struct {
 	}
 
 	BuildkitFlags []string
-	// BuildkitConfig
-	// when not empty, will create configmap with buildkit.toml and mounted
-	BuildkitConfig []byte
+	// files mounted at /etc/buildkitd
+	ConfigFiles map[string][]byte
 
 	Rootless       bool
 	NodeSelector   map[string]string
@@ -43,7 +44,7 @@ const (
 	AnnotationPlatform = "buildx.docker.com/platform"
 )
 
-func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c *corev1.ConfigMap, err error) {
+func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.ConfigMap, err error) {
 	labels := map[string]string{
 		"app": opt.Name,
 	}
@@ -103,26 +104,23 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c *corev1.ConfigMa
 			},
 		},
 	}
-
-	if len(opt.BuildkitConfig) > 0 {
-		c = &corev1.ConfigMap{
+	for _, cfg := range splitConfigFiles(opt.ConfigFiles) {
+		cc := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{
 				APIVersion: corev1.SchemeGroupVersion.String(),
 				Kind:       "ConfigMap",
 			},
 			ObjectMeta: metav1.ObjectMeta{
 				Namespace:   opt.Namespace,
-				Name:        opt.Name + "-config",
+				Name:        opt.Name + "-" + cfg.name,
 				Annotations: annotations,
 			},
-			Data: map[string]string{
-				"buildkitd.toml": string(opt.BuildkitConfig),
-			},
+			Data: cfg.files,
 		}
 
 		d.Spec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{{
-			Name:      "config",
-			MountPath: "/etc/buildkit",
+			Name:      cfg.name,
+			MountPath: path.Join("/etc/buildkit", cfg.path),
 		}}
 
 		d.Spec.Template.Spec.Volumes = []corev1.Volume{{
@@ -130,11 +128,12 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c *corev1.ConfigMa
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
-						Name: c.Name,
+						Name: cc.Name,
 					},
 				},
 			},
 		}}
+		c = append(c, cc)
 	}
 
 	if opt.Qemu.Install {
@@ -207,4 +206,36 @@ func toRootless(d *appsv1.Deployment) error {
 	d.Spec.Template.ObjectMeta.Annotations["container.apparmor.security.beta.kubernetes.io/"+containerName] = "unconfined"
 	d.Spec.Template.ObjectMeta.Annotations["container.seccomp.security.alpha.kubernetes.io/"+containerName] = "unconfined"
 	return nil
+}
+
+type config struct {
+	name  string
+	path  string
+	files map[string]string
+}
+
+func splitConfigFiles(m map[string][]byte) []config {
+	var c []config
+	idx := map[string]int{}
+	nameIdx := 0
+	for k, v := range m {
+		dir := path.Dir(k)
+		i, ok := idx[dir]
+		if !ok {
+			idx[dir] = len(c)
+			i = len(c)
+			name := "config"
+			if dir != "." {
+				nameIdx++
+				name = fmt.Sprintf("%s-%d", name, nameIdx)
+			}
+			c = append(c, config{
+				path:  dir,
+				name:  name,
+				files: map[string]string{},
+			})
+		}
+		c[i].files[path.Base(k)] = string(v)
+	}
+	return c
 }
