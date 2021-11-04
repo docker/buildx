@@ -225,7 +225,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 
 	printer := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
-	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), dockerCli.ConfigFile(), confutil.ConfigDir(dockerCli), printer)
+	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1

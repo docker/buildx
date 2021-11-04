@@ -9,7 +9,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
-	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
@@ -25,53 +25,9 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
-// getStore returns current builder instance store
-func getStore(dockerCli command.Cli) (*store.Txn, func(), error) {
-	s, err := store.New(confutil.ConfigDir(dockerCli))
-	if err != nil {
-		return nil, nil, err
-	}
-	return s.Txn()
-}
-
-// getCurrentEndpoint returns the current default endpoint value
-func getCurrentEndpoint(dockerCli command.Cli) (string, error) {
-	name := dockerCli.CurrentContext()
-	if name != "default" {
-		return name, nil
-	}
-	de, err := getDockerEndpoint(dockerCli, name)
-	if err != nil {
-		return "", errors.Errorf("docker endpoint for %q not found", name)
-	}
-	return de, nil
-}
-
-// getDockerEndpoint returns docker endpoint string for given context
-func getDockerEndpoint(dockerCli command.Cli, name string) (string, error) {
-	list, err := dockerCli.ContextStore().List()
-	if err != nil {
-		return "", err
-	}
-	for _, l := range list {
-		if l.Name == name {
-			ep, ok := l.Endpoints["docker"]
-			if !ok {
-				return "", errors.Errorf("context %q does not have a Docker endpoint", name)
-			}
-			typed, ok := ep.(docker.EndpointMeta)
-			if !ok {
-				return "", errors.Errorf("endpoint %q is not of type EndpointMeta, %T", ep, ep)
-			}
-			return typed.Host, nil
-		}
-	}
-	return "", nil
-}
-
 // validateEndpoint validates that endpoint is either a context or a docker host
 func validateEndpoint(dockerCli command.Cli, ep string) (string, error) {
-	de, err := getDockerEndpoint(dockerCli, ep)
+	de, err := storeutil.GetDockerEndpoint(dockerCli, ep)
 	if err == nil && de != "" {
 		if ep == "default" {
 			return de, nil
@@ -83,60 +39,6 @@ func validateEndpoint(dockerCli command.Cli, ep string) (string, error) {
 		return "", errors.Wrapf(err, "failed to parse endpoint %s", ep)
 	}
 	return h, nil
-}
-
-// getCurrentInstance finds the current builder instance
-func getCurrentInstance(txn *store.Txn, dockerCli command.Cli) (*store.NodeGroup, error) {
-	ep, err := getCurrentEndpoint(dockerCli)
-	if err != nil {
-		return nil, err
-	}
-	ng, err := txn.Current(ep)
-	if err != nil {
-		return nil, err
-	}
-	if ng == nil {
-		ng, _ = getNodeGroup(txn, dockerCli, dockerCli.CurrentContext())
-	}
-
-	return ng, nil
-}
-
-// getNodeGroup returns nodegroup based on the name
-func getNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.NodeGroup, error) {
-	ng, err := txn.NodeGroupByName(name)
-	if err != nil {
-		if !os.IsNotExist(errors.Cause(err)) {
-			return nil, err
-		}
-	}
-	if ng != nil {
-		return ng, nil
-	}
-
-	if name == "default" {
-		name = dockerCli.CurrentContext()
-	}
-
-	list, err := dockerCli.ContextStore().List()
-	if err != nil {
-		return nil, err
-	}
-	for _, l := range list {
-		if l.Name == name {
-			return &store.NodeGroup{
-				Name: "default",
-				Nodes: []store.Node{
-					{
-						Name:     "default",
-						Endpoint: name,
-					},
-				},
-			}, nil
-		}
-	}
-
-	return nil, errors.Errorf("no builder %q found", name)
 }
 
 // driversForNodeGroup returns drivers for a nodegroup instance
@@ -161,6 +63,10 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 			return nil, err
 		}
 		ng.Driver = f.Name()
+	}
+	imageopt, err := storeutil.GetImageConfig(dockerCli, ng)
+	if err != nil {
+		return nil, err
 	}
 
 	for i, n := range ng.Nodes {
@@ -211,12 +117,13 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, dockerCli.ConfigFile(), kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, contextPathHash)
 				if err != nil {
 					di.Err = err
 					return nil
 				}
 				di.Driver = d
+				di.ImageOpt = imageopt
 				return nil
 			})
 		}(i, n)
@@ -314,7 +221,7 @@ func getInstanceOrDefault(ctx context.Context, dockerCli command.Cli, instance, 
 }
 
 func getInstanceByName(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
-	txn, release, err := getStore(dockerCli)
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return nil, err
 	}
@@ -329,14 +236,14 @@ func getInstanceByName(ctx context.Context, dockerCli command.Cli, instance, con
 
 // getDefaultDrivers returns drivers based on current cli config
 func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly bool, contextPathHash string) ([]build.DriverInfo, error) {
-	txn, release, err := getStore(dockerCli)
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return nil, err
 	}
 	defer release()
 
 	if !defaultOnly {
-		ng, err := getCurrentInstance(txn, dockerCli)
+		ng, err := storeutil.GetCurrentInstance(txn, dockerCli)
 		if err != nil {
 			return nil, err
 		}
@@ -346,14 +253,20 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly b
 		}
 	}
 
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), dockerCli.ConfigFile(), nil, nil, nil, nil, nil, contextPathHash)
+	imageopt, err := storeutil.GetImageConfig(dockerCli, nil)
+	if err != nil {
+		return nil, err
+	}
+
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), imageopt.Auth, nil, nil, nil, nil, nil, contextPathHash)
 	if err != nil {
 		return nil, err
 	}
 	return []build.DriverInfo{
 		{
-			Name:   "default",
-			Driver: d,
+			Name:     "default",
+			Driver:   d,
+			ImageOpt: imageopt,
 		},
 	}, nil
 }

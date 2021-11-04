@@ -21,7 +21,6 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
-	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/cli/opts"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
@@ -86,10 +85,7 @@ type DriverInfo struct {
 	Name     string
 	Platform []specs.Platform
 	Err      error
-}
-
-type Auth interface {
-	GetAuthConfig(registryHostname string) (clitypes.AuthConfig, error)
+	ImageOpt imagetools.Opt
 }
 
 type DockerAPI interface {
@@ -189,8 +185,8 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 	return m
 }
 
-func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
-	dps, clients, err := resolveDriversBase(ctx, drivers, auth, opt, pw)
+func resolveDrivers(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+	dps, clients, err := resolveDriversBase(ctx, drivers, opt, pw)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -230,7 +226,7 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, auth Auth, opt ma
 	return dps, clients, nil
 }
 
-func resolveDriversBase(ctx context.Context, drivers []DriverInfo, auth Auth, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+func resolveDriversBase(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
 	availablePlatforms := map[string]int{}
 	for i, d := range drivers {
 		for _, p := range d.Platform {
@@ -583,7 +579,7 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 	return &so, releaseF, nil
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, auth Auth, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -610,7 +606,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}
 
-	m, clients, err := resolveDrivers(ctx, drivers, auth, opt, w)
+	m, clients, err := resolveDrivers(ctx, drivers, opt, w)
 	if err != nil {
 		return nil, err
 	}
@@ -731,9 +727,12 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 							}
 						}
 						if len(descs) > 0 {
-							itpull := imagetools.New(imagetools.Opt{
-								Auth: auth,
-							})
+							var imageopt imagetools.Opt
+							for _, dp := range dps {
+								imageopt = drivers[dp.driverIndex].ImageOpt
+								break
+							}
+							itpull := imagetools.New(imageopt)
 
 							names := strings.Split(pushNames, ",")
 							dt, desc, err := itpull.Combine(ctx, names[0], descs)
@@ -746,9 +745,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 								}
 							}
 
-							itpush := imagetools.New(imagetools.Opt{
-								Auth: auth,
-							})
+							itpush := imagetools.New(imageopt)
 
 							for _, n := range names {
 								nn, err := reference.ParseNormalizedNamed(n)

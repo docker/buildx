@@ -12,6 +12,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/google/shlex"
@@ -74,7 +75,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		return errors.Errorf("failed to find driver %q", in.driver)
 	}
 
-	txn, release, err := getStore(dockerCli)
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
 	}
@@ -142,7 +143,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 				return errors.Errorf("could not create a builder instance with TLS data loaded from environment. Please use `docker context create <context-name>` to create a context for current environment and then create a builder instance with `docker buildx create <context-name>`")
 			}
 
-			ep, err = getCurrentEndpoint(dockerCli)
+			ep, err = storeutil.GetCurrentEndpoint(dockerCli)
 			if err != nil {
 				return err
 			}
@@ -174,7 +175,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	}
 
 	if in.use && ep != "" {
-		current, err := getCurrentEndpoint(dockerCli)
+		current, err := storeutil.GetCurrentEndpoint(dockerCli)
 		if err != nil {
 			return err
 		}

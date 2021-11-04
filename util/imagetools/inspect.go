@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/containerd/remotes/docker"
 	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/distribution/reference"
+	registryconfig "github.com/moby/buildkit/util/resolver/config"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -20,7 +21,8 @@ type Auth interface {
 }
 
 type Opt struct {
-	Auth Auth
+	Auth           Auth
+	RegistryConfig map[string]registryconfig.RegistryConfig
 }
 
 type Resolver struct {

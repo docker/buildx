@@ -325,6 +325,7 @@ github.com/moby/buildkit/util/grpcerrors
 github.com/moby/buildkit/util/progress
 github.com/moby/buildkit/util/progress/progressui
 github.com/moby/buildkit/util/progress/progresswriter
+github.com/moby/buildkit/util/resolver/config
 github.com/moby/buildkit/util/sshutil
 github.com/moby/buildkit/util/stack
 github.com/moby/buildkit/util/system

@@ -5,15 +5,19 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func RootCmd(dockerCli command.Cli) *cobra.Command {
+type RootOptions struct {
+	Builder string
+}
+
+func RootCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "imagetools",
 		Short: "Commands to work on images in registry",
 	}
 
 	cmd.AddCommand(
-		inspectCmd(dockerCli),
-		createCmd(dockerCli),
+		inspectCmd(dockerCli, opts),
+		createCmd(dockerCli, opts),
 	)
 
 	return cmd

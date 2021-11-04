@@ -48,7 +48,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		versionCmd(dockerCli),
 		pruneCmd(dockerCli, opts),
 		duCmd(dockerCli, opts),
-		imagetoolscmd.RootCmd(dockerCli),
+		imagetoolscmd.RootCmd(dockerCli, imagetoolscmd.RootOptions{Builder: opts.builder}),
 	)
 }
 
