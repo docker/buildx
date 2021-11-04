@@ -1,13 +1,17 @@
 package storeutil
 
 import (
+	"bytes"
 	"os"
+	"strings"
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/imagetools"
+	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
+	buildkitdconfig "github.com/moby/buildkit/cmd/buildkitd/config"
 	"github.com/pkg/errors"
 )
 
@@ -111,6 +115,52 @@ func GetNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.No
 
 func GetImageConfig(dockerCli command.Cli, ng *store.NodeGroup) (opt imagetools.Opt, err error) {
 	opt.Auth = dockerCli.ConfigFile()
+
+	if ng == nil || len(ng.Nodes) == 0 {
+		return opt, nil
+	}
+
+	files := ng.Nodes[0].Files
+
+	dt, ok := files["buildkitd.toml"]
+	if !ok {
+		return opt, nil
+	}
+
+	config, err := buildkitdconfig.Load(bytes.NewReader(dt))
+	if err != nil {
+		return opt, err
+	}
+
+	regconfig := make(map[string]resolver.RegistryConfig)
+
+	for k, v := range config.Registries {
+		rc := resolver.RegistryConfig{
+			Mirrors:   v.Mirrors,
+			PlainHTTP: v.PlainHTTP,
+			Insecure:  v.Insecure,
+		}
+		for _, ca := range v.RootCAs {
+			dt, ok := files[strings.TrimPrefix(ca, confutil.DefaultBuildKitConfigDir+"/")]
+			if ok {
+				rc.RootCAs = append(rc.RootCAs, dt)
+			}
+		}
+
+		for _, kp := range v.KeyPairs {
+			key, keyok := files[strings.TrimPrefix(kp.Key, confutil.DefaultBuildKitConfigDir+"/")]
+			cert, certok := files[strings.TrimPrefix(kp.Certificate, confutil.DefaultBuildKitConfigDir+"/")]
+			if keyok && certok {
+				rc.KeyPairs = append(rc.KeyPairs, resolver.TLSKeyPair{
+					Key:         key,
+					Certificate: cert,
+				})
+			}
+		}
+		regconfig[k] = rc
+	}
+
+	opt.RegistryConfig = regconfig
 
 	return opt, nil
 }

@@ -10,9 +10,10 @@ import (
 
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/docker/buildx/util/resolver"
 	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/distribution/reference"
-	registryconfig "github.com/moby/buildkit/util/resolver/config"
+	"github.com/moby/buildkit/util/tracing"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -22,23 +23,34 @@ type Auth interface {
 
 type Opt struct {
 	Auth           Auth
-	RegistryConfig map[string]registryconfig.RegistryConfig
+	RegistryConfig map[string]resolver.RegistryConfig
 }
 
 type Resolver struct {
-	auth docker.Authorizer
+	auth  docker.Authorizer
+	hosts docker.RegistryHosts
 }
 
 func New(opt Opt) *Resolver {
 	return &Resolver{
-		auth: docker.NewDockerAuthorizer(docker.WithAuthCreds(toCredentialsFunc(opt.Auth)), docker.WithAuthClient(http.DefaultClient)),
+		auth:  docker.NewDockerAuthorizer(docker.WithAuthCreds(toCredentialsFunc(opt.Auth)), docker.WithAuthClient(http.DefaultClient)),
+		hosts: resolver.NewRegistryConfig(opt.RegistryConfig),
 	}
 }
 
 func (r *Resolver) resolver() remotes.Resolver {
 	return docker.NewResolver(docker.ResolverOptions{
-		Authorizer: r.auth,
-		Client:     http.DefaultClient,
+		Hosts: func(domain string) ([]docker.RegistryHost, error) {
+			res, err := r.hosts(domain)
+			if err != nil {
+				return nil, err
+			}
+			for i := range res {
+				res[i].Authorizer = r.auth
+			}
+			return res, nil
+		},
+		Client: tracing.DefaultClient,
 	})
 }
 
