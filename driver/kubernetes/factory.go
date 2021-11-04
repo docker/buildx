@@ -2,7 +2,6 @@ package kubernetes
 
 import (
 	"context"
-	"os"
 	"strconv"
 	"strings"
 
@@ -74,17 +73,10 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		BuildkitFlags: cfg.BuildkitFlags,
 		Rootless:      false,
 		Platforms:     cfg.Platforms,
+		ConfigFiles:   cfg.Files,
 	}
 
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
-
-	if cfg.ConfigFile != "" {
-		buildkitConfig, err := os.ReadFile(cfg.ConfigFile)
-		if err != nil {
-			return nil, err
-		}
-		deploymentOpt.BuildkitConfig = buildkitConfig
-	}
 
 	loadbalance := LoadbalanceSticky
 
@@ -147,7 +139,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		}
 	}
 
-	d.deployment, d.configMap, err = manifest.NewDeployment(deploymentOpt)
+	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
 		return nil, err
 	}

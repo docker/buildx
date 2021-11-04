@@ -41,7 +41,7 @@ type Driver struct {
 	factory          driver.Factory
 	minReplicas      int
 	deployment       *appsv1.Deployment
-	configMap        *corev1.ConfigMap
+	configMaps       []*corev1.ConfigMap
 	clientset        *kubernetes.Clientset
 	deploymentClient clientappsv1.DeploymentInterface
 	podClient        clientcorev1.PodInterface
@@ -65,16 +65,16 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 				return errors.Wrapf(err, "error for bootstrap %q", d.deployment.Name)
 			}
 
-			if d.configMap != nil {
+			for _, cfg := range d.configMaps {
 				// create ConfigMap first if exists
-				_, err = d.configMapClient.Create(ctx, d.configMap, metav1.CreateOptions{})
+				_, err = d.configMapClient.Create(ctx, cfg, metav1.CreateOptions{})
 				if err != nil {
 					if !apierrors.IsAlreadyExists(err) {
-						return errors.Wrapf(err, "error while calling configMapClient.Create for %q", d.configMap.Name)
+						return errors.Wrapf(err, "error while calling configMapClient.Create for %q", cfg.Name)
 					}
-					_, err = d.configMapClient.Update(ctx, d.configMap, metav1.UpdateOptions{})
+					_, err = d.configMapClient.Update(ctx, cfg, metav1.UpdateOptions{})
 					if err != nil {
-						return errors.Wrapf(err, "error while calling configMapClient.Update for %q", d.configMap.Name)
+						return errors.Wrapf(err, "error while calling configMapClient.Update for %q", cfg.Name)
 					}
 				}
 			}
@@ -171,10 +171,10 @@ func (d *Driver) Rm(ctx context.Context, force bool, rmVolume bool) error {
 			return errors.Wrapf(err, "error while calling deploymentClient.Delete for %q", d.deployment.Name)
 		}
 	}
-	if d.configMap != nil {
-		if err := d.configMapClient.Delete(ctx, d.configMap.Name, metav1.DeleteOptions{}); err != nil {
+	for _, cfg := range d.configMaps {
+		if err := d.configMapClient.Delete(ctx, cfg.Name, metav1.DeleteOptions{}); err != nil {
 			if !apierrors.IsNotFound(err) {
-				return errors.Wrapf(err, "error while calling configMapClient.Delete for %q", d.configMap.Name)
+				return errors.Wrapf(err, "error while calling configMapClient.Delete for %q", cfg.Name)
 			}
 		}
 	}

@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/containerd/containerd/platforms"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -21,8 +22,9 @@ type Node struct {
 	Endpoint   string
 	Platforms  []specs.Platform
 	Flags      []string
-	ConfigFile string
 	DriverOpts map[string]string
+
+	Files map[string][]byte
 }
 
 func (ng *NodeGroup) Leave(name string) error {
@@ -88,10 +90,18 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		Name:       name,
 		Endpoint:   endpoint,
 		Platforms:  pp,
-		ConfigFile: configFile,
 		Flags:      flags,
 		DriverOpts: do,
 	}
+
+	if configFile != "" {
+		files, err := confutil.LoadConfigFiles(configFile)
+		if err != nil {
+			return err
+		}
+		n.Files = files
+	}
+
 	ng.Nodes = append(ng.Nodes, n)
 
 	if err := ng.validateDuplicates(endpoint, len(ng.Nodes)-1); err != nil {

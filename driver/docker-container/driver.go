@@ -7,6 +7,8 @@ import (
 	"io/ioutil"
 	"net"
 	"os"
+	"path"
+	"path/filepath"
 	"time"
 
 	"github.com/docker/buildx/driver"
@@ -134,15 +136,8 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		if f := d.InitConfig.ConfigFile; f != "" {
-			configFiles, err := confutil.LoadConfigFiles(f)
-			if err != nil {
-				return err
-			}
-			defer os.RemoveAll(configFiles)
-			if err := d.copyToContainer(ctx, configFiles, "/"); err != nil {
-				return err
-			}
+		if err := d.copyToContainer(ctx, d.InitConfig.Files); err != nil {
+			return err
 		}
 		if err := d.start(ctx, l); err != nil {
 			return err
@@ -202,7 +197,14 @@ func (d *Driver) copyLogs(ctx context.Context, l progress.SubLogger) error {
 	return rc.Close()
 }
 
-func (d *Driver) copyToContainer(ctx context.Context, srcPath string, dstDir string) error {
+func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) error {
+	srcPath, err := writeConfigFiles(files)
+	if err != nil {
+		return err
+	}
+	if srcPath != "" {
+		defer os.RemoveAll(srcPath)
+	}
 	srcArchive, err := dockerarchive.TarWithOptions(srcPath, &dockerarchive.TarOptions{
 		ChownOpts: &idtools.Identity{UID: 0, GID: 0},
 	})
@@ -210,7 +212,7 @@ func (d *Driver) copyToContainer(ctx context.Context, srcPath string, dstDir str
 		return err
 	}
 	defer srcArchive.Close()
-	return d.DockerAPI.CopyToContainer(ctx, d.Name, dstDir, srcArchive, dockertypes.CopyToContainerOptions{})
+	return d.DockerAPI.CopyToContainer(ctx, d.Name, "/", srcArchive, dockertypes.CopyToContainerOptions{})
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
@@ -382,4 +384,28 @@ type logWriter struct {
 func (l *logWriter) Write(dt []byte) (int, error) {
 	l.logger.Log(l.stream, dt)
 	return len(dt), nil
+}
+
+func writeConfigFiles(m map[string][]byte) (_ string, err error) {
+	// Temp dir that will be copied to the container
+	tmpDir, err := os.MkdirTemp("", "buildkitd-config")
+	if err != nil {
+		return "", err
+	}
+	defer func() {
+		if err != nil {
+			os.RemoveAll(tmpDir)
+		}
+	}()
+	for f, dt := range m {
+		f = path.Join(confutil.DefaultBuildKitConfigDir, f)
+		p := filepath.Join(tmpDir, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+			return "", err
+		}
+		if err := os.WriteFile(p, dt, 0600); err != nil {
+			return "", err
+		}
+	}
+	return tmpDir, nil
 }

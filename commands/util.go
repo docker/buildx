@@ -225,7 +225,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, dockerCli.ConfigFile(), kcc, n.Flags, n.ConfigFile, n.DriverOpts, n.Platforms, contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, dockerCli.ConfigFile(), kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, contextPathHash)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -360,7 +360,7 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly b
 		}
 	}
 
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), dockerCli.ConfigFile(), nil, nil, "", nil, nil, contextPathHash)
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), dockerCli.ConfigFile(), nil, nil, nil, nil, nil, contextPathHash)
 	if err != nil {
 		return nil, err
 	}

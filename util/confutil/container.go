@@ -1,6 +1,7 @@
 package confutil
 
 import (
+	"bytes"
 	"io"
 	"os"
 	"path"
@@ -20,31 +21,20 @@ const (
 
 // LoadConfigFiles creates a temp directory with BuildKit config and
 // registry certificates ready to be copied to a container.
-func LoadConfigFiles(bkconfig string) (string, error) {
+func LoadConfigFiles(bkconfig string) (map[string][]byte, error) {
 	if _, err := os.Stat(bkconfig); errors.Is(err, os.ErrNotExist) {
-		return "", errors.Wrapf(err, "buildkit configuration file not found: %s", bkconfig)
+		return nil, errors.Wrapf(err, "buildkit configuration file not found: %s", bkconfig)
 	} else if err != nil {
-		return "", errors.Wrapf(err, "invalid buildkit configuration file: %s", bkconfig)
+		return nil, errors.Wrapf(err, "invalid buildkit configuration file: %s", bkconfig)
 	}
 
 	// Load config tree
 	btoml, err := loadConfigTree(bkconfig)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
 
-	// Temp dir that will be copied to the container
-	tmpDir, err := os.MkdirTemp("", "buildkitd-config")
-	if err != nil {
-		return "", err
-	}
-
-	// Create BuildKit config folders
-	tmpBuildKitConfigDir := path.Join(tmpDir, DefaultBuildKitConfigDir)
-	tmpBuildKitCertsDir := path.Join(tmpBuildKitConfigDir, "certs")
-	if err := os.MkdirAll(tmpBuildKitCertsDir, 0700); err != nil {
-		return "", err
-	}
+	m := make(map[string][]byte)
 
 	// Iterate through registry config to copy certs and update
 	// BuildKit config with the underlying certs' path in the container.
@@ -70,19 +60,20 @@ func LoadConfigFiles(bkconfig string) (string, error) {
 			if regConf == nil {
 				continue
 			}
-			regCertsDir := path.Join(tmpBuildKitCertsDir, regName)
-			if err := os.Mkdir(regCertsDir, 0755); err != nil {
-				return "", err
-			}
+			pfx := path.Join("certs", regName)
 			if regConf.Has("ca") {
 				regCAs := regConf.GetArray("ca").([]string)
 				if len(regCAs) > 0 {
 					var cas []string
 					for _, ca := range regCAs {
-						cas = append(cas, path.Join(DefaultBuildKitConfigDir, "certs", regName, path.Base(ca)))
-						if err := copyfile(ca, path.Join(regCertsDir, path.Base(ca))); err != nil {
-							return "", err
+						fp := path.Join(pfx, path.Base(ca))
+						cas = append(cas, path.Join(DefaultBuildKitConfigDir, fp))
+
+						dt, err := readFile(ca)
+						if err != nil {
+							return nil, errors.Wrapf(err, "failed to read CA file: %s", ca)
 						}
+						m[fp] = dt
 					}
 					regConf.Set("ca", cas)
 				}
@@ -98,47 +89,44 @@ func LoadConfigFiles(bkconfig string) (string, error) {
 					}
 					key := kp.Get("key").(string)
 					if len(key) > 0 {
-						kp.Set("key", path.Join(DefaultBuildKitConfigDir, "certs", regName, path.Base(key)))
-						if err := copyfile(key, path.Join(regCertsDir, path.Base(key))); err != nil {
-							return "", err
+						fp := path.Join(pfx, path.Base(key))
+						kp.Set("key", path.Join(DefaultBuildKitConfigDir, fp))
+						dt, err := readFile(key)
+						if err != nil {
+							return nil, errors.Wrapf(err, "failed to read key file: %s", key)
 						}
+						m[fp] = dt
 					}
 					cert := kp.Get("cert").(string)
 					if len(cert) > 0 {
-						kp.Set("cert", path.Join(DefaultBuildKitConfigDir, "certs", regName, path.Base(cert)))
-						if err := copyfile(cert, path.Join(regCertsDir, path.Base(cert))); err != nil {
-							return "", err
+						fp := path.Join(pfx, path.Base(cert))
+						kp.Set("cert", path.Join(DefaultBuildKitConfigDir, fp))
+						dt, err := readFile(cert)
+						if err != nil {
+							return nil, errors.Wrapf(err, "failed to read cert file: %s", cert)
 						}
+						m[fp] = dt
 					}
 				}
 			}
 		}
 	}
 
-	// Write BuildKit config
-	bkfile, err := os.OpenFile(path.Join(tmpBuildKitConfigDir, "buildkitd.toml"), os.O_CREATE|os.O_WRONLY, 0600)
+	b := bytes.NewBuffer(nil)
+	_, err = btoml.WriteTo(b)
 	if err != nil {
-		return "", err
+		return nil, err
 	}
-	_, err = btoml.WriteTo(bkfile)
-	if err != nil {
-		return "", err
-	}
+	m["buildkitd.toml"] = b.Bytes()
 
-	return tmpDir, nil
+	return m, nil
 }
 
-func copyfile(src string, dst string) error {
-	sf, err := os.Open(src)
+func readFile(fp string) ([]byte, error) {
+	sf, err := os.Open(fp)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	defer sf.Close()
-	df, err := os.OpenFile(dst, os.O_CREATE|os.O_WRONLY, 0600)
-	if err != nil {
-		return err
-	}
-	defer df.Close()
-	_, err = io.Copy(df, sf)
-	return err
+	return io.ReadAll(io.LimitReader(sf, 1024*1024))
 }
