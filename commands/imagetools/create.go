@@ -6,6 +6,8 @@ import (
 	"io/ioutil"
 	"strings"
 
+	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/distribution/reference"
@@ -18,6 +20,7 @@ import (
 )
 
 type createOptions struct {
+	builder      string
 	files        []string
 	tags         []string
 	dryrun       bool
@@ -101,9 +104,32 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 
 	ctx := appcontext.Context()
 
-	r := imagetools.New(imagetools.Opt{
-		Auth: dockerCli.ConfigFile(),
-	})
+	txn, release, err := storeutil.GetStore(dockerCli)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	var ng *store.NodeGroup
+
+	if in.builder != "" {
+		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
+		if err != nil {
+			return err
+		}
+	} else {
+		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
+		if err != nil {
+			return err
+		}
+	}
+
+	imageopt, err := storeutil.GetImageConfig(dockerCli, ng)
+	if err != nil {
+		return err
+	}
+
+	r := imagetools.New(imageopt)
 
 	if sourceRefs {
 		eg, ctx2 := errgroup.WithContext(ctx)
@@ -152,9 +178,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	}
 
 	// new resolver cause need new auth
-	r = imagetools.New(imagetools.Opt{
-		Auth: dockerCli.ConfigFile(),
-	})
+	r = imagetools.New(imageopt)
 
 	for _, t := range tags {
 		if err := r.Push(ctx, t, desc, dt); err != nil {
@@ -224,13 +248,14 @@ func parseSource(in string) (*src, error) {
 	return &s, nil
 }
 
-func createCmd(dockerCli command.Cli) *cobra.Command {
+func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	var options createOptions
 
 	cmd := &cobra.Command{
 		Use:   "create [OPTIONS] [SOURCE] [SOURCE...]",
 		Short: "Create a new image based on source images",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.builder = opts.Builder
 			return runCreate(dockerCli, options, args)
 		},
 	}
@@ -241,8 +266,6 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Set reference for new image")
 	flags.BoolVar(&options.dryrun, "dry-run", false, "Show final image instead of pushing")
 	flags.BoolVar(&options.actionAppend, "append", false, "Append to existing manifest")
-
-	_ = flags
 
 	return cmd
 }

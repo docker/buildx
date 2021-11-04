@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -24,7 +25,7 @@ type inspectOptions struct {
 func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	ctx := appcontext.Context()
 
-	txn, release, err := getStore(dockerCli)
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
 	}
@@ -33,12 +34,12 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	var ng *store.NodeGroup
 
 	if in.builder != "" {
-		ng, err = getNodeGroup(txn, dockerCli, in.builder)
+		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
 		if err != nil {
 			return err
 		}
 	} else {
-		ng, err = getCurrentInstance(txn, dockerCli)
+		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
 		if err != nil {
 			return err
 		}

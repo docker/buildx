@@ -156,7 +156,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return nil
 	}
 
-	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), dockerCli.ConfigFile(), confutil.ConfigDir(dockerCli), printer)
+	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	if err != nil {
 		return err
 	}

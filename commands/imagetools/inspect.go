@@ -5,6 +5,8 @@ import (
 	"os"
 
 	"github.com/containerd/containerd/images"
+	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -14,15 +16,38 @@ import (
 )
 
 type inspectOptions struct {
-	raw bool
+	raw     bool
+	builder string
 }
 
 func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
 	ctx := appcontext.Context()
 
-	r := imagetools.New(imagetools.Opt{
-		Auth: dockerCli.ConfigFile(),
-	})
+	txn, release, err := storeutil.GetStore(dockerCli)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	var ng *store.NodeGroup
+
+	if in.builder != "" {
+		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
+		if err != nil {
+			return err
+		}
+	} else {
+		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
+		if err != nil {
+			return err
+		}
+	}
+
+	imageopt, err := storeutil.GetImageConfig(dockerCli, ng)
+	if err != nil {
+		return err
+	}
+	r := imagetools.New(imageopt)
 
 	dt, desc, err := r.Get(ctx, name)
 	if err != nil {
@@ -46,7 +71,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
 	return nil
 }
 
-func inspectCmd(dockerCli command.Cli) *cobra.Command {
+func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	var options inspectOptions
 
 	cmd := &cobra.Command{
@@ -54,6 +79,7 @@ func inspectCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Show details of image in the registry",
 		Args:  cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.builder = rootOpts.Builder
 			return runInspect(dockerCli, options, args[0])
 		},
 	}
@@ -61,8 +87,6 @@ func inspectCmd(dockerCli command.Cli) *cobra.Command {
 	flags := cmd.Flags()
 
 	flags.BoolVar(&options.raw, "raw", false, "Show original JSON manifest")
-
-	_ = flags
 
 	return cmd
 }

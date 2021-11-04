@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
@@ -16,7 +17,7 @@ type useOptions struct {
 }
 
 func runUse(dockerCli command.Cli, in useOptions) error {
-	txn, release, err := getStore(dockerCli)
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
 	}
@@ -28,7 +29,7 @@ func runUse(dockerCli command.Cli, in useOptions) error {
 				return errors.Errorf("run `docker context use default` to switch to default context")
 			}
 			if in.builder == "default" || in.builder == dockerCli.CurrentContext() {
-				ep, err := getCurrentEndpoint(dockerCli)
+				ep, err := storeutil.GetCurrentEndpoint(dockerCli)
 				if err != nil {
 					return err
 				}
@@ -51,7 +52,7 @@ func runUse(dockerCli command.Cli, in useOptions) error {
 		return errors.Wrapf(err, "failed to find instance %q", in.builder)
 	}
 
-	ep, err := getCurrentEndpoint(dockerCli)
+	ep, err := storeutil.GetCurrentEndpoint(dockerCli)
 	if err != nil {
 		return err
 	}

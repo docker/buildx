@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
@@ -18,14 +19,14 @@ type rmOptions struct {
 func runRm(dockerCli command.Cli, in rmOptions) error {
 	ctx := appcontext.Context()
 
-	txn, release, err := getStore(dockerCli)
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
 	}
 	defer release()
 
 	if in.builder != "" {
-		ng, err := getNodeGroup(txn, dockerCli, in.builder)
+		ng, err := storeutil.GetNodeGroup(txn, dockerCli, in.builder)
 		if err != nil {
 			return err
 		}
@@ -36,7 +37,7 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		return err1
 	}
 
-	ng, err := getCurrentInstance(txn, dockerCli)
+	ng, err := storeutil.GetCurrentInstance(txn, dockerCli)
 	if err != nil {
 		return err
 	}
