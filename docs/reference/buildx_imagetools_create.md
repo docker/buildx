@@ -12,7 +12,7 @@ Create a new image based on source images
 | Name | Description |
 | --- | --- |
 | [`--append`](#append) | Append to existing manifest |
-| `--builder string` | Override the configured builder instance |
+| [`--builder string`](#builder) | Override the configured builder instance |
 | [`--dry-run`](#dry-run) | Show final image instead of pushing |
 | [`-f`](#file), [`--file stringArray`](#file) | Read source descriptor from file |
 | [`-t`](#tag), [`--tag stringArray`](#tag) | Set reference for new image |
@@ -36,6 +36,10 @@ specified, create performs a carbon copy.
 
 Use the `--append` flag to append the new sources to an existing manifest list
 in the destination.
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).
 
 ### <a name="dry-run"></a> Show final image instead of pushing (--dry-run)
 

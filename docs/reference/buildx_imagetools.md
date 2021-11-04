@@ -15,6 +15,12 @@ Commands to work on images in registry
 | [`inspect`](buildx_imagetools_inspect.md) | Show details of image in the registry |
 
 
+### Options
+
+| Name | Description |
+| --- | --- |
+| [`--builder string`](#builder) | Override the configured builder instance |
+
 
 <!---MARKER_GEN_END-->
 
@@ -22,3 +28,9 @@ Commands to work on images in registry
 
 Imagetools contains commands for working with manifest lists in the registry.
 These commands are useful for inspecting multi-platform build results.
+
+## Examples
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).

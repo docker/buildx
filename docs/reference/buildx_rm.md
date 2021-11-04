@@ -11,7 +11,7 @@ Remove a builder instance
 
 | Name | Description |
 | --- | --- |
-| `--builder string` | Override the configured builder instance |
+| [`--builder string`](#builder) | Override the configured builder instance |
 | [`--keep-state`](#keep-state) | Keep BuildKit state |
 
 
@@ -23,6 +23,10 @@ Removes the specified or current builder. It is a no-op attempting to remove the
 default builder.
 
 ## Examples
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).
 
 ### <a name="keep-state"></a> Keep BuildKit state (--keep-state)
 

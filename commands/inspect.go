@@ -132,10 +132,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-
 	flags.BoolVar(&options.bootstrap, "bootstrap", false, "Ensure builder has booted before inspecting")
-
-	_ = flags
 
 	return cmd
 }

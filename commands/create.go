@@ -13,6 +13,7 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/google/shlex"
@@ -238,7 +239,8 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.BoolVar(&options.actionLeave, "leave", false, "Remove a node from builder instead of changing it")
 	flags.BoolVar(&options.use, "use", false, "Set the current builder instance")
 
-	_ = flags
+	// hide builder persistent flag for this command
+	cobrautil.HideInheritedFlags(cmd, "builder")
 
 	return cmd
 }

@@ -80,11 +80,8 @@ func useCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-
 	flags.BoolVar(&options.isGlobal, "global", false, "Builder persists context changes")
 	flags.BoolVar(&options.isDefault, "default", false, "Set builder as default for current context")
-
-	_ = flags
 
 	return cmd
 }

@@ -62,12 +62,6 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		},
 	}
 
-	flags := cmd.Flags()
-
-	// flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, "Output destination (format: type=local,dest=path)")
-
-	_ = flags
-
 	return cmd
 }
 

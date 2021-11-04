@@ -12,7 +12,7 @@ Remove build cache
 | Name | Description |
 | --- | --- |
 | `-a`, `--all` | Remove all unused images, not just dangling ones |
-| `--builder string` | Override the configured builder instance |
+| [`--builder string`](#builder) | Override the configured builder instance |
 | `--filter filter` | Provide filter values (e.g., `until=24h`) |
 | `-f`, `--force` | Do not prompt for confirmation |
 | `--keep-storage bytes` | Amount of disk space to keep for cache |
@@ -21,3 +21,8 @@ Remove build cache
 
 <!---MARKER_GEN_END-->
 
+## Examples
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).

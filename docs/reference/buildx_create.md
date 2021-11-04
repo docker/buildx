@@ -13,7 +13,6 @@ Create a new builder instance
 | --- | --- |
 | [`--append`](#append) | Append a node to builder instead of changing it |
 | `--bootstrap` | Boot builder after creation |
-| `--builder string` | Override the configured builder instance |
 | [`--buildkitd-flags string`](#buildkitd-flags) | Flags for buildkitd daemon |
 | [`--config string`](#config) | BuildKit config file |
 | [`--driver string`](#driver) | Driver to use (available: `docker`, `docker-container`, `kubernetes`) |

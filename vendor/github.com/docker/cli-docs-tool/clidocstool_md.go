@@ -24,28 +24,34 @@ import (
 	"strings"
 	"text/template"
 
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
 // GenMarkdownTree will generate a markdown page for this command and all
 // descendants in the directory given.
-func GenMarkdownTree(cmd *cobra.Command, dir string) error {
-	for _, c := range cmd.Commands() {
-		if err := GenMarkdownTree(c, dir); err != nil {
+func (c *Client) GenMarkdownTree(cmd *cobra.Command) error {
+	for _, sc := range cmd.Commands() {
+		if err := c.GenMarkdownTree(sc); err != nil {
 			return err
 		}
 	}
-	if !cmd.HasParent() {
+
+	// always disable the addition of [flags] to the usage
+	cmd.DisableFlagsInUseLine = true
+
+	// Skip the root command altogether, to prevent generating a useless
+	// md file for plugins.
+	if c.plugin && !cmd.HasParent() {
 		return nil
 	}
 
 	log.Printf("INFO: Generating Markdown for %q", cmd.CommandPath())
 	mdFile := mdFilename(cmd)
-	fullPath := filepath.Join(dir, mdFile)
+	sourcePath := filepath.Join(c.source, mdFile)
+	targetPath := filepath.Join(c.target, mdFile)
 
-	if _, err := os.Stat(fullPath); os.IsNotExist(err) {
+	if !fileExists(sourcePath) {
 		var icBuf bytes.Buffer
 		icTpl, err := template.New("ic").Option("missingkey=error").Parse(`# {{ .Command }}
 
@@ -63,12 +69,14 @@ func GenMarkdownTree(cmd *cobra.Command, dir string) error {
 		}); err != nil {
 			return err
 		}
-		if err = ioutil.WriteFile(fullPath, icBuf.Bytes(), 0644); err != nil {
+		if err = ioutil.WriteFile(targetPath, icBuf.Bytes(), 0644); err != nil {
 			return err
 		}
+	} else if err := copyFile(sourcePath, targetPath); err != nil {
+		return err
 	}
 
-	content, err := ioutil.ReadFile(fullPath)
+	content, err := ioutil.ReadFile(targetPath)
 	if err != nil {
 		return err
 	}
@@ -79,10 +87,10 @@ func GenMarkdownTree(cmd *cobra.Command, dir string) error {
 	end := strings.Index(cs, "<!---MARKER_GEN_END-->")
 
 	if start == -1 {
-		return errors.Errorf("no start marker in %s", mdFile)
+		return fmt.Errorf("no start marker in %s", mdFile)
 	}
 	if end == -1 {
-		return errors.Errorf("no end marker in %s", mdFile)
+		return fmt.Errorf("no end marker in %s", mdFile)
 	}
 
 	out, err := mdCmdOutput(cmd, cs)
@@ -91,12 +99,12 @@ func GenMarkdownTree(cmd *cobra.Command, dir string) error {
 	}
 	cont := cs[:start] + "<!---MARKER_GEN_START-->" + "\n" + out + "\n" + cs[end:]
 
-	fi, err := os.Stat(fullPath)
+	fi, err := os.Stat(targetPath)
 	if err != nil {
 		return err
 	}
-	if err := ioutil.WriteFile(fullPath, []byte(cont), fi.Mode()); err != nil {
-		return errors.Wrapf(err, "failed to write %s", fullPath)
+	if err = ioutil.WriteFile(targetPath, []byte(cont), fi.Mode()); err != nil {
+		return fmt.Errorf("failed to write %s: %w", targetPath, err)
 	}
 
 	return nil
@@ -112,7 +120,7 @@ func mdFilename(cmd *cobra.Command) string {
 
 func mdMakeLink(txt, link string, f *pflag.Flag, isAnchor bool) string {
 	link = "#" + link
-	annotations, ok := f.Annotations["docs.external.url"]
+	annotations, ok := f.Annotations[AnnotationExternalUrl]
 	if ok && len(annotations) > 0 {
 		link = annotations[0]
 	} else {
@@ -153,11 +161,10 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 		fmt.Fprint(b, "\n\n")
 	}
 
-	hasFlags := cmd.Flags().HasAvailableFlags()
-
+	// add inherited flags before checking for flags availability
 	cmd.Flags().AddFlagSet(cmd.InheritedFlags())
 
-	if hasFlags {
+	if cmd.Flags().HasAvailableFlags() {
 		fmt.Fprint(b, "### Options\n\n")
 		fmt.Fprint(b, "| Name | Description |\n")
 		fmt.Fprint(b, "| --- | --- |\n")

@@ -12,7 +12,7 @@ Inspect current builder instance
 | Name | Description |
 | --- | --- |
 | [`--bootstrap`](#bootstrap) | Ensure builder has booted before inspecting |
-| `--builder string` | Override the configured builder instance |
+| [`--builder string`](#builder) | Override the configured builder instance |
 
 
 <!---MARKER_GEN_END-->
@@ -22,6 +22,19 @@ Inspect current builder instance
 Shows information about the current or specified builder.
 
 ## Examples
+
+### <a name="bootstrap"></a> Ensure that the builder is running before inspecting (--bootstrap)
+
+Use the `--bootstrap` option to ensure that the builder is running before
+inspecting it. If the driver is `docker-container`, then `--bootstrap` starts
+the buildkit container and waits until it is operational. Bootstrapping is
+automatically done during build, and therefore not necessary. The same BuildKit
+container is used during the lifetime of the associated builder node (as
+displayed in `buildx ls`).
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).
 
 ### Get information about a builder instance
 
@@ -47,12 +60,3 @@ Endpoint:  ssh://ubuntu@1.2.3.4
 Status:    running
 Platforms: linux/arm64, linux/arm/v7, linux/arm/v6
 ```
-
-### <a name="bootstrap"></a> Ensure that the builder is running before inspecting (--bootstrap)
-
-Use the `--bootstrap` option to ensure that the builder is running before
-inspecting it. If the driver is `docker-container`, then `--bootstrap` starts
-the buildkit container and waits until it is operational. Bootstrapping is
-automatically done during build, and therefore not necessary. The same BuildKit
-container is used during the lifetime of the associated builder node (as
-displayed in `buildx ls`).

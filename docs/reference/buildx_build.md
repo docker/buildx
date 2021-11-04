@@ -18,7 +18,7 @@ Start a build
 | [`--add-host stringSlice`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | Add a custom host-to-IP mapping (format: `host:ip`) |
 | [`--allow stringSlice`](#allow) | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`) |
 | [`--build-arg stringArray`](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) | Set build-time variables |
-| `--builder string` | Override the configured builder instance |
+| [`--builder string`](#builder) | Override the configured builder instance |
 | [`--cache-from stringArray`](#cache-from) | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`) |
 | [`--cache-to stringArray`](#cache-to) | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
 | [`--cgroup-parent string`](https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent) | Optional parent cgroup for the container |
@@ -55,6 +55,10 @@ documentation](https://docs.docker.com/engine/reference/commandline/build/). In
 here we’ll document a subset of the new flags.
 
 ## Examples
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).
 
 ### <a name="platform"></a> Set the target platforms for the build (--platform)
 

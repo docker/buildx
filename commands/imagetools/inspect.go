@@ -85,7 +85,6 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-
 	flags.BoolVar(&options.raw, "raw", false, "Show original JSON manifest")
 
 	return cmd

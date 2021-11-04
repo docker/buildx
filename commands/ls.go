@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -147,6 +148,9 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 			return runLs(dockerCli, options)
 		},
 	}
+
+	// hide builder persistent flag for this command
+	cobrautil.HideInheritedFlags(cmd, "builder")
 
 	return cmd
 }

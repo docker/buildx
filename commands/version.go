@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -23,5 +24,9 @@ func versionCmd(dockerCli command.Cli) *cobra.Command {
 			return runVersion(dockerCli)
 		},
 	}
+
+	// hide builder persistent flag for this command
+	cobrautil.HideInheritedFlags(cmd, "builder")
+
 	return cmd
 }
