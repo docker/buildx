@@ -732,7 +732,9 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 								return err
 							}
 							if opt.ImageIDFile != "" {
-								return ioutil.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644)
+								if err := ioutil.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
+									return err
+								}
 							}
 
 							itpush := imagetools.New(imagetools.Opt{
