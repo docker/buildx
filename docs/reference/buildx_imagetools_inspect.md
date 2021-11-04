@@ -11,7 +11,7 @@ Show details of image in the registry
 
 | Name | Description |
 | --- | --- |
-| `--builder string` | Override the configured builder instance |
+| [`--builder string`](#builder) | Override the configured builder instance |
 | [`--raw`](#raw) | Show original JSON manifest |
 
 
@@ -40,6 +40,12 @@ Manifests:
   Platform:  linux/arm/v6
  ...
 ```
+
+## Examples
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).
 
 ### <a name="raw"></a> Show original, unformatted JSON manifest (--raw)
 

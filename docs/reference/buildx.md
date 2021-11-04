@@ -27,5 +27,17 @@ Extended build capabilities with BuildKit
 | [`version`](buildx_version.md) | Show buildx version information |
 
 
+### Options
+
+| Name | Description |
+| --- | --- |
+| [`--builder string`](#builder) | Override the configured builder instance |
+
 
 <!---MARKER_GEN_END-->
+
+## Examples
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+You can also use the `BUILDX_BUILDER` environment variable.

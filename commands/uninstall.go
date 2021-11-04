@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/config"
@@ -53,6 +54,9 @@ func uninstallCmd(dockerCli command.Cli) *cobra.Command {
 		},
 		Hidden: true,
 	}
+
+	// hide builder persistent flag for this command
+	cobrautil.HideInheritedFlags(cmd, "builder")
 
 	return cmd
 }

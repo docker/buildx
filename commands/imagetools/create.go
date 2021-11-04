@@ -261,7 +261,6 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Read source descriptor from file")
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Set reference for new image")
 	flags.BoolVar(&options.dryrun, "dry-run", false, "Show final image instead of pushing")

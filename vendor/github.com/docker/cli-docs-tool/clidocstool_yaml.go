@@ -74,62 +74,61 @@ type cmdDoc struct {
 // correctly if your command names have `-` in them. If you have `cmd` with two
 // subcmds, `sub` and `sub-third`, and `sub` has a subcommand called `third`
 // it is undefined which help output will be in the file `cmd-sub-third.1`.
-func GenYamlTree(cmd *cobra.Command, dir string) error {
+func (c *Client) GenYamlTree(cmd *cobra.Command) error {
 	emptyStr := func(s string) string { return "" }
-	if err := loadLongDescription(cmd, dir); err != nil {
+	if err := c.loadLongDescription(cmd); err != nil {
 		return err
 	}
-	return GenYamlTreeCustom(cmd, dir, emptyStr)
+	return c.genYamlTreeCustom(cmd, emptyStr)
 }
 
-// GenYamlTreeCustom creates yaml structured ref files.
-func GenYamlTreeCustom(cmd *cobra.Command, dir string, filePrepender func(string) string) error {
-	for _, c := range cmd.Commands() {
-		if !c.Runnable() && !c.HasAvailableSubCommands() {
+// genYamlTreeCustom creates yaml structured ref files.
+func (c *Client) genYamlTreeCustom(cmd *cobra.Command, filePrepender func(string) string) error {
+	for _, sc := range cmd.Commands() {
+		if !sc.Runnable() && !sc.HasAvailableSubCommands() {
 			// skip non-runnable commands without subcommands
 			// but *do* generate YAML for hidden and deprecated commands
 			// the YAML will have those included as metadata, so that the
 			// documentation repository can decide whether or not to present them
 			continue
 		}
-		if err := GenYamlTreeCustom(c, dir, filePrepender); err != nil {
+		if err := c.genYamlTreeCustom(sc, filePrepender); err != nil {
 			return err
 		}
 	}
 
-	// TODO: conditionally skip the root command (for plugins)
-	//
+	// always disable the addition of [flags] to the usage
+	cmd.DisableFlagsInUseLine = true
+
 	// The "root" command used in the generator is just a "stub", and only has a
 	// list of subcommands, but not (e.g.) global options/flags. We should fix
 	// that, so that the YAML file for the docker "root" command contains the
 	// global flags.
-	//
-	// If we're using this code to generate YAML docs for a plugin, the root-
-	// command is even less useful; in that case, the root command represents
-	// the "docker" command, and is a "dummy" with no flags, and only a single
-	// subcommand (the plugin's top command). For plugins, we should skip the
-	// root command altogether, to prevent generating a useless YAML file.
-	if !cmd.HasParent() {
+
+	// Skip the root command altogether, to prevent generating a useless
+	// YAML file for plugins.
+	if c.plugin && !cmd.HasParent() {
 		return nil
 	}
+
 	log.Printf("INFO: Generating YAML for %q", cmd.CommandPath())
 	basename := strings.Replace(cmd.CommandPath(), " ", "_", -1) + ".yaml"
-	filename := filepath.Join(dir, basename)
-	f, err := os.Create(filename)
+	target := filepath.Join(c.target, basename)
+	f, err := os.Create(target)
 	if err != nil {
 		return err
 	}
 	defer f.Close()
 
-	if _, err := io.WriteString(f, filePrepender(filename)); err != nil {
+	if _, err := io.WriteString(f, filePrepender(target)); err != nil {
 		return err
 	}
-	return GenYamlCustom(cmd, f)
+	return c.genYamlCustom(cmd, f)
 }
 
-// GenYamlCustom creates custom yaml output.
+// genYamlCustom creates custom yaml output.
 // nolint: gocyclo
-func GenYamlCustom(cmd *cobra.Command, w io.Writer) error {
+func (c *Client) genYamlCustom(cmd *cobra.Command, w io.Writer) error {
 	const (
 		// shortMaxWidth is the maximum width for the "Short" description before
 		// we force YAML to use multi-line syntax. The goal is to make the total
@@ -143,6 +142,10 @@ func GenYamlCustom(cmd *cobra.Command, w io.Writer) error {
 		// minus the with of the field, colon, and whitespace ('long: ').
 		longMaxWidth = 74
 	)
+
+	// necessary to add inherited flags otherwise some
+	// fields are not properly declared like usage
+	cmd.Flags().AddFlagSet(cmd.InheritedFlags())
 
 	cliDoc := cmdDoc{
 		Name:       cmd.CommandPath(),
@@ -263,7 +266,7 @@ func genFlagResult(flags *pflag.FlagSet, anchors map[string]struct{}) []cmdOptio
 			Deprecated:   len(flag.Deprecated) > 0,
 		}
 
-		if v, ok := flag.Annotations["docs.external.url"]; ok && len(v) > 0 {
+		if v, ok := flag.Annotations[AnnotationExternalUrl]; ok && len(v) > 0 {
 			opt.DetailsURL = strings.TrimPrefix(v[0], "https://docs.docker.com")
 		} else if _, ok = anchors[flag.Name]; ok {
 			opt.DetailsURL = "#" + flag.Name
@@ -338,15 +341,15 @@ func hasSeeAlso(cmd *cobra.Command) bool {
 }
 
 // loadLongDescription gets long descriptions and examples from markdown.
-func loadLongDescription(parentCmd *cobra.Command, path string) error {
+func (c *Client) loadLongDescription(parentCmd *cobra.Command) error {
 	for _, cmd := range parentCmd.Commands() {
 		if cmd.HasSubCommands() {
-			if err := loadLongDescription(cmd, path); err != nil {
+			if err := c.loadLongDescription(cmd); err != nil {
 				return err
 			}
 		}
 		name := cmd.CommandPath()
-		if i := strings.Index(name, " "); i >= 0 {
+		if i := strings.Index(name, " "); c.plugin && i >= 0 {
 			// remove root command / binary name
 			name = name[i+1:]
 		}
@@ -354,8 +357,8 @@ func loadLongDescription(parentCmd *cobra.Command, path string) error {
 			continue
 		}
 		mdFile := strings.ReplaceAll(name, " ", "_") + ".md"
-		fullPath := filepath.Join(path, mdFile)
-		content, err := ioutil.ReadFile(fullPath)
+		sourcePath := filepath.Join(c.source, mdFile)
+		content, err := ioutil.ReadFile(sourcePath)
 		if os.IsNotExist(err) {
 			log.Printf("WARN: %s does not exist, skipping Markdown examples for YAML doc\n", mdFile)
 			continue

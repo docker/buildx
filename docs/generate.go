@@ -3,7 +3,6 @@ package main
 import (
 	"log"
 	"os"
-	"path/filepath"
 
 	"github.com/docker/buildx/commands"
 	clidocstool "github.com/docker/cli-docs-tool"
@@ -40,27 +39,28 @@ func gen(opts *options) error {
 	}
 
 	cmd.AddCommand(commands.NewRootCmd("buildx", true, dockerCLI))
-	clidocstool.DisableFlagsInUseLine(cmd)
 
-	cwd, _ := os.Getwd()
-	source := filepath.Join(cwd, opts.source)
-
-	if err = os.MkdirAll(source, 0755); err != nil {
+	c, err := clidocstool.New(clidocstool.Options{
+		Root:      cmd,
+		SourceDir: opts.source,
+		Plugin:    true,
+	})
+	if err != nil {
 		return err
 	}
 
 	for _, format := range opts.formats {
 		switch format {
 		case "md":
-			if err = clidocstool.GenMarkdownTree(cmd, source); err != nil {
+			if err = c.GenMarkdownTree(cmd); err != nil {
 				return err
 			}
 		case "yaml":
-			if err = clidocstool.GenYamlTree(cmd, source); err != nil {
+			if err = c.GenYamlTree(cmd); err != nil {
 				return err
 			}
 		default:
-			return errors.Errorf("unknwown doc format %q", format)
+			return errors.Errorf("unknown format %q", format)
 		}
 	}
 

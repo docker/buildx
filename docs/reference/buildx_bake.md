@@ -15,7 +15,7 @@ Build from a file
 
 | Name | Description |
 | --- | --- |
-| `--builder string` | Override the configured builder instance |
+| [`--builder string`](#builder) | Override the configured builder instance |
 | [`-f`](#file), [`--file stringArray`](#file) | Build definition file |
 | `--load` | Shorthand for `--set=*.output=type=docker` |
 | `--metadata-file string` | Write build result metadata to the file |
@@ -42,6 +42,10 @@ features in the future if needed. We are looking for feedback on improving the
 command and extending the functionality further.
 
 ## Examples
+
+### <a name="builder"></a> Override the configured builder instance (--builder)
+
+Same as [`buildx --builder`](buildx.md#builder).
 
 ### <a name="file"></a> Specify a build definition file (-f, --file)
 
