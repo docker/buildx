@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
@@ -224,7 +225,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 
 	printer := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
-	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), dockerCli.ConfigFile(), printer)
+	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), dockerCli.ConfigFile(), confutil.ConfigDir(dockerCli), printer)
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1
