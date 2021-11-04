@@ -21,6 +21,7 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/cli/opts"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
@@ -686,6 +687,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 			wg.Add(len(dps))
 
 			var pushNames string
+			var insecurePush bool
 
 			eg.Go(func() (err error) {
 				defer func() {
@@ -732,9 +734,25 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 								imageopt = drivers[dp.driverIndex].ImageOpt
 								break
 							}
+							names := strings.Split(pushNames, ",")
+
+							if insecurePush {
+								insecureTrue := true
+								httpTrue := true
+								nn, err := reference.ParseNormalizedNamed(names[0])
+								if err != nil {
+									return err
+								}
+								imageopt.RegistryConfig = map[string]resolver.RegistryConfig{
+									reference.Domain(nn): {
+										Insecure:  &insecureTrue,
+										PlainHTTP: &httpTrue,
+									},
+								}
+							}
+
 							itpull := imagetools.New(imageopt)
 
-							names := strings.Split(pushNames, ",")
 							dt, desc, err := itpull.Combine(ctx, names[0], descs)
 							if err != nil {
 								return err
@@ -789,6 +807,9 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 									names, err := toRepoOnly(e.Attrs["name"])
 									if err != nil {
 										return err
+									}
+									if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
+										insecurePush = true
 									}
 									e.Attrs["name"] = names
 									e.Attrs["push-by-digest"] = "true"
