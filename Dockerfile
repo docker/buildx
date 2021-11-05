@@ -24,12 +24,13 @@ RUN --mount=target=. \
 
 FROM gobase AS buildx-build
 ENV CGO_ENABLED=0
+ARG LDFLAGS="-w -s"
 ARG TARGETPLATFORM
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
   --mount=type=bind,source=/tmp/.ldflags,target=/tmp/.ldflags,from=buildx-version \
-  set -x; xx-go build -ldflags "$(cat /tmp/.ldflags)" -o /usr/bin/buildx ./cmd/buildx && \
+  set -x; xx-go build -ldflags "$(cat /tmp/.ldflags) ${LDFLAGS}" -o /usr/bin/buildx ./cmd/buildx && \
   xx-verify --static /usr/bin/buildx
 
 FROM buildx-build AS test
