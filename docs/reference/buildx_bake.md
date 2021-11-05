@@ -492,7 +492,7 @@ $ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
 
 #### Using the `add` function
 
-You can use [`go-cty` stdlib functions]([go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib)).
+You can use [`go-cty` stdlib functions](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib).
 Here we are using the `add` function.
 
 ```hcl
