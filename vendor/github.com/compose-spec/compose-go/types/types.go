@@ -89,7 +89,7 @@ type ServiceConfig struct {
 	Profiles []string `mapstructure:"profiles" yaml:"profiles,omitempty" json:"profiles,omitempty"`
 
 	Build           *BuildConfig                     `yaml:",omitempty" json:"build,omitempty"`
-	BlkioConfig     *BlkioConfig                     `yaml:",omitempty" json:"blkio_config,omitempty"`
+	BlkioConfig     *BlkioConfig                     `mapstructure:"blkio_config" yaml:",omitempty" json:"blkio_config,omitempty"`
 	CapAdd          []string                         `mapstructure:"cap_add" yaml:"cap_add,omitempty" json:"cap_add,omitempty"`
 	CapDrop         []string                         `mapstructure:"cap_drop" yaml:"cap_drop,omitempty" json:"cap_drop,omitempty"`
 	CgroupParent    string                           `mapstructure:"cgroup_parent" yaml:"cgroup_parent,omitempty" json:"cgroup_parent,omitempty"`
@@ -152,7 +152,7 @@ type ServiceConfig struct {
 	ReadOnly        bool                             `mapstructure:"read_only" yaml:"read_only,omitempty" json:"read_only,omitempty"`
 	Restart         string                           `yaml:",omitempty" json:"restart,omitempty"`
 	Runtime         string                           `yaml:",omitempty" json:"runtime,omitempty"`
-	Scale           int                              `yaml:",omitempty" json:"scale,omitempty"`
+	Scale           int                              `yaml:"-" json:"-"`
 	Secrets         []ServiceSecretConfig            `yaml:",omitempty" json:"secrets,omitempty"`
 	SecurityOpt     []string                         `mapstructure:"security_opt" yaml:"security_opt,omitempty" json:"security_opt,omitempty"`
 	ShmSize         UnitBytes                        `mapstructure:"shm_size" yaml:"shm_size,omitempty" json:"shm_size,omitempty"`
@@ -226,10 +226,17 @@ const (
 )
 
 const (
+	// ServicePrefix is the prefix for references pointing to a service
+	ServicePrefix = "service:"
+	// ContainerPrefix is the prefix for references pointing to a container
+	ContainerPrefix = "container:"
+
 	// NetworkModeServicePrefix is the prefix for network_mode pointing to a service
-	NetworkModeServicePrefix = "service:"
+	// Deprecated prefer ServicePrefix
+	NetworkModeServicePrefix = ServicePrefix
 	// NetworkModeContainerPrefix is the prefix for network_mode pointing to a container
-	NetworkModeContainerPrefix = "container:"
+	// Deprecated prefer ContainerPrefix
+	NetworkModeContainerPrefix = ContainerPrefix
 )
 
 // GetDependencies retrieve all services this service depends on
@@ -246,9 +253,21 @@ func (s ServiceConfig) GetDependencies() []string {
 			dependencies.append(link)
 		}
 	}
-	if strings.HasPrefix(s.NetworkMode, NetworkModeServicePrefix) {
-		dependencies.append(s.NetworkMode[len(NetworkModeServicePrefix):])
+	if strings.HasPrefix(s.NetworkMode, ServicePrefix) {
+		dependencies.append(s.NetworkMode[len(ServicePrefix):])
 	}
+	if strings.HasPrefix(s.Ipc, ServicePrefix) {
+		dependencies.append(s.Ipc[len(ServicePrefix):])
+	}
+	if strings.HasPrefix(s.Pid, ServicePrefix) {
+		dependencies.append(s.Pid[len(ServicePrefix):])
+	}
+	for _, vol := range s.VolumesFrom {
+		if !strings.HasPrefix(s.Pid, ContainerPrefix) {
+			dependencies.append(vol)
+		}
+	}
+
 	return dependencies.toSlice()
 }
 
@@ -352,7 +371,7 @@ func (e MappingWithEquals) OverrideBy(other MappingWithEquals) MappingWithEquals
 // Resolve update a MappingWithEquals for keys without value (`key`, but not `key=`)
 func (e MappingWithEquals) Resolve(lookupFn func(string) (string, bool)) MappingWithEquals {
 	for k, v := range e {
-		if v == nil || *v == "" {
+		if v == nil {
 			if value, ok := lookupFn(k); ok {
 				e[k] = &value
 			}
@@ -558,7 +577,7 @@ type ServiceNetworkConfig struct {
 // ServicePortConfig is the port configuration for a service
 type ServicePortConfig struct {
 	Mode      string `yaml:",omitempty" json:"mode,omitempty"`
-	HostIP    string `yaml:"host_ip,omitempty" json:"host_ip,omitempty"`
+	HostIP    string `mapstructure:"host_ip" yaml:"host_ip,omitempty" json:"host_ip,omitempty"`
 	Target    uint32 `yaml:",omitempty" json:"target,omitempty"`
 	Published uint32 `yaml:",omitempty" json:"published,omitempty"`
 	Protocol  string `yaml:",omitempty" json:"protocol,omitempty"`
@@ -671,7 +690,7 @@ type ServiceVolumeVolume struct {
 
 // ServiceVolumeTmpfs are options for a service volume of type tmpfs
 type ServiceVolumeTmpfs struct {
-	Size int64 `yaml:",omitempty" json:"size,omitempty"`
+	Size UnitBytes `yaml:",omitempty" json:"size,omitempty"`
 
 	Extensions map[string]interface{} `yaml:",inline" json:"-"`
 }
@@ -729,6 +748,7 @@ type NetworkConfig struct {
 	Internal   bool                   `yaml:",omitempty" json:"internal,omitempty"`
 	Attachable bool                   `yaml:",omitempty" json:"attachable,omitempty"`
 	Labels     Labels                 `yaml:",omitempty" json:"labels,omitempty"`
+	EnableIPv6 bool                   `mapstructure:"enable_ipv6" yaml:"enable_ipv6,omitempty" json:"enable_ipv6,omitempty"`
 	Extensions map[string]interface{} `yaml:",inline" json:"-"`
 }
 

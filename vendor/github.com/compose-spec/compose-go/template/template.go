@@ -25,11 +25,12 @@ import (
 )
 
 var delimiter = "\\$"
-var substitution = "[_a-z][_a-z0-9]*(?::?[-?][^}]*)?"
+var substitutionNamed = "[_a-z][_a-z0-9]*"
+var substitutionBraced = "[_a-z][_a-z0-9]*(?::?[-?][^}]*)?"
 
 var patternString = fmt.Sprintf(
 	"%s(?i:(?P<escaped>%s)|(?P<named>%s)|{(?P<braced>%s)}|(?P<invalid>))",
-	delimiter, delimiter, substitution, substitution,
+	delimiter, delimiter, substitutionNamed, substitutionBraced,
 )
 
 var defaultPattern = regexp.MustCompile(patternString)
@@ -74,9 +75,11 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 			return escaped
 		}
 
+		braced := false
 		substitution := groups["named"]
 		if substitution == "" {
 			substitution = groups["braced"]
+			braced = true
 		}
 
 		if substitution == "" {
@@ -84,19 +87,21 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 			return ""
 		}
 
-		for _, f := range subsFuncs {
-			var (
-				value   string
-				applied bool
-			)
-			value, applied, err = f(substitution, mapping)
-			if err != nil {
-				return ""
+		if braced {
+			for _, f := range subsFuncs {
+				var (
+					value   string
+					applied bool
+				)
+				value, applied, err = f(substitution, mapping)
+				if err != nil {
+					return ""
+				}
+				if !applied {
+					continue
+				}
+				return value
 			}
-			if !applied {
-				continue
-			}
-			return value
 		}
 
 		value, ok := mapping(substitution)
