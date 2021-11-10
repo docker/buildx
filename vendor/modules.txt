@@ -30,7 +30,7 @@ github.com/cenkalti/backoff/v4
 github.com/cespare/xxhash/v2
 # github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e
 ## explicit
-# github.com/compose-spec/compose-go v0.0.0-20210729195839-de56f4f0cb3c
+# github.com/compose-spec/compose-go v1.0.5
 ## explicit
 github.com/compose-spec/compose-go/errdefs
 github.com/compose-spec/compose-go/interpolation
@@ -38,6 +38,8 @@ github.com/compose-spec/compose-go/loader
 github.com/compose-spec/compose-go/schema
 github.com/compose-spec/compose-go/template
 github.com/compose-spec/compose-go/types
+# github.com/compose-spec/godotenv v1.1.0
+github.com/compose-spec/godotenv
 # github.com/containerd/console v1.0.3
 ## explicit
 github.com/containerd/console
@@ -263,8 +265,6 @@ github.com/inconshreveable/mousetrap
 ## explicit
 # github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a
 ## explicit
-# github.com/joho/godotenv v1.3.0
-github.com/joho/godotenv
 # github.com/json-iterator/go v1.1.11
 github.com/json-iterator/go
 # github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
@@ -284,7 +284,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/miekg/pkcs11
 # github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7
 github.com/mitchellh/go-wordwrap
-# github.com/mitchellh/mapstructure v1.4.1
+# github.com/mitchellh/mapstructure v1.4.2
 github.com/mitchellh/mapstructure
 # github.com/moby/buildkit v0.9.1-0.20211019185819-8778943ac3da
 ## explicit

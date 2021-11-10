@@ -94,24 +94,6 @@ func (p Project) ConfigNames() []string {
 	return names
 }
 
-func (p Project) GetByContainerName(names ...string) (Services, error) {
-	if len(names) == 0 {
-		return p.Services, nil
-	}
-	services := Services{}
-outLoop:
-	for _, name := range names {
-		for _, s := range p.Services {
-			if name == s.ContainerName {
-				services = append(services, s)
-				continue outLoop
-			}
-		}
-		return nil, fmt.Errorf("service with container_name %q could not be found", name)
-	}
-	return services, nil
-}
-
 // GetServices retrieve services by names, or return all services if no name specified
 func (p Project) GetServices(names ...string) (Services, error) {
 	if len(names) == 0 {
@@ -228,6 +210,11 @@ func (s Services) GetProfiles() []string {
 
 // ApplyProfiles disables service which don't match selected profiles
 func (p *Project) ApplyProfiles(profiles []string) {
+	for _, p := range profiles {
+		if p == "*" {
+			return
+		}
+	}
 	var enabled, disabled Services
 	for _, service := range p.Services {
 		if service.HasProfile(profiles) {
