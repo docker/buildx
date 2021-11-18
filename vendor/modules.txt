@@ -43,7 +43,7 @@ github.com/compose-spec/godotenv
 # github.com/containerd/console v1.0.3
 ## explicit
 github.com/containerd/console
-# github.com/containerd/containerd v1.5.5
+# github.com/containerd/containerd v1.5.8
 ## explicit
 github.com/containerd/containerd/api/services/content/v1
 github.com/containerd/containerd/archive/compression
@@ -360,7 +360,7 @@ github.com/opencontainers/go-digest
 ## explicit
 github.com/opencontainers/image-spec/specs-go
 github.com/opencontainers/image-spec/specs-go/v1
-# github.com/opencontainers/runc v1.0.1
+# github.com/opencontainers/runc v1.0.2
 github.com/opencontainers/runc/libcontainer/user
 # github.com/pelletier/go-toml v1.9.4
 ## explicit
@@ -606,7 +606,7 @@ google.golang.org/grpc/serviceconfig
 google.golang.org/grpc/stats
 google.golang.org/grpc/status
 google.golang.org/grpc/tap
-# google.golang.org/protobuf v1.26.0
+# google.golang.org/protobuf v1.27.1
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire
