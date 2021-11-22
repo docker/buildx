@@ -102,9 +102,10 @@ github.com/docker/cli/cli/streams
 github.com/docker/cli/cli/trust
 github.com/docker/cli/cli/version
 github.com/docker/cli/opts
-# github.com/docker/cli-docs-tool v0.2.1
+# github.com/docker/cli-docs-tool v0.3.0
 ## explicit
 github.com/docker/cli-docs-tool
+github.com/docker/cli-docs-tool/annotation
 # github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496
 ## explicit
 github.com/docker/compose-on-kubernetes/api

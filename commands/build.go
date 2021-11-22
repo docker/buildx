@@ -14,6 +14,7 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
+	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
@@ -277,51 +278,51 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, "Add a custom host-to-IP mapping (format: `host:ip`)")
-	flags.SetAnnotation("add-host", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host"})
+	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
+	flags.SetAnnotation("add-host", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host"})
 
-	flags.StringSliceVar(&options.allow, "allow", []string{}, "Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)")
+	flags.StringSliceVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
 
 	flags.StringArrayVar(&options.buildArgs, "build-arg", []string{}, "Set build-time variables")
-	flags.SetAnnotation("build-arg", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg"})
+	flags.SetAnnotation("build-arg", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg"})
 
-	flags.StringArrayVar(&options.cacheFrom, "cache-from", []string{}, "External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`)")
+	flags.StringArrayVar(&options.cacheFrom, "cache-from", []string{}, `External cache sources (e.g., "user/app:cache", "type=local,src=path/to/dir")`)
 
-	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, "Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`)")
+	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, `Cache export destinations (e.g., "user/app:cache", "type=local,dest=path/to/dir")`)
 
 	flags.StringVar(&options.cgroupParent, "cgroup-parent", "", "Optional parent cgroup for the container")
-	flags.SetAnnotation("cgroup-parent", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent"})
+	flags.SetAnnotation("cgroup-parent", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent"})
 
-	flags.StringVarP(&options.dockerfileName, "file", "f", "", "Name of the Dockerfile (default: `PATH/Dockerfile`)")
-	flags.SetAnnotation("file", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f"})
+	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
+	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f"})
 
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
-	flags.BoolVar(&options.exportLoad, "load", false, "Shorthand for `--output=type=docker`")
+	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--output=type=docker"`)
 
-	flags.StringVar(&options.networkMode, "network", "default", "Set the networking mode for the RUN instructions during build")
+	flags.StringVar(&options.networkMode, "network", "default", `Set the networking mode for the "RUN" instructions during build`)
 
-	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, "Output destination (format: `type=local,dest=path`)")
+	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
-	flags.BoolVar(&options.exportPush, "push", false, "Shorthand for `--output=type=registry`")
+	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 
-	flags.StringArrayVar(&options.secrets, "secret", []string{}, "Secret file to expose to the build (format: `id=mysecret,src=/local/secret`)")
+	flags.StringArrayVar(&options.secrets, "secret", []string{}, `Secret file to expose to the build (format: "id=mysecret,src=/local/secret")`)
 
-	flags.Var(&options.shmSize, "shm-size", "Size of `/dev/shm`")
+	flags.Var(&options.shmSize, "shm-size", `Size of "/dev/shm"`)
 
-	flags.StringArrayVar(&options.ssh, "ssh", []string{}, "SSH agent socket or keys to expose to the build (format: `default|<id>[=<socket>|<key>[,<key>]]`)")
+	flags.StringArrayVar(&options.ssh, "ssh", []string{}, `SSH agent socket or keys to expose to the build (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
 
-	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Name and optionally a tag (format: `name:tag`)")
-	flags.SetAnnotation("tag", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t"})
+	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, `Name and optionally a tag (format: "name:tag")`)
+	flags.SetAnnotation("tag", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t"})
 
-	flags.StringVar(&options.target, "target", "", "Set the target build stage to build.")
-	flags.SetAnnotation("target", "docs.external.url", []string{"https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target"})
+	flags.StringVar(&options.target, "target", "", "Set the target build stage to build")
+	flags.SetAnnotation("target", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target"})
 
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
@@ -349,7 +350,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVarP(&ignore, "memory", "m", "", "Memory limit")
 	flags.MarkHidden("memory")
 
-	flags.StringVar(&ignore, "memory-swap", "", "Swap limit equal to memory plus swap: `-1` to enable unlimited swap")
+	flags.StringVar(&ignore, "memory-swap", "", `Swap limit equal to memory plus swap: "-1" to enable unlimited swap`)
 	flags.MarkHidden("memory-swap")
 
 	flags.Int64VarP(&ignoreInt, "cpu-shares", "c", 0, "CPU shares (relative weight)")
@@ -361,10 +362,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.Int64Var(&ignoreInt, "cpu-quota", 0, "Limit the CPU CFS (Completely Fair Scheduler) quota")
 	flags.MarkHidden("cpu-quota")
 
-	flags.StringVar(&ignore, "cpuset-cpus", "", "CPUs in which to allow execution (`0-3`, `0,1`)")
+	flags.StringVar(&ignore, "cpuset-cpus", "", `CPUs in which to allow execution ("0-3", "0,1")`)
 	flags.MarkHidden("cpuset-cpus")
 
-	flags.StringVar(&ignore, "cpuset-mems", "", "MEMs in which to allow execution (`0-3`, `0,1`)")
+	flags.StringVar(&ignore, "cpuset-mems", "", `MEMs in which to allow execution ("0-3", "0,1")`)
 	flags.MarkHidden("cpuset-mems")
 
 	flags.BoolVar(&ignoreBool, "rm", true, "Remove intermediate containers after a successful build")
@@ -379,7 +380,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 func commonBuildFlags(options *commonOptions, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
-	flags.StringVar(&options.progress, "progress", "auto", "Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output")
+	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 	options.pull = flags.Bool("pull", false, "Always attempt to pull a newer version of the image")
 	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to the file")
 }

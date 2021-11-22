@@ -24,6 +24,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"gopkg.in/yaml.v2"
@@ -37,6 +38,7 @@ type cmdOption struct {
 	Description     string `yaml:",omitempty"`
 	DetailsURL      string `yaml:"details_url,omitempty"` // DetailsURL contains an anchor-id or link for more information on this flag
 	Deprecated      bool
+	Hidden          bool
 	MinAPIVersion   string `yaml:"min_api_version,omitempty"`
 	Experimental    bool
 	ExperimentalCLI bool
@@ -164,7 +166,7 @@ func (c *Client) genYamlCustom(cmd *cobra.Command, w io.Writer) error {
 		cliDoc.Usage = cmd.UseLine()
 	}
 
-	// Check recursively so that, e.g., `docker stack ls` returns the same output as `docker stack`
+	// check recursively to handle inherited annotations
 	for curr := cmd; curr != nil; curr = curr.Parent() {
 		if v, ok := curr.Annotations["version"]; ok && cliDoc.MinAPIVersion == "" {
 			cliDoc.MinAPIVersion = v
@@ -184,6 +186,14 @@ func (c *Client) genYamlCustom(cmd *cobra.Command, w io.Writer) error {
 		if o, ok := curr.Annotations["ostype"]; ok && cliDoc.OSType == "" {
 			cliDoc.OSType = o
 		}
+		if _, ok := cmd.Annotations[annotation.CodeDelimiter]; !ok {
+			if cd, cok := curr.Annotations[annotation.CodeDelimiter]; cok {
+				if cmd.Annotations == nil {
+					cmd.Annotations = map[string]string{}
+				}
+				cmd.Annotations[annotation.CodeDelimiter] = cd
+			}
+		}
 	}
 
 	anchors := make(map[string]struct{})
@@ -195,11 +205,11 @@ func (c *Client) genYamlCustom(cmd *cobra.Command, w io.Writer) error {
 
 	flags := cmd.NonInheritedFlags()
 	if flags.HasFlags() {
-		cliDoc.Options = genFlagResult(flags, anchors)
+		cliDoc.Options = genFlagResult(cmd, flags, anchors)
 	}
 	flags = cmd.InheritedFlags()
 	if flags.HasFlags() {
-		cliDoc.InheritedOptions = genFlagResult(flags, anchors)
+		cliDoc.InheritedOptions = genFlagResult(cmd, flags, anchors)
 	}
 
 	if hasSeeAlso(cmd) {
@@ -237,7 +247,7 @@ func (c *Client) genYamlCustom(cmd *cobra.Command, w io.Writer) error {
 	return nil
 }
 
-func genFlagResult(flags *pflag.FlagSet, anchors map[string]struct{}) []cmdOption {
+func genFlagResult(cmd *cobra.Command, flags *pflag.FlagSet, anchors map[string]struct{}) []cmdOption {
 	var (
 		result []cmdOption
 		opt    cmdOption
@@ -262,11 +272,19 @@ func genFlagResult(flags *pflag.FlagSet, anchors map[string]struct{}) []cmdOptio
 			Option:       flag.Name,
 			ValueType:    flag.Value.Type(),
 			DefaultValue: forceMultiLine(flag.DefValue, defaultValueMaxWidth),
-			Description:  forceMultiLine(flag.Usage, descriptionMaxWidth),
 			Deprecated:   len(flag.Deprecated) > 0,
+			Hidden:       flag.Hidden,
 		}
 
-		if v, ok := flag.Annotations[AnnotationExternalUrl]; ok && len(v) > 0 {
+		usage := flag.Usage
+		if cd, ok := flag.Annotations[annotation.CodeDelimiter]; ok {
+			usage = strings.ReplaceAll(usage, cd[0], "`")
+		} else if cd, ok := cmd.Annotations[annotation.CodeDelimiter]; ok {
+			usage = strings.ReplaceAll(usage, cd, "`")
+		}
+		opt.Description = forceMultiLine(usage, descriptionMaxWidth)
+
+		if v, ok := flag.Annotations[annotation.ExternalURL]; ok && len(v) > 0 {
 			opt.DetailsURL = strings.TrimPrefix(v[0], "https://docs.docker.com")
 		} else if _, ok = anchors[flag.Name]; ok {
 			opt.DetailsURL = "#" + flag.Name

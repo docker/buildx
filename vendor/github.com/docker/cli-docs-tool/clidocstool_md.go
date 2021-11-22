@@ -24,6 +24,7 @@ import (
 	"strings"
 	"text/template"
 
+	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -50,6 +51,18 @@ func (c *Client) GenMarkdownTree(cmd *cobra.Command) error {
 	mdFile := mdFilename(cmd)
 	sourcePath := filepath.Join(c.source, mdFile)
 	targetPath := filepath.Join(c.target, mdFile)
+
+	// check recursively to handle inherited annotations
+	for curr := cmd; curr != nil; curr = curr.Parent() {
+		if _, ok := cmd.Annotations[annotation.CodeDelimiter]; !ok {
+			if cd, cok := curr.Annotations[annotation.CodeDelimiter]; cok {
+				if cmd.Annotations == nil {
+					cmd.Annotations = map[string]string{}
+				}
+				cmd.Annotations[annotation.CodeDelimiter] = cd
+			}
+		}
+	}
 
 	if !fileExists(sourcePath) {
 		var icBuf bytes.Buffer
@@ -120,7 +133,7 @@ func mdFilename(cmd *cobra.Command) string {
 
 func mdMakeLink(txt, link string, f *pflag.Flag, isAnchor bool) string {
 	link = "#" + link
-	annotations, ok := f.Annotations[AnnotationExternalUrl]
+	annotations, ok := f.Annotations[annotation.ExternalURL]
 	if ok && len(annotations) > 0 {
 		link = annotations[0]
 	} else {
@@ -186,7 +199,13 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 			}
 			name += "`"
 			name = mdMakeLink(name, f.Name, f, isLink)
-			fmt.Fprintf(b, "%s | %s |\n", mdEscapePipe(name), mdEscapePipe(f.Usage))
+			usage := f.Usage
+			if cd, ok := f.Annotations[annotation.CodeDelimiter]; ok {
+				usage = strings.ReplaceAll(usage, cd[0], "`")
+			} else if cd, ok := cmd.Annotations[annotation.CodeDelimiter]; ok {
+				usage = strings.ReplaceAll(usage, cd, "`")
+			}
+			fmt.Fprintf(b, "%s | %s |\n", mdEscapePipe(name), mdEscapePipe(usage))
 		})
 		fmt.Fprintln(b, "")
 	}

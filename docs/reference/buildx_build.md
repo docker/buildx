@@ -27,7 +27,7 @@ Start a build
 | `--label stringArray` | Set metadata for an image |
 | [`--load`](#load) | Shorthand for `--output=type=docker` |
 | `--metadata-file string` | Write build result metadata to the file |
-| `--network string` | Set the networking mode for the RUN instructions during build |
+| `--network string` | Set the networking mode for the `RUN` instructions during build |
 | `--no-cache` | Do not use cache when building the image |
 | [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: `type=local,dest=path`) |
 | [`--platform stringArray`](#platform) | Set target platform for build |
@@ -39,7 +39,7 @@ Start a build
 | [`--shm-size bytes`](#shm-size) | Size of `/dev/shm` |
 | `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag (format: `name:tag`) |
-| [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build. |
+| [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build |
 | [`--ulimit ulimit`](#ulimit) | Ulimit options |
 
 

@@ -22,11 +22,6 @@ import (
 	"github.com/spf13/cobra"
 )
 
-const (
-	// AnnotationExternalUrl specifies an external link annotation
-	AnnotationExternalUrl = "docs.external.url"
-)
-
 // Options defines options for cli-docs-tool
 type Options struct {
 	Root      *cobra.Command

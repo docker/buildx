@@ -12,7 +12,7 @@ require (
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.5.5
 	github.com/docker/cli v20.10.8+incompatible
-	github.com/docker/cli-docs-tool v0.2.1
+	github.com/docker/cli-docs-tool v0.3.0
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
 	github.com/docker/distribution v2.7.1+incompatible
 	github.com/docker/docker v20.10.7+incompatible
