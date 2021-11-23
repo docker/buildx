@@ -295,7 +295,7 @@ func (d *Driver) Stop(ctx context.Context, force bool) error {
 	return nil
 }
 
-func (d *Driver) Rm(ctx context.Context, force bool, rmVolume bool) error {
+func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	info, err := d.Info(ctx)
 	if err != nil {
 		return err
@@ -305,20 +305,22 @@ func (d *Driver) Rm(ctx context.Context, force bool, rmVolume bool) error {
 		if err != nil {
 			return err
 		}
-		if err := d.DockerAPI.ContainerRemove(ctx, d.Name, dockertypes.ContainerRemoveOptions{
-			RemoveVolumes: true,
-			Force:         force,
-		}); err != nil {
-			return err
-		}
-		for _, v := range container.Mounts {
-			if v.Name == d.Name+volumeStateSuffix {
+		if rmDaemon {
+			if err := d.DockerAPI.ContainerRemove(ctx, d.Name, dockertypes.ContainerRemoveOptions{
+				RemoveVolumes: true,
+				Force:         force,
+			}); err != nil {
+				return err
+			}
+			for _, v := range container.Mounts {
+				if v.Name != d.Name+volumeStateSuffix {
+					continue
+				}
 				if rmVolume {
 					return d.DockerAPI.VolumeRemove(ctx, d.Name+volumeStateSuffix, false)
 				}
 			}
 		}
-
 	}
 	return nil
 }
