@@ -4,6 +4,7 @@ import (
 	"os"
 
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
+	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
@@ -15,6 +16,9 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		Short: "Docker Buildx",
 		Long:  `Extended build capabilities with BuildKit`,
 		Use:   name,
+		Annotations: map[string]string{
+			annotation.CodeDelimiter: `"`,
+		},
 	}
 	if isPlugin {
 		cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
