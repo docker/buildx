@@ -340,7 +340,7 @@ target "db" {
 Complete list of valid target fields:
 
 `args`, `cache-from`, `cache-to`, `context`, `contexts`, `dockerfile`, `inherits`, `labels`,
-`no-cache`, `output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`
+`no-cache`, `no-cache-filter`, `output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`
 
 ### Global scope attributes
 
@@ -982,7 +982,7 @@ $ docker buildx bake --print
 Complete list of valid fields for `x-bake`:
 
 `tags`, `cache-from`, `cache-to`, `secret`, `ssh`, `platforms`, `output`,
-`pull`, `no-cache`
+`pull`, `no-cache`, `no-cache-filter`
 
 ### Built-in variables
 

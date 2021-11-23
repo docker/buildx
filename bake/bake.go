@@ -524,7 +524,7 @@ type Target struct {
 	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional"`
 	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
 	NetworkMode      *string           `json:"-" hcl:"-"`
-
+	NoCacheFilter    []string          `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
 
@@ -536,6 +536,7 @@ func (t *Target) normalize() {
 	t.CacheFrom = removeDupes(t.CacheFrom)
 	t.CacheTo = removeDupes(t.CacheTo)
 	t.Outputs = removeDupes(t.Outputs)
+	t.NoCacheFilter = removeDupes(t.NoCacheFilter)
 
 	for k, v := range t.Contexts {
 		if v == "" {
@@ -608,6 +609,9 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.NetworkMode != nil {
 		t.NetworkMode = t2.NetworkMode
 	}
+	if t2.NoCacheFilter != nil { // merge
+		t.NoCacheFilter = append(t.NoCacheFilter, t2.NoCacheFilter...)
+	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
@@ -666,6 +670,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 				return errors.Errorf("invalid value %s for boolean key no-cache", value)
 			}
 			t.NoCache = &noCache
+		case "no-cache-filter":
+			t.NoCacheFilter = o.ArrValue
 		case "pull":
 			pull, err := strconv.ParseBool(value)
 			if err != nil {
@@ -776,13 +782,14 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	t.Context = &bi.ContextPath
 
 	bo := &build.Options{
-		Inputs:      bi,
-		Tags:        t.Tags,
-		BuildArgs:   t.Args,
-		Labels:      t.Labels,
-		NoCache:     noCache,
-		Pull:        pull,
-		NetworkMode: networkMode,
+		Inputs:        bi,
+		Tags:          t.Tags,
+		BuildArgs:     t.Args,
+		Labels:        t.Labels,
+		NoCache:       noCache,
+		NoCacheFilter: t.NoCacheFilter,
+		Pull:          pull,
+		NetworkMode:   networkMode,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)
