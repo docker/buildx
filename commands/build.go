@@ -42,25 +42,26 @@ type buildOptions struct {
 	contextPath    string
 	dockerfileName string
 
-	allow        []string
-	buildArgs    []string
-	cacheFrom    []string
-	cacheTo      []string
-	cgroupParent string
-	contexts     []string
-	extraHosts   []string
-	imageIDFile  string
-	labels       []string
-	networkMode  string
-	outputs      []string
-	platforms    []string
-	quiet        bool
-	secrets      []string
-	shmSize      dockeropts.MemBytes
-	ssh          []string
-	tags         []string
-	target       string
-	ulimits      *dockeropts.UlimitOpt
+	allow         []string
+	buildArgs     []string
+	cacheFrom     []string
+	cacheTo       []string
+	cgroupParent  string
+	contexts      []string
+	extraHosts    []string
+	imageIDFile   string
+	labels        []string
+	networkMode   string
+	noCacheFilter []string
+	outputs       []string
+	platforms     []string
+	quiet         bool
+	secrets       []string
+	shmSize       dockeropts.MemBytes
+	ssh           []string
+	tags          []string
+	target        string
+	ulimits       *dockeropts.UlimitOpt
 	commonOptions
 }
 
@@ -116,17 +117,18 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 			InStream:       os.Stdin,
 			NamedContexts:  contexts,
 		},
-		BuildArgs:   listToMap(in.buildArgs, true),
-		ExtraHosts:  in.extraHosts,
-		ImageIDFile: in.imageIDFile,
-		Labels:      listToMap(in.labels, false),
-		NetworkMode: in.networkMode,
-		NoCache:     noCache,
-		Pull:        pull,
-		ShmSize:     in.shmSize,
-		Tags:        in.tags,
-		Target:      in.target,
-		Ulimits:     in.ulimits,
+		BuildArgs:     listToMap(in.buildArgs, true),
+		ExtraHosts:    in.extraHosts,
+		ImageIDFile:   in.imageIDFile,
+		Labels:        listToMap(in.labels, false),
+		NetworkMode:   in.networkMode,
+		NoCache:       noCache,
+		NoCacheFilter: in.noCacheFilter,
+		Pull:          pull,
+		ShmSize:       in.shmSize,
+		Tags:          in.tags,
+		Target:        in.target,
+		Ulimits:       in.ulimits,
 	}
 
 	platforms, err := platformutil.Parse(in.platforms)
@@ -362,6 +364,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--output=type=docker"`)
 
 	flags.StringVar(&options.networkMode, "network", "default", `Set the networking mode for the "RUN" instructions during build`)
+
+	flags.StringArrayVar(&options.noCacheFilter, "no-cache-filter", []string{}, "Do not cache specified stages")
 
 	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
 
