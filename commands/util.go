@@ -290,9 +290,7 @@ func loadInfoData(ctx context.Context, d *dinfo) error {
 			return errors.Wrap(err, "listing workers")
 		}
 		for _, w := range workers {
-			for _, p := range w.Platforms {
-				d.platforms = append(d.platforms, p)
-			}
+			d.platforms = append(d.platforms, w.Platforms...)
 		}
 		d.platforms = platformutil.Dedupe(d.platforms)
 	}

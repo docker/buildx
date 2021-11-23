@@ -393,7 +393,6 @@ func checkWarnedFlags(f *pflag.Flag) {
 		switch t {
 		case "flag-warn":
 			logrus.Warn(m[0])
-			break
 		}
 	}
 }
