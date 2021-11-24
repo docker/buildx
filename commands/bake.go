@@ -38,7 +38,6 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}()
 
 	var url string
-	var noTarget bool
 	cmdContext := "cwd://"
 
 	if len(targets) > 0 {
@@ -49,7 +48,6 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 				if bake.IsRemoteURL(targets[0]) {
 					cmdContext = targets[0]
 					targets = targets[1:]
-
 				}
 			}
 		}
@@ -57,7 +55,6 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 
 	if len(targets) == 0 {
 		targets = []string{"default"}
-		noTarget = true
 	}
 
 	overrides := in.overrides
@@ -107,7 +104,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return err
 	}
 
-	t, g, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
+	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
 		// Don't forget to update documentation if you add a new
 		// built-in variable: docs/reference/buildx_bake.md#built-in-variables
 		"BAKE_CMD_CONTEXT":    cmdContext,
@@ -118,31 +115,24 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}
 
 	// this function can update target context string from the input so call before printOnly check
-	bo, err := bake.TargetsToBuildOpt(t, inp)
+	bo, err := bake.TargetsToBuildOpt(tgts, inp)
 	if err != nil {
 		return err
 	}
 
 	if in.printOnly {
-		defGroup := map[string][]string{
-			"default": targets,
-		}
-		if noTarget {
-			for _, group := range g {
-				if group.Name != "default" {
-					continue
-				}
-				defGroup = map[string][]string{
-					"default": group.Targets,
-				}
+		var defg map[string]*bake.Group
+		if len(grps) == 1 {
+			defg = map[string]*bake.Group{
+				"default": grps[0],
 			}
 		}
 		dt, err := json.MarshalIndent(struct {
-			Group  map[string][]string     `json:"group,omitempty"`
+			Group  map[string]*bake.Group  `json:"group,omitempty"`
 			Target map[string]*bake.Target `json:"target"`
 		}{
-			defGroup,
-			t,
+			defg,
+			tgts,
 		}, "", "  ")
 		if err != nil {
 			return err

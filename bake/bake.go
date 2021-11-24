@@ -89,7 +89,20 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 			}
 		}
 	}
-	return m, c.Groups, nil
+
+	var g []*Group
+	if len(targets) == 0 || (len(targets) == 1 && targets[0] == "default") {
+		for _, group := range c.Groups {
+			if group.Name != "default" {
+				continue
+			}
+			g = []*Group{{Targets: group.Targets}}
+		}
+	} else {
+		g = []*Group{{Targets: targets}}
+	}
+
+	return m, g, nil
 }
 
 func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error) {
