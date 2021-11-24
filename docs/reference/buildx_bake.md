@@ -99,19 +99,23 @@ $ docker buildx bake -f docker-compose.dev.yaml backend database
 You can also use a remote `git` bake definition:
 
 ```console
-$ docker buildx bake "git://github.com/docker/cli#master" --print
-#1 [internal] load git source git://github.com/docker/cli#master
-#1 0.686 2776a6d694f988c0c1df61cad4bfac0f54e481c8       refs/heads/master
-#1 CACHED
+$ docker buildx bake "git://github.com/docker/cli#v20.10.11" --print
+#1 [internal] load git source git://github.com/docker/cli#v20.10.11
+#1 0.745 e8f1871b077b64bcb4a13334b7146492773769f7       refs/tags/v20.10.11
+#1 2.022 From git://github.com/docker/cli
+#1 2.022  * [new tag]         v20.10.11  -> v20.10.11
+#1 DONE 2.9s
 {
   "group": {
-    "default": [
-      "binary"
-    ]
+    "default": {
+      "targets": [
+        "binary"
+      ]
+    }
   },
   "target": {
     "binary": {
-      "context": "git://github.com/docker/cli#master",
+      "context": "git://github.com/docker/cli#v20.10.11",
       "dockerfile": "Dockerfile",
       "args": {
         "BASE_VARIANT": "alpine",
@@ -153,11 +157,6 @@ EOT
 ```console
 $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" --print
 {
-  "group": {
-    "default": [
-      "default"
-    ]
-  },
   "target": {
     "default": {
       "context": ".",
@@ -180,19 +179,14 @@ $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test"
 ```
 
 ```console
-$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#master" --print
+$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#v20.10.11" --print
 #1 [internal] load git source git://github.com/tonistiigi/buildx#remote-test
-#1 0.401 577303add004dd7efeb13434d69ea030d35f7888       refs/heads/remote-test
+#1 0.429 577303add004dd7efeb13434d69ea030d35f7888       refs/heads/remote-test
 #1 CACHED
 {
-  "group": {
-    "default": [
-      "default"
-    ]
-  },
   "target": {
     "default": {
-      "context": "git://github.com/docker/cli#master",
+      "context": "git://github.com/docker/cli#v20.10.11",
       "dockerfile": "Dockerfile",
       "dockerfile-inline": "FROM alpine\nWORKDIR /src\nCOPY . .\nRUN ls -l \u0026\u0026 stop\n"
     }
@@ -201,7 +195,7 @@ $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://git
 ```
 
 ```console
-$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#master"
+$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#v20.10.11"
 ...
  > [4/4] RUN ls -l && stop:
 #8 0.136 drwxrwxrwx    5 root     root          4096 Jul 27 18:31 kubernetes
@@ -229,9 +223,11 @@ format, without starting a build.
 $ docker buildx bake -f docker-bake.hcl --print db
 {
   "group": {
-    "default": [
-      "db"
-    ]
+    "default": {
+      "targets": [
+        "db"
+      ]
+    }
   },
   "target": {
     "db": {
@@ -372,9 +368,11 @@ You can use this file directly:
 $ docker buildx bake --print app
 {
   "group": {
-    "default": [
-      "app"
-    ]
+    "default": {
+      "targets": [
+        "app"
+      ]
+    }
   },
   "target": {
     "app": {
@@ -402,9 +400,11 @@ And invoke bake together with both of the files:
 $ docker buildx bake -f docker-bake.hcl -f env.hcl --print app
 {
   "group": {
-    "default": [
-      "app"
-    ]
+    "default": {
+      "targets": [
+        "app"
+      ]
+    }
   },
   "target": {
     "app": {
@@ -454,9 +454,11 @@ target "webapp" {
 $ docker buildx bake --print webapp
 {
   "group": {
-    "default": [
-      "webapp"
-    ]
+    "default": {
+      "targets": [
+        "webapp"
+      ]
+    }
   },
   "target": {
     "webapp": {
@@ -474,9 +476,11 @@ $ docker buildx bake --print webapp
 $ TAG=$(git rev-parse --short HEAD) docker buildx bake --print webapp
 {
   "group": {
-    "default": [
-      "webapp"
-    ]
+    "default": {
+      "targets": [
+        "webapp"
+      ]
+    }
   },
   "target": {
     "webapp": {
@@ -516,9 +520,11 @@ target "webapp" {
 $ docker buildx bake --print webapp
 {
   "group": {
-    "default": [
-      "webapp"
-    ]
+    "default": {
+      "targets": [
+        "webapp"
+      ]
+    }
   },
   "target": {
     "webapp": {
@@ -559,9 +565,11 @@ target "webapp" {
 $ docker buildx bake --print webapp
 {
   "group": {
-    "default": [
-      "webapp"
-    ]
+    "default": {
+      "targets": [
+        "webapp"
+      ]
+    }
   },
   "target": {
     "webapp": {
@@ -604,9 +612,11 @@ target "webapp" {
 $ docker buildx bake --print webapp
 {
   "group": {
-    "default": [
-      "webapp"
-    ]
+    "default": {
+      "targets": [
+        "webapp"
+      ]
+    }
   },
   "target": {
     "webapp": {
@@ -645,9 +655,11 @@ target "webapp" {
 $ docker buildx bake --print webapp
 {
   "group": {
-    "default": [
-      "webapp"
-    ]
+    "default": {
+      "targets": [
+        "webapp"
+      ]
+    }
   },
   "target": {
     "webapp": {
@@ -700,9 +712,11 @@ target "app" {
 $ docker buildx bake -f docker-bake1.hcl -f docker-bake2.hcl --print app
 {
   "group": {
-    "default": [
-      "app"
-    ]
+    "default": {
+      "targets": [
+        "app"
+      ]
+    }
   },
   "target": {
     "app": {
@@ -744,9 +758,11 @@ target "app" {
 $ docker buildx bake --print app
 {
   "group": {
-    "default": [
-      "app"
-    ]
+    "default": {
+      "targets": [
+        "app"
+      ]
+    }
   },
   "target": {
     "app": {
@@ -810,6 +826,14 @@ services:
 ```console
 $ docker buildx bake --print
 {
+  "group": {
+    "default": {
+      "targets": [
+        "aws",
+        "addon"
+      ]
+    }
+  },
   "target": {
     "addon": {
       "context": ".",
