@@ -97,17 +97,17 @@ To remove this alias, run [`docker buildx uninstall`](docs/reference/buildx_unin
 
 ```console
 # Buildx 0.6+
-$ docker buildx bake "git://github.com/docker/buildx"
+$ docker buildx bake "https://github.com/docker/buildx.git"
 $ mkdir -p ~/.docker/cli-plugins
 $ mv ./bin/buildx ~/.docker/cli-plugins/docker-buildx
 
 # Docker 19.03+
-$ DOCKER_BUILDKIT=1 docker build --platform=local -o . "git://github.com/docker/buildx"
+$ DOCKER_BUILDKIT=1 docker build --platform=local -o . "https://github.com/docker/buildx.git"
 $ mkdir -p ~/.docker/cli-plugins
 $ mv buildx ~/.docker/cli-plugins/docker-buildx
 
 # Local 
-$ git clone git://github.com/docker/buildx && cd buildx
+$ git clone https://github.com/docker/buildx.git && cd buildx
 $ make install
 ```
 
