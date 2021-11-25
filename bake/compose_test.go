@@ -19,6 +19,8 @@ services:
     build:
       context: ./dir
       dockerfile: Dockerfile-alternate
+      network:
+        none
       args:
         buildno: 123
 `)
@@ -43,6 +45,7 @@ services:
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[1].Dockerfile)
 	require.Equal(t, 1, len(c.Targets[1].Args))
 	require.Equal(t, "123", c.Targets[1].Args["buildno"])
+	require.Equal(t, "none", *c.Targets[1].NetworkMode)
 }
 
 func TestNoBuildOutOfTreeService(t *testing.T) {

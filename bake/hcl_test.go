@@ -36,6 +36,7 @@ func TestHCLBasic(t *testing.T) {
 
 		target "webapp-plus" {
 			inherits = ["webapp", "cross"]
+			network = "host"
 			args = {
 				IAMCROSS = "true"
 			}
@@ -63,6 +64,7 @@ func TestHCLBasic(t *testing.T) {
 	require.Equal(t, c.Targets[3].Name, "webapp-plus")
 	require.Equal(t, 1, len(c.Targets[3].Args))
 	require.Equal(t, map[string]string{"IAMCROSS": "true"}, c.Targets[3].Args)
+	require.Equal(t, "host", *c.Targets[3].NetworkMode)
 }
 
 func TestHCLBasicInJSON(t *testing.T) {
@@ -93,6 +95,7 @@ func TestHCLBasicInJSON(t *testing.T) {
 				},
 				"webapp-plus": {
 					"inherits": ["webapp", "cross"],
+					"network": "host",
 					"args": {
 						"IAMCROSS": "true"
 					}
@@ -123,6 +126,7 @@ func TestHCLBasicInJSON(t *testing.T) {
 	require.Equal(t, c.Targets[3].Name, "webapp-plus")
 	require.Equal(t, 1, len(c.Targets[3].Args))
 	require.Equal(t, map[string]string{"IAMCROSS": "true"}, c.Targets[3].Args)
+	require.Equal(t, "host", *c.Targets[3].NetworkMode)
 }
 
 func TestHCLWithFunctions(t *testing.T) {
