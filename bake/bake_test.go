@@ -3,6 +3,7 @@ package bake
 import (
 	"context"
 	"os"
+	"sort"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -34,7 +35,7 @@ target "webapp" {
 	ctx := context.TODO()
 
 	t.Run("NoOverrides", func(t *testing.T) {
-		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
 
@@ -43,6 +44,9 @@ target "webapp" {
 		require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
 		require.Equal(t, true, *m["webapp"].NoCache)
 		require.Nil(t, m["webapp"].Pull)
+
+		require.Equal(t, 1, len(g))
+		require.Equal(t, []string{"webapp"}, g[0].Targets)
 	})
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
@@ -56,7 +60,7 @@ target "webapp" {
 			os.Setenv("VAR_FROMENV"+t.Name(), "fromEnv")
 			defer os.Unsetenv("VAR_FROM_ENV" + t.Name())
 
-			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webapp.args.VAR_UNSET",
 				"webapp.args.VAR_EMPTY=",
 				"webapp.args.VAR_SET=bananas",
@@ -81,17 +85,23 @@ target "webapp" {
 
 			require.Equal(t, m["webapp"].Args["VAR_BOTH"], "webapp")
 			require.Equal(t, m["webapp"].Args["VAR_INHERITED"], "override")
+
+			require.Equal(t, 1, len(g))
+			require.Equal(t, []string{"webapp"}, g[0].Targets)
 		})
 
 		// building leaf but overriding parent fields
 		t.Run("parent", func(t *testing.T) {
-			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webDEP.args.VAR_INHERITED=override",
 				"webDEP.args.VAR_BOTH=override",
 			}, nil)
+
 			require.NoError(t, err)
 			require.Equal(t, m["webapp"].Args["VAR_INHERITED"], "override")
 			require.Equal(t, m["webapp"].Args["VAR_BOTH"], "webapp")
+			require.Equal(t, 1, len(g))
+			require.Equal(t, []string{"webapp"}, g[0].Targets)
 		})
 	})
 
@@ -99,40 +109,48 @@ target "webapp" {
 		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil)
 		require.NotNil(t, err)
 
-		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil)
 		require.NoError(t, err)
-
 		require.Equal(t, "foo", *m["webapp"].Context)
+		require.Equal(t, 1, len(g))
+		require.Equal(t, []string{"webapp"}, g[0].Targets)
 	})
 
 	t.Run("NoCacheOverride", func(t *testing.T) {
-		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].NoCache)
+		require.Equal(t, 1, len(g))
+		require.Equal(t, []string{"webapp"}, g[0].Targets)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
-		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].Pull)
+		require.Equal(t, 1, len(g))
+		require.Equal(t, []string{"webapp"}, g[0].Targets)
 	})
 
 	t.Run("PatternOverride", func(t *testing.T) {
 		// same check for two cases
-		multiTargetCheck := func(t *testing.T, m map[string]*Target, err error) {
+		multiTargetCheck := func(t *testing.T, m map[string]*Target, g []*Group, err error) {
 			require.NoError(t, err)
 			require.Equal(t, 2, len(m))
 			require.Equal(t, "foo", *m["webapp"].Dockerfile)
 			require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
 			require.Equal(t, "foo", *m["webDEP"].Dockerfile)
 			require.Equal(t, "webDEP", m["webDEP"].Args["VAR_INHERITED"])
+			require.Equal(t, 1, len(g))
+			sort.Strings(g[0].Targets)
+			require.Equal(t, []string{"webDEP", "webapp"}, g[0].Targets)
 		}
 
 		cases := []struct {
 			name      string
 			targets   []string
 			overrides []string
-			check     func(*testing.T, map[string]*Target, error)
+			check     func(*testing.T, map[string]*Target, []*Group, error)
 		}{
 			{
 				name:      "multi target single pattern",
@@ -150,18 +168,20 @@ target "webapp" {
 				name:      "single target",
 				targets:   []string{"webapp"},
 				overrides: []string{"web*.dockerfile=foo"},
-				check: func(t *testing.T, m map[string]*Target, err error) {
+				check: func(t *testing.T, m map[string]*Target, g []*Group, err error) {
 					require.NoError(t, err)
 					require.Equal(t, 1, len(m))
 					require.Equal(t, "foo", *m["webapp"].Dockerfile)
 					require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
+					require.Equal(t, 1, len(g))
+					require.Equal(t, []string{"webapp"}, g[0].Targets)
 				},
 			},
 			{
 				name:      "nomatch",
 				targets:   []string{"webapp"},
 				overrides: []string{"nomatch*.dockerfile=foo"},
-				check: func(t *testing.T, m map[string]*Target, err error) {
+				check: func(t *testing.T, m map[string]*Target, g []*Group, err error) {
 					// NOTE: I am unsure whether failing to match should always error out
 					// instead of simply skipping that override.
 					// Let's enforce the error and we can relax it later if users complain.
@@ -172,8 +192,8 @@ target "webapp" {
 		}
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
-				m, _, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides, nil)
-				test.check(t, m, err)
+				m, g, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides, nil)
+				test.check(t, m, g, err)
 			})
 		}
 	})
@@ -260,16 +280,21 @@ services:
 
 	ctx := context.TODO()
 
-	m, _, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(m))
 	_, ok := m["newservice"]
+
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
 	require.Equal(t, ".", *m["webapp"].Context)
 	require.Equal(t, "1", m["webapp"].Args["buildno"])
 	require.Equal(t, "12", m["webapp"].Args["buildno2"])
+
+	require.Equal(t, 1, len(g))
+	sort.Strings(g[0].Targets)
+	require.Equal(t, []string{"db", "newservice", "webapp"}, g[0].Targets)
 }
 
 func TestHCLCwdPrefix(t *testing.T) {
@@ -282,7 +307,7 @@ func TestHCLCwdPrefix(t *testing.T) {
 			}`),
 	}
 	ctx := context.TODO()
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))
@@ -294,6 +319,9 @@ func TestHCLCwdPrefix(t *testing.T) {
 
 	require.Equal(t, "test", *m["app"].Dockerfile)
 	require.Equal(t, "foo", *m["app"].Context)
+
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"app"}, g[0].Targets)
 }
 
 func TestOverrideMerge(t *testing.T) {
@@ -323,4 +351,178 @@ func TestOverrideMerge(t *testing.T) {
 	require.Equal(t, []string{"linux/arm", "linux/ppc64le"}, m["app"].Platforms)
 	require.Equal(t, 1, len(m["app"].Outputs))
 	require.Equal(t, "type=registry", m["app"].Outputs[0])
+}
+
+func TestReadTargetsMixed(t *testing.T) {
+	t.Parallel()
+
+	fTargetDefault := File{
+		Name: "docker-bake2.hcl",
+		Data: []byte(`
+target "default" {
+  dockerfile = "test"
+}`)}
+
+	fTargetImage := File{
+		Name: "docker-bake3.hcl",
+		Data: []byte(`
+target "image" {
+  dockerfile = "test"
+}`)}
+
+	fpHCL := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+group "default" {
+  targets = ["image"]
+}
+
+target "nocache" {
+  no-cache = true
+}
+
+group "release" {
+  targets = ["image-release"]
+}
+
+target "image" {
+  inherits = ["nocache"]
+  output = ["type=docker"]
+}
+
+target "image-release" {
+  inherits = ["image"]
+  output = ["type=image,push=true"]
+  tags = ["user/app:latest"]
+}`)}
+
+	fpYML := File{
+		Name: "docker-compose.yml",
+		Data: []byte(`
+services:
+  addon:
+    build:
+      context: .
+      dockerfile: ./Dockerfile
+      args:
+        CT_ECR: foo
+        CT_TAG: bar
+    image: ct-addon:bar
+    environment:
+      - NODE_ENV=test
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+
+  aws:
+    build:
+      dockerfile: ./aws.Dockerfile
+      args:
+        CT_ECR: foo
+        CT_TAG: bar
+    image: ct-fake-aws:bar`)}
+
+	fpJSON := File{
+		Name: "docker-bake.json",
+		Data: []byte(`{
+	 "group": {
+	   "default": {
+	     "targets": [
+	       "image"
+	     ]
+	   }
+	 },
+	 "target": {
+	   "image": {
+	     "context": ".",
+	     "dockerfile": "Dockerfile",
+	     "output": [
+	       "type=docker"
+	     ]
+	   }
+	 }
+	}`)}
+
+	ctx := context.TODO()
+
+	m, g, err := ReadTargets(ctx, []File{fTargetDefault}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(g))
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["default"].Dockerfile)
+
+	_, _, err = ReadTargets(ctx, []File{fTargetImage}, []string{"default"}, nil, nil)
+	require.Error(t, err)
+
+	m, g, err = ReadTargets(ctx, []File{fTargetImage}, []string{"image"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["image"].Dockerfile)
+
+	m, g, err = ReadTargets(ctx, []File{fTargetImage}, []string{"image"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["image"].Dockerfile)
+
+	m, g, err = ReadTargets(ctx, []File{fpHCL}, []string{"image-release"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image-release"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, 1, len(m["image-release"].Outputs))
+	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
+
+	m, g, err = ReadTargets(ctx, []File{fpHCL}, []string{"image", "image-release"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image", "image-release"}, g[0].Targets)
+	require.Equal(t, 2, len(m))
+	require.Equal(t, ".", *m["image"].Context)
+	require.Equal(t, 1, len(m["image-release"].Outputs))
+	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
+
+	m, g, err = ReadTargets(ctx, []File{fpYML, fpHCL}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, ".", *m["image"].Context)
+
+	m, g, err = ReadTargets(ctx, []File{fpJSON}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, ".", *m["image"].Context)
+
+	m, g, err = ReadTargets(ctx, []File{fpYML}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	sort.Strings(g[0].Targets)
+	require.Equal(t, []string{"addon", "aws"}, g[0].Targets)
+	require.Equal(t, 2, len(m))
+	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
+	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
+
+	m, g, err = ReadTargets(ctx, []File{fpYML, fpHCL}, []string{"addon", "aws"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	sort.Strings(g[0].Targets)
+	require.Equal(t, []string{"addon", "aws"}, g[0].Targets)
+	require.Equal(t, 2, len(m))
+	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
+	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
+
+	m, g, err = ReadTargets(ctx, []File{fpYML, fpHCL}, []string{"addon", "aws", "image"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	sort.Strings(g[0].Targets)
+	require.Equal(t, []string{"addon", "aws", "image"}, g[0].Targets)
+	require.Equal(t, 3, len(m))
+	require.Equal(t, ".", *m["image"].Context)
+	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
+	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
 }
