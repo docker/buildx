@@ -13,33 +13,14 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	"github.com/docker/cli/cli/context/docker"
 	"github.com/docker/cli/cli/context/kubernetes"
 	ctxstore "github.com/docker/cli/cli/context/store"
-	dopts "github.com/docker/cli/opts"
-	dockerclient "github.com/docker/docker/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"k8s.io/client-go/tools/clientcmd"
 )
-
-// validateEndpoint validates that endpoint is either a context or a docker host
-func validateEndpoint(dockerCli command.Cli, ep string) (string, error) {
-	de, err := storeutil.GetDockerEndpoint(dockerCli, ep)
-	if err == nil && de != "" {
-		if ep == "default" {
-			return de, nil
-		}
-		return ep, nil
-	}
-	h, err := dopts.ParseHost(true, ep)
-	if err != nil {
-		return "", errors.Wrapf(err, "failed to parse endpoint %s", ep)
-	}
-	return h, nil
-}
 
 // driversForNodeGroup returns drivers for a nodegroup instance
 func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, contextPathHash string) ([]build.DriverInfo, error) {
@@ -54,7 +35,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 			return nil, errors.Errorf("failed to find driver %q", f)
 		}
 	} else {
-		dockerapi, err := clientForEndpoint(dockerCli, ng.Nodes[0].Endpoint)
+		dockerapi, err := storeutil.ClientForEndpoint(dockerCli, ng.Nodes[0].Endpoint)
 		if err != nil {
 			return nil, err
 		}
@@ -79,13 +60,12 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				defer func() {
 					dis[i] = di
 				}()
-				dockerapi, err := clientForEndpoint(dockerCli, n.Endpoint)
+
+				dockerapi, err := storeutil.ClientForEndpoint(dockerCli, n.Endpoint)
 				if err != nil {
 					di.Err = err
 					return nil
 				}
-				// TODO: replace the following line with dockerclient.WithAPIVersionNegotiation option in clientForEndpoint
-				dockerapi.NegotiateAPIVersion(ctx)
 
 				contextStore := dockerCli.ContextStore()
 
@@ -150,48 +130,6 @@ func configFromContext(endpointName string, s ctxstore.Reader) (clientcmd.Client
 		return clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{}), nil
 	}
 	return kubernetes.ConfigFromContext(endpointName, s)
-}
-
-// clientForEndpoint returns a docker client for an endpoint
-func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClient, error) {
-	list, err := dockerCli.ContextStore().List()
-	if err != nil {
-		return nil, err
-	}
-	for _, l := range list {
-		if l.Name == name {
-			dep, ok := l.Endpoints["docker"]
-			if !ok {
-				return nil, errors.Errorf("context %q does not have a Docker endpoint", name)
-			}
-			epm, ok := dep.(docker.EndpointMeta)
-			if !ok {
-				return nil, errors.Errorf("endpoint %q is not of type EndpointMeta, %T", dep, dep)
-			}
-			ep, err := docker.WithTLSData(dockerCli.ContextStore(), name, epm)
-			if err != nil {
-				return nil, err
-			}
-			clientOpts, err := ep.ClientOpts()
-			if err != nil {
-				return nil, err
-			}
-			return dockerclient.NewClientWithOpts(clientOpts...)
-		}
-	}
-
-	ep := docker.Endpoint{
-		EndpointMeta: docker.EndpointMeta{
-			Host: name,
-		},
-	}
-
-	clientOpts, err := ep.ClientOpts()
-	if err != nil {
-		return nil, err
-	}
-
-	return dockerclient.NewClientWithOpts(clientOpts...)
 }
 
 func getInstanceOrDefault(ctx context.Context, dockerCli command.Cli, instance, contextPathHash string) ([]build.DriverInfo, error) {
@@ -359,21 +297,6 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 	}
 
 	return nil
-}
-
-func dockerAPI(dockerCli command.Cli) *api {
-	return &api{dockerCli: dockerCli}
-}
-
-type api struct {
-	dockerCli command.Cli
-}
-
-func (a *api) DockerAPI(name string) (dockerclient.APIClient, error) {
-	if name == "" {
-		name = a.dockerCli.CurrentContext()
-	}
-	return clientForEndpoint(a.dockerCli, name)
 }
 
 type dinfo struct {

@@ -9,6 +9,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
@@ -146,7 +147,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return nil
 	}
 
-	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, err := build.Build(ctx, dis, bo, storeutil.NewDockerClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	if err != nil {
 		return err
 	}

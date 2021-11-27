@@ -16,6 +16,7 @@ import (
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/opts"
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
@@ -143,7 +144,6 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 			if dockerCli.CurrentContext() == "default" && dockerCli.DockerEndpoint().TLSData != nil {
 				return errors.Errorf("could not create a builder instance with TLS data loaded from environment. Please use `docker context create <context-name>` to create a context for current environment and then create a builder instance with `docker buildx create <context-name>`")
 			}
-
 			ep, err = storeutil.GetCurrentEndpoint(dockerCli)
 			if err != nil {
 				return err
@@ -262,4 +262,19 @@ func csvToMap(in []string) (map[string]string, error) {
 		}
 	}
 	return m, nil
+}
+
+func validateEndpoint(dockerCli command.Cli, ep string) (string, error) {
+	dem, err := storeutil.GetDockerEndpoint(dockerCli, ep)
+	if err == nil && dem != nil {
+		if ep == "default" {
+			return dem.Host, nil
+		}
+		return ep, nil
+	}
+	h, err := opts.ParseHost(true, ep)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to parse endpoint %s", ep)
+	}
+	return h, nil
 }
