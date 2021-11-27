@@ -3,8 +3,8 @@ package commands
 import (
 	"context"
 
-	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
@@ -26,31 +26,22 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 	}
 	defer release()
 
-	if in.builder != "" {
-		ng, err := storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-		err1 := rm(ctx, dockerCli, ng, in.keepState, in.keepDaemon)
-		if err := txn.Remove(ng.Name); err != nil {
-			return err
-		}
-		return err1
-	}
-
-	ng, err := storeutil.GetCurrentInstance(txn, dockerCli)
+	builder, err := builderutil.New(dockerCli, txn, in.builder)
 	if err != nil {
 		return err
 	}
-	if ng != nil {
-		err1 := rm(ctx, dockerCli, ng, in.keepState, in.keepDaemon)
-		if err := txn.Remove(ng.Name); err != nil {
-			return err
-		}
-		return err1
+	if err = builder.Validate(); err != nil {
+		return err
+	}
+	if err = builder.LoadDrivers(ctx, false, ""); err != nil {
+		return err
 	}
 
-	return nil
+	err1 := rm(ctx, builder.Drivers, in.keepState, in.keepDaemon)
+	if err := txn.Remove(builder.NodeGroup.Name); err != nil {
+		return err
+	}
+	return err1
 }
 
 func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -76,22 +67,18 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func rm(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, keepState, keepDaemon bool) error {
-	dis, err := driversForNodeGroup(ctx, dockerCli, ng, "")
-	if err != nil {
-		return err
-	}
-	for _, di := range dis {
+func rm(ctx context.Context, drivers []builderutil.Driver, keepState, keepDaemon bool) (err error) {
+	for _, di := range drivers {
 		if di.Driver == nil {
 			continue
 		}
 		// Do not stop the buildkitd daemon when --keep-daemon is provided
 		if !keepDaemon {
-			if err := di.Driver.Stop(ctx, true); err != nil {
+			if err = di.Driver.Stop(ctx, true); err != nil {
 				return err
 			}
 		}
-		if err := di.Driver.Rm(ctx, true, !keepState, !keepDaemon); err != nil {
+		if err = di.Driver.Rm(ctx, true, !keepState, !keepDaemon); err != nil {
 			return err
 		}
 		if di.Err != nil {

@@ -3,8 +3,8 @@ package commands
 import (
 	"context"
 
-	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
@@ -24,26 +24,18 @@ func runStop(dockerCli command.Cli, in stopOptions) error {
 	}
 	defer release()
 
-	if in.builder != "" {
-		ng, err := storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-		if err := stop(ctx, dockerCli, ng); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	ng, err := storeutil.GetCurrentInstance(txn, dockerCli)
+	builder, err := builderutil.New(dockerCli, txn, in.builder)
 	if err != nil {
 		return err
 	}
-	if ng != nil {
-		return stop(ctx, dockerCli, ng)
+	if err = builder.Validate(); err != nil {
+		return err
+	}
+	if err = builder.LoadDrivers(ctx, false, ""); err != nil {
+		return err
 	}
 
-	return stopCurrent(ctx, dockerCli)
+	return stop(ctx, builder.Drivers)
 }
 
 func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -65,30 +57,8 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup) error {
-	dis, err := driversForNodeGroup(ctx, dockerCli, ng, "")
-	if err != nil {
-		return err
-	}
-	for _, di := range dis {
-		if di.Driver != nil {
-			if err := di.Driver.Stop(ctx, true); err != nil {
-				return err
-			}
-		}
-		if di.Err != nil {
-			err = di.Err
-		}
-	}
-	return err
-}
-
-func stopCurrent(ctx context.Context, dockerCli command.Cli) error {
-	dis, err := getDefaultDrivers(ctx, dockerCli, false, "")
-	if err != nil {
-		return err
-	}
-	for _, di := range dis {
+func stop(ctx context.Context, drivers []builderutil.Driver) (err error) {
+	for _, di := range drivers {
 		if di.Driver != nil {
 			if err := di.Driver.Stop(ctx, true); err != nil {
 				return err

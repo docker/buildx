@@ -5,8 +5,8 @@ import (
 	"os"
 
 	"github.com/containerd/containerd/images"
-	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -29,24 +29,18 @@ func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
 	}
 	defer release()
 
-	var ng *store.NodeGroup
-
-	if in.builder != "" {
-		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-	} else {
-		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
-		if err != nil {
-			return err
-		}
-	}
-
-	imageopt, err := storeutil.GetImageConfig(dockerCli, ng)
+	builder, err := builderutil.New(dockerCli, txn, in.builder)
 	if err != nil {
 		return err
 	}
+	if err = builder.Validate(); err != nil {
+		return err
+	}
+	imageopt, err := builder.GetImageOpt()
+	if err != nil {
+		return err
+	}
+
 	r := imagetools.New(imageopt)
 
 	dt, desc, err := r.Get(ctx, name)

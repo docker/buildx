@@ -7,7 +7,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/opts"
@@ -34,10 +35,10 @@ const (
 	allCacheWarning = `WARNING! This will remove all build cache. Are you sure you want to continue?`
 )
 
-func runPrune(dockerCli command.Cli, opts pruneOptions) error {
+func runPrune(dockerCli command.Cli, in pruneOptions) error {
 	ctx := appcontext.Context()
 
-	pruneFilters := opts.filter.Value()
+	pruneFilters := in.filter.Value()
 	pruneFilters = command.PruneFilters(dockerCli, pruneFilters)
 
 	pi, err := toBuildkitPruneInfo(pruneFilters)
@@ -46,20 +47,33 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 	}
 
 	warning := normalWarning
-	if opts.all {
+	if in.all {
 		warning = allCacheWarning
 	}
 
-	if !opts.force && !command.PromptForConfirmation(dockerCli.In(), dockerCli.Out(), warning) {
+	if !in.force && !command.PromptForConfirmation(dockerCli.In(), dockerCli.Out(), warning) {
 		return nil
 	}
 
-	dis, err := getInstanceOrDefault(ctx, dockerCli, opts.builder, "")
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
 	}
+	defer release()
 
-	for _, di := range dis {
+	builder, err := builderutil.New(dockerCli, txn, in.builder)
+	if err != nil {
+		return err
+	}
+	if err = builder.Validate(); err != nil {
+		return err
+	}
+	if err = builder.LoadDrivers(ctx, false, ""); err != nil {
+		return err
+	}
+
+	drivers := builder.Drivers
+	for _, di := range drivers {
 		if di.Err != nil {
 			return err
 		}
@@ -76,7 +90,7 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 		defer close(printed)
 		for du := range ch {
 			total += du.Size
-			if opts.verbose {
+			if in.verbose {
 				printVerbose(tw, []*client.UsageInfo{&du})
 			} else {
 				if first {
@@ -90,8 +104,8 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 	}()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	for _, di := range dis {
-		func(di build.DriverInfo) {
+	for _, di := range drivers {
+		func(di builderutil.Driver) {
 			eg.Go(func() error {
 				if di.Driver != nil {
 					c, err := di.Driver.Client(ctx)
@@ -99,10 +113,10 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 						return err
 					}
 					popts := []client.PruneOption{
-						client.WithKeepOpt(pi.KeepDuration, opts.keepStorage.Value()),
+						client.WithKeepOpt(pi.KeepDuration, in.keepStorage.Value()),
 						client.WithFilter(pi.Filter),
 					}
-					if opts.all {
+					if in.all {
 						popts = append(popts, client.PruneAll)
 					}
 					return c.Prune(ctx, ch, popts...)

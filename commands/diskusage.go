@@ -6,7 +6,8 @@ import (
 	"os"
 	"text/tabwriter"
 
-	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/opts"
@@ -23,30 +24,43 @@ type duOptions struct {
 	verbose bool
 }
 
-func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
+func runDiskUsage(dockerCli command.Cli, in duOptions) error {
 	ctx := appcontext.Context()
 
-	pi, err := toBuildkitPruneInfo(opts.filter.Value())
+	pi, err := toBuildkitPruneInfo(in.filter.Value())
 	if err != nil {
 		return err
 	}
 
-	dis, err := getInstanceOrDefault(ctx, dockerCli, opts.builder, "")
+	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
 	}
+	defer release()
 
-	for _, di := range dis {
+	builder, err := builderutil.New(dockerCli, txn, in.builder)
+	if err != nil {
+		return err
+	}
+	if err = builder.Validate(); err != nil {
+		return err
+	}
+	if err = builder.LoadDrivers(ctx, false, ""); err != nil {
+		return err
+	}
+
+	drivers := builder.Drivers
+	for _, di := range drivers {
 		if di.Err != nil {
 			return err
 		}
 	}
 
-	out := make([][]*client.UsageInfo, len(dis))
+	out := make([][]*client.UsageInfo, len(drivers))
 
 	eg, ctx := errgroup.WithContext(ctx)
-	for i, di := range dis {
-		func(i int, di build.DriverInfo) {
+	for i, di := range drivers {
+		func(i int, di builderutil.Driver) {
 			eg.Go(func() error {
 				if di.Driver != nil {
 					c, err := di.Driver.Client(ctx)
@@ -75,7 +89,7 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 		if du == nil {
 			continue
 		}
-		if opts.verbose {
+		if in.verbose {
 			printVerbose(tw, du)
 		} else {
 			if first {
@@ -90,7 +104,7 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 		}
 	}
 
-	if opts.filter.Value().Len() == 0 {
+	if in.filter.Value().Len() == 0 {
 		printSummary(tw, out)
 	}
 

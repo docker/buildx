@@ -10,6 +10,7 @@ import (
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
@@ -205,7 +206,24 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		contextPathHash = in.contextPath
 	}
 
-	imageID, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
+	txn, release, err := storeutil.GetStore(dockerCli)
+	if err != nil {
+		return err
+	}
+	defer release()
+
+	builder, err := builderutil.New(dockerCli, txn, in.builder)
+	if err != nil {
+		return err
+	}
+	if err = builder.Validate(); err != nil {
+		return err
+	}
+	if err = builder.LoadDrivers(ctx, false, contextPathHash); err != nil {
+		return err
+	}
+
+	imageID, err := buildTargets(ctx, dockerCli, builder.Drivers, map[string]build.Options{defaultTargetName: opts}, in.progress, in.metadataFile)
 	if err != nil {
 		return err
 	}
@@ -216,18 +234,13 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	return nil
 }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) (imageID string, err error) {
-	dis, err := getInstanceOrDefault(ctx, dockerCli, instance, contextPathHash)
-	if err != nil {
-		return "", err
-	}
-
+func buildTargets(ctx context.Context, dockerCli command.Cli, drivers []builderutil.Driver, opts map[string]build.Options, progressMode string, metadataFile string) (imageID string, err error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
 	printer := progress.NewPrinter(ctx2, os.Stderr, progressMode)
 
-	resp, err := build.Build(ctx, dis, opts, storeutil.NewDockerClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, err := build.Build(ctx, drivers, opts, storeutil.NewDockerClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1

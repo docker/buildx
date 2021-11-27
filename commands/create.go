@@ -13,6 +13,7 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -185,17 +186,17 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
-	ngi := &nginfo{ng: ng}
-
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	if err = loadNodeGroupData(timeoutCtx, dockerCli, ngi); err != nil {
-		return err
-	}
-
 	if in.bootstrap {
-		if _, err = boot(ctx, ngi); err != nil {
+		builder, err := builderutil.New(dockerCli, txn, ng.Name)
+		if err != nil {
+			return err
+		}
+		timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		if err = builder.LoadDrivers(timeoutCtx, true, ""); err != nil {
+			return err
+		}
+		if _, err = builder.Boot(ctx); err != nil {
 			return err
 		}
 	}

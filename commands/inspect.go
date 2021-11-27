@@ -8,8 +8,8 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/builderutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -31,81 +31,57 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	}
 	defer release()
 
-	var ng *store.NodeGroup
-
-	if in.builder != "" {
-		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-	} else {
-		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
-		if err != nil {
-			return err
-		}
+	builder, err := builderutil.New(dockerCli, txn, in.builder)
+	if err != nil {
+		return err
 	}
-
-	if ng == nil {
-		ng = &store.NodeGroup{
-			Name: "default",
-			Nodes: []store.Node{{
-				Name:     "default",
-				Endpoint: "default",
-			}},
-		}
-	}
-
-	ngi := &nginfo{ng: ng}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	err = loadNodeGroupData(timeoutCtx, dockerCli, ngi)
+	err = builder.LoadDrivers(timeoutCtx, true, "")
 
-	var bootNgi *nginfo
+	var bootBuilder *builderutil.Builder
 	if in.bootstrap {
 		var ok bool
-		ok, err = boot(ctx, ngi)
+		ok, err = builder.Boot(ctx)
 		if err != nil {
 			return err
 		}
-		bootNgi = ngi
+		bootBuilder = builder
 		if ok {
-			ngi = &nginfo{ng: ng}
-			err = loadNodeGroupData(ctx, dockerCli, ngi)
+			err = builder.LoadDrivers(timeoutCtx, true, "")
 		}
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "Name:\t%s\n", ngi.ng.Name)
-	fmt.Fprintf(w, "Driver:\t%s\n", ngi.ng.Driver)
+	fmt.Fprintf(w, "Name:\t%s\n", builder.NodeGroup.Name)
+	fmt.Fprintf(w, "Driver:\t%s\n", builder.NodeGroup.Driver)
 	if err != nil {
 		fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-	} else if ngi.err != nil {
-		fmt.Fprintf(w, "Error:\t%s\n", ngi.err.Error())
+	} else if builder.Err != nil {
+		fmt.Fprintf(w, "Error:\t%s\n", builder.Err.Error())
 	}
 	if err == nil {
 		fmt.Fprintln(w, "")
 		fmt.Fprintln(w, "Nodes:")
 
-		for i, n := range ngi.ng.Nodes {
+		for i, n := range builder.NodeGroup.Nodes {
 			if i != 0 {
 				fmt.Fprintln(w, "")
 			}
 			fmt.Fprintf(w, "Name:\t%s\n", n.Name)
 			fmt.Fprintf(w, "Endpoint:\t%s\n", n.Endpoint)
-			if err := ngi.drivers[i].di.Err; err != nil {
+			if err := builder.Drivers[i].Err; err != nil {
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-			} else if err := ngi.drivers[i].err; err != nil {
-				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-			} else if bootNgi != nil && len(bootNgi.drivers) > i && bootNgi.drivers[i].err != nil {
-				fmt.Fprintf(w, "Error:\t%s\n", bootNgi.drivers[i].err.Error())
+			} else if bootBuilder != nil && len(bootBuilder.Drivers) > i && bootBuilder.Drivers[i].Err != nil {
+				fmt.Fprintf(w, "Error:\t%s\n", bootBuilder.Drivers[i].Err.Error())
 			} else {
-				fmt.Fprintf(w, "Status:\t%s\n", ngi.drivers[i].info.Status)
+				fmt.Fprintf(w, "Status:\t%s\n", builder.Drivers[i].Info.Status)
 				if len(n.Flags) > 0 {
 					fmt.Fprintf(w, "Flags:\t%s\n", strings.Join(n.Flags, " "))
 				}
-				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Platforms, ngi.drivers[i].platforms), ", "))
+				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Platforms, builder.Drivers[i].Platforms), ", "))
 			}
 		}
 	}
