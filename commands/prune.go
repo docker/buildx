@@ -12,11 +12,11 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/filters"
+	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/units"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -119,7 +119,7 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 	<-printed
 
 	tw = tabwriter.NewWriter(os.Stdout, 1, 8, 1, '\t', 0)
-	fmt.Fprintf(tw, "Total:\t%.2f\n", units.Bytes(total))
+	fmt.Fprintf(tw, "Total:\t%s\n", units.HumanSize(float64(total)))
 	tw.Flush()
 	return nil
 }

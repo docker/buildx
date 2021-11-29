@@ -42,7 +42,6 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	github.com/theupdateframework/notary v0.6.1 // indirect
-	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea
 	github.com/zclconf/go-cty v1.7.1
 	go.opentelemetry.io/otel v1.0.0-RC1
 	go.opentelemetry.io/otel/trace v1.0.0-RC1
