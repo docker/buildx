@@ -450,6 +450,28 @@ target "webapp" {
 }
 ```
 
+alternatively, in json format:
+
+```json
+{
+  "variable": {
+    "TAG": {
+      "default": "latest"
+    }
+  }
+  "group": {
+    "default": {
+      "targets": ["webapp"]
+    }
+  },
+  "target": {
+    "webapp": {
+      "tags": ["docker.io/username/webapp:${TAG}"]
+    }
+  }
+}
+```
+
 ```console
 $ docker buildx bake --print webapp
 {
