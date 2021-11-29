@@ -5,15 +5,16 @@ import (
 	"io"
 	"os"
 	"text/tabwriter"
+	"time"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/opts"
+	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
-	"github.com/tonistiigi/units"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -132,13 +133,13 @@ func printVerbose(tw *tabwriter.Writer, du []*client.UsageInfo) {
 		printKV(tw, "Mutable", di.Mutable)
 		printKV(tw, "Reclaimable", !di.InUse)
 		printKV(tw, "Shared", di.Shared)
-		printKV(tw, "Size", fmt.Sprintf("%.2f", units.Bytes(di.Size)))
+		printKV(tw, "Size", units.HumanSize(float64(di.Size)))
 		if di.Description != "" {
 			printKV(tw, "Description", di.Description)
 		}
 		printKV(tw, "Usage count", di.UsageCount)
 		if di.LastUsedAt != nil {
-			printKV(tw, "Last used", di.LastUsedAt)
+			printKV(tw, "Last used", units.HumanDuration(time.Since(*di.LastUsedAt))+" ago")
 		}
 		if di.RecordType != "" {
 			printKV(tw, "Type", di.RecordType)
@@ -159,11 +160,15 @@ func printTableRow(tw *tabwriter.Writer, di *client.UsageInfo) {
 	if di.Mutable {
 		id += "*"
 	}
-	size := fmt.Sprintf("%.2f", units.Bytes(di.Size))
+	size := units.HumanSize(float64(di.Size))
 	if di.Shared {
 		size += "*"
 	}
-	fmt.Fprintf(tw, "%-71s\t%-11v\t%s\t\n", id, !di.InUse, size)
+	lastAccessed := ""
+	if di.LastUsedAt != nil {
+		lastAccessed = units.HumanDuration(time.Since(*di.LastUsedAt)) + " ago"
+	}
+	fmt.Fprintf(tw, "%-40s\t%-5v\t%-10s\t%s\n", id, !di.InUse, size, lastAccessed)
 }
 
 func printSummary(tw *tabwriter.Writer, dus [][]*client.UsageInfo) {
@@ -186,11 +191,11 @@ func printSummary(tw *tabwriter.Writer, dus [][]*client.UsageInfo) {
 	}
 
 	if shared > 0 {
-		fmt.Fprintf(tw, "Shared:\t%.2f\n", units.Bytes(shared))
-		fmt.Fprintf(tw, "Private:\t%.2f\n", units.Bytes(total-shared))
+		fmt.Fprintf(tw, "Shared:\t%s\n", units.HumanSize(float64(shared)))
+		fmt.Fprintf(tw, "Private:\t%s\n", units.HumanSize(float64(total-shared)))
 	}
 
-	fmt.Fprintf(tw, "Reclaimable:\t%.2f\n", units.Bytes(reclaimable))
-	fmt.Fprintf(tw, "Total:\t%.2f\n", units.Bytes(total))
+	fmt.Fprintf(tw, "Reclaimable:\t%s\n", units.HumanSize(float64(reclaimable)))
+	fmt.Fprintf(tw, "Total:\t%s\n", units.HumanSize(float64(total)))
 	tw.Flush()
 }
