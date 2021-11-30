@@ -55,12 +55,21 @@ func ReadLocalFiles(names []string) ([]File, error) {
 	out := make([]File, 0, len(names))
 
 	for _, n := range names {
-		dt, err := ioutil.ReadFile(n)
-		if err != nil {
-			if isDefault && errors.Is(err, os.ErrNotExist) {
-				continue
+		var dt []byte
+		var err error
+		if n == "-" {
+			dt, err = ioutil.ReadAll(os.Stdin)
+			if err != nil {
+				return nil, err
 			}
-			return nil, err
+		} else {
+			dt, err = ioutil.ReadFile(n)
+			if err != nil {
+				if isDefault && errors.Is(err, os.ErrNotExist) {
+					continue
+				}
+				return nil, err
+			}
 		}
 		out = append(out, File{Name: n, Data: dt})
 	}
