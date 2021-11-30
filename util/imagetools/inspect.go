@@ -47,10 +47,10 @@ func (r *Resolver) resolver() remotes.Resolver {
 			}
 			for i := range res {
 				res[i].Authorizer = r.auth
+				res[i].Client = tracing.DefaultClient
 			}
 			return res, nil
 		},
-		Client: tracing.DefaultClient,
 	})
 }
 
