@@ -567,8 +567,6 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 					}
 				}
 			}
-		case "network":
-			t.NetworkMode = &o.Value
 		default:
 			return errors.Errorf("unknown key: %s", keys[0])
 		}

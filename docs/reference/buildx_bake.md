@@ -291,7 +291,7 @@ $ docker buildx bake --set foo*.no-cache              # bypass caching only for 
 
 Complete list of overridable fields:
 `args`, `cache-from`, `cache-to`, `context`, `dockerfile`, `labels`, `no-cache`,
-`output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`, `network`
+`output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`
 
 ### File definition
 
