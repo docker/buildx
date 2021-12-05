@@ -435,6 +435,7 @@ type Target struct {
 	Outputs          []string          `json:"output,omitempty" hcl:"output,optional"`
 	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional"`
 	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
+	NetworkMode      *string
 
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
@@ -500,6 +501,9 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.NoCache != nil {
 		t.NoCache = t2.NoCache
+	}
+	if t2.NetworkMode != nil {
+		t.NetworkMode = t2.NetworkMode
 	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
@@ -641,6 +645,10 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.Pull != nil {
 		pull = *t.Pull
 	}
+	networkMode := ""
+	if t.NetworkMode != nil {
+		networkMode = *t.NetworkMode
+	}
 
 	bi := build.Inputs{
 		ContextPath:    contextPath,
@@ -657,12 +665,13 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	t.Context = &bi.ContextPath
 
 	bo := &build.Options{
-		Inputs:    bi,
-		Tags:      t.Tags,
-		BuildArgs: t.Args,
-		Labels:    t.Labels,
-		NoCache:   noCache,
-		Pull:      pull,
+		Inputs:      bi,
+		Tags:        t.Tags,
+		BuildArgs:   t.Args,
+		Labels:      t.Labels,
+		NoCache:     noCache,
+		Pull:        pull,
+		NetworkMode: networkMode,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)

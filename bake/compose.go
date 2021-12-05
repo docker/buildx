@@ -79,7 +79,8 @@ func ParseCompose(dt []byte) (*Config, error) {
 					val, ok := cfg.Environment[val]
 					return val, ok
 				})),
-				CacheFrom: s.Build.CacheFrom,
+				CacheFrom:   s.Build.CacheFrom,
+				NetworkMode: &s.Build.Network,
 			}
 			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err
