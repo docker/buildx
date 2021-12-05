@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
 	"github.com/docker/buildx/util/resolver"
@@ -15,6 +16,7 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/tracing"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
 )
 
 type Auth interface {
@@ -55,6 +57,12 @@ func (r *Resolver) resolver() remotes.Resolver {
 }
 
 func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispec.Descriptor, error) {
+	// discard containerd logger to avoid printing unnecessary info during image reference resolution.
+	// https://github.com/containerd/containerd/blob/1a88cf5242445657258e0c744def5017d7cfb492/remotes/docker/resolver.go#L288
+	logger := logrus.New()
+	logger.Out = io.Discard
+	ctx = log.WithLogger(ctx, logrus.NewEntry(logger))
+
 	ref, err := parseRef(in)
 	if err != nil {
 		return "", ocispec.Descriptor{}, err
