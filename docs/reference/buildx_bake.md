@@ -99,10 +99,10 @@ $ docker buildx bake -f docker-compose.dev.yaml backend database
 You can also use a remote `git` bake definition:
 
 ```console
-$ docker buildx bake "git://github.com/docker/cli#v20.10.11" --print
-#1 [internal] load git source git://github.com/docker/cli#v20.10.11
+$ docker buildx bake "https://github.com/docker/cli.git#v20.10.11" --print
+#1 [internal] load git source https://github.com/docker/cli.git#v20.10.11
 #1 0.745 e8f1871b077b64bcb4a13334b7146492773769f7       refs/tags/v20.10.11
-#1 2.022 From git://github.com/docker/cli
+#1 2.022 From https://github.com/docker/cli
 #1 2.022  * [new tag]         v20.10.11  -> v20.10.11
 #1 DONE 2.9s
 {
@@ -115,7 +115,7 @@ $ docker buildx bake "git://github.com/docker/cli#v20.10.11" --print
   },
   "target": {
     "binary": {
-      "context": "git://github.com/docker/cli#v20.10.11",
+      "context": "https://github.com/docker/cli.git#v20.10.11",
       "dockerfile": "Dockerfile",
       "args": {
         "BASE_VARIANT": "alpine",
@@ -134,7 +134,7 @@ $ docker buildx bake "git://github.com/docker/cli#v20.10.11" --print
 }
 ```
 
-As you can see the context is fixed to `git://github.com/docker/cli` even if
+As you can see the context is fixed to `https://github.com/docker/cli.git` even if
 [no context is actually defined](https://github.com/docker/cli/blob/2776a6d694f988c0c1df61cad4bfac0f54e481c8/docker-bake.hcl#L17-L26)
 in the definition.
 
@@ -155,7 +155,7 @@ EOT
 ```
 
 ```console
-$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" --print
+$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" --print
 {
   "target": {
     "default": {
@@ -169,7 +169,7 @@ $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" --print
 
 ```console
 $ touch foo bar
-$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test"
+$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test"
 ...
  > [4/4] RUN ls -l && stop:
 #8 0.101 total 0
@@ -179,14 +179,14 @@ $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test"
 ```
 
 ```console
-$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#v20.10.11" --print
-#1 [internal] load git source git://github.com/tonistiigi/buildx#remote-test
+$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "https://github.com/docker/cli.git#v20.10.11" --print
+#1 [internal] load git source https://github.com/tonistiigi/buildx.git#remote-test
 #1 0.429 577303add004dd7efeb13434d69ea030d35f7888       refs/heads/remote-test
 #1 CACHED
 {
   "target": {
     "default": {
-      "context": "git://github.com/docker/cli#v20.10.11",
+      "context": "https://github.com/docker/cli.git#v20.10.11",
       "dockerfile": "Dockerfile",
       "dockerfile-inline": "FROM alpine\nWORKDIR /src\nCOPY . .\nRUN ls -l \u0026\u0026 stop\n"
     }
@@ -195,7 +195,7 @@ $ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://git
 ```
 
 ```console
-$ docker buildx bake "git://github.com/tonistiigi/buildx#remote-test" "git://github.com/docker/cli#v20.10.11"
+$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "https://github.com/docker/cli.git#v20.10.11"
 ...
  > [4/4] RUN ls -l && stop:
 #8 0.136 drwxrwxrwx    5 root     root          4096 Jul 27 18:31 kubernetes
