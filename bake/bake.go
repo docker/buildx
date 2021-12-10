@@ -435,7 +435,7 @@ type Target struct {
 	Outputs          []string          `json:"output,omitempty" hcl:"output,optional"`
 	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional"`
 	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
-	NetworkMode      *string
+	NetworkMode      *string           `json:"-" hcl:"-"`
 
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
 }
