@@ -108,10 +108,39 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 			g = []*Group{{Targets: group.Targets}}
 		}
 	} else {
-		g = []*Group{{Targets: targets}}
+		var gt []string
+		for _, target := range targets {
+			isGroup := false
+			for _, group := range c.Groups {
+				if target == group.Name {
+					gt = append(gt, group.Targets...)
+					isGroup = true
+					break
+				}
+			}
+			if !isGroup {
+				gt = append(gt, target)
+			}
+		}
+		g = []*Group{{Targets: dedupString(gt)}}
 	}
 
 	return m, g, nil
+}
+
+func dedupString(s []string) []string {
+	if len(s) == 0 {
+		return s
+	}
+	var res []string
+	seen := make(map[string]struct{})
+	for _, val := range s {
+		if _, ok := seen[val]; !ok {
+			res = append(res, val)
+			seen[val] = struct{}{}
+		}
+	}
+	return res
 }
 
 func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error) {

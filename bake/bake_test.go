@@ -203,7 +203,7 @@ func TestPushOverride(t *testing.T) {
 	t.Parallel()
 
 	fp := File{
-		Name: "docker-bake.hc",
+		Name: "docker-bake.hcl",
 		Data: []byte(
 			`target "app" {
 				output = ["type=image,compression=zstd"]
@@ -217,7 +217,7 @@ func TestPushOverride(t *testing.T) {
 	require.Equal(t, "type=image,compression=zstd,push=true", m["app"].Outputs[0])
 
 	fp = File{
-		Name: "docker-bake.hc",
+		Name: "docker-bake.hcl",
 		Data: []byte(
 			`target "app" {
 				output = ["type=image,compression=zstd"]
@@ -231,7 +231,7 @@ func TestPushOverride(t *testing.T) {
 	require.Equal(t, "type=image,compression=zstd,push=false", m["app"].Outputs[0])
 
 	fp = File{
-		Name: "docker-bake.hc",
+		Name: "docker-bake.hcl",
 		Data: []byte(
 			`target "app" {
 			}`),
@@ -353,50 +353,127 @@ func TestOverrideMerge(t *testing.T) {
 	require.Equal(t, "type=registry", m["app"].Outputs[0])
 }
 
-func TestReadTargetsMixed(t *testing.T) {
+func TestReadTargetsDefault(t *testing.T) {
 	t.Parallel()
+	ctx := context.TODO()
 
-	fTargetDefault := File{
-		Name: "docker-bake2.hcl",
+	f := File{
+		Name: "docker-bake.hcl",
 		Data: []byte(`
 target "default" {
   dockerfile = "test"
 }`)}
 
-	fTargetImage := File{
-		Name: "docker-bake3.hcl",
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 0, len(g))
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["default"].Dockerfile)
+}
+
+func TestReadTargetsSpecified(t *testing.T) {
+	t.Parallel()
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
 		Data: []byte(`
 target "image" {
   dockerfile = "test"
 }`)}
 
-	fpHCL := File{
+	_, _, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil)
+	require.Error(t, err)
+
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"image"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["image"].Dockerfile)
+}
+
+func TestReadTargetsGroup(t *testing.T) {
+	t.Parallel()
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+group "foo" {
+  targets = ["image"]
+}
+target "image" {
+  dockerfile = "test"
+}`)}
+
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["image"].Dockerfile)
+}
+
+func TestReadTargetsGroupAndTarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+group "foo" {
+  targets = ["image"]
+}
+target "foo" {
+  dockerfile = "bar"
+}
+target "image" {
+  dockerfile = "test"
+}`)}
+
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["image"].Dockerfile)
+
+	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "foo"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"image"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "test", *m["image"].Dockerfile)
+}
+
+func TestReadTargetsMixed(t *testing.T) {
+	t.Parallel()
+	ctx := context.TODO()
+
+	fhcl := File{
 		Name: "docker-bake.hcl",
 		Data: []byte(`
 group "default" {
   targets = ["image"]
 }
-
 target "nocache" {
   no-cache = true
 }
-
 group "release" {
   targets = ["image-release"]
 }
-
 target "image" {
   inherits = ["nocache"]
   output = ["type=docker"]
 }
-
 target "image-release" {
   inherits = ["image"]
   output = ["type=image,push=true"]
   tags = ["user/app:latest"]
 }`)}
 
-	fpYML := File{
+	fyml := File{
 		Name: "docker-compose.yml",
 		Data: []byte(`
 services:
@@ -412,7 +489,6 @@ services:
       - NODE_ENV=test
       - AWS_ACCESS_KEY_ID=dummy
       - AWS_SECRET_ACCESS_KEY=dummy
-
   aws:
     build:
       dockerfile: ./aws.Dockerfile
@@ -421,7 +497,7 @@ services:
         CT_TAG: bar
     image: ct-fake-aws:bar`)}
 
-	fpJSON := File{
+	fjson := File{
 		Name: "docker-bake.json",
 		Data: []byte(`{
 	 "group": {
@@ -442,32 +518,15 @@ services:
 	 }
 	}`)}
 
-	ctx := context.TODO()
-
-	m, g, err := ReadTargets(ctx, []File{fTargetDefault}, []string{"default"}, nil, nil)
-	require.NoError(t, err)
-	require.Equal(t, 0, len(g))
-	require.Equal(t, 1, len(m))
-	require.Equal(t, "test", *m["default"].Dockerfile)
-
-	_, _, err = ReadTargets(ctx, []File{fTargetImage}, []string{"default"}, nil, nil)
-	require.Error(t, err)
-
-	m, g, err = ReadTargets(ctx, []File{fTargetImage}, []string{"image"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fhcl}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g[0].Targets)
 	require.Equal(t, 1, len(m))
-	require.Equal(t, "test", *m["image"].Dockerfile)
+	require.Equal(t, 1, len(m["image"].Outputs))
+	require.Equal(t, "type=docker", m["image"].Outputs[0])
 
-	m, g, err = ReadTargets(ctx, []File{fTargetImage}, []string{"image"}, nil, nil)
-	require.NoError(t, err)
-	require.Equal(t, 1, len(g))
-	require.Equal(t, []string{"image"}, g[0].Targets)
-	require.Equal(t, 1, len(m))
-	require.Equal(t, "test", *m["image"].Dockerfile)
-
-	m, g, err = ReadTargets(ctx, []File{fpHCL}, []string{"image-release"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image-release"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image-release"}, g[0].Targets)
@@ -475,7 +534,7 @@ services:
 	require.Equal(t, 1, len(m["image-release"].Outputs))
 	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
 
-	m, g, err = ReadTargets(ctx, []File{fpHCL}, []string{"image", "image-release"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image", "image-release"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image", "image-release"}, g[0].Targets)
@@ -484,21 +543,21 @@ services:
 	require.Equal(t, 1, len(m["image-release"].Outputs))
 	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
 
-	m, g, err = ReadTargets(ctx, []File{fpYML, fpHCL}, []string{"default"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g[0].Targets)
 	require.Equal(t, 1, len(m))
 	require.Equal(t, ".", *m["image"].Context)
 
-	m, g, err = ReadTargets(ctx, []File{fpJSON}, []string{"default"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fjson}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g[0].Targets)
 	require.Equal(t, 1, len(m))
 	require.Equal(t, ".", *m["image"].Context)
 
-	m, g, err = ReadTargets(ctx, []File{fpYML}, []string{"default"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	sort.Strings(g[0].Targets)
@@ -507,7 +566,7 @@ services:
 	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
 	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
 
-	m, g, err = ReadTargets(ctx, []File{fpYML, fpHCL}, []string{"addon", "aws"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"addon", "aws"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	sort.Strings(g[0].Targets)
@@ -516,7 +575,7 @@ services:
 	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
 	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
 
-	m, g, err = ReadTargets(ctx, []File{fpYML, fpHCL}, []string{"addon", "aws", "image"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"addon", "aws", "image"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	sort.Strings(g[0].Targets)
