@@ -37,6 +37,7 @@ const (
 type Driver struct {
 	driver.InitConfig
 	factory      driver.Factory
+	userNSRemap  bool // true if dockerd is running with userns-remap mode
 	netMode      string
 	image        string
 	cgroupParent string
@@ -112,7 +113,6 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	if err := l.Wrap("creating container "+d.Name, func() error {
 		hc := &container.HostConfig{
 			Privileged: true,
-			UsernsMode: "host",
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeVolume,
@@ -120,6 +120,9 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 					Target: confutil.DefaultBuildKitStateDir,
 				},
 			},
+		}
+		if d.userNSRemap {
+			hc.UsernsMode = "host"
 		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
