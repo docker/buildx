@@ -21,8 +21,7 @@ import (
 	"golang.org/x/time/rate"
 )
 
-func DisplaySolveStatus(ctx context.Context, phase string, c console.Console, w io.Writer, ch chan *client.SolveStatus) error {
-
+func DisplaySolveStatus(ctx context.Context, phase string, c console.Console, w io.Writer, ch chan *client.SolveStatus) ([]client.VertexWarning, error) {
 	modeConsole := c != nil
 
 	disp := &display{c: c, phase: phase}
@@ -46,7 +45,10 @@ func DisplaySolveStatus(ctx context.Context, phase string, c console.Console, w 
 
 	var done bool
 	ticker := time.NewTicker(tickerTimeout)
-	defer ticker.Stop()
+	// implemented as closure because "ticker" can change
+	defer func() {
+		ticker.Stop()
+	}()
 
 	displayLimiter := rate.NewLimiter(rate.Every(displayTimeout), 1)
 
@@ -55,7 +57,7 @@ func DisplaySolveStatus(ctx context.Context, phase string, c console.Console, w 
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return nil, ctx.Err()
 		case <-ticker.C:
 		case ss, ok := <-ch:
 			if ok {
@@ -70,7 +72,7 @@ func DisplaySolveStatus(ctx context.Context, phase string, c console.Console, w 
 			if done {
 				disp.print(t.displayInfo(), width, height, true)
 				t.printErrorLogs(c)
-				return nil
+				return t.warnings(), nil
 			} else if displayLimiter.Allow() {
 				ticker.Stop()
 				ticker = time.NewTicker(tickerTimeout)
@@ -81,7 +83,7 @@ func DisplaySolveStatus(ctx context.Context, phase string, c console.Console, w 
 				printer.print(t)
 				if done {
 					t.printErrorLogs(w)
-					return nil
+					return t.warnings(), nil
 				}
 				ticker.Stop()
 				ticker = time.NewTicker(tickerTimeout)
@@ -138,6 +140,9 @@ type vertex struct {
 	count         int
 	statusUpdates map[string]struct{}
 
+	warnings   []client.VertexWarning
+	warningIdx int
+
 	jobs      []*job
 	jobCached bool
 
@@ -165,6 +170,14 @@ func newTrace(w io.Writer, modeConsole bool) *trace {
 		w:           w,
 		modeConsole: modeConsole,
 	}
+}
+
+func (t *trace) warnings() []client.VertexWarning {
+	var out []client.VertexWarning
+	for _, v := range t.vertexes {
+		out = append(out, v.warnings...)
+	}
+	return out
 }
 
 func (t *trace) triggerVertexEvent(v *client.Vertex) {
@@ -251,6 +264,14 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 		v.byID[s.ID].VertexStatus = s
 		v.statusUpdates[s.ID] = struct{}{}
 		t.updates[v.Digest] = struct{}{}
+		v.update(1)
+	}
+	for _, w := range s.Warnings {
+		v, ok := t.byDigest[w.Vertex]
+		if !ok {
+			continue // shouldn't happen
+		}
+		v.warnings = append(v.warnings, *w)
 		v.update(1)
 	}
 	for _, l := range s.Logs {
@@ -364,6 +385,16 @@ func (t *trace) displayInfo() (d displayInfo) {
 				j.status = fmt.Sprintf("%.2f / %.2f", units.Bytes(s.Current), units.Bytes(s.Total))
 			} else if s.Current != 0 {
 				j.status = fmt.Sprintf("%.2f", units.Bytes(s.Current))
+			}
+			jobs = append(jobs, j)
+		}
+		for _, w := range v.warnings {
+			msg := "WARN: " + string(w.Short)
+			j := &job{
+				startTime:     addTime(v.Started, t.localTimeDiff),
+				completedTime: addTime(v.Completed, t.localTimeDiff),
+				name:          msg,
+				isCanceled:    true,
 			}
 			jobs = append(jobs, j)
 		}

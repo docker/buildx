@@ -9,6 +9,7 @@ import "github.com/moby/buildkit/api/types/worker.proto";
 import "github.com/moby/buildkit/util/apicaps/pb/caps.proto";
 import "github.com/tonistiigi/fsutil/types/stat.proto";
 
+
 option (gogoproto.sizer_all) = true;
 option (gogoproto.marshaler_all) = true;
 option (gogoproto.unmarshaler_all) = true;
@@ -31,7 +32,10 @@ service LLBBridge {
 
 	rpc NewContainer(NewContainerRequest) returns (NewContainerResponse);
 	rpc ReleaseContainer(ReleaseContainerRequest) returns (ReleaseContainerResponse);
-	rpc ExecProcess(stream ExecMessage) returns (stream ExecMessage);  
+	rpc ExecProcess(stream ExecMessage) returns (stream ExecMessage);
+
+	// apicaps:CapGatewayWarnings
+	rpc Warn(WarnRequest) returns (WarnResponse); 
 }
 
 message Result {
@@ -168,6 +172,18 @@ message PongResponse{
 	repeated moby.buildkit.v1.apicaps.APICap LLBCaps = 2 [(gogoproto.nullable) = false];
 	repeated moby.buildkit.v1.types.WorkerRecord Workers = 3;
 }
+
+message WarnRequest {
+	string digest = 1 [(gogoproto.customtype) = "github.com/opencontainers/go-digest.Digest", (gogoproto.nullable) = false];
+	int64 level = 2;
+	bytes short = 3;
+	repeated bytes detail = 4;
+	string url = 5;
+	pb.SourceInfo info = 6;
+	repeated pb.Range ranges = 7;
+}
+
+message WarnResponse{}
 
 message NewContainerRequest {
 	string ContainerID = 1;

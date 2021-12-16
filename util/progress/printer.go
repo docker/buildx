@@ -59,7 +59,7 @@ func NewPrinter(ctx context.Context, out console.File, mode string) *Printer {
 			}
 		}
 		// not using shared context to not disrupt display but let is finish reporting errors
-		pw.err = progressui.DisplaySolveStatus(ctx, "", c, w, statusCh)
+		_, pw.err = progressui.DisplaySolveStatus(ctx, "", c, w, statusCh)
 		close(doneCh)
 	}()
 	return pw

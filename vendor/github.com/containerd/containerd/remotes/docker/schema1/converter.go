@@ -23,7 +23,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"strconv"
 	"strings"
 	"sync"
@@ -230,7 +229,7 @@ func (c *Converter) Convert(ctx context.Context, opts ...ConvertOpt) (ocispec.De
 // ReadStripSignature reads in a schema1 manifest and returns a byte array
 // with the "signatures" field stripped
 func ReadStripSignature(schema1Blob io.Reader) ([]byte, error) {
-	b, err := ioutil.ReadAll(io.LimitReader(schema1Blob, manifestSizeLimit)) // limit to 8MB
+	b, err := io.ReadAll(io.LimitReader(schema1Blob, manifestSizeLimit)) // limit to 8MB
 	if err != nil {
 		return nil, err
 	}
@@ -255,6 +254,9 @@ func (c *Converter) fetchManifest(ctx context.Context, desc ocispec.Descriptor) 
 	var m manifest
 	if err := json.Unmarshal(b, &m); err != nil {
 		return err
+	}
+	if len(m.Manifests) != 0 || len(m.Layers) != 0 {
+		return errors.New("converter: expected schema1 document but found extra keys")
 	}
 	c.pulledManifest = &m
 
@@ -472,8 +474,10 @@ type history struct {
 }
 
 type manifest struct {
-	FSLayers []fsLayer `json:"fsLayers"`
-	History  []history `json:"history"`
+	FSLayers  []fsLayer       `json:"fsLayers"`
+	History   []history       `json:"history"`
+	Layers    json.RawMessage `json:"layers,omitempty"`    // OCI manifest
+	Manifests json.RawMessage `json:"manifests,omitempty"` // OCI index
 }
 
 type v1History struct {
