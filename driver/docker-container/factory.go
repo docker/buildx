@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/driver"
+	dockertypes "github.com/docker/docker/api/types"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 )
@@ -40,6 +41,20 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		return nil, errors.Errorf("%s driver requires docker API access", f.Name())
 	}
 	d := &Driver{factory: f, InitConfig: cfg}
+	dockerInfo, err := cfg.DockerAPI.Info(ctx)
+	if err != nil {
+		return nil, err
+	}
+	secOpts, err := dockertypes.DecodeSecurityOptions(dockerInfo.SecurityOptions)
+	if err != nil {
+		return nil, err
+	}
+	for _, f := range secOpts {
+		if f.Name == "userns" {
+			d.userNSRemap = true
+			break
+		}
+	}
 	for k, v := range cfg.DriverOpts {
 		switch {
 		case k == "network":
