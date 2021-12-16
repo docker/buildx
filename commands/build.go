@@ -20,6 +20,7 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
+	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
@@ -44,6 +45,7 @@ type buildOptions struct {
 	cacheFrom    []string
 	cacheTo      []string
 	cgroupParent string
+	contexts     []string
 	extraHosts   []string
 	imageIDFile  string
 	labels       []string
@@ -100,11 +102,17 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		in.progress = "quiet"
 	}
 
+	contexts, err := parseContextNames(in.contexts)
+	if err != nil {
+		return err
+	}
+
 	opts := build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    in.contextPath,
 			DockerfilePath: in.dockerfileName,
 			InStream:       os.Stdin,
+			NamedContexts:  contexts,
 		},
 		BuildArgs:   listToMap(in.buildArgs, true),
 		ExtraHosts:  in.extraHosts,
@@ -339,6 +347,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVar(&options.cgroupParent, "cgroup-parent", "", "Optional parent cgroup for the container")
 	flags.SetAnnotation("cgroup-parent", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent"})
 
+	flags.StringArrayVar(&options.contexts, "context", []string{}, "Additional named contexts (e.g., name=path)")
+
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
 	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f"})
 
@@ -461,4 +471,24 @@ func listToMap(values []string, defaultEnv bool) map[string]string {
 		}
 	}
 	return result
+}
+
+func parseContextNames(values []string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	result := make(map[string]string, len(values))
+	for _, value := range values {
+		kv := strings.SplitN(value, "=", 2)
+		if len(kv) != 2 {
+			return nil, errors.Errorf("invalid context value: %s, expected key=value", value)
+		}
+		named, err := reference.ParseNormalizedNamed(kv[0])
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid context name %s", kv[0])
+		}
+		name := strings.TrimSuffix(reference.FamiliarString(named), ":latest")
+		result[name] = kv[1]
+	}
+	return result, nil
 }
