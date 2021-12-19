@@ -7,8 +7,10 @@ import (
 	"os"
 
 	"github.com/containerd/console"
+	"github.com/docker/buildx/util/logutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -19,9 +21,10 @@ const (
 )
 
 type Printer struct {
-	status chan *client.SolveStatus
-	done   <-chan struct{}
-	err    error
+	status   chan *client.SolveStatus
+	done     <-chan struct{}
+	err      error
+	warnings []client.VertexWarning
 }
 
 func (p *Printer) Wait() error {
@@ -32,6 +35,10 @@ func (p *Printer) Wait() error {
 
 func (p *Printer) Write(s *client.SolveStatus) {
 	p.status <- s
+}
+
+func (p *Printer) Warnings() []client.VertexWarning {
+	return p.warnings
 }
 
 func NewPrinter(ctx context.Context, out console.File, mode string) *Printer {
@@ -58,8 +65,10 @@ func NewPrinter(ctx context.Context, out console.File, mode string) *Printer {
 				c = cons
 			}
 		}
+		resumeLogs := logutil.Pause(logrus.StandardLogger())
 		// not using shared context to not disrupt display but let is finish reporting errors
-		_, pw.err = progressui.DisplaySolveStatus(ctx, "", c, w, statusCh)
+		pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, "", c, w, statusCh)
+		resumeLogs()
 		close(doneCh)
 	}()
 	return pw
