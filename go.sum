@@ -1201,8 +1201,8 @@ github.com/tommy-muehle/go-mnd v1.1.1/go.mod h1:dSUh0FtTP8VhvkL1S+gUR1OKd9ZnSaoz
 github.com/tommy-muehle/go-mnd v1.3.1-0.20200224220436-e6f9a994e8fa/go.mod h1:dSUh0FtTP8VhvkL1S+gUR1OKd9ZnSaozuI6r3m6wOig=
 github.com/tonistiigi/docker v0.10.1-0.20211122204227-65a6f25dbca2 h1:e6PyP4Gi3HZ9hSH9gGGGSaBh3EI+HZj5E4fgEV43ZCI=
 github.com/tonistiigi/docker v0.10.1-0.20211122204227-65a6f25dbca2/go.mod h1:v9W/4hjeg+54O4ffkt1Dnh7nOIE9uHi9F0W9clN3nTQ=
-github.com/tonistiigi/fsutil v0.0.0-20211122210416-da5201e0b3af h1:G5OoRy5gm3D9uLT0JIlgjB0aJPyTM48GFDqS9ESQPW4=
-github.com/tonistiigi/fsutil v0.0.0-20211122210416-da5201e0b3af/go.mod h1:WnebnONB1EcTV5BdGlPLPlCX+FVMKhTnGZP2BvmyhgE=
+github.com/tonistiigi/fsutil v0.0.0-20211222194517-22a581344001 h1:Xa39RCQdfLqzbqRFvJ80w+a4OaLSdTiNk9AlQHuB5A8=
+github.com/tonistiigi/fsutil v0.0.0-20211222194517-22a581344001/go.mod h1:lJAxK//iyZ3yGbQswdrPTxugZIDM7sd4bEsD0x3XMHk=
 github.com/tonistiigi/go-actions-cache v0.0.0-20211002214948-4d48f2ff622a/go.mod h1:YiIBjH5gP7mao3t0dBrNNBGuKYdeJmcAJjYLXr43k6A=
 github.com/tonistiigi/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20210714055410-d010b05b4939 h1:s6wDMZYNyWt8KvkjhrMpOthFPgI3JB8ipJS+eCV/psg=
 github.com/tonistiigi/opentelemetry-go-contrib/instrumentation/google.golang.org/grpc/otelgrpc v0.0.0-20210714055410-d010b05b4939/go.mod h1:Vm5u/mtkj1OMhtao0v+BGo2LUoLCgHYXvRmj0jWITlE=
