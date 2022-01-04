@@ -378,7 +378,12 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 	visited[name] = struct{}{}
 	targets := make([]string, 0, len(g.Targets))
 	for _, t := range g.Targets {
-		targets = append(targets, c.group(t, visited)...)
+		tgroup := c.group(t, visited)
+		if len(tgroup) > 0 {
+			targets = append(targets, tgroup...)
+		} else {
+			targets = append(targets, t)
+		}
 	}
 	return targets
 }

@@ -585,3 +585,69 @@ services:
 	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
 	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
 }
+
+func TestReadTargetsSameGroupTarget(t *testing.T) {
+	t.Parallel()
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+group "foo" {
+  targets = ["foo"]
+}
+target "foo" {
+  dockerfile = "bar"
+}
+target "image" {
+  output = ["type=docker"]
+}`)}
+
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"foo"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "bar", *m["foo"].Dockerfile)
+
+	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "foo"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"foo"}, g[0].Targets)
+	require.Equal(t, 1, len(m))
+	require.Equal(t, "bar", *m["foo"].Dockerfile)
+}
+
+func TestReadTargetsSameGroupTargetMulti(t *testing.T) {
+	t.Parallel()
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+group "foo" {
+  targets = ["foo", "image"]
+}
+target "foo" {
+  dockerfile = "bar"
+}
+target "image" {
+  output = ["type=docker"]
+}`)}
+
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"foo", "image"}, g[0].Targets)
+	require.Equal(t, 2, len(m))
+	require.Equal(t, "bar", *m["foo"].Dockerfile)
+	require.Equal(t, "type=docker", m["image"].Outputs[0])
+
+	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "image"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"foo", "image"}, g[0].Targets)
+	require.Equal(t, 2, len(m))
+	require.Equal(t, "bar", *m["foo"].Dockerfile)
+	require.Equal(t, "type=docker", m["image"].Outputs[0])
+}
