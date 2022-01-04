@@ -4,9 +4,11 @@ import (
 	"os"
 
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
+	"github.com/docker/buildx/util/logutil"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
+	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -25,6 +27,12 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 			return plugin.PersistentPreRunE(cmd, args)
 		}
 	}
+
+	logrus.AddHook(logutil.NewFilter(
+		"serving grpc connection",
+		"stopping session",
+		"using default config store",
+	))
 
 	addCommands(cmd, dockerCli)
 	return cmd
