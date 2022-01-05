@@ -27,11 +27,13 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
+	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"google.golang.org/grpc/codes"
 )
 
 const defaultTargetName = "default"
@@ -217,6 +219,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	}
 
 	imageID, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
+	err = wrapBuildError(err)
 	if err != nil {
 		return err
 	}
@@ -491,4 +494,30 @@ func parseContextNames(values []string) (map[string]string, error) {
 		result[name] = kv[1]
 	}
 	return result, nil
+}
+
+func wrapBuildError(err error) error {
+	if err == nil {
+		return nil
+	}
+	st, ok := grpcerrors.AsGRPCStatus(err)
+	if ok {
+		if st.Code() == codes.Unimplemented && strings.Contains(st.Message(), "unsupported frontend capability moby.buildkit.frontend.contexts") {
+			return &wrapped{err, "current frontend does not support --build-context. Named contexts are supported since Dockerfile v1.4"}
+		}
+	}
+	return err
+}
+
+type wrapped struct {
+	err error
+	msg string
+}
+
+func (w *wrapped) Error() string {
+	return w.msg
+}
+
+func (w *wrapped) Unwrap() error {
+	return w.err
 }
