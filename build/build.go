@@ -1090,10 +1090,10 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 		}
 		st, err := os.Stat(v)
 		if err != nil {
-			return nil, errors.Wrapf(err, "failed to get context %v", k)
+			return nil, errors.Wrapf(err, "failed to get build context %v", k)
 		}
 		if !st.IsDir() {
-			return nil, errors.Wrapf(syscall.ENOTDIR, "failed to get context path %v", v)
+			return nil, errors.Wrapf(syscall.ENOTDIR, "failed to get build context path %v", v)
 		}
 		localName := k
 		if k == "context" || k == "dockerfile" {
