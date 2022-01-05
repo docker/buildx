@@ -18,6 +18,7 @@ Start a build
 | [`--add-host stringSlice`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | Add a custom host-to-IP mapping (format: `host:ip`) |
 | [`--allow stringSlice`](#allow) | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`) |
 | [`--build-arg stringArray`](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) | Set build-time variables |
+| [`--build-context stringArray`](#build-context) | Additional build contexts (e.g., name=path) |
 | [`--builder string`](#builder) | Override the configured builder instance |
 | [`--cache-from stringArray`](#cache-from) | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`) |
 | [`--cache-to stringArray`](#cache-to) | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
@@ -302,6 +303,39 @@ $ docker buildx build --cache-to=type=gha .
 ```
 
 More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
+
+
+### <a name="build-context"></a> Additional build contexts (--build-context)
+
+```
+--build-context=name=VALUE
+```
+
+Define additional build context with specified contents. In Dockerfile the context can be accessed when `FROM name` or `--from=name` is used.
+When Dockerfile defines a stage with the same name it is overwritten.
+
+The value can be a local source directory, container image (with docker-image:// prefix), Git or HTTP URL.
+
+**Examples**
+
+Replace `alpine:latest` with a pinned one:
+
+```console
+$ docker buildx build --build-context alpine=docker-image://alpine@sha256:0123456789 .
+```
+
+Expose a secondary local source directory:
+
+```console
+$ docker buildx build --build-context project=path/to/project/source .
+# docker buildx build --build-context project=https://github.com/myuser/project.git .
+```
+
+```Dockerfile
+FROM alpine
+COPY --from=project myfile /
+```
+
 
 ### <a name="allow"></a> Allow extra privileged entitlement (--allow)
 
