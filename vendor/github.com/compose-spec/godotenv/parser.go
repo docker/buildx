@@ -127,15 +127,21 @@ loop:
 
 // extractVarValue extracts variable value and returns rest of slice
 func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (value string, rest []byte, err error) {
-	quote, hasPrefix := hasQuotePrefix(src)
-	if !hasPrefix {
-		// unquoted value - read until whitespace
-		end := bytes.IndexFunc(src, unicode.IsSpace)
-		if end == -1 {
-			return expandVariables(string(src), envMap, lookupFn), nil, nil
+	quote, isQuoted := hasQuotePrefix(src)
+	if !isQuoted {
+		// unquoted value - read until new line
+		end := bytes.IndexFunc(src, isNewLine)
+		var rest []byte
+		var value string
+		if end < 0 {
+			value := strings.TrimRightFunc(string(src), unicode.IsSpace)
+			rest = nil
+			return expandVariables(value, envMap, lookupFn), rest, nil
 		}
 
-		return expandVariables(string(src[0:end]), envMap, lookupFn), src[end:], nil
+		value = strings.TrimRightFunc(string(src[0:end]), unicode.IsSpace)
+		rest = src[end:]
+		return expandVariables(value, envMap, lookupFn), rest, nil
 	}
 
 	// lookup quoted string terminator
@@ -192,7 +198,7 @@ func indexOfNonSpaceChar(src []byte) int {
 }
 
 // hasQuotePrefix reports whether charset starts with single or double quote and returns quote character
-func hasQuotePrefix(src []byte) (prefix byte, isQuored bool) {
+func hasQuotePrefix(src []byte) (quote byte, isQuoted bool) {
 	if len(src) == 0 {
 		return 0, false
 	}
@@ -220,4 +226,10 @@ func isSpace(r rune) bool {
 		return true
 	}
 	return false
+}
+
+
+// isNewLine reports whether the rune is a new line character
+func isNewLine(r rune) bool {
+	return r == '\n'
 }

@@ -8,7 +8,7 @@ require (
 	github.com/bugsnag/panicwrap v1.2.0 // indirect
 	github.com/cenkalti/backoff v2.1.1+incompatible // indirect
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
-	github.com/compose-spec/compose-go v1.0.5
+	github.com/compose-spec/compose-go v1.0.8
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.0-beta.3
 	github.com/docker/cli v20.10.11+incompatible

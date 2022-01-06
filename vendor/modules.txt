@@ -30,7 +30,7 @@ github.com/cenkalti/backoff/v4
 github.com/cespare/xxhash/v2
 # github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e
 ## explicit
-# github.com/compose-spec/compose-go v1.0.5
+# github.com/compose-spec/compose-go v1.0.8
 ## explicit
 github.com/compose-spec/compose-go/errdefs
 github.com/compose-spec/compose-go/interpolation
@@ -38,7 +38,7 @@ github.com/compose-spec/compose-go/loader
 github.com/compose-spec/compose-go/schema
 github.com/compose-spec/compose-go/template
 github.com/compose-spec/compose-go/types
-# github.com/compose-spec/godotenv v1.1.0
+# github.com/compose-spec/godotenv v1.1.1
 github.com/compose-spec/godotenv
 # github.com/containerd/console v1.0.3
 ## explicit

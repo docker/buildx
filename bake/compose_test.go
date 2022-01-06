@@ -280,6 +280,36 @@ services:
 	require.Equal(t, c.Targets[1].NoCache, newBool(true))
 }
 
+func TestEnv(t *testing.T) {
+	envf, err := os.CreateTemp("", "env")
+	require.NoError(t, err)
+	defer os.Remove(envf.Name())
+
+	_, err = envf.WriteString("FOO=bsdf -csdf\n")
+	require.NoError(t, err)
+
+	var dt = []byte(`
+services:
+  scratch:
+    build:
+     context: .
+     args:
+        CT_ECR: foo
+        FOO:
+        NODE_ENV:
+    environment:
+      - NODE_ENV=test
+      - AWS_ACCESS_KEY_ID=dummy
+      - AWS_SECRET_ACCESS_KEY=dummy
+    env_file:
+      - ` + envf.Name() + `
+`)
+
+	c, err := ParseCompose(dt)
+	require.NoError(t, err)
+	require.Equal(t, c.Targets[0].Args, map[string]string{"CT_ECR": "foo", "FOO": "bsdf -csdf", "NODE_ENV": "test"})
+}
+
 func newBool(val bool) *bool {
 	b := val
 	return &b

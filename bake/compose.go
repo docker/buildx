@@ -76,6 +76,9 @@ func ParseCompose(dt []byte) (*Config, error) {
 				Dockerfile: dockerfilePathP,
 				Labels:     s.Build.Labels,
 				Args: flatten(s.Build.Args.Resolve(func(val string) (string, bool) {
+					if val, ok := s.Environment[val]; ok && val != nil {
+						return *val, true
+					}
 					val, ok := cfg.Environment[val]
 					return val, ok
 				})),

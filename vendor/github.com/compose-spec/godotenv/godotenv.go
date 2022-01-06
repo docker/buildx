@@ -266,12 +266,12 @@ func parseLineWithLookup(line string, envMap map[string]string, lookupFn LookupF
 	firstColon := strings.Index(line, ":")
 	splitString := strings.SplitN(line, "=", 2)
 	if firstColon != -1 && (firstColon < firstEquals || firstEquals == -1) {
-		//this is a yaml-style line
+		// This is a yaml-style line
 		splitString = strings.SplitN(line, ":", 2)
 	}
 
 	if len(splitString) != 2 {
-		err = errors.New("Can't separate key from value")
+		err = errors.New("can't separate key from value")
 		return
 	}
 	key = exportRegex.ReplaceAllString(splitString[0], "$1")
@@ -341,15 +341,15 @@ func expandVariables(v string, envMap map[string]string, lookupFn LookupFn) stri
 		if submatch[1] == "\\" || submatch[2] == "(" {
 			return submatch[0][1:]
 		} else if submatch[4] != "" {
-			//first check if we have defined this already earlier
+			// first check if we have defined this already earlier
 			if envMap[submatch[4]] != "" {
 				return envMap[submatch[4]]
 			}
 			if lookupFn == nil {
 				return ""
 			}
-			//if we have not defined it, check the lookup function provided
-			//by the user
+			// if we have not defined it, check the lookup function provided
+			// by the user
 			s2, ok := lookupFn(submatch[4])
 			if ok {
 				return s2
