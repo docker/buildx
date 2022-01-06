@@ -280,6 +280,27 @@ services:
 	require.Equal(t, c.Targets[1].NoCache, newBool(true))
 }
 
+func TestEnvFile(t *testing.T) {
+	envf, err := os.CreateTemp("", "env")
+	require.NoError(t, err)
+	defer os.Remove(envf.Name())
+
+	_, err = envf.WriteString("FOO=bsdf -csdf\n")
+	require.NoError(t, err)
+
+	var dt = []byte(`
+services:
+  scratch:
+    build:
+     context: .
+    env_file:
+      - ` + envf.Name() + `
+`)
+
+	_, err = ParseCompose(dt)
+	require.NoError(t, err)
+}
+
 func newBool(val bool) *bool {
 	b := val
 	return &b
