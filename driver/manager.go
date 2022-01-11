@@ -2,6 +2,7 @@ package driver
 
 import (
 	"context"
+	"fmt"
 	"io/ioutil"
 	"sort"
 	"strings"
@@ -138,6 +139,18 @@ func GetFactories() []Factory {
 		return ds[i].Name() < ds[j].Name()
 	})
 	return ds
+}
+
+func GetDefaultDockerDriver(ctx context.Context, api dockerclient.APIClient, auth Auth, contextPathHash string) (Driver, error) {
+	f := GetFactory("docker", false)
+	if f == nil {
+		return nil, fmt.Errorf("unable to get default builder")
+	}
+	d, err := f.New(ctx, InitConfig{DockerAPI: api, Auth: auth})
+	if err != nil {
+		return nil, err
+	}
+	return d, nil
 }
 
 type cachedDriver struct {
