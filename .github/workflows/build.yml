@@ -15,7 +15,6 @@ on:
 
 env:
   REPO_SLUG: "docker/buildx-bin"
-  REPO_SLUG_ORIGIN: "moby/buildkit:master"
   RELEASE_OUT: "./release-out"
 
 jobs:
@@ -31,8 +30,6 @@ jobs:
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v1
-        with:
-          driver-opts: image=${{ env.REPO_SLUG_ORIGIN }}
       -
         name: Test
         run: |
@@ -90,3 +87,26 @@ jobs:
         with:
           draft: true
           files: ${{ env.RELEASE_OUT }}/*
+
+  buildkit-edge:
+    runs-on: ubuntu-latest
+    continue-on-error: true
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v2
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v1
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          driver-opts: image=moby/buildkit:master
+          buildkitd-flags: --debug
+      -
+        # Just run a bake target to check eveything runs fine
+        name: Build
+        uses: docker/bake-action@v1
+        with:
+          targets: binaries-cross
