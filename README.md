@@ -21,9 +21,10 @@ Key features:
 # Table of Contents
 
 - [Installing](#installing)
-  - [Docker](#docker)
-  - [Binary release](#binary-release)
-  - [From `Dockerfile`](#from-dockerfile)
+  - [Windows and macOS](#windows-and-macos)
+  - [Linux packages](#linux-packages)
+  - [Manual download](#manual-download)
+  - [Dockerfile](#dockerfile)
 - [Set buildx as the default builder](#set-buildx-as-the-default-builder)
 - [Building](#building)
 - [Getting started](#getting-started)
@@ -56,27 +57,60 @@ Using `buildx` as a docker CLI plugin requires using Docker 19.03 or newer.
 A limited set of functionality works with older versions of Docker when
 invoking the binary directly.
 
-## Docker
+## Windows and macOS
 
-`buildx` comes bundled with Docker Desktop and in latest
-[Docker CE packages](https://docs.docker.com/engine/install/), but may not be
-included in third-party software components (in which case follow the
-[binary release](#binary-release) instructions).
+Docker Buildx is included in [Docker Desktop](https://docs.docker.com/desktop/)
+for Windows and macOS.
 
-## Binary release
+## Linux packages
 
-You can also download the latest `buildx` binary from the
-[GitHub releases](https://github.com/docker/buildx/releases/latest) page, copy
-it to `~/.docker/cli-plugins` folder with name `docker-buildx` and change the
-permission to execute:
+Docker Linux packages also include Docker Buildx when installed using the
+[DEB or RPM packages](https://docs.docker.com/engine/install/).
 
-```console
-$ chmod a+x ~/.docker/cli-plugins/docker-buildx
-```
+## Manual download
 
-## From `Dockerfile`
+> **Important**
+>
+> This section is for unattended installation of the buildx component. These
+> instructions are mostly suitable for testing purposes. We do not recommend
+> installing buildx using manual download in production environments as they
+> will not be updated automatically with security updates.
+>
+> On Windows and macOS, we recommend that you install [Docker Desktop](https://docs.docker.com/desktop/)
+> instead. For Linux, we recommend that you follow the [instructions specific for your distribution](#linux-packages).
 
-Here is how to use buildx inside a Dockerfile through the
+You can also download the latest binary from the [GitHub releases page](https://github.com/docker/buildx/releases/latest).
+
+Rename the relevant binary and copy it to the destination matching your OS:
+
+| OS       | Binary name          | Destination folder                       |
+| -------- | -------------------- | -----------------------------------------|
+| Linux    | `docker-buildx`      | `$HOME/.docker/cli-plugins`              |
+| macOS    | `docker-buildx`      | `$HOME/.docker/cli-plugins`              |
+| Windows  | `docker-buildx.exe`  | `%USERPROFILE%\.docker\cli-plugin`       |
+
+Or copy it into one of these folders for installing it system-wide.
+
+On Unix environments:
+
+* `/usr/local/lib/docker/cli-plugins` OR `/usr/local/libexec/docker/cli-plugins`
+* `/usr/lib/docker/cli-plugins` OR `/usr/libexec/docker/cli-plugins`
+
+On Windows:
+
+* `C:\ProgramData\Docker\cli-plugins`
+* `C:\Program Files\Docker\cli-plugins`
+
+> **Note**
+>
+> On Unix environments, it may also be necessary to make it executable with `chmod +x`:
+> ```shell
+> $ chmod +x ~/.docker/cli-plugins/docker-buildx
+> ```
+
+## Dockerfile
+
+Here is how to install and use Buildx inside a Dockerfile through the
 [`docker/buildx-bin`](https://hub.docker.com/r/docker/buildx-bin) image:
 
 ```Dockerfile
