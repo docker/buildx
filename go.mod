@@ -43,7 +43,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.7.0
 	github.com/theupdateframework/notary v0.6.1 // indirect
-	github.com/zclconf/go-cty v1.7.1
+	github.com/zclconf/go-cty v1.10.0
 	go.opentelemetry.io/otel v1.2.0
 	go.opentelemetry.io/otel/trace v1.2.0
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
