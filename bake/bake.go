@@ -389,10 +389,11 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 }
 
 func (c Config) ResolveTarget(name string, overrides map[string]map[string]Override) (*Target, error) {
-	t, err := c.target(name, map[string]struct{}{}, overrides)
+	t, err := c.target(name, map[string]*Target{}, overrides)
 	if err != nil {
 		return nil, err
 	}
+	t.Inherits = nil
 	if t.Context == nil {
 		s := "."
 		t.Context = &s
@@ -404,11 +405,11 @@ func (c Config) ResolveTarget(name string, overrides map[string]map[string]Overr
 	return t, nil
 }
 
-func (c Config) target(name string, visited map[string]struct{}, overrides map[string]map[string]Override) (*Target, error) {
-	if _, ok := visited[name]; ok {
-		return nil, nil
+func (c Config) target(name string, visited map[string]*Target, overrides map[string]map[string]Override) (*Target, error) {
+	if t, ok := visited[name]; ok {
+		return t, nil
 	}
-	visited[name] = struct{}{}
+	visited[name] = nil
 	var t *Target
 	for _, target := range c.Targets {
 		if target.Name == name {
@@ -429,7 +430,6 @@ func (c Config) target(name string, visited map[string]struct{}, overrides map[s
 			tt.Merge(t)
 		}
 	}
-	t.Inherits = nil
 	m := defaultTarget()
 	m.Merge(tt)
 	m.Merge(t)
@@ -437,8 +437,8 @@ func (c Config) target(name string, visited map[string]struct{}, overrides map[s
 	if err := tt.AddOverrides(overrides[name]); err != nil {
 		return nil, err
 	}
-
 	tt.normalize()
+	visited[name] = tt
 	return tt, nil
 }
 

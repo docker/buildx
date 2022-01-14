@@ -651,3 +651,140 @@ target "image" {
 	require.Equal(t, "bar", *m["foo"].Dockerfile)
 	require.Equal(t, "type=docker", m["image"].Outputs[0])
 }
+
+func TestNestedInherits(t *testing.T) {
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "a" {
+  args = {
+    foo = "123"
+    bar = "234"
+  }
+}
+target "b" {
+  inherits = ["a"]
+  args = {
+    bar = "567"
+  }
+}
+target "c" {
+  inherits = ["a"]
+  args = {
+    baz = "890"
+  }
+}
+target "d" {
+  inherits = ["b", "c"]
+}`)}
+
+	cases := []struct {
+		name      string
+		overrides []string
+		want      map[string]string
+	}{
+		{
+			name:      "nested simple",
+			overrides: nil,
+			want:      map[string]string{"bar": "234", "baz": "890", "foo": "123"},
+		},
+		{
+			name:      "nested with overrides first",
+			overrides: []string{"a.args.foo=321", "b.args.bar=432"},
+			want:      map[string]string{"bar": "234", "baz": "890", "foo": "321"},
+		},
+		{
+			name:      "nested with overrides last",
+			overrides: []string{"a.args.foo=321", "c.args.bar=432"},
+			want:      map[string]string{"bar": "432", "baz": "890", "foo": "321"},
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			m, g, err := ReadTargets(ctx, []File{f}, []string{"d"}, tt.overrides, nil)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(g))
+			require.Equal(t, []string{"d"}, g[0].Targets)
+			require.Equal(t, 1, len(m))
+			require.Equal(t, tt.want, m["d"].Args)
+		})
+	}
+}
+
+func TestNestedInheritsWithGroup(t *testing.T) {
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "grandparent" {
+  output = ["type=docker"]
+  args = {
+    BAR = "fuu"
+  }
+}
+target "parent" {
+  inherits = ["grandparent"]
+  args = {
+    FOO = "bar"
+  }
+}
+target "child1" {
+  inherits = ["parent"]
+}
+target "child2" {
+  inherits = ["parent"]
+  args = {
+    FOO2 = "bar2"
+  }
+}
+group "default" {
+  targets = [
+    "child1",
+    "child2"
+  ]
+}`)}
+
+	cases := []struct {
+		name      string
+		overrides []string
+		wantch1   map[string]string
+		wantch2   map[string]string
+	}{
+		{
+			name:      "nested simple",
+			overrides: nil,
+			wantch1:   map[string]string{"BAR": "fuu", "FOO": "bar"},
+			wantch2:   map[string]string{"BAR": "fuu", "FOO": "bar", "FOO2": "bar2"},
+		},
+		{
+			name:      "nested with overrides first",
+			overrides: []string{"grandparent.args.BAR=fii", "child1.args.FOO=baaar"},
+			wantch1:   map[string]string{"BAR": "fii", "FOO": "baaar"},
+			wantch2:   map[string]string{"BAR": "fii", "FOO": "bar", "FOO2": "bar2"},
+		},
+		{
+			name:      "nested with overrides last",
+			overrides: []string{"grandparent.args.BAR=fii", "child2.args.FOO=baaar"},
+			wantch1:   map[string]string{"BAR": "fii", "FOO": "bar"},
+			wantch2:   map[string]string{"BAR": "fii", "FOO": "baaar", "FOO2": "bar2"},
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, tt.overrides, nil)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(g))
+			require.Equal(t, []string{"child1", "child2"}, g[0].Targets)
+			require.Equal(t, 2, len(m))
+			require.Equal(t, tt.wantch1, m["child1"].Args)
+			require.Equal(t, []string{"type=docker"}, m["child1"].Outputs)
+			require.Equal(t, tt.wantch2, m["child2"].Args)
+			require.Equal(t, []string{"type=docker"}, m["child2"].Outputs)
+		})
+	}
+}
