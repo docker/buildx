@@ -14,7 +14,8 @@ on:
       - 'v[0-9]*'
 
 env:
-  REPO_SLUG: "docker/buildx-bin"
+  BIN_REPO_SLUG: "docker/buildx-bin"
+  PKG_REPO_SLUG: "docker/buildx-pkg"
   RELEASE_OUT: "./release-out"
 
 jobs:
@@ -71,7 +72,7 @@ jobs:
         uses: docker/metadata-action@v3
         with:
           images: |
-            ${{ env.REPO_SLUG }}
+            ${{ env.BIN_REPO_SLUG }}
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -113,6 +114,18 @@ jobs:
         with:
           fetch-depth: 0
       -
+        name: Docker meta
+        id: meta
+        uses: docker/metadata-action@v3
+        with:
+          images: |
+            ${{ env.PKG_REPO_SLUG }}
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+          bake-target: meta-helper
+      -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v1
       -
@@ -121,10 +134,22 @@ jobs:
         with:
           driver-opts: image=${{ env.REPO_SLUG_ORIGIN }}
       -
-        name: Build packages
-        run: |
-          make pkg-cross
-          tree ./bin
+        name: Login to DockerHub
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v1
+        with:
+          username: ${{ secrets.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+      -
+        name: Build and push image
+        uses: docker/bake-action@v1
+        with:
+          files: |
+            ./docker-bake.hcl
+            ${{ steps.meta.outputs.bake-file }}
+          targets: pkg-cross
+          set: |
+            *.output=type=image,push=${{ github.event_name != 'pull_request' }}
 
   buildkit-edge:
     runs-on: ubuntu-latest

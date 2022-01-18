@@ -180,7 +180,7 @@ variable "PKG_PACKAGER" {
 # PKG_TYPES=deb PKG_DEB_RELEASES=debian11 docker buildx bake pkg
 # docker buildx bake --set *.platform=windows/amd64 --set *.output=./bin pkg
 target "pkg" {
-  inherits = ["binaries"]
+  inherits = ["meta-helper", "binaries"]
   args = {
     PKG_TYPES = PKG_TYPES
     PKG_APK_RELEASES = PKG_APK_RELEASES
