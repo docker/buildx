@@ -7,22 +7,24 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func NewFilter(filters ...string) logrus.Hook {
+func NewFilter(levels []logrus.Level, filters ...string) logrus.Hook {
 	dl := logrus.New()
 	dl.SetOutput(ioutil.Discard)
 	return &logsFilter{
+		levels:        levels,
 		filters:       filters,
 		discardLogger: dl,
 	}
 }
 
 type logsFilter struct {
+	levels        []logrus.Level
 	filters       []string
 	discardLogger *logrus.Logger
 }
 
 func (d *logsFilter) Levels() []logrus.Level {
-	return []logrus.Level{logrus.DebugLevel}
+	return d.levels
 }
 
 func (d *logsFilter) Fire(entry *logrus.Entry) error {

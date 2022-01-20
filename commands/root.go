@@ -28,10 +28,22 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		}
 	}
 
-	logrus.AddHook(logutil.NewFilter(
+	logrus.AddHook(logutil.NewFilter([]logrus.Level{
+		logrus.DebugLevel,
+	},
 		"serving grpc connection",
 		"stopping session",
 		"using default config store",
+	))
+
+	// filter out useless commandConn.CloseWrite warning message that can occur
+	// when listing builder instances with "buildx ls" for those that are
+	// unreachable: "commandConn.CloseWrite: commandconn: failed to wait: signal: killed"
+	// https://github.com/docker/cli/blob/3fb4fb83dfb5db0c0753a8316f21aea54dab32c5/cli/connhelper/commandconn/commandconn.go#L203-L214
+	logrus.AddHook(logutil.NewFilter([]logrus.Level{
+		logrus.WarnLevel,
+	},
+		"commandConn.CloseWrite:",
 	))
 
 	addCommands(cmd, dockerCli)
