@@ -99,6 +99,10 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		pull = *in.pull
 	}
 
+	if noCache && len(in.noCacheFilter) > 0 {
+		return errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
+	}
+
 	if in.quiet && in.progress != "auto" && in.progress != "quiet" {
 		return errors.Errorf("progress=%s and quiet cannot be used together", in.progress)
 	} else if in.quiet {
