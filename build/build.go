@@ -14,6 +14,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/containerd/containerd/images"
@@ -79,6 +80,7 @@ type Inputs struct {
 	InStream         io.Reader
 	ContextState     *llb.State
 	DockerfileInline string
+	NamedContexts    map[string]string
 }
 
 type DriverInfo struct {
@@ -1079,6 +1081,27 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 	}
 
 	target.FrontendAttrs["filename"] = dockerfileName
+
+	for k, v := range inp.NamedContexts {
+		target.FrontendAttrs["frontend.caps"] = "moby.buildkit.frontend.contexts+forward"
+		if urlutil.IsGitURL(v) || urlutil.IsURL(v) || strings.HasPrefix(v, "docker-image://") {
+			target.FrontendAttrs["context:"+k] = v
+			continue
+		}
+		st, err := os.Stat(v)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to get build context %v", k)
+		}
+		if !st.IsDir() {
+			return nil, errors.Wrapf(syscall.ENOTDIR, "failed to get build context path %v", v)
+		}
+		localName := k
+		if k == "context" || k == "dockerfile" {
+			localName = "_" + k // underscore to avoid collisions
+		}
+		target.LocalDirs[localName] = v
+		target.FrontendAttrs["context:"+k] = "local:" + localName
+	}
 
 	release := func() {
 		for _, dir := range toRemove {
