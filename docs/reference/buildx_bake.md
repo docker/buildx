@@ -339,7 +339,7 @@ target "db" {
 
 Complete list of valid target fields:
 
-`args`, `cache-from`, `cache-to`, `context`, `dockerfile`, `inherits`, `labels`,
+`args`, `cache-from`, `cache-to`, `context`, `contexts`, `dockerfile`, `inherits`, `labels`,
 `no-cache`, `output`, `platform`, `pull`, `secrets`, `ssh`, `tags`, `target`
 
 ### Global scope attributes

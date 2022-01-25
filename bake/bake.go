@@ -8,6 +8,7 @@ import (
 	"os"
 	"path"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 
@@ -128,6 +129,12 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 			}
 		}
 		g = []*Group{{Targets: dedupString(gt)}}
+	}
+
+	for name, t := range m {
+		if err := c.loadLinks(name, t, m, o, nil); err != nil {
+			return nil, nil, err
+		}
 	}
 
 	return m, g, nil
@@ -303,10 +310,45 @@ func (c Config) expandTargets(pattern string) ([]string, error) {
 	return names, nil
 }
 
+func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[string]map[string]Override, visited []string) error {
+	visited = append(visited, name)
+	for _, v := range t.Contexts {
+		if strings.HasPrefix(v, "target:") {
+			target := strings.TrimPrefix(v, "target:")
+			if target == t.Name {
+				return errors.Errorf("target %s cannot link to itself", target)
+			}
+			for _, v := range visited {
+				if v == target {
+					return errors.Errorf("infinite loop from %s to %s", name, target)
+				}
+			}
+			t2, ok := m[target]
+			if !ok {
+				var err error
+				t2, err = c.ResolveTarget(target, o)
+				if err != nil {
+					return err
+				}
+				t2.Outputs = nil
+				m[target] = t2
+			}
+			if err := c.loadLinks(target, t2, m, o, visited); err != nil {
+				return err
+			}
+			if len(t.Platforms) > 1 && len(t2.Platforms) > 1 {
+				if !sliceEqual(t.Platforms, t2.Platforms) {
+					return errors.Errorf("target %s can't be used by %s because it is defined for different platforms %v and %v", target, name, t2.Platforms, t.Platforms)
+				}
+			}
+		}
+	}
+	return nil
+}
+
 func (c Config) newOverrides(v []string) (map[string]map[string]Override, error) {
 	m := map[string]map[string]Override{}
 	for _, v := range v {
-
 		parts := strings.SplitN(v, "=", 2)
 		keys := strings.SplitN(parts[0], ".", 3)
 		if len(keys) < 2 {
@@ -349,6 +391,11 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 						continue
 					}
 					o.Value = v
+				}
+				fallthrough
+			case "contexts":
+				if len(keys) != 3 {
+					return nil, errors.Errorf("invalid key %s, contexts requires name", parts[0])
 				}
 				fallthrough
 			default:
@@ -461,6 +508,7 @@ type Target struct {
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional"`
 
 	Context          *string           `json:"context,omitempty" hcl:"context,optional"`
+	Contexts         map[string]string `json:"contexts,omitempty" hcl:"contexts,optional"`
 	Dockerfile       *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
 	DockerfileInline *string           `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional"`
 	Args             map[string]string `json:"args,omitempty" hcl:"args,optional"`
@@ -488,6 +536,15 @@ func (t *Target) normalize() {
 	t.CacheFrom = removeDupes(t.CacheFrom)
 	t.CacheTo = removeDupes(t.CacheTo)
 	t.Outputs = removeDupes(t.Outputs)
+
+	for k, v := range t.Contexts {
+		if v == "" {
+			delete(t.Contexts, k)
+		}
+	}
+	if len(t.Contexts) == 0 {
+		t.Contexts = nil
+	}
 }
 
 func (t *Target) Merge(t2 *Target) {
@@ -505,6 +562,12 @@ func (t *Target) Merge(t2 *Target) {
 			t.Args = map[string]string{}
 		}
 		t.Args[k] = v
+	}
+	for k, v := range t2.Contexts {
+		if t.Contexts == nil {
+			t.Contexts = map[string]string{}
+		}
+		t.Contexts[k] = v
 	}
 	for k, v := range t2.Labels {
 		if t.Labels == nil {
@@ -565,7 +628,14 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 				t.Args = map[string]string{}
 			}
 			t.Args[keys[1]] = value
-
+		case "contexts":
+			if len(keys) != 2 {
+				return errors.Errorf("contexts require name")
+			}
+			if t.Contexts == nil {
+				t.Contexts = map[string]string{}
+			}
+			t.Contexts[keys[1]] = value
 		case "labels":
 			if len(keys) != 2 {
 				return errors.Errorf("labels require name")
@@ -693,6 +763,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	bi := build.Inputs{
 		ContextPath:    contextPath,
 		DockerfilePath: dockerfilePath,
+		NamedContexts:  t.Contexts,
 	}
 	if t.DockerfileInline != nil {
 		bi.DockerfileInline = *t.DockerfileInline
@@ -810,4 +881,18 @@ func validateTargetName(name string) error {
 		return errors.Errorf("only %q are allowed", validTargetNameChars)
 	}
 	return nil
+}
+
+func sliceEqual(s1, s2 []string) bool {
+	if len(s1) != len(s2) {
+		return false
+	}
+	sort.Strings(s1)
+	sort.Strings(s2)
+	for i := range s1 {
+		if s1[i] != s2[i] {
+			return false
+		}
+	}
+	return true
 }
