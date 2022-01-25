@@ -28,6 +28,8 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		}
 	}
 
+	logrus.SetFormatter(&logutil.Formatter{})
+
 	logrus.AddHook(logutil.NewFilter([]logrus.Level{
 		logrus.DebugLevel,
 	},
