@@ -8,6 +8,7 @@ import (
 
 	"github.com/compose-spec/compose-go/loader"
 	compose "github.com/compose-spec/compose-go/types"
+	"github.com/pkg/errors"
 )
 
 func parseCompose(dt []byte) (*compose.Project, error) {
@@ -57,6 +58,10 @@ func ParseCompose(dt []byte) (*Config, error) {
 					return nil, fmt.Errorf("compose file invalid: service %s has neither an image nor a build context specified. At least one must be provided", s.Name)
 				}
 				continue
+			}
+
+			if err = validateTargetName(s.Name); err != nil {
+				return nil, errors.Wrapf(err, "invalid service name %q", s.Name)
 			}
 
 			var contextPathP *string

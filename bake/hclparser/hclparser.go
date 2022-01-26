@@ -16,8 +16,9 @@ import (
 )
 
 type Opt struct {
-	LookupVar func(string) (string, bool)
-	Vars      map[string]string
+	LookupVar     func(string) (string, bool)
+	Vars          map[string]string
+	ValidateLabel func(string) error
 }
 
 type variable struct {
@@ -262,6 +263,12 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		}
 	}
 
+	if opt.ValidateLabel == nil {
+		opt.ValidateLabel = func(string) error {
+			return nil
+		}
+	}
+
 	p := &parser{
 		opt: opt,
 
@@ -444,6 +451,17 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		if diag.HasErrors() {
 			diags = append(diags, diag...)
 			continue
+		}
+
+		if err := opt.ValidateLabel(b.Labels[0]); err != nil {
+			return hcl.Diagnostics{
+				&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Invalid name",
+					Detail:   err.Error(),
+					Subject:  &b.LabelRanges[0],
+				},
+			}
 		}
 
 		lblIndex := setLabel(vv, b.Labels[0])
