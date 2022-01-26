@@ -788,3 +788,58 @@ group "default" {
 		})
 	}
 }
+
+func TestTargetName(t *testing.T) {
+	ctx := context.TODO()
+	cases := []struct {
+		target  string
+		wantErr bool
+	}{
+		{
+			target:  "a",
+			wantErr: false,
+		},
+		{
+			target:  "abc",
+			wantErr: false,
+		},
+		{
+			target:  "a/b",
+			wantErr: true,
+		},
+		{
+			target:  "a.b",
+			wantErr: true,
+		},
+		{
+			target:  "_a",
+			wantErr: false,
+		},
+		{
+			target:  "a_b",
+			wantErr: false,
+		},
+		{
+			target:  "AbC",
+			wantErr: false,
+		},
+		{
+			target:  "AbC-0123",
+			wantErr: false,
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.target, func(t *testing.T) {
+			_, _, err := ReadTargets(ctx, []File{{
+				Name: "docker-bake.hcl",
+				Data: []byte(`target "` + tt.target + `" {}`),
+			}}, []string{tt.target}, nil, nil)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}

@@ -22,8 +22,13 @@ import (
 	"github.com/pkg/errors"
 )
 
-var httpPrefix = regexp.MustCompile(`^https?://`)
-var gitURLPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
+var (
+	httpPrefix                   = regexp.MustCompile(`^https?://`)
+	gitURLPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
+
+	validTargetNameChars = `[a-zA-Z0-9_-]+`
+	targetNamePattern    = regexp.MustCompile(`^` + validTargetNameChars + `$`)
+)
 
 type File struct {
 	Name string
@@ -176,8 +181,9 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 
 	if len(fs) > 0 {
 		if err := hclparser.Parse(hcl.MergeFiles(fs), hclparser.Opt{
-			LookupVar: os.LookupEnv,
-			Vars:      defaults,
+			LookupVar:     os.LookupEnv,
+			Vars:          defaults,
+			ValidateLabel: validateTargetName,
 		}, &c); err.HasErrors() {
 			return nil, err
 		}
@@ -797,4 +803,11 @@ func parseOutputType(str string) string {
 		}
 	}
 	return ""
+}
+
+func validateTargetName(name string) error {
+	if !targetNamePattern.MatchString(name) {
+		return errors.Errorf("only %q are allowed", validTargetNameChars)
+	}
+	return nil
 }

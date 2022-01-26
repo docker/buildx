@@ -314,3 +314,55 @@ func newBool(val bool) *bool {
 	b := val
 	return &b
 }
+
+func TestServiceName(t *testing.T) {
+	cases := []struct {
+		svc     string
+		wantErr bool
+	}{
+		{
+			svc:     "a",
+			wantErr: false,
+		},
+		{
+			svc:     "abc",
+			wantErr: false,
+		},
+		{
+			svc:     "a.b",
+			wantErr: true,
+		},
+		{
+			svc:     "_a",
+			wantErr: false,
+		},
+		{
+			svc:     "a_b",
+			wantErr: false,
+		},
+		{
+			svc:     "AbC",
+			wantErr: false,
+		},
+		{
+			svc:     "AbC-0123",
+			wantErr: false,
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.svc, func(t *testing.T) {
+			_, err := ParseCompose([]byte(`
+services:
+  ` + tt.svc + `:
+    build:
+      context: .
+`))
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
