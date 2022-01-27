@@ -23,6 +23,7 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/resolver"
+	"github.com/docker/buildx/util/waitmap"
 	"github.com/docker/cli/opts"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
@@ -34,6 +35,7 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/progress/progresswriter"
@@ -667,8 +669,35 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		}
 	}
 
+	// validate that all links between targets use same drivers
+	for name := range opt {
+		dps := m[name]
+		for _, dp := range dps {
+			for k, v := range dp.so.FrontendAttrs {
+				if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
+					k2 := strings.TrimPrefix(v, "target:")
+					dps2, ok := m[k2]
+					if !ok {
+						return nil, errors.Errorf("failed to find target %s for context %s", k2, strings.TrimPrefix(k, "context:")) // should be validated before already
+					}
+					var found bool
+					for _, dp2 := range dps2 {
+						if dp2.driverIndex == dp.driverIndex {
+							found = true
+							break
+						}
+					}
+					if !found {
+						return nil, errors.Errorf("failed to use %s as context %s for %s because targets build with different drivers", k2, strings.TrimPrefix(k, "context:"), name)
+					}
+				}
+			}
+		}
+	}
+
 	resp = map[string]*client.SolveResponse{}
 	var respMu sync.Mutex
+	results := waitmap.New()
 
 	multiTarget := len(opt) > 1
 
@@ -793,7 +822,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 			for i, dp := range dps {
 				so := *dp.so
-
 				if multiDriver {
 					for i, e := range so.Exports {
 						switch e.Type {
@@ -826,14 +854,42 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 					pw := progress.WithPrefix(w, k, multiTarget)
 
 					c := clients[dp.driverIndex]
-
-					pw = progress.ResetTime(pw)
-
 					eg.Go(func() error {
+						if err := waitContextDeps(ctx, dp.driverIndex, results, &so); err != nil {
+							return err
+						}
+
+						pw = progress.ResetTime(pw)
 						defer wg.Done()
 						ch, done := progress.NewChannel(pw)
 						defer func() { <-done }()
-						rr, err := c.Solve(ctx, nil, so, ch)
+
+						frontendInputs := make(map[string]*pb.Definition)
+						for key, st := range so.FrontendInputs {
+							def, err := st.Marshal(ctx)
+							if err != nil {
+								return err
+							}
+							frontendInputs[key] = def.ToPB()
+						}
+
+						req := gateway.SolveRequest{
+							Frontend:       so.Frontend,
+							FrontendOpt:    so.FrontendAttrs,
+							FrontendInputs: frontendInputs,
+						}
+						so.Frontend = ""
+						so.FrontendAttrs = nil
+						so.FrontendInputs = nil
+
+						rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+							res, err := c.Solve(ctx, req)
+							if err != nil {
+								return nil, err
+							}
+							results.Set(resultKey(dp.driverIndex, k), res)
+							return res, nil
+						}, ch)
 						if err != nil {
 							return err
 						}
@@ -1084,7 +1140,7 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 
 	for k, v := range inp.NamedContexts {
 		target.FrontendAttrs["frontend.caps"] = "moby.buildkit.frontend.contexts+forward"
-		if urlutil.IsGitURL(v) || urlutil.IsURL(v) || strings.HasPrefix(v, "docker-image://") {
+		if urlutil.IsGitURL(v) || urlutil.IsURL(v) || strings.HasPrefix(v, "docker-image://") || strings.HasPrefix(v, "target:") {
 			target.FrontendAttrs["context:"+k] = v
 			continue
 		}
@@ -1109,6 +1165,83 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 		}
 	}
 	return release, nil
+}
+
+func resultKey(index int, name string) string {
+	return fmt.Sprintf("%d-%s", index, name)
+}
+
+func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *client.SolveOpt) error {
+	m := map[string]string{}
+	for k, v := range so.FrontendAttrs {
+		if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
+			target := resultKey(index, strings.TrimPrefix(v, "target:"))
+			m[target] = k
+		}
+	}
+	if len(m) == 0 {
+		return nil
+	}
+	keys := make([]string, 0, len(m))
+	for k := range m {
+		keys = append(keys, k)
+	}
+	res, err := results.Get(ctx, keys...)
+	if err != nil {
+		return err
+	}
+
+	for k, v := range m {
+		r, ok := res[k]
+		if !ok {
+			continue
+		}
+		rr, ok := r.(*gateway.Result)
+		if !ok {
+			return errors.Errorf("invalid result type %T", rr)
+		}
+		if so.FrontendAttrs == nil {
+			so.FrontendAttrs = map[string]string{}
+		}
+		if so.FrontendInputs == nil {
+			so.FrontendInputs = map[string]llb.State{}
+		}
+		if len(rr.Refs) > 0 {
+			for platform, r := range rr.Refs {
+				st, err := r.ToState()
+				if err != nil {
+					return err
+				}
+				so.FrontendInputs[k+"::"+platform] = st
+				so.FrontendAttrs[v+"::"+platform] = "input:" + k + "::" + platform
+				dt, ok := rr.Metadata["containerimage.config/"+platform]
+				if !ok {
+					continue
+				}
+				dt, err = json.Marshal(map[string][]byte{"containerimage.config": dt})
+				if err != nil {
+					return err
+				}
+				so.FrontendAttrs["input-metadata:"+k+"::"+platform] = string(dt)
+			}
+		}
+		if rr.Ref != nil {
+			st, err := rr.Ref.ToState()
+			if err != nil {
+				return err
+			}
+			so.FrontendInputs[k] = st
+			so.FrontendAttrs[v] = "input:" + k
+			if dt, ok := rr.Metadata["containerimage.config"]; ok {
+				dt, err = json.Marshal(map[string][]byte{"containerimage.config": dt})
+				if err != nil {
+					return err
+				}
+				so.FrontendAttrs["input-metadata:"+k] = string(dt)
+			}
+		}
+	}
+	return nil
 }
 
 func notSupported(d driver.Driver, f driver.Feature) error {
