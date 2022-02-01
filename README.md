@@ -196,7 +196,7 @@ with `--output`.
 ## Working with builder instances
 
 By default, buildx will initially use the `docker` driver if it is supported,
-providing a very similar user experience to the native `docker build`. Note tha
+providing a very similar user experience to the native `docker build`. Note that
 you must use a local shared daemon to build your applications.
 
 Buildx allows you to create new instances of isolated builders. This can be
