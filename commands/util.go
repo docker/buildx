@@ -389,6 +389,17 @@ type nginfo struct {
 	err     error
 }
 
+// inactive checks if all nodes are inactive for this builder
+func (n *nginfo) inactive() bool {
+	for idx := range n.ng.Nodes {
+		d := n.drivers[idx]
+		if d.info != nil && d.info.Status == driver.Running {
+			return false
+		}
+	}
+	return true
+}
+
 func boot(ctx context.Context, ngi *nginfo) (bool, error) {
 	toBoot := make([]int, 0, len(ngi.drivers))
 	for i, d := range ngi.drivers {
