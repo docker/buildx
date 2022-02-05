@@ -41,7 +41,7 @@ func (p *Printer) Warnings() []client.VertexWarning {
 	return p.warnings
 }
 
-func NewPrinter(ctx context.Context, out console.File, mode string) *Printer {
+func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string) *Printer {
 	statusCh := make(chan *client.SolveStatus)
 	doneCh := make(chan struct{})
 
@@ -56,7 +56,6 @@ func NewPrinter(ctx context.Context, out console.File, mode string) *Printer {
 
 	go func() {
 		var c console.Console
-		var w io.Writer = out
 		switch mode {
 		case PrinterModeQuiet:
 			w = ioutil.Discard
