@@ -414,7 +414,7 @@ func boot(ctx context.Context, ngi *nginfo) (bool, error) {
 		return false, nil
 	}
 
-	printer := progress.NewPrinter(context.TODO(), os.Stderr, "auto")
+	printer := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, "auto")
 
 	baseCtx := ctx
 	eg, _ := errgroup.WithContext(ctx)

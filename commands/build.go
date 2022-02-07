@@ -239,7 +239,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	printer := progress.NewPrinter(ctx2, os.Stderr, progressMode)
+	printer := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode)
 
 	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	err1 := printer.Wait()
