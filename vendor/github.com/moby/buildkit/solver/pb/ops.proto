@@ -18,6 +18,7 @@ message Op {
 		FileOp file = 4;
 		BuildOp build = 5;
 		MergeOp merge = 6;
+		DiffOp diff = 7;
 	}
 	Platform platform = 10;
 	WorkerConstraints constraints = 11;
@@ -46,6 +47,7 @@ message ExecOp {
 	repeated Mount mounts = 2;
 	NetMode network = 3;
 	SecurityMode security = 4;
+	repeated SecretEnv secretenv = 5;
 }
 
 // Meta is a set of arguments for ExecOp.
@@ -83,6 +85,13 @@ enum NetMode {
 enum SecurityMode {
 	SANDBOX = 0;
 	INSECURE = 1; // privileged mode
+}
+
+// SecretEnv is an environment variable that is backed by a secret.
+message SecretEnv {
+	string ID = 1;
+	string name = 2;
+	bool optional = 3;
 }
 
 // Mount specifies how to mount an input Op as a filesystem.
@@ -198,6 +207,8 @@ message OpMetadata {
 	ExportCache export_cache = 4;
 
 	map<string, bool> caps = 5 [(gogoproto.castkey) = "github.com/moby/buildkit/util/apicaps.CapID", (gogoproto.nullable) = false];
+
+	ProgressGroup progress_group = 6;
 }
 
 // Source is a source mapping description for a file
@@ -238,6 +249,11 @@ message Position {
 
 message ExportCache {
 	bool Value = 1;
+}
+
+message ProgressGroup {
+	string id = 1;
+	string name = 2;
 }
 
 message ProxyEnv {
@@ -371,4 +387,17 @@ message MergeInput {
 
 message MergeOp {
 	repeated MergeInput inputs = 1;
+}
+
+message LowerDiffInput {
+  int64 input = 1 [(gogoproto.customtype) = "InputIndex", (gogoproto.nullable) = false];
+}
+
+message UpperDiffInput {
+  int64 input = 1 [(gogoproto.customtype) = "InputIndex", (gogoproto.nullable) = false];
+}
+
+message DiffOp {
+  LowerDiffInput lower = 1;
+  UpperDiffInput upper = 2;
 }

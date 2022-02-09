@@ -53,6 +53,7 @@ const (
 	CapExecMountSecret                   apicaps.CapID = "exec.mount.secret"
 	CapExecMountSSH                      apicaps.CapID = "exec.mount.ssh"
 	CapExecCgroupsMounted                apicaps.CapID = "exec.cgroup"
+	CapExecSecretEnv                     apicaps.CapID = "exec.secretenv"
 
 	CapFileBase                       apicaps.CapID = "file.base"
 	CapFileRmWildcard                 apicaps.CapID = "file.rm.wildcard"
@@ -69,10 +70,10 @@ const (
 	CapRemoteCacheGHA apicaps.CapID = "cache.gha"
 
 	CapMergeOp apicaps.CapID = "mergeop"
+	CapDiffOp  apicaps.CapID = "diffop"
 )
 
 func init() {
-
 	Caps.Init(apicaps.Cap{
 		ID:      CapSourceImage,
 		Enabled: true,
@@ -314,6 +315,12 @@ func init() {
 	})
 
 	Caps.Init(apicaps.Cap{
+		ID:      CapExecSecretEnv,
+		Enabled: true,
+		Status:  apicaps.CapStatusExperimental,
+	})
+
+	Caps.Init(apicaps.Cap{
 		ID:      CapFileBase,
 		Enabled: true,
 		Status:  apicaps.CapStatusPrerelease,
@@ -378,6 +385,11 @@ func init() {
 	})
 	Caps.Init(apicaps.Cap{
 		ID:      CapMergeOp,
+		Enabled: true,
+		Status:  apicaps.CapStatusExperimental,
+	})
+	Caps.Init(apicaps.Cap{
+		ID:      CapDiffOp,
 		Enabled: true,
 		Status:  apicaps.CapStatusExperimental,
 	})
