@@ -263,13 +263,14 @@ func (c *Client) solve(ctx context.Context, def *llb.Definition, runGateway runG
 			s := SolveStatus{}
 			for _, v := range resp.Vertexes {
 				s.Vertexes = append(s.Vertexes, &Vertex{
-					Digest:    v.Digest,
-					Inputs:    v.Inputs,
-					Name:      v.Name,
-					Started:   v.Started,
-					Completed: v.Completed,
-					Error:     v.Error,
-					Cached:    v.Cached,
+					Digest:        v.Digest,
+					Inputs:        v.Inputs,
+					Name:          v.Name,
+					Started:       v.Started,
+					Completed:     v.Completed,
+					Error:         v.Error,
+					Cached:        v.Cached,
+					ProgressGroup: v.ProgressGroup,
 				})
 			}
 			for _, v := range resp.Statuses {
@@ -459,7 +460,6 @@ func parseCacheOptions(ctx context.Context, opt SolveOpt) (*cacheOptions, error)
 				}
 			}
 			contentStores["local:"+csDir] = cs
-
 		}
 		if im.Type == "registry" {
 			legacyImportRef := attrs["ref"]
