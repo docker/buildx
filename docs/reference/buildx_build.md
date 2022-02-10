@@ -36,7 +36,7 @@ Start a build
 | `--pull` | Always attempt to pull a newer version of the image |
 | [`--push`](#push) | Shorthand for `--output=type=registry` |
 | `-q`, `--quiet` | Suppress the build output and print image ID on success |
-| `--secret stringArray` | Secret file to expose to the build (format: `id=mysecret,src=/local/secret`) |
+| [`--secret stringArray`](#secret) | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`) |
 | [`--shm-size bytes`](#shm-size) | Size of `/dev/shm` |
 | `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag (format: `name:tag`) |
@@ -357,6 +357,55 @@ with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_cre
 ```console
 $ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
 $ docker buildx build --allow security.insecure .
+```
+
+### <a name="secret"></a> Secret to expose to the build (`--secret`)
+
+```
+--secret=[type=TYPE[,KEY=VALUE]
+```
+
+Exposes secret to the build. The secret can be used by the build using
+[`RUN --mount=type=secret` mount](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#run---mounttypesecret).
+
+If `type` is unset it will be detected. Supported types are:
+
+#### `file`
+
+Attribute keys:
+
+- `id` - ID of the secret. Defaults to basename of the `src` path.
+- `src`, `source` - Secret filename. `id` used if unset.
+
+```dockerfile
+# syntax=docker/dockerfile:1.3
+FROM python:3
+RUN pip install awscli
+RUN --mount=type=secret,id=aws,target=/root/.aws/credentials \
+  aws s3 cp s3://... ...
+```
+
+```shell
+docker buildx build --secret id=aws,src=$HOME/.aws/credentials .
+```
+
+#### `env`
+
+Attribute keys:
+
+- `id` - ID of the secret. Defaults to `env` name.
+- `env` - Secret environment variable. `id` used if unset, otherwise will look for `src`, `source` if `id` unset.
+
+```dockerfile
+# syntax=docker/dockerfile:1.3
+FROM node:alpine
+RUN --mount=type=bind,target=. \
+  --mount=type=secret,id=SECRET_TOKEN \
+  SECRET_TOKEN=$(cat /run/secrets/SECRET_TOKEN) yarn run test
+```
+
+```shell
+SECRET_TOKEN=token docker buildx build --secret id=SECRET_TOKEN .
 ```
 
 ### <a name="shm-size"></a> Size of `/dev/shm` (--shm-size)
