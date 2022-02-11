@@ -13,7 +13,6 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
-	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -152,16 +151,20 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}
 
 	if len(in.metadataFile) > 0 && resp != nil {
-		mdata := map[string]map[string]string{}
-		for k, r := range resp {
-			mdata[k] = r.ExporterResponse
-		}
-		mdatab, err := json.MarshalIndent(mdata, "", "  ")
-		if err != nil {
-			return err
-		}
-		if err := ioutils.AtomicWriteFile(in.metadataFile, mdatab, 0644); err != nil {
-			return err
+		if len(resp) == 1 {
+			for _, r := range resp {
+				if err := writeMetadataFile(in.metadataFile, decodeExporterResponse(r.ExporterResponse)); err != nil {
+					return err
+				}
+			}
+		} else {
+			dt := make(map[string]interface{})
+			for t, r := range resp {
+				dt[t] = decodeExporterResponse(r.ExporterResponse)
+			}
+			if err := writeMetadataFile(in.metadataFile, dt); err != nil {
+				return err
+			}
 		}
 	}
 
