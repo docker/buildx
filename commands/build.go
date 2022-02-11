@@ -371,7 +371,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 
-	flags.StringArrayVar(&options.secrets, "secret", []string{}, `Secret file to expose to the build (format: "id=mysecret,src=/local/secret")`)
+	flags.StringArrayVar(&options.secrets, "secret", []string{}, `Secret to expose to the build (format: "id=mysecret[,src=/local/secret]")`)
 
 	flags.Var(&options.shmSize, "shm-size", `Size of "/dev/shm"`)
 
