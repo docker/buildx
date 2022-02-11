@@ -10,13 +10,20 @@ set -eu -o pipefail
 : ${MULTI_NODE=0}
 : ${PLATFORMS=linux/amd64,linux/arm64}
 
+function buildxCmd {
+  (set -x ; $BUILDX_CMD "$@")
+}
+
 function clean {
   rm -rf "$context"
-  ${BUILDX_CMD} rm "$builderName"
+  if [ "$builderName" != "default" ]; then
+    buildxCmd rm "$builderName"
+  fi
 }
 
 context=$(mktemp -d -t buildx-output.XXXXXXXXXX)
 dockerfile=${context}/Dockerfile
+bakedef=${context}/docker-bake.hcl
 trap clean EXIT
 
 builderName=buildx-test-$(openssl rand -hex 16)
@@ -44,15 +51,12 @@ if [ "$DRIVER" != "docker" ]; then
       if [ "$firstNode" = "0" ]; then
         createFlags="$createFlags --append"
       fi
-      (
-        set -x
-        ${BUILDX_CMD} create ${createFlags} \
-          --name="${builderName}" \
-          --node="${builderName}-${platform/\//-}" \
-          --driver="${DRIVER}" \
-          --driver-opt="${driverOpt}" \
-          --platform="${platform}"
-      )
+      buildxCmd create ${createFlags} \
+        --name="${builderName}" \
+        --node="${builderName}-${platform/\//-}" \
+        --driver="${DRIVER}" \
+        --driver-opt="${driverOpt}" \
+        --platform="${platform}"
       firstNode=0
     done
   else
@@ -60,27 +64,37 @@ if [ "$DRIVER" != "docker" ]; then
     if [ -f "$BUILDKIT_CFG" ]; then
       createFlags="$createFlags --config=${BUILDKIT_CFG}"
     fi
-    (
-      set -x
-      ${BUILDX_CMD} create ${createFlags} \
-        --name="${builderName}" \
-        --driver="${DRIVER}" \
-        --driver-opt="${driverOpt}" \
-        --platform="${PLATFORMS}"
-    )
+    buildxCmd create ${createFlags} \
+      --name="${builderName}" \
+      --driver="${DRIVER}" \
+      --driver-opt="${driverOpt}" \
+      --platform="${PLATFORMS}"
   fi
 fi
 
+function buildOutput {
+  local name=$1
+  if [ "$DRIVER" != "docker" ]; then
+    if [ "${MULTI_NODE}" = "1" ]; then
+      echo "type=cacheonly"
+    else
+      echo "type=oci,dest=${context}/${name}.tar"
+    fi
+  else
+    echo "type=docker,name=${name}"
+  fi
+}
+
 # multi-platform not supported by docker driver
 buildPlatformFlag=
+bakePlatformFlag=
 if [ "$DRIVER" != "docker" ]; then
   buildPlatformFlag=--platform="${PLATFORMS}"
+  bakePlatformFlag=--set="*.platform=${PLATFORMS}"
 fi
 
-set -x
-
 # inspect and bootstrap
-${BUILDX_CMD} inspect --bootstrap --builder="${builderName}"
+buildxCmd inspect --bootstrap --builder="${builderName}"
 
 # create dockerfile
 cat > "${dockerfile}" <<EOL
@@ -88,14 +102,60 @@ FROM busybox as build
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 RUN echo "I am running on \$BUILDPLATFORM, building for \$TARGETPLATFORM" > /log
-FROM busybox
+
+FROM busybox AS log
 COPY --from=build /log /log
 RUN cat /log
 RUN uname -a
+
+FROM busybox AS hello
+RUN echo hello > /hello
+
+FROM scratch
+COPY --from=log /log /log
+COPY --from=hello /hello /hello
 EOL
 
 # build
-${BUILDX_CMD} build ${buildPlatformFlag} \
-  --output="type=cacheonly" \
+buildxCmd build ${buildPlatformFlag} \
+  --output="$(buildOutput buildx-test-build)" \
   --builder="${builderName}" \
+  --metadata-file="${context}/metadata-build.json" \
   "${context}"
+cat "${context}/metadata-build.json"
+
+# create bake def
+cat > "${bakedef}" <<EOL
+group "default" {
+  targets = ["release"]
+}
+group "all" {
+  targets = ["log", "hello"]
+}
+target "release" {
+  output = ["$(buildOutput buildx-test-bake-release)"]
+}
+target "log" {
+  output = ["$(buildOutput buildx-test-bake-log)"]
+}
+target "hello" {
+  output = ["$(buildOutput buildx-test-bake-hello)"]
+}
+EOL
+
+# bake default target
+buildxCmd bake ${bakePlatformFlag} \
+  --file="${bakedef}" \
+  --builder="${builderName}" \
+  --set "*.context=${context}" \
+  --metadata-file="${context}/metadata-bake-def.json"
+cat "${context}/metadata-bake-def.json"
+
+# bake all target
+buildxCmd bake ${bakePlatformFlag} \
+  --file="${bakedef}" \
+  --builder="${builderName}" \
+  --set "*.context=${context}" \
+  --metadata-file="${context}/metadata-bake-all.json" \
+  all
+cat "${context}/metadata-bake-all.json"
