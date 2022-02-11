@@ -3,6 +3,7 @@ package commands
 import (
 	"bytes"
 	"context"
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -251,11 +252,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	}
 
 	if len(metadataFile) > 0 && resp != nil {
-		mdatab, err := json.MarshalIndent(resp[defaultTargetName].ExporterResponse, "", "  ")
-		if err != nil {
-			return "", err
-		}
-		if err := ioutils.AtomicWriteFile(metadataFile, mdatab, 0644); err != nil {
+		if err := writeMetadataFile(metadataFile, decodeExporterResponse(resp[defaultTargetName].ExporterResponse)); err != nil {
 			return "", err
 		}
 	}
@@ -494,6 +491,32 @@ func parseContextNames(values []string) (map[string]string, error) {
 		result[name] = kv[1]
 	}
 	return result, nil
+}
+
+func writeMetadataFile(filename string, dt interface{}) error {
+	b, err := json.MarshalIndent(dt, "", "  ")
+	if err != nil {
+		return err
+	}
+	return ioutils.AtomicWriteFile(filename, b, 0644)
+}
+
+func decodeExporterResponse(exporterResponse map[string]string) map[string]interface{} {
+	out := make(map[string]interface{})
+	for k, v := range exporterResponse {
+		dt, err := base64.StdEncoding.DecodeString(v)
+		if err != nil {
+			out[k] = v
+			continue
+		}
+		var raw map[string]interface{}
+		if err = json.Unmarshal(dt, &raw); err != nil || len(raw) == 0 {
+			out[k] = v
+			continue
+		}
+		out[k] = json.RawMessage(dt)
+	}
+	return out
 }
 
 func wrapBuildError(err error) error {
