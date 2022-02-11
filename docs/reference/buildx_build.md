@@ -54,6 +54,18 @@ For documentation on most of these flags, refer to the [`docker build`
 documentation](https://docs.docker.com/engine/reference/commandline/build/). In
 here we’ll document a subset of the new flags.
 
+### Built-in build args
+
+* `BUILDKIT_INLINE_BUILDINFO_ATTRS=<bool>` inline build info attributes in image config or not
+* `BUILDKIT_INLINE_CACHE=<bool>` inline cache metadata to image config or not
+* `BUILDKIT_MULTI_PLATFORM=<bool>` opt into determnistic output regardless of multi-platform output or not
+
+```shell
+docker buildx build --build-arg BUILDKIT_MULTI_PLATFORM=1 .
+```
+
+Other useful built-in args can be found in [dockerfile frontend docs](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#built-in-build-args).
+
 ## Examples
 
 ### <a name="builder"></a> Override the configured builder instance (--builder)
