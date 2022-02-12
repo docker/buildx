@@ -39,7 +39,7 @@ Start a build
 | `-q`, `--quiet` | Suppress the build output and print image ID on success |
 | [`--secret stringArray`](#secret) | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`) |
 | [`--shm-size bytes`](#shm-size) | Size of `/dev/shm` |
-| `--ssh stringArray` | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
+| [`--ssh stringArray`](#ssh) | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
 | [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag (format: `name:tag`) |
 | [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build |
 | [`--ulimit ulimit`](#ulimit) | Ulimit options |
@@ -401,6 +401,37 @@ $ SECRET_TOKEN=token docker buildx build --secret id=SECRET_TOKEN .
 The format is `<number><unit>`. `number` must be greater than `0`. Unit is
 optional and can be `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`
 (gigabytes). If you omit the unit, the system uses bytes.
+
+### <a name="ssh"></a> SSH agent socket or keys to expose to the build (--ssh)
+
+```
+--ssh=default|<id>[=<socket>|<key>[,<key>]]
+```
+
+This can be useful when some commands in your Dockerfile need specific SSH
+authentication (e.g., cloning a private repository).
+
+`--ssh` exposes SSH agent socket or keys to the build and can be used with the
+[`RUN --mount=type=ssh` mount](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#run---mounttypessh).
+
+Example to access Gitlab using an SSH agent socket:
+
+```dockerfile
+# syntax=docker/dockerfile:1.3
+FROM alpine
+RUN apk add --no-cache openssh-client
+RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
+RUN --mount=type=ssh ssh -q -T git@gitlab.com 2>&1 | tee /hello
+# "Welcome to GitLab, @GITLAB_USERNAME_ASSOCIATED_WITH_SSHKEY" should be printed here
+# with the type of build progress is defined as `plain`.
+```
+
+```console
+$ eval $(ssh-agent)
+$ ssh-add ~/.ssh/id_rsa
+(Input your passphrase here)
+$ docker buildx build --ssh default=$SSH_AUTH_SOCK .
+```
 
 ### <a name="ulimit"></a> Set ulimits (--ulimit)
 
