@@ -30,6 +30,7 @@ Start a build
 | `--metadata-file string` | Write build result metadata to the file |
 | `--network string` | Set the networking mode for the `RUN` instructions during build |
 | `--no-cache` | Do not use cache when building the image |
+| `--no-cache-filter stringArray` | Do not cache specified stages |
 | [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: `type=local,dest=path`) |
 | [`--platform stringArray`](#platform) | Set target platform for build |
 | [`--progress string`](#progress) | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |

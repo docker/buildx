@@ -194,6 +194,14 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 				if res, ok := val.(bool); ok {
 					t.NoCache = &res
 				}
+			case "no-cache-filter":
+				if res, k := val.(string); k {
+					t.NoCacheFilter = append(t.NoCacheFilter, res)
+				} else {
+					for _, res := range val.([]interface{}) {
+						t.NoCacheFilter = append(t.NoCacheFilter, res.(string))
+					}
+				}
 			default:
 				return fmt.Errorf("compose file invalid: unkwown %s field for x-bake", key)
 			}

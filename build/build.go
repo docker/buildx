@@ -56,24 +56,25 @@ var (
 type Options struct {
 	Inputs Inputs
 
-	Allow        []entitlements.Entitlement
-	BuildArgs    map[string]string
-	CacheFrom    []client.CacheOptionsEntry
-	CacheTo      []client.CacheOptionsEntry
-	CgroupParent string
-	Exports      []client.ExportEntry
-	ExtraHosts   []string
-	ImageIDFile  string
-	Labels       map[string]string
-	NetworkMode  string
-	NoCache      bool
-	Platforms    []specs.Platform
-	Pull         bool
-	Session      []session.Attachable
-	ShmSize      opts.MemBytes
-	Tags         []string
-	Target       string
-	Ulimits      *opts.UlimitOpt
+	Allow         []entitlements.Entitlement
+	BuildArgs     map[string]string
+	CacheFrom     []client.CacheOptionsEntry
+	CacheTo       []client.CacheOptionsEntry
+	CgroupParent  string
+	Exports       []client.ExportEntry
+	ExtraHosts    []string
+	ImageIDFile   string
+	Labels        map[string]string
+	NetworkMode   string
+	NoCache       bool
+	NoCacheFilter []string
+	Platforms     []specs.Platform
+	Pull          bool
+	Session       []session.Attachable
+	ShmSize       opts.MemBytes
+	Tags          []string
+	Target        string
+	Ulimits       *opts.UlimitOpt
 }
 
 type Inputs struct {
@@ -526,6 +527,9 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 	}
 	if opt.Target != "" {
 		so.FrontendAttrs["target"] = opt.Target
+	}
+	if len(opt.NoCacheFilter) > 0 {
+		so.FrontendAttrs["no-cache"] = strings.Join(opt.NoCacheFilter, ",")
 	}
 	if opt.NoCache {
 		so.FrontendAttrs["no-cache"] = ""
