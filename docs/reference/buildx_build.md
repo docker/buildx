@@ -27,7 +27,7 @@ Start a build
 | `--iidfile string` | Write the image ID to the file |
 | `--label stringArray` | Set metadata for an image |
 | [`--load`](#load) | Shorthand for `--output=type=docker` |
-| `--metadata-file string` | Write build result metadata to the file |
+| [`--metadata-file string`](#metadata-file) | Write build result metadata to the file |
 | `--network string` | Set the networking mode for the `RUN` instructions during build |
 | `--no-cache` | Do not use cache when building the image |
 | `--no-cache-filter stringArray` | Do not cache specified stages |
@@ -202,6 +202,52 @@ More info about cache exporters and available attributes: https://github.com/mob
 
 Shorthand for [`--output=type=docker`](#docker). Will automatically load the
 single-platform build result to `docker images`.
+
+### <a name="metadata-file"></a> Write build result metadata to the file (--metadata-file)
+
+To output build metadata such as the image digest, pass the `--metadata-file` flag.
+The metadata will be written as a JSON object to the specified file. The
+directory of the specified file must already exist and be writable.
+
+```console
+$ docker buildx build --load --metadata-file metadata.json .
+$ cat metadata.json
+```
+```json
+{
+  "containerimage.buildinfo": {
+    "frontend": "dockerfile.v0",
+    "attrs": {
+      "context": "https://github.com/crazy-max/buildkit-buildsources-test.git#master",
+      "filename": "Dockerfile",
+      "source": "docker/dockerfile:master"
+    },
+    "sources": [
+      {
+        "type": "docker-image",
+        "ref": "docker.io/docker/buildx-bin:0.6.1@sha256:a652ced4a4141977c7daaed0a074dcd9844a78d7d2615465b12f433ae6dd29f0",
+        "pin": "sha256:a652ced4a4141977c7daaed0a074dcd9844a78d7d2615465b12f433ae6dd29f0"
+      },
+      {
+        "type": "docker-image",
+        "ref": "docker.io/library/alpine:3.13",
+        "pin": "sha256:026f721af4cf2843e07bba648e158fb35ecc876d822130633cc49f707f0fc88c"
+      }
+    ]
+  },
+  "containerimage.config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
+  "containerimage.descriptor": {
+    "annotations": {
+      "config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
+      "org.opencontainers.image.created": "2022-02-08T21:28:03Z"
+    },
+    "digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3",
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "size": 506
+  },
+  "containerimage.digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3"
+}
+```
 
 ### <a name="output"></a> Set the export action for the build result (-o, --output)
 
