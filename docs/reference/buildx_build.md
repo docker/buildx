@@ -17,7 +17,7 @@ Start a build
 | --- | --- |
 | [`--add-host stringSlice`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | Add a custom host-to-IP mapping (format: `host:ip`) |
 | [`--allow stringSlice`](#allow) | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`) |
-| [`--build-arg stringArray`](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg) | Set build-time variables |
+| [`--build-arg stringArray`](#build-arg) | Set build-time variables |
 | [`--build-context stringArray`](#build-context) | Additional build contexts (e.g., name=path) |
 | [`--builder string`](#builder) | Override the configured builder instance |
 | [`--cache-from stringArray`](#cache-from) | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`) |
@@ -79,6 +79,22 @@ with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_cre
 $ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
 $ docker buildx build --allow security.insecure .
 ```
+
+### <a name="build-arg"></a> Set build-time variables (--build-arg)
+
+Same as [`docker build` command](https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg).
+
+There are also useful built-in build args like:
+
+* `BUILDKIT_CONTEXT_KEEP_GIT_DIR=<bool>` trigger git context to keep the `.git` directory
+* `BUILDKIT_INLINE_CACHE=<bool>` inline cache metadata to image config or not
+* `BUILDKIT_MULTI_PLATFORM=<bool>` opt into determnistic output regardless of multi-platform output or not
+
+```console
+$ docker buildx build --build-arg BUILDKIT_MULTI_PLATFORM=1 .
+```
+
+More built-in build args can be found in [dockerfile frontend docs](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#built-in-build-args).
 
 ### <a name="build-context"></a> Additional build contexts (--build-context)
 

@@ -344,7 +344,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringSliceVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
 
 	flags.StringArrayVar(&options.buildArgs, "build-arg", []string{}, "Set build-time variables")
-	flags.SetAnnotation("build-arg", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#set-build-time-variables---build-arg"})
 
 	flags.StringArrayVar(&options.cacheFrom, "cache-from", []string{}, `External cache sources (e.g., "user/app:cache", "type=local,src=path/to/dir")`)
 
