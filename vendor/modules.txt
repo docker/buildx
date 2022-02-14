@@ -111,7 +111,7 @@ github.com/docker/cli-docs-tool/annotation
 # github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496
 ## explicit
 github.com/docker/compose-on-kubernetes/api
-# github.com/docker/distribution v2.7.1+incompatible
+# github.com/docker/distribution v2.8.0+incompatible
 ## explicit
 github.com/docker/distribution
 github.com/docker/distribution/digestset
