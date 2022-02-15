@@ -129,7 +129,7 @@ github.com/docker/distribution/registry/client/transport
 github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
-# github.com/docker/docker v20.10.7+incompatible => github.com/docker/docker v20.10.3-0.20211216190657-088afc99e4bf+incompatible
+# github.com/docker/docker v20.10.7+incompatible => github.com/docker/docker v20.10.3-0.20220121014307-40bb9831756f+incompatible
 ## explicit
 github.com/docker/docker/api
 github.com/docker/docker/api/types
@@ -426,7 +426,7 @@ github.com/theupdateframework/notary/tuf/data
 github.com/theupdateframework/notary/tuf/signed
 github.com/theupdateframework/notary/tuf/utils
 github.com/theupdateframework/notary/tuf/validation
-# github.com/tonistiigi/fsutil v0.0.0-20211208180946-61a57076b9b0
+# github.com/tonistiigi/fsutil v0.0.0-20211208180946-61a57076b9b0 => github.com/tonistiigi/fsutil v0.0.0-20220115021204-b19f7f9cb274
 github.com/tonistiigi/fsutil
 github.com/tonistiigi/fsutil/types
 # github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea
@@ -886,7 +886,8 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
 sigs.k8s.io/yaml
 # github.com/docker/cli => github.com/docker/cli v20.10.3-0.20210702143511-f782d1355eff+incompatible
-# github.com/docker/docker => github.com/docker/docker v20.10.3-0.20211216190657-088afc99e4bf+incompatible
+# github.com/docker/docker => github.com/docker/docker v20.10.3-0.20220121014307-40bb9831756f+incompatible
+# github.com/tonistiigi/fsutil => github.com/tonistiigi/fsutil v0.0.0-20220115021204-b19f7f9cb274
 # k8s.io/api => k8s.io/api v0.22.4
 # k8s.io/apimachinery => k8s.io/apimachinery v0.22.4
 # k8s.io/client-go => k8s.io/client-go v0.22.4

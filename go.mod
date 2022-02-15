@@ -58,7 +58,8 @@ require (
 
 replace (
 	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20210702143511-f782d1355eff+incompatible
-	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20211216190657-088afc99e4bf+incompatible
+	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20220121014307-40bb9831756f+incompatible
+	github.com/tonistiigi/fsutil => github.com/tonistiigi/fsutil v0.0.0-20220115021204-b19f7f9cb274
 	k8s.io/api => k8s.io/api v0.22.4
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4
 	k8s.io/client-go => k8s.io/client-go v0.22.4
