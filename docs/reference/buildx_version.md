@@ -10,10 +10,9 @@ Show buildx version information
 
 <!---MARKER_GEN_END-->
 
-## Examples
+## Description
 
-### View version information
-
+View version information
 
 ```console
 $ docker buildx version

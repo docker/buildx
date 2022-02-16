@@ -1,9 +1,10 @@
 # buildx
 
-[![PkgGoDev](https://img.shields.io/badge/go.dev-docs-007d9c?logo=go&logoColor=white)](https://pkg.go.dev/github.com/docker/buildx)
-[![Build Status](https://github.com/docker/buildx/workflows/build/badge.svg)](https://github.com/docker/buildx/actions?query=workflow%3Abuild)
-[![Go Report Card](https://goreportcard.com/badge/github.com/docker/buildx)](https://goreportcard.com/report/github.com/docker/buildx)
-[![codecov](https://codecov.io/gh/docker/buildx/branch/master/graph/badge.svg)](https://codecov.io/gh/docker/buildx)
+[![GitHub release](https://img.shields.io/github/release/docker/buildx.svg?style=flat-square)](https://github.com/docker/buildx/releases/latest)
+[![PkgGoDev](https://img.shields.io/badge/go.dev-docs-007d9c?style=flat-square&logo=go&logoColor=white)](https://pkg.go.dev/github.com/docker/buildx)
+[![Build Status](https://img.shields.io/github/workflow/status/docker/buildx/build?label=build&logo=github&style=flat-square)](https://github.com/docker/buildx/actions?query=workflow%3Abuild)
+[![Go Report Card](https://goreportcard.com/badge/github.com/docker/buildx?style=flat-square)](https://goreportcard.com/report/github.com/docker/buildx)
+[![codecov](https://img.shields.io/codecov/c/github/docker/buildx?logo=codecov&style=flat-square)](https://codecov.io/gh/docker/buildx)
 
 `buildx` is a Docker CLI plugin for extended build capabilities with
 [BuildKit](https://github.com/moby/buildkit).
