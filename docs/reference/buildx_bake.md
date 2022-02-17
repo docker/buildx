@@ -264,7 +264,6 @@ $ docker buildx bake --progress=plain
 ...
 ```
 
-
 ### <a name="pull"></a> Always attempt to pull a newer version of the image (--pull)
 
 Same as `build --pull`.
@@ -277,9 +276,6 @@ Same as `build --pull`.
 
 Override target configurations from command line. The pattern matching syntax
 is defined in https://golang.org/pkg/path/#Match.
-
-
-**Examples**
 
 ```console
 $ docker buildx bake --set target.args.mybuildarg=value
@@ -313,8 +309,7 @@ groups to inherit from.
 Note: Design of bake command is work in progress, the user experience may change
 based on feedback.
 
-
-**Example HCL definition**
+HCL definition example:
 
 ```hcl
 group "default" {
@@ -869,7 +864,6 @@ target "app" {
 ```
 
 Please note that in most cases you should just use a single multi-stage Dockerfile with multiple targets for similar behavior. This case is recommended when you have multiple Dockerfiles that can't be easily merged into one.
-
 
 ### Extension field with Compose
 

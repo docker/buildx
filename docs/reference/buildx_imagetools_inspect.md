@@ -21,8 +21,6 @@ Show details of image in the registry
 
 Show details of image in the registry.
 
-Example:
-
 ```console
 $ docker buildx imagetools inspect alpine
 
