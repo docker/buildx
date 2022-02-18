@@ -37,6 +37,32 @@ func GetCurrentEndpoint(dockerCli command.Cli) (string, error) {
 	return de, nil
 }
 
+func GetProxyConfig(dockerCli command.Cli) map[string]string {
+	cfg := dockerCli.ConfigFile()
+	host := dockerCli.Client().DaemonHost()
+
+	proxy, ok := cfg.Proxies[host]
+	if !ok {
+		proxy = cfg.Proxies["default"]
+	}
+
+	m := map[string]string{}
+
+	if v := proxy.HTTPProxy; v != "" {
+		m["HTTP_PROXY"] = v
+	}
+	if v := proxy.HTTPSProxy; v != "" {
+		m["HTTPS_PROXY"] = v
+	}
+	if v := proxy.NoProxy; v != "" {
+		m["NO_PROXY"] = v
+	}
+	if v := proxy.FTPProxy; v != "" {
+		m["FTP_PROXY"] = v
+	}
+	return m
+}
+
 // GetDockerEndpoint returns docker endpoint string for given context
 func GetDockerEndpoint(dockerCli command.Cli, name string) (string, error) {
 	list, err := dockerCli.ContextStore().List()

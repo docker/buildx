@@ -87,11 +87,12 @@ type Inputs struct {
 }
 
 type DriverInfo struct {
-	Driver   driver.Driver
-	Name     string
-	Platform []specs.Platform
-	Err      error
-	ImageOpt imagetools.Opt
+	Driver      driver.Driver
+	Name        string
+	Platform    []specs.Platform
+	Err         error
+	ImageOpt    imagetools.Opt
+	ProxyConfig map[string]string
 }
 
 type DockerAPI interface {
@@ -338,7 +339,8 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+	d := di.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
 		for _, f := range defers {
@@ -541,6 +543,12 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 		so.FrontendAttrs["label:"+k] = v
 	}
 
+	for k, v := range di.ProxyConfig {
+		if _, ok := opt.BuildArgs[k]; !ok {
+			so.FrontendAttrs["build-arg:"+k] = v
+		}
+	}
+
 	// set platforms
 	if len(opt.Platforms) != 0 {
 		pp := make([]string, len(opt.Platforms))
@@ -635,12 +643,12 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 		multiDriver := len(m[k]) > 1
 		hasMobyDriver := false
 		for i, dp := range m[k] {
-			d := drivers[dp.driverIndex].Driver
-			if d.IsMobyDriver() {
+			di := drivers[dp.driverIndex]
+			if di.Driver.IsMobyDriver() {
 				hasMobyDriver = true
 			}
 			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(ctx, d, multiDriver, opt, dp.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
+			so, release, err := toSolveOpt(ctx, di, multiDriver, opt, dp.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
 				return newDockerLoader(ctx, docker, name, w)
 			})
 			if err != nil {
