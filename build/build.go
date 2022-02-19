@@ -32,6 +32,7 @@ import (
 	"github.com/docker/docker/pkg/urlutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
@@ -1218,15 +1219,20 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 				}
 				so.FrontendInputs[k+"::"+platform] = st
 				so.FrontendAttrs[v+"::"+platform] = "input:" + k + "::" + platform
-				dt, ok := rr.Metadata["containerimage.config/"+platform]
-				if !ok {
-					continue
+				metadata := make(map[string][]byte)
+				if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey+"/"+platform]; ok {
+					metadata[exptypes.ExporterImageConfigKey] = dt
 				}
-				dt, err = json.Marshal(map[string][]byte{"containerimage.config": dt})
-				if err != nil {
-					return err
+				if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo+"/"+platform]; ok {
+					metadata[exptypes.ExporterBuildInfo] = dt
 				}
-				so.FrontendAttrs["input-metadata:"+k+"::"+platform] = string(dt)
+				if len(metadata) > 0 {
+					dt, err := json.Marshal(metadata)
+					if err != nil {
+						return err
+					}
+					so.FrontendAttrs["input-metadata:"+k+"::"+platform] = string(dt)
+				}
 			}
 		}
 		if rr.Ref != nil {
@@ -1236,8 +1242,15 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 			}
 			so.FrontendInputs[k] = st
 			so.FrontendAttrs[v] = "input:" + k
-			if dt, ok := rr.Metadata["containerimage.config"]; ok {
-				dt, err = json.Marshal(map[string][]byte{"containerimage.config": dt})
+			metadata := make(map[string][]byte)
+			if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey]; ok {
+				metadata[exptypes.ExporterImageConfigKey] = dt
+			}
+			if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo]; ok {
+				metadata[exptypes.ExporterBuildInfo] = dt
+			}
+			if len(metadata) > 0 {
+				dt, err := json.Marshal(metadata)
 				if err != nil {
 					return err
 				}
