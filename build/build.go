@@ -505,6 +505,12 @@ func toSolveOpt(ctx context.Context, d driver.Driver, multiDriver bool, opt Opti
 				}
 			}
 		}
+		if e.Type == "docker" || e.Type == "image" || e.Type == "oci" {
+			// inline buildinfo attrs from build arg
+			if v, ok := opt.BuildArgs["BUILDKIT_INLINE_BUILDINFO_ATTRS"]; ok {
+				e.Attrs["buildinfo-attrs"] = v
+			}
+		}
 	}
 
 	so.Exports = opt.Exports
