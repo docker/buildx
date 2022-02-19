@@ -859,14 +859,12 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 
 					c := clients[dp.driverIndex]
 					eg.Go(func() error {
+						pw = progress.ResetTime(pw)
+						defer wg.Done()
+
 						if err := waitContextDeps(ctx, dp.driverIndex, results, &so); err != nil {
 							return err
 						}
-
-						pw = progress.ResetTime(pw)
-						defer wg.Done()
-						ch, done := progress.NewChannel(pw)
-						defer func() { <-done }()
 
 						frontendInputs := make(map[string]*pb.Definition)
 						for key, st := range so.FrontendInputs {
@@ -885,6 +883,9 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						so.Frontend = ""
 						so.FrontendAttrs = nil
 						so.FrontendInputs = nil
+
+						ch, done := progress.NewChannel(pw)
+						defer func() { <-done }()
 
 						rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 							res, err := c.Solve(ctx, req)
