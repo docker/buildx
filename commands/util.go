@@ -73,8 +73,9 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 		func(i int, n store.Node) {
 			eg.Go(func() error {
 				di := build.DriverInfo{
-					Name:     n.Name,
-					Platform: n.Platforms,
+					Name:        n.Name,
+					Platform:    n.Platforms,
+					ProxyConfig: storeutil.GetProxyConfig(dockerCli),
 				}
 				defer func() {
 					dis[i] = di
@@ -264,9 +265,10 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly b
 	}
 	return []build.DriverInfo{
 		{
-			Name:     "default",
-			Driver:   d,
-			ImageOpt: imageopt,
+			Name:        "default",
+			Driver:      d,
+			ImageOpt:    imageopt,
+			ProxyConfig: storeutil.GetProxyConfig(dockerCli),
 		},
 	}, nil
 }
