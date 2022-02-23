@@ -10,7 +10,7 @@ require (
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
 	github.com/compose-spec/compose-go v1.0.8
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.0-rc.2
+	github.com/containerd/containerd v1.6.0
 	github.com/docker/cli v20.10.12+incompatible
 	github.com/docker/cli-docs-tool v0.3.0
 	github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 // indirect
@@ -31,7 +31,7 @@ require (
 	github.com/jinzhu/gorm v1.9.2 // indirect
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a // indirect
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
-	github.com/moby/buildkit v0.10.0-rc1.0.20220215175614-1e6032cec26b
+	github.com/moby/buildkit v0.10.0-rc1.0.20220223192213-b124b0c3f19c
 	github.com/morikuni/aec v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5
@@ -44,16 +44,16 @@ require (
 	github.com/stretchr/testify v1.7.0
 	github.com/theupdateframework/notary v0.6.1 // indirect
 	github.com/zclconf/go-cty v1.10.0
-	go.opentelemetry.io/otel v1.4.0
-	go.opentelemetry.io/otel/trace v1.4.0
+	go.opentelemetry.io/otel v1.4.1
+	go.opentelemetry.io/otel/trace v1.4.1
 	golang.org/x/sync v0.0.0-20210220032951-036812b2e83c
 	google.golang.org/grpc v1.44.0
 	gopkg.in/dancannon/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/fatih/pool.v2 v2.0.0 // indirect
 	gopkg.in/gorethink/gorethink.v3 v3.0.5 // indirect
-	k8s.io/api v0.23.3
-	k8s.io/apimachinery v0.23.3
-	k8s.io/client-go v0.23.3
+	k8s.io/api v0.23.4
+	k8s.io/apimachinery v0.23.4
+	k8s.io/client-go v0.23.4
 )
 
 replace (
