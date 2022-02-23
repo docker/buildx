@@ -226,7 +226,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	}
 
 	imageID, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
-	err = wrapBuildError(err)
+	err = wrapBuildError(err, false)
 	if err != nil {
 		return err
 	}
@@ -526,14 +526,19 @@ func decodeExporterResponse(exporterResponse map[string]string) map[string]inter
 	return out
 }
 
-func wrapBuildError(err error) error {
+func wrapBuildError(err error, bake bool) error {
 	if err == nil {
 		return nil
 	}
 	st, ok := grpcerrors.AsGRPCStatus(err)
 	if ok {
 		if st.Code() == codes.Unimplemented && strings.Contains(st.Message(), "unsupported frontend capability moby.buildkit.frontend.contexts") {
-			return &wrapped{err, "current frontend does not support --build-context. Named contexts are supported since Dockerfile v1.4"}
+			msg := "current frontend does not support --build-context."
+			if bake {
+				msg = "current frontend does not support defining additional contexts for targets."
+			}
+			msg += " Named contexts are supported since Dockerfile v1.4. Use #syntax directive in Dockerfile or update to latest BuildKit."
+			return &wrapped{err, msg}
 		}
 	}
 	return err
