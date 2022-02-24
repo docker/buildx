@@ -55,9 +55,12 @@ github.com/containerd/containerd/content/proxy
 github.com/containerd/containerd/defaults
 github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/filters
+github.com/containerd/containerd/identifiers
 github.com/containerd/containerd/images
 github.com/containerd/containerd/labels
+github.com/containerd/containerd/leases
 github.com/containerd/containerd/log
+github.com/containerd/containerd/namespaces
 github.com/containerd/containerd/pkg/seed
 github.com/containerd/containerd/pkg/userns
 github.com/containerd/containerd/platforms
@@ -71,6 +74,8 @@ github.com/containerd/containerd/services/content/contentserver
 github.com/containerd/containerd/version
 # github.com/containerd/continuity v0.2.2
 github.com/containerd/continuity/sysx
+# github.com/containerd/ttrpc v1.1.0
+github.com/containerd/ttrpc
 # github.com/containerd/typeurl v1.0.2
 github.com/containerd/typeurl
 # github.com/davecgh/go-spew v1.1.1
@@ -293,7 +298,7 @@ github.com/miekg/pkcs11
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.4.2
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.10.0-rc1.0.20220223192213-b124b0c3f19c
+# github.com/moby/buildkit v0.10.0-rc1.0.20220223201314-b0e56cd5633a
 ## explicit
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -322,19 +327,26 @@ github.com/moby/buildkit/session/upload
 github.com/moby/buildkit/session/upload/uploadprovider
 github.com/moby/buildkit/solver/errdefs
 github.com/moby/buildkit/solver/pb
+github.com/moby/buildkit/source/types
 github.com/moby/buildkit/util/apicaps
 github.com/moby/buildkit/util/apicaps/pb
 github.com/moby/buildkit/util/appcontext
 github.com/moby/buildkit/util/appdefaults
 github.com/moby/buildkit/util/bklog
+github.com/moby/buildkit/util/buildinfo/types
+github.com/moby/buildkit/util/contentutil
 github.com/moby/buildkit/util/entitlements
 github.com/moby/buildkit/util/flightcontrol
 github.com/moby/buildkit/util/gitutil
 github.com/moby/buildkit/util/grpcerrors
+github.com/moby/buildkit/util/imageutil
+github.com/moby/buildkit/util/leaseutil
 github.com/moby/buildkit/util/progress
 github.com/moby/buildkit/util/progress/progressui
 github.com/moby/buildkit/util/progress/progresswriter
 github.com/moby/buildkit/util/resolver/config
+github.com/moby/buildkit/util/resolver/limited
+github.com/moby/buildkit/util/resolver/retryhandler
 github.com/moby/buildkit/util/sshutil
 github.com/moby/buildkit/util/stack
 github.com/moby/buildkit/util/system
@@ -343,6 +355,7 @@ github.com/moby/buildkit/util/tracing/detect
 github.com/moby/buildkit/util/tracing/detect/delegated
 github.com/moby/buildkit/util/tracing/env
 github.com/moby/buildkit/util/tracing/otlptracegrpc
+github.com/moby/buildkit/version
 # github.com/moby/locker v1.0.1
 github.com/moby/locker
 # github.com/moby/spdystream v0.2.0
