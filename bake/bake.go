@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -744,6 +745,59 @@ func updateContext(t *build.Inputs, inp *Input) {
 	t.ContextState = &st
 }
 
+// validateContextsEntitlements is a basic check to ensure contexts do not
+// escape local directories when loaded from remote sources. This is to be
+// replaced with proper entitlements support in the future.
+func validateContextsEntitlements(t build.Inputs, inp *Input) error {
+	if inp == nil || inp.State == nil {
+		return nil
+	}
+	if v, ok := os.LookupEnv("BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
+		if vv, _ := strconv.ParseBool(v); vv {
+			return nil
+		}
+	}
+	if t.ContextState == nil {
+		if err := checkPath(t.ContextPath); err != nil {
+			return err
+		}
+	}
+	for _, v := range t.NamedContexts {
+		if v.State != nil {
+			continue
+		}
+		if err := checkPath(v.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkPath(p string) error {
+	if IsRemoteURL(p) || strings.HasPrefix(p, "target:") || strings.HasPrefix(p, "docker-image:") {
+		return nil
+	}
+	p, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(wd, p)
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return errors.Errorf("path %s is outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS=1", p)
+	}
+	return nil
+}
+
 func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
@@ -797,6 +851,10 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		if strings.HasPrefix(v.Path, "cwd://") {
 			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
 		}
+	}
+
+	if err := validateContextsEntitlements(bi, inp); err != nil {
+		return nil, err
 	}
 
 	t.Context = &bi.ContextPath
