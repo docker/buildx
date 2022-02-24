@@ -715,6 +715,21 @@ func updateContext(t *build.Inputs, inp *Input) {
 	if inp == nil || inp.State == nil {
 		return
 	}
+
+	for k, v := range t.NamedContexts {
+		if v.Path == "." {
+			t.NamedContexts[k] = build.NamedContext{Path: inp.URL}
+		}
+		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
+			continue
+		}
+		if IsRemoteURL(v.Path) {
+			continue
+		}
+		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
+		t.NamedContexts[k] = build.NamedContext{State: &st}
+	}
+
 	if t.ContextPath == "." {
 		t.ContextPath = inp.URL
 		return
@@ -769,7 +784,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	bi := build.Inputs{
 		ContextPath:    contextPath,
 		DockerfilePath: dockerfilePath,
-		NamedContexts:  t.Contexts,
+		NamedContexts:  toNamedContexts(t.Contexts),
 	}
 	if t.DockerfileInline != nil {
 		bi.DockerfileInline = *t.DockerfileInline
@@ -777,6 +792,11 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	updateContext(&bi, inp)
 	if strings.HasPrefix(bi.ContextPath, "cwd://") {
 		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
+	}
+	for k, v := range bi.NamedContexts {
+		if strings.HasPrefix(v.Path, "cwd://") {
+			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
+		}
 	}
 
 	t.Context = &bi.ContextPath
@@ -902,4 +922,12 @@ func sliceEqual(s1, s2 []string) bool {
 		}
 	}
 	return true
+}
+
+func toNamedContexts(m map[string]string) map[string]build.NamedContext {
+	m2 := make(map[string]build.NamedContext, len(m))
+	for k, v := range m {
+		m2[k] = build.NamedContext{Path: v}
+	}
+	return m2
 }

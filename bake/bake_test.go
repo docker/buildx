@@ -386,8 +386,8 @@ func TestReadContexts(t *testing.T) {
 	ctxs := bo["app"].Inputs.NamedContexts
 	require.Equal(t, 2, len(ctxs))
 
-	require.Equal(t, "baz", ctxs["foo"])
-	require.Equal(t, "def", ctxs["abc"])
+	require.Equal(t, "baz", ctxs["foo"].Path)
+	require.Equal(t, "def", ctxs["abc"].Path)
 
 	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.contexts.foo=bay", "base.contexts.ghi=jkl"}, nil)
 	require.NoError(t, err)
@@ -402,9 +402,9 @@ func TestReadContexts(t *testing.T) {
 	ctxs = bo["app"].Inputs.NamedContexts
 	require.Equal(t, 3, len(ctxs))
 
-	require.Equal(t, "bay", ctxs["foo"])
-	require.Equal(t, "def", ctxs["abc"])
-	require.Equal(t, "jkl", ctxs["ghi"])
+	require.Equal(t, "bay", ctxs["foo"].Path)
+	require.Equal(t, "def", ctxs["abc"].Path)
+	require.Equal(t, "jkl", ctxs["ghi"].Path)
 
 	// test resetting base values
 	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.contexts.foo="}, nil)
@@ -419,7 +419,7 @@ func TestReadContexts(t *testing.T) {
 
 	ctxs = bo["app"].Inputs.NamedContexts
 	require.Equal(t, 1, len(ctxs))
-	require.Equal(t, "def", ctxs["abc"])
+	require.Equal(t, "def", ctxs["abc"].Path)
 }
 
 func TestReadContextFromTargetUnknown(t *testing.T) {
