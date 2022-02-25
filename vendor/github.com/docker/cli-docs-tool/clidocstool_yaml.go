@@ -17,7 +17,6 @@ package clidocstool
 import (
 	"fmt"
 	"io"
-	"io/ioutil"
 	"log"
 	"os"
 	"path/filepath"
@@ -269,12 +268,24 @@ func genFlagResult(cmd *cobra.Command, flags *pflag.FlagSet, anchors map[string]
 
 	flags.VisitAll(func(flag *pflag.Flag) {
 		opt = cmdOption{
-			Option:       flag.Name,
-			ValueType:    flag.Value.Type(),
-			DefaultValue: forceMultiLine(flag.DefValue, defaultValueMaxWidth),
-			Deprecated:   len(flag.Deprecated) > 0,
-			Hidden:       flag.Hidden,
+			Option:     flag.Name,
+			ValueType:  flag.Value.Type(),
+			Deprecated: len(flag.Deprecated) > 0,
+			Hidden:     flag.Hidden,
 		}
+
+		var defval string
+		if v, ok := flag.Annotations[annotation.DefaultValue]; ok && len(v) > 0 {
+			defval = v[0]
+			if cd, ok := flag.Annotations[annotation.CodeDelimiter]; ok {
+				defval = strings.ReplaceAll(defval, cd[0], "`")
+			} else if cd, ok := cmd.Annotations[annotation.CodeDelimiter]; ok {
+				defval = strings.ReplaceAll(defval, cd, "`")
+			}
+		} else {
+			defval = flag.DefValue
+		}
+		opt.DefaultValue = forceMultiLine(defval, defaultValueMaxWidth)
 
 		usage := flag.Usage
 		if cd, ok := flag.Annotations[annotation.CodeDelimiter]; ok {
@@ -367,7 +378,7 @@ func (c *Client) loadLongDescription(parentCmd *cobra.Command) error {
 			}
 		}
 		name := cmd.CommandPath()
-		if i := strings.Index(name, " "); c.plugin && i >= 0 {
+		if i := strings.Index(name, " "); i >= 0 {
 			// remove root command / binary name
 			name = name[i+1:]
 		}
@@ -376,7 +387,7 @@ func (c *Client) loadLongDescription(parentCmd *cobra.Command) error {
 		}
 		mdFile := strings.ReplaceAll(name, " ", "_") + ".md"
 		sourcePath := filepath.Join(c.source, mdFile)
-		content, err := ioutil.ReadFile(sourcePath)
+		content, err := os.ReadFile(sourcePath)
 		if os.IsNotExist(err) {
 			log.Printf("WARN: %s does not exist, skipping Markdown examples for YAML doc\n", mdFile)
 			continue

@@ -13,18 +13,18 @@ Build from a file
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--builder string`](#builder) | Override the configured builder instance |
-| [`-f`](#file), [`--file stringArray`](#file) | Build definition file |
-| `--load` | Shorthand for `--set=*.output=type=docker` |
-| `--metadata-file string` | Write build result metadata to the file |
-| [`--no-cache`](#no-cache) | Do not use cache when building the image |
-| [`--print`](#print) | Print the options without building |
-| [`--progress string`](#progress) | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| [`--pull`](#pull) | Always attempt to pull a newer version of the image |
-| `--push` | Shorthand for `--set=*.output=type=registry` |
-| [`--set stringArray`](#set) | Override target value (e.g., `targetpattern.key=value`) |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
+| [`-f`](#file), [`--file`](#file) | `stringArray` |  | Build definition file |
+| `--load` |  |  | Shorthand for `--set=*.output=type=docker` |
+| `--metadata-file` | `string` |  | Write build result metadata to the file |
+| [`--no-cache`](#no-cache) |  |  | Do not use cache when building the image |
+| [`--print`](#print) |  |  | Print the options without building |
+| [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
+| [`--pull`](#pull) |  |  | Always attempt to pull a newer version of the image |
+| `--push` |  |  | Shorthand for `--set=*.output=type=registry` |
+| [`--set`](#set) | `stringArray` |  | Override target value (e.g., `targetpattern.key=value`) |
 
 
 <!---MARKER_GEN_END-->

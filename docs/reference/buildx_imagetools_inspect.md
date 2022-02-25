@@ -9,10 +9,10 @@ Show details of image in the registry
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--builder string`](#builder) | Override the configured builder instance |
-| [`--raw`](#raw) | Show original JSON manifest |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
+| [`--raw`](#raw) |  |  | Show original JSON manifest |
 
 
 <!---MARKER_GEN_END-->
