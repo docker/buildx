@@ -9,11 +9,11 @@ Disk usage
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--builder string`](#builder) | Override the configured builder instance |
-| `--filter filter` | Provide filter values |
-| `--verbose` | Provide a more verbose output |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
+| `--filter` | `filter` |  | Provide filter values |
+| `--verbose` |  |  | Provide a more verbose output |
 
 
 <!---MARKER_GEN_END-->

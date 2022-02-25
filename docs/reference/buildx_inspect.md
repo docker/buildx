@@ -9,10 +9,10 @@ Inspect current builder instance
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--bootstrap`](#bootstrap) | Ensure builder has booted before inspecting |
-| [`--builder string`](#builder) | Override the configured builder instance |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--bootstrap`](#bootstrap) |  |  | Ensure builder has booted before inspecting |
+| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
 
 
 <!---MARKER_GEN_END-->

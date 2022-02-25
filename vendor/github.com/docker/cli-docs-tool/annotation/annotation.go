@@ -20,4 +20,6 @@ const (
 	// CodeDelimiter specifies the char that will be converted as code backtick.
 	// Can be used on cmd for inheritance or a specific flag.
 	CodeDelimiter = "docs.code-delimiter"
+	// DefaultValue specifies the default value for a flag.
+	DefaultValue = "docs.default-value"
 )

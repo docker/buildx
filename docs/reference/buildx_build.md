@@ -13,36 +13,36 @@ Start a build
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--add-host stringSlice`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | Add a custom host-to-IP mapping (format: `host:ip`) |
-| [`--allow stringSlice`](#allow) | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`) |
-| [`--build-arg stringArray`](#build-arg) | Set build-time variables |
-| [`--build-context stringArray`](#build-context) | Additional build contexts (e.g., name=path) |
-| [`--builder string`](#builder) | Override the configured builder instance |
-| [`--cache-from stringArray`](#cache-from) | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`) |
-| [`--cache-to stringArray`](#cache-to) | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
-| [`--cgroup-parent string`](https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent) | Optional parent cgroup for the container |
-| [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file string`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | Name of the Dockerfile (default: `PATH/Dockerfile`) |
-| `--iidfile string` | Write the image ID to the file |
-| `--label stringArray` | Set metadata for an image |
-| [`--load`](#load) | Shorthand for `--output=type=docker` |
-| [`--metadata-file string`](#metadata-file) | Write build result metadata to the file |
-| `--network string` | Set the networking mode for the `RUN` instructions during build |
-| `--no-cache` | Do not use cache when building the image |
-| `--no-cache-filter stringArray` | Do not cache specified stages |
-| [`-o`](#output), [`--output stringArray`](#output) | Output destination (format: `type=local,dest=path`) |
-| [`--platform stringArray`](#platform) | Set target platform for build |
-| [`--progress string`](#progress) | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| `--pull` | Always attempt to pull a newer version of the image |
-| [`--push`](#push) | Shorthand for `--output=type=registry` |
-| `-q`, `--quiet` | Suppress the build output and print image ID on success |
-| [`--secret stringArray`](#secret) | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`) |
-| [`--shm-size bytes`](#shm-size) | Size of `/dev/shm` |
-| [`--ssh stringArray`](#ssh) | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
-| [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag stringArray`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | Name and optionally a tag (format: `name:tag`) |
-| [`--target string`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | Set the target build stage to build |
-| [`--ulimit ulimit`](#ulimit) | Ulimit options |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--add-host`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | `stringSlice` |  | Add a custom host-to-IP mapping (format: `host:ip`) |
+| [`--allow`](#allow) | `stringSlice` |  | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`) |
+| [`--build-arg`](#build-arg) | `stringArray` |  | Set build-time variables |
+| [`--build-context`](#build-context) | `stringArray` |  | Additional build contexts (e.g., name=path) |
+| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
+| [`--cache-from`](#cache-from) | `stringArray` |  | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`) |
+| [`--cache-to`](#cache-to) | `stringArray` |  | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
+| [`--cgroup-parent`](https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent) | `string` |  | Optional parent cgroup for the container |
+| [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | `string` |  | Name of the Dockerfile (default: `PATH/Dockerfile`) |
+| `--iidfile` | `string` |  | Write the image ID to the file |
+| `--label` | `stringArray` |  | Set metadata for an image |
+| [`--load`](#load) |  |  | Shorthand for `--output=type=docker` |
+| [`--metadata-file`](#metadata-file) | `string` |  | Write build result metadata to the file |
+| `--network` | `string` | `default` | Set the networking mode for the `RUN` instructions during build |
+| `--no-cache` |  |  | Do not use cache when building the image |
+| `--no-cache-filter` | `stringArray` |  | Do not cache specified stages |
+| [`-o`](#output), [`--output`](#output) | `stringArray` |  | Output destination (format: `type=local,dest=path`) |
+| [`--platform`](#platform) | `stringArray` |  | Set target platform for build |
+| [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
+| `--pull` |  |  | Always attempt to pull a newer version of the image |
+| [`--push`](#push) |  |  | Shorthand for `--output=type=registry` |
+| `-q`, `--quiet` |  |  | Suppress the build output and print image ID on success |
+| [`--secret`](#secret) | `stringArray` |  | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`) |
+| [`--shm-size`](#shm-size) | `bytes` | `0` | Size of `/dev/shm` |
+| [`--ssh`](#ssh) | `stringArray` |  | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
+| [`-t`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t), [`--tag`](https://docs.docker.com/engine/reference/commandline/build/#tag-an-image--t) | `stringArray` |  | Name and optionally a tag (format: `name:tag`) |
+| [`--target`](https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target) | `string` |  | Set the target build stage to build |
+| [`--ulimit`](#ulimit) | `ulimit` |  | Ulimit options |
 
 
 <!---MARKER_GEN_END-->

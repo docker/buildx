@@ -9,19 +9,19 @@ Create a new builder instance
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--append`](#append) | Append a node to builder instead of changing it |
-| `--bootstrap` | Boot builder after creation |
-| [`--buildkitd-flags string`](#buildkitd-flags) | Flags for buildkitd daemon |
-| [`--config string`](#config) | BuildKit config file |
-| [`--driver string`](#driver) | Driver to use (available: `docker`, `docker-container`, `kubernetes`) |
-| [`--driver-opt stringArray`](#driver-opt) | Options for the driver |
-| [`--leave`](#leave) | Remove a node from builder instead of changing it |
-| [`--name string`](#name) | Builder instance name |
-| [`--node string`](#node) | Create/modify node with given name |
-| [`--platform stringArray`](#platform) | Fixed platforms for current node |
-| [`--use`](#use) | Set the current builder instance |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--append`](#append) |  |  | Append a node to builder instead of changing it |
+| `--bootstrap` |  |  | Boot builder after creation |
+| [`--buildkitd-flags`](#buildkitd-flags) | `string` |  | Flags for buildkitd daemon |
+| [`--config`](#config) | `string` |  | BuildKit config file |
+| [`--driver`](#driver) | `string` |  | Driver to use (available: `docker`, `docker-container`, `kubernetes`) |
+| [`--driver-opt`](#driver-opt) | `stringArray` |  | Options for the driver |
+| [`--leave`](#leave) |  |  | Remove a node from builder instead of changing it |
+| [`--name`](#name) | `string` |  | Builder instance name |
+| [`--node`](#node) | `string` |  | Create/modify node with given name |
+| [`--platform`](#platform) | `stringArray` |  | Fixed platforms for current node |
+| [`--use`](#use) |  |  | Set the current builder instance |
 
 
 <!---MARKER_GEN_END-->

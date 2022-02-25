@@ -17,9 +17,9 @@ Commands to work on images in registry
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--builder string`](#builder) | Override the configured builder instance |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
 
 
 <!---MARKER_GEN_END-->

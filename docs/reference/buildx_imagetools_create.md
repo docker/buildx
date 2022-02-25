@@ -9,13 +9,13 @@ Create a new image based on source images
 
 ### Options
 
-| Name | Description |
-| --- | --- |
-| [`--append`](#append) | Append to existing manifest |
-| [`--builder string`](#builder) | Override the configured builder instance |
-| [`--dry-run`](#dry-run) | Show final image instead of pushing |
-| [`-f`](#file), [`--file stringArray`](#file) | Read source descriptor from file |
-| [`-t`](#tag), [`--tag stringArray`](#tag) | Set reference for new image |
+| Name | Type | Default | Description |
+| --- | --- | --- | --- |
+| [`--append`](#append) |  |  | Append to existing manifest |
+| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
+| [`--dry-run`](#dry-run) |  |  | Show final image instead of pushing |
+| [`-f`](#file), [`--file`](#file) | `stringArray` |  | Read source descriptor from file |
+| [`-t`](#tag), [`--tag`](#tag) | `stringArray` |  | Set reference for new image |
 
 
 <!---MARKER_GEN_END-->
