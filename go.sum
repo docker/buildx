@@ -973,8 +973,8 @@ github.com/mitchellh/mapstructure v1.4.2 h1:6h7AQ0yhTcIsmFmnAwQls75jp2Gzs4iB8W7p
 github.com/mitchellh/mapstructure v1.4.2/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/osext v0.0.0-20151018003038-5e2d6d41470f/go.mod h1:OkQIRizQZAeMln+1tSwduZz7+Af5oFlKirV/MSYes2A=
 github.com/moby/buildkit v0.8.1/go.mod h1:/kyU1hKy/aYCuP39GZA9MaKioovHku57N6cqlKZIaiQ=
-github.com/moby/buildkit v0.10.0-rc1.0.20220223201314-b0e56cd5633a h1:DKCpVlYCXbP1iJZ7rNSJTzH4N+El12Z6IdVRaNMbQ54=
-github.com/moby/buildkit v0.10.0-rc1.0.20220223201314-b0e56cd5633a/go.mod h1:WJRmOULNzLGkGcQaLLVYJiARKvm37cFx23r6oQAPhvQ=
+github.com/moby/buildkit v0.10.0-rc1.0.20220225190804-0692ad797425 h1:4muA0f6pWdKTHPJvdwWGTYYu+whyg39gqwTDVcV4i/U=
+github.com/moby/buildkit v0.10.0-rc1.0.20220225190804-0692ad797425/go.mod h1:vG6thoKi/B564lEn03YQQc1rbOlAohvgD3/X7Mf9Wz0=
 github.com/moby/locker v1.0.1 h1:fOXqR41zeveg4fFODix+1Ch4mj/gT0NE1XJbp/epuBg=
 github.com/moby/locker v1.0.1/go.mod h1:S7SDdo5zpBK84bzzVlKr2V0hz+7x9hWbYC/kq7oQppc=
 github.com/moby/spdystream v0.2.0 h1:cjW1zVyyoiM0T7b6UoySUFqzXMoqRckQtXwGPiBhOM8=
