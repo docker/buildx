@@ -7,6 +7,7 @@ import (
 	"io/ioutil"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"sort"
 	"strconv"
@@ -715,6 +716,21 @@ func updateContext(t *build.Inputs, inp *Input) {
 	if inp == nil || inp.State == nil {
 		return
 	}
+
+	for k, v := range t.NamedContexts {
+		if v.Path == "." {
+			t.NamedContexts[k] = build.NamedContext{Path: inp.URL}
+		}
+		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
+			continue
+		}
+		if IsRemoteURL(v.Path) {
+			continue
+		}
+		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
+		t.NamedContexts[k] = build.NamedContext{State: &st}
+	}
+
 	if t.ContextPath == "." {
 		t.ContextPath = inp.URL
 		return
@@ -727,6 +743,59 @@ func updateContext(t *build.Inputs, inp *Input) {
 	}
 	st := llb.Scratch().File(llb.Copy(*inp.State, t.ContextPath, "/"), llb.WithCustomNamef("set context to %s", t.ContextPath))
 	t.ContextState = &st
+}
+
+// validateContextsEntitlements is a basic check to ensure contexts do not
+// escape local directories when loaded from remote sources. This is to be
+// replaced with proper entitlements support in the future.
+func validateContextsEntitlements(t build.Inputs, inp *Input) error {
+	if inp == nil || inp.State == nil {
+		return nil
+	}
+	if v, ok := os.LookupEnv("BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
+		if vv, _ := strconv.ParseBool(v); vv {
+			return nil
+		}
+	}
+	if t.ContextState == nil {
+		if err := checkPath(t.ContextPath); err != nil {
+			return err
+		}
+	}
+	for _, v := range t.NamedContexts {
+		if v.State != nil {
+			continue
+		}
+		if err := checkPath(v.Path); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func checkPath(p string) error {
+	if IsRemoteURL(p) || strings.HasPrefix(p, "target:") || strings.HasPrefix(p, "docker-image:") {
+		return nil
+	}
+	p, err := filepath.EvalSymlinks(p)
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil
+		}
+		return err
+	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return err
+	}
+	rel, err := filepath.Rel(wd, p)
+	if err != nil {
+		return err
+	}
+	if strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+		return errors.Errorf("path %s is outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS=1", p)
+	}
+	return nil
 }
 
 func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
@@ -769,7 +838,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	bi := build.Inputs{
 		ContextPath:    contextPath,
 		DockerfilePath: dockerfilePath,
-		NamedContexts:  t.Contexts,
+		NamedContexts:  toNamedContexts(t.Contexts),
 	}
 	if t.DockerfileInline != nil {
 		bi.DockerfileInline = *t.DockerfileInline
@@ -777,6 +846,15 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	updateContext(&bi, inp)
 	if strings.HasPrefix(bi.ContextPath, "cwd://") {
 		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
+	}
+	for k, v := range bi.NamedContexts {
+		if strings.HasPrefix(v.Path, "cwd://") {
+			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
+		}
+	}
+
+	if err := validateContextsEntitlements(bi, inp); err != nil {
+		return nil, err
 	}
 
 	t.Context = &bi.ContextPath
@@ -902,4 +980,12 @@ func sliceEqual(s1, s2 []string) bool {
 		}
 	}
 	return true
+}
+
+func toNamedContexts(m map[string]string) map[string]build.NamedContext {
+	m2 := make(map[string]build.NamedContext, len(m))
+	for k, v := range m {
+		m2[k] = build.NamedContext{Path: v}
+	}
+	return m2
 }

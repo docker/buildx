@@ -84,7 +84,12 @@ type Inputs struct {
 	InStream         io.Reader
 	ContextState     *llb.State
 	DockerfileInline string
-	NamedContexts    map[string]string
+	NamedContexts    map[string]NamedContext
+}
+
+type NamedContext struct {
+	Path  string
+	State *llb.State
 }
 
 type DriverInfo struct {
@@ -1160,11 +1165,20 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 
 	for k, v := range inp.NamedContexts {
 		target.FrontendAttrs["frontend.caps"] = "moby.buildkit.frontend.contexts+forward"
-		if urlutil.IsGitURL(v) || urlutil.IsURL(v) || strings.HasPrefix(v, "docker-image://") || strings.HasPrefix(v, "target:") {
-			target.FrontendAttrs["context:"+k] = v
+		if v.State != nil {
+			target.FrontendAttrs["context:"+k] = "input:" + k
+			if target.FrontendInputs == nil {
+				target.FrontendInputs = make(map[string]llb.State)
+			}
+			target.FrontendInputs[k] = *v.State
 			continue
 		}
-		st, err := os.Stat(v)
+
+		if urlutil.IsGitURL(v.Path) || urlutil.IsURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
+			target.FrontendAttrs["context:"+k] = v.Path
+			continue
+		}
+		st, err := os.Stat(v.Path)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get build context %v", k)
 		}
@@ -1175,7 +1189,7 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 		if k == "context" || k == "dockerfile" {
 			localName = "_" + k // underscore to avoid collisions
 		}
-		target.LocalDirs[localName] = v
+		target.LocalDirs[localName] = v.Path
 		target.FrontendAttrs["context:"+k] = "local:" + localName
 	}
 

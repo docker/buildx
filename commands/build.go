@@ -480,11 +480,11 @@ func listToMap(values []string, defaultEnv bool) map[string]string {
 	return result
 }
 
-func parseContextNames(values []string) (map[string]string, error) {
+func parseContextNames(values []string) (map[string]build.NamedContext, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
-	result := make(map[string]string, len(values))
+	result := make(map[string]build.NamedContext, len(values))
 	for _, value := range values {
 		kv := strings.SplitN(value, "=", 2)
 		if len(kv) != 2 {
@@ -495,7 +495,7 @@ func parseContextNames(values []string) (map[string]string, error) {
 			return nil, errors.Wrapf(err, "invalid context name %s", kv[0])
 		}
 		name := strings.TrimSuffix(reference.FamiliarString(named), ":latest")
-		result[name] = kv[1]
+		result[name] = build.NamedContext{Path: kv[1]}
 	}
 	return result, nil
 }
