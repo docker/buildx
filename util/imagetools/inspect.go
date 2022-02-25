@@ -163,10 +163,10 @@ func RegistryAuthForRef(ref string, a Auth) (string, error) {
 	return base64.URLEncoding.EncodeToString(buf), nil
 }
 
-func (r *Resolver) ImageConfig(ctx context.Context, in string) (digest.Digest, []byte, error) {
+func (r *Resolver) ImageConfig(ctx context.Context, in string, platform *ocispec.Platform) (digest.Digest, []byte, error) {
 	in, _, err := r.Resolve(ctx, in)
 	if err != nil {
 		return "", nil, err
 	}
-	return imageutil.Config(ctx, in, r.resolver(), r.buffer, nil, nil)
+	return imageutil.Config(ctx, in, r.resolver(), r.buffer, nil, platform)
 }

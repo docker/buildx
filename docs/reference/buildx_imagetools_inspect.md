@@ -12,7 +12,8 @@ Show details of an image in the registry
 | Name | Type | Default | Description |
 | --- | --- | --- | --- |
 | [`--builder`](#builder) | `string` |  | Override the configured builder instance |
-| [`--raw`](#raw) |  |  | Show original JSON manifest |
+| [`--format`](#format) | `string` | `{{.Manifest}}` | Format the output using the given Go template |
+| [`--raw`](#raw) |  |  | Show original, unformatted JSON manifest |
 
 
 <!---MARKER_GEN_END-->
@@ -20,6 +21,42 @@ Show details of an image in the registry
 ## Description
 
 Show details of an image in the registry.
+
+```console
+$ docker buildx imagetools inspect alpine
+Name:      docker.io/library/alpine:latest
+MediaType: application/vnd.docker.distribution.manifest.list.v2+json
+Digest:    sha256:21a3deaa0d32a8057914f36584b5288d2e5ecc984380bc0118285c70fa8c9300
+
+Manifests:
+  Name:      docker.io/library/alpine:latest@sha256:e7d88de73db3d3fd9b2d63aa7f447a10fd0220b7cbf39803c803f2af9ba256b3
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/amd64
+
+  Name:      docker.io/library/alpine:latest@sha256:e047bc2af17934d38c5a7fa9f46d443f1de3a7675546402592ef805cfa929f9d
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/arm/v6
+
+  Name:      docker.io/library/alpine:latest@sha256:8483ecd016885d8dba70426fda133c30466f661bb041490d525658f1aac73822
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/arm/v7
+
+  Name:      docker.io/library/alpine:latest@sha256:c74f1b1166784193ea6c8f9440263b9be6cae07dfe35e32a5df7a31358ac2060
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/arm64/v8
+
+  Name:      docker.io/library/alpine:latest@sha256:2689e157117d2da668ad4699549e55eba1ceb79cb7862368b30919f0488213f4
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/386
+
+  Name:      docker.io/library/alpine:latest@sha256:2042a492bcdd847a01cd7f119cd48caa180da696ed2aedd085001a78664407d6
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/ppc64le
+
+  Name:      docker.io/library/alpine:latest@sha256:49e322ab6690e73a4909f787bcbdb873631264ff4a108cddfd9f9c249ba1d58e
+  MediaType: application/vnd.docker.distribution.manifest.v2+json
+  Platform:  linux/s390x
+```
 
 ## Examples
 
@@ -29,12 +66,12 @@ Same as [`buildx --builder`](buildx.md#builder).
 
 ### <a name="format"></a> Format the output (--format)
 
-Format the output using the given Go template. At the moment the following
-fields are available:
+Format the output using the given Go template. Defaults to `{{.Manifest}}` if
+unset. Following fields are available:
 
 * `.Name`: provides the reference of the image
-* `.Manifest`: provides manifest or manifest list
-* `.Config`: provides the image config as `application/vnd.oci.image.config.v1+json` mediatype
+* `.Manifest`: provides the manifest or manifest list
+* `.Image`: provides the image config
 * `.BuildInfo`: provides [build info from image config](https://github.com/moby/buildkit/blob/master/docs/build-repro.md#image-config)
 
 #### `.Name`
@@ -57,30 +94,30 @@ Digest:    sha256:08602e7340970e92bde5e0a2e887c1fde4d9ae753d1e05efb4c8ef3b609f97
 $ docker buildx imagetools inspect moby/buildkit:master --format "{{.Manifest}}"
 Name:      docker.io/moby/buildkit:master
 MediaType: application/vnd.docker.distribution.manifest.list.v2+json
-Digest:    sha256:4e078bb87be98cc2a0fcdac4a05ac934055d563bd3d23e4d714eb03a3f62b49e
+Digest:    sha256:3183f7ce54d1efb44c34b84f428ae10aaf141e553c6b52a7ff44cc7083a05a66
 
 Manifests:
-  Name:      docker.io/moby/buildkit:master@sha256:bd1e78f06de26610fadf4eb9d04b1a45a545799d6342701726e952cc0c11c912
+  Name:      docker.io/moby/buildkit:master@sha256:667d28c9fb33820ce686887a717a148e89fa77f9097f9352996bbcce99d352b1
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/amd64
 
-  Name:      docker.io/moby/buildkit:master@sha256:d37dcced63ec0965824fca644f0ac9efad8569434ec15b4c83adfcb3dcfc743b
+  Name:      docker.io/moby/buildkit:master@sha256:71789527b64ab3d7b3de01d364b449cd7f7a3da758218fbf73b9c9aae05a6775
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/arm/v7
 
-  Name:      docker.io/moby/buildkit:master@sha256:ce142eb2255e6af46f2809e159fd03081697c7605a3de03b9cbe9a52ddb244bf
+  Name:      docker.io/moby/buildkit:master@sha256:fb64667e1ce6ab0d05478f3a8402af07b27737598dcf9a510fb1d792b13a66be
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/arm64
 
-  Name:      docker.io/moby/buildkit:master@sha256:f59bfb5062fff76ce464bfa4e25ebaaaac887d6818238e119d68613c456d360c
+  Name:      docker.io/moby/buildkit:master@sha256:1c3ddf95a0788e23f72f25800c05abc4458946685e2b66788c3d978cde6da92b
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/s390x
 
-  Name:      docker.io/moby/buildkit:master@sha256:cc96426e0c50a78105d5637d31356db5dd6ec594f21b24276e534a32da09645c
+  Name:      docker.io/moby/buildkit:master@sha256:05bcde6d460a284e5bc88026cd070277e8380355de3126cbc8fe8a452708c6b1
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/ppc64le
 
-  Name:      docker.io/moby/buildkit:master@sha256:39f9c1e2878e6c333acb23187d6b205ce82ed934c60da326cb2c698192631478
+  Name:      docker.io/moby/buildkit:master@sha256:c04c57765304ab84f4f9807fff3e11605c3a60e16435c734b02c723680f6bd6e
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/riscv64
 ```
@@ -92,21 +129,21 @@ $ docker buildx imagetools inspect crazymax/buildx:buildinfo --format "{{.BuildI
 Name: docker.io/crazymax/buildx:buildinfo
 Frontend: dockerfile.v0
 Attrs:
+  filename:      Dockerfile
+  source:        docker/dockerfile-upstream:master-labs
   build-arg:bar: foo
   build-arg:foo: bar
-  filename:      Dockerfile
-  source:        crazymax/dockerfile:buildattrs
 Sources:
   Type: docker-image
   Ref:  docker.io/docker/buildx-bin:0.6.1@sha256:a652ced4a4141977c7daaed0a074dcd9844a78d7d2615465b12f433ae6dd29f0
   Pin:  sha256:a652ced4a4141977c7daaed0a074dcd9844a78d7d2615465b12f433ae6dd29f0
 
   Type: docker-image
-  Ref:  docker.io/library/alpine:3.13@sha256:026f721af4cf2843e07bba648e158fb35ecc876d822130633cc49f707f0fc88c
+  Ref:  docker.io/library/alpine:3.13
   Pin:  sha256:026f721af4cf2843e07bba648e158fb35ecc876d822130633cc49f707f0fc88c
 
   Type: docker-image
-  Ref:  docker.io/moby/buildkit:v0.9.0@sha256:8dc668e7f66db1c044aadbed306020743516a94848793e0f81f94a087ee78cab
+  Ref:  docker.io/moby/buildkit:v0.9.0
   Pin:  sha256:8dc668e7f66db1c044aadbed306020743516a94848793e0f81f94a087ee78cab
 
   Type: docker-image
@@ -251,10 +288,10 @@ $ docker buildx imagetools inspect crazymax/buildx:buildinfo --format "{{json .}
   "name": "crazymax/buildx:buildinfo",
   "manifest": {
     "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-    "digest": "sha256:ac98300a6580fa30d9350a868de2a09f5a0190f4ba94e6c0ead8cc892150977c",
+    "digest": "sha256:899d2c7acbc124d406820857bb51d9089717bbe4e22b97eb4bc5789e99f09f83",
     "size": 2628
   },
-  "config": {
+  "image": {
     "created": "2022-02-24T12:27:43.627154558Z",
     "architecture": "amd64",
     "os": "linux",
@@ -379,7 +416,7 @@ $ docker buildx imagetools inspect crazymax/buildx:buildinfo --format "{{json .}
       "build-arg:bar": "foo",
       "build-arg:foo": "bar",
       "filename": "Dockerfile",
-      "source": "crazymax/dockerfile:buildattrs"
+      "source": "docker/dockerfile-upstream:master-labs"
     },
     "sources": [
       {
@@ -389,12 +426,12 @@ $ docker buildx imagetools inspect crazymax/buildx:buildinfo --format "{{json .}
       },
       {
         "type": "docker-image",
-        "ref": "docker.io/library/alpine:3.13@sha256:026f721af4cf2843e07bba648e158fb35ecc876d822130633cc49f707f0fc88c",
+        "ref": "docker.io/library/alpine:3.13",
         "pin": "sha256:026f721af4cf2843e07bba648e158fb35ecc876d822130633cc49f707f0fc88c"
       },
       {
         "type": "docker-image",
-        "ref": "docker.io/moby/buildkit:v0.9.0@sha256:8dc668e7f66db1c044aadbed306020743516a94848793e0f81f94a087ee78cab",
+        "ref": "docker.io/moby/buildkit:v0.9.0",
         "pin": "sha256:8dc668e7f66db1c044aadbed306020743516a94848793e0f81f94a087ee78cab"
       },
       {
@@ -409,6 +446,81 @@ $ docker buildx imagetools inspect crazymax/buildx:buildinfo --format "{{json .}
       }
     ]
   }
+}
+```
+
+#### Multi-platform
+
+Multi-platform images are supported for `.Image` and `.BuildInfo` fields. If
+you want to pick up a specific platform, you can specify it using the `index`
+go template function:
+
+```console
+$ docker buildx imagetools inspect --format '{{json (index .Image "linux/s390x")}}' moby/buildkit:master
+```
+```json
+{
+  "created": "2022-02-25T17:13:27.89891722Z",
+  "architecture": "s390x",
+  "os": "linux",
+  "config": {
+    "Env": [
+      "PATH=/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+    ],
+    "Entrypoint": [
+      "buildkitd"
+    ],
+    "Volumes": {
+      "/var/lib/buildkit": {}
+    }
+  },
+  "rootfs": {
+    "type": "layers",
+    "diff_ids": [
+      "sha256:41048e32d0684349141cf05f629c5fc3c5915d1f3426b66dbb8953a540e01e1e",
+      "sha256:2651209b9208fff6c053bc3c17353cb07874e50f1a9bc96d6afd03aef63de76a",
+      "sha256:6741ed7e73039d853fa8902246a4c7e8bf9dd09652fd1b08251bc5f9e8876a7f",
+      "sha256:92ac046adeeb65c86ae3f0b458dee04ad4a462e417661c04d77642c66494f69b"
+    ]
+  },
+  "history": [
+    {
+      "created": "2021-11-24T20:41:23.709681315Z",
+      "created_by": "/bin/sh -c #(nop) ADD file:cd24c711a2ef431b3ff94f9a02bfc42f159bc60de1d0eceecafea4e8af02441d in / "
+    },
+    {
+      "created": "2021-11-24T20:41:23.94211262Z",
+      "created_by": "/bin/sh -c #(nop)  CMD [\"/bin/sh\"]",
+      "empty_layer": true
+    },
+    {
+      "created": "2022-01-26T18:15:21.449825391Z",
+      "created_by": "RUN /bin/sh -c apk add --no-cache fuse3 git openssh pigz xz   \u0026\u0026 ln -s fusermount3 /usr/bin/fusermount # buildkit",
+      "comment": "buildkit.dockerfile.v0"
+    },
+    {
+      "created": "2022-02-24T00:34:00.924540012Z",
+      "created_by": "COPY examples/buildctl-daemonless/buildctl-daemonless.sh /usr/bin/ # buildkit",
+      "comment": "buildkit.dockerfile.v0"
+    },
+    {
+      "created": "2022-02-25T17:13:27.89891722Z",
+      "created_by": "VOLUME [/var/lib/buildkit]",
+      "comment": "buildkit.dockerfile.v0",
+      "empty_layer": true
+    },
+    {
+      "created": "2022-02-25T17:13:27.89891722Z",
+      "created_by": "COPY / /usr/bin/ # buildkit",
+      "comment": "buildkit.dockerfile.v0"
+    },
+    {
+      "created": "2022-02-25T17:13:27.89891722Z",
+      "created_by": "ENTRYPOINT [\"buildkitd\"]",
+      "comment": "buildkit.dockerfile.v0",
+      "empty_layer": true
+    }
+  ]
 }
 ```
 
@@ -460,7 +572,7 @@ $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
   "manifests": [
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-      "digest": "sha256:905307ef07e366e5977163218b9f01e9553fe2c15fe5e4a529328f91b510351d",
+      "digest": "sha256:667d28c9fb33820ce686887a717a148e89fa77f9097f9352996bbcce99d352b1",
       "size": 1158,
       "platform": {
         "architecture": "amd64",
@@ -469,7 +581,7 @@ $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
     },
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-      "digest": "sha256:250a6dd96c377a1084cf8ea766916ae643f2fdf0f2e68728b3fda0a4d4669a2e",
+      "digest": "sha256:71789527b64ab3d7b3de01d364b449cd7f7a3da758218fbf73b9c9aae05a6775",
       "size": 1158,
       "platform": {
         "architecture": "arm",
@@ -479,7 +591,7 @@ $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
     },
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-      "digest": "sha256:7ee37cac4b2b8b54d28127a10aa783260430a145bafab169cec88b8a20462678",
+      "digest": "sha256:fb64667e1ce6ab0d05478f3a8402af07b27737598dcf9a510fb1d792b13a66be",
       "size": 1158,
       "platform": {
         "architecture": "arm64",
@@ -488,7 +600,7 @@ $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
     },
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-      "digest": "sha256:0ba8d091f6b346a5c45b06dcb534b6b6945a681fcdf40c195e1d6619115dffd2",
+      "digest": "sha256:1c3ddf95a0788e23f72f25800c05abc4458946685e2b66788c3d978cde6da92b",
       "size": 1158,
       "platform": {
         "architecture": "s390x",
@@ -497,7 +609,7 @@ $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
     },
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-      "digest": "sha256:964d4b79d1be97ce22e6fe0c29be1d6cc63da10e5b8a21505851014c9846268a",
+      "digest": "sha256:05bcde6d460a284e5bc88026cd070277e8380355de3126cbc8fe8a452708c6b1",
       "size": 1159,
       "platform": {
         "architecture": "ppc64le",
@@ -506,7 +618,7 @@ $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
     },
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
-      "digest": "sha256:44d8de2c5f813b48d649a3a6cc348b57387cc22355897a14c7447cbfa03d079c",
+      "digest": "sha256:c04c57765304ab84f4f9807fff3e11605c3a60e16435c734b02c723680f6bd6e",
       "size": 1158,
       "platform": {
         "architecture": "riscv64",

@@ -4,6 +4,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/imagetools"
+	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
@@ -71,7 +72,10 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&options.format, "format", "{{.Manifest}}", "Format the output using the given Go template")
+
+	flags.StringVar(&options.format, "format", "", "Format the output using the given Go template")
+	flags.SetAnnotation("format", annotation.DefaultValue, []string{`"{{.Manifest}}"`})
+
 	flags.BoolVar(&options.raw, "raw", false, "Show original, unformatted JSON manifest")
 
 	return cmd

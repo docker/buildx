@@ -28,12 +28,11 @@ type Printer struct {
 	name   string
 	format string
 
-	raw      []byte
-	ref      reference.Named
-	manifest ocispecs.Descriptor
-	index    ocispecs.Index
-	image    ocispecs.Image
-	binfo    binfotypes.BuildInfo
+	raw       []byte
+	ref       reference.Named
+	manifest  ocispecs.Descriptor
+	index     ocispecs.Index
+	platforms []ocispecs.Platform
 }
 
 func NewPrinter(ctx context.Context, opt Opt, name string, format string) (*Printer, error) {
@@ -54,44 +53,26 @@ func NewPrinter(ctx context.Context, opt Opt, name string, format string) (*Prin
 		return nil, err
 	}
 
-	_, dtcic, err := resolver.ImageConfig(ctx, name)
-	if err != nil {
-		return nil, err
-	}
-
-	var image ocispecs.Image
-	if err = json.Unmarshal(dtcic, &image); err != nil {
-		return nil, err
-	}
-
-	var binfo binfotypes.BuildInfo
-	if len(dtcic) > 0 {
-		var biconfig binfotypes.ImageConfig
-		if err := json.Unmarshal(dtcic, &biconfig); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal image config")
+	var pforms []ocispecs.Platform
+	switch manifest.MediaType {
+	case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
+		for _, m := range index.Manifests {
+			pforms = append(pforms, *m.Platform)
 		}
-		if len(biconfig.BuildInfo) > 0 {
-			bidec, err := base64.StdEncoding.DecodeString(biconfig.BuildInfo)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to decode build info")
-			}
-			if err = json.Unmarshal(bidec, &binfo); err != nil {
-				return nil, errors.Wrap(err, "failed to unmarshal build info")
-			}
-		}
+	default:
+		pforms = append(pforms, platforms.DefaultSpec())
 	}
 
 	return &Printer{
-		ctx:      ctx,
-		resolver: resolver,
-		name:     name,
-		format:   format,
-		raw:      dt,
-		ref:      ref,
-		manifest: manifest,
-		index:    index,
-		image:    image,
-		binfo:    binfo,
+		ctx:       ctx,
+		resolver:  resolver,
+		name:      name,
+		format:    format,
+		raw:       dt,
+		ref:       ref,
+		manifest:  manifest,
+		index:     index,
+		platforms: pforms,
 	}, nil
 }
 
@@ -99,6 +80,21 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	if raw {
 		_, err := fmt.Fprintf(out, "%s", p.raw) // avoid newline to keep digest
 		return err
+	}
+
+	if p.format == "" {
+		w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
+		_, _ = fmt.Fprintf(w, "Name:\t%s\n", p.ref.String())
+		_, _ = fmt.Fprintf(w, "MediaType:\t%s\n", p.manifest.MediaType)
+		_, _ = fmt.Fprintf(w, "Digest:\t%s\n", p.manifest.Digest)
+		_ = w.Flush()
+		switch p.manifest.MediaType {
+		case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
+			if err := p.printManifestList(out); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
 	tpl, err := template.New("").Funcs(template.FuncMap{
@@ -111,6 +107,22 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 		return err
 	}
 
+	imageconfigs := make(map[string]*ocispecs.Image)
+	buildinfos := make(map[string]*binfotypes.BuildInfo)
+	for _, pform := range p.platforms {
+		img, dtic, err := p.getImageConfig(&pform)
+		if err != nil {
+			return err
+		} else if img != nil {
+			imageconfigs[platforms.Format(pform)] = img
+		}
+		if bi, err := p.getBuildInfo(dtic); err != nil {
+			return err
+		} else if bi != nil {
+			buildinfos[platforms.Format(pform)] = bi
+		}
+	}
+
 	format := tpl.Root.String()
 
 	var manifest interface{}
@@ -120,23 +132,12 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
 		manifest = p.index
 	}
-	v := struct {
-		Name      string               `json:"name,omitempty"`
-		Manifest  interface{}          `json:"manifest,omitempty"`
-		Config    ocispecs.Image       `json:"config,omitempty"`
-		BuildInfo binfotypes.BuildInfo `json:"buildinfo,omitempty"`
-	}{
-		Name:      p.name,
-		Manifest:  manifest,
-		Config:    p.image,
-		BuildInfo: p.binfo,
-	}
 
 	switch {
-	case strings.HasPrefix(format, "{{.Manifest"), strings.HasPrefix(format, "{{.Config"), strings.HasPrefix(format, "{{.BuildInfo"):
+	// TODO: print formatted config
+	case strings.HasPrefix(format, "{{.Manifest"), strings.HasPrefix(format, "{{.BuildInfo"):
 		w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 		_, _ = fmt.Fprintf(w, "Name:\t%s\n", p.ref.String())
-		_ = w.Flush()
 		if strings.HasPrefix(format, "{{.Manifest") {
 			_, _ = fmt.Fprintf(w, "MediaType:\t%s\n", p.manifest.MediaType)
 			_, _ = fmt.Fprintf(w, "Digest:\t%s\n", p.manifest.Digest)
@@ -145,13 +146,43 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 			case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
 				_ = p.printManifestList(out)
 			}
-		} else if strings.HasPrefix(format, "{{.Config") {
-			// TODO: print formatted config
 		} else if strings.HasPrefix(format, "{{.BuildInfo") {
-			_ = p.printBuildInfo(p.binfo, "", out)
+			_ = w.Flush()
+			_ = p.printBuildInfos(buildinfos, out)
 		}
 	default:
-		return tpl.Execute(out, v)
+		if len(p.platforms) > 1 {
+			return tpl.Execute(out, struct {
+				Name      string                           `json:"name,omitempty"`
+				Manifest  interface{}                      `json:"manifest,omitempty"`
+				Image     map[string]*ocispecs.Image       `json:"image,omitempty"`
+				BuildInfo map[string]*binfotypes.BuildInfo `json:"buildinfo,omitempty"`
+			}{
+				Name:      p.name,
+				Manifest:  manifest,
+				Image:     imageconfigs,
+				BuildInfo: buildinfos,
+			})
+		}
+		var imageconfig *ocispecs.Image
+		for _, ic := range imageconfigs {
+			imageconfig = ic
+		}
+		var buildinfo *binfotypes.BuildInfo
+		for _, bi := range buildinfos {
+			buildinfo = bi
+		}
+		return tpl.Execute(out, struct {
+			Name      string                `json:"name,omitempty"`
+			Manifest  interface{}           `json:"manifest,omitempty"`
+			Image     *ocispecs.Image       `json:"image,omitempty"`
+			BuildInfo *binfotypes.BuildInfo `json:"buildinfo,omitempty"`
+		}{
+			Name:      p.name,
+			Manifest:  manifest,
+			Image:     imageconfig,
+			BuildInfo: buildinfo,
+		})
 	}
 
 	return nil
@@ -198,7 +229,24 @@ func (p *Printer) printManifestList(out io.Writer) error {
 	return w.Flush()
 }
 
-func (p *Printer) printBuildInfo(bi binfotypes.BuildInfo, pfx string, out io.Writer) error {
+func (p *Printer) printBuildInfos(bis map[string]*binfotypes.BuildInfo, out io.Writer) error {
+	if len(bis) == 1 {
+		for _, bi := range bis {
+			return p.printBuildInfo(bi, "", out)
+		}
+	}
+	for pform, bi := range bis {
+		w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
+		_, _ = fmt.Fprintf(w, "\t\nPlatform:\t%s\t\n", pform)
+		_ = w.Flush()
+		if err := p.printBuildInfo(bi, "", out); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (p *Printer) printBuildInfo(bi *binfotypes.BuildInfo, pfx string, out io.Writer) error {
 	w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 	_, _ = fmt.Fprintf(w, "%sFrontend:\t%s\n", pfx, bi.Frontend)
 
@@ -233,10 +281,42 @@ func (p *Printer) printBuildInfo(bi binfotypes.BuildInfo, pfx string, out io.Wri
 			}
 			_, _ = fmt.Fprintf(w, "%sName:\t%s\n", pfx+defaultPfx, k)
 			_ = w.Flush()
-			_ = p.printBuildInfo(v, pfx+defaultPfx, out)
+			_ = p.printBuildInfo(&v, pfx+defaultPfx, out)
 			firstPass = false
 		}
 	}
 
 	return w.Flush()
+}
+
+func (p *Printer) getImageConfig(platform *ocispecs.Platform) (*ocispecs.Image, []byte, error) {
+	_, dtic, err := p.resolver.ImageConfig(p.ctx, p.name, platform)
+	if err != nil {
+		return nil, nil, err
+	}
+	var img *ocispecs.Image
+	if err = json.Unmarshal(dtic, &img); err != nil {
+		return nil, nil, err
+	}
+	return img, dtic, nil
+}
+
+func (p *Printer) getBuildInfo(dtic []byte) (*binfotypes.BuildInfo, error) {
+	var binfo *binfotypes.BuildInfo
+	if len(dtic) > 0 {
+		var biconfig binfotypes.ImageConfig
+		if err := json.Unmarshal(dtic, &biconfig); err != nil {
+			return nil, errors.Wrap(err, "failed to unmarshal image config")
+		}
+		if len(biconfig.BuildInfo) > 0 {
+			dtbi, err := base64.StdEncoding.DecodeString(biconfig.BuildInfo)
+			if err != nil {
+				return nil, errors.Wrap(err, "failed to decode build info")
+			}
+			if err = json.Unmarshal(dtbi, &binfo); err != nil {
+				return nil, errors.Wrap(err, "failed to unmarshal build info")
+			}
+		}
+	}
+	return binfo, nil
 }
