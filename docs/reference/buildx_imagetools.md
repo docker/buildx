@@ -12,7 +12,7 @@ Commands to work on images in registry
 | Name | Description |
 | --- | --- |
 | [`create`](buildx_imagetools_create.md) | Create a new image based on source images |
-| [`inspect`](buildx_imagetools_inspect.md) | Show details of image in the registry |
+| [`inspect`](buildx_imagetools_inspect.md) | Show details of an image in the registry |
 
 
 ### Options

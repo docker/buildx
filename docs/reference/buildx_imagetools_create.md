@@ -22,9 +22,6 @@ Create a new image based on source images
 
 ## Description
 
-Imagetools contains commands for working with manifest lists in the registry.
-These commands are useful for inspecting multi-platform build results.
-
 Create a new manifest list based on source manifests. The source manifests can
 be manifest lists or single platform distribution manifests and must already
 exist in the registry where the new manifest is created. If only one source is

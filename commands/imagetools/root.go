@@ -16,8 +16,8 @@ func RootCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	}
 
 	cmd.AddCommand(
-		inspectCmd(dockerCli, opts),
 		createCmd(dockerCli, opts),
+		inspectCmd(dockerCli, opts),
 	)
 
 	return cmd
