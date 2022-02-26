@@ -74,22 +74,19 @@ jobs:
             echo "MULTI_NODE=0" >> $GITHUB_ENV
           fi
       -
-        name: Install k3s
+        name: Set up kind
         if: matrix.driver == 'kubernetes'
-        uses: debianmaster/actions-k3s@v1.0.3
-        id: k3s
+        uses: engineerd/setup-kind@v0.5.0
         with:
-          version: v1.21.2-k3s1
+          version: v0.11.1
       -
-        name: Config k3s
+        name: Check kind
         if: matrix.driver == 'kubernetes'
         run: |
-          (set -x ; cat ${{ steps.k3s.outputs.kubeconfig }})
-      -
-        name: Check k3s nodes
-        if: matrix.driver == 'kubernetes'
-        run: |
-          kubectl get nodes
+          set -x
+          kubectl cluster-info
+          kubectl get pods -n kube-system
+          cat ${KUBECONFIG}
       -
         name: Test
         run: |
