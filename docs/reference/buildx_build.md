@@ -34,7 +34,7 @@ Start a build
 | [`-o`](#output), [`--output`](#output) | `stringArray` |  | Output destination (format: `type=local,dest=path`) |
 | [`--platform`](#platform) | `stringArray` |  | Set target platform for build |
 | [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| `--pull` |  |  | Always attempt to pull a newer version of the image |
+| `--pull` |  |  | Always attempt to pull all referenced images |
 | [`--push`](#push) |  |  | Shorthand for `--output=type=registry` |
 | `-q`, `--quiet` |  |  | Suppress the build output and print image ID on success |
 | [`--secret`](#secret) | `stringArray` |  | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`) |
@@ -54,19 +54,7 @@ to the UI of `docker build` command and takes the same flags and arguments.
 
 For documentation on most of these flags, refer to the [`docker build`
 documentation](https://docs.docker.com/engine/reference/commandline/build/). In
-here we’ll document a subset of the new flags.
-
-### Built-in build args
-
-* `BUILDKIT_INLINE_BUILDINFO_ATTRS=<bool>` inline build info attributes in image config or not
-* `BUILDKIT_INLINE_CACHE=<bool>` inline cache metadata to image config or not
-* `BUILDKIT_MULTI_PLATFORM=<bool>` opt into determnistic output regardless of multi-platform output or not
-
-```shell
-docker buildx build --build-arg BUILDKIT_MULTI_PLATFORM=1 .
-```
-
-Other useful built-in args can be found in [dockerfile frontend docs](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#built-in-build-args).
+here we'll document a subset of the new flags.
 
 ## Examples
 
@@ -99,6 +87,7 @@ Same as [`docker build` command](https://docs.docker.com/engine/reference/comman
 There are also useful built-in build args like:
 
 * `BUILDKIT_CONTEXT_KEEP_GIT_DIR=<bool>` trigger git context to keep the `.git` directory
+* `BUILDKIT_INLINE_BUILDINFO_ATTRS=<bool>` inline build info attributes in image config or not
 * `BUILDKIT_INLINE_CACHE=<bool>` inline cache metadata to image config or not
 * `BUILDKIT_MULTI_PLATFORM=<bool>` opt into determnistic output regardless of multi-platform output or not
 
