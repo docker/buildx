@@ -1,4 +1,4 @@
-package kubernetes
+package context
 
 import (
 	"io/ioutil"

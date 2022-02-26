@@ -8,13 +8,13 @@ import (
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
+	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
-	"github.com/docker/cli/cli/context/kubernetes"
 	ctxstore "github.com/docker/cli/cli/context/store"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
@@ -150,7 +150,7 @@ func configFromContext(endpointName string, s ctxstore.Reader) (clientcmd.Client
 		}
 		return clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{}), nil
 	}
-	return kubernetes.ConfigFromContext(endpointName, s)
+	return ctxkube.ConfigFromContext(endpointName, s)
 }
 
 // clientForEndpoint returns a docker client for an endpoint

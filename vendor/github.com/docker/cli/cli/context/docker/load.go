@@ -4,7 +4,6 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/pem"
-	"fmt"
 	"net"
 	"net/http"
 	"os"
@@ -26,7 +25,12 @@ type EndpointMeta = context.EndpointMetaBase
 // a Docker Engine endpoint, with its tls data
 type Endpoint struct {
 	EndpointMeta
-	TLSData     *context.TLSData
+	TLSData *context.TLSData
+
+	// Deprecated: Use of encrypted TLS private keys has been deprecated, and
+	// will be removed in a future release. Golang has deprecated support for
+	// legacy PEM encryption (as specified in RFC 1423), as it is insecure by
+	// design (see https://go-review.googlesource.com/c/go/+/264159).
 	TLSPassword string
 }
 
@@ -62,16 +66,10 @@ func (c *Endpoint) tlsConfig() (*tls.Config, error) {
 		keyBytes := c.TLSData.Key
 		pemBlock, _ := pem.Decode(keyBytes)
 		if pemBlock == nil {
-			return nil, fmt.Errorf("no valid private key found")
+			return nil, errors.New("no valid private key found")
 		}
-
-		var err error
-		if x509.IsEncryptedPEMBlock(pemBlock) {
-			keyBytes, err = x509.DecryptPEMBlock(pemBlock, []byte(c.TLSPassword))
-			if err != nil {
-				return nil, errors.Wrap(err, "private key is encrypted, but could not decrypt it")
-			}
-			keyBytes = pem.EncodeToMemory(&pem.Block{Type: pemBlock.Type, Bytes: keyBytes})
+		if x509.IsEncryptedPEMBlock(pemBlock) { //nolint: staticcheck // SA1019: x509.IsEncryptedPEMBlock is deprecated, and insecure by design
+			return nil, errors.New("private key is encrypted - support for encrypted private keys has been removed, see https://docs.docker.com/go/deprecated/")
 		}
 
 		x509cert, err := tls.X509KeyPair(c.TLSData.Cert, keyBytes)
