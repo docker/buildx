@@ -357,7 +357,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
 	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f"})
 
-	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID or digest to the file")
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 

@@ -24,7 +24,7 @@ Start a build
 | [`--cache-to`](#cache-to) | `stringArray` |  | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
 | [`--cgroup-parent`](https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent) | `string` |  | Optional parent cgroup for the container |
 | [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | `string` |  | Name of the Dockerfile (default: `PATH/Dockerfile`) |
-| `--iidfile` | `string` |  | Write the image ID to the file |
+| [`--iidfile`](#iidfile) | `string` |  | Write the image ID or digest to the file |
 | `--label` | `stringArray` |  | Set metadata for an image |
 | [`--load`](#load) |  |  | Shorthand for `--output=type=docker` |
 | [`--metadata-file`](#metadata-file) | `string` |  | Write build result metadata to the file |
@@ -209,6 +209,16 @@ $ docker buildx build --cache-to=type=gha .
 ```
 
 More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
+
+### <a name="iidfile"></a> Write the image ID or digest to the file (--iidfile)
+
+Output the image ID or digest depending on the driver and output being used to
+the specified file:
+
+* `docker` driver : writes the image ID.
+* `docker` driver with `--push`: writes the image digest.
+* `docker-container` driver with `--load`: writes the image ID.
+* `docker-container` driver with `--push`: writes the image digest.
 
 ### <a name="load"></a> Load the single-platform build result to `docker images` (--load)
 
