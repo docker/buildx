@@ -762,7 +762,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				resp[k] = res[0]
 				respMu.Unlock()
 				if len(res) == 1 {
-					digest := res[0].ExporterResponse["containerimage.digest"]
+					digest := res[0].ExporterResponse[exptypes.ExporterImageDigestKey]
 					if opt.ImageIDFile != "" {
 						return ioutil.WriteFile(opt.ImageIDFile, []byte(digest), 0644)
 					}
@@ -774,7 +774,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						descs := make([]specs.Descriptor, 0, len(res))
 
 						for _, r := range res {
-							s, ok := r.ExporterResponse["containerimage.digest"]
+							s, ok := r.ExporterResponse[exptypes.ExporterImageDigestKey]
 							if ok {
 								descs = append(descs, specs.Descriptor{
 									Digest:    digest.Digest(s),
@@ -920,8 +920,9 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						}
 
 						d := drivers[dp.driverIndex].Driver
-						if d.IsMobyDriver() {
-							for _, e := range so.Exports {
+
+						for _, e := range so.Exports {
+							if d.IsMobyDriver() {
 								if e.Type == "moby" && e.Attrs["push"] != "" {
 									if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
 										pushNames = e.Attrs["name"]
@@ -937,13 +938,21 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 												return err
 											}
 										}
-										remoteDigest, errp := remoteDigestWithMoby(ctx, d, pushList[0])
-										if errp == nil && remoteDigest != "" {
+										remoteDigest, err := remoteDigestWithMoby(ctx, d, pushList[0])
+										if err == nil && remoteDigest != "" {
 											rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
-										} else if errp != nil {
+										} else if err != nil {
 											return err
 										}
 									}
+								}
+							} else if names, ok := e.Attrs["name"]; ok && e.Type == "docker" {
+								nameList := strings.Split(names, ",")
+								imageID, err := dockerImageID(ctx, d, nameList[0])
+								if err == nil && imageID != "" {
+									rr.ExporterResponse[exptypes.ExporterImageDigestKey] = imageID
+								} else if err != nil {
+									return err
 								}
 							}
 						}
@@ -1071,6 +1080,18 @@ func remoteDigestWithMoby(ctx context.Context, d driver.Driver, name string) (st
 		return "", err
 	}
 	return remoteImage.Descriptor.Digest.String(), nil
+}
+
+func dockerImageID(ctx context.Context, d driver.Driver, name string) (string, error) {
+	api := d.Config().DockerAPI
+	if api == nil {
+		return "", errors.Errorf("invalid empty Docker API reference") // should never happen
+	}
+	image, _, err := api.ImageInspectWithRaw(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	return image.ID, nil
 }
 
 func createTempDockerfile(r io.Reader) (string, error) {
