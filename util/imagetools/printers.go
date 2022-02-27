@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution/reference"
 	binfotypes "github.com/moby/buildkit/util/buildinfo/types"
+	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -142,7 +143,21 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	case images.MediaTypeDockerSchema2Manifest, ocispecs.MediaTypeImageManifest:
 		manifest = p.manifest
 	case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
-		manifest = p.index
+		manifest = struct {
+			SchemaVersion int                   `json:"schemaVersion"`
+			MediaType     string                `json:"mediaType,omitempty"`
+			Digest        digest.Digest         `json:"digest"`
+			Size          int64                 `json:"size"`
+			Manifests     []ocispecs.Descriptor `json:"manifests"`
+			Annotations   map[string]string     `json:"annotations,omitempty"`
+		}{
+			SchemaVersion: p.index.Versioned.SchemaVersion,
+			MediaType:     p.index.MediaType,
+			Digest:        p.manifest.Digest,
+			Size:          p.manifest.Size,
+			Manifests:     p.index.Manifests,
+			Annotations:   p.index.Annotations,
+		}
 	}
 
 	switch {

@@ -178,6 +178,8 @@ $ docker buildx imagetools inspect moby/buildkit:master --format "{{json .Manife
 {
   "schemaVersion": 2,
   "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
+  "digest": "sha256:79d97f205e2799d99a3a8ae2a1ef17acb331e11784262c3faada847dc6972c52",
+  "size": 2010,
   "manifests": [
     {
       "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
