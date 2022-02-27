@@ -833,7 +833,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 							respMu.Lock()
 							resp[k] = &client.SolveResponse{
 								ExporterResponse: map[string]string{
-									"containerimage.digest": desc.Digest.String(),
+									exptypes.ExporterImageDigestKey: desc.Digest.String(),
 								},
 							}
 							respMu.Unlock()
@@ -918,7 +918,6 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						if err != nil {
 							return err
 						}
-						res[i] = rr
 
 						d := drivers[dp.driverIndex].Driver
 						if d.IsMobyDriver() {
@@ -930,17 +929,26 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 											return errors.Errorf("tag is needed when pushing to registry")
 										}
 										pw := progress.ResetTime(pw)
-										for _, name := range strings.Split(pushNames, ",") {
+										pushList := strings.Split(pushNames, ",")
+										for _, name := range pushList {
 											if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
 												return pushWithMoby(ctx, d, name, l)
 											}); err != nil {
 												return err
 											}
 										}
+										remoteDigest, errp := remoteDigestWithMoby(ctx, d, pushList[0])
+										if errp == nil && remoteDigest != "" {
+											rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
+										} else if errp != nil {
+											return err
+										}
 									}
 								}
 							}
 						}
+
+						res[i] = rr
 						return nil
 					})
 
@@ -1038,7 +1046,31 @@ func pushWithMoby(ctx context.Context, d driver.Driver, name string, l progress.
 			parsedError = jm.Error
 		}
 	}
+
 	return nil
+}
+
+func remoteDigestWithMoby(ctx context.Context, d driver.Driver, name string) (string, error) {
+	api := d.Config().DockerAPI
+	if api == nil {
+		return "", errors.Errorf("invalid empty Docker API reference") // should never happen
+	}
+	creds, err := imagetools.RegistryAuthForRef(name, d.Config().Auth)
+	if err != nil {
+		return "", err
+	}
+	image, _, err := api.ImageInspectWithRaw(ctx, name)
+	if err != nil {
+		return "", err
+	}
+	if len(image.RepoDigests) == 0 {
+		return "", nil
+	}
+	remoteImage, err := api.DistributionInspect(ctx, name, creds)
+	if err != nil {
+		return "", err
+	}
+	return remoteImage.Descriptor.Digest.String(), nil
 }
 
 func createTempDockerfile(r io.Reader) (string, error) {
