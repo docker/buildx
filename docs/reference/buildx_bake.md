@@ -22,7 +22,7 @@ Build from a file
 | [`--no-cache`](#no-cache) |  |  | Do not use cache when building the image |
 | [`--print`](#print) |  |  | Print the options without building |
 | [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| [`--pull`](#pull) |  |  | Always attempt to pull a newer version of the image |
+| [`--pull`](#pull) |  |  | Always attempt to pull all referenced images |
 | `--push` |  |  | Shorthand for `--set=*.output=type=registry` |
 | [`--set`](#set) | `stringArray` |  | Override target value (e.g., `targetpattern.key=value`) |
 
