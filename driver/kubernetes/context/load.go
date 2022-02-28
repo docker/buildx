@@ -1,4 +1,4 @@
-package kubernetes
+package context
 
 import (
 	"os"
@@ -7,9 +7,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context"
 	"github.com/docker/cli/cli/context/store"
-	api "github.com/docker/compose-on-kubernetes/api"
 	"github.com/docker/docker/pkg/homedir"
-	"github.com/pkg/errors"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
@@ -88,23 +86,18 @@ func (c *Endpoint) KubernetesConfig() clientcmd.ClientConfig {
 
 // ResolveDefault returns endpoint metadata for the default Kubernetes
 // endpoint, which is derived from the env-based kubeconfig.
-func (c *EndpointMeta) ResolveDefault(stackOrchestrator command.Orchestrator) (interface{}, *store.EndpointTLSData, error) {
+func (c *EndpointMeta) ResolveDefault() (interface{}, *store.EndpointTLSData, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
 		kubeconfig = filepath.Join(homedir.Get(), ".kube/config")
 	}
 	kubeEP, err := FromKubeConfig(kubeconfig, "", "")
 	if err != nil {
-		if stackOrchestrator == command.OrchestratorKubernetes || stackOrchestrator == command.OrchestratorAll {
-			return nil, nil, errors.Wrapf(err, "default orchestrator is %s but unable to resolve kubernetes endpoint", stackOrchestrator)
-		}
-
 		// We deliberately quash the error here, returning nil
 		// for the first argument is sufficient to indicate we weren't able to
 		// provide a default
 		return nil, nil, nil
 	}
-
 	var tls *store.EndpointTLSData
 	if kubeEP.TLSData != nil {
 		tls = kubeEP.TLSData.ToStoreTLSData()
@@ -142,5 +135,21 @@ func ConfigFromContext(name string, s store.Reader) (clientcmd.ClientConfig, err
 		return ep.KubernetesConfig(), nil
 	}
 	// context has no kubernetes endpoint
-	return api.NewKubernetesConfig(""), nil
+	return NewKubernetesConfig(""), nil
+}
+
+// NewKubernetesConfig resolves the path to the desired Kubernetes configuration
+// file based on the KUBECONFIG environment variable and command line flags.
+func NewKubernetesConfig(configPath string) clientcmd.ClientConfig {
+	kubeConfig := configPath
+	if kubeConfig == "" {
+		if config := os.Getenv("KUBECONFIG"); config != "" {
+			kubeConfig = config
+		} else {
+			kubeConfig = filepath.Join(homedir.Get(), ".kube/config")
+		}
+	}
+	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
+		&clientcmd.ClientConfigLoadingRules{ExplicitPath: kubeConfig},
+		&clientcmd.ConfigOverrides{})
 }

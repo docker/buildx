@@ -443,12 +443,10 @@ github.com/dimchansky/utfbom v1.1.1/go.mod h1:SxdoEBH5qIqFocHMyGOXVAybYJdr71b1Q/
 github.com/distribution/distribution/v3 v3.0.0-20210316161203-a01c71e2477e h1:n81KvOMrLZa+VWHwST7dun9f0G98X3zREHS1ztYzZKU=
 github.com/distribution/distribution/v3 v3.0.0-20210316161203-a01c71e2477e/go.mod h1:xpWTC2KnJMiDLkoawhsPQcXjvwATEBcbq0xevG2YR9M=
 github.com/dnaeon/go-vcr v1.0.1/go.mod h1:aBB1+wY4s93YsC3HHjMBMrwTj2R9FHDzUr9KyGc8n1E=
-github.com/docker/cli v20.10.3-0.20210702143511-f782d1355eff+incompatible h1:CaaxCD/l9Dxogu6lxf7AQautlv3sHULrasPadayp0fM=
-github.com/docker/cli v20.10.3-0.20210702143511-f782d1355eff+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
+github.com/docker/cli v20.10.3-0.20220226190722-8667ccd1124c+incompatible h1:0Kr33P67t7g42iFMU3uzizk+bek+a5MThEqmt4bqVGM=
+github.com/docker/cli v20.10.3-0.20220226190722-8667ccd1124c+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/cli-docs-tool v0.4.0 h1:MdfKoErGEbFqIxQ8an9BsZ+YzKUGd58RBVkV+Q82GPo=
 github.com/docker/cli-docs-tool v0.4.0/go.mod h1:rgW5KKdNpLMBIuH4WQ/1RNh38nH+/Ay5jgL4P0ZMPpY=
-github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496 h1:90ytrX1dbzL7Uf/hHiuWwvywC+gikHv4hkAy4CwRTbs=
-github.com/docker/compose-on-kubernetes v0.4.19-0.20190128150448-356b2919c496/go.mod h1:iT2pYfi580XlpaV4KmK0T6+4/9+XoKmk/fhoDod1emE=
 github.com/docker/distribution v0.0.0-20190905152932-14b96e55d84c/go.mod h1:0+TTO4EOBfRPhZXAeF1Vu+W3hHZ8eLp8PgKVZlcvtFY=
 github.com/docker/distribution v2.6.0-rc.1.0.20180327202408-83389a148052+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
 github.com/docker/distribution v2.7.1-0.20190205005809-0d3efadf0154+incompatible/go.mod h1:J2gT2udsDAN96Uj4KfcMRqY0/ypR+oyYUYmja8H+y+w=
