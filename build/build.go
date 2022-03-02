@@ -1263,6 +1263,7 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 					so.FrontendAttrs["input-metadata:"+k+"::"+platform] = string(dt)
 				}
 			}
+			delete(so.FrontendAttrs, v)
 		}
 		if rr.Ref != nil {
 			st, err := rr.Ref.ToState()
