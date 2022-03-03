@@ -189,6 +189,10 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 			pp = append(pp, p)
 			mm[idx] = pp
 		}
+		// if no platform is specified, use first driver
+		if len(mm) == 0 {
+			mm[0] = nil
+		}
 		dps := make([]driverPair, 0, 2)
 		for idx, pp := range mm {
 			dps = append(dps, driverPair{driverIndex: idx, platforms: pp})
