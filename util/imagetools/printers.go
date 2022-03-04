@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"text/template"
@@ -17,6 +18,7 @@ import (
 	binfotypes "github.com/moby/buildkit/util/buildinfo/types"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 const defaultPfx = "  "
@@ -109,18 +111,28 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 
 	imageconfigs := make(map[string]*ocispecs.Image)
 	buildinfos := make(map[string]*binfotypes.BuildInfo)
-	for _, pform := range p.platforms {
-		img, dtic, err := p.getImageConfig(&pform)
-		if err != nil {
-			return err
-		} else if img != nil {
-			imageconfigs[platforms.Format(pform)] = img
-		}
-		if bi, err := p.getBuildInfo(dtic); err != nil {
-			return err
-		} else if bi != nil {
-			buildinfos[platforms.Format(pform)] = bi
-		}
+
+	eg, _ := errgroup.WithContext(p.ctx)
+	for _, platform := range p.platforms {
+		func(platform ocispecs.Platform) {
+			eg.Go(func() error {
+				img, dtic, err := p.getImageConfig(&platform)
+				if err != nil {
+					return err
+				} else if img != nil {
+					imageconfigs[platforms.Format(platform)] = img
+				}
+				if bi, err := p.getBuildInfo(dtic); err != nil {
+					return err
+				} else if bi != nil {
+					buildinfos[platforms.Format(platform)] = bi
+				}
+				return nil
+			})
+		}(platform)
+	}
+	if err := eg.Wait(); err != nil {
+		return err
 	}
 
 	format := tpl.Root.String()
@@ -164,13 +176,13 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 				BuildInfo: buildinfos,
 			})
 		}
-		var imageconfig *ocispecs.Image
-		for _, ic := range imageconfigs {
-			imageconfig = ic
+		var ic *ocispecs.Image
+		for _, v := range imageconfigs {
+			ic = v
 		}
-		var buildinfo *binfotypes.BuildInfo
-		for _, bi := range buildinfos {
-			buildinfo = bi
+		var bi *binfotypes.BuildInfo
+		for _, v := range buildinfos {
+			bi = v
 		}
 		return tpl.Execute(out, struct {
 			Name      string                `json:"name,omitempty"`
@@ -180,8 +192,8 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 		}{
 			Name:      p.name,
 			Manifest:  manifest,
-			Image:     imageconfig,
-			BuildInfo: buildinfo,
+			Image:     ic,
+			BuildInfo: bi,
 		})
 	}
 
@@ -230,14 +242,22 @@ func (p *Printer) printManifestList(out io.Writer) error {
 }
 
 func (p *Printer) printBuildInfos(bis map[string]*binfotypes.BuildInfo, out io.Writer) error {
-	if len(bis) == 1 {
+	if len(bis) == 0 {
+		return nil
+	} else if len(bis) == 1 {
 		for _, bi := range bis {
 			return p.printBuildInfo(bi, "", out)
 		}
 	}
-	for pform, bi := range bis {
+	var pkeys []string
+	for _, pform := range p.platforms {
+		pkeys = append(pkeys, platforms.Format(pform))
+	}
+	sort.Strings(pkeys)
+	for _, platform := range pkeys {
+		bi := bis[platform]
 		w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
-		_, _ = fmt.Fprintf(w, "\t\nPlatform:\t%s\t\n", pform)
+		_, _ = fmt.Fprintf(w, "\t\nPlatform:\t%s\t\n", platform)
 		_ = w.Flush()
 		if err := p.printBuildInfo(bi, "", out); err != nil {
 			return err
