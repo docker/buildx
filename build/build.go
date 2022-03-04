@@ -762,9 +762,12 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 				resp[k] = res[0]
 				respMu.Unlock()
 				if len(res) == 1 {
-					digest := res[0].ExporterResponse["containerimage.digest"]
+					dgst := res[0].ExporterResponse[exptypes.ExporterImageDigestKey]
+					if v, ok := res[0].ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
+						dgst = v
+					}
 					if opt.ImageIDFile != "" {
-						return ioutil.WriteFile(opt.ImageIDFile, []byte(digest), 0644)
+						return ioutil.WriteFile(opt.ImageIDFile, []byte(dgst), 0644)
 					}
 					return nil
 				}
@@ -774,7 +777,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						descs := make([]specs.Descriptor, 0, len(res))
 
 						for _, r := range res {
-							s, ok := r.ExporterResponse["containerimage.digest"]
+							s, ok := r.ExporterResponse[exptypes.ExporterImageDigestKey]
 							if ok {
 								descs = append(descs, specs.Descriptor{
 									Digest:    digest.Digest(s),
