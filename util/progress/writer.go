@@ -10,6 +10,8 @@ import (
 
 type Writer interface {
 	Write(*client.SolveStatus)
+	ValidateLogSource(digest.Digest, interface{}) bool
+	ClearLogSource(interface{})
 }
 
 func Write(w Writer, name string, f func() error) {
@@ -47,8 +49,20 @@ func NewChannel(w Writer) (chan *client.SolveStatus, chan struct{}) {
 			v, ok := <-ch
 			if !ok {
 				close(done)
+				w.ClearLogSource(done)
 				return
 			}
+
+			if len(v.Logs) > 0 {
+				logs := make([]*client.VertexLog, 0, len(v.Logs))
+				for _, l := range v.Logs {
+					if w.ValidateLogSource(l.Vertex, done) {
+						logs = append(logs, l)
+					}
+				}
+				v.Logs = logs
+			}
+
 			w.Write(v)
 		}
 	}()
