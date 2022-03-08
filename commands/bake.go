@@ -157,6 +157,22 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 					return err
 				}
 			}
+		} else if len(grps) == 1 {
+			if len(grps[0].Targets) == 1 {
+				if err := writeMetadataFile(in.metadataFile, decodeExporterResponse(resp[grps[0].Targets[0]].ExporterResponse)); err != nil {
+					return err
+				}
+			} else {
+				dt := make(map[string]interface{})
+				for _, t := range grps[0].Targets {
+					if r, ok := resp[t]; ok {
+						dt[t] = decodeExporterResponse(r.ExporterResponse)
+					}
+				}
+				if err := writeMetadataFile(in.metadataFile, dt); err != nil {
+					return err
+				}
+			}
 		} else {
 			dt := make(map[string]interface{})
 			for t, r := range resp {
