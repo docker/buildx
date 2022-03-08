@@ -10,7 +10,7 @@ require (
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
 	github.com/compose-spec/compose-go v1.0.8
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.0
+	github.com/containerd/containerd v1.6.1
 	github.com/docker/cli v20.10.12+incompatible
 	github.com/docker/cli-docs-tool v0.4.0
 	github.com/docker/distribution v2.8.0+incompatible
@@ -30,7 +30,7 @@ require (
 	github.com/jinzhu/gorm v1.9.2 // indirect
 	github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a // indirect
 	github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0 // indirect
-	github.com/moby/buildkit v0.10.0-rc1.0.20220225190804-0692ad797425
+	github.com/moby/buildkit v0.10.0-rc2.0.20220308185020-fdecd0ae108b
 	github.com/morikuni/aec v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.2-0.20211117181255-693428a734f5
