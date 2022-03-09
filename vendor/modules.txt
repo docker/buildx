@@ -45,7 +45,7 @@ github.com/compose-spec/godotenv
 # github.com/containerd/console v1.0.3
 ## explicit
 github.com/containerd/console
-# github.com/containerd/containerd v1.6.0
+# github.com/containerd/containerd v1.6.1
 ## explicit
 github.com/containerd/containerd/api/services/content/v1
 github.com/containerd/containerd/archive/compression
@@ -277,7 +277,7 @@ github.com/inconshreveable/mousetrap
 github.com/json-iterator/go
 # github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 ## explicit
-# github.com/klauspost/compress v1.14.3
+# github.com/klauspost/compress v1.15.0
 github.com/klauspost/compress
 github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
@@ -294,7 +294,7 @@ github.com/miekg/pkcs11
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.4.2
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.10.0-rc1.0.20220225190804-0692ad797425
+# github.com/moby/buildkit v0.10.0-rc2.0.20220308185020-fdecd0ae108b
 ## explicit
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types

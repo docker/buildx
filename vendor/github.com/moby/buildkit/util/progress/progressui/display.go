@@ -119,7 +119,6 @@ type trace struct {
 	localTimeDiff time.Duration
 	vertexes      []*vertex
 	byDigest      map[digest.Digest]*vertex
-	nextIndex     int
 	updates       map[digest.Digest]struct{}
 	modeConsole   bool
 	groups        map[string]*vertexGroup // group id -> group
@@ -156,7 +155,7 @@ type vertex struct {
 	// Interval start time in unix nano -> interval. Using a map ensures
 	// that updates for the same interval overwrite their previous updates.
 	intervals       map[int64]interval
-	mostRecentStart *time.Time
+	mergedIntervals []interval
 
 	// whether the vertex should be hidden due to being in a progress group
 	// that doesn't have any non-weak members that have started
@@ -171,17 +170,23 @@ func (v *vertex) update(c int) {
 	v.count += c
 }
 
+func (v *vertex) mostRecentInterval() *interval {
+	if v.isStarted() {
+		ival := v.mergedIntervals[len(v.mergedIntervals)-1]
+		return &ival
+	}
+	return nil
+}
+
 func (v *vertex) isStarted() bool {
-	return len(v.intervals) > 0
+	return len(v.mergedIntervals) > 0
 }
 
 func (v *vertex) isCompleted() bool {
-	for _, ival := range v.intervals {
-		if ival.stop == nil {
-			return false
-		}
+	if ival := v.mostRecentInterval(); ival != nil {
+		return ival.stop != nil
 	}
-	return true
+	return false
 }
 
 type vertexGroup struct {
@@ -208,9 +213,6 @@ func (vg *vertexGroup) refresh() (changed, newlyStarted, newlyRevealed bool) {
 				newlyStarted = true
 			}
 			vg.intervals[subVtx.Started.UnixNano()] = newInterval
-			if vg.mostRecentStart == nil || subVtx.Started.After(*vg.mostRecentStart) {
-				vg.mostRecentStart = subVtx.Started
-			}
 
 			if !subVtx.ProgressGroup.Weak {
 				vg.hidden = false
@@ -240,6 +242,12 @@ func (vg *vertexGroup) refresh() (changed, newlyStarted, newlyRevealed bool) {
 		changed = true
 		newlyRevealed = true
 	}
+
+	var ivals []interval
+	for _, ival := range vg.intervals {
+		ivals = append(ivals, ival)
+	}
+	vg.mergedIntervals = mergeIntervals(ivals)
 
 	return changed, newlyStarted, newlyRevealed
 }
@@ -410,7 +418,6 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 		if v.ProgressGroup != nil {
 			group, ok := t.groups[v.ProgressGroup.Id]
 			if !ok {
-				t.nextIndex++
 				group = &vertexGroup{
 					vertex: &vertex{
 						Vertex: &client.Vertex{
@@ -419,7 +426,6 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 						},
 						byID:          make(map[string]*status),
 						statusUpdates: make(map[string]struct{}),
-						index:         t.nextIndex,
 						intervals:     make(map[int64]interval),
 						hidden:        true,
 					},
@@ -441,11 +447,9 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 		}
 		prev, ok := t.byDigest[v.Digest]
 		if !ok {
-			t.nextIndex++
 			t.byDigest[v.Digest] = &vertex{
 				byID:          make(map[string]*status),
 				statusUpdates: make(map[string]struct{}),
-				index:         t.nextIndex,
 				intervals:     make(map[int64]interval),
 			}
 			if t.modeConsole {
@@ -468,9 +472,11 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 				start: v.Started,
 				stop:  v.Completed,
 			}
-			if t.byDigest[v.Digest].mostRecentStart == nil || v.Started.After(*t.byDigest[v.Digest].mostRecentStart) {
-				t.byDigest[v.Digest].mostRecentStart = v.Started
+			var ivals []interval
+			for _, ival := range t.byDigest[v.Digest].intervals {
+				ivals = append(ivals, ival)
 			}
+			t.byDigest[v.Digest].mergedIntervals = mergeIntervals(ivals)
 		}
 		t.byDigest[v.Digest].jobCached = false
 	}
@@ -479,7 +485,7 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 		changed, newlyStarted, newlyRevealed := group.refresh()
 		if newlyStarted {
 			if t.localTimeDiff == 0 {
-				t.localTimeDiff = time.Since(*group.mostRecentStart)
+				t.localTimeDiff = time.Since(*group.mergedIntervals[0].start)
 			}
 		}
 		if group.hidden {
@@ -539,8 +545,8 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 				v.logs[len(v.logs)-1] = append(v.logs[len(v.logs)-1], dt...)
 			} else {
 				ts := time.Duration(0)
-				if v.isStarted() {
-					ts = l.Timestamp.Sub(*v.mostRecentStart)
+				if ival := v.mostRecentInterval(); ival != nil {
+					ts = l.Timestamp.Sub(*ival.start)
 				}
 				prec := 1
 				sec := ts.Seconds()
@@ -653,15 +659,14 @@ func (t *trace) displayInfo() (d displayInfo) {
 		}
 		for _, w := range v.warnings {
 			msg := "WARN: " + string(w.Short)
-			mostRecentStart := v.mostRecentStart
-			var mostRecentStop *time.Time
-			if mostRecentStart != nil {
-				mostRecentStop = v.intervals[mostRecentStart.UnixNano()].stop
+			var mostRecentInterval interval
+			if ival := v.mostRecentInterval(); ival != nil {
+				mostRecentInterval = *ival
 			}
 			j := &job{
 				intervals: []interval{{
-					start: addTime(mostRecentStart, t.localTimeDiff),
-					stop:  addTime(mostRecentStop, t.localTimeDiff),
+					start: addTime(mostRecentInterval.start, t.localTimeDiff),
+					stop:  addTime(mostRecentInterval.stop, t.localTimeDiff),
 				}},
 				name:       msg,
 				isCanceled: true,
