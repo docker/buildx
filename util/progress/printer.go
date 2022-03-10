@@ -3,7 +3,6 @@ package progress
 import (
 	"context"
 	"io"
-	"io/ioutil"
 	"os"
 	"sync"
 
@@ -88,7 +87,7 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string)
 		var c console.Console
 		switch mode {
 		case PrinterModeQuiet:
-			w = ioutil.Discard
+			w = io.Discard
 		case PrinterModeAuto, PrinterModeTty:
 			if cons, err := console.ConsoleFromFile(out); err == nil {
 				c = cons

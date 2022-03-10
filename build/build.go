@@ -8,7 +8,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -771,7 +770,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						dgst = v
 					}
 					if opt.ImageIDFile != "" {
-						return ioutil.WriteFile(opt.ImageIDFile, []byte(dgst), 0644)
+						return os.WriteFile(opt.ImageIDFile, []byte(dgst), 0644)
 					}
 					return nil
 				}
@@ -820,7 +819,7 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 								return err
 							}
 							if opt.ImageIDFile != "" {
-								if err := ioutil.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
+								if err := os.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
 									return err
 								}
 							}
@@ -1086,7 +1085,7 @@ func remoteDigestWithMoby(ctx context.Context, d driver.Driver, name string) (st
 }
 
 func createTempDockerfile(r io.Reader) (string, error) {
-	dir, err := ioutil.TempDir("", "dockerfile")
+	dir, err := os.MkdirTemp("", "dockerfile")
 	if err != nil {
 		return "", err
 	}
@@ -1145,7 +1144,7 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 				}
 				// stdin is dockerfile
 				dockerfileReader = buf
-				inp.ContextPath, _ = ioutil.TempDir("", "empty-dir")
+				inp.ContextPath, _ = os.MkdirTemp("", "empty-dir")
 				toRemove = append(toRemove, inp.ContextPath)
 				target.LocalDirs["context"] = inp.ContextPath
 			}
@@ -1464,13 +1463,13 @@ func tryNodeIdentifier(configDir string) (out string) {
 			if _, err := rand.Read(b); err != nil {
 				return out
 			}
-			if err := ioutil.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0600); err != nil {
+			if err := os.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0600); err != nil {
 				return out
 			}
 		}
 	}
 
-	dt, err := ioutil.ReadFile(sessionFile)
+	dt, err := os.ReadFile(sessionFile)
 	if err == nil {
 		return string(dt)
 	}

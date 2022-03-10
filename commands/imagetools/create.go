@@ -3,7 +3,7 @@ package commands
 import (
 	"encoding/json"
 	"fmt"
-	"io/ioutil"
+	"os"
 	"strings"
 
 	"github.com/docker/buildx/store"
@@ -38,7 +38,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 
 	fileArgs := make([]string, len(in.files))
 	for i, f := range in.files {
-		dt, err := ioutil.ReadFile(f)
+		dt, err := os.ReadFile(f)
 		if err != nil {
 			return err
 		}

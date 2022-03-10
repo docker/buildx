@@ -1,7 +1,6 @@
 package context
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 
@@ -42,7 +41,7 @@ var testStoreCfg = store.NewConfig(
 )
 
 func TestSaveLoadContexts(t *testing.T) {
-	storeDir, err := ioutil.TempDir("", "test-load-save-k8-context")
+	storeDir, err := os.MkdirTemp("", "test-load-save-k8-context")
 	require.NoError(t, err)
 	defer os.RemoveAll(storeDir)
 	store := store.New(storeDir, testStoreCfg)
@@ -50,7 +49,7 @@ func TestSaveLoadContexts(t *testing.T) {
 	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, true), "raw-notls-skip"))
 	require.NoError(t, save(store, testEndpoint("https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), true), "raw-tls"))
 
-	kcFile, err := ioutil.TempFile(os.TempDir(), "test-load-save-k8-context")
+	kcFile, err := os.CreateTemp(os.TempDir(), "test-load-save-k8-context")
 	require.NoError(t, err)
 	defer os.Remove(kcFile.Name())
 	defer kcFile.Close()
@@ -147,7 +146,7 @@ func save(s store.Writer, ep Endpoint, name string) error {
 }
 
 func TestSaveLoadGKEConfig(t *testing.T) {
-	storeDir, err := ioutil.TempDir("", t.Name())
+	storeDir, err := os.MkdirTemp("", t.Name())
 	require.NoError(t, err)
 	defer os.RemoveAll(storeDir)
 	store := store.New(storeDir, testStoreCfg)
@@ -172,7 +171,7 @@ func TestSaveLoadGKEConfig(t *testing.T) {
 }
 
 func TestSaveLoadEKSConfig(t *testing.T) {
-	storeDir, err := ioutil.TempDir("", t.Name())
+	storeDir, err := os.MkdirTemp("", t.Name())
 	require.NoError(t, err)
 	defer os.RemoveAll(storeDir)
 	store := store.New(storeDir, testStoreCfg)
@@ -197,7 +196,7 @@ func TestSaveLoadEKSConfig(t *testing.T) {
 }
 
 func TestSaveLoadK3SConfig(t *testing.T) {
-	storeDir, err := ioutil.TempDir("", t.Name())
+	storeDir, err := os.MkdirTemp("", t.Name())
 	require.NoError(t, err)
 	defer os.RemoveAll(storeDir)
 	store := store.New(storeDir, testStoreCfg)

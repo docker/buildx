@@ -2,7 +2,6 @@ package progress
 
 import (
 	"io"
-	"io/ioutil"
 	"time"
 
 	"github.com/moby/buildkit/client"
@@ -24,7 +23,7 @@ func FromReader(w Writer, name string, rc io.ReadCloser) {
 		Vertexes: []*client.Vertex{&vtx},
 	})
 
-	_, err := io.Copy(ioutil.Discard, rc)
+	_, err := io.Copy(io.Discard, rc)
 
 	tm2 := time.Now()
 	vtx2 := vtx
