@@ -429,7 +429,7 @@ Attribute keys:
 - `src`, `source` - Secret filename. `id` used if unset.
 
 ```dockerfile
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.4
 FROM python:3
 RUN pip install awscli
 RUN --mount=type=secret,id=aws,target=/root/.aws/credentials \
@@ -448,7 +448,7 @@ Attribute keys:
 - `env` - Secret environment variable. `id` used if unset, otherwise will look for `src`, `source` if `id` unset.
 
 ```dockerfile
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.4
 FROM node:alpine
 RUN --mount=type=bind,target=. \
   --mount=type=secret,id=SECRET_TOKEN \
@@ -480,7 +480,7 @@ authentication (e.g., cloning a private repository).
 Example to access Gitlab using an SSH agent socket:
 
 ```dockerfile
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.4
 FROM alpine
 RUN apk add --no-cache openssh-client
 RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
