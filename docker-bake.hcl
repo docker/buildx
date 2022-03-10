@@ -89,11 +89,7 @@ target "mod-outdated" {
   inherits = ["_common"]
   dockerfile = "./hack/dockerfiles/vendor.Dockerfile"
   target = "outdated"
-  args = {
-    // used to invalidate cache for outdated run stage
-    // can be dropped when https://github.com/moby/buildkit/issues/1213 fixed
-    _RANDOM = uuidv4()
-  }
+  no-cache-filter = ["outdated"]
   output = ["type=cacheonly"]
 }
 
