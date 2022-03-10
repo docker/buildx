@@ -12,6 +12,7 @@ linters:
     - gofmt
     - govet
     - deadcode
+    - depguard
     - goimports
     - ineffassign
     - misspell
@@ -22,6 +23,15 @@ linters:
     - typecheck
     - structcheck
   disable-all: true
+
+linters-settings:
+  depguard:
+    list-type: blacklist
+    include-go-root: true
+    packages:
+      # The io/ioutil package has been deprecated.
+      # https://go.dev/doc/go1.16#ioutil
+      - io/ioutil
 
 issues:
   exclude-rules:
