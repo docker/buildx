@@ -2,7 +2,7 @@ package build
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"path/filepath"
 
 	"github.com/docker/buildx/driver"
@@ -53,11 +53,11 @@ func createTempDockerfileFromURL(ctx context.Context, d driver.Driver, url strin
 		if err != nil {
 			return nil, err
 		}
-		dir, err := ioutil.TempDir("", "buildx")
+		dir, err := os.MkdirTemp("", "buildx")
 		if err != nil {
 			return nil, err
 		}
-		if err := ioutil.WriteFile(filepath.Join(dir, "Dockerfile"), dt, 0600); err != nil {
+		if err := os.WriteFile(filepath.Join(dir, "Dockerfile"), dt, 0600); err != nil {
 			return nil, err
 		}
 		out = dir

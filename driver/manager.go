@@ -2,7 +2,7 @@ package driver
 
 import (
 	"context"
-	"io/ioutil"
+	"os"
 	"sort"
 	"strings"
 	"sync"
@@ -40,7 +40,7 @@ func (k KubeClientConfigInCluster) ClientConfig() (*rest.Config, error) {
 }
 
 func (k KubeClientConfigInCluster) Namespace() (string, bool, error) {
-	namespace, err := ioutil.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
 	if err != nil {
 		return "", false, err
 	}

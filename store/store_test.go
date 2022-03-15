@@ -1,7 +1,6 @@
 package store
 
 import (
-	"io/ioutil"
 	"os"
 	"testing"
 	"time"
@@ -12,7 +11,7 @@ import (
 
 func TestEmptyStartup(t *testing.T) {
 	t.Parallel()
-	tmpdir, err := ioutil.TempDir("", "buildx-store")
+	tmpdir, err := os.MkdirTemp("", "buildx-store")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -30,7 +29,7 @@ func TestEmptyStartup(t *testing.T) {
 
 func TestNodeLocking(t *testing.T) {
 	t.Parallel()
-	tmpdir, err := ioutil.TempDir("", "buildx-store")
+	tmpdir, err := os.MkdirTemp("", "buildx-store")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
@@ -65,7 +64,7 @@ func TestNodeLocking(t *testing.T) {
 
 func TestNodeManagement(t *testing.T) {
 	t.Parallel()
-	tmpdir, err := ioutil.TempDir("", "buildx-store")
+	tmpdir, err := os.MkdirTemp("", "buildx-store")
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 

@@ -4,7 +4,6 @@ import (
 	"bytes"
 	"context"
 	"io"
-	"io/ioutil"
 	"net"
 	"os"
 	"path"
@@ -90,7 +89,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(ioutil.Discard, rc)
+		_, err = io.Copy(io.Discard, rc)
 		return err
 	}); err != nil {
 		// image pulling failed, check if it exists in local image store.

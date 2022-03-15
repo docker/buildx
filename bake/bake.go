@@ -4,7 +4,7 @@ import (
 	"context"
 	"encoding/csv"
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -65,12 +65,12 @@ func ReadLocalFiles(names []string) ([]File, error) {
 		var dt []byte
 		var err error
 		if n == "-" {
-			dt, err = ioutil.ReadAll(os.Stdin)
+			dt, err = io.ReadAll(os.Stdin)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			dt, err = ioutil.ReadFile(n)
+			dt, err = os.ReadFile(n)
 			if err != nil {
 				if isDefault && errors.Is(err, os.ErrNotExist) {
 					continue

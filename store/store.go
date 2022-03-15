@@ -2,7 +2,6 @@ package store
 
 import (
 	"encoding/json"
-	"io/ioutil"
 	"os"
 	"path/filepath"
 	"regexp"
@@ -46,7 +45,7 @@ type Txn struct {
 
 func (t *Txn) List() ([]*NodeGroup, error) {
 	pp := filepath.Join(t.s.root, "instances")
-	fis, err := ioutil.ReadDir(pp)
+	fis, err := os.ReadDir(pp)
 	if err != nil {
 		return nil, err
 	}
@@ -75,7 +74,7 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	dt, err := ioutil.ReadFile(filepath.Join(t.s.root, "instances", name))
+	dt, err := os.ReadFile(filepath.Join(t.s.root, "instances", name))
 	if err != nil {
 		return nil, err
 	}
@@ -144,7 +143,7 @@ func (t *Txn) reset(key string) error {
 }
 
 func (t *Txn) Current(key string) (*NodeGroup, error) {
-	dt, err := ioutil.ReadFile(filepath.Join(t.s.root, "current"))
+	dt, err := os.ReadFile(filepath.Join(t.s.root, "current"))
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
@@ -175,7 +174,7 @@ func (t *Txn) Current(key string) (*NodeGroup, error) {
 
 	h := toHash(key)
 
-	dt, err = ioutil.ReadFile(filepath.Join(t.s.root, "defaults", h))
+	dt, err = os.ReadFile(filepath.Join(t.s.root, "defaults", h))
 	if err != nil {
 		if os.IsNotExist(err) {
 			t.reset(key)
