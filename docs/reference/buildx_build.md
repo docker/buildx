@@ -129,6 +129,7 @@ $ docker buildx build --build-context project=path/to/project/source .
 ```
 
 ```Dockerfile
+#syntax=docker/dockerfile:1.4
 FROM alpine
 COPY --from=project myfile /
 ```
