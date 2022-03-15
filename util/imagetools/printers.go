@@ -2,7 +2,6 @@ package imagetools
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -16,9 +15,9 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution/reference"
 	binfotypes "github.com/moby/buildkit/util/buildinfo/types"
+	"github.com/moby/buildkit/util/imageutil"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -123,7 +122,7 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 				} else if img != nil {
 					imageconfigs[platforms.Format(platform)] = img
 				}
-				if bi, err := p.getBuildInfo(dtic); err != nil {
+				if bi, err := imageutil.BuildInfo(dtic); err != nil {
 					return err
 				} else if bi != nil {
 					buildinfos[platforms.Format(platform)] = bi
@@ -334,24 +333,4 @@ func (p *Printer) getImageConfig(platform *ocispecs.Platform) (*ocispecs.Image, 
 		return nil, nil, err
 	}
 	return img, dtic, nil
-}
-
-func (p *Printer) getBuildInfo(dtic []byte) (*binfotypes.BuildInfo, error) {
-	var binfo *binfotypes.BuildInfo
-	if len(dtic) > 0 {
-		var biconfig binfotypes.ImageConfig
-		if err := json.Unmarshal(dtic, &biconfig); err != nil {
-			return nil, errors.Wrap(err, "failed to unmarshal image config")
-		}
-		if len(biconfig.BuildInfo) > 0 {
-			dtbi, err := base64.StdEncoding.DecodeString(biconfig.BuildInfo)
-			if err != nil {
-				return nil, errors.Wrap(err, "failed to decode build info")
-			}
-			if err = json.Unmarshal(dtbi, &binfo); err != nil {
-				return nil, errors.Wrap(err, "failed to unmarshal build info")
-			}
-		}
-	}
-	return binfo, nil
 }
