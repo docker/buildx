@@ -79,6 +79,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 	fmt.Fprintf(w, "Name:\t%s\n", ngi.ng.Name)
 	fmt.Fprintf(w, "Driver:\t%s\n", ngi.ng.Driver)
+
 	if err != nil {
 		fmt.Fprintf(w, "Error:\t%s\n", err.Error())
 	} else if ngi.err != nil {
@@ -94,6 +95,16 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 			}
 			fmt.Fprintf(w, "Name:\t%s\n", n.Name)
 			fmt.Fprintf(w, "Endpoint:\t%s\n", n.Endpoint)
+
+			var driverOpts []string
+			for k, v := range n.DriverOpts {
+				driverOpts = append(driverOpts, fmt.Sprintf("\t%s=%s\n", k, v))
+			}
+
+			if len(driverOpts) > 0 {
+				fmt.Fprintf(w, "Driver Options: %s", strings.Join(driverOpts, ","))
+			}
+
 			if err := ngi.drivers[i].di.Err; err != nil {
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
 			} else if err := ngi.drivers[i].err; err != nil {
