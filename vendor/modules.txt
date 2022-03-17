@@ -112,7 +112,7 @@ github.com/docker/cli/opts
 ## explicit
 github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
-# github.com/docker/distribution v2.8.0+incompatible
+# github.com/docker/distribution v2.8.1+incompatible
 ## explicit
 github.com/docker/distribution
 github.com/docker/distribution/digestset
