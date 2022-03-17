@@ -1011,7 +1011,7 @@ func TestTargetName(t *testing.T) {
 		},
 		{
 			target:  "a.b",
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			target:  "_a",

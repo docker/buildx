@@ -28,7 +28,7 @@ var (
 	httpPrefix                   = regexp.MustCompile(`^https?://`)
 	gitURLPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
 
-	validTargetNameChars = `[a-zA-Z0-9_-]+`
+	validTargetNameChars = `[a-zA-Z0-9._-]+`
 	targetNamePattern    = regexp.MustCompile(`^` + validTargetNameChars + `$`)
 )
 
