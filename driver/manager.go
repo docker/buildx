@@ -11,6 +11,7 @@ import (
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
+	buildkitclient "github.com/moby/buildkit/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -52,8 +53,11 @@ type InitConfig struct {
 	Name             string
 	DockerAPI        dockerclient.APIClient
 	KubeClientConfig KubeClientConfig
+	BuldkitdAddr     string
+	BuildkitAPI      *buildkitclient.Client
 	BuildkitFlags    []string
 	Files            map[string][]byte
+	Driver           string
 	DriverOpts       map[string]string
 	Auth             Auth
 	Platforms        []specs.Platform
@@ -103,13 +107,16 @@ func GetFactory(name string, instanceRequired bool) Factory {
 	return nil
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, api dockerclient.APIClient, buldkitdAddr string, buildkitAPI *buildkitclient.Client, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string, driver string) (Driver, error) {
 	ic := InitConfig{
 		DockerAPI:        api,
 		KubeClientConfig: kcc,
 		Name:             name,
+		BuldkitdAddr:     buldkitdAddr,
+		BuildkitAPI:      buildkitAPI,
 		BuildkitFlags:    flags,
 		DriverOpts:       do,
+		Driver:           driver,
 		Auth:             auth,
 		Platforms:        platforms,
 		ContextPathHash:  contextPathHash,

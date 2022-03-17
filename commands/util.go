@@ -6,6 +6,8 @@ import (
 	"os"
 	"strings"
 
+	buildkitclient "github.com/moby/buildkit/client"
+
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
 	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
@@ -80,6 +82,13 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				defer func() {
 					dis[i] = di
 				}()
+
+				buildkitAPI, err := buildkitclient.New(ctx, n.Endpoint)
+				if err != nil {
+					di.Err = err
+					return nil
+				}
+
 				dockerapi, err := clientForEndpoint(dockerCli, n.Endpoint)
 				if err != nil {
 					di.Err = err
@@ -118,7 +127,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, n.Endpoint, buildkitAPI, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, contextPathHash, ng.Driver)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -259,7 +268,7 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly b
 		return nil, err
 	}
 
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), imageopt.Auth, nil, nil, nil, nil, nil, contextPathHash)
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), "", nil, imageopt.Auth, nil, nil, nil, nil, nil, contextPathHash, "")
 	if err != nil {
 		return nil, err
 	}
