@@ -330,6 +330,10 @@ func TestServiceName(t *testing.T) {
 		},
 		{
 			svc:     "a.b",
+			wantErr: false,
+		},
+		{
+			svc:     "a?b",
 			wantErr: true,
 		},
 		{
