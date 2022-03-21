@@ -60,7 +60,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 				continue
 			}
 
-			if err = validateTargetName(s.Name); err != nil {
+			if err = validateTargetNameCompose(s.Name); err != nil {
 				return nil, errors.Wrapf(err, "invalid service name %q", s.Name)
 			}
 

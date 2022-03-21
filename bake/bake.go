@@ -28,8 +28,10 @@ var (
 	httpPrefix                   = regexp.MustCompile(`^https?://`)
 	gitURLPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
 
-	validTargetNameChars = `[a-zA-Z0-9_-]+`
-	targetNamePattern    = regexp.MustCompile(`^` + validTargetNameChars + `$`)
+	validTargetNameChars        = `[a-zA-Z0-9_-]+`
+	validTargetNameCharsCompose = `[a-zA-Z0-9._-]+`
+	targetNamePattern           = regexp.MustCompile(`^` + validTargetNameChars + `$`)
+	targetNamePatternCompose    = regexp.MustCompile(`^` + validTargetNameCharsCompose + `$`)
 )
 
 type File struct {
@@ -964,6 +966,13 @@ func parseOutputType(str string) string {
 func validateTargetName(name string) error {
 	if !targetNamePattern.MatchString(name) {
 		return errors.Errorf("only %q are allowed", validTargetNameChars)
+	}
+	return nil
+}
+
+func validateTargetNameCompose(name string) error {
+	if !targetNamePatternCompose.MatchString(name) {
+		return errors.Errorf("only %q are allowed", validTargetNameCharsCompose)
 	}
 	return nil
 }
