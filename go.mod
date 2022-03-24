@@ -10,7 +10,7 @@ require (
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
 	github.com/compose-spec/compose-go v1.0.8
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.1
+	github.com/containerd/containerd v1.6.2
 	github.com/docker/cli v20.10.12+incompatible
 	github.com/docker/cli-docs-tool v0.4.0
 	github.com/docker/distribution v2.8.1+incompatible
