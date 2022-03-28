@@ -412,12 +412,12 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 }
 
 func (c Config) ResolveGroup(name string) []string {
-	return c.group(name, map[string]struct{}{})
+	return dedupString(c.group(name, map[string][]string{}))
 }
 
-func (c Config) group(name string, visited map[string]struct{}) []string {
+func (c Config) group(name string, visited map[string][]string) []string {
 	if _, ok := visited[name]; ok {
-		return nil
+		return visited[name]
 	}
 	var g *Group
 	for _, group := range c.Groups {
@@ -429,7 +429,7 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 	if g == nil {
 		return []string{name}
 	}
-	visited[name] = struct{}{}
+	visited[name] = []string{}
 	targets := make([]string, 0, len(g.Targets))
 	for _, t := range g.Targets {
 		tgroup := c.group(t, visited)
@@ -439,6 +439,7 @@ func (c Config) group(name string, visited map[string]struct{}) []string {
 			targets = append(targets, t)
 		}
 	}
+	visited[name] = targets
 	return targets
 }
 

@@ -1045,3 +1045,79 @@ func TestTargetName(t *testing.T) {
 		})
 	}
 }
+
+func TestNestedGroupsWithSameTarget(t *testing.T) {
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+group "a" {
+  targets = ["b", "c"]
+}
+
+group "b" {
+  targets = ["d"]
+}
+
+group "c" {
+  targets = ["b"]
+}
+
+target "d" {
+  context = "."
+  dockerfile = "./testdockerfile"
+}
+
+group "e" {
+  targets = ["a", "f"]
+}
+
+target "f" {
+  context = "./foo"
+}`)}
+
+	cases := []struct {
+		name     string
+		targets  []string
+		ntargets int
+	}{
+		{
+			name:     "a",
+			targets:  []string{"b", "c"},
+			ntargets: 1,
+		},
+		{
+			name:     "b",
+			targets:  []string{"d"},
+			ntargets: 1,
+		},
+		{
+			name:     "c",
+			targets:  []string{"b"},
+			ntargets: 1,
+		},
+		{
+			name:     "d",
+			targets:  []string{"d"},
+			ntargets: 1,
+		},
+		{
+			name:     "e",
+			targets:  []string{"a", "f"},
+			ntargets: 2,
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			m, g, err := ReadTargets(ctx, []File{f}, []string{tt.name}, nil, nil)
+			require.NoError(t, err)
+			require.Equal(t, 1, len(g))
+			require.Equal(t, tt.targets, g[0].Targets)
+			require.Equal(t, tt.ntargets, len(m))
+			require.Equal(t, ".", *m["d"].Context)
+			require.Equal(t, "./testdockerfile", *m["d"].Dockerfile)
+		})
+	}
+}
