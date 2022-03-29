@@ -32,16 +32,16 @@ github.com/cenkalti/backoff/v4
 github.com/cespare/xxhash/v2
 # github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e
 ## explicit
-# github.com/compose-spec/compose-go v1.0.8
+# github.com/compose-spec/compose-go v1.2.1
 ## explicit
+github.com/compose-spec/compose-go/consts
+github.com/compose-spec/compose-go/dotenv
 github.com/compose-spec/compose-go/errdefs
 github.com/compose-spec/compose-go/interpolation
 github.com/compose-spec/compose-go/loader
 github.com/compose-spec/compose-go/schema
 github.com/compose-spec/compose-go/template
 github.com/compose-spec/compose-go/types
-# github.com/compose-spec/godotenv v1.1.1
-github.com/compose-spec/godotenv
 # github.com/containerd/console v1.0.3
 ## explicit
 github.com/containerd/console
@@ -292,7 +292,7 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 github.com/miekg/pkcs11
 # github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7
 github.com/mitchellh/go-wordwrap
-# github.com/mitchellh/mapstructure v1.4.2
+# github.com/mitchellh/mapstructure v1.4.3
 github.com/mitchellh/mapstructure
 # github.com/moby/buildkit v0.10.0
 ## explicit
