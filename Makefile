@@ -20,6 +20,12 @@ binaries:
 binaries-cross:
 	$(BUILDX_CMD) bake binaries-cross
 
+pkg:
+	$(BUILDX_CMD) bake pkg
+
+pkg-cross:
+	$(BUILDX_CMD) bake pkg-cross
+
 install: binaries
 	mkdir -p ~/.docker/cli-plugins
 	install bin/buildx ~/.docker/cli-plugins/docker-buildx
@@ -59,4 +65,4 @@ authors:
 mod-outdated:
 	$(BUILDX_CMD) bake mod-outdated
 
-.PHONY: shell binaries binaries-cross install release validate-all lint validate-vendor validate-docs validate-authors vendor docs authors
+.PHONY: shell binaries binaries-cross pkg pkg-cross install release validate-all lint validate-vendor validate-docs validate-authors vendor docs authors

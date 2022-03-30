@@ -1,12 +1,13 @@
-# syntax=docker/dockerfile:1.3
+# syntax=docker/dockerfile:1.3-labs
 
 ARG GO_VERSION=1.17
+ARG NFPM_VERSION=v2.13.0
 ARG DOCKERD_VERSION=20.10.8
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
 
 # xx is a helper for cross-compilation
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.0.0 AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.1.0 AS xx
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golatest
 
@@ -16,24 +17,24 @@ RUN apk add --no-cache file git
 ENV GOFLAGS=-mod=vendor
 WORKDIR /src
 
-FROM gobase AS buildx-version
+FROM gobase AS version
 RUN --mount=target=. \
   PKG=github.com/docker/buildx VERSION=$(git describe --match 'v[0-9]*' --dirty='.m' --always --tags) REVISION=$(git rev-parse HEAD)$(if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi); \
   echo "-X ${PKG}/version.Version=${VERSION} -X ${PKG}/version.Revision=${REVISION} -X ${PKG}/version.Package=${PKG}" | tee /tmp/.ldflags; \
   echo -n "${VERSION}" | tee /tmp/.version;
 
-FROM gobase AS buildx-build
+FROM gobase AS build
 ENV CGO_ENABLED=0
 ARG LDFLAGS="-w -s"
 ARG TARGETPLATFORM
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
-  --mount=type=bind,source=/tmp/.ldflags,target=/tmp/.ldflags,from=buildx-version \
+  --mount=type=bind,source=/tmp/.ldflags,target=/tmp/.ldflags,from=version \
   set -x; xx-go build -ldflags "$(cat /tmp/.ldflags) ${LDFLAGS}" -o /usr/bin/buildx ./cmd/buildx && \
   xx-verify --static /usr/bin/buildx
 
-FROM buildx-build AS test
+FROM build AS test
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
@@ -44,13 +45,13 @@ FROM scratch AS test-coverage
 COPY --from=test /tmp/coverage.txt /coverage.txt
 
 FROM scratch AS binaries-unix
-COPY --from=buildx-build /usr/bin/buildx /
+COPY --from=build /usr/bin/buildx /
 
 FROM binaries-unix AS binaries-darwin
 FROM binaries-unix AS binaries-linux
 
 FROM scratch AS binaries-windows
-COPY --from=buildx-build /usr/bin/buildx /buildx.exe
+COPY --from=build /usr/bin/buildx /buildx.exe
 
 FROM binaries-$TARGETOS AS binaries
 
@@ -59,11 +60,33 @@ FROM --platform=$BUILDPLATFORM alpine AS releaser
 WORKDIR /work
 ARG TARGETPLATFORM
 RUN --mount=from=binaries \
-  --mount=type=bind,source=/tmp/.version,target=/tmp/.version,from=buildx-version \
+  --mount=type=bind,source=/tmp/.version,target=/tmp/.version,from=version \
   mkdir -p /out && cp buildx* "/out/buildx-$(cat /tmp/.version).$(echo $TARGETPLATFORM | sed 's/\//-/g')$(ls buildx* | sed -e 's/^buildx//')"
 
 FROM scratch AS release
 COPY --from=releaser /out/ /
+
+# Pkg
+FROM --platform=$BUILDPLATFORM goreleaser/nfpm:${NFPM_VERSION} AS nfpm
+FROM --platform=$BUILDPLATFORM alpine AS build-pkg
+RUN apk add --no-cache bash file git zip tar
+WORKDIR /work
+COPY --from=xx / /
+COPY --from=build /usr/bin/buildx /usr/bin/buildx
+ARG TARGETPLATFORM
+ARG PKG_TYPES
+ARG PKG_APK_RELEASES
+ARG PKG_DEB_RELEASES
+ARG PKG_RPM_RELEASES
+ARG PKG_VENDOR
+ARG PKG_PACKAGER
+RUN --mount=source=.,target=/src \
+  --mount=from=nfpm,source=/usr/bin/nfpm,target=/usr/bin/nfpm \
+  --mount=source=/tmp/.version,target=/tmp/.version,from=version \
+  VERSION=$(cat /tmp/.version) NFPM_CONFIG=/src/hack/nfpm.yml OUTPUT=/build /src/hack/create-pkg
+
+FROM scratch AS pkg
+COPY --from=build-pkg /build /
 
 # Shell
 FROM docker:$DOCKERD_VERSION AS dockerd-release

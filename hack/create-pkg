@@ -1,0 +1,71 @@
+#!/usr/bin/env bash
+
+set -eu -o pipefail
+
+: "${VERSION=}"
+: "${NFPM_CONFIG=}"
+: "${OUTPUT=.}"
+
+: "${PKG_TYPES=}"
+: "${PKG_APK_RELEASES=}"
+: "${PKG_DEB_RELEASES=}"
+: "${PKG_RPM_RELEASES=}"
+: "${PKG_VENDOR=}"
+: "${PKG_PACKAGER=}"
+
+if ! type nfpm > /dev/null 2>&1; then
+  echo >&2 "ERROR: nfpm is required"
+  exit 1
+fi
+if ! type xx-info > /dev/null 2>&1; then
+  echo >&2 "ERROR: xx-info is required"
+  exit 1
+fi
+
+if [[ $VERSION =~ ^[a-f0-9]{7}$ ]]; then
+  VERSION="v0.0.0+${VERSION}"
+fi
+
+workdir=$(mktemp -d -t buildx-pkg.XXXXXXXXXX)
+trap 'rm -rf -- "$workdir"' EXIT
+mkdir -p "$workdir/docker-buildx-plugin"
+
+PKG_OUTPUT="${OUTPUT}/$(xx-info os)/$(xx-info arch)/$(xx-info variant)"
+mkdir -p "${PKG_OUTPUT}"
+
+for pkgtype in ${PKG_TYPES//,/ }; do
+  os=$(xx-info os)
+  arch=$(xx-info march)
+  releases=0
+  if [ $pkgtype = "static" ]; then
+    cp /src/LICENSE /src/README.md "$workdir/docker-buildx-plugin/"
+    if [ "$os" = "windows" ]; then
+      cp /usr/bin/buildx "$workdir/docker-buildx-plugin/docker-buildx.exe"
+      (set -x ; cd "$workdir" && zip -r "$PKG_OUTPUT/docker-buildx-plugin_${VERSION#v}.zip" docker-buildx-plugin)
+    else
+      cp /usr/bin/buildx "$workdir/docker-buildx-plugin/docker-buildx"
+      (set -x ; tar -czf "$PKG_OUTPUT/docker-buildx-plugin_${VERSION#v}.tgz" -C "$workdir" docker-buildx-plugin)
+    fi
+    continue
+  fi
+  if [ "$os" != "linux" ]; then
+    continue
+  fi
+  case $pkgtype in
+    apk)
+      arch=$(xx-info alpine-arch)
+      releases=$PKG_APK_RELEASES
+      ;;
+    deb)
+      arch=$(xx-info debian-arch)
+      releases=$PKG_DEB_RELEASES
+      ;;
+    rpm)
+      arch=$(xx-info rhel-arch)
+      releases=$PKG_RPM_RELEASES
+      ;;
+  esac
+  for release in ${releases//,/ }; do
+    (set -x ; ARCH="${arch}" VERSION="${VERSION}" RELEASE="$release" VENDOR="${PKG_VENDOR}" PACKAGER="${PKG_PACKAGER}" nfpm package --config $NFPM_CONFIG --packager $pkgtype --target "$PKG_OUTPUT")
+  done
+done
