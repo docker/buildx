@@ -310,6 +310,27 @@ services:
 	require.Equal(t, c.Targets[0].Args, map[string]string{"CT_ECR": "foo", "FOO": "bsdf -csdf", "NODE_ENV": "test"})
 }
 
+func TestPorts(t *testing.T) {
+	var dt = []byte(`
+services:
+  foo:
+    build:
+     context: .
+    ports:
+      - 3306:3306
+  bar:
+    build:
+     context: .
+    ports:
+      - mode: ingress
+        target: 3306
+        published: "3306"
+        protocol: tcp
+`)
+	_, err := ParseCompose(dt)
+	require.NoError(t, err)
+}
+
 func newBool(val bool) *bool {
 	b := val
 	return &b
