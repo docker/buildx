@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.3-labs
+# syntax=docker/dockerfile:1.4
 
 FROM alpine:3.14 AS gen
 RUN apk add --no-cache git

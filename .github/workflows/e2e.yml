@@ -52,6 +52,11 @@ jobs:
         uses: docker/setup-qemu-action@v1
         if: matrix.driver == 'docker' || matrix.driver == 'docker-container'
       -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v1
+        with:
+          version: latest
+      -
         name: Install buildx
         run: |
           make install
