@@ -302,10 +302,8 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 	attrs, diags := b.JustAttributes()
 	if diags.HasErrors() {
-		for _, d := range diags {
-			if d.Detail != "Blocks are not allowed here." {
-				return diags
-			}
+		if d := removeAttributesDiags(diags, reserved); len(d) > 0 {
+			return d
 		}
 	}
 
@@ -513,4 +511,28 @@ func setLabel(v reflect.Value, lbl string) int {
 		}
 	}
 	return -1
+}
+
+func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}) hcl.Diagnostics {
+	var fdiags hcl.Diagnostics
+	for _, d := range diags {
+		if fout := func(d *hcl.Diagnostic) bool {
+			// https://github.com/docker/buildx/pull/541
+			if d.Detail == "Blocks are not allowed here." {
+				return true
+			}
+			for r := range reserved {
+				// JSON body objects don't handle repeated blocks like HCL but
+				// reserved name attributes should be allowed when multi bodies are merged.
+				// https://github.com/hashicorp/hcl/blob/main/json/spec.md#blocks
+				if strings.HasPrefix(d.Detail, fmt.Sprintf(`Argument "%s" was already set at `, r)) {
+					return true
+				}
+			}
+			return false
+		}(d); !fout {
+			fdiags = append(fdiags, d)
+		}
+	}
+	return fdiags
 }

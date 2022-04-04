@@ -620,3 +620,79 @@ func TestHCLBuiltinVars(t *testing.T) {
 	require.Equal(t, "foo", *c.Targets[0].Context)
 	require.Equal(t, "test", *c.Targets[0].Dockerfile)
 }
+
+func TestCombineHCLAndJSON(t *testing.T) {
+	c, err := ParseFiles([]File{
+		{
+			Name: "docker-bake.hcl",
+			Data: []byte(`
+group "default" {
+  targets = ["a"]
+}
+
+target "metadata-a" {}
+target "metadata-b" {}
+
+target "a" {
+  inherits = ["metadata-a"]
+  context = "."
+  target = "a"
+}
+
+target "b" {
+  inherits = ["metadata-b"]
+  context = "."
+  target = "b"
+}`),
+		},
+		{
+			Name: "metadata-a.json",
+			Data: []byte(`
+{
+  "target": [{
+    "metadata-a": [{
+      "tags": [
+        "app/a:1.0.0",
+        "app/a:latest"
+      ]
+    }]
+  }]
+}`),
+		},
+		{
+			Name: "metadata-b.json",
+			Data: []byte(`
+{
+  "target": [{
+    "metadata-b": [{
+      "tags": [
+        "app/b:1.0.0",
+        "app/b:latest"
+      ]
+    }]
+  }]
+}`),
+		},
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	require.Equal(t, []string{"a"}, c.Groups[0].Targets)
+
+	require.Equal(t, 4, len(c.Targets))
+
+	require.Equal(t, c.Targets[0].Name, "metadata-a")
+	require.Equal(t, []string{"app/a:1.0.0", "app/a:latest"}, c.Targets[0].Tags)
+
+	require.Equal(t, c.Targets[1].Name, "metadata-b")
+	require.Equal(t, []string{"app/b:1.0.0", "app/b:latest"}, c.Targets[1].Tags)
+
+	require.Equal(t, c.Targets[2].Name, "a")
+	require.Equal(t, ".", *c.Targets[2].Context)
+	require.Equal(t, "a", *c.Targets[2].Target)
+
+	require.Equal(t, c.Targets[3].Name, "b")
+	require.Equal(t, ".", *c.Targets[3].Context)
+	require.Equal(t, "b", *c.Targets[3].Target)
+}
