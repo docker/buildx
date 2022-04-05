@@ -5,6 +5,8 @@ import (
 	"strconv"
 	"strings"
 
+	corev1 "k8s.io/api/core/v1"
+
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
@@ -117,6 +119,48 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 				}
 			}
 			deploymentOpt.NodeSelector = s
+		case "tolerations":
+			u, err := strconv.Unquote(v)
+			if nil != err {
+				return nil, err
+			}
+			ts := strings.Split(u, ";")
+			deploymentOpt.Tolerations = []corev1.Toleration{}
+			for i := range ts {
+				kvs := strings.Split(ts[i], ",")
+				if len(kvs) == 0 {
+					return nil, errors.Errorf("invalid tolaration %q", v)
+				}
+
+				t := corev1.Toleration{}
+
+				for j := range kvs {
+					kv := strings.Split(kvs[j], "=")
+					if len(kv) == 2 {
+						switch kv[0] {
+						case "key":
+							t.Key = kv[1]
+						case "operator":
+							t.Operator = corev1.TolerationOperator(kv[1])
+						case "value":
+							t.Value = kv[1]
+						case "effect":
+							t.Effect = corev1.TaintEffect(kv[1])
+						case "tolerationSeconds":
+							c, err := strconv.Atoi(kv[1])
+							if nil != err {
+								return nil, err
+							}
+							c64 := int64(c)
+							t.TolerationSeconds = &c64
+						default:
+							return nil, errors.Errorf("invalid tolaration %q", v)
+						}
+					}
+				}
+
+				deploymentOpt.Tolerations = append(deploymentOpt.Tolerations, t)
+			}
 		case "loadbalance":
 			switch v {
 			case LoadbalanceSticky:
