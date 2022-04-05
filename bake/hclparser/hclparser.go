@@ -302,7 +302,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 	attrs, diags := b.JustAttributes()
 	if diags.HasErrors() {
-		if d := removeAttributesDiags(diags, reserved); len(d) > 0 {
+		if d := removeAttributesDiags(diags, reserved, p.vars); len(d) > 0 {
 			return d
 		}
 	}
@@ -513,7 +513,7 @@ func setLabel(v reflect.Value, lbl string) int {
 	return -1
 }
 
-func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}) hcl.Diagnostics {
+func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}, vars map[string]*variable) hcl.Diagnostics {
 	var fdiags hcl.Diagnostics
 	for _, d := range diags {
 		if fout := func(d *hcl.Diagnostic) bool {
@@ -526,6 +526,12 @@ func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}) 
 				// reserved name attributes should be allowed when multi bodies are merged.
 				// https://github.com/hashicorp/hcl/blob/main/json/spec.md#blocks
 				if strings.HasPrefix(d.Detail, fmt.Sprintf(`Argument "%s" was already set at `, r)) {
+					return true
+				}
+			}
+			for v := range vars {
+				// Do the same for global variables
+				if strings.HasPrefix(d.Detail, fmt.Sprintf(`Argument "%s" was already set at `, v)) {
 					return true
 				}
 			}
