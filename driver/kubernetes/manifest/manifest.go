@@ -32,6 +32,7 @@ type DeploymentOpt struct {
 
 	Rootless       bool
 	NodeSelector   map[string]string
+	Tolerations    []corev1.Toleration
 	RequestsCPU    string
 	RequestsMemory string
 	LimitsCPU      string
@@ -157,6 +158,10 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 
 	if len(opt.NodeSelector) > 0 {
 		d.Spec.Template.Spec.NodeSelector = opt.NodeSelector
+	}
+
+	if len(opt.Tolerations) > 0 {
+		d.Spec.Template.Spec.Tolerations = opt.Tolerations
 	}
 
 	if opt.RequestsCPU != "" {
