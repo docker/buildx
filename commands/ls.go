@@ -93,7 +93,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "NAME/NODE\tDRIVER/ENDPOINT\tSTATUS\tPLATFORMS\n")
+	fmt.Fprintf(w, "NAME/NODE\tDRIVER/ENDPOINT\tSTATUS\tBUILDKIT\tPLATFORMS\n")
 
 	currentSet := false
 	for _, b := range builders {
@@ -114,7 +114,7 @@ func printngi(w io.Writer, ngi *nginfo) {
 	if ngi.err != nil {
 		err = ngi.err.Error()
 	}
-	fmt.Fprintf(w, "%s\t%s\t%s\t\n", ngi.ng.Name, ngi.ng.Driver, err)
+	fmt.Fprintf(w, "%s\t%s\t%s\t\t\n", ngi.ng.Name, ngi.ng.Driver, err)
 	if ngi.err == nil {
 		for idx, n := range ngi.ng.Nodes {
 			d := ngi.drivers[idx]
@@ -131,7 +131,7 @@ func printngi(w io.Writer, ngi *nginfo) {
 			if err != "" {
 				fmt.Fprintf(w, "  %s\t%s\t%s\n", n.Name, n.Endpoint, err)
 			} else {
-				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, strings.Join(platformutil.FormatInGroups(n.Platforms, d.platforms), ", "))
+				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, d.version, strings.Join(platformutil.FormatInGroups(n.Platforms, d.platforms), ", "))
 			}
 		}
 	}
