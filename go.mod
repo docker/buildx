@@ -155,7 +155,7 @@ require (
 )
 
 replace (
-	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20220721163225-f1615facb1ca+incompatible // master (v22.06-dev)
+	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible // master (v22.06-dev)
 	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20220720171342-a60b458179aa+incompatible // 22.06 branch (v22.06-dev)
 	k8s.io/api => k8s.io/api v0.22.4
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4

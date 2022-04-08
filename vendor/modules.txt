@@ -117,7 +117,7 @@ github.com/davecgh/go-spew/spew
 ## explicit; go 1.18
 github.com/distribution/distribution/v3/digestset
 github.com/distribution/distribution/v3/reference
-# github.com/docker/cli v20.10.17+incompatible => github.com/docker/cli v20.10.3-0.20220721163225-f1615facb1ca+incompatible
+# github.com/docker/cli v20.10.17+incompatible => github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/manager
@@ -1010,7 +1010,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 # sigs.k8s.io/yaml v1.2.0
 ## explicit; go 1.12
 sigs.k8s.io/yaml
-# github.com/docker/cli => github.com/docker/cli v20.10.3-0.20220721163225-f1615facb1ca+incompatible
+# github.com/docker/cli => github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible
 # github.com/docker/docker => github.com/docker/docker v20.10.3-0.20220720171342-a60b458179aa+incompatible
 # k8s.io/api => k8s.io/api v0.22.4
 # k8s.io/apimachinery => k8s.io/apimachinery v0.22.4

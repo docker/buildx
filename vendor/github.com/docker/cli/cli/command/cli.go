@@ -35,6 +35,8 @@ import (
 	notaryclient "github.com/theupdateframework/notary/client"
 )
 
+const defaultInitTimeout = 2 * time.Second
+
 // Streams is an interface which exposes the standard input and output streams
 type Streams interface {
 	In() *streams.In
@@ -77,6 +79,7 @@ type DockerCli struct {
 	currentContext     string
 	dockerEndpoint     docker.Endpoint
 	contextStoreConfig store.Config
+	initTimeout        time.Duration
 }
 
 // DefaultVersion returns api.defaultVersion.
@@ -216,7 +219,7 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...Initialize
 	cli.contextStore = &ContextStoreWithDefault{
 		Store: baseContextStore,
 		Resolver: func() (*DefaultContext, error) {
-			return ResolveDefaultContext(opts.Common, cli.ConfigFile(), cli.contextStoreConfig, cli.Err())
+			return ResolveDefaultContext(opts.Common, cli.contextStoreConfig)
 		},
 	}
 	cli.currentContext, err = resolveContextName(opts.Common, cli.configFile, cli.contextStore)
@@ -244,7 +247,7 @@ func NewAPIClientFromFlags(opts *cliflags.CommonOptions, configFile *configfile.
 	contextStore := &ContextStoreWithDefault{
 		Store: store.New(config.ContextStoreDir(), storeConfig),
 		Resolver: func() (*DefaultContext, error) {
-			return ResolveDefaultContext(opts, configFile, storeConfig, io.Discard)
+			return ResolveDefaultContext(opts, storeConfig)
 		},
 	}
 	contextName, err := resolveContextName(opts, configFile, contextStore)
@@ -313,13 +316,20 @@ func resolveDefaultDockerEndpoint(opts *cliflags.CommonOptions) (docker.Endpoint
 	}, nil
 }
 
+func (cli *DockerCli) getInitTimeout() time.Duration {
+	if cli.initTimeout != 0 {
+		return cli.initTimeout
+	}
+	return defaultInitTimeout
+}
+
 func (cli *DockerCli) initializeFromClient() {
 	ctx := context.Background()
-	if strings.HasPrefix(cli.DockerEndpoint().Host, "tcp://") {
+	if !strings.HasPrefix(cli.DockerEndpoint().Host, "ssh://") {
 		// @FIXME context.WithTimeout doesn't work with connhelper / ssh connections
 		// time="2020-04-10T10:16:26Z" level=warning msg="commandConn.CloseWrite: commandconn: failed to wait: signal: killed"
 		var cancel func()
-		ctx, cancel = context.WithTimeout(ctx, 2*time.Second)
+		ctx, cancel = context.WithTimeout(ctx, cli.getInitTimeout())
 		defer cancel()
 	}
 
@@ -456,10 +466,10 @@ func resolveContextName(opts *cliflags.CommonOptions, config *configfile.ConfigF
 	if len(opts.Hosts) > 0 {
 		return DefaultContextName, nil
 	}
-	if _, present := os.LookupEnv(client.EnvOverrideHost); present {
+	if os.Getenv(client.EnvOverrideHost) != "" {
 		return DefaultContextName, nil
 	}
-	if ctxName, ok := os.LookupEnv("DOCKER_CONTEXT"); ok {
+	if ctxName := os.Getenv("DOCKER_CONTEXT"); ctxName != "" {
 		return ctxName, nil
 	}
 	if config != nil && config.CurrentContext != "" {
