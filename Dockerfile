@@ -6,7 +6,7 @@ ARG DOCKERD_VERSION=20.10.8
 FROM docker:$DOCKERD_VERSION AS dockerd-release
 
 # xx is a helper for cross-compilation
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.0.0 AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.1.0 AS xx
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golatest
 
