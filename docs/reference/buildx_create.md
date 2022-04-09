@@ -141,7 +141,7 @@ Passes additional driver-specific options. Details for each driver:
   - `limits.memory` - Sets the limit memory value specified in bytes or with a valid suffix. Example `limits.memory=500Mi`, `limits.memory=4G`
   - `nodeselector="label1=value1,label2=value2"` - Sets the kv of `Pod` nodeSelector. No Defaults. Example `nodeselector=kubernetes.io/arch=arm64`
   - `tolerations="key=foo,value=bar;key=foo2,operator=exists;key=foo3,effect=NoSchedule"` - Sets the `Pod` tolerations. Accepts the same values as the kube manifest tolerations. Key-value pairs are separated by `,`, tolerations are separated by `;`. No Defaults. Example `tolerations=operator=exists`
-  - `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
+  - `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. Needs Kubernetes 1.19 or later. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
   - `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
   - `qemu.install=(true|false)` - Install QEMU emulation for multi platforms support.
   - `qemu.image=IMAGE` - Sets the QEMU emulation image. Defaults to `tonistiigi/binfmt:latest`

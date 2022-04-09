@@ -204,12 +204,15 @@ func toRootless(d *appsv1.Deployment) error {
 		d.Spec.Template.Spec.Containers[0].Args,
 		"--oci-worker-no-process-sandbox",
 	)
-	d.Spec.Template.Spec.Containers[0].SecurityContext = nil
+	d.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+		SeccompProfile: &corev1.SeccompProfile{
+			Type: corev1.SeccompProfileTypeUnconfined,
+		},
+	}
 	if d.Spec.Template.ObjectMeta.Annotations == nil {
-		d.Spec.Template.ObjectMeta.Annotations = make(map[string]string, 2)
+		d.Spec.Template.ObjectMeta.Annotations = make(map[string]string, 1)
 	}
 	d.Spec.Template.ObjectMeta.Annotations["container.apparmor.security.beta.kubernetes.io/"+containerName] = "unconfined"
-	d.Spec.Template.ObjectMeta.Annotations["container.seccomp.security.alpha.kubernetes.io/"+containerName] = "unconfined"
 	return nil
 }
 
