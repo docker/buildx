@@ -50,6 +50,7 @@ type buildOptions struct {
 	cgroupParent  string
 	contexts      []string
 	extraHosts    []string
+	frontend      string
 	imageIDFile   string
 	labels        []string
 	networkMode   string
@@ -125,6 +126,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		BuildArgs:     listToMap(in.buildArgs, true),
 		ExtraHosts:    in.extraHosts,
 		ImageIDFile:   in.imageIDFile,
+		Frontend:      in.frontend,
 		Labels:        listToMap(in.labels, false),
 		NetworkMode:   in.networkMode,
 		NoCache:       noCache,
@@ -358,6 +360,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f"})
 
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+
+	flags.StringVar(&options.frontend, "frontend", "", "Set custom frontend to use for build")
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 

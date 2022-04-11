@@ -24,6 +24,7 @@ Start a build
 | [`--cache-to`](#cache-to) | `stringArray` |  | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`) |
 | [`--cgroup-parent`](https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent) | `string` |  | Optional parent cgroup for the container |
 | [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | `string` |  | Name of the Dockerfile (default: `PATH/Dockerfile`) |
+| `--frontend` | `string` |  | Set custom frontend to use for build |
 | `--iidfile` | `string` |  | Write the image ID to the file |
 | `--label` | `stringArray` |  | Set metadata for an image |
 | [`--load`](#load) |  |  | Shorthand for `--output=type=docker` |

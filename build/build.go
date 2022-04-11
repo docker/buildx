@@ -63,6 +63,7 @@ type Options struct {
 	CgroupParent  string
 	Exports       []client.ExportEntry
 	ExtraHosts    []string
+	Frontend      string
 	ImageIDFile   string
 	Labels        map[string]string
 	NetworkMode   string
@@ -413,6 +414,11 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 		CacheExports:        cacheTo,
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
+	}
+
+	if opt.Frontend != "" {
+		so.Frontend = "gateway.v0"
+		so.FrontendAttrs["source"] = opt.Frontend
 	}
 
 	if opt.CgroupParent != "" {
