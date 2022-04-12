@@ -68,121 +68,9 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		clientset:  clientset,
 	}
 
-	deploymentOpt := &manifest.DeploymentOpt{
-		Name:          deploymentName,
-		Image:         bkimage.DefaultImage,
-		Replicas:      1,
-		BuildkitFlags: cfg.BuildkitFlags,
-		Rootless:      false,
-		Platforms:     cfg.Platforms,
-		ConfigFiles:   cfg.Files,
-	}
-
-	deploymentOpt.Qemu.Image = bkimage.QemuImage
-
-	loadbalance := LoadbalanceSticky
-
-	for k, v := range cfg.DriverOpts {
-		switch k {
-		case "image":
-			if v != "" {
-				deploymentOpt.Image = v
-			}
-		case "namespace":
-			namespace = v
-		case "replicas":
-			deploymentOpt.Replicas, err = strconv.Atoi(v)
-			if err != nil {
-				return nil, err
-			}
-		case "requests.cpu":
-			deploymentOpt.RequestsCPU = v
-		case "requests.memory":
-			deploymentOpt.RequestsMemory = v
-		case "limits.cpu":
-			deploymentOpt.LimitsCPU = v
-		case "limits.memory":
-			deploymentOpt.LimitsMemory = v
-		case "rootless":
-			deploymentOpt.Rootless, err = strconv.ParseBool(v)
-			if err != nil {
-				return nil, err
-			}
-			if _, isImage := cfg.DriverOpts["image"]; !isImage {
-				deploymentOpt.Image = bkimage.DefaultRootlessImage
-			}
-		case "nodeselector":
-			kvs := strings.Split(strings.Trim(v, `"`), ",")
-			s := map[string]string{}
-			for i := range kvs {
-				kv := strings.Split(kvs[i], "=")
-				if len(kv) == 2 {
-					s[kv[0]] = kv[1]
-				}
-			}
-			deploymentOpt.NodeSelector = s
-		case "tolerations":
-			u, err := strconv.Unquote(v)
-			if nil != err {
-				return nil, err
-			}
-			ts := strings.Split(u, ";")
-			deploymentOpt.Tolerations = []corev1.Toleration{}
-			for i := range ts {
-				kvs := strings.Split(ts[i], ",")
-				if len(kvs) == 0 {
-					return nil, errors.Errorf("invalid tolaration %q", v)
-				}
-
-				t := corev1.Toleration{}
-
-				for j := range kvs {
-					kv := strings.Split(kvs[j], "=")
-					if len(kv) == 2 {
-						switch kv[0] {
-						case "key":
-							t.Key = kv[1]
-						case "operator":
-							t.Operator = corev1.TolerationOperator(kv[1])
-						case "value":
-							t.Value = kv[1]
-						case "effect":
-							t.Effect = corev1.TaintEffect(kv[1])
-						case "tolerationSeconds":
-							c, err := strconv.Atoi(kv[1])
-							if nil != err {
-								return nil, err
-							}
-							c64 := int64(c)
-							t.TolerationSeconds = &c64
-						default:
-							return nil, errors.Errorf("invalid tolaration %q", v)
-						}
-					}
-				}
-
-				deploymentOpt.Tolerations = append(deploymentOpt.Tolerations, t)
-			}
-		case "loadbalance":
-			switch v {
-			case LoadbalanceSticky:
-			case LoadbalanceRandom:
-			default:
-				return nil, errors.Errorf("invalid loadbalance %q", v)
-			}
-			loadbalance = v
-		case "qemu.install":
-			deploymentOpt.Qemu.Install, err = strconv.ParseBool(v)
-			if err != nil {
-				return nil, err
-			}
-		case "qemu.image":
-			if v != "" {
-				deploymentOpt.Qemu.Image = v
-			}
-		default:
-			return nil, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
-		}
+	deploymentOpt, loadbalance, namespace, err := f.processDriverOpts(deploymentName, namespace, cfg)
+	if nil != err {
+		return nil, err
 	}
 
 	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
@@ -210,6 +98,121 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		}
 	}
 	return d, nil
+}
+
+func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg driver.InitConfig) (*manifest.DeploymentOpt, string, string, error) {
+	deploymentOpt := &manifest.DeploymentOpt{
+		Name:          deploymentName,
+		Image:         bkimage.DefaultImage,
+		Replicas:      1,
+		BuildkitFlags: cfg.BuildkitFlags,
+		Rootless:      false,
+		Platforms:     cfg.Platforms,
+		ConfigFiles:   cfg.Files,
+	}
+
+	deploymentOpt.Qemu.Image = bkimage.QemuImage
+
+	loadbalance := LoadbalanceSticky
+	var err error
+
+	for k, v := range cfg.DriverOpts {
+		switch k {
+		case "image":
+			if v != "" {
+				deploymentOpt.Image = v
+			}
+		case "namespace":
+			namespace = v
+		case "replicas":
+			deploymentOpt.Replicas, err = strconv.Atoi(v)
+			if err != nil {
+				return nil, "", "", err
+			}
+		case "requests.cpu":
+			deploymentOpt.RequestsCPU = v
+		case "requests.memory":
+			deploymentOpt.RequestsMemory = v
+		case "limits.cpu":
+			deploymentOpt.LimitsCPU = v
+		case "limits.memory":
+			deploymentOpt.LimitsMemory = v
+		case "rootless":
+			deploymentOpt.Rootless, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, "", "", err
+			}
+			if _, isImage := cfg.DriverOpts["image"]; !isImage {
+				deploymentOpt.Image = bkimage.DefaultRootlessImage
+			}
+		case "nodeselector":
+			kvs := strings.Split(strings.Trim(v, `"`), ",")
+			s := map[string]string{}
+			for i := range kvs {
+				kv := strings.Split(kvs[i], "=")
+				if len(kv) == 2 {
+					s[kv[0]] = kv[1]
+				}
+			}
+			deploymentOpt.NodeSelector = s
+		case "tolerations":
+			ts := strings.Split(v, ";")
+			deploymentOpt.Tolerations = []corev1.Toleration{}
+			for i := range ts {
+				kvs := strings.Split(ts[i], ",")
+
+				t := corev1.Toleration{}
+
+				for j := range kvs {
+					kv := strings.Split(kvs[j], "=")
+					if len(kv) == 2 {
+						switch kv[0] {
+						case "key":
+							t.Key = kv[1]
+						case "operator":
+							t.Operator = corev1.TolerationOperator(kv[1])
+						case "value":
+							t.Value = kv[1]
+						case "effect":
+							t.Effect = corev1.TaintEffect(kv[1])
+						case "tolerationSeconds":
+							c, err := strconv.Atoi(kv[1])
+							if nil != err {
+								return nil, "", "", err
+							}
+							c64 := int64(c)
+							t.TolerationSeconds = &c64
+						default:
+							return nil, "", "", errors.Errorf("invalid tolaration %q", v)
+						}
+					}
+				}
+
+				deploymentOpt.Tolerations = append(deploymentOpt.Tolerations, t)
+			}
+		case "loadbalance":
+			switch v {
+			case LoadbalanceSticky:
+			case LoadbalanceRandom:
+			default:
+				return nil, "", "", errors.Errorf("invalid loadbalance %q", v)
+			}
+			loadbalance = v
+		case "qemu.install":
+			deploymentOpt.Qemu.Install, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, "", "", err
+			}
+		case "qemu.image":
+			if v != "" {
+				deploymentOpt.Qemu.Image = v
+			}
+		default:
+			return nil, "", "", errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
+		}
+	}
+
+	return deploymentOpt, loadbalance, namespace, nil
 }
 
 func (f *factory) AllowsInstances() bool {
