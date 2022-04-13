@@ -108,7 +108,9 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if err != nil {
 				return nil, err
 			}
-			deploymentOpt.Image = bkimage.DefaultRootlessImage
+			if _, isImage := cfg.DriverOpts["image"]; !isImage {
+				deploymentOpt.Image = bkimage.DefaultRootlessImage
+			}
 		case "nodeselector":
 			kvs := strings.Split(strings.Trim(v, `"`), ",")
 			s := map[string]string{}
