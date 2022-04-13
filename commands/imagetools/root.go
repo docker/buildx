@@ -6,7 +6,7 @@ import (
 )
 
 type RootOptions struct {
-	Builder string
+	Builder *string
 }
 
 func RootCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {

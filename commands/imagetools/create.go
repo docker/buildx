@@ -255,7 +255,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 		Use:   "create [OPTIONS] [SOURCE] [SOURCE...]",
 		Short: "Create a new image based on source images",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			options.builder = opts.Builder
+			options.builder = *opts.Builder
 			return runCreate(dockerCli, options, args)
 		},
 	}
