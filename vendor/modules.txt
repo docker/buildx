@@ -32,7 +32,7 @@ github.com/cenkalti/backoff/v4
 github.com/cespare/xxhash/v2
 # github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e
 ## explicit
-# github.com/compose-spec/compose-go v1.2.1
+# github.com/compose-spec/compose-go v1.2.4
 ## explicit
 github.com/compose-spec/compose-go/consts
 github.com/compose-spec/compose-go/dotenv

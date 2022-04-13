@@ -53,6 +53,8 @@ type Options struct {
 	SkipNormalization bool
 	// Resolve paths
 	ResolvePaths bool
+	// Convert Windows paths
+	ConvertWindowsPaths bool
 	// Skip consistency check
 	SkipConsistencyCheck bool
 	// Skip extends
@@ -489,7 +491,7 @@ func loadServiceWithExtends(filename, name string, servicesDict map[string]inter
 		return nil, fmt.Errorf("cannot extend service %q in %s: service not found", name, filename)
 	}
 
-	serviceConfig, err := LoadService(name, target.(map[string]interface{}), workingDir, lookupEnv, opts.ResolvePaths)
+	serviceConfig, err := LoadService(name, target.(map[string]interface{}), workingDir, lookupEnv, opts.ResolvePaths, opts.ConvertWindowsPaths)
 	if err != nil {
 		return nil, err
 	}
@@ -552,7 +554,7 @@ func loadServiceWithExtends(filename, name string, servicesDict map[string]inter
 
 // LoadService produces a single ServiceConfig from a compose file Dict
 // the serviceDict is not validated if directly used. Use Load() to enable validation
-func LoadService(name string, serviceDict map[string]interface{}, workingDir string, lookupEnv template.Mapping, resolvePaths bool) (*types.ServiceConfig, error) {
+func LoadService(name string, serviceDict map[string]interface{}, workingDir string, lookupEnv template.Mapping, resolvePaths bool, convertPaths bool) (*types.ServiceConfig, error) {
 	serviceConfig := &types.ServiceConfig{
 		Scale: 1,
 	}
@@ -577,9 +579,28 @@ func LoadService(name string, serviceDict map[string]interface{}, workingDir str
 		if resolvePaths {
 			serviceConfig.Volumes[i] = resolveVolumePath(volume, workingDir, lookupEnv)
 		}
+
+		if convertPaths {
+			serviceConfig.Volumes[i] = convertVolumePath(volume)
+		}
 	}
 
 	return serviceConfig, nil
+}
+
+// Windows paths, c:\\my\\path\\shiny, need to be changed to be compatible with
+// the Engine. Volume paths are expected to be linux style /c/my/path/shiny/
+func convertVolumePath(volume types.ServiceVolumeConfig) types.ServiceVolumeConfig {
+	volumeName := strings.ToLower(filepath.VolumeName(volume.Source))
+	if len(volumeName) != 2 {
+		return volume
+	}
+
+	convertedSource := fmt.Sprintf("/%c%s", volumeName[0], volume.Source[len(volumeName):])
+	convertedSource = strings.ReplaceAll(convertedSource, "\\", "/")
+
+	volume.Source = convertedSource
+	return volume
 }
 
 func resolveEnvironment(serviceConfig *types.ServiceConfig, workingDir string, lookupEnv template.Mapping) error {
@@ -998,14 +1019,19 @@ var transformSSHConfig TransformerFunc = func(data interface{}) (interface{}, er
 		}
 		return result, nil
 	case string:
-		if value == "" {
-			value = "default"
-		}
-		key, val := transformValueToMapEntry(value, "=", false)
-		result := []types.SSHKey{{ID: key, Path: val.(string)}}
-		return result, nil
+		return ParseShortSSHSyntax(value)
 	}
 	return nil, errors.Errorf("expected a sting, map or a list, got %T: %#v", data, data)
+}
+
+// ParseShortSSHSyntax parse short syntax for SSH authentications
+func ParseShortSSHSyntax(value string) ([]types.SSHKey, error) {
+	if value == "" {
+		value = "default"
+	}
+	key, val := transformValueToMapEntry(value, "=", false)
+	result := []types.SSHKey{{ID: key, Path: val.(string)}}
+	return result, nil
 }
 
 var transformStringOrNumberList TransformerFunc = func(value interface{}) (interface{}, error) {
