@@ -74,6 +74,16 @@ func ParseCompose(dt []byte) (*Config, error) {
 				dockerfilePath := s.Build.Dockerfile
 				dockerfilePathP = &dockerfilePath
 			}
+
+			var secrets []string
+			for _, bs := range s.Build.Secrets {
+				secret, err := composeToBuildkitSecret(bs, cfg.Secrets[bs.Source])
+				if err != nil {
+					return nil, err
+				}
+				secrets = append(secrets, secret)
+			}
+
 			g.Targets = append(g.Targets, s.Name)
 			t := &Target{
 				Name:       s.Name,
@@ -89,6 +99,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 				})),
 				CacheFrom:   s.Build.CacheFrom,
 				NetworkMode: &s.Build.Network,
+				Secrets:     secrets,
 			}
 			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err
@@ -208,4 +219,22 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		}
 	}
 	return nil
+}
+
+// composeToBuildkitSecret converts secret from compose format to buildkit's
+// csv format.
+func composeToBuildkitSecret(inp compose.ServiceSecretConfig, psecret compose.SecretConfig) (string, error) {
+	if psecret.External.External {
+		return "", errors.Errorf("unsupported external secret %s", psecret.Name)
+	}
+
+	var bkattrs []string
+	if inp.Source != "" {
+		bkattrs = append(bkattrs, "id="+inp.Source)
+	}
+	if psecret.File != "" {
+		bkattrs = append(bkattrs, "src="+psecret.File)
+	}
+
+	return strings.Join(bkattrs, ","), nil
 }
