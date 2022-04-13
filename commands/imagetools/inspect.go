@@ -66,7 +66,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 		Short: "Show details of an image in the registry",
 		Args:  cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			options.builder = rootOpts.Builder
+			options.builder = *rootOpts.Builder
 			return runInspect(dockerCli, options, args[0])
 		},
 	}
