@@ -98,11 +98,10 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 
 			var driverOpts []string
 			for k, v := range n.DriverOpts {
-				driverOpts = append(driverOpts, fmt.Sprintf("\t%s=%s\n", k, v))
+				driverOpts = append(driverOpts, fmt.Sprintf("%s=%q", k, v))
 			}
-
 			if len(driverOpts) > 0 {
-				fmt.Fprintf(w, "Driver Options: %s", strings.Join(driverOpts, ","))
+				fmt.Fprintf(w, "Driver Options:\t%s\n", strings.Join(driverOpts, " "))
 			}
 
 			if err := ngi.drivers[i].di.Err; err != nil {
