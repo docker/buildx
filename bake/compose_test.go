@@ -23,6 +23,13 @@ services:
         none
       args:
         buildno: 123
+      secrets:
+        - ENV_TOKEN
+        - aws
+secrets:
+  ENV_TOKEN: {}
+  aws:
+    file: /root/.aws/credentials
 `)
 
 	c, err := ParseCompose(dt)
@@ -46,6 +53,10 @@ services:
 	require.Equal(t, 1, len(c.Targets[1].Args))
 	require.Equal(t, "123", c.Targets[1].Args["buildno"])
 	require.Equal(t, "none", *c.Targets[1].NetworkMode)
+	require.Equal(t, []string{
+		"id=ENV_TOKEN",
+		"id=aws,src=/root/.aws/credentials",
+	}, c.Targets[1].Secrets)
 }
 
 func TestNoBuildOutOfTreeService(t *testing.T) {
