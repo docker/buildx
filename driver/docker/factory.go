@@ -26,7 +26,7 @@ func (*factory) Usage() string {
 	return "docker"
 }
 
-func (*factory) Priority(ctx context.Context, api dockerclient.APIClient) int {
+func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient) int {
 	if api == nil {
 		return priorityUnsupported
 	}

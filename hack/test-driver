@@ -7,6 +7,7 @@ set -eu -o pipefail
 : ${BUILDKIT_CFG=}
 : ${DRIVER=docker-container}
 : ${DRIVER_OPT=}
+: ${ENDPOINT=}
 : ${MULTI_NODE=0}
 : ${PLATFORMS=linux/amd64,linux/arm64}
 
@@ -34,9 +35,11 @@ else
   buildPlatformFlag=--platform="${PLATFORMS}"
 fi
 
-driverOpt=image=${BUILDKIT_IMAGE}
+if [ "$DRIVER" != "remote" ]; then
+  driverOpt=${driverOpt:+"${driverOpt},"}image=${BUILDKIT_IMAGE}
+fi
 if [ -n "$DRIVER_OPT" ]; then
-  driverOpt=$driverOpt,$DRIVER_OPT
+  driverOpt=${driverOpt:+"${driverOpt},"}$DRIVER_OPT
 fi
 
 # create builder except for docker driver
@@ -54,9 +57,10 @@ if [ "$DRIVER" != "docker" ]; then
       buildxCmd create ${createFlags} \
         --name="${builderName}" \
         --node="${builderName}-${platform/\//-}" \
+        --platform="${platform}" \
         --driver="${DRIVER}" \
-        --driver-opt="${driverOpt}" \
-        --platform="${platform}"
+        ${driverOpt:+"--driver-opt=${driverOpt}"} \
+        ${ENDPOINT}
       firstNode=0
     done
   else
@@ -66,9 +70,10 @@ if [ "$DRIVER" != "docker" ]; then
     fi
     buildxCmd create ${createFlags} \
       --name="${builderName}" \
+      --platform="${PLATFORMS}" \
       --driver="${DRIVER}" \
-      --driver-opt="${driverOpt}" \
-      --platform="${PLATFORMS}"
+      ${driverOpt:+"--driver-opt=${driverOpt}"} \
+      ${ENDPOINT}
   fi
 fi
 

@@ -23,8 +23,8 @@ import (
 
 	_ "github.com/docker/buildx/driver/docker"
 	_ "github.com/docker/buildx/driver/docker-container"
-	_ "github.com/docker/buildx/driver/env"
 	_ "github.com/docker/buildx/driver/kubernetes"
+	_ "github.com/docker/buildx/driver/remote"
 )
 
 func init() {
