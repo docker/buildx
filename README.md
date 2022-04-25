@@ -184,14 +184,18 @@ are not yet available for regular `docker build` like building manifest lists,
 distributed caching, and exporting build results to OCI image tarballs.
 
 Buildx is supposed to be flexible and can be run in different configurations
-that are exposed through a driver concept. Currently, we support a
-[`docker` driver](docs/reference/buildx_create.md#docker-driver) that uses
-the BuildKit library bundled into the Docker daemon binary, a
-[`docker-container` driver](docs/reference/buildx_create.md#docker-container-driver)
-that automatically launches BuildKit inside a Docker container and a
-[`kubernetes` driver](docs/reference/buildx_create.md#kubernetes-driver) to
-spin up pods with defined BuildKit container image to build your images. We
-plan to add more drivers in the future.
+that are exposed through a driver concept. Currently, we support:
+
+- a [`docker` driver](docs/reference/buildx_create.md#docker-driver) that uses
+  the BuildKit library bundled into the Docker daemon binary,
+- a [`docker-container` driver](docs/reference/buildx_create.md#docker-container-driver)
+  that automatically launches BuildKit inside a Docker container,
+- a [`kubernetes` driver](docs/reference/buildx_create.md#kubernetes-driver) to
+  spin up pods with defined BuildKit container image to build your images.
+- a [`remote` driver](docs/reference/buildx_create.md#remote-driver) to
+  connect to manually provisioned and managed buildkitd instances.
+
+We plan to add more drivers in the future.
 
 The user experience of using buildx is very similar across drivers, but there
 are some features that are not currently supported by the `docker` driver,
