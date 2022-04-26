@@ -620,3 +620,128 @@ func TestHCLBuiltinVars(t *testing.T) {
 	require.Equal(t, "foo", *c.Targets[0].Context)
 	require.Equal(t, "test", *c.Targets[0].Dockerfile)
 }
+
+func TestCombineHCLAndJSONTargets(t *testing.T) {
+	c, err := ParseFiles([]File{
+		{
+			Name: "docker-bake.hcl",
+			Data: []byte(`
+group "default" {
+  targets = ["a"]
+}
+
+target "metadata-a" {}
+target "metadata-b" {}
+
+target "a" {
+  inherits = ["metadata-a"]
+  context = "."
+  target = "a"
+}
+
+target "b" {
+  inherits = ["metadata-b"]
+  context = "."
+  target = "b"
+}`),
+		},
+		{
+			Name: "metadata-a.json",
+			Data: []byte(`
+{
+  "target": [{
+    "metadata-a": [{
+      "tags": [
+        "app/a:1.0.0",
+        "app/a:latest"
+      ]
+    }]
+  }]
+}`),
+		},
+		{
+			Name: "metadata-b.json",
+			Data: []byte(`
+{
+  "target": [{
+    "metadata-b": [{
+      "tags": [
+        "app/b:1.0.0",
+        "app/b:latest"
+      ]
+    }]
+  }]
+}`),
+		},
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	require.Equal(t, []string{"a"}, c.Groups[0].Targets)
+
+	require.Equal(t, 4, len(c.Targets))
+
+	require.Equal(t, c.Targets[0].Name, "metadata-a")
+	require.Equal(t, []string{"app/a:1.0.0", "app/a:latest"}, c.Targets[0].Tags)
+
+	require.Equal(t, c.Targets[1].Name, "metadata-b")
+	require.Equal(t, []string{"app/b:1.0.0", "app/b:latest"}, c.Targets[1].Tags)
+
+	require.Equal(t, c.Targets[2].Name, "a")
+	require.Equal(t, ".", *c.Targets[2].Context)
+	require.Equal(t, "a", *c.Targets[2].Target)
+
+	require.Equal(t, c.Targets[3].Name, "b")
+	require.Equal(t, ".", *c.Targets[3].Context)
+	require.Equal(t, "b", *c.Targets[3].Target)
+}
+
+func TestCombineHCLAndJSONVars(t *testing.T) {
+	c, err := ParseFiles([]File{
+		{
+			Name: "docker-bake.hcl",
+			Data: []byte(`
+variable "ABC" {
+  default = "foo"
+}
+variable "DEF" {
+  default = ""
+}
+group "default" {
+  targets = ["one"]
+}
+target "one" {
+  args = {
+    a = "pre-${ABC}"
+  }
+}
+target "two" {
+  args = {
+    b = "pre-${DEF}"
+  }
+}`),
+		},
+		{
+			Name: "foo.json",
+			Data: []byte(`{"variable": {"DEF": {"default": "bar"}}, "target": { "one": { "args": {"a": "pre-${ABC}-${DEF}"}} } }`),
+		},
+		{
+			Name: "bar.json",
+			Data: []byte(`{"ABC": "ghi", "DEF": "jkl"}`),
+		},
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	require.Equal(t, []string{"one"}, c.Groups[0].Targets)
+
+	require.Equal(t, 2, len(c.Targets))
+
+	require.Equal(t, c.Targets[0].Name, "one")
+	require.Equal(t, map[string]string{"a": "pre-ghi-jkl"}, c.Targets[0].Args)
+
+	require.Equal(t, c.Targets[1].Name, "two")
+	require.Equal(t, map[string]string{"b": "pre-jkl"}, c.Targets[1].Args)
+}
