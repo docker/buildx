@@ -256,6 +256,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 	if err := gohcl.DecodeBody(b, nil, &defs); err != nil {
 		return err
 	}
+	defsSchema, _ := gohcl.ImpliedBodySchema(defs)
 
 	if opt.LookupVar == nil {
 		opt.LookupVar = func(string) (string, bool) {
@@ -298,6 +299,16 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 			continue
 		}
 		p.funcs[v.Name] = v
+	}
+
+	content, b, diags := b.PartialContent(schema)
+	if diags.HasErrors() {
+		return diags
+	}
+
+	_, b, diags = b.PartialContent(defsSchema)
+	if diags.HasErrors() {
+		return diags
 	}
 
 	attrs, diags := b.JustAttributes()
@@ -369,11 +380,6 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 				},
 			}
 		}
-	}
-
-	content, _, diags := b.PartialContent(schema)
-	if diags.HasErrors() {
-		return diags
 	}
 
 	for _, a := range content.Attributes {
