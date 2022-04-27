@@ -6,6 +6,7 @@ import (
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	"github.com/docker/buildx/util/logutil"
 	"github.com/docker/cli-docs-tool/annotation"
+	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/sirupsen/logrus"
@@ -26,6 +27,14 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
 			return plugin.PersistentPreRunE(cmd, args)
 		}
+	} else {
+		// match plugin behavior for standalone mode
+		// https://github.com/docker/cli/blob/6c9eb708fa6d17765d71965f90e1c59cea686ee9/cli-plugins/plugin/plugin.go#L117-L127
+		cmd.SilenceUsage = true
+		cmd.SilenceErrors = true
+		cmd.TraverseChildren = true
+		cmd.DisableFlagsInUseLine = true
+		cli.DisableFlagsInUseLine(cmd)
 	}
 
 	logrus.SetFormatter(&logutil.Formatter{})

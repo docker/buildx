@@ -15,11 +15,6 @@ import (
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/stack"
-	"github.com/moby/buildkit/util/tracing/detect"
-	"go.opentelemetry.io/otel"
-
-	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
-	_ "github.com/moby/buildkit/util/tracing/env"
 
 	// FIXME: "k8s.io/client-go/plugin/pkg/client/auth/azure" is excluded because of compilation error
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -31,73 +26,64 @@ import (
 	_ "github.com/docker/buildx/driver/kubernetes"
 )
 
-var experimental string
-
 func init() {
 	seed.WithTimeAndRand()
 	stack.SetVersionInfo(version.Version, version.Revision)
+}
 
-	detect.ServiceName = "buildx"
-	// do not log tracing errors to stdio
-	otel.SetErrorHandler(skipErrors{})
+func runStandalone(cmd *command.DockerCli) error {
+	if err := cmd.Initialize(cliflags.NewClientOptions()); err != nil {
+		return err
+	}
+	rootCmd := commands.NewRootCmd(os.Args[0], false, cmd)
+	return rootCmd.Execute()
+}
+
+func runPlugin(cmd *command.DockerCli) error {
+	rootCmd := commands.NewRootCmd("buildx", true, cmd)
+	return plugin.RunPlugin(cmd, rootCmd, manager.Metadata{
+		SchemaVersion: "0.1.0",
+		Vendor:        "Docker Inc.",
+		Version:       version.Version,
+	})
 }
 
 func main() {
-	if plugin.RunningStandalone() {
-		dockerCli, err := command.NewDockerCli()
-		if err != nil {
-			fmt.Fprintln(os.Stderr, err)
-			os.Exit(1)
-		}
-		opts := cliflags.NewClientOptions()
-		dockerCli.Initialize(opts)
-		rootCmd := commands.NewRootCmd(os.Args[0], false, dockerCli)
-		if err := rootCmd.Execute(); err != nil {
-			os.Exit(1)
-		}
-		os.Exit(0)
-	}
-
-	dockerCli, err := command.NewDockerCli()
+	cmd, err := command.NewDockerCli()
 	if err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	p := commands.NewRootCmd("buildx", true, dockerCli)
-	meta := manager.Metadata{
-		SchemaVersion: "0.1.0",
-		Vendor:        "Docker Inc.",
-		Version:       version.Version,
-		Experimental:  experimental != "",
+	if plugin.RunningStandalone() {
+		err = runStandalone(cmd)
+	} else {
+		err = runPlugin(cmd)
+	}
+	if err == nil {
+		return
 	}
 
-	if err := plugin.RunPlugin(dockerCli, p, meta); err != nil {
-		if sterr, ok := err.(cli.StatusError); ok {
-			if sterr.Status != "" {
-				fmt.Fprintln(dockerCli.Err(), sterr.Status)
-			}
-			// StatusError should only be used for errors, and all errors should
-			// have a non-zero exit status, so never exit with 0
-			if sterr.StatusCode == 0 {
-				os.Exit(1)
-			}
-			os.Exit(sterr.StatusCode)
+	if sterr, ok := err.(cli.StatusError); ok {
+		if sterr.Status != "" {
+			fmt.Fprintln(cmd.Err(), sterr.Status)
 		}
-		for _, s := range errdefs.Sources(err) {
-			s.Print(dockerCli.Err())
+		// StatusError should only be used for errors, and all errors should
+		// have a non-zero exit status, so never exit with 0
+		if sterr.StatusCode == 0 {
+			os.Exit(1)
 		}
-
-		if debug.IsEnabled() {
-			fmt.Fprintf(dockerCli.Err(), "error: %+v", stack.Formatter(err))
-		} else {
-			fmt.Fprintf(dockerCli.Err(), "error: %v\n", err)
-		}
-
-		os.Exit(1)
+		os.Exit(sterr.StatusCode)
 	}
+
+	for _, s := range errdefs.Sources(err) {
+		s.Print(cmd.Err())
+	}
+	if debug.IsEnabled() {
+		fmt.Fprintf(cmd.Err(), "error: %+v", stack.Formatter(err))
+	} else {
+		fmt.Fprintf(cmd.Err(), "error: %v\n", err)
+	}
+
+	os.Exit(1)
 }
-
-type skipErrors struct{}
-
-func (skipErrors) Handle(err error) {}
