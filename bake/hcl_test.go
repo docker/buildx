@@ -745,3 +745,13 @@ target "two" {
 	require.Equal(t, c.Targets[1].Name, "two")
 	require.Equal(t, map[string]string{"b": "pre-jkl"}, c.Targets[1].Args)
 }
+
+func TestEmptyVariableJSON(t *testing.T) {
+	dt := []byte(`{
+	  "variable": {
+	    "VAR": {}
+	  }
+	}`)
+	_, err := ParseFile(dt, "docker-bake.json")
+	require.NoError(t, err)
+}
