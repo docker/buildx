@@ -41,6 +41,18 @@ func validateEndpoint(dockerCli command.Cli, ep string) (string, error) {
 	return h, nil
 }
 
+// validateBuildkitEndpoint validates that endpoint is a valid buildkit host
+func validateBuildkitEndpoint(ep string) (string, error) {
+	endpoint, err := url.Parse(ep)
+	if err != nil {
+		return "", errors.Wrapf(err, "failed to parse endpoint %s", ep)
+	}
+	if endpoint.Scheme != "tcp" && endpoint.Scheme != "unix" {
+		return "", errors.Errorf("unrecognized url scheme %s", endpoint.Scheme)
+	}
+	return ep, nil
+}
+
 // driversForNodeGroup returns drivers for a nodegroup instance
 func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, contextPathHash string) ([]build.DriverInfo, error) {
 	eg, _ := errgroup.WithContext(ctx)
@@ -54,11 +66,12 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 			return nil, errors.Errorf("failed to find driver %q", f)
 		}
 	} else {
-		dockerapi, err := clientForEndpoint(dockerCli, ng.Nodes[0].Endpoint)
+		ep := ng.Nodes[0].Endpoint
+		dockerapi, err := clientForEndpoint(dockerCli, ep)
 		if err != nil {
 			return nil, err
 		}
-		f, err = driver.GetDefaultFactory(ctx, dockerapi, false)
+		f, err = driver.GetDefaultFactory(ctx, ep, dockerapi, false)
 		if err != nil {
 			return nil, err
 		}
@@ -80,6 +93,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				defer func() {
 					dis[i] = di
 				}()
+
 				dockerapi, err := clientForEndpoint(dockerCli, n.Endpoint)
 				if err != nil {
 					di.Err = err
@@ -118,7 +132,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, f, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, contextPathHash)
 				if err != nil {
 					di.Err = err
 					return nil
@@ -259,7 +273,7 @@ func getDefaultDrivers(ctx context.Context, dockerCli command.Cli, defaultOnly b
 		return nil, err
 	}
 
-	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, dockerCli.Client(), imageopt.Auth, nil, nil, nil, nil, nil, contextPathHash)
+	d, err := driver.GetDriver(ctx, "buildx_buildkit_default", nil, "", dockerCli.Client(), imageopt.Auth, nil, nil, nil, nil, nil, contextPathHash)
 	if err != nil {
 		return nil, err
 	}

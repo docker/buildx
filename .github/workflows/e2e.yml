@@ -53,6 +53,7 @@ jobs:
           - docker
           - docker-container
           - kubernetes
+          - remote
         buildkit:
           - moby/buildkit:buildx-stable-1
           - moby/buildkit:master
@@ -68,6 +69,8 @@ jobs:
         include:
           - driver: kubernetes
             driver-opt: qemu.install=true
+          - driver: remote
+            endpoint: tcp://localhost:1234
         exclude:
           - driver: docker
             multi-node: mnode-true
@@ -75,6 +78,10 @@ jobs:
             buildkit-cfg: bkcfg-true
           - driver: docker-container
             multi-node: mnode-true
+          - driver: remote
+            multi-node: mnode-true
+          - driver: remote
+            buildkit-cfg: bkcfg-true
     steps:
       -
         name: Checkout
@@ -129,6 +136,15 @@ jobs:
         run: |
           kubectl get nodes
       -
+        name: Launch remote buildkitd
+        if: matrix.driver == 'remote'
+        run: |
+          docker run -d --privileged \
+            --name=remote-buildkit \
+            -p 1234:1234 \
+            ${{ matrix.buildkit }} \
+            --addr tcp://0.0.0.0:1234
+      -
         name: Test
         run: |
           make test-driver
@@ -136,4 +152,5 @@ jobs:
           BUILDKIT_IMAGE: ${{ matrix.buildkit }}
           DRIVER: ${{ matrix.driver }}
           DRIVER_OPT: ${{ matrix.driver-opt }}
+          ENDPOINT: ${{ matrix.endpoint }}
           PLATFORMS: ${{ matrix.platforms }}

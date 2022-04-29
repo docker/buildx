@@ -60,16 +60,26 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
+	buildkitHost := os.Getenv("BUILDKIT_HOST")
+
 	driverName := in.driver
 	if driverName == "" {
-		f, err := driver.GetDefaultFactory(ctx, dockerCli.Client(), true)
-		if err != nil {
-			return err
+		if len(args) == 0 && buildkitHost != "" {
+			driverName = "remote"
+		} else {
+			var arg string
+			if len(args) > 0 {
+				arg = args[0]
+			}
+			f, err := driver.GetDefaultFactory(ctx, arg, dockerCli.Client(), true)
+			if err != nil {
+				return err
+			}
+			if f == nil {
+				return errors.Errorf("no valid drivers found")
+			}
+			driverName = f.Name()
 		}
-		if f == nil {
-			return errors.Errorf("no valid drivers found")
-		}
-		driverName = f.Name()
 	}
 
 	if driver.GetFactory(driverName, true) == nil {
@@ -129,44 +139,59 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	}
 
 	var ep string
+	var setEp bool
 	if in.actionLeave {
 		if err := ng.Leave(in.nodeName); err != nil {
 			return err
 		}
 	} else {
-		if len(args) > 0 {
-			ep, err = validateEndpoint(dockerCli, args[0])
-			if err != nil {
-				return err
-			}
-		} else {
-			if dockerCli.CurrentContext() == "default" && dockerCli.DockerEndpoint().TLSData != nil {
-				return errors.Errorf("could not create a builder instance with TLS data loaded from environment. Please use `docker context create <context-name>` to create a context for current environment and then create a builder instance with `docker buildx create <context-name>`")
-			}
-
-			ep, err = storeutil.GetCurrentEndpoint(dockerCli)
-			if err != nil {
-				return err
-			}
-		}
-
-		if in.driver == "kubernetes" {
+		switch {
+		case driverName == "kubernetes":
 			// naming endpoint to make --append works
 			ep = (&url.URL{
-				Scheme: in.driver,
+				Scheme: driverName,
 				Path:   "/" + in.name,
 				RawQuery: (&url.Values{
 					"deployment": {in.nodeName},
 					"kubeconfig": {os.Getenv("KUBECONFIG")},
 				}).Encode(),
 			}).String()
+			setEp = false
+		case driverName == "remote":
+			if len(args) > 0 {
+				ep = args[0]
+			} else if buildkitHost != "" {
+				ep = buildkitHost
+			} else {
+				return errors.Errorf("no remote endpoint provided")
+			}
+			ep, err = validateBuildkitEndpoint(ep)
+			if err != nil {
+				return err
+			}
+			setEp = true
+		case len(args) > 0:
+			ep, err = validateEndpoint(dockerCli, args[0])
+			if err != nil {
+				return err
+			}
+			setEp = true
+		default:
+			if dockerCli.CurrentContext() == "default" && dockerCli.DockerEndpoint().TLSData != nil {
+				return errors.Errorf("could not create a builder instance with TLS data loaded from environment. Please use `docker context create <context-name>` to create a context for current environment and then create a builder instance with `docker buildx create <context-name>`")
+			}
+			ep, err = storeutil.GetCurrentEndpoint(dockerCli)
+			if err != nil {
+				return err
+			}
+			setEp = false
 		}
 
 		m, err := csvToMap(in.driverOpts)
 		if err != nil {
 			return err
 		}
-		if err := ng.Update(in.nodeName, ep, in.platform, len(args) > 0, in.actionAppend, flags, in.configFile, m); err != nil {
+		if err := ng.Update(in.nodeName, ep, in.platform, setEp, in.actionAppend, flags, in.configFile, m); err != nil {
 			return err
 		}
 	}
