@@ -55,6 +55,7 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		logrus.WarnLevel,
 	},
 		"commandConn.CloseWrite:",
+		"commandConn.CloseRead:",
 	))
 
 	addCommands(cmd, dockerCli)
