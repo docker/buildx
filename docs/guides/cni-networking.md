@@ -1,4 +1,8 @@
-# CNI networking
+---
+title: "CNI networking"
+description: "Enhance your builder with CNI networking"
+keywords: build, buildx, buildkit, cni, network
+---
 
 It can be useful to use a bridge network for your builder if for example you
 encounter a network port contention during multiple builds. If you're using
@@ -11,7 +15,7 @@ Now build this image:
 $ docker buildx build --tag buildkit-cni:local --load .
 ```
 
-Then [create a `docker-container` builder](../reference/buildx_create.md) that
+Then [create a `docker-container` builder](https://docs.docker.com/engine/reference/commandline/buildx_create/) that
 will use this image:
 
 ```console

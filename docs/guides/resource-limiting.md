@@ -1,18 +1,22 @@
-# Resource limiting
+---
+title: "Resource limiting"
+description: "Max parallelism and limit on TCP connection in your build"
+keywords: build, buildx, buildkit, compute, network
+---
 
 ## Max parallelism
 
 You can limit the parallelism of the BuildKit solver, which is particularly useful
 for low-powered machines, using a [BuildKit daemon configuration](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md)
-while creating a builder with the [`--config` flags](../reference/buildx_create.md#config).
+while creating a builder with the [`--config` flags](https://docs.docker.com/engine/reference/commandline/buildx_create/#config).
 
 ```toml
+# /etc/buildkitd.toml
 [worker.oci]
   max-parallelism = 4
 ```
-> `/etc/buildkitd.toml`
 
-Now you can [create a `docker-container` builder](../reference/buildx_create.md)
+Now you can [create a `docker-container` builder](https://docs.docker.com/engine/reference/commandline/buildx_create/)
 that will use this BuildKit configuration to limit parallelism.
 
 ```console
