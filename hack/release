@@ -17,4 +17,10 @@ if ! type shasum > /dev/null 2>&1; then
   echo >&2 "ERROR: shasum is required"
   exit 1
 fi
-find ./${RELEASE_OUT}/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/# #' > ./${RELEASE_OUT}/checksums.txt
+find ./${RELEASE_OUT}/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/#  #' > ./${RELEASE_OUT}/checksums.txt
+
+# verify
+(
+  cd ./${RELEASE_OUT}
+  shasum -a 256 -U -c checksums.txt
+)
