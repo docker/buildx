@@ -1,6 +1,10 @@
-# Using a custom registry configuration
+---
+title: "Using a custom registry configuration"
+description: "Set registry configuration in your builder"
+keywords: build, buildx, buildkit, registry
+---
 
-If you [create a `docker-container` or `kubernetes` builder](../reference/buildx_create.md) and
+If you [create a `docker-container` or `kubernetes` builder](https://docs.docker.com/engine/reference/commandline/buildx_create/) and
 have specified certificates for registries in the [BuildKit daemon configuration](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md),
 the files will be copied into the container under `/etc/buildkit/certs` and
 configuration will be updated to reflect that.
@@ -8,7 +12,8 @@ configuration will be updated to reflect that.
 Take the following `buildkitd.toml` configuration that will be used for
 pushing an image to this registry using self-signed certificates:
 
-```toml"
+```toml
+# /etc/buildkitd.toml
 debug = true
 [registry."myregistry.com"]
   ca=["/etc/certs/myregistry.pem"]
@@ -16,11 +21,10 @@ debug = true
     key="/etc/certs/myregistry_key.pem"
     cert="/etc/certs/myregistry_cert.pem"
 ```
-> `/etc/buildkitd.toml`
 
 Here we have configured a self-signed certificate for `myregistry.com` registry.
 
-Now [create a `docker-container` builder](../reference/buildx_create.md)
+Now [create a `docker-container` builder](https://docs.docker.com/engine/reference/commandline/buildx_create/)
 that will use this BuildKit configuration:
 
 ```console

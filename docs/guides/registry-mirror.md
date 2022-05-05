@@ -1,19 +1,25 @@
-# Registry mirror
+---
+title: "Registry mirror"
+description: "Using a registry mirror in your build"
+keywords: build, buildx, buildkit, registry
+---
 
 You can define a registry mirror to use for your builds by providing a [BuildKit daemon configuration](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md)
-while creating a builder with the [`--config` flags](../reference/buildx_create.md#config).
+while creating a builder with the [`--config` flags](https://docs.docker.com/engine/reference/commandline/buildx_create/#config).
 
 ```toml
+# /etc/buildkitd.toml
 debug = true
 [registry."docker.io"]
   mirrors = ["mirror.gcr.io"]
 ```
-> `/etc/buildkitd.toml`
 
-> :information_source: `debug = true` has been added to be able to debug requests
-in the BuildKit daemon and see if the mirror is effectively used.
+> **Notes**
+>
+> `debug = true` has been added to be able to debug requests
+> in the BuildKit daemon and see if the mirror is effectively used.
 
-Then [create a `docker-container` builder](../reference/buildx_create.md)
+Then [create a `docker-container` builder](https://docs.docker.com/engine/reference/commandline/buildx_create/)
 that will use this BuildKit configuration:
 
 ```console
@@ -23,7 +29,7 @@ $ docker buildx create --use \
   --config /etc/buildkitd.toml
 ```
 
-Boot and [inspect `mybuilder`](../reference/buildx_inspect.md):
+Boot and [inspect `mybuilder`](https://docs.docker.com/engine/reference/commandline/buildx_inspect/):
 
 ```console
 $ docker buildx inspect --bootstrap
