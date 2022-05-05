@@ -81,7 +81,8 @@ type Options struct {
 	Ulimits       *opts.UlimitOpt
 
 	// Linked marks this target as exclusively linked (not requested by the user).
-	Linked bool
+	Linked    bool
+	PrintFunc string
 }
 
 type Inputs struct {
@@ -1039,10 +1040,22 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 						defer func() { <-done }()
 
 						cc := c
+						var printRes map[string][]byte
 						rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+							if opt.PrintFunc != "" {
+								if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
+									req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
+								} else {
+									req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
+								}
+								req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc
+							}
 							res, err := c.Solve(ctx, req)
 							if err != nil {
 								return nil, err
+							}
+							if opt.PrintFunc != "" {
+								printRes = res.Metadata
 							}
 							results.Set(resultKey(dp.driverIndex, k), res)
 							if resultHandleFunc != nil {
@@ -1054,6 +1067,10 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 							return err
 						}
 						res[i] = rr
+
+						for k, v := range printRes {
+							rr.ExporterResponse[k] = string(v)
+						}
 
 						d := drivers[dp.driverIndex].Driver
 						if d.IsMobyDriver() {

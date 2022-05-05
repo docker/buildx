@@ -48,6 +48,7 @@ const defaultTargetName = "default"
 type buildOptions struct {
 	contextPath    string
 	dockerfileName string
+	printFunc      string
 
 	allow         []string
 	buildArgs     []string
@@ -141,6 +142,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		Tags:          in.tags,
 		Target:        in.target,
 		Ulimits:       in.ulimits,
+		PrintFunc:     in.printFunc,
 	}
 
 	platforms, err := platformutil.Parse(in.platforms)
@@ -307,6 +309,14 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 
 	printWarnings(os.Stderr, printer.Warnings(), progressMode)
 
+	for k := range resp {
+		if opts[k].PrintFunc != "" {
+			if err := printResult(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
+				return "", nil, err
+			}
+		}
+	}
+
 	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], res, err
 }
 
@@ -463,6 +473,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
+	if isExperimental() {
+		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (outline, targets)")
+	}
+
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
@@ -481,7 +495,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
-	if os.Getenv("BUILDX_EXPERIMENTAL") == "1" {
+	if isExperimental() {
 		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build. BUILDX_EXPERIMENTAL=1 is required.")
 	}
 
@@ -651,4 +665,12 @@ func (w *wrapped) Error() string {
 
 func (w *wrapped) Unwrap() error {
 	return w.err
+}
+
+func isExperimental() bool {
+	if v, ok := os.LookupEnv("BUILDKIT_EXPERIMENTAL"); ok {
+		vv, _ := strconv.ParseBool(v)
+		return vv
+	}
+	return false
 }
