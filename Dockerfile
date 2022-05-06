@@ -14,6 +14,7 @@ FROM golatest AS gobase
 COPY --from=xx / /
 RUN apk add --no-cache file git
 ENV GOFLAGS=-mod=vendor
+ENV CGO_ENABLED=0
 WORKDIR /src
 
 FROM gobase AS buildx-version
@@ -23,7 +24,6 @@ RUN --mount=target=. \
   echo -n "${VERSION}" | tee /tmp/.version;
 
 FROM gobase AS buildx-build
-ENV CGO_ENABLED=0
 ARG LDFLAGS="-w -s"
 ARG TARGETPLATFORM
 RUN --mount=type=bind,target=. \
@@ -33,7 +33,7 @@ RUN --mount=type=bind,target=. \
   set -x; xx-go build -ldflags "$(cat /tmp/.ldflags) ${LDFLAGS}" -o /usr/bin/buildx ./cmd/buildx && \
   xx-verify --static /usr/bin/buildx
 
-FROM buildx-build AS test
+FROM gobase AS test
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
