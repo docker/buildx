@@ -39,6 +39,7 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
@@ -55,6 +56,10 @@ import (
 var (
 	errStdinConflict      = errors.New("invalid argument: can't use stdin for both build context and dockerfile")
 	errDockerfileConflict = errors.New("ambiguous Dockerfile source: both stdin and flag correspond to Dockerfiles")
+)
+
+const (
+	printFallbackImage = "docker/dockerfile-upstream:1.4-outline@sha256:ccd574ab34a8875c64bb6a8fb3cfae2e6d62d31b28b9f688075cc14c9b669a59"
 )
 
 type Options struct {
@@ -731,7 +736,7 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 		}
 	}
 
-	if noMobyDriver != nil && !noDefaultLoad() {
+	if noMobyDriver != nil && !noDefaultLoad() && noPrintFunc(opt) {
 		var noOutputTargets []string
 		for name, opt := range opt {
 			if !opt.Linked && len(opt.Exports) == 0 {
@@ -1042,32 +1047,63 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 						cc := c
 						var printRes map[string][]byte
 						rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-							if opt.PrintFunc != "" {
-								if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
-									req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
-								} else {
-									req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
+							var isFallback bool
+							var origErr error
+							for {
+								if opt.PrintFunc != "" {
+									if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
+										req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
+									} else {
+										req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
+									}
+									req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc
+									if isFallback {
+										req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
+									}
 								}
-								req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc
+								res, err := c.Solve(ctx, req)
+								if err != nil {
+									if origErr != nil {
+										return nil, err
+									}
+									var reqErr *errdefs.UnsupportedSubrequestError
+									if !isFallback {
+										if errors.As(err, &reqErr) {
+											switch reqErr.Name {
+											case "frontend.outline", "frontend.targets":
+												isFallback = true
+												origErr = err
+												continue
+											}
+											return nil, err
+										}
+										// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
+										if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
+											isFallback = true
+											origErr = err
+											continue
+										}
+									}
+									return nil, err
+								}
+								if opt.PrintFunc != "" {
+									printRes = res.Metadata
+								}
+								results.Set(resultKey(dp.driverIndex, k), res)
+								if resultHandleFunc != nil {
+									resultHandleFunc(dp.driverIndex, &ResultContext{cc, res})
+								}
+								return res, nil
 							}
-							res, err := c.Solve(ctx, req)
-							if err != nil {
-								return nil, err
-							}
-							if opt.PrintFunc != "" {
-								printRes = res.Metadata
-							}
-							results.Set(resultKey(dp.driverIndex, k), res)
-							if resultHandleFunc != nil {
-								resultHandleFunc(dp.driverIndex, &ResultContext{cc, res})
-							}
-							return res, nil
 						}, ch)
 						if err != nil {
 							return err
 						}
 						res[i] = rr
 
+						if rr.ExporterResponse == nil {
+							rr.ExporterResponse = map[string]string{}
+						}
 						for k, v := range printRes {
 							rr.ExporterResponse[k] = string(v)
 						}
@@ -1646,4 +1682,13 @@ func tryNodeIdentifier(configDir string) (out string) {
 		return string(dt)
 	}
 	return
+}
+
+func noPrintFunc(opt map[string]Options) bool {
+	for _, v := range opt {
+		if v.PrintFunc != "" {
+			return false
+		}
+	}
+	return true
 }
