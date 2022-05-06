@@ -4,9 +4,22 @@ set -eu -o pipefail
 
 : ${BUILDX_CMD=docker buildx}
 : ${RELEASE_OUT=./release-out}
+: ${CACHE_FROM=}
+: ${CACHE_TO=}
+
+if [ -n "$CACHE_FROM" ]; then
+  for cfrom in $CACHE_FROM; do
+    cacheFlags+=(--set "*.cache-from=$cfrom")
+  done
+fi
+if [ -n "$CACHE_TO" ]; then
+  for cto in $CACHE_TO; do
+    cacheFlags+=(--set "*.cache-to=$cto")
+  done
+fi
 
 # release
-(set -x ; ${BUILDX_CMD} bake --set "*.output=$RELEASE_OUT" release)
+(set -x ; ${BUILDX_CMD} bake "${cacheFlags[@]}" --set "*.output=$RELEASE_OUT" release)
 
 # wrap binaries
 mv -f ./${RELEASE_OUT}/**/* ./${RELEASE_OUT}/

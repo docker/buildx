@@ -42,9 +42,15 @@ jobs:
         with:
           file: ./coverage/coverage.txt
       -
+        name: Expose GitHub Runtime
+        uses: crazy-max/ghaction-github-runtime@v1
+      -
         name: Build binaries
         run: |
           make release
+        env:
+          CACHE_FROM: type=gha,scope=release
+          CACHE_TO: type=gha,scope=release
       -
         name: Upload artifacts
         uses: actions/upload-artifact@v2
