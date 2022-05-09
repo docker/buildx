@@ -160,6 +160,10 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	}, nil
 }
 
+func (d *Driver) Version(ctx context.Context) (string, error) {
+	return "", nil
+}
+
 func (d *Driver) Stop(ctx context.Context, force bool) error {
 	// future version may scale the replicas to zero here
 	return nil

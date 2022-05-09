@@ -314,9 +314,10 @@ func loadInfoData(ctx context.Context, d *dinfo) error {
 		inf, err := c.Info(ctx)
 		if err != nil {
 			if st, ok := grpcerrors.AsGRPCStatus(err); ok && st.Code() == codes.Unimplemented {
-				d.version = "N/A"
-			} else {
-				return errors.Wrap(err, "getting info")
+				d.version, err = d.di.Driver.Version(ctx)
+				if err != nil {
+					return errors.Wrap(err, "getting version")
+				}
 			}
 		} else {
 			d.version = inf.BuildkitVersion.Version

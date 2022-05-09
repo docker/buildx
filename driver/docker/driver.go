@@ -29,6 +29,14 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	}, nil
 }
 
+func (d *Driver) Version(ctx context.Context) (string, error) {
+	v, err := d.DockerAPI.ServerVersion(ctx)
+	if err != nil {
+		return "", errors.Wrapf(driver.ErrNotConnecting, err.Error())
+	}
+	return v.Version, nil
+}
+
 func (d *Driver) Stop(ctx context.Context, force bool) error {
 	return nil
 }
