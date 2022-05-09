@@ -2,11 +2,11 @@ package remote
 
 import (
 	"context"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
-	"github.com/pkg/errors"
 )
 
 type Driver struct {
@@ -23,17 +23,39 @@ type tlsOpts struct {
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
-	return nil
+	for i := 0; ; i++ {
+		info, err := d.Info(ctx)
+		if err != nil {
+			return err
+		}
+		if info.Status != driver.Inactive {
+			return nil
+		}
+
+		select {
+		case <-ctx.Done():
+			return ctx.Err()
+		default:
+			if i > 10 {
+				i = 10
+			}
+			time.Sleep(time.Duration(i) * time.Second)
+		}
+	}
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	c, err := d.Client(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(driver.ErrNotConnecting, err.Error())
+		return &driver.Info{
+			Status: driver.Inactive,
+		}, nil
 	}
 
 	if _, err := c.ListWorkers(ctx); err != nil {
-		return nil, errors.Wrapf(driver.ErrNotConnecting, err.Error())
+		return &driver.Info{
+			Status: driver.Inactive,
+		}, nil
 	}
 
 	return &driver.Info{

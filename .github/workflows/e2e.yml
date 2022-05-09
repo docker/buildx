@@ -139,28 +139,13 @@ jobs:
         name: Launch remote buildkitd
         if: matrix.driver == 'remote'
         run: |
-          docker run -d --privileged \
+          docker run -d \
+            --privileged \
             --name=remote-buildkit \
             -p 1234:1234 \
-            --health-cmd "buildctl debug workers" \
-            --health-interval 1s \
             ${{ matrix.buildkit }} \
             --addr unix:///run/buildkit/buildkitd.sock \
             --addr tcp://0.0.0.0:1234
-      -
-        name: Check remote buildkitd
-        if: matrix.driver == 'remote'
-        run: |
-          try=0
-          max=10
-          until [ "$(docker container inspect remote-buildkit --format '{{ .State.Health.Status }}')" = "healthy" ]; do
-            if [ $try -gt $max ]; then
-              echo >&2 "healthcheck failed after $max trials"
-              exit 1
-            fi
-            sleep $(awk "BEGIN{print (100 + $try * 20) * 0.002}")
-            try=$(expr $try + 1)
-          done
       -
         name: Test
         run: |
