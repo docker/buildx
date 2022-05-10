@@ -82,14 +82,20 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		return errors.Errorf("multiple repositories currently not supported, found %v", repos)
 	}
 
-	var repo string
-	for r := range repos {
-		repo = r
+	var defaultRepo *string
+	if len(repos) == 1 {
+		for repo := range repos {
+			defaultRepo = &repo
+		}
 	}
 
 	for i, s := range srcs {
 		if s.Ref == nil && s.Desc.MediaType == "" && s.Desc.Digest != "" {
-			n, err := reference.ParseNormalizedNamed(repo)
+			if defaultRepo == nil {
+				return errors.Errorf("multiple repositories specified, cannot determine default from %v", repos)
+			}
+
+			n, err := reference.ParseNormalizedNamed(*defaultRepo)
 			if err != nil {
 				return err
 			}
@@ -143,7 +149,6 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 					if err != nil {
 						return err
 					}
-					srcs[i].Ref = nil
 					if srcs[i].Desc.Digest == "" {
 						srcs[i].Desc = desc
 					} else {
@@ -162,12 +167,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
-	descs := make([]ocispec.Descriptor, len(srcs))
-	for i := range descs {
-		descs[i] = srcs[i].Desc
-	}
-
-	dt, desc, err := r.Combine(ctx, repo, descs)
+	dt, desc, err := r.Combine(ctx, srcs)
 	if err != nil {
 		return err
 	}
@@ -190,13 +190,8 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	return nil
 }
 
-type src struct {
-	Desc ocispec.Descriptor
-	Ref  reference.Named
-}
-
-func parseSources(in []string) ([]*src, error) {
-	out := make([]*src, len(in))
+func parseSources(in []string) ([]*imagetools.Source, error) {
+	out := make([]*imagetools.Source, len(in))
 	for i, in := range in {
 		s, err := parseSource(in)
 		if err != nil {
@@ -219,11 +214,11 @@ func parseRefs(in []string) ([]reference.Named, error) {
 	return refs, nil
 }
 
-func parseSource(in string) (*src, error) {
+func parseSource(in string) (*imagetools.Source, error) {
 	// source can be a digest, reference or a descriptor JSON
 	dgst, err := digest.Parse(in)
 	if err == nil {
-		return &src{
+		return &imagetools.Source{
 			Desc: ocispec.Descriptor{
 				Digest: dgst,
 			},
@@ -234,14 +229,14 @@ func parseSource(in string) (*src, error) {
 
 	ref, err := reference.ParseNormalizedNamed(in)
 	if err == nil {
-		return &src{
+		return &imagetools.Source{
 			Ref: ref,
 		}, nil
 	} else if !strings.HasPrefix(in, "{") {
 		return nil, err
 	}
 
-	var s src
+	var s imagetools.Source
 	if err := json.Unmarshal([]byte(in), &s.Desc); err != nil {
 		return nil, errors.WithStack(err)
 	}

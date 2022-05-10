@@ -17,46 +17,46 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descriptor) ([]byte, ocispec.Descriptor, error) {
-	ref, err := parseRef(in)
-	if err != nil {
-		return nil, ocispec.Descriptor{}, err
-	}
+type Source struct {
+	Desc ocispec.Descriptor
+	Ref  reference.Named
+}
 
+func (r *Resolver) Combine(ctx context.Context, srcs []*Source) ([]byte, ocispec.Descriptor, error) {
 	eg, ctx := errgroup.WithContext(ctx)
 
-	dts := make([][]byte, len(descs))
+	dts := make([][]byte, len(srcs))
 	for i := range dts {
 		func(i int) {
 			eg.Go(func() error {
-				dt, err := r.GetDescriptor(ctx, ref.String(), descs[i])
+				dt, err := r.GetDescriptor(ctx, srcs[i].Ref.String(), srcs[i].Desc)
 				if err != nil {
 					return err
 				}
 				dts[i] = dt
 
-				if descs[i].MediaType == "" {
+				if srcs[i].Desc.MediaType == "" {
 					mt, err := detectMediaType(dt)
 					if err != nil {
 						return err
 					}
-					descs[i].MediaType = mt
+					srcs[i].Desc.MediaType = mt
 				}
 
-				mt := descs[i].MediaType
+				mt := srcs[i].Desc.MediaType
 
 				switch mt {
 				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-					p := descs[i].Platform
-					if descs[i].Platform == nil {
+					p := srcs[i].Desc.Platform
+					if srcs[i].Desc.Platform == nil {
 						p = &ocispec.Platform{}
 					}
 					if p.OS == "" || p.Architecture == "" {
-						if err := r.loadPlatform(ctx, p, in, dt); err != nil {
+						if err := r.loadPlatform(ctx, p, srcs[i].Ref.String(), dt); err != nil {
 							return err
 						}
 					}
-					descs[i].Platform = p
+					srcs[i].Desc.Platform = p
 				case images.MediaTypeDockerSchema1Manifest:
 					return errors.Errorf("schema1 manifests are not allowed in manifest lists")
 				}
@@ -71,14 +71,14 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 	}
 
 	// on single source, return original bytes
-	if len(descs) == 1 {
-		if mt := descs[0].MediaType; mt == images.MediaTypeDockerSchema2ManifestList || mt == ocispec.MediaTypeImageIndex {
-			return dts[0], descs[0], nil
+	if len(srcs) == 1 {
+		if mt := srcs[0].Desc.MediaType; mt == images.MediaTypeDockerSchema2ManifestList || mt == ocispec.MediaTypeImageIndex {
+			return dts[0], srcs[0].Desc, nil
 		}
 	}
 
 	m := map[digest.Digest]int{}
-	newDescs := make([]ocispec.Descriptor, 0, len(descs))
+	newDescs := make([]ocispec.Descriptor, 0, len(srcs))
 
 	addDesc := func(d ocispec.Descriptor) {
 		idx, ok := m[d.Digest]
@@ -103,8 +103,8 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 		}
 	}
 
-	for i, desc := range descs {
-		switch desc.MediaType {
+	for i, src := range srcs {
+		switch src.Desc.MediaType {
 		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 			var mfst ocispec.Index
 			if err := json.Unmarshal(dts[i], &mfst); err != nil {
@@ -114,7 +114,7 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 				addDesc(d)
 			}
 		default:
-			addDesc(desc)
+			addDesc(src.Desc)
 		}
 	}
 
