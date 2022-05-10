@@ -53,6 +53,7 @@ type Driver interface {
 	Factory() Factory
 	Bootstrap(context.Context, progress.Logger) error
 	Info(context.Context) (*Info, error)
+	Version(context.Context) (string, error)
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error
 	Client(ctx context.Context) (*client.Client, error)

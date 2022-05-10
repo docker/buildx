@@ -975,8 +975,8 @@ github.com/mitchellh/mapstructure v1.4.3 h1:OVowDSCllw/YjdLkam3/sm7wEtOy59d8ndGg
 github.com/mitchellh/mapstructure v1.4.3/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/osext v0.0.0-20151018003038-5e2d6d41470f/go.mod h1:OkQIRizQZAeMln+1tSwduZz7+Af5oFlKirV/MSYes2A=
 github.com/moby/buildkit v0.8.1/go.mod h1:/kyU1hKy/aYCuP39GZA9MaKioovHku57N6cqlKZIaiQ=
-github.com/moby/buildkit v0.10.1-0.20220402051847-3e38a2d34830 h1:guxGTZCTDl42mlHoUOAlLaZOoCvgHlg7TG5+OJ1moyQ=
-github.com/moby/buildkit v0.10.1-0.20220402051847-3e38a2d34830/go.mod h1:3gd2suj256Va94VdkNsw64sCAMp0mzUyqZOJNAUQb38=
+github.com/moby/buildkit v0.10.1-0.20220408230406-86c33b66e176 h1:qX9PbJl7NRkERPQ3vHidr+hiNTRPU1RKpDkOs0vPqg8=
+github.com/moby/buildkit v0.10.1-0.20220408230406-86c33b66e176/go.mod h1:zvLW+0cZ+NaX7INVLDAZ/9T8g57p9aEs1bM/eMV25/g=
 github.com/moby/locker v1.0.1 h1:fOXqR41zeveg4fFODix+1Ch4mj/gT0NE1XJbp/epuBg=
 github.com/moby/locker v1.0.1/go.mod h1:S7SDdo5zpBK84bzzVlKr2V0hz+7x9hWbYC/kq7oQppc=
 github.com/moby/spdystream v0.2.0 h1:cjW1zVyyoiM0T7b6UoySUFqzXMoqRckQtXwGPiBhOM8=
@@ -1299,7 +1299,7 @@ github.com/tonistiigi/fsutil v0.0.0-20201103201449-0834f99b7b85/go.mod h1:a7cilN
 github.com/tonistiigi/fsutil v0.0.0-20220115021204-b19f7f9cb274/go.mod h1:oPAfvw32vlUJSjyDcQ3Bu0nb2ON2B+G0dtVN/SZNJiA=
 github.com/tonistiigi/fsutil v0.0.0-20220315205639-9ed612626da3 h1:T1pEe+WB3SCPVAfVquvfPfagKZU2Z8c1OP3SuGB+id0=
 github.com/tonistiigi/fsutil v0.0.0-20220315205639-9ed612626da3/go.mod h1:oPAfvw32vlUJSjyDcQ3Bu0nb2ON2B+G0dtVN/SZNJiA=
-github.com/tonistiigi/go-actions-cache v0.0.0-20211202175116-9642704158ff/go.mod h1:qqvyZqkfwkoJuPU/bw61bItaoO0SJ8YSW0vSVRRvsRg=
+github.com/tonistiigi/go-actions-cache v0.0.0-20220404170428-0bdeb6e1eac7/go.mod h1:qqvyZqkfwkoJuPU/bw61bItaoO0SJ8YSW0vSVRRvsRg=
 github.com/tonistiigi/go-archvariant v1.0.0/go.mod h1:TxFmO5VS6vMq2kvs3ht04iPXtu2rUT/erOnGFYfk5Ho=
 github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea h1:SXhTLE6pb6eld/v/cCndK0AMpt1wiVFb/YYmqB3/QG0=
 github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea/go.mod h1:WPnis/6cRcDZSUvVmezrxJPkiO87ThFYsoUiMwWNDJk=

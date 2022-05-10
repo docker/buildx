@@ -18,10 +18,12 @@ import (
 	ctxstore "github.com/docker/cli/cli/context/store"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
+	"github.com/moby/buildkit/util/grpcerrors"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/grpc/codes"
 	"k8s.io/client-go/tools/clientcmd"
 )
 
@@ -309,6 +311,17 @@ func loadInfoData(ctx context.Context, d *dinfo) error {
 			d.platforms = append(d.platforms, w.Platforms...)
 		}
 		d.platforms = platformutil.Dedupe(d.platforms)
+		inf, err := c.Info(ctx)
+		if err != nil {
+			if st, ok := grpcerrors.AsGRPCStatus(err); ok && st.Code() == codes.Unimplemented {
+				d.version, err = d.di.Driver.Version(ctx)
+				if err != nil {
+					return errors.Wrap(err, "getting version")
+				}
+			}
+		} else {
+			d.version = inf.BuildkitVersion.Version
+		}
 	}
 	return nil
 }
@@ -396,6 +409,7 @@ type dinfo struct {
 	di        *build.DriverInfo
 	info      *driver.Info
 	platforms []specs.Platform
+	version   string
 	err       error
 }
 
