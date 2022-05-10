@@ -13,7 +13,7 @@ RUN --mount=target=/context \
   --mount=target=/go/pkg/mod,type=cache <<EOT
 set -e
 rsync -a /context/. .
-go mod tidy
+go mod tidy -compat=1.17
 go mod vendor
 mkdir /out
 cp -r go.mod go.sum vendor /out
