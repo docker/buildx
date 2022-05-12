@@ -121,7 +121,7 @@ jobs:
       -
         name: Install k3s
         if: matrix.driver == 'kubernetes'
-        uses: debianmaster/actions-k3s@v1.0.3
+        uses: debianmaster/actions-k3s@v1.0.5
         id: k3s
         with:
           version: v1.21.2-k3s1
