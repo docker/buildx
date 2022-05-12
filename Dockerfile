@@ -44,13 +44,13 @@ FROM scratch AS test-coverage
 COPY --from=test /tmp/coverage.txt /coverage.txt
 
 FROM scratch AS binaries-unix
-COPY --from=buildx-build /usr/bin/buildx /
+COPY --link --from=buildx-build /usr/bin/buildx /
 
 FROM binaries-unix AS binaries-darwin
 FROM binaries-unix AS binaries-linux
 
 FROM scratch AS binaries-windows
-COPY --from=buildx-build /usr/bin/buildx /buildx.exe
+COPY --link --from=buildx-build /usr/bin/buildx /buildx.exe
 
 FROM binaries-$TARGETOS AS binaries
 

@@ -29,6 +29,10 @@ jobs:
         uses: docker/bake-action@v1
         with:
           targets: binaries
+          set: |
+            *.cache-from=type=gha,scope=release
+            *.cache-from=type=gha,scope=binaries
+            *.cache-to=type=gha,scope=binaries
       -
         name: Rename binary
         run: |
