@@ -79,7 +79,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
         name: Build and push image
-        uses: docker/bake-action@v1
+        uses: docker/bake-action@v2
         with:
           files: |
             ./docker-bake.hcl
@@ -116,6 +116,6 @@ jobs:
       -
         # Just run a bake target to check eveything runs fine
         name: Build
-        uses: docker/bake-action@v1
+        uses: docker/bake-action@v2
         with:
           targets: binaries-cross
