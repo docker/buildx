@@ -23,13 +23,13 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       -
         name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
       -
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
         with:
           version: latest
       -
@@ -43,7 +43,7 @@ jobs:
           file: ./coverage/coverage.txt
       -
         name: Expose GitHub Runtime
-        uses: crazy-max/ghaction-github-runtime@v1
+        uses: crazy-max/ghaction-github-runtime@94085cef04e835448ac610090128515e781b4939
       -
         name: Build binaries
         run: |
@@ -53,7 +53,7 @@ jobs:
           CACHE_TO: type=gha,scope=release
       -
         name: Upload artifacts
-        uses: actions/upload-artifact@v2
+        uses: actions/upload-artifact@v3
         with:
           name: buildx
           path: ${{ env.RELEASE_OUT }}/*
@@ -61,7 +61,7 @@ jobs:
       -
         name: Docker meta
         id: meta
-        uses: docker/metadata-action@v3
+        uses: docker/metadata-action@v4
         with:
           images: |
             ${{ env.REPO_SLUG }}
@@ -73,13 +73,13 @@ jobs:
       -
         name: Login to DockerHub
         if: github.event_name != 'pull_request'
-        uses: docker/login-action@v1
+        uses: docker/login-action@v2
         with:
           username: ${{ secrets.DOCKERHUB_USERNAME }}
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
         name: Build and push image
-        uses: docker/bake-action@v1
+        uses: docker/bake-action@v2
         with:
           files: |
             ./docker-bake.hcl
@@ -89,7 +89,7 @@ jobs:
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@v1
+        uses: softprops/action-gh-release@1e07f4398721186383de40550babbdf2b84acfc5
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
@@ -102,13 +102,13 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       -
         name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
       -
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
         with:
           version: latest
           driver-opts: image=moby/buildkit:master
@@ -116,6 +116,6 @@ jobs:
       -
         # Just run a bake target to check eveything runs fine
         name: Build
-        uses: docker/bake-action@v1
+        uses: docker/bake-action@v2
         with:
           targets: binaries-cross

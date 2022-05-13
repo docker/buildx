@@ -18,15 +18,15 @@ jobs:
       BIN_OUT: ./bin
     steps:
       - name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       -
         name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v1
+        uses: docker/setup-buildx-action@v2
         with:
           version: latest
       -
         name: Build
-        uses: docker/bake-action@v1
+        uses: docker/bake-action@v2
         with:
           targets: binaries
           set: |
@@ -89,10 +89,10 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
       -
         name: Set up QEMU
-        uses: docker/setup-qemu-action@v1
+        uses: docker/setup-qemu-action@v2
         if: matrix.driver == 'docker' || matrix.driver == 'docker-container'
       -
         name: Install buildx
@@ -125,7 +125,7 @@ jobs:
       -
         name: Install k3s
         if: matrix.driver == 'kubernetes'
-        uses: debianmaster/actions-k3s@v1.0.3
+        uses: debianmaster/actions-k3s@b9cf3f599fd118699a3c8a0d18a2f2bda6cf4ce4
         id: k3s
         with:
           version: v1.21.2-k3s1
