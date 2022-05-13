@@ -14,6 +14,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/cobrautil"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/google/shlex"
@@ -191,6 +192,16 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		if err != nil {
 			return err
 		}
+
+		if in.configFile == "" {
+			// if buildkit config is not provided, check if the default one is
+			// available and use it
+			if f, ok := confutil.DefaultConfigFile(dockerCli); ok {
+				logrus.Warnf("Using default BuildKit config in %s", f)
+				in.configFile = f
+			}
+		}
+
 		if err := ng.Update(in.nodeName, ep, in.platform, setEp, in.actionAppend, flags, in.configFile, m); err != nil {
 			return err
 		}
