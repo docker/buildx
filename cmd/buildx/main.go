@@ -81,9 +81,9 @@ func main() {
 		s.Print(cmd.Err())
 	}
 	if debug.IsEnabled() {
-		fmt.Fprintf(cmd.Err(), "error: %+v", stack.Formatter(err))
+		fmt.Fprintf(cmd.Err(), "ERROR: %+v", stack.Formatter(err))
 	} else {
-		fmt.Fprintf(cmd.Err(), "error: %v\n", err)
+		fmt.Fprintf(cmd.Err(), "ERROR: %v\n", err)
 	}
 
 	os.Exit(1)
