@@ -2,6 +2,7 @@ package confutil
 
 import (
 	"os"
+	"path"
 	"path/filepath"
 
 	"github.com/docker/cli/cli/command"
@@ -22,6 +23,15 @@ func ConfigDir(dockerCli command.Cli) string {
 	buildxConfig := filepath.Join(filepath.Dir(dockerCli.ConfigFile().Filename), "buildx")
 	logrus.Debugf("using default config store %q", buildxConfig)
 	return buildxConfig
+}
+
+// DefaultConfigFile returns the default BuildKit configuration file path
+func DefaultConfigFile(dockerCli command.Cli) (string, bool) {
+	f := path.Join(ConfigDir(dockerCli), "buildkitd.default.toml")
+	if _, err := os.Stat(f); err == nil {
+		return f, true
+	}
+	return "", false
 }
 
 // loadConfigTree loads BuildKit config toml tree
