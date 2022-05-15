@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/docker/buildx/store"
@@ -73,7 +74,12 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 	if err := txn.Remove(ng.Name); err != nil {
 		return err
 	}
-	return err1
+	if err1 != nil {
+		return err1
+	}
+
+	_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", ng.Name)
+	return nil
 }
 
 func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -158,6 +164,7 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 					if err := txn.Remove(b.ng.Name); err != nil {
 						return err
 					}
+					_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", b.ng.Name)
 					return rmerr
 				}
 				return nil
