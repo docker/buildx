@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -45,22 +46,29 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 		builders[i] = &nginfo{ng: ng}
 	}
 
-	list, err := dockerCli.ContextStore().List()
+	contexts, err := dockerCli.ContextStore().List()
 	if err != nil {
 		return err
 	}
-	ctxbuilders := make([]*nginfo, len(list))
-	for i, l := range list {
-		ctxbuilders[i] = &nginfo{ng: &store.NodeGroup{
-			Name: l.Name,
+	sort.Slice(contexts, func(i, j int) bool {
+		return contexts[i].Name < contexts[j].Name
+	})
+	for _, c := range contexts {
+		ngi := &nginfo{ng: &store.NodeGroup{
+			Name: c.Name,
 			Nodes: []store.Node{{
-				Name:     l.Name,
-				Endpoint: l.Name,
+				Name:     c.Name,
+				Endpoint: c.Name,
 			}},
 		}}
+		// if a context has the same name as an instance from the store, do not
+		// add it to the builders list. An instance from the store takes
+		// precedence over context builders.
+		if hasNodeGroup(builders, ngi) {
+			continue
+		}
+		builders = append(builders, ngi)
 	}
-
-	builders = append(builders, ctxbuilders...)
 
 	eg, _ := errgroup.WithContext(ctx)
 
