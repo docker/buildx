@@ -1164,7 +1164,7 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 
 	case urlutil.IsGitURL(inp.ContextPath), urlutil.IsURL(inp.ContextPath):
 		if inp.DockerfilePath == "-" {
-			return nil, errors.Errorf("Dockerfile from stdin is not supported with remote contexts")
+			dockerfileReader = inp.InStream
 		}
 		target.FrontendAttrs["context"] = inp.ContextPath
 	default:
