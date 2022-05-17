@@ -9,6 +9,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
 	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
+	remoteutil "github.com/docker/buildx/driver/remote/util"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/platformutil"
@@ -45,12 +46,8 @@ func validateEndpoint(dockerCli command.Cli, ep string) (string, error) {
 
 // validateBuildkitEndpoint validates that endpoint is a valid buildkit host
 func validateBuildkitEndpoint(ep string) (string, error) {
-	endpoint, err := url.Parse(ep)
-	if err != nil {
-		return "", errors.Wrapf(err, "failed to parse endpoint %s", ep)
-	}
-	if endpoint.Scheme != "tcp" && endpoint.Scheme != "unix" {
-		return "", errors.Errorf("unrecognized url scheme %s", endpoint.Scheme)
+	if err := remoteutil.IsValidEndpoint(ep); err != nil {
+		return "", err
 	}
 	return ep, nil
 }
