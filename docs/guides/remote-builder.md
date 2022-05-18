@@ -115,6 +115,16 @@ $ docker buildx create \
   tcp://localhost:1234
 ```
 
+Alternatively, we could use the `docker-container://` URL scheme to connect
+to the buildkit container without specifying a port:
+
+```console
+$ docker buildx create \
+  --name remote-container \
+  --driver remote \
+  docker-container://remote-container
+```
+
 ## Remote Buildkit in Kubernetes
 
 In this scenario, we'll create a similar setup to the `kubernetes` driver by
@@ -147,10 +157,24 @@ only creates a ClusterIP service). To configure the builder to be accessible
 remotely, you can use an appropriately configured Ingress, which is outside the
 scope of this guide.
 
-Alternatively, to access remotely use the port forwarding mechanism in kubectl:
+To access the service remotely, we can use the port forwarding mechanism in
+kubectl:
 
 ```console
 $ kubectl port-forward svc/buildkitd 1234:1234
 ```
 
 Then you can simply point the remote driver at `tcp://localhost:1234`.
+
+Alternatively, we could use the `kube-pod://` URL scheme to connect
+directly to a buildkit pod through the kubernetes api (note that this method
+will only connect to a single pod in the deployment):
+
+```console
+$ kubectl get pods --selector=app=buildkitd -o json | jq -r '.items[].metadata.name
+buildkitd-XXXXXXXXXX-xxxxx
+$ docker buildx create \
+  --name remote-container \
+  --driver remote \
+  kube-pod://buildkitd-XXXXXXXXXX-xxxxx
+```
