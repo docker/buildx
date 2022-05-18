@@ -112,7 +112,7 @@ $ docker buildx create \
   --name remote-container \
   --driver remote \
   --driver-opt cacert=.certs/ca.pem,cert=.certs/client-cert.pem,key=.certs/client-key.pem,servername=... \
-  tcp://buildkitd.default.svc:1234
+  tcp://localhost:1234
 ```
 
 ## Remote Buildkit in Kubernetes
