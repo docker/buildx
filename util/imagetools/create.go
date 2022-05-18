@@ -10,6 +10,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution/reference"
+	"github.com/moby/buildkit/util/contentutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -167,6 +168,33 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 		return nil
 	}
 	return err
+}
+
+func (r *Resolver) Copy(ctx context.Context, srcs []*Source, dest reference.Named) error {
+	dest = reference.TagNameOnly(dest)
+	p, err := r.resolver().Pusher(ctx, dest.String())
+	if err != nil {
+		return err
+	}
+
+	for _, src := range srcs {
+		if reference.Domain(src.Ref) == reference.Domain(dest) && reference.Path(src.Ref) == reference.Path(dest) {
+			continue
+		}
+
+		srcRef := reference.TagNameOnly(src.Ref)
+		f, err := r.resolver().Fetcher(ctx, srcRef.String())
+		if err != nil {
+			return err
+		}
+
+		err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), src.Desc)
+		if err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
 
 func (r *Resolver) loadPlatform(ctx context.Context, p2 *ocispec.Platform, in string, dt []byte) error {
