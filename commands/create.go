@@ -101,6 +101,19 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
+	if !in.actionLeave && !in.actionAppend {
+		contexts, err := dockerCli.ContextStore().List()
+		if err != nil {
+			return err
+		}
+		for _, c := range contexts {
+			if c.Name == name {
+				logrus.Warnf("instance name %q already exists as context builder", name)
+				break
+			}
+		}
+	}
+
 	ng, err := txn.NodeGroupByName(name)
 	if err != nil {
 		if os.IsNotExist(errors.Cause(err)) {
