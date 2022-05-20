@@ -390,6 +390,15 @@ func loadNodeGroupData(ctx context.Context, dockerCli command.Cli, ngi *nginfo) 
 	return nil
 }
 
+func hasNodeGroup(list []*nginfo, ngi *nginfo) bool {
+	for _, l := range list {
+		if ngi.ng.Name == l.ng.Name {
+			return true
+		}
+	}
+	return false
+}
+
 func dockerAPI(dockerCli command.Cli) *api {
 	return &api{dockerCli: dockerCli}
 }
