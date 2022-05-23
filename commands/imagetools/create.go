@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/imagetools"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/appcontext"
@@ -25,6 +27,7 @@ type createOptions struct {
 	tags         []string
 	dryrun       bool
 	actionAppend bool
+	progress     string
 }
 
 func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
@@ -177,18 +180,45 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	// new resolver cause need new auth
 	r = imagetools.New(imageopt)
 
-	for _, t := range tags {
-		if err := r.Copy(ctx, srcs, t); err != nil {
-			return err
-		}
+	ctx2, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	printer := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, in.progress)
 
-		if err := r.Push(ctx, t, desc, dt); err != nil {
-			return err
-		}
-		fmt.Println(t.String())
+	eg, _ := errgroup.WithContext(ctx)
+	pw := progress.WithPrefix(printer, "internal", true)
+
+	for _, t := range tags {
+		t := t
+		eg.Go(func() error {
+			return progress.Wrap(fmt.Sprintf("pushing %s", t.String()), pw.Write, func(sub progress.SubLogger) error {
+				eg2, _ := errgroup.WithContext(ctx)
+				for _, s := range srcs {
+					if reference.Domain(s.Ref) == reference.Domain(t) && reference.Path(s.Ref) == reference.Path(t) {
+						continue
+					}
+					s := s
+					eg2.Go(func() error {
+						sub.Log(1, []byte(fmt.Sprintf("copying %s from %s to %s\n", s.Desc.Digest.String(), s.Ref.String(), t.String())))
+						return r.Copy(ctx, s, t)
+					})
+				}
+
+				if err := eg2.Wait(); err != nil {
+					return err
+				}
+				sub.Log(1, []byte(fmt.Sprintf("pushing %s to %s\n", desc.Digest.String(), t.String())))
+				return r.Push(ctx, t, desc, dt)
+			})
+		})
 	}
 
-	return nil
+	err = eg.Wait()
+	err1 := printer.Wait()
+	if err == nil {
+		err = err1
+	}
+
+	return err
 }
 
 func parseSources(in []string) ([]*imagetools.Source, error) {
@@ -261,6 +291,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Set reference for new image")
 	flags.BoolVar(&options.dryrun, "dry-run", false, "Show final image instead of pushing")
 	flags.BoolVar(&options.actionAppend, "append", false, "Append to existing manifest")
+	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 
 	return cmd
 }

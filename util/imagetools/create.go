@@ -170,30 +170,23 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 	return err
 }
 
-func (r *Resolver) Copy(ctx context.Context, srcs []*Source, dest reference.Named) error {
+func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) error {
 	dest = reference.TagNameOnly(dest)
 	p, err := r.resolver().Pusher(ctx, dest.String())
 	if err != nil {
 		return err
 	}
 
-	for _, src := range srcs {
-		if reference.Domain(src.Ref) == reference.Domain(dest) && reference.Path(src.Ref) == reference.Path(dest) {
-			continue
-		}
-
-		srcRef := reference.TagNameOnly(src.Ref)
-		f, err := r.resolver().Fetcher(ctx, srcRef.String())
-		if err != nil {
-			return err
-		}
-
-		err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), src.Desc)
-		if err != nil {
-			return err
-		}
+	srcRef := reference.TagNameOnly(src.Ref)
+	f, err := r.resolver().Fetcher(ctx, srcRef.String())
+	if err != nil {
+		return err
 	}
 
+	err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), src.Desc)
+	if err != nil {
+		return err
+	}
 	return nil
 }
 
