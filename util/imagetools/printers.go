@@ -59,7 +59,9 @@ func NewPrinter(ctx context.Context, opt Opt, name string, format string) (*Prin
 	switch manifest.MediaType {
 	case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
 		for _, m := range index.Manifests {
-			pforms = append(pforms, *m.Platform)
+			if m.Platform != nil {
+				pforms = append(pforms, *m.Platform)
+			}
 		}
 	default:
 		pforms = append(pforms, platforms.DefaultSpec())
