@@ -4,14 +4,19 @@ import (
 	"bytes"
 	"context"
 	"encoding/base64"
+	"encoding/csv"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
+	"sync"
 
+	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
@@ -63,6 +68,7 @@ type buildOptions struct {
 	tags          []string
 	target        string
 	ulimits       *dockeropts.UlimitOpt
+	invoke        string
 	commonOptions
 }
 
@@ -225,10 +231,30 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		contextPathHash = in.contextPath
 	}
 
-	imageID, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
+	imageID, res, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return err
+	}
+
+	if in.invoke != "" {
+		cfg, err := parseInvokeConfig(in.invoke)
+		if err != nil {
+			return err
+		}
+		cfg.ResultCtx = res
+		con := console.Current()
+		if err := con.SetRaw(); err != nil {
+			return errors.Errorf("failed to configure terminal: %v", err)
+		}
+		err = monitor.RunMonitor(ctx, cfg, func(ctx context.Context) (*build.ResultContext, error) {
+			_, rr, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
+			return rr, err
+		}, io.NopCloser(os.Stdin), nopCloser{os.Stdout}, nopCloser{os.Stderr})
+		if err != nil {
+			logrus.Warnf("failed to run monitor: %v", err)
+		}
+		con.Reset()
 	}
 
 	if in.quiet {
@@ -237,10 +263,16 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	return nil
 }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) (imageID string, err error) {
+type nopCloser struct {
+	io.WriteCloser
+}
+
+func (c nopCloser) Close() error { return nil }
+
+func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) (imageID string, res *build.ResultContext, err error) {
 	dis, err := getInstanceOrDefault(ctx, dockerCli, instance, contextPathHash)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	ctx2, cancel := context.WithCancel(context.TODO())
@@ -248,24 +280,82 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 
 	printer := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode)
 
-	resp, err := build.Build(ctx, dis, opts, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	var mu sync.Mutex
+	var idx int
+	resp, err := build.BuildWithResultHandler(ctx, dis, opts, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer, func(driverIndex int, gotRes *build.ResultContext) {
+		mu.Lock()
+		defer mu.Unlock()
+		if res == nil || driverIndex < idx {
+			idx, res = driverIndex, gotRes
+		}
+	})
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1
 	}
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 
 	if len(metadataFile) > 0 && resp != nil {
 		if err := writeMetadataFile(metadataFile, decodeExporterResponse(resp[defaultTargetName].ExporterResponse)); err != nil {
-			return "", err
+			return "", nil, err
 		}
 	}
 
 	printWarnings(os.Stderr, printer.Warnings(), progressMode)
 
-	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], err
+	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], res, err
+}
+
+func parseInvokeConfig(invoke string) (cfg build.ContainerConfig, err error) {
+	csvReader := csv.NewReader(strings.NewReader(invoke))
+	fields, err := csvReader.Read()
+	if err != nil {
+		return cfg, err
+	}
+	cfg.Tty = true
+	if len(fields) == 1 && !strings.Contains(fields[0], "=") {
+		cfg.Args = []string{fields[0]}
+		return cfg, nil
+	}
+	var entrypoint string
+	var args []string
+	for _, field := range fields {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) != 2 {
+			return cfg, errors.Errorf("invalid value %s", field)
+		}
+		key := strings.ToLower(parts[0])
+		value := parts[1]
+		switch key {
+		case "args":
+			args = append(args, value) // TODO: support JSON
+		case "entrypoint":
+			entrypoint = value // TODO: support JSON
+		case "env":
+			cfg.Env = append(cfg.Env, value)
+		case "user":
+			cfg.User = value
+		case "cwd":
+			cfg.Cwd = value
+		case "tty":
+			cfg.Tty, err = strconv.ParseBool(value)
+			if err != nil {
+				return cfg, errors.Errorf("failed to parse tty: %v", err)
+			}
+		default:
+			return cfg, errors.Errorf("unknown key %q", key)
+		}
+	}
+	cfg.Args = args
+	if entrypoint != "" {
+		cfg.Args = append([]string{entrypoint}, cfg.Args...)
+	}
+	if len(cfg.Args) == 0 {
+		cfg.Args = []string{"sh"}
+	}
+	return cfg, nil
 }
 
 func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
@@ -388,6 +478,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.SetAnnotation("target", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target"})
 
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
+
+	if os.Getenv("BUILDX_EXPERIMENTAL") == "1" {
+		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build. BUILDX_EXPERIMENTAL=1 is required.")
+	}
 
 	// hidden flags
 	var ignore string

@@ -615,7 +615,101 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 	return &so, releaseF, nil
 }
 
+// ContainerConfig is configuration for a container to run.
+type ContainerConfig struct {
+	ResultCtx *ResultContext
+	Args      []string
+	Env       []string
+	User      string
+	Cwd       string
+	Tty       bool
+	Stdin     io.ReadCloser
+	Stdout    io.WriteCloser
+	Stderr    io.WriteCloser
+}
+
+// ResultContext is a build result with the client that built it.
+type ResultContext struct {
+	Client *client.Client
+	Res    *gateway.Result
+}
+
+// Invoke invokes a build result as a container.
+func Invoke(ctx context.Context, cfg ContainerConfig) error {
+	if cfg.ResultCtx == nil {
+		return errors.Errorf("result must be provided")
+	}
+	c, res := cfg.ResultCtx.Client, cfg.ResultCtx.Res
+	_, err := c.Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		if res.Ref == nil {
+			return nil, errors.Errorf("no reference is registered")
+		}
+		st, err := res.Ref.ToState()
+		if err != nil {
+			return nil, err
+		}
+		def, err := st.Marshal(ctx)
+		if err != nil {
+			return nil, err
+		}
+		imgRef, err := c.Solve(ctx, gateway.SolveRequest{
+			Definition: def.ToPB(),
+		})
+		if err != nil {
+			return nil, err
+		}
+		ctr, err := c.NewContainer(ctx, gateway.NewContainerRequest{
+			Mounts: []gateway.Mount{
+				{
+					Dest:      "/",
+					MountType: pb.MountType_BIND,
+					Ref:       imgRef.Ref,
+				},
+			},
+		})
+		if err != nil {
+			return nil, err
+		}
+		defer ctr.Release(ctx)
+		proc, err := ctr.Start(ctx, gateway.StartRequest{
+			Args:   cfg.Args,
+			Env:    cfg.Env,
+			User:   cfg.User,
+			Cwd:    cfg.Cwd,
+			Tty:    cfg.Tty,
+			Stdin:  cfg.Stdin,
+			Stdout: cfg.Stdout,
+			Stderr: cfg.Stderr,
+		})
+		if err != nil {
+			return nil, errors.Errorf("failed to start container: %v", err)
+		}
+		errCh := make(chan error)
+		doneCh := make(chan struct{})
+		go func() {
+			if err := proc.Wait(); err != nil {
+				errCh <- err
+				return
+			}
+			close(doneCh)
+		}()
+		select {
+		case <-doneCh:
+		case <-ctx.Done():
+			return nil, ctx.Err()
+		case err := <-errCh:
+			return nil, err
+		}
+		return nil, nil
+	}, nil)
+	return err
+}
+
 func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, drivers, opt, docker, configDir, w, nil)
+}
+
+func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext)) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -927,12 +1021,16 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 						ch, done := progress.NewChannel(pw)
 						defer func() { <-done }()
 
+						cc := c
 						rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 							res, err := c.Solve(ctx, req)
 							if err != nil {
 								return nil, err
 							}
 							results.Set(resultKey(dp.driverIndex, k), res)
+							if resultHandleFunc != nil {
+								resultHandleFunc(dp.driverIndex, &ResultContext{cc, res})
+							}
 							return res, nil
 						}, ch)
 						if err != nil {
