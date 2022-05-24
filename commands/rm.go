@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 	"time"
 
 	"github.com/docker/buildx/store"
@@ -43,30 +44,41 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		return rmAllInactive(ctx, txn, dockerCli, in)
 	}
 
+	var ng *store.NodeGroup
 	if in.builder != "" {
-		ng, err := storeutil.GetNodeGroup(txn, dockerCli, in.builder)
+		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
 		if err != nil {
 			return err
 		}
-		err1 := rm(ctx, dockerCli, in, ng)
-		if err := txn.Remove(ng.Name); err != nil {
+	} else {
+		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
+		if err != nil {
 			return err
 		}
-		return err1
+	}
+	if ng == nil {
+		return nil
 	}
 
-	ng, err := storeutil.GetCurrentInstance(txn, dockerCli)
+	ctxbuilders, err := dockerCli.ContextStore().List()
 	if err != nil {
 		return err
 	}
-	if ng != nil {
-		err1 := rm(ctx, dockerCli, in, ng)
-		if err := txn.Remove(ng.Name); err != nil {
-			return err
+	for _, cb := range ctxbuilders {
+		if ng.Driver == "docker" && len(ng.Nodes) == 1 && ng.Nodes[0].Endpoint == cb.Name {
+			return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb.Name)
 		}
+	}
+
+	err1 := rm(ctx, dockerCli, in, ng)
+	if err := txn.Remove(ng.Name); err != nil {
+		return err
+	}
+	if err1 != nil {
 		return err1
 	}
 
+	_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", ng.Name)
 	return nil
 }
 
@@ -152,6 +164,7 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 					if err := txn.Remove(b.ng.Name); err != nil {
 						return err
 					}
+					_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", b.ng.Name)
 					return rmerr
 				}
 				return nil
