@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/url"
+	"strings"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
@@ -182,6 +184,17 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) 
 	if err != nil {
 		return err
 	}
+
+	refspec := reference.TrimNamed(src.Ref).String()
+	u, err := url.Parse("dummy://" + refspec)
+	if err != nil {
+		return err
+	}
+	source, repo := u.Hostname(), strings.TrimPrefix(u.Path, "/")
+	if src.Desc.Annotations == nil {
+		src.Desc.Annotations = make(map[string]string)
+	}
+	src.Desc.Annotations["containerd.io/distribution.source."+source] = repo
 
 	err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), src.Desc)
 	if err != nil {
