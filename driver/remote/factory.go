@@ -4,18 +4,21 @@ import (
 	"context"
 	"net/url"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	// import connhelpers for special url schemes
+	_ "github.com/moby/buildkit/client/connhelper/dockercontainer"
+	_ "github.com/moby/buildkit/client/connhelper/kubepod"
+	_ "github.com/moby/buildkit/client/connhelper/ssh"
+
 	"github.com/docker/buildx/driver"
+	util "github.com/docker/buildx/driver/remote/util"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
 )
 
 const prioritySupported = 20
 const priorityUnsupported = 90
-
-var schemeRegexp = regexp.MustCompile("^(tcp|unix)://")
 
 func init() {
 	driver.Register(&factory{})
@@ -33,10 +36,10 @@ func (*factory) Usage() string {
 }
 
 func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient) int {
-	if schemeRegexp.MatchString(endpoint) {
-		return prioritySupported
+	if util.IsValidEndpoint(endpoint) != nil {
+		return priorityUnsupported
 	}
-	return priorityUnsupported
+	return prioritySupported
 }
 
 func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver, error) {
