@@ -105,7 +105,7 @@ $ TAG=dev docker buildx bake webapp-dev  # will use the TAG environment variable
 
 > **Tip**
 >
-> You can also define [global scope attributes](#global-scope-attributes).
+> See also the [Configuring builds](configuring-build.md) page for advanced usage.
 
 ### Functions
 
@@ -439,84 +439,4 @@ $ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "htt
 #8 0.136 drwxrwxrwx   10 root     root          4096 Jul 27 18:31 vendor
 #8 0.136 -rwxrwxrwx    1 root     root          9620 Jul 27 18:31 vendor.conf
 #8 0.136 /bin/sh: stop: not found
-```
-
-## Global scope attributes
-
-You can define global scope attributes in HCL/JSON and use them for code reuse
-and setting values for variables. This means you can do a "data-only" HCL file
-with the values you want to set/override and use it in the list of regular
-output files.
-
-```hcl
-# docker-bake.hcl
-variable "FOO" {
-  default = "abc"
-}
-
-target "app" {
-  args = {
-    v1 = "pre-${FOO}"
-  }
-}
-```
-
-You can use this file directly:
-
-```console
-$ docker buildx bake --print app
-```
-```json
-{
-  "group": {
-    "default": {
-      "targets": [
-        "app"
-      ]
-    }
-  },
-  "target": {
-    "app": {
-      "context": ".",
-      "dockerfile": "Dockerfile",
-      "args": {
-        "v1": "pre-abc"
-      }
-    }
-  }
-}
-```
-
-Or create an override configuration file:
-
-```hcl
-# env.hcl
-WHOAMI="myuser"
-FOO="def-${WHOAMI}"
-```
-
-And invoke bake together with both of the files:
-
-```console
-$ docker buildx bake -f docker-bake.hcl -f env.hcl --print app
-```
-```json
-{
-  "group": {
-    "default": {
-      "targets": [
-        "app"
-      ]
-    }
-  },
-  "target": {
-    "app": {
-      "context": ".",
-      "dockerfile": "Dockerfile",
-      "args": {
-        "v1": "pre-def-myuser"
-      }
-    }
-  }
-}
 ```

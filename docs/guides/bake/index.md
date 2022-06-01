@@ -33,6 +33,7 @@ and also allows better code reuse, different target groups and extended features
 ## Next steps
 
 * [File definition](file-definition.md)
+* [Configuring builds](configuring-build.md)
 * [HCL variables and functions](hcl-vars-funcs.md)
 * [Defining additional build contexts and linking targets](build-contexts.md)
 * [Extension field with Compose](compose-xbake.md)

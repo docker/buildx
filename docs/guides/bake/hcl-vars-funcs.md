@@ -15,8 +15,9 @@ are also supported.
 
 ## Using interpolation to tag an image with the git sha
 
-Bake supports variable blocks which are assigned to matching environment
-variables or default values.
+As shown in the [File definition](file-definition.md#variable) page, `bake`
+supports variable blocks which are assigned to matching environment variables
+or default values:
 
 ```hcl
 # docker-bake.hcl
