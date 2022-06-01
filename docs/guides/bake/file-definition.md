@@ -4,8 +4,9 @@ keywords: build, buildx, bake, buildkit, hcl, json, compose
 ---
 
 `buildx bake` supports HCL, JSON and Compose file format for defining build
-groups and targets. It looks for build definition files in the current
-directory in the following order:
+groups, targets as well as [variables and functions](hcl-vars-funcs.md). It
+looks for build definition files in the current directory in the following
+order:
 
 * `docker-compose.yml`
 * `docker-compose.yaml`
@@ -14,21 +15,193 @@ directory in the following order:
 * `docker-bake.hcl`
 * `docker-bake.override.hcl`
 
-A target reflects a single docker build invocation with the same options that
-you would specify for `docker build`. A group is a grouping of targets.
+## Specification
 
-Multiple files can include the same target and final build options will be
-determined by merging them together.
+### Target
+
+A target reflects a single docker build invocation with the same options that
+you would specify for `docker build`:
+
+```hcl
+# docker-bake.hcl
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:latest"]
+}
+```
+```console
+$ docker buildx bake webapp-dev
+```
 
 > **Note**
 >
 > In the case of compose files, each service corresponds to a target.
 
+Complete list of valid target fields available for [HCL](#hcl-definition) and
+[JSON](#json-definition) definitions:
+
+* `args`
+* `cache-from`
+* `cache-to`
+* `context`
+* `contexts`
+* `dockerfile`
+* `inherits`
+* `labels`
+* `no-cache`
+* `no-cache-filter`
+* `output`
+* `platform`
+* `pull`
+* `secrets`
+* `ssh`
+* `tags`
+* `target`
+
+### Group
+
+A group is a grouping of targets:
+
+```hcl
+# docker-bake.hcl
+group "build" {
+  targets = ["db", "webapp-dev"]
+}
+
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:latest"]
+}
+
+target "db" {
+  dockerfile = "Dockerfile.db"
+  tags = ["docker.io/username/db"]
+}
+```
+```console
+$ docker buildx bake build
+```
+
+### Variable
+
+You can define variables with values provided by the current environment, or a
+default value when unset:
+
+```hcl
+# docker-bake.hcl
+variable "TAG" {
+  default = "latest"
+}
+
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:${TAG}"]
+}
+```
+```console
+$ docker buildx bake webapp-dev          # will use the default value "latest"
+$ TAG=dev docker buildx bake webapp-dev  # will use the TAG environment variable value
+```
+
+> **Tip**
+>
+> You can also define [global scope attributes](#global-scope-attributes).
+
+### Functions
+
+A set of generally useful functions are available for use in HCL files:
+
+```hcl
+# docker-bake.hcl
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:latest"]
+  args = {
+    buildno = "${add(123, 1)}"
+  }
+}
+```
+
+User defined functions are also supported:
+
+```hcl
+# docker-bake.hcl
+function "increment" {
+  params = [number]
+  result = number + 1
+}
+
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:latest"]
+  args = {
+    buildno = "${increment(123)}"
+  }
+}
+```
+
+> **Note**
+>
+> See [HCL variables and functions](hcl-vars-funcs.md) page for more details.
+
+## Merging and inheritance
+
+Multiple files can include the same target and final build options will be
+determined by merging them together:
+
+```hcl
+# docker-bake.hcl
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:latest"]
+}
+```
+```hcl
+# docker-bake2.hcl
+target "webapp-dev" {
+  tags = ["docker.io/username/webapp:dev"]
+}
+```
+```console
+$ docker buildx bake -f docker-bake.hcl -f docker-bake2.hcl webapp-dev
+```
+
 A group can specify its list of targets with the `targets` option. A target can
 inherit build options by setting the `inherits` option to the list of targets or
-groups to inherit from.
+groups to inherit from:
 
-## HCL definition
+```hcl
+# docker-bake.hcl
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:${TAG}"]
+}
+
+target "webapp-release" {
+  inherits = ["webapp-dev"]
+  platforms = ["linux/amd64", "linux/arm64"]
+}
+```
+
+## `default` target/group
+
+When you invoke `bake` you specify what targets/groups you want to build. If no
+arguments is specified, the group/target named `default` will be built:
+
+```hcl
+# docker-bake.hcl
+target "default" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:latest"]
+}
+```
+```console
+$ docker buildx bake
+```
+
+## Definitions
+
+### HCL definition
 
 HCL definition file is recommended as its experience is more aligned with buildx UX
 and also allows better code reuse, different target groups and extended features.
@@ -59,27 +232,7 @@ target "db" {
 }
 ```
 
-Complete list of valid target fields:
-
-* `args`
-* `cache-from`
-* `cache-to`
-* `context`
-* `contexts`
-* `dockerfile`
-* `inherits`
-* `labels`
-* `no-cache`
-* `no-cache-filter`
-* `output`
-* `platform`
-* `pull`
-* `secrets`
-* `ssh`
-* `tags`
-* `target`
-
-## JSON definition
+### JSON definition
 
 ```json
 {
@@ -122,9 +275,7 @@ Complete list of valid target fields:
 }
 ```
 
-Same list of target fields as [HCL definition](#hcl-definition) are available.
-
-## Compose file
+### Compose file
 
 ```yaml
 # docker-compose.yml
@@ -164,7 +315,7 @@ services:
 
 ## Remote definition
 
-You can also use a remote `git` bake definition:
+You can also build bake files directly from a remote Git repository or HTTPS URL:
 
 ```console
 $ docker buildx bake "https://github.com/docker/cli.git#v20.10.11" --print
@@ -173,6 +324,8 @@ $ docker buildx bake "https://github.com/docker/cli.git#v20.10.11" --print
 #1 2.022 From https://github.com/docker/cli
 #1 2.022  * [new tag]         v20.10.11  -> v20.10.11
 #1 DONE 2.9s
+```
+```json
 {
   "group": {
     "default": {
@@ -242,6 +395,8 @@ $ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" --pr
 ```console
 $ touch foo bar
 $ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test"
+```
+```text
 ...
  > [4/4] RUN ls -l && stop:
 #8 0.101 total 0
@@ -255,6 +410,8 @@ $ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "htt
 #1 [internal] load git source https://github.com/tonistiigi/buildx.git#remote-test
 #1 0.429 577303add004dd7efeb13434d69ea030d35f7888       refs/heads/remote-test
 #1 CACHED
+```
+```json
 {
   "target": {
     "default": {
@@ -268,6 +425,8 @@ $ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "htt
 
 ```console
 $ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "https://github.com/docker/cli.git#v20.10.11"
+```
+```text
 ...
  > [4/4] RUN ls -l && stop:
 #8 0.136 drwxrwxrwx    5 root     root          4096 Jul 27 18:31 kubernetes
