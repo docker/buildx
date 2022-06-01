@@ -14,7 +14,7 @@ debug = true
   mirrors = ["mirror.gcr.io"]
 ```
 
-> **Notes**
+> **Note**
 >
 > `debug = true` has been added to be able to debug requests
 > in the BuildKit daemon and see if the mirror is effectively used.

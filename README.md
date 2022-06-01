@@ -32,14 +32,16 @@ Key features:
   - [Building with buildx](#building-with-buildx)
   - [Working with builder instances](#working-with-builder-instances)
   - [Building multi-platform images](#building-multi-platform-images)
-  - [High-level build options](#high-level-build-options)
 - [Guides](docs/guides)
+  - [High-level build options with Bake](docs/guides/bake/index.md)
   - [CI/CD](docs/guides/cicd.md)
   - [CNI networking](docs/guides/cni-networking.md)
-  - [Registry mirror](docs/guides/registry-mirror.md)
-  - [Resource limiting](docs/guides/resource-limiting.md)
   - [Using a custom network](docs/guides/custom-network.md)
   - [Using a custom registry configuration](docs/guides/custom-registry-config.md)
+  - [OpenTelemetry support](docs/guides/opentelemetry.md)
+  - [Registry mirror](docs/guides/registry-mirror.md)
+  - [Remote builder](docs/guides/remote-builder.md)
+  - [Resource limiting](docs/guides/resource-limiting.md)
 - [Reference](docs/reference/buildx.md)
   - [`buildx bake`](docs/reference/buildx_bake.md)
   - [`buildx build`](docs/reference/buildx_build.md)
@@ -319,26 +321,7 @@ cross-compilation helpers for more advanced use-cases.
 
 ## High-level build options
 
-Buildx also aims to provide support for high-level build concepts that go beyond
-invoking a single build command. We want to support building all the images in
-your application together and let the users define project specific reusable
-build flows that can then be easily invoked by anyone.
-
-BuildKit efficiently handles multiple concurrent build requests and
-de-duplicating work. The build commands can be combined with general-purpose
-command runners (for example, `make`). However, these tools generally invoke
-builds in sequence  and therefore cannot leverage the full potential of BuildKit
-parallelization, or combine BuildKit’s output for the user. For this use case,
-we have added a command called [`docker buildx bake`](docs/reference/buildx_bake.md).
-
-The `bake` command supports building images from compose files, similar to
-[`docker-compose build`](https://docs.docker.com/compose/reference/build/),
-but allowing all the services to be built concurrently as part of a single
-request.
-
-There is also support for custom build rules from HCL/JSON files allowing
-better code reuse and different target groups. The design of bake is in very
-early stages and we are looking for feedback from users.
+See [`docs/guides/bake/index.md`](docs/guides/bake/index.md) for more details.
 
 # Contributing
 
