@@ -332,6 +332,7 @@ func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[st
 					return err
 				}
 				t2.Outputs = nil
+				t2.linked = true
 				m[target] = t2
 			}
 			if err := c.loadLinks(target, t2, m, o, visited); err != nil {
@@ -528,6 +529,9 @@ type Target struct {
 	NetworkMode      *string           `json:"-" hcl:"-"`
 	NoCacheFilter    []string          `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and README.
+
+	// linked is a private field to mark a target used as a linked one
+	linked bool
 }
 
 func (t *Target) normalize() {
@@ -869,6 +873,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		NoCacheFilter: t.NoCacheFilter,
 		Pull:          pull,
 		NetworkMode:   networkMode,
+		Linked:        t.linked,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)

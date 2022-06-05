@@ -2,6 +2,7 @@ package build
 
 import (
 	"bufio"
+	"bytes"
 	"context"
 	"crypto/rand"
 	"encoding/hex"
@@ -75,6 +76,9 @@ type Options struct {
 	Tags          []string
 	Target        string
 	Ulimits       *opts.UlimitOpt
+
+	// Linked marks this target as exclusively linked (not requested by the user).
+	Linked bool
 }
 
 type Inputs struct {
@@ -630,11 +634,21 @@ func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, do
 	}
 
 	if noMobyDriver != nil && !noDefaultLoad() {
-		for _, opt := range opt {
-			if len(opt.Exports) == 0 {
-				logrus.Warnf("No output specified for %s driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", noMobyDriver.Factory().Name())
-				break
+		var noOutputTargets []string
+		for name, opt := range opt {
+			if !opt.Linked && len(opt.Exports) == 0 {
+				noOutputTargets = append(noOutputTargets, name)
 			}
+		}
+		if len(noOutputTargets) > 0 {
+			var warnNoOutputBuf bytes.Buffer
+			warnNoOutputBuf.WriteString("No output specified ")
+			if len(noOutputTargets) == 1 && noOutputTargets[0] == "default" {
+				warnNoOutputBuf.WriteString(fmt.Sprintf("with %s driver", noMobyDriver.Factory().Name()))
+			} else {
+				warnNoOutputBuf.WriteString(fmt.Sprintf("for %s target(s) with %s driver", strings.Join(noOutputTargets, ", "), noMobyDriver.Factory().Name()))
+			}
+			logrus.Warnf("%s. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", warnNoOutputBuf.String())
 		}
 	}
 
