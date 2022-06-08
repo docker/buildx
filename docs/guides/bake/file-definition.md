@@ -17,6 +17,9 @@ order:
 
 ## Specification
 
+Inside a bake file you can declare group, target and variable blocks to define
+project specific reusable build flows.
+
 ### Target
 
 A target reflects a single docker build invocation with the same options that
