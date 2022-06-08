@@ -1,17 +1,7 @@
 ---
-title: "HCL variables and functions"
+title: "User defined HCL functions"
 keywords: build, buildx, bake, buildkit, hcl
 ---
-
-Similar to how Terraform provides a way to [define variables](https://www.terraform.io/docs/configuration/variables.html#declaring-an-input-variable),
-the HCL file format also supports variable block definitions. These can be used
-to define variables with values provided by the current environment, or a
-default value when unset.
-
-A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hclparser/stdlib.go)
-provided by [go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib)
-are available for use in HCL files. In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/main/ext/userfunc)
-are also supported.
 
 ## Using interpolation to tag an image with the git sha
 
@@ -291,66 +281,6 @@ $ docker buildx bake --print webapp
 }
 ```
 
-## Using variables in variables across files
-
-When multiple files are specified, one file can use variables defined in
-another file.
-
-```hcl
-# docker-bake1.hcl
-variable "FOO" {
-  default = upper("${BASE}def")
-}
-
-variable "BAR" {
-  default = "-${FOO}-"
-}
-
-target "app" {
-  args = {
-    v1 = "pre-${BAR}"
-  }
-}
-```
-
-```hcl
-# docker-bake2.hcl
-variable "BASE" {
-  default = "abc"
-}
-
-target "app" {
-  args = {
-    v2 = "${FOO}-post"
-  }
-}
-```
-
-```console
-$ docker buildx bake -f docker-bake1.hcl -f docker-bake2.hcl --print app
-```
-```json
-{
-  "group": {
-    "default": {
-      "targets": [
-        "app"
-      ]
-    }
-  },
-  "target": {
-    "app": {
-      "context": ".",
-      "dockerfile": "Dockerfile",
-      "args": {
-        "v1": "pre--ABCDEF-",
-        "v2": "ABCDEF-post"
-      }
-    }
-  }
-}
-```
-
 ## Using typed variables
 
 Non-string variables are also accepted. The value passed with env is parsed
@@ -398,10 +328,3 @@ $ docker buildx bake --print app
   }
 }
 ```
-
-## Built-in variables
-
-* `BAKE_CMD_CONTEXT` can be used to access the main `context` for bake command
-  from a bake file that has been [imported remotely](file-definition.md#remote-definition).
-* `BAKE_LOCAL_PLATFORM` returns the current platform's default platform
-  specification (e.g. `linux/amd64`).

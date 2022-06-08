@@ -34,6 +34,6 @@ and also allows better code reuse, different target groups and extended features
 
 * [File definition](file-definition.md)
 * [Configuring builds](configuring-build.md)
-* [HCL variables and functions](hcl-vars-funcs.md)
+* [User defined HCL functions](hcl-funcs.md)
 * [Defining additional build contexts and linking targets](build-contexts.md)
 * [Extension field with Compose](compose-xbake.md)

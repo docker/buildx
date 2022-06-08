@@ -4,9 +4,9 @@ keywords: build, buildx, bake, buildkit, hcl, json, compose
 ---
 
 `buildx bake` supports HCL, JSON and Compose file format for defining build
-groups, targets as well as [variables and functions](hcl-vars-funcs.md). It
-looks for build definition files in the current directory in the following
-order:
+[groups](#group), [targets](#target) as well as [variables](#variable) and
+[functions](#functions). It looks for build definition files in the current
+directory in the following order:
 
 * `docker-compose.yml`
 * `docker-compose.yaml`
@@ -87,7 +87,9 @@ $ docker buildx bake build
 
 ### Variable
 
-You can define variables with values provided by the current environment, or a
+Similar to how Terraform provides a way to [define variables](https://www.terraform.io/docs/configuration/variables.html#declaring-an-input-variable),
+the HCL file format also supports variable block definitions. These can be used
+to define variables with values provided by the current environment, or a
 default value when unset:
 
 ```hcl
@@ -112,7 +114,9 @@ $ TAG=dev docker buildx bake webapp-dev  # will use the TAG environment variable
 
 ### Functions
 
-A set of generally useful functions are available for use in HCL files:
+A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hclparser/stdlib.go)
+provided by [go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib)
+are available for use in HCL files:
 
 ```hcl
 # docker-bake.hcl
@@ -125,7 +129,8 @@ target "webapp-dev" {
 }
 ```
 
-User defined functions are also supported:
+In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/main/ext/userfunc)
+are also supported:
 
 ```hcl
 # docker-bake.hcl
@@ -145,7 +150,14 @@ target "webapp-dev" {
 
 > **Note**
 >
-> See [HCL variables and functions](hcl-vars-funcs.md) page for more details.
+> See [User defined HCL functions](hcl-funcs.md) page for more details.
+
+## Built-in variables
+
+* `BAKE_CMD_CONTEXT` can be used to access the main `context` for bake command
+  from a bake file that has been [imported remotely](file-definition.md#remote-definition).
+* `BAKE_LOCAL_PLATFORM` returns the current platform's default platform
+  specification (e.g. `linux/amd64`).
 
 ## Merging and inheritance
 
@@ -363,7 +375,7 @@ As you can see the context is fixed to `https://github.com/docker/cli.git` even 
 in the definition.
 
 If you want to access the main context for bake command from a bake file
-that has been imported remotely, you can use the [`BAKE_CMD_CONTEXT` built-in var](hcl-vars-funcs.md#built-in-variables).
+that has been imported remotely, you can use the [`BAKE_CMD_CONTEXT` built-in var](#built-in-variables).
 
 ```console
 $ cat https://raw.githubusercontent.com/tonistiigi/buildx/remote-test/docker-bake.hcl
