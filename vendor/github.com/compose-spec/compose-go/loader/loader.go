@@ -24,7 +24,6 @@ import (
 	"path/filepath"
 	"reflect"
 	"regexp"
-	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -70,7 +69,7 @@ type Options struct {
 }
 
 func (o *Options) SetProjectName(name string, imperativelySet bool) {
-	o.projectName = normalizeProjectName(name)
+	o.projectName = NormalizeProjectName(name)
 	o.projectNameImperativelySet = imperativelySet
 }
 
@@ -209,7 +208,7 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 	}
 
 	projectName, projectNameImperativelySet := opts.GetProjectName()
-	model.Name = normalizeProjectName(model.Name)
+	model.Name = NormalizeProjectName(model.Name)
 	if !projectNameImperativelySet && model.Name != "" {
 		projectName = model.Name
 	}
@@ -246,7 +245,7 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 	return project, nil
 }
 
-func normalizeProjectName(s string) string {
+func NormalizeProjectName(s string) string {
 	r := regexp.MustCompile("[a-z0-9_-]")
 	s = strings.ToLower(s)
 	s = strings.Join(r.FindAllString(s, -1), "")
@@ -385,7 +384,7 @@ func createTransformHook(additionalTransformers ...Transformer) mapstructure.Dec
 		reflect.TypeOf(types.MappingWithEquals{}):                transformMappingOrListFunc("=", true),
 		reflect.TypeOf(types.Labels{}):                           transformMappingOrListFunc("=", false),
 		reflect.TypeOf(types.MappingWithColon{}):                 transformMappingOrListFunc(":", false),
-		reflect.TypeOf(types.HostsList{}):                        transformListOrMappingFunc(":", false),
+		reflect.TypeOf(types.HostsList{}):                        transformMappingOrListFunc(":", false),
 		reflect.TypeOf(types.ServiceVolumeConfig{}):              transformServiceVolumeConfig,
 		reflect.TypeOf(types.BuildConfig{}):                      transformBuildConfig,
 		reflect.TypeOf(types.Duration(0)):                        transformStringToDuration,
@@ -571,18 +570,18 @@ func LoadService(name string, serviceDict map[string]interface{}, workingDir str
 		if volume.Type != types.VolumeTypeBind {
 			continue
 		}
-
 		if volume.Source == "" {
 			return nil, errors.New(`invalid mount config for type "bind": field Source must not be empty`)
 		}
 
-		if resolvePaths {
-			serviceConfig.Volumes[i] = resolveVolumePath(volume, workingDir, lookupEnv)
+		if resolvePaths || convertPaths {
+			volume = resolveVolumePath(volume, workingDir, lookupEnv)
 		}
 
 		if convertPaths {
-			serviceConfig.Volumes[i] = convertVolumePath(volume)
+			volume = convertVolumePath(volume)
 		}
+		serviceConfig.Volumes[i] = volume
 	}
 
 	return serviceConfig, nil
@@ -805,7 +804,7 @@ func loadFileObjectConfig(name string, objType string, obj types.FileObjectConfi
 			return obj, errors.Errorf("%[1]s %[2]s: %[1]s.driver and %[1]s.file conflict; only use %[1]s.driver", objType, name)
 		}
 	default:
-		if resolvePaths {
+		if obj.File != "" && resolvePaths {
 			obj.File = absPath(details.WorkingDir, obj.File)
 		}
 	}
@@ -1060,22 +1059,6 @@ func transformMappingOrListFunc(sep string, allowNil bool) TransformerFunc {
 	}
 }
 
-func transformListOrMappingFunc(sep string, allowNil bool) TransformerFunc {
-	return func(data interface{}) (interface{}, error) {
-		return transformListOrMapping(data, sep, allowNil)
-	}
-}
-
-func transformListOrMapping(listOrMapping interface{}, sep string, allowNil bool) (interface{}, error) {
-	switch value := listOrMapping.(type) {
-	case map[string]interface{}:
-		return toStringList(value, sep, allowNil), nil
-	case []interface{}:
-		return listOrMapping, nil
-	}
-	return nil, errors.Errorf("expected a map or a list, got %T: %#v", listOrMapping, listOrMapping)
-}
-
 func transformMappingOrList(mappingOrList interface{}, sep string, allowNil bool) (interface{}, error) {
 	switch value := mappingOrList.(type) {
 	case map[string]interface{}:
@@ -1167,16 +1150,4 @@ func toString(value interface{}, allowNil bool) interface{} {
 	default:
 		return ""
 	}
-}
-
-func toStringList(value map[string]interface{}, separator string, allowNil bool) []string {
-	var output []string
-	for key, value := range value {
-		if value == nil && !allowNil {
-			continue
-		}
-		output = append(output, fmt.Sprintf("%s%s%s", key, separator, value))
-	}
-	sort.Strings(output)
-	return output
 }

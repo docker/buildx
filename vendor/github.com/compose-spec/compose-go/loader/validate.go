@@ -68,5 +68,15 @@ func checkConsistency(project *types.Project) error {
 			}
 		}
 	}
+
+	for name, secret := range project.Secrets {
+		if secret.External.External {
+			continue
+		}
+		if secret.File == "" && secret.Environment == "" {
+			return errors.Wrap(errdefs.ErrInvalid, fmt.Sprintf("secret %q must declare either `file` or `environment`", name))
+		}
+	}
+
 	return nil
 }

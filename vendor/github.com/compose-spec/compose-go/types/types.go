@@ -305,6 +305,7 @@ type BuildConfig struct {
 	Network    string                `yaml:",omitempty" json:"network,omitempty"`
 	Target     string                `yaml:",omitempty" json:"target,omitempty"`
 	Secrets    []ServiceSecretConfig `yaml:",omitempty" json:"secrets,omitempty"`
+	Tags       StringList            `mapstructure:"tags" yaml:"tags,omitempty" json:"tags,omitempty"`
 
 	Extensions map[string]interface{} `yaml:",inline" json:"-"`
 }
@@ -468,7 +469,16 @@ func (s SSHKey) MarshalJSON() ([]byte, error) {
 type MappingWithColon map[string]string
 
 // HostsList is a list of colon-separated host-ip mappings
-type HostsList []string
+type HostsList map[string]string
+
+// AsList return host-ip mappings as a list of colon-separated strings
+func (h HostsList) AsList() []string {
+	l := make([]string, 0, len(h))
+	for k, v := range h {
+		l = append(l, fmt.Sprintf("%s:%s", k, v))
+	}
+	return l
+}
 
 // LoggingConfig the logging configuration for a service
 type LoggingConfig struct {
@@ -881,6 +891,7 @@ type CredentialSpecConfig struct {
 type FileObjectConfig struct {
 	Name           string                 `yaml:",omitempty" json:"name,omitempty"`
 	File           string                 `yaml:",omitempty" json:"file,omitempty"`
+	Environment    string                 `yaml:",omitempty" json:"environment,omitempty"`
 	External       External               `yaml:",omitempty" json:"external,omitempty"`
 	Labels         Labels                 `yaml:",omitempty" json:"labels,omitempty"`
 	Driver         string                 `yaml:",omitempty" json:"driver,omitempty"`
