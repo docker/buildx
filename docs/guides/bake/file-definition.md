@@ -295,19 +295,10 @@ target "db" {
 ```yaml
 # docker-compose.yml
 services:
-  webapp-dev: &dev
+  webapp:
+    image: docker.io/username/webapp:latest
     build:
       dockerfile: Dockerfile.webapp
-      tags:
-        - docker.io/username/webapp:latest
-
-  webapp-release:
-    <<: *dev
-    build:
-      x-bake:
-        platforms:
-          - linux/amd64
-          - linux/arm64
 
   db:
     image: docker.io/username/db
@@ -315,18 +306,9 @@ services:
       dockerfile: Dockerfile.db
 ```
 
-> **Limitations**
+> **Note**
 >
-> Bake uses the [compose-spec](https://docs.docker.com/compose/compose-file/) to
-> parse a compose file. Some fields are not (yet) available, but you can use
-> the [special extension field `x-bake`](compose-xbake.md).
->
-> `inherits` service field is also not supported. Use [YAML anchors](https://docs.docker.com/compose/compose-file/#fragments)
-> to reference other services.
->
-> Specifying variables or global scope attributes is not yet supported for
-> compose files.
-{: .warning }
+> See [Building from Compose file](compose-file.md) page for more details.
 
 ## Remote definition
 
