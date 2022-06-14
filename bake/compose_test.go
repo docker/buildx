@@ -24,10 +24,11 @@ services:
       args:
         buildno: 123
       secrets:
-        - ENV_TOKEN
+        - token
         - aws
 secrets:
-  ENV_TOKEN: {}
+  token:
+    environment: ENV_TOKEN
   aws:
     file: /root/.aws/credentials
 `)
@@ -54,7 +55,7 @@ secrets:
 	require.Equal(t, "123", c.Targets[1].Args["buildno"])
 	require.Equal(t, "none", *c.Targets[1].NetworkMode)
 	require.Equal(t, []string{
-		"id=ENV_TOKEN",
+		"id=token,env=ENV_TOKEN",
 		"id=aws,src=/root/.aws/credentials",
 	}, c.Targets[1].Secrets)
 }

@@ -235,6 +235,9 @@ func composeToBuildkitSecret(inp compose.ServiceSecretConfig, psecret compose.Se
 	if psecret.File != "" {
 		bkattrs = append(bkattrs, "src="+psecret.File)
 	}
+	if psecret.Environment != "" {
+		bkattrs = append(bkattrs, "env="+psecret.Environment)
+	}
 
 	return strings.Join(bkattrs, ","), nil
 }
