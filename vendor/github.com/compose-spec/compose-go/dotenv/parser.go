@@ -18,6 +18,9 @@ const (
 
 func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 	cutset := src
+	if lookupFn == nil {
+		lookupFn = noLookupFn
+	}
 	for {
 		cutset = getStatementStart(cutset)
 		if cutset == nil {
@@ -34,9 +37,6 @@ func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 		}
 
 		if inherited {
-			if lookupFn == nil {
-				lookupFn = noLookupFn
-			}
 
 			value, ok := lookupFn(key)
 			if ok {
@@ -49,6 +49,9 @@ func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 		value, left, err := extractVarValue(left, out, lookupFn)
 		if err != nil {
 			return err
+		}
+		if lookUpValue, ok := lookupFn(key); ok {
+			value = lookUpValue
 		}
 
 		out[key] = value

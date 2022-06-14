@@ -22,6 +22,9 @@ services:
           uid: '103'
           gid: '103'
           mode: 0440
+      tags:
+        - foo:v1.0.0
+        - docker.io/username/foo:my-other-tag
 
 
     cap_add:
@@ -402,6 +405,7 @@ configs:
     external: true
   config4:
     name: foo
+    file: ~/config_data
     x-bar: baz
     x-foo: bar
 
@@ -417,6 +421,7 @@ secrets:
     external: true
   secret4:
     name: bar
+    environment: BAR
     x-bar: baz
     x-foo: bar
 x-bar: baz
