@@ -755,3 +755,30 @@ func TestEmptyVariableJSON(t *testing.T) {
 	_, err := ParseFile(dt, "docker-bake.json")
 	require.NoError(t, err)
 }
+
+func TestFunctionNoParams(t *testing.T) {
+	dt := []byte(`
+		function "foo" {
+			result = "bar"
+		}
+		target "foo_target" {
+			args = {
+				test = foo()
+			}
+		}
+		`)
+
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+}
+
+func TestFunctionNoResult(t *testing.T) {
+	dt := []byte(`
+		function "foo" {
+			params = ["a"]
+		}
+		`)
+
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+}
