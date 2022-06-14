@@ -47,6 +47,7 @@ secrets:
 	})
 	require.Equal(t, "db", c.Targets[0].Name)
 	require.Equal(t, "./db", *c.Targets[0].Context)
+	require.Equal(t, []string{"docker.io/tonistiigi/db"}, c.Targets[0].Tags)
 
 	require.Equal(t, "webapp", c.Targets[1].Name)
 	require.Equal(t, "./dir", *c.Targets[1].Context)
@@ -194,6 +195,24 @@ networks:
 	require.NoError(t, err)
 }
 
+func TestTags(t *testing.T) {
+	var dt = []byte(`
+services:
+  example:
+    image: example
+    build:
+      context: .
+      dockerfile: Dockerfile
+      tags:
+        - foo
+        - bar
+`)
+
+	c, err := ParseCompose(dt)
+	require.NoError(t, err)
+	require.Equal(t, c.Targets[0].Tags, []string{"foo", "bar"})
+}
+
 func TestDependsOnList(t *testing.T) {
 	var dt = []byte(`
 version: "3.8"
@@ -240,6 +259,8 @@ services:
       dockerfile: ./Dockerfile
       cache_from:
         - user/app:cache
+      tags:
+        - ct-addon:baz
       args:
         CT_ECR: foo
         CT_TAG: bar
@@ -279,7 +300,7 @@ services:
 		return c.Targets[i].Name < c.Targets[j].Name
 	})
 	require.Equal(t, c.Targets[0].Args, map[string]string{"CT_ECR": "foo", "CT_TAG": "bar"})
-	require.Equal(t, c.Targets[0].Tags, []string{"ct-addon:foo", "ct-addon:alp"})
+	require.Equal(t, c.Targets[0].Tags, []string{"ct-addon:baz", "ct-addon:foo", "ct-addon:alp"})
 	require.Equal(t, c.Targets[0].Platforms, []string{"linux/amd64", "linux/arm64"})
 	require.Equal(t, c.Targets[0].CacheFrom, []string{"type=local,src=path/to/cache"})
 	require.Equal(t, c.Targets[0].CacheTo, []string{"local,dest=path/to/cache"})
