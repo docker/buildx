@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
 	"sort"
 	"strings"
 	"text/tabwriter"
@@ -100,49 +99,72 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 		}
 	}
 
-	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
+	w := tabwriter.NewWriter(dockerCli.Out(), 0, 0, 1, ' ', 0)
 	fmt.Fprintf(w, "NAME/NODE\tDRIVER/ENDPOINT\tSTATUS\tBUILDKIT\tPLATFORMS\n")
 
 	currentSet := false
+	printErr := false
 	for _, b := range builders {
 		if !currentSet && b.ng.Name == currentName {
 			b.ng.Name += " *"
 			currentSet = true
 		}
-		printngi(w, b)
+		if ok := printngi(w, b); !ok {
+			printErr = true
+		}
 	}
 
 	w.Flush()
 
+	if printErr {
+		_, _ = fmt.Fprintf(dockerCli.Err(), "\n")
+		for _, b := range builders {
+			if b.err != nil {
+				_, _ = fmt.Fprintf(dockerCli.Err(), "Cannot load builder %s: %s\n", b.ng.Name, strings.TrimSpace(b.err.Error()))
+			} else {
+				for idx, n := range b.ng.Nodes {
+					d := b.drivers[idx]
+					var nodeErr string
+					if d.err != nil {
+						nodeErr = d.err.Error()
+					} else if d.di.Err != nil {
+						nodeErr = d.di.Err.Error()
+					}
+					if nodeErr != "" {
+						_, _ = fmt.Fprintf(dockerCli.Err(), "Failed to get status for %s (%s): %s\n", b.ng.Name, n.Name, strings.TrimSpace(nodeErr))
+					}
+				}
+			}
+		}
+	}
+
 	return nil
 }
 
-func printngi(w io.Writer, ngi *nginfo) {
+func printngi(w io.Writer, ngi *nginfo) (ok bool) {
+	ok = true
 	var err string
 	if ngi.err != nil {
-		err = ngi.err.Error()
+		ok = false
+		err = "error"
 	}
 	fmt.Fprintf(w, "%s\t%s\t%s\t\t\n", ngi.ng.Name, ngi.ng.Driver, err)
 	if ngi.err == nil {
 		for idx, n := range ngi.ng.Nodes {
 			d := ngi.drivers[idx]
-			var err string
-			if d.err != nil {
-				err = d.err.Error()
-			} else if d.di.Err != nil {
-				err = d.di.Err.Error()
-			}
 			var status string
 			if d.info != nil {
 				status = d.info.Status.String()
 			}
-			if err != "" {
-				fmt.Fprintf(w, "  %s\t%s\t%s\n", n.Name, n.Endpoint, err)
+			if d.err != nil || d.di.Err != nil {
+				ok = false
+				fmt.Fprintf(w, "  %s\t%s\t%s\t\t\n", n.Name, n.Endpoint, "error")
 			} else {
 				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, d.version, strings.Join(platformutil.FormatInGroups(n.Platforms, d.platforms), ", "))
 			}
 		}
 	}
+	return
 }
 
 func lsCmd(dockerCli command.Cli) *cobra.Command {
