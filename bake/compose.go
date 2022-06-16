@@ -9,6 +9,7 @@ import (
 	"github.com/compose-spec/compose-go/loader"
 	compose "github.com/compose-spec/compose-go/types"
 	"github.com/pkg/errors"
+	"gopkg.in/yaml.v3"
 )
 
 func parseCompose(dt []byte) (*compose.Project, error) {
@@ -135,90 +136,86 @@ func flatten(in compose.MappingWithEquals) compose.Mapping {
 	return out
 }
 
+// xbake Compose build extension provides fields not (yet) available in
+// Compose build specification: https://github.com/compose-spec/compose-spec/blob/master/build.md
+type xbake struct {
+	Tags          stringArray `yaml:"tags,omitempty"`
+	CacheFrom     stringArray `yaml:"cache-from,omitempty"`
+	CacheTo       stringArray `yaml:"cache-to,omitempty"`
+	Secrets       stringArray `yaml:"secret,omitempty"`
+	SSH           stringArray `yaml:"ssh,omitempty"`
+	Platforms     stringArray `yaml:"platforms,omitempty"`
+	Outputs       stringArray `yaml:"output,omitempty"`
+	Pull          *bool       `yaml:"pull,omitempty"`
+	NoCache       *bool       `yaml:"no-cache,omitempty"`
+	NoCacheFilter stringArray `yaml:"no-cache-filter,omitempty"`
+	// don't forget to update documentation if you add a new field:
+	// docs/guides/bake/compose-file.md#extension-field-with-x-bake
+}
+
+type stringArray []string
+
+func (sa *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
+	var multi []string
+	err := unmarshal(&multi)
+	if err != nil {
+		var single string
+		if err := unmarshal(&single); err != nil {
+			return err
+		}
+		*sa = strings.Fields(single)
+	} else {
+		*sa = multi
+	}
+	return nil
+}
+
 // composeExtTarget converts Compose build extension x-bake to bake Target
 // https://github.com/compose-spec/compose-spec/blob/master/spec.md#extension
 func (t *Target) composeExtTarget(exts map[string]interface{}) error {
-	if ext, ok := exts["x-bake"]; ok {
-		for key, val := range ext.(map[string]interface{}) {
-			switch key {
-			case "tags":
-				if res, k := val.(string); k {
-					t.Tags = append(t.Tags, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.Tags = append(t.Tags, res.(string))
-					}
-				}
-			case "cache-from":
-				t.CacheFrom = []string{} // Needed to override the main field
-				if res, k := val.(string); k {
-					t.CacheFrom = append(t.CacheFrom, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.CacheFrom = append(t.CacheFrom, res.(string))
-					}
-				}
-			case "cache-to":
-				if res, k := val.(string); k {
-					t.CacheTo = append(t.CacheTo, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.CacheTo = append(t.CacheTo, res.(string))
-					}
-				}
-			case "secret":
-				if res, k := val.(string); k {
-					t.Secrets = append(t.Secrets, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.Secrets = append(t.Secrets, res.(string))
-					}
-				}
-			case "ssh":
-				if res, k := val.(string); k {
-					t.SSH = append(t.SSH, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.SSH = append(t.SSH, res.(string))
-					}
-				}
-			case "platforms":
-				if res, k := val.(string); k {
-					t.Platforms = append(t.Platforms, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.Platforms = append(t.Platforms, res.(string))
-					}
-				}
-			case "output":
-				if res, k := val.(string); k {
-					t.Outputs = append(t.Outputs, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.Outputs = append(t.Outputs, res.(string))
-					}
-				}
-			case "pull":
-				if res, ok := val.(bool); ok {
-					t.Pull = &res
-				}
-			case "no-cache":
-				if res, ok := val.(bool); ok {
-					t.NoCache = &res
-				}
-			case "no-cache-filter":
-				if res, k := val.(string); k {
-					t.NoCacheFilter = append(t.NoCacheFilter, res)
-				} else {
-					for _, res := range val.([]interface{}) {
-						t.NoCacheFilter = append(t.NoCacheFilter, res.(string))
-					}
-				}
-			default:
-				return fmt.Errorf("compose file invalid: unkwown %s field for x-bake", key)
-			}
-		}
+	var xb xbake
+
+	ext, ok := exts["x-bake"]
+	if !ok || ext == nil {
+		return nil
 	}
+
+	yb, _ := yaml.Marshal(ext)
+	if err := yaml.Unmarshal(yb, &xb); err != nil {
+		return err
+	}
+
+	if len(xb.Tags) > 0 {
+		t.Tags = append(t.Tags, xb.Tags...)
+	}
+	if len(xb.CacheFrom) > 0 {
+		t.CacheFrom = xb.CacheFrom // override main field
+	}
+	if len(xb.CacheTo) > 0 {
+		t.CacheTo = append(t.CacheTo, xb.CacheTo...)
+	}
+	if len(xb.Secrets) > 0 {
+		t.Secrets = append(t.Secrets, xb.Secrets...)
+	}
+	if len(xb.SSH) > 0 {
+		t.SSH = append(t.SSH, xb.SSH...)
+	}
+	if len(xb.Platforms) > 0 {
+		t.Platforms = append(t.Platforms, xb.Platforms...)
+	}
+	if len(xb.Outputs) > 0 {
+		t.Outputs = append(t.Outputs, xb.Outputs...)
+	}
+	if xb.Pull != nil {
+		t.Pull = xb.Pull
+	}
+	if xb.NoCache != nil {
+		t.NoCache = xb.NoCache
+	}
+	if len(xb.NoCacheFilter) > 0 {
+		t.NoCacheFilter = append(t.NoCacheFilter, xb.NoCacheFilter...)
+	}
+
 	return nil
 }
 

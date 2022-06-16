@@ -273,7 +273,7 @@ services:
           - linux/arm64
         cache-from:
           - type=local,src=path/to/cache
-        cache-to: local,dest=path/to/cache
+        cache-to: type=local,dest=path/to/cache
         pull: true
 
   aws:
@@ -303,7 +303,7 @@ services:
 	require.Equal(t, c.Targets[0].Tags, []string{"ct-addon:baz", "ct-addon:foo", "ct-addon:alp"})
 	require.Equal(t, c.Targets[0].Platforms, []string{"linux/amd64", "linux/arm64"})
 	require.Equal(t, c.Targets[0].CacheFrom, []string{"type=local,src=path/to/cache"})
-	require.Equal(t, c.Targets[0].CacheTo, []string{"local,dest=path/to/cache"})
+	require.Equal(t, c.Targets[0].CacheTo, []string{"type=local,dest=path/to/cache"})
 	require.Equal(t, c.Targets[0].Pull, newBool(true))
 	require.Equal(t, c.Targets[1].Tags, []string{"ct-fake-aws:bar"})
 	require.Equal(t, c.Targets[1].Secrets, []string{"id=mysecret,src=/local/secret", "id=mysecret2,src=/local/secret2"})
