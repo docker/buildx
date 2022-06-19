@@ -106,7 +106,7 @@ More built-in build args can be found in [dockerfile frontend docs](https://gith
 Define additional build context with specified contents. In Dockerfile the context can be accessed when `FROM name` or `--from=name` is used.
 When Dockerfile defines a stage with the same name it is overwritten.
 
-The value can be a local source directory, container image (with docker-image:// prefix), Git or HTTP URL.
+The value can be a local source directory, [local OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md), container image (with docker-image:// prefix), Git or HTTP URL.
 
 Replace `alpine:latest` with a pinned one:
 
@@ -125,6 +125,32 @@ $ docker buildx build --build-context project=path/to/project/source .
 FROM alpine
 COPY --from=project myfile /
 ```
+
+#### <a name="source-oci-layout"></a> Source image from OCI layout directory
+
+Source an image from a local [OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md):
+
+```console
+$ docker buildx build --build-context foo=oci-layout:///path/to/local/layout@sha256:abcd12345 .
+```
+
+```Dockerfile
+FROM alpine
+RUN apk add git
+
+COPY --from=foo myfile /
+
+FROM foo
+```
+
+The OCI layout directory must be compliant with the [OCI layout specification](https://github.com/opencontainers/image-spec/blob/main/image-layout.md). It looks _solely_ for hashes. It does not
+do any form of `image:tag` resolution to find the hash of the manifest; that is up to you.
+
+The format of the `--build-context` must be: `<context>=oci-layout://<path-to-local-layout>@sha256:<hash-of-manifest>`, where:
+
+* `context` is the name of the build context as used in the `Dockerfile`.
+* `path-to-local-layout` is the path on the local machine, where you are running `docker build`, to the spec-compliant OCI layout.
+* `hash-of-manifest` is the hash of the manifest for the image. It can be a single-architecture manifest or a multi-architecture index.
 
 ### <a name="builder"></a> Override the configured builder instance (--builder)
 

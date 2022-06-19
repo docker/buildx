@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	_ "crypto/sha256" // ensure digests can be computed
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -17,6 +18,8 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containerd/containerd/content"
+	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/driver"
@@ -1331,6 +1334,32 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 
 		if urlutil.IsGitURL(v.Path) || urlutil.IsURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
 			target.FrontendAttrs["context:"+k] = v.Path
+			continue
+		}
+
+		// handle OCI layout
+		if strings.HasPrefix(v.Path, "oci-layout://") {
+			pathAlone := strings.TrimPrefix(v.Path, "oci-layout://")
+			parts := strings.SplitN(pathAlone, "@", 2)
+			if len(parts) != 2 {
+				return nil, errors.Errorf("invalid oci-layout context %s, must be oci-layout:///path/to/layout@sha256:hash", v.Path)
+			}
+			localPath := parts[0]
+			dgst, err := digest.Parse(parts[1])
+			if err != nil {
+				return nil, errors.Wrapf(err, "invalid oci-layout context %s, does not have proper hash, must be oci-layout:///path/to/layout@sha256:hash", v.Path)
+			}
+			store, err := local.NewStore(localPath)
+			if err != nil {
+				return nil, errors.Wrapf(err, "invalid store at %s", localPath)
+			}
+			// now we can add it
+			if target.OCIStores == nil {
+				target.OCIStores = map[string]content.Store{}
+			}
+			target.OCIStores[k] = store
+
+			target.FrontendAttrs["context:"+k] = fmt.Sprintf("oci-layout:%s@%s", k, dgst.String())
 			continue
 		}
 		st, err := os.Stat(v.Path)
