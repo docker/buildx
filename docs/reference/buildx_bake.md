@@ -34,7 +34,7 @@ Build from a file
 Bake is a high-level build command. Each specified target will run in parallel
 as part of the build.
 
-Read [High-level build options with Bake](https://docs.docker.com/build/bake/)
+Read [High-level build options with Bake](https://github.com/docker/buildx#high-level-build-options)
 guide for introduction to writing bake files.
 
 > **Note**
