@@ -111,6 +111,13 @@ func (p *parser) resolveFunction(name string) error {
 	}
 	p.progressF[name] = struct{}{}
 
+	if f.Result == nil {
+		return errors.Errorf("empty result not allowed for %s", name)
+	}
+	if f.Params == nil {
+		return errors.Errorf("empty params not allowed for %s", name)
+	}
+
 	paramExprs, paramsDiags := hcl.ExprList(f.Params.Expr)
 	if paramsDiags.HasErrors() {
 		return paramsDiags
@@ -306,7 +313,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		return diags
 	}
 
-	_, b, diags = b.PartialContent(defsSchema)
+	blocks, b, diags := b.PartialContent(defsSchema)
 	if diags.HasErrors() {
 		return diags
 	}
@@ -370,13 +377,27 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 			if diags, ok := err.(hcl.Diagnostics); ok {
 				return diags
 			}
+			var subject *hcl.Range
+			var context *hcl.Range
+			if p.funcs[k].Params != nil {
+				subject = &p.funcs[k].Params.Range
+				context = subject
+			} else {
+				for _, block := range blocks.Blocks {
+					if block.Type == "function" && len(block.Labels) == 1 && block.Labels[0] == k {
+						subject = &block.LabelRanges[0]
+						context = &block.DefRange
+						break
+					}
+				}
+			}
 			return hcl.Diagnostics{
 				&hcl.Diagnostic{
 					Severity: hcl.DiagError,
 					Summary:  "Invalid function",
 					Detail:   err.Error(),
-					Subject:  &p.funcs[k].Params.Range,
-					Context:  &p.funcs[k].Params.Range,
+					Subject:  subject,
+					Context:  context,
 				},
 			}
 		}
