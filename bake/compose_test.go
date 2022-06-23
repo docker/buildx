@@ -153,21 +153,15 @@ services:
 	require.Equal(t, c.Targets[0].Args["BRB"], "FOO")
 }
 
-func TestBogusCompose(t *testing.T) {
+func TestInconsistentComposeFile(t *testing.T) {
 	var dt = []byte(`
 services:
-  db:
-    labels:
-      - "foo"
   webapp:
-    build:
-      context: .
-      target: webapp
+    entrypoint: echo 1
 `)
 
 	_, err := ParseCompose(dt)
-	require.Error(t, err)
-	require.Contains(t, err.Error(), "has neither an image nor a build context specified: invalid compose project")
+	require.NoError(t, err)
 }
 
 func TestAdvancedNetwork(t *testing.T) {
@@ -412,6 +406,72 @@ services:
     build:
       context: .
 `))
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateComposeSecret(t *testing.T) {
+	cases := []struct {
+		name    string
+		dt      []byte
+		wantErr bool
+	}{
+		{
+			name: "secret set by file",
+			dt: []byte(`
+secrets:
+  foo:
+    file: .secret
+`),
+			wantErr: false,
+		},
+		{
+			name: "secret set by environment",
+			dt: []byte(`
+secrets:
+  foo:
+    environment: TOKEN
+`),
+			wantErr: false,
+		},
+		{
+			name: "external secret",
+			dt: []byte(`
+secrets:
+  foo:
+    external: true
+`),
+			wantErr: false,
+		},
+		{
+			name: "unset secret",
+			dt: []byte(`
+secrets:
+  foo: {}
+`),
+			wantErr: true,
+		},
+		{
+			name: "undefined secret",
+			dt: []byte(`
+services:
+  foo:
+    build:
+      secrets:
+        - token
+`),
+			wantErr: true,
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			_, err := ParseCompose(tt.dt)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
