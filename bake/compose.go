@@ -190,7 +190,7 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.Tags = append(t.Tags, xb.Tags...)
 	}
 	if len(xb.CacheFrom) > 0 {
-		t.CacheFrom = xb.CacheFrom // override main field
+		t.CacheFrom = append(t.CacheFrom, xb.CacheFrom...)
 	}
 	if len(xb.CacheTo) > 0 {
 		t.CacheTo = append(t.CacheTo, xb.CacheTo...)

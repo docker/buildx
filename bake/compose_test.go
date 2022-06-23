@@ -305,7 +305,7 @@ services:
 	require.Equal(t, c.Targets[0].Args, map[string]string{"CT_ECR": "foo", "CT_TAG": "bar"})
 	require.Equal(t, c.Targets[0].Tags, []string{"ct-addon:baz", "ct-addon:foo", "ct-addon:alp"})
 	require.Equal(t, c.Targets[0].Platforms, []string{"linux/amd64", "linux/arm64"})
-	require.Equal(t, c.Targets[0].CacheFrom, []string{"type=local,src=path/to/cache"})
+	require.Equal(t, c.Targets[0].CacheFrom, []string{"user/app:cache", "type=local,src=path/to/cache"})
 	require.Equal(t, c.Targets[0].CacheTo, []string{"user/app:cache", "type=local,dest=path/to/cache"})
 	require.Equal(t, c.Targets[0].Pull, newBool(true))
 	require.Equal(t, c.Targets[1].Tags, []string{"ct-fake-aws:bar"})
