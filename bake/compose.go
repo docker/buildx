@@ -3,7 +3,6 @@ package bake
 import (
 	"fmt"
 	"os"
-	"reflect"
 	"strings"
 
 	"github.com/compose-spec/compose-go/loader"
@@ -11,6 +10,9 @@ import (
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
+
+// errComposeInvalid is returned when a compose file is invalid
+var errComposeInvalid = errors.New("invalid compose file")
 
 func parseCompose(dt []byte) (*compose.Project, error) {
 	return loader.Load(compose.ConfigDetails{
@@ -22,6 +24,7 @@ func parseCompose(dt []byte) (*compose.Project, error) {
 		Environment: envMap(os.Environ()),
 	}, func(options *loader.Options) {
 		options.SkipNormalization = true
+		options.SkipConsistencyCheck = true
 	})
 }
 
@@ -42,9 +45,11 @@ func ParseCompose(dt []byte) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
+	if err = composeValidate(cfg); err != nil {
+		return nil, err
+	}
 
 	var c Config
-	var zeroBuildConfig compose.BuildConfig
 	if len(cfg.Services) > 0 {
 		c.Groups = []*Group{}
 		c.Targets = []*Target{}
@@ -52,13 +57,8 @@ func ParseCompose(dt []byte) (*Config, error) {
 		g := &Group{Name: "default"}
 
 		for _, s := range cfg.Services {
-
-			if s.Build == nil || reflect.DeepEqual(s.Build, zeroBuildConfig) {
-				// if not make sure they're setting an image or it's invalid d-c.yml
-				if s.Image == "" {
-					return nil, fmt.Errorf("compose file invalid: service %s has neither an image nor a build context specified. At least one must be provided", s.Name)
-				}
-				continue
+			if s.Build == nil {
+				s.Build = &compose.BuildConfig{}
 			}
 
 			if err = validateTargetName(s.Name); err != nil {
@@ -216,6 +216,28 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.NoCacheFilter = append(t.NoCacheFilter, xb.NoCacheFilter...)
 	}
 
+	return nil
+}
+
+// compposeValidate validates a compose file
+func composeValidate(project *compose.Project) error {
+	for _, s := range project.Services {
+		if s.Build != nil {
+			for _, secret := range s.Build.Secrets {
+				if _, ok := project.Secrets[secret.Source]; !ok {
+					return errors.Wrap(errComposeInvalid, fmt.Sprintf("service %q refers to undefined build secret %s", s.Name, secret.Source))
+				}
+			}
+		}
+	}
+	for name, secret := range project.Secrets {
+		if secret.External.External {
+			continue
+		}
+		if secret.File == "" && secret.Environment == "" {
+			return errors.Wrap(errComposeInvalid, fmt.Sprintf("secret %q must declare either `file` or `environment`", name))
+		}
+	}
 	return nil
 }
 

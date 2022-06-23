@@ -278,9 +278,19 @@ services:
 `),
 	}
 
+	fp3 := File{
+		Name: "docker-compose3.yml",
+		Data: []byte(
+			`version: "3"
+services:
+  webapp:
+    entrypoint: echo 1
+`),
+	}
+
 	ctx := context.TODO()
 
-	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp, fp2, fp3}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(m))
@@ -446,6 +456,40 @@ func TestReadContextFromTargetUnknown(t *testing.T) {
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to find target bar")
 }
+
+func TestReadEmptyTargets(t *testing.T) {
+	t.Parallel()
+
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`target "app1" {}`),
+	}
+
+	fp2 := File{
+		Name: "docker-compose.yml",
+		Data: []byte(`
+services:
+  app2: {}
+`),
+	}
+
+	ctx := context.TODO()
+
+	m, _, err := ReadTargets(ctx, []File{fp, fp2}, []string{"app1", "app2"}, nil, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(m))
+	_, ok := m["app1"]
+	require.True(t, ok)
+	_, ok = m["app2"]
+	require.True(t, ok)
+
+	require.Equal(t, "Dockerfile", *m["app1"].Dockerfile)
+	require.Equal(t, ".", *m["app1"].Context)
+	require.Equal(t, "Dockerfile", *m["app2"].Dockerfile)
+	require.Equal(t, ".", *m["app2"].Context)
+}
+
 func TestReadContextFromTargetChain(t *testing.T) {
 	ctx := context.TODO()
 	fp := File{
