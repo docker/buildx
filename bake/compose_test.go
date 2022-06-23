@@ -316,6 +316,37 @@ services:
 	require.Equal(t, c.Targets[1].NoCache, newBool(true))
 }
 
+func TestComposeExtDedup(t *testing.T) {
+	var dt = []byte(`
+services:
+  webapp:
+    image: app:bar
+    build:
+      cache_from:
+        - user/app:cache
+      cache_to:
+        - user/app:cache
+      tags:
+        - ct-addon:foo
+      x-bake:
+        tags:
+          - ct-addon:foo
+          - ct-addon:baz
+        cache-from:
+          - user/app:cache
+          - type=local,src=path/to/cache
+        cache-to:
+          - type=local,dest=path/to/cache
+`)
+
+	c, err := ParseCompose(dt)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Tags, []string{"ct-addon:foo", "ct-addon:baz"})
+	require.Equal(t, c.Targets[0].CacheFrom, []string{"user/app:cache", "type=local,src=path/to/cache"})
+	require.Equal(t, c.Targets[0].CacheTo, []string{"user/app:cache", "type=local,dest=path/to/cache"})
+}
+
 func TestEnv(t *testing.T) {
 	envf, err := os.CreateTemp("", "env")
 	require.NoError(t, err)
