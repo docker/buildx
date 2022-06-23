@@ -100,6 +100,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 					return val, ok
 				})),
 				CacheFrom:   s.Build.CacheFrom,
+				CacheTo:     s.Build.CacheTo,
 				NetworkMode: &s.Build.Network,
 				Secrets:     secrets,
 			}

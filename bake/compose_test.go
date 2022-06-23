@@ -23,6 +23,10 @@ services:
         none
       args:
         buildno: 123
+      cache_from:
+        - type=local,src=path/to/cache
+      cache_to:
+        - type=local,dest=path/to/cache
       secrets:
         - token
         - aws
@@ -54,6 +58,8 @@ secrets:
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[1].Dockerfile)
 	require.Equal(t, 1, len(c.Targets[1].Args))
 	require.Equal(t, "123", c.Targets[1].Args["buildno"])
+	require.Equal(t, c.Targets[1].CacheFrom, []string{"type=local,src=path/to/cache"})
+	require.Equal(t, c.Targets[1].CacheTo, []string{"type=local,dest=path/to/cache"})
 	require.Equal(t, "none", *c.Targets[1].NetworkMode)
 	require.Equal(t, []string{
 		"id=token,env=ENV_TOKEN",
@@ -253,6 +259,8 @@ services:
       dockerfile: ./Dockerfile
       cache_from:
         - user/app:cache
+      cache_to:
+        - user/app:cache
       tags:
         - ct-addon:baz
       args:
@@ -267,7 +275,8 @@ services:
           - linux/arm64
         cache-from:
           - type=local,src=path/to/cache
-        cache-to: type=local,dest=path/to/cache
+        cache-to:
+          - type=local,dest=path/to/cache
         pull: true
 
   aws:
@@ -297,7 +306,7 @@ services:
 	require.Equal(t, c.Targets[0].Tags, []string{"ct-addon:baz", "ct-addon:foo", "ct-addon:alp"})
 	require.Equal(t, c.Targets[0].Platforms, []string{"linux/amd64", "linux/arm64"})
 	require.Equal(t, c.Targets[0].CacheFrom, []string{"type=local,src=path/to/cache"})
-	require.Equal(t, c.Targets[0].CacheTo, []string{"type=local,dest=path/to/cache"})
+	require.Equal(t, c.Targets[0].CacheTo, []string{"user/app:cache", "type=local,dest=path/to/cache"})
 	require.Equal(t, c.Targets[0].Pull, newBool(true))
 	require.Equal(t, c.Targets[1].Tags, []string{"ct-fake-aws:bar"})
 	require.Equal(t, c.Targets[1].Secrets, []string{"id=mysecret,src=/local/secret", "id=mysecret2,src=/local/secret2"})
