@@ -166,6 +166,9 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	} else {
 		switch {
 		case driverName == "kubernetes":
+			if len(args) > 0 {
+				logrus.Warnf("kubernetes driver does not support endpoint args %q", args[0])
+			}
 			// naming endpoint to make --append works
 			ep = (&url.URL{
 				Scheme: driverName,
