@@ -6,6 +6,7 @@ import (
 	"sort"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/serialx/hashring"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
@@ -28,6 +29,9 @@ func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 	pods, err := ListRunningPods(ctx, pc.PodClient, pc.Deployment)
 	if err != nil {
 		return nil, err
+	}
+	if len(pods) == 0 {
+		return nil, errors.New("no running buildkit pods found")
 	}
 	randSource := pc.RandSource
 	if randSource == nil {
