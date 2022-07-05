@@ -25,6 +25,7 @@ Build from a file
 | [`--pull`](#pull) |  |  | Always attempt to pull all referenced images |
 | `--push` |  |  | Shorthand for `--set=*.output=type=registry` |
 | [`--set`](#set) | `stringArray` |  | Override target value (e.g., `targetpattern.key=value`) |
+| `--sync-output` |  |  | Ensure all builds complete before beginning output |
 
 
 <!---MARKER_GEN_END-->

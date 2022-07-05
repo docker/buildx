@@ -297,7 +297,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 		if res == nil || driverIndex < idx {
 			idx, res = driverIndex, gotRes
 		}
-	}, allowNoOutput)
+	}, false, allowNoOutput)
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1
