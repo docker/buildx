@@ -17,6 +17,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
+	"github.com/docker/cli/cli/config"
 	"github.com/docker/docker/pkg/urlutil"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client/llb"
@@ -882,7 +883,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	bo.Platforms = platforms
 
-	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(os.Stderr))
+	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(dockerConfig))
 
 	secrets, err := buildflags.ParseSecretSpecs(t.Secrets)
 	if err != nil {
