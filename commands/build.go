@@ -25,6 +25,7 @@ import (
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/config"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/pkg/ioutils"
@@ -148,7 +149,8 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	}
 	opts.Platforms = platforms
 
-	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(os.Stderr))
+	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(dockerConfig))
 
 	secrets, err := buildflags.ParseSecretSpecs(in.secrets)
 	if err != nil {

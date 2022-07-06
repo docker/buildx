@@ -35,6 +35,10 @@ const (
 	CapSourceHTTPPerm     apicaps.CapID = "source.http.perm"
 	CapSourceHTTPUIDGID   apicaps.CapID = "soruce.http.uidgid"
 
+	CapSourceOCILayout           apicaps.CapID = "source.ocilayout"
+	CapSourceOCILayoutSessionID  apicaps.CapID = "source.ocilayout.sessionid"
+	CapSourceOCILayoutLayerLimit apicaps.CapID = "source.ocilayout.layerlimit"
+
 	CapBuildOpLLBFileName apicaps.CapID = "source.buildop.llbfilename"
 
 	CapExecMetaBase                      apicaps.CapID = "exec.meta.base"
@@ -70,9 +74,12 @@ const (
 	CapMetaExportCache apicaps.CapID = "meta.exportcache"
 
 	CapRemoteCacheGHA apicaps.CapID = "cache.gha"
+	CapRemoteCacheS3  apicaps.CapID = "cache.s3"
 
 	CapMergeOp apicaps.CapID = "mergeop"
 	CapDiffOp  apicaps.CapID = "diffop"
+
+	CapAnnotations apicaps.CapID = "exporter.image.annotations"
 )
 
 func init() {
@@ -198,6 +205,24 @@ func init() {
 
 	Caps.Init(apicaps.Cap{
 		ID:      CapSourceHTTPPerm,
+		Enabled: true,
+		Status:  apicaps.CapStatusExperimental,
+	})
+
+	Caps.Init(apicaps.Cap{
+		ID:      CapSourceOCILayout,
+		Enabled: true,
+		Status:  apicaps.CapStatusExperimental,
+	})
+
+	Caps.Init(apicaps.Cap{
+		ID:      CapSourceOCILayoutSessionID,
+		Enabled: true,
+		Status:  apicaps.CapStatusExperimental,
+	})
+
+	Caps.Init(apicaps.Cap{
+		ID:      CapSourceOCILayoutLayerLimit,
 		Enabled: true,
 		Status:  apicaps.CapStatusExperimental,
 	})
@@ -391,13 +416,27 @@ func init() {
 		Enabled: true,
 		Status:  apicaps.CapStatusExperimental,
 	})
+
+	Caps.Init(apicaps.Cap{
+		ID:      CapRemoteCacheS3,
+		Enabled: true,
+		Status:  apicaps.CapStatusExperimental,
+	})
+
 	Caps.Init(apicaps.Cap{
 		ID:      CapMergeOp,
 		Enabled: true,
 		Status:  apicaps.CapStatusExperimental,
 	})
+
 	Caps.Init(apicaps.Cap{
 		ID:      CapDiffOp,
+		Enabled: true,
+		Status:  apicaps.CapStatusExperimental,
+	})
+
+	Caps.Init(apicaps.Cap{
+		ID:      CapAnnotations,
 		Enabled: true,
 		Status:  apicaps.CapStatusExperimental,
 	})
