@@ -45,7 +45,7 @@ srw-rw---- 1 root user 0 May  5 11:04 /home/user/buildkitd.sock
 You can then connect buildx to it with the remote driver:
 
 ```console
-$ buildx create \
+$ docker buildx create \
   --name remote-unix \
   --driver remote \
   unix://$HOME/buildkitd.sock
@@ -54,10 +54,10 @@ $ buildx create \
 If you list available builders, you should then see `remote-unix` among them:
 
 ```console
-$ buildx ls
+$ docker buildx ls
 NAME/NODE           DRIVER/ENDPOINT                        STATUS  PLATFORMS
-test                remote
-  test0             unix:///home/.../buildkitd.sock        running linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/386
+remote-unix         remote
+  remote-unix0      unix:///home/.../buildkitd.sock        running linux/amd64, linux/amd64/v2, linux/amd64/v3, linux/386
 default *           docker
   default           default                                running linux/amd64, linux/386
 ```
