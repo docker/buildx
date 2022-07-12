@@ -89,7 +89,7 @@ There are also useful built-in build args like:
 * `BUILDKIT_CONTEXT_KEEP_GIT_DIR=<bool>` trigger git context to keep the `.git` directory
 * `BUILDKIT_INLINE_BUILDINFO_ATTRS=<bool>` inline build info attributes in image config or not
 * `BUILDKIT_INLINE_CACHE=<bool>` inline cache metadata to image config or not
-* `BUILDKIT_MULTI_PLATFORM=<bool>` opt into determnistic output regardless of multi-platform output or not
+* `BUILDKIT_MULTI_PLATFORM=<bool>` opt into deterministic output regardless of multi-platform output or not
 
 ```console
 $ docker buildx build --build-arg BUILDKIT_MULTI_PLATFORM=1 .
