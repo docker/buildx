@@ -242,6 +242,11 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	if err = loadNodeGroupData(timeoutCtx, dockerCli, ngi); err != nil {
 		return err
 	}
+	for _, info := range ngi.drivers {
+		if err := info.di.Err; err != nil {
+			logrus.Errorf("failed to initialize builder %s (%s): %s", ng.Name, info.di.Name, err)
+		}
+	}
 
 	if in.bootstrap {
 		if _, err = boot(ctx, ngi); err != nil {
