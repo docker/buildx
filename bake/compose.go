@@ -100,6 +100,7 @@ func ParseCompose(dt []byte) (*Config, error) {
 					return val, ok
 				})),
 				CacheFrom:   s.Build.CacheFrom,
+				CacheTo:     s.Build.CacheTo,
 				NetworkMode: &s.Build.Network,
 				Secrets:     secrets,
 			}
@@ -186,25 +187,25 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 	}
 
 	if len(xb.Tags) > 0 {
-		t.Tags = append(t.Tags, xb.Tags...)
+		t.Tags = dedupString(append(t.Tags, xb.Tags...))
 	}
 	if len(xb.CacheFrom) > 0 {
-		t.CacheFrom = xb.CacheFrom // override main field
+		t.CacheFrom = dedupString(append(t.CacheFrom, xb.CacheFrom...))
 	}
 	if len(xb.CacheTo) > 0 {
-		t.CacheTo = append(t.CacheTo, xb.CacheTo...)
+		t.CacheTo = dedupString(append(t.CacheTo, xb.CacheTo...))
 	}
 	if len(xb.Secrets) > 0 {
-		t.Secrets = append(t.Secrets, xb.Secrets...)
+		t.Secrets = dedupString(append(t.Secrets, xb.Secrets...))
 	}
 	if len(xb.SSH) > 0 {
-		t.SSH = append(t.SSH, xb.SSH...)
+		t.SSH = dedupString(append(t.SSH, xb.SSH...))
 	}
 	if len(xb.Platforms) > 0 {
-		t.Platforms = append(t.Platforms, xb.Platforms...)
+		t.Platforms = dedupString(append(t.Platforms, xb.Platforms...))
 	}
 	if len(xb.Outputs) > 0 {
-		t.Outputs = append(t.Outputs, xb.Outputs...)
+		t.Outputs = dedupString(append(t.Outputs, xb.Outputs...))
 	}
 	if xb.Pull != nil {
 		t.Pull = xb.Pull
@@ -213,7 +214,7 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.NoCache = xb.NoCache
 	}
 	if len(xb.NoCacheFilter) > 0 {
-		t.NoCacheFilter = append(t.NoCacheFilter, xb.NoCacheFilter...)
+		t.NoCacheFilter = dedupString(append(t.NoCacheFilter, xb.NoCacheFilter...))
 	}
 
 	return nil
