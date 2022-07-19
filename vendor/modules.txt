@@ -319,6 +319,8 @@ github.com/klauspost/compress/huff0
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
+# github.com/kr/pretty v0.3.0
+## explicit; go 1.12
 # github.com/mattn/go-shellwords v1.0.12
 ## explicit; go 1.13
 github.com/mattn/go-shellwords
@@ -461,6 +463,8 @@ github.com/prometheus/common/model
 github.com/prometheus/procfs
 github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
+# github.com/rogpeppe/go-internal v1.8.1
+## explicit; go 1.16
 # github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 ## explicit
 github.com/serialx/hashring
@@ -749,6 +753,8 @@ google.golang.org/protobuf/types/known/durationpb
 google.golang.org/protobuf/types/known/fieldmaskpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
+# gopkg.in/check.v1 v1.0.0-20201130134442-10cb98267c6c
+## explicit; go 1.11
 # gopkg.in/dancannon/gorethink.v3 v3.0.5
 ## explicit
 # gopkg.in/fatih/pool.v2 v2.0.0
@@ -764,7 +770,7 @@ gopkg.in/yaml.v2
 # gopkg.in/yaml.v3 v3.0.1
 ## explicit
 gopkg.in/yaml.v3
-# k8s.io/api v0.23.4 => k8s.io/api v0.22.4
+# k8s.io/api v0.23.5 => k8s.io/api v0.22.4
 ## explicit; go 1.16
 k8s.io/api/admissionregistration/v1
 k8s.io/api/admissionregistration/v1beta1
@@ -809,7 +815,7 @@ k8s.io/api/scheduling/v1beta1
 k8s.io/api/storage/v1
 k8s.io/api/storage/v1alpha1
 k8s.io/api/storage/v1beta1
-# k8s.io/apimachinery v0.23.4 => k8s.io/apimachinery v0.22.4
+# k8s.io/apimachinery v0.23.5 => k8s.io/apimachinery v0.22.4
 ## explicit; go 1.16
 k8s.io/apimachinery/pkg/api/errors
 k8s.io/apimachinery/pkg/api/meta
@@ -851,7 +857,7 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/reflect
-# k8s.io/client-go v0.23.4 => k8s.io/client-go v0.22.4
+# k8s.io/client-go v0.23.5 => k8s.io/client-go v0.22.4
 ## explicit; go 1.16
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
 k8s.io/client-go/applyconfigurations/admissionregistration/v1beta1
