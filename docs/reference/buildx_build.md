@@ -230,6 +230,9 @@ More info about cache exporters and available attributes: https://github.com/mob
 Shorthand for [`--output=type=docker`](#docker). Will automatically load the
 single-platform build result to `docker images`.
 
+> **Note**
+> `--load` is the default option during a `docker buildx build` command. These builds store images locally. At the moment, multi-platform builds are only possible using remote registries. The `--push` command pushes the images directly to a registry. Local multi-platform build support is part [part of our current roadmap](https://github.com/docker/roadmap/issues/371) and should be available soon.
+
 ### <a name="metadata-file"></a> Write build result metadata to the file (--metadata-file)
 
 To output build metadata such as the image digest, pass the `--metadata-file` flag.
