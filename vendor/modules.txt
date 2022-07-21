@@ -336,7 +336,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.10.1-0.20220706082100-f4eb826799e5
+# github.com/moby/buildkit v0.10.1-0.20220721175135-c75998aec3d4
 ## explicit; go 1.17
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
