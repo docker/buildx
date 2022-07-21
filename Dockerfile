@@ -1,12 +1,13 @@
 # syntax=docker/dockerfile:1.4
 
 ARG GO_VERSION=1.18
+ARG XX_VERSION=1.1.2
 ARG DOCKERD_VERSION=20.10.14
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
 
 # xx is a helper for cross-compilation
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:1.1.0 AS xx
+FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golatest
 
