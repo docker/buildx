@@ -11,7 +11,6 @@ import (
 	"time"
 
 	"github.com/docker/cli/cli/config"
-	cliconfig "github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/config/configfile"
 	dcontext "github.com/docker/cli/cli/context"
 	"github.com/docker/cli/cli/context/docker"
@@ -26,7 +25,8 @@ import (
 	dopts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api"
 	"github.com/docker/docker/api/types"
-	registrytypes "github.com/docker/docker/api/types/registry"
+	"github.com/docker/docker/api/types/registry"
+	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/tlsconfig"
 	"github.com/moby/term"
@@ -52,7 +52,6 @@ type Cli interface {
 	Apply(ops ...DockerCliOption) error
 	ConfigFile() *configfile.ConfigFile
 	ServerInfo() ServerInfo
-	ClientInfo() ClientInfo
 	NotaryClient(imgRefAndAuth trust.ImageRefAndAuth, actions []string) (notaryclient.Repository, error)
 	DefaultVersion() string
 	ManifestStore() manifeststore.Store
@@ -73,7 +72,6 @@ type DockerCli struct {
 	err                io.Writer
 	client             client.APIClient
 	serverInfo         ServerInfo
-	clientInfo         *ClientInfo
 	contentTrust       bool
 	contextStore       store.Store
 	currentContext     string
@@ -81,9 +79,9 @@ type DockerCli struct {
 	contextStoreConfig store.Config
 }
 
-// DefaultVersion returns api.defaultVersion or DOCKER_API_VERSION if specified.
+// DefaultVersion returns api.defaultVersion.
 func (cli *DockerCli) DefaultVersion() string {
-	return cli.ClientInfo().DefaultVersion
+	return api.DefaultVersion
 }
 
 // Client returns the APIClient
@@ -129,37 +127,14 @@ func (cli *DockerCli) ConfigFile() *configfile.ConfigFile {
 }
 
 func (cli *DockerCli) loadConfigFile() {
-	cli.configFile = cliconfig.LoadDefaultConfigFile(cli.err)
+	cli.configFile = config.LoadDefaultConfigFile(cli.err)
 }
 
 // ServerInfo returns the server version details for the host this client is
 // connected to
 func (cli *DockerCli) ServerInfo() ServerInfo {
+	// TODO(thaJeztah) make ServerInfo() lazily load the info (ping only when needed)
 	return cli.serverInfo
-}
-
-// ClientInfo returns the client details for the cli
-func (cli *DockerCli) ClientInfo() ClientInfo {
-	if cli.clientInfo == nil {
-		if err := cli.loadClientInfo(); err != nil {
-			panic(err)
-		}
-	}
-	return *cli.clientInfo
-}
-
-func (cli *DockerCli) loadClientInfo() error {
-	var v string
-	if cli.client != nil {
-		v = cli.client.ClientVersion()
-	} else {
-		v = api.DefaultVersion
-	}
-	cli.clientInfo = &ClientInfo{
-		DefaultVersion:  v,
-		HasExperimental: true,
-	}
-	return nil
 }
 
 // ContentTrustEnabled returns whether content trust has been enabled by an
@@ -197,7 +172,7 @@ func (cli *DockerCli) ManifestStore() manifeststore.Store {
 // RegistryClient returns a client for communicating with a Docker distribution
 // registry
 func (cli *DockerCli) RegistryClient(allowInsecure bool) registryclient.RegistryClient {
-	resolver := func(ctx context.Context, index *registrytypes.IndexInfo) types.AuthConfig {
+	resolver := func(ctx context.Context, index *registry.IndexInfo) types.AuthConfig {
 		return ResolveAuthConfig(ctx, cli, index)
 	}
 	return registryclient.NewRegistryClient(resolver, UserAgent(), allowInsecure)
@@ -228,7 +203,7 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...Initialize
 	cliflags.SetLogLevel(opts.Common.LogLevel)
 
 	if opts.ConfigDir != "" {
-		cliconfig.SetDir(opts.ConfigDir)
+		config.SetDir(opts.ConfigDir)
 	}
 
 	if opts.Common.Debug {
@@ -237,7 +212,7 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...Initialize
 
 	cli.loadConfigFile()
 
-	baseContextStore := store.New(cliconfig.ContextStoreDir(), cli.contextStoreConfig)
+	baseContextStore := store.New(config.ContextStoreDir(), cli.contextStoreConfig)
 	cli.contextStore = &ContextStoreWithDefault{
 		Store: baseContextStore,
 		Resolver: func() (*DefaultContext, error) {
@@ -260,28 +235,23 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...Initialize
 		}
 	}
 	cli.initializeFromClient()
-
-	if err := cli.loadClientInfo(); err != nil {
-		return err
-	}
-
 	return nil
 }
 
 // NewAPIClientFromFlags creates a new APIClient from command line flags
 func NewAPIClientFromFlags(opts *cliflags.CommonOptions, configFile *configfile.ConfigFile) (client.APIClient, error) {
 	storeConfig := DefaultContextStoreConfig()
-	store := &ContextStoreWithDefault{
-		Store: store.New(cliconfig.ContextStoreDir(), storeConfig),
+	contextStore := &ContextStoreWithDefault{
+		Store: store.New(config.ContextStoreDir(), storeConfig),
 		Resolver: func() (*DefaultContext, error) {
 			return ResolveDefaultContext(opts, configFile, storeConfig, io.Discard)
 		},
 	}
-	contextName, err := resolveContextName(opts, configFile, store)
+	contextName, err := resolveContextName(opts, configFile, contextStore)
 	if err != nil {
 		return nil, err
 	}
-	endpoint, err := resolveDockerEndpoint(store, contextName)
+	endpoint, err := resolveDockerEndpoint(contextStore, contextName)
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to resolve docker endpoint")
 	}
@@ -368,6 +338,7 @@ func (cli *DockerCli) initializeFromClient() {
 		HasExperimental: ping.Experimental,
 		OSType:          ping.OSType,
 		BuildkitVersion: ping.BuilderVersion,
+		SwarmStatus:     ping.SwarmStatus,
 	}
 	cli.client.NegotiateAPIVersionPing(ping)
 }
@@ -408,26 +379,28 @@ type ServerInfo struct {
 	HasExperimental bool
 	OSType          string
 	BuildkitVersion types.BuilderVersion
-}
 
-// ClientInfo stores details about the supported features of the client
-type ClientInfo struct {
-	// Deprecated: experimental CLI features always enabled. This field is kept
-	// for backward-compatibility, and is always "true".
-	HasExperimental bool
-	DefaultVersion  string
+	// SwarmStatus provides information about the current swarm status of the
+	// engine, obtained from the "Swarm" header in the API response.
+	//
+	// It can be a nil struct if the API version does not provide this header
+	// in the ping response, or if an error occurred, in which case the client
+	// should use other ways to get the current swarm status, such as the /swarm
+	// endpoint.
+	SwarmStatus *swarm.Status
 }
 
 // NewDockerCli returns a DockerCli instance with all operators applied on it.
 // It applies by default the standard streams, and the content trust from
 // environment.
 func NewDockerCli(ops ...DockerCliOption) (*DockerCli, error) {
-	cli := &DockerCli{}
 	defaultOps := []DockerCliOption{
 		WithContentTrustFromEnv(),
+		WithDefaultContextStoreConfig(),
 	}
-	cli.contextStoreConfig = DefaultContextStoreConfig()
 	ops = append(defaultOps, ops...)
+
+	cli := &DockerCli{}
 	if err := cli.Apply(ops...); err != nil {
 		return nil, err
 	}
@@ -450,7 +423,7 @@ func getServerHost(hosts []string, tlsOptions *tlsconfig.Options) (string, error
 	var host string
 	switch len(hosts) {
 	case 0:
-		host = os.Getenv("DOCKER_HOST")
+		host = os.Getenv(client.EnvOverrideHost)
 	case 1:
 		host = hosts[0]
 	default:
@@ -468,7 +441,7 @@ func UserAgent() string {
 // resolveContextName resolves the current context name with the following rules:
 // - setting both --context and --host flags is ambiguous
 // - if --context is set, use this value
-// - if --host flag or DOCKER_HOST is set, fallbacks to use the same logic as before context-store was added
+// - if --host flag or DOCKER_HOST (client.EnvOverrideHost) is set, fallbacks to use the same logic as before context-store was added
 // for backward compatibility with existing scripts
 // - if DOCKER_CONTEXT is set, use this value
 // - if Config file has a globally set "CurrentContext", use this value
@@ -483,7 +456,7 @@ func resolveContextName(opts *cliflags.CommonOptions, config *configfile.ConfigF
 	if len(opts.Hosts) > 0 {
 		return DefaultContextName, nil
 	}
-	if _, present := os.LookupEnv("DOCKER_HOST"); present {
+	if _, present := os.LookupEnv(client.EnvOverrideHost); present {
 		return DefaultContextName, nil
 	}
 	if ctxName, ok := os.LookupEnv("DOCKER_CONTEXT"); ok {

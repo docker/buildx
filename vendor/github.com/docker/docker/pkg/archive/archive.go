@@ -18,12 +18,14 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/containerd/containerd/pkg/userns"
 	"github.com/docker/docker/pkg/fileutils"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/docker/pkg/pools"
 	"github.com/docker/docker/pkg/system"
 	"github.com/klauspost/compress/zstd"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	exec "golang.org/x/sys/execabs"
 )
@@ -40,8 +42,7 @@ type (
 		ExcludePatterns  []string
 		Compression      Compression
 		NoLchown         bool
-		UIDMaps          []idtools.IDMap
-		GIDMaps          []idtools.IDMap
+		IDMap            idtools.IdentityMapping
 		ChownOpts        *idtools.Identity
 		IncludeSourceDir bool
 		// WhiteoutFormat is the expected on disk format for whiteout files.
@@ -63,12 +64,12 @@ type (
 // mappings for untar, an Archiver can be created with maps which will then be passed to Untar operations.
 type Archiver struct {
 	Untar     func(io.Reader, string, *TarOptions) error
-	IDMapping *idtools.IdentityMapping
+	IDMapping idtools.IdentityMapping
 }
 
 // NewDefaultArchiver returns a new Archiver without any IdentityMapping
 func NewDefaultArchiver() *Archiver {
-	return &Archiver{Untar: Untar, IDMapping: &idtools.IdentityMapping{}}
+	return &Archiver{Untar: Untar}
 }
 
 // breakoutError is used to differentiate errors related to breaking out
@@ -534,7 +535,7 @@ type tarAppender struct {
 
 	// for hardlink mapping
 	SeenFiles       map[uint64]string
-	IdentityMapping *idtools.IdentityMapping
+	IdentityMapping idtools.IdentityMapping
 	ChownOpts       *idtools.Identity
 
 	// For packing and unpacking whiteout files in the
@@ -544,7 +545,7 @@ type tarAppender struct {
 	WhiteoutConverter tarWhiteoutConverter
 }
 
-func newTarAppender(idMapping *idtools.IdentityMapping, writer io.Writer, chownOpts *idtools.Identity) *tarAppender {
+func newTarAppender(idMapping idtools.IdentityMapping, writer io.Writer, chownOpts *idtools.Identity) *tarAppender {
 	return &tarAppender{
 		SeenFiles:       make(map[uint64]string),
 		TarWriter:       tar.NewWriter(writer),
@@ -729,7 +730,7 @@ func createTarFile(path, extractDir string, hdr *tar.Header, reader io.Reader, L
 		}
 
 	case tar.TypeLink:
-		//#nosec G305 -- The target path is checked for path traversal.
+		// #nosec G305 -- The target path is checked for path traversal.
 		targetPath := filepath.Join(extractDir, hdr.Linkname)
 		// check for hardlink breakout
 		if !strings.HasPrefix(targetPath, extractDir) {
@@ -742,7 +743,7 @@ func createTarFile(path, extractDir string, hdr *tar.Header, reader io.Reader, L
 	case tar.TypeSymlink:
 		// 	path 				-> hdr.Linkname = targetPath
 		// e.g. /extractDir/path/to/symlink 	-> ../2/file	= /extractDir/path/2/file
-		targetPath := filepath.Join(filepath.Dir(path), hdr.Linkname) //#nosec G305 -- The target path is checked for path traversal.
+		targetPath := filepath.Join(filepath.Dir(path), hdr.Linkname) // #nosec G305 -- The target path is checked for path traversal.
 
 		// the reason we don't need to check symlinks in the path (with FollowSymlinkInScope) is because
 		// that symlink would first have to be created, which would be caught earlier, at this very check:
@@ -767,7 +768,11 @@ func createTarFile(path, extractDir string, hdr *tar.Header, reader io.Reader, L
 			chownOpts = &idtools.Identity{UID: hdr.Uid, GID: hdr.Gid}
 		}
 		if err := os.Lchown(path, chownOpts.UID, chownOpts.GID); err != nil {
-			return err
+			msg := "failed to Lchown %q for UID %d, GID %d"
+			if errors.Is(err, syscall.EINVAL) && userns.RunningInUserNS() {
+				msg += " (try increasing the number of subordinate IDs in /etc/subuid and /etc/subgid)"
+			}
+			return errors.Wrapf(err, msg, path, hdr.Uid, hdr.Gid)
 		}
 	}
 
@@ -860,7 +865,7 @@ func TarWithOptions(srcPath string, options *TarOptions) (io.ReadCloser, error) 
 
 	go func() {
 		ta := newTarAppender(
-			idtools.NewIDMappingsFromMaps(options.UIDMaps, options.GIDMaps),
+			options.IDMap,
 			compressWriter,
 			options.ChownOpts,
 		)
@@ -1044,8 +1049,7 @@ func Unpack(decompressedArchive io.Reader, dest string, options *TarOptions) err
 	defer pools.BufioReader32KPool.Put(trBuf)
 
 	var dirs []*tar.Header
-	idMapping := idtools.NewIDMappingsFromMaps(options.UIDMaps, options.GIDMaps)
-	rootIDs := idMapping.RootPair()
+	rootIDs := options.IDMap.RootPair()
 	whiteoutConverter, err := getWhiteoutConverter(options.WhiteoutFormat, options.InUserNS)
 	if err != nil {
 		return err
@@ -1095,7 +1099,7 @@ loop:
 			}
 		}
 
-		//#nosec G305 -- The joined path is checked for path traversal.
+		// #nosec G305 -- The joined path is checked for path traversal.
 		path := filepath.Join(dest, hdr.Name)
 		rel, err := filepath.Rel(dest, path)
 		if err != nil {
@@ -1134,7 +1138,7 @@ loop:
 		}
 		trBuf.Reset(tr)
 
-		if err := remapIDs(idMapping, hdr); err != nil {
+		if err := remapIDs(options.IDMap, hdr); err != nil {
 			return err
 		}
 
@@ -1160,7 +1164,7 @@ loop:
 	}
 
 	for _, hdr := range dirs {
-		//#nosec G305 -- The header was checked for path traversal before it was appended to the dirs slice.
+		// #nosec G305 -- The header was checked for path traversal before it was appended to the dirs slice.
 		path := filepath.Join(dest, hdr.Name)
 
 		if err := system.Chtimes(path, hdr.AccessTime, hdr.ModTime); err != nil {
@@ -1173,7 +1177,8 @@ loop:
 // Untar reads a stream of bytes from `archive`, parses it as a tar archive,
 // and unpacks it into the directory at `dest`.
 // The archive may be compressed with one of the following algorithms:
-//  identity (uncompressed), gzip, bzip2, xz.
+// identity (uncompressed), gzip, bzip2, xz.
+//
 // FIXME: specify behavior when target path exists vs. doesn't exist.
 func Untar(tarArchive io.Reader, dest string, options *TarOptions) error {
 	return untarHandler(tarArchive, dest, options, true)
@@ -1221,8 +1226,7 @@ func (archiver *Archiver) TarUntar(src, dst string) error {
 	}
 	defer archive.Close()
 	options := &TarOptions{
-		UIDMaps: archiver.IDMapping.UIDs(),
-		GIDMaps: archiver.IDMapping.GIDs(),
+		IDMap: archiver.IDMapping,
 	}
 	return archiver.Untar(archive, dst, options)
 }
@@ -1235,8 +1239,7 @@ func (archiver *Archiver) UntarPath(src, dst string) error {
 	}
 	defer archive.Close()
 	options := &TarOptions{
-		UIDMaps: archiver.IDMapping.UIDs(),
-		GIDMaps: archiver.IDMapping.GIDs(),
+		IDMap: archiver.IDMapping,
 	}
 	return archiver.Untar(archive, dst, options)
 }
@@ -1343,11 +1346,11 @@ func (archiver *Archiver) CopyFileWithTar(src, dst string) (err error) {
 }
 
 // IdentityMapping returns the IdentityMapping of the archiver.
-func (archiver *Archiver) IdentityMapping() *idtools.IdentityMapping {
+func (archiver *Archiver) IdentityMapping() idtools.IdentityMapping {
 	return archiver.IDMapping
 }
 
-func remapIDs(idMapping *idtools.IdentityMapping, hdr *tar.Header) error {
+func remapIDs(idMapping idtools.IdentityMapping, hdr *tar.Header) error {
 	ids, err := idMapping.ToHost(idtools.Identity{UID: hdr.Uid, GID: hdr.Gid})
 	hdr.Uid, hdr.Gid = ids.UID, ids.GID
 	return err
