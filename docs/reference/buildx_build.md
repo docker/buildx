@@ -68,7 +68,7 @@ Allow extra privileged entitlement. List of entitlements:
 
 - `network.host` - Allows executions with host networking.
 - `security.insecure` - Allows executions without sandbox. See
-  [related Dockerfile extensions](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/experimental.md#run---securityinsecuresandbox).
+  [related Dockerfile extensions](https://docs.docker.com/engine/reference/builder/#run---securitysandbox).
 
 For entitlements to be enabled, the `buildkitd` daemon also needs to allow them
 with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#buildkitd-flags))
@@ -95,7 +95,9 @@ There are also useful built-in build args like:
 $ docker buildx build --build-arg BUILDKIT_MULTI_PLATFORM=1 .
 ```
 
-More built-in build args can be found in [dockerfile frontend docs](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#built-in-build-args).
+> **Note**
+>
+> More built-in build args can be found in [Dockerfile reference docs](https://docs.docker.com/engine/reference/builder/#buildkit-built-in-build-args).
 
 ### <a name="build-context"></a> Additional build contexts (--build-context)
 
@@ -443,7 +445,7 @@ build result to registry.
 ```
 
 Exposes secret to the build. The secret can be used by the build using
-[`RUN --mount=type=secret` mount](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#run---mounttypesecret).
+[`RUN --mount=type=secret` mount](https://docs.docker.com/engine/reference/builder/#run---mounttypesecret).
 
 If `type` is unset it will be detected. Supported types are:
 
@@ -501,7 +503,7 @@ This can be useful when some commands in your Dockerfile need specific SSH
 authentication (e.g., cloning a private repository).
 
 `--ssh` exposes SSH agent socket or keys to the build and can be used with the
-[`RUN --mount=type=ssh` mount](https://github.com/moby/buildkit/blob/master/frontend/dockerfile/docs/syntax.md#run---mounttypessh).
+[`RUN --mount=type=ssh` mount](https://docs.docker.com/engine/reference/builder/#run---mounttypessh).
 
 Example to access Gitlab using an SSH agent socket:
 
