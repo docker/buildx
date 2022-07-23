@@ -121,26 +121,7 @@ $ docker buildx bake -f docker-bake.hcl --print db
 
 ### <a name="progress"></a> Set type of progress output (--progress)
 
-Same as [`build --progress`](buildx_build.md#progress). Set type of progress
-output (auto, plain, tty). Use plain to show container output (default "auto").
-
-> You can also use the `BUILDKIT_PROGRESS` environment variable to set its value.
-
-The following example uses `plain` output during the build:
-
-```console
-$ docker buildx bake --progress=plain
-
-#2 [backend internal] load build definition from Dockerfile.test
-#2 sha256:de70cb0bb6ed8044f7b9b1b53b67f624e2ccfb93d96bb48b70c1fba562489618
-#2 ...
-
-#1 [database internal] load build definition from Dockerfile.test
-#1 sha256:453cb50abd941762900a1212657a35fc4aad107f5d180b0ee9d93d6b74481bce
-#1 transferring dockerfile: 36B done
-#1 DONE 0.1s
-...
-```
+Same as [`build --progress`](buildx_build.md#progress).
 
 ### <a name="pull"></a> Always attempt to pull a newer version of the image (--pull)
 
