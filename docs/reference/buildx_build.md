@@ -415,8 +415,9 @@ $ docker buildx build --platform=darwin .
 Set type of progress output (auto, plain, tty). Use plain to show container
 output (default "auto").
 
-> You can also use the `BUILDKIT_PROGRESS` environment variable to set
-> its value.
+> **Note**
+>
+> You can also use the `BUILDKIT_PROGRESS` environment variable to set its value.
 
 The following example uses `plain` output during the build:
 
@@ -432,6 +433,11 @@ $ docker buildx build --load --progress=plain .
 #2 DONE 0.0s
 ...
 ```
+
+> **Note**
+>
+> Check also our [Color output controls guide](https://docs.docker.com/build/guides/color-output/)
+> for modifying the colors that are used to output information to the terminal.
 
 ### <a name="push"></a> Push the build result to a registry (--push)
 
