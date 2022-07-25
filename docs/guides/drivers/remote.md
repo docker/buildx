@@ -174,3 +174,5 @@ $ docker buildx create \
   --driver remote \
   kube-pod://buildkitd-XXXXXXXXXX-xxxxx
 ```
+
+<!--- FIXME: for 0.9, add further reading section with link to reference --->
