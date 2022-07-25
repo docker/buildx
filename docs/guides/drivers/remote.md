@@ -1,4 +1,4 @@
-# Remote builder
+# Remote driver
 
 The buildx remote driver allows for more complex custom build workloads that
 allow users to connect to external buildkit instances. This is useful for

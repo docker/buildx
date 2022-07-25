@@ -1,4 +1,4 @@
-# Kubernetes builder
+# Kubernetes driver
 
 The buildx kubernetes driver allows connecting your local development or ci
 environments to your kubernetes cluster to allow access to more powerful
