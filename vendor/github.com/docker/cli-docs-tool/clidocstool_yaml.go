@@ -26,7 +26,7 @@ import (
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"gopkg.in/yaml.v2"
+	"gopkg.in/yaml.v3"
 )
 
 type cmdOption struct {
@@ -150,7 +150,7 @@ func (c *Client) genYamlCustom(cmd *cobra.Command, w io.Writer) error {
 
 	cliDoc := cmdDoc{
 		Name:       cmd.CommandPath(),
-		Aliases:    strings.Join(cmd.Aliases, ", "),
+		Aliases:    strings.Join(getAliases(cmd), ", "),
 		Short:      forceMultiLine(cmd.Short, shortMaxWidth),
 		Long:       forceMultiLine(cmd.Long, longMaxWidth),
 		Example:    cmd.Example,

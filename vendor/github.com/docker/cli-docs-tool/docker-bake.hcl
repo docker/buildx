@@ -12,10 +12,6 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
-variable "GO_VERSION" {
-  default = "1.16"
-}
-
 group "default" {
   targets = ["test"]
 }
@@ -25,49 +21,31 @@ group "validate" {
 }
 
 target "lint" {
-  args = {
-    GO_VERSION = GO_VERSION
-  }
-  dockerfile = "./hack/lint.Dockerfile"
   target = "lint"
   output = ["type=cacheonly"]
 }
 
 target "vendor-validate" {
-  args = {
-    GO_VERSION = GO_VERSION
-  }
-  dockerfile = "./hack/vendor.Dockerfile"
-  target = "validate"
+  target = "vendor-validate"
   output = ["type=cacheonly"]
 }
 
 target "vendor-update" {
-  args = {
-    GO_VERSION = GO_VERSION
-  }
-  dockerfile = "./hack/vendor.Dockerfile"
-  target = "update"
+  target = "vendor-update"
   output = ["."]
 }
 
 target "test" {
-  args = {
-    GO_VERSION = GO_VERSION
-  }
-  dockerfile = "./hack/test.Dockerfile"
   target = "test-coverage"
   output = ["."]
 }
 
 target "license-validate" {
-  dockerfile = "./hack/license.Dockerfile"
-  target = "validate"
+  target = "license-validate"
   output = ["type=cacheonly"]
 }
 
 target "license-update" {
-  dockerfile = "./hack/license.Dockerfile"
-  target = "update"
+  target = "license-update"
   output = ["."]
 }

@@ -7,7 +7,7 @@ require (
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.6
 	github.com/docker/cli v20.10.17+incompatible // v22.06.x - see "replace" for the actual version
-	github.com/docker/cli-docs-tool v0.4.0
+	github.com/docker/cli-docs-tool v0.5.0
 	github.com/docker/distribution v2.8.1+incompatible
 	github.com/docker/docker v20.10.17+incompatible // v22.06.x - see "replace" for the actual version
 	github.com/docker/go-units v0.4.0
@@ -25,7 +25,7 @@ require (
 	github.com/sirupsen/logrus v1.8.1
 	github.com/spf13/cobra v1.5.0
 	github.com/spf13/pflag v1.0.5
-	github.com/stretchr/testify v1.7.0
+	github.com/stretchr/testify v1.7.2
 	github.com/zclconf/go-cty v1.10.0
 	go.opentelemetry.io/otel v1.4.1
 	go.opentelemetry.io/otel/trace v1.4.1
