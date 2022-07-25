@@ -6,7 +6,6 @@ import (
 	"encoding/pem"
 	"net"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/docker/cli/cli/connhelper"
@@ -68,7 +67,7 @@ func (c *Endpoint) tlsConfig() (*tls.Config, error) {
 		if pemBlock == nil {
 			return nil, errors.New("no valid private key found")
 		}
-		if x509.IsEncryptedPEMBlock(pemBlock) { //nolint: staticcheck // SA1019: x509.IsEncryptedPEMBlock is deprecated, and insecure by design
+		if x509.IsEncryptedPEMBlock(pemBlock) { //nolint:staticcheck // SA1019: x509.IsEncryptedPEMBlock is deprecated, and insecure by design
 			return nil, errors.New("private key is encrypted - support for encrypted private keys has been removed, see https://docs.docker.com/go/deprecated/")
 		}
 
@@ -122,12 +121,7 @@ func (c *Endpoint) ClientOpts() ([]client.Opt, error) {
 		}
 	}
 
-	version := os.Getenv("DOCKER_API_VERSION")
-	if version != "" {
-		result = append(result, client.WithVersion(version))
-	} else {
-		result = append(result, client.WithAPIVersionNegotiation())
-	}
+	result = append(result, client.WithVersionFromEnv(), client.WithAPIVersionNegotiation())
 	return result, nil
 }
 

@@ -309,7 +309,7 @@ func (d *Driver) Stop(ctx context.Context, force bool) error {
 		return err
 	}
 	if info.Status == driver.Running {
-		return d.DockerAPI.ContainerStop(ctx, d.Name, nil)
+		return d.DockerAPI.ContainerStop(ctx, d.Name, container.StopOptions{})
 	}
 	return nil
 }
