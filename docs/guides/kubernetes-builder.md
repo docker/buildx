@@ -1,8 +1,4 @@
----
-title: "Kubernetes builder"
-description: "Connect buildx to a kubernetes cluster"
-keywords: build, buildx, buildkit
----
+# Kubernetes builder
 
 The buildx kubernetes driver allows connecting your local development or ci
 environments to your kubernetes cluster to allow access to more powerful

@@ -1,7 +1,4 @@
----
-title: "User defined HCL functions"
-keywords: build, buildx, bake, buildkit, hcl
----
+# User defined HCL functions
 
 ## Using interpolation to tag an image with the git sha
 

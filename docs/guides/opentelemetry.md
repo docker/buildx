@@ -1,8 +1,4 @@
----
-title: "OpenTelemetry support"
-description: "OpenTelemetry support for your builder"
-keywords: build, buildx, buildkit, opentelemetry, tracing
----
+# OpenTelemetry support
 
 To capture the trace to [Jaeger](https://github.com/jaegertracing/jaeger), set
 `JAEGER_TRACE` environment variable to the collection address using a `driver-opt`.

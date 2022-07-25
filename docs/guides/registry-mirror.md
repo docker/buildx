@@ -1,8 +1,4 @@
----
-title: "Registry mirror"
-description: "Using a registry mirror in your build"
-keywords: build, buildx, buildkit, registry
----
+# Registry mirror
 
 You can define a registry mirror to use for your builds by providing a [BuildKit daemon configuration](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md)
 while creating a builder with the [`--config` flags](https://docs.docker.com/engine/reference/commandline/buildx_create/#config).

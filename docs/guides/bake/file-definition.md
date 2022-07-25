@@ -1,7 +1,4 @@
----
-title: "Bake file definition"
-keywords: build, buildx, bake, buildkit, hcl, json, compose
----
+# Bake file definition
 
 `buildx bake` supports HCL, JSON and Compose file format for defining build
 [groups](#group), [targets](#target) as well as [variables](#variable) and

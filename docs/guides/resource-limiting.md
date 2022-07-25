@@ -1,8 +1,4 @@
----
-title: "Resource limiting"
-description: "Max parallelism and limit on TCP connection in your build"
-keywords: build, buildx, buildkit, compute, network
----
+# Resource limiting
 
 ## Max parallelism
 

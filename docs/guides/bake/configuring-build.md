@@ -1,7 +1,4 @@
----
-title: "Configuring builds"
-keywords: build, buildx, bake, buildkit, hcl, json
----
+# Configuring builds
 
 Bake supports loading build definition from files, but sometimes you need even
 more flexibility to configure this definition.

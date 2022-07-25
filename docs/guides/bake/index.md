@@ -1,7 +1,4 @@
----
-title: "High-level build options with Bake"
-keywords: build, buildx, bake, buildkit, hcl, json, compose
----
+# High-level build options with Bake
 
 > This command is experimental.
 >

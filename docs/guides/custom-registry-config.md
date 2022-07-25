@@ -1,8 +1,4 @@
----
-title: "Using a custom registry configuration"
-description: "Set registry configuration in your builder"
-keywords: build, buildx, buildkit, registry
----
+# Using a custom registry configuration
 
 If you [create a `docker-container` or `kubernetes` builder](https://docs.docker.com/engine/reference/commandline/buildx_create/) and
 have specified certificates for registries in the [BuildKit daemon configuration](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md),
