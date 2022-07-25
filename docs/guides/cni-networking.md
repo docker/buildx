@@ -1,8 +1,4 @@
----
-title: "CNI networking"
-description: "Enhance your builder with CNI networking"
-keywords: build, buildx, buildkit, cni, network
----
+# CNI networking
 
 It can be useful to use a bridge network for your builder if for example you
 encounter a network port contention during multiple builds. If you're using

@@ -1,7 +1,4 @@
----
-title: "Building from Compose file"
-keywords: build, buildx, bake, buildkit, compose
----
+# Building from Compose file
 
 ## Specification
 

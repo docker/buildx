@@ -1,7 +1,4 @@
----
-title: "Defining additional build contexts and linking targets"
-keywords: build, buildx, bake, buildkit, hcl
----
+# Defining additional build contexts and linking targets
 
 In addition to the main `context` key that defines the build context each target
 can also define additional named contexts with a map defined with key `contexts`.

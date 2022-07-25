@@ -1,8 +1,4 @@
----
-title: "Remote builder"
-description: "Connect buildx to an external buildkitd instance"
-keywords: build, buildx, buildkit
----
+# Remote builder
 
 The buildx remote driver allows for more complex custom build workloads that
 allow users to connect to external buildkit instances. This is useful for

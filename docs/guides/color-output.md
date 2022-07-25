@@ -1,8 +1,4 @@
----
-title: "Color output controls"
-description: "Modifying colors of progress output"
-keywords: build, buildx, buildkit
----
+# Color output controls
 
 Buildx has support for modifying the colors that are used to output information
 to the terminal. You can set the environment variable `BUILDKIT_COLORS` to

@@ -1,8 +1,4 @@
----
-title: "Using a custom network"
-description: "Create and use a custom network for your build"
-keywords: build, buildx, buildkit, network
----
+# Using a custom network
 
 [Create a network](https://docs.docker.com/engine/reference/commandline/network_create/)
 named `foonet`:
