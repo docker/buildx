@@ -1,0 +1,56 @@
+name: docs
+
+on:
+  release:
+    types: [ published ]
+
+jobs:
+  open-pr:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout docs repo
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.GHPAT_DOCS_DISPATCH }}
+          repository: docker/docker.github.io
+          ref: master
+      -
+        name: Prepare
+        run: |
+          rm -rf ./_data/buildx/*
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      -
+        name: Build docs
+        uses: docker/bake-action@v2
+        with:
+          source: ${{ github.server_url }}/${{ github.repository }}.git#${{ github.event.release.name }}
+          targets: update-docs
+          set: |
+            *.output=/tmp/buildx-docs
+        env:
+          DOCS_FORMATS: yaml
+      -
+        name: Copy files
+        run: |
+          cp /tmp/buildx-docs/out/reference/*.yaml ./_data/buildx/
+      -
+        name: Commit changes
+        run: |
+          git add -A .
+      -
+        name: Create PR on docs repo
+        uses: peter-evans/create-pull-request@923ad837f191474af6b1721408744feb989a4c27 # v4.0.4
+        with:
+          token: ${{ secrets.GHPAT_DOCS_DISPATCH }}
+          push-to-fork: docker-tools-robot/docker.github.io
+          commit-message: "build: update buildx reference to ${{ github.event.release.name }}"
+          signoff: true
+          branch: dispatch/buildx-ref-${{ github.event.release.name }}
+          delete-branch: true
+          title: Update buildx reference to ${{ github.event.release.name }}
+          body: |
+            Update the buildx reference documentation to keep in sync with the latest release `${{ github.event.release.name }}`
+          draft: false
