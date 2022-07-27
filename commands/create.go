@@ -134,6 +134,11 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
+	ngOriginal := ng
+	if ngOriginal != nil {
+		ngOriginal = ngOriginal.Copy()
+	}
+
 	if ng == nil {
 		ng = &store.NodeGroup{
 			Name: name,
@@ -224,16 +229,6 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		return err
 	}
 
-	if in.use && ep != "" {
-		current, err := storeutil.GetCurrentEndpoint(dockerCli)
-		if err != nil {
-			return err
-		}
-		if err := txn.SetCurrent(current, ng.Name, false, false); err != nil {
-			return err
-		}
-	}
-
 	ngi := &nginfo{ng: ng}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
@@ -244,7 +239,27 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	}
 	for _, info := range ngi.drivers {
 		if err := info.di.Err; err != nil {
-			logrus.Errorf("failed to initialize builder %s (%s): %s", ng.Name, info.di.Name, err)
+			err := errors.Errorf("failed to initialize builder %s (%s): %s", ng.Name, info.di.Name, err)
+			var err2 error
+			if ngOriginal == nil {
+				err2 = txn.Remove(ng.Name)
+			} else {
+				err2 = txn.Save(ngOriginal)
+			}
+			if err2 != nil {
+				logrus.Warnf("Could not rollback to previous state: %s", err2)
+			}
+			return err
+		}
+	}
+
+	if in.use && ep != "" {
+		current, err := storeutil.GetCurrentEndpoint(dockerCli)
+		if err != nil {
+			return err
+		}
+		if err := txn.SetCurrent(current, ng.Name, false, false); err != nil {
+			return err
 		}
 	}
 
