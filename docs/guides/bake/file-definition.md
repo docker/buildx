@@ -40,23 +40,26 @@ $ docker buildx bake webapp-dev
 Complete list of valid target fields available for [HCL](#hcl-definition) and
 [JSON](#json-definition) definitions:
 
-* `args`
-* `cache-from`
-* `cache-to`
-* `context`
-* `contexts`
-* `dockerfile`
-* `inherits`
-* `labels`
-* `no-cache`
-* `no-cache-filter`
-* `output`
-* `platform`
-* `pull`
-* `secrets`
-* `ssh`
-* `tags`
-* `target`
+| Name                | Type   | Description                                                                                                                                     |
+|---------------------|--------|-------------------------------------------------------------------------------------------------------------------------------------------------|
+| `inherits`          | List   | [Inherit build options](#merging-and-inheritance) from other targets                                                                            |
+| `args`              | Map    | Set build-time variables (same as [`--build-arg` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                     |
+| `cache-from`        | List   | External cache sources (same as [`--cache-from` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                      |
+| `cache-to`          | List   | Cache export destinations (same as [`--cache-to` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                     |
+| `context`           | String | Set of files located in the specified path or URL                                                                                               |
+| `contexts`          | Map    | Additional build contexts (same as [`--build-context` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                |
+| `dockerfile`        | String | Name of the Dockerfile (same as [`--file` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                            |
+| `dockerfile-inline` | String | Inline Dockerfile content                                                                                                                       |
+| `labels`            | Map    | Set metadata for an image (same as [`--label` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                        |
+| `no-cache`          | Bool   | Do not use cache when building the image (same as [`--no-cache` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))      |
+| `no-cache-filter`   | List   | Do not cache specified stages (same as [`--no-cache-filter` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))          |
+| `output`            | List   | Output destination (same as [`--output` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                              |
+| `platforms`         | List   | Set target platforms for build (same as [`--platform` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                |
+| `pull`              | Bool   | Always attempt to pull all referenced images (same as [`--pull` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))      |
+| `secret`            | List   | Secret to expose to the build (same as [`--secret` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))                   |
+| `ssh`               | List   | SSH agent socket or keys to expose to the build (same as [`--ssh` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))    |
+| `tags`              | List   | Name and optionally a tag in the format `name:tag` (same as [`--tag` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/)) |
+| `target`            | String | Set the target build stage to build (same as [`--target` flag](https://docs.docker.com/engine/reference/commandline/buildx_build/))             |
 
 ### Group
 
