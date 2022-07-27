@@ -3,7 +3,7 @@
 > This command is experimental.
 >
 > The design of bake is in early stages, and we are looking for [feedback from users](https://github.com/docker/buildx/issues).
-{: .important }
+{: .experimental }
 
 Buildx also aims to provide support for high-level build concepts that go beyond
 invoking a single build command. We want to support building all the images in
