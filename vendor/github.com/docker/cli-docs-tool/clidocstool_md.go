@@ -155,11 +155,9 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 		fmt.Fprintf(b, "%s\n\n", desc)
 	}
 
-	if len(cmd.Aliases) != 0 {
-		fmt.Fprintf(b, "### Aliases\n\n`%s`", cmd.Name())
-		for _, a := range cmd.Aliases {
-			fmt.Fprintf(b, ", `%s`", a)
-		}
+	if aliases := getAliases(cmd); len(aliases) != 0 {
+		fmt.Fprint(b, "### Aliases\n\n")
+		fmt.Fprint(b, "`"+strings.Join(aliases, "`, `")+"`")
 		fmt.Fprint(b, "\n\n")
 	}
 

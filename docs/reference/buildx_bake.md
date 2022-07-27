@@ -9,7 +9,7 @@ Build from a file
 
 ### Aliases
 
-`bake`, `f`
+`docker buildx bake`, `docker buildx f`
 
 ### Options
 

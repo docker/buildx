@@ -18,6 +18,7 @@ import (
 	"errors"
 	"io"
 	"os"
+	"strings"
 
 	"github.com/spf13/cobra"
 )
@@ -96,4 +97,27 @@ func copyFile(src string, dst string) error {
 	defer df.Close()
 	_, err = io.Copy(df, sf)
 	return err
+}
+
+func getAliases(cmd *cobra.Command) []string {
+	if a := cmd.Annotations["aliases"]; a != "" {
+		aliases := strings.Split(a, ",")
+		for i := 0; i < len(aliases); i++ {
+			aliases[i] = strings.TrimSpace(aliases[i])
+		}
+		return aliases
+	}
+	if len(cmd.Aliases) == 0 {
+		return cmd.Aliases
+	}
+
+	var parentPath string
+	if cmd.HasParent() {
+		parentPath = cmd.Parent().CommandPath() + " "
+	}
+	aliases := []string{cmd.CommandPath()}
+	for _, a := range cmd.Aliases {
+		aliases = append(aliases, parentPath+a)
+	}
+	return aliases
 }
