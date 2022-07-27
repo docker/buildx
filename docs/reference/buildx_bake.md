@@ -172,9 +172,11 @@ Complete list of overridable fields:
 * `dockerfile`
 * `labels`
 * `no-cache`
+* `no-cache-filter`
 * `output`
 * `platform`
 * `pull`
+* `push`
 * `secrets`
 * `ssh`
 * `tags`
