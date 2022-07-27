@@ -320,6 +320,9 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 }
 
 func csvToMap(in []string) (map[string]string, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
 	m := make(map[string]string, len(in))
 	for _, s := range in {
 		csvReader := csv.NewReader(strings.NewReader(s))

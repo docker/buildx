@@ -8,6 +8,7 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type NodeGroup struct {
@@ -59,17 +60,42 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		return err
 	}
 
+	var files map[string][]byte
+	if configFile != "" {
+		files, err = confutil.LoadConfigFiles(configFile)
+		if err != nil {
+			return err
+		}
+	}
+
 	if i != -1 {
 		n := ng.Nodes[i]
+		needsRestart := false
 		if endpointsSet {
 			n.Endpoint = endpoint
+			needsRestart = true
 		}
 		if len(platforms) > 0 {
 			n.Platforms = pp
 		}
 		if flags != nil {
 			n.Flags = flags
+			needsRestart = true
 		}
+		if do != nil {
+			n.DriverOpts = do
+			needsRestart = true
+		}
+		if configFile != "" {
+			for k, v := range files {
+				n.Files[k] = v
+			}
+			needsRestart = true
+		}
+		if needsRestart {
+			logrus.Warn("new settings may not be used until builder is restarted")
+		}
+
 		ng.Nodes[i] = n
 		if err := ng.validateDuplicates(endpoint, i); err != nil {
 			return err
@@ -92,14 +118,7 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		Platforms:  pp,
 		Flags:      flags,
 		DriverOpts: do,
-	}
-
-	if configFile != "" {
-		files, err := confutil.LoadConfigFiles(configFile)
-		if err != nil {
-			return err
-		}
-		n.Files = files
+		Files:      files,
 	}
 
 	ng.Nodes = append(ng.Nodes, n)
