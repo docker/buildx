@@ -119,7 +119,7 @@ For more information on scalability, see the options for [buildx create](https:/
 
 ## Multi-platform builds
 
-The kubernetes buildx driver has support for creating [multi-platform images](https://docs.docker.com/build/buildx/multi-platform-images/),
+The kubernetes buildx driver has support for creating [multi-platform images](https://docs.docker.com/build/buildx/multiplatform-images/),
 for easily building for multiple platforms at once.
 
 ### QEMU
