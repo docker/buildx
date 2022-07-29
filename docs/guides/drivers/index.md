@@ -8,7 +8,7 @@ Currently, we support the following drivers:
 
 - The `docker` driver, that uses the BuildKit library bundled into the Docker
   daemon.
-  ([reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+  ([guide](./docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
 - The `docker-container` driver, that launches a dedicated BuildKit container
   using Docker, for access to advanced features.
   ([guide](./docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
