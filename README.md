@@ -91,7 +91,7 @@ Docker Linux packages also include Docker Buildx when installed using the
 > instead. For Linux, we recommend that you follow the [instructions specific for your distribution](#linux-packages).
 
 You can also download the latest binary from the [GitHub releases page](https://github.com/docker/buildx/releases/latest).
-We generate [SLSA3 provenance](slsa.dev) using the OpenSSF's [slsa-framework/slsa-github-generator](https://github.com/slsa-framework/slsa-github-generator) during the release process. To verify a relase binary:
+We generate [SLSA3 provenance](slsa.dev) using the OpenSSF's [slsa-framework/slsa-github-generator](https://github.com/slsa-framework/slsa-github-generator) during the release process. To verify a release binary:
 1. Install the verification tool from [slsa-framework/slsa-verifier#installation](https://github.com/slsa-framework/slsa-verifier#installation).
 2. Download the provenance file `attestation.intoto.jsonl` from the [GitHub releases page](https://github.com/docker/buildx/releases/latest).
 3. Run the verifier:
