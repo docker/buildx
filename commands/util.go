@@ -65,9 +65,18 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 			return nil, errors.Errorf("failed to find driver %q", f)
 		}
 	} else {
+		// empty driver means nodegroup was implicitly created as a default
+		// driver for a docker context and allows falling back to a
+		// docker-container driver for older daemon that doesn't support
+		// buildkit (< 18.06).
 		ep := ng.Nodes[0].Endpoint
 		dockerapi, err := clientForEndpoint(dockerCli, ep)
 		if err != nil {
+			return nil, err
+		}
+		// check if endpoint is healthy is needed to determine the driver type.
+		// if this fails then can't continue with driver selection.
+		if _, err = dockerapi.Ping(ctx); err != nil {
 			return nil, err
 		}
 		f, err = driver.GetDefaultFactory(ctx, ep, dockerapi, false)
