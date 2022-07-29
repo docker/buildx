@@ -117,9 +117,9 @@ ensuring better local cache utilization.
 
 For more information on scalability, see the options for [buildx create](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver-opt).
 
-## Multi-arch builds
+## Multi-platform builds
 
-The kubernetes buildx driver has support for creating [multi-architecture images](https://docs.docker.com/build/buildx/#build-multi-platform-images),
+The kubernetes buildx driver has support for creating [multi-platform images](https://docs.docker.com/build/buildx/multi-platform-images/),
 for easily building for multiple platforms at once.
 
 ### QEMU
