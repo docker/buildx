@@ -5,6 +5,7 @@
 [![Build Status](https://img.shields.io/github/workflow/status/docker/buildx/build?label=build&logo=github&style=flat-square)](https://github.com/docker/buildx/actions?query=workflow%3Abuild)
 [![Go Report Card](https://goreportcard.com/badge/github.com/docker/buildx?style=flat-square)](https://goreportcard.com/report/github.com/docker/buildx)
 [![codecov](https://img.shields.io/codecov/c/github/docker/buildx?logo=codecov&style=flat-square)](https://codecov.io/gh/docker/buildx)
+[![SLSA 3](https://slsa.dev/images/gh-badge-level3.svg)](https://slsa.dev/images/gh-badge-level3.svg)
 
 `buildx` is a Docker CLI plugin for extended build capabilities with
 [BuildKit](https://github.com/moby/buildkit).
@@ -90,6 +91,13 @@ Docker Linux packages also include Docker Buildx when installed using the
 > instead. For Linux, we recommend that you follow the [instructions specific for your distribution](#linux-packages).
 
 You can also download the latest binary from the [GitHub releases page](https://github.com/docker/buildx/releases/latest).
+We generate [SLSA3 provenance](slsa.dev) using the OpenSSF's [slsa-framework/slsa-github-generator](https://github.com/slsa-framework/slsa-github-generator) during the release process. To verify a relase binary:
+1. Install the verification tool from [slsa-framework/slsa-verifier#installation](https://github.com/slsa-framework/slsa-verifier#installation).
+2. Download the provenance file `attestation.intoto.jsonl`.
+3. Run:
+```shell
+slsa-verifier -artifact-path buildx-v1.darwin-amd64 -provenance attestation.intoto.jsonl -source github.com/docker/buildx -branch master
+```
 
 Rename the relevant binary and copy it to the destination matching your OS:
 
