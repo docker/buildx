@@ -1,4 +1,4 @@
-# Remote builder
+# Remote driver
 
 The buildx remote driver allows for more complex custom build workloads that
 allow users to connect to external buildkit instances. This is useful for
@@ -174,3 +174,5 @@ $ docker buildx create \
   --driver remote \
   kube-pod://buildkitd-XXXXXXXXXX-xxxxx
 ```
+
+<!--- FIXME: for 0.9, add further reading section with link to reference --->

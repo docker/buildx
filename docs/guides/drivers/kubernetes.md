@@ -1,4 +1,4 @@
-# Kubernetes builder
+# Kubernetes driver
 
 The buildx kubernetes driver allows connecting your local development or ci
 environments to your kubernetes cluster to allow access to more powerful
@@ -230,3 +230,9 @@ $ docker buildx create \
 ```
 
 This will create your pods without `securityContext.privileged`.
+
+## Further reading
+
+For more information on the kubernetes driver, see the [buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
+
+<!--- FIXME: for 0.9, make reference link relative --->

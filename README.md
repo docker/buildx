@@ -40,7 +40,7 @@ Key features:
   - [Using a custom registry configuration](docs/guides/custom-registry-config.md)
   - [OpenTelemetry support](docs/guides/opentelemetry.md)
   - [Registry mirror](docs/guides/registry-mirror.md)
-  - [Remote builder](docs/guides/remote-builder.md)
+  - [Drivers](docs/guides/drivers/index.md)
   - [Resource limiting](docs/guides/resource-limiting.md)
 - [Reference](docs/reference/buildx.md)
   - [`buildx bake`](docs/reference/buildx_bake.md)
@@ -185,27 +185,17 @@ specifying target platform. In addition, Buildx also supports new features that
 are not yet available for regular `docker build` like building manifest lists,
 distributed caching, and exporting build results to OCI image tarballs.
 
-Buildx is supposed to be flexible and can be run in different configurations
-that are exposed through a driver concept. Currently, we support:
+Buildx is flexible and can be run in different configurations that are exposed
+through various "drivers". Each driver defines how and where a build should
+run, and have different feature sets.
 
-- a [`docker` driver](docs/reference/buildx_create.md#docker-driver) that uses
-  the BuildKit library bundled into the Docker daemon binary,
-- a [`docker-container` driver](docs/reference/buildx_create.md#docker-container-driver)
-  that automatically launches BuildKit inside a Docker container,
-- a [`kubernetes` driver](docs/reference/buildx_create.md#kubernetes-driver) to
-  spin up pods with defined BuildKit container image to build your images.
-- a [`remote` driver](docs/reference/buildx_create.md#remote-driver) to
-  connect to manually provisioned and managed buildkitd instances.
+We currently support the following drivers:
+- The `docker` driver ([reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `docker-container` driver ([guide](./docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `kubernetes` driver ([guide](./kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `remote` driver ([guide](./remote.md))
 
-We plan to add more drivers in the future.
-
-The user experience of using buildx is very similar across drivers, but there
-are some features that are not currently supported by the `docker` driver,
-because the BuildKit library bundled into docker daemon currently uses a
-different storage component. In contrast, all images built with `docker` driver
-are automatically added to the `docker images` view by default, whereas when
-using other drivers the method for outputting an image needs to be selected
-with `--output`.
+For more information on drivers, see the [drivers guide](docs/guides/drivers/index.md).
 
 ## Working with builder instances
 
