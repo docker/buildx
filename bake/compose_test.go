@@ -418,7 +418,7 @@ func TestServiceName(t *testing.T) {
 		},
 		{
 			svc:     "a.b",
-			wantErr: true,
+			wantErr: false,
 		},
 		{
 			svc:     "_a",
