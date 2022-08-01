@@ -25,6 +25,7 @@ services:
       tags:
         - foo:v1.0.0
         - docker.io/username/foo:my-other-tag
+        - ${COMPOSE_PROJECT_NAME}:1.0.0
 
 
     cap_add:

@@ -19,6 +19,7 @@ package template
 import (
 	"fmt"
 	"regexp"
+	"sort"
 	"strings"
 
 	"github.com/sirupsen/logrus"
@@ -27,7 +28,7 @@ import (
 var delimiter = "\\$"
 var substitutionNamed = "[_a-z][_a-z0-9]*"
 
-var substitutionBraced = "[_a-z][_a-z0-9]*(?::?[-?](.*}|[^}]*))?"
+var substitutionBraced = "[_a-z][_a-z0-9]*(?::?[-+?](.*}|[^}]*))?"
 
 var patternString = fmt.Sprintf(
 	"%s(?i:(?P<escaped>%s)|(?P<named>%s)|{(?P<braced>%s)}|(?P<invalid>))",
@@ -60,10 +61,12 @@ type SubstituteFunc func(string, Mapping) (string, bool, error)
 // SubstituteWith substitute variables in the string with their values.
 // It accepts additional substitute function.
 func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, subsFuncs ...SubstituteFunc) (string, error) {
-	if len(subsFuncs) == 0 {
-		subsFuncs = getDefaultSortedSubstitutionFunctions(template)
-	}
 	var err error
+
+	if len(subsFuncs) == 0 {
+		_, subsFunc := getSubstitutionFunctionForTemplate(template)
+		subsFuncs = []SubstituteFunc{subsFunc}
+	}
 	result := pattern.ReplaceAllStringFunc(template, func(substring string) string {
 		closingBraceIndex := getFirstBraceClosingIndex(substring)
 		rest := ""
@@ -121,23 +124,31 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 	return result, err
 }
 
-func getDefaultSortedSubstitutionFunctions(template string, fns ...SubstituteFunc) []SubstituteFunc {
-	hyphenIndex := strings.IndexByte(template, '-')
-	questionIndex := strings.IndexByte(template, '?')
-	if hyphenIndex < 0 || hyphenIndex > questionIndex {
-		return []SubstituteFunc{
-			requiredNonEmpty,
-			required,
-			softDefault,
-			hardDefault,
+func getSubstitutionFunctionForTemplate(template string) (string, SubstituteFunc) {
+	interpolationMapping := []struct {
+		string
+		SubstituteFunc
+	}{
+		{":?", requiredErrorWhenEmptyOrUnset},
+		{"?", requiredErrorWhenUnset},
+		{":-", defaultWhenEmptyOrUnset},
+		{"-", defaultWhenUnset},
+		{":+", defaultWhenNotEmpty},
+		{"+", defaultWhenSet},
+	}
+	sort.Slice(interpolationMapping, func(i, j int) bool {
+		idxI := strings.Index(template, interpolationMapping[i].string)
+		idxJ := strings.Index(template, interpolationMapping[j].string)
+		if idxI < 0 {
+			return false
 		}
-	}
-	return []SubstituteFunc{
-		softDefault,
-		hardDefault,
-		requiredNonEmpty,
-		required,
-	}
+		if idxJ < 0 {
+			return true
+		}
+		return idxI < idxJ
+	})
+
+	return interpolationMapping[0].string, interpolationMapping[0].SubstituteFunc
 }
 
 func getFirstBraceClosingIndex(s string) int {
@@ -203,9 +214,10 @@ func recurseExtract(value interface{}, pattern *regexp.Regexp) map[string]Variab
 }
 
 type Variable struct {
-	Name         string
-	DefaultValue string
-	Required     bool
+	Name          string
+	DefaultValue  string
+	PresenceValue string
+	Required      bool
 }
 
 func extractVariable(value interface{}, pattern *regexp.Regexp) ([]Variable, bool) {
@@ -229,6 +241,7 @@ func extractVariable(value interface{}, pattern *regexp.Regexp) ([]Variable, boo
 		}
 		name := val
 		var defaultValue string
+		var presenceValue string
 		var required bool
 		switch {
 		case strings.Contains(val, ":?"):
@@ -241,37 +254,52 @@ func extractVariable(value interface{}, pattern *regexp.Regexp) ([]Variable, boo
 			name, defaultValue = partition(val, ":-")
 		case strings.Contains(val, "-"):
 			name, defaultValue = partition(val, "-")
+		case strings.Contains(val, ":+"):
+			name, presenceValue = partition(val, ":+")
+		case strings.Contains(val, "+"):
+			name, presenceValue = partition(val, "+")
 		}
 		values = append(values, Variable{
-			Name:         name,
-			DefaultValue: defaultValue,
-			Required:     required,
+			Name:          name,
+			DefaultValue:  defaultValue,
+			PresenceValue: presenceValue,
+			Required:      required,
 		})
 	}
 	return values, len(values) > 0
 }
 
 // Soft default (fall back if unset or empty)
-func softDefault(substitution string, mapping Mapping) (string, bool, error) {
-	sep := ":-"
-	if !strings.Contains(substitution, sep) {
-		return "", false, nil
-	}
-	name, defaultValue := partition(substitution, sep)
-	defaultValue, err := Substitute(defaultValue, mapping)
-	if err != nil {
-		return "", false, err
-	}
-	value, ok := mapping(name)
-	if !ok || value == "" {
-		return defaultValue, true, nil
-	}
-	return value, true, nil
+func defaultWhenEmptyOrUnset(substitution string, mapping Mapping) (string, bool, error) {
+	return withDefaultWhenAbsence(substitution, mapping, true)
 }
 
 // Hard default (fall back if-and-only-if empty)
-func hardDefault(substitution string, mapping Mapping) (string, bool, error) {
-	sep := "-"
+func defaultWhenUnset(substitution string, mapping Mapping) (string, bool, error) {
+	return withDefaultWhenAbsence(substitution, mapping, false)
+}
+
+func defaultWhenNotEmpty(substitution string, mapping Mapping) (string, bool, error) {
+	return withDefaultWhenPresence(substitution, mapping, true)
+}
+
+func defaultWhenSet(substitution string, mapping Mapping) (string, bool, error) {
+	return withDefaultWhenPresence(substitution, mapping, false)
+}
+
+func requiredErrorWhenEmptyOrUnset(substitution string, mapping Mapping) (string, bool, error) {
+	return withRequired(substitution, mapping, ":?", func(v string) bool { return v != "" })
+}
+
+func requiredErrorWhenUnset(substitution string, mapping Mapping) (string, bool, error) {
+	return withRequired(substitution, mapping, "?", func(_ string) bool { return true })
+}
+
+func withDefaultWhenPresence(substitution string, mapping Mapping, notEmpty bool) (string, bool, error) {
+	sep := "+"
+	if notEmpty {
+		sep = ":+"
+	}
 	if !strings.Contains(substitution, sep) {
 		return "", false, nil
 	}
@@ -281,18 +309,30 @@ func hardDefault(substitution string, mapping Mapping) (string, bool, error) {
 		return "", false, err
 	}
 	value, ok := mapping(name)
-	if !ok {
+	if ok && (!notEmpty || (notEmpty && value != "")) {
 		return defaultValue, true, nil
 	}
 	return value, true, nil
 }
 
-func requiredNonEmpty(substitution string, mapping Mapping) (string, bool, error) {
-	return withRequired(substitution, mapping, ":?", func(v string) bool { return v != "" })
-}
-
-func required(substitution string, mapping Mapping) (string, bool, error) {
-	return withRequired(substitution, mapping, "?", func(_ string) bool { return true })
+func withDefaultWhenAbsence(substitution string, mapping Mapping, emptyOrUnset bool) (string, bool, error) {
+	sep := "-"
+	if emptyOrUnset {
+		sep = ":-"
+	}
+	if !strings.Contains(substitution, sep) {
+		return "", false, nil
+	}
+	name, defaultValue := partition(substitution, sep)
+	defaultValue, err := Substitute(defaultValue, mapping)
+	if err != nil {
+		return "", false, err
+	}
+	value, ok := mapping(name)
+	if !ok || (emptyOrUnset && value == "") {
+		return defaultValue, true, nil
+	}
+	return value, true, nil
 }
 
 func withRequired(substitution string, mapping Mapping, sep string, valid func(string) bool) (string, bool, error) {

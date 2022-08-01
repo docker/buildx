@@ -37,7 +37,6 @@ func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 		}
 
 		if inherited {
-
 			value, ok := lookupFn(key)
 			if ok {
 				out[key] = value
@@ -49,9 +48,6 @@ func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 		value, left, err := extractVarValue(left, out, lookupFn)
 		if err != nil {
 			return err
-		}
-		if lookUpValue, ok := lookupFn(key); ok {
-			value = lookUpValue
 		}
 
 		out[key] = value
@@ -85,7 +81,9 @@ func getStatementStart(src []byte) []byte {
 }
 
 // locateKeyName locates and parses key name and returns rest of slice
-func locateKeyName(src []byte) (key string, cutset []byte, inherited bool, err error) {
+func locateKeyName(src []byte) (string, []byte, bool, error) {
+	var key string
+	var inherited bool
 	// trim "export" and space at beginning
 	src = bytes.TrimLeftFunc(bytes.TrimPrefix(src, []byte(exportPrefix)), isSpace)
 
@@ -105,9 +103,9 @@ loop:
 			offset = i + 1
 			inherited = char == '\n'
 			break loop
-		case '_':
+		case '_', '.':
 		default:
-			// variable name should match [A-Za-z0-9_]
+			// variable name should match [A-Za-z0-9_.]
 			if unicode.IsLetter(rchar) || unicode.IsNumber(rchar) {
 				continue
 			}
@@ -124,12 +122,12 @@ loop:
 
 	// trim whitespace
 	key = strings.TrimRightFunc(key, unicode.IsSpace)
-	cutset = bytes.TrimLeftFunc(src[offset:], isSpace)
+	cutset := bytes.TrimLeftFunc(src[offset:], isSpace)
 	return key, cutset, inherited, nil
 }
 
 // extractVarValue extracts variable value and returns rest of slice
-func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (value string, rest []byte, err error) {
+func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (string, []byte, error) {
 	quote, isQuoted := hasQuotePrefix(src)
 	if !isQuoted {
 		// unquoted value - read until new line
@@ -138,13 +136,17 @@ func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (v
 		if end < 0 {
 			value := strings.Split(string(src), "#")[0] // Remove inline comments on unquoted lines
 			value = strings.TrimRightFunc(value, unicode.IsSpace)
-			return expandVariables(value, envMap, lookupFn), nil, nil
+
+			retVal, err := expandVariables(value, envMap, lookupFn)
+			return retVal, nil, err
 		}
 
 		value := strings.Split(string(src[0:end]), "#")[0]
 		value = strings.TrimRightFunc(value, unicode.IsSpace)
 		rest = src[end:]
-		return expandVariables(value, envMap, lookupFn), rest, nil
+
+		retVal, err := expandVariables(value, envMap, lookupFn)
+		return retVal, rest, err
 	}
 
 	// lookup quoted string terminator
@@ -160,11 +162,16 @@ func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (v
 
 		// trim quotes
 		trimFunc := isCharFunc(rune(quote))
-		value = string(bytes.TrimLeftFunc(bytes.TrimRightFunc(src[0:i], trimFunc), trimFunc))
+		value := string(bytes.TrimLeftFunc(bytes.TrimRightFunc(src[0:i], trimFunc), trimFunc))
 		if quote == prefixDoubleQuote {
 			// unescape newlines for double quote (this is compat feature)
 			// and expand environment variables
-			value = expandVariables(expandEscapes(value), envMap, lookupFn)
+
+			retVal, err := expandVariables(expandEscapes(value), envMap, lookupFn)
+			if err != nil {
+				return "", nil, err
+			}
+			value = retVal
 		}
 
 		return value, src[i+1:], nil
@@ -187,6 +194,8 @@ func expandEscapes(str string) string {
 			return "\n"
 		case "r":
 			return "\r"
+		case "$":
+			return "$$"
 		default:
 			return match
 		}
@@ -201,14 +210,14 @@ func indexOfNonSpaceChar(src []byte) int {
 }
 
 // hasQuotePrefix reports whether charset starts with single or double quote and returns quote character
-func hasQuotePrefix(src []byte) (quote byte, isQuoted bool) {
+func hasQuotePrefix(src []byte) (byte, bool) {
 	if len(src) == 0 {
 		return 0, false
 	}
 
-	switch prefix := src[0]; prefix {
+	switch quote := src[0]; quote {
 	case prefixDoubleQuote, prefixSingleQuote:
-		return prefix, true
+		return quote, true // isQuoted
 	default:
 		return 0, false
 	}

@@ -204,26 +204,26 @@ func (s *ServiceConfig) NetworksByPriority() []string {
 }
 
 const (
-	//PullPolicyAlways always pull images
+	// PullPolicyAlways always pull images
 	PullPolicyAlways = "always"
-	//PullPolicyNever never pull images
+	// PullPolicyNever never pull images
 	PullPolicyNever = "never"
-	//PullPolicyIfNotPresent pull missing images
+	// PullPolicyIfNotPresent pull missing images
 	PullPolicyIfNotPresent = "if_not_present"
-	//PullPolicyMissing pull missing images
+	// PullPolicyMissing pull missing images
 	PullPolicyMissing = "missing"
-	//PullPolicyBuild force building images
+	// PullPolicyBuild force building images
 	PullPolicyBuild = "build"
 )
 
 const (
-	//RestartPolicyAlways always restart the container if it stops
+	// RestartPolicyAlways always restart the container if it stops
 	RestartPolicyAlways = "always"
-	//RestartPolicyOnFailure restart the container if it exits due to an error
+	// RestartPolicyOnFailure restart the container if it exits due to an error
 	RestartPolicyOnFailure = "on-failure"
-	//RestartPolicyNo do not automatically restart the container
+	// RestartPolicyNo do not automatically restart the container
 	RestartPolicyNo = "no"
-	//RestartPolicyUnlessStopped always restart the container unless the container is stopped (manually or otherwise)
+	// RestartPolicyUnlessStopped always restart the container unless the container is stopped (manually or otherwise)
 	RestartPolicyUnlessStopped = "unless-stopped"
 )
 
@@ -275,8 +275,8 @@ func (s ServiceConfig) GetDependencies() []string {
 
 type set map[string]struct{}
 
-func (s set) append(strings ...string) {
-	for _, str := range strings {
+func (s set) append(strs ...string) {
+	for _, str := range strs {
 		s[str] = struct{}{}
 	}
 }
@@ -459,9 +459,9 @@ func (s SSHKey) MarshalYAML() (interface{}, error) {
 // MarshalJSON makes SSHKey implement json.Marshaller
 func (s SSHKey) MarshalJSON() ([]byte, error) {
 	if s.Path == "" {
-		return []byte(fmt.Sprintf(`"%s"`, s.ID)), nil
+		return []byte(fmt.Sprintf(`%q`, s.ID)), nil
 	}
-	return []byte(fmt.Sprintf(`"%s": %s`, s.ID, s.Path)), nil
+	return []byte(fmt.Sprintf(`%q: %s`, s.ID, s.Path)), nil
 }
 
 // MappingWithColon is a mapping type that can be converted from a list of
@@ -617,10 +617,11 @@ type PlacementPreferences struct {
 
 // ServiceNetworkConfig is the network configuration for a service
 type ServiceNetworkConfig struct {
-	Priority    int      `yaml:",omitempty" json:"priotirt,omitempty"`
-	Aliases     []string `yaml:",omitempty" json:"aliases,omitempty"`
-	Ipv4Address string   `mapstructure:"ipv4_address" yaml:"ipv4_address,omitempty" json:"ipv4_address,omitempty"`
-	Ipv6Address string   `mapstructure:"ipv6_address" yaml:"ipv6_address,omitempty" json:"ipv6_address,omitempty"`
+	Priority     int      `yaml:",omitempty" json:"priority,omitempty"`
+	Aliases      []string `yaml:",omitempty" json:"aliases,omitempty"`
+	Ipv4Address  string   `mapstructure:"ipv4_address" yaml:"ipv4_address,omitempty" json:"ipv4_address,omitempty"`
+	Ipv6Address  string   `mapstructure:"ipv6_address" yaml:"ipv6_address,omitempty" json:"ipv6_address,omitempty"`
+	LinkLocalIPs []string `mapstructure:"link_local_ips" yaml:"link_local_ips,omitempty" json:"link_local_ips,omitempty"`
 
 	Extensions map[string]interface{} `yaml:",inline" json:"-"`
 }
