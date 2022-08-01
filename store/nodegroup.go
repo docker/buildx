@@ -110,6 +110,44 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 	return nil
 }
 
+func (ng *NodeGroup) Copy() *NodeGroup {
+	nodes := make([]Node, len(ng.Nodes))
+	for i, node := range ng.Nodes {
+		nodes[i] = *node.Copy()
+	}
+	return &NodeGroup{
+		Name:    ng.Name,
+		Driver:  ng.Driver,
+		Nodes:   nodes,
+		Dynamic: ng.Dynamic,
+	}
+}
+
+func (n *Node) Copy() *Node {
+	platforms := []specs.Platform{}
+	copy(platforms, n.Platforms)
+	flags := []string{}
+	copy(flags, n.Flags)
+	driverOpts := map[string]string{}
+	for k, v := range n.DriverOpts {
+		driverOpts[k] = v
+	}
+	files := map[string][]byte{}
+	for k, v := range n.Files {
+		vv := []byte{}
+		copy(vv, v)
+		files[k] = vv
+	}
+	return &Node{
+		Name:       n.Name,
+		Endpoint:   n.Endpoint,
+		Platforms:  platforms,
+		Flags:      flags,
+		DriverOpts: driverOpts,
+		Files:      files,
+	}
+}
+
 func (ng *NodeGroup) validateDuplicates(ep string, idx int) error {
 	i := 0
 	for _, n := range ng.Nodes {
