@@ -4,12 +4,15 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"net/url"
+	"strings"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution/reference"
+	"github.com/moby/buildkit/util/contentutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -17,46 +20,46 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descriptor) ([]byte, ocispec.Descriptor, error) {
-	ref, err := parseRef(in)
-	if err != nil {
-		return nil, ocispec.Descriptor{}, err
-	}
+type Source struct {
+	Desc ocispec.Descriptor
+	Ref  reference.Named
+}
 
+func (r *Resolver) Combine(ctx context.Context, srcs []*Source) ([]byte, ocispec.Descriptor, error) {
 	eg, ctx := errgroup.WithContext(ctx)
 
-	dts := make([][]byte, len(descs))
+	dts := make([][]byte, len(srcs))
 	for i := range dts {
 		func(i int) {
 			eg.Go(func() error {
-				dt, err := r.GetDescriptor(ctx, ref.String(), descs[i])
+				dt, err := r.GetDescriptor(ctx, srcs[i].Ref.String(), srcs[i].Desc)
 				if err != nil {
 					return err
 				}
 				dts[i] = dt
 
-				if descs[i].MediaType == "" {
+				if srcs[i].Desc.MediaType == "" {
 					mt, err := detectMediaType(dt)
 					if err != nil {
 						return err
 					}
-					descs[i].MediaType = mt
+					srcs[i].Desc.MediaType = mt
 				}
 
-				mt := descs[i].MediaType
+				mt := srcs[i].Desc.MediaType
 
 				switch mt {
 				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
-					p := descs[i].Platform
-					if descs[i].Platform == nil {
+					p := srcs[i].Desc.Platform
+					if srcs[i].Desc.Platform == nil {
 						p = &ocispec.Platform{}
 					}
 					if p.OS == "" || p.Architecture == "" {
-						if err := r.loadPlatform(ctx, p, in, dt); err != nil {
+						if err := r.loadPlatform(ctx, p, srcs[i].Ref.String(), dt); err != nil {
 							return err
 						}
 					}
-					descs[i].Platform = p
+					srcs[i].Desc.Platform = p
 				case images.MediaTypeDockerSchema1Manifest:
 					return errors.Errorf("schema1 manifests are not allowed in manifest lists")
 				}
@@ -71,14 +74,14 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 	}
 
 	// on single source, return original bytes
-	if len(descs) == 1 {
-		if mt := descs[0].MediaType; mt == images.MediaTypeDockerSchema2ManifestList || mt == ocispec.MediaTypeImageIndex {
-			return dts[0], descs[0], nil
+	if len(srcs) == 1 {
+		if mt := srcs[0].Desc.MediaType; mt == images.MediaTypeDockerSchema2ManifestList || mt == ocispec.MediaTypeImageIndex {
+			return dts[0], srcs[0].Desc, nil
 		}
 	}
 
 	m := map[digest.Digest]int{}
-	newDescs := make([]ocispec.Descriptor, 0, len(descs))
+	newDescs := make([]ocispec.Descriptor, 0, len(srcs))
 
 	addDesc := func(d ocispec.Descriptor) {
 		idx, ok := m[d.Digest]
@@ -103,8 +106,8 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 		}
 	}
 
-	for i, desc := range descs {
-		switch desc.MediaType {
+	for i, src := range srcs {
+		switch src.Desc.MediaType {
 		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 			var mfst ocispec.Index
 			if err := json.Unmarshal(dts[i], &mfst); err != nil {
@@ -114,7 +117,7 @@ func (r *Resolver) Combine(ctx context.Context, in string, descs []ocispec.Descr
 				addDesc(d)
 			}
 		default:
-			addDesc(desc)
+			addDesc(src.Desc)
 		}
 	}
 
@@ -167,6 +170,37 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 		return nil
 	}
 	return err
+}
+
+func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) error {
+	dest = reference.TagNameOnly(dest)
+	p, err := r.resolver().Pusher(ctx, dest.String())
+	if err != nil {
+		return err
+	}
+
+	srcRef := reference.TagNameOnly(src.Ref)
+	f, err := r.resolver().Fetcher(ctx, srcRef.String())
+	if err != nil {
+		return err
+	}
+
+	refspec := reference.TrimNamed(src.Ref).String()
+	u, err := url.Parse("dummy://" + refspec)
+	if err != nil {
+		return err
+	}
+	source, repo := u.Hostname(), strings.TrimPrefix(u.Path, "/")
+	if src.Desc.Annotations == nil {
+		src.Desc.Annotations = make(map[string]string)
+	}
+	src.Desc.Annotations["containerd.io/distribution.source."+source] = repo
+
+	err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), src.Desc)
+	if err != nil {
+		return err
+	}
+	return nil
 }
 
 func (r *Resolver) loadPlatform(ctx context.Context, p2 *ocispec.Platform, in string, dt []byte) error {

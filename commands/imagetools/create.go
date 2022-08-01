@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/imagetools"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/appcontext"
@@ -25,6 +27,7 @@ type createOptions struct {
 	tags         []string
 	dryrun       bool
 	actionAppend bool
+	progress     string
 }
 
 func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
@@ -78,18 +81,21 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	if len(repos) == 0 {
 		return errors.Errorf("no repositories specified, please set a reference in tag or source")
 	}
-	if len(repos) > 1 {
-		return errors.Errorf("multiple repositories currently not supported, found %v", repos)
-	}
 
-	var repo string
-	for r := range repos {
-		repo = r
+	var defaultRepo *string
+	if len(repos) == 1 {
+		for repo := range repos {
+			defaultRepo = &repo
+		}
 	}
 
 	for i, s := range srcs {
 		if s.Ref == nil && s.Desc.MediaType == "" && s.Desc.Digest != "" {
-			n, err := reference.ParseNormalizedNamed(repo)
+			if defaultRepo == nil {
+				return errors.Errorf("multiple repositories specified, cannot infer repository for %q", args[i])
+			}
+
+			n, err := reference.ParseNormalizedNamed(*defaultRepo)
 			if err != nil {
 				return err
 			}
@@ -143,7 +149,6 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 					if err != nil {
 						return err
 					}
-					srcs[i].Ref = nil
 					if srcs[i].Desc.Digest == "" {
 						srcs[i].Desc = desc
 					} else {
@@ -162,12 +167,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
-	descs := make([]ocispec.Descriptor, len(srcs))
-	for i := range descs {
-		descs[i] = srcs[i].Desc
-	}
-
-	dt, desc, err := r.Combine(ctx, repo, descs)
+	dt, desc, err := r.Combine(ctx, srcs)
 	if err != nil {
 		return err
 	}
@@ -180,23 +180,49 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	// new resolver cause need new auth
 	r = imagetools.New(imageopt)
 
+	ctx2, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	printer := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, in.progress)
+
+	eg, _ := errgroup.WithContext(ctx)
+	pw := progress.WithPrefix(printer, "internal", true)
+
 	for _, t := range tags {
-		if err := r.Push(ctx, t, desc, dt); err != nil {
-			return err
-		}
-		fmt.Println(t.String())
+		t := t
+		eg.Go(func() error {
+			return progress.Wrap(fmt.Sprintf("pushing %s", t.String()), pw.Write, func(sub progress.SubLogger) error {
+				eg2, _ := errgroup.WithContext(ctx)
+				for _, s := range srcs {
+					if reference.Domain(s.Ref) == reference.Domain(t) && reference.Path(s.Ref) == reference.Path(t) {
+						continue
+					}
+					s := s
+					eg2.Go(func() error {
+						sub.Log(1, []byte(fmt.Sprintf("copying %s from %s to %s\n", s.Desc.Digest.String(), s.Ref.String(), t.String())))
+						return r.Copy(ctx, s, t)
+					})
+				}
+
+				if err := eg2.Wait(); err != nil {
+					return err
+				}
+				sub.Log(1, []byte(fmt.Sprintf("pushing %s to %s\n", desc.Digest.String(), t.String())))
+				return r.Push(ctx, t, desc, dt)
+			})
+		})
 	}
 
-	return nil
+	err = eg.Wait()
+	err1 := printer.Wait()
+	if err == nil {
+		err = err1
+	}
+
+	return err
 }
 
-type src struct {
-	Desc ocispec.Descriptor
-	Ref  reference.Named
-}
-
-func parseSources(in []string) ([]*src, error) {
-	out := make([]*src, len(in))
+func parseSources(in []string) ([]*imagetools.Source, error) {
+	out := make([]*imagetools.Source, len(in))
 	for i, in := range in {
 		s, err := parseSource(in)
 		if err != nil {
@@ -219,11 +245,11 @@ func parseRefs(in []string) ([]reference.Named, error) {
 	return refs, nil
 }
 
-func parseSource(in string) (*src, error) {
+func parseSource(in string) (*imagetools.Source, error) {
 	// source can be a digest, reference or a descriptor JSON
 	dgst, err := digest.Parse(in)
 	if err == nil {
-		return &src{
+		return &imagetools.Source{
 			Desc: ocispec.Descriptor{
 				Digest: dgst,
 			},
@@ -234,14 +260,14 @@ func parseSource(in string) (*src, error) {
 
 	ref, err := reference.ParseNormalizedNamed(in)
 	if err == nil {
-		return &src{
+		return &imagetools.Source{
 			Ref: ref,
 		}, nil
 	} else if !strings.HasPrefix(in, "{") {
 		return nil, err
 	}
 
-	var s src
+	var s imagetools.Source
 	if err := json.Unmarshal([]byte(in), &s.Desc); err != nil {
 		return nil, errors.WithStack(err)
 	}
@@ -265,6 +291,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Set reference for new image")
 	flags.BoolVar(&options.dryrun, "dry-run", false, "Show final image instead of pushing")
 	flags.BoolVar(&options.actionAppend, "append", false, "Append to existing manifest")
+	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 
 	return cmd
 }
