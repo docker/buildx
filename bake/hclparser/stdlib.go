@@ -1,12 +1,15 @@
 package hclparser
 
 import (
+	"time"
+
 	"github.com/hashicorp/go-cty-funcs/cidr"
 	"github.com/hashicorp/go-cty-funcs/crypto"
 	"github.com/hashicorp/go-cty-funcs/encoding"
 	"github.com/hashicorp/go-cty-funcs/uuid"
 	"github.com/hashicorp/hcl/v2/ext/tryfunc"
 	"github.com/hashicorp/hcl/v2/ext/typeexpr"
+	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	"github.com/zclconf/go-cty/cty/function/stdlib"
 )
@@ -96,6 +99,7 @@ var stdlibFunctions = map[string]function.Function{
 	"substr":                 stdlib.SubstrFunc,
 	"subtract":               stdlib.SubtractFunc,
 	"timeadd":                stdlib.TimeAddFunc,
+	"timestamp":              timestampFunc,
 	"title":                  stdlib.TitleFunc,
 	"trim":                   stdlib.TrimFunc,
 	"trimprefix":             stdlib.TrimPrefixFunc,
@@ -109,3 +113,14 @@ var stdlibFunctions = map[string]function.Function{
 	"values":                 stdlib.ValuesFunc,
 	"zipmap":                 stdlib.ZipmapFunc,
 }
+
+// timestampFunc constructs a function that returns a string representation of the current date and time.
+//
+// This function was imported from terraform's datetime utilities.
+var timestampFunc = function.New(&function.Spec{
+	Params: []function.Parameter{},
+	Type:   function.StaticReturnType(cty.String),
+	Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+		return cty.StringVal(time.Now().UTC().Format(time.RFC3339)), nil
+	},
+})
