@@ -61,8 +61,9 @@ func ParseCompose(dt []byte) (*Config, error) {
 				s.Build = &compose.BuildConfig{}
 			}
 
-			if err = validateTargetName(s.Name); err != nil {
-				return nil, errors.Wrapf(err, "invalid service name %q", s.Name)
+			targetName := sanitizeTargetName(s.Name)
+			if err = validateTargetName(targetName); err != nil {
+				return nil, errors.Wrapf(err, "invalid service name %q", targetName)
 			}
 
 			var contextPathP *string
@@ -85,9 +86,9 @@ func ParseCompose(dt []byte) (*Config, error) {
 				secrets = append(secrets, secret)
 			}
 
-			g.Targets = append(g.Targets, s.Name)
+			g.Targets = append(g.Targets, targetName)
 			t := &Target{
-				Name:       s.Name,
+				Name:       targetName,
 				Context:    contextPathP,
 				Dockerfile: dockerfilePathP,
 				Tags:       s.Build.Tags,
@@ -220,13 +221,13 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 	return nil
 }
 
-// compposeValidate validates a compose file
+// composeValidate validates a compose file
 func composeValidate(project *compose.Project) error {
 	for _, s := range project.Services {
 		if s.Build != nil {
 			for _, secret := range s.Build.Secrets {
 				if _, ok := project.Secrets[secret.Source]; !ok {
-					return errors.Wrap(errComposeInvalid, fmt.Sprintf("service %q refers to undefined build secret %s", s.Name, secret.Source))
+					return errors.Wrap(errComposeInvalid, fmt.Sprintf("service %q refers to undefined build secret %s", sanitizeTargetName(s.Name), secret.Source))
 				}
 			}
 		}

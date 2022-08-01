@@ -90,6 +90,10 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 		return nil, nil, err
 	}
 
+	for i, t := range targets {
+		targets[i] = sanitizeTargetName(t)
+	}
+
 	o, err := c.newOverrides(overrides)
 	if err != nil {
 		return nil, nil, err
@@ -974,6 +978,13 @@ func validateTargetName(name string) error {
 		return errors.Errorf("only %q are allowed", validTargetNameChars)
 	}
 	return nil
+}
+
+func sanitizeTargetName(target string) string {
+	// as stipulated in compose spec, service name can contain a dot so as
+	// best-effort and to avoid any potential ambiguity, we replace the dot
+	// with an underscore.
+	return strings.ReplaceAll(target, ".", "_")
 }
 
 func sliceEqual(s1, s2 []string) bool {

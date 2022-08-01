@@ -307,6 +307,67 @@ services:
 	require.Equal(t, []string{"db", "newservice", "webapp"}, g[0].Targets)
 }
 
+func TestReadTargetsWithDotCompose(t *testing.T) {
+	t.Parallel()
+
+	fp := File{
+		Name: "docker-compose.yml",
+		Data: []byte(
+			`version: "3"
+services:
+  web.app:
+    build:
+      dockerfile: Dockerfile.webapp
+      args:
+        buildno: 1
+`),
+	}
+
+	fp2 := File{
+		Name: "docker-compose2.yml",
+		Data: []byte(
+			`version: "3"
+services:
+  web_app:
+    build:
+      args:
+        buildno2: 12
+`),
+	}
+
+	ctx := context.TODO()
+
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"web.app"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(m))
+	_, ok := m["web_app"]
+	require.True(t, ok)
+	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
+	require.Equal(t, "1", m["web_app"].Args["buildno"])
+
+	m, _, err = ReadTargets(ctx, []File{fp2}, []string{"web_app"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(m))
+	_, ok = m["web_app"]
+	require.True(t, ok)
+	require.Equal(t, "Dockerfile", *m["web_app"].Dockerfile)
+	require.Equal(t, "12", m["web_app"].Args["buildno2"])
+
+	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(m))
+	_, ok = m["web_app"]
+	require.True(t, ok)
+	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
+	require.Equal(t, ".", *m["web_app"].Context)
+	require.Equal(t, "1", m["web_app"].Args["buildno"])
+	require.Equal(t, "12", m["web_app"].Args["buildno2"])
+
+	require.Equal(t, 1, len(g))
+	sort.Strings(g[0].Targets)
+	require.Equal(t, []string{"web_app"}, g[0].Targets)
+}
+
 func TestHCLCwdPrefix(t *testing.T) {
 	fp := File{
 		Name: "docker-bake.hcl",

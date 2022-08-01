@@ -36,6 +36,7 @@ $ docker buildx bake webapp-dev
 > **Note**
 >
 > In the case of compose files, each service corresponds to a target.
+> If compose service name contains a dot it will be replaced with an underscore.
 
 Complete list of valid target fields available for [HCL](#hcl-definition) and
 [JSON](#json-definition) definitions:
