@@ -190,10 +190,10 @@ through various "drivers". Each driver defines how and where a build should
 run, and have different feature sets.
 
 We currently support the following drivers:
-- The `docker` driver ([reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `docker-container` driver ([guide](./docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `kubernetes` driver ([guide](./kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `remote` driver ([guide](./remote.md))
+- The `docker` driver ([guide](docs/guides/drivers/docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `docker-container` driver ([guide](docs/guides/drivers/docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `kubernetes` driver ([guide](docs/guides/drivers/kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `remote` driver ([guide](docs/guides/drivers/remote.md))
 
 For more information on drivers, see the [drivers guide](docs/guides/drivers/index.md).
 
