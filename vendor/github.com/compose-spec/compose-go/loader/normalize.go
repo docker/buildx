@@ -28,7 +28,7 @@ import (
 )
 
 // normalize compose project by moving deprecated attributes to their canonical position and injecting implicit defaults
-func normalize(project *types.Project, resolvePaths bool, separator string) error {
+func normalize(project *types.Project, resolvePaths bool) error {
 	absWorkingDir, err := filepath.Abs(project.WorkingDir)
 	if err != nil {
 		return err
@@ -110,7 +110,7 @@ func normalize(project *types.Project, resolvePaths bool, separator string) erro
 		project.Services[i] = s
 	}
 
-	setNameFromKey(project, separator)
+	setNameFromKey(project)
 
 	return nil
 }
@@ -143,31 +143,31 @@ func absComposeFiles(composeFiles []string) ([]string, error) {
 }
 
 // Resources with no explicit name are actually named by their key in map
-func setNameFromKey(project *types.Project, separator string) {
+func setNameFromKey(project *types.Project) {
 	for i, n := range project.Networks {
 		if n.Name == "" {
-			n.Name = fmt.Sprintf("%s%s%s", project.Name, separator, i)
+			n.Name = fmt.Sprintf("%s_%s", project.Name, i)
 			project.Networks[i] = n
 		}
 	}
 
 	for i, v := range project.Volumes {
 		if v.Name == "" {
-			v.Name = fmt.Sprintf("%s%s%s", project.Name, separator, i)
+			v.Name = fmt.Sprintf("%s_%s", project.Name, i)
 			project.Volumes[i] = v
 		}
 	}
 
 	for i, c := range project.Configs {
 		if c.Name == "" {
-			c.Name = fmt.Sprintf("%s%s%s", project.Name, separator, i)
+			c.Name = fmt.Sprintf("%s_%s", project.Name, i)
 			project.Configs[i] = c
 		}
 	}
 
 	for i, s := range project.Secrets {
 		if s.Name == "" {
-			s.Name = fmt.Sprintf("%s%s%s", project.Name, separator, i)
+			s.Name = fmt.Sprintf("%s_%s", project.Name, i)
 			project.Secrets[i] = s
 		}
 	}
