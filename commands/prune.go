@@ -176,6 +176,10 @@ func toBuildkitPruneInfo(f filters.Args) (*client.PruneInfo, error) {
 
 	bkFilter := make([]string, 0, f.Len())
 	for _, field := range f.Keys() {
+		if field == filterKey {
+			continue
+		}
+
 		values := f.Get(field)
 		switch len(values) {
 		case 0:
