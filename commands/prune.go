@@ -138,7 +138,7 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.BoolVarP(&options.all, "all", "a", false, "Remove all unused images, not just dangling ones")
+	flags.BoolVarP(&options.all, "all", "a", false, "Include internal/frontend images")
 	flags.Var(&options.filter, "filter", `Provide filter values (e.g., "until=24h")`)
 	flags.Var(&options.keepStorage, "keep-storage", "Amount of disk space to keep for cache")
 	flags.BoolVar(&options.verbose, "verbose", false, "Provide a more verbose output")
