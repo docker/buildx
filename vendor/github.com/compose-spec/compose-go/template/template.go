@@ -61,13 +61,14 @@ type SubstituteFunc func(string, Mapping) (string, bool, error)
 // SubstituteWith substitute variables in the string with their values.
 // It accepts additional substitute function.
 func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, subsFuncs ...SubstituteFunc) (string, error) {
-	var err error
+	var outerErr error
 
-	if len(subsFuncs) == 0 {
-		_, subsFunc := getSubstitutionFunctionForTemplate(template)
-		subsFuncs = []SubstituteFunc{subsFunc}
-	}
 	result := pattern.ReplaceAllStringFunc(template, func(substring string) string {
+		_, subsFunc := getSubstitutionFunctionForTemplate(substring)
+		if len(subsFuncs) > 0 {
+			subsFunc = subsFuncs[0]
+		}
+
 		closingBraceIndex := getFirstBraceClosingIndex(substring)
 		rest := ""
 		if closingBraceIndex > -1 {
@@ -89,24 +90,21 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 		}
 
 		if substitution == "" {
-			err = &InvalidTemplateError{Template: template}
+			outerErr = &InvalidTemplateError{Template: template}
 			return ""
 		}
 
 		if braced {
-			for _, f := range subsFuncs {
-				var (
-					value   string
-					applied bool
-				)
-				value, applied, err = f(substitution, mapping)
-				if err != nil {
-					return ""
-				}
-				if !applied {
-					continue
-				}
-				interpolatedNested, err := SubstituteWith(rest, mapping, pattern, subsFuncs...)
+			var (
+				value   string
+				applied bool
+			)
+			value, applied, outerErr = subsFunc(substitution, mapping)
+			if outerErr != nil {
+				return ""
+			}
+			if applied {
+				interpolatedNested, err := SubstituteWith(rest, mapping, pattern)
 				if err != nil {
 					return ""
 				}
@@ -121,7 +119,7 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 		return value
 	})
 
-	return result, err
+	return result, outerErr
 }
 
 func getSubstitutionFunctionForTemplate(template string) (string, SubstituteFunc) {
