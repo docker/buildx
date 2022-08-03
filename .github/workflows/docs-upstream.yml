@@ -1,0 +1,118 @@
+# this workflow runs the remote validate bake target from docker/docker.github.io
+# to check if yaml reference docs and markdown files used in this repo are still valid
+# https://github.com/docker/docker.github.io/blob/98c7c9535063ae4cd2cd0a31478a21d16d2f07a3/docker-bake.hcl#L34-L36
+name: docs-upstream
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  push:
+    branches:
+      - 'master'
+      - 'v[0-9]*'
+    paths:
+      - '.github/workflows/docs-upstream.yml'
+      - 'docs/**'
+  pull_request:
+    paths:
+      - '.github/workflows/docs-upstream.yml'
+      - 'docs/**'
+
+jobs:
+  docs-yaml:
+    runs-on: ubuntu-latest
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: latest
+      -
+        name: Build reference YAML docs
+        uses: docker/bake-action@v2
+        with:
+          targets: update-docs
+          set: |
+            *.output=/tmp/buildx-docs
+            *.cache-from=type=gha,scope=docs-yaml
+            *.cache-to=type=gha,scope=docs-yaml,mode=max
+        env:
+          DOCS_FORMATS: yaml
+      -
+        name: Upload reference YAML docs
+        uses: actions/upload-artifact@v3
+        with:
+          name: docs-yaml
+          path: /tmp/buildx-docs/out/reference
+          retention-days: 1
+
+  validate:
+    runs-on: ubuntu-latest
+    needs:
+      - docs-yaml
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+        with:
+          repository: docker/docker.github.io
+      -
+        name: Install js-yaml
+        run: npm install js-yaml
+      -
+        # use the actual buildx ref that triggers this workflow, so we make
+        # sure pages fetched by docs repo are still valid
+        # https://github.com/docker/docker.github.io/blob/98c7c9535063ae4cd2cd0a31478a21d16d2f07a3/_config.yml#L164-L173
+        name: Set correct ref to fetch remote resources
+        uses: actions/github-script@v6
+        with:
+          script: |
+            const fs = require('fs');
+            const yaml = require('js-yaml');
+
+            const configFile = '_config.yml'
+            const config = yaml.load(fs.readFileSync(configFile, 'utf8'));
+            for (const remote of config['fetch-remote']) {
+              if (remote['repo'] != 'https://github.com/docker/buildx') {
+                continue;
+              }
+              remote['ref'] = "${{ github.ref }}";
+            }
+
+            try {
+              fs.writeFileSync(configFile, yaml.dump(config), 'utf8')
+            } catch (err) {
+              console.error(err.message)
+              process.exit(1)
+            }
+      -
+        name: Prepare
+        run: |
+          # print docs jekyll config updated in previous step
+          yq _config.yml
+          # cleanup reference yaml docs and js-yaml module
+          rm -rf ./_data/buildx/* ./node_modules
+      -
+        name: Download built reference YAML docs
+        uses: actions/download-artifact@v3
+        with:
+          name: docs-yaml
+          path: ./_data/buildx/
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: latest
+      -
+        name: Validate
+        uses: docker/bake-action@v2
+        with:
+          targets: validate
+          set: |
+            *.cache-from=type=gha,scope=docs-upstream
+            *.cache-to=type=gha,scope=docs-upstream,mode=max

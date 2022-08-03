@@ -436,7 +436,7 @@ $ docker buildx build --load --progress=plain .
 
 > **Note**
 >
-> Check also our [Color output controls guide](https://docs.docker.com/build/guides/color-output/)
+> Check also our [Color output controls guide](https://github.com/docker/buildx/blob/master/docs/guides/color-output.md)
 > for modifying the colors that are used to output information to the terminal.
 
 ### <a name="push"></a> Push the build result to a registry (--push)
