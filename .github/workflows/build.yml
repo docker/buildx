@@ -22,9 +22,63 @@ env:
   RELEASE_OUT: "./release-out"
 
 jobs:
-  build:
+  test:
     runs-on: ubuntu-latest
     steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: latest
+      -
+        name: Test
+        uses: docker/bake-action@v2
+        with:
+          targets: test
+          set: |
+            *.cache-from=type=gha,scope=test
+            *.cache-to=type=gha,scope=test
+      -
+        name: Upload coverage
+        uses: codecov/codecov-action@v3
+        with:
+          file: ./coverage/coverage.txt
+
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.platforms.outputs.matrix }}
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Create matrix
+        id: platforms
+        run: |
+          echo ::set-output name=matrix::$(docker buildx bake binaries-cross --print | jq -cr '.target."binaries-cross".platforms')
+      -
+        name: Show matrix
+        run: |
+          echo ${{ steps.platforms.outputs.matrix }}
+
+  binaries:
+    runs-on: ubuntu-latest
+    needs:
+      - prepare
+    strategy:
+      fail-fast: false
+      matrix:
+        platform: ${{ fromJson(needs.prepare.outputs.matrix) }}
+    steps:
+      -
+        name: Prepare
+        run: |
+          platform=${{ matrix.platform }}
+          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
       -
         name: Checkout
         uses: actions/checkout@v3
@@ -37,24 +91,14 @@ jobs:
         with:
           version: latest
       -
-        name: Test
-        run: |
-          make test
-      -
-        name: Send to Codecov
-        uses: codecov/codecov-action@v3
+        name: Build
+        uses: docker/bake-action@v2
         with:
-          file: ./coverage/coverage.txt
-      -
-        name: Expose GitHub Runtime
-        uses: crazy-max/ghaction-github-runtime@906832f62b7baa936e3fbef72b029308af505ee7
-      -
-        name: Build binaries
-        run: |
-          make release
-        env:
-          CACHE_FROM: type=gha,scope=release
-          CACHE_TO: type=gha,scope=release
+          targets: release
+          set: |
+            *.platform=${{ matrix.platform }}
+            *.cache-from=type=gha,scope=binaries-${{ env.PLATFORM_PAIR }}
+            *.cache-to=type=gha,scope=binaries-${{ env.PLATFORM_PAIR }},mode=max
       -
         name: Upload artifacts
         uses: actions/upload-artifact@v3
@@ -62,6 +106,22 @@ jobs:
           name: buildx
           path: ${{ env.RELEASE_OUT }}/*
           if-no-files-found: error
+
+  bin-image:
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name != 'pull_request' }}
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: latest
       -
         name: Docker meta
         id: meta
@@ -90,6 +150,35 @@ jobs:
             ${{ steps.meta.outputs.bake-file }}
           targets: image-cross
           push: ${{ github.event_name != 'pull_request' }}
+          set: |
+            *.cache-from=type=gha,scope=bin-image
+            *.cache-to=type=gha,scope=bin-image,mode=max
+
+  release:
+    runs-on: ubuntu-latest
+    needs:
+      - binaries
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Download binaries
+        uses: actions/download-artifact@v3
+        with:
+          name: buildx
+          path: ${{ env.RELEASE_OUT }}
+      -
+        name: Create checksums
+        run: ./hack/hash-files
+      -
+        name: List artifacts
+        run: |
+          tree -nh ${{ env.RELEASE_OUT }}
+      -
+        name: Check artifacts
+        run: |
+          find ${{ env.RELEASE_OUT }} -type f -exec file -e ascii -- {} +
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -122,4 +211,4 @@ jobs:
         name: Build
         uses: docker/bake-action@v2
         with:
-          targets: binaries-cross
+          targets: binaries
