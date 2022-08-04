@@ -157,8 +157,8 @@ github.com/dgrijalva/jwt-go v3.2.0+incompatible/go.mod h1:E3ru+11k8xSBh+hMPgOLZm
 github.com/dgryski/go-sip13 v0.0.0-20181026042036-e10d5fee7954/go.mod h1:vAd38F8PWV+bWy6jNmig1y/TA+kYO4g3RSRF0IAv0no=
 github.com/distribution/distribution/v3 v3.0.0-20220725133111-4bf3547399eb h1:oCCuuU3kMO3sjZH/p7LamvQNW9SWoT4yQuMGcdSxGAE=
 github.com/distribution/distribution/v3 v3.0.0-20220725133111-4bf3547399eb/go.mod h1:28YO/VJk9/64+sTGNuYaBjWxrXTPrj0C0XmgTIOjxX4=
-github.com/docker/cli v20.10.3-0.20220721163225-f1615facb1ca+incompatible h1:Dd/CSOpM6U0thw3xNPlw6m+5/4VOexEcgKlL38haGgk=
-github.com/docker/cli v20.10.3-0.20220721163225-f1615facb1ca+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
+github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible h1:iKanFYBu6Cum7d9j8JGTw2s/d7hUAcXRkEcp2m8b6Qc=
+github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible/go.mod h1:JLrzqnKDaYBop7H2jaqPtU4hHvMKP+vjCwu2uszcLI8=
 github.com/docker/cli-docs-tool v0.5.0 h1:EjGwI6EyB7YemHCC7R8mwXszJTbuq0T0pFuDC5bMhcE=
 github.com/docker/cli-docs-tool v0.5.0/go.mod h1:zMjqTFCU361PRh8apiXzeAZ1Q/xupbIwTusYpzCXS/o=
 github.com/docker/distribution v2.8.1+incompatible h1:Q50tZOPR6T/hjNsyc9g8/syEs6bk8XXApsHjKukMl68=
