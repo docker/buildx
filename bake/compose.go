@@ -151,10 +151,12 @@ type xbake struct {
 	Pull          *bool       `yaml:"pull,omitempty"`
 	NoCache       *bool       `yaml:"no-cache,omitempty"`
 	NoCacheFilter stringArray `yaml:"no-cache-filter,omitempty"`
+	Contexts      stringMap   `yaml:"contexts,omitempty"`
 	// don't forget to update documentation if you add a new field:
 	// docs/guides/bake/compose-file.md#extension-field-with-x-bake
 }
 
+type stringMap map[string]string
 type stringArray []string
 
 func (sa *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
@@ -188,25 +190,25 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 	}
 
 	if len(xb.Tags) > 0 {
-		t.Tags = dedupString(append(t.Tags, xb.Tags...))
+		t.Tags = dedupSlice(append(t.Tags, xb.Tags...))
 	}
 	if len(xb.CacheFrom) > 0 {
-		t.CacheFrom = dedupString(append(t.CacheFrom, xb.CacheFrom...))
+		t.CacheFrom = dedupSlice(append(t.CacheFrom, xb.CacheFrom...))
 	}
 	if len(xb.CacheTo) > 0 {
-		t.CacheTo = dedupString(append(t.CacheTo, xb.CacheTo...))
+		t.CacheTo = dedupSlice(append(t.CacheTo, xb.CacheTo...))
 	}
 	if len(xb.Secrets) > 0 {
-		t.Secrets = dedupString(append(t.Secrets, xb.Secrets...))
+		t.Secrets = dedupSlice(append(t.Secrets, xb.Secrets...))
 	}
 	if len(xb.SSH) > 0 {
-		t.SSH = dedupString(append(t.SSH, xb.SSH...))
+		t.SSH = dedupSlice(append(t.SSH, xb.SSH...))
 	}
 	if len(xb.Platforms) > 0 {
-		t.Platforms = dedupString(append(t.Platforms, xb.Platforms...))
+		t.Platforms = dedupSlice(append(t.Platforms, xb.Platforms...))
 	}
 	if len(xb.Outputs) > 0 {
-		t.Outputs = dedupString(append(t.Outputs, xb.Outputs...))
+		t.Outputs = dedupSlice(append(t.Outputs, xb.Outputs...))
 	}
 	if xb.Pull != nil {
 		t.Pull = xb.Pull
@@ -215,7 +217,10 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.NoCache = xb.NoCache
 	}
 	if len(xb.NoCacheFilter) > 0 {
-		t.NoCacheFilter = dedupString(append(t.NoCacheFilter, xb.NoCacheFilter...))
+		t.NoCacheFilter = dedupSlice(append(t.NoCacheFilter, xb.NoCacheFilter...))
+	}
+	if len(xb.Contexts) > 0 {
+		t.Contexts = dedupMap(t.Contexts, xb.Contexts)
 	}
 
 	return nil
