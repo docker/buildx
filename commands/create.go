@@ -61,32 +61,6 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
-	buildkitHost := os.Getenv("BUILDKIT_HOST")
-
-	driverName := in.driver
-	if driverName == "" {
-		if len(args) == 0 && buildkitHost != "" {
-			driverName = "remote"
-		} else {
-			var arg string
-			if len(args) > 0 {
-				arg = args[0]
-			}
-			f, err := driver.GetDefaultFactory(ctx, arg, dockerCli.Client(), true)
-			if err != nil {
-				return err
-			}
-			if f == nil {
-				return errors.Errorf("no valid drivers found")
-			}
-			driverName = f.Name()
-		}
-	}
-
-	if driver.GetFactory(driverName, true) == nil {
-		return errors.Errorf("failed to find driver %q", in.driver)
-	}
-
 	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
@@ -121,17 +95,48 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 				logrus.Warnf("failed to find %q for append, creating a new instance instead", in.name)
 			}
 			if in.actionLeave {
-				return errors.Errorf("failed to find instance %q for leave", name)
+				return errors.Errorf("failed to find instance %q for leave", in.name)
 			}
 		} else {
 			return err
 		}
 	}
 
+	buildkitHost := os.Getenv("BUILDKIT_HOST")
+
+	driverName := in.driver
+	if driverName == "" {
+		if ng != nil {
+			driverName = ng.Driver
+		} else if len(args) == 0 && buildkitHost != "" {
+			driverName = "remote"
+		} else {
+			var arg string
+			if len(args) > 0 {
+				arg = args[0]
+			}
+			f, err := driver.GetDefaultFactory(ctx, arg, dockerCli.Client(), true)
+			if err != nil {
+				return err
+			}
+			if f == nil {
+				return errors.Errorf("no valid drivers found")
+			}
+			driverName = f.Name()
+		}
+	}
+
 	if ng != nil {
 		if in.nodeName == "" && !in.actionAppend {
-			return errors.Errorf("existing instance for %s but no append mode, specify --node to make changes for existing instances", name)
+			return errors.Errorf("existing instance for %q but no append mode, specify --node to make changes for existing instances", name)
 		}
+		if driverName != ng.Driver {
+			return errors.Errorf("existing instance for %q but has mismatched driver %q", name, ng.Driver)
+		}
+	}
+
+	if driver.GetFactory(driverName, true) == nil {
+		return errors.Errorf("failed to find driver %q", driverName)
 	}
 
 	ngOriginal := ng
@@ -141,12 +146,9 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 
 	if ng == nil {
 		ng = &store.NodeGroup{
-			Name: name,
+			Name:   name,
+			Driver: driverName,
 		}
-	}
-
-	if ng.Driver == "" || in.driver != "" {
-		ng.Driver = driverName
 	}
 
 	var flags []string
@@ -166,6 +168,9 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	} else {
 		switch {
 		case driverName == "kubernetes":
+			if len(args) > 0 {
+				logrus.Warnf("kubernetes driver does not support endpoint args %q", args[0])
+			}
 			// naming endpoint to make --append works
 			ep = (&url.URL{
 				Scheme: driverName,
@@ -315,6 +320,9 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 }
 
 func csvToMap(in []string) (map[string]string, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
 	m := make(map[string]string, len(in))
 	for _, s := range in {
 		csvReader := csv.NewReader(strings.NewReader(s))
