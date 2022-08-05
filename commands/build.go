@@ -123,6 +123,11 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		return err
 	}
 
+	printFunc, err := parsePrintFunc(in.printFunc)
+	if err != nil {
+		return err
+	}
+
 	opts := build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    in.contextPath,
@@ -142,7 +147,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		Tags:          in.tags,
 		Target:        in.target,
 		Ulimits:       in.ulimits,
-		PrintFunc:     in.printFunc,
+		PrintFunc:     printFunc,
 	}
 
 	platforms, err := platformutil.Parse(in.platforms)
@@ -310,7 +315,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	printWarnings(os.Stderr, printer.Warnings(), progressMode)
 
 	for k := range resp {
-		if opts[k].PrintFunc != "" {
+		if opts[k].PrintFunc != nil {
 			if err := printResult(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
 				return "", nil, err
 			}
@@ -608,6 +613,34 @@ func parseContextNames(values []string) (map[string]build.NamedContext, error) {
 		result[name] = build.NamedContext{Path: kv[1]}
 	}
 	return result, nil
+}
+
+func parsePrintFunc(str string) (*build.PrintFunc, error) {
+	if str == "" {
+		return nil, nil
+	}
+	csvReader := csv.NewReader(strings.NewReader(str))
+	fields, err := csvReader.Read()
+	if err != nil {
+		return nil, err
+	}
+	f := &build.PrintFunc{}
+	for _, field := range fields {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) == 2 {
+			if parts[0] == "format" {
+				f.Format = parts[1]
+			} else {
+				return nil, errors.Errorf("invalid print field: %s", field)
+			}
+		} else {
+			if f.Name != "" {
+				return nil, errors.Errorf("invalid print value: %s", str)
+			}
+			f.Name = field
+		}
+	}
+	return f, nil
 }
 
 func writeMetadataFile(filename string, dt interface{}) error {

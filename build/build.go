@@ -87,7 +87,12 @@ type Options struct {
 
 	// Linked marks this target as exclusively linked (not requested by the user).
 	Linked    bool
-	PrintFunc string
+	PrintFunc *PrintFunc
+}
+
+type PrintFunc struct {
+	Name   string
+	Format string
 }
 
 type Inputs struct {
@@ -1050,13 +1055,13 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 							var isFallback bool
 							var origErr error
 							for {
-								if opt.PrintFunc != "" {
+								if opt.PrintFunc != nil {
 									if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
 										req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
 									} else {
 										req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
 									}
-									req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc
+									req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
 									if isFallback {
 										req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
 									}
@@ -1086,7 +1091,7 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 									}
 									return nil, err
 								}
-								if opt.PrintFunc != "" {
+								if opt.PrintFunc != nil {
 									printRes = res.Metadata
 								}
 								results.Set(resultKey(dp.driverIndex, k), res)
@@ -1686,7 +1691,7 @@ func tryNodeIdentifier(configDir string) (out string) {
 
 func noPrintFunc(opt map[string]Options) bool {
 	for _, v := range opt {
-		if v.PrintFunc != "" {
+		if v.PrintFunc != nil {
 			return false
 		}
 	}
