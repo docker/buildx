@@ -52,10 +52,8 @@ func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, relo
 	}
 
 	// Start container automatically
-	go func() {
-		fmt.Fprintf(stdout, "Launching interactive container. Press Ctrl-a-c to switch to monitor console\n")
-		m.rollback(ctx, containerConfig)
-	}()
+	fmt.Fprintf(stdout, "Launching interactive container. Press Ctrl-a-c to switch to monitor console\n")
+	m.rollback(ctx, containerConfig)
 
 	// Serve monitor commands
 	monitorForwarder := newIOForwarder(monitorIn)
@@ -67,6 +65,10 @@ func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, relo
 		go func() {
 			defer close(doneCh)
 			defer in.Close()
+			go func() {
+				<-ctx.Done()
+				in.Close()
+			}()
 			t := term.NewTerminal(readWriter{in.stdin, in.stdout}, "(buildx) ")
 			for {
 				l, err := t.ReadLine()
@@ -105,8 +107,14 @@ func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, relo
 		}()
 		select {
 		case <-doneCh:
+			if m.curInvokeCancel != nil {
+				m.curInvokeCancel()
+			}
 			return nil
 		case err := <-errCh:
+			if m.curInvokeCancel != nil {
+				m.curInvokeCancel()
+			}
 			return err
 		case <-monitorDisableCh:
 		}
