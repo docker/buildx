@@ -155,9 +155,9 @@ func toBuildkitPruneInfo(f filters.Args) (*client.PruneInfo, error) {
 	if len(untilValues) > 0 && len(unusedForValues) > 0 {
 		return nil, errors.Errorf("conflicting filters %q and %q", "until", "unused-for")
 	}
-	filterKey := "until"
+	untilKey := "until"
 	if len(unusedForValues) > 0 {
-		filterKey = "unused-for"
+		untilKey = "unused-for"
 	}
 	untilValues = append(untilValues, unusedForValues...)
 
@@ -168,23 +168,27 @@ func toBuildkitPruneInfo(f filters.Args) (*client.PruneInfo, error) {
 		var err error
 		until, err = time.ParseDuration(untilValues[0])
 		if err != nil {
-			return nil, errors.Wrapf(err, "%q filter expects a duration (e.g., '24h')", filterKey)
+			return nil, errors.Wrapf(err, "%q filter expects a duration (e.g., '24h')", untilKey)
 		}
 	default:
 		return nil, errors.Errorf("filters expect only one value")
 	}
 
-	bkFilter := make([]string, 0, f.Len())
-	for _, field := range f.Keys() {
-		values := f.Get(field)
+	filters := make([]string, 0, f.Len())
+	for _, filterKey := range f.Keys() {
+		if filterKey == untilKey {
+			continue
+		}
+
+		values := f.Get(filterKey)
 		switch len(values) {
 		case 0:
-			bkFilter = append(bkFilter, field)
+			filters = append(filters, filterKey)
 		case 1:
-			if field == "id" {
-				bkFilter = append(bkFilter, field+"~="+values[0])
+			if filterKey == "id" {
+				filters = append(filters, filterKey+"~="+values[0])
 			} else {
-				bkFilter = append(bkFilter, field+"=="+values[0])
+				filters = append(filters, filterKey+"=="+values[0])
 			}
 		default:
 			return nil, errors.Errorf("filters expect only one value")
@@ -192,6 +196,6 @@ func toBuildkitPruneInfo(f filters.Args) (*client.PruneInfo, error) {
 	}
 	return &client.PruneInfo{
 		KeepDuration: until,
-		Filter:       []string{strings.Join(bkFilter, ",")},
+		Filter:       []string{strings.Join(filters, ",")},
 	}, nil
 }
