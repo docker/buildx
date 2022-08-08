@@ -134,7 +134,7 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 				gt = append(gt, target)
 			}
 		}
-		g = []*Group{{Targets: dedupString(gt)}}
+		g = []*Group{{Targets: dedupSlice(gt)}}
 	}
 
 	for name, t := range m {
@@ -146,7 +146,7 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 	return m, g, nil
 }
 
-func dedupString(s []string) []string {
+func dedupSlice(s []string) []string {
 	if len(s) == 0 {
 		return s
 	}
@@ -156,6 +156,24 @@ func dedupString(s []string) []string {
 		if _, ok := seen[val]; !ok {
 			res = append(res, val)
 			seen[val] = struct{}{}
+		}
+	}
+	return res
+}
+
+func dedupMap(ms ...map[string]string) map[string]string {
+	if len(ms) == 0 {
+		return nil
+	}
+	res := map[string]string{}
+	for _, m := range ms {
+		if len(m) == 0 {
+			continue
+		}
+		for k, v := range m {
+			if _, ok := res[k]; !ok {
+				res[k] = v
+			}
 		}
 	}
 	return res
@@ -418,7 +436,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 }
 
 func (c Config) ResolveGroup(name string) []string {
-	return dedupString(c.group(name, map[string][]string{}))
+	return dedupSlice(c.group(name, map[string][]string{}))
 }
 
 func (c Config) group(name string, visited map[string][]string) []string {

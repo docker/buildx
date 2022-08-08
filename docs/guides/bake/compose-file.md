@@ -209,6 +209,7 @@ Complete list of valid fields for `x-bake`:
 
 * `cache-from`
 * `cache-to`
+* `contexts`
 * `no-cache`
 * `no-cache-filter`
 * `output`

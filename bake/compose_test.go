@@ -267,6 +267,8 @@ services:
         CT_ECR: foo
         CT_TAG: bar
       x-bake:
+        contexts:
+          alpine: docker-image://alpine:3.13
         tags:
           - ct-addon:foo
           - ct-addon:alp
@@ -308,6 +310,7 @@ services:
 	require.Equal(t, c.Targets[0].CacheFrom, []string{"user/app:cache", "type=local,src=path/to/cache"})
 	require.Equal(t, c.Targets[0].CacheTo, []string{"user/app:cache", "type=local,dest=path/to/cache"})
 	require.Equal(t, c.Targets[0].Pull, newBool(true))
+	require.Equal(t, c.Targets[0].Contexts, map[string]string{"alpine": "docker-image://alpine:3.13"})
 	require.Equal(t, c.Targets[1].Tags, []string{"ct-fake-aws:bar"})
 	require.Equal(t, c.Targets[1].Secrets, []string{"id=mysecret,src=/local/secret", "id=mysecret2,src=/local/secret2"})
 	require.Equal(t, c.Targets[1].SSH, []string{"default"})
