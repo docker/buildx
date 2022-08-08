@@ -233,7 +233,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		contextPathHash = in.contextPath
 	}
 
-	imageID, res, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
+	imageID, res, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile, in.invoke != "")
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return err
@@ -250,7 +250,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 			return errors.Errorf("failed to configure terminal: %v", err)
 		}
 		err = monitor.RunMonitor(ctx, cfg, func(ctx context.Context) (*build.ResultContext, error) {
-			_, rr, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile)
+			_, rr, err := buildTargets(ctx, dockerCli, map[string]build.Options{defaultTargetName: opts}, in.progress, contextPathHash, in.builder, in.metadataFile, true)
 			return rr, err
 		}, io.NopCloser(os.Stdin), nopCloser{os.Stdout}, nopCloser{os.Stderr})
 		if err != nil {
@@ -271,7 +271,7 @@ type nopCloser struct {
 
 func (c nopCloser) Close() error { return nil }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string) (imageID string, res *build.ResultContext, err error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]build.Options, progressMode, contextPathHash, instance string, metadataFile string, allowNoOutput bool) (imageID string, res *build.ResultContext, err error) {
 	dis, err := getInstanceOrDefault(ctx, dockerCli, instance, contextPathHash)
 	if err != nil {
 		return "", nil, err
@@ -290,7 +290,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 		if res == nil || driverIndex < idx {
 			idx, res = driverIndex, gotRes
 		}
-	})
+	}, allowNoOutput)
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1

@@ -13,6 +13,14 @@ import (
 	"golang.org/x/term"
 )
 
+const helpMessage = `
+Available commads are:
+  reload   reloads the context and build it.
+  rollback re-runs the interactive container with initial rootfs contents.
+  exit     exits monitor.
+  help     shows this message.
+`
+
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
 func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, reloadFunc func(context.Context) (*build.ResultContext, error), stdin io.ReadCloser, stdout, stderr io.WriteCloser) error {
 	monitorIn, monitorOut := ioSetPipe()
@@ -34,11 +42,18 @@ func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, relo
 
 	m := &monitor{
 		invokeIO: newIOForwarder(containerIn),
-		muxIO:    newMuxIO(ioSetIn{stdin, stdout, stderr}, []ioSetOutContext{monitorOutCtx, containerOutCtx}, 1, "Switched IO\n"),
+		muxIO: newMuxIO(ioSetIn{stdin, stdout, stderr}, []ioSetOutContext{monitorOutCtx, containerOutCtx}, 1, func(prev int, res int) string {
+			if prev == 0 && res == 0 {
+				// No toggle happened because container I/O isn't enabled.
+				return "No running interactive containers. You can start one by issuing rollback command\n"
+			}
+			return "Switched IO\n"
+		}),
 	}
 
 	// Start container automatically
 	go func() {
+		fmt.Fprintf(stdout, "Launching interactive container. Press Ctrl-a-c to switch to monitor console\n")
 		m.rollback(ctx, containerConfig)
 	}()
 
@@ -73,13 +88,18 @@ func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, relo
 						// rollback the running container with the new result
 						containerConfig.ResultCtx = res
 						m.rollback(ctx, containerConfig)
+						fmt.Fprint(stdout, "Interactive container was restarted. Press Ctrl-a-c to switch to the new container\n")
 					}
 				case "rollback":
 					m.rollback(ctx, containerConfig)
+					fmt.Fprint(stdout, "Interactive container was restarted. Press Ctrl-a-c to switch to the new container\n")
 				case "exit":
 					return
+				case "help":
+					fmt.Fprint(stdout, helpMessage)
 				default:
 					fmt.Printf("unknown command: %q\n", l)
+					fmt.Fprint(stdout, helpMessage)
 				}
 			}
 		}()
@@ -227,7 +247,7 @@ type ioSetOutContext struct {
 // newMuxIO forwards IO stream to/from "in" and "outs".
 // "outs" are closed automatically when "in" reaches EOF.
 // "in" doesn't closed automatically so the caller needs to explicitly close it.
-func newMuxIO(in ioSetIn, out []ioSetOutContext, initIdx int, toggleMessage string) *muxIO {
+func newMuxIO(in ioSetIn, out []ioSetOutContext, initIdx int, toggleMessage func(prev int, res int) string) *muxIO {
 	m := &muxIO{
 		enabled:       make(map[int]struct{}),
 		in:            in,
@@ -327,7 +347,7 @@ type muxIO struct {
 	in            ioSetIn
 	out           []ioSetOutContext
 	closedCh      chan struct{}
-	toggleMessage string
+	toggleMessage func(prev int, res int) string
 }
 
 func (m *muxIO) waitClosed() {
@@ -357,6 +377,7 @@ func (m *muxIO) toggleIO() {
 	if m.out[m.cur].disableHook != nil {
 		m.out[m.cur].disableHook()
 	}
+	prev := m.cur
 	for {
 		if m.cur+1 >= m.maxCur {
 			m.cur = 0
@@ -368,10 +389,11 @@ func (m *muxIO) toggleIO() {
 		}
 		break
 	}
+	res := m.cur
 	if m.out[m.cur].enableHook != nil {
 		m.out[m.cur].enableHook()
 	}
-	fmt.Fprintf(m.in.stdout, m.toggleMessage)
+	fmt.Fprint(m.in.stdout, m.toggleMessage(prev, res))
 }
 
 func traceReader(r io.ReadCloser, f func(rune) (bool, error)) io.ReadCloser {

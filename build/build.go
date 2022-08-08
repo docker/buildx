@@ -709,10 +709,10 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 }
 
 func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, drivers, opt, docker, configDir, w, nil)
+	return BuildWithResultHandler(ctx, drivers, opt, docker, configDir, w, nil, false)
 }
 
-func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext)) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -737,7 +737,7 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 				noOutputTargets = append(noOutputTargets, name)
 			}
 		}
-		if len(noOutputTargets) > 0 {
+		if len(noOutputTargets) > 0 && !allowNoOutput {
 			var warnNoOutputBuf bytes.Buffer
 			warnNoOutputBuf.WriteString("No output specified ")
 			if len(noOutputTargets) == 1 && noOutputTargets[0] == "default" {
