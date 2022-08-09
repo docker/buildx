@@ -66,9 +66,9 @@ func (d *Driver) Features() map[driver.Feature]bool {
 		}
 	}
 	return map[driver.Feature]bool{
-		driver.OCIExporter:    false,
-		driver.DockerExporter: false,
-		driver.CacheExport:    false,
+		driver.OCIExporter:    useContainerdSnapshotter,
+		driver.DockerExporter: useContainerdSnapshotter,
+		driver.CacheExport:    useContainerdSnapshotter,
 		driver.MultiPlatform:  useContainerdSnapshotter,
 	}
 }
