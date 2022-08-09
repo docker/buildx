@@ -131,7 +131,7 @@ func TestMuxIO(t *testing.T) {
 				outBufs = append(outBufs, outBuf)
 				outs = append(outs, ioSetOutContext{out, nil, nil})
 			}
-			mio := newMuxIO(in, outs, tt.initIdx, "")
+			mio := newMuxIO(in, outs, tt.initIdx, func(prev int, res int) string { return "" })
 			for _, i := range tt.inputs {
 				// Add input to muxIO
 				istr, writeback := i(mio)
