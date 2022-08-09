@@ -643,7 +643,16 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 		return errors.Errorf("result must be provided")
 	}
 	c, res := cfg.ResultCtx.Client, cfg.ResultCtx.Res
-	_, err := c.Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+
+	mainCtx := ctx
+
+	_, err := c.Build(context.TODO(), client.SolveOpt{}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		ctx, cancel := context.WithCancel(ctx)
+		go func() {
+			<-mainCtx.Done()
+			cancel()
+		}()
+
 		if res.Ref == nil {
 			return nil, errors.Errorf("no reference is registered")
 		}
@@ -673,7 +682,8 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 		if err != nil {
 			return nil, err
 		}
-		defer ctr.Release(ctx)
+		defer ctr.Release(context.TODO())
+
 		proc, err := ctr.Start(ctx, gateway.StartRequest{
 			Args:   cfg.Args,
 			Env:    cfg.Env,
