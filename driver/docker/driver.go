@@ -54,11 +54,22 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 }
 
 func (d *Driver) Features() map[driver.Feature]bool {
+	var useContainerdSnapshotter bool
+	ctx := context.Background()
+	c, err := d.Client(ctx)
+	if err == nil {
+		workers, _ := c.ListWorkers(ctx)
+		for _, w := range workers {
+			if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
+				useContainerdSnapshotter = true
+			}
+		}
+	}
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    false,
 		driver.DockerExporter: false,
 		driver.CacheExport:    false,
-		driver.MultiPlatform:  false,
+		driver.MultiPlatform:  useContainerdSnapshotter,
 	}
 }
 
