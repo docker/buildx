@@ -3,8 +3,10 @@ package bake
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 
+	"github.com/compose-spec/compose-go/dotenv"
 	"github.com/compose-spec/compose-go/loader"
 	compose "github.com/compose-spec/compose-go/types"
 	"github.com/pkg/errors"
@@ -14,34 +16,18 @@ import (
 // errComposeInvalid is returned when a compose file is invalid
 var errComposeInvalid = errors.New("invalid compose file")
 
-func parseCompose(dt []byte) (*compose.Project, error) {
-	return loader.Load(compose.ConfigDetails{
+func ParseCompose(dt []byte, envs map[string]string) (*Config, error) {
+	cfg, err := loader.Load(compose.ConfigDetails{
 		ConfigFiles: []compose.ConfigFile{
 			{
 				Content: dt,
 			},
 		},
-		Environment: envMap(os.Environ()),
+		Environment: envs,
 	}, func(options *loader.Options) {
 		options.SkipNormalization = true
 		options.SkipConsistencyCheck = true
 	})
-}
-
-func envMap(env []string) map[string]string {
-	result := make(map[string]string, len(env))
-	for _, s := range env {
-		kv := strings.SplitN(s, "=", 2)
-		if len(kv) != 2 {
-			continue
-		}
-		result[kv[0]] = kv[1]
-	}
-	return result
-}
-
-func ParseCompose(dt []byte) (*Config, error) {
-	cfg, err := parseCompose(dt)
 	if err != nil {
 		return nil, err
 	}
@@ -122,6 +108,42 @@ func ParseCompose(dt []byte) (*Config, error) {
 	}
 
 	return &c, nil
+}
+
+func loadDotEnv(curenv map[string]string, workingDir string) (map[string]string, error) {
+	if curenv == nil {
+		curenv = make(map[string]string)
+	}
+
+	ef, err := filepath.Abs(filepath.Join(workingDir, ".env"))
+	if err != nil {
+		return nil, err
+	}
+
+	if _, err = os.Stat(ef); os.IsNotExist(err) {
+		return curenv, nil
+	} else if err != nil {
+		return nil, err
+	}
+
+	dt, err := os.ReadFile(ef)
+	if err != nil {
+		return nil, err
+	}
+
+	envs, err := dotenv.UnmarshalBytes(dt)
+	if err != nil {
+		return nil, err
+	}
+
+	for k, v := range envs {
+		if _, set := curenv[k]; set {
+			continue
+		}
+		curenv[k] = v
+	}
+
+	return curenv, nil
 }
 
 func flatten(in compose.MappingWithEquals) compose.Mapping {
