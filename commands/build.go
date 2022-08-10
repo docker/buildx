@@ -48,6 +48,7 @@ const defaultTargetName = "default"
 type buildOptions struct {
 	contextPath    string
 	dockerfileName string
+	printFunc      string
 
 	allow         []string
 	buildArgs     []string
@@ -122,6 +123,11 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		return err
 	}
 
+	printFunc, err := parsePrintFunc(in.printFunc)
+	if err != nil {
+		return err
+	}
+
 	opts := build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    in.contextPath,
@@ -141,6 +147,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		Tags:          in.tags,
 		Target:        in.target,
 		Ulimits:       in.ulimits,
+		PrintFunc:     printFunc,
 	}
 
 	platforms, err := platformutil.Parse(in.platforms)
@@ -307,6 +314,14 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 
 	printWarnings(os.Stderr, printer.Warnings(), progressMode)
 
+	for k := range resp {
+		if opts[k].PrintFunc != nil {
+			if err := printResult(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
+				return "", nil, err
+			}
+		}
+	}
+
 	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], res, err
 }
 
@@ -463,6 +478,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
+	if isExperimental() {
+		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (outline, targets)")
+	}
+
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
@@ -481,7 +500,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
-	if os.Getenv("BUILDX_EXPERIMENTAL") == "1" {
+	if isExperimental() {
 		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build. BUILDX_EXPERIMENTAL=1 is required.")
 	}
 
@@ -596,6 +615,34 @@ func parseContextNames(values []string) (map[string]build.NamedContext, error) {
 	return result, nil
 }
 
+func parsePrintFunc(str string) (*build.PrintFunc, error) {
+	if str == "" {
+		return nil, nil
+	}
+	csvReader := csv.NewReader(strings.NewReader(str))
+	fields, err := csvReader.Read()
+	if err != nil {
+		return nil, err
+	}
+	f := &build.PrintFunc{}
+	for _, field := range fields {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) == 2 {
+			if parts[0] == "format" {
+				f.Format = parts[1]
+			} else {
+				return nil, errors.Errorf("invalid print field: %s", field)
+			}
+		} else {
+			if f.Name != "" {
+				return nil, errors.Errorf("invalid print value: %s", str)
+			}
+			f.Name = field
+		}
+	}
+	return f, nil
+}
+
 func writeMetadataFile(filename string, dt interface{}) error {
 	b, err := json.MarshalIndent(dt, "", "  ")
 	if err != nil {
@@ -651,4 +698,12 @@ func (w *wrapped) Error() string {
 
 func (w *wrapped) Unwrap() error {
 	return w.err
+}
+
+func isExperimental() bool {
+	if v, ok := os.LookupEnv("BUILDKIT_EXPERIMENTAL"); ok {
+		vv, _ := strconv.ParseBool(v)
+		return vv
+	}
+	return false
 }
