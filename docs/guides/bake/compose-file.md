@@ -94,6 +94,56 @@ limitations with the compose format:
 * Specifying variables or global scope attributes is not yet supported
 * `inherits` service field is not supported, but you can use [YAML anchors](https://docs.docker.com/compose/compose-file/#fragments) to reference other services like the example above
 
+## `.env` file
+
+You can declare default environment variables in an environment file named
+`.env`. This file will be loaded from the current working directory,
+where the command is executed and applied to compose definitions passed
+with `-f`.
+
+```yaml
+# docker-compose.yml
+services:
+  webapp:
+    image: docker.io/username/webapp:${TAG:-v1.0.0}
+    build:
+      dockerfile: Dockerfile
+```
+
+```
+# .env
+TAG=v1.1.0
+```
+
+```console
+$ docker buildx bake --print
+```
+```json
+{
+  "group": {
+    "default": {
+      "targets": [
+        "webapp"
+      ]
+    }
+  },
+  "target": {
+    "webapp": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "tags": [
+        "docker.io/username/webapp:v1.1.0"
+      ]
+    }
+  }
+}
+```
+
+> **Note**
+>
+> System environment variables take precedence over environment variables
+> in `.env` file.
+
 ## Extension field with `x-bake`
 
 Even if some fields are not (yet) available in the compose specification, you

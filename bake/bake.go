@@ -179,6 +179,21 @@ func dedupMap(ms ...map[string]string) map[string]string {
 	return res
 }
 
+func sliceToMap(env []string) (res map[string]string) {
+	res = make(map[string]string)
+	for _, s := range env {
+		kv := strings.SplitN(s, "=", 2)
+		key := kv[0]
+		switch {
+		case len(kv) == 1:
+			res[key] = ""
+		default:
+			res[key] = kv[1]
+		}
+	}
+	return
+}
+
 func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error) {
 	defer func() {
 		err = formatHCLError(err, files)
@@ -242,15 +257,22 @@ func ParseFile(dt []byte, fn string) (*Config, error) {
 }
 
 func ParseComposeFile(dt []byte, fn string) (*Config, bool, error) {
+	envs := sliceToMap(os.Environ())
+	if wd, err := os.Getwd(); err == nil {
+		envs, err = loadDotEnv(envs, wd)
+		if err != nil {
+			return nil, true, err
+		}
+	}
 	fnl := strings.ToLower(fn)
 	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
-		cfg, err := ParseCompose(dt)
+		cfg, err := ParseCompose(dt, envs)
 		return cfg, true, err
 	}
 	if strings.HasSuffix(fnl, ".json") || strings.HasSuffix(fnl, ".hcl") {
 		return nil, false, nil
 	}
-	cfg, err := ParseCompose(dt)
+	cfg, err := ParseCompose(dt, envs)
 	return cfg, err == nil, err
 }
 
