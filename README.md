@@ -109,7 +109,7 @@ On Unix environments:
 On Windows:
 
 * `C:\ProgramData\Docker\cli-plugins`
-* `C:\Program Files\Docker\cli-plugins`
+* `C:\Program Files\Docker\Docker\resources\cli-plugins`
 
 > **Note**
 >
