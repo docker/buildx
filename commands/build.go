@@ -701,7 +701,7 @@ func (w *wrapped) Unwrap() error {
 }
 
 func isExperimental() bool {
-	if v, ok := os.LookupEnv("BUILDKIT_EXPERIMENTAL"); ok {
+	if v, ok := os.LookupEnv("BUILDX_EXPERIMENTAL"); ok {
 		vv, _ := strconv.ParseBool(v)
 		return vv
 	}
