@@ -92,16 +92,16 @@ func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient,
 	return dd[0].f, nil
 }
 
-func GetFactory(name string, instanceRequired bool) Factory {
+func GetFactory(name string, instanceRequired bool) (Factory, error) {
 	for _, f := range drivers {
-		if instanceRequired && !f.AllowsInstances() {
-			continue
-		}
 		if f.Name() == name {
-			return f
+			if instanceRequired && !f.AllowsInstances() {
+				return nil, errors.Errorf("additional instances of driver %q cannot be created", name)
+			}
+			return f, nil
 		}
 	}
-	return nil
+	return nil, errors.Errorf("failed to find driver %q", name)
 }
 
 func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string) (Driver, error) {
@@ -131,9 +131,12 @@ func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string,
 	return &cachedDriver{Driver: d}, nil
 }
 
-func GetFactories() []Factory {
+func GetFactories(instanceRequired bool) []Factory {
 	ds := make([]Factory, 0, len(drivers))
 	for _, d := range drivers {
+		if instanceRequired && !d.AllowsInstances() {
+			continue
+		}
 		ds = append(ds, d)
 	}
 	sort.Slice(ds, func(i, j int) bool {

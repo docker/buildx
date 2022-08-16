@@ -15,7 +15,7 @@ Create a new builder instance
 | `--bootstrap` |  |  | Boot builder after creation |
 | [`--buildkitd-flags`](#buildkitd-flags) | `string` |  | Flags for buildkitd daemon |
 | [`--config`](#config) | `string` |  | BuildKit config file |
-| [`--driver`](#driver) | `string` |  | Driver to use (available: `docker`, `docker-container`, `kubernetes`, `remote`) |
+| [`--driver`](#driver) | `string` |  | Driver to use (available: `docker-container`, `kubernetes`, `remote`) |
 | [`--driver-opt`](#driver-opt) | `stringArray` |  | Options for the driver |
 | [`--leave`](#leave) |  |  | Remove a node from builder instead of changing it |
 | [`--name`](#name) | `string` |  | Builder instance name |
