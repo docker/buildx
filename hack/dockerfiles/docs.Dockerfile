@@ -14,6 +14,7 @@ RUN apk add --no-cache rsync git
 WORKDIR /src
 COPY --from=docsgen /out/docsgen /usr/bin
 ARG FORMATS
+ARG BUILDX_EXPERIMENTAL
 RUN --mount=target=/context \
   --mount=target=.,type=tmpfs <<EOT
 set -e

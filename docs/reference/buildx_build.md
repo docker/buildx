@@ -25,6 +25,7 @@ Start a build
 | [`--cgroup-parent`](https://docs.docker.com/engine/reference/commandline/build/#use-a-custom-parent-cgroup---cgroup-parent) | `string` |  | Optional parent cgroup for the container |
 | [`-f`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f), [`--file`](https://docs.docker.com/engine/reference/commandline/build/#specify-a-dockerfile--f) | `string` |  | Name of the Dockerfile (default: `PATH/Dockerfile`) |
 | `--iidfile` | `string` |  | Write the image ID to the file |
+| `--invoke` | `string` |  | Invoke a command after the build [experimental] |
 | `--label` | `stringArray` |  | Set metadata for an image |
 | [`--load`](#load) |  |  | Shorthand for `--output=type=docker` |
 | [`--metadata-file`](#metadata-file) | `string` |  | Write build result metadata to the file |
@@ -33,6 +34,7 @@ Start a build
 | `--no-cache-filter` | `stringArray` |  | Do not cache specified stages |
 | [`-o`](#output), [`--output`](#output) | `stringArray` |  | Output destination (format: `type=local,dest=path`) |
 | [`--platform`](#platform) | `stringArray` |  | Set target platform for build |
+| `--print` | `string` |  | Print result of information request (e.g., outline, targets) [experimental] |
 | [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
 | `--pull` |  |  | Always attempt to pull all referenced images |
 | [`--push`](#push) |  |  | Shorthand for `--output=type=registry` |
@@ -46,6 +48,9 @@ Start a build
 
 
 <!---MARKER_GEN_END-->
+
+Flags marked with `[experimental]` need to be explicitly enabled by setting the
+`BUILDX_EXPERIMENTAL=1` environment variable.
 
 ## Description
 
