@@ -135,8 +135,8 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
-	if driver.GetFactory(driverName, true) == nil {
-		return errors.Errorf("failed to find driver %q", driverName)
+	if _, err := driver.GetFactory(driverName, true); err != nil {
+		return err
 	}
 
 	ngOriginal := ng
@@ -282,7 +282,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	var options createOptions
 
 	var drivers bytes.Buffer
-	for _, d := range driver.GetFactories() {
+	for _, d := range driver.GetFactories(true) {
 		if len(drivers.String()) > 0 {
 			drivers.WriteString(", ")
 		}
