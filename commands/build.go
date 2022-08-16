@@ -479,7 +479,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
 	if isExperimental() {
-		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (outline, targets)")
+		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
 	}
 
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
@@ -501,7 +501,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
 	if isExperimental() {
-		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build. BUILDX_EXPERIMENTAL=1 is required.")
+		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build [experimental]")
 	}
 
 	// hidden flags
