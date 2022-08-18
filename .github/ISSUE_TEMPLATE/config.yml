@@ -1,0 +1,12 @@
+# https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/configuring-issue-templates-for-your-repository#configuring-the-template-chooser
+blank_issues_enabled: true
+contact_links:
+  - name: Questions and Discussions
+    url: https://github.com/docker/buildx/discussions/new
+    about: Use Github Discussions to ask questions and/or open discussion topics.
+  - name: Command line reference
+    url: https://docs.docker.com/engine/reference/commandline/buildx/
+    about: Read the command line reference.
+  - name: Documentation
+    url: https://docs.docker.com/build/
+    about: Read the documentation.

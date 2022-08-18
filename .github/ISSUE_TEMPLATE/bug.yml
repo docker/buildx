@@ -1,0 +1,137 @@
+# https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema
+name: Bug Report
+description: Report a bug
+labels:
+  - kind/bug
+  - status/triage
+
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thank you for taking the time to report a bug!
+        If this is a security issue please report it to the [Docker Security team](mailto:security@docker.com).
+
+  - type: checkboxes
+    attributes:
+      label: Contributing guidelines
+      description: |
+        Please read the contributing guidelines before proceeding.
+      options:
+        - label: I've read the [contributing guidelines](https://github.com/docker/buildx/blob/master/.github/CONTRIBUTING.md) and wholeheartedly agree
+          required: true
+
+  - type: checkboxes
+    attributes:
+      label: I've found a bug and checked that ...
+      description: |
+        Make sure that your request fulfills all of the following requirements.
+        If one requirement cannot be satisfied, explain in detail why.
+      options:
+        - label: ... the documentation does not mention anything about my problem
+        - label: ... there are no open or closed issues that are related to my problem
+
+  - type: textarea
+    attributes:
+      label: Description
+      description: |
+        Please provide a brief description of the bug in 1-2 sentences.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Expected behaviour
+      description: |
+        Please describe precisely what you'd expect to happen.
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Actual behaviour
+      description: |
+        Please describe precisely what is actually happening.
+    validations:
+      required: true
+
+  - type: input
+    attributes:
+      label: Buildx version
+      description: |
+        Can be found using the `docker buildx version` command.
+        Example: `github.com/docker/buildx v0.8.1 5fac64c2c49dae1320f2b51f1a899ca451935554`
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Docker info
+      description: |
+        Output of `docker info`.
+      placeholder: |
+        ```
+        
+        ```
+      render: markdown
+
+  - type: textarea
+    attributes:
+      label: Builders list
+      description: |
+        Output of `docker buildx ls`.
+      placeholder: |
+        ```
+        
+        ```
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Configuration
+      description: |
+        Please provide a minimal Dockerfile, bake definition (if applicable) and invoked command to reproduce the bug.
+      placeholder: |
+        ```dockerfile
+        FROM alpine
+        echo hello
+        ```
+        
+        ```hcl
+        group "default" {
+          targets = ["app"]
+        }
+        target "app" {
+          dockerfile = "Dockerfile"
+          target = "build"
+        }
+        ```
+        
+        ```console
+        $ docker buildx build .
+        $ docker buildx bake
+        ```
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Logs
+      description: |
+        Please provide Buildx logs (also BuildKit logs if applicable).
+      placeholder: |
+        ```
+        
+        ```
+      render: markdown
+    validations:
+      required: false
+
+  - type: textarea
+    attributes:
+      label: Additional info
+      description: |
+        Please provide any additional information that could be useful.
