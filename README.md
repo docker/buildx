@@ -123,7 +123,8 @@ On Windows:
 Here is how to install and use Buildx inside a Dockerfile through the
 [`docker/buildx-bin`](https://hub.docker.com/r/docker/buildx-bin) image:
 
-```Dockerfile
+```dockerfile
+# syntax=docker/dockerfile:1
 FROM docker
 COPY --from=docker/buildx-bin /buildx /usr/libexec/docker/cli-plugins/docker-buildx
 RUN docker buildx version
@@ -298,6 +299,7 @@ inside your Dockerfile and can be leveraged by the processes running as part
 of your build.
 
 ```dockerfile
+# syntax=docker/dockerfile:1
 FROM --platform=$BUILDPLATFORM golang:alpine AS build
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
