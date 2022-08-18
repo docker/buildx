@@ -530,7 +530,8 @@ func TestReadEmptyTargets(t *testing.T) {
 		Name: "docker-compose.yml",
 		Data: []byte(`
 services:
-  app2: {}
+  app2:
+    build: {}
 `),
 	}
 

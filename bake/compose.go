@@ -1,7 +1,6 @@
 package bake
 
 import (
-	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -13,25 +12,29 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// errComposeInvalid is returned when a compose file is invalid
-var errComposeInvalid = errors.New("invalid compose file")
-
-func ParseCompose(dt []byte, envs map[string]string) (*Config, error) {
-	cfg, err := loader.Load(compose.ConfigDetails{
-		ConfigFiles: []compose.ConfigFile{
-			{
-				Content: dt,
-			},
-		},
-		Environment: envs,
-	}, func(options *loader.Options) {
-		options.SkipNormalization = true
-		options.SkipConsistencyCheck = true
-	})
+func ParseComposeFiles(fs []File) (*Config, error) {
+	envs, err := composeEnv()
 	if err != nil {
 		return nil, err
 	}
-	if err = composeValidate(cfg); err != nil {
+	var cfgs []compose.ConfigFile
+	for _, f := range fs {
+		cfgs = append(cfgs, compose.ConfigFile{
+			Filename: f.Name,
+			Content:  f.Data,
+		})
+	}
+	return ParseCompose(cfgs, envs)
+}
+
+func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, error) {
+	cfg, err := loader.Load(compose.ConfigDetails{
+		ConfigFiles: cfgs,
+		Environment: envs,
+	}, func(options *loader.Options) {
+		options.SkipNormalization = true
+	})
+	if err != nil {
 		return nil, err
 	}
 
@@ -44,7 +47,7 @@ func ParseCompose(dt []byte, envs map[string]string) (*Config, error) {
 
 		for _, s := range cfg.Services {
 			if s.Build == nil {
-				s.Build = &compose.BuildConfig{}
+				continue
 			}
 
 			targetName := sanitizeTargetName(s.Name)
@@ -108,6 +111,50 @@ func ParseCompose(dt []byte, envs map[string]string) (*Config, error) {
 	}
 
 	return &c, nil
+}
+
+func validateComposeFile(dt []byte, fn string) (bool, error) {
+	envs, err := composeEnv()
+	if err != nil {
+		return true, err
+	}
+	fnl := strings.ToLower(fn)
+	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
+		return true, validateCompose(dt, envs)
+	}
+	if strings.HasSuffix(fnl, ".json") || strings.HasSuffix(fnl, ".hcl") {
+		return false, nil
+	}
+	err = validateCompose(dt, envs)
+	return err == nil, err
+}
+
+func validateCompose(dt []byte, envs map[string]string) error {
+	_, err := loader.Load(compose.ConfigDetails{
+		ConfigFiles: []compose.ConfigFile{
+			{
+				Content: dt,
+			},
+		},
+		Environment: envs,
+	}, func(options *loader.Options) {
+		options.SkipNormalization = true
+		// consistency is checked later in ParseCompose to ensure multiple
+		// compose files can be merged together
+		options.SkipConsistencyCheck = true
+	})
+	return err
+}
+
+func composeEnv() (map[string]string, error) {
+	envs := sliceToMap(os.Environ())
+	if wd, err := os.Getwd(); err == nil {
+		envs, err = loadDotEnv(envs, wd)
+		if err != nil {
+			return nil, err
+		}
+	}
+	return envs, nil
 }
 
 func loadDotEnv(curenv map[string]string, workingDir string) (map[string]string, error) {
@@ -245,28 +292,6 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.Contexts = dedupMap(t.Contexts, xb.Contexts)
 	}
 
-	return nil
-}
-
-// composeValidate validates a compose file
-func composeValidate(project *compose.Project) error {
-	for _, s := range project.Services {
-		if s.Build != nil {
-			for _, secret := range s.Build.Secrets {
-				if _, ok := project.Secrets[secret.Source]; !ok {
-					return errors.Wrap(errComposeInvalid, fmt.Sprintf("service %q refers to undefined build secret %s", sanitizeTargetName(s.Name), secret.Source))
-				}
-			}
-		}
-	}
-	for name, secret := range project.Secrets {
-		if secret.External.External {
-			continue
-		}
-		if secret.File == "" && secret.Environment == "" {
-			return errors.Wrap(errComposeInvalid, fmt.Sprintf("secret %q must declare either `file` or `environment`", name))
-		}
-	}
 	return nil
 }
 
