@@ -10,6 +10,14 @@ type VT100Writer struct {
 	buffer []byte
 }
 
+func (w *VT100Writer) Buffer() []byte {
+	return w.buffer
+}
+
+func (w *VT100Writer) SetBuffer(buffer []byte) {
+	w.buffer = buffer
+}
+
 // WriteRaw to write raw byte array
 func (w *VT100Writer) WriteRaw(data []byte) {
 	w.buffer = append(w.buffer, data...)
