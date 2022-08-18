@@ -44,7 +44,7 @@ The following example shows information about a builder instance named
 `elated_tesla`:
 
 > **Note**
-> 
+>
 > Asterisk `*` next to node build platform(s) indicate they had been set manually during `buildx create`. Otherwise, it had been autodetected.
 
 ```console
@@ -57,10 +57,12 @@ Nodes:
 Name:      elated_tesla0
 Endpoint:  unix:///var/run/docker.sock
 Status:    running
+Buildkit:  v0.10.3
 Platforms: linux/amd64
 
 Name:      elated_tesla1
 Endpoint:  ssh://ubuntu@1.2.3.4
 Status:    running
+Buildkit:  v0.10.3
 Platforms: linux/arm64*, linux/arm/v7, linux/arm/v6
 ```
