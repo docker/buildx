@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	compose "github.com/compose-spec/compose-go/types"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -542,6 +543,83 @@ services:
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ParseCompose([]compose.ConfigFile{{Content: tt.dt}}, nil)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestValidateComposeFile(t *testing.T) {
+	cases := []struct {
+		name      string
+		fn        string
+		dt        []byte
+		isCompose bool
+		wantErr   bool
+	}{
+		{
+			name: "empty service",
+			fn:   "docker-compose.yml",
+			dt: []byte(`
+services:
+  foo:
+`),
+			isCompose: true,
+			wantErr:   true,
+		},
+		{
+			name: "build",
+			fn:   "docker-compose.yml",
+			dt: []byte(`
+services:
+  foo:
+    build: .
+`),
+			isCompose: true,
+			wantErr:   false,
+		},
+		{
+			name: "image",
+			fn:   "docker-compose.yml",
+			dt: []byte(`
+services:
+  simple:
+    image: nginx
+`),
+			isCompose: true,
+			wantErr:   false,
+		},
+		{
+			name: "unknown ext",
+			fn:   "docker-compose.foo",
+			dt: []byte(`
+services:
+  simple:
+    image: nginx
+`),
+			isCompose: true,
+			wantErr:   false,
+		},
+		{
+			name: "hcl",
+			fn:   "docker-bake.hcl",
+			dt: []byte(`
+target "default" {
+  dockerfile = "test"
+}
+`),
+			isCompose: false,
+			wantErr:   false,
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			isCompose, err := validateComposeFile(tt.dt, tt.fn)
+			assert.Equal(t, tt.isCompose, isCompose)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
