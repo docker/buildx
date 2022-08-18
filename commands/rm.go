@@ -149,12 +149,22 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 		builders[i] = &nginfo{ng: ng}
 	}
 
+	ctxbuilders, err := dockerCli.ContextStore().List()
+	if err != nil {
+		return err
+	}
+
 	eg, _ := errgroup.WithContext(ctx)
 	for _, b := range builders {
 		func(b *nginfo) {
 			eg.Go(func() error {
 				if err := loadNodeGroupData(ctx, dockerCli, b); err != nil {
 					return errors.Wrapf(err, "cannot load %s", b.ng.Name)
+				}
+				for _, cb := range ctxbuilders {
+					if b.ng.Driver == "docker" && len(b.ng.Nodes) == 1 && b.ng.Nodes[0].Endpoint == cb.Name {
+						return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb.Name)
+					}
 				}
 				if b.ng.Dynamic {
 					return nil
