@@ -63,7 +63,7 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 		var err error
 		f, err = driver.GetFactory(ng.Driver, true)
 		if err != nil {
-			return nil, errors.Errorf("failed to find driver %q", f)
+			return nil, err
 		}
 	} else {
 		// empty driver means nodegroup was implicitly created as a default
