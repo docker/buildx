@@ -530,7 +530,8 @@ func TestReadEmptyTargets(t *testing.T) {
 		Name: "docker-compose.yml",
 		Data: []byte(`
 services:
-  app2: {}
+  app2:
+    build: {}
 `),
 	}
 
@@ -1225,4 +1226,36 @@ target "f" {
 			require.Equal(t, "./testdockerfile", *m["d"].Dockerfile)
 		})
 	}
+}
+
+func TestUnknownExt(t *testing.T) {
+	dt := []byte(`
+		target "app" {
+			context = "dir"
+			args = {
+				v1 = "foo"
+			}
+		}
+		`)
+	dt2 := []byte(`
+services:
+  app:
+    build:
+      dockerfile: Dockerfile-alternate
+      args:
+        v2: "bar"
+`)
+
+	c, err := ParseFiles([]File{
+		{Data: dt, Name: "c1.foo"},
+		{Data: dt2, Name: "c2.bar"},
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, "app", c.Targets[0].Name)
+	require.Equal(t, "foo", c.Targets[0].Args["v1"])
+	require.Equal(t, "bar", c.Targets[0].Args["v2"])
+	require.Equal(t, "dir", *c.Targets[0].Context)
+	require.Equal(t, "Dockerfile-alternate", *c.Targets[0].Dockerfile)
 }

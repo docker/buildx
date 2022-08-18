@@ -200,15 +200,15 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 	}()
 
 	var c Config
-	var fs []*hcl.File
+	var composeFiles []File
+	var hclFiles []*hcl.File
 	for _, f := range files {
-		cfg, isCompose, composeErr := ParseComposeFile(f.Data, f.Name)
+		isCompose, composeErr := validateComposeFile(f.Data, f.Name)
 		if isCompose {
 			if composeErr != nil {
 				return nil, composeErr
 			}
-			c = mergeConfig(c, *cfg)
-			c = dedupeConfig(c)
+			composeFiles = append(composeFiles, f)
 		}
 		if !isCompose {
 			hf, isHCL, err := ParseHCLFile(f.Data, f.Name)
@@ -216,7 +216,7 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 				if err != nil {
 					return nil, err
 				}
-				fs = append(fs, hf)
+				hclFiles = append(hclFiles, hf)
 			} else if composeErr != nil {
 				return nil, fmt.Errorf("failed to parse %s: parsing yaml: %v, parsing hcl: %w", f.Name, composeErr, err)
 			} else {
@@ -225,8 +225,17 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 		}
 	}
 
-	if len(fs) > 0 {
-		if err := hclparser.Parse(hcl.MergeFiles(fs), hclparser.Opt{
+	if len(composeFiles) > 0 {
+		cfg, cmperr := ParseComposeFiles(composeFiles)
+		if cmperr != nil {
+			return nil, errors.Wrap(cmperr, "failed to parse compose file")
+		}
+		c = mergeConfig(c, *cfg)
+		c = dedupeConfig(c)
+	}
+
+	if len(hclFiles) > 0 {
+		if err := hclparser.Parse(hcl.MergeFiles(hclFiles), hclparser.Opt{
 			LookupVar:     os.LookupEnv,
 			Vars:          defaults,
 			ValidateLabel: validateTargetName,
@@ -234,18 +243,25 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 			return nil, err
 		}
 	}
+
 	return &c, nil
 }
 
 func dedupeConfig(c Config) Config {
 	c2 := c
+	c2.Groups = make([]*Group, 0, len(c2.Groups))
+	for _, g := range c.Groups {
+		g1 := *g
+		g1.Targets = dedupSlice(g1.Targets)
+		c2.Groups = append(c2.Groups, &g1)
+	}
 	c2.Targets = make([]*Target, 0, len(c2.Targets))
-	m := map[string]*Target{}
+	mt := map[string]*Target{}
 	for _, t := range c.Targets {
-		if t2, ok := m[t.Name]; ok {
+		if t2, ok := mt[t.Name]; ok {
 			t2.Merge(t)
 		} else {
-			m[t.Name] = t
+			mt[t.Name] = t
 			c2.Targets = append(c2.Targets, t)
 		}
 	}
@@ -254,26 +270,6 @@ func dedupeConfig(c Config) Config {
 
 func ParseFile(dt []byte, fn string) (*Config, error) {
 	return ParseFiles([]File{{Data: dt, Name: fn}}, nil)
-}
-
-func ParseComposeFile(dt []byte, fn string) (*Config, bool, error) {
-	envs := sliceToMap(os.Environ())
-	if wd, err := os.Getwd(); err == nil {
-		envs, err = loadDotEnv(envs, wd)
-		if err != nil {
-			return nil, true, err
-		}
-	}
-	fnl := strings.ToLower(fn)
-	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
-		cfg, err := ParseCompose(dt, envs)
-		return cfg, true, err
-	}
-	if strings.HasSuffix(fnl, ".json") || strings.HasSuffix(fnl, ".hcl") {
-		return nil, false, nil
-	}
-	cfg, err := ParseCompose(dt, envs)
-	return cfg, err == nil, err
 }
 
 type Config struct {
