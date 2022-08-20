@@ -786,6 +786,18 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 
 	eg, ctx := errgroup.WithContext(ctx)
 
+	for _, opt := range opt {
+		gitLabels, err := addGitProvenance(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
+		if err != nil {
+			return nil, err
+		}
+		for n, v := range gitLabels {
+			if _, ok := opt.Labels[n]; !ok {
+				opt.Labels[n] = v
+			}
+		}
+	}
+
 	for k, opt := range opt {
 		multiDriver := len(m[k]) > 1
 		hasMobyDriver := false
