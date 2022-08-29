@@ -3,7 +3,7 @@ module github.com/docker/buildx
 go 1.17
 
 require (
-	github.com/compose-spec/compose-go v1.4.0
+	github.com/compose-spec/compose-go v1.5.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.6
 	github.com/docker/cli v20.10.17+incompatible // v22.06.x - see "replace" for the actual version
