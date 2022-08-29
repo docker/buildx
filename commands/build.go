@@ -10,6 +10,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"sync"
@@ -17,12 +18,14 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	controllerapi "github.com/docker/buildx/commands/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
+	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
@@ -50,50 +53,15 @@ import (
 const defaultTargetName = "default"
 
 type buildOptions struct {
-	contextPath    string
-	dockerfileName string
-	printFunc      string
-
-	allow         []string
-	attests       []string
-	buildArgs     []string
-	cacheFrom     []string
-	cacheTo       []string
-	cgroupParent  string
-	contexts      []string
-	extraHosts    []string
-	imageIDFile   string
-	invoke        string
-	labels        []string
-	networkMode   string
-	noCacheFilter []string
-	outputs       []string
-	platforms     []string
-	quiet         bool
-	secrets       []string
-	shmSize       dockeropts.MemBytes
-	ssh           []string
-	tags          []string
-	target        string
-	ulimits       *dockeropts.UlimitOpt
-	commonOptions
-}
-
-type commonOptions struct {
-	builder      string
-	metadataFile string
-	noCache      *bool
 	progress     string
-	pull         *bool
-
-	exportPush bool
-	exportLoad bool
-
-	sbom       string
-	provenance string
+	invoke       string
+	serverConfig string
+	root         string
+	detach       bool
+	controllerapi.BuildOptions
 }
 
-func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
+func runBuild(dockerCli command.Cli, in buildOptions) error {
 	ctx := appcontext.Context()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
@@ -104,89 +72,85 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		end(err)
 	}()
 
-	noCache := false
-	if in.noCache != nil {
-		noCache = *in.noCache
-	}
-	pull := false
-	if in.pull != nil {
-		pull = *in.pull
+	_, err = runBuildWithContext(ctx, dockerCli, in.BuildOptions, os.Stdin, in.progress, nil)
+	return err
+}
+
+func runBuildWithContext(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (res *build.ResultContext, err error) {
+	if in.Opts.NoCache && len(in.NoCacheFilter) > 0 {
+		return nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
 
-	if noCache && len(in.noCacheFilter) > 0 {
-		return errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
+	if in.Quiet && progressMode != progress.PrinterModeAuto && progressMode != progress.PrinterModeQuiet {
+		return nil, errors.Errorf("progress=%s and quiet cannot be used together", progressMode)
+	} else if in.Quiet {
+		progressMode = "quiet"
 	}
 
-	if in.quiet && in.progress != progress.PrinterModeAuto && in.progress != progress.PrinterModeQuiet {
-		return errors.Errorf("progress=%s and quiet cannot be used together", in.progress)
-	} else if in.quiet {
-		in.progress = "quiet"
-	}
-
-	contexts, err := parseContextNames(in.contexts)
+	contexts, err := parseContextNames(in.Contexts)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	printFunc, err := parsePrintFunc(in.printFunc)
+	printFunc, err := parsePrintFunc(in.PrintFunc)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
 	opts := build.Options{
 		Inputs: build.Inputs{
-			ContextPath:    in.contextPath,
-			DockerfilePath: in.dockerfileName,
-			InStream:       os.Stdin,
+			ContextPath:    in.ContextPath,
+			DockerfilePath: in.DockerfileName,
+			InStream:       inStream,
 			NamedContexts:  contexts,
 		},
-		BuildArgs:     listToMap(in.buildArgs, true),
-		ExtraHosts:    in.extraHosts,
-		ImageIDFile:   in.imageIDFile,
-		Labels:        listToMap(in.labels, false),
-		NetworkMode:   in.networkMode,
-		NoCache:       noCache,
-		NoCacheFilter: in.noCacheFilter,
-		Pull:          pull,
-		ShmSize:       in.shmSize,
-		Tags:          in.tags,
-		Target:        in.target,
-		Ulimits:       in.ulimits,
+		BuildArgs:     listToMap(in.BuildArgs, true),
+		ExtraHosts:    in.ExtraHosts,
+		ImageIDFile:   in.ImageIDFile,
+		Labels:        listToMap(in.Labels, false),
+		NetworkMode:   in.NetworkMode,
+		NoCache:       in.Opts.NoCache,
+		NoCacheFilter: in.NoCacheFilter,
+		Pull:          in.Opts.Pull,
+		ShmSize:       dockeropts.MemBytes(in.ShmSize),
+		Tags:          in.Tags,
+		Target:        in.Target,
+		Ulimits:       controllerUlimitOpt2DockerUlimit(in.Ulimits),
 		PrintFunc:     printFunc,
 	}
 
-	platforms, err := platformutil.Parse(in.platforms)
+	platforms, err := platformutil.Parse(in.Platforms)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.Platforms = platforms
 
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
 	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(dockerConfig))
 
-	secrets, err := buildflags.ParseSecretSpecs(in.secrets)
+	secrets, err := buildflags.ParseSecretSpecs(in.Secrets)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.Session = append(opts.Session, secrets)
 
-	sshSpecs := in.ssh
-	if len(sshSpecs) == 0 && buildflags.IsGitSSH(in.contextPath) {
+	sshSpecs := in.SSH
+	if len(sshSpecs) == 0 && buildflags.IsGitSSH(in.ContextPath) {
 		sshSpecs = []string{"default"}
 	}
 	ssh, err := buildflags.ParseSSHSpecs(sshSpecs)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.Session = append(opts.Session, ssh)
 
-	outputs, err := buildflags.ParseOutputs(in.outputs)
+	outputs, err := buildflags.ParseOutputs(in.Outputs)
 	if err != nil {
-		return err
+		return nil, err
 	}
-	if in.exportPush {
-		if in.exportLoad {
-			return errors.Errorf("push and load may not be set together at the moment")
+	if in.Opts.ExportPush {
+		if in.Opts.ExportLoad {
+			return nil, errors.Errorf("push and load may not be set together at the moment")
 		}
 		if len(outputs) == 0 {
 			outputs = []client.ExportEntry{{
@@ -200,11 +164,11 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 			case "image":
 				outputs[0].Attrs["push"] = "true"
 			default:
-				return errors.Errorf("push and %q output can't be used together", outputs[0].Type)
+				return nil, errors.Errorf("push and %q output can't be used together", outputs[0].Type)
 			}
 		}
 	}
-	if in.exportLoad {
+	if in.Opts.ExportLoad {
 		if len(outputs) == 0 {
 			outputs = []client.ExportEntry{{
 				Type:  "docker",
@@ -214,102 +178,76 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 			switch outputs[0].Type {
 			case "docker":
 			default:
-				return errors.Errorf("load and %q output can't be used together", outputs[0].Type)
+				return nil, errors.Errorf("load and %q output can't be used together", outputs[0].Type)
 			}
 		}
 	}
 	opts.Exports = outputs
 
-	inAttests := append([]string{}, in.attests...)
-	if in.provenance != "" {
-		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", in.provenance))
+	inAttests := append([]string{}, in.Attests...)
+	if in.Opts.Provenance != "" {
+		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", in.Opts.Provenance))
 	}
-	if in.sbom != "" {
-		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", in.sbom))
+	if in.Opts.SBOM != "" {
+		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", in.Opts.SBOM))
 	}
 	opts.Attests, err = buildflags.ParseAttests(inAttests)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	cacheImports, err := buildflags.ParseCacheEntry(in.cacheFrom)
+	cacheImports, err := buildflags.ParseCacheEntry(in.CacheFrom)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.CacheFrom = cacheImports
 
-	cacheExports, err := buildflags.ParseCacheEntry(in.cacheTo)
+	cacheExports, err := buildflags.ParseCacheEntry(in.CacheTo)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.CacheTo = cacheExports
 
-	allow, err := buildflags.ParseEntitlements(in.allow)
+	allow, err := buildflags.ParseEntitlements(in.Allow)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	opts.Allow = allow
 
 	// key string used for kubernetes "sticky" mode
-	contextPathHash, err := filepath.Abs(in.contextPath)
+	contextPathHash, err := filepath.Abs(in.ContextPath)
 	if err != nil {
-		contextPathHash = in.contextPath
+		contextPathHash = in.ContextPath
 	}
 
 	b, err := builder.New(dockerCli,
-		builder.WithName(in.builder),
+		builder.WithName(in.Opts.Builder),
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
-		return err
+		return nil, err
 	}
 	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
-		return errors.Wrapf(err, "failed to update builder last activity time")
+		return nil, errors.Wrapf(err, "failed to update builder last activity time")
 	}
 	nodes, err := b.LoadNodes(ctx, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	imageID, res, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, in.progress, in.metadataFile, in.invoke != "")
+	imageID, res, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
 	err = wrapBuildError(err, false)
 	if err != nil {
-		return err
+		return nil, err
 	}
 
-	if in.invoke != "" {
-		cfg, err := parseInvokeConfig(in.invoke)
-		if err != nil {
-			return err
-		}
-		cfg.ResultCtx = res
-		con := console.Current()
-		if err := con.SetRaw(); err != nil {
-			return errors.Errorf("failed to configure terminal: %v", err)
-		}
-		err = monitor.RunMonitor(ctx, cfg, func(ctx context.Context) (*build.ResultContext, error) {
-			_, rr, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, in.progress, in.metadataFile, true)
-			return rr, err
-		}, io.NopCloser(os.Stdin), nopCloser{os.Stdout}, nopCloser{os.Stderr})
-		if err != nil {
-			logrus.Warnf("failed to run monitor: %v", err)
-		}
-		con.Reset()
-	}
-
-	if in.quiet {
+	if in.Quiet {
 		fmt.Println(imageID)
 	}
-	return nil
+	return res, nil
 }
 
-type nopCloser struct {
-	io.WriteCloser
-}
-
-func (c nopCloser) Close() error { return nil }
-
-func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, allowNoOutput bool) (imageID string, res *build.ResultContext, err error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (imageID string, res *build.ResultContext, err error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
@@ -320,13 +258,13 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.No
 
 	var mu sync.Mutex
 	var idx int
-	resp, err := build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer, func(driverIndex int, gotRes *build.ResultContext) {
+	resp, err := build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan), func(driverIndex int, gotRes *build.ResultContext) {
 		mu.Lock()
 		defer mu.Unlock()
 		if res == nil || driverIndex < idx {
 			idx, res = driverIndex, gotRes
 		}
-	}, allowNoOutput)
+	})
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1
@@ -352,51 +290,6 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.No
 	}
 
 	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], res, err
-}
-
-func parseInvokeConfig(invoke string) (cfg build.ContainerConfig, err error) {
-	cfg.Tty = true
-	if invoke == "default" {
-		return cfg, nil
-	}
-
-	csvReader := csv.NewReader(strings.NewReader(invoke))
-	fields, err := csvReader.Read()
-	if err != nil {
-		return cfg, err
-	}
-	if len(fields) == 1 && !strings.Contains(fields[0], "=") {
-		cfg.Cmd = []string{fields[0]}
-		return cfg, nil
-	}
-	for _, field := range fields {
-		parts := strings.SplitN(field, "=", 2)
-		if len(parts) != 2 {
-			return cfg, errors.Errorf("invalid value %s", field)
-		}
-		key := strings.ToLower(parts[0])
-		value := parts[1]
-		switch key {
-		case "args":
-			cfg.Cmd = append(cfg.Cmd, value) // TODO: support JSON
-		case "entrypoint":
-			cfg.Entrypoint = append(cfg.Entrypoint, value) // TODO: support JSON
-		case "env":
-			cfg.Env = append(cfg.Env, value)
-		case "user":
-			cfg.User = &value
-		case "cwd":
-			cfg.Cwd = &value
-		case "tty":
-			cfg.Tty, err = strconv.ParseBool(value)
-			if err != nil {
-				return cfg, errors.Errorf("failed to parse tty: %v", err)
-			}
-		default:
-			return cfg, errors.Errorf("unknown key %q", key)
-		}
-	}
-	return cfg, nil
 }
 
 func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
@@ -439,15 +332,9 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
 	}
 }
 
-func newBuildOptions() buildOptions {
-	ulimits := make(map[string]*units.Ulimit)
-	return buildOptions{
-		ulimits: dockeropts.NewUlimitOpt(&ulimits),
-	}
-}
-
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	options := newBuildOptions()
+	cFlags := &commonFlags{}
 
 	cmd := &cobra.Command{
 		Use:     "build [OPTIONS] PATH | URL | -",
@@ -455,9 +342,22 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Short:   "Start a build",
 		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			options.contextPath = args[0]
-			options.builder = rootOpts.builder
+			options.ContextPath = args[0]
+			options.Opts.Builder = rootOpts.builder
+			options.Opts.MetadataFile = cFlags.metadataFile
+			options.Opts.NoCache = false
+			if cFlags.noCache != nil {
+				options.Opts.NoCache = *cFlags.noCache
+			}
+			options.Opts.Pull = false
+			if cFlags.pull != nil {
+				options.Opts.Pull = *cFlags.pull
+			}
+			options.progress = cFlags.progress
 			cmd.Flags().VisitAll(checkWarnedFlags)
+			if isExperimental() {
+				return launchControllerAndRunBuild(dockerCli, options)
+			}
 			return runBuild(dockerCli, options)
 		},
 	}
@@ -469,67 +369,70 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
+	flags.StringSliceVar(&options.ExtraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
 	flags.SetAnnotation("add-host", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#add-host"})
 
-	flags.StringSliceVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
+	flags.StringSliceVar(&options.Allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
 
-	flags.StringArrayVar(&options.buildArgs, "build-arg", []string{}, "Set build-time variables")
+	flags.StringArrayVar(&options.BuildArgs, "build-arg", []string{}, "Set build-time variables")
 
-	flags.StringArrayVar(&options.cacheFrom, "cache-from", []string{}, `External cache sources (e.g., "user/app:cache", "type=local,src=path/to/dir")`)
+	flags.StringArrayVar(&options.CacheFrom, "cache-from", []string{}, `External cache sources (e.g., "user/app:cache", "type=local,src=path/to/dir")`)
 
-	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, `Cache export destinations (e.g., "user/app:cache", "type=local,dest=path/to/dir")`)
+	flags.StringArrayVar(&options.CacheTo, "cache-to", []string{}, `Cache export destinations (e.g., "user/app:cache", "type=local,dest=path/to/dir")`)
 
-	flags.StringVar(&options.cgroupParent, "cgroup-parent", "", "Optional parent cgroup for the container")
+	flags.StringVar(&options.CgroupParent, "cgroup-parent", "", "Optional parent cgroup for the container")
 	flags.SetAnnotation("cgroup-parent", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#cgroup-parent"})
 
-	flags.StringArrayVar(&options.contexts, "build-context", []string{}, "Additional build contexts (e.g., name=path)")
+	flags.StringArrayVar(&options.Contexts, "build-context", []string{}, "Additional build contexts (e.g., name=path)")
 
-	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
+	flags.StringVarP(&options.DockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
 	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#file"})
 
-	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.StringVar(&options.ImageIDFile, "iidfile", "", "Write the image ID to the file")
 
-	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
+	flags.StringArrayVar(&options.Labels, "label", []string{}, "Set metadata for an image")
 
-	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--output=type=docker"`)
+	flags.BoolVar(&options.Opts.ExportLoad, "load", false, `Shorthand for "--output=type=docker"`)
 
-	flags.StringVar(&options.networkMode, "network", "default", `Set the networking mode for the "RUN" instructions during build`)
+	flags.StringVar(&options.NetworkMode, "network", "default", `Set the networking mode for the "RUN" instructions during build`)
 
-	flags.StringArrayVar(&options.noCacheFilter, "no-cache-filter", []string{}, "Do not cache specified stages")
+	flags.StringArrayVar(&options.NoCacheFilter, "no-cache-filter", []string{}, "Do not cache specified stages")
 
-	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
+	flags.StringArrayVarP(&options.Outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
 
-	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
+	flags.StringArrayVar(&options.Platforms, "platform", platformsDefault, "Set target platform for build")
 
 	if isExperimental() {
-		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
+		flags.StringVar(&options.PrintFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
 	}
 
-	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
+	flags.BoolVar(&options.Opts.ExportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
-	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
+	flags.BoolVarP(&options.Quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 
-	flags.StringArrayVar(&options.secrets, "secret", []string{}, `Secret to expose to the build (format: "id=mysecret[,src=/local/secret]")`)
+	flags.StringArrayVar(&options.Secrets, "secret", []string{}, `Secret to expose to the build (format: "id=mysecret[,src=/local/secret]")`)
 
-	flags.Var(&options.shmSize, "shm-size", `Size of "/dev/shm"`)
+	flags.Var(newShmSize(&options), "shm-size", `Size of "/dev/shm"`)
 
-	flags.StringArrayVar(&options.ssh, "ssh", []string{}, `SSH agent socket or keys to expose to the build (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
+	flags.StringArrayVar(&options.SSH, "ssh", []string{}, `SSH agent socket or keys to expose to the build (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
 
-	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, `Name and optionally a tag (format: "name:tag")`)
+	flags.StringArrayVarP(&options.Tags, "tag", "t", []string{}, `Name and optionally a tag (format: "name:tag")`)
 	flags.SetAnnotation("tag", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#tag"})
 
-	flags.StringVar(&options.target, "target", "", "Set the target build stage to build")
+	flags.StringVar(&options.Target, "target", "", "Set the target build stage to build")
 	flags.SetAnnotation("target", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#target"})
 
-	flags.Var(options.ulimits, "ulimit", "Ulimit options")
+	flags.Var(newUlimits(&options), "ulimit", "Ulimit options")
 
-	flags.StringArrayVar(&options.attests, "attest", []string{}, `Attestation parameters (format: "type=sbom,generator=image")`)
-	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--attest=type=sbom"`)
-	flags.StringVar(&options.provenance, "provenance", "", `Shortand for "--attest=type=provenance"`)
+	flags.StringArrayVar(&options.Attests, "attest", []string{}, `Attestation parameters (format: "type=sbom,generator=image")`)
+	flags.StringVar(&options.Opts.SBOM, "sbom", "", `Shorthand for "--attest=type=sbom"`)
+	flags.StringVar(&options.Opts.Provenance, "provenance", "", `Shortand for "--attest=type=provenance"`)
 
 	if isExperimental() {
 		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build [experimental]")
+		flags.StringVar(&options.root, "root", "", "Specify root directory of server to connect [experimental]")
+		flags.BoolVar(&options.detach, "detach", runtime.GOOS == "linux", "Detach buildx server (supported only on linux) [experimental]")
+		flags.StringVar(&options.serverConfig, "server-config", "", "Specify buildx server config file (used only when launching new server) [experimental]")
 	}
 
 	// hidden flags
@@ -580,11 +483,19 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&ignoreBool, "force-rm", false, "Always remove intermediate containers")
 	flags.MarkHidden("force-rm")
 
-	commonBuildFlags(&options.commonOptions, flags)
+	commonBuildFlags(cFlags, flags)
 	return cmd
 }
 
-func commonBuildFlags(options *commonOptions, flags *pflag.FlagSet) {
+// comomnFlags is a set of flags commonly shared among subcommands.
+type commonFlags struct {
+	metadataFile string
+	progress     string
+	noCache      *bool
+	pull         *bool
+}
+
+func commonBuildFlags(options *commonFlags, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 	options.pull = flags.Bool("pull", false, "Always attempt to pull all referenced images")
@@ -743,4 +654,236 @@ func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
 	}
 	defer release()
 	return txn.UpdateLastActivity(ng)
+}
+
+func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) error {
+	ctx := context.TODO()
+
+	if options.Quiet && options.progress != "auto" && options.progress != "quiet" {
+		return errors.Errorf("progress=%s and quiet cannot be used together", options.progress)
+	} else if options.Quiet {
+		options.progress = "quiet"
+	}
+	if options.invoke != "" && (options.DockerfileName == "-" || options.ContextPath == "-") {
+		// stdin must be usable for monitor
+		return errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
+	}
+	var invokeConfig controllerapi.ContainerConfig
+	if inv := options.invoke; inv != "" {
+		var err error
+		invokeConfig, err = parseInvokeConfig(inv) // TODO: produce *controller.ContainerConfig directly.
+		if err != nil {
+			return err
+		}
+
+	}
+
+	var c monitor.BuildxController
+	var err error
+	if options.detach {
+		logrus.Infof("connecting to buildx server")
+		c, err = newRemoteBuildxController(ctx, dockerCli, options)
+		if err != nil {
+			return fmt.Errorf("failed to use buildx server; use --detach=false: %w", err)
+		}
+	} else {
+		logrus.Infof("launching local buildx controller")
+		c = newLocalBuildxController(ctx, dockerCli)
+	}
+	defer func() {
+		if err := c.Close(); err != nil {
+			logrus.Warnf("failed to close server connection %v", err)
+		}
+	}()
+
+	f := ioset.NewSingleForwarder()
+	pr, pw := io.Pipe()
+	f.SetWriter(pw, func() io.WriteCloser {
+		pw.Close() // propagate EOF
+		logrus.Debug("propagating stdin close")
+		return nil
+	})
+	f.SetReader(os.Stdin)
+
+	// Start build
+	ref, err := c.Build(ctx, options.BuildOptions, pr, os.Stdout, os.Stderr, options.progress)
+	if err != nil {
+		return fmt.Errorf("failed to build: %w", err) // TODO: allow invoke even on error
+	}
+	if err := pw.Close(); err != nil {
+		logrus.Debug("failed to close stdin pipe writer")
+	}
+	if err := pr.Close(); err != nil {
+		logrus.Debug("failed to close stdin pipe reader")
+	}
+
+	// post-build operations
+	if options.invoke != "" {
+		pr2, pw2 := io.Pipe()
+		f.SetWriter(pw2, func() io.WriteCloser {
+			pw2.Close() // propagate EOF
+			return nil
+		})
+		con := console.Current()
+		if err := con.SetRaw(); err != nil {
+			if err := c.Disconnect(ctx, ref); err != nil {
+				logrus.Warnf("disconnect error: %v", err)
+			}
+			return errors.Errorf("failed to configure terminal: %v", err)
+		}
+		err = monitor.RunMonitor(ctx, ref, options.BuildOptions, invokeConfig, c, options.progress, pr2, os.Stdout, os.Stderr)
+		con.Reset()
+		if err := pw2.Close(); err != nil {
+			logrus.Debug("failed to close monitor stdin pipe reader")
+		}
+		if err != nil {
+			logrus.Warnf("failed to run monitor: %v", err)
+		}
+	} else {
+		if err := c.Disconnect(ctx, ref); err != nil {
+			logrus.Warnf("disconnect error: %v", err)
+		}
+		// If "invoke" isn't specified, further inspection ins't provided. Finish the buildx server.
+		if err := c.Kill(ctx); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func parseInvokeConfig(invoke string) (cfg controllerapi.ContainerConfig, err error) {
+	cfg.Tty = true
+	if invoke == "default" {
+		return cfg, nil
+	}
+
+	csvReader := csv.NewReader(strings.NewReader(invoke))
+	fields, err := csvReader.Read()
+	if err != nil {
+		return cfg, err
+	}
+	if len(fields) == 1 && !strings.Contains(fields[0], "=") {
+		cfg.Cmd = []string{fields[0]}
+		return cfg, nil
+	}
+	cfg.NoUser = true
+	cfg.NoCwd = true
+	for _, field := range fields {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) != 2 {
+			return cfg, errors.Errorf("invalid value %s", field)
+		}
+		key := strings.ToLower(parts[0])
+		value := parts[1]
+		switch key {
+		case "args":
+			cfg.Cmd = append(cfg.Cmd, value) // TODO: support JSON
+		case "entrypoint":
+			cfg.Entrypoint = append(cfg.Entrypoint, value) // TODO: support JSON
+		case "env":
+			cfg.Env = append(cfg.Env, value)
+		case "user":
+			cfg.User = value
+			cfg.NoUser = false
+		case "cwd":
+			cfg.Cwd = value
+			cfg.NoCwd = false
+		case "tty":
+			cfg.Tty, err = strconv.ParseBool(value)
+			if err != nil {
+				return cfg, errors.Errorf("failed to parse tty: %v", err)
+			}
+		default:
+			return cfg, errors.Errorf("unknown key %q", key)
+		}
+	}
+	return cfg, nil
+}
+
+func controllerUlimitOpt2DockerUlimit(u *controllerapi.UlimitOpt) *dockeropts.UlimitOpt {
+	if u == nil {
+		return nil
+	}
+	values := make(map[string]*units.Ulimit)
+	for k, v := range u.Values {
+		values[k] = &units.Ulimit{
+			Name: v.Name,
+			Hard: v.Hard,
+			Soft: v.Soft,
+		}
+	}
+	return dockeropts.NewUlimitOpt(&values)
+}
+
+func newBuildOptions() buildOptions {
+	return buildOptions{
+		BuildOptions: controllerapi.BuildOptions{
+			Opts: &controllerapi.CommonOptions{},
+		},
+	}
+}
+
+func newUlimits(opt *buildOptions) *ulimits {
+	ul := make(map[string]*units.Ulimit)
+	return &ulimits{opt: opt, org: dockeropts.NewUlimitOpt(&ul)}
+}
+
+type ulimits struct {
+	opt *buildOptions
+	org *dockeropts.UlimitOpt
+}
+
+func (u *ulimits) sync() {
+	du := &controllerapi.UlimitOpt{
+		Values: make(map[string]*controllerapi.Ulimit),
+	}
+	for _, l := range u.org.GetList() {
+		du.Values[l.Name] = &controllerapi.Ulimit{
+			Name: l.Name,
+			Hard: l.Hard,
+			Soft: l.Soft,
+		}
+	}
+	u.opt.Ulimits = du
+}
+
+func (u *ulimits) String() string {
+	return u.org.String()
+}
+
+func (u *ulimits) Set(v string) error {
+	err := u.org.Set(v)
+	u.sync()
+	return err
+}
+
+func (u *ulimits) Type() string {
+	return u.org.Type()
+}
+
+func newShmSize(opt *buildOptions) *shmSize {
+	return &shmSize{opt: opt}
+}
+
+type shmSize struct {
+	opt *buildOptions
+	org dockeropts.MemBytes
+}
+
+func (s *shmSize) sync() {
+	s.opt.ShmSize = s.org.Value()
+}
+
+func (s *shmSize) String() string {
+	return s.org.String()
+}
+
+func (s *shmSize) Set(v string) error {
+	err := s.org.Set(v)
+	s.sync()
+	return err
+}
+
+func (s *shmSize) Type() string {
+	return s.org.Type()
 }

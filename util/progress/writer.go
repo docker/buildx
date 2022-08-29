@@ -68,3 +68,24 @@ func NewChannel(w Writer) (chan *client.SolveStatus, chan struct{}) {
 	}()
 	return ch, done
 }
+
+type tee struct {
+	Writer
+	ch chan *client.SolveStatus
+}
+
+func (t *tee) Write(v *client.SolveStatus) {
+	v2 := *v
+	t.ch <- &v2
+	t.Writer.Write(v)
+}
+
+func Tee(w Writer, ch chan *client.SolveStatus) Writer {
+	if ch == nil {
+		return w
+	}
+	return &tee{
+		Writer: w,
+		ch:     ch,
+	}
+}

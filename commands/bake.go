@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	controllerapi "github.com/docker/buildx/commands/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
@@ -25,10 +26,10 @@ type bakeOptions struct {
 	files     []string
 	overrides []string
 	printOnly bool
-	commonOptions
+	controllerapi.CommonOptions
 }
 
-func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error) {
+func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
 	ctx := appcontext.Context()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "bake")
@@ -60,31 +61,31 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}
 
 	overrides := in.overrides
-	if in.exportPush {
-		if in.exportLoad {
+	if in.ExportPush {
+		if in.ExportLoad {
 			return errors.Errorf("push and load may not be set together at the moment")
 		}
 		overrides = append(overrides, "*.push=true")
-	} else if in.exportLoad {
+	} else if in.ExportLoad {
 		overrides = append(overrides, "*.output=type=docker")
 	}
-	if in.noCache != nil {
-		overrides = append(overrides, fmt.Sprintf("*.no-cache=%t", *in.noCache))
+	if cFlags.noCache != nil {
+		overrides = append(overrides, fmt.Sprintf("*.no-cache=%t", *cFlags.noCache))
 	}
-	if in.pull != nil {
-		overrides = append(overrides, fmt.Sprintf("*.pull=%t", *in.pull))
+	if cFlags.pull != nil {
+		overrides = append(overrides, fmt.Sprintf("*.pull=%t", *cFlags.pull))
 	}
-	if in.sbom != "" {
-		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("sbom", in.sbom)))
+	if in.SBOM != "" {
+		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("sbom", in.SBOM)))
 	}
-	if in.provenance != "" {
-		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("provenance", in.provenance)))
+	if in.Provenance != "" {
+		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("provenance", in.Provenance)))
 	}
 	contextPathHash, _ := os.Getwd()
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, in.progress)
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, cFlags.progress)
 	if err != nil {
 		return err
 	}
@@ -105,7 +106,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	// instance only needed for reading remote bake files or building
 	if url != "" || !in.printOnly {
 		b, err := builder.New(dockerCli,
-			builder.WithName(in.builder),
+			builder.WithName(in.Builder),
 			builder.WithContextPathHash(contextPathHash),
 		)
 		if err != nil {
@@ -170,12 +171,12 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return wrapBuildError(err, true)
 	}
 
-	if len(in.metadataFile) > 0 {
+	if len(in.MetadataFile) > 0 {
 		dt := make(map[string]interface{})
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
 		}
-		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
+		if err := writeMetadataFile(in.MetadataFile, dt); err != nil {
 			return err
 		}
 	}
@@ -185,6 +186,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options bakeOptions
+	var cFlags commonFlags
 
 	cmd := &cobra.Command{
 		Use:     "bake [OPTIONS] [TARGET...]",
@@ -193,27 +195,29 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			// reset to nil to avoid override is unset
 			if !cmd.Flags().Lookup("no-cache").Changed {
-				options.noCache = nil
+				cFlags.noCache = nil
 			}
 			if !cmd.Flags().Lookup("pull").Changed {
-				options.pull = nil
+				cFlags.pull = nil
 			}
-			options.commonOptions.builder = rootOpts.builder
-			return runBake(dockerCli, args, options)
+			options.Builder = rootOpts.builder
+			options.MetadataFile = cFlags.metadataFile
+			// Other common flags (noCache, pull and progress) are processed in runBake function.
+			return runBake(dockerCli, args, options, cFlags)
 		},
 	}
 
 	flags := cmd.Flags()
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
-	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
+	flags.BoolVar(&options.ExportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
-	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
-	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
-	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
+	flags.BoolVar(&options.ExportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
+	flags.StringVar(&options.SBOM, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
+	flags.StringVar(&options.Provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
 
-	commonBuildFlags(&options.commonOptions, flags)
+	commonBuildFlags(&cFlags, flags)
 
 	return cmd
 }
