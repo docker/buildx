@@ -26,6 +26,9 @@ services:
         - foo:v1.0.0
         - docker.io/username/foo:my-other-tag
         - ${COMPOSE_PROJECT_NAME}:1.0.0
+      platforms:
+        - linux/amd64
+        - linux/arm64
 
 
     cap_add:
