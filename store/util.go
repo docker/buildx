@@ -2,11 +2,14 @@ package store
 
 import (
 	"os"
+	"regexp"
 	"strings"
 
 	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/pkg/errors"
 )
+
+var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\.\-_]*$`)
 
 func ValidateName(s string) (string, error) {
 	if !namePattern.MatchString(s) {
