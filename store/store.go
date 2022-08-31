@@ -4,7 +4,6 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
-	"regexp"
 	"sort"
 
 	"github.com/docker/docker/pkg/ioutils"
@@ -198,8 +197,6 @@ type current struct {
 	Name   string
 	Global bool
 }
-
-var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\.\-_]*$`)
 
 func toHash(in string) string {
 	return digest.FromBytes([]byte(in)).Hex()[:20]
