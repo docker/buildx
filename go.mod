@@ -6,7 +6,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.5
 	github.com/compose-spec/compose-go v1.5.0
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.6
+	github.com/containerd/containerd v1.6.8
 	github.com/docker/cli v20.10.17+incompatible // v22.06.x - see "replace" for the actual version
 	github.com/docker/cli-docs-tool v0.5.0
 	github.com/docker/distribution v2.8.1+incompatible
