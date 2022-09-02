@@ -84,7 +84,7 @@ func ReadLocalFiles(names []string) ([]File, error) {
 	return out, nil
 }
 
-func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, []*Group, error) {
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, map[string]*Group, error) {
 	c, err := ParseFiles(files, defaults)
 	if err != nil {
 		return nil, nil, err
@@ -111,30 +111,23 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 		}
 	}
 
-	var g []*Group
+	gs := map[string]*Group{}
 	if len(targets) == 0 || (len(targets) == 1 && targets[0] == "default") {
 		for _, group := range c.Groups {
 			if group.Name != "default" {
 				continue
 			}
-			g = []*Group{{Targets: group.Targets}}
+			gs[group.Name] = group
 		}
 	} else {
-		var gt []string
 		for _, target := range targets {
-			isGroup := false
 			for _, group := range c.Groups {
 				if target == group.Name {
-					gt = append(gt, group.Targets...)
-					isGroup = true
+					gs[group.Name] = group
 					break
 				}
 			}
-			if !isGroup {
-				gt = append(gt, target)
-			}
 		}
-		g = []*Group{{Targets: dedupSlice(gt)}}
 	}
 
 	for name, t := range m {
@@ -143,7 +136,7 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 		}
 	}
 
-	return m, g, nil
+	return m, gs, nil
 }
 
 func dedupSlice(s []string) []string {

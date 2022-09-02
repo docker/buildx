@@ -120,17 +120,11 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 	}
 
 	if in.printOnly {
-		var defg map[string]*bake.Group
-		if len(grps) == 1 {
-			defg = map[string]*bake.Group{
-				"default": grps[0],
-			}
-		}
 		dt, err := json.MarshalIndent(struct {
 			Group  map[string]*bake.Group  `json:"group,omitempty"`
 			Target map[string]*bake.Target `json:"target"`
 		}{
-			defg,
+			grps,
 			tgts,
 		}, "", "  ")
 		if err != nil {
