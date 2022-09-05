@@ -61,7 +61,7 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 
 	for _, di := range dis {
 		if di.Err != nil {
-			return err
+			return di.Err
 		}
 	}
 
