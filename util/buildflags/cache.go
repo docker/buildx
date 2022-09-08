@@ -1,10 +1,12 @@
 package buildflags
 
 import (
+	"context"
 	"encoding/csv"
 	"os"
 	"strings"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 )
@@ -49,6 +51,7 @@ func ParseCacheEntry(in []string) ([]client.CacheOptionsEntry, error) {
 		if !addGithubToken(&im) {
 			continue
 		}
+		addAwsCredentials(&im)
 		imports = append(imports, im)
 	}
 	return imports, nil
@@ -78,4 +81,28 @@ func addGithubToken(ci *client.CacheOptionsEntry) bool {
 		}
 	}
 	return ci.Attrs["token"] != "" && ci.Attrs["url"] != ""
+}
+
+func addAwsCredentials(ci *client.CacheOptionsEntry) {
+	if ci.Type != "s3" {
+		return
+	}
+	ctx := context.TODO()
+	awsConfig, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return
+	}
+	credentials, err := awsConfig.Credentials.Retrieve(ctx)
+	if err != nil {
+		return
+	}
+	if _, ok := ci.Attrs["access_key_id"]; !ok && credentials.AccessKeyID != "" {
+		ci.Attrs["access_key_id"] = credentials.AccessKeyID
+	}
+	if _, ok := ci.Attrs["secret_access_key"]; !ok && credentials.SecretAccessKey != "" {
+		ci.Attrs["secret_access_key"] = credentials.SecretAccessKey
+	}
+	if _, ok := ci.Attrs["session_token"]; !ok && credentials.SessionToken != "" {
+		ci.Attrs["session_token"] = credentials.SessionToken
+	}
 }

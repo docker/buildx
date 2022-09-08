@@ -410,6 +410,10 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 			if !bopts.LLBCaps.Contains(apicaps.CapID("cache.gha")) {
 				continue
 			}
+		} else if e.Type == "s3" {
+			if !bopts.LLBCaps.Contains(apicaps.CapID("cache.s3")) {
+				continue
+			}
 		}
 		cacheTo = append(cacheTo, e)
 	}
@@ -418,6 +422,10 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 	for _, e := range opt.CacheFrom {
 		if e.Type == "gha" {
 			if !bopts.LLBCaps.Contains(apicaps.CapID("cache.gha")) {
+				continue
+			}
+		} else if e.Type == "s3" {
+			if !bopts.LLBCaps.Contains(apicaps.CapID("cache.s3")) {
 				continue
 			}
 		}

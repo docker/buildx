@@ -3,6 +3,7 @@ module github.com/docker/buildx
 go 1.17
 
 require (
+	github.com/aws/aws-sdk-go-v2/config v1.15.5
 	github.com/compose-spec/compose-go v1.5.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.6
@@ -53,6 +54,16 @@ require (
 	github.com/apparentlymart/go-cidr v1.0.1 // indirect
 	github.com/apparentlymart/go-textseg/v12 v12.0.0 // indirect
 	github.com/apparentlymart/go-textseg/v13 v13.0.0 // indirect
+	github.com/aws/aws-sdk-go-v2 v1.16.3 // indirect
+	github.com/aws/aws-sdk-go-v2/credentials v1.12.0 // indirect
+	github.com/aws/aws-sdk-go-v2/feature/ec2/imds v1.12.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/configsources v1.1.10 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/endpoints/v2 v2.4.4 // indirect
+	github.com/aws/aws-sdk-go-v2/internal/ini v1.3.11 // indirect
+	github.com/aws/aws-sdk-go-v2/service/internal/presigned-url v1.9.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sso v1.11.4 // indirect
+	github.com/aws/aws-sdk-go-v2/service/sts v1.16.4 // indirect
+	github.com/aws/smithy-go v1.11.2 // indirect
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/bugsnag/bugsnag-go v1.4.1 // indirect
 	github.com/bugsnag/panicwrap v1.2.0 // indirect
@@ -155,6 +166,7 @@ require (
 )
 
 replace (
+	github.com/aws/aws-sdk-go-v2/config => github.com/aws/aws-sdk-go-v2/config v1.15.5 // same as buildkit
 	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible // master (v22.06-dev)
 	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20220720171342-a60b458179aa+incompatible // 22.06 branch (v22.06-dev)
 	k8s.io/api => k8s.io/api v0.22.4

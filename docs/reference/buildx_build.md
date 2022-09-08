@@ -170,7 +170,7 @@ Same as [`buildx --builder`](buildx.md#builder).
 ```
 
 Use an external cache source for a build. Supported types are `registry`,
-`local` and `gha`.
+`local`, `gha` and `s3`.
 
 - [`registry` source](https://github.com/moby/buildkit#registry-push-image-and-cache-separately)
   can import cache from a cache manifest or (special) image configuration on the
@@ -180,6 +180,9 @@ Use an external cache source for a build. Supported types are `registry`,
 - [`gha` source](https://github.com/moby/buildkit#github-actions-cache-experimental)
   can import cache from a previously exported cache with `--cache-to` in your
   GitHub repository
+- [`s3` source](https://github.com/moby/buildkit#s3-cache-experimental)
+  can import cache from a previously exported cache with `--cache-to` in your
+  S3 bucket
 
 If no type is specified, `registry` exporter is used with a specified reference.
 
@@ -191,6 +194,7 @@ $ docker buildx build --cache-from=user/app .
 $ docker buildx build --cache-from=type=registry,ref=user/app .
 $ docker buildx build --cache-from=type=local,src=path/to/cache .
 $ docker buildx build --cache-from=type=gha .
+$ docker buildx build --cache-from=type=s3,region=eu-west-1,bucket=mybucket .
 ```
 
 More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
@@ -202,15 +206,17 @@ More info about cache exporters and available attributes: https://github.com/mob
 ```
 
 Export build cache to an external cache destination. Supported types are
-`registry`, `local`, `inline` and `gha`.
+`registry`, `local`, `inline`, `gha` and `s3`.
 
 - [`registry` type](https://github.com/moby/buildkit#registry-push-image-and-cache-separately) exports build cache to a cache manifest in the registry.
-- [`local` type](https://github.com/moby/buildkit#local-directory-1) type
-  exports cache to a local directory on the client.
+- [`local` type](https://github.com/moby/buildkit#local-directory-1) exports
+  cache to a local directory on the client.
 - [`inline` type](https://github.com/moby/buildkit#inline-push-image-and-cache-together)
-  type writes the cache metadata into the image configuration.
+  writes the cache metadata into the image configuration.
 - [`gha` type](https://github.com/moby/buildkit#github-actions-cache-experimental)
-  type exports cache through the [Github Actions Cache service API](https://github.com/tonistiigi/go-actions-cache/blob/master/api.md#authentication).
+  exports cache through the [GitHub Actions Cache service API](https://github.com/tonistiigi/go-actions-cache/blob/master/api.md#authentication).
+- [`s3` type](https://github.com/moby/buildkit#s3-cache-experimental) exports
+  cache to a S3 bucket.
 
 `docker` driver currently only supports exporting inline cache metadata to image
 configuration. Alternatively, `--build-arg BUILDKIT_INLINE_CACHE=1` can be used
@@ -228,6 +234,7 @@ $ docker buildx build --cache-to=type=inline .
 $ docker buildx build --cache-to=type=registry,ref=user/app .
 $ docker buildx build --cache-to=type=local,dest=path/to/cache .
 $ docker buildx build --cache-to=type=gha .
+$ docker buildx build --cache-to=type=s3,region=eu-west-1,bucket=mybucket .
 ```
 
 More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
