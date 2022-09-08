@@ -40,7 +40,7 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 
 	for _, di := range dis {
 		if di.Err != nil {
-			return err
+			return di.Err
 		}
 	}
 
