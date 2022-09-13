@@ -234,5 +234,3 @@ This will create your pods without `securityContext.privileged`.
 ## Further reading
 
 For more information on the kubernetes driver, see the [buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
-
-<!--- FIXME: for 0.9, make reference link relative --->
