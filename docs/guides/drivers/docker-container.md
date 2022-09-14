@@ -71,5 +71,3 @@ REPOSITORY                       TAG               IMAGE ID       CREATED       
 ## Further reading
 
 For more information on the docker-container driver, see the [buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
-
-<!--- FIXME: for 0.9, make reference link relative --->

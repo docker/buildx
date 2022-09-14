@@ -2,24 +2,22 @@
 
 The buildx client connects out to the BuildKit backend to execute builds -
 Buildx drivers allow fine-grained control over management of the backend, and
-supports several different options for where and how BuildKit should run.
+supports several options for where and how BuildKit should run.
 
 Currently, we support the following drivers:
 
 - The `docker` driver, that uses the BuildKit library bundled into the Docker
   daemon.
-  ([guide](./docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+  ([guide](./docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#docker-driver-1))
 - The `docker-container` driver, that launches a dedicated BuildKit container
   using Docker, for access to advanced features.
-  ([guide](./docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+  ([guide](./docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#docker-container-driver-1))
 - The `kubernetes` driver, that launches dedicated BuildKit pods in a
   remote Kubernetes cluster, for scalable builds.
-  ([guide](./kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+  ([guide](./kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#kubernetes-driver-1))
 - The `remote` driver, that allows directly connecting to a manually managed
   BuildKit daemon, for more custom setups.
-  ([guide](./remote.md))
-
-<!--- FIXME: for 0.9, make links relative, and add reference link for remote --->
+  ([guide](./remote.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#remote-driver-1))
 
 To create a new builder that uses one of the above drivers, you can use the
 [`docker buildx create`](https://docs.docker.com/engine/reference/commandline/buildx_create/) command:

@@ -34,7 +34,7 @@ the available [Docker Contexts](https://docs.docker.com/engine/context/working-w
 When you add new contexts using `docker context create`, these will appear in
 your list of buildx builders.
 
-Unlike the [other drivers](../index.md), builders using the docker driver
+Unlike the [other drivers](./index.md), builders using the docker driver
 cannot be manually created, and can only be automatically created from the
 docker context. Additionally, they cannot be configured to a specific BuildKit
 version, and cannot take any extra parameters, as these are both preset by the
@@ -46,5 +46,3 @@ overhead, then see the help page for the [docker-container driver](./docker-cont
 ## Further reading
 
 For more information on the docker driver, see the [buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
-
-<!--- FIXME: for 0.9, make reference link relative --->
