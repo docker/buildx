@@ -640,14 +640,17 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 // ContainerConfig is configuration for a container to run.
 type ContainerConfig struct {
 	ResultCtx *ResultContext
-	Args      []string
-	Env       []string
-	User      string
-	Cwd       string
-	Tty       bool
-	Stdin     io.ReadCloser
-	Stdout    io.WriteCloser
-	Stderr    io.WriteCloser
+
+	Stdin  io.ReadCloser
+	Stdout io.WriteCloser
+	Stderr io.WriteCloser
+	Tty    bool
+
+	Entrypoint []string
+	Cmd        []string
+	Env        []string
+	User       *string
+	Cwd        *string
 }
 
 // ResultContext is a build result with the client that built it.
@@ -703,11 +706,53 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 		}
 		defer ctr.Release(context.TODO())
 
+		imgData := res.Metadata[exptypes.ExporterImageConfigKey]
+		var img *specs.Image
+		if len(imgData) > 0 {
+			img = &specs.Image{}
+			if err := json.Unmarshal(imgData, img); err != nil {
+				fmt.Println(err)
+				return nil, err
+			}
+		}
+
+		user := ""
+		if cfg.User != nil {
+			user = *cfg.User
+		} else if img != nil {
+			user = img.Config.User
+		}
+
+		cwd := ""
+		if cfg.Cwd != nil {
+			cwd = *cfg.Cwd
+		} else if img != nil {
+			cwd = img.Config.WorkingDir
+		}
+
+		env := []string{}
+		if img != nil {
+			env = append(env, img.Config.Env...)
+		}
+		env = append(env, cfg.Env...)
+
+		args := []string{}
+		if cfg.Entrypoint != nil {
+			args = append(args, cfg.Entrypoint...)
+		} else if img != nil {
+			args = append(args, img.Config.Entrypoint...)
+		}
+		if cfg.Cmd != nil {
+			args = append(args, cfg.Cmd...)
+		} else if img != nil {
+			args = append(args, img.Config.Cmd...)
+		}
+
 		proc, err := ctr.Start(ctx, gateway.StartRequest{
-			Args:   cfg.Args,
-			Env:    cfg.Env,
-			User:   cfg.User,
-			Cwd:    cfg.Cwd,
+			Args:   args,
+			Env:    env,
+			User:   user,
+			Cwd:    cwd,
 			Tty:    cfg.Tty,
 			Stdin:  cfg.Stdin,
 			Stdout: cfg.Stdout,
