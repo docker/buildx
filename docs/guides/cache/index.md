@@ -86,8 +86,6 @@ $ docker buildx build --push -t <registry>/<image> \
 
 ## Configuration options
 
-<!-- FIXME: link to image exporter guide when it's written -->
-
 This section describes some of the configuration options available when
 generating cache exports. The options described here are common for at least two
 or more backend types. Additionally, the different backend types support
@@ -96,9 +94,9 @@ more information about which configuration parameters apply.
 
 The common parameters described here are:
 
-- Cache mode
-- Cache compression
-- OCI media type
+- [Cache mode](#cache-mode)
+- [Cache compression](#cache-compression)
+- [OCI media type](#oci-media-types)
 
 ### Cache mode
 
@@ -129,15 +127,12 @@ with both parameters to find the results that work best for you.
 
 ### Cache compression
 
-Since `registry` cache image is a separate export artifact from the main build
-result, you can specify separate compression parameters for it. These parameters
-are similar to the options provided by the `image` exporter. While the default
-values provide a good out-of-the-box experience, you may wish to tweak the
-parameters to optimize for storage vs compute costs.
+<!-- FIXME: this link won't work on docs.docker.com -->
 
-To select the compression algorithm, you can use the
-`compression=<uncompressed|gzip|estargz|zstd>` option. For example, to build the
-cache with `compression=zstd`:
+The cache compression options are the same as the
+[exporter compression options](../exporters/index.md#compression).
+
+For example, to compress the `registry` cache with `zstd` compression:
 
 ```console
 $ docker buildx build --push -t <registry>/<image> \
@@ -145,31 +140,14 @@ $ docker buildx build --push -t <registry>/<image> \
   --cache-from type=registry,ref=<registry>/<cache-image> .
 ```
 
-Use the `compression-level=<value>` option alongside the `compression` parameter
-to choose a compression level for the algorithms which support it:
-
-- 0-9 for `gzip` and `estargz`
-- 0-22 for `zstd`
-
-As a general rule, the higher the number, the smaller the resulting file will
-be, and the longer the compression will take to run.
-
-Use the `force-compression=true` option to force re-compressing layers imported
-from a previous cache, if the requested compression algorithm is different from
-the previous compression algorithm.
-
-> **Note**
->
-> The `gzip` and `estargz` compression methods use the
-> [`compress/gzip` package](https://pkg.go.dev/compress/gzip), while `zstd` uses
-> the
-> [`github.com/klauspost/compress/zstd` package](https://github.com/klauspost/compress/tree/master/zstd).
-
 ### OCI media types
 
-Like the `image` exporter, the `registry` cache exporter supports creating
-images with Docker media types or with OCI media types. To export OCI media type
-cache, use the `oci-mediatypes` property:
+<!-- FIXME: this link won't work on docs.docker.com -->
+
+The cache OCI options are the same as the
+[exporter OCI options](../exporters/index.md#oci-media-types).
+
+For example, to export OCI media type cache, use the `oci-mediatypes` property:
 
 ```console
 $ docker buildx build --push -t <registry>/<image> \
