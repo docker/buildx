@@ -1,87 +1,182 @@
 # Cache storage backends
 
-To ensure that builds run as quickly as possible, BuildKit automatically caches
-the build result in its own internal cache. However, in addition to this simple
-cache, BuildKit also supports exporting cache for a specific build to an
-external location to easily import into future builds.
+To ensure fast builds, BuildKit automatically caches the build result in its own
+internal cache. Additionally, BuildKit also supports exporting build cache to an
+external location, making it possible to import in future builds.
 
-This external cache becomes almost essential in CI/CD environments, where there
-may be little-to-no persistence between runs, but it's still important to keep
-the runtime of image builds as low as possible.
+An external cache becomes almost essential in CI/CD build environments. Such
+environments usually have little-to-no persistence between runs, but it's still
+important to keep the runtime of image builds as low as possible.
 
 > **Warning**
 >
-> If you use secrets or credentials inside your build process, then ensure you
-> manipulate them using the dedicated [--secret](../../reference/buildx_build.md#secret)
-> functionality instead of using manually `COPY`d files or build `ARG`s. Using
-> manually managed secrets like this with exported cache could lead to an
-> information leak.
+> If you use secrets or credentials inside your build process, ensure you
+> manipulate them using the dedicated
+> [--secret](../../reference/buildx_build.md#secret) functionality instead of
+> using manually `COPY`d files or build `ARG`s. Using manually managed secrets
+> like this with exported cache could lead to an information leak.
 
-Currently, Buildx supports the following cache storage backends:
+## Backends
 
-- `inline` image cache, that embeds the build cache into the image, and is pushed to
-  the same location as the main output result - note that this only works for the
-  `image` exporter.
+Buildx supports the following cache storage backends:
 
-  ([guide](./inline.md))
+- [Inline cache](./inline.md) that embeds the build cache into the image.
 
-- `registry` image cache, that embeds the build cache into a separate image, and
-  pushes to a dedicated location separate from the main output.
+  The inline cache gets pushed to the same location as the main output result.
+  Note that this only works for the `image` exporter.
 
-  ([guide](./registry.md))
+- [Registry cache](./registry.md) that embeds the build cache into a separate
+  image, and pushes to a dedicated location separate from the main output.
 
-- `local` directory cache, that writes the build cache to a local directory on
-  the filesystem.
+- [Local directory cache](./local.md) that writes the build cache to a local
+  directory on the filesystem.
 
-  ([guide](./local.md))
+- [GitHub Actions cache](./gha.md) that uploads the build cache to
+  [GitHub](https://docs.github.com/en/rest/actions/cache) (beta).
 
-- `gha` GitHub Actions cache, that uploads the build cache to [GitHub](https://docs.github.com/en/rest/actions/cache)
-  (experimental).
+- [Amazon S3 cache](./s3.md) that uploads the build cache to an
+  [AWS S3 bucket](https://aws.amazon.com/s3/) (unreleased).
 
-  ([guide](./gha.md))
-
-- `s3` AWS cache, that uploads the build cache to an [AWS S3 bucket](https://aws.amazon.com/s3/)
+- [Azure Blob Storage cache](./azblob.md) that uploads the build cache to
+  [Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs/)
   (unreleased).
 
-  ([guide](./s3.md))
+## Command syntax
 
-- `azblob` Azure cache, that uploads the build cache to [Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs/)
-  (unreleased).
+To use any of the cache backends, you first need to specify it on build with the
+[`--cache-to`](../../reference/buildx_build.md#cache-to) option to export the
+cache to your storage backend of choice. Then, use the
+[`--cache-from`](../../reference/buildx_build.md#cache-from) option to import
+the cache from the storage backend into the current build. Unlike the local
+BuildKit cache (which is always enabled), all of the cache storage backends must
+be explicitly exported to, and explicitly imported from. All cache exporters
+except for the `inline` cache requires that you
+[select an alternative Buildx driver](../drivers/index.md).
 
-  ([guide](./azblob.md))
-
-To use any of the above backends, you first need to specify it on build with
-the [`--cache-to`](../../reference/buildx_build.md#cache-to) option to export
-the cache to your storage backend of choice, then use the [`--cache-from`](../../reference/buildx_build.md#cache-from)
-option to import the cache from the storage backend into the current build.
-Unlike the local BuildKit cache (which is always enabled), **all** of the cache
-storage backends have to be explicitly exported to and then explicitly imported
-from. Note that all cache exporters except for the `inline` cache, require
-[selecting an alternative Buildx driver](../drivers/index.md).
-
-For example, to perform a cache import and export using the [`registry` cache](./registry.md):
+Example `buildx` command using the `registry` backend, using import and export
+cache:
 
 ```console
-$ docker buildx build --push -t <user>/<image> \
-  --cache-to type=registry,ref=<user>/<cache-image> \
-  --cache-from type=registry,ref=<user>/<cache-image> .
+$ docker buildx build . --push -t <registry>/<image> \
+  --cache-to type=registry,ref=<registry>/<cache-image>[,parameters...] \
+  --cache-from type=registry,ref=<registry>/<cache-image>[,parameters...]
 ```
 
 > **Warning**
 >
-> As a general rule, each cache writes to some location - no location can be
+> As a general rule, each cache writes to some location. No location can be
 > written to twice, without overwriting the previously cached data. If you want
-> to maintain multiple separately scoped caches (e.g. a cache per git branch),
-> then ensure that you specify different locations in your cache exporters.
+> to maintain multiple scoped caches (for example, a cache per Git branch), then
+> ensure that you use different locations for exported cache.
 
-While [currently](https://github.com/moby/buildkit/pull/3024) only a single
-cache exporter is supported, you can import from as many remote caches as you
-like. For example, a common pattern is to use the cache of both the current
-branch as well as the main branch (again using the [`registry` cache](./registry.md)):
+## Multiple caches
+
+BuildKit currently only supports
+[a single cache exporter](https://github.com/moby/buildkit/pull/3024). But you
+can import from as many remote caches as you like. For example, a common pattern
+is to use the cache of both the current branch and the main branch. The
+following example shows importing cache from multiple locations using the
+registry cache backend:
 
 ```console
-$ docker buildx build --push -t <user>/<image> \
-  --cache-to type=registry,ref=<user>/<cache-image>:<branch> \
-  --cache-from type=registry,ref=<user>/<cache-image>:<branch> \
-  --cache-from type=registry,ref=<user>/<cache-image>:master .
+$ docker buildx build . --push -t <registry>/<image> \
+  --cache-to type=registry,ref=<registry>/<cache-image>:<branch> \
+  --cache-from type=registry,ref=<registry>/<cache-image>:<branch> \
+  --cache-from type=registry,ref=<registry>/<cache-image>:main
 ```
+
+## Configuration options
+
+<!-- FIXME: link to image exporter guide when it's written -->
+
+This section describes some of the configuration options available when
+generating cache exports. The options described here are common for at least two
+or more backend types. Additionally, the different backend types support
+specific parameters as well. See the detailed page about each backend type for
+more information about which configuration parameters apply.
+
+The common parameters described here are:
+
+- Cache mode
+- Cache compression
+- OCI media type
+
+### Cache mode
+
+When generating a cache output, the `--cache-to` argument accepts a `mode`
+option for defining which layers to include in the exported cache.
+
+Mode can be set to either of two options: `mode=min` or `mode=max`. For example,
+to build the cache with `mode=max` with the registry backend:
+
+```console
+$ docker buildx build . --push -t <registry>/<image> \
+  --cache-to type=registry,ref=<registry>/<cache-image>,mode=max \
+  --cache-from type=registry,ref=<registry>/<cache-image>
+```
+
+This option is only set when exporting a cache, using `--cache-to`. When
+importing a cache (`--cache-from`) the relevant parameters are automatically
+detected.
+
+In `min` cache mode (the default), only layers that are exported into the
+resulting image are cached, while in `max` cache mode, all layers are cached,
+even those of intermediate steps.
+
+While `min` cache is typically smaller (which speeds up import/export times, and
+reduces storage costs), `max` cache is more likely to get more cache hits.
+Depending on the complexity and location of your build, you should experiment
+with both parameters to find the results that work best for you.
+
+### Cache compression
+
+Since `registry` cache image is a separate export artifact from the main build
+result, you can specify separate compression parameters for it. These parameters
+are similar to the options provided by the `image` exporter. While the default
+values provide a good out-of-the-box experience, you may wish to tweak the
+parameters to optimize for storage vs compute costs.
+
+To select the compression algorithm, you can use the
+`compression=<uncompressed|gzip|estargz|zstd>` option. For example, to build the
+cache with `compression=zstd`:
+
+```console
+$ docker buildx build . --push -t <registry>/<image> \
+  --cache-to type=registry,ref=<registry>/<cache-image>,compression=zstd \
+  --cache-from type=registry,ref=<registry>/<cache-image>
+```
+
+Use the `compression-level=<value>` option alongside the `compression` parameter
+to choose a compression level for the algorithms which support it:
+
+- 0-9 for `gzip` and `estargz`
+- 0-22 for `zstd`
+
+As a general rule, the higher the number, the smaller the resulting file will
+be, and the longer the compression will take to run.
+
+Use the `force-compression=true` option to force re-compressing layers imported
+from a previous cache, if the requested compression algorithm is different from
+the previous compression algorithm.
+
+> **Note**
+>
+> The `gzip` and `estargz` compression methods use the
+> [`compress/gzip` package](https://pkg.go.dev/compress/gzip), while `zstd` uses
+> the
+> [`github.com/klauspost/compress/zstd` package](https://github.com/klauspost/compress/tree/master/zstd).
+
+### OCI media types
+
+Like the `image` exporter, the `registry` cache exporter supports creating
+images with Docker media types or with OCI media types. To export OCI media type
+cache, use the `oci-mediatypes` property:
+
+```console
+$ docker buildx build . --push -t <registry>/<image> \
+  --cache-to type=registry,ref=<registry>/<cache-image>,oci-mediatypes=true \
+  --cache-from type=registry,ref=<registry>/<cache-image>
+```
+
+This property is only meaningful with the `--cache-to` flag. When fetching
+cache, BuildKit will auto-detect the correct media types to use.
