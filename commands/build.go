@@ -482,7 +482,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
 	}
 
-	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
+	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=image,push=true"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 

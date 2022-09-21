@@ -23,7 +23,7 @@ Build from a file
 | [`--print`](#print) |  |  | Print the options without building |
 | [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
 | [`--pull`](#pull) |  |  | Always attempt to pull all referenced images |
-| `--push` |  |  | Shorthand for `--set=*.output=type=registry` |
+| `--push` |  |  | Shorthand for `--set=*.output=type=image,push=true` |
 | [`--set`](#set) | `stringArray` |  | Override target value (e.g., `targetpattern.key=value`) |
 
 

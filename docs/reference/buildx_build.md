@@ -37,7 +37,7 @@ Start a build
 | `--print` | `string` |  | Print result of information request (e.g., outline, targets) [experimental] |
 | [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
 | `--pull` |  |  | Always attempt to pull all referenced images |
-| [`--push`](#push) |  |  | Shorthand for `--output=type=registry` |
+| [`--push`](#push) |  |  | Shorthand for `--output=type=image,push=true` |
 | `-q`, `--quiet` |  |  | Suppress the build output and print image ID on success |
 | [`--secret`](#secret) | `stringArray` |  | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`) |
 | [`--shm-size`](#shm-size) | `bytes` | `0` | Size of `/dev/shm` |
@@ -314,7 +314,7 @@ $ docker buildx build -o outdir .
 $ docker buildx build -o - - > out.tar
 $ docker buildx build -o type=docker .
 $ docker buildx build -o type=docker,dest=- . > myimage.tar
-$ docker buildx build -t tonistiigi/foo -o type=registry
+$ docker buildx build -t tonistiigi/foo -o type=image,push=true
 ```
 
 Supported exported types are:
