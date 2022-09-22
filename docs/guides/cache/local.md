@@ -53,6 +53,8 @@ Parameters for `--cache-from`:
 
 ## Cache versioning
 
+<!-- FIXME: update once https://github.com/moby/buildkit/pull/3111 is released -->
+
 This section describes how versioning works for caches on a local filesystem,
 and how you can use the `digest` parameter to use older versions of cache.
 
