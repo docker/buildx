@@ -16,6 +16,9 @@ on:
     branches:
       - 'master'
       - 'v[0-9]*'
+    paths-ignore:
+      - 'README.md'
+      - 'docs/**'
 
 env:
   REPO_SLUG: "docker/buildx-bin"
