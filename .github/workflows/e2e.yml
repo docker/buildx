@@ -168,3 +168,36 @@ jobs:
           DRIVER_OPT: ${{ matrix.driver-opt }}
           ENDPOINT: ${{ matrix.endpoint }}
           PLATFORMS: ${{ matrix.platforms }}
+
+  cases:
+    runs-on: ubuntu-20.04
+    needs:
+      - build
+    strategy:
+      fail-fast: false
+      matrix:
+        case:
+          - bake-sync-output
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Install buildx
+        uses: actions/download-artifact@v3
+        with:
+          name: binary
+          path: /home/runner/.docker/cli-plugins
+      -
+        name: Fix perms and check
+        run: |
+          chmod +x /home/runner/.docker/cli-plugins/docker-buildx
+          docker buildx version
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+      -
+        name: Test
+        working-directory: ./test/${{ matrix.case }}
+        run: |
+          ./test.sh
