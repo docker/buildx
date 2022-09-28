@@ -27,20 +27,18 @@ $ docker buildx build . --push -t <registry>/<image> \
   --cache-from type=azblob,name=<cache-image>[,parameters...]
 ```
 
-Common parameters:
+The following table describes the available CSV parameters that you can pass to
+`--cache-to` and `--cache-from`.
 
-- `name`: the name of the cache image.
-- `account_url`: the base address of the blob storage account, for example:
-  `https://myaccount.blob.core.windows.net`. See
-  [authentication](#authentication).
-- `secret_access_key`: specifies the
-  [Azure Blob Storage account key](https://docs.microsoft.com/en-us/azure/storage/common/storage-account-keys-manage),
-  see [authentication](#authentication).
+| Parameter           | Option     | Value      | Default | Description                                        |
+| ------------------- | ---------- | ---------- | ------- | -------------------------------------------------- |
+| `name`              | Both       | String     |         | Required. The name of the cache image.             |
+| `account_url`       | Both       | String     |         | Base URL of the storage account.                   |
+| `secret_access_key` | Both       | String     |         | Blob storage account key, see [authentication][1]. |
+| `mode`              | `cache-to` | `min\|max` | `min`   | Cache layers to export, see [cache mode][2].       |
 
-Parameters for `--cache-to`:
-
-- `mode`: specify cache layers to export (default: `min`), see
-  [cache mode](./index.md#cache-mode)
+[1]: #authentication
+[2]: index.md#cache-mode
 
 ## Authentication
 

@@ -26,30 +26,27 @@ $ docker buildx build . --push -t <registry>/<image> \
   --cache-from type=local,src=path/to/local/dir,
 ```
 
-Parameters for `--cache-to`:
+The following table describes the available CSV parameters that you can pass to
+`--cache-to` and `--cache-from`.
 
-- `dest`: absolute or relative path to the local directory where you want to
-  export the cache to.
-- `mode`: specify cache layers to export (default: `min`), see
-  [cache mode](./index.md#cache-mode)
-- `oci-mediatypes`: whether to use OCI media types in exported manifests
-  (default `true`, since BuildKit `v0.8`), see
-  [OCI media types](./index.md#oci-media-types)
-- `compression`: compression type for layers newly created and cached (default:
-  `gzip`), see [cache compression](./index.md#cache-compression)
-- `compression-level`: compression level for `gzip`, `estargz` (0-9) and `zstd`
-  (0-22)
-- `force-compression`: forcibly apply `compression` option to all layers
+| Parameter           | Option       | Value                 | Default | Description                                                          |
+| ------------------- | ------------ | --------------------- | ------- | -------------------------------------------------------------------- |
+| `src`               | `cache-from` | String                |         | Path of the local directory where cache gets imported from.          |
+| `digest`            | `cache-from` | String                |         | Digest of manifest to import, see [cache versioning][4].             |
+| `dest`              | `cache-to`   | String                |         | Path of the local directory where cache gets exported to.            |
+| `mode`              | `cache-to`   | `min\|max`            | `min`   | Cache layers to export, see [cache mode][1].                         |
+| `oci-mediatypes`    | `cache-to`   | `true\|false`         | `true`  | Use OCI media types in exported manifests, see [OCI media types][2]. |
+| `compression`       | `cache-to`   | `gzip\|estargz\|zstd` | `gzip`  | Compression type, see [cache compression][3].                        |
+| `compression-level` | `cache-to`   | `0..22`               |         | Compression level, see [cache compression][3].                       |
+| `force-compression` | `cache-to`   | `true\|false`         | `false` | Forcibly apply compression.                                          |
 
-Parameters for `--cache-from`:
+[1]: index.md#cache-mode
+[2]: index.md#oci-media-types
+[3]: index.md#cache-compression
+[4]: #cache-versioning
 
-- `src`: absolute or relative path to the local directory where you want to
-  import cache from.
-- `digest`: specify explicit digest of the manifest list to import, see
-  [cache versioning](#cache-versioning)
-
-  If the `src` cache doesn't exist, then the cache import step will fail, but
-  the build will continue.
+If the `src` cache doesn't exist, then the cache import step will fail, but the
+build will continue.
 
 ## Cache versioning
 

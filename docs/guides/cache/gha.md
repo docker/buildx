@@ -31,18 +31,19 @@ $ docker buildx build . --push -t <registry>/<image> \
   --cache-from type=gha[,parameters...]
 ```
 
-Common parameters:
+The following table describes the available CSV parameters that you can pass to
+`--cache-to` and `--cache-from`.
 
-- `url`: cache server URL (default `$ACTIONS_CACHE_URL`), see
-  [authentication](#authentication)
-- `token`: access token (default `$ACTIONS_RUNTIME_TOKEN`), see
-  [authentication](#authentication)
-- `scope`: cache scope (defaults to the name of the current Git branch).
+| Parameter | Option     | Value      | Default                         | Description                                  |
+| --------- | ---------- | ---------- | ------------------------------- | -------------------------------------------- |
+| `url`     | Both       | String     | `$ACTIONS_CACHE_URL`            | Cache server URL, see [authentication][1].   |
+| `token`   | Both       | String     | `$ACTIONS_RUNTIME_TOKEN`        | Access token, see [authentication][1].       |
+| `scope`   | Both       | String     | Name of the current Git branch. | Cache scope, see [scope][2]                  |
+| `mode`    | `cache-to` | `min\|max` | `min`                           | Cache layers to export, see [cache mode][3]. |
 
-Parameters for `--cache-to`:
-
-- `mode`: specify cache layers to export (default: `min`), see
-  [cache mode](./index.md#cache-mode)
+[1]: #authentication
+[2]: #scope
+[3]: index.md#cache-mode
 
 ## Authentication
 

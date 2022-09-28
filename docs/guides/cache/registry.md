@@ -34,23 +34,22 @@ $ docker buildx build . --push -t <registry>/<image> \
   --cache-from type=registry,ref=<registry>/<cache-image>
 ```
 
-Common parameters:
+The following table describes the available CSV parameters that you can pass to
+`--cache-to` and `--cache-from`.
 
-- `ref`: full address and name of the cache image that you want to import or
-  export.
+| Parameter           | Option     | Value                 | Default | Description                                                          |
+| ------------------- | ---------- | --------------------- | ------- | -------------------------------------------------------------------- |
+| `ref`               | Both       | String                |         | Full name of the cache image to import.                              |
+| `dest`              | `cache-to` | String                |         | Path of the local directory where cache gets exported to.            |
+| `mode`              | `cache-to` | `min\|max`            | `min`   | Cache layers to export, see [cache mode][1].                         |
+| `oci-mediatypes`    | `cache-to` | `true\|false`         | `true`  | Use OCI media types in exported manifests, see [OCI media types][2]. |
+| `compression`       | `cache-to` | `gzip\|estargz\|zstd` | `gzip`  | Compression type, see [cache compression][3].                        |
+| `compression-level` | `cache-to` | `0..22`               |         | Compression level, see [cache compression][3].                       |
+| `force-compression` | `cache-to` | `true\|false`         | `false` | Forcibly apply compression.                                          |
 
-Parameters for `--cache-to`:
-
-- `mode`: specify cache layers to export (default: `min`), see
-  [cache mode](./index.md#cache-mode)
-- `oci-mediatypes`: whether to use OCI media types in exported manifests
-  (default `true`, since BuildKit `v0.8`), see
-  [OCI media types](./index.md#oci-media-types)
-- `compression`: compression type for layers newly created and cached (default:
-  `gzip`), see [cache compression](./index.md#cache-compression)
-- `compression-level`: compression level for `gzip`, `estargz` (0-9) and `zstd`
-  (0-22)
-- `force-compression`: forcibly apply `compression` option to all layers
+[1]: index.md#cache-mode
+[2]: index.md#oci-media-types
+[3]: index.md#cache-compression
 
 You can choose any valid value for `ref`, as long as it's not the same as the
 target location that you push your image to. You might choose different tags
