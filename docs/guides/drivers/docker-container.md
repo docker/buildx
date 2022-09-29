@@ -1,40 +1,43 @@
 # Docker container driver
 
-The buildx docker-container driver allows creation of a managed and
-customizable BuildKit environment inside a dedicated Docker container.
+The buildx Docker container driver allows creation of a managed and customizable
+BuildKit environment in a dedicated Docker container.
 
-Using the docker-container driver has a couple of advantages over the basic
-docker driver. Firstly, we can manually override the version of buildkit to
-use, meaning that we can access the latest and greatest features as soon as
-they're released, instead of waiting to upgrade to a newer version of Docker.
-Additionally, we can access more complex features like multi-architecture
-builds and the more advanced cache exporters, which are currently unsupported
-in the default docker driver.
+Using the Docker container driver has a couple of advantages over the default
+Docker driver. For example:
 
-We can easily create a new builder that uses the docker-container driver:
+- Specify custom BuildKit versions to use.
+- Build multi-arch images, see [QEMU](#qemu)
+- Advanced options for
+  [cache import and export](https://docs.docker.com/build/building/cache/)
+
+## Synopsis
+
+Run the following command to create a new builder, named `container`, that uses
+the Docker container driver:
 
 ```console
 $ docker buildx create --name container --driver docker-container
 container
 ```
 
-We should then be able to see it on our list of available builders:
+The following table describes the available driver-specific options that you can
+pass to `--driver-opt`:
+
+| Parameter       | Value  | Default          | Description                                                                                |
+| --------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------ |
+| `image`         | string |                  | Sets the image to use for running BuildKit.                                                |
+| `network`       | string |                  | Sets the network mode for running the BuildKit container.                                  |
+| `cgroup-parent` | string | `/docker/buildx` | Sets the cgroup parent of the BuildKit container if Docker is using the `cgroupfs` driver. |
+
+## Usage
+
+When you run a build, Buildx pulls the specified `moby/buildkit` image from
+[Docker Hub](https://hub.docker.com/u/moby/buildkit). When the container has
+started, Buildx submits the build submitted to the containerized build server.
 
 ```console
-$ docker buildx ls
-NAME/NODE       DRIVER/ENDPOINT      STATUS   BUILDKIT PLATFORMS
-container       docker-container                       
-  container0    desktop-linux        inactive          
-default         docker                                 
-  default       default              running  20.10.17 linux/amd64, linux/386
-```
-
-If we trigger a build, the appropriate `moby/buildkit` image will be pulled
-from [Docker Hub](https://hub.docker.com/u/moby/buildkit), the image started,
-and our build submitted to our containerized build server.
-
-```console
-$ docker buildx build -t <image> --builder=container .
+$ docker buildx build . -t <image> --builder=container
 WARNING: No output specified with docker-container driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load
 #1 [internal] booting buildkit
 #1 pulling image moby/buildkit:buildx-stable-1
@@ -45,22 +48,24 @@ WARNING: No output specified with docker-container driver. Build result will onl
 ...
 ```
 
-Note the warning "Build result will only remain in the build cache" - unlike
-the `docker` driver, the built image must be explicitly loaded into the local
-image store. We can use the `--load` flag for this:
+## Loading to local image store
+
+Unlike when using the default `docker` driver, images built with the
+`docker-container` driver must be explicitly loaded into the local image store.
+Use the `--load` flag:
 
 ```console
-$ docker buildx build --load -t <image> --builder=container .
+$ docker buildx build . --load -t <image> --builder=container
 ...
  => exporting to oci image format                                                                                                      7.7s
  => => exporting layers                                                                                                                4.9s
- => => exporting manifest sha256:4e4ca161fa338be2c303445411900ebbc5fc086153a0b846ac12996960b479d3                                      0.0s 
- => => exporting config sha256:adf3eec768a14b6e183a1010cb96d91155a82fd722a1091440c88f3747f1f53f                                        0.0s 
- => => sending tarball                                                                                                                 2.8s 
- => importing to docker   
+ => => exporting manifest sha256:4e4ca161fa338be2c303445411900ebbc5fc086153a0b846ac12996960b479d3                                      0.0s
+ => => exporting config sha256:adf3eec768a14b6e183a1010cb96d91155a82fd722a1091440c88f3747f1f53f                                        0.0s
+ => => sending tarball                                                                                                                 2.8s
+ => importing to docker
 ```
 
-The image should then be available in the image store:
+The image becomes available in the image store when the build finishes:
 
 ```console
 $ docker image ls
@@ -68,6 +73,32 @@ REPOSITORY                       TAG               IMAGE ID       CREATED       
 <image>                          latest            adf3eec768a1   2 minutes ago       197MB
 ```
 
+### QEMU
+
+The `docker-container` driver supports using [QEMU](https://www.qemu.org/) (user
+mode) to build non-native platforms. Use the `--platform` flag to specify which
+architectures that you want to build for.
+
+For example, to build a Linux image for `amd64` and `arm64`:
+
+```console
+$ docker buildx build . \
+  --builder=container \
+  --platform=linux/amd64,linux/arm64 \
+  -t <registry>/<image> \
+  --push
+```
+
+> **Warning**
+>
+> QEMU performs full-system emulation of non-native platforms, which is much
+> slower than native builds. Compute-heavy tasks like compilation and
+> compression/decompression will likely take a large performance hit.
+
 ## Further reading
 
-For more information on the docker-container driver, see the [buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
+For more information on the Docker container driver, see the
+[buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
+
+If want to explore builders running on a remote server, see the
+[Kubernetes driver](./kubernetes.md) and the [Remote driver](./remote.md).
