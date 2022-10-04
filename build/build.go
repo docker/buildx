@@ -801,6 +801,9 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 		}
 		for n, v := range gitLabels {
 			if _, ok := opt.Labels[n]; !ok {
+				if opt.Labels == nil {
+					opt.Labels = map[string]string{}
+				}
 				opt.Labels[n] = v
 			}
 		}
