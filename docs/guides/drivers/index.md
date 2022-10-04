@@ -12,19 +12,17 @@ Buildx supports the following drivers:
 Different drivers support different use cases. The default `docker` driver
 prioritizes simplicity and ease of use. It has limited support for advanced
 features like caching and output formats, and isn't configurable. Other drivers
-provide more flexibility and are better at handling advanced scenarios. The
-`kubernetes` and `remote` drivers specifically aim to enable remote builders.
+provide more flexibility and are better at handling advanced scenarios.
 
 The following table outlines some of the differences between drivers.
 
 | Feature                      |  `docker`   | `docker-container` | `kubernetes` |      `remote`      |
 | :--------------------------- | :---------: | :----------------: | :----------: | :----------------: |
-| **Automatically load image** |     Yes     |         No         |      No      |         No         |
-| **Cache export**             | Inline only |        Yes         |     Yes      |        Yes         |
-| **Remote builders**          |     No      |         No         |     Yes      |        Yes         |
-| **Tarball output**           |     No      |        Yes         |     Yes      |        Yes         |
-| **Multi-arch images**        |     No      |        Yes         |     Yes      |        Yes         |
-| **BuildKit configuration**   |     No      |        Yes         |     Yes      | Managed externally |
+| **Automatically load image** |     ✅      |                    |              |                    |
+| **Cache export**             | Inline only |         ✅         |      ✅      |         ✅         |
+| **Tarball output**           |             |         ✅         |      ✅      |         ✅         |
+| **Multi-arch images**        |             |         ✅         |      ✅      |         ✅         |
+| **BuildKit configuration**   |             |         ✅         |      ✅      | Managed externally |
 
 ## List available builders
 

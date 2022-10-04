@@ -20,21 +20,21 @@ $ docker buildx create \
 The following table describes the available driver-specific options that you can
 pass to `--driver-opt`:
 
-| Parameter         | Value            | Default                                 | Description                                                                                                                          |
-| ----------------- | ---------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `image`           | String           |                                         | Sets the image to use for running BuildKit.                                                                                          |
-| `namespace`       | String           | Namespace in current Kubernetes context | Sets the Kubernetes namespace.                                                                                                       |
-| `replicas`        | Integer          | 1                                       | Sets the number of Pod replicas to create. See [scaling BuildKit][1]                                                                 |
-| `requests.cpu`    | CPU units        |                                         | Sets the request CPU value specified in units of Kubernetes CPU. For example `requests.cpu=100m` or `requests.cpu=2`                 |
-| `requests.memory` | Memory size      |                                         | Sets the request memory value specified in bytes or with a valid suffix. For example `requests.memory=500Mi` or `requests.memory=4G` |
-| `limits.cpu`      | CPU units        |                                         | Sets the limit CPU value specified in units of Kubernetes CPU. For example `requests.cpu=100m` or `requests.cpu=2`                   |
-| `limits.memory`   | Memory size      |                                         | Sets the limit memory value specified in bytes or with a valid suffix. For example `requests.memory=500Mi` or `requests.memory=4G`   |
-| `nodeselector`    | CSV string       |                                         | Sets the pod's `nodeSelector` label(s). See [node assignment][2].                                                                    |
-| `tolerations`     | CSV string       |                                         | Configures the pod's taint toleration. See [node assignment][2].                                                                     |
-| `rootless`        | `true\|false`    | `false`                                 | Run the container as a non-root user. See [rootless mode][3].                                                                        |
-| `loadbalance`     | `sticky\|random` | `sticky`                                | Load-balancing strategy. If set to `sticky`, the pod is chosen using the hash of the context path.                                   |
-| `qemu.install`    | `true\|false`    |                                         | Install QEMU emulation for multi platforms support. See [QEMU][4].                                                                   |
-| `qemu.image`      | String           | `tonistiigi/binfmt:latest`              | Sets the QEMU emulation image. See [QEMU][4].                                                                                        |
+| Parameter         | Value             | Default                                 | Description                                                                                                                          |
+| ----------------- | ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `image`           | String            |                                         | Sets the image to use for running BuildKit.                                                                                          |
+| `namespace`       | String            | Namespace in current Kubernetes context | Sets the Kubernetes namespace.                                                                                                       |
+| `replicas`        | Integer           | 1                                       | Sets the number of Pod replicas to create. See [scaling BuildKit][1]                                                                 |
+| `requests.cpu`    | CPU units         |                                         | Sets the request CPU value specified in units of Kubernetes CPU. For example `requests.cpu=100m` or `requests.cpu=2`                 |
+| `requests.memory` | Memory size       |                                         | Sets the request memory value specified in bytes or with a valid suffix. For example `requests.memory=500Mi` or `requests.memory=4G` |
+| `limits.cpu`      | CPU units         |                                         | Sets the limit CPU value specified in units of Kubernetes CPU. For example `requests.cpu=100m` or `requests.cpu=2`                   |
+| `limits.memory`   | Memory size       |                                         | Sets the limit memory value specified in bytes or with a valid suffix. For example `requests.memory=500Mi` or `requests.memory=4G`   |
+| `nodeselector`    | CSV string        |                                         | Sets the pod's `nodeSelector` label(s). See [node assignment][2].                                                                    |
+| `tolerations`     | CSV string        |                                         | Configures the pod's taint toleration. See [node assignment][2].                                                                     |
+| `rootless`        | `true`,`false`    | `false`                                 | Run the container as a non-root user. See [rootless mode][3].                                                                        |
+| `loadbalance`     | `sticky`,`random` | `sticky`                                | Load-balancing strategy. If set to `sticky`, the pod is chosen using the hash of the context path.                                   |
+| `qemu.install`    | `true`,`false`    |                                         | Install QEMU emulation for multi platforms support. See [QEMU][4].                                                                   |
+| `qemu.image`      | String            | `tonistiigi/binfmt:latest`              | Sets the QEMU emulation image. See [QEMU][4].                                                                                        |
 
 [1]: #scaling-buildkit
 [2]: #node-assignment
@@ -107,16 +107,16 @@ the same values as the Kubernetes manifest. Each `tolerations` entry specifies a
 taint key and the value, operator, or effect. For example:
 `"tolerations=key=foo,value=bar;key=foo2,operator=exists;key=foo3,effect=NoSchedule"`
 
-The syntax for these parameters is slightly different compared to other driver
-options. You must wrap both `nodeSelector` and `tolerations` in double quotes.
-For example:
+Due to quoting rules for shell commands, you must wrap the `nodeselector` and
+`tolerations` parameters in single quotes. You can even wrap all of
+`--driver-opt` in single quotes, for example:
 
 ```console
 $ docker buildx create \
   --bootstrap \
   --name=kube \
   --driver=kubernetes \
-  --driver-opt="nodeselector=label=value","tolerations=key=key1,value=value1"
+  '--driver-opt="nodeselector=label1=value1,label2=value2","tolerations=key=key1,value=value1"'
 ```
 
 ## Multi-platform builds
@@ -238,7 +238,7 @@ This will create your pods without `securityContext.privileged`.
 Requires Kubernetes version 1.19 or later. Using Ubuntu as the host kernel is
 recommended.
 
-## Guide: Creating a Buildx builder in Kubernetes
+## Example: Creating a Buildx builder in Kubernetes
 
 This guide shows you how to:
 

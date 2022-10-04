@@ -17,7 +17,10 @@ Run the following command to create a new builder, named `container`, that uses
 the Docker container driver:
 
 ```console
-$ docker buildx create --name container --driver docker-container
+$ docker buildx create \
+  --name container \
+  --driver=docker-container \
+  --driver-opt=[key=value,...]
 container
 ```
 
@@ -26,13 +29,14 @@ pass to `--driver-opt`:
 
 | Parameter       | Value  | Default          | Description                                                                                |
 | --------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------ |
-| `image`         | string |                  | Sets the image to use for running BuildKit.                                                |
-| `network`       | string |                  | Sets the network mode for running the BuildKit container.                                  |
-| `cgroup-parent` | string | `/docker/buildx` | Sets the cgroup parent of the BuildKit container if Docker is using the `cgroupfs` driver. |
+| `image`         | String |                  | Sets the image to use for running BuildKit.                                                |
+| `network`       | String |                  | Sets the network mode for running the BuildKit container.                                  |
+| `cgroup-parent` | String | `/docker/buildx` | Sets the cgroup parent of the BuildKit container if Docker is using the `cgroupfs` driver. |
 
 ## Usage
 
-When you run a build, Buildx pulls the specified `image` (by default, [`moby/buildkit`](https://hub.docker.com/r/moby/buildkit))
+When you run a build, Buildx pulls the specified `image` (by default,
+[`moby/buildkit`](https://hub.docker.com/r/moby/buildkit))
 [Docker Hub](https://hub.docker.com/u/moby/buildkit). When the container has
 started, Buildx submits the build submitted to the containerized build server.
 
@@ -99,6 +103,3 @@ $ docker buildx build . \
 
 For more information on the Docker container driver, see the
 [buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
-
-If want to explore builders running on a remote server, see the
-[Kubernetes driver](./kubernetes.md) and the [Remote driver](./remote.md).

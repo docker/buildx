@@ -24,7 +24,7 @@ pass to `--driver-opt`:
 | `cacert`     | String |                    | Sets the TLS certificate authority used for validation.    |
 | `servername` | String | Endpoint hostname. | Sets the TLS server name used in requests.                 |
 
-## Guide: Remote BuildKit over Unix sockets
+## Example: Remote BuildKit over Unix sockets
 
 This guide shows you how to create a setup with a BuildKit daemon listening on a
 Unix socket, and have Buildx connect through it.
@@ -81,7 +81,7 @@ $ docker buildx build . --builder=remote-unix -t test --load
 Remember that you need to use the `--load` flag if you want to load the build
 result into the Docker daemon.
 
-## Guide: Remote BuildKit in Docker container
+## Example: Remote BuildKit in Docker container
 
 This guide will show you how to create setup similar to the `docker-container`
 driver, by manually booting a BuildKit Docker container and connecting to it
@@ -136,7 +136,7 @@ but this is for illustration purposes.)
       docker-container://remote-container
     ```
 
-## Guide: Remote BuildKit in Kubernetes
+## Example: Remote BuildKit in Kubernetes
 
 This guide will show you how to create a setup similar to the `kubernetes`
 driver by manually creating a BuildKit `Deployment`. While the `kubernetes`
