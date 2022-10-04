@@ -26,7 +26,7 @@ The following table outlines some of the differences between drivers.
 | **Multi-arch images**        |     No      |        Yes         |     Yes      |        Yes         |
 | **BuildKit configuration**   |     No      |        Yes         |     Yes      | Managed externally |
 
-## List available drivers
+## List available builders
 
 Use `docker buildx ls` to see builder instances available on your system, and
 the drivers they're using.
