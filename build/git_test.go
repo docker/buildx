@@ -64,6 +64,14 @@ func TestAddGitProvenanceDataWithoutEnv(t *testing.T) {
 	assert.Nilf(t, labels, "No labels expected")
 }
 
+func TestAddGitProvenanceDataWitEmptyEnv(t *testing.T) {
+	defer setupTest(t)(t)
+	os.Setenv("BUILDX_GIT_LABELS", "")
+	labels, err := addGitProvenance(context.Background(), repoDir, filepath.Join(repoDir, "Dockerfile"))
+	assert.Nilf(t, err, "No error expected")
+	assert.Nilf(t, labels, "No labels expected")
+}
+
 func TestAddGitProvenanceDataWithoutLabels(t *testing.T) {
 	defer setupTest(t)(t)
 	os.Setenv("BUILDX_GIT_LABELS", "full")

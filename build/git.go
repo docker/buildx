@@ -15,8 +15,8 @@ import (
 const DockerfileLabel = "com.docker.image.source.entrypoint"
 
 func addGitProvenance(ctx context.Context, contextPath string, dockerfilePath string) (map[string]string, error) {
-	v, ok := os.LookupEnv("BUILDX_GIT_LABELS")
-	if !ok || contextPath == "" {
+	v := os.Getenv("BUILDX_GIT_LABELS")
+	if (v != "1" && v != "full") || contextPath == "" {
 		return nil, nil
 	}
 	labels := make(map[string]string, 0)
