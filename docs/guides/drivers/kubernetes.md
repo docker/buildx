@@ -135,11 +135,11 @@ output to.
 For example, to build a Linux image for `amd64` and `arm64`:
 
 ```console
-$ docker buildx build . \
+$ docker buildx build \
   --builder=kube \
   --platform=linux/amd64,linux/arm64 \
   -t <user>/<image> \
-  --push
+  --push .
 ```
 
 > **Warning**
@@ -309,10 +309,10 @@ Prerequisites:
    ```console
    # Replace <registry> with your Docker username
    # and <image> with the name of the image you want to build
-   docker buildx build . \
+   docker buildx build \
      --builder=kube \
      -t <registry>/<image> \
-     --push
+     --push .
    ```
 
 That's it! You've now built an image from a Kubernetes pod, using Buildx!

@@ -41,7 +41,7 @@ When you run a build, Buildx pulls the specified `image` (by default,
 started, Buildx submits the build submitted to the containerized build server.
 
 ```console
-$ docker buildx build . -t <image> --builder=container
+$ docker buildx build -t <image> --builder=container .
 WARNING: No output specified with docker-container driver. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load
 #1 [internal] booting buildkit
 #1 pulling image moby/buildkit:buildx-stable-1
@@ -59,7 +59,7 @@ Unlike when using the default `docker` driver, images built with the
 Use the `--load` flag:
 
 ```console
-$ docker buildx build . --load -t <image> --builder=container
+$ docker buildx build --load -t <image> --builder=container .
 ...
  => exporting to oci image format                                                                                                      7.7s
  => => exporting layers                                                                                                                4.9s
@@ -86,11 +86,11 @@ architectures that you want to build for.
 For example, to build a Linux image for `amd64` and `arm64`:
 
 ```console
-$ docker buildx build . \
+$ docker buildx build \
   --builder=container \
   --platform=linux/amd64,linux/arm64 \
   -t <registry>/<image> \
-  --push
+  --push .
 ```
 
 > **Warning**

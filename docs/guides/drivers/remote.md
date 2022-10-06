@@ -75,7 +75,7 @@ You can switch to this new builder as the default using
 `docker buildx use remote-unix`, or specify it per build using `--builder`:
 
 ```console
-$ docker buildx build . --builder=remote-unix -t test --load
+$ docker buildx build --builder=remote-unix -t test --load .
 ```
 
 Remember that you need to use the `--load` flag if you want to load the build
