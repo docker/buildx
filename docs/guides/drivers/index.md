@@ -1,39 +1,76 @@
 # Buildx drivers overview
 
-The buildx client connects out to the BuildKit backend to execute builds -
-Buildx drivers allow fine-grained control over management of the backend, and
-supports several options for where and how BuildKit should run.
+Buildx drivers are configurations for how and where the BuildKit backend runs.
+Driver settings are customizable and allows fine-grained control of the builder.
+Buildx supports the following drivers:
 
-Currently, we support the following drivers:
+- `docker`: uses the BuildKit library bundled into the Docker daemon.
+- `docker-container`: creates a dedicated BuildKit container using Docker.
+- `kubernetes`: creates BuildKit pods in a Kubernetes cluster.
+- `remote`: connects directly to a manually managed BuildKit daemon.
 
-- The `docker` driver, that uses the BuildKit library bundled into the Docker
-  daemon.
-  ([guide](./docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#docker-driver-1))
-- The `docker-container` driver, that launches a dedicated BuildKit container
-  using Docker, for access to advanced features.
-  ([guide](./docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#docker-container-driver-1))
-- The `kubernetes` driver, that launches dedicated BuildKit pods in a
-  remote Kubernetes cluster, for scalable builds.
-  ([guide](./kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#kubernetes-driver-1))
-- The `remote` driver, that allows directly connecting to a manually managed
-  BuildKit daemon, for more custom setups.
-  ([guide](./remote.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#remote-driver-1))
+Different drivers support different use cases. The default `docker` driver
+prioritizes simplicity and ease of use. It has limited support for advanced
+features like caching and output formats, and isn't configurable. Other drivers
+provide more flexibility and are better at handling advanced scenarios.
 
-To create a new builder that uses one of the above drivers, you can use the
-[`docker buildx create`](https://docs.docker.com/engine/reference/commandline/buildx_create/) command:
+The following table outlines some of the differences between drivers.
+
+| Feature                      |  `docker`   | `docker-container` | `kubernetes` |      `remote`      |
+| :--------------------------- | :---------: | :----------------: | :----------: | :----------------: |
+| **Automatically load image** |     ✅      |                    |              |                    |
+| **Cache export**             | Inline only |         ✅         |      ✅      |         ✅         |
+| **Tarball output**           |             |         ✅         |      ✅      |         ✅         |
+| **Multi-arch images**        |             |         ✅         |      ✅      |         ✅         |
+| **BuildKit configuration**   |             |         ✅         |      ✅      | Managed externally |
+
+## List available builders
+
+Use `docker buildx ls` to see builder instances available on your system, and
+the drivers they're using.
+
+```console
+$ docker buildx ls
+NAME/NODE       DRIVER/ENDPOINT      STATUS   BUILDKIT PLATFORMS
+default         docker
+  default       default              running  20.10.17 linux/amd64, linux/386
+```
+
+Depending on your setup, you may find multiple builders in your list that use
+the Docker driver. For example, on a system that runs both a manually installed
+version of dockerd, as well as Docker Desktop, you might see the following
+output from `docker buildx ls`:
+
+```console
+NAME/NODE       DRIVER/ENDPOINT STATUS  BUILDKIT PLATFORMS
+default         docker
+  default       default         running 20.10.17 linux/amd64, linux/386
+desktop-linux * docker
+  desktop-linux desktop-linux   running 20.10.17 linux/amd64, linux/arm64, linux/riscv64, linux/ppc64le, linux/s390x, linux/386, linux/arm/v7, linux/arm/v6
+```
+
+This is because the Docker driver builders are automatically pulled from the
+available
+[Docker Contexts](https://docs.docker.com/engine/context/working-with-contexts/).
+When you add new contexts using `docker context create`, these will appear in
+your list of buildx builders.
+
+## Create a new builder
+
+Use the
+[`docker buildx create`](https://docs.docker.com/engine/reference/commandline/buildx_create/)
+command to create a builder, and specify the driver using the `--driver` option.
 
 ```console
 $ docker buildx create --name=<builder-name> --driver=<driver> --driver-opt=<driver-options>
 ```
 
-The build experience is very similar across drivers, however, there are some
-features that are not evenly supported across the board, notably, the `docker`
-driver does not include support for certain output/caching types.
+## What's next
 
-| Feature                       |    `docker`     | `docker-container` | `kubernetes` |        `remote`        |
-| :---------------------------- | :-------------: | :----------------: | :----------: | :--------------------: |
-| **Automatic `--load`**        |        ✅        |         ❌          |      ❌       |           ❌            |
-| **Cache export**              | ❔ (inline only) |         ✅          |      ✅       |           ✅            |
-| **Docker/OCI tarball output** |        ❌        |         ✅          |      ✅       |           ✅            |
-| **Multi-arch images**         |        ❌        |         ✅          |      ✅       |           ✅            |
-| **BuildKit configuration**    |        ❌        |         ✅          |      ✅       | ❔ (managed externally) |
+Read about each of the Buildx drivers to learn about how they work and how to
+use them:
+
+- [Docker driver](./docker.md)
+- [Docker container driver](./docker-container.md)
+- [Kubernetes driver](./kubernetes.md)
+- [Remote driver](./remote.md)

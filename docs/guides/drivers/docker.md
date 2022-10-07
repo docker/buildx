@@ -1,48 +1,30 @@
 # Docker driver
 
-The buildx docker driver is the default builtin driver, that uses the BuildKit
-server components built directly into the docker engine.
+The Buildx Docker driver is the default driver. It uses the BuildKit server
+components built directly into the Docker engine. The Docker driver requires no
+configuration.
 
-No setup should be required for the docker driver - it should already be
-configured for you:
+Unlike the other drivers, builders using the Docker driver can't be manually
+created. They're only created automatically from the Docker context.
 
-```console
-$ docker buildx ls
-NAME/NODE       DRIVER/ENDPOINT      STATUS   BUILDKIT PLATFORMS
-default         docker                                 
-  default       default              running  20.10.17 linux/amd64, linux/386
-```
+Images built with the Docker driver are automatically loaded to the local image
+store.
 
-This builder is ready to build with out-of-the-box, requiring no extra setup,
-so you can get going with a `docker buildx build` as soon as you like.
-
-Depending on your personal setup, you may find multiple builders in your list
-the use the docker driver. For example, on a system that runs both a package
-managed version of dockerd, as well as Docker Desktop, you might have the
-following:
+## Synopsis
 
 ```console
-NAME/NODE       DRIVER/ENDPOINT STATUS  BUILDKIT PLATFORMS
-default         docker                           
-  default       default         running 20.10.17 linux/amd64, linux/386
-desktop-linux * docker                           
-  desktop-linux desktop-linux   running 20.10.17 linux/amd64, linux/arm64, linux/riscv64, linux/ppc64le, linux/s390x, linux/386, linux/arm/v7, linux/arm/v6
+# The Docker driver is used by buildx by default
+docker buildx build .
 ```
 
-This is because the docker driver builders are automatically pulled from
-the available [Docker Contexts](https://docs.docker.com/engine/context/working-with-contexts/).
-When you add new contexts using `docker context create`, these will appear in
-your list of buildx builders.
+It's not possible to configure which BuildKit version to use, or to pass any
+additional BuildKit parameters to a builder using the Docker driver. The
+BuildKit version and parameters are preset by the Docker engine internally.
 
-Unlike the [other drivers](./index.md), builders using the docker driver
-cannot be manually created, and can only be automatically created from the
-docker context. Additionally, they cannot be configured to a specific BuildKit
-version, and cannot take any extra parameters, as these are both preset by the
-Docker engine internally.
-
-If you want the extra configuration and flexibility without too much more
-overhead, then see the help page for the [docker-container driver](./docker-container.md).
+If you need additional configuration and flexibility, consider using the
+[Docker container driver](./docker-container.md).
 
 ## Further reading
 
-For more information on the docker driver, see the [buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
+For more information on the Docker driver, see the
+[buildx reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
