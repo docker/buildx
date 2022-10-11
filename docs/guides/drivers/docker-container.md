@@ -36,9 +36,9 @@ pass to `--driver-opt`:
 ## Usage
 
 When you run a build, Buildx pulls the specified `image` (by default,
-[`moby/buildkit`](https://hub.docker.com/r/moby/buildkit))
-[Docker Hub](https://hub.docker.com/u/moby/buildkit). When the container has
-started, Buildx submits the build submitted to the containerized build server.
+[`moby/buildkit`](https://hub.docker.com/r/moby/buildkit)). When the container
+has started, Buildx submits the build submitted to the containerized build
+server.
 
 ```console
 $ docker buildx build -t <image> --builder=container .

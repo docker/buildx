@@ -12,8 +12,8 @@ The `azblob` cache store uploads your resulting build cache to
 >
 > This cache storage backend requires using a different driver than the default
 > `docker` driver - see more information on selecting a driver
-> [here](../drivers/index.md). To create a new driver (which can act as a simple
-> drop-in replacement):
+> [here](https://docs.docker.com/build/building/drivers/). To create a new
+> driver (which can act as a simple drop-in replacement):
 >
 > ```console
 > docker buildx create --use --driver=docker-container
@@ -50,7 +50,7 @@ The environment variables are read from the server, not the Buildx client.
 ## Further reading
 
 For an introduction to caching see
-[Optimizing builds with cache management](https://docs.docker.com/build/building/cache).
+[Optimizing builds with cache](https://docs.docker.com/build/building/cache).
 
 For more information on the `azblob` cache backend, see the
 [BuildKit README](https://github.com/moby/buildkit#azure-blob-storage-cache-experimental).
