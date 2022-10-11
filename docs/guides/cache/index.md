@@ -43,12 +43,14 @@ Buildx supports the following cache storage backends:
 ## Command syntax
 
 To use any of the cache backends, you first need to specify it on build with the
-[`--cache-to` option](https://docs.docker.com/engine/reference/commandline/buildx_build/#cache-to) to export the cache to your storage backend of choice. Then,
-use the [`--cache-from` option](https://docs.docker.com/engine/reference/commandline/buildx_build/#cache-from) to import the cache from the storage backend into
-the current build. Unlike the local BuildKit cache (which is always enabled),
-all of the cache storage backends must be explicitly exported to, and explicitly
-imported from. All cache exporters except for the `inline` cache requires that
-you [select an alternative Buildx driver](../drivers/index.md).
+[`--cache-to` option](https://docs.docker.com/engine/reference/commandline/buildx_build/#cache-to)
+to export the cache to your storage backend of choice. Then, use the
+[`--cache-from` option](https://docs.docker.com/engine/reference/commandline/buildx_build/#cache-from)
+to import the cache from the storage backend into the current build. Unlike the
+local BuildKit cache (which is always enabled), all of the cache storage
+backends must be explicitly exported to, and explicitly imported from. All cache
+exporters except for the `inline` cache requires that you
+[select an alternative Buildx driver](https://docs.docker.com/build/building/drivers/).
 
 Example `buildx` command using the `registry` backend, using import and export
 cache:
