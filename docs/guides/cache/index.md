@@ -20,24 +20,23 @@ important to keep the runtime of image builds as low as possible.
 
 Buildx supports the following cache storage backends:
 
-- [Inline cache](./inline.md) that embeds the build cache into the image.
+- `inline-cache`: embeds the build cache into the image.
 
   The inline cache gets pushed to the same location as the main output result.
   Note that this only works for the `image` exporter.
 
-- [Registry cache](./registry.md) that embeds the build cache into a separate
-  image, and pushes to a dedicated location separate from the main output.
+- `registry`: embeds the build cache into a separate image, and pushes to a
+  dedicated location separate from the main output.
 
-- [Local directory cache](./local.md) that writes the build cache to a local
-  directory on the filesystem.
+- `local`: writes the build cache to a local directory on the filesystem.
 
-- [GitHub Actions cache](./gha.md) that uploads the build cache to
-  [GitHub](https://docs.github.com/en/rest/actions/cache) (beta).
+- `gha`: uploads the build cache to
+  [GitHub Actions cache](https://docs.github.com/en/rest/actions/cache) (beta).
 
-- [Amazon S3 cache](./s3.md) that uploads the build cache to an
+- `s3`: uploads the build cache to an
   [AWS S3 bucket](https://aws.amazon.com/s3/) (unreleased).
 
-- [Azure Blob Storage cache](./azblob.md) that uploads the build cache to
+- `azblob`: uploads the build cache to
   [Azure Blob Storage](https://azure.microsoft.com/en-us/services/storage/blobs/)
   (unreleased).
 
