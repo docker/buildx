@@ -22,9 +22,9 @@ The `azblob` cache store uploads your resulting build cache to
 ## Synopsis
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=azblob,name=<cache-image>[,parameters...] \
-  --cache-from type=azblob,name=<cache-image>[,parameters...]
+  --cache-from type=azblob,name=<cache-image>[,parameters...] .
 ```
 
 The following table describes the available CSV parameters that you can pass to

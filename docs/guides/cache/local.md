@@ -21,9 +21,9 @@ solution.
 ## Synopsis
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=local,dest=path/to/local/dir[,parameters...] \
-  --cache-from type=local,src=path/to/local/dir,
+  --cache-from type=local,src=path/to/local/dir .
 ```
 
 The following table describes the available CSV parameters that you can pass to
@@ -88,9 +88,9 @@ When importing cache using `--cache-to`, you can specify the `digest` parameter
 to force loading an older version of the cache, for example:
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=local,dest=path/to/local/dir \
-  --cache-from type=local,ref=path/to/local/dir,digest=sha256:6982c70595cb91769f61cd1e064cf5f41d5357387bab6b18c0164c5f98c1f707
+  --cache-from type=local,ref=path/to/local/dir,digest=sha256:6982c70595cb91769f61cd1e064cf5f41d5357387bab6b18c0164c5f98c1f707 .
 ```
 
 ## Further reading
