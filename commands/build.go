@@ -326,18 +326,20 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 }
 
 func parseInvokeConfig(invoke string) (cfg build.ContainerConfig, err error) {
+	cfg.Tty = true
+	if invoke == "default" {
+		return cfg, nil
+	}
+
 	csvReader := csv.NewReader(strings.NewReader(invoke))
 	fields, err := csvReader.Read()
 	if err != nil {
 		return cfg, err
 	}
-	cfg.Tty = true
 	if len(fields) == 1 && !strings.Contains(fields[0], "=") {
-		cfg.Args = []string{fields[0]}
+		cfg.Cmd = []string{fields[0]}
 		return cfg, nil
 	}
-	var entrypoint string
-	var args []string
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		if len(parts) != 2 {
@@ -347,15 +349,15 @@ func parseInvokeConfig(invoke string) (cfg build.ContainerConfig, err error) {
 		value := parts[1]
 		switch key {
 		case "args":
-			args = append(args, value) // TODO: support JSON
+			cfg.Cmd = append(cfg.Cmd, value) // TODO: support JSON
 		case "entrypoint":
-			entrypoint = value // TODO: support JSON
+			cfg.Entrypoint = append(cfg.Entrypoint, value) // TODO: support JSON
 		case "env":
 			cfg.Env = append(cfg.Env, value)
 		case "user":
-			cfg.User = value
+			cfg.User = &value
 		case "cwd":
-			cfg.Cwd = value
+			cfg.Cwd = &value
 		case "tty":
 			cfg.Tty, err = strconv.ParseBool(value)
 			if err != nil {
@@ -364,13 +366,6 @@ func parseInvokeConfig(invoke string) (cfg build.ContainerConfig, err error) {
 		default:
 			return cfg, errors.Errorf("unknown key %q", key)
 		}
-	}
-	cfg.Args = args
-	if entrypoint != "" {
-		cfg.Args = append([]string{entrypoint}, cfg.Args...)
-	}
-	if len(cfg.Args) == 0 {
-		cfg.Args = []string{"sh"}
 	}
 	return cfg, nil
 }
