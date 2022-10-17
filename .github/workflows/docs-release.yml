@@ -42,7 +42,7 @@ jobs:
           git add -A .
       -
         name: Create PR on docs repo
-        uses: peter-evans/create-pull-request@671dc9c9e0c2d73f07fa45a3eb0220e1622f0c5f
+        uses: peter-evans/create-pull-request@ad43dccb4d726ca8514126628bec209b8354b6dd
         with:
           token: ${{ secrets.GHPAT_DOCS_DISPATCH }}
           push-to-fork: docker-tools-robot/docker.github.io
