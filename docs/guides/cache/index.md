@@ -20,7 +20,7 @@ important to keep the runtime of image builds as low as possible.
 
 Buildx supports the following cache storage backends:
 
-- `inline-cache`: embeds the build cache into the image.
+- `inline`: embeds the build cache into the image.
 
   The inline cache gets pushed to the same location as the main output result.
   Note that this only works for the `image` exporter.
