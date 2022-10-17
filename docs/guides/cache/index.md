@@ -56,9 +56,9 @@ Example `buildx` command using the `registry` backend, using import and export
 cache:
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=registry,ref=<registry>/<cache-image>[,parameters...] \
-  --cache-from type=registry,ref=<registry>/<cache-image>[,parameters...]
+  --cache-from type=registry,ref=<registry>/<cache-image>[,parameters...] .
 ```
 
 > **Warning**
@@ -78,10 +78,10 @@ following example shows importing cache from multiple locations using the
 registry cache backend:
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=registry,ref=<registry>/<cache-image>:<branch> \
   --cache-from type=registry,ref=<registry>/<cache-image>:<branch> \
-  --cache-from type=registry,ref=<registry>/<cache-image>:main
+  --cache-from type=registry,ref=<registry>/<cache-image>:main .
 ```
 
 ## Configuration options
@@ -109,9 +109,9 @@ Mode can be set to either of two options: `mode=min` or `mode=max`. For example,
 to build the cache with `mode=max` with the registry backend:
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=registry,ref=<registry>/<cache-image>,mode=max \
-  --cache-from type=registry,ref=<registry>/<cache-image>
+  --cache-from type=registry,ref=<registry>/<cache-image> .
 ```
 
 This option is only set when exporting a cache, using `--cache-to`. When
@@ -140,9 +140,9 @@ To select the compression algorithm, you can use the
 cache with `compression=zstd`:
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=registry,ref=<registry>/<cache-image>,compression=zstd \
-  --cache-from type=registry,ref=<registry>/<cache-image>
+  --cache-from type=registry,ref=<registry>/<cache-image> .
 ```
 
 Use the `compression-level=<value>` option alongside the `compression` parameter
@@ -172,9 +172,9 @@ images with Docker media types or with OCI media types. To export OCI media type
 cache, use the `oci-mediatypes` property:
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=registry,ref=<registry>/<cache-image>,oci-mediatypes=true \
-  --cache-from type=registry,ref=<registry>/<cache-image>
+  --cache-from type=registry,ref=<registry>/<cache-image> .
 ```
 
 This property is only meaningful with the `--cache-to` flag. When fetching

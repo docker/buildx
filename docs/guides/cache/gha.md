@@ -26,9 +26,9 @@ inside your GitHub action pipelines, as long as your use case falls within the
 ## Synopsis
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
+$ docker buildx build --push -t <registry>/<image> \
   --cache-to type=gha[,parameters...] \
-  --cache-from type=gha[,parameters...]
+  --cache-from type=gha[,parameters...] .
 ```
 
 The following table describes the available CSV parameters that you can pass to
@@ -67,12 +67,12 @@ example, the cache is set to a combination of the branch name and the image
 name, to ensure each branch gets its own cache):
 
 ```console
-$ docker buildx build . --push -t <registry>/<image> \
-  --cache-to type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image
-  --cache-from type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image
-$ docker buildx build . --push -t <registry>/<image2> \
-  --cache-to type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image2
-  --cache-from type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image2
+$ docker buildx build --push -t <registry>/<image> \
+  --cache-to type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image \
+  --cache-from type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image .
+$ docker buildx build --push -t <registry>/<image2> \
+  --cache-to type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image2 \
+  --cache-from type=gha,url=...,token=...,scope=$GITHUB_REF_NAME-image2 .
 ```
 
 GitHub's
