@@ -128,7 +128,8 @@ $ docker buildx build --build-context project=path/to/project/source .
 # docker buildx build --build-context project=https://github.com/myuser/project.git .
 ```
 
-```Dockerfile
+```dockerfile
+# syntax=docker/dockerfile:1
 FROM alpine
 COPY --from=project myfile /
 ```
@@ -141,10 +142,10 @@ Source an image from a local [OCI layout compliant directory](https://github.com
 $ docker buildx build --build-context foo=oci-layout:///path/to/local/layout@sha256:abcd12345 .
 ```
 
-```Dockerfile
+```dockerfile
+# syntax=docker/dockerfile:1
 FROM alpine
 RUN apk add git
-
 COPY --from=foo myfile /
 
 FROM foo
@@ -475,7 +476,7 @@ Attribute keys:
 - `src`, `source` - Secret filename. `id` used if unset.
 
 ```dockerfile
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1
 FROM python:3
 RUN pip install awscli
 RUN --mount=type=secret,id=aws,target=/root/.aws/credentials \
@@ -494,7 +495,7 @@ Attribute keys:
 - `env` - Secret environment variable. `id` used if unset, otherwise will look for `src`, `source` if `id` unset.
 
 ```dockerfile
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1
 FROM node:alpine
 RUN --mount=type=bind,target=. \
   --mount=type=secret,id=SECRET_TOKEN \
@@ -526,7 +527,7 @@ authentication (e.g., cloning a private repository).
 Example to access Gitlab using an SSH agent socket:
 
 ```dockerfile
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1
 FROM alpine
 RUN apk add --no-cache openssh-client
 RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
