@@ -1,16 +1,15 @@
 package monitor
 
 import (
-	"bufio"
 	"context"
 	"fmt"
 	"io"
 	"sync"
 
+	prompt "github.com/c-bata/go-prompt"
 	"github.com/docker/buildx/build"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/term"
 )
 
 const helpMessage = `
@@ -69,16 +68,7 @@ func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, relo
 				<-ctx.Done()
 				in.Close()
 			}()
-			t := term.NewTerminal(readWriter{in.stdin, in.stdout}, "(buildx) ")
-			for {
-				l, err := t.ReadLine()
-				if err != nil {
-					if err != io.EOF {
-						errCh <- err
-						return
-					}
-					return
-				}
+			exec := func(l string) {
 				switch l {
 				case "":
 					// nop
@@ -104,6 +94,36 @@ func RunMonitor(ctx context.Context, containerConfig build.ContainerConfig, relo
 					fmt.Fprint(stdout, helpMessage)
 				}
 			}
+			completer := func(d prompt.Document) []prompt.Suggest {
+				return []prompt.Suggest{}
+			}
+
+			prompt.New(exec, completer, prompt.OptionHistory([]string{
+				"reload", "rollback", "exit", "help",
+			}),
+				prompt.OptionPrefix("(buildx) "),
+				prompt.OptionParser(&customParser{
+					PosixParser: *prompt.NewStandardInputParser(),
+					reader:      in.stdin,
+				}),
+				prompt.OptionWriter(&posixWriter{
+					w: in.stdout,
+				}),
+				prompt.OptionAddASCIICodeBind(
+					prompt.ASCIICodeBind{
+						ASCIICode: []byte{0x1b, 'f'},
+						Fn: func(b *prompt.Buffer) {
+							b.CursorRight(1 + b.Document().FindEndOfCurrentWordWithSpace())
+						},
+					},
+					prompt.ASCIICodeBind{
+						ASCIICode: []byte{0x1b, 'b'},
+						Fn: func(b *prompt.Buffer) {
+							b.CursorLeft(len(b.Document().TextBeforeCursor()) - b.Document().FindStartOfPreviousWordWithSpace())
+						},
+					},
+				),
+			).Run()
 		}()
 		select {
 		case <-doneCh:
@@ -307,12 +327,12 @@ func newMuxIO(in ioSetIn, out []ioSetOutContext, initIdx int, toggleMessage func
 		errToggle := errors.Errorf("toggle IO")
 		for {
 			prevIsControlSequence := false
-			if err := copyToFunc(traceReader(in.stdin, func(r rune) (bool, error) {
+			if err := copyToFunc(traceReader(in.stdin, func(r []byte) (bool, error) {
 				// Toggle IO when it detects C-a-c
 				// TODO: make it configurable if needed
-				if int(r) == 1 {
+				if len(r) == 1 && int(r[0]) == 1 {
 					prevIsControlSequence = true
-					return false, nil
+					return true, nil
 				}
 				defer func() { prevIsControlSequence = false }()
 				if prevIsControlSequence {
@@ -404,12 +424,12 @@ func (m *muxIO) toggleIO() {
 	fmt.Fprint(m.in.stdout, m.toggleMessage(prev, res))
 }
 
-func traceReader(r io.ReadCloser, f func(rune) (bool, error)) io.ReadCloser {
+func traceReader(r io.ReadCloser, f func([]byte) (bool, error)) io.ReadCloser {
+	dt := make([]byte, 32)
 	pr, pw := io.Pipe()
 	go func() {
-		br := bufio.NewReader(r)
 		for {
-			rn, _, err := br.ReadRune()
+			n, err := r.Read(dt)
 			if err != nil {
 				if err == io.EOF {
 					pw.Close()
@@ -418,13 +438,13 @@ func traceReader(r io.ReadCloser, f func(rune) (bool, error)) io.ReadCloser {
 				pw.CloseWithError(err)
 				return
 			}
-			if isWrite, err := f(rn); err != nil {
+			if isWrite, err := f(dt[:n]); err != nil {
 				pw.CloseWithError(err)
 				return
 			} else if !isWrite {
 				continue
 			}
-			if _, err := pw.Write([]byte(string(rn))); err != nil {
+			if _, err := pw.Write(dt[:n]); err != nil {
 				pw.CloseWithError(err)
 				return
 			}
@@ -513,4 +533,46 @@ type readerWithClose struct {
 
 func (r *readerWithClose) Close() error {
 	return r.closeFunc()
+}
+
+type customParser struct {
+	prompt.PosixParser
+	reader io.Reader
+}
+
+func (cp *customParser) Read() ([]byte, error) {
+	buf := make([]byte, 1024)
+	n, err := cp.reader.Read(buf)
+	if err != nil {
+		return []byte{}, err
+	}
+	return buf[:n], nil
+}
+
+type posixWriter struct {
+	prompt.VT100Writer
+	w io.Writer
+}
+
+func (w *posixWriter) Flush() error {
+	buf := w.Buffer()
+	l := len(buf)
+	offset := 0
+	retry := 0
+	for {
+		n, err := w.w.Write(buf[offset:])
+		if err != nil {
+			if retry < 3 {
+				retry++
+				continue
+			}
+			return err
+		}
+		offset += n
+		if offset == l {
+			break
+		}
+	}
+	w.SetBuffer([]byte{})
+	return nil
 }
