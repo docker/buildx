@@ -20,7 +20,7 @@ everything that the inline cache can do, and more:
 > driver (which can act as a simple drop-in replacement):
 >
 > ```console
-> docker buildx create --use --driver=docker-container
+> $ docker buildx create --use --driver=docker-container
 > ```
 
 ## Synopsis

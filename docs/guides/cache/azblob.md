@@ -16,7 +16,7 @@ The `azblob` cache store uploads your resulting build cache to
 > driver (which can act as a simple drop-in replacement):
 >
 > ```console
-> docker buildx create --use --driver=docker-container
+> $ docker buildx create --use --driver=docker-container
 > ```
 
 ## Synopsis
