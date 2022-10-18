@@ -86,13 +86,17 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		}
 	}()
 
-	dis, err := getInstanceOrDefault(ctx, dockerCli, in.builder, contextPathHash)
-	if err != nil {
-		return err
-	}
-
+	var dis []build.DriverInfo
 	var files []bake.File
 	var inp *bake.Input
+
+	// instance only needed for reading remote bake files or building
+	if url != "" || !in.printOnly {
+		dis, err = getInstanceOrDefault(ctx, dockerCli, in.builder, contextPathHash)
+		if err != nil {
+			return err
+		}
+	}
 
 	if url != "" {
 		files, inp, err = bake.ReadRemoteFiles(ctx, dis, url, in.files, printer)
