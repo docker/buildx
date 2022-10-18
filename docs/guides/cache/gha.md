@@ -20,7 +20,7 @@ inside your GitHub action pipelines, as long as your use case falls within the
 > driver (which can act as a simple drop-in replacement):
 >
 > ```console
-> docker buildx create --use --driver=docker-container
+> $ docker buildx create --use --driver=docker-container
 > ```
 
 ## Synopsis
