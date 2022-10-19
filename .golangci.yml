@@ -21,6 +21,7 @@ linters:
     - revive
     - staticcheck
     - typecheck
+    - nolintlint
   disable-all: true
 
 linters-settings:

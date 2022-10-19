@@ -81,10 +81,7 @@ type commonOptions struct {
 	progress     string
 	pull         *bool
 
-	// golangci-lint#826
-	// nolint:structcheck
 	exportPush bool
-	// nolint:structcheck
 	exportLoad bool
 }
 
