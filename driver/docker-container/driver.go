@@ -36,7 +36,6 @@ const (
 type Driver struct {
 	driver.InitConfig
 	factory      driver.Factory
-	userNSRemap  bool // true if dockerd is running with userns-remap mode
 	netMode      string
 	image        string
 	cgroupParent string
@@ -120,19 +119,30 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				},
 			},
 		}
-		if d.userNSRemap {
-			hc.UsernsMode = "host"
-		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
 		}
-		if info, err := d.DockerAPI.Info(ctx); err == nil && info.CgroupDriver == "cgroupfs" {
-			// Place all buildkit containers inside this cgroup by default so limits can be attached
-			// to all build activity on the host.
-			hc.CgroupParent = "/docker/buildx"
-			if d.cgroupParent != "" {
-				hc.CgroupParent = d.cgroupParent
+		if info, err := d.DockerAPI.Info(ctx); err == nil {
+			if info.CgroupDriver == "cgroupfs" {
+				// Place all buildkit containers inside this cgroup by default so limits can be attached
+				// to all build activity on the host.
+				hc.CgroupParent = "/docker/buildx"
+				if d.cgroupParent != "" {
+					hc.CgroupParent = d.cgroupParent
+				}
 			}
+
+			secOpts, err := dockertypes.DecodeSecurityOptions(info.SecurityOptions)
+			if err != nil {
+				return err
+			}
+			for _, f := range secOpts {
+				if f.Name == "userns" {
+					hc.UsernsMode = "host"
+					break
+				}
+			}
+
 		}
 		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
 		if err != nil {
