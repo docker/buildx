@@ -16,7 +16,6 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/docker/api/types"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -84,7 +83,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, types.ImageCreateOptions{
+		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, dockertypes.ImageCreateOptions{
 			RegistryAuth: ra,
 		})
 		if err != nil {
@@ -186,7 +185,7 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 }
 
 func (d *Driver) copyLogs(ctx context.Context, l progress.SubLogger) error {
-	rc, err := d.DockerAPI.ContainerLogs(ctx, d.Name, types.ContainerLogsOptions{
+	rc, err := d.DockerAPI.ContainerLogs(ctx, d.Name, dockertypes.ContainerLogsOptions{
 		ShowStdout: true, ShowStderr: true,
 	})
 	if err != nil {
@@ -219,7 +218,7 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
-	execConfig := types.ExecConfig{
+	execConfig := dockertypes.ExecConfig{
 		Cmd:          cmd,
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -235,7 +234,7 @@ func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, erro
 		return "", nil, errors.New("exec ID empty")
 	}
 
-	resp, err := d.DockerAPI.ContainerExecAttach(ctx, execID, types.ExecStartCheck{})
+	resp, err := d.DockerAPI.ContainerExecAttach(ctx, execID, dockertypes.ExecStartCheck{})
 	if err != nil {
 		return "", nil, err
 	}
@@ -262,7 +261,7 @@ func (d *Driver) run(ctx context.Context, cmd []string, stdout, stderr io.Writer
 }
 
 func (d *Driver) start(ctx context.Context, l progress.SubLogger) error {
-	return d.DockerAPI.ContainerStart(ctx, d.Name, types.ContainerStartOptions{})
+	return d.DockerAPI.ContainerStart(ctx, d.Name, dockertypes.ContainerStartOptions{})
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
