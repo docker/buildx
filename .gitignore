@@ -1,4 +1,1 @@
-bin
-coverage
-cross-out
-release-out
+/bin

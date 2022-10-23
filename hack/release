@@ -2,10 +2,10 @@
 
 set -eu -o pipefail
 
-: ${BUILDX_CMD=docker buildx}
-: ${RELEASE_OUT=./release-out}
-: ${CACHE_FROM=}
-: ${CACHE_TO=}
+: "${BUILDX_CMD=docker buildx}"
+: "${DESTDIR=./bin/release}"
+: "${CACHE_FROM=}"
+: "${CACHE_TO=}"
 
 if [ -n "$CACHE_FROM" ]; then
   for cfrom in $CACHE_FROM; do
@@ -19,10 +19,10 @@ if [ -n "$CACHE_TO" ]; then
 fi
 
 # release
-(set -x ; ${BUILDX_CMD} bake "${cacheFlags[@]}" --set "*.output=$RELEASE_OUT" release)
+(set -x ; ${BUILDX_CMD} bake "${cacheFlags[@]}" --set "*.output=$DESTDIR" release)
 
 # wrap binaries
-mv -f ./${RELEASE_OUT}/**/* ./${RELEASE_OUT}/
-find ./${RELEASE_OUT} -type d -empty -delete
+mv -f ./${DESTDIR}/**/* ./${DESTDIR}/
+find ./${DESTDIR} -type d -empty -delete
 
 source ./hack/hash-files

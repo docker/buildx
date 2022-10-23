@@ -1,17 +1,14 @@
 variable "GO_VERSION" {
   default = "1.19"
 }
-variable "BIN_OUT" {
-  default = "./bin"
-}
-variable "RELEASE_OUT" {
-  default = "./release-out"
-}
 variable "DOCS_FORMATS" {
   default = "md"
 }
+variable "DESTDIR" {
+  default = "./bin"
+}
 
-// Special target: https://github.com/docker/metadata-action#bake-definition
+# Special target: https://github.com/docker/metadata-action#bake-definition
 target "meta-helper" {
   tags = ["docker/buildx-bin:local"]
 }
@@ -97,13 +94,13 @@ target "mod-outdated" {
 target "test" {
   inherits = ["_common"]
   target = "test-coverage"
-  output = ["./coverage"]
+  output = ["${DESTDIR}/coverage"]
 }
 
 target "binaries" {
   inherits = ["_common"]
   target = "binaries"
-  output = [BIN_OUT]
+  output = ["${DESTDIR}/build"]
   platforms = ["local"]
 }
 
@@ -127,7 +124,7 @@ target "binaries-cross" {
 target "release" {
   inherits = ["binaries-cross"]
   target = "release"
-  output = [RELEASE_OUT]
+  output = ["${DESTDIR}/release"]
 }
 
 target "image" {

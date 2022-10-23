@@ -2,17 +2,21 @@
 
 set -eu -o pipefail
 
-: ${RELEASE_OUT=./release-out}
+: "${DESTDIR=./bin/release}"
+
+if [ ! -d "$DESTDIR" ]; then
+  exit 0
+fi
 
 # checksums
-if ! type shasum > /dev/null 2>&1; then
+if ! command shasum > /dev/null 2>&1; then
   echo >&2 "ERROR: shasum is required"
   exit 1
 fi
-find ./${RELEASE_OUT}/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/#  #' > ./${RELEASE_OUT}/checksums.txt
+find ./${DESTDIR}/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/#  #' > ./${DESTDIR}/checksums.txt
 
 # verify
 (
-  cd ./${RELEASE_OUT}
+  cd ./${DESTDIR}
   shasum -a 256 -U -c checksums.txt
 )
