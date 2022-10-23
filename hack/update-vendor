@@ -2,10 +2,10 @@
 
 set -eu -o pipefail
 
-: ${BUILDX_CMD=docker buildx}
+: "${BUILDX_CMD=docker buildx}"
 
 output=$(mktemp -d -t buildx-output.XXXXXXXXXX)
 (set -x ; ${BUILDX_CMD} bake --set "*.output=$output" update-vendor)
 rm -rf ./vendor
 cp -R "$output"/out/* .
-rm -rf $output
+rm -rf "$output"

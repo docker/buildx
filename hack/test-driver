@@ -2,14 +2,14 @@
 
 set -eu -o pipefail
 
-: ${BUILDX_CMD=docker buildx}
-: ${BUILDKIT_IMAGE=moby/buildkit:buildx-stable-1}
-: ${BUILDKIT_CFG=}
-: ${DRIVER=docker-container}
-: ${DRIVER_OPT=}
-: ${ENDPOINT=}
-: ${MULTI_NODE=0}
-: ${PLATFORMS=linux/amd64,linux/arm64}
+: "${BUILDX_CMD=docker buildx}"
+: "${BUILDKIT_IMAGE=moby/buildkit:buildx-stable-1}"
+: "${BUILDKIT_CFG=}"
+: "${DRIVER=docker-container}"
+: "${DRIVER_OPT=}"
+: "${ENDPOINT=}"
+: "${MULTI_NODE=0}"
+: "${PLATFORMS=linux/amd64,linux/arm64}"
 
 function buildxCmd {
   (set -x ; $BUILDX_CMD "$@")
