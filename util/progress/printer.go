@@ -11,6 +11,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -69,7 +70,7 @@ func (p *Printer) ClearLogSource(v interface{}) {
 	}
 }
 
-func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string) *Printer {
+func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string) (*Printer, error) {
 	statusCh := make(chan *client.SolveStatus)
 	doneCh := make(chan struct{})
 
@@ -83,21 +84,26 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string)
 		mode = v
 	}
 
-	go func() {
-		var c console.Console
-		switch mode {
-		case PrinterModeQuiet:
-			w = io.Discard
-		case PrinterModeAuto, PrinterModeTty:
-			if cons, err := console.ConsoleFromFile(out); err == nil {
-				c = cons
+	var c console.Console
+	switch mode {
+	case PrinterModeQuiet:
+		w = io.Discard
+	case PrinterModeAuto, PrinterModeTty:
+		if cons, err := console.ConsoleFromFile(out); err == nil {
+			c = cons
+		} else {
+			if mode == PrinterModeTty {
+				return nil, errors.Wrap(err, "failed to get console")
 			}
 		}
+	}
+
+	go func() {
 		resumeLogs := logutil.Pause(logrus.StandardLogger())
 		// not using shared context to not disrupt display but let is finish reporting errors
 		pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, "", c, w, statusCh)
 		resumeLogs()
 		close(doneCh)
 	}()
-	return pw
+	return pw, nil
 }

@@ -75,7 +75,10 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	printer := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, in.progress)
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, in.progress)
+	if err != nil {
+		return err
+	}
 
 	defer func() {
 		if printer != nil {
