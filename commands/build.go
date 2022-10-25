@@ -109,7 +109,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		return errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
 
-	if in.quiet && in.progress != "auto" && in.progress != "quiet" {
+	if in.quiet && in.progress != progress.PrinterModeAuto && in.progress != progress.PrinterModeQuiet {
 		return errors.Errorf("progress=%s and quiet cannot be used together", in.progress)
 	} else if in.quiet {
 		in.progress = "quiet"
@@ -284,7 +284,10 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, opts map[string]bu
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	printer := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode)
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode)
+	if err != nil {
+		return "", nil, err
+	}
 
 	var mu sync.Mutex
 	var idx int

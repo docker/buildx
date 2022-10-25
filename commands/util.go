@@ -460,7 +460,10 @@ func boot(ctx context.Context, ngi *nginfo) (bool, error) {
 		return false, nil
 	}
 
-	printer := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, "auto")
+	printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progress.PrinterModeAuto)
+	if err != nil {
+		return false, err
+	}
 
 	baseCtx := ctx
 	eg, _ := errgroup.WithContext(ctx)
@@ -477,7 +480,7 @@ func boot(ctx context.Context, ngi *nginfo) (bool, error) {
 		}(idx)
 	}
 
-	err := eg.Wait()
+	err = eg.Wait()
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1
