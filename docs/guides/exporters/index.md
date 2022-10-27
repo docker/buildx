@@ -1,103 +1,218 @@
 # Exporters overview
 
-BuildKit exporters allow outputting the results of a build to different
-locations.
+Exporters save your build results to a specified output type. You specify the
+exporter to use with the
+[`--output` CLI option](../../reference/buildx_build.md#output). Buildx supports
+the following exporters:
 
-...
-
-Buildx supports the following exporters:
-
-- `image` / `registry`: exports the build result into a container image.
+- `image`: exports the build result to a container image.
+- `registry`: exports the build result into a container image, and pushes it to
+  the specified registry.
 - `local`: exports the build root filesystem into a local directory.
 - `tar`: packs the build root filesystem into a local tarball.
-- `oci`: exports the build result as a local
-  [OCI image layout](https://github.com/opencontainers/image-spec/blob/v1.0.1/image-layout.md).
-- `docker`: exports the build result as a local
-  [Docker image specification](https://github.com/docker/docker/blob/v20.10.2/image/spec/v1.2.md).
+- `oci`: exports the build result to the local filesystem in the
+  [OCI image layout](https://github.com/opencontainers/image-spec/blob/v1.0.1/image-layout.md)
+  format.
+- `docker`: exports the build result to the local filesystem in the
+  [Docker image](https://github.com/docker/docker/blob/v20.10.2/image/spec/v1.2.md)
+  format.
+- `cacheonly`: doesn't export a build output, but runs the build and creates a
+  cache.
 
-Each exporter creates outputs designed for different use cases. To build
-container images ready to load or push to a registry, you can use the `image`
-exporter. Alternatively, you can use the `oci` or `docker` exporters to export
-the container image to disk directly, to import or post-process as you want.
-Finally, if you just want the output of the final root filesystem, you can use
-the `local` or `tar` exporters.
+## Using exporters
 
-## Command syntax
-
-To use any of the exporters, you need to specify it by either using the
-available shorthands, or passing the exporter name and its parameters to the
-[`--output`](../../reference/buildx_build.md#output) flag.
-
-To get the full flexibility out of the various exporters buildkit has to offer,
-you'll need to use the full form of the `--output` flag. However, for
-ease-of-use, buildx also offers various familiar short-hands.
-
-### Pushing images
-
-You may already be familiar with the following `buildx` command syntax using
-the `-t`/`--tag` and `--push` shorthands to push the resulting image to a
-registry:
+To specify an exporter, use the following command syntax:
 
 ```console
-$ docker buildx build . --tag <registry>/<image> --push
+$ docker buildx build --tag <registry>/<image> \
+  --output type=<TYPE> .
 ```
 
-You can replicate this command without the shorthands, using the full
-`--output` flag:
+Most common use cases doesn't require you don't need to specify which exporter
+to use explicitly. You only need to specify the exporter if you intend to
+customize the output somehow, or if you want to save it to disk. The `--load`
+and `--push` options allow Buildx to infer the exporter settings to use.
+
+For example, if you use the `--push` option in combination with `--tag`, Buildx
+automatically uses the `image` exporter, and configures the exporter to push the
+results to the specified registry.
+
+To get the full flexibility out of the various exporters BuildKit has to offer,
+you use the `--output` flag that lets you configure exporter options.
+
+## Use cases
+
+Each exporter type is designed for different use cases. The following sections
+describe some common scenarios, and how you can use exporters to generate the
+output that you need.
+
+### Load to image store
+
+Buildx is often used to build container images that can be loaded to an image
+store. That's where the `oci` and `docker` exporters come in. The following
+example shows how to build an image using the `oci` exporter, and have that
+image loaded to the local image store, using the `--output` option:
 
 ```console
-$ docker buildx build . --output type=image,name=<registry>/<image>,push=true
+$ docker buildx build \
+  --output type=oci,name=<registry>/<image>,store=true .
 ```
 
-### Loading images
-
-Images built using the [Docker "default" Buildx driver](../../guides/drivers/docker.md)
-will be automatically loaded into the engine. This means you can run them
-immediately, and they'll be visible in the `docker images` view.
-
-Images built using any of theh other drivers will not be automatically
-loaded, and instead require manually adding the `--load` flag:
+Buildx CLI will automatically use the `oci` exporter and load it to the image
+store if you provide the `--tag` and `--load` options:
 
 ```console
-$ docker buildx build . --tag <registry>/<image> --load
+$ docker buildx build --tag <registry>/<image> --load .
+```
+
+Images built using the
+[default `docker` Buildx driver](../../guides/drivers/docker.md) will be
+automatically loaded into the image store. This means that the images are
+available to run immediately after being built, and they'll be visible when you
+run the `docker images` command.
+
+### Push to registry
+
+To push a built image to a container registry, you can use the `registry` or
+`image` exporters.
+
+When you pass the `--push` option to the Buildx CLI, you instruct BuildKit to
+push the built image to the specified registry:
+
+```console
+$ docker buildx build --tag <registry>/<image> --push .
+```
+
+Under the hood, this uses the `image` exporter, and sets the `push` parameter.
+It's the same as using the following long-form command using the `--output`
+option:
+
+```console
+$ docker buildx build \
+  --output type=image,name=<registry>/<image>,push=true .
+```
+
+You can also use the `registry` exporter, which does the same thing:
+
+```console
+$ docker buildx build \
+  --output type=registry,name=<registry>/<image> .
+```
+
+### Export image layout to file
+
+You can use either the `oci` or `docker` exporters to save the build results to
+image layout on your local filesystem. Both of these exporters generate a tar
+archive file containing the corresponding image layout. The `dest` parameter
+defines the target output path for the tarball.
+
+```console
+$ docker buildx build --output type=oci,dest=./myimage .
+[+] Building 0.8s (7/7) FINISHED
+ ...
+ => exporting to oci image format                                                                     0.0s
+ => exporting layers                                                                                  0.0s
+ => exporting manifest sha256:c1ef01a0a0ef94a7064d5cbce408075730410060e253ff8525d1e5f7e27bc900        0.0s
+ => exporting config sha256:eadab326c1866dd247efb52cb715ba742bd0f05b6a205439f107cf91b3abc853          0.0s
+ => sending tarball                                                                                   0.0s
+$ tar -xf ./myimage
+$ tree .
+.
+├── Dockerfile
+├── blobs
+│   └── sha256
+│       ├── 9b18e9b68314027565b90ff6189d65942c0f7986da80df008b8431276885218e
+│       ├── c1ef01a0a0ef94a7064d5cbce408075730410060e253ff8525d1e5f7e27bc900
+│       ├── c6b4b7b7c04f702f5bd2e8f36fcfc8f006a44e27730fdff002e64f3a14cf44f3
+│       ├── eadab326c1866dd247efb52cb715ba742bd0f05b6a205439f107cf91b3abc853
+│       └── fc1975b0f6ceb6395d6cd54415454938769b46d28d376322d26cad7adca82dd2
+├── index.json
+├── manifest.json
+├── myimage
+└── oci-layout
+```
+
+### Export filesystem
+
+If you don't want to build an image from your build results, but instead export
+the filesystem that was built, you can use the `local` and `tar` exporters.
+
+The `local` exporter unpacks the filesystem into a directory structure in the
+specified location. The `tar` exporter creates a tarball archive file.
+
+```console
+$ docker buildx build --output type=tar,dest=<path/to/output> .
+```
+
+The `local` exporter is useful in
+[multi-stage builds](/build/building/multi-stage/) since it allows you to export
+only a minimal number of build artifacts. For example, self-contained binaries.
+
+### Cache-only export
+
+The `cacheonly` exporter can be used if you just want to run a build, without
+exporting any output. This can be useful if, for example, you want to run a test
+build. Or, if you want to run the build first, and create exports using
+subsequent commands. The `cacheonly` exporter creates a build cache, so any
+successive builds are instant.
+
+```console
+$ docker buildx build --output type=cacheonly
+```
+
+If you don't specify an exporter, and you don't provide short-hand options like
+`--load` that automatically selects the appropriate exporter, Buildx uses the
+`cacheonly` by default. Except if you build using the `docker` driver, in which
+case you use the `image` exporter.
+
+Buildx logs a warning message when using `cacheonly` as a default:
+
+```console
+$ docker buildx build .
+WARNING: No output specified with docker-container driver.
+         Build result will only remain in the build cache.
+         To push result image into registry use --push or
+         to load image into docker use --load
 ```
 
 ## Multiple exporters
 
-While [currently](https://github.com/moby/buildkit/pull/2760) only a single
-exporter is supported, you can perform multiple builds one after another to
-export the same content twice - because of caching, as long as nothing changes
-inbetween, then all builds after the first should be instantaneous.
+You can only specify a single exporter for any given build (see
+[this pull request](https://github.com/moby/buildkit/pull/2760) for details).
+But you can perform multiple builds one after another to export the same content
+twice. BuildKit caches the build, so unless any of the layers change, all
+successive builds following the first are instant.
 
-For example, using both the [`image` exporter](./image.md) and the
-[`local` exporter](./local.md)
+The following example shows how to run the same build twice, first using the
+`image`, followed by the `local`.
 
 ```console
-$ docker buildx build --output type=image,tag=<user>/<image> .
+$ docker buildx build --output type=image,tag=<registry>/<image> .
 $ docker buildx build --output type=local,dest=<path/to/output> .
 ```
 
 ## Configuration options
 
 This section describes some of the configuration options available for
-exporters. The options described here are common for at least two or more
-exporter types. Additionally, the different exporters types support specific
-parameters as well. See the detailed page about each exporter for more
-information about which configuration parameters apply.
+exporters.
+
+The options described here are common for at least two or more exporter types.
+Additionally, the different exporters types support specific parameters as well.
+See the detailed page about each exporter for more information about which
+configuration parameters apply.
 
 The common parameters described here are:
 
 - [Compression](#compression)
-- [OCI media type](#oci-media-type)
+- [OCI media type](#oci-media-types)
 
 ### Compression
 
-For all exporters that compress their output, you can configure the exact
-compression algorithm and level to use. While the default values provide a good
+When you export a compressed output, you can configure the exact compression
+algorithm and level to use. While the default values provide a good
 out-of-the-box experience, you may wish to tweak the parameters to optimize for
-storage vs compute costs. Changing the compression parameters can reduce
-storage space required, and improve image download times, but will increase
-build times.
+storage vs compute costs. Changing the compression parameters can reduce storage
+space required, and improve image download times, but will increase build times.
 
 To select the compression algorithm, you can use the `compression` option. For
 example, to build an `image` with `compression=zstd`:
@@ -107,8 +222,8 @@ $ docker buildx build \
   --output type=image,name=<registry>/<image>,push=true,compression=zstd .
 ```
 
-Use the `compression-level=<value>` option alongside the `compression`
-parameter to choose a compression level for the algorithms which support it:
+Use the `compression-level=<value>` option alongside the `compression` parameter
+to choose a compression level for the algorithms which support it:
 
 - 0-9 for `gzip` and `estargz`
 - 0-22 for `zstd`
@@ -130,11 +245,11 @@ the previous compression algorithm.
 ### OCI media types
 
 Exporters that output container images, support creating images with either
-Docker media types or with OCI media types. By default, BuildKit exports
-images using Docker image types.
+Docker media types or with OCI media types. By default, BuildKit exports images
+using Docker media type.
 
-To export images with OCI mediatypes set, use the `oci-mediatypes` property. For
-example, with the `image` exporter:
+To export images with OCI media types set, use the `oci-mediatypes` property.
+For example, with the `image` exporter:
 
 ```console
 $ docker buildx build \
@@ -155,16 +270,14 @@ This build info is attached to the image configuration:
 }
 ```
 
-By default, the build dependencies are inlined in the image configuration. You
-can disable this behavior using the `buildinfo` attribute.
+By default, build dependencies are attached to the image configuration. You can
+turn off this behavior by setting `buildinfo=false`.
 
 ## What's next
 
-Read about each of the exporters to learn about how they work and how to
-use them:
+Read about each of the exporters to learn about how they work and how to use
+them:
 
-- [`image`](./image.md) / [`registry`](./image.md)
-- [`local`](./local.md)
-- [`tar`](./tar.md)
-- [`oci`](./oci.md)
-- [`docker`](./docker.md)
+- [Image and registry exporters](image-registry.md)
+- [OCI and Docker exporters](oci-docker.md).
+- [Local and tar exporters](local-tar.md)
