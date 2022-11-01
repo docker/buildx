@@ -31,7 +31,7 @@ var substitutionNamed = "[_a-z][_a-z0-9]*"
 var substitutionBraced = "[_a-z][_a-z0-9]*(?::?[-+?](.*}|[^}]*))?"
 
 var patternString = fmt.Sprintf(
-	"%s(?i:(?P<escaped>%s)|(?P<named>%s)|{(?P<braced>%s)}|(?P<invalid>))",
+	"%s(?i:(?P<escaped>%s)|(?P<named>%s)|{(?:(?P<braced>%s)}|(?P<invalid>)))",
 	delimiter, delimiter, substitutionNamed, substitutionBraced,
 )
 
@@ -62,6 +62,7 @@ type SubstituteFunc func(string, Mapping) (string, bool, error)
 // It accepts additional substitute function.
 func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, subsFuncs ...SubstituteFunc) (string, error) {
 	var outerErr error
+	var returnErr error
 
 	result := pattern.ReplaceAllStringFunc(template, func(substring string) string {
 		_, subsFunc := getSubstitutionFunctionForTemplate(substring)
@@ -91,6 +92,9 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 
 		if substitution == "" {
 			outerErr = &InvalidTemplateError{Template: template}
+			if returnErr == nil {
+				returnErr = outerErr
+			}
 			return ""
 		}
 
@@ -101,6 +105,9 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 			)
 			value, applied, outerErr = subsFunc(substitution, mapping)
 			if outerErr != nil {
+				if returnErr == nil {
+					returnErr = outerErr
+				}
 				return ""
 			}
 			if applied {
@@ -119,7 +126,7 @@ func SubstituteWith(template string, mapping Mapping, pattern *regexp.Regexp, su
 		return value
 	})
 
-	return result, outerErr
+	return result, returnErr
 }
 
 func getSubstitutionFunctionForTemplate(template string) (string, SubstituteFunc) {
