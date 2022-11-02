@@ -366,11 +366,14 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 		return nil, err
 	}
 
-	td, _ := exp.(client.TracerDelegate)
-
-	return client.New(ctx, "", client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+	var opts []client.ClientOpt
+	opts = append(opts, client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 		return conn, nil
-	}), client.WithTracerDelegate(td))
+	}))
+	if td, ok := exp.(client.TracerDelegate); ok {
+		opts = append(opts, client.WithTracerDelegate(td))
+	}
+	return client.New(ctx, "", opts...)
 }
 
 func (d *Driver) Factory() driver.Factory {
