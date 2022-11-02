@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"errors"
 	"fmt"
+	"regexp"
+	"strconv"
 	"strings"
 	"unicode"
 )
@@ -12,8 +14,11 @@ const (
 	charComment       = '#'
 	prefixSingleQuote = '\''
 	prefixDoubleQuote = '"'
+)
 
-	exportPrefix = "export"
+var (
+	escapeSeqRegex = regexp.MustCompile(`(\\(?:[abcfnrtv$"\\]|0\d{0,3}))`)
+	exportRegex    = regexp.MustCompile(`^export\s+`)
 )
 
 func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
@@ -85,7 +90,7 @@ func locateKeyName(src []byte) (string, []byte, bool, error) {
 	var key string
 	var inherited bool
 	// trim "export" and space at beginning
-	src = bytes.TrimLeftFunc(bytes.TrimPrefix(src, []byte(exportPrefix)), isSpace)
+	src = bytes.TrimLeftFunc(exportRegex.ReplaceAll(src, nil), isSpace)
 
 	// locate key name end and validate it in single loop
 	offset := 0
@@ -131,21 +136,12 @@ func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (s
 	quote, isQuoted := hasQuotePrefix(src)
 	if !isQuoted {
 		// unquoted value - read until new line
-		end := bytes.IndexFunc(src, isNewLine)
-		var rest []byte
-		if end < 0 {
-			value := strings.Split(string(src), "#")[0] // Remove inline comments on unquoted lines
-			value = strings.TrimRightFunc(value, unicode.IsSpace)
+		value, rest, _ := bytes.Cut(src, []byte("\n"))
 
-			retVal, err := expandVariables(value, envMap, lookupFn)
-			return retVal, nil, err
-		}
-
-		value := strings.Split(string(src[0:end]), "#")[0]
-		value = strings.TrimRightFunc(value, unicode.IsSpace)
-		rest = src[end:]
-
-		retVal, err := expandVariables(value, envMap, lookupFn)
+		// Remove inline comments on unquoted lines
+		value, _, _ = bytes.Cut(value, []byte(" #"))
+		value = bytes.TrimRightFunc(value, unicode.IsSpace)
+		retVal, err := expandVariables(string(value), envMap, lookupFn)
 		return retVal, rest, err
 	}
 
@@ -161,12 +157,10 @@ func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (s
 		}
 
 		// trim quotes
-		trimFunc := isCharFunc(rune(quote))
-		value := string(bytes.TrimLeftFunc(bytes.TrimRightFunc(src[0:i], trimFunc), trimFunc))
+		value := string(src[1:i])
 		if quote == prefixDoubleQuote {
-			// unescape newlines for double quote (this is compat feature)
-			// and expand environment variables
-
+			// expand standard shell escape sequences & then interpolate
+			// variables on the result
 			retVal, err := expandVariables(expandEscapes(value), envMap, lookupFn)
 			if err != nil {
 				return "", nil, err
@@ -187,20 +181,35 @@ func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (s
 }
 
 func expandEscapes(str string) string {
-	out := escapeRegex.ReplaceAllStringFunc(str, func(match string) string {
-		c := strings.TrimPrefix(match, `\`)
-		switch c {
-		case "n":
-			return "\n"
-		case "r":
-			return "\r"
-		case "$":
+	out := escapeSeqRegex.ReplaceAllStringFunc(str, func(match string) string {
+		if match == `\$` {
+			// `\$` is not a Go escape sequence, the expansion parser uses
+			// the special `$$` syntax
+			// both `FOO=\$bar` and `FOO=$$bar` are valid in an env file and
+			// will result in FOO w/ literal value of "$bar" (no interpolation)
 			return "$$"
-		default:
+		}
+
+		if strings.HasPrefix(match, `\0`) {
+			// octal escape sequences in Go are not prefixed with `\0`, so
+			// rewrite the prefix, e.g. `\0123` -> `\123` -> literal value "S"
+			match = strings.Replace(match, `\0`, `\`, 1)
+		}
+
+		// use Go to unquote (unescape) the literal
+		// see https://go.dev/ref/spec#Rune_literals
+		//
+		// NOTE: Go supports ADDITIONAL escapes like `\x` & `\u` & `\U`!
+		// These are NOT supported, which is why we use a regex to find
+		// only matches we support and then use `UnquoteChar` instead of a
+		// `Unquote` on the entire value
+		v, _, _, err := strconv.UnquoteChar(match, '"')
+		if err != nil {
 			return match
 		}
+		return string(v)
 	})
-	return unescapeCharsRegex.ReplaceAllString(out, "$1")
+	return out
 }
 
 func indexOfNonSpaceChar(src []byte) int {
@@ -238,9 +247,4 @@ func isSpace(r rune) bool {
 		return true
 	}
 	return false
-}
-
-// isNewLine reports whether the rune is a new line character
-func isNewLine(r rune) bool {
-	return r == '\n'
 }

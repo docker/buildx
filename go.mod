@@ -4,14 +4,14 @@ go 1.17
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.5
-	github.com/compose-spec/compose-go v1.5.0
+	github.com/compose-spec/compose-go v1.6.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.6
 	github.com/docker/cli v20.10.17+incompatible // v22.06.x - see "replace" for the actual version
 	github.com/docker/cli-docs-tool v0.5.0
 	github.com/docker/distribution v2.8.1+incompatible
 	github.com/docker/docker v20.10.17+incompatible // v22.06.x - see "replace" for the actual version
-	github.com/docker/go-units v0.4.0
+	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.7.3
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
