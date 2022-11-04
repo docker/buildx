@@ -35,7 +35,7 @@ The following table describes the available parameters:
 | `buildinfo-attrs`   | `true`,`false`                         | `false` | Attach inline [build info attributes][3]                                                                                              |
 | `annotation.<key>`  | String                                 |         | Attach an annotation with the respective `key` and `value` to the built image,see [annotations][4]                                    |
 
-[1]: index.md#cache-compression
+[1]: index.md#compression
 [2]: index.md#oci-media-types
 [3]: index.md#build-info
 [4]: #annotations

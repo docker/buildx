@@ -40,7 +40,7 @@ jobs:
 In this example we are also using 3 other actions:
 
 * [`setup-buildx`](https://github.com/docker/setup-buildx-action) action will create and boot a builder using by
-default the `docker-container` [builder driver](../reference/buildx_create.md#driver).
+default the `docker-container` [builder driver](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver).
 This is **not required but recommended** using it to be able to build multi-platform images, export cache, etc.
 * [`setup-qemu`](https://github.com/docker/setup-qemu-action) action can be useful if you want
 to add emulation support with QEMU to be able to build against more platforms.

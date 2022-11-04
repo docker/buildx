@@ -2,8 +2,8 @@
 
 Exporters save your build results to a specified output type. You specify the
 exporter to use with the
-[`--output` CLI option](../../reference/buildx_build.md#output). Buildx supports
-the following exporters:
+[`--output` CLI option](https://docs.docker.com/engine/reference/commandline/buildx_build/#output).
+Buildx supports the following exporters:
 
 - `image`: exports the build result to a container image.
 - `registry`: exports the build result into a container image, and pushes it to

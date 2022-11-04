@@ -127,10 +127,10 @@ with both parameters to find the results that work best for you.
 
 ### Cache compression
 
-<!-- FIXME: this link won't work on docs.docker.com -->
+<!-- TODO: change this link to a local link -->
 
 The cache compression options are the same as the
-[exporter compression options](../exporters/index.md#compression).
+[exporter compression options](https://docs.docker.com/build/building/exporters/#compression).
 
 For example, to compress the `registry` cache with `zstd` compression:
 
@@ -142,10 +142,10 @@ $ docker buildx build --push -t <registry>/<image> \
 
 ### OCI media types
 
-<!-- FIXME: this link won't work on docs.docker.com -->
+<!-- TODO: change this link to a local link -->
 
 The cache OCI options are the same as the
-[exporter OCI options](../exporters/index.md#oci-media-types).
+[exporter OCI options](https://docs.docker.com/build/building/exporters/#oci-media-types).
 
 For example, to export OCI media type cache, use the `oci-mediatypes` property:
 
