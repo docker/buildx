@@ -569,7 +569,7 @@ type Target struct {
 	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
 	NetworkMode      *string           `json:"-" hcl:"-"`
 	NoCacheFilter    []string          `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional"`
-	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/guides/bake/file-definition.md.
+	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/manuals/bake/file-definition.md.
 
 	// linked is a private field to mark a target used as a linked one
 	linked bool

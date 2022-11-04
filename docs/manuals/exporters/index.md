@@ -144,8 +144,9 @@ $ docker buildx build --output type=tar,dest=<path/to/output> .
 ```
 
 The `local` exporter is useful in
-[multi-stage builds](/build/building/multi-stage/) since it allows you to export
-only a minimal number of build artifacts. For example, self-contained binaries.
+[multi-stage builds](https://docs.docker.com/build/building/multi-stage/) since
+it allows you to export only a minimal number of build artifacts. For example,
+self-contained binaries.
 
 ### Cache-only export
 
