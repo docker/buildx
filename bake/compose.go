@@ -222,7 +222,7 @@ type xbake struct {
 	NoCacheFilter stringArray `yaml:"no-cache-filter,omitempty"`
 	Contexts      stringMap   `yaml:"contexts,omitempty"`
 	// don't forget to update documentation if you add a new field:
-	// docs/guides/bake/compose-file.md#extension-field-with-x-bake
+	// docs/manuals/bake/compose-file.md#extension-field-with-x-bake
 }
 
 type stringMap map[string]string

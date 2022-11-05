@@ -112,7 +112,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 
 	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
 		// don't forget to update documentation if you add a new
-		// built-in variable: docs/guides/bake/file-definition.md#built-in-variables
+		// built-in variable: docs/manuals/bake/file-definition.md#built-in-variables
 		"BAKE_CMD_CONTEXT":    cmdContext,
 		"BAKE_LOCAL_PLATFORM": platforms.DefaultString(),
 	})

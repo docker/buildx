@@ -50,7 +50,7 @@ to import the cache from the storage backend into the current build. Unlike the
 local BuildKit cache (which is always enabled), all of the cache storage
 backends must be explicitly exported to, and explicitly imported from. All cache
 exporters except for the `inline` cache requires that you
-[select an alternative Buildx driver](https://docs.docker.com/build/building/drivers/).
+[select an alternative Buildx driver](../../drivers/index.md).
 
 Example `buildx` command using the `registry` backend, using import and export
 cache:
@@ -127,10 +127,8 @@ with both parameters to find the results that work best for you.
 
 ### Cache compression
 
-<!-- TODO: change this link to a local link -->
-
 The cache compression options are the same as the
-[exporter compression options](https://docs.docker.com/build/building/exporters/#compression).
+[exporter compression options](../../exporters/index.md#compression).
 
 For example, to compress the `registry` cache with `zstd` compression:
 
@@ -142,10 +140,8 @@ $ docker buildx build --push -t <registry>/<image> \
 
 ### OCI media types
 
-<!-- TODO: change this link to a local link -->
-
 The cache OCI options are the same as the
-[exporter OCI options](https://docs.docker.com/build/building/exporters/#oci-media-types).
+[exporter OCI options](../../exporters/index.md#oci-media-types).
 
 For example, to export OCI media type cache, use the `oci-mediatypes` property:
 

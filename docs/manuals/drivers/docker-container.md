@@ -9,7 +9,7 @@ Docker driver. For example:
 - Specify custom BuildKit versions to use.
 - Build multi-arch images, see [QEMU](#qemu)
 - Advanced options for
-  [cache import and export](https://docs.docker.com/build/building/cache/)
+  [cache import and export](../cache/backends/index.md)
 
 ## Synopsis
 

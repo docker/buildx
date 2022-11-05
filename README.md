@@ -32,15 +32,18 @@ Key features:
   - [Building with buildx](#building-with-buildx)
   - [Working with builder instances](#working-with-builder-instances)
   - [Building multi-platform images](#building-multi-platform-images)
+- [Manuals](docs/manuals)
+  - [High-level build options with Bake](docs/manuals/bake/index.md)
+  - [Drivers](docs/manuals/drivers/index.md)
+  - [Exporters](docs/manuals/exporters/index.md)
+  - [Cache backends](docs/manuals/cache/backends/index.md)
 - [Guides](docs/guides)
-  - [High-level build options with Bake](docs/guides/bake/index.md)
   - [CI/CD](docs/guides/cicd.md)
   - [CNI networking](docs/guides/cni-networking.md)
   - [Using a custom network](docs/guides/custom-network.md)
   - [Using a custom registry configuration](docs/guides/custom-registry-config.md)
   - [OpenTelemetry support](docs/guides/opentelemetry.md)
   - [Registry mirror](docs/guides/registry-mirror.md)
-  - [Drivers](docs/guides/drivers/index.md)
   - [Resource limiting](docs/guides/resource-limiting.md)
 - [Reference](docs/reference/buildx.md)
   - [`buildx bake`](docs/reference/buildx_bake.md)
@@ -191,12 +194,12 @@ through various "drivers". Each driver defines how and where a build should
 run, and have different feature sets.
 
 We currently support the following drivers:
-- The `docker` driver ([guide](docs/guides/drivers/docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `docker-container` driver ([guide](docs/guides/drivers/docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `kubernetes` driver ([guide](docs/guides/drivers/kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `remote` driver ([guide](docs/guides/drivers/remote.md))
+- The `docker` driver ([guide](docs/manuals/drivers/docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `docker-container` driver ([guide](docs/manuals/drivers/docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `kubernetes` driver ([guide](docs/manuals/drivers/kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `remote` driver ([guide](docs/manuals/drivers/remote.md))
 
-For more information on drivers, see the [drivers guide](docs/guides/drivers/index.md).
+For more information on drivers, see the [drivers guide](docs/manuals/drivers/index.md).
 
 ## Working with builder instances
 
@@ -313,7 +316,7 @@ cross-compilation helpers for more advanced use-cases.
 
 ## High-level build options
 
-See [`docs/guides/bake/index.md`](docs/guides/bake/index.md) for more details.
+See [`docs/manuals/bake/index.md`](docs/manuals/bake/index.md) for more details.
 
 # Contributing
 
