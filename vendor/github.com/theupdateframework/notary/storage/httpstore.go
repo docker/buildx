@@ -67,7 +67,7 @@ func (n NetworkError) Error() string {
 
 func (err ErrServerUnavailable) Error() string {
 	if err.code == 401 {
-		return fmt.Sprintf("you are not authorized to perform this operation: server returned 401.")
+		return "you are not authorized to perform this operation: server returned 401."
 	}
 	return fmt.Sprintf("unable to reach trust server at this time: %d.", err.code)
 }
@@ -109,6 +109,18 @@ type HTTPStore struct {
 	metaExtension string
 	keyExtension  string
 	roundTrip     http.RoundTripper
+}
+
+// NewNotaryServerStore returns a new HTTPStore against a URL which should represent a notary
+// server
+func NewNotaryServerStore(serverURL string, gun data.GUN, roundTrip http.RoundTripper) (RemoteStore, error) {
+	return NewHTTPStore(
+		serverURL+"/v2/"+gun.String()+"/_trust/tuf/",
+		"",
+		"json",
+		"key",
+		roundTrip,
+	)
 }
 
 // NewHTTPStore initializes a new store against a URL and a number of configuration options.
@@ -363,5 +375,5 @@ func (s HTTPStore) RotateKey(role data.RoleName) ([]byte, error) {
 
 // Location returns a human readable name for the storage location
 func (s HTTPStore) Location() string {
-	return s.baseURL.String()
+	return s.baseURL.Host
 }

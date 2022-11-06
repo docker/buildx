@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	"github.com/theupdateframework/notary"
-	"golang.org/x/crypto/ssh/terminal"
+	"golang.org/x/term"
 )
 
 const (
@@ -29,18 +29,18 @@ way to recover this key. You can find the key in your config directory.`
 var (
 	// ErrTooShort is returned if the passphrase entered for a new key is
 	// below the minimum length
-	ErrTooShort = errors.New("Passphrase too short")
+	ErrTooShort = errors.New("passphrase too short")
 
 	// ErrDontMatch is returned if the two entered passphrases don't match.
 	// new key is below the minimum length
-	ErrDontMatch = errors.New("The entered passphrases do not match")
+	ErrDontMatch = errors.New("the entered passphrases do not match")
 
 	// ErrTooManyAttempts is returned if the maximum number of passphrase
 	// entry attempts is reached.
-	ErrTooManyAttempts = errors.New("Too many attempts")
+	ErrTooManyAttempts = errors.New("too many attempts")
 
 	// ErrNoInput is returned if we do not have a valid input method for passphrases
-	ErrNoInput = errors.New("Please either use environment variables or STDIN with a terminal to provide key passphrases")
+	ErrNoInput = errors.New("please either use environment variables or STDIN with a terminal to provide key passphrases")
 )
 
 // PromptRetriever returns a new Retriever which will provide a prompt on stdin
@@ -49,7 +49,7 @@ var (
 // Upon successful passphrase retrievals, the passphrase will be cached such that
 // subsequent prompts will produce the same passphrase.
 func PromptRetriever() notary.PassRetriever {
-	if !terminal.IsTerminal(int(os.Stdin.Fd())) {
+	if !term.IsTerminal(int(os.Stdin.Fd())) {
 		return func(string, string, bool, int) (string, bool, error) {
 			return "", false, ErrNoInput
 		}
@@ -200,8 +200,8 @@ func GetPassphrase(in *bufio.Reader) ([]byte, error) {
 		err        error
 	)
 
-	if terminal.IsTerminal(int(os.Stdin.Fd())) {
-		passphrase, err = terminal.ReadPassword(int(os.Stdin.Fd()))
+	if term.IsTerminal(int(os.Stdin.Fd())) {
+		passphrase, err = term.ReadPassword(int(os.Stdin.Fd()))
 	} else {
 		passphrase, err = in.ReadBytes('\n')
 	}

@@ -137,14 +137,16 @@ func (f *FilesystemStore) GetSized(name string, size int64) ([]byte, error) {
 	if err != nil {
 		return nil, err
 	}
-	file, err := os.OpenFile(p, os.O_RDONLY, notary.PrivNoExecPerms)
+	file, err := os.Open(p)
 	if err != nil {
 		if os.IsNotExist(err) {
 			err = ErrMetaNotFound{Resource: name}
 		}
 		return nil, err
 	}
-	defer file.Close()
+	defer func() {
+		_ = file.Close()
+	}()
 
 	if size == NoSizeLimit {
 		size = notary.MaxDownloadSize
@@ -232,7 +234,7 @@ func (f FilesystemStore) Location() string {
 // ListFiles returns a list of all the filenames that can be used with Get*
 // to retrieve content from this filestore
 func (f FilesystemStore) ListFiles() []string {
-	files := make([]string, 0, 0)
+	files := make([]string, 0)
 	filepath.Walk(f.baseDir, func(fp string, fi os.FileInfo, err error) error {
 		// If there are errors, ignore this particular file
 		if err != nil {

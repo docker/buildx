@@ -54,7 +54,7 @@ func isValidTargetsStructure(t Targets, roleName RoleName) error {
 	return nil
 }
 
-// NewTargets intiializes a new empty SignedTargets object
+// NewTargets initializes a new empty SignedTargets object
 func NewTargets() *SignedTargets {
 	return &SignedTargets{
 		Signatures: make([]Signature, 0),
@@ -151,7 +151,7 @@ func (t *SignedTargets) AddTarget(path string, meta FileMeta) {
 // ensuring the keys either already exist, or are added to the map
 // of delegation keys
 func (t *SignedTargets) AddDelegation(role *Role, keys []*PublicKey) error {
-	return errors.New("Not Implemented")
+	return errors.New("not Implemented")
 }
 
 // ToSigned partially serializes a SignedTargets for further signing

@@ -7,7 +7,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/theupdateframework/notary"
 	"github.com/theupdateframework/notary/client/changelist"
-	store "github.com/theupdateframework/notary/storage"
 	"github.com/theupdateframework/notary/tuf/data"
 	"github.com/theupdateframework/notary/tuf/utils"
 )
@@ -77,7 +76,7 @@ func (r *repository) AddDelegationPaths(name data.RoleName, paths []string) erro
 }
 
 // RemoveDelegationKeysAndPaths creates changelist entries to remove provided delegation key IDs and paths.
-// This method composes RemoveDelegationPaths and RemoveDelegationKeys (each creates one changelist if called).
+// This method composes RemoveDelegationPaths and RemoveDelegationKeys (each creates one changelist entry if called).
 func (r *repository) RemoveDelegationKeysAndPaths(name data.RoleName, keyIDs, paths []string) error {
 	if len(paths) > 0 {
 		err := r.RemoveDelegationPaths(name, paths)
@@ -201,41 +200,6 @@ func newDeleteDelegationChange(name data.RoleName, content []byte) *changelist.T
 	)
 }
 
-// GetDelegationRoles returns the keys and roles of the repository's delegations
-// Also converts key IDs to canonical key IDs to keep consistent with signing prompts
-func (r *repository) GetDelegationRoles() ([]data.Role, error) {
-	// Update state of the repo to latest
-	if err := r.Update(false); err != nil {
-		return nil, err
-	}
-
-	// All top level delegations (ex: targets/level1) are stored exclusively in targets.json
-	_, ok := r.tufRepo.Targets[data.CanonicalTargetsRole]
-	if !ok {
-		return nil, store.ErrMetaNotFound{Resource: data.CanonicalTargetsRole.String()}
-	}
-
-	// make a copy for traversing nested delegations
-	allDelegations := []data.Role{}
-
-	// Define a visitor function to populate the delegations list and translate their key IDs to canonical IDs
-	delegationCanonicalListVisitor := func(tgt *data.SignedTargets, validRole data.DelegationRole) interface{} {
-		// For the return list, update with a copy that includes canonicalKeyIDs
-		// These aren't validated by the validRole
-		canonicalDelegations, err := translateDelegationsToCanonicalIDs(tgt.Signed.Delegations)
-		if err != nil {
-			return err
-		}
-		allDelegations = append(allDelegations, canonicalDelegations...)
-		return nil
-	}
-	err := r.tufRepo.WalkTargets("", "", delegationCanonicalListVisitor)
-	if err != nil {
-		return nil, err
-	}
-	return allDelegations, nil
-}
-
 func translateDelegationsToCanonicalIDs(delegationInfo data.Delegations) ([]data.Role, error) {
 	canonicalDelegations := make([]data.Role, len(delegationInfo.Roles))
 	// Do a copy by value to ensure local delegation metadata is untouched
@@ -248,11 +212,11 @@ func translateDelegationsToCanonicalIDs(delegationInfo data.Delegations) ([]data
 		for _, keyID := range delegation.KeyIDs {
 			pubKey, ok := delegationKeys[keyID]
 			if !ok {
-				return []data.Role{}, fmt.Errorf("Could not translate canonical key IDs for %s", delegation.Name)
+				return []data.Role{}, fmt.Errorf("could not translate canonical key IDs for %s", delegation.Name)
 			}
 			canonicalKeyID, err := utils.CanonicalKeyID(pubKey)
 			if err != nil {
-				return []data.Role{}, fmt.Errorf("Could not translate canonical key IDs for %s: %v", delegation.Name, err)
+				return []data.Role{}, fmt.Errorf("could not translate canonical key IDs for %s: %v", delegation.Name, err)
 			}
 			canonicalKeyIDs = append(canonicalKeyIDs, canonicalKeyID)
 		}

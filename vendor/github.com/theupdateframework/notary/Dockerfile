@@ -1,24 +1,31 @@
-FROM golang:1.10.1
+FROM golang:1.17.13
 
 RUN apt-get update && apt-get install -y \
 	curl \
 	clang \
-	libltdl-dev \
 	libsqlite3-dev \
 	patch \
 	tar \
 	xz-utils \
 	python \
-	python-pip \
+	python3-pip \
 	python-setuptools \
 	--no-install-recommends \
 	&& rm -rf /var/lib/apt/lists/*
 
 RUN useradd -ms /bin/bash notary \
-	&& pip install codecov \
-	&& go get github.com/golang/lint/golint github.com/fzipp/gocyclo github.com/client9/misspell/cmd/misspell github.com/gordonklaus/ineffassign github.com/HewlettPackard/gas
+    && pip install codecov
 
-ENV NOTARYDIR /go/src/github.com/theupdateframework/notary
+ENV GO111MODULE=on
+
+RUN go get golang.org/x/lint/golint \
+    github.com/client9/misspell/cmd/misspell \
+    github.com/gordonklaus/ineffassign \
+    github.com/securego/gosec/cmd/gosec/... \
+    github.com/fzipp/gocyclo/cmd/gocyclo
+
+ENV GOFLAGS=-mod=vendor \
+    NOTARYDIR=/go/src/github.com/theupdateframework/notary
 
 COPY . ${NOTARYDIR}
 RUN chmod -R a+rw /go && chmod 0600 ${NOTARYDIR}/fixtures/database/*

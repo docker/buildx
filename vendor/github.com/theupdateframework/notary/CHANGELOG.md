@@ -1,8 +1,15 @@
 # Changelog
 
+## [v0.7.0](https://github.com/docker/notary/releases/tag/v0.7.0) 12/01/2021
++ Switch to Go modules [#1523](https://github.com/theupdateframework/notary/pull/1523)
++ Use golang/x/crypto for ed25519 [#1344](https://github.com/theupdateframework/notary/pull/1344)
++ Update Go version
++ Update dependency versions
++ Fixes from using Gosec for source analysis
+
 ## [v0.6.1](https://github.com/docker/notary/releases/tag/v0.6.0) 04/10/2018
 + Fixed bug where CLI requested admin privileges for all metadata operations, including listing targets on a repo [#1315](https://github.com/theupdateframework/notary/pull/1315)
-+ Prevented notary signer from being dumpable or ptraceable in Linux, except in debug mode [#1327](https://github.com/theupdateframework/notary/pull/1327)
++ Prevented notary signer from being dumpable or being ptraced in Linux, except in debug mode [#1327](https://github.com/theupdateframework/notary/pull/1327)
 + Bumped JWT dependency to fix potential Invalid Curve Attack on NIST curves within ECDH key management [#1334](https://github.com/theupdateframework/notary/pull/1334)
 + If the home directory cannot be found, log a warning instead of erroring out [#1318](https://github.com/theupdateframework/notary/pull/1318)
 + Bumped go version and various dependencies [#1323](https://github.com/theupdateframework/notary/pull/1323) [#1332](https://github.com/theupdateframework/notary/pull/1332) [#1335](https://github.com/theupdateframework/notary/pull/1335) [#1336](https://github.com/theupdateframework/notary/pull/1336)

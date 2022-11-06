@@ -21,6 +21,9 @@ var (
 	// ErrRootKeyNotEncrypted is returned if a root key being imported is
 	// unencrypted
 	ErrRootKeyNotEncrypted = errors.New("only encrypted root keys may be imported")
+
+	// EmptyService is an empty crypto service
+	EmptyService = NewCryptoService()
 )
 
 // CryptoService implements Sign and Create, holding a specific GUN and keystore to
@@ -82,7 +85,7 @@ func (cs *CryptoService) GetKeyInfo(keyID string) (trustmanager.KeyInfo, error) 
 			return info, nil
 		}
 	}
-	return trustmanager.KeyInfo{}, fmt.Errorf("Could not find info for keyID %s", keyID)
+	return trustmanager.KeyInfo{}, fmt.Errorf("could not find info for keyID %s", keyID)
 }
 
 // RemoveKey deletes a key by ID
@@ -151,6 +154,7 @@ func CheckRootKeyIsEncrypted(pemBytes []byte) error {
 	if block.Type == "ENCRYPTED PRIVATE KEY" {
 		return nil
 	}
+	//lint:ignore SA1019 Needed for legacy keys.
 	if !notary.FIPSEnabled() && x509.IsEncryptedPEMBlock(block) {
 		return nil
 	}
