@@ -138,7 +138,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source) ([]byte, ocispec
 		},
 	}
 
-	idxBytes, err := json.MarshalIndent(idx, "", "   ")
+	idxBytes, err := json.MarshalIndent(idx, "", "  ")
 	if err != nil {
 		return nil, ocispec.Descriptor{}, errors.Wrap(err, "failed to marshal index")
 	}
