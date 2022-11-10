@@ -21,7 +21,7 @@ $ docker buildx build --output type=tar[,parameters] .
 
 The following table describes the available parameters:
 
-| Parameter | Value  | Default | Description           |
+| Parameter | Type   | Default | Description           |
 | --------- | ------ | ------- | --------------------- |
 | `dest`    | String |         | Path to copy files to |
 

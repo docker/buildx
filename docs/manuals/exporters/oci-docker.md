@@ -23,7 +23,7 @@ $ docker buildx build --output type=docker[,parameters] .
 
 The following table describes the available parameters:
 
-| Parameter           | Value                                  | Default | Description                                                                                                                           |
+| Parameter           | Type                                   | Default | Description                                                                                                                           |
 | ------------------- | -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`              | String                                 |         | Specify image name(s)                                                                                                                 |
 | `dest`              | String                                 |         | Path                                                                                                                                  |

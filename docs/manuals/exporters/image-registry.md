@@ -19,7 +19,7 @@ $ docker buildx build --output type=registry[,parameters] .
 The following table describes the available parameters that you can pass to
 `--output` for `type=image`:
 
-| Parameter              | Value                                  | Default | Description                                                                                                                                                                                                                         |
+| Parameter              | Type                                   | Default | Description                                                                                                                                                                                                                         |
 | ---------------------- | -------------------------------------- | ------- | ----------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`                 | String                                 |         | Specify image name(s)                                                                                                                                                                                                               |
 | `push`                 | `true`,`false`                         | `false` | Push after creating the image.                                                                                                                                                                                                      |

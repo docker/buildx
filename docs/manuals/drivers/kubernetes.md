@@ -20,7 +20,7 @@ $ docker buildx create \
 The following table describes the available driver-specific options that you can
 pass to `--driver-opt`:
 
-| Parameter         | Value             | Default                                 | Description                                                                                                                          |
+| Parameter         | Type              | Default                                 | Description                                                                                                                          |
 | ----------------- | ----------------- | --------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
 | `image`           | String            |                                         | Sets the image to use for running BuildKit.                                                                                          |
 | `namespace`       | String            | Namespace in current Kubernetes context | Sets the Kubernetes namespace.                                                                                                       |
