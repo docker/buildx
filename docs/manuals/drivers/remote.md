@@ -17,7 +17,7 @@ $ docker buildx create \
 The following table describes the available driver-specific options that you can
 pass to `--driver-opt`:
 
-| Parameter    | Value  | Default            | Description                                                |
+| Parameter    | Type   | Default            | Description                                                |
 | ------------ | ------ | ------------------ | ---------------------------------------------------------- |
 | `key`        | String |                    | Sets the TLS client key.                                   |
 | `cert`       | String |                    | Sets the TLS client certificate to present to `buildkitd`. |

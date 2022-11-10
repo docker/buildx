@@ -27,7 +27,7 @@ container
 The following table describes the available driver-specific options that you can
 pass to `--driver-opt`:
 
-| Parameter       | Value  | Default          | Description                                                                                |
+| Parameter       | Type   | Default          | Description                                                                                |
 | --------------- | ------ | ---------------- | ------------------------------------------------------------------------------------------ |
 | `image`         | String |                  | Sets the image to use for running BuildKit.                                                |
 | `network`       | String |                  | Sets the network mode for running the BuildKit container.                                  |
