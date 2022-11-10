@@ -64,7 +64,7 @@ leaving only the final cache.
 To preserve the cache for multiple builds on the same branch, you can manually
 specify a cache scope name using the `scope` parameter. In the following
 example, the cache is set to a combination of the branch name and the image
-name, to ensure each branch gets its own cache):
+name, to ensure each image gets its own cache):
 
 ```console
 $ docker buildx build --push -t <registry>/<image> \
