@@ -32,6 +32,7 @@ pass to `--driver-opt`:
 | `image`         | String |                  | Sets the image to use for running BuildKit.                                                |
 | `network`       | String |                  | Sets the network mode for running the BuildKit container.                                  |
 | `cgroup-parent` | String | `/docker/buildx` | Sets the cgroup parent of the BuildKit container if Docker is using the `cgroupfs` driver. |
+| `env.<key>`     | String |                  | Sets the environment variable `key` to the specified `value` in the BuildKit container.    |
 
 ## Usage
 
