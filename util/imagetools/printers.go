@@ -113,8 +113,9 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	}
 
 	imageconfigs := make(map[string]*ocispecs.Image)
+	imageconfigsMutex := sync.Mutex{}
 	buildinfos := make(map[string]*binfotypes.BuildInfo)
-	mutex := &sync.RWMutex{}
+	buildinfosMutex := sync.Mutex{}
 
 	eg, _ := errgroup.WithContext(p.ctx)
 	for _, platform := range p.platforms {
@@ -124,16 +125,16 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 				if err != nil {
 					return err
 				} else if img != nil {
-					mutex.Lock()
+					imageconfigsMutex.Lock()
 					imageconfigs[platforms.Format(platform)] = img
-					mutex.Unlock()
+					imageconfigsMutex.Unlock()
 				}
 				if bi, err := imageutil.BuildInfo(dtic); err != nil {
 					return err
 				} else if bi != nil {
-					mutex.Lock()
+					buildinfosMutex.Lock()
 					buildinfos[platforms.Format(platform)] = bi
-					mutex.Unlock()
+					buildinfosMutex.Unlock()
 				}
 				return nil
 			})
