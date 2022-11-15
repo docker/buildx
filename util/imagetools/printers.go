@@ -8,6 +8,7 @@ import (
 	"os"
 	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 	"text/template"
 
@@ -112,7 +113,9 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	}
 
 	imageconfigs := make(map[string]*ocispecs.Image)
+	imageconfigsMutex := sync.Mutex{}
 	buildinfos := make(map[string]*binfotypes.BuildInfo)
+	buildinfosMutex := sync.Mutex{}
 
 	eg, _ := errgroup.WithContext(p.ctx)
 	for _, platform := range p.platforms {
@@ -122,12 +125,16 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 				if err != nil {
 					return err
 				} else if img != nil {
+					imageconfigsMutex.Lock()
 					imageconfigs[platforms.Format(platform)] = img
+					imageconfigsMutex.Unlock()
 				}
 				if bi, err := imageutil.BuildInfo(dtic); err != nil {
 					return err
 				} else if bi != nil {
+					buildinfosMutex.Lock()
 					buildinfos[platforms.Format(platform)] = bi
+					buildinfosMutex.Unlock()
 				}
 				return nil
 			})
