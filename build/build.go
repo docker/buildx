@@ -1109,7 +1109,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							FrontendInputs: frontendInputs,
 						}
 						so.Frontend = ""
-						so.FrontendAttrs = nil
+						so.FrontendAttrs = attestations.Filter(so.FrontendAttrs)
 						so.FrontendInputs = nil
 
 						ch, done := progress.NewChannel(pw)
