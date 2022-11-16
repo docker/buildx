@@ -60,6 +60,7 @@ type buildOptions struct {
 	contexts      []string
 	extraHosts    []string
 	imageIDFile   string
+	invoke        string
 	labels        []string
 	networkMode   string
 	noCacheFilter []string
@@ -72,7 +73,6 @@ type buildOptions struct {
 	tags          []string
 	target        string
 	ulimits       *dockeropts.UlimitOpt
-	invoke        string
 	commonOptions
 }
 
