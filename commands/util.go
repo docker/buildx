@@ -2,9 +2,7 @@ package commands
 
 import (
 	"context"
-	"net/url"
 	"os"
-	"strings"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/driver"
@@ -16,7 +14,6 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
-	ctxstore "github.com/docker/cli/cli/context/store"
 	dopts "github.com/docker/cli/opts"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/util/grpcerrors"
@@ -25,7 +22,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
-	"k8s.io/client-go/tools/clientcmd"
 )
 
 // validateEndpoint validates that endpoint is either a context or a docker host
@@ -114,12 +110,12 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 				contextStore := dockerCli.ContextStore()
 
 				var kcc driver.KubeClientConfig
-				kcc, err = configFromContext(n.Endpoint, contextStore)
+				kcc, err = ctxkube.ConfigFromEndpoint(n.Endpoint, contextStore)
 				if err != nil {
 					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
 					// try again with name="default".
 					// FIXME: n should retain real context name.
-					kcc, err = configFromContext("default", contextStore)
+					kcc, err = ctxkube.ConfigFromEndpoint("default", contextStore)
 					if err != nil {
 						logrus.Error(err)
 					}
@@ -158,22 +154,6 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 	}
 
 	return dis, nil
-}
-
-func configFromContext(endpointName string, s ctxstore.Reader) (clientcmd.ClientConfig, error) {
-	if strings.HasPrefix(endpointName, "kubernetes://") {
-		u, _ := url.Parse(endpointName)
-		if kubeconfig := u.Query().Get("kubeconfig"); kubeconfig != "" {
-			_ = os.Setenv(clientcmd.RecommendedConfigPathEnvVar, kubeconfig)
-		}
-		rules := clientcmd.NewDefaultClientConfigLoadingRules()
-		apiConfig, err := rules.Load()
-		if err != nil {
-			return nil, err
-		}
-		return clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{}), nil
-	}
-	return ctxkube.ConfigFromContext(endpointName, s)
 }
 
 // clientForEndpoint returns a docker client for an endpoint
