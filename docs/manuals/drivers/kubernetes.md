@@ -6,8 +6,8 @@ varied compute resources.
 
 ## Synopsis
 
-Run the following command to create a new builder, named `container`, that uses
-the Docker container driver:
+Run the following command to create a new builder, named `kube`, that uses
+the Kubernetes driver:
 
 ```console
 $ docker buildx create \
