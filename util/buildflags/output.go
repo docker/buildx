@@ -4,6 +4,7 @@ import (
 	"encoding/csv"
 	"io"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/containerd/console"
@@ -62,25 +63,52 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 			return nil, errors.Errorf("type is required for output")
 		}
 
-		// handle client side
+		supportFile := false
+		supportDir := false
 		switch out.Type {
 		case client.ExporterLocal:
-			dest, ok := out.Attrs["dest"]
+			supportDir = true
+		case client.ExporterTar:
+			supportFile = true
+		case client.ExporterOCI, client.ExporterDocker:
+			tar, err := strconv.ParseBool(out.Attrs["tar"])
+			if err != nil {
+				tar = true
+			}
+			supportFile = tar
+			supportDir = !tar
+		case "registry":
+			out.Type = client.ExporterImage
+			if _, ok := out.Attrs["push"]; !ok {
+				out.Attrs["push"] = "true"
+			}
+		}
+
+		dest, ok := out.Attrs["dest"]
+		if supportDir {
 			if !ok {
-				return nil, errors.Errorf("dest is required for local output")
+				return nil, errors.Errorf("dest is required for %s exporter", out.Type)
+			}
+			if dest == "-" {
+				return nil, errors.Errorf("dest cannot be stdout for %s exporter", out.Type)
+			}
+
+			fi, err := os.Stat(dest)
+			if err != nil && !os.IsNotExist(err) {
+				return nil, errors.Wrapf(err, "invalid destination directory: %s", dest)
+			}
+			if err == nil && !fi.IsDir() {
+				return nil, errors.Errorf("destination directory %s is a file", dest)
 			}
 			out.OutputDir = dest
-			delete(out.Attrs, "dest")
-		case client.ExporterOCI, client.ExporterDocker, client.ExporterTar:
-			dest, ok := out.Attrs["dest"]
-			if !ok {
-				if out.Type != client.ExporterDocker {
-					dest = "-"
-				}
+		}
+		if supportFile {
+			if !ok && out.Type != client.ExporterDocker {
+				dest = "-"
 			}
 			if dest == "-" {
 				if _, err := console.ConsoleFromFile(os.Stdout); err == nil {
-					return nil, errors.Errorf("output file is required for %s exporter. refusing to write to console", out.Type)
+					return nil, errors.Errorf("dest file is required for %s exporter. refusing to write to console", out.Type)
 				}
 				out.Output = wrapWriteCloser(os.Stdout)
 			} else if dest != "" {
@@ -97,12 +125,9 @@ func ParseOutputs(inp []string) ([]client.ExportEntry, error) {
 				}
 				out.Output = wrapWriteCloser(f)
 			}
+		}
+		if supportFile || supportDir {
 			delete(out.Attrs, "dest")
-		case "registry":
-			out.Type = client.ExporterImage
-			if _, ok := out.Attrs["push"]; !ok {
-				out.Attrs["push"] = "true"
-			}
 		}
 
 		outs = append(outs, out)
