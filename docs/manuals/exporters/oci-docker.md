@@ -27,6 +27,7 @@ The following table describes the available parameters:
 | ------------------- | -------------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | `name`              | String                                 |         | Specify image name(s)                                                                                                                 |
 | `dest`              | String                                 |         | Path                                                                                                                                  |
+| `tar`               | `true`,`false`                         | `true`  | Bundle the output into a tarball layout                                                                                               |
 | `compression`       | `uncompressed`,`gzip`,`estargz`,`zstd` | `gzip`  | Compression type, see [compression][1]                                                                                                |
 | `compression-level` | `0..22`                                |         | Compression level, see [compression][1]                                                                                               |
 | `force-compression` | `true`,`false`                         | `false` | Forcefully apply compression, see [compression][1]                                                                                    |
