@@ -101,7 +101,8 @@ The common parameters described here are:
 ### Cache mode
 
 When generating a cache output, the `--cache-to` argument accepts a `mode`
-option for defining which layers to include in the exported cache.
+option for defining which layers to include in the exported cache. This is
+supported by all cache backends except for the `inline` cache.
 
 Mode can be set to either of two options: `mode=min` or `mode=max`. For example,
 to build the cache with `mode=max` with the registry backend:
@@ -128,7 +129,8 @@ with both parameters to find the results that work best for you.
 ### Cache compression
 
 The cache compression options are the same as the
-[exporter compression options](../../exporters/index.md#compression).
+[exporter compression options](../../exporters/index.md#compression). This is
+supported by the `local` and `registry` cache backends.
 
 For example, to compress the `registry` cache with `zstd` compression:
 
@@ -141,7 +143,8 @@ $ docker buildx build --push -t <registry>/<image> \
 ### OCI media types
 
 The cache OCI options are the same as the
-[exporter OCI options](../../exporters/index.md#oci-media-types).
+[exporter OCI options](../../exporters/index.md#oci-media-types). These are
+supported by the `local` and `registry` cache backends.
 
 For example, to export OCI media type cache, use the `oci-mediatypes` property:
 
