@@ -245,8 +245,8 @@ the previous compression algorithm.
 ### OCI media types
 
 Exporters that output container images, support creating images with either
-Docker media types or with OCI media types. By default, BuildKit exports images
-using Docker media type.
+Docker media types (the default) or with OCI media types. This is supported by
+the `image`, `registry`, `oci` and `docker` exporters.
 
 To export images with OCI media types set, use the `oci-mediatypes` property.
 For example, with the `image` exporter:
@@ -260,7 +260,8 @@ $ docker buildx build \
 
 Exporters that output container images, allow embedding information about the
 build, including information on the original build request and sources used
-during the build.
+during the build. This is supported by the `image`, `registry`, `oci` and
+`docker` exporters.
 
 This build info is attached to the image configuration:
 

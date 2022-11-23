@@ -16,6 +16,8 @@ $ docker buildx build --push -t <registry>/<image> \
   --cache-from type=registry,ref=<registry>/image .
 ```
 
+No additional parameters are supported for the `inline` cache.
+
 To export cache using `inline` storage, pass `type=inline` to the `--cache-to`
 option:
 
