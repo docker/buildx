@@ -84,7 +84,7 @@ func ReadLocalFiles(names []string) ([]File, error) {
 	return out, nil
 }
 
-func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, []*Group, error) {
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, map[string]*Group, error) {
 	c, err := ParseFiles(files, defaults)
 	if err != nil {
 		return nil, nil, err
@@ -99,42 +99,39 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 		return nil, nil, err
 	}
 	m := map[string]*Target{}
-	for _, n := range targets {
-		for _, n := range c.ResolveGroup(n) {
-			t, err := c.ResolveTarget(n, o)
+	n := map[string]*Group{}
+	for _, target := range targets {
+		ts, gs := c.ResolveGroup(target)
+		for _, tname := range ts {
+			t, err := c.ResolveTarget(tname, o)
 			if err != nil {
 				return nil, nil, err
 			}
 			if t != nil {
-				m[n] = t
+				m[tname] = t
+			}
+		}
+		for _, gname := range gs {
+			for _, group := range c.Groups {
+				if group.Name == gname {
+					n[gname] = group
+					break
+				}
 			}
 		}
 	}
 
-	var g []*Group
-	if len(targets) == 0 || (len(targets) == 1 && targets[0] == "default") {
-		for _, group := range c.Groups {
-			if group.Name != "default" {
-				continue
-			}
-			g = []*Group{{Targets: group.Targets}}
+	for _, target := range targets {
+		if target == "default" {
+			continue
 		}
-	} else {
-		var gt []string
-		for _, target := range targets {
-			isGroup := false
-			for _, group := range c.Groups {
-				if target == group.Name {
-					gt = append(gt, group.Targets...)
-					isGroup = true
-					break
-				}
-			}
-			if !isGroup {
-				gt = append(gt, target)
-			}
+		if _, ok := n["default"]; !ok {
+			n["default"] = &Group{Name: "default"}
 		}
-		g = []*Group{{Targets: dedupSlice(gt)}}
+		n["default"].Targets = append(n["default"].Targets, target)
+	}
+	if g, ok := n["default"]; ok {
+		g.Targets = dedupSlice(g.Targets)
 	}
 
 	for name, t := range m {
@@ -143,7 +140,7 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 		}
 	}
 
-	return m, g, nil
+	return m, n, nil
 }
 
 func dedupSlice(s []string) []string {
@@ -453,13 +450,19 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 	return m, nil
 }
 
-func (c Config) ResolveGroup(name string) []string {
-	return dedupSlice(c.group(name, map[string][]string{}))
+func (c Config) ResolveGroup(name string) ([]string, []string) {
+	targets, groups := c.group(name, map[string]visit{})
+	return dedupSlice(targets), dedupSlice(groups)
 }
 
-func (c Config) group(name string, visited map[string][]string) []string {
-	if _, ok := visited[name]; ok {
-		return visited[name]
+type visit struct {
+	target []string
+	group  []string
+}
+
+func (c Config) group(name string, visited map[string]visit) ([]string, []string) {
+	if v, ok := visited[name]; ok {
+		return v.target, v.group
 	}
 	var g *Group
 	for _, group := range c.Groups {
@@ -469,20 +472,24 @@ func (c Config) group(name string, visited map[string][]string) []string {
 		}
 	}
 	if g == nil {
-		return []string{name}
+		return []string{name}, nil
 	}
-	visited[name] = []string{}
+	visited[name] = visit{}
 	targets := make([]string, 0, len(g.Targets))
+	groups := []string{name}
 	for _, t := range g.Targets {
-		tgroup := c.group(t, visited)
-		if len(tgroup) > 0 {
-			targets = append(targets, tgroup...)
+		ttarget, tgroup := c.group(t, visited)
+		if len(ttarget) > 0 {
+			targets = append(targets, ttarget...)
 		} else {
 			targets = append(targets, t)
 		}
+		if len(tgroup) > 0 {
+			groups = append(groups, tgroup...)
+		}
 	}
-	visited[name] = targets
-	return targets
+	visited[name] = visit{target: targets, group: groups}
+	return targets, groups
 }
 
 func (c Config) ResolveTarget(name string, overrides map[string]map[string]Override) (*Target, error) {
