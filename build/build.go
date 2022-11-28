@@ -23,6 +23,7 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/resolver"
@@ -31,7 +32,6 @@ import (
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/builder/remotecontext/urlutil"
-	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
@@ -116,10 +116,6 @@ type DriverInfo struct {
 	Err         error
 	ImageOpt    imagetools.Opt
 	ProxyConfig map[string]string
-}
-
-type DockerAPI interface {
-	DockerAPI(name string) (dockerclient.APIClient, error)
 }
 
 func filterAvailableDrivers(drivers []DriverInfo) ([]DriverInfo, error) {
@@ -782,11 +778,11 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 	return err
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	return BuildWithResultHandler(ctx, drivers, opt, docker, configDir, w, nil, false)
 }
 
-func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -864,7 +860,7 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 			}
 			opt.Platforms = dp.platforms
 			so, release, err := toSolveOpt(ctx, di, multiDriver, opt, dp.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
-				return newDockerLoader(ctx, docker, name, w)
+				return docker.LoadImage(ctx, name, w)
 			})
 			if err != nil {
 				return nil, err
@@ -1631,40 +1627,6 @@ func notSupported(d driver.Driver, f driver.Feature) error {
 
 type dockerLoadCallback func(name string) (io.WriteCloser, func(), error)
 
-func newDockerLoader(ctx context.Context, d DockerAPI, name string, status progress.Writer) (io.WriteCloser, func(), error) {
-	c, err := d.DockerAPI(name)
-	if err != nil {
-		return nil, nil, err
-	}
-
-	pr, pw := io.Pipe()
-	done := make(chan struct{})
-
-	ctx, cancel := context.WithCancel(ctx)
-	var w *waitingWriter
-	w = &waitingWriter{
-		PipeWriter: pw,
-		f: func() {
-			resp, err := c.ImageLoad(ctx, pr, false)
-			defer close(done)
-			if err != nil {
-				pr.CloseWithError(err)
-				w.mu.Lock()
-				w.err = err
-				w.mu.Unlock()
-				return
-			}
-			prog := progress.WithPrefix(status, "", false)
-			progress.FromReader(prog, "importing to docker", resp.Body)
-		},
-		done:   done,
-		cancel: cancel,
-	}
-	return w, func() {
-		pr.Close()
-	}, nil
-}
-
 func noDefaultLoad() bool {
 	v, ok := os.LookupEnv("BUILDX_NO_DEFAULT_LOAD")
 	if !ok {
@@ -1675,34 +1637,6 @@ func noDefaultLoad() bool {
 		logrus.Warnf("invalid non-bool value for BUILDX_NO_DEFAULT_LOAD: %s", v)
 	}
 	return b
-}
-
-type waitingWriter struct {
-	*io.PipeWriter
-	f      func()
-	once   sync.Once
-	mu     sync.Mutex
-	err    error
-	done   chan struct{}
-	cancel func()
-}
-
-func (w *waitingWriter) Write(dt []byte) (int, error) {
-	w.once.Do(func() {
-		go w.f()
-	})
-	return w.PipeWriter.Write(dt)
-}
-
-func (w *waitingWriter) Close() error {
-	err := w.PipeWriter.Close()
-	<-w.done
-	if err == nil {
-		w.mu.Lock()
-		defer w.mu.Unlock()
-		return w.err
-	}
-	return err
 }
 
 // handle https://github.com/moby/moby/pull/10858
