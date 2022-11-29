@@ -9,14 +9,9 @@ if [ ! -d "$DESTDIR" ]; then
 fi
 
 # checksums
-if ! command shasum > /dev/null 2>&1; then
-  echo >&2 "ERROR: shasum is required"
-  exit 1
-fi
-find ./${DESTDIR}/ -type f \( -iname "buildx-*" ! -iname "*darwin*" \) -print0 | sort -z | xargs -r0 shasum -a 256 -b | sed 's# .*/#  #' > ./${DESTDIR}/checksums.txt
-
-# verify
 (
-  cd ./${DESTDIR}
-  shasum -a 256 -U -c checksums.txt
+  cd ${DESTDIR}
+  sha256sum -b buildx-* > ./checksums.txt
+  sed -i '/darwin/d' ./checksums.txt
+  sha256sum -c --strict checksums.txt
 )
