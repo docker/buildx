@@ -8,9 +8,6 @@ else
 	$(error "Buildx is required: https://github.com/docker/buildx#installing")
 endif
 
-export BIN_OUT = ./bin
-export RELEASE_OUT = ./release-out
-
 shell:
 	./hack/shell
 
@@ -22,7 +19,7 @@ binaries-cross:
 
 install: binaries
 	mkdir -p ~/.docker/cli-plugins
-	install bin/buildx ~/.docker/cli-plugins/docker-buildx
+	install bin/build/buildx ~/.docker/cli-plugins/docker-buildx
 
 release:
 	./hack/release

@@ -2,11 +2,11 @@
 
 set -eu -o pipefail
 
-: ${BUILDX_CMD=docker buildx}
-: ${FORMATS=md}
+: "${BUILDX_CMD=docker buildx}"
+: "${FORMATS=md}"
 
 output=$(mktemp -d -t buildx-output.XXXXXXXXXX)
 (set -x ; DOCS_FORMATS=$FORMATS ${BUILDX_CMD} bake --set "*.output=$output" update-docs)
 rm -rf ./docs/reference/*
 cp -R "$output"/out/* ./docs/
-rm -rf $output
+rm -rf "$output"

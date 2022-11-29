@@ -22,7 +22,7 @@ on:
 
 env:
   REPO_SLUG: "docker/buildx-bin"
-  RELEASE_OUT: "./release-out"
+  DESTDIR: "./bin"
 
 jobs:
   test:
@@ -48,7 +48,7 @@ jobs:
         name: Upload coverage
         uses: codecov/codecov-action@v3
         with:
-          file: ./coverage/coverage.txt
+          directory: ${{ env.DESTDIR }}/coverage
 
   prepare:
     runs-on: ubuntu-latest
@@ -107,7 +107,7 @@ jobs:
         uses: actions/upload-artifact@v3
         with:
           name: buildx
-          path: ${{ env.RELEASE_OUT }}/*
+          path: ${{ env.DESTDIR }}/release/*
           if-no-files-found: error
 
   bin-image:
@@ -170,18 +170,18 @@ jobs:
         uses: actions/download-artifact@v3
         with:
           name: buildx
-          path: ${{ env.RELEASE_OUT }}
+          path: ${{ env.DESTDIR }}
       -
         name: Create checksums
         run: ./hack/hash-files
       -
         name: List artifacts
         run: |
-          tree -nh ${{ env.RELEASE_OUT }}
+          tree -nh ${{ env.DESTDIR }}
       -
         name: Check artifacts
         run: |
-          find ${{ env.RELEASE_OUT }} -type f -exec file -e ascii -- {} +
+          find ${{ env.DESTDIR }} -type f -exec file -e ascii -- {} +
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
@@ -190,7 +190,7 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
           draft: true
-          files: ${{ env.RELEASE_OUT }}/*
+          files: ${{ env.DESTDIR }}/*
 
   buildkit-edge:
     runs-on: ubuntu-latest

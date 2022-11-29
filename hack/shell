@@ -2,8 +2,8 @@
 
 set -e
 
-: ${BUILDX_CMD=docker buildx}
-: ${TMUX=}
+: "${BUILDX_CMD=docker buildx}"
+: "${TMUX=}"
 
 function clean {
   docker rmi $iid

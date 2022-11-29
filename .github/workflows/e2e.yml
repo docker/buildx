@@ -18,11 +18,12 @@ on:
       - 'README.md'
       - 'docs/**'
 
+env:
+  DESTDIR: "./bin"
+
 jobs:
   build:
     runs-on: ubuntu-20.04
-    env:
-      BIN_OUT: ./bin
     steps:
       - name: Checkout
         uses: actions/checkout@v3
@@ -43,13 +44,13 @@ jobs:
       -
         name: Rename binary
         run: |
-          mv ${{ env.BIN_OUT }}/buildx ${{ env.BIN_OUT }}/docker-buildx
+          mv ${{ env.DESTDIR }}/build/buildx ${{ env.DESTDIR }}/build/docker-buildx
       -
         name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: binary
-          path: ${{ env.BIN_OUT }}
+          path: ${{ env.DESTDIR }}/build
           if-no-files-found: error
           retention-days: 7
 
