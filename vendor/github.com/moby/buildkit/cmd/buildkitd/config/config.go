@@ -53,6 +53,7 @@ type NetworkConfig struct {
 	Mode          string `toml:"networkMode"`
 	CNIConfigPath string `toml:"cniConfigPath"`
 	CNIBinaryPath string `toml:"cniBinaryPath"`
+	CNIPoolSize   int    `toml:"cniPoolSize"`
 }
 
 type OCIConfig struct {
@@ -81,6 +82,9 @@ type OCIConfig struct {
 	// The profile should already be loaded (by a higher level system) before creating a worker.
 	ApparmorProfile string `toml:"apparmor-profile"`
 
+	// SELinux enables applying SELinux labels.
+	SELinux bool `toml:"selinux"`
+
 	// MaxParallelism is the maximum number of parallel build steps that can be run at the same time.
 	MaxParallelism int `toml:"max-parallelism"`
 }
@@ -98,6 +102,9 @@ type ContainerdConfig struct {
 	// ApparmorProfile is the name of the apparmor profile that should be used to constrain build containers.
 	// The profile should already be loaded (by a higher level system) before creating a worker.
 	ApparmorProfile string `toml:"apparmor-profile"`
+
+	// SELinux enables applying SELinux labels.
+	SELinux bool `toml:"selinux"`
 
 	MaxParallelism int `toml:"max-parallelism"`
 
