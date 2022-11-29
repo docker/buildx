@@ -19,20 +19,24 @@ ENV CGO_ENABLED=0
 WORKDIR /src
 
 FROM gobase AS buildx-version
-RUN --mount=target=. \
-  PKG=github.com/docker/buildx VERSION=$(git describe --match 'v[0-9]*' --dirty='.m' --always --tags) REVISION=$(git rev-parse HEAD)$(if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi); \
-  echo "-X ${PKG}/version.Version=${VERSION} -X ${PKG}/version.Revision=${REVISION} -X ${PKG}/version.Package=${PKG}" | tee /tmp/.ldflags; \
-  echo -n "${VERSION}" | tee /tmp/.version;
+RUN --mount=type=bind,target=. <<EOT
+  set -e
+  mkdir /buildx-version
+  echo -n "$(./hack/git-meta version)" | tee /buildx-version/version
+  echo -n "$(./hack/git-meta revision)" | tee /buildx-version/revision
+EOT
 
 FROM gobase AS buildx-build
-ARG LDFLAGS="-w -s"
 ARG TARGETPLATFORM
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
-  --mount=type=bind,source=/tmp/.ldflags,target=/tmp/.ldflags,from=buildx-version \
-  set -x; xx-go build -ldflags "$(cat /tmp/.ldflags) ${LDFLAGS}" -o /usr/bin/buildx ./cmd/buildx && \
-  xx-verify --static /usr/bin/buildx
+  --mount=type=bind,from=buildx-version,source=/buildx-version,target=/buildx-version <<EOT
+  set -e
+  xx-go --wrap
+  DESTDIR=/usr/bin VERSION=$(cat /buildx-version/version) REVISION=$(cat /buildx-version/revision) GO_EXTRA_LDFLAGS="-s -w" ./hack/build
+  xx-verify --static /usr/bin/docker-buildx
+EOT
 
 FROM gobase AS test
 RUN --mount=type=bind,target=. \
@@ -45,13 +49,13 @@ FROM scratch AS test-coverage
 COPY --from=test /tmp/coverage.txt /coverage.txt
 
 FROM scratch AS binaries-unix
-COPY --link --from=buildx-build /usr/bin/buildx /
+COPY --link --from=buildx-build /usr/bin/docker-buildx /buildx
 
 FROM binaries-unix AS binaries-darwin
 FROM binaries-unix AS binaries-linux
 
 FROM scratch AS binaries-windows
-COPY --link --from=buildx-build /usr/bin/buildx /buildx.exe
+COPY --link --from=buildx-build /usr/bin/docker-buildx /buildx.exe
 
 FROM binaries-$TARGETOS AS binaries
 
@@ -60,8 +64,11 @@ FROM --platform=$BUILDPLATFORM alpine AS releaser
 WORKDIR /work
 ARG TARGETPLATFORM
 RUN --mount=from=binaries \
-  --mount=type=bind,source=/tmp/.version,target=/tmp/.version,from=buildx-version \
-  mkdir -p /out && cp buildx* "/out/buildx-$(cat /tmp/.version).$(echo $TARGETPLATFORM | sed 's/\//-/g')$(ls buildx* | sed -e 's/^buildx//')"
+  --mount=type=bind,from=buildx-version,source=/buildx-version,target=/buildx-version <<EOT
+  set -e
+  mkdir -p /out
+  cp buildx* "/out/buildx-$(cat /buildx-version/version).$(echo $TARGETPLATFORM | sed 's/\//-/g')$(ls buildx* | sed -e 's/^buildx//')"
+EOT
 
 FROM scratch AS release
 COPY --from=releaser /out/ /

@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+
+set -e
+
+: "${DESTDIR=./bin/build}"
+: "${PACKAGE=github.com/docker/buildx}"
+: "${VERSION=$(./hack/git-meta version)}"
+: "${REVISION=$(./hack/git-meta revision)}"
+
+: "${CGO_ENABLED=0}"
+: "${GO_PKG=github.com/docker/buildx}"
+: "${GO_LDFLAGS=-X ${GO_PKG}/version.Version=${VERSION} -X ${GO_PKG}/version.Revision=${REVISION} -X ${GO_PKG}/version.Package=${PACKAGE}}"
+: "${GO_EXTRA_LDFLAGS=}"
+
+set -x
+CGO_ENABLED=$CGO_ENABLED go build -mod vendor -trimpath -ldflags "${GO_LDFLAGS} ${GO_EXTRA_LDFLAGS}" -o "${DESTDIR}/docker-buildx" ./cmd/buildx
