@@ -104,8 +104,6 @@ func driversForNodeGroup(ctx context.Context, dockerCli command.Cli, ng *store.N
 					di.Err = err
 					return nil
 				}
-				// TODO: replace the following line with dockerclient.WithAPIVersionNegotiation option in clientForEndpoint
-				dockerapi.NegotiateAPIVersion(ctx)
 
 				contextStore := dockerCli.ContextStore()
 
@@ -164,13 +162,9 @@ func clientForEndpoint(dockerCli command.Cli, name string) (dockerclient.APIClie
 	}
 	for _, l := range list {
 		if l.Name == name {
-			dep, ok := l.Endpoints["docker"]
-			if !ok {
-				return nil, errors.Errorf("context %q does not have a Docker endpoint", name)
-			}
-			epm, ok := dep.(docker.EndpointMeta)
-			if !ok {
-				return nil, errors.Errorf("endpoint %q is not of type EndpointMeta, %T", dep, dep)
+			epm, err := docker.EndpointFromContext(l)
+			if err != nil {
+				return nil, err
 			}
 			ep, err := docker.WithTLSData(dockerCli.ContextStore(), name, epm)
 			if err != nil {
