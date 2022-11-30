@@ -4,10 +4,12 @@ import (
 	"context"
 	"os"
 	"sort"
+	"sync"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
@@ -18,9 +20,10 @@ import (
 // Builder represents an active builder object
 type Builder struct {
 	*store.NodeGroup
-	nodes []Node
-	opts  builderOpts
-	err   error
+	driverFactory driverFactory
+	nodes         []Node
+	opts          builderOpts
+	err           error
 }
 
 type builderOpts struct {
@@ -199,6 +202,45 @@ func (b *Builder) Inactive() bool {
 // Err returns error if any.
 func (b *Builder) Err() error {
 	return b.err
+}
+
+type driverFactory struct {
+	driver.Factory
+	once sync.Once
+}
+
+// Factory returns the driver factory.
+func (b *Builder) Factory(ctx context.Context) (_ driver.Factory, err error) {
+	b.driverFactory.once.Do(func() {
+		if b.Driver != "" {
+			b.driverFactory.Factory, err = driver.GetFactory(b.Driver, true)
+			if err != nil {
+				return
+			}
+		} else {
+			// empty driver means nodegroup was implicitly created as a default
+			// driver for a docker context and allows falling back to a
+			// docker-container driver for older daemon that doesn't support
+			// buildkit (< 18.06).
+			ep := b.nodes[0].Endpoint
+			var dockerapi *dockerutil.ClientAPI
+			dockerapi, err = dockerutil.NewClientAPI(b.opts.dockerCli, b.nodes[0].Endpoint)
+			if err != nil {
+				return
+			}
+			// check if endpoint is healthy is needed to determine the driver type.
+			// if this fails then can't continue with driver selection.
+			if _, err = dockerapi.Ping(ctx); err != nil {
+				return
+			}
+			b.driverFactory.Factory, err = driver.GetDefaultFactory(ctx, ep, dockerapi, false)
+			if err != nil {
+				return
+			}
+			b.Driver = b.driverFactory.Factory.Name()
+		}
+	})
+	return b.driverFactory.Factory, err
 }
 
 // GetBuilders returns all builders

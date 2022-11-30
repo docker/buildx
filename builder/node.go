@@ -46,33 +46,9 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 		}
 	}()
 
-	// TODO: factory should be lazy and a dedicated method in Builder object
-	var factory driver.Factory
-	if b.NodeGroup.Driver != "" {
-		factory, err = driver.GetFactory(b.NodeGroup.Driver, true)
-		if err != nil {
-			return nil, err
-		}
-	} else {
-		// empty driver means nodegroup was implicitly created as a default
-		// driver for a docker context and allows falling back to a
-		// docker-container driver for older daemon that doesn't support
-		// buildkit (< 18.06).
-		ep := b.NodeGroup.Nodes[0].Endpoint
-		dockerapi, err := dockerutil.NewClientAPI(b.opts.dockerCli, b.NodeGroup.Nodes[0].Endpoint)
-		if err != nil {
-			return nil, err
-		}
-		// check if endpoint is healthy is needed to determine the driver type.
-		// if this fails then can't continue with driver selection.
-		if _, err = dockerapi.Ping(ctx); err != nil {
-			return nil, err
-		}
-		factory, err = driver.GetDefaultFactory(ctx, ep, dockerapi, false)
-		if err != nil {
-			return nil, err
-		}
-		b.NodeGroup.Driver = factory.Name()
+	factory, err := b.Factory(ctx)
+	if err != nil {
+		return nil, err
 	}
 
 	imageopt, err := b.ImageOpt()
