@@ -6,17 +6,17 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.5
 	github.com/compose-spec/compose-go v1.6.0
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.10
-	github.com/docker/cli v20.10.21+incompatible // v22.06.x - see "replace" for the actual version
+	github.com/containerd/containerd v1.6.11
+	github.com/docker/cli v23.0.0-beta.1+incompatible
 	github.com/docker/cli-docs-tool v0.5.0
 	github.com/docker/distribution v2.8.1+incompatible
-	github.com/docker/docker v20.10.21+incompatible // v22.06.x - see "replace" for the actual version
+	github.com/docker/docker v23.0.0-beta.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 	github.com/hashicorp/hcl/v2 v2.8.2
-	github.com/moby/buildkit v0.11.0-rc1.0.20221205150952-9624ab4710dd
+	github.com/moby/buildkit v0.11.0-rc1.0.20221207183946-5993b526de65
 	github.com/morikuni/aec v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20220303224323-02efb9a75ee1
@@ -170,9 +170,6 @@ require (
 )
 
 replace (
-	github.com/aws/aws-sdk-go-v2/config => github.com/aws/aws-sdk-go-v2/config v1.15.5 // same as buildkit
-	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20221124184145-c0fa00e6142d+incompatible // v23.0.0-dev
-	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221124164242-a913b5ad7ef1+incompatible // 22.06 branch (v23.0.0-dev)
 	k8s.io/api => k8s.io/api v0.22.4
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4
 	k8s.io/client-go => k8s.io/client-go v0.22.4

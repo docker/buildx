@@ -61,7 +61,7 @@ func setupCommonRootCommand(rootCmd *cobra.Command) (*cliflags.ClientOptions, *p
 	rootCmd.PersistentFlags().MarkShorthandDeprecated("help", "please use --help")
 	rootCmd.PersistentFlags().Lookup("help").Hidden = true
 
-	rootCmd.Annotations = map[string]string{"additionalHelp": "To get more help with docker, check out our guides at https://docs.docker.com/go/guides/"}
+	rootCmd.Annotations = map[string]string{"additionalHelp": "For more help on how to use Docker, head to https://docs.docker.com/go/guides/"}
 
 	// Configure registry.CertsDir() when running in rootless-mode
 	if os.Getenv("ROOTLESSKIT_STATE_DIR") != "" {
@@ -116,7 +116,13 @@ type TopLevelCommand struct {
 
 // NewTopLevelCommand returns a new TopLevelCommand object
 func NewTopLevelCommand(cmd *cobra.Command, dockerCli *command.DockerCli, opts *cliflags.ClientOptions, flags *pflag.FlagSet) *TopLevelCommand {
-	return &TopLevelCommand{cmd, dockerCli, opts, flags, os.Args[1:]}
+	return &TopLevelCommand{
+		cmd:       cmd,
+		dockerCli: dockerCli,
+		opts:      opts,
+		flags:     flags,
+		args:      os.Args[1:],
+	}
 }
 
 // SetArgs sets the args (default os.Args[:1] used to invoke the command
