@@ -90,21 +90,24 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	}
 
 	for i, s := range srcs {
-		if s.Ref == nil && s.Desc.MediaType == "" && s.Desc.Digest != "" {
+		if s.Ref == nil {
 			if defaultRepo == nil {
 				return errors.Errorf("multiple repositories specified, cannot infer repository for %q", args[i])
 			}
-
 			n, err := reference.ParseNormalizedNamed(*defaultRepo)
 			if err != nil {
 				return err
 			}
-			r, err := reference.WithDigest(n, s.Desc.Digest)
-			if err != nil {
-				return err
+			if s.Desc.MediaType == "" && s.Desc.Digest != "" {
+				r, err := reference.WithDigest(n, s.Desc.Digest)
+				if err != nil {
+					return err
+				}
+				srcs[i].Ref = r
+				sourceRefs = true
+			} else {
+				srcs[i].Ref = reference.TagNameOnly(n)
 			}
-			srcs[i].Ref = r
-			sourceRefs = true
 		}
 	}
 
