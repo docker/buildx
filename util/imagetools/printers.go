@@ -252,6 +252,7 @@ func (p *Printer) printManifestList(out io.Writer) error {
 				_, _ = fmt.Fprintf(w, "%sURLs:\t%s\n", defaultPfx, strings.Join(m.URLs, ", "))
 			}
 			if len(m.Annotations) > 0 {
+				_, _ = fmt.Fprintf(w, "%sAnnotations:\t\n", defaultPfx)
 				_ = w.Flush()
 				w2 := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 				for k, v := range m.Annotations {
