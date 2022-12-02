@@ -11,8 +11,14 @@ import (
 	"github.com/pkg/errors"
 )
 
-// archiveHeaderSize is the number of bytes in an archive header
-const archiveHeaderSize = 512
+const (
+	// archiveHeaderSize is the number of bytes in an archive header
+	archiveHeaderSize = 512
+	// mobyHostGatewayName defines a special string which users can append to
+	// --add-host to add an extra entry in /etc/hosts that maps
+	// host.docker.internal to the host IP
+	mobyHostGatewayName = "host-gateway"
+)
 
 func isLocalDir(c string) bool {
 	st, err := os.Stat(c)
@@ -39,18 +45,23 @@ func isArchive(header []byte) bool {
 }
 
 // toBuildkitExtraHosts converts hosts from docker key:value format to buildkit's csv format
-func toBuildkitExtraHosts(inp []string) (string, error) {
+func toBuildkitExtraHosts(inp []string, mobyDriver bool) (string, error) {
 	if len(inp) == 0 {
 		return "", nil
 	}
 	hosts := make([]string, 0, len(inp))
 	for _, h := range inp {
-		parts := strings.Split(h, ":")
-
-		if len(parts) != 2 || parts[0] == "" || net.ParseIP(parts[1]) == nil {
+		host, ip, ok := strings.Cut(h, ":")
+		if !ok || host == "" || ip == "" {
 			return "", errors.Errorf("invalid host %s", h)
 		}
-		hosts = append(hosts, parts[0]+"="+parts[1])
+		// Skip IP address validation for "host-gateway" string with moby driver
+		if !mobyDriver || ip != mobyHostGatewayName {
+			if net.ParseIP(ip) == nil {
+				return "", errors.Errorf("invalid host %s", h)
+			}
+		}
+		hosts = append(hosts, host+"="+ip)
 	}
 	return strings.Join(hosts, ","), nil
 }
