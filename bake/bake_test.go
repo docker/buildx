@@ -2,7 +2,6 @@ package bake
 
 import (
 	"context"
-	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -42,7 +41,7 @@ target "webapp" {
 
 		require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
 		require.Equal(t, ".", *m["webapp"].Context)
-		require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
+		require.Equal(t, ptrstr("webDEP"), m["webapp"].Args["VAR_INHERITED"])
 		require.Equal(t, true, *m["webapp"].NoCache)
 		require.Nil(t, m["webapp"].Pull)
 
@@ -58,8 +57,7 @@ target "webapp" {
 
 	t.Run("ArgsOverrides", func(t *testing.T) {
 		t.Run("leaf", func(t *testing.T) {
-			os.Setenv("VAR_FROMENV"+t.Name(), "fromEnv")
-			defer os.Unsetenv("VAR_FROM_ENV" + t.Name())
+			t.Setenv("VAR_FROMENV"+t.Name(), "fromEnv")
 
 			m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webapp.args.VAR_UNSET",
@@ -80,12 +78,12 @@ target "webapp" {
 			_, isSet = m["webapp"].Args["VAR_EMPTY"]
 			require.True(t, isSet, m["webapp"].Args["VAR_EMPTY"])
 
-			require.Equal(t, m["webapp"].Args["VAR_SET"], "bananas")
+			require.Equal(t, ptrstr("bananas"), m["webapp"].Args["VAR_SET"])
 
-			require.Equal(t, m["webapp"].Args["VAR_FROMENV"+t.Name()], "fromEnv")
+			require.Equal(t, ptrstr("fromEnv"), m["webapp"].Args["VAR_FROMENV"+t.Name()])
 
-			require.Equal(t, m["webapp"].Args["VAR_BOTH"], "webapp")
-			require.Equal(t, m["webapp"].Args["VAR_INHERITED"], "override")
+			require.Equal(t, ptrstr("webapp"), m["webapp"].Args["VAR_BOTH"])
+			require.Equal(t, ptrstr("override"), m["webapp"].Args["VAR_INHERITED"])
 
 			require.Equal(t, 1, len(g))
 			require.Equal(t, []string{"webapp"}, g["default"].Targets)
@@ -99,8 +97,8 @@ target "webapp" {
 			}, nil)
 
 			require.NoError(t, err)
-			require.Equal(t, m["webapp"].Args["VAR_INHERITED"], "override")
-			require.Equal(t, m["webapp"].Args["VAR_BOTH"], "webapp")
+			require.Equal(t, ptrstr("override"), m["webapp"].Args["VAR_INHERITED"])
+			require.Equal(t, ptrstr("webapp"), m["webapp"].Args["VAR_BOTH"])
 			require.Equal(t, 1, len(g))
 			require.Equal(t, []string{"webapp"}, g["default"].Targets)
 		})
@@ -139,9 +137,9 @@ target "webapp" {
 			require.NoError(t, err)
 			require.Equal(t, 2, len(m))
 			require.Equal(t, "foo", *m["webapp"].Dockerfile)
-			require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
+			require.Equal(t, ptrstr("webDEP"), m["webapp"].Args["VAR_INHERITED"])
 			require.Equal(t, "foo", *m["webDEP"].Dockerfile)
-			require.Equal(t, "webDEP", m["webDEP"].Args["VAR_INHERITED"])
+			require.Equal(t, ptrstr("webDEP"), m["webDEP"].Args["VAR_INHERITED"])
 			require.Equal(t, 1, len(g))
 			sort.Strings(g["default"].Targets)
 			require.Equal(t, []string{"webDEP", "webapp"}, g["default"].Targets)
@@ -173,7 +171,7 @@ target "webapp" {
 					require.NoError(t, err)
 					require.Equal(t, 1, len(m))
 					require.Equal(t, "foo", *m["webapp"].Dockerfile)
-					require.Equal(t, "webDEP", m["webapp"].Args["VAR_INHERITED"])
+					require.Equal(t, ptrstr("webDEP"), m["webapp"].Args["VAR_INHERITED"])
 					require.Equal(t, 1, len(g))
 					require.Equal(t, []string{"webapp"}, g["default"].Targets)
 				},
@@ -300,8 +298,8 @@ services:
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
 	require.Equal(t, ".", *m["webapp"].Context)
-	require.Equal(t, "1", m["webapp"].Args["buildno"])
-	require.Equal(t, "12", m["webapp"].Args["buildno2"])
+	require.Equal(t, ptrstr("1"), m["webapp"].Args["buildno"])
+	require.Equal(t, ptrstr("12"), m["webapp"].Args["buildno2"])
 
 	require.Equal(t, 1, len(g))
 	sort.Strings(g["default"].Targets)
@@ -344,7 +342,7 @@ services:
 	_, ok := m["web_app"]
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
-	require.Equal(t, "1", m["web_app"].Args["buildno"])
+	require.Equal(t, ptrstr("1"), m["web_app"].Args["buildno"])
 
 	m, _, err = ReadTargets(ctx, []File{fp2}, []string{"web_app"}, nil, nil)
 	require.NoError(t, err)
@@ -352,7 +350,7 @@ services:
 	_, ok = m["web_app"]
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile", *m["web_app"].Dockerfile)
-	require.Equal(t, "12", m["web_app"].Args["buildno2"])
+	require.Equal(t, ptrstr("12"), m["web_app"].Args["buildno2"])
 
 	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
@@ -361,8 +359,8 @@ services:
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
 	require.Equal(t, ".", *m["web_app"].Context)
-	require.Equal(t, "1", m["web_app"].Args["buildno"])
-	require.Equal(t, "12", m["web_app"].Args["buildno2"])
+	require.Equal(t, ptrstr("1"), m["web_app"].Args["buildno"])
+	require.Equal(t, ptrstr("12"), m["web_app"].Args["buildno2"])
 
 	require.Equal(t, 1, len(g))
 	sort.Strings(g["default"].Targets)
@@ -999,22 +997,22 @@ target "d" {
 	cases := []struct {
 		name      string
 		overrides []string
-		want      map[string]string
+		want      map[string]*string
 	}{
 		{
 			name:      "nested simple",
 			overrides: nil,
-			want:      map[string]string{"bar": "234", "baz": "890", "foo": "123"},
+			want:      map[string]*string{"bar": ptrstr("234"), "baz": ptrstr("890"), "foo": ptrstr("123")},
 		},
 		{
 			name:      "nested with overrides first",
 			overrides: []string{"a.args.foo=321", "b.args.bar=432"},
-			want:      map[string]string{"bar": "234", "baz": "890", "foo": "321"},
+			want:      map[string]*string{"bar": ptrstr("234"), "baz": ptrstr("890"), "foo": ptrstr("321")},
 		},
 		{
 			name:      "nested with overrides last",
 			overrides: []string{"a.args.foo=321", "c.args.bar=432"},
-			want:      map[string]string{"bar": "432", "baz": "890", "foo": "321"},
+			want:      map[string]*string{"bar": ptrstr("432"), "baz": ptrstr("890"), "foo": ptrstr("321")},
 		},
 	}
 	for _, tt := range cases {
@@ -1067,26 +1065,26 @@ group "default" {
 	cases := []struct {
 		name      string
 		overrides []string
-		wantch1   map[string]string
-		wantch2   map[string]string
+		wantch1   map[string]*string
+		wantch2   map[string]*string
 	}{
 		{
 			name:      "nested simple",
 			overrides: nil,
-			wantch1:   map[string]string{"BAR": "fuu", "FOO": "bar"},
-			wantch2:   map[string]string{"BAR": "fuu", "FOO": "bar", "FOO2": "bar2"},
+			wantch1:   map[string]*string{"BAR": ptrstr("fuu"), "FOO": ptrstr("bar")},
+			wantch2:   map[string]*string{"BAR": ptrstr("fuu"), "FOO": ptrstr("bar"), "FOO2": ptrstr("bar2")},
 		},
 		{
 			name:      "nested with overrides first",
 			overrides: []string{"grandparent.args.BAR=fii", "child1.args.FOO=baaar"},
-			wantch1:   map[string]string{"BAR": "fii", "FOO": "baaar"},
-			wantch2:   map[string]string{"BAR": "fii", "FOO": "bar", "FOO2": "bar2"},
+			wantch1:   map[string]*string{"BAR": ptrstr("fii"), "FOO": ptrstr("baaar")},
+			wantch2:   map[string]*string{"BAR": ptrstr("fii"), "FOO": ptrstr("bar"), "FOO2": ptrstr("bar2")},
 		},
 		{
 			name:      "nested with overrides last",
 			overrides: []string{"grandparent.args.BAR=fii", "child2.args.FOO=baaar"},
-			wantch1:   map[string]string{"BAR": "fii", "FOO": "bar"},
-			wantch2:   map[string]string{"BAR": "fii", "FOO": "baaar", "FOO2": "bar2"},
+			wantch1:   map[string]*string{"BAR": ptrstr("fii"), "FOO": ptrstr("bar")},
+			wantch2:   map[string]*string{"BAR": ptrstr("fii"), "FOO": ptrstr("baaar"), "FOO2": ptrstr("bar2")},
 		},
 	}
 	for _, tt := range cases {
@@ -1285,8 +1283,70 @@ services:
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "app", c.Targets[0].Name)
-	require.Equal(t, "foo", c.Targets[0].Args["v1"])
-	require.Equal(t, "bar", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("foo"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["v2"])
 	require.Equal(t, "dir", *c.Targets[0].Context)
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[0].Dockerfile)
+}
+
+func TestHCLNullVars(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`variable "FOO" {
+				default = null
+			}
+			target "default" {
+				args = {
+					foo = FOO
+					bar = "baz"
+				}
+			}`),
+	}
+
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m))
+	_, ok := m["default"]
+	require.True(t, ok)
+
+	_, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, m["default"].Args)
+}
+
+func TestJSONNullVars(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.json",
+		Data: []byte(
+			`{
+				"variable": {
+					"FOO": {
+						"default": null
+					}
+				},
+				"target": {
+					"default": {
+						"args": {
+							"foo": "${FOO}",
+							"bar": "baz"
+						}
+					}
+				}
+			}`),
+	}
+
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m))
+	_, ok := m["default"]
+	require.True(t, ok)
+
+	_, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, m["default"].Args)
 }

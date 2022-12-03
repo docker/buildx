@@ -83,7 +83,7 @@ func appendJSONFuncCalls(exp hcl.Expression, m map[string]struct{}) error {
 
 	// hcl/v2/json/ast#stringVal
 	val := src.FieldByName("Value")
-	if val.IsZero() {
+	if !val.IsValid() || val.IsZero() {
 		return nil
 	}
 	rng := src.FieldByName("SrcRange")

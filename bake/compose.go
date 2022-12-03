@@ -193,16 +193,16 @@ func loadDotEnv(curenv map[string]string, workingDir string) (map[string]string,
 	return curenv, nil
 }
 
-func flatten(in compose.MappingWithEquals) compose.Mapping {
+func flatten(in compose.MappingWithEquals) map[string]*string {
 	if len(in) == 0 {
 		return nil
 	}
-	out := compose.Mapping{}
+	out := map[string]*string{}
 	for k, v := range in {
 		if v == nil {
 			continue
 		}
-		out[k] = *v
+		out[k] = v
 	}
 	return out
 }
