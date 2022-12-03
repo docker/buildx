@@ -615,7 +615,7 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 	}
 
 	// setup extrahosts
-	extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts)
+	extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts, d.IsMobyDriver())
 	if err != nil {
 		return nil, nil, err
 	}
