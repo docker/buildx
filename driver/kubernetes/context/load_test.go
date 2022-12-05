@@ -13,7 +13,7 @@ import (
 func TestDefaultContextInitializer(t *testing.T) {
 	os.Setenv("KUBECONFIG", "./fixtures/test-kubeconfig")
 	defer os.Unsetenv("KUBECONFIG")
-	ctx, err := command.ResolveDefaultContext(&cliflags.CommonOptions{}, command.DefaultContextStoreConfig())
+	ctx, err := command.ResolveDefaultContext(&cliflags.ClientOptions{}, command.DefaultContextStoreConfig())
 	require.NoError(t, err)
 	assert.Equal(t, "default", ctx.Meta.Name)
 	assert.Equal(t, "zoinx", ctx.Meta.Endpoints[KubernetesEndpoint].(EndpointMeta).DefaultNamespace)
