@@ -3,8 +3,7 @@ package commands
 import (
 	"context"
 
-	"github.com/docker/buildx/store"
-	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
@@ -18,32 +17,19 @@ type stopOptions struct {
 func runStop(dockerCli command.Cli, in stopOptions) error {
 	ctx := appcontext.Context()
 
-	txn, release, err := storeutil.GetStore(dockerCli)
+	b, err := builder.New(dockerCli,
+		builder.WithName(in.builder),
+		builder.WithSkippedValidation(),
+	)
 	if err != nil {
 		return err
 	}
-	defer release()
-
-	if in.builder != "" {
-		ng, err := storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-		if err := stop(ctx, dockerCli, ng); err != nil {
-			return err
-		}
-		return nil
-	}
-
-	ng, err := storeutil.GetCurrentInstance(txn, dockerCli)
+	nodes, err := b.LoadNodes(ctx, false)
 	if err != nil {
 		return err
 	}
-	if ng != nil {
-		return stop(ctx, dockerCli, ng)
-	}
 
-	return stopCurrent(ctx, dockerCli)
+	return stop(ctx, nodes)
 }
 
 func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -65,37 +51,15 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func stop(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup) error {
-	dis, err := driversForNodeGroup(ctx, dockerCli, ng, "")
-	if err != nil {
-		return err
-	}
-	for _, di := range dis {
-		if di.Driver != nil {
-			if err := di.Driver.Stop(ctx, true); err != nil {
+func stop(ctx context.Context, nodes []builder.Node) (err error) {
+	for _, node := range nodes {
+		if node.Driver != nil {
+			if err := node.Driver.Stop(ctx, true); err != nil {
 				return err
 			}
 		}
-		if di.Err != nil {
-			err = di.Err
-		}
-	}
-	return err
-}
-
-func stopCurrent(ctx context.Context, dockerCli command.Cli) error {
-	dis, err := getDefaultDrivers(ctx, dockerCli, false, "")
-	if err != nil {
-		return err
-	}
-	for _, di := range dis {
-		if di.Driver != nil {
-			if err := di.Driver.Stop(ctx, true); err != nil {
-				return err
-			}
-		}
-		if di.Err != nil {
-			err = di.Err
+		if node.Err != nil {
+			err = node.Err
 		}
 	}
 	return err

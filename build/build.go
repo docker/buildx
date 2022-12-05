@@ -22,6 +22,7 @@ import (
 	"github.com/containerd/containerd/content/local"
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
@@ -109,24 +110,15 @@ type NamedContext struct {
 	State *llb.State
 }
 
-type DriverInfo struct {
-	Driver      driver.Driver
-	Name        string
-	Platform    []specs.Platform
-	Err         error
-	ImageOpt    imagetools.Opt
-	ProxyConfig map[string]string
-}
-
-func filterAvailableDrivers(drivers []DriverInfo) ([]DriverInfo, error) {
-	out := make([]DriverInfo, 0, len(drivers))
+func filterAvailableNodes(nodes []builder.Node) ([]builder.Node, error) {
+	out := make([]builder.Node, 0, len(nodes))
 	err := errors.Errorf("no drivers found")
-	for _, di := range drivers {
-		if di.Err == nil && di.Driver != nil {
-			out = append(out, di)
+	for _, n := range nodes {
+		if n.Err == nil && n.Driver != nil {
+			out = append(out, n)
 		}
-		if di.Err != nil {
-			err = di.Err
+		if n.Err != nil {
+			err = n.Err
 		}
 	}
 	if len(out) > 0 {
@@ -165,8 +157,8 @@ func allIndexes(l int) []int {
 	return out
 }
 
-func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, pw progress.Writer) ([]*client.Client, error) {
-	clients := make([]*client.Client, len(drivers))
+func ensureBooted(ctx context.Context, nodes []builder.Node, idxs []int, pw progress.Writer) ([]*client.Client, error) {
+	clients := make([]*client.Client, len(nodes))
 
 	baseCtx := ctx
 	eg, ctx := errgroup.WithContext(ctx)
@@ -174,7 +166,7 @@ func ensureBooted(ctx context.Context, drivers []DriverInfo, idxs []int, pw prog
 	for _, i := range idxs {
 		func(i int) {
 			eg.Go(func() error {
-				c, err := driver.Boot(ctx, baseCtx, drivers[i].Driver, pw)
+				c, err := driver.Boot(ctx, baseCtx, nodes[i].Driver, pw)
 				if err != nil {
 					return err
 				}
@@ -215,8 +207,8 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 	return m
 }
 
-func resolveDrivers(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
-	dps, clients, err := resolveDriversBase(ctx, drivers, opt, pw)
+func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+	dps, clients, err := resolveDriversBase(ctx, nodes, opt, pw)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -256,10 +248,10 @@ func resolveDrivers(ctx context.Context, drivers []DriverInfo, opt map[string]Op
 	return dps, clients, nil
 }
 
-func resolveDriversBase(ctx context.Context, drivers []DriverInfo, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+func resolveDriversBase(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
 	availablePlatforms := map[string]int{}
-	for i, d := range drivers {
-		for _, p := range d.Platform {
+	for i, node := range nodes {
+		for _, p := range node.Platforms {
 			availablePlatforms[platforms.Format(p)] = i
 		}
 	}
@@ -277,12 +269,12 @@ func resolveDriversBase(ctx context.Context, drivers []DriverInfo, opt map[strin
 	}
 
 	// fast path
-	if len(drivers) == 1 || len(allPlatforms) == 0 {
+	if len(nodes) == 1 || len(allPlatforms) == 0 {
 		m := map[string][]driverPair{}
 		for k, opt := range opt {
 			m[k] = []driverPair{{driverIndex: 0, platforms: opt.Platforms}}
 		}
-		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), pw)
+		clients, err := ensureBooted(ctx, nodes, driverIndexes(m), pw)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -292,7 +284,7 @@ func resolveDriversBase(ctx context.Context, drivers []DriverInfo, opt map[strin
 	// map based on existing platforms
 	if !undetectedPlatform {
 		m := splitToDriverPairs(availablePlatforms, opt)
-		clients, err := ensureBooted(ctx, drivers, driverIndexes(m), pw)
+		clients, err := ensureBooted(ctx, nodes, driverIndexes(m), pw)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -300,7 +292,7 @@ func resolveDriversBase(ctx context.Context, drivers []DriverInfo, opt map[strin
 	}
 
 	// boot all drivers in k
-	clients, err := ensureBooted(ctx, drivers, allIndexes(len(drivers)), pw)
+	clients, err := ensureBooted(ctx, nodes, allIndexes(len(nodes)), pw)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -362,8 +354,8 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
-	d := di.Driver
+func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
 		for _, f := range defers {
@@ -395,8 +387,8 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 	}
 
 	for _, e := range opt.CacheTo {
-		if e.Type != "inline" && !d.Features()[driver.CacheExport] {
-			return nil, nil, notSupported(d, driver.CacheExport)
+		if e.Type != "inline" && !nodeDriver.Features()[driver.CacheExport] {
+			return nil, nil, notSupported(nodeDriver, driver.CacheExport)
 		}
 	}
 
@@ -456,7 +448,7 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 	case 1:
 		// valid
 	case 0:
-		if d.IsMobyDriver() && !noDefaultLoad() {
+		if nodeDriver.IsMobyDriver() && !noDefaultLoad() {
 			// backwards compat for docker driver only:
 			// this ensures the build results in a docker image.
 			opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
@@ -505,15 +497,15 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 		if (e.Type == "local" || e.Type == "tar") && opt.ImageIDFile != "" {
 			return nil, nil, errors.Errorf("local and tar exporters are incompatible with image ID file")
 		}
-		if e.Type == "oci" && !d.Features()[driver.OCIExporter] {
-			return nil, nil, notSupported(d, driver.OCIExporter)
+		if e.Type == "oci" && !nodeDriver.Features()[driver.OCIExporter] {
+			return nil, nil, notSupported(nodeDriver, driver.OCIExporter)
 		}
 		if e.Type == "docker" {
 			if len(opt.Platforms) > 1 {
 				return nil, nil, errors.Errorf("docker exporter does not currently support exporting manifest lists")
 			}
 			if e.Output == nil {
-				if d.IsMobyDriver() {
+				if nodeDriver.IsMobyDriver() {
 					e.Type = "image"
 				} else {
 					w, cancel, err := dl(e.Attrs["context"])
@@ -523,11 +515,11 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 					defers = append(defers, cancel)
 					opt.Exports[i].Output = wrapWriteCloser(w)
 				}
-			} else if !d.Features()[driver.DockerExporter] {
-				return nil, nil, notSupported(d, driver.DockerExporter)
+			} else if !nodeDriver.Features()[driver.DockerExporter] {
+				return nil, nil, notSupported(nodeDriver, driver.DockerExporter)
 			}
 		}
-		if e.Type == "image" && d.IsMobyDriver() {
+		if e.Type == "image" && nodeDriver.IsMobyDriver() {
 			opt.Exports[i].Type = "moby"
 			if e.Attrs["push"] != "" {
 				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
@@ -548,7 +540,7 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 	so.Exports = opt.Exports
 	so.Session = opt.Session
 
-	releaseLoad, err := LoadInputs(ctx, d, opt.Inputs, pw, &so)
+	releaseLoad, err := LoadInputs(ctx, nodeDriver, opt.Inputs, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -580,7 +572,7 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 		so.FrontendAttrs["label:"+k] = v
 	}
 
-	for k, v := range di.ProxyConfig {
+	for k, v := range node.ProxyConfig {
 		if _, ok := opt.BuildArgs[k]; !ok {
 			so.FrontendAttrs["build-arg:"+k] = v
 		}
@@ -592,8 +584,8 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 		for i, p := range opt.Platforms {
 			pp[i] = platforms.Format(p)
 		}
-		if len(pp) > 1 && !d.Features()[driver.MultiPlatform] {
-			return nil, nil, notSupported(d, driver.MultiPlatform)
+		if len(pp) > 1 && !nodeDriver.Features()[driver.MultiPlatform] {
+			return nil, nil, notSupported(nodeDriver, driver.MultiPlatform)
 		}
 		so.FrontendAttrs["platform"] = strings.Join(pp, ",")
 	}
@@ -611,7 +603,7 @@ func toSolveOpt(ctx context.Context, di DriverInfo, multiDriver bool, opt Option
 	}
 
 	// setup extrahosts
-	extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts, d.IsMobyDriver())
+	extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts, nodeDriver.IsMobyDriver())
 	if err != nil {
 		return nil, nil, err
 	}
@@ -778,24 +770,24 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 	return err
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, drivers, opt, docker, configDir, w, nil, false)
+func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, nodes, opt, docker, configDir, w, nil, false)
 }
 
-func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
-	if len(drivers) == 0 {
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
+	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
 
-	drivers, err = filterAvailableDrivers(drivers)
+	nodes, err = filterAvailableNodes(nodes)
 	if err != nil {
 		return nil, errors.Wrapf(err, "no valid drivers found")
 	}
 
 	var noMobyDriver driver.Driver
-	for _, d := range drivers {
-		if !d.Driver.IsMobyDriver() {
-			noMobyDriver = d.Driver
+	for _, n := range nodes {
+		if !n.Driver.IsMobyDriver() {
+			noMobyDriver = n.Driver
 			break
 		}
 	}
@@ -819,7 +811,7 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 		}
 	}
 
-	m, clients, err := resolveDrivers(ctx, drivers, opt, w)
+	m, clients, err := resolveDrivers(ctx, nodes, opt, w)
 	if err != nil {
 		return nil, err
 	}
@@ -853,13 +845,13 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 	for k, opt := range opt {
 		multiDriver := len(m[k]) > 1
 		hasMobyDriver := false
-		for i, dp := range m[k] {
-			di := drivers[dp.driverIndex]
-			if di.Driver.IsMobyDriver() {
+		for i, np := range m[k] {
+			node := nodes[np.driverIndex]
+			if node.Driver.IsMobyDriver() {
 				hasMobyDriver = true
 			}
-			opt.Platforms = dp.platforms
-			so, release, err := toSolveOpt(ctx, di, multiDriver, opt, dp.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
+			opt.Platforms = np.platforms
+			so, release, err := toSolveOpt(ctx, node, multiDriver, opt, np.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
 				return docker.LoadImage(ctx, name, w)
 			})
 			if err != nil {
@@ -988,7 +980,7 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 						if len(descs) > 0 {
 							var imageopt imagetools.Opt
 							for _, dp := range dps {
-								imageopt = drivers[dp.driverIndex].ImageOpt
+								imageopt = nodes[dp.driverIndex].ImageOpt
 								break
 							}
 							names := strings.Split(pushNames, ",")
@@ -1187,8 +1179,8 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 							rr.ExporterResponse[k] = string(v)
 						}
 
-						d := drivers[dp.driverIndex].Driver
-						if d.IsMobyDriver() {
+						node := nodes[dp.driverIndex].Driver
+						if node.IsMobyDriver() {
 							for _, e := range so.Exports {
 								if e.Type == "moby" && e.Attrs["push"] != "" {
 									if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
@@ -1200,12 +1192,12 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 										pushList := strings.Split(pushNames, ",")
 										for _, name := range pushList {
 											if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
-												return pushWithMoby(ctx, d, name, l)
+												return pushWithMoby(ctx, node, name, l)
 											}); err != nil {
 												return err
 											}
 										}
-										remoteDigest, err := remoteDigestWithMoby(ctx, d, pushList[0])
+										remoteDigest, err := remoteDigestWithMoby(ctx, node, pushList[0])
 										if err == nil && remoteDigest != "" {
 											// old daemons might not have containerimage.config.digest set
 											// in response so use containerimage.digest value for it if available

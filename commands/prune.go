@@ -7,7 +7,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/opts"
@@ -54,14 +54,18 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 		return nil
 	}
 
-	dis, err := getInstanceOrDefault(ctx, dockerCli, opts.builder, "")
+	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
 	if err != nil {
 		return err
 	}
 
-	for _, di := range dis {
-		if di.Err != nil {
-			return di.Err
+	nodes, err := b.LoadNodes(ctx, false)
+	if err != nil {
+		return err
+	}
+	for _, node := range nodes {
+		if node.Err != nil {
+			return node.Err
 		}
 	}
 
@@ -90,11 +94,11 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 	}()
 
 	eg, ctx := errgroup.WithContext(ctx)
-	for _, di := range dis {
-		func(di build.DriverInfo) {
+	for _, node := range nodes {
+		func(node builder.Node) {
 			eg.Go(func() error {
-				if di.Driver != nil {
-					c, err := di.Driver.Client(ctx)
+				if node.Driver != nil {
+					c, err := node.Driver.Client(ctx)
 					if err != nil {
 						return err
 					}
@@ -109,7 +113,7 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 				}
 				return nil
 			})
-		}(di)
+		}(node)
 	}
 
 	if err := eg.Wait(); err != nil {

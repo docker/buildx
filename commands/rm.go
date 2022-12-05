@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/cli/cli"
@@ -44,41 +45,33 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		return rmAllInactive(ctx, txn, dockerCli, in)
 	}
 
-	var ng *store.NodeGroup
-	if in.builder != "" {
-		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-	} else {
-		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
-		if err != nil {
-			return err
-		}
-	}
-	if ng == nil {
-		return nil
-	}
-
-	ctxbuilders, err := dockerCli.ContextStore().List()
+	b, err := builder.New(dockerCli,
+		builder.WithName(in.builder),
+		builder.WithStore(txn),
+		builder.WithSkippedValidation(),
+	)
 	if err != nil {
 		return err
 	}
-	for _, cb := range ctxbuilders {
-		if ng.Driver == "docker" && len(ng.Nodes) == 1 && ng.Nodes[0].Endpoint == cb.Name {
-			return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb.Name)
-		}
+
+	nodes, err := b.LoadNodes(ctx, false)
+	if err != nil {
+		return err
 	}
 
-	err1 := rm(ctx, dockerCli, in, ng)
-	if err := txn.Remove(ng.Name); err != nil {
+	if cb := b.ContextName(); cb != "" {
+		return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb)
+	}
+
+	err1 := rm(ctx, nodes, in)
+	if err := txn.Remove(b.Name); err != nil {
 		return err
 	}
 	if err1 != nil {
 		return err1
 	}
 
-	_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", ng.Name)
+	_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", b.Name)
 	return nil
 }
 
@@ -110,61 +103,56 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func rm(ctx context.Context, dockerCli command.Cli, in rmOptions, ng *store.NodeGroup) error {
-	dis, err := driversForNodeGroup(ctx, dockerCli, ng, "")
-	if err != nil {
-		return err
-	}
-	for _, di := range dis {
-		if di.Driver == nil {
+func rm(ctx context.Context, nodes []builder.Node, in rmOptions) (err error) {
+	for _, node := range nodes {
+		if node.Driver == nil {
 			continue
 		}
 		// Do not stop the buildkitd daemon when --keep-daemon is provided
 		if !in.keepDaemon {
-			if err := di.Driver.Stop(ctx, true); err != nil {
+			if err := node.Driver.Stop(ctx, true); err != nil {
 				return err
 			}
 		}
-		if err := di.Driver.Rm(ctx, true, !in.keepState, !in.keepDaemon); err != nil {
+		if err := node.Driver.Rm(ctx, true, !in.keepState, !in.keepDaemon); err != nil {
 			return err
 		}
-		if di.Err != nil {
-			err = di.Err
+		if node.Err != nil {
+			err = node.Err
 		}
 	}
 	return err
 }
 
 func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, in rmOptions) error {
-	ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	ll, err := txn.List()
+	builders, err := builder.GetBuilders(dockerCli, txn)
 	if err != nil {
 		return err
 	}
 
-	builders := make([]*nginfo, len(ll))
-	for i, ng := range ll {
-		builders[i] = &nginfo{ng: ng}
-	}
+	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	defer cancel()
 
-	eg, _ := errgroup.WithContext(ctx)
+	eg, _ := errgroup.WithContext(timeoutCtx)
 	for _, b := range builders {
-		func(b *nginfo) {
+		func(b *builder.Builder) {
 			eg.Go(func() error {
-				if err := loadNodeGroupData(ctx, dockerCli, b); err != nil {
-					return errors.Wrapf(err, "cannot load %s", b.ng.Name)
+				nodes, err := b.LoadNodes(timeoutCtx, true)
+				if err != nil {
+					return errors.Wrapf(err, "cannot load %s", b.Name)
 				}
-				if b.ng.Dynamic {
+				if cb := b.ContextName(); cb != "" {
+					return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb)
+				}
+				if b.Dynamic {
 					return nil
 				}
-				if b.inactive() {
-					rmerr := rm(ctx, dockerCli, in, b.ng)
-					if err := txn.Remove(b.ng.Name); err != nil {
+				if b.Inactive() {
+					rmerr := rm(ctx, nodes, in)
+					if err := txn.Remove(b.Name); err != nil {
 						return err
 					}
-					_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", b.ng.Name)
+					_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", b.Name)
 					return rmerr
 				}
 				return nil

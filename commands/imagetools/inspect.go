@@ -1,8 +1,7 @@
 package commands
 
 import (
-	"github.com/docker/buildx/store"
-	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
@@ -25,27 +24,11 @@ func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
 		return errors.Errorf("format and raw cannot be used together")
 	}
 
-	txn, release, err := storeutil.GetStore(dockerCli)
+	b, err := builder.New(dockerCli, builder.WithName(in.builder))
 	if err != nil {
 		return err
 	}
-	defer release()
-
-	var ng *store.NodeGroup
-
-	if in.builder != "" {
-		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-	} else {
-		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
-		if err != nil {
-			return err
-		}
-	}
-
-	imageopt, err := storeutil.GetImageConfig(dockerCli, ng)
+	imageopt, err := b.ImageOpt()
 	if err != nil {
 		return err
 	}
