@@ -75,13 +75,19 @@ func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, e
 				secrets = append(secrets, secret)
 			}
 
+			// compose does not support nil values for labels
+			labels := map[string]*string{}
+			for k, v := range s.Build.Labels {
+				labels[k] = &v
+			}
+
 			g.Targets = append(g.Targets, targetName)
 			t := &Target{
 				Name:       targetName,
 				Context:    contextPathP,
 				Dockerfile: dockerfilePathP,
 				Tags:       s.Build.Tags,
-				Labels:     s.Build.Labels,
+				Labels:     labels,
 				Args: flatten(s.Build.Args.Resolve(func(val string) (string, bool) {
 					if val, ok := s.Environment[val]; ok && val != nil {
 						return *val, true

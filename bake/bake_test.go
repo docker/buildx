@@ -1296,10 +1296,17 @@ func TestHCLNullVars(t *testing.T) {
 			`variable "FOO" {
 				default = null
 			}
+			variable "BAR" {
+				default = null
+			}
 			target "default" {
 				args = {
 					foo = FOO
 					bar = "baz"
+				}
+				labels = {
+					"com.docker.app.bar" = BAR
+					"com.docker.app.baz" = "foo"
 				}
 			}`),
 	}
@@ -1315,6 +1322,7 @@ func TestHCLNullVars(t *testing.T) {
 	_, err = TargetsToBuildOpt(m, &Input{})
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, m["default"].Args)
+	require.Equal(t, map[string]*string{"com.docker.app.baz": ptrstr("foo")}, m["default"].Labels)
 }
 
 func TestJSONNullVars(t *testing.T) {

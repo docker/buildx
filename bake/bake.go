@@ -564,7 +564,7 @@ type Target struct {
 	Dockerfile       *string            `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
 	DockerfileInline *string            `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
 	Args             map[string]*string `json:"args,omitempty" hcl:"args,optional" cty:"args"`
-	Labels           map[string]string  `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
+	Labels           map[string]*string `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
 	Tags             []string           `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
 	CacheFrom        []string           `json:"cache-from,omitempty"  hcl:"cache-from,optional" cty:"cache-from"`
 	CacheTo          []string           `json:"cache-to,omitempty"  hcl:"cache-to,optional" cty:"cache-to"`
@@ -630,8 +630,11 @@ func (t *Target) Merge(t2 *Target) {
 		t.Contexts[k] = v
 	}
 	for k, v := range t2.Labels {
+		if v == nil {
+			continue
+		}
 		if t.Labels == nil {
-			t.Labels = map[string]string{}
+			t.Labels = map[string]*string{}
 		}
 		t.Labels[k] = v
 	}
@@ -707,9 +710,9 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 				return errors.Errorf("labels require name")
 			}
 			if t.Labels == nil {
-				t.Labels = map[string]string{}
+				t.Labels = map[string]*string{}
 			}
-			t.Labels[keys[1]] = value
+			t.Labels[keys[1]] = &value
 		case "tags":
 			t.Tags = o.ArrValue
 		case "cache-from":
@@ -893,6 +896,14 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		args[k] = *v
 	}
 
+	labels := map[string]string{}
+	for k, v := range t.Labels {
+		if v == nil {
+			continue
+		}
+		labels[k] = *v
+	}
+
 	noCache := false
 	if t.NoCache != nil {
 		noCache = *t.NoCache
@@ -934,7 +945,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		Inputs:        bi,
 		Tags:          t.Tags,
 		BuildArgs:     args,
-		Labels:        t.Labels,
+		Labels:        labels,
 		NoCache:       noCache,
 		NoCacheFilter: t.NoCacheFilter,
 		Pull:          pull,
