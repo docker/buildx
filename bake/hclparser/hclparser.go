@@ -241,7 +241,7 @@ func (p *parser) resolveValue(name string) (err error) {
 			return nil
 		} else {
 			// TODO: support lists with csv values
-			return errors.Errorf("unsupported type %s for variable %s", v.Type(), name)
+			return errors.Errorf("unsupported type %s for variable %s", vv.Type().FriendlyName(), name)
 		}
 	}
 	v = &vv

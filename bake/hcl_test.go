@@ -782,3 +782,15 @@ func TestFunctionNoResult(t *testing.T) {
 	_, err := ParseFile(dt, "docker-bake.hcl")
 	require.Error(t, err)
 }
+
+func TestVarUnsupportedType(t *testing.T) {
+	dt := []byte(`
+		variable "FOO" {
+			default = []
+		}
+		target "default" {}`)
+
+	t.Setenv("FOO", "bar")
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+}
