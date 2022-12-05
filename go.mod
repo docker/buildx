@@ -10,13 +10,13 @@ require (
 	github.com/docker/cli v20.10.21+incompatible // v22.06.x - see "replace" for the actual version
 	github.com/docker/cli-docs-tool v0.5.0
 	github.com/docker/distribution v2.8.1+incompatible
-	github.com/docker/docker v20.10.18+incompatible // v22.06.x - see "replace" for the actual version
+	github.com/docker/docker v20.10.21+incompatible // v22.06.x - see "replace" for the actual version
 	github.com/docker/go-units v0.5.0
-	github.com/gofrs/flock v0.7.3
+	github.com/gofrs/flock v0.8.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 	github.com/hashicorp/hcl/v2 v2.8.2
-	github.com/moby/buildkit v0.10.1-0.20221121234933-ae9d0f57c7f3
+	github.com/moby/buildkit v0.11.0-rc1.0.20221205150952-9624ab4710dd
 	github.com/morikuni/aec v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
 	github.com/opencontainers/image-spec v1.0.3-0.20220303224323-02efb9a75ee1
@@ -77,7 +77,7 @@ require (
 	github.com/containerd/typeurl v1.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/distribution/v3 v3.0.0-20220725133111-4bf3547399eb // indirect
-	github.com/docker/docker-credential-helpers v0.6.4 // indirect
+	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
 	github.com/docker/go-metrics v0.0.1 // indirect
@@ -119,7 +119,7 @@ require (
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/moby/sys/sequential v0.5.0 // indirect
 	github.com/moby/sys/signal v0.7.0 // indirect
-	github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6 // indirect
+	github.com/moby/term v0.0.0-20221120202655-abb19827d345 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
 	github.com/modern-go/reflect2 v1.0.2 // indirect
 	github.com/opencontainers/runc v1.1.3 // indirect
@@ -131,7 +131,7 @@ require (
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/spf13/viper v1.14.0 // indirect
 	github.com/theupdateframework/notary v0.6.1 // indirect
-	github.com/tonistiigi/fsutil v0.0.0-20220930225714-4638ad635be5 // indirect
+	github.com/tonistiigi/fsutil v0.0.0-20221114235510-0127568185cf // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
 	github.com/tonistiigi/vt100 v0.0.0-20210615222946-8066bb97264f // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
@@ -153,7 +153,7 @@ require (
 	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783 // indirect
 	golang.org/x/sys v0.2.0 // indirect
 	golang.org/x/text v0.4.0 // indirect
-	golang.org/x/time v0.0.0-20220609170525-579cf78fd858 // indirect
+	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e // indirect
 	google.golang.org/protobuf v1.28.1 // indirect
@@ -171,8 +171,8 @@ require (
 
 replace (
 	github.com/aws/aws-sdk-go-v2/config => github.com/aws/aws-sdk-go-v2/config v1.15.5 // same as buildkit
-	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible // master (v22.06-dev)
-	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221006005007-99aa9bb766b5+incompatible // 22.06 branch (v22.06-dev)
+	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20221124184145-c0fa00e6142d+incompatible // v23.0.0-dev
+	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221124164242-a913b5ad7ef1+incompatible // 22.06 branch (v23.0.0-dev)
 	k8s.io/api => k8s.io/api v0.22.4
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4
 	k8s.io/client-go => k8s.io/client-go v0.22.4

@@ -179,6 +179,7 @@ github.com/containerd/containerd/services/content/contentserver
 github.com/containerd/containerd/version
 # github.com/containerd/continuity v0.3.0
 ## explicit; go 1.17
+github.com/containerd/continuity/fs
 github.com/containerd/continuity/sysx
 # github.com/containerd/ttrpc v1.1.0
 ## explicit; go 1.13
@@ -193,7 +194,7 @@ github.com/davecgh/go-spew/spew
 ## explicit; go 1.18
 github.com/distribution/distribution/v3/digestset
 github.com/distribution/distribution/v3/reference
-# github.com/docker/cli v20.10.21+incompatible => github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible
+# github.com/docker/cli v20.10.21+incompatible => github.com/docker/cli v20.10.3-0.20221124184145-c0fa00e6142d+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/manager
@@ -240,7 +241,7 @@ github.com/docker/distribution/registry/client/transport
 github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
-# github.com/docker/docker v20.10.18+incompatible => github.com/docker/docker v20.10.3-0.20221006005007-99aa9bb766b5+incompatible
+# github.com/docker/docker v20.10.21+incompatible => github.com/docker/docker v20.10.3-0.20221124164242-a913b5ad7ef1+incompatible
 ## explicit
 github.com/docker/docker/api
 github.com/docker/docker/api/types
@@ -273,8 +274,8 @@ github.com/docker/docker/pkg/stdcopy
 github.com/docker/docker/pkg/stringid
 github.com/docker/docker/pkg/system
 github.com/docker/docker/registry
-# github.com/docker/docker-credential-helpers v0.6.4
-## explicit; go 1.13
+# github.com/docker/docker-credential-helpers v0.7.0
+## explicit; go 1.18
 github.com/docker/docker-credential-helpers/client
 github.com/docker/docker-credential-helpers/credentials
 # github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c
@@ -310,7 +311,7 @@ github.com/go-logr/logr/funcr
 github.com/go-logr/stdr
 # github.com/go-sql-driver/mysql v1.6.0
 ## explicit; go 1.10
-# github.com/gofrs/flock v0.7.3
+# github.com/gofrs/flock v0.8.1
 ## explicit
 github.com/gofrs/flock
 # github.com/gogo/googleapis v1.4.1
@@ -433,7 +434,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.10.1-0.20221121234933-ae9d0f57c7f3
+# github.com/moby/buildkit v0.11.0-rc1.0.20221205150952-9624ab4710dd
 ## explicit; go 1.18
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -517,8 +518,8 @@ github.com/moby/sys/sequential
 # github.com/moby/sys/signal v0.7.0
 ## explicit; go 1.16
 github.com/moby/sys/signal
-# github.com/moby/term v0.0.0-20210619224110-3f7ff695adc6
-## explicit; go 1.13
+# github.com/moby/term v0.0.0-20221120202655-abb19827d345
+## explicit; go 1.18
 github.com/moby/term
 github.com/moby/term/windows
 # github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd
@@ -603,7 +604,7 @@ github.com/theupdateframework/notary/tuf/data
 github.com/theupdateframework/notary/tuf/signed
 github.com/theupdateframework/notary/tuf/utils
 github.com/theupdateframework/notary/tuf/validation
-# github.com/tonistiigi/fsutil v0.0.0-20220930225714-4638ad635be5
+# github.com/tonistiigi/fsutil v0.0.0-20221114235510-0127568185cf
 ## explicit; go 1.18
 github.com/tonistiigi/fsutil
 github.com/tonistiigi/fsutil/types
@@ -754,7 +755,7 @@ golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
 golang.org/x/text/unicode/bidi
 golang.org/x/text/unicode/norm
-# golang.org/x/time v0.0.0-20220609170525-579cf78fd858
+# golang.org/x/time v0.1.0
 ## explicit
 golang.org/x/time/rate
 # google.golang.org/appengine v1.6.7
@@ -1105,8 +1106,8 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 # github.com/aws/aws-sdk-go-v2/config => github.com/aws/aws-sdk-go-v2/config v1.15.5
-# github.com/docker/cli => github.com/docker/cli v20.10.3-0.20220803220330-418ca3b4d46f+incompatible
-# github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221006005007-99aa9bb766b5+incompatible
+# github.com/docker/cli => github.com/docker/cli v20.10.3-0.20221124184145-c0fa00e6142d+incompatible
+# github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221124164242-a913b5ad7ef1+incompatible
 # k8s.io/api => k8s.io/api v0.22.4
 # k8s.io/apimachinery => k8s.io/apimachinery v0.22.4
 # k8s.io/client-go => k8s.io/client-go v0.22.4

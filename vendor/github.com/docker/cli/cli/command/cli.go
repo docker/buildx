@@ -29,7 +29,6 @@ import (
 	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/tlsconfig"
-	"github.com/moby/term"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	notaryclient "github.com/theupdateframework/notary/client"
@@ -203,14 +202,17 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...Initialize
 			return err
 		}
 	}
-	cliflags.SetLogLevel(opts.Common.LogLevel)
+	cliflags.SetLogLevel(opts.LogLevel)
 
 	if opts.ConfigDir != "" {
 		config.SetDir(opts.ConfigDir)
 	}
 
-	if opts.Common.Debug {
+	if opts.Debug {
 		debug.Enable()
+	}
+	if opts.Context != "" && len(opts.Hosts) > 0 {
+		return errors.New("conflicting options: either specify --host or --context, not both")
 	}
 
 	cli.loadConfigFile()
@@ -219,13 +221,10 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...Initialize
 	cli.contextStore = &ContextStoreWithDefault{
 		Store: baseContextStore,
 		Resolver: func() (*DefaultContext, error) {
-			return ResolveDefaultContext(opts.Common, cli.contextStoreConfig)
+			return ResolveDefaultContext(opts, cli.contextStoreConfig)
 		},
 	}
-	cli.currentContext, err = resolveContextName(opts.Common, cli.configFile, cli.contextStore)
-	if err != nil {
-		return err
-	}
+	cli.currentContext = resolveContextName(opts, cli.configFile)
 	cli.dockerEndpoint, err = resolveDockerEndpoint(cli.contextStore, cli.currentContext)
 	if err != nil {
 		return errors.Wrap(err, "unable to resolve docker endpoint")
@@ -242,7 +241,11 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...Initialize
 }
 
 // NewAPIClientFromFlags creates a new APIClient from command line flags
-func NewAPIClientFromFlags(opts *cliflags.CommonOptions, configFile *configfile.ConfigFile) (client.APIClient, error) {
+func NewAPIClientFromFlags(opts *cliflags.ClientOptions, configFile *configfile.ConfigFile) (client.APIClient, error) {
+	if opts.Context != "" && len(opts.Hosts) > 0 {
+		return nil, errors.New("conflicting options: either specify --host or --context, not both")
+	}
+
 	storeConfig := DefaultContextStoreConfig()
 	contextStore := &ContextStoreWithDefault{
 		Store: store.New(config.ContextStoreDir(), storeConfig),
@@ -250,11 +253,7 @@ func NewAPIClientFromFlags(opts *cliflags.CommonOptions, configFile *configfile.
 			return ResolveDefaultContext(opts, storeConfig)
 		},
 	}
-	contextName, err := resolveContextName(opts, configFile, contextStore)
-	if err != nil {
-		return nil, err
-	}
-	endpoint, err := resolveDockerEndpoint(contextStore, contextName)
+	endpoint, err := resolveDockerEndpoint(contextStore, resolveContextName(opts, configFile))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to resolve docker endpoint")
 	}
@@ -288,7 +287,7 @@ func resolveDockerEndpoint(s store.Reader, contextName string) (docker.Endpoint,
 }
 
 // Resolve the Docker endpoint for the default context (based on config, env vars and CLI flags)
-func resolveDefaultDockerEndpoint(opts *cliflags.CommonOptions) (docker.Endpoint, error) {
+func resolveDefaultDockerEndpoint(opts *cliflags.ClientOptions) (docker.Endpoint, error) {
 	host, err := getServerHost(opts.Hosts, opts.TLSOptions)
 	if err != nil {
 		return docker.Endpoint{}, err
@@ -363,9 +362,61 @@ func (cli *DockerCli) ContextStore() store.Store {
 	return cli.contextStore
 }
 
-// CurrentContext returns the current context name
+// CurrentContext returns the current context name, based on flags,
+// environment variables and the cli configuration file, in the following
+// order of preference:
+//
+//  1. The "--context" command-line option.
+//  2. The "DOCKER_CONTEXT" environment variable.
+//  3. The current context as configured through the in "currentContext"
+//     field in the CLI configuration file ("~/.docker/config.json").
+//  4. If no context is configured, use the "default" context.
+//
+// # Fallbacks for backward-compatibility
+//
+// To preserve backward-compatibility with the "pre-contexts" behavior,
+// the "default" context is used if:
+//
+//   - The "--host" option is set
+//   - The "DOCKER_HOST" ([DefaultContextName]) environment variable is set
+//     to a non-empty value.
+//
+// In these cases, the default context is used, which uses the host as
+// specified in "DOCKER_HOST", and TLS config from flags/env vars.
+//
+// Setting both the "--context" and "--host" flags is ambiguous and results
+// in an error when the cli is started.
+//
+// CurrentContext does not validate if the given context exists or if it's
+// valid; errors may occur when trying to use it.
 func (cli *DockerCli) CurrentContext() string {
 	return cli.currentContext
+}
+
+// CurrentContext returns the current context name, based on flags,
+// environment variables and the cli configuration file. It does not
+// validate if the given context exists or if it's valid; errors may
+// occur when trying to use it.
+//
+// Refer to [DockerCli.CurrentContext] above for further details.
+func resolveContextName(opts *cliflags.ClientOptions, config *configfile.ConfigFile) string {
+	if opts != nil && opts.Context != "" {
+		return opts.Context
+	}
+	if opts != nil && len(opts.Hosts) > 0 {
+		return DefaultContextName
+	}
+	if os.Getenv(client.EnvOverrideHost) != "" {
+		return DefaultContextName
+	}
+	if ctxName := os.Getenv("DOCKER_CONTEXT"); ctxName != "" {
+		return ctxName
+	}
+	if config != nil && config.CurrentContext != "" {
+		// We don't validate if this context exists: errors may occur when trying to use it.
+		return config.CurrentContext
+	}
+	return DefaultContextName
 }
 
 // DockerEndpoint returns the current docker endpoint
@@ -407,24 +458,13 @@ func NewDockerCli(ops ...DockerCliOption) (*DockerCli, error) {
 	defaultOps := []DockerCliOption{
 		WithContentTrustFromEnv(),
 		WithDefaultContextStoreConfig(),
+		WithStandardStreams(),
 	}
 	ops = append(defaultOps, ops...)
 
 	cli := &DockerCli{}
 	if err := cli.Apply(ops...); err != nil {
 		return nil, err
-	}
-	if cli.out == nil || cli.in == nil || cli.err == nil {
-		stdin, stdout, stderr := term.StdStreams()
-		if cli.in == nil {
-			cli.in = streams.NewIn(stdin)
-		}
-		if cli.out == nil {
-			cli.out = streams.NewOut(stdout)
-		}
-		if cli.err == nil {
-			cli.err = stderr
-		}
 	}
 	return cli, nil
 }
@@ -446,40 +486,6 @@ func getServerHost(hosts []string, tlsOptions *tlsconfig.Options) (string, error
 // UserAgent returns the user agent string used for making API requests
 func UserAgent() string {
 	return "Docker-Client/" + version.Version + " (" + runtime.GOOS + ")"
-}
-
-// resolveContextName resolves the current context name with the following rules:
-// - setting both --context and --host flags is ambiguous
-// - if --context is set, use this value
-// - if --host flag or DOCKER_HOST (client.EnvOverrideHost) is set, fallbacks to use the same logic as before context-store was added
-// for backward compatibility with existing scripts
-// - if DOCKER_CONTEXT is set, use this value
-// - if Config file has a globally set "CurrentContext", use this value
-// - fallbacks to default HOST, uses TLS config from flags/env vars
-func resolveContextName(opts *cliflags.CommonOptions, config *configfile.ConfigFile, contextstore store.Reader) (string, error) {
-	if opts.Context != "" && len(opts.Hosts) > 0 {
-		return "", errors.New("Conflicting options: either specify --host or --context, not both")
-	}
-	if opts.Context != "" {
-		return opts.Context, nil
-	}
-	if len(opts.Hosts) > 0 {
-		return DefaultContextName, nil
-	}
-	if os.Getenv(client.EnvOverrideHost) != "" {
-		return DefaultContextName, nil
-	}
-	if ctxName := os.Getenv("DOCKER_CONTEXT"); ctxName != "" {
-		return ctxName, nil
-	}
-	if config != nil && config.CurrentContext != "" {
-		_, err := contextstore.GetMetadata(config.CurrentContext)
-		if store.IsErrContextDoesNotExist(err) {
-			return "", errors.Errorf("Current context %q is not found on the file system, please check your config file at %s", config.CurrentContext, config.Filename)
-		}
-		return config.CurrentContext, err
-	}
-	return DefaultContextName, nil
 }
 
 var defaultStoreEndpoints = []store.NamedTypeGetter{
