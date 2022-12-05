@@ -87,7 +87,7 @@ func appendJSONFuncCalls(exp hcl.Expression, m map[string]struct{}) error {
 		return nil
 	}
 	rng := src.FieldByName("SrcRange")
-	if val.IsZero() {
+	if rng.IsZero() {
 		return nil
 	}
 	var stringVal struct {
