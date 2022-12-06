@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -36,8 +37,10 @@ import (
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/solver/errdefs"
@@ -1478,26 +1481,59 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 		// handle OCI layout
 		if strings.HasPrefix(v.Path, "oci-layout://") {
 			pathAlone := strings.TrimPrefix(v.Path, "oci-layout://")
-			parts := strings.SplitN(pathAlone, "@", 2)
-			if len(parts) != 2 {
-				return nil, errors.Errorf("invalid oci-layout context %s, must be oci-layout:///path/to/layout@sha256:hash", v.Path)
+			localPath := pathAlone
+			localPath, dig, hasDigest := strings.Cut(localPath, "@")
+			localPath, tag, hasTag := strings.Cut(localPath, ":")
+			if !hasDigest {
+				indexPath := path.Join(localPath, "index.json")
+				index, err := ociindex.ReadIndexJSONFileLocked(indexPath)
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to read oci-layout index at %s", indexPath)
+				}
+
+				if len(index.Manifests) == 1 {
+					dig = string(index.Manifests[0].Digest)
+					hasDigest = true
+				}
+
+				if !hasTag {
+					tag = "latest"
+				}
+				for _, m := range index.Manifests {
+					if m.Annotations[specs.AnnotationRefName] == tag {
+						dig = string(m.Digest)
+						hasDigest = true
+						break
+					}
+				}
 			}
-			localPath := parts[0]
-			dgst, err := digest.Parse(parts[1])
+			if !hasDigest {
+				return nil, errors.Errorf("oci-layout reference %q could not be resolved", v.Path)
+			}
+			_, err := digest.Parse(dig)
 			if err != nil {
-				return nil, errors.Wrapf(err, "invalid oci-layout context %s, does not have proper hash, must be oci-layout:///path/to/layout@sha256:hash", v.Path)
+				return nil, errors.Wrapf(err, "invalid oci-layout digest %s", dig)
 			}
+
 			store, err := local.NewStore(localPath)
 			if err != nil {
 				return nil, errors.Wrapf(err, "invalid store at %s", localPath)
 			}
-			// now we can add it
+			storeName := identity.NewID()
 			if target.OCIStores == nil {
 				target.OCIStores = map[string]content.Store{}
 			}
-			target.OCIStores[k] = store
+			target.OCIStores[storeName] = store
 
-			target.FrontendAttrs["context:"+k] = fmt.Sprintf("oci-layout:%s@%s", k, dgst.String())
+			layout := "oci-layout://" + storeName
+			if hasTag {
+				layout += ":" + tag
+			}
+			if hasDigest {
+				layout += "@" + dig
+			}
+
+			target.FrontendAttrs["context:"+k] = layout
 			continue
 		}
 		st, err := os.Stat(v.Path)
