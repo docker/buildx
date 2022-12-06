@@ -170,7 +170,6 @@ require (
 )
 
 replace (
-	github.com/aws/aws-sdk-go-v2/config => github.com/aws/aws-sdk-go-v2/config v1.15.5 // same as buildkit
 	github.com/docker/cli => github.com/docker/cli v20.10.3-0.20221124184145-c0fa00e6142d+incompatible // v23.0.0-dev
 	github.com/docker/docker => github.com/docker/docker v20.10.3-0.20221124164242-a913b5ad7ef1+incompatible // 22.06 branch (v23.0.0-dev)
 	k8s.io/api => k8s.io/api v0.22.4
