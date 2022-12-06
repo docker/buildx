@@ -9,7 +9,9 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
@@ -89,20 +91,27 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		}
 	}()
 
-	var dis []build.DriverInfo
+	var nodes []builder.Node
 	var files []bake.File
 	var inp *bake.Input
 
 	// instance only needed for reading remote bake files or building
 	if url != "" || !in.printOnly {
-		dis, err = getInstanceOrDefault(ctx, dockerCli, in.builder, contextPathHash)
+		b, err := builder.New(dockerCli,
+			builder.WithName(in.builder),
+			builder.WithContextPathHash(contextPathHash),
+		)
+		if err != nil {
+			return err
+		}
+		nodes, err = b.LoadNodes(ctx, false)
 		if err != nil {
 			return err
 		}
 	}
 
 	if url != "" {
-		files, inp, err = bake.ReadRemoteFiles(ctx, dis, url, in.files, printer)
+		files, inp, err = bake.ReadRemoteFiles(ctx, nodes, url, in.files, printer)
 	} else {
 		files, err = bake.ReadLocalFiles(in.files)
 	}
@@ -146,7 +155,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return nil
 	}
 
-	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, err := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	if err != nil {
 		return wrapBuildError(err, true)
 	}

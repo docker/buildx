@@ -8,8 +8,7 @@ import (
 	"text/tabwriter"
 	"time"
 
-	"github.com/docker/buildx/store"
-	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -25,71 +24,43 @@ type inspectOptions struct {
 func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	ctx := appcontext.Context()
 
-	txn, release, err := storeutil.GetStore(dockerCli)
+	b, err := builder.New(dockerCli,
+		builder.WithName(in.builder),
+		builder.WithSkippedValidation(),
+	)
 	if err != nil {
 		return err
 	}
-	defer release()
-
-	var ng *store.NodeGroup
-
-	if in.builder != "" {
-		ng, err = storeutil.GetNodeGroup(txn, dockerCli, in.builder)
-		if err != nil {
-			return err
-		}
-	} else {
-		ng, err = storeutil.GetCurrentInstance(txn, dockerCli)
-		if err != nil {
-			return err
-		}
-	}
-
-	if ng == nil {
-		ng = &store.NodeGroup{
-			Name: "default",
-			Nodes: []store.Node{{
-				Name:     "default",
-				Endpoint: "default",
-			}},
-		}
-	}
-
-	ngi := &nginfo{ng: ng}
 
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	err = loadNodeGroupData(timeoutCtx, dockerCli, ngi)
-
-	var bootNgi *nginfo
+	nodes, err := b.LoadNodes(timeoutCtx, true)
 	if in.bootstrap {
 		var ok bool
-		ok, err = boot(ctx, ngi)
+		ok, err = b.Boot(ctx)
 		if err != nil {
 			return err
 		}
-		bootNgi = ngi
 		if ok {
-			ngi = &nginfo{ng: ng}
-			err = loadNodeGroupData(ctx, dockerCli, ngi)
+			nodes, err = b.LoadNodes(timeoutCtx, true)
 		}
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "Name:\t%s\n", ngi.ng.Name)
-	fmt.Fprintf(w, "Driver:\t%s\n", ngi.ng.Driver)
+	fmt.Fprintf(w, "Name:\t%s\n", b.Name)
+	fmt.Fprintf(w, "Driver:\t%s\n", b.Driver)
 
 	if err != nil {
 		fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-	} else if ngi.err != nil {
-		fmt.Fprintf(w, "Error:\t%s\n", ngi.err.Error())
+	} else if b.Err() != nil {
+		fmt.Fprintf(w, "Error:\t%s\n", b.Err().Error())
 	}
 	if err == nil {
 		fmt.Fprintln(w, "")
 		fmt.Fprintln(w, "Nodes:")
 
-		for i, n := range ngi.ng.Nodes {
+		for i, n := range nodes {
 			if i != 0 {
 				fmt.Fprintln(w, "")
 			}
@@ -104,21 +75,17 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 				fmt.Fprintf(w, "Driver Options:\t%s\n", strings.Join(driverOpts, " "))
 			}
 
-			if err := ngi.drivers[i].di.Err; err != nil {
+			if err := n.Err; err != nil {
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-			} else if err := ngi.drivers[i].err; err != nil {
-				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
-			} else if bootNgi != nil && len(bootNgi.drivers) > i && bootNgi.drivers[i].err != nil {
-				fmt.Fprintf(w, "Error:\t%s\n", bootNgi.drivers[i].err.Error())
 			} else {
-				fmt.Fprintf(w, "Status:\t%s\n", ngi.drivers[i].info.Status)
+				fmt.Fprintf(w, "Status:\t%s\n", nodes[i].DriverInfo.Status)
 				if len(n.Flags) > 0 {
 					fmt.Fprintf(w, "Flags:\t%s\n", strings.Join(n.Flags, " "))
 				}
-				if ngi.drivers[i].version != "" {
-					fmt.Fprintf(w, "Buildkit:\t%s\n", ngi.drivers[i].version)
+				if nodes[i].Version != "" {
+					fmt.Fprintf(w, "Buildkit:\t%s\n", nodes[i].Version)
 				}
-				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Platforms, ngi.drivers[i].platforms), ", "))
+				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Node.Platforms, n.Platforms), ", "))
 			}
 		}
 	}
