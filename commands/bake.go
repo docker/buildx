@@ -19,9 +19,10 @@ import (
 )
 
 type bakeOptions struct {
-	files     []string
-	overrides []string
-	printOnly bool
+	files      []string
+	overrides  []string
+	printOnly  bool
+	syncOutput bool
 	commonOptions
 }
 
@@ -146,7 +147,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		return nil
 	}
 
-	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, err := build.Build(ctx, dis, bo, dockerAPI(dockerCli), confutil.ConfigDir(dockerCli), printer, in.syncOutput)
 	if err != nil {
 		return wrapBuildError(err, true)
 	}
@@ -190,6 +191,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
+	flags.BoolVar(&options.syncOutput, "sync-output", false, "Ensure all builds complete before beginning output")
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
 
 	commonBuildFlags(&options.commonOptions, flags)

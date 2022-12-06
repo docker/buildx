@@ -15,6 +15,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"syscall"
 	"time"
 
@@ -782,11 +783,11 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 	return err
 }
 
-func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, drivers, opt, docker, configDir, w, nil, false)
+func Build(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer, syncOutputs bool) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, drivers, opt, docker, configDir, w, nil, syncOutputs, false)
 }
 
-func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[string]Options, docker DockerAPI, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), syncOutputs bool, allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -854,9 +855,11 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 		}
 	}
 
+	msize := 0
 	for k, opt := range opt {
 		multiDriver := len(m[k]) > 1
 		hasMobyDriver := false
+		msize += len(m[k])
 		for i, dp := range m[k] {
 			di := drivers[dp.driverIndex]
 			if di.Driver.IsMobyDriver() {
@@ -927,6 +930,10 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 	results := waitmap.New()
 
 	multiTarget := len(opt) > 1
+
+	buildGrp := &sync.WaitGroup{}
+	buildGrp.Add(msize)
+	errCount := int64(0)
 
 	for k, opt := range opt {
 		err := func(k string) error {
@@ -1147,6 +1154,8 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 								res, err := c.Solve(ctx, req)
 								if err != nil {
 									if origErr != nil {
+										atomic.AddInt64(&errCount, 1)
+										buildGrp.Done()
 										return nil, err
 									}
 									var reqErr *errdefs.UnsupportedSubrequestError
@@ -1158,6 +1167,8 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 												origErr = err
 												continue
 											}
+											atomic.AddInt64(&errCount, 1)
+											buildGrp.Done()
 											return nil, err
 										}
 										// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
@@ -1167,6 +1178,8 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 											continue
 										}
 									}
+									atomic.AddInt64(&errCount, 1)
+									buildGrp.Done()
 									return nil, err
 								}
 								if opt.PrintFunc != nil {
@@ -1176,6 +1189,27 @@ func BuildWithResultHandler(ctx context.Context, drivers []DriverInfo, opt map[s
 								if resultHandleFunc != nil {
 									resultHandleFunc(dp.driverIndex, &ResultContext{cc, res})
 								}
+
+								if syncOutputs {
+									err := res.EachRef(func(ref gateway.Reference) error {
+										return ref.Evaluate(ctx)
+									})
+									if err != nil {
+										atomic.AddInt64(&errCount, 1)
+										buildGrp.Done()
+										return nil, err
+									}
+								}
+								buildGrp.Done()
+								if syncOutputs {
+									buildGrp.Wait()
+									if atomic.LoadInt64(&errCount) > 0 {
+										// wait until cancelled
+										<-ctx.Done()
+										return nil, ctx.Err()
+									}
+								}
+
 								return res, nil
 							}
 						}, ch)
