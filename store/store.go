@@ -12,11 +12,16 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	instanceDir = "instances"
+	defaultsDir = "defaults"
+)
+
 func New(root string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(root, "instances"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, instanceDir), 0700); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(root, "defaults"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, defaultsDir), 0700); err != nil {
 		return nil, err
 	}
 	return &Store{root: root}, nil
@@ -43,7 +48,7 @@ type Txn struct {
 }
 
 func (t *Txn) List() ([]*NodeGroup, error) {
-	pp := filepath.Join(t.s.root, "instances")
+	pp := filepath.Join(t.s.root, instanceDir)
 	fis, err := os.ReadDir(pp)
 	if err != nil {
 		return nil, err
@@ -73,7 +78,7 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	dt, err := os.ReadFile(filepath.Join(t.s.root, "instances", name))
+	dt, err := os.ReadFile(filepath.Join(t.s.root, instanceDir, name))
 	if err != nil {
 		return nil, err
 	}
@@ -93,7 +98,7 @@ func (t *Txn) Save(ng *NodeGroup) error {
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, "instances", name), dt, 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, instanceDir, name), dt, 0600)
 }
 
 func (t *Txn) Remove(name string) error {
@@ -101,7 +106,7 @@ func (t *Txn) Remove(name string) error {
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(t.s.root, "instances", name))
+	return os.RemoveAll(filepath.Join(t.s.root, instanceDir, name))
 }
 
 func (t *Txn) SetCurrent(key, name string, global, def bool) error {
@@ -121,11 +126,11 @@ func (t *Txn) SetCurrent(key, name string, global, def bool) error {
 	h := toHash(key)
 
 	if def {
-		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "defaults", h), []byte(name), 0600); err != nil {
+		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, defaultsDir, h), []byte(name), 0600); err != nil {
 			return err
 		}
 	} else {
-		os.RemoveAll(filepath.Join(t.s.root, "defaults", h)) // ignore error
+		os.RemoveAll(filepath.Join(t.s.root, defaultsDir, h)) // ignore error
 	}
 	return nil
 }
@@ -173,7 +178,7 @@ func (t *Txn) Current(key string) (*NodeGroup, error) {
 
 	h := toHash(key)
 
-	dt, err = os.ReadFile(filepath.Join(t.s.root, "defaults", h))
+	dt, err = os.ReadFile(filepath.Join(t.s.root, defaultsDir, h))
 	if err != nil {
 		if os.IsNotExist(err) {
 			t.reset(key)
