@@ -97,9 +97,6 @@ func New(dockerCli command.Cli, opts ...Option) (_ *Builder, err error) {
 			return nil, err
 		}
 	}
-	if b.NodeGroup.Name == "default" && len(b.NodeGroup.Nodes) == 1 {
-		b.NodeGroup.Name = b.NodeGroup.Nodes[0].Endpoint
-	}
 	if b.opts.validate {
 		if err = b.Validate(); err != nil {
 			return nil, err
@@ -111,16 +108,16 @@ func New(dockerCli command.Cli, opts ...Option) (_ *Builder, err error) {
 
 // Validate validates builder context
 func (b *Builder) Validate() error {
-	if b.NodeGroup.Name == "default" && b.NodeGroup.Name != b.opts.dockerCli.CurrentContext() {
-		return errors.Errorf("use `docker --context=default buildx` to switch to default context")
-	}
-	list, err := b.opts.dockerCli.ContextStore().List()
-	if err != nil {
-		return err
-	}
-	for _, l := range list {
-		if l.Name == b.NodeGroup.Name && b.NodeGroup.Name != "default" {
-			return errors.Errorf("use `docker --context=%s buildx` to switch to context %q", b.NodeGroup.Name, b.NodeGroup.Name)
+	if b.NodeGroup.DockerContext {
+		list, err := b.opts.dockerCli.ContextStore().List()
+		if err != nil {
+			return err
+		}
+		currentContext := b.opts.dockerCli.CurrentContext()
+		for _, l := range list {
+			if l.Name == b.Name && l.Name != currentContext {
+				return errors.Errorf("use `docker --context=%s buildx` to switch to context %q", l.Name, l.Name)
+			}
 		}
 	}
 	return nil

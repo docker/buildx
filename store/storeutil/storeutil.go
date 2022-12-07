@@ -79,10 +79,6 @@ func GetNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.No
 		return ng, nil
 	}
 
-	if name == "default" {
-		name = dockerCli.CurrentContext()
-	}
-
 	list, err := dockerCli.ContextStore().List()
 	if err != nil {
 		return nil, err
@@ -90,13 +86,14 @@ func GetNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.No
 	for _, l := range list {
 		if l.Name == name {
 			return &store.NodeGroup{
-				Name: "default",
+				Name: name,
 				Nodes: []store.Node{
 					{
-						Name:     "default",
+						Name:     name,
 						Endpoint: name,
 					},
 				},
+				DockerContext: true,
 			}, nil
 		}
 	}

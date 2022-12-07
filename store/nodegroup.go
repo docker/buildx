@@ -12,10 +12,11 @@ import (
 )
 
 type NodeGroup struct {
-	Name    string
-	Driver  string
-	Nodes   []Node
-	Dynamic bool
+	Name          string
+	Driver        string
+	Nodes         []Node
+	Dynamic       bool
+	DockerContext bool
 }
 
 type Node struct {
