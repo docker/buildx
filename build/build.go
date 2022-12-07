@@ -607,7 +607,9 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	if err != nil {
 		return nil, nil, err
 	}
-	so.FrontendAttrs["add-hosts"] = extraHosts
+	if len(extraHosts) > 0 {
+		so.FrontendAttrs["add-hosts"] = extraHosts
+	}
 
 	// setup shm size
 	if opt.ShmSize.Value() > 0 {
