@@ -37,6 +37,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/frontend/attestations"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
@@ -67,6 +68,7 @@ type Options struct {
 	Inputs Inputs
 
 	Allow         []entitlements.Entitlement
+	Attests       map[string]*string
 	BuildArgs     map[string]string
 	CacheFrom     []client.CacheOptionsEntry
 	CacheTo       []client.CacheOptionsEntry
@@ -576,6 +578,21 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		if _, ok := opt.BuildArgs[k]; !ok {
 			so.FrontendAttrs["build-arg:"+k] = v
 		}
+	}
+
+	if len(opt.Attests) > 0 {
+		if !bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) {
+			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
+		}
+		for k, v := range opt.Attests {
+			if v == nil {
+				continue
+			}
+			so.FrontendAttrs[k] = *v
+		}
+	}
+	if _, ok := opt.Attests["attest:provenance"]; !ok {
+		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
 	}
 
 	// set platforms
