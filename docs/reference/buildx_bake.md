@@ -22,8 +22,10 @@ Build from a file
 | [`--no-cache`](#no-cache) |  |  | Do not use cache when building the image |
 | [`--print`](#print) |  |  | Print the options without building |
 | [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
+| `--provenance` | `string` |  | Shorthand for `--set=*.attest=type=provenance` |
 | [`--pull`](#pull) |  |  | Always attempt to pull all referenced images |
 | `--push` |  |  | Shorthand for `--set=*.output=type=registry` |
+| `--sbom` | `string` |  | Shorthand for `--set=*.attest=type=sbom` |
 | [`--set`](#set) | `stringArray` |  | Override target value (e.g., `targetpattern.key=value`) |
 
 

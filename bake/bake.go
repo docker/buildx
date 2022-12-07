@@ -417,7 +417,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			o := t[kk[1]]
 
 			switch keys[1] {
-			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh":
+			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest":
 				if len(parts) == 2 {
 					o.ArrValue = append(o.ArrValue, parts[1])
 				}
@@ -558,6 +558,7 @@ type Target struct {
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional"`
 
+	Attest           []string          `json:"attest,omitempty" hcl:"attest,optional"`
 	Context          *string           `json:"context,omitempty" hcl:"context,optional"`
 	Contexts         map[string]string `json:"contexts,omitempty" hcl:"contexts,optional"`
 	Dockerfile       *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
@@ -583,6 +584,7 @@ type Target struct {
 }
 
 func (t *Target) normalize() {
+	t.Attest = removeDupes(t.Attest)
 	t.Tags = removeDupes(t.Tags)
 	t.Secrets = removeDupes(t.Secrets)
 	t.SSH = removeDupes(t.SSH)
@@ -635,6 +637,9 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.Target != nil {
 		t.Target = t2.Target
+	}
+	if t2.Attest != nil { // merge
+		t.Attest = append(t.Attest, t2.Attest...)
 	}
 	if t2.Secrets != nil { // merge
 		t.Secrets = append(t.Secrets, t2.Secrets...)
@@ -718,6 +723,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.Platforms = o.ArrValue
 		case "output":
 			t.Outputs = o.ArrValue
+		case "attest":
+			t.Attest = append(t.Attest, o.ArrValue...)
 		case "no-cache":
 			noCache, err := strconv.ParseBool(value)
 			if err != nil {
@@ -970,6 +977,12 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		return nil, err
 	}
 	bo.Exports = outputs
+
+	attests, err := buildflags.ParseAttests(t.Attest)
+	if err != nil {
+		return nil, err
+	}
+	bo.Attests = attests
 
 	return bo, nil
 }
