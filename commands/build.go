@@ -18,6 +18,8 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/monitor"
+	"github.com/docker/buildx/store"
+	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
@@ -260,6 +262,9 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	)
 	if err != nil {
 		return err
+	}
+	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
+		return errors.Wrapf(err, "failed to update builder last activity time")
 	}
 	nodes, err := b.LoadNodes(ctx, false)
 	if err != nil {
@@ -729,4 +734,13 @@ func isExperimental() bool {
 		return vv
 	}
 	return false
+}
+
+func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
+	txn, release, err := storeutil.GetStore(dockerCli)
+	if err != nil {
+		return err
+	}
+	defer release()
+	return txn.UpdateLastActivity(ng)
 }

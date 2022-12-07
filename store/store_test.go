@@ -92,6 +92,7 @@ func TestNodeManagement(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, "mybuild", ng.Name)
 	require.Equal(t, "mydriver", ng.Driver)
+	require.True(t, !ng.LastActivity.IsZero())
 
 	_, err = txn.NodeGroupByName("mybuild2")
 	require.Error(t, err)
