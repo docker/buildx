@@ -1,0 +1,16 @@
+#!/usr/bin/env sh
+
+set -e
+
+case $1 in
+  "version")
+    git describe --match 'v[0-9]*' --dirty='.m' --always --tags
+    ;;
+  "revision")
+    echo "$(git rev-parse HEAD)$(if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi)"
+    ;;
+  *)
+    echo "usage: ./hack/git-meta <version|revision>"
+    exit 1
+    ;;
+esac
