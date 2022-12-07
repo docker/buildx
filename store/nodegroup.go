@@ -12,11 +12,13 @@ import (
 )
 
 type NodeGroup struct {
-	Name          string
-	Driver        string
-	Nodes         []Node
-	Dynamic       bool
-	DockerContext bool
+	Name    string
+	Driver  string
+	Nodes   []Node
+	Dynamic bool
+
+	// skip the following fields from being saved in the store
+	DockerContext bool `json:"-"`
 }
 
 type Node struct {
