@@ -17,6 +17,7 @@ Start a build
 | --- | --- | --- | --- |
 | [`--add-host`](https://docs.docker.com/engine/reference/commandline/build/#add-entries-to-container-hosts-file---add-host) | `stringSlice` |  | Add a custom host-to-IP mapping (format: `host:ip`) |
 | [`--allow`](#allow) | `stringSlice` |  | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`) |
+| `--attest` | `stringArray` |  | Attestation parameters (format: `type=sbom,generator=image`) |
 | [`--build-arg`](#build-arg) | `stringArray` |  | Set build-time variables |
 | [`--build-context`](#build-context) | `stringArray` |  | Additional build contexts (e.g., name=path) |
 | [`--builder`](#builder) | `string` |  | Override the configured builder instance |
@@ -36,9 +37,11 @@ Start a build
 | [`--platform`](#platform) | `stringArray` |  | Set target platform for build |
 | `--print` | `string` |  | Print result of information request (e.g., outline, targets) [experimental] |
 | [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
+| `--provenance` | `string` |  | Shortand for `--attest=type=provenance` |
 | `--pull` |  |  | Always attempt to pull all referenced images |
 | [`--push`](#push) |  |  | Shorthand for `--output=type=registry` |
 | `-q`, `--quiet` |  |  | Suppress the build output and print image ID on success |
+| `--sbom` | `string` |  | Shorthand for `--attest=type=sbom` |
 | [`--secret`](#secret) | `stringArray` |  | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`) |
 | [`--shm-size`](#shm-size) | `bytes` | `0` | Size of `/dev/shm` |
 | [`--ssh`](#ssh) | `stringArray` |  | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |

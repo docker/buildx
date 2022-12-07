@@ -53,6 +53,7 @@ type buildOptions struct {
 	printFunc      string
 
 	allow         []string
+	attests       []string
 	buildArgs     []string
 	cacheFrom     []string
 	cacheTo       []string
@@ -85,6 +86,9 @@ type commonOptions struct {
 
 	exportPush bool
 	exportLoad bool
+
+	sbom       string
+	provenance string
 }
 
 func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
@@ -212,8 +216,19 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 			}
 		}
 	}
-
 	opts.Exports = outputs
+
+	inAttests := append([]string{}, in.attests...)
+	if in.provenance != "" {
+		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", in.provenance))
+	}
+	if in.sbom != "" {
+		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", in.sbom))
+	}
+	opts.Attests, err = buildflags.ParseAttests(inAttests)
+	if err != nil {
+		return err
+	}
 
 	cacheImports, err := buildflags.ParseCacheEntry(in.cacheFrom)
 	if err != nil {
@@ -503,6 +518,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.SetAnnotation("target", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#specifying-target-build-stage---target"})
 
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
+
+	flags.StringArrayVar(&options.attests, "attest", []string{}, `Attestation parameters (format: "type=sbom,generator=image")`)
+	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--attest=type=sbom"`)
+	flags.StringVar(&options.provenance, "provenance", "", `Shortand for "--attest=type=provenance"`)
 
 	if isExperimental() {
 		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build [experimental]")
