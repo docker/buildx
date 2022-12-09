@@ -3,23 +3,24 @@ package commands
 import (
 	"context"
 	"fmt"
-	"io"
 	"strings"
-	"text/tabwriter"
 	"time"
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/cobrautil"
-	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/command/formatter"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
 
 type lsOptions struct {
+	quiet   bool
+	noTrunc bool
+	format  string
 }
 
 func runLs(dockerCli command.Cli, in lsOptions) error {
@@ -41,39 +42,26 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
-
-	eg, _ := errgroup.WithContext(timeoutCtx)
-	for _, b := range builders {
-		func(b *builder.Builder) {
-			eg.Go(func() error {
-				_, _ = b.LoadNodes(timeoutCtx, true)
-				return nil
-			})
-		}(b)
+	if !in.quiet {
+		timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		eg, _ := errgroup.WithContext(timeoutCtx)
+		for _, b := range builders {
+			func(b *builder.Builder) {
+				eg.Go(func() error {
+					_, _ = b.LoadNodes(timeoutCtx, true)
+					return nil
+				})
+			}(b)
+		}
+		if err := eg.Wait(); err != nil {
+			return err
+		}
 	}
 
-	if err := eg.Wait(); err != nil {
+	if hasErrors, err := lsPrint(dockerCli, current, builders, !in.noTrunc, in.quiet, in.format); err != nil {
 		return err
-	}
-
-	w := tabwriter.NewWriter(dockerCli.Out(), 0, 0, 1, ' ', 0)
-	fmt.Fprintf(w, "NAME/NODE\tDRIVER/ENDPOINT\tSTATUS\tBUILDKIT\tPLATFORMS\n")
-
-	printErr := false
-	for _, b := range builders {
-		if current.Name == b.Name {
-			b.Name += " *"
-		}
-		if ok := printBuilder(w, b); !ok {
-			printErr = true
-		}
-	}
-
-	w.Flush()
-
-	if printErr {
+	} else if hasErrors {
 		_, _ = fmt.Fprintf(dockerCli.Err(), "\n")
 		for _, b := range builders {
 			if b.Err() != nil {
@@ -91,31 +79,6 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	return nil
 }
 
-func printBuilder(w io.Writer, b *builder.Builder) (ok bool) {
-	ok = true
-	var err string
-	if b.Err() != nil {
-		ok = false
-		err = "error"
-	}
-	fmt.Fprintf(w, "%s\t%s\t%s\t\t\n", b.Name, b.Driver, err)
-	if b.Err() == nil {
-		for _, n := range b.Nodes() {
-			var status string
-			if n.DriverInfo != nil {
-				status = n.DriverInfo.Status.String()
-			}
-			if n.Err != nil {
-				ok = false
-				fmt.Fprintf(w, "  %s\t%s\t%s\t\t\n", n.Name, n.Endpoint, "error")
-			} else {
-				fmt.Fprintf(w, "  %s\t%s\t%s\t%s\t%s\n", n.Name, n.Endpoint, status, n.Version, strings.Join(platformutil.FormatInGroups(n.Node.Platforms, n.Platforms), ", "))
-			}
-		}
-	}
-	return
-}
-
 func lsCmd(dockerCli command.Cli) *cobra.Command {
 	var options lsOptions
 
@@ -127,6 +90,11 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 			return runLs(dockerCli, options)
 		},
 	}
+
+	flags := cmd.Flags()
+	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Only display builder names")
+	flags.BoolVar(&options.noTrunc, "no-trunc", false, "Do not truncate output")
+	flags.StringVar(&options.format, "format", formatter.TableFormatKey, "Format the output")
 
 	// hide builder persistent flag for this command
 	cobrautil.HideInheritedFlags(cmd, "builder")

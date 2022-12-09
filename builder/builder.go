@@ -2,9 +2,12 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"sort"
+	"strings"
 	"sync"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
@@ -238,6 +241,28 @@ func (b *Builder) Factory(ctx context.Context) (_ driver.Factory, err error) {
 		}
 	})
 	return b.driverFactory.Factory, err
+}
+
+func (b *Builder) MarshalJSON() ([]byte, error) {
+	var err string
+	if b.err != nil {
+		err = strings.TrimSpace(b.err.Error())
+	}
+	return json.Marshal(struct {
+		Name         string
+		Driver       string
+		LastActivity time.Time `json:",omitempty"`
+		Dynamic      bool
+		Nodes        []Node
+		Err          string `json:",omitempty"`
+	}{
+		Name:         b.Name,
+		Driver:       b.Driver,
+		LastActivity: b.LastActivity,
+		Dynamic:      b.Dynamic,
+		Nodes:        b.nodes,
+		Err:          err,
+	})
 }
 
 // GetBuilders returns all builders

@@ -2,7 +2,10 @@ package builder
 
 import (
 	"context"
+	"encoding/json"
+	"strings"
 
+	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/driver"
 	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
 	"github.com/docker/buildx/store"
@@ -161,6 +164,45 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 	}
 
 	return b.nodes, nil
+}
+
+func (n *Node) MarshalJSON() ([]byte, error) {
+	var status string
+	if n.DriverInfo != nil {
+		status = n.DriverInfo.Status.String()
+	}
+	var err string
+	if n.Err != nil {
+		status = "error"
+		err = strings.TrimSpace(n.Err.Error())
+	}
+	var pp []string
+	for _, p := range n.Platforms {
+		pp = append(pp, platforms.Format(p))
+	}
+	return json.Marshal(struct {
+		Name        string
+		Endpoint    string
+		Platforms   []string          `json:",omitempty"`
+		Flags       []string          `json:",omitempty"`
+		DriverOpts  map[string]string `json:",omitempty"`
+		Files       map[string][]byte `json:",omitempty"`
+		Status      string            `json:",omitempty"`
+		ProxyConfig map[string]string `json:",omitempty"`
+		Version     string            `json:",omitempty"`
+		Err         string            `json:",omitempty"`
+	}{
+		Name:        n.Name,
+		Endpoint:    n.Endpoint,
+		Platforms:   pp,
+		Flags:       n.Flags,
+		DriverOpts:  n.DriverOpts,
+		Files:       n.Files,
+		Status:      status,
+		ProxyConfig: n.ProxyConfig,
+		Version:     n.Version,
+		Err:         err,
+	})
 }
 
 func (n *Node) loadData(ctx context.Context) error {
