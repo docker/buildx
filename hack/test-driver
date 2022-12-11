@@ -131,6 +131,14 @@ buildxCmd build ${buildPlatformFlag} \
   "${context}"
 cat "${context}/metadata-build.json"
 
+# load to docker store
+if [ "$DRIVER" != "docker" ]; then
+  buildxCmd build \
+    --output="type=docker,name=buildx-test-load" \
+    --builder="${builderName}" \
+    "${context}"
+fi
+
 # create bake def
 cat > "${bakedef}" <<EOL
 group "default" {
