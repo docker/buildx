@@ -20,6 +20,7 @@ on:
 
 env:
   DESTDIR: "./bin"
+  K3S_VERSION: "v1.21.2-k3s1"
 
 jobs:
   build:
@@ -133,20 +134,67 @@ jobs:
       -
         name: Install k3s
         if: matrix.driver == 'kubernetes'
-        uses: debianmaster/actions-k3s@b9cf3f599fd118699a3c8a0d18a2f2bda6cf4ce4
-        id: k3s
+        uses: actions/github-script@v6
         with:
-          version: v1.21.2-k3s1
+          script: |
+            const fs = require('fs');
+            
+            let wait = function(milliseconds) {
+              return new Promise((resolve, reject) => {
+                if (typeof(milliseconds) !== 'number') { 
+                  throw new Error('milleseconds not a number'); 
+                }
+                setTimeout(() => resolve("done!"), milliseconds)
+              });
+            }
+            
+            try {
+              const kubeconfig="/tmp/buildkit-k3s/kubeconfig.yaml";
+              core.info(`storing kubeconfig in ${kubeconfig}`);
+          
+              await exec.exec('docker', ["run", "-d",
+                "--privileged",
+                "--name=buildkit-k3s",
+                "-e", "K3S_KUBECONFIG_OUTPUT="+kubeconfig,
+                "-e", "K3S_KUBECONFIG_MODE=666",
+                "-v", "/tmp/buildkit-k3s:/tmp/buildkit-k3s",
+                "-p", "6443:6443",
+                "-p", "80:80",
+                "-p", "443:443",
+                "-p", "8080:8080",
+                "rancher/k3s:${{ env.K3S_VERSION }}", "server"
+              ]);
+              await wait(10000);
+              
+              core.exportVariable('KUBECONFIG', kubeconfig);
+              
+              let nodeName;
+              for (let count = 1; count <= 5; count++) {
+                try {
+                  const nodeNameOutput = await exec.getExecOutput("kubectl get nodes --no-headers -oname");
+                  nodeName = nodeNameOutput.stdout
+                } catch (error) {
+                  core.info(`Unable to resolve node name (${error.message}). Attempt ${count} of 5.`)
+                } finally {
+                  if (nodeName) {
+                    break;
+                  }
+                  await wait(5000);
+                }
+              }
+              if (!nodeName) {
+                throw new Error(`Unable to resolve node name after 5 attempts.`);
+              }
+              
+              await exec.exec(`kubectl wait --for=condition=Ready ${nodeName}`);
+            } catch (error) {
+              core.setFailed(error.message);
+            }
       -
-        name: Config k3s
+        name: Print KUBECONFIG
         if: matrix.driver == 'kubernetes'
         run: |
-          (set -x ; cat ${{ steps.k3s.outputs.kubeconfig }})
-      -
-        name: Check k3s nodes
-        if: matrix.driver == 'kubernetes'
-        run: |
-          kubectl get nodes
+          yq ${{ env.KUBECONFIG }}
       -
         name: Launch remote buildkitd
         if: matrix.driver == 'remote'
