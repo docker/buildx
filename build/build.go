@@ -595,6 +595,10 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
 	}
 
+	for k, v := range getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath) {
+		so.FrontendAttrs[k] = v
+	}
+
 	// set platforms
 	if len(opt.Platforms) != 0 {
 		pp := make([]string, len(opt.Platforms))
@@ -845,21 +849,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	}()
 
 	eg, ctx := errgroup.WithContext(ctx)
-
-	for _, opt := range opt {
-		gitLabels, err := addGitProvenance(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
-		if err != nil {
-			return nil, err
-		}
-		for n, v := range gitLabels {
-			if _, ok := opt.Labels[n]; !ok {
-				if opt.Labels == nil {
-					opt.Labels = map[string]string{}
-				}
-				opt.Labels[n] = v
-			}
-		}
-	}
 
 	for k, opt := range opt {
 		multiDriver := len(m[k]) > 1

@@ -2,122 +2,131 @@ package build
 
 import (
 	"context"
-	"fmt"
 	"os"
-	"os/exec"
 	"path/filepath"
-	"runtime"
 	"strings"
 	"testing"
 
-	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/docker/buildx/util/gitutil"
+	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 )
 
-var repoDir string
-
-func setupTest(tb testing.TB) func(tb testing.TB) {
-	repoDir = tb.TempDir()
-	// required for local testing on mac to avoid strange /private symlinks
-	if runtime.GOOS == "darwin" {
-		repoDir, _ = filepath.EvalSymlinks(repoDir)
-	}
-	cmd := exec.Command("git", "init")
-	cmd.Dir = repoDir
-	err := cmd.Run()
-	assert.Nilf(tb, err, "failed to init git repo: %v", err)
-
+func setupTest(tb testing.TB) {
+	gitutil.Mktmp(tb)
+	gitutil.GitInit(tb)
 	df := []byte("FROM alpine:latest\n")
-	err = os.WriteFile(filepath.Join(repoDir, "Dockerfile"), df, 0644)
-	assert.Nilf(tb, err, "failed to write file: %v", err)
+	assert.NoError(tb, os.WriteFile("Dockerfile", df, 0644))
+	gitutil.GitAdd(tb, "Dockerfile")
+	gitutil.GitCommit(tb, "initial commit")
+}
 
-	cmd = exec.Command("git", "add", "Dockerfile")
-	cmd.Dir = repoDir
-	err = cmd.Run()
-	assert.Nilf(tb, err, "failed to add file: %v", err)
+func TestGetGitAttributesNoContext(t *testing.T) {
+	setupTest(t)
 
-	cmd = exec.Command("git", "config", "user.name", "buildx")
-	cmd.Dir = repoDir
-	err = cmd.Run()
-	assert.Nilf(tb, err, "failed to set git user.name: %v", err)
+	gitattrs := getGitAttributes(context.Background(), "", "Dockerfile")
+	assert.Empty(t, gitattrs)
+}
 
-	cmd = exec.Command("git", "config", "user.email", "buildx@docker.com")
-	cmd.Dir = repoDir
-	err = cmd.Run()
-	assert.Nilf(tb, err, "failed to set git user.email: %v", err)
-
-	cmd = exec.Command("git", "commit", "-m", "Initial commit")
-	cmd.Dir = repoDir
-	err = cmd.Run()
-	assert.Nilf(tb, err, "failed to commit: %v", err)
-
-	return func(tb testing.TB) {
-		os.Unsetenv("BUILDX_GIT_LABELS")
-		os.RemoveAll(repoDir)
+func TestGetGitAttributes(t *testing.T) {
+	cases := []struct {
+		name         string
+		envGitLabels string
+		envGitInfo   string
+		expected     []string
+	}{
+		{
+			name:         "default",
+			envGitLabels: "",
+			envGitInfo:   "",
+			expected: []string{
+				"vcs:revision",
+			},
+		},
+		{
+			name:         "gitinfo",
+			envGitLabels: "false",
+			envGitInfo:   "true",
+			expected: []string{
+				"vcs:revision",
+			},
+		},
+		{
+			name:         "gitlabels",
+			envGitLabels: "true",
+			envGitInfo:   "false",
+			expected: []string{
+				"label:" + DockerfileLabel,
+				"label:" + specs.AnnotationRevision,
+			},
+		},
+		{
+			name:         "both",
+			envGitLabels: "true",
+			envGitInfo:   "",
+			expected: []string{
+				"label:" + DockerfileLabel,
+				"label:" + specs.AnnotationRevision,
+				"vcs:revision",
+			},
+		},
+	}
+	for _, tt := range cases {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			setupTest(t)
+			if tt.envGitLabels != "" {
+				t.Setenv("BUILDX_GIT_LABELS", tt.envGitLabels)
+			}
+			if tt.envGitInfo != "" {
+				t.Setenv("BUILDX_GIT_INFO", tt.envGitInfo)
+			}
+			gitattrs := getGitAttributes(context.Background(), ".", "Dockerfile")
+			for _, e := range tt.expected {
+				assert.Contains(t, gitattrs, e)
+				assert.NotEmpty(t, gitattrs[e])
+				if e == "label:"+DockerfileLabel {
+					assert.Equal(t, "Dockerfile", gitattrs[e])
+				}
+			}
+		})
 	}
 }
 
-func TestAddGitProvenanceDataWithoutEnv(t *testing.T) {
-	defer setupTest(t)(t)
-	labels, err := addGitProvenance(context.Background(), repoDir, filepath.Join(repoDir, "Dockerfile"))
-	assert.Nilf(t, err, "No error expected")
-	assert.Nilf(t, labels, "No labels expected")
+func TestGetGitAttributesWithRemote(t *testing.T) {
+	setupTest(t)
+	gitutil.GitSetRemote(t, "git@github.com:docker/buildx.git")
+
+	t.Setenv("BUILDX_GIT_LABELS", "true")
+	gitattrs := getGitAttributes(context.Background(), ".", "Dockerfile")
+	assert.Equal(t, 5, len(gitattrs))
+	assert.Contains(t, gitattrs, "label:"+DockerfileLabel)
+	assert.Equal(t, "Dockerfile", gitattrs["label:"+DockerfileLabel])
+	assert.Contains(t, gitattrs, "label:"+specs.AnnotationRevision)
+	assert.NotEmpty(t, gitattrs["label:"+specs.AnnotationRevision])
+	assert.Contains(t, gitattrs, "label:"+specs.AnnotationSource)
+	assert.Equal(t, "git@github.com:docker/buildx.git", gitattrs["label:"+specs.AnnotationSource])
+	assert.Contains(t, gitattrs, "vcs:revision")
+	assert.NotEmpty(t, gitattrs["vcs:revision"])
+	assert.Contains(t, gitattrs, "vcs:source")
+	assert.Equal(t, "git@github.com:docker/buildx.git", gitattrs["vcs:source"])
 }
 
-func TestAddGitProvenanceDataWitEmptyEnv(t *testing.T) {
-	defer setupTest(t)(t)
-	os.Setenv("BUILDX_GIT_LABELS", "")
-	labels, err := addGitProvenance(context.Background(), repoDir, filepath.Join(repoDir, "Dockerfile"))
-	assert.Nilf(t, err, "No error expected")
-	assert.Nilf(t, labels, "No labels expected")
-}
+func TestGetGitAttributesDirty(t *testing.T) {
+	setupTest(t)
 
-func TestAddGitProvenanceDataWithoutLabels(t *testing.T) {
-	defer setupTest(t)(t)
-	os.Setenv("BUILDX_GIT_LABELS", "full")
-	labels, err := addGitProvenance(context.Background(), repoDir, filepath.Join(repoDir, "Dockerfile"))
-	assert.Nilf(t, err, "No error expected")
-	assert.Equal(t, 2, len(labels), "Exactly 2 git provenance labels expected")
-	assert.Equal(t, "Dockerfile", labels[DockerfileLabel], "Expected a dockerfile path provenance label")
-
-	cmd := exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = repoDir
-	out, _ := cmd.Output()
-	assert.Equal(t, strings.TrimSpace(string(out)), labels[ocispecs.AnnotationRevision], "Expected a sha provenance label")
-}
-
-func TestAddGitProvenanceDataWithLabels(t *testing.T) {
-	defer setupTest(t)(t)
 	// make a change to test dirty flag
 	df := []byte("FROM alpine:edge\n")
-	os.Mkdir(filepath.Join(repoDir, "dir"), 0755)
-	os.WriteFile(filepath.Join(repoDir, "dir", "Dockerfile"), df, 0644)
-	// add a remote
-	cmd := exec.Command("git", "remote", "add", "origin", "git@github.com:docker/buildx.git")
-	cmd.Dir = repoDir
-	cmd.Run()
+	assert.NoError(t, os.Mkdir("dir", 0755))
+	assert.NoError(t, os.WriteFile(filepath.Join("dir", "Dockerfile"), df, 0644))
 
-	os.Setenv("BUILDX_GIT_LABELS", "full")
-	labels, err := addGitProvenance(context.Background(), repoDir, filepath.Join(repoDir, "Dockerfile"))
-	assert.Nilf(t, err, "No error expected")
-	assert.Equal(t, 3, len(labels), "Exactly 3 git provenance labels expected")
-	assert.Equal(t, "Dockerfile", labels[DockerfileLabel], "Expected a dockerfile path provenance label")
-	assert.Equal(t, "git@github.com:docker/buildx.git", labels[ocispecs.AnnotationSource], "Expected a remote provenance label")
-
-	cmd = exec.Command("git", "rev-parse", "HEAD")
-	cmd.Dir = repoDir
-	out, _ := cmd.Output()
-	assert.Equal(t, fmt.Sprintf("%s-dirty", strings.TrimSpace(string(out))), labels[ocispecs.AnnotationRevision], "Expected a sha provenance label")
-}
-
-func TestAddGitProvenanceDataOutsideOfGitRepository(t *testing.T) {
-	defer setupTest(t)(t)
-	os.Setenv("BUILDX_GIT_LABELS", "full")
-	parentDir := filepath.Dir(repoDir)
-	cwd, _ := os.Getwd()
-	os.Chdir(parentDir)
-	labels, err := addGitProvenance(context.Background(), filepath.Base(repoDir), "")
-	assert.Nilf(t, err, "No error expected")
-	assert.Equal(t, "Dockerfile", labels[DockerfileLabel], "Expected a dockerfile path provenance label")
-	os.Chdir(cwd)
+	t.Setenv("BUILDX_GIT_LABELS", "true")
+	gitattrs := getGitAttributes(context.Background(), ".", "Dockerfile")
+	assert.Equal(t, 3, len(gitattrs))
+	assert.Contains(t, gitattrs, "label:"+DockerfileLabel)
+	assert.Equal(t, "Dockerfile", gitattrs["label:"+DockerfileLabel])
+	assert.Contains(t, gitattrs, "label:"+specs.AnnotationRevision)
+	assert.True(t, strings.HasSuffix(gitattrs["label:"+specs.AnnotationRevision], "-dirty"))
+	assert.Contains(t, gitattrs, "vcs:revision")
+	assert.True(t, strings.HasSuffix(gitattrs["vcs:revision"], "-dirty"))
 }
