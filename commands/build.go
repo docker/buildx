@@ -16,6 +16,8 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/options"
+
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
@@ -133,8 +135,8 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		return err
 	}
 
-	opts := build.Options{
-		Inputs: build.Inputs{
+	opts := options.Options{
+		Inputs: options.Inputs{
 			ContextPath:    in.contextPath,
 			DockerfilePath: in.dockerfileName,
 			InStream:       os.Stdin,
@@ -271,7 +273,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 		return err
 	}
 
-	imageID, res, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, in.progress, in.metadataFile, in.invoke != "")
+	imageID, res, err := buildTargets(ctx, dockerCli, nodes, map[string]options.Options{defaultTargetName: opts}, in.progress, in.metadataFile, in.invoke != "")
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return err
@@ -288,7 +290,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 			return errors.Errorf("failed to configure terminal: %v", err)
 		}
 		err = monitor.RunMonitor(ctx, cfg, func(ctx context.Context) (*build.ResultContext, error) {
-			_, rr, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, in.progress, in.metadataFile, true)
+			_, rr, err := buildTargets(ctx, dockerCli, nodes, map[string]options.Options{defaultTargetName: opts}, in.progress, in.metadataFile, true)
 			return rr, err
 		}, io.NopCloser(os.Stdin), nopCloser{os.Stdout}, nopCloser{os.Stderr})
 		if err != nil {
@@ -309,7 +311,7 @@ type nopCloser struct {
 
 func (c nopCloser) Close() error { return nil }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, allowNoOutput bool) (imageID string, res *build.ResultContext, err error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]options.Options, progressMode string, metadataFile string, allowNoOutput bool) (imageID string, res *build.ResultContext, err error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
@@ -623,11 +625,11 @@ func listToMap(values []string, defaultEnv bool) map[string]string {
 	return result
 }
 
-func parseContextNames(values []string) (map[string]build.NamedContext, error) {
+func parseContextNames(values []string) (map[string]options.NamedContext, error) {
 	if len(values) == 0 {
 		return nil, nil
 	}
-	result := make(map[string]build.NamedContext, len(values))
+	result := make(map[string]options.NamedContext, len(values))
 	for _, value := range values {
 		kv := strings.SplitN(value, "=", 2)
 		if len(kv) != 2 {
@@ -638,12 +640,12 @@ func parseContextNames(values []string) (map[string]build.NamedContext, error) {
 			return nil, errors.Wrapf(err, "invalid context name %s", kv[0])
 		}
 		name := strings.TrimSuffix(reference.FamiliarString(named), ":latest")
-		result[name] = build.NamedContext{Path: kv[1]}
+		result[name] = options.NamedContext{Path: kv[1]}
 	}
 	return result, nil
 }
 
-func parsePrintFunc(str string) (*build.PrintFunc, error) {
+func parsePrintFunc(str string) (*options.PrintFunc, error) {
 	if str == "" {
 		return nil, nil
 	}
@@ -652,7 +654,7 @@ func parsePrintFunc(str string) (*build.PrintFunc, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &build.PrintFunc{}
+	f := &options.PrintFunc{}
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		if len(parts) == 2 {

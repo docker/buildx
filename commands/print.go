@@ -6,14 +6,14 @@ import (
 	"log"
 	"os"
 
-	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/options"
 	"github.com/docker/docker/api/types/versions"
 	"github.com/moby/buildkit/frontend/subrequests"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 )
 
-func printResult(f *build.PrintFunc, res map[string]string) error {
+func printResult(f *options.PrintFunc, res map[string]string) error {
 	switch f.Name {
 	case "outline":
 		return printValue(outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)

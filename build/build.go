@@ -23,13 +23,14 @@ import (
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/options"
+
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/buildx/util/waitmap"
-	"github.com/docker/cli/opts"
 	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/builder/remotecontext/urlutil"
@@ -39,7 +40,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/attestations"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
@@ -63,54 +63,6 @@ var (
 const (
 	printFallbackImage = "docker/dockerfile-upstream:1.4-outline@sha256:627443ff4e2d0f635d429cfc1da5388bcd5a70949c38adcd3cd7c4e5df67c73c"
 )
-
-type Options struct {
-	Inputs Inputs
-
-	Allow         []entitlements.Entitlement
-	Attests       map[string]*string
-	BuildArgs     map[string]string
-	CacheFrom     []client.CacheOptionsEntry
-	CacheTo       []client.CacheOptionsEntry
-	CgroupParent  string
-	Exports       []client.ExportEntry
-	ExtraHosts    []string
-	ImageIDFile   string
-	Labels        map[string]string
-	NetworkMode   string
-	NoCache       bool
-	NoCacheFilter []string
-	Platforms     []specs.Platform
-	Pull          bool
-	Session       []session.Attachable
-	ShmSize       opts.MemBytes
-	Tags          []string
-	Target        string
-	Ulimits       *opts.UlimitOpt
-
-	// Linked marks this target as exclusively linked (not requested by the user).
-	Linked    bool
-	PrintFunc *PrintFunc
-}
-
-type PrintFunc struct {
-	Name   string
-	Format string
-}
-
-type Inputs struct {
-	ContextPath      string
-	DockerfilePath   string
-	InStream         io.Reader
-	ContextState     *llb.State
-	DockerfileInline string
-	NamedContexts    map[string]NamedContext
-}
-
-type NamedContext struct {
-	Path  string
-	State *llb.State
-}
 
 type driverPair struct {
 	driverIndex int
@@ -168,7 +120,7 @@ func ensureBooted(ctx context.Context, nodes []builder.Node, idxs []int, pw prog
 	return clients, nil
 }
 
-func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Options) map[string][]driverPair {
+func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]options.Options) map[string][]driverPair {
 	m := map[string][]driverPair{}
 	for k, opt := range opt {
 		mm := map[int][]specs.Platform{}
@@ -192,7 +144,7 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 	return m
 }
 
-func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]options.Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
 	dps, clients, err := resolveDriversBase(ctx, nodes, opt, pw)
 	if err != nil {
 		return nil, nil, err
@@ -233,7 +185,7 @@ func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Op
 	return dps, clients, nil
 }
 
-func resolveDriversBase(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+func resolveDriversBase(ctx context.Context, nodes []builder.Node, opt map[string]options.Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
 	availablePlatforms := map[string]int{}
 	for i, node := range nodes {
 		for _, p := range node.Platforms {
@@ -339,7 +291,7 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt options.Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
@@ -776,11 +728,11 @@ func Invoke(ctx context.Context, cfg ContainerConfig) error {
 	return err
 }
 
-func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+func Build(ctx context.Context, nodes []builder.Node, opt map[string]options.Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	return BuildWithResultHandler(ctx, nodes, opt, docker, configDir, w, nil, false)
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]options.Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -1339,7 +1291,7 @@ func createTempDockerfile(r io.Reader) (string, error) {
 	return dir, err
 }
 
-func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
+func LoadInputs(ctx context.Context, d driver.Driver, inp options.Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
@@ -1679,7 +1631,7 @@ func tryNodeIdentifier(configDir string) (out string) {
 	return
 }
 
-func noPrintFunc(opt map[string]Options) bool {
+func noPrintFunc(opt map[string]options.Options) bool {
 	for _, v := range opt {
 		if v.PrintFunc != nil {
 			return false

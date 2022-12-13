@@ -14,7 +14,8 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/bake/hclparser"
-	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/options"
+
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli/config"
@@ -760,8 +761,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 	return nil
 }
 
-func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
-	m2 := make(map[string]build.Options, len(m))
+func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]options.Options, error) {
+	m2 := make(map[string]options.Options, len(m))
 	for k, v := range m {
 		bo, err := toBuildOpt(v, inp)
 		if err != nil {
@@ -772,14 +773,14 @@ func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Optio
 	return m2, nil
 }
 
-func updateContext(t *build.Inputs, inp *Input) {
+func updateContext(t *options.Inputs, inp *Input) {
 	if inp == nil || inp.State == nil {
 		return
 	}
 
 	for k, v := range t.NamedContexts {
 		if v.Path == "." {
-			t.NamedContexts[k] = build.NamedContext{Path: inp.URL}
+			t.NamedContexts[k] = options.NamedContext{Path: inp.URL}
 		}
 		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
 			continue
@@ -788,7 +789,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 			continue
 		}
 		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
-		t.NamedContexts[k] = build.NamedContext{State: &st}
+		t.NamedContexts[k] = options.NamedContext{State: &st}
 	}
 
 	if t.ContextPath == "." {
@@ -808,7 +809,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 // validateContextsEntitlements is a basic check to ensure contexts do not
 // escape local directories when loaded from remote sources. This is to be
 // replaced with proper entitlements support in the future.
-func validateContextsEntitlements(t build.Inputs, inp *Input) error {
+func validateContextsEntitlements(t options.Inputs, inp *Input) error {
 	if inp == nil || inp.State == nil {
 		return nil
 	}
@@ -858,7 +859,7 @@ func checkPath(p string) error {
 	return nil
 }
 
-func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
+func toBuildOpt(t *Target, inp *Input) (*options.Options, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -895,7 +896,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		networkMode = *t.NetworkMode
 	}
 
-	bi := build.Inputs{
+	bi := options.Inputs{
 		ContextPath:    contextPath,
 		DockerfilePath: dockerfilePath,
 		NamedContexts:  toNamedContexts(t.Contexts),
@@ -909,7 +910,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	for k, v := range bi.NamedContexts {
 		if strings.HasPrefix(v.Path, "cwd://") {
-			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
+			bi.NamedContexts[k] = options.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
 		}
 	}
 
@@ -919,7 +920,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 	t.Context = &bi.ContextPath
 
-	bo := &build.Options{
+	bo := &options.Options{
 		Inputs:        bi,
 		Tags:          t.Tags,
 		BuildArgs:     t.Args,
@@ -1057,10 +1058,10 @@ func sliceEqual(s1, s2 []string) bool {
 	return true
 }
 
-func toNamedContexts(m map[string]string) map[string]build.NamedContext {
-	m2 := make(map[string]build.NamedContext, len(m))
+func toNamedContexts(m map[string]string) map[string]options.NamedContext {
+	m2 := make(map[string]options.NamedContext, len(m))
 	for k, v := range m {
-		m2[k] = build.NamedContext{Path: v}
+		m2[k] = options.NamedContext{Path: v}
 	}
 	return m2
 }
