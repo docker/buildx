@@ -34,6 +34,24 @@ func (b *Builder) Nodes() []Node {
 	return b.nodes
 }
 
+// AvailableNodes returns only nodes that are available.
+func (b *Builder) AvailableNodes() ([]Node, error) {
+	out := make([]Node, 0, len(b.nodes))
+	err := errors.Errorf("no drivers found")
+	for _, n := range b.nodes {
+		if n.Err == nil && n.Driver != nil {
+			out = append(out, n)
+		}
+		if n.Err != nil {
+			err = n.Err
+		}
+	}
+	if len(out) > 0 {
+		return out, nil
+	}
+	return nil, err
+}
+
 // LoadNodes loads and returns nodes for this builder.
 // TODO: this should be a method on a Node object and lazy load data for each driver.
 func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err error) {
@@ -161,6 +179,15 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 	}
 
 	return b.nodes, nil
+}
+
+func (b *Builder) LoadAvailableNodes(ctx context.Context, withData bool) (_ []Node, err error) {
+	_, err = b.LoadNodes(ctx, withData)
+	if err != nil {
+		return nil, err
+	}
+
+	return b.AvailableNodes()
 }
 
 func (n *Node) loadData(ctx context.Context) error {

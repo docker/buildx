@@ -112,23 +112,6 @@ type NamedContext struct {
 	State *llb.State
 }
 
-func filterAvailableNodes(nodes []builder.Node) ([]builder.Node, error) {
-	out := make([]builder.Node, 0, len(nodes))
-	err := errors.Errorf("no drivers found")
-	for _, n := range nodes {
-		if n.Err == nil && n.Driver != nil {
-			out = append(out, n)
-		}
-		if n.Err != nil {
-			err = n.Err
-		}
-	}
-	if len(out) > 0 {
-		return out, nil
-	}
-	return nil, err
-}
-
 type driverPair struct {
 	driverIndex int
 	platforms   []specs.Platform
@@ -800,11 +783,6 @@ func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, do
 func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultContext), allowNoOutput bool) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
-	}
-
-	nodes, err = filterAvailableNodes(nodes)
-	if err != nil {
-		return nil, errors.Wrapf(err, "no valid drivers found")
 	}
 
 	var noMobyDriver driver.Driver

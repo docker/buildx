@@ -266,7 +266,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
 		return errors.Wrapf(err, "failed to update builder last activity time")
 	}
-	nodes, err := b.LoadNodes(ctx, false)
+	nodes, err := b.LoadAvailableNodes(ctx, false)
 	if err != nil {
 		return err
 	}

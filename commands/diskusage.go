@@ -38,14 +38,9 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 		return err
 	}
 
-	nodes, err := b.LoadNodes(ctx, false)
+	nodes, err := b.LoadAvailableNodes(ctx, false)
 	if err != nil {
 		return err
-	}
-	for _, node := range nodes {
-		if node.Err != nil {
-			return node.Err
-		}
 	}
 
 	out := make([][]*client.UsageInfo, len(nodes))
