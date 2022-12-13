@@ -5,6 +5,7 @@ import (
 	"os"
 	"path/filepath"
 	"sort"
+	"time"
 
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/gofrs/flock"
@@ -12,11 +13,20 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	instanceDir = "instances"
+	defaultsDir = "defaults"
+	activityDir = "activity"
+)
+
 func New(root string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(root, "instances"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, instanceDir), 0700); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(root, "defaults"), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, defaultsDir), 0700); err != nil {
+		return nil, err
+	}
+	if err := os.MkdirAll(filepath.Join(root, activityDir), 0700); err != nil {
 		return nil, err
 	}
 	return &Store{root: root}, nil
@@ -43,7 +53,7 @@ type Txn struct {
 }
 
 func (t *Txn) List() ([]*NodeGroup, error) {
-	pp := filepath.Join(t.s.root, "instances")
+	pp := filepath.Join(t.s.root, instanceDir)
 	fis, err := os.ReadDir(pp)
 	if err != nil {
 		return nil, err
@@ -73,12 +83,15 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	dt, err := os.ReadFile(filepath.Join(t.s.root, "instances", name))
+	dt, err := os.ReadFile(filepath.Join(t.s.root, instanceDir, name))
 	if err != nil {
 		return nil, err
 	}
 	var ng NodeGroup
 	if err := json.Unmarshal(dt, &ng); err != nil {
+		return nil, err
+	}
+	if ng.LastActivity, err = t.GetLastActivity(&ng); err != nil {
 		return nil, err
 	}
 	return &ng, nil
@@ -89,11 +102,14 @@ func (t *Txn) Save(ng *NodeGroup) error {
 	if err != nil {
 		return err
 	}
+	if err := t.UpdateLastActivity(ng); err != nil {
+		return err
+	}
 	dt, err := json.Marshal(ng)
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, "instances", name), dt, 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, instanceDir, name), dt, 0600)
 }
 
 func (t *Txn) Remove(name string) error {
@@ -101,7 +117,10 @@ func (t *Txn) Remove(name string) error {
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(t.s.root, "instances", name))
+	if err := t.RemoveLastActivity(name); err != nil {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(t.s.root, instanceDir, name))
 }
 
 func (t *Txn) SetCurrent(key, name string, global, def bool) error {
@@ -121,13 +140,36 @@ func (t *Txn) SetCurrent(key, name string, global, def bool) error {
 	h := toHash(key)
 
 	if def {
-		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "defaults", h), []byte(name), 0600); err != nil {
+		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, defaultsDir, h), []byte(name), 0600); err != nil {
 			return err
 		}
 	} else {
-		os.RemoveAll(filepath.Join(t.s.root, "defaults", h)) // ignore error
+		os.RemoveAll(filepath.Join(t.s.root, defaultsDir, h)) // ignore error
 	}
 	return nil
+}
+
+func (t *Txn) UpdateLastActivity(ng *NodeGroup) error {
+	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, activityDir, ng.Name), []byte(time.Now().UTC().Format(time.RFC3339)), 0600)
+}
+
+func (t *Txn) GetLastActivity(ng *NodeGroup) (la time.Time, _ error) {
+	dt, err := os.ReadFile(filepath.Join(t.s.root, activityDir, ng.Name))
+	if err != nil {
+		if os.IsNotExist(errors.Cause(err)) {
+			return la, nil
+		}
+		return la, err
+	}
+	return time.Parse(time.RFC3339, string(dt))
+}
+
+func (t *Txn) RemoveLastActivity(name string) error {
+	name, err := ValidateName(name)
+	if err != nil {
+		return err
+	}
+	return os.RemoveAll(filepath.Join(t.s.root, activityDir, name))
 }
 
 func (t *Txn) reset(key string) error {
@@ -173,7 +215,7 @@ func (t *Txn) Current(key string) (*NodeGroup, error) {
 
 	h := toHash(key)
 
-	dt, err = os.ReadFile(filepath.Join(t.s.root, "defaults", h))
+	dt, err = os.ReadFile(filepath.Join(t.s.root, defaultsDir, h))
 	if err != nil {
 		if os.IsNotExist(err) {
 			t.reset(key)

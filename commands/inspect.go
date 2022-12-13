@@ -50,6 +50,9 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 	fmt.Fprintf(w, "Name:\t%s\n", b.Name)
 	fmt.Fprintf(w, "Driver:\t%s\n", b.Driver)
+	if !b.NodeGroup.LastActivity.IsZero() {
+		fmt.Fprintf(w, "Last Activity:\t%v\n", b.NodeGroup.LastActivity)
+	}
 
 	if err != nil {
 		fmt.Fprintf(w, "Error:\t%s\n", err.Error())
