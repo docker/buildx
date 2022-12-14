@@ -270,8 +270,8 @@ func ParseFile(dt []byte, fn string) (*Config, error) {
 }
 
 type Config struct {
-	Groups  []*Group  `json:"group" hcl:"group,block"`
-	Targets []*Target `json:"target" hcl:"target,block"`
+	Groups  []*Group  `json:"group" hcl:"group,block" cty:"group"`
+	Targets []*Target `json:"target" hcl:"target,block" cty:"target"`
 }
 
 func mergeConfig(c1, c2 Config) Config {
@@ -547,36 +547,36 @@ func (c Config) target(name string, visited map[string]*Target, overrides map[st
 }
 
 type Group struct {
-	Name    string   `json:"-" hcl:"name,label"`
-	Targets []string `json:"targets" hcl:"targets"`
+	Name    string   `json:"-" hcl:"name,label" cty:"name"`
+	Targets []string `json:"targets" hcl:"targets" cty:"targets"`
 	// Target // TODO?
 }
 
 type Target struct {
-	Name string `json:"-" hcl:"name,label"`
+	Name string `json:"-" hcl:"name,label" cty:"name"`
 
 	// Inherits is the only field that cannot be overridden with --set
-	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional"`
+	Attest   []string `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
+	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
 
-	Attest           []string          `json:"attest,omitempty" hcl:"attest,optional"`
-	Context          *string           `json:"context,omitempty" hcl:"context,optional"`
-	Contexts         map[string]string `json:"contexts,omitempty" hcl:"contexts,optional"`
-	Dockerfile       *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional"`
-	DockerfileInline *string           `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional"`
-	Args             map[string]string `json:"args,omitempty" hcl:"args,optional"`
-	Labels           map[string]string `json:"labels,omitempty" hcl:"labels,optional"`
-	Tags             []string          `json:"tags,omitempty" hcl:"tags,optional"`
-	CacheFrom        []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional"`
-	CacheTo          []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional"`
-	Target           *string           `json:"target,omitempty" hcl:"target,optional"`
-	Secrets          []string          `json:"secret,omitempty" hcl:"secret,optional"`
-	SSH              []string          `json:"ssh,omitempty" hcl:"ssh,optional"`
-	Platforms        []string          `json:"platforms,omitempty" hcl:"platforms,optional"`
-	Outputs          []string          `json:"output,omitempty" hcl:"output,optional"`
-	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional"`
-	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional"`
-	NetworkMode      *string           `json:"-" hcl:"-"`
-	NoCacheFilter    []string          `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional"`
+	Context          *string           `json:"context,omitempty" hcl:"context,optional" cty:"context"`
+	Contexts         map[string]string `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
+	Dockerfile       *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
+	DockerfileInline *string           `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
+	Args             map[string]string `json:"args,omitempty" hcl:"args,optional" cty:"args"`
+	Labels           map[string]string `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
+	Tags             []string          `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
+	CacheFrom        []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional" cty:"cache-from"`
+	CacheTo          []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional" cty:"cache-to"`
+	Target           *string           `json:"target,omitempty" hcl:"target,optional" cty:"target"`
+	Secrets          []string          `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
+	SSH              []string          `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
+	Platforms        []string          `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
+	Outputs          []string          `json:"output,omitempty" hcl:"output,optional" cty:"output"`
+	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
+	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
+	NetworkMode      *string           `json:"-" hcl:"-" cty:"-"`
+	NoCacheFilter    []string          `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/manuals/bake/file-definition.md.
 
 	// linked is a private field to mark a target used as a linked one

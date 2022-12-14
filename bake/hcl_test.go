@@ -444,6 +444,94 @@ func TestHCLAttrs(t *testing.T) {
 	// attr-multifile
 }
 
+func TestHCLTargetAttrs(t *testing.T) {
+	dt := []byte(`
+		target "foo" {
+			dockerfile = "xxx"
+			context = target.bar.context
+			target = target.foo.dockerfile
+		}
+		
+		target "bar" {
+			dockerfile = target.foo.dockerfile
+			context = "yyy"
+			target = target.bar.context
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "foo", c.Targets[0].Name)
+	require.Equal(t, "bar", c.Targets[1].Name)
+
+	require.Equal(t, "xxx", *c.Targets[0].Dockerfile)
+	require.Equal(t, "yyy", *c.Targets[0].Context)
+	require.Equal(t, "xxx", *c.Targets[0].Target)
+
+	require.Equal(t, "xxx", *c.Targets[1].Dockerfile)
+	require.Equal(t, "yyy", *c.Targets[1].Context)
+	require.Equal(t, "yyy", *c.Targets[1].Target)
+}
+
+func TestHCLTargetGlobal(t *testing.T) {
+	dt := []byte(`
+		target "foo" {
+			dockerfile = "x"
+		}
+		x = target.foo.dockerfile
+		y = x
+		target "bar" {
+			dockerfile = y
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "foo", c.Targets[0].Name)
+	require.Equal(t, "bar", c.Targets[1].Name)
+
+	require.Equal(t, "x", *c.Targets[0].Dockerfile)
+	require.Equal(t, "x", *c.Targets[1].Dockerfile)
+}
+
+func TestHCLTargetAttrName(t *testing.T) {
+	dt := []byte(`
+		target "foo" {
+			dockerfile = target.foo.name
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, "foo", c.Targets[0].Name)
+	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+}
+
+func TestHCLTargetAttrEmptyChain(t *testing.T) {
+	dt := []byte(`
+		target "foo" {
+			# dockerfile = Dockerfile
+			context = target.foo.dockerfile
+			target = target.foo.context
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, "foo", c.Targets[0].Name)
+	require.Nil(t, c.Targets[0].Dockerfile)
+	require.Nil(t, c.Targets[0].Context)
+	require.Nil(t, c.Targets[0].Target)
+}
+
 func TestHCLAttrsCustomType(t *testing.T) {
 	dt := []byte(`
 		platforms=["linux/arm64", "linux/amd64"]
