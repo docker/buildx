@@ -691,92 +691,99 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					return nil
 				}
 
-				if pushNames != "" {
-					progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
-						descs := make([]specs.Descriptor, 0, len(res))
-
-						for _, r := range res {
-							s, ok := r.ExporterResponse[exptypes.ExporterImageDigestKey]
-							if ok {
-								descs = append(descs, specs.Descriptor{
-									Digest:    digest.Digest(s),
-									MediaType: images.MediaTypeDockerSchema2ManifestList,
-									Size:      -1,
-								})
-							}
-						}
-						if len(descs) > 0 {
-							var imageopt imagetools.Opt
-							for _, dp := range dps {
-								imageopt = nodes[dp.driverIndex].ImageOpt
-								break
-							}
-							names := strings.Split(pushNames, ",")
-
-							if insecurePush {
-								insecureTrue := true
-								httpTrue := true
-								nn, err := reference.ParseNormalizedNamed(names[0])
-								if err != nil {
-									return err
-								}
-								imageopt.RegistryConfig = map[string]resolver.RegistryConfig{
-									reference.Domain(nn): {
-										Insecure:  &insecureTrue,
-										PlainHTTP: &httpTrue,
-									},
-								}
-							}
-
-							itpull := imagetools.New(imageopt)
-
-							ref, err := reference.ParseNormalizedNamed(names[0])
-							if err != nil {
-								return err
-							}
-							ref = reference.TagNameOnly(ref)
-
-							srcs := make([]*imagetools.Source, len(descs))
-							for i, desc := range descs {
-								srcs[i] = &imagetools.Source{
-									Desc: desc,
-									Ref:  ref,
-								}
-							}
-
-							dt, desc, err := itpull.Combine(ctx, srcs)
-							if err != nil {
-								return err
-							}
-							if opt.ImageIDFile != "" {
-								if err := os.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
-									return err
-								}
-							}
-
-							itpush := imagetools.New(imageopt)
-
-							for _, n := range names {
-								nn, err := reference.ParseNormalizedNamed(n)
-								if err != nil {
-									return err
-								}
-								if err := itpush.Push(ctx, nn, desc, dt); err != nil {
-									return err
-								}
-							}
-
-							respMu.Lock()
-							resp[k] = &client.SolveResponse{
-								ExporterResponse: map[string]string{
-									"containerimage.digest": desc.Digest.String(),
-								},
-							}
-							respMu.Unlock()
-						}
-						return nil
-					})
+				if pushNames == "" {
+					return nil
 				}
+
+				progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
+					descs := make([]specs.Descriptor, 0, len(res))
+
+					for _, r := range res {
+						s, ok := r.ExporterResponse[exptypes.ExporterImageDigestKey]
+						if ok {
+							descs = append(descs, specs.Descriptor{
+								Digest:    digest.Digest(s),
+								MediaType: images.MediaTypeDockerSchema2ManifestList,
+								Size:      -1,
+							})
+						}
+					}
+
+					if len(descs) == 0 {
+						return nil
+					}
+
+					var imageopt imagetools.Opt
+					for _, dp := range dps {
+						imageopt = nodes[dp.driverIndex].ImageOpt
+						break
+					}
+					names := strings.Split(pushNames, ",")
+
+					if insecurePush {
+						insecureTrue := true
+						httpTrue := true
+						nn, err := reference.ParseNormalizedNamed(names[0])
+						if err != nil {
+							return err
+						}
+						imageopt.RegistryConfig = map[string]resolver.RegistryConfig{
+							reference.Domain(nn): {
+								Insecure:  &insecureTrue,
+								PlainHTTP: &httpTrue,
+							},
+						}
+					}
+
+					itpull := imagetools.New(imageopt)
+
+					ref, err := reference.ParseNormalizedNamed(names[0])
+					if err != nil {
+						return err
+					}
+					ref = reference.TagNameOnly(ref)
+
+					srcs := make([]*imagetools.Source, len(descs))
+					for i, desc := range descs {
+						srcs[i] = &imagetools.Source{
+							Desc: desc,
+							Ref:  ref,
+						}
+					}
+
+					dt, desc, err := itpull.Combine(ctx, srcs)
+					if err != nil {
+						return err
+					}
+					if opt.ImageIDFile != "" {
+						if err := os.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
+							return err
+						}
+					}
+
+					itpush := imagetools.New(imageopt)
+
+					for _, n := range names {
+						nn, err := reference.ParseNormalizedNamed(n)
+						if err != nil {
+							return err
+						}
+						if err := itpush.Push(ctx, nn, desc, dt); err != nil {
+							return err
+						}
+					}
+
+					respMu.Lock()
+					resp[k] = &client.SolveResponse{
+						ExporterResponse: map[string]string{
+							"containerimage.digest": desc.Digest.String(),
+						},
+					}
+					respMu.Unlock()
+
+					return nil
+				})
+
 				return nil
 			})
 
@@ -866,22 +873,23 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 										return nil, err
 									}
 									var reqErr *errdefs.UnsupportedSubrequestError
-									if !isFallback {
-										if errors.As(err, &reqErr) {
-											switch reqErr.Name {
-											case "frontend.outline", "frontend.targets":
-												isFallback = true
-												origErr = err
-												continue
-											}
-											return nil, err
-										}
-										// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
-										if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
+									if isFallback {
+										return nil, err
+									}
+									if errors.As(err, &reqErr) {
+										switch reqErr.Name {
+										case "frontend.outline", "frontend.targets":
 											isFallback = true
 											origErr = err
 											continue
 										}
+										return nil, err
+									}
+									// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
+									if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
+										isFallback = true
+										origErr = err
+										continue
 									}
 									return nil, err
 								}
@@ -908,40 +916,44 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						}
 
 						node := nodes[dp.driverIndex].Driver
-						if node.IsMobyDriver() {
-							for _, e := range so.Exports {
-								if e.Type == "moby" && e.Attrs["push"] != "" {
-									if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-										pushNames = e.Attrs["name"]
-										if pushNames == "" {
-											return errors.Errorf("tag is needed when pushing to registry")
-										}
-										pw := progress.ResetTime(pw)
-										pushList := strings.Split(pushNames, ",")
-										for _, name := range pushList {
-											if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
-												return pushWithMoby(ctx, node, name, l)
-											}); err != nil {
-												return err
-											}
-										}
-										remoteDigest, err := remoteDigestWithMoby(ctx, node, pushList[0])
-										if err == nil && remoteDigest != "" {
-											// old daemons might not have containerimage.config.digest set
-											// in response so use containerimage.digest value for it if available
-											if _, ok := rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; !ok {
-												if v, ok := rr.ExporterResponse[exptypes.ExporterImageDigestKey]; ok {
-													rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey] = v
-												}
-											}
-											rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
-										} else if err != nil {
-											return err
+						if !node.IsMobyDriver() {
+							return nil
+						}
+
+						for _, e := range so.Exports {
+							if e.Type == "moby" && e.Attrs["push"] != "" {
+								if ok, _ := strconv.ParseBool(e.Attrs["push"]); !ok {
+									continue
+								}
+								pushNames = e.Attrs["name"]
+								if pushNames == "" {
+									return errors.Errorf("tag is needed when pushing to registry")
+								}
+								pw := progress.ResetTime(pw)
+								pushList := strings.Split(pushNames, ",")
+								for _, name := range pushList {
+									if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
+										return pushWithMoby(ctx, node, name, l)
+									}); err != nil {
+										return err
+									}
+								}
+								remoteDigest, err := remoteDigestWithMoby(ctx, node, pushList[0])
+								if err == nil && remoteDigest != "" {
+									// old daemons might not have containerimage.config.digest set
+									// in response so use containerimage.digest value for it if available
+									if _, ok := rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; !ok {
+										if v, ok := rr.ExporterResponse[exptypes.ExporterImageDigestKey]; ok {
+											rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey] = v
 										}
 									}
+									rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
+								} else if err != nil {
+									return err
 								}
 							}
 						}
+
 						return nil
 					})
 
@@ -1315,27 +1327,30 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 			}
 			delete(so.FrontendAttrs, v)
 		}
-		if rr.Ref != nil {
-			st, err := rr.Ref.ToState()
+
+		if rr.Ref == nil {
+			continue
+		}
+
+		st, err := rr.Ref.ToState()
+		if err != nil {
+			return err
+		}
+		so.FrontendInputs[k] = st
+		so.FrontendAttrs[v] = "input:" + k
+		metadata := make(map[string][]byte)
+		if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey]; ok {
+			metadata[exptypes.ExporterImageConfigKey] = dt
+		}
+		if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo]; ok {
+			metadata[exptypes.ExporterBuildInfo] = dt
+		}
+		if len(metadata) > 0 {
+			dt, err := json.Marshal(metadata)
 			if err != nil {
 				return err
 			}
-			so.FrontendInputs[k] = st
-			so.FrontendAttrs[v] = "input:" + k
-			metadata := make(map[string][]byte)
-			if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey]; ok {
-				metadata[exptypes.ExporterImageConfigKey] = dt
-			}
-			if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo]; ok {
-				metadata[exptypes.ExporterBuildInfo] = dt
-			}
-			if len(metadata) > 0 {
-				dt, err := json.Marshal(metadata)
-				if err != nil {
-					return err
-				}
-				so.FrontendAttrs["input-metadata:"+k] = string(dt)
-			}
+			so.FrontendAttrs["input-metadata:"+k] = string(dt)
 		}
 	}
 	return nil
