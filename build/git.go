@@ -24,13 +24,13 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	if v, ok := os.LookupEnv("BUILDX_GIT_LABELS"); ok {
 		if v == "full" { // backward compatibility with old "full" mode
 			setGitLabels = true
-		} else if v, _ := strconv.ParseBool(v); v {
+		} else if v, err := strconv.ParseBool(v); err == nil {
 			setGitLabels = v
 		}
 	}
 	setGitInfo := true
 	if v, ok := os.LookupEnv("BUILDX_GIT_INFO"); ok {
-		if v, _ := strconv.ParseBool(v); v {
+		if v, err := strconv.ParseBool(v); err == nil {
 			setGitInfo = v
 		}
 	}
