@@ -44,6 +44,12 @@ func TestGetGitAttributes(t *testing.T) {
 			},
 		},
 		{
+			name:         "none",
+			envGitLabels: "false",
+			envGitInfo:   "false",
+			expected:     []string{},
+		},
+		{
 			name:         "gitinfo",
 			envGitLabels: "false",
 			envGitInfo:   "true",
