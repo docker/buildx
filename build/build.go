@@ -594,10 +594,10 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			if v == nil {
 				continue
 			}
-			so.FrontendAttrs[k] = *v
+			so.FrontendAttrs["attest:"+k] = *v
 		}
 	}
-	if _, ok := opt.Attests["attest:provenance"]; !ok {
+	if _, ok := opt.Attests["provenance"]; !ok {
 		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
 	}
 

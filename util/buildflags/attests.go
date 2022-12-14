@@ -28,14 +28,13 @@ func ParseAttests(in []string) (map[string]*string, error) {
 			return nil, err
 		}
 
-		k := "attest:" + attestType
-		if _, ok := out[k]; ok {
+		if _, ok := out[attestType]; ok {
 			return nil, errors.Errorf("duplicate attestation field %s", attestType)
 		}
 		if enabled {
-			out[k] = &in
+			out[attestType] = &in
 		} else {
-			out[k] = nil
+			out[attestType] = nil
 		}
 	}
 	return out, nil
