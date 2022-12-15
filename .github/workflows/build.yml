@@ -163,6 +163,8 @@ jobs:
           set: |
             *.cache-from=type=gha,scope=bin-image
             *.cache-to=type=gha,scope=bin-image,mode=max
+            *.attest=type=sbom
+            *.attest=type=provenance,mode=max,builder-id=https://github.com/${{ env.GITHUB_REPOSITORY }}/actions/runs/${{ env.GITHUB_RUN_ID }}
 
   release:
     runs-on: ubuntu-latest
