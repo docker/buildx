@@ -3,18 +3,19 @@ package build
 import (
 	"context"
 	"os"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
 
 	"github.com/docker/buildx/util/gitutil"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/sirupsen/logrus"
+	"github.com/pkg/errors"
 )
 
 const DockerfileLabel = "com.docker.image.source.entrypoint"
 
-func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath string) (res map[string]string) {
+func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath string) (res map[string]string, _ error) {
 	res = make(map[string]string)
 	if contextPath == "" {
 		return
@@ -50,30 +51,45 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 
 	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
 	if err != nil {
-		logrus.Warnf("Failed to initialize git: %v", err)
+		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
+			return res, errors.New("No git was found in the system. Current commit information was not captured by the build.")
+		}
 		return
 	}
 
 	if !gitc.IsInsideWorkTree() {
-		logrus.Warnf("Unable to determine git information")
-		return
+		return res, errors.New("Not inside a git repository")
 	}
 
-	var resRevision, resSource, resDockerfilePath string
-
-	if sha, err := gitc.FullCommit(); err == nil && sha != "" {
-		resRevision = sha
+	if sha, err := gitc.FullCommit(); err != nil {
+		return res, errors.Wrapf(err, "failed to get git commit")
+	} else if sha != "" {
 		if gitc.IsDirty() {
-			resRevision += "-dirty"
+			sha += "-dirty"
+		}
+		if setGitLabels {
+			res["label:"+specs.AnnotationRevision] = sha
+		}
+		if setGitInfo {
+			res["vcs:revision"] = sha
 		}
 	}
 
-	if rurl, err := gitc.RemoteURL(); err == nil && rurl != "" {
-		resSource = rurl
+	if rurl, err := gitc.RemoteURL(); err != nil {
+		return res, errors.Wrapf(err, "failed to get git remote url")
+	} else if rurl != "" {
+		if setGitLabels {
+			res["label:"+specs.AnnotationSource] = rurl
+		}
+		if setGitInfo {
+			res["vcs:source"] = rurl
+		}
 	}
 
 	if setGitLabels {
-		if root, err := gitc.RootDir(); err == nil && root != "" {
+		if root, err := gitc.RootDir(); err != nil {
+			return res, errors.Wrapf(err, "failed to get git root dir")
+		} else if root != "" {
 			if dockerfilePath == "" {
 				dockerfilePath = filepath.Join(wd, "Dockerfile")
 			}
@@ -83,30 +99,8 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 			}
 			dockerfilePath, _ = filepath.Rel(root, dockerfilePath)
 			if !strings.HasPrefix(dockerfilePath, "..") {
-				resDockerfilePath = dockerfilePath
+				res["label:"+DockerfileLabel] = dockerfilePath
 			}
-		}
-	}
-
-	if resSource != "" {
-		if setGitLabels {
-			res["label:"+specs.AnnotationSource] = resSource
-		}
-		if setGitInfo {
-			res["vcs:source"] = resSource
-		}
-	}
-	if resRevision != "" {
-		if setGitLabels {
-			res["label:"+specs.AnnotationRevision] = resRevision
-		}
-		if setGitInfo {
-			res["vcs:revision"] = resRevision
-		}
-	}
-	if resDockerfilePath != "" {
-		if setGitLabels {
-			res["label:"+DockerfileLabel] = resDockerfilePath
 		}
 	}
 

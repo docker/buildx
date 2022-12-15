@@ -3,13 +3,12 @@ package gitutil
 import (
 	"testing"
 
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
 func TestGit(t *testing.T) {
 	c, err := New()
-	assert.NoError(t, err)
+	require.NoError(t, err)
 
 	out, err := c.run("status")
 	require.NoError(t, err)
@@ -22,10 +21,10 @@ func TestGit(t *testing.T) {
 }
 
 func TestGitFullCommit(t *testing.T) {
-	c, err := New()
-	assert.NoError(t, err)
-
 	Mktmp(t)
+	c, err := New()
+	require.NoError(t, err)
+
 	GitInit(c, t)
 	GitCommit(c, t, "bar")
 
@@ -35,10 +34,10 @@ func TestGitFullCommit(t *testing.T) {
 }
 
 func TestGitShortCommit(t *testing.T) {
-	c, err := New()
-	assert.NoError(t, err)
-
 	Mktmp(t)
+	c, err := New()
+	require.NoError(t, err)
+
 	GitInit(c, t)
 	GitCommit(c, t, "bar")
 
@@ -48,10 +47,10 @@ func TestGitShortCommit(t *testing.T) {
 }
 
 func TestGitTagsPointsAt(t *testing.T) {
-	c, err := New()
-	assert.NoError(t, err)
-
 	Mktmp(t)
+	c, err := New()
+	require.NoError(t, err)
+
 	GitInit(c, t)
 	GitCommit(c, t, "bar")
 	GitTag(c, t, "v0.8.0")
@@ -64,10 +63,10 @@ func TestGitTagsPointsAt(t *testing.T) {
 }
 
 func TestGitDescribeTags(t *testing.T) {
-	c, err := New()
-	assert.NoError(t, err)
-
 	Mktmp(t)
+	c, err := New()
+	require.NoError(t, err)
+
 	GitInit(c, t)
 	GitCommit(c, t, "bar")
 	GitTag(c, t, "v0.8.0")
