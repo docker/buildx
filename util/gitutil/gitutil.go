@@ -98,7 +98,7 @@ func (c *Git) run(args ...string) (string, error) {
 	}
 
 	args = append(extraArgs, args...)
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(c.ctx, "git", args...)
 	if c.wd != "" {
 		cmd.Dir = c.wd
 	}

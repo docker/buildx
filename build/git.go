@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/docker/buildx/util/gitutil"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -15,6 +16,9 @@ import (
 const DockerfileLabel = "com.docker.image.source.entrypoint"
 
 func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath string) (res map[string]string) {
+	ctx, cancel := context.WithTimeout(ctx, 2*time.Second)
+	defer cancel()
+
 	res = make(map[string]string)
 	if contextPath == "" {
 		return
