@@ -37,7 +37,6 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
-	"github.com/moby/buildkit/frontend/attestations"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
@@ -1113,11 +1112,13 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 
 						req := gateway.SolveRequest{
 							Frontend:       so.Frontend,
-							FrontendOpt:    so.FrontendAttrs,
 							FrontendInputs: frontendInputs,
+							FrontendOpt:    make(map[string]string),
+						}
+						for k, v := range so.FrontendAttrs {
+							req.FrontendOpt[k] = v
 						}
 						so.Frontend = ""
-						so.FrontendAttrs = attestations.Filter(so.FrontendAttrs)
 						so.FrontendInputs = nil
 
 						ch, done := progress.NewChannel(pw)
