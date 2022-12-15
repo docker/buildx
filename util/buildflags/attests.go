@@ -29,6 +29,9 @@ func ParseAttests(in []string) (map[string]*string, error) {
 		}
 
 		k := "attest:" + attestType
+		if _, ok := out[k]; ok {
+			return nil, errors.Errorf("duplicate attestation field %s", attestType)
+		}
 		if enabled {
 			out[k] = &in
 		} else {
