@@ -21,6 +21,8 @@ on:
       - 'docs/**'
 
 env:
+  BUILDX_VERSION: "v0.10.0-rc1"
+  BUILDKIT_IMAGE: "moby/buildkit:v0.11.0-rc2"
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
 
@@ -35,7 +37,9 @@ jobs:
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
-          version: latest
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+          buildkitd-flags: --debug
       -
         name: Test
         uses: docker/bake-action@v2
@@ -92,22 +96,23 @@ jobs:
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
-          version: latest
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+          buildkitd-flags: --debug
       -
         name: Build
-        uses: docker/bake-action@v2
-        with:
-          targets: release
-          set: |
-            *.platform=${{ matrix.platform }}
-            *.cache-from=type=gha,scope=binaries-${{ env.PLATFORM_PAIR }}
-            *.cache-to=type=gha,scope=binaries-${{ env.PLATFORM_PAIR }},mode=max
+        run: |
+          make release
+        env:
+          PLATFORMS: ${{ matrix.platform }}
+          CACHE_FROM: type=gha,scope=binaries-${{ env.PLATFORM_PAIR }}
+          CACHE_TO: type=gha,scope=binaries-${{ env.PLATFORM_PAIR }},mode=max
       -
         name: Upload artifacts
         uses: actions/upload-artifact@v3
         with:
           name: buildx
-          path: ${{ env.DESTDIR }}/release/*
+          path: ${{ env.DESTDIR }}/*
           if-no-files-found: error
 
   bin-image:
@@ -124,7 +129,9 @@ jobs:
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
-          version: latest
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+          buildkitd-flags: --debug
       -
         name: Docker meta
         id: meta
@@ -206,7 +213,7 @@ jobs:
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
         with:
-          version: latest
+          version: ${{ env.BUILDX_VERSION }}
           driver-opts: image=moby/buildkit:master
           buildkitd-flags: --debug
       -
