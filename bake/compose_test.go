@@ -60,7 +60,7 @@ secrets:
 	require.Equal(t, "./dir", *c.Targets[1].Context)
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[1].Dockerfile)
 	require.Equal(t, 1, len(c.Targets[1].Args))
-	require.Equal(t, "123", c.Targets[1].Args["buildno"])
+	require.Equal(t, ptrstr("123"), c.Targets[1].Args["buildno"])
 	require.Equal(t, []string{"type=local,src=path/to/cache"}, c.Targets[1].CacheFrom)
 	require.Equal(t, []string{"type=local,dest=path/to/cache"}, c.Targets[1].CacheTo)
 	require.Equal(t, "none", *c.Targets[1].NetworkMode)
@@ -149,18 +149,15 @@ services:
         BRB: FOO
 `)
 
-	os.Setenv("FOO", "bar")
-	defer os.Unsetenv("FOO")
-	os.Setenv("BAR", "foo")
-	defer os.Unsetenv("BAR")
-	os.Setenv("ZZZ_BAR", "zzz_foo")
-	defer os.Unsetenv("ZZZ_BAR")
+	t.Setenv("FOO", "bar")
+	t.Setenv("BAR", "foo")
+	t.Setenv("ZZZ_BAR", "zzz_foo")
 
 	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, sliceToMap(os.Environ()))
 	require.NoError(t, err)
-	require.Equal(t, "bar", c.Targets[0].Args["FOO"])
-	require.Equal(t, "zzz_foo", c.Targets[0].Args["BAR"])
-	require.Equal(t, "FOO", c.Targets[0].Args["BRB"])
+	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["FOO"])
+	require.Equal(t, ptrstr("zzz_foo"), c.Targets[0].Args["BAR"])
+	require.Equal(t, ptrstr("FOO"), c.Targets[0].Args["BRB"])
 }
 
 func TestInconsistentComposeFile(t *testing.T) {
@@ -308,7 +305,7 @@ services:
 	sort.Slice(c.Targets, func(i, j int) bool {
 		return c.Targets[i].Name < c.Targets[j].Name
 	})
-	require.Equal(t, map[string]string{"CT_ECR": "foo", "CT_TAG": "bar"}, c.Targets[0].Args)
+	require.Equal(t, map[string]*string{"CT_ECR": ptrstr("foo"), "CT_TAG": ptrstr("bar")}, c.Targets[0].Args)
 	require.Equal(t, []string{"ct-addon:baz", "ct-addon:foo", "ct-addon:alp"}, c.Targets[0].Tags)
 	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Targets[0].Platforms)
 	require.Equal(t, []string{"user/app:cache", "type=local,src=path/to/cache"}, c.Targets[0].CacheFrom)
@@ -381,7 +378,7 @@ services:
 
 	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
-	require.Equal(t, map[string]string{"CT_ECR": "foo", "FOO": "bsdf -csdf", "NODE_ENV": "test"}, c.Targets[0].Args)
+	require.Equal(t, map[string]*string{"CT_ECR": ptrstr("foo"), "FOO": ptrstr("bsdf -csdf"), "NODE_ENV": ptrstr("test")}, c.Targets[0].Args)
 }
 
 func TestDotEnv(t *testing.T) {
@@ -405,7 +402,7 @@ services:
 		Data: dt,
 	}})
 	require.NoError(t, err)
-	require.Equal(t, map[string]string{"FOO": "bar"}, c.Targets[0].Args)
+	require.Equal(t, map[string]*string{"FOO": ptrstr("bar")}, c.Targets[0].Args)
 }
 
 func TestPorts(t *testing.T) {
@@ -627,6 +624,22 @@ target "default" {
 			}
 		})
 	}
+}
+
+func TestComposeNullArgs(t *testing.T) {
+	var dt = []byte(`
+services:
+  scratch:
+    build:
+     context: .
+     args:
+        FOO: null
+        bar: "baz"
+`)
+
+	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, c.Targets[0].Args)
 }
 
 // chdir changes the current working directory to the named directory,

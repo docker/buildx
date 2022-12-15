@@ -559,24 +559,24 @@ type Target struct {
 	Attest   []string `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
 
-	Context          *string           `json:"context,omitempty" hcl:"context,optional" cty:"context"`
-	Contexts         map[string]string `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
-	Dockerfile       *string           `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
-	DockerfileInline *string           `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
-	Args             map[string]string `json:"args,omitempty" hcl:"args,optional" cty:"args"`
-	Labels           map[string]string `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
-	Tags             []string          `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
-	CacheFrom        []string          `json:"cache-from,omitempty"  hcl:"cache-from,optional" cty:"cache-from"`
-	CacheTo          []string          `json:"cache-to,omitempty"  hcl:"cache-to,optional" cty:"cache-to"`
-	Target           *string           `json:"target,omitempty" hcl:"target,optional" cty:"target"`
-	Secrets          []string          `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
-	SSH              []string          `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
-	Platforms        []string          `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
-	Outputs          []string          `json:"output,omitempty" hcl:"output,optional" cty:"output"`
-	Pull             *bool             `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
-	NoCache          *bool             `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
-	NetworkMode      *string           `json:"-" hcl:"-" cty:"-"`
-	NoCacheFilter    []string          `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
+	Context          *string            `json:"context,omitempty" hcl:"context,optional" cty:"context"`
+	Contexts         map[string]string  `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
+	Dockerfile       *string            `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
+	DockerfileInline *string            `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
+	Args             map[string]*string `json:"args,omitempty" hcl:"args,optional" cty:"args"`
+	Labels           map[string]*string `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
+	Tags             []string           `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
+	CacheFrom        []string           `json:"cache-from,omitempty"  hcl:"cache-from,optional" cty:"cache-from"`
+	CacheTo          []string           `json:"cache-to,omitempty"  hcl:"cache-to,optional" cty:"cache-to"`
+	Target           *string            `json:"target,omitempty" hcl:"target,optional" cty:"target"`
+	Secrets          []string           `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
+	SSH              []string           `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
+	Platforms        []string           `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
+	Outputs          []string           `json:"output,omitempty" hcl:"output,optional" cty:"output"`
+	Pull             *bool              `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
+	NoCache          *bool              `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
+	NetworkMode      *string            `json:"-" hcl:"-" cty:"-"`
+	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/manuals/bake/file-definition.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -615,8 +615,11 @@ func (t *Target) Merge(t2 *Target) {
 		t.DockerfileInline = t2.DockerfileInline
 	}
 	for k, v := range t2.Args {
+		if v == nil {
+			continue
+		}
 		if t.Args == nil {
-			t.Args = map[string]string{}
+			t.Args = map[string]*string{}
 		}
 		t.Args[k] = v
 	}
@@ -627,8 +630,11 @@ func (t *Target) Merge(t2 *Target) {
 		t.Contexts[k] = v
 	}
 	for k, v := range t2.Labels {
+		if v == nil {
+			continue
+		}
 		if t.Labels == nil {
-			t.Labels = map[string]string{}
+			t.Labels = map[string]*string{}
 		}
 		t.Labels[k] = v
 	}
@@ -688,9 +694,9 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 				return errors.Errorf("args require name")
 			}
 			if t.Args == nil {
-				t.Args = map[string]string{}
+				t.Args = map[string]*string{}
 			}
-			t.Args[keys[1]] = value
+			t.Args[keys[1]] = &value
 		case "contexts":
 			if len(keys) != 2 {
 				return errors.Errorf("contexts require name")
@@ -704,9 +710,9 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 				return errors.Errorf("labels require name")
 			}
 			if t.Labels == nil {
-				t.Labels = map[string]string{}
+				t.Labels = map[string]*string{}
 			}
-			t.Labels[keys[1]] = value
+			t.Labels[keys[1]] = &value
 		case "tags":
 			t.Tags = o.ArrValue
 		case "cache-from":
@@ -882,6 +888,22 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		dockerfilePath = path.Join(contextPath, dockerfilePath)
 	}
 
+	args := map[string]string{}
+	for k, v := range t.Args {
+		if v == nil {
+			continue
+		}
+		args[k] = *v
+	}
+
+	labels := map[string]string{}
+	for k, v := range t.Labels {
+		if v == nil {
+			continue
+		}
+		labels[k] = *v
+	}
+
 	noCache := false
 	if t.NoCache != nil {
 		noCache = *t.NoCache
@@ -922,8 +944,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	bo := &build.Options{
 		Inputs:        bi,
 		Tags:          t.Tags,
-		BuildArgs:     t.Args,
-		Labels:        t.Labels,
+		BuildArgs:     args,
+		Labels:        labels,
 		NoCache:       noCache,
 		NoCacheFilter: t.NoCacheFilter,
 		Pull:          pull,

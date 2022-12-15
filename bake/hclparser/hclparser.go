@@ -281,19 +281,16 @@ func (p *parser) resolveValue(name string) (err error) {
 	_, isVar := p.vars[name]
 
 	if envv, ok := p.opt.LookupVar(name); ok && isVar {
-		if vv.Type().Equals(cty.Bool) {
+		switch {
+		case vv.Type().Equals(cty.Bool):
 			b, err := strconv.ParseBool(envv)
 			if err != nil {
 				return errors.Wrapf(err, "failed to parse %s as bool", name)
 			}
-			vv := cty.BoolVal(b)
-			v = &vv
-			return nil
-		} else if vv.Type().Equals(cty.String) {
-			vv := cty.StringVal(envv)
-			v = &vv
-			return nil
-		} else if vv.Type().Equals(cty.Number) {
+			vv = cty.BoolVal(b)
+		case vv.Type().Equals(cty.String), vv.Type().Equals(cty.DynamicPseudoType):
+			vv = cty.StringVal(envv)
+		case vv.Type().Equals(cty.Number):
 			n, err := strconv.ParseFloat(envv, 64)
 			if err == nil && (math.IsNaN(n) || math.IsInf(n, 0)) {
 				err = errors.Errorf("invalid number value")
@@ -301,10 +298,8 @@ func (p *parser) resolveValue(name string) (err error) {
 			if err != nil {
 				return errors.Wrapf(err, "failed to parse %s as number", name)
 			}
-			vv := cty.NumberVal(big.NewFloat(n))
-			v = &vv
-			return nil
-		} else {
+			vv = cty.NumberVal(big.NewFloat(n))
+		default:
 			// TODO: support lists with csv values
 			return errors.Errorf("unsupported type %s for variable %s", vv.Type().FriendlyName(), name)
 		}

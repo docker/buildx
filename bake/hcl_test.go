@@ -1,7 +1,7 @@
 package bake
 
 import (
-	"os"
+	"reflect"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -54,7 +54,7 @@ func TestHCLBasic(t *testing.T) {
 
 	require.Equal(t, c.Targets[1].Name, "webapp")
 	require.Equal(t, 1, len(c.Targets[1].Args))
-	require.Equal(t, "123", c.Targets[1].Args["buildno"])
+	require.Equal(t, ptrstr("123"), c.Targets[1].Args["buildno"])
 
 	require.Equal(t, c.Targets[2].Name, "cross")
 	require.Equal(t, 2, len(c.Targets[2].Platforms))
@@ -62,7 +62,7 @@ func TestHCLBasic(t *testing.T) {
 
 	require.Equal(t, c.Targets[3].Name, "webapp-plus")
 	require.Equal(t, 1, len(c.Targets[3].Args))
-	require.Equal(t, map[string]string{"IAMCROSS": "true"}, c.Targets[3].Args)
+	require.Equal(t, map[string]*string{"IAMCROSS": ptrstr("true")}, c.Targets[3].Args)
 }
 
 func TestHCLBasicInJSON(t *testing.T) {
@@ -114,7 +114,7 @@ func TestHCLBasicInJSON(t *testing.T) {
 
 	require.Equal(t, c.Targets[1].Name, "webapp")
 	require.Equal(t, 1, len(c.Targets[1].Args))
-	require.Equal(t, "123", c.Targets[1].Args["buildno"])
+	require.Equal(t, ptrstr("123"), c.Targets[1].Args["buildno"])
 
 	require.Equal(t, c.Targets[2].Name, "cross")
 	require.Equal(t, 2, len(c.Targets[2].Platforms))
@@ -122,7 +122,7 @@ func TestHCLBasicInJSON(t *testing.T) {
 
 	require.Equal(t, c.Targets[3].Name, "webapp-plus")
 	require.Equal(t, 1, len(c.Targets[3].Args))
-	require.Equal(t, map[string]string{"IAMCROSS": "true"}, c.Targets[3].Args)
+	require.Equal(t, map[string]*string{"IAMCROSS": ptrstr("true")}, c.Targets[3].Args)
 }
 
 func TestHCLWithFunctions(t *testing.T) {
@@ -147,7 +147,7 @@ func TestHCLWithFunctions(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "webapp")
-	require.Equal(t, "124", c.Targets[0].Args["buildno"])
+	require.Equal(t, ptrstr("124"), c.Targets[0].Args["buildno"])
 }
 
 func TestHCLWithUserDefinedFunctions(t *testing.T) {
@@ -177,7 +177,7 @@ func TestHCLWithUserDefinedFunctions(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "webapp")
-	require.Equal(t, "124", c.Targets[0].Args["buildno"])
+	require.Equal(t, ptrstr("124"), c.Targets[0].Args["buildno"])
 }
 
 func TestHCLWithVariables(t *testing.T) {
@@ -206,9 +206,9 @@ func TestHCLWithVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "webapp")
-	require.Equal(t, "123", c.Targets[0].Args["buildno"])
+	require.Equal(t, ptrstr("123"), c.Targets[0].Args["buildno"])
 
-	os.Setenv("BUILD_NUMBER", "456")
+	t.Setenv("BUILD_NUMBER", "456")
 
 	c, err = ParseFile(dt, "docker-bake.hcl")
 	require.NoError(t, err)
@@ -219,7 +219,7 @@ func TestHCLWithVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "webapp")
-	require.Equal(t, "456", c.Targets[0].Args["buildno"])
+	require.Equal(t, ptrstr("456"), c.Targets[0].Args["buildno"])
 }
 
 func TestHCLWithVariablesInFunctions(t *testing.T) {
@@ -244,7 +244,7 @@ func TestHCLWithVariablesInFunctions(t *testing.T) {
 	require.Equal(t, c.Targets[0].Name, "webapp")
 	require.Equal(t, []string{"user/repo:v1"}, c.Targets[0].Tags)
 
-	os.Setenv("REPO", "docker/buildx")
+	t.Setenv("REPO", "docker/buildx")
 
 	c, err = ParseFile(dt, "docker-bake.hcl")
 	require.NoError(t, err)
@@ -280,10 +280,10 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre-abc", c.Targets[0].Args["v1"])
-	require.Equal(t, "abc-post", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("pre-abc"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("abc-post"), c.Targets[0].Args["v2"])
 
-	os.Setenv("FOO", "def")
+	t.Setenv("FOO", "def")
 
 	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
@@ -293,12 +293,11 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre-def", c.Targets[0].Args["v1"])
-	require.Equal(t, "def-post", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("pre-def"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("def-post"), c.Targets[0].Args["v2"])
 }
 
 func TestHCLVarsWithVars(t *testing.T) {
-	os.Unsetenv("FOO")
 	dt := []byte(`
 		variable "FOO" {
 			default = upper("${BASE}def")
@@ -330,10 +329,10 @@ func TestHCLVarsWithVars(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre--ABCDEF-", c.Targets[0].Args["v1"])
-	require.Equal(t, "ABCDEF-post", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("pre--ABCDEF-"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("ABCDEF-post"), c.Targets[0].Args["v2"])
 
-	os.Setenv("BASE", "new")
+	t.Setenv("BASE", "new")
 
 	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
@@ -343,12 +342,11 @@ func TestHCLVarsWithVars(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre--NEWDEF-", c.Targets[0].Args["v1"])
-	require.Equal(t, "NEWDEF-post", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("pre--NEWDEF-"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("NEWDEF-post"), c.Targets[0].Args["v2"])
 }
 
 func TestHCLTypedVariables(t *testing.T) {
-	os.Unsetenv("FOO")
 	dt := []byte(`
 		variable "FOO" {
 			default = 3
@@ -369,31 +367,78 @@ func TestHCLTypedVariables(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "lower", c.Targets[0].Args["v1"])
-	require.Equal(t, "yes", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("lower"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("yes"), c.Targets[0].Args["v2"])
 
-	os.Setenv("FOO", "5.1")
-	os.Setenv("IS_FOO", "0")
+	t.Setenv("FOO", "5.1")
+	t.Setenv("IS_FOO", "0")
 
 	c, err = ParseFile(dt, "docker-bake.hcl")
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "higher", c.Targets[0].Args["v1"])
-	require.Equal(t, "no", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("higher"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("no"), c.Targets[0].Args["v2"])
 
-	os.Setenv("FOO", "NaN")
+	t.Setenv("FOO", "NaN")
 	_, err = ParseFile(dt, "docker-bake.hcl")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to parse FOO as number")
 
-	os.Setenv("FOO", "0")
-	os.Setenv("IS_FOO", "maybe")
+	t.Setenv("FOO", "0")
+	t.Setenv("IS_FOO", "maybe")
 
 	_, err = ParseFile(dt, "docker-bake.hcl")
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to parse IS_FOO as bool")
+}
+
+func TestHCLNullVariables(t *testing.T) {
+	dt := []byte(`
+		variable "FOO" {
+			default = null
+		}
+		target "default" {
+			args = {
+				foo = FOO
+			}
+		}`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Equal(t, ptrstr(nil), c.Targets[0].Args["foo"])
+
+	t.Setenv("FOO", "bar")
+	c, err = ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["foo"])
+}
+
+func TestJSONNullVariables(t *testing.T) {
+	dt := []byte(`{
+		"variable": {
+			"FOO": {
+				"default": null
+			}
+		},
+		"target": {
+			"default": {
+				"args": {
+					"foo": "${FOO}"
+				}
+			}
+		}
+	}`)
+
+	c, err := ParseFile(dt, "docker-bake.json")
+	require.NoError(t, err)
+	require.Equal(t, ptrstr(nil), c.Targets[0].Args["foo"])
+
+	t.Setenv("FOO", "bar")
+	c, err = ParseFile(dt, "docker-bake.json")
+	require.NoError(t, err)
+	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["foo"])
 }
 
 func TestHCLVariableCycle(t *testing.T) {
@@ -431,16 +476,16 @@ func TestHCLAttrs(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "attr-abcdef", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("attr-abcdef"), c.Targets[0].Args["v1"])
 
 	// env does not apply if no variable
-	os.Setenv("FOO", "bar")
+	t.Setenv("FOO", "bar")
 	c, err = ParseFile(dt, "docker-bake.hcl")
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "attr-abcdef", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("attr-abcdef"), c.Targets[0].Args["v1"])
 	// attr-multifile
 }
 
@@ -549,11 +594,10 @@ func TestHCLAttrsCustomType(t *testing.T) {
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
 	require.Equal(t, []string{"linux/arm64", "linux/amd64"}, c.Targets[0].Platforms)
-	require.Equal(t, "linux/arm64", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("linux/arm64"), c.Targets[0].Args["v1"])
 }
 
 func TestHCLMultiFileAttrs(t *testing.T) {
-	os.Unsetenv("FOO")
 	dt := []byte(`
 		variable "FOO" {
 			default = "abc"
@@ -575,9 +619,9 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre-def", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("pre-def"), c.Targets[0].Args["v1"])
 
-	os.Setenv("FOO", "ghi")
+	t.Setenv("FOO", "ghi")
 
 	c, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
@@ -587,7 +631,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre-ghi", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("pre-ghi"), c.Targets[0].Args["v1"])
 }
 
 func TestJSONAttributes(t *testing.T) {
@@ -598,7 +642,7 @@ func TestJSONAttributes(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre-abc-def", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("pre-abc-def"), c.Targets[0].Args["v1"])
 }
 
 func TestJSONFunctions(t *testing.T) {
@@ -623,7 +667,7 @@ func TestJSONFunctions(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "pre-<FOO-abc>", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("pre-<FOO-abc>"), c.Targets[0].Args["v1"])
 }
 
 func TestHCLFunctionInAttr(t *testing.T) {
@@ -651,7 +695,7 @@ func TestHCLFunctionInAttr(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "FOO <> [baz]", c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("FOO <> [baz]"), c.Targets[0].Args["v1"])
 }
 
 func TestHCLCombineCompose(t *testing.T) {
@@ -682,8 +726,8 @@ services:
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, c.Targets[0].Name, "app")
-	require.Equal(t, "foo", c.Targets[0].Args["v1"])
-	require.Equal(t, "bar", c.Targets[0].Args["v2"])
+	require.Equal(t, ptrstr("foo"), c.Targets[0].Args["v1"])
+	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["v2"])
 	require.Equal(t, "dir", *c.Targets[0].Context)
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[0].Dockerfile)
 }
@@ -828,10 +872,10 @@ target "two" {
 	require.Equal(t, 2, len(c.Targets))
 
 	require.Equal(t, c.Targets[0].Name, "one")
-	require.Equal(t, map[string]string{"a": "pre-ghi-jkl"}, c.Targets[0].Args)
+	require.Equal(t, map[string]*string{"a": ptrstr("pre-ghi-jkl")}, c.Targets[0].Args)
 
 	require.Equal(t, c.Targets[1].Name, "two")
-	require.Equal(t, map[string]string{"b": "pre-jkl"}, c.Targets[1].Args)
+	require.Equal(t, map[string]*string{"b": ptrstr("pre-jkl")}, c.Targets[1].Args)
 }
 
 func TestEmptyVariableJSON(t *testing.T) {
@@ -881,4 +925,13 @@ func TestVarUnsupportedType(t *testing.T) {
 	t.Setenv("FOO", "bar")
 	_, err := ParseFile(dt, "docker-bake.hcl")
 	require.Error(t, err)
+}
+
+func ptrstr(s interface{}) *string {
+	var n *string = nil
+	if reflect.ValueOf(s).Kind() == reflect.String {
+		ss := s.(string)
+		n = &ss
+	}
+	return n
 }
