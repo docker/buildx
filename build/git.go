@@ -48,9 +48,14 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 		wd, _ = filepath.Abs(filepath.Join(cwd, contextPath))
 	}
 
-	gitc := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
+	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
+	if err != nil {
+		logrus.Warnf("Failed to initialize git: %v", err)
+		return
+	}
+
 	if !gitc.IsInsideWorkTree() {
-		logrus.Warnf("Unable to determine Git information")
+		logrus.Warnf("Unable to determine git information")
 		return
 	}
 

@@ -12,17 +12,20 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-func setupTest(tb testing.TB) {
+func setupTest(tb testing.TB) *gitutil.Git {
+	c, err := gitutil.New()
+	assert.NoError(tb, err)
 	gitutil.Mktmp(tb)
-	gitutil.GitInit(tb)
+	gitutil.GitInit(c, tb)
 	df := []byte("FROM alpine:latest\n")
 	assert.NoError(tb, os.WriteFile("Dockerfile", df, 0644))
-	gitutil.GitAdd(tb, "Dockerfile")
-	gitutil.GitCommit(tb, "initial commit")
+	gitutil.GitAdd(c, tb, "Dockerfile")
+	gitutil.GitCommit(c, tb, "initial commit")
+	return c
 }
 
 func TestGetGitAttributesNoContext(t *testing.T) {
-	setupTest(t)
+	_ = setupTest(t)
 
 	gitattrs := getGitAttributes(context.Background(), "", "Dockerfile")
 	assert.Empty(t, gitattrs)
@@ -80,7 +83,7 @@ func TestGetGitAttributes(t *testing.T) {
 	for _, tt := range cases {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			setupTest(t)
+			_ = setupTest(t)
 			if tt.envGitLabels != "" {
 				t.Setenv("BUILDX_GIT_LABELS", tt.envGitLabels)
 			}
@@ -100,8 +103,8 @@ func TestGetGitAttributes(t *testing.T) {
 }
 
 func TestGetGitAttributesWithRemote(t *testing.T) {
-	setupTest(t)
-	gitutil.GitSetRemote(t, "git@github.com:docker/buildx.git")
+	c := setupTest(t)
+	gitutil.GitSetRemote(c, t, "git@github.com:docker/buildx.git")
 
 	t.Setenv("BUILDX_GIT_LABELS", "true")
 	gitattrs := getGitAttributes(context.Background(), ".", "Dockerfile")
@@ -119,7 +122,7 @@ func TestGetGitAttributesWithRemote(t *testing.T) {
 }
 
 func TestGetGitAttributesDirty(t *testing.T) {
-	setupTest(t)
+	_ = setupTest(t)
 
 	// make a change to test dirty flag
 	df := []byte("FROM alpine:edge\n")
