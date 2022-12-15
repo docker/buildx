@@ -219,9 +219,9 @@ func (b *Builder) Factory(ctx context.Context) (_ driver.Factory, err error) {
 			// driver for a docker context and allows falling back to a
 			// docker-container driver for older daemon that doesn't support
 			// buildkit (< 18.06).
-			ep := b.nodes[0].Endpoint
+			ep := b.NodeGroup.Nodes[0].Endpoint
 			var dockerapi *dockerutil.ClientAPI
-			dockerapi, err = dockerutil.NewClientAPI(b.opts.dockerCli, b.nodes[0].Endpoint)
+			dockerapi, err = dockerutil.NewClientAPI(b.opts.dockerCli, b.NodeGroup.Nodes[0].Endpoint)
 			if err != nil {
 				return
 			}
