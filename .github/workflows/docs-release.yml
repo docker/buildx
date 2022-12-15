@@ -2,11 +2,13 @@ name: docs-release
 
 on:
   release:
-    types: [ released ]
+    types:
+      - releases
 
 jobs:
   open-pr:
     runs-on: ubuntu-latest
+    if: "!github.event.release.prerelease"
     steps:
       -
         name: Checkout docs repo
