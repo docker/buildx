@@ -26,7 +26,7 @@ env:
 
 jobs:
   test:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     steps:
       -
         name: Checkout
@@ -51,7 +51,7 @@ jobs:
           directory: ${{ env.DESTDIR }}/coverage
 
   prepare:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.platforms.outputs.matrix }}
     steps:
@@ -69,7 +69,7 @@ jobs:
           echo ${{ steps.platforms.outputs.matrix }}
 
   binaries:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - prepare
     strategy:
@@ -111,7 +111,7 @@ jobs:
           if-no-files-found: error
 
   bin-image:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     if: ${{ github.event_name != 'pull_request' }}
     steps:
       -
@@ -158,7 +158,7 @@ jobs:
             *.cache-to=type=gha,scope=bin-image,mode=max
 
   release:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     needs:
       - binaries
     steps:
@@ -193,7 +193,7 @@ jobs:
           files: ${{ env.DESTDIR }}/*
 
   buildkit-edge:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04
     continue-on-error: true
     steps:
       -
