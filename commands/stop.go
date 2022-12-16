@@ -24,7 +24,8 @@ func runStop(dockerCli command.Cli, in stopOptions) error {
 	if err != nil {
 		return err
 	}
-	nodes, err := b.LoadNodes(ctx, false)
+
+	nodes, err := b.Nodes(ctx)
 	if err != nil {
 		return err
 	}

@@ -250,7 +250,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	nodes, err := b.LoadNodes(timeoutCtx, true)
+	nodes, err := b.NodesWithData(timeoutCtx)
 	if err != nil {
 		return err
 	}

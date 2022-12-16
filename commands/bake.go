@@ -111,12 +111,11 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions) (err error
 		if err != nil {
 			return err
 		}
+		if nodes, err = b.Nodes(ctx); err != nil {
+			return err
+		}
 		if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
 			return errors.Wrapf(err, "failed to update builder last activity time")
-		}
-		nodes, err = b.LoadNodes(ctx, false)
-		if err != nil {
-			return err
 		}
 	}
 

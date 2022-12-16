@@ -263,12 +263,12 @@ func runBuild(dockerCli command.Cli, in buildOptions) (err error) {
 	if err != nil {
 		return err
 	}
-	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
-		return errors.Wrapf(err, "failed to update builder last activity time")
-	}
-	nodes, err := b.LoadNodes(ctx, false)
+	nodes, err := b.Nodes(ctx)
 	if err != nil {
 		return err
+	}
+	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
+		return errors.Wrapf(err, "failed to update builder last activity time")
 	}
 
 	imageID, res, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, in.progress, in.metadataFile, in.invoke != "")

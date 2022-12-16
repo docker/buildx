@@ -33,12 +33,14 @@ func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
 		return err
 	}
 
-	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
+	b, err := builder.New(dockerCli,
+		builder.WithName(opts.builder),
+	)
 	if err != nil {
 		return err
 	}
 
-	nodes, err := b.LoadNodes(ctx, false)
+	nodes, err := b.Nodes(ctx)
 	if err != nil {
 		return err
 	}

@@ -21,7 +21,7 @@ import (
 type Builder struct {
 	*store.NodeGroup
 	driverFactory driverFactory
-	nodes         []Node
+	nodesFactory  nodesFactory
 	opts          builderOpts
 	err           error
 }
@@ -144,12 +144,17 @@ func (b *Builder) ImageOpt() (imagetools.Opt, error) {
 
 // Boot bootstrap a builder
 func (b *Builder) Boot(ctx context.Context) (bool, error) {
-	toBoot := make([]int, 0, len(b.nodes))
-	for idx, d := range b.nodes {
-		if d.Err != nil || d.Driver == nil || d.DriverInfo == nil {
+	// ensure nodes are loaded
+	if _, err := b.Nodes(ctx); err != nil {
+		return false, err
+	}
+
+	toBoot := make([]int, 0, len(b.nodesFactory.nodes))
+	for idx, n := range b.nodesFactory.nodes {
+		if n.Err != nil || n.Driver == nil || n.DriverInfo == nil {
 			continue
 		}
-		if d.DriverInfo.Status != driver.Running {
+		if n.DriverInfo.Status != driver.Running {
 			toBoot = append(toBoot, idx)
 		}
 	}
@@ -168,9 +173,8 @@ func (b *Builder) Boot(ctx context.Context) (bool, error) {
 		func(idx int) {
 			eg.Go(func() error {
 				pw := progress.WithPrefix(printer, b.NodeGroup.Nodes[idx].Name, len(toBoot) > 1)
-				_, err := driver.Boot(ctx, baseCtx, b.nodes[idx].Driver, pw)
-				if err != nil {
-					b.nodes[idx].Err = err
+				if _, err := driver.Boot(ctx, baseCtx, b.nodesFactory.nodes[idx].Driver, pw); err != nil {
+					b.nodesFactory.nodes[idx].Err = err
 				}
 				return nil
 			})
@@ -188,7 +192,7 @@ func (b *Builder) Boot(ctx context.Context) (bool, error) {
 
 // Inactive checks if all nodes are inactive for this builder.
 func (b *Builder) Inactive() bool {
-	for _, d := range b.nodes {
+	for _, d := range b.nodesFactory.nodes {
 		if d.DriverInfo != nil && d.DriverInfo.Status == driver.Running {
 			return false
 		}

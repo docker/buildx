@@ -35,7 +35,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	nodes, err := b.LoadNodes(timeoutCtx, true)
+	nodes, err := b.NodesWithData(timeoutCtx)
 	if in.bootstrap {
 		var ok bool
 		ok, err = b.Boot(ctx)
@@ -43,7 +43,7 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 			return err
 		}
 		if ok {
-			nodes, err = b.LoadNodes(timeoutCtx, true)
+			nodes, err = b.NodesWithData(timeoutCtx)
 		}
 	}
 
@@ -62,7 +62,6 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 	if err == nil {
 		fmt.Fprintln(w, "")
 		fmt.Fprintln(w, "Nodes:")
-
 		for i, n := range nodes {
 			if i != 0 {
 				fmt.Fprintln(w, "")

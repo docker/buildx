@@ -54,13 +54,13 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		return err
 	}
 
-	nodes, err := b.LoadNodes(ctx, false)
-	if err != nil {
-		return err
-	}
-
 	if cb := b.ContextName(); cb != "" {
 		return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb)
+	}
+
+	nodes, err := b.Nodes(ctx)
+	if err != nil {
+		return err
 	}
 
 	err1 := rm(ctx, nodes, in)
@@ -137,7 +137,7 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 	for _, b := range builders {
 		func(b *builder.Builder) {
 			eg.Go(func() error {
-				nodes, err := b.LoadNodes(timeoutCtx, true)
+				nodes, err := b.NodesWithData(timeoutCtx)
 				if err != nil {
 					return errors.Wrapf(err, "cannot load %s", b.Name)
 				}

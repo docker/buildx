@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"sync"
 
 	"github.com/docker/buildx/driver"
 	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
@@ -29,16 +30,27 @@ type Node struct {
 	Err         error
 }
 
-// Nodes returns nodes for this builder.
-func (b *Builder) Nodes() []Node {
-	return b.nodes
+type nodesFactory struct {
+	nodes []Node
+	once  sync.Once
 }
 
-// LoadNodes loads and returns nodes for this builder.
-// TODO: this should be a method on a Node object and lazy load data for each driver.
-func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err error) {
-	eg, _ := errgroup.WithContext(ctx)
-	b.nodes = make([]Node, len(b.NodeGroup.Nodes))
+// Nodes loads and returns nodes for this builder.
+func (b *Builder) Nodes(ctx context.Context) (_ []Node, err error) {
+	b.nodesFactory.once.Do(func() {
+		err = b.loadNodes(ctx)
+	})
+	return b.nodesFactory.nodes, err
+}
+
+// NodesWithData loads nodes with data for this builder.
+func (b *Builder) NodesWithData(ctx context.Context) (_ []Node, err error) {
+	err = b.loadNodesWithData(ctx)
+	return b.nodesFactory.nodes, err
+}
+
+func (b *Builder) loadNodes(ctx context.Context) (err error) {
+	b.nodesFactory.nodes = make([]Node, len(b.NodeGroup.Nodes))
 
 	defer func() {
 		if b.err == nil && err != nil {
@@ -48,14 +60,15 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 
 	factory, err := b.Factory(ctx)
 	if err != nil {
-		return nil, err
+		return err
 	}
 
 	imageopt, err := b.ImageOpt()
 	if err != nil {
-		return nil, err
+		return err
 	}
 
+	eg, _ := errgroup.WithContext(ctx)
 	for i, n := range b.NodeGroup.Nodes {
 		func(i int, n store.Node) {
 			eg.Go(func() error {
@@ -64,7 +77,7 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 					ProxyConfig: storeutil.GetProxyConfig(b.opts.dockerCli),
 				}
 				defer func() {
-					b.nodes[i] = node
+					b.nodesFactory.nodes[i] = node
 				}()
 
 				dockerapi, err := dockerutil.NewClientAPI(b.opts.dockerCli, n.Endpoint)
@@ -108,59 +121,71 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 					node.Err = err
 					return nil
 				}
+
 				node.Driver = d
 				node.ImageOpt = imageopt
-
-				if withData {
-					if err := node.loadData(ctx); err != nil {
-						node.Err = err
-					}
-				}
 				return nil
 			})
 		}(i, n)
 	}
 
-	if err := eg.Wait(); err != nil {
-		return nil, err
+	return eg.Wait()
+}
+
+func (b *Builder) loadNodesWithData(ctx context.Context) (err error) {
+	// ensure nodes are loaded
+	if _, err = b.Nodes(ctx); err != nil {
+		return err
 	}
 
-	// TODO: This should be done in the routine loading driver data
-	if withData {
-		kubernetesDriverCount := 0
-		for _, d := range b.nodes {
-			if d.DriverInfo != nil && len(d.DriverInfo.DynamicNodes) > 0 {
-				kubernetesDriverCount++
-			}
-		}
-
-		isAllKubernetesDrivers := len(b.nodes) == kubernetesDriverCount
-		if isAllKubernetesDrivers {
-			var nodes []Node
-			var dynamicNodes []store.Node
-			for _, di := range b.nodes {
-				// dynamic nodes are used in Kubernetes driver.
-				// Kubernetes' pods are dynamically mapped to BuildKit Nodes.
-				if di.DriverInfo != nil && len(di.DriverInfo.DynamicNodes) > 0 {
-					for i := 0; i < len(di.DriverInfo.DynamicNodes); i++ {
-						diClone := di
-						if pl := di.DriverInfo.DynamicNodes[i].Platforms; len(pl) > 0 {
-							diClone.Platforms = pl
-						}
-						nodes = append(nodes, di)
-					}
-					dynamicNodes = append(dynamicNodes, di.DriverInfo.DynamicNodes...)
+	eg, _ := errgroup.WithContext(ctx)
+	for idx := range b.nodesFactory.nodes {
+		func(idx int) {
+			eg.Go(func() error {
+				if err = b.nodesFactory.nodes[idx].loadData(ctx); err != nil {
+					b.nodesFactory.nodes[idx].Err = err
 				}
-			}
+				return nil
+			})
+		}(idx)
+	}
+	if err = eg.Wait(); err != nil {
+		return err
+	}
 
-			// not append (remove the static nodes in the store)
-			b.NodeGroup.Nodes = dynamicNodes
-			b.nodes = nodes
-			b.NodeGroup.Dynamic = true
+	kubernetesDriverCount := 0
+	for _, d := range b.nodesFactory.nodes {
+		if d.DriverInfo != nil && len(d.DriverInfo.DynamicNodes) > 0 {
+			kubernetesDriverCount++
 		}
 	}
 
-	return b.nodes, nil
+	isAllKubernetesDrivers := len(b.nodesFactory.nodes) == kubernetesDriverCount
+	if isAllKubernetesDrivers {
+		var nodes []Node
+		var dynamicNodes []store.Node
+		for _, di := range b.nodesFactory.nodes {
+			// dynamic nodes are used in Kubernetes driver.
+			// Kubernetes' pods are dynamically mapped to BuildKit Nodes.
+			if di.DriverInfo != nil && len(di.DriverInfo.DynamicNodes) > 0 {
+				for i := 0; i < len(di.DriverInfo.DynamicNodes); i++ {
+					diClone := di
+					if pl := di.DriverInfo.DynamicNodes[i].Platforms; len(pl) > 0 {
+						diClone.Platforms = pl
+					}
+					nodes = append(nodes, di)
+				}
+				dynamicNodes = append(dynamicNodes, di.DriverInfo.DynamicNodes...)
+			}
+		}
+
+		// not append (remove the static nodes in the store)
+		b.NodeGroup.Nodes = dynamicNodes
+		b.nodesFactory.nodes = nodes
+		b.NodeGroup.Dynamic = true
+	}
+
+	return nil
 }
 
 func (n *Node) loadData(ctx context.Context) error {

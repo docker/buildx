@@ -48,7 +48,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	for _, b := range builders {
 		func(b *builder.Builder) {
 			eg.Go(func() error {
-				_, _ = b.LoadNodes(timeoutCtx, true)
+				_, _ = b.NodesWithData(timeoutCtx)
 				return nil
 			})
 		}(b)
@@ -66,7 +66,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 		if current.Name == b.Name {
 			b.Name += " *"
 		}
-		if ok := printBuilder(w, b); !ok {
+		if ok := printBuilder(ctx, w, b); !ok {
 			printErr = true
 		}
 	}
@@ -79,7 +79,8 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 			if b.Err() != nil {
 				_, _ = fmt.Fprintf(dockerCli.Err(), "Cannot load builder %s: %s\n", b.Name, strings.TrimSpace(b.Err().Error()))
 			} else {
-				for _, d := range b.Nodes() {
+				nodes, _ := b.Nodes(ctx)
+				for _, d := range nodes {
 					if d.Err != nil {
 						_, _ = fmt.Fprintf(dockerCli.Err(), "Failed to get status for %s (%s): %s\n", b.Name, d.Name, strings.TrimSpace(d.Err.Error()))
 					}
@@ -91,7 +92,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	return nil
 }
 
-func printBuilder(w io.Writer, b *builder.Builder) (ok bool) {
+func printBuilder(ctx context.Context, w io.Writer, b *builder.Builder) (ok bool) {
 	ok = true
 	var err string
 	if b.Err() != nil {
@@ -100,7 +101,8 @@ func printBuilder(w io.Writer, b *builder.Builder) (ok bool) {
 	}
 	fmt.Fprintf(w, "%s\t%s\t%s\t\t\n", b.Name, b.Driver, err)
 	if b.Err() == nil {
-		for _, n := range b.Nodes() {
+		nodes, _ := b.Nodes(ctx)
+		for _, n := range nodes {
 			var status string
 			if n.DriverInfo != nil {
 				status = n.DriverInfo.Status.String()
