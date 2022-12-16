@@ -22,7 +22,7 @@ on:
 
 env:
   BUILDX_VERSION: "v0.10.0-rc1"
-  BUILDKIT_IMAGE: "moby/buildkit:v0.11.0-rc2"
+  BUILDKIT_IMAGE: "moby/buildkit:v0.11.0-rc3"
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
 
