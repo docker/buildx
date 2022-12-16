@@ -31,7 +31,7 @@ func setupTest(tb testing.TB) {
 
 func TestGetGitAttributesNotGitRepo(t *testing.T) {
 	_, err := getGitAttributes(context.Background(), t.TempDir(), "Dockerfile")
-	assert.Error(t, err)
+	assert.NoError(t, err)
 }
 
 func TestGetGitAttributesBadGitRepo(t *testing.T) {

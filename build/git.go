@@ -52,13 +52,16 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
 	if err != nil {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
-			return res, errors.New("No git was found in the system. Current commit information was not captured by the build.")
+			return res, errors.New("git was not found in the system. Current commit information was not captured by the build")
 		}
 		return
 	}
 
 	if !gitc.IsInsideWorkTree() {
-		return res, errors.New("Not inside a git repository")
+		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
+			return res, errors.New("failed to read current commit information with git rev-parse --is-inside-work-tree")
+		}
+		return res, nil
 	}
 
 	if sha, err := gitc.FullCommit(); err != nil {
