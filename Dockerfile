@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile-upstream:master
 
 ARG GO_VERSION=1.19
 ARG XX_VERSION=1.1.2
@@ -58,6 +58,8 @@ FROM scratch AS binaries-windows
 COPY --link --from=buildx-build /usr/bin/docker-buildx /buildx.exe
 
 FROM binaries-$TARGETOS AS binaries
+# enable scanning for this stage
+ARG BUILDKIT_SBOM_SCAN_STAGE=true
 
 # Release
 FROM --platform=$BUILDPLATFORM alpine AS releaser
