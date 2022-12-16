@@ -861,11 +861,11 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			so, release, err := toSolveOpt(ctx, node, multiDriver, opt, np.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
 				return docker.LoadImage(ctx, name, w)
 			})
-			for k, v := range gitattrs {
-				so.FrontendAttrs[k] = v
-			}
 			if err != nil {
 				return nil, err
+			}
+			for k, v := range gitattrs {
+				so.FrontendAttrs[k] = v
 			}
 			defers = append(defers, release)
 			m[k][i].so = so
