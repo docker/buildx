@@ -594,10 +594,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
 	}
 
-	for k, v := range getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath) {
-		so.FrontendAttrs[k] = v
-	}
-
 	// set platforms
 	if len(opt.Platforms) != 0 {
 		pp := make([]string, len(opt.Platforms))
@@ -852,6 +848,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	for k, opt := range opt {
 		multiDriver := len(m[k]) > 1
 		hasMobyDriver := false
+		gitattrs, err := getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
+		if err != nil {
+			logrus.Warn(err)
+		}
 		for i, np := range m[k] {
 			node := nodes[np.driverIndex]
 			if node.Driver.IsMobyDriver() {
@@ -861,6 +861,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			so, release, err := toSolveOpt(ctx, node, multiDriver, opt, np.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
 				return docker.LoadImage(ctx, name, w)
 			})
+			for k, v := range gitattrs {
+				so.FrontendAttrs[k] = v
+			}
 			if err != nil {
 				return nil, err
 			}

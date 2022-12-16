@@ -11,8 +11,9 @@ import (
 
 // Git represents an active git object
 type Git struct {
-	ctx context.Context
-	wd  string
+	ctx     context.Context
+	wd      string
+	gitpath string
 }
 
 // Option provides a variadic option for configuring the git client.
@@ -33,14 +34,22 @@ func WithWorkingDir(wd string) Option {
 }
 
 // New initializes a new git client
-func New(opts ...Option) *Git {
+func New(opts ...Option) (*Git, error) {
+	var err error
 	c := &Git{
 		ctx: context.Background(),
 	}
+
 	for _, opt := range opts {
 		opt(c)
 	}
-	return c
+
+	c.gitpath, err = gitPath(c.wd)
+	if err != nil {
+		return nil, errors.New("git not found in PATH")
+	}
+
+	return c, nil
 }
 
 func (c *Git) IsInsideWorkTree() bool {
@@ -89,16 +98,12 @@ func (c *Git) Tag() (string, error) {
 }
 
 func (c *Git) run(args ...string) (string, error) {
-	if _, err := exec.LookPath("git"); err != nil {
-		return "", errors.New("git not present in PATH")
-	}
-
 	var extraArgs = []string{
 		"-c", "log.showSignature=false",
 	}
 
 	args = append(extraArgs, args...)
-	cmd := exec.Command("git", args...)
+	cmd := exec.CommandContext(c.ctx, c.gitpath, args...)
 	if c.wd != "" {
 		cmd.Dir = c.wd
 	}

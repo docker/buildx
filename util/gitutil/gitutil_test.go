@@ -7,7 +7,9 @@ import (
 )
 
 func TestGit(t *testing.T) {
-	c := New()
+	c, err := New()
+	require.NoError(t, err)
+
 	out, err := c.run("status")
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
@@ -20,10 +22,12 @@ func TestGit(t *testing.T) {
 
 func TestGitFullCommit(t *testing.T) {
 	Mktmp(t)
-	GitInit(t)
-	GitCommit(t, "bar")
+	c, err := New()
+	require.NoError(t, err)
 
-	c := New()
+	GitInit(c, t)
+	GitCommit(c, t, "bar")
+
 	out, err := c.FullCommit()
 	require.NoError(t, err)
 	require.Equal(t, 40, len(out))
@@ -31,10 +35,12 @@ func TestGitFullCommit(t *testing.T) {
 
 func TestGitShortCommit(t *testing.T) {
 	Mktmp(t)
-	GitInit(t)
-	GitCommit(t, "bar")
+	c, err := New()
+	require.NoError(t, err)
 
-	c := New()
+	GitInit(c, t)
+	GitCommit(c, t, "bar")
+
 	out, err := c.ShortCommit()
 	require.NoError(t, err)
 	require.Equal(t, 7, len(out))
@@ -42,13 +48,15 @@ func TestGitShortCommit(t *testing.T) {
 
 func TestGitTagsPointsAt(t *testing.T) {
 	Mktmp(t)
-	GitInit(t)
-	GitCommit(t, "bar")
-	GitTag(t, "v0.8.0")
-	GitCommit(t, "foo")
-	GitTag(t, "v0.9.0")
+	c, err := New()
+	require.NoError(t, err)
 
-	c := New()
+	GitInit(c, t)
+	GitCommit(c, t, "bar")
+	GitTag(c, t, "v0.8.0")
+	GitCommit(c, t, "foo")
+	GitTag(c, t, "v0.9.0")
+
 	out, err := c.clean(c.run("tag", "--points-at", "HEAD", "--sort", "-version:creatordate"))
 	require.NoError(t, err)
 	require.Equal(t, "v0.9.0", out)
@@ -56,13 +64,15 @@ func TestGitTagsPointsAt(t *testing.T) {
 
 func TestGitDescribeTags(t *testing.T) {
 	Mktmp(t)
-	GitInit(t)
-	GitCommit(t, "bar")
-	GitTag(t, "v0.8.0")
-	GitCommit(t, "foo")
-	GitTag(t, "v0.9.0")
+	c, err := New()
+	require.NoError(t, err)
 
-	c := New()
+	GitInit(c, t)
+	GitCommit(c, t, "bar")
+	GitTag(c, t, "v0.8.0")
+	GitCommit(c, t, "foo")
+	GitTag(c, t, "v0.9.0")
+
 	out, err := c.clean(c.run("describe", "--tags", "--abbrev=0"))
 	require.NoError(t, err)
 	require.Equal(t, "v0.9.0", out)
