@@ -17,7 +17,6 @@ target "_common" {
   args = {
     GO_VERSION = GO_VERSION
     BUILDKIT_CONTEXT_KEEP_GIT_DIR = 1
-    BUILDX_EXPERIMENTAL = 1
   }
 }
 
@@ -46,6 +45,7 @@ target "validate-docs" {
   inherits = ["_common"]
   args = {
     FORMATS = DOCS_FORMATS
+    BUILDX_EXPERIMENTAL = 1 // enables experimental cmds/flags for docs generation
   }
   dockerfile = "./hack/dockerfiles/docs.Dockerfile"
   target = "validate"
@@ -70,6 +70,7 @@ target "update-docs" {
   inherits = ["_common"]
   args = {
     FORMATS = DOCS_FORMATS
+    BUILDX_EXPERIMENTAL = 1 // enables experimental cmds/flags for docs generation
   }
   dockerfile = "./hack/dockerfiles/docs.Dockerfile"
   target = "update"
