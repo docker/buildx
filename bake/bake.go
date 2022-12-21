@@ -140,6 +140,16 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 		}
 	}
 
+	// Propagate SOURCE_DATE_EPOCH from the client env.
+	// The logic is purposely duplicated from `build/build`.go for keeping this visible in `bake --print`.
+	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
+		for _, f := range m {
+			if _, ok := f.Args["SOURCE_DATE_EPOCH"]; !ok {
+				f.Args["SOURCE_DATE_EPOCH"] = &v
+			}
+		}
+	}
+
 	return m, n, nil
 }
 
