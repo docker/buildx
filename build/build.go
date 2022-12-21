@@ -579,6 +579,13 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		}
 	}
 
+	// Propagate SOURCE_DATE_EPOCH from the client env
+	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
+		if _, ok := so.FrontendAttrs["build-arg:SOURCE_DATE_EPOCH"]; !ok {
+			so.FrontendAttrs["build-arg:SOURCE_DATE_EPOCH"] = v
+		}
+	}
+
 	if len(opt.Attests) > 0 {
 		if !bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) {
 			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
