@@ -56,6 +56,11 @@ func main() {
 		os.Exit(1)
 	}
 
+	if err := configureProxy(cmd); err != nil {
+		fmt.Fprintln(os.Stderr, err)
+		os.Exit(1)
+	}
+
 	if plugin.RunningStandalone() {
 		err = runStandalone(cmd)
 	} else {
