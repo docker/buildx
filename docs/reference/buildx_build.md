@@ -139,10 +139,12 @@ COPY --from=project myfile /
 
 #### <a name="source-oci-layout"></a> Source image from OCI layout directory
 
-Source an image from a local [OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md):
+Source an image from a local [OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md),
+either by tag, or by digest:
 
 ```console
-$ docker buildx build --build-context foo=oci-layout:///path/to/local/layout@sha256:abcd12345 .
+$ docker buildx build --build-context foo=oci-layout:///path/to/local/layout:<tag>
+$ docker buildx build --build-context foo=oci-layout:///path/to/local/layout@sha256:<digest>
 ```
 
 ```dockerfile
@@ -154,14 +156,8 @@ COPY --from=foo myfile /
 FROM foo
 ```
 
-The OCI layout directory must be compliant with the [OCI layout specification](https://github.com/opencontainers/image-spec/blob/main/image-layout.md). It looks _solely_ for hashes. It does not
-do any form of `image:tag` resolution to find the hash of the manifest; that is up to you.
-
-The format of the `--build-context` must be: `<context>=oci-layout://<path-to-local-layout>@sha256:<hash-of-manifest>`, where:
-
-* `context` is the name of the build context as used in the `Dockerfile`.
-* `path-to-local-layout` is the path on the local machine, where you are running `docker build`, to the spec-compliant OCI layout.
-* `hash-of-manifest` is the hash of the manifest for the image. It can be a single-architecture manifest or a multi-architecture index.
+The OCI layout directory must be compliant with the [OCI layout specification](https://github.com/opencontainers/image-spec/blob/main/image-layout.md).
+You can reference an image in the layout using either tags, or the exact digest.
 
 ### <a name="builder"></a> Override the configured builder instance (--builder)
 
