@@ -6,17 +6,17 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.5
 	github.com/compose-spec/compose-go v1.6.0
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.11
-	github.com/docker/cli v23.0.0-beta.1+incompatible
+	github.com/containerd/containerd v1.6.14
+	github.com/docker/cli v23.0.0-rc.1+incompatible
 	github.com/docker/cli-docs-tool v0.5.0
 	github.com/docker/distribution v2.8.1+incompatible
-	github.com/docker/docker v23.0.0-beta.1+incompatible
+	github.com/docker/docker v23.0.0-rc.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 	github.com/hashicorp/hcl/v2 v2.8.2
-	github.com/moby/buildkit v0.11.0-rc1.0.20221213193744-862b22d7e7cf
+	github.com/moby/buildkit v0.11.0-rc4
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/morikuni/aec v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
@@ -132,7 +132,7 @@ require (
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
 	github.com/spf13/viper v1.14.0 // indirect
 	github.com/theupdateframework/notary v0.6.1 // indirect
-	github.com/tonistiigi/fsutil v0.0.0-20221114235510-0127568185cf // indirect
+	github.com/tonistiigi/fsutil v0.0.0-20230105215944-fb433841cbfa // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
 	github.com/tonistiigi/vt100 v0.0.0-20210615222946-8066bb97264f // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20180127040702-4e3ac2762d5f // indirect
