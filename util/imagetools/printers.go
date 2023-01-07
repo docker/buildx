@@ -6,20 +6,15 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"sort"
 	"strings"
-	"sync"
 	"text/tabwriter"
 	"text/template"
 
 	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/distribution/reference"
-	binfotypes "github.com/moby/buildkit/util/buildinfo/types"
-	"github.com/moby/buildkit/util/imageutil"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
-	"golang.org/x/sync/errgroup"
 )
 
 const defaultPfx = "  "
@@ -31,11 +26,10 @@ type Printer struct {
 	name   string
 	format string
 
-	raw       []byte
-	ref       reference.Named
-	manifest  ocispecs.Descriptor
-	index     ocispecs.Index
-	platforms []ocispecs.Platform
+	raw      []byte
+	ref      reference.Named
+	manifest ocispecs.Descriptor
+	index    ocispecs.Index
 }
 
 func NewPrinter(ctx context.Context, opt Opt, name string, format string) (*Printer, error) {
@@ -46,38 +40,25 @@ func NewPrinter(ctx context.Context, opt Opt, name string, format string) (*Prin
 		return nil, err
 	}
 
-	dt, manifest, err := resolver.Get(ctx, name)
+	dt, mfst, err := resolver.Get(ctx, ref.String())
 	if err != nil {
 		return nil, err
 	}
 
-	var index ocispecs.Index
-	if err = json.Unmarshal(dt, &index); err != nil {
+	var idx ocispecs.Index
+	if err = json.Unmarshal(dt, &idx); err != nil {
 		return nil, err
 	}
 
-	var pforms []ocispecs.Platform
-	switch manifest.MediaType {
-	case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
-		for _, m := range index.Manifests {
-			if m.Platform != nil {
-				pforms = append(pforms, *m.Platform)
-			}
-		}
-	default:
-		pforms = append(pforms, platforms.DefaultSpec())
-	}
-
 	return &Printer{
-		ctx:       ctx,
-		resolver:  resolver,
-		name:      name,
-		format:    format,
-		raw:       dt,
-		ref:       ref,
-		manifest:  manifest,
-		index:     index,
-		platforms: pforms,
+		ctx:      ctx,
+		resolver: resolver,
+		name:     name,
+		format:   format,
+		raw:      dt,
+		ref:      ref,
+		manifest: mfst,
+		index:    idx,
 	}, nil
 }
 
@@ -102,6 +83,11 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 		return nil
 	}
 
+	res, err := newLoader(p.resolver.resolver()).Load(p.ctx, p.name)
+	if err != nil {
+		return err
+	}
+
 	tpl, err := template.New("").Funcs(template.FuncMap{
 		"json": func(v interface{}) string {
 			b, _ := json.MarshalIndent(v, "", "  ")
@@ -112,46 +98,17 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 		return err
 	}
 
-	imageconfigs := make(map[string]*ocispecs.Image)
-	imageconfigsMutex := sync.Mutex{}
-	buildinfos := make(map[string]*binfotypes.BuildInfo)
-	buildinfosMutex := sync.Mutex{}
-
-	eg, _ := errgroup.WithContext(p.ctx)
-	for _, platform := range p.platforms {
-		func(platform ocispecs.Platform) {
-			eg.Go(func() error {
-				img, dtic, err := p.getImageConfig(&platform)
-				if err != nil {
-					return err
-				} else if img != nil {
-					imageconfigsMutex.Lock()
-					imageconfigs[platforms.Format(platform)] = img
-					imageconfigsMutex.Unlock()
-				}
-				if bi, err := imageutil.BuildInfo(dtic); err != nil {
-					return err
-				} else if bi != nil {
-					buildinfosMutex.Lock()
-					buildinfos[platforms.Format(platform)] = bi
-					buildinfosMutex.Unlock()
-				}
-				return nil
-			})
-		}(platform)
-	}
-	if err := eg.Wait(); err != nil {
-		return err
-	}
-
+	imageconfigs := res.Configs()
+	slsas := res.SLSA()
+	sboms := res.SBOM()
 	format := tpl.Root.String()
 
-	var manifest interface{}
+	var mfst interface{}
 	switch p.manifest.MediaType {
 	case images.MediaTypeDockerSchema2Manifest, ocispecs.MediaTypeImageManifest:
-		manifest = p.manifest
+		mfst = p.manifest
 	case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
-		manifest = struct {
+		mfst = struct {
 			SchemaVersion int                   `json:"schemaVersion"`
 			MediaType     string                `json:"mediaType,omitempty"`
 			Digest        digest.Digest         `json:"digest"`
@@ -170,10 +127,11 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 
 	switch {
 	// TODO: print formatted config
-	case strings.HasPrefix(format, "{{.Manifest"), strings.HasPrefix(format, "{{.BuildInfo"):
+	case strings.HasPrefix(format, "{{.Manifest"):
 		w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 		_, _ = fmt.Fprintf(w, "Name:\t%s\n", p.ref.String())
-		if strings.HasPrefix(format, "{{.Manifest") {
+		switch {
+		case strings.HasPrefix(format, "{{.Manifest"):
 			_, _ = fmt.Fprintf(w, "MediaType:\t%s\n", p.manifest.MediaType)
 			_, _ = fmt.Fprintf(w, "Digest:\t%s\n", p.manifest.Digest)
 			_ = w.Flush()
@@ -181,42 +139,47 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 			case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
 				_ = p.printManifestList(out)
 			}
-		} else if strings.HasPrefix(format, "{{.BuildInfo") {
-			_ = w.Flush()
-			_ = p.printBuildInfos(buildinfos, out)
 		}
 	default:
-		if len(p.platforms) > 1 {
+		if len(res.platforms) > 1 {
 			return tpl.Execute(out, struct {
-				Name      string                           `json:"name,omitempty"`
-				Manifest  interface{}                      `json:"manifest,omitempty"`
-				Image     map[string]*ocispecs.Image       `json:"image,omitempty"`
-				BuildInfo map[string]*binfotypes.BuildInfo `json:"buildinfo,omitempty"`
+				Name     string                     `json:"name,omitempty"`
+				Manifest interface{}                `json:"manifest,omitempty"`
+				Image    map[string]*ocispecs.Image `json:"image,omitempty"`
+				SLSA     map[string]slsaStub        `json:"SLSA,omitempty"`
+				SBOM     map[string]sbomStub        `json:"SBOM,omitempty"`
 			}{
-				Name:      p.name,
-				Manifest:  manifest,
-				Image:     imageconfigs,
-				BuildInfo: buildinfos,
+				Name:     p.name,
+				Manifest: mfst,
+				Image:    imageconfigs,
+				SLSA:     slsas,
+				SBOM:     sboms,
 			})
 		}
 		var ic *ocispecs.Image
 		for _, v := range imageconfigs {
 			ic = v
 		}
-		var bi *binfotypes.BuildInfo
-		for _, v := range buildinfos {
-			bi = v
+		var slsa slsaStub
+		for _, v := range slsas {
+			slsa = v
+		}
+		var sbom sbomStub
+		for _, v := range sboms {
+			sbom = v
 		}
 		return tpl.Execute(out, struct {
-			Name      string                `json:"name,omitempty"`
-			Manifest  interface{}           `json:"manifest,omitempty"`
-			Image     *ocispecs.Image       `json:"image,omitempty"`
-			BuildInfo *binfotypes.BuildInfo `json:"buildinfo,omitempty"`
+			Name     string          `json:"name,omitempty"`
+			Manifest interface{}     `json:"manifest,omitempty"`
+			Image    *ocispecs.Image `json:"image,omitempty"`
+			SLSA     slsaStub        `json:"SLSA,omitempty"`
+			SBOM     sbomStub        `json:"SBOM,omitempty"`
 		}{
-			Name:      p.name,
-			Manifest:  manifest,
-			Image:     ic,
-			BuildInfo: bi,
+			Name:     p.name,
+			Manifest: mfst,
+			Image:    ic,
+			SLSA:     slsa,
+			SBOM:     sbom,
 		})
 	}
 
@@ -252,6 +215,7 @@ func (p *Printer) printManifestList(out io.Writer) error {
 				_, _ = fmt.Fprintf(w, "%sURLs:\t%s\n", defaultPfx, strings.Join(m.URLs, ", "))
 			}
 			if len(m.Annotations) > 0 {
+				_, _ = fmt.Fprintf(w, "%sAnnotations:\t\n", defaultPfx)
 				_ = w.Flush()
 				w2 := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 				for k, v := range m.Annotations {
@@ -262,84 +226,4 @@ func (p *Printer) printManifestList(out io.Writer) error {
 		}
 	}
 	return w.Flush()
-}
-
-func (p *Printer) printBuildInfos(bis map[string]*binfotypes.BuildInfo, out io.Writer) error {
-	if len(bis) == 0 {
-		return nil
-	} else if len(bis) == 1 {
-		for _, bi := range bis {
-			return p.printBuildInfo(bi, "", out)
-		}
-	}
-	var pkeys []string
-	for _, pform := range p.platforms {
-		pkeys = append(pkeys, platforms.Format(pform))
-	}
-	sort.Strings(pkeys)
-	for _, platform := range pkeys {
-		bi := bis[platform]
-		w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
-		_, _ = fmt.Fprintf(w, "\t\nPlatform:\t%s\t\n", platform)
-		_ = w.Flush()
-		if err := p.printBuildInfo(bi, "", out); err != nil {
-			return err
-		}
-	}
-	return nil
-}
-
-func (p *Printer) printBuildInfo(bi *binfotypes.BuildInfo, pfx string, out io.Writer) error {
-	w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
-	_, _ = fmt.Fprintf(w, "%sFrontend:\t%s\n", pfx, bi.Frontend)
-
-	if len(bi.Attrs) > 0 {
-		_, _ = fmt.Fprintf(w, "%sAttrs:\t\n", pfx)
-		_ = w.Flush()
-		for k, v := range bi.Attrs {
-			_, _ = fmt.Fprintf(w, "%s%s:\t%s\n", pfx+defaultPfx, k, *v)
-		}
-	}
-
-	if len(bi.Sources) > 0 {
-		_, _ = fmt.Fprintf(w, "%sSources:\t\n", pfx)
-		_ = w.Flush()
-		for i, v := range bi.Sources {
-			if i != 0 {
-				_, _ = fmt.Fprintf(w, "\t\n")
-			}
-			_, _ = fmt.Fprintf(w, "%sType:\t%s\n", pfx+defaultPfx, v.Type)
-			_, _ = fmt.Fprintf(w, "%sRef:\t%s\n", pfx+defaultPfx, v.Ref)
-			_, _ = fmt.Fprintf(w, "%sPin:\t%s\n", pfx+defaultPfx, v.Pin)
-		}
-	}
-
-	if len(bi.Deps) > 0 {
-		_, _ = fmt.Fprintf(w, "%sDeps:\t\n", pfx)
-		_ = w.Flush()
-		firstPass := true
-		for k, v := range bi.Deps {
-			if !firstPass {
-				_, _ = fmt.Fprintf(w, "\t\n")
-			}
-			_, _ = fmt.Fprintf(w, "%sName:\t%s\n", pfx+defaultPfx, k)
-			_ = w.Flush()
-			_ = p.printBuildInfo(&v, pfx+defaultPfx, out)
-			firstPass = false
-		}
-	}
-
-	return w.Flush()
-}
-
-func (p *Printer) getImageConfig(platform *ocispecs.Platform) (*ocispecs.Image, []byte, error) {
-	_, dtic, err := p.resolver.ImageConfig(p.ctx, p.name, platform)
-	if err != nil {
-		return nil, nil, err
-	}
-	var img *ocispecs.Image
-	if err = json.Unmarshal(dtic, &img); err != nil {
-		return nil, nil, err
-	}
-	return img, dtic, nil
 }
