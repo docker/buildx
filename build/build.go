@@ -11,7 +11,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -1503,27 +1502,31 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 			localPath := pathAlone
 			localPath, dig, hasDigest := strings.Cut(localPath, "@")
 			localPath, tag, hasTag := strings.Cut(localPath, ":")
+			if !hasTag {
+				tag = "latest"
+				hasTag = true
+			}
+			idx := ociindex.NewStoreIndex(localPath)
 			if !hasDigest {
-				indexPath := path.Join(localPath, "index.json")
-				index, err := ociindex.ReadIndexJSONFileLocked(indexPath)
+				// lookup by name
+				desc, err := idx.Get(tag)
 				if err != nil {
-					return nil, errors.Wrapf(err, "failed to read oci-layout index at %s", indexPath)
+					return nil, err
 				}
-
-				if len(index.Manifests) == 1 {
-					dig = string(index.Manifests[0].Digest)
+				if desc != nil {
+					dig = string(desc.Digest)
 					hasDigest = true
 				}
-
-				if !hasTag {
-					tag = "latest"
+			}
+			if !hasDigest {
+				// lookup single
+				desc, err := idx.GetSingle()
+				if err != nil {
+					return nil, err
 				}
-				for _, m := range index.Manifests {
-					if m.Annotations[specs.AnnotationRefName] == tag {
-						dig = string(m.Digest)
-						hasDigest = true
-						break
-					}
+				if desc != nil {
+					dig = string(desc.Digest)
+					hasDigest = true
 				}
 			}
 			if !hasDigest {
