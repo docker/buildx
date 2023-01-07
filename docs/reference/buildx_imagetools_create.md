@@ -9,14 +9,14 @@ Create a new image based on source images
 
 ### Options
 
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| [`--append`](#append) |  |  | Append to existing manifest |
-| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
-| [`--dry-run`](#dry-run) |  |  | Show final image instead of pushing |
-| [`-f`](#file), [`--file`](#file) | `stringArray` |  | Read source descriptor from file |
-| `--progress` | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| [`-t`](#tag), [`--tag`](#tag) | `stringArray` |  | Set reference for new image |
+| Name                             | Type          | Default | Description                                                                              |
+|:---------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
+| [`--append`](#append)            |               |         | Append to existing manifest                                                              |
+| [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                 |
+| [`--dry-run`](#dry-run)          |               |         | Show final image instead of pushing                                                      |
+| [`-f`](#file), [`--file`](#file) | `stringArray` |         | Read source descriptor from file                                                         |
+| `--progress`                     | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
+| [`-t`](#tag), [`--tag`](#tag)    | `stringArray` |         | Set reference for new image                                                              |
 
 
 <!---MARKER_GEN_END-->
