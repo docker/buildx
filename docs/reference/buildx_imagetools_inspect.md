@@ -9,11 +9,11 @@ Show details of an image in the registry
 
 ### Options
 
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
-| [`--format`](#format) | `string` | `{{.Manifest}}` | Format the output using the given Go template |
-| [`--raw`](#raw) |  |  | Show original, unformatted JSON manifest |
+| Name                    | Type     | Default         | Description                                   |
+|:------------------------|:---------|:----------------|:----------------------------------------------|
+| [`--builder`](#builder) | `string` |                 | Override the configured builder instance      |
+| [`--format`](#format)   | `string` | `{{.Manifest}}` | Format the output using the given Go template |
+| [`--raw`](#raw)         |          |                 | Show original, unformatted JSON manifest      |
 
 
 <!---MARKER_GEN_END-->

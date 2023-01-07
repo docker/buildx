@@ -9,9 +9,9 @@ Stop builder instance
 
 ### Options
 
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
+| Name                    | Type     | Default | Description                              |
+|:------------------------|:---------|:--------|:-----------------------------------------|
+| [`--builder`](#builder) | `string` |         | Override the configured builder instance |
 
 
 <!---MARKER_GEN_END-->
