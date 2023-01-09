@@ -1,5 +1,5 @@
 [![PkgGoDev](https://img.shields.io/badge/go.dev-docs-007d9c?logo=go&logoColor=white&style=flat-square)](https://pkg.go.dev/github.com/docker/cli-docs-tool)
-[![Test Status](https://img.shields.io/github/workflow/status/docker/cli-docs-tool/test?label=test&logo=github&style=flat-square)](https://github.com/docker/cli-docs-tool/actions?query=workflow%3Atest)
+[![Test Status](https://img.shields.io/github/actions/workflow/status/docker/cli-docs-tool/test.yml?branch=main&label=test&logo=github&style=flat-square)](https://github.com/docker/cli-docs-tool/actions?query=workflow%3Atest)
 [![Go Report Card](https://goreportcard.com/badge/github.com/docker/cli-docs-tool)](https://goreportcard.com/report/github.com/docker/cli-docs-tool)
 
 ## About

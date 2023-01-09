@@ -13,20 +13,20 @@ Build from a file
 
 ### Options
 
-| Name | Type | Default | Description |
-| --- | --- | --- | --- |
-| [`--builder`](#builder) | `string` |  | Override the configured builder instance |
-| [`-f`](#file), [`--file`](#file) | `stringArray` |  | Build definition file |
-| `--load` |  |  | Shorthand for `--set=*.output=type=docker` |
-| `--metadata-file` | `string` |  | Write build result metadata to the file |
-| [`--no-cache`](#no-cache) |  |  | Do not use cache when building the image |
-| [`--print`](#print) |  |  | Print the options without building |
-| [`--progress`](#progress) | `string` | `auto` | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| `--provenance` | `string` |  | Shorthand for `--set=*.attest=type=provenance` |
-| [`--pull`](#pull) |  |  | Always attempt to pull all referenced images |
-| `--push` |  |  | Shorthand for `--set=*.output=type=registry` |
-| `--sbom` | `string` |  | Shorthand for `--set=*.attest=type=sbom` |
-| [`--set`](#set) | `stringArray` |  | Override target value (e.g., `targetpattern.key=value`) |
+| Name                             | Type          | Default | Description                                                                              |
+|:---------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
+| [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                 |
+| [`-f`](#file), [`--file`](#file) | `stringArray` |         | Build definition file                                                                    |
+| `--load`                         |               |         | Shorthand for `--set=*.output=type=docker`                                               |
+| `--metadata-file`                | `string`      |         | Write build result metadata to the file                                                  |
+| [`--no-cache`](#no-cache)        |               |         | Do not use cache when building the image                                                 |
+| [`--print`](#print)              |               |         | Print the options without building                                                       |
+| [`--progress`](#progress)        | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
+| `--provenance`                   | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                           |
+| [`--pull`](#pull)                |               |         | Always attempt to pull all referenced images                                             |
+| `--push`                         |               |         | Shorthand for `--set=*.output=type=registry`                                             |
+| `--sbom`                         | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                 |
+| [`--set`](#set)                  | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                  |
 
 
 <!---MARKER_GEN_END-->
