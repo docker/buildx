@@ -287,69 +287,57 @@ $ docker buildx imagetools inspect moby/buildkit:master --format "{{json .Manife
 Following command provides [SLSA](https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-provenance.md) JSON output:
 
 ```console
-$ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .SLSA}}"
+$ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Provenance}}"
 ```
 ```json
 {
-  "Provenance": {
-    "_type": "https://in-toto.io/Statement/v0.1",
-    "predicateType": "https://slsa.dev/provenance/v0.2",
-    "subject": [
+  "SLSA": {
+    "builder": {
+      "id": ""
+    },
+    "buildType": "https://mobyproject.org/buildkit@v1",
+    "materials": [
       {
-        "name": "pkg:docker/crazymax/buildkit@attest?platform=linux%2Famd64",
+        "uri": "pkg:docker/docker/buildkit-syft-scanner@stable-1",
         "digest": {
-          "sha256": "fbd10fe50b4b174bb9ea273e2eb9827fa8bf5c88edd8635a93dc83e0d1aecb55"
+          "sha256": "b45f1d207e16c3a3a5a10b254ad8ad358d01f7ea090d382b95c6b2ee2b3ef765"
+        }
+      },
+      {
+        "uri": "pkg:docker/alpine@latest?platform=linux%2Famd64",
+        "digest": {
+          "sha256": "8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4"
         }
       }
     ],
-    "predicate": {
-      "builder": {
-        "id": ""
-      },
-      "buildType": "https://mobyproject.org/buildkit@v1",
-      "materials": [
-        {
-          "uri": "pkg:docker/docker/buildkit-syft-scanner@stable-1",
-          "digest": {
-            "sha256": "b45f1d207e16c3a3a5a10b254ad8ad358d01f7ea090d382b95c6b2ee2b3ef765"
+    "invocation": {
+      "configSource": {},
+      "parameters": {
+        "frontend": "dockerfile.v0",
+        "locals": [
+          {
+            "name": "context"
+          },
+          {
+            "name": "dockerfile"
           }
-        },
-        {
-          "uri": "pkg:docker/alpine@latest?platform=linux%2Famd64",
-          "digest": {
-            "sha256": "8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4"
-          }
-        }
-      ],
-      "invocation": {
-        "configSource": {},
-        "parameters": {
-          "frontend": "dockerfile.v0",
-          "locals": [
-            {
-              "name": "context"
-            },
-            {
-              "name": "dockerfile"
-            }
-          ]
-        },
-        "environment": {
-          "platform": "linux/amd64"
-        }
+        ]
       },
-      "metadata": {
-        "buildInvocationID": "02tdha2xkbxvin87mz9drhag4",
-        "buildStartedOn": "2022-12-01T11:50:07.264704131Z",
-        "buildFinishedOn": "2022-12-01T11:50:08.243788739Z",
-        "reproducible": false,
-        "completeness": {
-          "parameters": true,
-          "environment": true,
-          "materials": false
-        },
-        "https://mobyproject.org/buildkit@v1#metadata": {}
+      "environment": {
+        "platform": "linux/amd64"
       }
+    },
+    "metadata": {
+      "buildInvocationID": "02tdha2xkbxvin87mz9drhag4",
+      "buildStartedOn": "2022-12-01T11:50:07.264704131Z",
+      "buildFinishedOn": "2022-12-01T11:50:08.243788739Z",
+      "reproducible": false,
+      "completeness": {
+        "parameters": true,
+        "environment": true,
+        "materials": false
+      },
+      "https://mobyproject.org/buildkit@v1#metadata": {}
     }
   }
 }
@@ -363,32 +351,20 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .SB
 ```json
 {
   "SPDX": {
-    "_type": "https://in-toto.io/Statement/v0.1",
-    "predicateType": "https://spdx.dev/Document",
-    "subject": [
-      {
-        "name": "pkg:docker/crazymax/buildkit@attest?platform=linux%2Famd64",
-        "digest": {
-          "sha256": "fbd10fe50b4b174bb9ea273e2eb9827fa8bf5c88edd8635a93dc83e0d1aecb55"
-        }
-      }
-    ],
-    "predicate": {
-      "SPDXID": "SPDXRef-DOCUMENT",
-      "creationInfo": {
-        "created": "2022-12-01T11:46:48.063400162Z",
-        "creators": [
-          "Tool: syft-v0.60.3",
-          "Tool: buildkit-1ace2bb",
-          "Organization: Anchore, Inc"
-        ],
-        "licenseListVersion": "3.18"
-      },
-      "dataLicense": "CC0-1.0",
-      "documentNamespace": "https://anchore.com/syft/dir/run/src/core-0a4ccc6d-1a72-4c3a-a40e-3df1a2ffca94",
-      "files": [...],
-      "spdxVersion": "SPDX-2.2"
-    }
+    "SPDXID": "SPDXRef-DOCUMENT",
+    "creationInfo": {
+      "created": "2022-12-01T11:46:48.063400162Z",
+      "creators": [
+        "Tool: syft-v0.60.3",
+        "Tool: buildkit-1ace2bb",
+        "Organization: Anchore, Inc"
+      ],
+      "licenseListVersion": "3.18"
+    },
+    "dataLicense": "CC0-1.0",
+    "documentNamespace": "https://anchore.com/syft/dir/run/src/core-0a4ccc6d-1a72-4c3a-a40e-3df1a2ffca94",
+    "files": [...],
+    "spdxVersion": "SPDX-2.2"
   }
 }
 ```
@@ -465,97 +441,73 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .}}
       }
     ]
   },
-  "SLSA": {
-    "Provenance": {
-      "_type": "https://in-toto.io/Statement/v0.1",
-      "predicateType": "https://slsa.dev/provenance/v0.2",
-      "subject": [
+  "Provenance": {
+    "SLSA": {
+      "builder": {
+        "id": ""
+      },
+      "buildType": "https://mobyproject.org/buildkit@v1",
+      "materials": [
         {
-          "name": "pkg:docker/crazymax/buildkit@attest?platform=linux%2Famd64",
+          "uri": "pkg:docker/docker/buildkit-syft-scanner@stable-1",
           "digest": {
-            "sha256": "fbd10fe50b4b174bb9ea273e2eb9827fa8bf5c88edd8635a93dc83e0d1aecb55"
+            "sha256": "b45f1d207e16c3a3a5a10b254ad8ad358d01f7ea090d382b95c6b2ee2b3ef765"
+          }
+        },
+        {
+          "uri": "pkg:docker/alpine@latest?platform=linux%2Famd64",
+          "digest": {
+            "sha256": "8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4"
           }
         }
       ],
-      "predicate": {
-        "builder": {
-          "id": ""
-        },
-        "buildType": "https://mobyproject.org/buildkit@v1",
-        "materials": [
-          {
-            "uri": "pkg:docker/docker/buildkit-syft-scanner@stable-1",
-            "digest": {
-              "sha256": "b45f1d207e16c3a3a5a10b254ad8ad358d01f7ea090d382b95c6b2ee2b3ef765"
+      "invocation": {
+        "configSource": {},
+        "parameters": {
+          "frontend": "dockerfile.v0",
+          "locals": [
+            {
+              "name": "context"
+            },
+            {
+              "name": "dockerfile"
             }
-          },
-          {
-            "uri": "pkg:docker/alpine@latest?platform=linux%2Famd64",
-            "digest": {
-              "sha256": "8914eb54f968791faf6a8638949e480fef81e697984fba772b3976835194c6d4"
-            }
-          }
-        ],
-        "invocation": {
-          "configSource": {},
-          "parameters": {
-            "frontend": "dockerfile.v0",
-            "locals": [
-              {
-                "name": "context"
-              },
-              {
-                "name": "dockerfile"
-              }
-            ]
-          },
-          "environment": {
-            "platform": "linux/amd64"
-          }
+          ]
         },
-        "metadata": {
-          "buildInvocationID": "02tdha2xkbxvin87mz9drhag4",
-          "buildStartedOn": "2022-12-01T11:50:07.264704131Z",
-          "buildFinishedOn": "2022-12-01T11:50:08.243788739Z",
-          "reproducible": false,
-          "completeness": {
-            "parameters": true,
-            "environment": true,
-            "materials": false
-          },
-          "https://mobyproject.org/buildkit@v1#metadata": {}
+        "environment": {
+          "platform": "linux/amd64"
         }
+      },
+      "metadata": {
+        "buildInvocationID": "02tdha2xkbxvin87mz9drhag4",
+        "buildStartedOn": "2022-12-01T11:50:07.264704131Z",
+        "buildFinishedOn": "2022-12-01T11:50:08.243788739Z",
+        "reproducible": false,
+        "completeness": {
+          "parameters": true,
+          "environment": true,
+          "materials": false
+        },
+        "https://mobyproject.org/buildkit@v1#metadata": {}
       }
     }
   },
   "SBOM": {
     "SPDX": {
-      "_type": "https://in-toto.io/Statement/v0.1",
-      "predicateType": "https://spdx.dev/Document",
-      "subject": [
-        {
-          "name": "pkg:docker/crazymax/buildkit@attest?platform=linux%2Famd64",
-          "digest": {
-            "sha256": "fbd10fe50b4b174bb9ea273e2eb9827fa8bf5c88edd8635a93dc83e0d1aecb55"
-          }
-        }
-      ],
-      "predicate": {
-        "SPDXID": "SPDXRef-DOCUMENT",
-        "creationInfo": {
-          "created": "2022-12-01T11:46:48.063400162Z",
-          "creators": [
-            "Tool: syft-v0.60.3",
-            "Tool: buildkit-1ace2bb",
-            "Organization: Anchore, Inc"
-          ],
-          "licenseListVersion": "3.18"
-        },
-        "dataLicense": "CC0-1.0",
-        "documentNamespace": "https://anchore.com/syft/dir/run/src/core-0a4ccc6d-1a72-4c3a-a40e-3df1a2ffca94",
-        "files": [...],
-        "spdxVersion": "SPDX-2.2"
-      }
+      "SPDXID": "SPDXRef-DOCUMENT",
+      "creationInfo": {
+        "created": "2022-12-01T11:46:48.063400162Z",
+        "creators": [
+          "Tool: syft-v0.60.3",
+          "Tool: buildkit-1ace2bb",
+          "Organization: Anchore, Inc"
+        ],
+        "licenseListVersion": "3.18"
+      },
+      "dataLicense": "CC0-1.0",
+      "documentNamespace": "https://anchore.com/syft/dir/run/src/core-0a4ccc6d-1a72-4c3a-a40e-3df1a2ffca94",
+      "files": [...],
+      "spdxVersion": "SPDX-2.2"
     }
   }
 }

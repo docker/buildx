@@ -46,9 +46,9 @@ type index struct {
 }
 
 type asset struct {
-	config *ocispec.Image
-	sbom   *sbomStub
-	slsa   *slsaStub
+	config     *ocispec.Image
+	sbom       *sbomStub
+	provenance *provenanceStub
 }
 
 type result struct {
@@ -255,7 +255,8 @@ func (l *loader) scanConfig(ctx context.Context, fetcher remotes.Fetcher, desc o
 }
 
 type sbomStub struct {
-	SPDX json.RawMessage `json:",omitempty"`
+	SPDX            interface{}   `json:",omitempty"`
+	AdditionalSPDXs []interface{} `json:",omitempty"`
 }
 
 func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
@@ -275,8 +276,18 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 				if err != nil {
 					return err
 				}
-				as.sbom = &sbomStub{
-					SPDX: dt,
+				var spdx struct {
+					Predicate interface{} `json:"predicate"`
+				}
+				if err := json.Unmarshal(dt, &spdx); err != nil {
+					return err
+				}
+
+				if as.sbom == nil {
+					as.sbom = &sbomStub{}
+					as.sbom.SPDX = spdx.Predicate
+				} else {
+					as.sbom.AdditionalSPDXs = append(as.sbom.AdditionalSPDXs, spdx.Predicate)
 				}
 			}
 		}
@@ -284,8 +295,8 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 	return nil
 }
 
-type slsaStub struct {
-	Provenance json.RawMessage `json:",omitempty"`
+type provenanceStub struct {
+	SLSA interface{} `json:",omitempty"`
 }
 
 func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
@@ -305,9 +316,16 @@ func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r 
 				if err != nil {
 					return err
 				}
-				as.slsa = &slsaStub{
-					Provenance: dt,
+				var slsa struct {
+					Predicate interface{} `json:"predicate"`
 				}
+				if err := json.Unmarshal(dt, &slsa); err != nil {
+					return err
+				}
+				as.provenance = &provenanceStub{
+					SLSA: slsa.Predicate,
+				}
+				break
 			}
 		}
 	}
@@ -328,16 +346,16 @@ func (r *result) Configs() map[string]*ocispec.Image {
 	return res
 }
 
-func (r *result) SLSA() map[string]slsaStub {
+func (r *result) Provenance() map[string]provenanceStub {
 	if len(r.assets) == 0 {
 		return nil
 	}
-	res := make(map[string]slsaStub)
+	res := make(map[string]provenanceStub)
 	for p, a := range r.assets {
-		if a.slsa == nil {
+		if a.provenance == nil {
 			continue
 		}
-		res[p] = *a.slsa
+		res[p] = *a.provenance
 	}
 	return res
 }
