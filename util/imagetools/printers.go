@@ -99,7 +99,7 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	}
 
 	imageconfigs := res.Configs()
-	slsas := res.SLSA()
+	provenances := res.Provenance()
 	sboms := res.SBOM()
 	format := tpl.Root.String()
 
@@ -143,43 +143,43 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	default:
 		if len(res.platforms) > 1 {
 			return tpl.Execute(out, struct {
-				Name     string                     `json:"name,omitempty"`
-				Manifest interface{}                `json:"manifest,omitempty"`
-				Image    map[string]*ocispecs.Image `json:"image,omitempty"`
-				SLSA     map[string]slsaStub        `json:"SLSA,omitempty"`
-				SBOM     map[string]sbomStub        `json:"SBOM,omitempty"`
+				Name       string                     `json:"name,omitempty"`
+				Manifest   interface{}                `json:"manifest,omitempty"`
+				Image      map[string]*ocispecs.Image `json:"image,omitempty"`
+				Provenance map[string]provenanceStub  `json:"Provenance,omitempty"`
+				SBOM       map[string]sbomStub        `json:"SBOM,omitempty"`
 			}{
-				Name:     p.name,
-				Manifest: mfst,
-				Image:    imageconfigs,
-				SLSA:     slsas,
-				SBOM:     sboms,
+				Name:       p.name,
+				Manifest:   mfst,
+				Image:      imageconfigs,
+				Provenance: provenances,
+				SBOM:       sboms,
 			})
 		}
 		var ic *ocispecs.Image
 		for _, v := range imageconfigs {
 			ic = v
 		}
-		var slsa slsaStub
-		for _, v := range slsas {
-			slsa = v
+		var provenance provenanceStub
+		for _, v := range provenances {
+			provenance = v
 		}
 		var sbom sbomStub
 		for _, v := range sboms {
 			sbom = v
 		}
 		return tpl.Execute(out, struct {
-			Name     string          `json:"name,omitempty"`
-			Manifest interface{}     `json:"manifest,omitempty"`
-			Image    *ocispecs.Image `json:"image,omitempty"`
-			SLSA     slsaStub        `json:"SLSA,omitempty"`
-			SBOM     sbomStub        `json:"SBOM,omitempty"`
+			Name       string          `json:"name,omitempty"`
+			Manifest   interface{}     `json:"manifest,omitempty"`
+			Image      *ocispecs.Image `json:"image,omitempty"`
+			Provenance provenanceStub  `json:"Provenance,omitempty"`
+			SBOM       sbomStub        `json:"SBOM,omitempty"`
 		}{
-			Name:     p.name,
-			Manifest: mfst,
-			Image:    ic,
-			SLSA:     slsa,
-			SBOM:     sbom,
+			Name:       p.name,
+			Manifest:   mfst,
+			Image:      ic,
+			Provenance: provenance,
+			SBOM:       sbom,
 		})
 	}
 
