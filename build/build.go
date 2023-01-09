@@ -954,123 +954,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			var pushNames string
 			var insecurePush bool
 
-			eg.Go(func() (err error) {
-				defer func() {
-					if span != nil {
-						tracing.FinishWithError(span, err)
-					}
-				}()
-				pw := progress.WithPrefix(w, "default", false)
-				wg.Wait()
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
-				}
-
-				respMu.Lock()
-				resp[k] = res[0]
-				respMu.Unlock()
-				if len(res) == 1 {
-					dgst := res[0].ExporterResponse[exptypes.ExporterImageDigestKey]
-					if v, ok := res[0].ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
-						dgst = v
-					}
-					if opt.ImageIDFile != "" {
-						return os.WriteFile(opt.ImageIDFile, []byte(dgst), 0644)
-					}
-					return nil
-				}
-
-				if pushNames != "" {
-					progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
-						descs := make([]specs.Descriptor, 0, len(res))
-
-						for _, r := range res {
-							s, ok := r.ExporterResponse[exptypes.ExporterImageDigestKey]
-							if ok {
-								descs = append(descs, specs.Descriptor{
-									Digest:    digest.Digest(s),
-									MediaType: images.MediaTypeDockerSchema2ManifestList,
-									Size:      -1,
-								})
-							}
-						}
-						if len(descs) > 0 {
-							var imageopt imagetools.Opt
-							for _, dp := range dps {
-								imageopt = nodes[dp.driverIndex].ImageOpt
-								break
-							}
-							names := strings.Split(pushNames, ",")
-
-							if insecurePush {
-								insecureTrue := true
-								httpTrue := true
-								nn, err := reference.ParseNormalizedNamed(names[0])
-								if err != nil {
-									return err
-								}
-								imageopt.RegistryConfig = map[string]resolver.RegistryConfig{
-									reference.Domain(nn): {
-										Insecure:  &insecureTrue,
-										PlainHTTP: &httpTrue,
-									},
-								}
-							}
-
-							itpull := imagetools.New(imageopt)
-
-							ref, err := reference.ParseNormalizedNamed(names[0])
-							if err != nil {
-								return err
-							}
-							ref = reference.TagNameOnly(ref)
-
-							srcs := make([]*imagetools.Source, len(descs))
-							for i, desc := range descs {
-								srcs[i] = &imagetools.Source{
-									Desc: desc,
-									Ref:  ref,
-								}
-							}
-
-							dt, desc, err := itpull.Combine(ctx, srcs)
-							if err != nil {
-								return err
-							}
-							if opt.ImageIDFile != "" {
-								if err := os.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
-									return err
-								}
-							}
-
-							itpush := imagetools.New(imageopt)
-
-							for _, n := range names {
-								nn, err := reference.ParseNormalizedNamed(n)
-								if err != nil {
-									return err
-								}
-								if err := itpush.Push(ctx, nn, desc, dt); err != nil {
-									return err
-								}
-							}
-
-							respMu.Lock()
-							resp[k] = &client.SolveResponse{
-								ExporterResponse: map[string]string{
-									"containerimage.digest": desc.Digest.String(),
-								},
-							}
-							respMu.Unlock()
-						}
-						return nil
-					})
-				}
-				return nil
-			})
-
 			for i, dp := range dps {
 				i, dp, so := i, dp, *dp.so
 				if multiDriver {
@@ -1237,6 +1120,123 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					return nil
 				})
 			}
+
+			eg.Go(func() (err error) {
+				defer func() {
+					if span != nil {
+						tracing.FinishWithError(span, err)
+					}
+				}()
+				pw := progress.WithPrefix(w, "default", false)
+				wg.Wait()
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				default:
+				}
+
+				respMu.Lock()
+				resp[k] = res[0]
+				respMu.Unlock()
+				if len(res) == 1 {
+					dgst := res[0].ExporterResponse[exptypes.ExporterImageDigestKey]
+					if v, ok := res[0].ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
+						dgst = v
+					}
+					if opt.ImageIDFile != "" {
+						return os.WriteFile(opt.ImageIDFile, []byte(dgst), 0644)
+					}
+					return nil
+				}
+
+				if pushNames != "" {
+					progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
+						descs := make([]specs.Descriptor, 0, len(res))
+
+						for _, r := range res {
+							s, ok := r.ExporterResponse[exptypes.ExporterImageDigestKey]
+							if ok {
+								descs = append(descs, specs.Descriptor{
+									Digest:    digest.Digest(s),
+									MediaType: images.MediaTypeDockerSchema2ManifestList,
+									Size:      -1,
+								})
+							}
+						}
+						if len(descs) > 0 {
+							var imageopt imagetools.Opt
+							for _, dp := range dps {
+								imageopt = nodes[dp.driverIndex].ImageOpt
+								break
+							}
+							names := strings.Split(pushNames, ",")
+
+							if insecurePush {
+								insecureTrue := true
+								httpTrue := true
+								nn, err := reference.ParseNormalizedNamed(names[0])
+								if err != nil {
+									return err
+								}
+								imageopt.RegistryConfig = map[string]resolver.RegistryConfig{
+									reference.Domain(nn): {
+										Insecure:  &insecureTrue,
+										PlainHTTP: &httpTrue,
+									},
+								}
+							}
+
+							itpull := imagetools.New(imageopt)
+
+							ref, err := reference.ParseNormalizedNamed(names[0])
+							if err != nil {
+								return err
+							}
+							ref = reference.TagNameOnly(ref)
+
+							srcs := make([]*imagetools.Source, len(descs))
+							for i, desc := range descs {
+								srcs[i] = &imagetools.Source{
+									Desc: desc,
+									Ref:  ref,
+								}
+							}
+
+							dt, desc, err := itpull.Combine(ctx, srcs)
+							if err != nil {
+								return err
+							}
+							if opt.ImageIDFile != "" {
+								if err := os.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
+									return err
+								}
+							}
+
+							itpush := imagetools.New(imageopt)
+
+							for _, n := range names {
+								nn, err := reference.ParseNormalizedNamed(n)
+								if err != nil {
+									return err
+								}
+								if err := itpush.Push(ctx, nn, desc, dt); err != nil {
+									return err
+								}
+							}
+
+							respMu.Lock()
+							resp[k] = &client.SolveResponse{
+								ExporterResponse: map[string]string{
+									"containerimage.digest": desc.Digest.String(),
+								},
+							}
+							respMu.Unlock()
+						}
+						return nil
+					})
+				}
+				return nil
+			})
 
 			return nil
 		}(k)
