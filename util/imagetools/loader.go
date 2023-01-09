@@ -255,8 +255,8 @@ func (l *loader) scanConfig(ctx context.Context, fetcher remotes.Fetcher, desc o
 }
 
 type sbomStub struct {
-	SPDX  interface{}   `json:",omitempty"`
-	SPDXs []interface{} `json:",omitempty"`
+	SPDX            interface{}   `json:",omitempty"`
+	AdditionalSPDXs []interface{} `json:",omitempty"`
 }
 
 func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
@@ -286,8 +286,9 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 				if as.sbom == nil {
 					as.sbom = &sbomStub{}
 					as.sbom.SPDX = spdx.Predicate
+				} else {
+					as.sbom.AdditionalSPDXs = append(as.sbom.AdditionalSPDXs, spdx.Predicate)
 				}
-				as.sbom.SPDXs = append(as.sbom.SPDXs, spdx.Predicate)
 			}
 		}
 	}
