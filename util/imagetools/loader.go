@@ -278,6 +278,7 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 				as.sbom = &sbomStub{
 					SPDX: dt,
 				}
+				break
 			}
 		}
 	}
@@ -308,6 +309,7 @@ func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r 
 				as.slsa = &slsaStub{
 					Provenance: dt,
 				}
+				break
 			}
 		}
 	}
