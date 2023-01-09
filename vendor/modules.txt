@@ -219,7 +219,7 @@ github.com/docker/cli/cli/streams
 github.com/docker/cli/cli/trust
 github.com/docker/cli/cli/version
 github.com/docker/cli/opts
-# github.com/docker/cli-docs-tool v0.5.0
+# github.com/docker/cli-docs-tool v0.5.1
 ## explicit; go 1.18
 github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
