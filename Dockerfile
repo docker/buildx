@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile-upstream:master
+# syntax=docker/dockerfile-upstream:1.5.0
 
 ARG GO_VERSION=1.19
 ARG XX_VERSION=1.1.2
