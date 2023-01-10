@@ -213,7 +213,10 @@ type tplInput struct {
 }
 
 func (inp tplInput) SBOM() (sbomStub, error) {
-	sbom := inp.result.SBOM()
+	sbom, err := inp.result.SBOM()
+	if err != nil {
+		return sbomStub{}, nil
+	}
 	for _, v := range sbom {
 		return v, nil
 	}
@@ -221,7 +224,10 @@ func (inp tplInput) SBOM() (sbomStub, error) {
 }
 
 func (inp tplInput) Provenance() (provenanceStub, error) {
-	provenance := inp.result.Provenance()
+	provenance, err := inp.result.Provenance()
+	if err != nil {
+		return provenanceStub{}, nil
+	}
 	for _, v := range provenance {
 		return v, nil
 	}
@@ -237,9 +243,9 @@ type tplInputs struct {
 }
 
 func (inp tplInputs) SBOM() (map[string]sbomStub, error) {
-	return inp.result.SBOM(), nil
+	return inp.result.SBOM()
 }
 
 func (inp tplInputs) Provenance() (map[string]provenanceStub, error) {
-	return inp.result.Provenance(), nil
+	return inp.result.Provenance()
 }

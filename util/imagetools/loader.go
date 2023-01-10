@@ -49,6 +49,9 @@ type asset struct {
 	config     *ocispec.Image
 	sbom       *sbomStub
 	provenance *provenanceStub
+
+	deferredSbom       func() (*sbomStub, error)
+	deferredProvenance func() (*provenanceStub, error)
 }
 
 type result struct {
@@ -261,36 +264,40 @@ type sbomStub struct {
 
 func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
-	for _, dgst := range refs {
-		mfst, ok := r.manifests[dgst]
-		if !ok {
-			return errors.Errorf("referenced image %s not found", dgst)
-		}
-		for _, layer := range mfst.manifest.Layers {
-			if layer.MediaType == "application/vnd.in-toto+json" && layer.Annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document" {
-				_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, layer)
-				if err != nil {
-					return err
-				}
-				dt, err := content.ReadBlob(ctx, l.cache, layer)
-				if err != nil {
-					return err
-				}
-				var spdx struct {
-					Predicate interface{} `json:"predicate"`
-				}
-				if err := json.Unmarshal(dt, &spdx); err != nil {
-					return err
-				}
+	as.deferredSbom = func() (*sbomStub, error) {
+		var sbom *sbomStub
+		for _, dgst := range refs {
+			mfst, ok := r.manifests[dgst]
+			if !ok {
+				return nil, errors.Errorf("referenced image %s not found", dgst)
+			}
+			for _, layer := range mfst.manifest.Layers {
+				if layer.MediaType == "application/vnd.in-toto+json" && layer.Annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document" {
+					_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, layer)
+					if err != nil {
+						return nil, err
+					}
+					dt, err := content.ReadBlob(ctx, l.cache, layer)
+					if err != nil {
+						return nil, err
+					}
+					var spdx struct {
+						Predicate interface{} `json:"predicate"`
+					}
+					if err := json.Unmarshal(dt, &spdx); err != nil {
+						return nil, err
+					}
 
-				if as.sbom == nil {
-					as.sbom = &sbomStub{}
-					as.sbom.SPDX = spdx.Predicate
-				} else {
-					as.sbom.AdditionalSPDXs = append(as.sbom.AdditionalSPDXs, spdx.Predicate)
+					if sbom == nil {
+						sbom = &sbomStub{}
+						sbom.SPDX = spdx.Predicate
+					} else {
+						sbom.AdditionalSPDXs = append(sbom.AdditionalSPDXs, spdx.Predicate)
+					}
 				}
 			}
 		}
+		return sbom, nil
 	}
 	return nil
 }
@@ -301,33 +308,37 @@ type provenanceStub struct {
 
 func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
-	for _, dgst := range refs {
-		mfst, ok := r.manifests[dgst]
-		if !ok {
-			return errors.Errorf("referenced image %s not found", dgst)
-		}
-		for _, layer := range mfst.manifest.Layers {
-			if layer.MediaType == "application/vnd.in-toto+json" && strings.HasPrefix(layer.Annotations["in-toto.io/predicate-type"], "https://slsa.dev/provenance/") {
-				_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, layer)
-				if err != nil {
-					return err
+	as.deferredProvenance = func() (*provenanceStub, error) {
+		var provenance *provenanceStub
+		for _, dgst := range refs {
+			mfst, ok := r.manifests[dgst]
+			if !ok {
+				return nil, errors.Errorf("referenced image %s not found", dgst)
+			}
+			for _, layer := range mfst.manifest.Layers {
+				if layer.MediaType == "application/vnd.in-toto+json" && strings.HasPrefix(layer.Annotations["in-toto.io/predicate-type"], "https://slsa.dev/provenance/") {
+					_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, layer)
+					if err != nil {
+						return nil, err
+					}
+					dt, err := content.ReadBlob(ctx, l.cache, layer)
+					if err != nil {
+						return nil, err
+					}
+					var slsa struct {
+						Predicate interface{} `json:"predicate"`
+					}
+					if err := json.Unmarshal(dt, &slsa); err != nil {
+						return nil, err
+					}
+					provenance = &provenanceStub{
+						SLSA: slsa.Predicate,
+					}
+					break
 				}
-				dt, err := content.ReadBlob(ctx, l.cache, layer)
-				if err != nil {
-					return err
-				}
-				var slsa struct {
-					Predicate interface{} `json:"predicate"`
-				}
-				if err := json.Unmarshal(dt, &slsa); err != nil {
-					return err
-				}
-				as.provenance = &provenanceStub{
-					SLSA: slsa.Predicate,
-				}
-				break
 			}
 		}
+		return provenance, nil
 	}
 	return nil
 }
@@ -346,30 +357,50 @@ func (r *result) Configs() map[string]*ocispec.Image {
 	return res
 }
 
-func (r *result) Provenance() map[string]provenanceStub {
+func (r *result) Provenance() (map[string]provenanceStub, error) {
 	if len(r.assets) == 0 {
-		return nil
+		return nil, nil
 	}
 	res := make(map[string]provenanceStub)
 	for p, a := range r.assets {
-		if a.provenance == nil {
+		if a.deferredProvenance == nil {
 			continue
+		}
+		if a.provenance == nil {
+			provenance, err := a.deferredProvenance()
+			if err != nil {
+				return nil, err
+			}
+			if provenance == nil {
+				continue
+			}
+			a.provenance = provenance
 		}
 		res[p] = *a.provenance
 	}
-	return res
+	return res, nil
 }
 
-func (r *result) SBOM() map[string]sbomStub {
+func (r *result) SBOM() (map[string]sbomStub, error) {
 	if len(r.assets) == 0 {
-		return nil
+		return nil, nil
 	}
 	res := make(map[string]sbomStub)
 	for p, a := range r.assets {
-		if a.sbom == nil {
+		if a.deferredSbom == nil {
 			continue
+		}
+		if a.sbom == nil {
+			sbom, err := a.deferredSbom()
+			if err != nil {
+				return nil, err
+			}
+			if sbom == nil {
+				continue
+			}
+			a.sbom = sbom
 		}
 		res[p] = *a.sbom
 	}
-	return res
+	return res, nil
 }
