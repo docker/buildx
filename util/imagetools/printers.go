@@ -99,8 +99,6 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	}
 
 	imageconfigs := res.Configs()
-	provenances := res.Provenance()
-	sboms := res.SBOM()
 	format := tpl.Root.String()
 
 	var mfst interface{}
@@ -142,44 +140,22 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 		}
 	default:
 		if len(res.platforms) > 1 {
-			return tpl.Execute(out, struct {
-				Name       string                     `json:"name,omitempty"`
-				Manifest   interface{}                `json:"manifest,omitempty"`
-				Image      map[string]*ocispecs.Image `json:"image,omitempty"`
-				Provenance map[string]provenanceStub  `json:"Provenance,omitempty"`
-				SBOM       map[string]sbomStub        `json:"SBOM,omitempty"`
-			}{
-				Name:       p.name,
-				Manifest:   mfst,
-				Image:      imageconfigs,
-				Provenance: provenances,
-				SBOM:       sboms,
+			return tpl.Execute(out, tplInputs{
+				Name:     p.name,
+				Manifest: mfst,
+				Image:    imageconfigs,
+				result:   res,
 			})
 		}
 		var ic *ocispecs.Image
 		for _, v := range imageconfigs {
 			ic = v
 		}
-		var provenance provenanceStub
-		for _, v := range provenances {
-			provenance = v
-		}
-		var sbom sbomStub
-		for _, v := range sboms {
-			sbom = v
-		}
-		return tpl.Execute(out, struct {
-			Name       string          `json:"name,omitempty"`
-			Manifest   interface{}     `json:"manifest,omitempty"`
-			Image      *ocispecs.Image `json:"image,omitempty"`
-			Provenance provenanceStub  `json:"Provenance,omitempty"`
-			SBOM       sbomStub        `json:"SBOM,omitempty"`
-		}{
-			Name:       p.name,
-			Manifest:   mfst,
-			Image:      ic,
-			Provenance: provenance,
-			SBOM:       sbom,
+		return tpl.Execute(out, tplInput{
+			Name:     p.name,
+			Manifest: mfst,
+			Image:    ic,
+			result:   res,
 		})
 	}
 
@@ -226,4 +202,44 @@ func (p *Printer) printManifestList(out io.Writer) error {
 		}
 	}
 	return w.Flush()
+}
+
+type tplInput struct {
+	Name     string          `json:"name,omitempty"`
+	Manifest interface{}     `json:"manifest,omitempty"`
+	Image    *ocispecs.Image `json:"image,omitempty"`
+
+	result *result
+}
+
+func (inp tplInput) SBOM() (sbomStub, error) {
+	sbom := inp.result.SBOM()
+	for _, v := range sbom {
+		return v, nil
+	}
+	return sbomStub{}, nil
+}
+
+func (inp tplInput) Provenance() (provenanceStub, error) {
+	provenance := inp.result.Provenance()
+	for _, v := range provenance {
+		return v, nil
+	}
+	return provenanceStub{}, nil
+}
+
+type tplInputs struct {
+	Name     string                     `json:"name,omitempty"`
+	Manifest interface{}                `json:"manifest,omitempty"`
+	Image    map[string]*ocispecs.Image `json:"image,omitempty"`
+
+	result *result
+}
+
+func (inp tplInputs) SBOM() (map[string]sbomStub, error) {
+	return inp.result.SBOM(), nil
+}
+
+func (inp tplInputs) Provenance() (map[string]provenanceStub, error) {
+	return inp.result.Provenance(), nil
 }
