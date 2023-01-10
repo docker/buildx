@@ -946,10 +946,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			if multiTarget {
 				span, ctx = tracing.StartSpan(ctx, k)
 			}
+			baseCtx := ctx
 
 			res := make([]*client.SolveResponse, len(dps))
-			wg := &sync.WaitGroup{}
-			wg.Add(len(dps))
+			eg2, ctx := errgroup.WithContext(ctx)
 
 			var pushNames string
 			var insecurePush bool
@@ -987,9 +987,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				pw := progress.WithPrefix(w, k, multiTarget)
 
 				c := clients[dp.driverIndex]
-				eg.Go(func() error {
+				eg2.Go(func() error {
 					pw = progress.ResetTime(pw)
-					defer wg.Done()
 
 					if err := waitContextDeps(ctx, dp.driverIndex, results, &so); err != nil {
 						return err
@@ -1122,17 +1121,15 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			}
 
 			eg.Go(func() (err error) {
+				ctx := baseCtx
 				defer func() {
 					if span != nil {
 						tracing.FinishWithError(span, err)
 					}
 				}()
 				pw := progress.WithPrefix(w, "default", false)
-				wg.Wait()
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
+				if err := eg2.Wait(); err != nil {
+					return err
 				}
 
 				respMu.Lock()
