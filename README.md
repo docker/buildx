@@ -147,7 +147,7 @@ To remove this alias, run [`docker buildx uninstall`](docs/reference/buildx_unin
 # Buildx 0.6+
 $ docker buildx bake "https://github.com/docker/buildx.git"
 $ mkdir -p ~/.docker/cli-plugins
-$ mv ./bin/buildx ~/.docker/cli-plugins/docker-buildx
+$ mv ./bin/build/buildx ~/.docker/cli-plugins/docker-buildx
 
 # Docker 19.03+
 $ DOCKER_BUILDKIT=1 docker build --platform=local -o . "https://github.com/docker/buildx.git"
