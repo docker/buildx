@@ -6,7 +6,7 @@ To capture the trace to [Jaeger](https://github.com/jaegertracing/jaeger), set
 First create a Jaeger container:
 
 ```console
-$ docker run -d --name jaeger -p "6831:6831/udp" -p "16686:16686" jaegertracing/all-in-one
+$ docker run -d --name jaeger -p "6831:6831/udp" -p "16686:16686" --restart unless-stopped jaegertracing/all-in-one
 ```
 
 Then [create a `docker-container` builder](https://docs.docker.com/engine/reference/commandline/buildx_create/)
