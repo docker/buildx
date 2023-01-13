@@ -3,7 +3,7 @@ name: docs-release
 on:
   release:
     types:
-      - releases
+      - released
 
 jobs:
   open-pr:
