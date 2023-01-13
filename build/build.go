@@ -588,18 +588,22 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		}
 	}
 
-	if len(opt.Attests) > 0 {
-		if !bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) {
-			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
-		}
-		for k, v := range opt.Attests {
-			if v == nil {
-				continue
-			}
-			so.FrontendAttrs[k] = *v
+	attests := make(map[string]string)
+	for k, v := range opt.Attests {
+		if v != nil {
+			attests[k] = *v
 		}
 	}
-	if _, ok := opt.Attests["attest:provenance"]; !ok {
+	supportsAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations"))
+	if len(attests) > 0 {
+		if !supportsAttestations {
+			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
+		}
+		for k, v := range attests {
+			so.FrontendAttrs[k] = v
+		}
+	}
+	if _, ok := opt.Attests["attest:provenance"]; !ok && supportsAttestations {
 		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
 	}
 
