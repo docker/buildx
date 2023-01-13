@@ -447,6 +447,25 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		so.FrontendAttrs["multi-platform"] = "true"
 	}
 
+	attests := make(map[string]string)
+	for k, v := range opt.Attests {
+		if v != nil {
+			attests[k] = *v
+		}
+	}
+	supportsAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations"))
+	if len(attests) > 0 {
+		if !supportsAttestations {
+			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
+		}
+		for k, v := range attests {
+			so.FrontendAttrs[k] = v
+		}
+	}
+	if _, ok := opt.Attests["attest:provenance"]; !ok && supportsAttestations {
+		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
+	}
+
 	switch len(opt.Exports) {
 	case 1:
 		// valid
@@ -504,7 +523,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			return nil, nil, notSupported(nodeDriver, driver.OCIExporter)
 		}
 		if e.Type == "docker" {
-			if len(opt.Platforms) > 1 {
+			if len(opt.Platforms) > 1 || len(attests) > 0 {
 				return nil, nil, errors.Errorf("docker exporter does not currently support exporting manifest lists")
 			}
 			if e.Output == nil {
@@ -586,25 +605,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		if _, ok := so.FrontendAttrs["build-arg:SOURCE_DATE_EPOCH"]; !ok {
 			so.FrontendAttrs["build-arg:SOURCE_DATE_EPOCH"] = v
 		}
-	}
-
-	attests := make(map[string]string)
-	for k, v := range opt.Attests {
-		if v != nil {
-			attests[k] = *v
-		}
-	}
-	supportsAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations"))
-	if len(attests) > 0 {
-		if !supportsAttestations {
-			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
-		}
-		for k, v := range attests {
-			so.FrontendAttrs[k] = v
-		}
-	}
-	if _, ok := opt.Attests["attest:provenance"]; !ok && supportsAttestations {
-		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
 	}
 
 	// set platforms
