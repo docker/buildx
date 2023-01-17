@@ -36,7 +36,7 @@ Build from a file
 Bake is a high-level build command. Each specified target will run in parallel
 as part of the build.
 
-Read [High-level build options with Bake](https://docs.docker.com/build/customize/bake/)
+Read [High-level build options with Bake](https://docs.docker.com/build/bake/)
 guide for introduction to writing bake files.
 
 > **Note**
@@ -87,7 +87,7 @@ target "db" {
 $ docker buildx bake -f docker-bake.dev.hcl db webapp-release
 ```
 
-See our [file definition](https://docs.docker.com/build/customize/bake/file-definition/)
+See our [file definition](https://docs.docker.com/build/bake/file-definition/)
 guide for more details.
 
 ### <a name="no-cache"></a> Do not use cache when building the image (--no-cache)
