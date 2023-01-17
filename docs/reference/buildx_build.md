@@ -17,7 +17,7 @@ Start a build
 |:-------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------|:----------|:----------------------------------------------------------------------------------------------------|
 | [`--add-host`](https://docs.docker.com/engine/reference/commandline/build/#add-host)                                                                   | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                 |
 | [`--allow`](#allow)                                                                                                                                    | `stringSlice` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)                      |
-| `--attest`                                                                                                                                             | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                        |
+| [`--attest`](#attest)                                                                                                                                  | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                        |
 | [`--build-arg`](#build-arg)                                                                                                                            | `stringArray` |           | Set build-time variables                                                                            |
 | [`--build-context`](#build-context)                                                                                                                    | `stringArray` |           | Additional build contexts (e.g., name=path)                                                         |
 | [`--builder`](#builder)                                                                                                                                | `string`      |           | Override the configured builder instance                                                            |
@@ -37,11 +37,11 @@ Start a build
 | [`--platform`](#platform)                                                                                                                              | `stringArray` |           | Set target platform for build                                                                       |
 | `--print`                                                                                                                                              | `string`      |           | Print result of information request (e.g., outline, targets) [experimental]                         |
 | [`--progress`](#progress)                                                                                                                              | `string`      | `auto`    | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output            |
-| `--provenance`                                                                                                                                         | `string`      |           | Shortand for `--attest=type=provenance`                                                             |
+| [`--provenance`](#provenance)                                                                                                                          | `string`      |           | Shortand for `--attest=type=provenance`                                                             |
 | `--pull`                                                                                                                                               |               |           | Always attempt to pull all referenced images                                                        |
 | [`--push`](#push)                                                                                                                                      |               |           | Shorthand for `--output=type=registry`                                                              |
 | `-q`, `--quiet`                                                                                                                                        |               |           | Suppress the build output and print image ID on success                                             |
-| `--sbom`                                                                                                                                               | `string`      |           | Shorthand for `--attest=type=sbom`                                                                  |
+| [`--sbom`](#sbom)                                                                                                                                      | `string`      |           | Shorthand for `--attest=type=sbom`                                                                  |
 | [`--secret`](#secret)                                                                                                                                  | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                           |
 | [`--shm-size`](#shm-size)                                                                                                                              | `bytes`       | `0`       | Size of `/dev/shm`                                                                                  |
 | [`--ssh`](#ssh)                                                                                                                                        | `stringArray` |           | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
@@ -65,6 +65,30 @@ documentation](https://docs.docker.com/engine/reference/commandline/build/). In
 here we'll document a subset of the new flags.
 
 ## Examples
+
+### <a name="attest"></a> Create attestations (--attest)
+
+```
+--attest=type=sbom,...
+--attest=type=provenance,...
+```
+
+Create [image attestations](https://docs.docker.com/build/attestations/).
+BuildKit currently supports:
+
+- `sbom` - Software Bill of Materials.
+
+  Use `--attest=type=sbom` to generate an SBOM for an image at build-time.
+  Alternatively, you can use the [`--sbom` shorthand](#sbom).
+
+  For more information, see [here](https://docs.docker.com/build/attestations/sbom/).
+
+- `provenance` - SLSA Provenance
+
+  Use `--attest=type=provenance` to generate provenance for an image at
+  build-time. Alternatively, you can use the [`--provenance` shorthand](#provenance).
+
+  For more information, see [here](https://docs.docker.com/build/attestations/slsa-provenance/).
 
 ### <a name="allow"></a> Allow extra privileged entitlement (--allow)
 
@@ -451,10 +475,20 @@ $ docker buildx build --load --progress=plain .
 > Check also our [Color output controls guide](https://github.com/docker/buildx/blob/master/docs/guides/color-output.md)
 > for modifying the colors that are used to output information to the terminal.
 
+### <a name="provenance"></a> Create provenance attestations (--provenance)
+
+Shorthand for [`--attest=type=provenance`](#attest). Enables provenance
+attestations for the build result.
+
 ### <a name="push"></a> Push the build result to a registry (--push)
 
 Shorthand for [`--output=type=registry`](#registry). Will automatically push the
 build result to registry.
+
+### <a name="sbom"></a> Create SBOM attestations (--sbom)
+
+Shorthand for [`--attest=type=sbom`](#attest). Enables SBOM attestations for
+the build result.
 
 ### <a name="secret"></a> Secret to expose to the build (--secret)
 

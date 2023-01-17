@@ -22,10 +22,10 @@ Build from a file
 | [`--no-cache`](#no-cache)        |               |         | Do not use cache when building the image                                                 |
 | [`--print`](#print)              |               |         | Print the options without building                                                       |
 | [`--progress`](#progress)        | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| `--provenance`                   | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                           |
+| [`--provenance`](#provenance)    | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                           |
 | [`--pull`](#pull)                |               |         | Always attempt to pull all referenced images                                             |
 | `--push`                         |               |         | Shorthand for `--set=*.output=type=registry`                                             |
-| `--sbom`                         | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                 |
+| [`--sbom`](#sbom)                | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                 |
 | [`--set`](#set)                  | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                  |
 
 
@@ -125,9 +125,17 @@ $ docker buildx bake -f docker-bake.hcl --print db
 
 Same as [`build --progress`](buildx_build.md#progress).
 
+### <a name="provenance"></a> Create provenance attestations (--provenance)
+
+Same as [`build --provenance`](buildx_build.md#provenance).
+
 ### <a name="pull"></a> Always attempt to pull a newer version of the image (--pull)
 
 Same as `build --pull`.
+
+### <a name="sbom"></a> Create SBOM attestations (--sbom)
+
+Same as [`build --sbom`](buildx_build.md#sbom).
 
 ### <a name="set"></a> Override target configurations from command line (--set)
 
