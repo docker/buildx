@@ -44,9 +44,9 @@ func GitAdd(c *Git, tb testing.TB, file string) {
 	require.NoError(tb, err)
 }
 
-func GitSetRemote(c *Git, tb testing.TB, url string) {
+func GitSetRemote(c *Git, tb testing.TB, name string, url string) {
 	tb.Helper()
-	_, err := fakeGit(c, "remote", "add", "origin", url)
+	_, err := fakeGit(c, "remote", "add", name, url)
 	require.NoError(tb, err)
 }
 
