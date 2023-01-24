@@ -26,7 +26,7 @@ func setupTest(tb testing.TB) {
 
 	gitutil.GitAdd(c, tb, "Dockerfile")
 	gitutil.GitCommit(c, tb, "initial commit")
-	gitutil.GitSetRemote(c, tb, "git@github.com:docker/buildx.git")
+	gitutil.GitSetRemote(c, tb, "origin", "git@github.com:docker/buildx.git")
 }
 
 func TestGetGitAttributesNotGitRepo(t *testing.T) {
