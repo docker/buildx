@@ -228,7 +228,9 @@ func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Op
 
 		func(i int, c *client.Client) {
 			eg.Go(func() error {
-				clients[i].Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+				clients[i].Build(ctx, client.SolveOpt{
+					Internal: true,
+				}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 					bopts[i] = c.BuildOpts()
 					return nil, nil
 				}, nil)
