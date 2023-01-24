@@ -66,9 +66,13 @@ Key features:
 
 # Installing
 
-Using `buildx` as a docker CLI plugin requires using Docker 19.03 or newer.
-A limited set of functionality works with older versions of Docker when
-invoking the binary directly.
+Using `buildx` with Docker requires Docker engine 19.03 or newer.
+
+> **Warning**
+>
+> Using an incompatible version of Docker may result in unexpected behavior,
+> and will likely cause issues, especially when using Buildx builders with more
+> recent versions of BuildKit.
 
 ## Windows and macOS
 
