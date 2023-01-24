@@ -141,9 +141,6 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 				if err != nil {
 					return errors.Wrapf(err, "cannot load %s", b.Name)
 				}
-				if cb := b.ContextName(); cb != "" {
-					return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb)
-				}
 				if b.Dynamic {
 					return nil
 				}
