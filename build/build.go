@@ -952,26 +952,190 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			if multiTarget {
 				span, ctx = tracing.StartSpan(ctx, k)
 			}
+			baseCtx := ctx
 
 			res := make([]*client.SolveResponse, len(dps))
-			wg := &sync.WaitGroup{}
-			wg.Add(len(dps))
+			eg2, ctx := errgroup.WithContext(ctx)
 
 			var pushNames string
 			var insecurePush bool
 
+			for i, dp := range dps {
+				i, dp, so := i, dp, *dp.so
+				if multiDriver {
+					for i, e := range so.Exports {
+						switch e.Type {
+						case "oci", "tar":
+							return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
+						case "image":
+							if pushNames == "" && e.Attrs["push"] != "" {
+								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+									pushNames = e.Attrs["name"]
+									if pushNames == "" {
+										return errors.Errorf("tag is needed when pushing to registry")
+									}
+									names, err := toRepoOnly(e.Attrs["name"])
+									if err != nil {
+										return err
+									}
+									if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
+										insecurePush = true
+									}
+									e.Attrs["name"] = names
+									e.Attrs["push-by-digest"] = "true"
+									so.Exports[i].Attrs = e.Attrs
+								}
+							}
+						}
+					}
+				}
+
+				pw := progress.WithPrefix(w, k, multiTarget)
+
+				c := clients[dp.driverIndex]
+				eg2.Go(func() error {
+					pw = progress.ResetTime(pw)
+
+					if err := waitContextDeps(ctx, dp.driverIndex, results, &so); err != nil {
+						return err
+					}
+
+					frontendInputs := make(map[string]*pb.Definition)
+					for key, st := range so.FrontendInputs {
+						def, err := st.Marshal(ctx)
+						if err != nil {
+							return err
+						}
+						frontendInputs[key] = def.ToPB()
+					}
+
+					req := gateway.SolveRequest{
+						Frontend:       so.Frontend,
+						FrontendInputs: frontendInputs,
+						FrontendOpt:    make(map[string]string),
+					}
+					for k, v := range so.FrontendAttrs {
+						req.FrontendOpt[k] = v
+					}
+					so.Frontend = ""
+					so.FrontendInputs = nil
+
+					ch, done := progress.NewChannel(pw)
+					defer func() { <-done }()
+
+					cc := c
+					var printRes map[string][]byte
+					rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+						var isFallback bool
+						var origErr error
+						for {
+							if opt.PrintFunc != nil {
+								if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
+									req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
+								} else {
+									req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
+								}
+								req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
+								if isFallback {
+									req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
+								}
+							}
+							res, err := c.Solve(ctx, req)
+							if err != nil {
+								if origErr != nil {
+									return nil, err
+								}
+								var reqErr *errdefs.UnsupportedSubrequestError
+								if !isFallback {
+									if errors.As(err, &reqErr) {
+										switch reqErr.Name {
+										case "frontend.outline", "frontend.targets":
+											isFallback = true
+											origErr = err
+											continue
+										}
+										return nil, err
+									}
+									// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
+									if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
+										isFallback = true
+										origErr = err
+										continue
+									}
+								}
+								return nil, err
+							}
+							if opt.PrintFunc != nil {
+								printRes = res.Metadata
+							}
+							results.Set(resultKey(dp.driverIndex, k), res)
+							if resultHandleFunc != nil {
+								resultHandleFunc(dp.driverIndex, &ResultContext{cc, res})
+							}
+							return res, nil
+						}
+					}, ch)
+					if err != nil {
+						return err
+					}
+					res[i] = rr
+
+					if rr.ExporterResponse == nil {
+						rr.ExporterResponse = map[string]string{}
+					}
+					for k, v := range printRes {
+						rr.ExporterResponse[k] = string(v)
+					}
+
+					node := nodes[dp.driverIndex].Driver
+					if node.IsMobyDriver() {
+						for _, e := range so.Exports {
+							if e.Type == "moby" && e.Attrs["push"] != "" {
+								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+									pushNames = e.Attrs["name"]
+									if pushNames == "" {
+										return errors.Errorf("tag is needed when pushing to registry")
+									}
+									pw := progress.ResetTime(pw)
+									pushList := strings.Split(pushNames, ",")
+									for _, name := range pushList {
+										if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
+											return pushWithMoby(ctx, node, name, l)
+										}); err != nil {
+											return err
+										}
+									}
+									remoteDigest, err := remoteDigestWithMoby(ctx, node, pushList[0])
+									if err == nil && remoteDigest != "" {
+										// old daemons might not have containerimage.config.digest set
+										// in response so use containerimage.digest value for it if available
+										if _, ok := rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; !ok {
+											if v, ok := rr.ExporterResponse[exptypes.ExporterImageDigestKey]; ok {
+												rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey] = v
+											}
+										}
+										rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
+									} else if err != nil {
+										return err
+									}
+								}
+							}
+						}
+					}
+					return nil
+				})
+			}
+
 			eg.Go(func() (err error) {
+				ctx := baseCtx
 				defer func() {
 					if span != nil {
 						tracing.FinishWithError(span, err)
 					}
 				}()
 				pw := progress.WithPrefix(w, "default", false)
-				wg.Wait()
-				select {
-				case <-ctx.Done():
-					return ctx.Err()
-				default:
+				if err := eg2.Wait(); err != nil {
+					return err
 				}
 
 				respMu.Lock()
@@ -1076,176 +1240,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				}
 				return nil
 			})
-
-			for i, dp := range dps {
-				so := *dp.so
-				if multiDriver {
-					for i, e := range so.Exports {
-						switch e.Type {
-						case "oci", "tar":
-							return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
-						case "image":
-							if pushNames == "" && e.Attrs["push"] != "" {
-								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-									pushNames = e.Attrs["name"]
-									if pushNames == "" {
-										return errors.Errorf("tag is needed when pushing to registry")
-									}
-									names, err := toRepoOnly(e.Attrs["name"])
-									if err != nil {
-										return err
-									}
-									if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
-										insecurePush = true
-									}
-									e.Attrs["name"] = names
-									e.Attrs["push-by-digest"] = "true"
-									so.Exports[i].Attrs = e.Attrs
-								}
-							}
-						}
-					}
-				}
-
-				func(i int, dp driverPair, so client.SolveOpt) {
-					pw := progress.WithPrefix(w, k, multiTarget)
-
-					c := clients[dp.driverIndex]
-					eg.Go(func() error {
-						pw = progress.ResetTime(pw)
-						defer wg.Done()
-
-						if err := waitContextDeps(ctx, dp.driverIndex, results, &so); err != nil {
-							return err
-						}
-
-						frontendInputs := make(map[string]*pb.Definition)
-						for key, st := range so.FrontendInputs {
-							def, err := st.Marshal(ctx)
-							if err != nil {
-								return err
-							}
-							frontendInputs[key] = def.ToPB()
-						}
-
-						req := gateway.SolveRequest{
-							Frontend:       so.Frontend,
-							FrontendInputs: frontendInputs,
-							FrontendOpt:    make(map[string]string),
-						}
-						for k, v := range so.FrontendAttrs {
-							req.FrontendOpt[k] = v
-						}
-						so.Frontend = ""
-						so.FrontendInputs = nil
-
-						ch, done := progress.NewChannel(pw)
-						defer func() { <-done }()
-
-						cc := c
-						var printRes map[string][]byte
-						rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-							var isFallback bool
-							var origErr error
-							for {
-								if opt.PrintFunc != nil {
-									if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
-										req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
-									} else {
-										req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
-									}
-									req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
-									if isFallback {
-										req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
-									}
-								}
-								res, err := c.Solve(ctx, req)
-								if err != nil {
-									if origErr != nil {
-										return nil, err
-									}
-									var reqErr *errdefs.UnsupportedSubrequestError
-									if !isFallback {
-										if errors.As(err, &reqErr) {
-											switch reqErr.Name {
-											case "frontend.outline", "frontend.targets":
-												isFallback = true
-												origErr = err
-												continue
-											}
-											return nil, err
-										}
-										// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
-										if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
-											isFallback = true
-											origErr = err
-											continue
-										}
-									}
-									return nil, err
-								}
-								if opt.PrintFunc != nil {
-									printRes = res.Metadata
-								}
-								results.Set(resultKey(dp.driverIndex, k), res)
-								if resultHandleFunc != nil {
-									resultHandleFunc(dp.driverIndex, &ResultContext{cc, res})
-								}
-								return res, nil
-							}
-						}, ch)
-						if err != nil {
-							return err
-						}
-						res[i] = rr
-
-						if rr.ExporterResponse == nil {
-							rr.ExporterResponse = map[string]string{}
-						}
-						for k, v := range printRes {
-							rr.ExporterResponse[k] = string(v)
-						}
-
-						node := nodes[dp.driverIndex].Driver
-						if node.IsMobyDriver() {
-							for _, e := range so.Exports {
-								if e.Type == "moby" && e.Attrs["push"] != "" {
-									if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-										pushNames = e.Attrs["name"]
-										if pushNames == "" {
-											return errors.Errorf("tag is needed when pushing to registry")
-										}
-										pw := progress.ResetTime(pw)
-										pushList := strings.Split(pushNames, ",")
-										for _, name := range pushList {
-											if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
-												return pushWithMoby(ctx, node, name, l)
-											}); err != nil {
-												return err
-											}
-										}
-										remoteDigest, err := remoteDigestWithMoby(ctx, node, pushList[0])
-										if err == nil && remoteDigest != "" {
-											// old daemons might not have containerimage.config.digest set
-											// in response so use containerimage.digest value for it if available
-											if _, ok := rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; !ok {
-												if v, ok := rr.ExporterResponse[exptypes.ExporterImageDigestKey]; ok {
-													rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey] = v
-												}
-											}
-											rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
-										} else if err != nil {
-											return err
-										}
-									}
-								}
-							}
-						}
-						return nil
-					})
-
-				}(i, dp, so)
-			}
 
 			return nil
 		}(k)
