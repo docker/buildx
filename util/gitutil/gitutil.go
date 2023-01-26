@@ -67,7 +67,15 @@ func (c *Git) RootDir() (string, error) {
 }
 
 func (c *Git) RemoteURL() (string, error) {
-	return c.clean(c.run("ls-remote", "--get-url"))
+	// Try to get the remote URL from the origin remote first
+	if ru, err := c.clean(c.run("remote", "get-url", "origin")); err == nil && ru != "" {
+		return ru, nil
+	}
+	// If that fails, try to get the remote URL from the upstream remote
+	if ru, err := c.clean(c.run("remote", "get-url", "upstream")); err == nil && ru != "" {
+		return ru, nil
+	}
+	return "", errors.New("no remote URL found for either origin or upstream")
 }
 
 func (c *Git) FullCommit() (string, error) {
