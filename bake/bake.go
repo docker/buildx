@@ -144,6 +144,9 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 	// The logic is purposely duplicated from `build/build`.go for keeping this visible in `bake --print`.
 	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
 		for _, f := range m {
+			if f.Args == nil {
+				f.Args = make(map[string]*string)
+			}
 			if _, ok := f.Args["SOURCE_DATE_EPOCH"]; !ok {
 				f.Args["SOURCE_DATE_EPOCH"] = &v
 			}
