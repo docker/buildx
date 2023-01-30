@@ -6,6 +6,7 @@ import (
 	"context"
 	"crypto/rand"
 	_ "crypto/sha256" // ensure digests can be computed
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -1157,7 +1158,24 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						descs := make([]specs.Descriptor, 0, len(res))
 
 						for _, r := range res {
-							s, ok := r.ExporterResponse[exptypes.ExporterImageDigestKey]
+							s, ok := r.ExporterResponse[exptypes.ExporterImageDescriptorKey]
+							if ok {
+								dt, err := base64.StdEncoding.DecodeString(s)
+								if err != nil {
+									return err
+								}
+								var desc specs.Descriptor
+								if err := json.Unmarshal(dt, &desc); err != nil {
+									return errors.Wrapf(err, "failed to unmarshal descriptor %s", s)
+								}
+								descs = append(descs, desc)
+								continue
+							}
+							// This is fallback for some very old buildkit versions.
+							// Note that the mediatype isn't really correct as most of the time it is image manifest and
+							// not manifest list but actually both are handled because for Docker mediatypes the
+							// mediatype value in the Accpet header does not seem to matter.
+							s, ok = r.ExporterResponse[exptypes.ExporterImageDigestKey]
 							if ok {
 								descs = append(descs, specs.Descriptor{
 									Digest:    digest.Digest(s),
