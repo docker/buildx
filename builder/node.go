@@ -62,6 +62,7 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 				node := Node{
 					Node:        n,
 					ProxyConfig: storeutil.GetProxyConfig(b.opts.dockerCli),
+					Platforms:   n.Platforms,
 				}
 				defer func() {
 					b.nodes[i] = node

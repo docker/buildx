@@ -52,20 +52,20 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
 	if err != nil {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
-			return res, errors.New("git was not found in the system. Current commit information was not captured by the build")
+			return res, errors.New("buildx: git was not found in the system. Current commit information was not captured by the build")
 		}
 		return
 	}
 
 	if !gitc.IsInsideWorkTree() {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
-			return res, errors.New("failed to read current commit information with git rev-parse --is-inside-work-tree")
+			return res, errors.New("buildx: failed to read current commit information with git rev-parse --is-inside-work-tree")
 		}
 		return res, nil
 	}
 
 	if sha, err := gitc.FullCommit(); err != nil {
-		return res, errors.Wrapf(err, "failed to get git commit")
+		return res, errors.Wrapf(err, "buildx: failed to get git commit")
 	} else if sha != "" {
 		if gitc.IsDirty() {
 			sha += "-dirty"
@@ -78,9 +78,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 		}
 	}
 
-	if rurl, err := gitc.RemoteURL(); err != nil {
-		return res, errors.Wrapf(err, "failed to get git remote url")
-	} else if rurl != "" {
+	if rurl, err := gitc.RemoteURL(); err == nil && rurl != "" {
 		if setGitLabels {
 			res["label:"+specs.AnnotationSource] = rurl
 		}
@@ -91,7 +89,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 
 	if setGitLabels {
 		if root, err := gitc.RootDir(); err != nil {
-			return res, errors.Wrapf(err, "failed to get git root dir")
+			return res, errors.Wrapf(err, "buildx: failed to get git root dir")
 		} else if root != "" {
 			if dockerfilePath == "" {
 				dockerfilePath = filepath.Join(wd, "Dockerfile")
