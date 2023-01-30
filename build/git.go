@@ -78,9 +78,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 		}
 	}
 
-	if rurl, err := gitc.RemoteURL(); err != nil {
-		return res, errors.Wrapf(err, "failed to get git remote url")
-	} else if rurl != "" {
+	if rurl, err := gitc.RemoteURL(); err == nil && rurl != "" {
 		if setGitLabels {
 			res["label:"+specs.AnnotationSource] = rurl
 		}
