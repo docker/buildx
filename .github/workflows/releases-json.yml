@@ -1,0 +1,55 @@
+name: releases-json
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  release:
+    types:
+      - released
+  pull_request:
+    paths-ignore:
+      - '.github/releases.json'
+
+jobs:
+  generate:
+    uses: crazy-max/.github/.github/workflows/releases-json.yml@2a596c917a8ad3e6203ae99b777148525a2e00d5
+    with:
+      repository: docker/buildx
+      artifact_name: releases-json
+      filename: releases.json
+    secrets: inherit
+
+  open-pr:
+    runs-on: ubuntu-22.04
+    if: github.event_name == 'release'
+    needs:
+      - generate
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Download
+        uses: actions/download-artifact@v3
+        with:
+          name: releases-json
+          path: .github
+      -
+        name: Commit changes
+        run: |
+          git add -A .
+      -
+        name: Create PR
+        uses: peter-evans/create-pull-request@2b011faafdcbc9ceb11414d64d0573f37c774b04
+        with:
+          base: master
+          branch: releases-json/${{ github.event.release.name }}
+          commit-message: "github: update .github/releases.json"
+          signoff: true
+          delete-branch: true
+          title: "Update `.github/releases.json`"
+          body: |
+            Update `.github/releases.json` to keep in sync with GitHub Releases.
+          draft: false
