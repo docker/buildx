@@ -13,10 +13,8 @@ on:
     tags:
       - 'v*'
   pull_request:
-    branches:
-      - 'master'
-      - 'v[0-9]*'
     paths-ignore:
+      - '.github/releases.json'
       - 'README.md'
       - 'docs/**'
 
