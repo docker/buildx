@@ -19,8 +19,6 @@ on:
     paths:
       - '.github/workflows/docs-upstream.yml'
       - 'docs/**'
-    paths-ignore:
-      - '.github/releases.json'
 
 jobs:
   docs-yaml:
