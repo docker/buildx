@@ -86,6 +86,9 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		duCmd(dockerCli, opts),
 		imagetoolscmd.RootCmd(dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
 	)
+	if isExperimental() {
+		addControllerCommands(cmd, dockerCli, opts)
+	}
 }
 
 func rootFlags(options *rootOptions, flags *pflag.FlagSet) {

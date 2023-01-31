@@ -1,4 +1,4 @@
-package monitor
+package ioset
 
 import (
 	"bytes"
@@ -11,7 +11,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// TestMuxIO tests muxIO
+// TestMuxIO tests MuxIO
 func TestMuxIO(t *testing.T) {
 	tests := []struct {
 		name       string
@@ -122,20 +122,20 @@ func TestMuxIO(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			inBuf, end, in := newTestIn(t)
 			var outBufs []*outBuf
-			var outs []ioSetOutContext
+			var outs []MuxOut
 			if tt.outputsNum != len(tt.wants) {
 				t.Fatalf("wants != outputsNum")
 			}
 			for i := 0; i < tt.outputsNum; i++ {
 				outBuf, out := newTestOut(t, i)
 				outBufs = append(outBufs, outBuf)
-				outs = append(outs, ioSetOutContext{out, nil, nil})
+				outs = append(outs, MuxOut{out, nil, nil})
 			}
-			mio := newMuxIO(in, outs, tt.initIdx, func(prev int, res int) string { return "" })
+			mio := NewMuxIO(in, outs, tt.initIdx, func(prev int, res int) string { return "" })
 			for _, i := range tt.inputs {
-				// Add input to muxIO
+				// Add input to MuxIO
 				istr, writeback := i(mio)
-				if _, err := end.stdin.Write([]byte(istr)); err != nil {
+				if _, err := end.Stdin.Write([]byte(istr)); err != nil {
 					t.Fatalf("failed to write data to stdin: %v", err)
 				}
 
@@ -143,14 +143,14 @@ func TestMuxIO(t *testing.T) {
 				var eg errgroup.Group
 				eg.Go(func() error {
 					outbuf := make([]byte, len(writeback))
-					if _, err := io.ReadAtLeast(end.stdout, outbuf, len(outbuf)); err != nil {
+					if _, err := io.ReadAtLeast(end.Stdout, outbuf, len(outbuf)); err != nil {
 						return err
 					}
 					return nil
 				})
 				eg.Go(func() error {
 					errbuf := make([]byte, len(writeback))
-					if _, err := io.ReadAtLeast(end.stderr, errbuf, len(errbuf)); err != nil {
+					if _, err := io.ReadAtLeast(end.Stderr, errbuf, len(errbuf)); err != nil {
 						return err
 					}
 					return nil
@@ -160,8 +160,8 @@ func TestMuxIO(t *testing.T) {
 				}
 			}
 
-			// Close stdin on this muxIO
-			end.stdin.Close()
+			// Close stdin on this MuxIO
+			end.Stdin.Close()
 
 			// Wait for all output ends reach EOF
 			mio.waitClosed()
@@ -189,30 +189,30 @@ func TestMuxIO(t *testing.T) {
 	}
 }
 
-type instruction func(m *muxIO) (intput string, writeBackView string)
+type instruction func(m *MuxIO) (intput string, writeBackView string)
 
 func input(s string) instruction {
-	return func(m *muxIO) (string, string) {
+	return func(m *MuxIO) (string, string) {
 		return s, strings.ReplaceAll(s, string([]rune{rune(1)}), "")
 	}
 }
 
 func toggle() instruction {
-	return func(m *muxIO) (string, string) {
+	return func(m *MuxIO) (string, string) {
 		return string([]rune{rune(1)}) + "c", ""
 	}
 }
 
 func enable(i int) instruction {
-	return func(m *muxIO) (string, string) {
-		m.enable(i)
+	return func(m *MuxIO) (string, string) {
+		m.Enable(i)
 		return "", ""
 	}
 }
 
 func disable(i int) instruction {
-	return func(m *muxIO) (string, string) {
-		m.disable(i)
+	return func(m *MuxIO) (string, string) {
+		m.Disable(i)
 		return "", ""
 	}
 }
@@ -223,7 +223,7 @@ type inBuf struct {
 	doneCh chan struct{}
 }
 
-func newTestIn(t *testing.T) (*inBuf, ioSetOut, ioSetIn) {
+func newTestIn(t *testing.T) (*inBuf, Out, In) {
 	ti := &inBuf{
 		doneCh: make(chan struct{}),
 	}
@@ -253,7 +253,7 @@ func newTestIn(t *testing.T) (*inBuf, ioSetOut, ioSetIn) {
 		close(ti.doneCh)
 	}()
 	inR, inW := io.Pipe()
-	return ti, ioSetOut{inW, gotOutR, gotErrR}, ioSetIn{inR, outW, errW}
+	return ti, Out{Stdin: inW, Stdout: gotOutR, Stderr: gotErrR}, In{Stdin: inR, Stdout: outW, Stderr: errW}
 }
 
 type outBuf struct {
@@ -262,7 +262,7 @@ type outBuf struct {
 	doneCh chan struct{}
 }
 
-func newTestOut(t *testing.T, idx int) (*outBuf, ioSetOut) {
+func newTestOut(t *testing.T, idx int) (*outBuf, Out) {
 	to := &outBuf{
 		idx:    idx,
 		doneCh: make(chan struct{}),
@@ -290,7 +290,7 @@ func newTestOut(t *testing.T, idx int) (*outBuf, ioSetOut) {
 		errW.Close()
 		close(to.doneCh)
 	}()
-	return to, ioSetOut{inW, outR, errR}
+	return to, Out{Stdin: inW, Stdout: outR, Stderr: errR}
 }
 
 func writeMasked(w io.Writer, s string) io.Writer {

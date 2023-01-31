@@ -37,7 +37,7 @@ release:
 	./hack/release
 
 .PHONY: validate-all
-validate-all: lint test validate-vendor validate-docs
+validate-all: lint test validate-vendor validate-docs validate-generated-files
 
 .PHONY: lint
 lint:
@@ -59,6 +59,10 @@ validate-docs:
 validate-authors:
 	$(BUILDX_CMD) bake validate-authors
 
+.PHONY: validate-generated-files
+validate-generated-files:
+	$(BUILDX_CMD) bake validate-generated-files
+
 .PHONY: test-driver
 test-driver:
 	./hack/test-driver
@@ -78,3 +82,7 @@ authors:
 .PHONY: mod-outdated
 mod-outdated:
 	$(BUILDX_CMD) bake mod-outdated
+
+.PHONY: generated-files
+generated-files:
+	$(BUILDX_CMD) bake update-generated-files

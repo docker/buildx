@@ -1,0 +1,179 @@
+syntax = "proto3";
+
+package buildx.controller.v1;
+
+import "github.com/moby/buildkit/api/services/control/control.proto";
+
+option go_package = "pb";
+
+service Controller {
+  rpc Build(BuildRequest) returns (BuildResponse);
+  rpc Status(StatusRequest) returns (stream StatusResponse);
+  rpc Input(stream InputMessage) returns (InputResponse);
+  rpc Invoke(stream Message) returns (stream Message);
+  rpc List(ListRequest) returns (ListResponse);
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+  rpc Info(InfoRequest) returns (InfoResponse);
+}
+
+message BuildRequest {
+  string Ref = 1;
+  BuildOptions Options = 2;
+}
+
+message BuildOptions {
+  string ContextPath = 1;
+  string DockerfileName = 2;
+  string PrintFunc = 3;
+
+  repeated string Allow = 4;
+  repeated string Attests = 5; // TODO
+  repeated string BuildArgs = 6;
+  repeated string CacheFrom = 7;
+  repeated string CacheTo = 8;
+  string CgroupParent = 9;
+  repeated string Contexts = 10;
+  repeated string ExtraHosts = 11;
+  string ImageIDFile = 12;
+  repeated string Labels = 13;
+  string NetworkMode = 14;
+  repeated string NoCacheFilter = 15;
+  repeated string Outputs = 16;
+  repeated string Platforms = 17;
+  bool Quiet = 18;
+  repeated string Secrets = 19;
+  int64 ShmSize = 20;
+  repeated string SSH = 21;
+  repeated string Tags = 22;
+  string Target = 23;
+  UlimitOpt Ulimits = 24;
+  // string Invoke: provided via Invoke API
+  CommonOptions Opts = 25;
+}
+
+message UlimitOpt {
+  map<string, Ulimit> values = 1;
+}
+
+message Ulimit {
+  string Name = 1;
+  int64 Hard = 2;
+  int64 Soft = 3;
+}
+
+message CommonOptions {
+  string Builder = 1;
+  string MetadataFile = 2;
+  bool NoCache = 3;
+  // string Progress: no progress view on server side
+  bool Pull = 4;
+  bool ExportPush = 5;
+  bool ExportLoad = 6;
+  string SBOM       = 7; // TODO
+  string Provenance = 8; // TODO
+}
+
+message BuildResponse {}
+
+message DisconnectRequest {
+  string Ref = 1;
+}
+
+message DisconnectResponse {}
+
+message ListRequest {
+  string Ref = 1;
+}
+
+message ListResponse {
+  repeated string keys = 1;
+}
+
+message InputMessage {
+  oneof Input {
+    InputInitMessage Init = 1;
+    DataMessage Data = 2;
+  }
+}
+
+message InputInitMessage {
+  string Ref = 1;
+}
+
+message DataMessage {
+  bool EOF = 1;    // true if eof was reached
+  bytes Data = 2;  // should be chunked smaller than 4MB:
+                   // https://pkg.go.dev/google.golang.org/grpc#MaxRecvMsgSize
+}
+
+message InputResponse {}
+
+message Message {
+  oneof Input {
+    InitMessage Init = 1;
+    // FdMessage used from client to server for input (stdin) and
+    // from server to client for output (stdout, stderr)
+    FdMessage File = 2;
+    // ResizeMessage used from client to server for terminal resize events
+    ResizeMessage Resize = 3;
+    // SignalMessage is used from client to server to send signal events
+    SignalMessage Signal = 4;
+  }
+}
+
+message InitMessage {
+  string Ref = 1;
+  ContainerConfig ContainerConfig = 2;
+}
+
+message ContainerConfig {
+  repeated string Entrypoint = 1;
+  repeated string Cmd = 2;
+  repeated string Env = 3;
+  string User = 4;
+  bool NoUser = 5; // Do not set user but use the image's default
+  string Cwd = 6;
+  bool NoCwd = 7; // Do not set cwd but use the image's default
+  bool Tty = 8;
+}
+
+message FdMessage {
+  uint32 Fd = 1;   // what fd the data was from
+  bool EOF = 2;    // true if eof was reached
+  bytes Data = 3;  // should be chunked smaller than 4MB:
+                   // https://pkg.go.dev/google.golang.org/grpc#MaxRecvMsgSize
+}
+
+message ResizeMessage {
+  uint32 Rows = 1;
+  uint32 Cols = 2;
+}
+
+message SignalMessage {
+  // we only send name (ie HUP, INT) because the int values
+  // are platform dependent.
+  string Name = 1;
+}
+
+message StatusRequest {
+  string Ref = 1;
+}
+
+message StatusResponse {
+  repeated moby.buildkit.v1.Vertex vertexes = 1;
+  repeated moby.buildkit.v1.VertexStatus statuses = 2;
+  repeated moby.buildkit.v1.VertexLog logs = 3;
+  repeated moby.buildkit.v1.VertexWarning warnings = 4;
+}
+
+message InfoRequest {}
+
+message InfoResponse {
+  BuildxVersion buildxVersion = 1;
+}
+
+message BuildxVersion {
+  string package = 1;
+  string version = 2;
+  string revision = 3;
+}
