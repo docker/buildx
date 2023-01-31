@@ -1,6 +1,6 @@
 //go:build linux
 
-package commands
+package remote
 
 import (
 	"context"
@@ -17,9 +17,9 @@ import (
 
 	"github.com/containerd/containerd/log"
 	"github.com/docker/buildx/build"
-	"github.com/docker/buildx/commands/controller"
-	controllerapi "github.com/docker/buildx/commands/controller/pb"
-	"github.com/docker/buildx/monitor"
+	cbuild "github.com/docker/buildx/controller/build"
+	"github.com/docker/buildx/controller/control"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
@@ -45,8 +45,8 @@ type serverConfig struct {
 	LogFile string `toml:"log_file"`
 }
 
-func newRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts buildOptions) (monitor.BuildxController, error) {
-	rootDir := opts.root
+func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts control.ControlOptions) (control.BuildxController, error) {
+	rootDir := opts.Root
 	if rootDir == "" {
 		rootDir = rootDataDir(dockerCli)
 	}
@@ -56,10 +56,10 @@ func newRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 		logrus.Info("no buildx server found; launching...")
 		// start buildx server via subcommand
 		launchFlags := []string{}
-		if opts.serverConfig != "" {
-			launchFlags = append(launchFlags, "--config", opts.serverConfig)
+		if opts.ServerConfig != "" {
+			launchFlags = append(launchFlags, "--config", opts.ServerConfig)
 		}
-		logFile, err := getLogFilePath(dockerCli, opts.serverConfig)
+		logFile, err := getLogFilePath(dockerCli, opts.ServerConfig)
 		if err != nil {
 			return nil, err
 		}
@@ -76,13 +76,13 @@ func newRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 	return &buildxController{c, serverRoot}, nil
 }
 
-func addControllerCommands(cmd *cobra.Command, dockerCli command.Cli, rootOpts *rootOptions) {
+func AddControllerCommands(cmd *cobra.Command, dockerCli command.Cli) {
 	cmd.AddCommand(
-		serveCmd(dockerCli, rootOpts),
+		serveCmd(dockerCli),
 	)
 }
 
-func serveCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
+func serveCmd(dockerCli command.Cli) *cobra.Command {
 	var serverConfigPath string
 	cmd := &cobra.Command{
 		Use:    fmt.Sprintf("%s [OPTIONS]", serveCommandName),
@@ -120,8 +120,8 @@ func serveCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}()
 
 			// prepare server
-			b := controller.New(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (res *build.ResultContext, err error) {
-				return runBuildWithContext(ctx, dockerCli, *options, stdin, "quiet", statusChan)
+			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (res *build.ResultContext, err error) {
+				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, "quiet", statusChan)
 			})
 			defer b.Close()
 
@@ -149,7 +149,6 @@ func serveCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 				if err := rpc.Serve(l); err != nil {
 					errCh <- fmt.Errorf("error on serving via socket %q: %w", addr, err)
 				}
-				return
 			}()
 			var s os.Signal
 			sigCh := make(chan os.Signal, 1)
@@ -228,8 +227,8 @@ func rootDataDir(dockerCli command.Cli) string {
 	return filepath.Join(confutil.ConfigDir(dockerCli), "controller")
 }
 
-func newBuildxClientAndCheck(addr string, checkNum int, duration time.Duration) (*controller.Client, error) {
-	c, err := controller.NewClient(addr)
+func newBuildxClientAndCheck(addr string, checkNum int, duration time.Duration) (*Client, error) {
+	c, err := NewClient(addr)
 	if err != nil {
 		return nil, err
 	}
@@ -261,7 +260,7 @@ func newBuildxClientAndCheck(addr string, checkNum int, duration time.Duration) 
 }
 
 type buildxController struct {
-	*controller.Client
+	*Client
 	serverRoot string
 }
 

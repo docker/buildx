@@ -4,6 +4,7 @@ import (
 	"os"
 
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
+	"github.com/docker/buildx/controller/remote"
 	"github.com/docker/buildx/util/logutil"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
@@ -87,7 +88,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		imagetoolscmd.RootCmd(dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
 	)
 	if isExperimental() {
-		addControllerCommands(cmd, dockerCli, opts)
+		remote.AddControllerCommands(cmd, dockerCli)
 	}
 }
 

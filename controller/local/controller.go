@@ -1,4 +1,4 @@
-package commands
+package local
 
 import (
 	"context"
@@ -7,12 +7,13 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
-	controllerapi "github.com/docker/buildx/commands/controller/pb"
-	"github.com/docker/buildx/monitor"
+	cbuild "github.com/docker/buildx/controller/build"
+	"github.com/docker/buildx/controller/control"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/cli/cli/command"
 )
 
-func newLocalBuildxController(ctx context.Context, dockerCli command.Cli) monitor.BuildxController {
+func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli) control.BuildxController {
 	return &localController{
 		dockerCli: dockerCli,
 		ref:       "local",
@@ -52,7 +53,7 @@ func (b *localController) Invoke(ctx context.Context, ref string, cfg controller
 }
 
 func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, error) {
-	res, err := runBuildWithContext(ctx, b.dockerCli, options, in, progressMode, nil)
+	res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
 	if err != nil {
 		return "", err
 	}
