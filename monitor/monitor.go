@@ -2,8 +2,11 @@ package monitor
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
+	"os/exec"
+	"runtime"
 	"sort"
 	"strings"
 	"sync"
@@ -12,6 +15,7 @@ import (
 	"github.com/containerd/console"
 	controllerapi "github.com/docker/buildx/commands/controller/pb"
 	"github.com/docker/buildx/util/ioset"
+	"github.com/google/shlex"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )
@@ -116,13 +120,30 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 					}
 					return
 				}
-				args := strings.Fields(l) // TODO: use shlex
+
+				if strings.HasPrefix(l, "!") {
+					raw := defaultShell(runtime.GOOS)
+					raw = append(raw, l[1:])
+					cmd := exec.Command(raw[0], raw[1:]...)
+
+					// cmd.Stdin = stdin // TODO: support stdin
+					cmd.Stdout = stdout
+					cmd.Stderr = stderr
+					if err := cmd.Run(); err != nil && !errors.Is(err, &exec.ExitError{}) {
+						fmt.Fprintf(stdout, "command failed: %v\n", err)
+					}
+					continue
+				}
+
+				args, err := shlex.Split(l)
+				if err != nil {
+					fmt.Fprintf(stdout, "failed to parse command: %v", err)
+					continue
+				}
 				if len(args) == 0 {
 					continue
 				}
 				switch args[0] {
-				case "":
-					// nop
 				case "reload":
 					if curRef != "" {
 						if err := c.Disconnect(ctx, curRef); err != nil {
@@ -255,3 +276,10 @@ type nopCloser struct {
 }
 
 func (c nopCloser) Close() error { return nil }
+
+func defaultShell(os string) []string {
+	if os == "windows" {
+		return []string{"cmd", "/S", "/C"}
+	}
+	return []string{"/bin/sh", "-c"}
+}
