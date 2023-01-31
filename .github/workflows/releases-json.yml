@@ -5,6 +5,7 @@ concurrency:
   cancel-in-progress: true
 
 on:
+  workflow_dispatch:
   release:
     types:
       - released
@@ -23,7 +24,7 @@ jobs:
 
   open-pr:
     runs-on: ubuntu-22.04
-    if: github.event_name == 'release'
+    if: github.event_name != 'pull_request'
     needs:
       - generate
     steps:
