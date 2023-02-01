@@ -25,6 +25,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/client"
 	"github.com/pelletier/go-toml"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"google.golang.org/grpc"
@@ -70,7 +71,7 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 		go wait()
 		c, err = newBuildxClientAndCheck(filepath.Join(serverRoot, "buildx.sock"), 10, time.Second)
 		if err != nil {
-			return nil, fmt.Errorf("cannot connect to the buildx server: %w", err)
+			return nil, errors.Wrap(err, "cannot connect to the buildx server")
 		}
 	}
 	return &buildxController{c, serverRoot}, nil
@@ -91,14 +92,14 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			// Parse config
 			config, err := getConfig(dockerCli, serverConfigPath)
 			if err != nil {
-				return fmt.Errorf("failed to get config")
+				return err
 			}
 			if config.LogLevel == "" {
 				logrus.SetLevel(logrus.InfoLevel)
 			} else {
 				lvl, err := logrus.ParseLevel(config.LogLevel)
 				if err != nil {
-					return fmt.Errorf("failed to prepare logger: %w", err)
+					return errors.Wrap(err, "failed to prepare logger")
 				}
 				logrus.SetLevel(lvl)
 			}
@@ -147,7 +148,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			go func() {
 				defer close(doneCh)
 				if err := rpc.Serve(l); err != nil {
-					errCh <- fmt.Errorf("error on serving via socket %q: %w", addr, err)
+					errCh <- errors.Wrapf(err, "error on serving via socket %q", addr)
 				}
 			}()
 			var s os.Signal
@@ -173,7 +174,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 func getLogFilePath(dockerCli command.Cli, configPath string) (string, error) {
 	config, err := getConfig(dockerCli, configPath)
 	if err != nil {
-		return "", fmt.Errorf("failed to get config")
+		return "", err
 	}
 	logFile := config.LogFile
 	if logFile == "" {
@@ -196,10 +197,10 @@ func getConfig(dockerCli command.Cli, configPath string) (*serverConfig, error) 
 	var config serverConfig
 	tree, err := toml.LoadFile(configPath)
 	if err != nil && !(os.IsNotExist(err) && defaultConfigPath) {
-		return nil, fmt.Errorf("failed to load config file %q", configPath)
+		return nil, errors.Wrapf(err, "failed to read config %q", configPath)
 	} else if err == nil {
 		if err := tree.Unmarshal(&config); err != nil {
-			return nil, fmt.Errorf("failed to unmarshal config file %q", configPath)
+			return nil, errors.Wrapf(err, "failed to unmarshal config %q", configPath)
 		}
 	}
 	return &config, nil
@@ -211,7 +212,7 @@ func prepareRootDir(dockerCli command.Cli, config *serverConfig) (string, error)
 		rootDir = rootDataDir(dockerCli)
 	}
 	if rootDir == "" {
-		return "", fmt.Errorf("buildx root dir must be determined")
+		return "", errors.New("buildx root dir must be determined")
 	}
 	if err := os.MkdirAll(rootDir, 0700); err != nil {
 		return "", err
@@ -239,7 +240,7 @@ func newBuildxClientAndCheck(addr string, checkNum int, duration time.Duration) 
 			lastErr = nil
 			break
 		}
-		err = fmt.Errorf("failed to access server (tried %d times): %w", i, err)
+		err = errors.Wrapf(err, "failed to access server (tried %d times)", i)
 		logrus.Debugf("connection failure: %v", err)
 		lastErr = err
 		time.Sleep(duration)
@@ -274,7 +275,7 @@ func (c *buildxController) Kill(ctx context.Context) error {
 		return err
 	}
 	if pid <= 0 {
-		return fmt.Errorf("no PID is recorded for buildx server")
+		return errors.New("no PID is recorded for buildx server")
 	}
 	p, err := os.FindProcess(int(pid))
 	if err != nil {

@@ -2,12 +2,12 @@ package controller
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/docker/buildx/controller/control"
 	"github.com/docker/buildx/controller/local"
 	"github.com/docker/buildx/controller/remote"
 	"github.com/docker/cli/cli/command"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
@@ -21,7 +21,7 @@ func NewController(ctx context.Context, opts control.ControlOptions, dockerCli c
 	logrus.Infof("connecting to buildx server")
 	c, err = remote.NewRemoteBuildxController(ctx, dockerCli, opts)
 	if err != nil {
-		return nil, fmt.Errorf("failed to use buildx server; use --detach=false: %w", err)
+		return nil, errors.Wrap(err, "failed to use buildx server; use --detach=false")
 	}
 	return c, nil
 }

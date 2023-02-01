@@ -2,14 +2,13 @@ package remote
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"syscall"
 	"time"
 
 	"github.com/docker/buildx/controller/pb"
 	"github.com/moby/sys/signal"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -42,14 +41,14 @@ func serveIO(attachCtx context.Context, srv msgStream, initFn func(*pb.InitMessa
 	}
 	init := msg.GetInit()
 	if init == nil {
-		return fmt.Errorf("unexpected message: %T; wanted init", msg.GetInput())
+		return errors.Errorf("unexpected message: %T; wanted init", msg.GetInput())
 	}
 	ref := init.Ref
 	if ref == "" {
-		return fmt.Errorf("no ref is provided")
+		return errors.New("no ref is provided")
 	}
 	if err := initFn(init); err != nil {
-		return fmt.Errorf("failed to initialize IO server: %w", err)
+		return errors.Wrap(err, "failed to initialize IO server")
 	}
 
 	if stdout != nil {
@@ -124,7 +123,7 @@ func serveIO(attachCtx context.Context, srv msgStream, initFn func(*pb.InitMessa
 			}
 			if file := msg.GetFile(); file != nil {
 				if file.Fd != 0 {
-					return fmt.Errorf("unexpected fd: %v", file.Fd)
+					return errors.Errorf("unexpected fd: %v", file.Fd)
 				}
 				if stdin == nil {
 					continue // no stdin destination is specified so ignore the data
@@ -154,7 +153,7 @@ func serveIO(attachCtx context.Context, srv msgStream, initFn func(*pb.InitMessa
 					ioConfig.signalFn(ctx, syscallSignal)
 				}
 			} else {
-				return fmt.Errorf("unexpected message: %T", msg.GetInput())
+				return errors.Errorf("unexpected message: %T", msg.GetInput())
 			}
 		}
 	})
@@ -183,7 +182,7 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 			Init: initMessage,
 		},
 	}); err != nil {
-		return fmt.Errorf("failed to init: %w", err)
+		return errors.Wrap(err, "failed to init")
 	}
 
 	if cfg.stdin != nil {
@@ -228,7 +227,7 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 						},
 					},
 				}); err != nil {
-					return fmt.Errorf("failed to send signal: %w", err)
+					return errors.Wrap(err, "failed to send signal")
 				}
 			}
 		})
@@ -253,7 +252,7 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 						},
 					},
 				}); err != nil {
-					return fmt.Errorf("failed to send resize: %w", err)
+					return errors.Wrap(err, "failed to send resize")
 				}
 			}
 		})
@@ -301,7 +300,7 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 				case 2:
 					out = cfg.stderr
 				default:
-					return fmt.Errorf("unsupported fd %d", file.Fd)
+					return errors.Errorf("unsupported fd %d", file.Fd)
 
 				}
 				if out == nil {
@@ -317,7 +316,7 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 					eofs[file.Fd] = struct{}{}
 				}
 			} else {
-				return fmt.Errorf("unexpected message: %T", msg.GetInput())
+				return errors.Errorf("unexpected message: %T", msg.GetInput())
 			}
 		}
 	})

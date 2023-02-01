@@ -23,6 +23,7 @@ linters:
     - typecheck
     - nolintlint
     - gosec
+    - forbidigo
   disable-all: true
 
 linters-settings:
@@ -33,6 +34,9 @@ linters-settings:
       # The io/ioutil package has been deprecated.
       # https://go.dev/doc/go1.16#ioutil
       - io/ioutil
+  forbidigo:
+    forbid:
+      - '^fmt\.Errorf(# use errors\.Errorf instead)?$'
   gosec:
     excludes:
       - G204  # Audit use of command execution

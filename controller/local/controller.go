@@ -2,7 +2,6 @@ package local
 
 import (
 	"context"
-	"fmt"
 	"io"
 
 	"github.com/containerd/console"
@@ -11,6 +10,7 @@ import (
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/cli/cli/command"
+	"github.com/pkg/errors"
 )
 
 func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli) control.BuildxController {
@@ -28,10 +28,10 @@ type localController struct {
 
 func (b *localController) Invoke(ctx context.Context, ref string, cfg controllerapi.ContainerConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
 	if ref != b.ref {
-		return fmt.Errorf("unknown ref %q", ref)
+		return errors.Errorf("unknown ref %q", ref)
 	}
 	if b.resultCtx == nil {
-		return fmt.Errorf("no build result is registered")
+		return errors.New("no build result is registered")
 	}
 	ccfg := build.ContainerConfig{
 		ResultCtx:  b.resultCtx,

@@ -5,7 +5,6 @@ import (
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -358,7 +357,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	// Start build
 	ref, err := c.Build(ctx, options.BuildOptions, pr, os.Stdout, os.Stderr, options.progress)
 	if err != nil {
-		return fmt.Errorf("failed to build: %w", err) // TODO: allow invoke even on error
+		return errors.Wrapf(err, "failed to build") // TODO: allow invoke even on error
 	}
 	if err := pw.Close(); err != nil {
 		logrus.Debug("failed to close stdin pipe writer")

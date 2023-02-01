@@ -2,8 +2,6 @@ package remote
 
 import (
 	"context"
-	"errors"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -14,6 +12,7 @@ import (
 	"github.com/docker/buildx/version"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 )
@@ -71,7 +70,7 @@ func (m *Server) List(ctx context.Context, req *pb.ListRequest) (res *pb.ListRes
 func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res *pb.DisconnectResponse, err error) {
 	key := req.Ref
 	if key == "" {
-		return nil, fmt.Errorf("disconnect: empty key")
+		return nil, errors.New("disconnect: empty key")
 	}
 
 	m.sessionMu.Lock()
@@ -108,7 +107,7 @@ func (m *Server) Close() error {
 func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResponse, error) {
 	ref := req.Ref
 	if ref == "" {
-		return nil, fmt.Errorf("build: empty key")
+		return nil, errors.New("build: empty key")
 	}
 
 	// Prepare status channel and session if not exists
@@ -119,7 +118,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	s, ok := m.session[ref]
 	if ok && m.session[ref].statusChan != nil {
 		m.sessionMu.Unlock()
-		return &pb.BuildResponse{}, fmt.Errorf("build or status ongoing or status didn't called")
+		return &pb.BuildResponse{}, errors.New("build or status ongoing or status didn't call")
 	}
 	statusChan := make(chan *client.SolveStatus)
 	s.statusChan = statusChan
@@ -143,7 +142,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 		m.session[ref] = s
 	} else {
 		m.sessionMu.Unlock()
-		return nil, fmt.Errorf("build: unknown key %v", ref)
+		return nil, errors.Errorf("build: unknown key %v", ref)
 	}
 	m.sessionMu.Unlock()
 	defer inR.Close()
@@ -159,7 +158,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 		m.session[ref] = s
 	} else {
 		m.sessionMu.Unlock()
-		return nil, fmt.Errorf("build: unknown key %v", ref)
+		return nil, errors.Errorf("build: unknown key %v", ref)
 	}
 	m.sessionMu.Unlock()
 
@@ -169,7 +168,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer) error {
 	ref := req.Ref
 	if ref == "" {
-		return fmt.Errorf("status: empty key")
+		return errors.New("status: empty key")
 	}
 
 	// Wait and get status channel prepared by Build()
@@ -212,11 +211,11 @@ func (m *Server) Input(stream pb.Controller_InputServer) (err error) {
 	}
 	init := msg.GetInit()
 	if init == nil {
-		return fmt.Errorf("unexpected message: %T; wanted init", msg.GetInit())
+		return errors.Errorf("unexpected message: %T; wanted init", msg.GetInit())
 	}
 	ref := init.Ref
 	if ref == "" {
-		return fmt.Errorf("input: no ref is provided")
+		return errors.New("input: no ref is provided")
 	}
 
 	// Wait and get input stream pipe prepared by Build()
@@ -271,7 +270,7 @@ func (m *Server) Input(stream pb.Controller_InputServer) (err error) {
 			select {
 			case msg = <-msgCh:
 			case <-ctx.Done():
-				return fmt.Errorf("canceled: %w", ctx.Err())
+				return errors.Wrap(ctx.Err(), "canceled")
 			}
 			if msg == nil {
 				return nil
@@ -332,7 +331,7 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 				m.session[ref] = s
 			} else {
 				m.sessionMu.Unlock()
-				return fmt.Errorf("invoke: unknown key %v", ref)
+				return errors.Errorf("invoke: unknown key %v", ref)
 			}
 			m.sessionMu.Unlock()
 
@@ -340,7 +339,7 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 			m.sessionMu.Lock()
 			if _, ok := m.session[ref]; !ok || m.session[ref].result == nil {
 				m.sessionMu.Unlock()
-				return fmt.Errorf("unknown reference: %q", ref)
+				return errors.Errorf("unknown reference: %q", ref)
 			}
 			resultCtx = m.session[ref].result
 			m.sessionMu.Unlock()
@@ -361,10 +360,10 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 			return err
 		}
 		if cfg == nil {
-			return fmt.Errorf("no container config is provided")
+			return errors.New("no container config is provided")
 		}
 		if resultCtx == nil {
-			return fmt.Errorf("no result is provided")
+			return errors.New("no result is provided")
 		}
 		ccfg := build.ContainerConfig{
 			ResultCtx:  resultCtx,

@@ -2,7 +2,6 @@ package remote
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"sync"
 	"time"
@@ -77,7 +76,7 @@ func (c *Client) Disconnect(ctx context.Context, key string) error {
 
 func (c *Client) Invoke(ctx context.Context, ref string, containerConfig pb.ContainerConfig, in io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
 	if ref == "" {
-		return fmt.Errorf("build reference must be specified")
+		return errors.New("build reference must be specified")
 	}
 	stream, err := c.client().Invoke(ctx)
 	if err != nil {
@@ -207,7 +206,7 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 					},
 				},
 			}); err != nil {
-				return fmt.Errorf("failed to init input: %w", err)
+				return errors.Wrap(err, "failed to init input")
 			}
 
 			inReader, inWriter := io.Pipe()
