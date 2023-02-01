@@ -34,9 +34,9 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 	var files []File
 
 	var node *builder.Node
-	for _, n := range nodes {
+	for i, n := range nodes {
 		if n.Err == nil {
-			node = &n
+			node = &nodes[i]
 			continue
 		}
 	}
