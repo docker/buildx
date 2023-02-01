@@ -1,4 +1,4 @@
-package controller
+package remote
 
 import (
 	"context"
@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	"github.com/docker/buildx/commands/controller/pb"
+	"github.com/docker/buildx/controller/pb"
 	"github.com/moby/sys/signal"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"

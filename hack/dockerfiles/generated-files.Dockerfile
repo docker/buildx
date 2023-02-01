@@ -1,9 +1,9 @@
+# syntax=docker/dockerfile-upstream:master
+
 # Forked from https://github.com/moby/buildkit/blob/e1b3b6c4abf7684f13e6391e5f7bc9210752687a/hack/dockerfiles/generated-files.Dockerfile
 # Copyright The BuildKit Authors.
 # Copyright The Buildx Authors.
 # Licensed under the Apache License, Version 2.0
-
-# syntax=docker/dockerfile-upstream:master
 
 ARG GO_VERSION="1.19"
 ARG PROTOC_VERSION="3.11.4"

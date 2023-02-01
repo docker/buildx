@@ -10,7 +10,8 @@ import (
 	"text/tabwriter"
 
 	"github.com/containerd/console"
-	controllerapi "github.com/docker/buildx/commands/controller/pb"
+	"github.com/docker/buildx/controller/control"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
@@ -28,17 +29,8 @@ Available commads are:
   help       shows this message.
 `
 
-type BuildxController interface {
-	Invoke(ctx context.Context, ref string, options controllerapi.ContainerConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error
-	Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (ref string, err error)
-	Kill(ctx context.Context) error
-	Close() error
-	List(ctx context.Context) (res []string, _ error)
-	Disconnect(ctx context.Context, ref string) error
-}
-
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildOptions, invokeConfig controllerapi.ContainerConfig, c BuildxController, progressMode string, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File) error {
+func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildOptions, invokeConfig controllerapi.ContainerConfig, c control.BuildxController, progressMode string, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File) error {
 	defer func() {
 		if err := c.Disconnect(ctx, curRef); err != nil {
 			logrus.Warnf("disconnect error: %v", err)

@@ -1,4 +1,4 @@
-package controller
+package remote
 
 import (
 	"context"
@@ -9,7 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/build"
-	"github.com/docker/buildx/commands/controller/pb"
+	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/version"
 	controlapi "github.com/moby/buildkit/api/services/control"
@@ -20,13 +20,13 @@ import (
 
 type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (res *build.ResultContext, err error)
 
-func New(buildFunc BuildFunc) *Controller {
-	return &Controller{
+func NewServer(buildFunc BuildFunc) *Server {
+	return &Server{
 		buildFunc: buildFunc,
 	}
 }
 
-type Controller struct {
+type Server struct {
 	buildFunc BuildFunc
 	session   map[string]session
 	sessionMu sync.Mutex
@@ -40,7 +40,7 @@ type session struct {
 	curBuildCancel  func()
 }
 
-func (m *Controller) Info(ctx context.Context, req *pb.InfoRequest) (res *pb.InfoResponse, err error) {
+func (m *Server) Info(ctx context.Context, req *pb.InfoRequest) (res *pb.InfoResponse, err error) {
 	return &pb.InfoResponse{
 		BuildxVersion: &pb.BuildxVersion{
 			Package:  version.Package,
@@ -50,7 +50,7 @@ func (m *Controller) Info(ctx context.Context, req *pb.InfoRequest) (res *pb.Inf
 	}, nil
 }
 
-func (m *Controller) List(ctx context.Context, req *pb.ListRequest) (res *pb.ListResponse, err error) {
+func (m *Server) List(ctx context.Context, req *pb.ListRequest) (res *pb.ListResponse, err error) {
 	keys := make(map[string]struct{})
 
 	m.sessionMu.Lock()
@@ -68,7 +68,7 @@ func (m *Controller) List(ctx context.Context, req *pb.ListRequest) (res *pb.Lis
 	}, nil
 }
 
-func (m *Controller) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res *pb.DisconnectResponse, err error) {
+func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res *pb.DisconnectResponse, err error) {
 	key := req.Ref
 	if key == "" {
 		return nil, fmt.Errorf("disconnect: empty key")
@@ -89,7 +89,7 @@ func (m *Controller) Disconnect(ctx context.Context, req *pb.DisconnectRequest) 
 	return &pb.DisconnectResponse{}, nil
 }
 
-func (m *Controller) Close() error {
+func (m *Server) Close() error {
 	m.sessionMu.Lock()
 	for k := range m.session {
 		if s, ok := m.session[k]; ok {
@@ -105,7 +105,7 @@ func (m *Controller) Close() error {
 	return nil
 }
 
-func (m *Controller) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResponse, error) {
+func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResponse, error) {
 	ref := req.Ref
 	if ref == "" {
 		return nil, fmt.Errorf("build: empty key")
@@ -166,7 +166,7 @@ func (m *Controller) Build(ctx context.Context, req *pb.BuildRequest) (*pb.Build
 	return &pb.BuildResponse{}, err
 }
 
-func (m *Controller) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer) error {
+func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer) error {
 	ref := req.Ref
 	if ref == "" {
 		return fmt.Errorf("status: empty key")
@@ -201,7 +201,7 @@ func (m *Controller) Status(req *pb.StatusRequest, stream pb.Controller_StatusSe
 	return nil
 }
 
-func (m *Controller) Input(stream pb.Controller_InputServer) (err error) {
+func (m *Server) Input(stream pb.Controller_InputServer) (err error) {
 	// Get the target ref from init message
 	msg, err := stream.Recv()
 	if err != nil {
@@ -293,7 +293,7 @@ func (m *Controller) Input(stream pb.Controller_InputServer) (err error) {
 	return eg.Wait()
 }
 
-func (m *Controller) Invoke(srv pb.Controller_InvokeServer) error {
+func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 	ctx, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 	containerIn, containerOut := ioset.Pipe()

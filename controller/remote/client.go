@@ -1,4 +1,4 @@
-package controller
+package remote
 
 import (
 	"context"
@@ -10,7 +10,7 @@ import (
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/pkg/dialer"
-	"github.com/docker/buildx/commands/controller/pb"
+	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
