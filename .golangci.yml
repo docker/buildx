@@ -22,6 +22,7 @@ linters:
     - staticcheck
     - typecheck
     - nolintlint
+    - gosec
   disable-all: true
 
 linters-settings:
@@ -32,6 +33,12 @@ linters-settings:
       # The io/ioutil package has been deprecated.
       # https://go.dev/doc/go1.16#ioutil
       - io/ioutil
+  gosec:
+    excludes:
+      - G204  # Audit use of command execution
+      - G402  # TLS MinVersion too low
+    config:
+      G306: "0644"
 
 issues:
   exclude-rules:
