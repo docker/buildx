@@ -78,6 +78,7 @@ func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, e
 			// compose does not support nil values for labels
 			labels := map[string]*string{}
 			for k, v := range s.Build.Labels {
+				v := v
 				labels[k] = &v
 			}
 

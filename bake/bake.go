@@ -3,7 +3,6 @@ package bake
 import (
 	"context"
 	"encoding/csv"
-	"fmt"
 	"io"
 	"os"
 	"path"
@@ -228,7 +227,7 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 				}
 				hclFiles = append(hclFiles, hf)
 			} else if composeErr != nil {
-				return nil, fmt.Errorf("failed to parse %s: parsing yaml: %v, parsing hcl: %w", f.Name, composeErr, err)
+				return nil, errors.Wrapf(err, "failed to parse %s: parsing yaml: %v, parsing hcl", f.Name, composeErr)
 			} else {
 				return nil, err
 			}

@@ -37,7 +37,7 @@ func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 	if randSource == nil {
 		randSource = rand.NewSource(time.Now().Unix())
 	}
-	rnd := rand.New(randSource)
+	rnd := rand.New(randSource) //nolint:gosec // no strong seeding required
 	n := rnd.Int() % len(pods)
 	logrus.Debugf("RandomPodChooser.ChoosePod(): len(pods)=%d, n=%d", len(pods), n)
 	return pods[n], nil
