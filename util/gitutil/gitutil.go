@@ -138,3 +138,12 @@ func (c *Git) clean(out string, err error) (string, error) {
 	}
 	return out, err
 }
+
+func IsUnknownRevision(err error) bool {
+	if err == nil {
+		return false
+	}
+	// https://github.com/git/git/blob/a6a323b31e2bcbac2518bddec71ea7ad558870eb/setup.c#L204
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "unknown revision or path not in the working tree") || strings.Contains(errMsg, "bad revision")
+}

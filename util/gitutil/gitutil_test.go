@@ -46,6 +46,18 @@ func TestGitShortCommit(t *testing.T) {
 	require.Equal(t, 7, len(out))
 }
 
+func TestGitFullCommitErr(t *testing.T) {
+	Mktmp(t)
+	c, err := New()
+	require.NoError(t, err)
+
+	GitInit(c, t)
+
+	_, err = c.FullCommit()
+	require.Error(t, err)
+	require.True(t, IsUnknownRevision(err))
+}
+
 func TestGitTagsPointsAt(t *testing.T) {
 	Mktmp(t)
 	c, err := New()
