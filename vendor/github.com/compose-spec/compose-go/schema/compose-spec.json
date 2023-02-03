@@ -102,6 +102,7 @@
                 "shm_size": {"type": ["integer", "string"]},
                 "extra_hosts": {"$ref": "#/definitions/list_or_dict"},
                 "isolation": {"type": "string"},
+                "privileged": {"type": "boolean"},
                 "secrets": {"$ref": "#/definitions/service_config_or_secret"},
                 "tags": {"type": "array", "items": {"type": "string"}},
                 "platforms": {"type": "array", "items": {"type": "string"}}
@@ -140,6 +141,7 @@
         },
         "cap_add": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "cap_drop": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "cgroup": {"type": "string", "enum": ["host", "private"]},
         "cgroup_parent": {"type": "string"},
         "command": {
           "oneOf": [
@@ -365,6 +367,7 @@
           }
         },
         "user": {"type": "string"},
+        "uts": {"type": "string"},
         "userns_mode": {"type": "string"},
         "volumes": {
           "type": "array",
@@ -406,7 +409,8 @@
                           {"type": "integer", "minimum": 0},
                           {"type": "string"}
                         ]
-                      }
+                      },
+                      "mode": {"type": "number"}
                     },
                     "additionalProperties": false,
                     "patternProperties": {"^x-": {}}
