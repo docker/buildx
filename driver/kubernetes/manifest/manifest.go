@@ -14,10 +14,11 @@ import (
 )
 
 type DeploymentOpt struct {
-	Namespace string
-	Name      string
-	Image     string
-	Replicas  int
+	Namespace          string
+	Name               string
+	Image              string
+	Replicas           int
+	ServiceAccountName string
 
 	// Qemu
 	Qemu struct {
@@ -80,6 +81,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 					Annotations: annotations,
 				},
 				Spec: corev1.PodSpec{
+					ServiceAccountName: opt.ServiceAccountName,
 					Containers: []corev1.Container{
 						{
 							Name:  containerName,
