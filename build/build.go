@@ -360,6 +360,15 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
+func isBake() bool {
+	for _, i := range os.Args {
+		if i == "bake" {
+			return true
+		}
+	}
+	return false
+}
+
 func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
@@ -499,14 +508,21 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			}
 		}
 	} else {
-		for _, e := range opt.Exports {
-			if e.Type == "image" && e.Attrs["name"] == "" && e.Attrs["push"] != "" {
-				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-					return nil, nil, errors.Errorf("tag is needed when pushing to registry")
+			skipped := []string{}
+			for _, e := range opt.Exports {
+				if e.Type == "image" && e.Attrs["name"] == "" && e.Attrs["push"] != "" {
+					if ! isBake() {
+						if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+							return nil, nil, errors.Errorf("tag is needed when pushing to registry")
+						}
+					}
+					skipped = append(skipped, opt.Inputs.ContextPath)
 				}
 			}
+			if len(skipped) > 0 {
+				logrus.Warnf("Build will remain in cache for %+v. Image field not found", skipped)
+			}
 		}
-	}
 
 	// cacheonly is a fake exporter to opt out of default behaviors
 	exports := make([]client.ExportEntry, 0, len(opt.Exports))
@@ -973,7 +989,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
 									pushNames = e.Attrs["name"]
 									if pushNames == "" {
-										return errors.Errorf("tag is needed when pushing to registry")
+										if isBake() {
+											return errors.Errorf("tag is needed when pushing to registry")
+										}
 									}
 									names, err := toRepoOnly(e.Attrs["name"])
 									if err != nil {
@@ -1093,11 +1111,14 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						for _, e := range so.Exports {
 							if e.Type == "moby" && e.Attrs["push"] != "" {
 								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+									pw := progress.ResetTime(pw)
 									pushNames = e.Attrs["name"]
 									if pushNames == "" {
-										return errors.Errorf("tag is needed when pushing to registry")
+										if isBake() {
+											continue
+										}
+										return errors.Errorf("tag is needed when pushing to registry %+v", opt)
 									}
-									pw := progress.ResetTime(pw)
 									pushList := strings.Split(pushNames, ",")
 									for _, name := range pushList {
 										if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
