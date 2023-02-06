@@ -38,6 +38,14 @@ func checkConsistency(project *types.Project) error {
 			}
 		}
 
+		if s.HealthCheck != nil && len(s.HealthCheck.Test) > 0 {
+			switch s.HealthCheck.Test[0] {
+			case "CMD", "CMD-SHELL", "NONE":
+			default:
+				return errors.New(`healthcheck.test must start either by "CMD", "CMD-SHELL" or "NONE"`)
+			}
+		}
+
 		for dependedService := range s.DependsOn {
 			if _, err := project.GetService(dependedService); err != nil {
 				return errors.Wrap(errdefs.ErrInvalid, fmt.Sprintf("service %q depends on undefined service %s", s.Name, dependedService))
@@ -68,6 +76,12 @@ func checkConsistency(project *types.Project) error {
 		for _, config := range s.Configs {
 			if _, ok := project.Configs[config.Source]; !ok {
 				return errors.Wrap(errdefs.ErrInvalid, fmt.Sprintf("service %q refers to undefined config %s", s.Name, config.Source))
+			}
+		}
+
+		for _, secret := range s.Secrets {
+			if _, ok := project.Secrets[secret.Source]; !ok {
+				return errors.Wrap(errdefs.ErrInvalid, fmt.Sprintf("service %q refers to undefined secret %s", s.Name, secret.Source))
 			}
 		}
 	}

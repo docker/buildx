@@ -160,8 +160,8 @@ services:
     #   somehost: "162.242.195.82"
     #   otherhost: "50.31.209.229"
     extra_hosts:
-      - "somehost:162.242.195.82"
       - "otherhost:50.31.209.229"
+      - "somehost:162.242.195.82"
 
     hostname: foo
 
@@ -181,6 +181,8 @@ services:
     # image: busybox@sha256:38a203e1986cf79639cfb9b2e1d6e773de84002feea2d4eb006b52004ee8502d
 
     ipc: host
+
+    uts: host
 
     # Mapping or list
     # Mapping values can be strings, numbers or null
@@ -428,6 +430,8 @@ secrets:
     environment: BAR
     x-bar: baz
     x-foo: bar
+  secret5:
+    file: /abs/secret_data
 x-bar: baz
 x-foo: bar
 x-nested:

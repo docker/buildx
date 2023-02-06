@@ -137,7 +137,7 @@ github.com/cenkalti/backoff/v4
 github.com/cespare/xxhash/v2
 # github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e
 ## explicit
-# github.com/compose-spec/compose-go v1.6.0
+# github.com/compose-spec/compose-go v1.9.0
 ## explicit; go 1.18
 github.com/compose-spec/compose-go/consts
 github.com/compose-spec/compose-go/dotenv
@@ -191,7 +191,7 @@ github.com/containerd/typeurl
 # github.com/davecgh/go-spew v1.1.1
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/distribution/distribution/v3 v3.0.0-20220725133111-4bf3547399eb
+# github.com/distribution/distribution/v3 v3.0.0-20221103125252-ebfa2a0ac0a9
 ## explicit; go 1.18
 github.com/distribution/distribution/v3/digestset
 github.com/distribution/distribution/v3/reference

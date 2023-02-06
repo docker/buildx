@@ -21,24 +21,34 @@ var (
 	exportRegex    = regexp.MustCompile(`^export\s+`)
 )
 
-func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
+type parser struct {
+	line int
+}
+
+func newParser() *parser {
+	return &parser{
+		line: 1,
+	}
+}
+
+func (p *parser) parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 	cutset := src
 	if lookupFn == nil {
 		lookupFn = noLookupFn
 	}
 	for {
-		cutset = getStatementStart(cutset)
+		cutset = p.getStatementStart(cutset)
 		if cutset == nil {
 			// reached end of file
 			break
 		}
 
-		key, left, inherited, err := locateKeyName(cutset)
+		key, left, inherited, err := p.locateKeyName(cutset)
 		if err != nil {
 			return err
 		}
 		if strings.Contains(key, " ") {
-			return errors.New("key cannot contain a space")
+			return fmt.Errorf("line %d: key cannot contain a space", p.line)
 		}
 
 		if inherited {
@@ -50,7 +60,7 @@ func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 			continue
 		}
 
-		value, left, err := extractVarValue(left, out, lookupFn)
+		value, left, err := p.extractVarValue(left, out, lookupFn)
 		if err != nil {
 			return err
 		}
@@ -65,8 +75,8 @@ func parseBytes(src []byte, out map[string]string, lookupFn LookupFn) error {
 // getStatementPosition returns position of statement begin.
 //
 // It skips any comment line or non-whitespace character.
-func getStatementStart(src []byte) []byte {
-	pos := indexOfNonSpaceChar(src)
+func (p *parser) getStatementStart(src []byte) []byte {
+	pos := p.indexOfNonSpaceChar(src)
 	if pos == -1 {
 		return nil
 	}
@@ -81,12 +91,11 @@ func getStatementStart(src []byte) []byte {
 	if pos == -1 {
 		return nil
 	}
-
-	return getStatementStart(src[pos:])
+	return p.getStatementStart(src[pos:])
 }
 
 // locateKeyName locates and parses key name and returns rest of slice
-func locateKeyName(src []byte) (string, []byte, bool, error) {
+func (p *parser) locateKeyName(src []byte) (string, []byte, bool, error) {
 	var key string
 	var inherited bool
 	// trim "export" and space at beginning
@@ -108,16 +117,16 @@ loop:
 			offset = i + 1
 			inherited = char == '\n'
 			break loop
-		case '_', '.':
+		case '_', '.', '-', '[', ']':
 		default:
-			// variable name should match [A-Za-z0-9_.]
+			// variable name should match [A-Za-z0-9_.-]
 			if unicode.IsLetter(rchar) || unicode.IsNumber(rchar) {
 				continue
 			}
 
 			return "", nil, inherited, fmt.Errorf(
-				`unexpected character %q in variable name near %q`,
-				string(char), string(src))
+				`line %d: unexpected character %q in variable name`,
+				p.line, string(char))
 		}
 	}
 
@@ -132,11 +141,12 @@ loop:
 }
 
 // extractVarValue extracts variable value and returns rest of slice
-func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (string, []byte, error) {
+func (p *parser) extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (string, []byte, error) {
 	quote, isQuoted := hasQuotePrefix(src)
 	if !isQuoted {
 		// unquoted value - read until new line
 		value, rest, _ := bytes.Cut(src, []byte("\n"))
+		p.line++
 
 		// Remove inline comments on unquoted lines
 		value, _, _ = bytes.Cut(value, []byte(" #"))
@@ -147,6 +157,9 @@ func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (s
 
 	// lookup quoted string terminator
 	for i := 1; i < len(src); i++ {
+		if src[i] == '\n' {
+			p.line++
+		}
 		if char := src[i]; char != quote {
 			continue
 		}
@@ -177,7 +190,7 @@ func extractVarValue(src []byte, envMap map[string]string, lookupFn LookupFn) (s
 		valEndIndex = len(src)
 	}
 
-	return "", nil, fmt.Errorf("unterminated quoted value %s", src[:valEndIndex])
+	return "", nil, fmt.Errorf("line %d: unterminated quoted value %s", p.line, src[:valEndIndex])
 }
 
 func expandEscapes(str string) string {
@@ -212,8 +225,11 @@ func expandEscapes(str string) string {
 	return out
 }
 
-func indexOfNonSpaceChar(src []byte) int {
+func (p *parser) indexOfNonSpaceChar(src []byte) int {
 	return bytes.IndexFunc(src, func(r rune) bool {
+		if r == '\n' {
+			p.line++
+		}
 		return !unicode.IsSpace(r)
 	})
 }

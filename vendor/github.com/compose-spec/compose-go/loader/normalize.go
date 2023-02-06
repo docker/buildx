@@ -85,6 +85,9 @@ func normalize(project *types.Project, resolvePaths bool) error {
 			}
 			s.Build.Args = s.Build.Args.Resolve(fn)
 		}
+		for j, f := range s.EnvFile {
+			s.EnvFile[j] = absPath(project.WorkingDir, f)
+		}
 		s.Environment = s.Environment.Resolve(fn)
 
 		err := relocateLogDriver(&s)
@@ -108,6 +111,14 @@ func normalize(project *types.Project, resolvePaths bool) error {
 		}
 
 		project.Services[i] = s
+	}
+
+	for name, config := range project.Volumes {
+		if config.Driver == "local" && config.DriverOpts["o"] == "bind" {
+			// This is actually a bind mount
+			config.DriverOpts["device"] = absPath(project.WorkingDir, config.DriverOpts["device"])
+			project.Volumes[name] = config
+		}
 	}
 
 	setNameFromKey(project)

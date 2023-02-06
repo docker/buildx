@@ -4,7 +4,7 @@ go 1.17
 
 require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.5
-	github.com/compose-spec/compose-go v1.6.0
+	github.com/compose-spec/compose-go v1.9.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.16-0.20230124210447-1709cfe273d9
 	github.com/docker/cli v23.0.0-rc.1+incompatible
@@ -80,7 +80,7 @@ require (
 	github.com/containerd/ttrpc v1.1.0 // indirect
 	github.com/containerd/typeurl v1.0.2 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/distribution/distribution/v3 v3.0.0-20220725133111-4bf3547399eb // indirect
+	github.com/distribution/distribution/v3 v3.0.0-20221103125252-ebfa2a0ac0a9 // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
