@@ -93,6 +93,7 @@ func GetNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.No
 						Endpoint: name,
 					},
 				},
+				DockerContext: true,
 			}
 			if ng.LastActivity, err = txn.GetLastActivity(ng); err != nil {
 				return nil, err
