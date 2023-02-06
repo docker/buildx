@@ -91,6 +91,9 @@ BuildKit currently supports:
   Use `--attest=type=provenance` to generate provenance for an image at
   build-time. Alternatively, you can use the [`--provenance` shorthand](#provenance).
 
+  By default, a minimal provenance attestation will be created for the build
+  result, which will only be attached for images pushed to registries.
+
   For more information, see [here](https://docs.docker.com/build/attestations/slsa-provenance/).
 
 ### <a name="allow"></a> Allow extra privileged entitlement (--allow)
@@ -480,8 +483,20 @@ $ docker buildx build --load --progress=plain .
 
 ### <a name="provenance"></a> Create provenance attestations (--provenance)
 
-Shorthand for [`--attest=type=provenance`](#attest). Enables provenance
-attestations for the build result.
+Shorthand for [`--attest=type=provenance`](#attest), used to configure
+provenance attestations for the build result. For example,
+`--provenance=mode=max` can be used as an abbreviation for
+`--attest=type=provenance,mode=max`.
+
+Additionally, `--provenance` can be used with boolean values to broadly enable
+or disable provenance attestations. For example, `--provenance=false` can be
+used to disable all provenance attestations, while `--provenance=true` can be
+used to enable all provenance attestations.
+
+By default, a minimal provenance attestation will be created for the build
+result, which will only be attached for images pushed to registries.
+
+For more information, see [here](https://docs.docker.com/build/attestations/slsa-provenance/).
 
 ### <a name="push"></a> Push the build result to a registry (--push)
 
@@ -490,8 +505,16 @@ build result to registry.
 
 ### <a name="sbom"></a> Create SBOM attestations (--sbom)
 
-Shorthand for [`--attest=type=sbom`](#attest). Enables SBOM attestations for
-the build result.
+Shorthand for [`--attest=type=sbom`](#attest), used to configure SBOM
+attestations for the build result. For example,
+`--sbom=generator=<user>/<generator-image>` can be used as an abbreviation for
+`--attest=type=sbom,generator=<user>/<generator-image>`.
+
+Additionally, `--sbom` can be used with boolean values to broadly enable or
+disable SBOM attestations. For example, `--sbom=false` can be used to disable
+all SBOM attestations.
+
+For more information, see [here](https://docs.docker.com/build/attestations/sbom/).
 
 ### <a name="secret"></a> Secret to expose to the build (--secret)
 
