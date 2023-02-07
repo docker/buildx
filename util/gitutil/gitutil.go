@@ -3,6 +3,7 @@ package gitutil
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -115,6 +116,9 @@ func (c *Git) run(args ...string) (string, error) {
 	if c.wd != "" {
 		cmd.Dir = c.wd
 	}
+
+	// Override the locale to ensure consistent output
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
 
 	stdout := bytes.Buffer{}
 	stderr := bytes.Buffer{}
