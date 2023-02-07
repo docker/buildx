@@ -14,15 +14,7 @@ func funcCalls(exp hcl.Expression) ([]string, hcl.Diagnostics) {
 	if !ok {
 		fns, err := jsonFuncCallsRecursive(exp)
 		if err != nil {
-			return nil, hcl.Diagnostics{
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  "Invalid expression",
-					Detail:   err.Error(),
-					Subject:  exp.Range().Ptr(),
-					Context:  exp.Range().Ptr(),
-				},
-			}
+			return nil, wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 		}
 		return fns, nil
 	}
