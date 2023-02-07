@@ -670,6 +670,24 @@ func TestJSONFunctions(t *testing.T) {
 	require.Equal(t, ptrstr("pre-<FOO-abc>"), c.Targets[0].Args["v1"])
 }
 
+func TestJSONInvalidFunctions(t *testing.T) {
+	dt := []byte(`{
+	"target": {
+		"app": {
+			"args": {
+				"v1": "myfunc(\"foo\")"
+			}
+		}
+	}}`)
+
+	c, err := ParseFile(dt, "docker-bake.json")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, ptrstr(`myfunc("foo")`), c.Targets[0].Args["v1"])
+}
+
 func TestHCLFunctionInAttr(t *testing.T) {
 	dt := []byte(`
 	function "brace" {

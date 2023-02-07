@@ -62,7 +62,9 @@ type parser struct {
 	doneB     map[*hcl.Block]map[string]struct{}
 }
 
-func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}) hcl.Diagnostics {
+var errUndefined = errors.New("undefined")
+
+func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}, allowMissing bool) hcl.Diagnostics {
 	fns, hcldiags := funcCalls(exp)
 	if hcldiags.HasErrors() {
 		return hcldiags
@@ -70,6 +72,9 @@ func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}) hcl.D
 
 	for _, fn := range fns {
 		if err := p.resolveFunction(fn); err != nil {
+			if allowMissing && errors.Is(err, errUndefined) {
+				continue
+			}
 			return hcl.Diagnostics{
 				&hcl.Diagnostic{
 					Severity: hcl.DiagError,
@@ -128,6 +133,9 @@ func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}) hcl.D
 				}
 			}
 			if err := p.resolveBlock(blocks[0], target); err != nil {
+				if allowMissing && errors.Is(err, errUndefined) {
+					continue
+				}
 				return hcl.Diagnostics{
 					&hcl.Diagnostic{
 						Severity: hcl.DiagError,
@@ -140,6 +148,9 @@ func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}) hcl.D
 			}
 		} else {
 			if err := p.resolveValue(v.RootName()); err != nil {
+				if allowMissing && errors.Is(err, errUndefined) {
+					continue
+				}
 				return hcl.Diagnostics{
 					&hcl.Diagnostic{
 						Severity: hcl.DiagError,
@@ -167,7 +178,7 @@ func (p *parser) resolveFunction(name string) error {
 		if _, ok := p.ectx.Functions[name]; ok {
 			return nil
 		}
-		return errors.Errorf("undefined function %s", name)
+		return errors.Wrapf(errUndefined, "function %q does not exit", name)
 	}
 	if _, ok := p.progressF[name]; ok {
 		return errors.Errorf("function cycle not allowed for %s", name)
@@ -217,7 +228,7 @@ func (p *parser) resolveFunction(name string) error {
 		return diags
 	}
 
-	if diags := p.loadDeps(f.Result.Expr, params); diags.HasErrors() {
+	if diags := p.loadDeps(f.Result.Expr, params, false); diags.HasErrors() {
 		return diags
 	}
 
@@ -255,7 +266,7 @@ func (p *parser) resolveValue(name string) (err error) {
 	if _, builtin := p.opt.Vars[name]; !ok && !builtin {
 		vr, ok := p.vars[name]
 		if !ok {
-			return errors.Errorf("undefined variable %q", name)
+			return errors.Wrapf(errUndefined, "variable %q does not exit", name)
 		}
 		def = vr.Default
 	}
@@ -270,7 +281,7 @@ func (p *parser) resolveValue(name string) (err error) {
 		return
 	}
 
-	if diags := p.loadDeps(def.Expr, nil); diags.HasErrors() {
+	if diags := p.loadDeps(def.Expr, nil, true); diags.HasErrors() {
 		return diags
 	}
 	vv, diags := def.Expr.Value(p.ectx)
@@ -395,7 +406,7 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		return diag
 	}
 	for _, a := range content.Attributes {
-		diag := p.loadDeps(a.Expr, nil)
+		diag := p.loadDeps(a.Expr, nil, true)
 		if diag.HasErrors() {
 			return diag
 		}
