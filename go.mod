@@ -7,7 +7,7 @@ require (
 	github.com/compose-spec/compose-go v1.9.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.6.16
-	github.com/docker/cli v23.0.0-rc.1+incompatible
+	github.com/docker/cli v23.0.0+incompatible
 	github.com/docker/cli-docs-tool v0.5.1
 	github.com/docker/distribution v2.8.1+incompatible
 	github.com/docker/docker v23.0.0+incompatible
