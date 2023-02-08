@@ -465,8 +465,19 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			so.FrontendAttrs[k] = v
 		}
 	}
+
 	if _, ok := opt.Attests["attest:provenance"]; !ok && supportsAttestations {
-		so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
+		const noAttestEnv = "BUILDX_NO_DEFAULT_ATTESTATIONS"
+		var noProv bool
+		if v, ok := os.LookupEnv(noAttestEnv); ok {
+			noProv, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, nil, errors.Wrap(err, "invalid "+noAttestEnv)
+			}
+		}
+		if !noProv {
+			so.FrontendAttrs["attest:provenance"] = "mode=min,inline-only=true"
+		}
 	}
 
 	switch len(opt.Exports) {
