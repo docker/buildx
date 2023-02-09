@@ -84,11 +84,12 @@ type Options struct {
 	NoCacheFilter []string
 	Platforms     []specs.Platform
 	Pull          bool
-	Session       []session.Attachable
 	ShmSize       opts.MemBytes
 	Tags          []string
 	Target        string
 	Ulimits       *opts.UlimitOpt
+
+	Session []session.Attachable
 
 	// Linked marks this target as exclusively linked (not requested by the user).
 	Linked    bool

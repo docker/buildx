@@ -25,30 +25,52 @@ message BuildOptions {
   string ContextPath = 1;
   string DockerfileName = 2;
   string PrintFunc = 3;
+  map<string, string> NamedContexts = 4;
 
-  repeated string Allow = 4;
-  repeated string Attests = 5; // TODO
-  repeated string BuildArgs = 6;
-  repeated string CacheFrom = 7;
-  repeated string CacheTo = 8;
-  string CgroupParent = 9;
-  repeated string Contexts = 10;
-  repeated string ExtraHosts = 11;
-  string ImageIDFile = 12;
-  repeated string Labels = 13;
-  string NetworkMode = 14;
-  repeated string NoCacheFilter = 15;
-  repeated string Outputs = 16;
+  repeated string Allow = 5;
+  repeated string Attests = 6; // TODO
+  map<string, string> BuildArgs = 7;
+  repeated CacheOptionsEntry CacheFrom = 8;
+  repeated CacheOptionsEntry CacheTo = 9;
+  string CgroupParent = 10;
+  repeated ExportEntry Exports = 11;
+  repeated string ExtraHosts = 12;
+  string ImageIDFile = 13;
+  map<string, string> Labels = 14;
+  string NetworkMode = 15;
+  repeated string NoCacheFilter = 16;
   repeated string Platforms = 17;
   bool Quiet = 18;
-  repeated string Secrets = 19;
+  repeated Secret Secrets = 19;
   int64 ShmSize = 20;
-  repeated string SSH = 21;
+  repeated SSH SSH = 21;
   repeated string Tags = 22;
   string Target = 23;
   UlimitOpt Ulimits = 24;
-  // string Invoke: provided via Invoke API
+
   CommonOptions Opts = 25;
+}
+
+message ExportEntry {
+  string Type = 1;
+  map<string, string> Attrs = 2;
+  string Destination = 3;
+}
+
+message CacheOptionsEntry {
+  string Type = 1;
+  map<string, string> Attrs = 2;
+}
+
+message SSH {
+  string ID = 1;
+  repeated string Paths = 2;
+}
+
+message Secret {
+  string ID = 1;
+  string FilePath = 2;
+  string Env = 3;
 }
 
 message UlimitOpt {
