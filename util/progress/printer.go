@@ -70,7 +70,7 @@ func (p *Printer) ClearLogSource(v interface{}) {
 	}
 }
 
-func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string) (*Printer, error) {
+func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string, solveStatusOpt ...progressui.DisplaySolveStatusOpt) (*Printer, error) {
 	statusCh := make(chan *client.SolveStatus)
 	doneCh := make(chan struct{})
 
@@ -101,7 +101,7 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string)
 	go func() {
 		resumeLogs := logutil.Pause(logrus.StandardLogger())
 		// not using shared context to not disrupt display but let is finish reporting errors
-		pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, "", c, w, statusCh)
+		pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, statusCh, solveStatusOpt...)
 		resumeLogs()
 		close(doneCh)
 	}()

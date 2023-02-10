@@ -33,6 +33,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/grpcerrors"
+	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -200,7 +201,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, err
 	}
 
-	imageID, res, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
+	imageID, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return nil, err
@@ -212,11 +213,14 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	return res, nil
 }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (imageID string, res *build.ResultContext, err error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (imageID string, res *build.ResultContext, err error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode)
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
+		fmt.Sprintf("building with %q instance using %s driver", ng.Name, ng.Driver),
+		fmt.Sprintf("%s:%s", ng.Driver, ng.Name),
+	))
 	if err != nil {
 		return "", nil, err
 	}
