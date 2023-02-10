@@ -35,6 +35,12 @@ const (
 	serveCommandName = "_INTERNAL_SERVE"
 )
 
+var (
+	defaultLogFilename    = fmt.Sprintf("buildx.%s.log", version.Revision)
+	defaultSocketFilename = fmt.Sprintf("buildx.%s.sock", version.Revision)
+	defaultPIDFilename    = fmt.Sprintf("buildx.%s.pid", version.Revision)
+)
+
 type serverConfig struct {
 	// Specify buildx server root
 	Root string `toml:"root"`
@@ -55,7 +61,7 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 
 	// connect to buildx server if it is already running
 	ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
-	c, err := newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, "buildx.sock"))
+	c, err := newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
 	cancel()
 	if err != nil {
 		if !errors.Is(err, context.DeadlineExceeded) {
@@ -66,28 +72,28 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 	}
 
 	// start buildx server via subcommand
-		logrus.Info("no buildx server found; launching...")
-		launchFlags := []string{}
-		if opts.ServerConfig != "" {
-			launchFlags = append(launchFlags, "--config", opts.ServerConfig)
-		}
-		logFile, err := getLogFilePath(dockerCli, opts.ServerConfig)
-		if err != nil {
-			return nil, err
-		}
-		wait, err := launch(ctx, logFile, append([]string{serveCommandName}, launchFlags...)...)
-		if err != nil {
-			return nil, err
-		}
-		go wait()
+	logrus.Info("no buildx server found; launching...")
+	launchFlags := []string{}
+	if opts.ServerConfig != "" {
+		launchFlags = append(launchFlags, "--config", opts.ServerConfig)
+	}
+	logFile, err := getLogFilePath(dockerCli, opts.ServerConfig)
+	if err != nil {
+		return nil, err
+	}
+	wait, err := launch(ctx, logFile, append([]string{serveCommandName}, launchFlags...)...)
+	if err != nil {
+		return nil, err
+	}
+	go wait()
 
 	// wait for buildx server to be ready
 	ctx2, cancel = context.WithTimeout(ctx, 10*time.Second)
-	c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, "buildx.sock"))
+	c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
 	cancel()
-		if err != nil {
-			return nil, errors.Wrap(err, "cannot connect to the buildx server")
-		}
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot connect to the buildx server")
+	}
 	return &buildxController{c, serverRoot}, nil
 }
 
@@ -124,7 +130,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pidF := filepath.Join(root, "pid")
+			pidF := filepath.Join(root, defaultPIDFilename)
 			if err := os.WriteFile(pidF, []byte(fmt.Sprintf("%d", os.Getpid())), 0600); err != nil {
 				return err
 			}
@@ -141,7 +147,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			defer b.Close()
 
 			// serve server
-			addr := filepath.Join(root, "buildx.sock")
+			addr := filepath.Join(root, defaultSocketFilename)
 			if err := os.Remove(addr); err != nil && !os.IsNotExist(err) { // avoid EADDRINUSE
 				return err
 			}
@@ -199,7 +205,7 @@ func getLogFilePath(dockerCli command.Cli, configPath string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		return filepath.Join(root, "log"), nil
+		return filepath.Join(root, defaultLogFilename), nil
 	}
 	return config.LogFile, nil
 }
@@ -267,7 +273,7 @@ type buildxController struct {
 }
 
 func (c *buildxController) Kill(ctx context.Context) error {
-	pidB, err := os.ReadFile(filepath.Join(c.serverRoot, "pid"))
+	pidB, err := os.ReadFile(filepath.Join(c.serverRoot, defaultPIDFilename))
 	if err != nil {
 		return err
 	}
