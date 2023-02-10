@@ -154,7 +154,8 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 
 			var s os.Signal
 			sigCh := make(chan os.Signal, 1)
-			signal.Notify(sigCh, os.Interrupt)
+			signal.Notify(sigCh, syscall.SIGINT)
+			signal.Notify(sigCh, syscall.SIGTERM)
 			select {
 			case err := <-errCh:
 				logrus.Errorf("got error %s, exiting", err)
