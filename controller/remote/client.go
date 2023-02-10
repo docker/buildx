@@ -20,20 +20,21 @@ import (
 	"google.golang.org/grpc/credentials/insecure"
 )
 
-func NewClient(addr string) (*Client, error) {
+func NewClient(ctx context.Context, addr string) (*Client, error) {
 	backoffConfig := backoff.DefaultConfig
 	backoffConfig.MaxDelay = 3 * time.Second
 	connParams := grpc.ConnectParams{
 		Backoff: backoffConfig,
 	}
 	gopts := []grpc.DialOption{
+		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithConnectParams(connParams),
 		grpc.WithContextDialer(dialer.ContextDialer),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(defaults.DefaultMaxRecvMsgSize)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(defaults.DefaultMaxSendMsgSize)),
 	}
-	conn, err := grpc.Dial(dialer.DialAddress(addr), gopts...)
+	conn, err := grpc.DialContext(ctx, dialer.DialAddress(addr), gopts...)
 	if err != nil {
 		return nil, err
 	}
