@@ -151,18 +151,21 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 					errCh <- errors.Wrapf(err, "error on serving via socket %q", addr)
 				}
 			}()
+
 			var s os.Signal
 			sigCh := make(chan os.Signal, 1)
 			signal.Notify(sigCh, os.Interrupt)
 			select {
-			case s = <-sigCh:
-				logrus.Debugf("got signal %v", s)
 			case err := <-errCh:
+				logrus.Errorf("got error %s, exiting", err)
 				return err
+			case s = <-sigCh:
+				logrus.Infof("got signal %s, exiting", s)
+				return nil
 			case <-doneCh:
+				logrus.Infof("rpc server done, exiting")
+				return nil
 			}
-			return nil
-
 		},
 	}
 
