@@ -3,6 +3,7 @@ module github.com/docker/buildx
 go 1.19
 
 require (
+	github.com/Masterminds/semver/v3 v3.2.0
 	github.com/aws/aws-sdk-go-v2/config v1.15.5
 	github.com/compose-spec/compose-go v1.9.0
 	github.com/containerd/console v1.0.3
