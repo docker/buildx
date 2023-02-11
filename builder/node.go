@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/platformutil"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/grpcerrors"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -23,6 +24,8 @@ type Node struct {
 	Driver      driver.Driver
 	DriverInfo  *driver.Info
 	Platforms   []ocispecs.Platform
+	GCPolicy    []client.PruneInfo
+	Labels      map[string]string
 	ImageOpt    imagetools.Opt
 	ProxyConfig map[string]string
 	Version     string
@@ -182,8 +185,12 @@ func (n *Node) loadData(ctx context.Context) error {
 		if err != nil {
 			return errors.Wrap(err, "listing workers")
 		}
-		for _, w := range workers {
+		for idx, w := range workers {
 			n.Platforms = append(n.Platforms, w.Platforms...)
+			if idx == 0 {
+				n.GCPolicy = w.GCPolicy
+				n.Labels = w.Labels
+			}
 		}
 		n.Platforms = platformutil.Dedupe(n.Platforms)
 		inf, err := driverClient.Info(ctx)
