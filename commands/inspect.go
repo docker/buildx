@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 	"text/tabwriter"
 	"time"
@@ -12,6 +13,7 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/go-units"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
 )
@@ -89,6 +91,26 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 					fmt.Fprintf(w, "Buildkit:\t%s\n", nodes[i].Version)
 				}
 				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Node.Platforms, n.Platforms), ", "))
+				if len(nodes[i].Labels) > 0 {
+					fmt.Fprintf(w, "Labels:\n")
+					for _, k := range sortedKeys(nodes[i].Labels) {
+						v := nodes[i].Labels[k]
+						fmt.Fprintf(w, "\t%s:\t%s\n", k, v)
+					}
+				}
+				for ri, rule := range nodes[i].GCPolicy {
+					fmt.Fprintf(w, "GC Policy rule#%d:\n", ri)
+					fmt.Fprintf(w, "\tAll:\t%v\n", rule.All)
+					if len(rule.Filter) > 0 {
+						fmt.Fprintf(w, "\tFilters:\t%s\n", strings.Join(rule.Filter, " "))
+					}
+					if rule.KeepDuration > 0 {
+						fmt.Fprintf(w, "\tKeep Duration:\t%v\n", rule.KeepDuration.String())
+					}
+					if rule.KeepBytes > 0 {
+						fmt.Fprintf(w, "\tKeep Bytes:\t%s\n", units.BytesSize(float64(rule.KeepBytes)))
+					}
+				}
 			}
 		}
 	}
@@ -118,4 +140,15 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&options.bootstrap, "bootstrap", false, "Ensure builder has booted before inspecting")
 
 	return cmd
+}
+
+func sortedKeys(m map[string]string) []string {
+	s := make([]string, len(m))
+	i := 0
+	for k := range m {
+		s[i] = k
+		i++
+	}
+	sort.Strings(s)
+	return s
 }
