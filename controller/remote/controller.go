@@ -296,7 +296,12 @@ func (c *buildxController) Kill(ctx context.Context) error {
 }
 
 func launch(ctx context.Context, logFile string, args ...string) (func() error, error) {
-	bCmd := exec.CommandContext(ctx, os.Args[0], args...)
+	// set absolute path of binary, since we set the working directory to the root
+	pathname, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		return nil, err
+	}
+	bCmd := exec.CommandContext(ctx, pathname, args...)
 	if logFile != "" {
 		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
