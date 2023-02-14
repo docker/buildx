@@ -1260,7 +1260,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							respMu.Lock()
 							resp[k] = &client.SolveResponse{
 								ExporterResponse: map[string]string{
-									"containerimage.digest": desc.Digest.String(),
+									exptypes.ExporterImageDigestKey: desc.Digest.String(),
 								},
 							}
 							respMu.Unlock()

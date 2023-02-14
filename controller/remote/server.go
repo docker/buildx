@@ -17,7 +17,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (res *build.ResultContext, err error)
+type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (resp *client.SolveResponse, res *build.ResultContext, err error)
 
 func NewServer(buildFunc BuildFunc) *Server {
 	return &Server{
@@ -150,7 +150,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	// Build the specified request
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	res, err := m.buildFunc(ctx, req.Options, inR, statusChan)
+	resp, res, err := m.buildFunc(ctx, req.Options, inR, statusChan)
 	m.sessionMu.Lock()
 	if s, ok := m.session[ref]; ok {
 		s.result = res
@@ -162,7 +162,12 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	}
 	m.sessionMu.Unlock()
 
-	return &pb.BuildResponse{}, err
+	if resp == nil {
+		resp = &client.SolveResponse{}
+	}
+	return &pb.BuildResponse{
+		ExporterResponse: resp.ExporterResponse,
+	}, err
 }
 
 func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer) error {

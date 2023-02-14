@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
+	"fmt"
 	"io"
 	"os"
 	"runtime"
@@ -21,6 +22,7 @@ import (
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/ioset"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
@@ -54,7 +56,6 @@ type buildOptions struct {
 	outputs        []string
 	platforms      []string
 	printFunc      string
-	quiet          bool
 	secrets        []string
 	shmSize        dockeropts.MemBytes
 	ssh            []string
@@ -62,8 +63,10 @@ type buildOptions struct {
 	target         string
 	ulimits        *dockeropts.UlimitOpt
 
-	invoke   string
+	invoke string
+
 	progress string
+	quiet    bool
 
 	controllerapi.CommonOptions
 	control.ControlOptions
@@ -85,7 +88,6 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		NoCacheFilter:  o.noCacheFilter,
 		Platforms:      o.platforms,
 		PrintFunc:      o.printFunc,
-		Quiet:          o.quiet,
 		ShmSize:        int64(o.shmSize),
 		Tags:           o.tags,
 		Target:         o.target,
@@ -124,6 +126,22 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 	return opts, nil
 }
 
+func (o *buildOptions) toProgress() (string, error) {
+	switch o.progress {
+	case progress.PrinterModeAuto, progress.PrinterModeTty, progress.PrinterModePlain, progress.PrinterModeQuiet:
+	default:
+		return "", errors.Errorf("progress=%s is not a valid progress option", o.progress)
+	}
+
+	if o.quiet {
+		if o.progress != progress.PrinterModeAuto && o.progress != progress.PrinterModeQuiet {
+			return "", errors.Errorf("progress=%s and quiet cannot be used together", o.progress)
+		}
+		return progress.PrinterModeQuiet, nil
+	}
+	return o.progress, nil
+}
+
 func runBuild(dockerCli command.Cli, in buildOptions) error {
 	ctx := appcontext.Context()
 
@@ -139,8 +157,18 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if err != nil {
 		return err
 	}
-	_, err = cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, in.progress, nil)
-	return err
+	progress, err := in.toProgress()
+	if err != nil {
+		return err
+	}
+	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, progress, nil)
+	if err != nil {
+		return err
+	}
+	if in.quiet {
+		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
+	}
+	return nil
 }
 
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -403,11 +431,6 @@ func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
 func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) error {
 	ctx := context.TODO()
 
-	if options.quiet && options.progress != "auto" && options.progress != "quiet" {
-		return errors.Errorf("progress=%s and quiet cannot be used together", options.progress)
-	} else if options.quiet {
-		options.progress = "quiet"
-	}
 	if options.invoke != "" && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
@@ -440,12 +463,16 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	})
 	f.SetReader(os.Stdin)
 
-	// Start build
 	opts, err := options.toControllerOptions()
 	if err != nil {
 		return err
 	}
-	ref, err := c.Build(ctx, opts, pr, os.Stdout, os.Stderr, options.progress)
+	progress, err := options.toProgress()
+	if err != nil {
+		return err
+	}
+	// Start build
+	ref, resp, err := c.Build(ctx, opts, pr, os.Stdout, os.Stderr, progress)
 	if err != nil {
 		return errors.Wrapf(err, "failed to build") // TODO: allow invoke even on error
 	}
@@ -454,6 +481,10 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	}
 	if err := pr.Close(); err != nil {
 		logrus.Debug("failed to close stdin pipe reader")
+	}
+
+	if options.quiet {
+		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
 	}
 
 	// post-build operations

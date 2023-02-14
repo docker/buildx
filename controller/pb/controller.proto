@@ -40,13 +40,12 @@ message BuildOptions {
   string NetworkMode = 15;
   repeated string NoCacheFilter = 16;
   repeated string Platforms = 17;
-  bool Quiet = 18;
-  repeated Secret Secrets = 19;
-  int64 ShmSize = 20;
-  repeated SSH SSH = 21;
-  repeated string Tags = 22;
-  string Target = 23;
-  UlimitOpt Ulimits = 24;
+  repeated Secret Secrets = 18;
+  int64 ShmSize = 19;
+  repeated SSH SSH = 20;
+  repeated string Tags = 21;
+  string Target = 22;
+  UlimitOpt Ulimits = 23;
 
   CommonOptions Opts = 25;
 }
@@ -95,7 +94,9 @@ message CommonOptions {
   string Provenance = 8; // TODO
 }
 
-message BuildResponse {}
+message BuildResponse {
+	map<string, string> ExporterResponse = 1;
+}
 
 message DisconnectRequest {
   string Ref = 1;

@@ -41,15 +41,9 @@ import (
 
 const defaultTargetName = "default"
 
-func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (res *build.ResultContext, err error) {
+func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	if in.Opts.NoCache && len(in.NoCacheFilter) > 0 {
-		return nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
-	}
-
-	if in.Quiet && progressMode != progress.PrinterModeAuto && progressMode != progress.PrinterModeQuiet {
-		return nil, errors.Errorf("progress=%s and quiet cannot be used together", progressMode)
-	} else if in.Quiet {
-		progressMode = "quiet"
+		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
 
 	contexts := map[string]build.NamedContext{}
@@ -59,7 +53,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	printFunc, err := parsePrintFunc(in.PrintFunc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	opts := build.Options{
@@ -86,7 +80,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	platforms, err := platformutil.Parse(in.Platforms)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Platforms = platforms
 
@@ -95,7 +89,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	secrets, err := controllerapi.CreateSecrets(in.Secrets)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Session = append(opts.Session, secrets)
 
@@ -105,17 +99,17 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 	ssh, err := controllerapi.CreateSSH(sshSpecs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Session = append(opts.Session, ssh)
 
 	outputs, err := controllerapi.CreateExports(in.Exports)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if in.Opts.ExportPush {
 		if in.Opts.ExportLoad {
-			return nil, errors.Errorf("push and load may not be set together at the moment")
+			return nil, nil, errors.Errorf("push and load may not be set together at the moment")
 		}
 		if len(outputs) == 0 {
 			outputs = []client.ExportEntry{{
@@ -129,7 +123,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			case "image":
 				outputs[0].Attrs["push"] = "true"
 			default:
-				return nil, errors.Errorf("push and %q output can't be used together", outputs[0].Type)
+				return nil, nil, errors.Errorf("push and %q output can't be used together", outputs[0].Type)
 			}
 		}
 	}
@@ -143,7 +137,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			switch outputs[0].Type {
 			case "docker":
 			default:
-				return nil, errors.Errorf("load and %q output can't be used together", outputs[0].Type)
+				return nil, nil, errors.Errorf("load and %q output can't be used together", outputs[0].Type)
 			}
 		}
 	}
@@ -158,7 +152,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 	opts.Attests, err = buildflags.ParseAttests(inAttests)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	opts.CacheFrom = controllerapi.CreateCaches(in.CacheFrom)
@@ -166,7 +160,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	allow, err := buildflags.ParseEntitlements(in.Allow)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Allow = allow
 
@@ -181,29 +175,25 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
-		return nil, errors.Wrapf(err, "failed to update builder last activity time")
+		return nil, nil, errors.Wrapf(err, "failed to update builder last activity time")
 	}
 	nodes, err := b.LoadNodes(ctx, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	imageID, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
 	err = wrapBuildError(err, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	if in.Quiet {
-		fmt.Println(imageID)
-	}
-	return res, nil
+	return resp, res, nil
 }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (imageID string, res *build.ResultContext, err error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
@@ -212,9 +202,10 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		fmt.Sprintf("%s:%s", ng.Driver, ng.Name),
 	))
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
+	var res *build.ResultContext
 	var mu sync.Mutex
 	var idx int
 	resp, err := build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan), func(driverIndex int, gotRes *build.ResultContext) {
@@ -229,12 +220,12 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		err = err1
 	}
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	if len(metadataFile) > 0 && resp != nil {
 		if err := writeMetadataFile(metadataFile, decodeExporterResponse(resp[defaultTargetName].ExporterResponse)); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -243,12 +234,12 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 	for k := range resp {
 		if opts[k].PrintFunc != nil {
 			if err := printResult(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
-				return "", nil, err
+				return nil, nil, err
 			}
 		}
 	}
 
-	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], res, err
+	return resp[defaultTargetName], res, err
 }
 
 func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
