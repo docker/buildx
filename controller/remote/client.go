@@ -75,15 +75,28 @@ func (c *Client) Disconnect(ctx context.Context, key string) error {
 	return err
 }
 
-func (c *Client) Invoke(ctx context.Context, ref string, containerConfig pb.ContainerConfig, in io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
-	if ref == "" {
+func (c *Client) ListProcesses(ctx context.Context, ref string) (infos []*pb.ProcessInfo, retErr error) {
+	res, err := c.client().ListProcesses(ctx, &pb.ListProcessesRequest{Ref: ref})
+	if err != nil {
+		return nil, err
+	}
+	return res.Infos, nil
+}
+
+func (c *Client) DisconnectProcess(ctx context.Context, ref, pid string) error {
+	_, err := c.client().DisconnectProcess(ctx, &pb.DisconnectProcessRequest{Ref: ref, ProcessID: pid})
+	return err
+}
+
+func (c *Client) Invoke(ctx context.Context, ref string, pid string, invokeConfig pb.InvokeConfig, in io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
+	if ref == "" || pid == "" {
 		return errors.New("build reference must be specified")
 	}
 	stream, err := c.client().Invoke(ctx)
 	if err != nil {
 		return err
 	}
-	return attachIO(ctx, stream, &pb.InitMessage{Ref: ref, ContainerConfig: &containerConfig}, ioAttachConfig{
+	return attachIO(ctx, stream, &pb.InitMessage{Ref: ref, ProcessID: pid, InvokeConfig: &invokeConfig}, ioAttachConfig{
 		stdin:  in,
 		stdout: stdout,
 		stderr: stderr,

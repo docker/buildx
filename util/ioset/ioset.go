@@ -159,15 +159,27 @@ func (f *SingleForwarder) doForward() {
 	var r io.ReadCloser
 	for {
 		readerInvalid := false
+		var readerInvalidMu sync.Mutex
+		copyReaderToWriter := false
 		if r != nil {
+			copyReaderToWriter = true
+		}
+		if copyReaderToWriter {
+			srcR := r
 			go func() {
 				buf := make([]byte, 4096)
+				readerClosed := false
 				for {
-					n, readErr := r.Read(buf)
-					if readErr != nil && !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrClosedPipe) {
-						logrus.Debugf("single forwarder: reader error: %v", readErr)
-						return
+					n, readErr := srcR.Read(buf)
+					if readErr != nil {
+						srcR.Close()
+						readerClosed = true
+						if !errors.Is(readErr, io.EOF) && !errors.Is(readErr, io.ErrClosedPipe) {
+							logrus.Debugf("single forwarder: reader error: %v", readErr)
+							return
+						}
 					}
+
 					f.curWMu.Lock()
 					w := f.curW
 					f.curWMu.Unlock()
@@ -176,10 +188,14 @@ func (f *SingleForwarder) doForward() {
 							logrus.Debugf("single forwarder: writer error: %v", err)
 						}
 					}
-					if readerInvalid {
+					readerInvalidMu.Lock()
+					ri := readerInvalid
+					readerInvalidMu.Unlock()
+					if ri || readerClosed {
 						return
 					}
 					if readErr != io.EOF {
+						logrus.Debugf("unknown error: %v\n", readErr)
 						continue
 					}
 
@@ -202,7 +218,9 @@ func (f *SingleForwarder) doForward() {
 			}
 			f.curR = newR
 			r = newR
+			readerInvalidMu.Lock()
 			readerInvalid = true
+			readerInvalidMu.Unlock()
 			f.curRMu.Unlock()
 		case <-f.doneCh:
 			return

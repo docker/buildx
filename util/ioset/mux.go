@@ -133,6 +133,27 @@ func (m *MuxIO) Enable(i int) {
 	m.enabled[i] = struct{}{}
 }
 
+func (m *MuxIO) SwitchTo(i int) error {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if m.cur == i {
+		return nil
+	}
+	if _, ok := m.enabled[i]; !ok {
+		return errors.Errorf("IO index %d isn't active", i)
+	}
+	if m.outs[m.cur].DisableHook != nil {
+		m.outs[m.cur].DisableHook()
+	}
+	prev := m.cur
+	m.cur = i
+	if m.outs[m.cur].EnableHook != nil {
+		m.outs[m.cur].EnableHook()
+	}
+	fmt.Fprint(m.in.Stdout, m.toggleMessage(prev, i))
+	return nil
+}
+
 func (m *MuxIO) Disable(i int) error {
 	m.mu.Lock()
 	defer m.mu.Unlock()
