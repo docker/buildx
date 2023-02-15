@@ -29,6 +29,8 @@ import (
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/pkg/ioutils"
+	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/pkg/errors"
@@ -82,7 +84,6 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		ContextPath:    o.contextPath,
 		DockerfileName: o.dockerfileName,
 		ExtraHosts:     o.extraHosts,
-		ImageIDFile:    o.imageIDFile,
 		Labels:         listToMap(o.labels, false),
 		NetworkMode:    o.networkMode,
 		NoCacheFilter:  o.noCacheFilter,
@@ -103,6 +104,11 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 	opts.Exports, err = buildflags.ParseExports(o.outputs)
 	if err != nil {
 		return controllerapi.BuildOptions{}, err
+	}
+	for _, e := range opts.Exports {
+		if (e.Type == client.ExporterLocal || e.Type == client.ExporterTar) && o.imageIDFile != "" {
+			return controllerapi.BuildOptions{}, errors.Errorf("local and tar exporters are incompatible with image ID file")
+		}
 	}
 
 	opts.CacheFrom, err = buildflags.ParseCacheEntry(o.cacheFrom)
@@ -161,12 +167,26 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if err != nil {
 		return err
 	}
+
+	// Avoid leaving a stale file if we eventually fail
+	if in.imageIDFile != "" {
+		if err := os.Remove(in.imageIDFile); err != nil && !os.IsNotExist(err) {
+			return errors.Wrap(err, "removing image ID file")
+		}
+	}
 	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, progress, nil)
 	if err != nil {
 		return err
 	}
 	if in.quiet {
 		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
+	}
+	if in.imageIDFile != "" {
+		dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
+		if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
+			dgst = v
+		}
+		return os.WriteFile(in.imageIDFile, []byte(dgst), 0644)
 	}
 	return nil
 }
@@ -471,6 +491,14 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	if err != nil {
 		return err
 	}
+
+	// Avoid leaving a stale file if we eventually fail
+	if options.imageIDFile != "" {
+		if err := os.Remove(options.imageIDFile); err != nil && !os.IsNotExist(err) {
+			return errors.Wrap(err, "removing image ID file")
+		}
+	}
+
 	// Start build
 	ref, resp, err := c.Build(ctx, opts, pr, os.Stdout, os.Stderr, progress)
 	if err != nil {
@@ -485,6 +513,13 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 
 	if options.quiet {
 		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
+	}
+	if options.imageIDFile != "" {
+		dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
+		if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
+			dgst = v
+		}
+		return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
 	}
 
 	// post-build operations

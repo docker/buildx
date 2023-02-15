@@ -77,7 +77,6 @@ type Options struct {
 	CgroupParent  string
 	Exports       []client.ExportEntry
 	ExtraHosts    []string
-	ImageIDFile   string
 	Labels        map[string]string
 	NetworkMode   string
 	NoCache       bool
@@ -376,13 +375,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		}
 	}()
 
-	if opt.ImageIDFile != "" {
-		// Avoid leaving a stale file if we eventually fail
-		if err := os.Remove(opt.ImageIDFile); err != nil && !os.IsNotExist(err) {
-			return nil, nil, errors.Wrap(err, "removing image ID file")
-		}
-	}
-
 	// inline cache from build arg
 	if v, ok := opt.BuildArgs["BUILDKIT_INLINE_CACHE"]; ok {
 		if v, _ := strconv.ParseBool(v); v {
@@ -531,9 +523,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 
 	// set up exporters
 	for i, e := range opt.Exports {
-		if (e.Type == "local" || e.Type == "tar") && opt.ImageIDFile != "" {
-			return nil, nil, errors.Errorf("local and tar exporters are incompatible with image ID file")
-		}
 		if e.Type == "oci" && !nodeDriver.Features()[driver.OCIExporter] {
 			return nil, nil, notSupported(nodeDriver, driver.OCIExporter)
 		}
@@ -1155,13 +1144,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				resp[k] = res[0]
 				respMu.Unlock()
 				if len(res) == 1 {
-					dgst := res[0].ExporterResponse[exptypes.ExporterImageDigestKey]
-					if v, ok := res[0].ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
-						dgst = v
-					}
-					if opt.ImageIDFile != "" {
-						return os.WriteFile(opt.ImageIDFile, []byte(dgst), 0644)
-					}
 					return nil
 				}
 
@@ -1238,11 +1220,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							dt, desc, err := itpull.Combine(ctx, srcs)
 							if err != nil {
 								return err
-							}
-							if opt.ImageIDFile != "" {
-								if err := os.WriteFile(opt.ImageIDFile, []byte(desc.Digest), 0644); err != nil {
-									return err
-								}
 							}
 
 							itpush := imagetools.New(imageopt)

@@ -65,7 +65,6 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		},
 		BuildArgs:     in.BuildArgs,
 		ExtraHosts:    in.ExtraHosts,
-		ImageIDFile:   in.ImageIDFile,
 		Labels:        in.Labels,
 		NetworkMode:   in.NetworkMode,
 		NoCache:       in.Opts.NoCache,

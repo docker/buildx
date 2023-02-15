@@ -35,19 +35,18 @@ message BuildOptions {
   string CgroupParent = 10;
   repeated ExportEntry Exports = 11;
   repeated string ExtraHosts = 12;
-  string ImageIDFile = 13;
-  map<string, string> Labels = 14;
-  string NetworkMode = 15;
-  repeated string NoCacheFilter = 16;
-  repeated string Platforms = 17;
-  repeated Secret Secrets = 18;
-  int64 ShmSize = 19;
-  repeated SSH SSH = 20;
-  repeated string Tags = 21;
-  string Target = 22;
-  UlimitOpt Ulimits = 23;
+  map<string, string> Labels = 13;
+  string NetworkMode = 14;
+  repeated string NoCacheFilter = 15;
+  repeated string Platforms = 16;
+  repeated Secret Secrets = 17;
+  int64 ShmSize = 18;
+  repeated SSH SSH = 19;
+  repeated string Tags = 20;
+  string Target = 21;
+  UlimitOpt Ulimits = 22;
 
-  CommonOptions Opts = 25;
+  CommonOptions Opts = 24;
 }
 
 message ExportEntry {
