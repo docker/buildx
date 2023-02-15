@@ -18,7 +18,7 @@ import (
 )
 
 const helpMessage = `
-Available commads are:
+Available commands are:
   reload     reloads the context and build it.
   rollback   re-runs the interactive container with initial rootfs contents.
   list       list buildx sessions.
