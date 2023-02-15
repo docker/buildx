@@ -24,9 +24,11 @@ import (
 )
 
 type bakeOptions struct {
-	files     []string
-	overrides []string
-	printOnly bool
+	files      []string
+	overrides  []string
+	printOnly  bool
+	sbom       string
+	provenance string
 	controllerapi.CommonOptions
 }
 
@@ -76,11 +78,11 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	if cFlags.pull != nil {
 		overrides = append(overrides, fmt.Sprintf("*.pull=%t", *cFlags.pull))
 	}
-	if in.SBOM != "" {
-		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("sbom", in.SBOM)))
+	if in.sbom != "" {
+		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("sbom", in.sbom)))
 	}
-	if in.Provenance != "" {
-		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("provenance", in.Provenance)))
+	if in.provenance != "" {
+		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("provenance", in.provenance)))
 	}
 	contextPathHash, _ := os.Getwd()
 
@@ -220,8 +222,8 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&options.ExportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
 	flags.BoolVar(&options.ExportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
-	flags.StringVar(&options.SBOM, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
-	flags.StringVar(&options.Provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
+	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
+	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
 
 	commonBuildFlags(&cFlags, flags)

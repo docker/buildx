@@ -42,7 +42,6 @@ import (
 
 type buildOptions struct {
 	allow          []string
-	attests        []string
 	buildArgs      []string
 	cacheFrom      []string
 	cacheTo        []string
@@ -67,6 +66,10 @@ type buildOptions struct {
 
 	invoke string
 
+	attests    []string
+	sbom       string
+	provenance string
+
 	progress string
 	quiet    bool
 
@@ -78,7 +81,6 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 	var err error
 	opts := controllerapi.BuildOptions{
 		Allow:          o.allow,
-		Attests:        o.attests,
 		BuildArgs:      listToMap(o.buildArgs, true),
 		CgroupParent:   o.cgroupParent,
 		ContextPath:    o.contextPath,
@@ -94,6 +96,18 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		Target:         o.target,
 		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
 		Opts:           &o.CommonOptions,
+	}
+
+	inAttests := append([]string{}, o.attests...)
+	if o.provenance != "" {
+		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", o.provenance))
+	}
+	if o.sbom != "" {
+		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", o.sbom))
+	}
+	opts.Attests, err = buildflags.ParseAttests(inAttests)
+	if err != nil {
+		return controllerapi.BuildOptions{}, err
 	}
 
 	opts.NamedContexts, err = buildflags.ParseContextNames(o.contexts)
@@ -285,8 +299,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
 	flags.StringArrayVar(&options.attests, "attest", []string{}, `Attestation parameters (format: "type=sbom,generator=image")`)
-	flags.StringVar(&options.SBOM, "sbom", "", `Shorthand for "--attest=type=sbom"`)
-	flags.StringVar(&options.Provenance, "provenance", "", `Shortand for "--attest=type=provenance"`)
+	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--attest=type=sbom"`)
+	flags.StringVar(&options.provenance, "provenance", "", `Shortand for "--attest=type=provenance"`)
 
 	if isExperimental() {
 		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build [experimental]")

@@ -142,20 +142,10 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 	opts.Exports = outputs
 
-	inAttests := append([]string{}, in.Attests...)
-	if in.Opts.Provenance != "" {
-		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", in.Opts.Provenance))
-	}
-	if in.Opts.SBOM != "" {
-		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", in.Opts.SBOM))
-	}
-	opts.Attests, err = buildflags.ParseAttests(inAttests)
-	if err != nil {
-		return nil, nil, err
-	}
-
 	opts.CacheFrom = controllerapi.CreateCaches(in.CacheFrom)
 	opts.CacheTo = controllerapi.CreateCaches(in.CacheTo)
+
+	opts.Attests = controllerapi.CreateAttestations(in.Attests)
 
 	allow, err := buildflags.ParseEntitlements(in.Allow)
 	if err != nil {

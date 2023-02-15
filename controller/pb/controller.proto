@@ -28,7 +28,7 @@ message BuildOptions {
   map<string, string> NamedContexts = 4;
 
   repeated string Allow = 5;
-  repeated string Attests = 6; // TODO
+  repeated Attest Attests = 6;
   map<string, string> BuildArgs = 7;
   repeated CacheOptionsEntry CacheFrom = 8;
   repeated CacheOptionsEntry CacheTo = 9;
@@ -60,6 +60,12 @@ message CacheOptionsEntry {
   map<string, string> Attrs = 2;
 }
 
+message Attest {
+  string Type = 1;
+  bool Disabled = 2;
+  string Attrs = 3;
+}
+
 message SSH {
   string ID = 1;
   repeated string Paths = 2;
@@ -89,8 +95,6 @@ message CommonOptions {
   bool Pull = 4;
   bool ExportPush = 5;
   bool ExportLoad = 6;
-  string SBOM       = 7; // TODO
-  string Provenance = 8; // TODO
 }
 
 message BuildResponse {

@@ -455,11 +455,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
 		}
 		for k, v := range attests {
-			so.FrontendAttrs[k] = v
+			so.FrontendAttrs["attest:"+k] = v
 		}
 	}
 
-	if _, ok := opt.Attests["attest:provenance"]; !ok && supportsAttestations {
+	if _, ok := opt.Attests["provenance"]; !ok && supportsAttestations {
 		const noAttestEnv = "BUILDX_NO_DEFAULT_ATTESTATIONS"
 		var noProv bool
 		if v, ok := os.LookupEnv(noAttestEnv); ok {

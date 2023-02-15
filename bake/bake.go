@@ -1027,7 +1027,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if err != nil {
 		return nil, err
 	}
-	bo.Attests = attests
+	bo.Attests = controllerapi.CreateAttestations(attests)
 
 	return bo, nil
 }
