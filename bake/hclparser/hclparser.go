@@ -62,7 +62,9 @@ type parser struct {
 	doneB     map[*hcl.Block]map[string]struct{}
 }
 
-func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}) hcl.Diagnostics {
+var errUndefined = errors.New("undefined")
+
+func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}, allowMissing bool) hcl.Diagnostics {
 	fns, hcldiags := funcCalls(exp)
 	if hcldiags.HasErrors() {
 		return hcldiags
@@ -70,15 +72,10 @@ func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}) hcl.D
 
 	for _, fn := range fns {
 		if err := p.resolveFunction(fn); err != nil {
-			return hcl.Diagnostics{
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  "Invalid expression",
-					Detail:   err.Error(),
-					Subject:  exp.Range().Ptr(),
-					Context:  exp.Range().Ptr(),
-				},
+			if allowMissing && errors.Is(err, errUndefined) {
+				continue
 			}
+			return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 		}
 	}
 
@@ -128,27 +125,17 @@ func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}) hcl.D
 				}
 			}
 			if err := p.resolveBlock(blocks[0], target); err != nil {
-				return hcl.Diagnostics{
-					&hcl.Diagnostic{
-						Severity: hcl.DiagError,
-						Summary:  "Invalid expression",
-						Detail:   err.Error(),
-						Subject:  v.SourceRange().Ptr(),
-						Context:  v.SourceRange().Ptr(),
-					},
+				if allowMissing && errors.Is(err, errUndefined) {
+					continue
 				}
+				return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 			}
 		} else {
 			if err := p.resolveValue(v.RootName()); err != nil {
-				return hcl.Diagnostics{
-					&hcl.Diagnostic{
-						Severity: hcl.DiagError,
-						Summary:  "Invalid expression",
-						Detail:   err.Error(),
-						Subject:  v.SourceRange().Ptr(),
-						Context:  v.SourceRange().Ptr(),
-					},
+				if allowMissing && errors.Is(err, errUndefined) {
+					continue
 				}
+				return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 			}
 		}
 	}
@@ -167,7 +154,7 @@ func (p *parser) resolveFunction(name string) error {
 		if _, ok := p.ectx.Functions[name]; ok {
 			return nil
 		}
-		return errors.Errorf("undefined function %s", name)
+		return errors.Wrapf(errUndefined, "function %q does not exit", name)
 	}
 	if _, ok := p.progressF[name]; ok {
 		return errors.Errorf("function cycle not allowed for %s", name)
@@ -217,7 +204,7 @@ func (p *parser) resolveFunction(name string) error {
 		return diags
 	}
 
-	if diags := p.loadDeps(f.Result.Expr, params); diags.HasErrors() {
+	if diags := p.loadDeps(f.Result.Expr, params, false); diags.HasErrors() {
 		return diags
 	}
 
@@ -255,7 +242,7 @@ func (p *parser) resolveValue(name string) (err error) {
 	if _, builtin := p.opt.Vars[name]; !ok && !builtin {
 		vr, ok := p.vars[name]
 		if !ok {
-			return errors.Errorf("undefined variable %q", name)
+			return errors.Wrapf(errUndefined, "variable %q does not exit", name)
 		}
 		def = vr.Default
 	}
@@ -270,7 +257,7 @@ func (p *parser) resolveValue(name string) (err error) {
 		return
 	}
 
-	if diags := p.loadDeps(def.Expr, nil); diags.HasErrors() {
+	if diags := p.loadDeps(def.Expr, nil, true); diags.HasErrors() {
 		return diags
 	}
 	vv, diags := def.Expr.Value(p.ectx)
@@ -314,14 +301,7 @@ func (p *parser) resolveValue(name string) (err error) {
 func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err error) {
 	name := block.Labels[0]
 	if err := p.opt.ValidateLabel(name); err != nil {
-		return hcl.Diagnostics{
-			&hcl.Diagnostic{
-				Severity: hcl.DiagError,
-				Summary:  "Invalid name",
-				Detail:   err.Error(),
-				Subject:  &block.LabelRanges[0],
-			},
-		}
+		return wrapErrorDiagnostic("Invalid name", err, &block.LabelRanges[0], &block.LabelRanges[0])
 	}
 
 	if _, ok := p.doneB[block]; !ok {
@@ -395,7 +375,7 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		return diag
 	}
 	for _, a := range content.Attributes {
-		diag := p.loadDeps(a.Expr, nil)
+		diag := p.loadDeps(a.Expr, nil, true)
 		if diag.HasErrors() {
 			return diag
 		}
@@ -573,15 +553,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 				return diags
 			}
 			r := p.vars[k].Body.MissingItemRange()
-			return hcl.Diagnostics{
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  "Invalid value",
-					Detail:   err.Error(),
-					Subject:  &r,
-					Context:  &r,
-				},
-			}
+			return wrapErrorDiagnostic("Invalid value", err, &r, &r)
 		}
 	}
 
@@ -604,15 +576,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 					}
 				}
 			}
-			return hcl.Diagnostics{
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  "Invalid function",
-					Detail:   err.Error(),
-					Subject:  subject,
-					Context:  context,
-				},
-			}
+			return wrapErrorDiagnostic("Invalid function", err, subject, context)
 		}
 	}
 
@@ -673,15 +637,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 					continue
 				}
 			} else {
-				return hcl.Diagnostics{
-					&hcl.Diagnostic{
-						Severity: hcl.DiagError,
-						Summary:  "Invalid attribute",
-						Detail:   err.Error(),
-						Subject:  &b.LabelRanges[0],
-						Context:  &b.DefRange,
-					},
-				}
+				return wrapErrorDiagnostic("Invalid block", err, &b.LabelRanges[0], &b.DefRange)
 			}
 		}
 
@@ -726,19 +682,32 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 			if diags, ok := err.(hcl.Diagnostics); ok {
 				return diags
 			}
-			return hcl.Diagnostics{
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  "Invalid attribute",
-					Detail:   err.Error(),
-					Subject:  &p.attrs[k].Range,
-					Context:  &p.attrs[k].Range,
-				},
-			}
+			return wrapErrorDiagnostic("Invalid attribute", err, &p.attrs[k].Range, &p.attrs[k].Range)
 		}
 	}
 
 	return nil
+}
+
+// wrapErrorDiagnostic wraps an error into a hcl.Diagnostics object.
+// If the error is already an hcl.Diagnostics object, it is returned as is.
+func wrapErrorDiagnostic(message string, err error, subject *hcl.Range, context *hcl.Range) hcl.Diagnostics {
+	switch err := err.(type) {
+	case *hcl.Diagnostic:
+		return hcl.Diagnostics{err}
+	case hcl.Diagnostics:
+		return err
+	default:
+		return hcl.Diagnostics{
+			&hcl.Diagnostic{
+				Severity: hcl.DiagError,
+				Summary:  message,
+				Detail:   err.Error(),
+				Subject:  subject,
+				Context:  context,
+			},
+		}
+	}
 }
 
 func setLabel(v reflect.Value, lbl string) int {

@@ -3,6 +3,7 @@ package gitutil
 import (
 	"bytes"
 	"context"
+	"os"
 	"os/exec"
 	"strings"
 
@@ -116,6 +117,9 @@ func (c *Git) run(args ...string) (string, error) {
 		cmd.Dir = c.wd
 	}
 
+	// Override the locale to ensure consistent output
+	cmd.Env = append(os.Environ(), "LC_ALL=C")
+
 	stdout := bytes.Buffer{}
 	stderr := bytes.Buffer{}
 	cmd.Stdout = &stdout
@@ -133,4 +137,13 @@ func (c *Git) clean(out string, err error) (string, error) {
 		err = errors.New(strings.TrimSuffix(err.Error(), "\n"))
 	}
 	return out, err
+}
+
+func IsUnknownRevision(err error) bool {
+	if err == nil {
+		return false
+	}
+	// https://github.com/git/git/blob/a6a323b31e2bcbac2518bddec71ea7ad558870eb/setup.c#L204
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "unknown revision or path not in the working tree") || strings.Contains(errMsg, "bad revision")
 }
