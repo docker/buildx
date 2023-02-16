@@ -2,6 +2,7 @@ package gitutil
 
 import (
 	"os"
+	"strings"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -72,4 +73,12 @@ func fakeGit(c *Git, args ...string) (string, error) {
 	}
 	allArgs = append(allArgs, args...)
 	return c.clean(c.run(allArgs...))
+}
+
+func IsAmbiguousArgument(err error) bool {
+	if err == nil {
+		return false
+	}
+	errMsg := strings.ToLower(err.Error())
+	return strings.Contains(errMsg, "use '--' to separate paths from revisions")
 }
