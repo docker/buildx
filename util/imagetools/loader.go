@@ -21,8 +21,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const (
-	annotationReference = "vnd.docker.reference.digest"
+var (
+	annotationReferences = []string{
+		"com.docker.reference.digest",
+		"vnd.docker.reference.digest", // TODO: deprecate/remove after migration to new annotation
+	}
 )
 
 type contentCache interface {
@@ -167,8 +170,13 @@ func (l *loader) fetch(ctx context.Context, fetcher remotes.Fetcher, desc ocispe
 		}
 		r.mu.Unlock()
 
-		ref, ok := desc.Annotations[annotationReference]
-		if ok {
+		found := false
+		for _, annotationReference := range annotationReferences {
+			ref, ok := desc.Annotations[annotationReference]
+			if !ok {
+				continue
+			}
+
 			refdgst, err := digest.Parse(ref)
 			if err != nil {
 				return err
@@ -176,7 +184,10 @@ func (l *loader) fetch(ctx context.Context, fetcher remotes.Fetcher, desc ocispe
 			r.mu.Lock()
 			r.refs[refdgst] = append(r.refs[refdgst], desc.Digest)
 			r.mu.Unlock()
-		} else {
+			found = true
+			break
+		}
+		if !found {
 			p := desc.Platform
 			if p == nil {
 				p, err = l.readPlatformFromConfig(ctx, fetcher, mfst.Config)
