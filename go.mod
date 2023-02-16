@@ -6,11 +6,11 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.15.5
 	github.com/compose-spec/compose-go v1.9.0
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.6.16-0.20230124210447-1709cfe273d9
-	github.com/docker/cli v23.0.0-rc.1+incompatible
+	github.com/containerd/containerd v1.6.16
+	github.com/docker/cli v23.0.0+incompatible
 	github.com/docker/cli-docs-tool v0.5.1
 	github.com/docker/distribution v2.8.1+incompatible
-	github.com/docker/docker v23.0.0-rc.1+incompatible
+	github.com/docker/docker v23.0.0+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/protobuf v1.3.2
@@ -35,7 +35,7 @@ require (
 	go.opentelemetry.io/otel v1.4.1
 	go.opentelemetry.io/otel/trace v1.4.1
 	golang.org/x/sync v0.1.0
-	golang.org/x/term v0.3.0
+	golang.org/x/term v0.4.0
 	google.golang.org/grpc v1.50.1
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.23.5
@@ -94,7 +94,7 @@ require (
 	github.com/go-sql-driver/mysql v1.6.0 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/golang-jwt/jwt/v4 v4.4.2 // indirect
-	github.com/google/certificate-transparency-go v1.0.21 // indirect
+	github.com/google/certificate-transparency-go v1.1.4 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/google/uuid v1.3.0 // indirect
@@ -130,6 +130,7 @@ require (
 	github.com/prometheus/common v0.37.0 // indirect
 	github.com/prometheus/procfs v0.8.0 // indirect
 	github.com/rogpeppe/go-internal v1.8.1 // indirect
+	github.com/sergi/go-diff v1.2.0 // indirect
 	github.com/spf13/viper v1.14.0 // indirect
 	github.com/theupdateframework/notary v0.6.1 // indirect
 	github.com/tonistiigi/fsutil v0.0.0-20230105215944-fb433841cbfa // indirect
@@ -150,10 +151,10 @@ require (
 	go.opentelemetry.io/otel/sdk v1.4.1 // indirect
 	go.opentelemetry.io/proto/otlp v0.12.0 // indirect
 	golang.org/x/crypto v0.2.0 // indirect
-	golang.org/x/net v0.4.0 // indirect
-	golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783 // indirect
-	golang.org/x/sys v0.3.0 // indirect
-	golang.org/x/text v0.5.0 // indirect
+	golang.org/x/net v0.5.0 // indirect
+	golang.org/x/oauth2 v0.1.0 // indirect
+	golang.org/x/sys v0.4.0 // indirect
+	golang.org/x/text v0.6.0 // indirect
 	golang.org/x/time v0.1.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20221024183307-1bc688fe9f3e // indirect
@@ -164,7 +165,7 @@ require (
 	gopkg.in/gorethink/gorethink.v3 v3.0.5 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
-	k8s.io/klog/v2 v2.30.0 // indirect
+	k8s.io/klog/v2 v2.80.1 // indirect
 	k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b // indirect
 	sigs.k8s.io/structured-merge-diff/v4 v4.1.2 // indirect
 	sigs.k8s.io/yaml v1.2.0 // indirect

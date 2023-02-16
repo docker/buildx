@@ -61,7 +61,10 @@ func setupCommonRootCommand(rootCmd *cobra.Command) (*cliflags.ClientOptions, *p
 	rootCmd.PersistentFlags().MarkShorthandDeprecated("help", "please use --help")
 	rootCmd.PersistentFlags().Lookup("help").Hidden = true
 
-	rootCmd.Annotations = map[string]string{"additionalHelp": "For more help on how to use Docker, head to https://docs.docker.com/go/guides/"}
+	rootCmd.Annotations = map[string]string{
+		"additionalHelp":      "For more help on how to use Docker, head to https://docs.docker.com/go/guides/",
+		"docs.code-delimiter": `"`, // https://github.com/docker/cli-docs-tool/blob/77abede22166eaea4af7335096bdcedd043f5b19/annotation/annotation.go#L20-L22
+	}
 
 	// Configure registry.CertsDir() when running in rootless-mode
 	if os.Getenv("ROOTLESSKIT_STATE_DIR") != "" {
@@ -231,9 +234,13 @@ func isExperimental(cmd *cobra.Command) bool {
 }
 
 func additionalHelp(cmd *cobra.Command) string {
-	if additionalHelp, ok := cmd.Annotations["additionalHelp"]; ok {
+	if msg, ok := cmd.Annotations["additionalHelp"]; ok {
+		out := cmd.OutOrStderr()
+		if _, isTerminal := term.GetFdInfo(out); !isTerminal {
+			return msg
+		}
 		style := aec.EmptyBuilder.Bold().ANSI
-		return style.Apply(additionalHelp)
+		return style.Apply(msg)
 	}
 	return ""
 }
@@ -504,6 +511,7 @@ Run '{{.CommandPath}} COMMAND --help' for more information on a command.
 {{- if hasAdditionalHelp .}}
 
 {{ additionalHelp . }}
+
 {{- end}}
 `
 

@@ -150,7 +150,7 @@ github.com/compose-spec/compose-go/types
 # github.com/containerd/console v1.0.3
 ## explicit; go 1.13
 github.com/containerd/console
-# github.com/containerd/containerd v1.6.16-0.20230124210447-1709cfe273d9
+# github.com/containerd/containerd v1.6.16
 ## explicit; go 1.17
 github.com/containerd/containerd/api/services/content/v1
 github.com/containerd/containerd/archive/compression
@@ -195,7 +195,7 @@ github.com/davecgh/go-spew/spew
 ## explicit; go 1.18
 github.com/distribution/distribution/v3/digestset
 github.com/distribution/distribution/v3/reference
-# github.com/docker/cli v23.0.0-rc.1+incompatible
+# github.com/docker/cli v23.0.0+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/manager
@@ -230,6 +230,7 @@ github.com/docker/distribution
 github.com/docker/distribution/digestset
 github.com/docker/distribution/manifest
 github.com/docker/distribution/manifest/manifestlist
+github.com/docker/distribution/manifest/ocischema
 github.com/docker/distribution/manifest/schema2
 github.com/docker/distribution/metrics
 github.com/docker/distribution/reference
@@ -242,7 +243,7 @@ github.com/docker/distribution/registry/client/transport
 github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
-# github.com/docker/docker v23.0.0-rc.1+incompatible
+# github.com/docker/docker v23.0.0+incompatible
 ## explicit
 github.com/docker/docker/api
 github.com/docker/docker/api/types
@@ -365,8 +366,8 @@ github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
 github.com/golang/protobuf/ptypes/wrappers
-# github.com/google/certificate-transparency-go v1.0.21
-## explicit
+# github.com/google/certificate-transparency-go v1.1.4
+## explicit; go 1.17
 # github.com/google/go-cmp v0.5.9
 ## explicit; go 1.13
 github.com/google/go-cmp/cmp
@@ -600,6 +601,8 @@ github.com/prometheus/procfs/internal/fs
 github.com/prometheus/procfs/internal/util
 # github.com/rogpeppe/go-internal v1.8.1
 ## explicit; go 1.16
+# github.com/sergi/go-diff v1.2.0
+## explicit; go 1.12
 # github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 ## explicit
 github.com/serialx/hashring
@@ -743,7 +746,7 @@ golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 golang.org/x/crypto/ssh/terminal
-# golang.org/x/net v0.4.0
+# golang.org/x/net v0.5.0
 ## explicit; go 1.17
 golang.org/x/net/context
 golang.org/x/net/context/ctxhttp
@@ -755,7 +758,7 @@ golang.org/x/net/internal/socks
 golang.org/x/net/internal/timeseries
 golang.org/x/net/proxy
 golang.org/x/net/trace
-# golang.org/x/oauth2 v0.0.0-20221014153046-6fdb5e3db783
+# golang.org/x/oauth2 v0.1.0
 ## explicit; go 1.17
 golang.org/x/oauth2
 golang.org/x/oauth2/authhandler
@@ -768,7 +771,7 @@ golang.org/x/oauth2/jwt
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
-# golang.org/x/sys v0.3.0
+# golang.org/x/sys v0.4.0
 ## explicit; go 1.17
 golang.org/x/sys/cpu
 golang.org/x/sys/execabs
@@ -777,10 +780,10 @@ golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.3.0
+# golang.org/x/term v0.4.0
 ## explicit; go 1.17
 golang.org/x/term
-# golang.org/x/text v0.5.0
+# golang.org/x/text v0.6.0
 ## explicit; go 1.17
 golang.org/x/text/secure/bidirule
 golang.org/x/text/transform
@@ -1124,9 +1127,14 @@ k8s.io/client-go/util/homedir
 k8s.io/client-go/util/jsonpath
 k8s.io/client-go/util/keyutil
 k8s.io/client-go/util/workqueue
-# k8s.io/klog/v2 v2.30.0
+# k8s.io/klog/v2 v2.80.1
 ## explicit; go 1.13
 k8s.io/klog/v2
+k8s.io/klog/v2/internal/buffer
+k8s.io/klog/v2/internal/clock
+k8s.io/klog/v2/internal/dbg
+k8s.io/klog/v2/internal/serialize
+k8s.io/klog/v2/internal/severity
 # k8s.io/utils v0.0.0-20210930125809-cb0fa318a74b
 ## explicit; go 1.12
 k8s.io/utils/integer
