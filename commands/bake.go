@@ -18,6 +18,7 @@ import (
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
+	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -85,23 +86,11 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, cFlags.progress)
-	if err != nil {
-		return err
-	}
-
-	defer func() {
-		if printer != nil {
-			err1 := printer.Wait()
-			if err == nil {
-				err = err1
-			}
-		}
-	}()
 
 	var nodes []builder.Node
 	var files []bake.File
 	var inp *bake.Input
+	var progressConsoleDesc, progressTextDesc string
 
 	// instance only needed for reading remote bake files or building
 	if url != "" || !in.printOnly {
@@ -119,7 +108,25 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		if err != nil {
 			return err
 		}
+		progressConsoleDesc = fmt.Sprintf("%s:%s", b.Driver, b.Name)
+		progressTextDesc = fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver)
 	}
+
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, cFlags.progress,
+		progressui.WithDesc(progressTextDesc, progressConsoleDesc),
+	)
+	if err != nil {
+		return err
+	}
+
+	defer func() {
+		if printer != nil {
+			err1 := printer.Wait()
+			if err == nil {
+				err = err1
+			}
+		}
+	}()
 
 	if url != "" {
 		files, inp, err = bake.ReadRemoteFiles(ctx, nodes, url, in.files, printer)
