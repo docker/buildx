@@ -392,10 +392,6 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		if err := c.Disconnect(ctx, ref); err != nil {
 			logrus.Warnf("disconnect error: %v", err)
 		}
-		// If "invoke" isn't specified, further inspection ins't provided. Finish the buildx server.
-		if err := c.Kill(ctx); err != nil {
-			return err
-		}
 	}
 	return nil
 }

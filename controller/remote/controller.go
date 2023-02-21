@@ -35,6 +35,12 @@ const (
 	serveCommandName = "_INTERNAL_SERVE"
 )
 
+var (
+	defaultLogFilename    = fmt.Sprintf("buildx.%s.log", version.Revision)
+	defaultSocketFilename = fmt.Sprintf("buildx.%s.sock", version.Revision)
+	defaultPIDFilename    = fmt.Sprintf("buildx.%s.pid", version.Revision)
+)
+
 type serverConfig struct {
 	// Specify buildx server root
 	Root string `toml:"root"`
@@ -52,27 +58,41 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 		rootDir = rootDataDir(dockerCli)
 	}
 	serverRoot := filepath.Join(rootDir, "shared")
-	c, err := newBuildxClientAndCheck(filepath.Join(serverRoot, "buildx.sock"), 1, 0)
+
+	// connect to buildx server if it is already running
+	ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
+	c, err := newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
+	cancel()
 	if err != nil {
-		logrus.Info("no buildx server found; launching...")
-		// start buildx server via subcommand
-		launchFlags := []string{}
-		if opts.ServerConfig != "" {
-			launchFlags = append(launchFlags, "--config", opts.ServerConfig)
-		}
-		logFile, err := getLogFilePath(dockerCli, opts.ServerConfig)
-		if err != nil {
-			return nil, err
-		}
-		wait, err := launch(ctx, logFile, append([]string{serveCommandName}, launchFlags...)...)
-		if err != nil {
-			return nil, err
-		}
-		go wait()
-		c, err = newBuildxClientAndCheck(filepath.Join(serverRoot, "buildx.sock"), 10, time.Second)
-		if err != nil {
+		if !errors.Is(err, context.DeadlineExceeded) {
 			return nil, errors.Wrap(err, "cannot connect to the buildx server")
 		}
+	} else {
+		return &buildxController{c, serverRoot}, nil
+	}
+
+	// start buildx server via subcommand
+	logrus.Info("no buildx server found; launching...")
+	launchFlags := []string{}
+	if opts.ServerConfig != "" {
+		launchFlags = append(launchFlags, "--config", opts.ServerConfig)
+	}
+	logFile, err := getLogFilePath(dockerCli, opts.ServerConfig)
+	if err != nil {
+		return nil, err
+	}
+	wait, err := launch(ctx, logFile, append([]string{serveCommandName}, launchFlags...)...)
+	if err != nil {
+		return nil, err
+	}
+	go wait()
+
+	// wait for buildx server to be ready
+	ctx2, cancel = context.WithTimeout(ctx, 10*time.Second)
+	c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
+	cancel()
+	if err != nil {
+		return nil, errors.Wrap(err, "cannot connect to the buildx server")
 	}
 	return &buildxController{c, serverRoot}, nil
 }
@@ -110,7 +130,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			pidF := filepath.Join(root, "pid")
+			pidF := filepath.Join(root, defaultPIDFilename)
 			if err := os.WriteFile(pidF, []byte(fmt.Sprintf("%d", os.Getpid())), 0600); err != nil {
 				return err
 			}
@@ -127,7 +147,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			defer b.Close()
 
 			// serve server
-			addr := filepath.Join(root, "buildx.sock")
+			addr := filepath.Join(root, defaultSocketFilename)
 			if err := os.Remove(addr); err != nil && !os.IsNotExist(err) { // avoid EADDRINUSE
 				return err
 			}
@@ -151,18 +171,22 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 					errCh <- errors.Wrapf(err, "error on serving via socket %q", addr)
 				}
 			}()
+
 			var s os.Signal
 			sigCh := make(chan os.Signal, 1)
-			signal.Notify(sigCh, os.Interrupt)
+			signal.Notify(sigCh, syscall.SIGINT)
+			signal.Notify(sigCh, syscall.SIGTERM)
 			select {
-			case s = <-sigCh:
-				logrus.Debugf("got signal %v", s)
 			case err := <-errCh:
+				logrus.Errorf("got error %s, exiting", err)
 				return err
+			case s = <-sigCh:
+				logrus.Infof("got signal %s, exiting", s)
+				return nil
 			case <-doneCh:
+				logrus.Infof("rpc server done, exiting")
+				return nil
 			}
-			return nil
-
 		},
 	}
 
@@ -176,15 +200,14 @@ func getLogFilePath(dockerCli command.Cli, configPath string) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	logFile := config.LogFile
-	if logFile == "" {
+	if config.LogFile == "" {
 		root, err := prepareRootDir(dockerCli, config)
 		if err != nil {
 			return "", err
 		}
-		logFile = filepath.Join(root, "log")
+		return filepath.Join(root, defaultLogFilename), nil
 	}
-	return logFile, nil
+	return config.LogFile, nil
 }
 
 func getConfig(dockerCli command.Cli, configPath string) (*serverConfig, error) {
@@ -228,34 +251,18 @@ func rootDataDir(dockerCli command.Cli) string {
 	return filepath.Join(confutil.ConfigDir(dockerCli), "controller")
 }
 
-func newBuildxClientAndCheck(addr string, checkNum int, duration time.Duration) (*Client, error) {
-	c, err := NewClient(addr)
+func newBuildxClientAndCheck(ctx context.Context, addr string) (*Client, error) {
+	c, err := NewClient(ctx, addr)
 	if err != nil {
 		return nil, err
 	}
-	var lastErr error
-	for i := 0; i < checkNum; i++ {
-		_, err := c.List(context.TODO())
-		if err == nil {
-			lastErr = nil
-			break
-		}
-		err = errors.Wrapf(err, "failed to access server (tried %d times)", i)
-		logrus.Debugf("connection failure: %v", err)
-		lastErr = err
-		time.Sleep(duration)
-	}
-	if lastErr != nil {
-		return nil, lastErr
-	}
-	p, v, r, err := c.Version(context.TODO())
+	p, v, r, err := c.Version(ctx)
 	if err != nil {
 		return nil, err
 	}
 	logrus.Debugf("connected to server (\"%v %v %v\")", p, v, r)
 	if !(p == version.Package && v == version.Version && r == version.Revision) {
-		logrus.Warnf("version mismatch (server: \"%v %v %v\", client: \"%v %v %v\"); please kill and restart buildx server",
-			p, v, r, version.Package, version.Version, version.Revision)
+		return nil, errors.Errorf("version mismatch (client: \"%v %v %v\", server: \"%v %v %v\")", version.Package, version.Version, version.Revision, p, v, r)
 	}
 	return c, nil
 }
@@ -266,7 +273,7 @@ type buildxController struct {
 }
 
 func (c *buildxController) Kill(ctx context.Context) error {
-	pidB, err := os.ReadFile(filepath.Join(c.serverRoot, "pid"))
+	pidB, err := os.ReadFile(filepath.Join(c.serverRoot, defaultPIDFilename))
 	if err != nil {
 		return err
 	}
@@ -289,7 +296,12 @@ func (c *buildxController) Kill(ctx context.Context) error {
 }
 
 func launch(ctx context.Context, logFile string, args ...string) (func() error, error) {
-	bCmd := exec.CommandContext(ctx, os.Args[0], args...)
+	// set absolute path of binary, since we set the working directory to the root
+	pathname, err := filepath.Abs(os.Args[0])
+	if err != nil {
+		return nil, err
+	}
+	bCmd := exec.CommandContext(ctx, pathname, args...)
 	if logFile != "" {
 		f, err := os.OpenFile(logFile, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
