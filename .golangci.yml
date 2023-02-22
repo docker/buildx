@@ -11,13 +11,11 @@ linters:
   enable:
     - gofmt
     - govet
-    - deadcode
     - depguard
     - goimports
     - ineffassign
     - misspell
     - unused
-    - varcheck
     - revive
     - staticcheck
     - typecheck

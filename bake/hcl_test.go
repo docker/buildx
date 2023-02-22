@@ -946,7 +946,7 @@ func TestVarUnsupportedType(t *testing.T) {
 }
 
 func ptrstr(s interface{}) *string {
-	var n *string = nil
+	var n *string
 	if reflect.ValueOf(s).Kind() == reflect.String {
 		ss := s.(string)
 		n = &ss

@@ -10,8 +10,6 @@ import (
 )
 
 func TestReadTargets(t *testing.T) {
-	t.Parallel()
-
 	fp := File{
 		Name: "config.hcl",
 		Data: []byte(`
@@ -35,6 +33,7 @@ target "webapp" {
 	ctx := context.TODO()
 
 	t.Run("NoOverrides", func(t *testing.T) {
+		t.Parallel()
 		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
@@ -50,6 +49,7 @@ target "webapp" {
 	})
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
+		t.Parallel()
 		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"}, nil)
 		require.NotNil(t, err)
 		require.Equal(t, err.Error(), "could not find any target matching 'nosuchtarget'")
@@ -91,6 +91,7 @@ target "webapp" {
 
 		// building leaf but overriding parent fields
 		t.Run("parent", func(t *testing.T) {
+			t.Parallel()
 			m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webDEP.args.VAR_INHERITED=override",
 				"webDEP.args.VAR_BOTH=override",
@@ -105,6 +106,7 @@ target "webapp" {
 	})
 
 	t.Run("ContextOverride", func(t *testing.T) {
+		t.Parallel()
 		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil)
 		require.NotNil(t, err)
 
@@ -116,6 +118,7 @@ target "webapp" {
 	})
 
 	t.Run("NoCacheOverride", func(t *testing.T) {
+		t.Parallel()
 		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].NoCache)
@@ -124,6 +127,7 @@ target "webapp" {
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
+		t.Parallel()
 		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].Pull)
@@ -132,6 +136,7 @@ target "webapp" {
 	})
 
 	t.Run("PatternOverride", func(t *testing.T) {
+		t.Parallel()
 		// same check for two cases
 		multiTargetCheck := func(t *testing.T, m map[string]*Target, g map[string]*Group, err error) {
 			require.NoError(t, err)

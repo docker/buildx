@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile-upstream:1.5.0
 
-ARG GO_VERSION=1.19
+ARG GO_VERSION=1.20
 ARG XX_VERSION=1.1.2
 ARG DOCKERD_VERSION=20.10.14
 
