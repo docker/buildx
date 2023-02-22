@@ -1,4 +1,4 @@
-# syntax=docker/dockerfile:1.4
+# syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.19
 ARG MODOUTDATED_VERSION=v0.8.0
