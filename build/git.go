@@ -67,7 +67,13 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	if sha, err := gitc.FullCommit(); err != nil && !gitutil.IsUnknownRevision(err) {
 		return res, errors.Wrapf(err, "buildx: failed to get git commit")
 	} else if sha != "" {
-		if gitc.IsDirty() {
+		checkDirty := false
+		if v, ok := os.LookupEnv("BUILDX_GIT_CHECK_DIRTY"); ok {
+			if v, err := strconv.ParseBool(v); err == nil {
+				checkDirty = v
+			}
+		}
+		if checkDirty && gitc.IsDirty() {
 			sha += "-dirty"
 		}
 		if setGitLabels {
