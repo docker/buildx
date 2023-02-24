@@ -4,35 +4,30 @@ import (
 	"encoding/csv"
 	"strings"
 
-	"github.com/moby/buildkit/session"
-	"github.com/moby/buildkit/session/secrets/secretsprovider"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
 )
 
-func ParseSecretSpecs(sl []string) (session.Attachable, error) {
-	fs := make([]secretsprovider.Source, 0, len(sl))
+func ParseSecretSpecs(sl []string) ([]*controllerapi.Secret, error) {
+	fs := make([]*controllerapi.Secret, 0, len(sl))
 	for _, v := range sl {
 		s, err := parseSecret(v)
 		if err != nil {
 			return nil, err
 		}
-		fs = append(fs, *s)
+		fs = append(fs, s)
 	}
-	store, err := secretsprovider.NewStore(fs)
-	if err != nil {
-		return nil, err
-	}
-	return secretsprovider.NewSecretProvider(store), nil
+	return fs, nil
 }
 
-func parseSecret(value string) (*secretsprovider.Source, error) {
+func parseSecret(value string) (*controllerapi.Secret, error) {
 	csvReader := csv.NewReader(strings.NewReader(value))
 	fields, err := csvReader.Read()
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse csv secret")
 	}
 
-	fs := secretsprovider.Source{}
+	fs := controllerapi.Secret{}
 
 	var typ string
 	for _, field := range fields {

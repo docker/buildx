@@ -91,18 +91,21 @@ func (c *Client) Invoke(ctx context.Context, ref string, containerConfig pb.Cont
 	})
 }
 
-func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, error) {
+func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, *client.SolveResponse, error) {
 	ref := identity.NewID()
 	pw, err := progress.NewPrinter(context.TODO(), w, out, progressMode)
 	if err != nil {
-		return "", err
+		return "", nil, err
 	}
 	statusChan := make(chan *client.SolveStatus)
 	statusDone := make(chan struct{})
 	eg, egCtx := errgroup.WithContext(ctx)
+	var resp *client.SolveResponse
 	eg.Go(func() error {
 		defer close(statusChan)
-		return c.build(egCtx, ref, options, in, statusChan)
+		var err error
+		resp, err = c.build(egCtx, ref, options, in, statusChan)
+		return err
 	})
 	eg.Go(func() error {
 		defer close(statusDone)
@@ -116,19 +119,26 @@ func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadC
 		<-statusDone
 		return pw.Wait()
 	})
-	return ref, eg.Wait()
+	return ref, resp, eg.Wait()
 }
 
-func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, statusChan chan *client.SolveStatus) error {
+func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, statusChan chan *client.SolveStatus) (*client.SolveResponse, error) {
 	eg, egCtx := errgroup.WithContext(ctx)
 	done := make(chan struct{})
+
+	var resp *client.SolveResponse
+
 	eg.Go(func() error {
 		defer close(done)
-		if _, err := c.client().Build(egCtx, &pb.BuildRequest{
+		pbResp, err := c.client().Build(egCtx, &pb.BuildRequest{
 			Ref:     ref,
 			Options: &options,
-		}); err != nil {
+		})
+		if err != nil {
 			return err
+		}
+		resp = &client.SolveResponse{
+			ExporterResponse: pbResp.ExporterResponse,
 		}
 		return nil
 	})
@@ -254,7 +264,7 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 			return eg2.Wait()
 		})
 	}
-	return eg.Wait()
+	return resp, eg.Wait()
 }
 
 func (c *Client) client() pb.ControllerClient {

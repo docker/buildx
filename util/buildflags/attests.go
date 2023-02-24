@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"strings"
 
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
 )
 
@@ -14,66 +15,66 @@ func CanonicalizeAttest(attestType string, in string) string {
 		return ""
 	}
 	if b, err := strconv.ParseBool(in); err == nil {
-		return fmt.Sprintf("type=%s,enabled=%t", attestType, b)
+		return fmt.Sprintf("type=%s,disabled=%t", attestType, !b)
 	}
 	return fmt.Sprintf("type=%s,%s", attestType, in)
 }
 
-func ParseAttests(in []string) (map[string]*string, error) {
-	out := map[string]*string{}
+func ParseAttests(in []string) ([]*controllerapi.Attest, error) {
+	out := []*controllerapi.Attest{}
+	found := map[string]struct{}{}
 	for _, in := range in {
 		in := in
-		attestType, enabled, err := parseAttest(in)
+		attest, err := parseAttest(in)
 		if err != nil {
 			return nil, err
 		}
 
-		k := "attest:" + attestType
-		if _, ok := out[k]; ok {
-			return nil, errors.Errorf("duplicate attestation field %s", attestType)
+		if _, ok := found[attest.Type]; ok {
+			return nil, errors.Errorf("duplicate attestation field %s", attest.Type)
 		}
-		if enabled {
-			out[k] = &in
-		} else {
-			out[k] = nil
-		}
+		found[attest.Type] = struct{}{}
+
+		out = append(out, attest)
 	}
 	return out, nil
 }
 
-func parseAttest(in string) (string, bool, error) {
+func parseAttest(in string) (*controllerapi.Attest, error) {
 	if in == "" {
-		return "", false, nil
+		return nil, nil
 	}
 
 	csvReader := csv.NewReader(strings.NewReader(in))
 	fields, err := csvReader.Read()
 	if err != nil {
-		return "", false, err
+		return nil, err
 	}
 
-	attestType := ""
-	enabled := true
+	attest := controllerapi.Attest{
+		Attrs: in,
+	}
 	for _, field := range fields {
 		key, value, ok := strings.Cut(field, "=")
 		if !ok {
-			return "", false, errors.Errorf("invalid value %s", field)
+			return nil, errors.Errorf("invalid value %s", field)
 		}
 		key = strings.TrimSpace(strings.ToLower(key))
 
 		switch key {
 		case "type":
-			attestType = value
-		case "enabled":
-			enabled, err = strconv.ParseBool(value)
+			attest.Type = value
+		case "disabled":
+			disabled, err := strconv.ParseBool(value)
 			if err != nil {
-				return "", false, err
+				return nil, errors.Wrapf(err, "invalid value %s", field)
 			}
+			attest.Disabled = disabled
 		}
 	}
-	if attestType == "" {
-		return "", false, errors.Errorf("attestation type not specified")
+	if attest.Type == "" {
+		return nil, errors.Errorf("attestation type not specified")
 	}
 
-	return attestType, enabled, nil
+	return &attest, nil
 }

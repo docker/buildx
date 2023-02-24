@@ -14,6 +14,7 @@ import (
 
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli/config"
@@ -978,17 +979,24 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if err != nil {
 		return nil, err
 	}
-	bo.Session = append(bo.Session, secrets)
-
-	sshSpecs := t.SSH
-	if len(sshSpecs) == 0 && buildflags.IsGitSSH(contextPath) {
-		sshSpecs = []string{"default"}
-	}
-	ssh, err := buildflags.ParseSSHSpecs(sshSpecs)
+	secretAttachment, err := controllerapi.CreateSecrets(secrets)
 	if err != nil {
 		return nil, err
 	}
-	bo.Session = append(bo.Session, ssh)
+	bo.Session = append(bo.Session, secretAttachment)
+
+	sshSpecs, err := buildflags.ParseSSHSpecs(t.SSH)
+	if err != nil {
+		return nil, err
+	}
+	if len(sshSpecs) == 0 && buildflags.IsGitSSH(contextPath) {
+		sshSpecs = append(sshSpecs, &controllerapi.SSH{ID: "default"})
+	}
+	sshAttachment, err := controllerapi.CreateSSH(sshSpecs)
+	if err != nil {
+		return nil, err
+	}
+	bo.Session = append(bo.Session, sshAttachment)
 
 	if t.Target != nil {
 		bo.Target = *t.Target
@@ -998,25 +1006,28 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if err != nil {
 		return nil, err
 	}
-	bo.CacheFrom = cacheImports
+	bo.CacheFrom = controllerapi.CreateCaches(cacheImports)
 
 	cacheExports, err := buildflags.ParseCacheEntry(t.CacheTo)
 	if err != nil {
 		return nil, err
 	}
-	bo.CacheTo = cacheExports
+	bo.CacheTo = controllerapi.CreateCaches(cacheExports)
 
-	outputs, err := buildflags.ParseOutputs(t.Outputs)
+	outputs, err := buildflags.ParseExports(t.Outputs)
 	if err != nil {
 		return nil, err
 	}
-	bo.Exports = outputs
+	bo.Exports, err = controllerapi.CreateExports(outputs)
+	if err != nil {
+		return nil, err
+	}
 
 	attests, err := buildflags.ParseAttests(t.Attest)
 	if err != nil {
 		return nil, err
 	}
-	bo.Attests = attests
+	bo.Attests = controllerapi.CreateAttestations(attests)
 
 	return bo, nil
 }

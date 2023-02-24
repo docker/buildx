@@ -26,7 +26,6 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/config"
 	dockeropts "github.com/docker/cli/opts"
-	"github.com/docker/distribution/reference"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
@@ -42,25 +41,19 @@ import (
 
 const defaultTargetName = "default"
 
-func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (res *build.ResultContext, err error) {
+func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	if in.Opts.NoCache && len(in.NoCacheFilter) > 0 {
-		return nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
+		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
 
-	if in.Quiet && progressMode != progress.PrinterModeAuto && progressMode != progress.PrinterModeQuiet {
-		return nil, errors.Errorf("progress=%s and quiet cannot be used together", progressMode)
-	} else if in.Quiet {
-		progressMode = "quiet"
-	}
-
-	contexts, err := parseContextNames(in.Contexts)
-	if err != nil {
-		return nil, err
+	contexts := map[string]build.NamedContext{}
+	for name, path := range in.NamedContexts {
+		contexts[name] = build.NamedContext{Path: path}
 	}
 
 	printFunc, err := parsePrintFunc(in.PrintFunc)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	opts := build.Options{
@@ -70,10 +63,9 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			InStream:       inStream,
 			NamedContexts:  contexts,
 		},
-		BuildArgs:     listToMap(in.BuildArgs, true),
+		BuildArgs:     in.BuildArgs,
 		ExtraHosts:    in.ExtraHosts,
-		ImageIDFile:   in.ImageIDFile,
-		Labels:        listToMap(in.Labels, false),
+		Labels:        in.Labels,
 		NetworkMode:   in.NetworkMode,
 		NoCache:       in.Opts.NoCache,
 		NoCacheFilter: in.NoCacheFilter,
@@ -87,36 +79,36 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	platforms, err := platformutil.Parse(in.Platforms)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Platforms = platforms
 
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
 	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(dockerConfig))
 
-	secrets, err := buildflags.ParseSecretSpecs(in.Secrets)
+	secrets, err := controllerapi.CreateSecrets(in.Secrets)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Session = append(opts.Session, secrets)
 
 	sshSpecs := in.SSH
 	if len(sshSpecs) == 0 && buildflags.IsGitSSH(in.ContextPath) {
-		sshSpecs = []string{"default"}
+		sshSpecs = append(sshSpecs, &controllerapi.SSH{ID: "default"})
 	}
-	ssh, err := buildflags.ParseSSHSpecs(sshSpecs)
+	ssh, err := controllerapi.CreateSSH(sshSpecs)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Session = append(opts.Session, ssh)
 
-	outputs, err := buildflags.ParseOutputs(in.Outputs)
+	outputs, err := controllerapi.CreateExports(in.Exports)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if in.Opts.ExportPush {
 		if in.Opts.ExportLoad {
-			return nil, errors.Errorf("push and load may not be set together at the moment")
+			return nil, nil, errors.Errorf("push and load may not be set together at the moment")
 		}
 		if len(outputs) == 0 {
 			outputs = []client.ExportEntry{{
@@ -130,7 +122,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			case "image":
 				outputs[0].Attrs["push"] = "true"
 			default:
-				return nil, errors.Errorf("push and %q output can't be used together", outputs[0].Type)
+				return nil, nil, errors.Errorf("push and %q output can't be used together", outputs[0].Type)
 			}
 		}
 	}
@@ -144,39 +136,20 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			switch outputs[0].Type {
 			case "docker":
 			default:
-				return nil, errors.Errorf("load and %q output can't be used together", outputs[0].Type)
+				return nil, nil, errors.Errorf("load and %q output can't be used together", outputs[0].Type)
 			}
 		}
 	}
 	opts.Exports = outputs
 
-	inAttests := append([]string{}, in.Attests...)
-	if in.Opts.Provenance != "" {
-		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", in.Opts.Provenance))
-	}
-	if in.Opts.SBOM != "" {
-		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", in.Opts.SBOM))
-	}
-	opts.Attests, err = buildflags.ParseAttests(inAttests)
-	if err != nil {
-		return nil, err
-	}
+	opts.CacheFrom = controllerapi.CreateCaches(in.CacheFrom)
+	opts.CacheTo = controllerapi.CreateCaches(in.CacheTo)
 
-	cacheImports, err := buildflags.ParseCacheEntry(in.CacheFrom)
-	if err != nil {
-		return nil, err
-	}
-	opts.CacheFrom = cacheImports
-
-	cacheExports, err := buildflags.ParseCacheEntry(in.CacheTo)
-	if err != nil {
-		return nil, err
-	}
-	opts.CacheTo = cacheExports
+	opts.Attests = controllerapi.CreateAttestations(in.Attests)
 
 	allow, err := buildflags.ParseEntitlements(in.Allow)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	opts.Allow = allow
 
@@ -191,29 +164,25 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
-		return nil, errors.Wrapf(err, "failed to update builder last activity time")
+		return nil, nil, errors.Wrapf(err, "failed to update builder last activity time")
 	}
 	nodes, err := b.LoadNodes(ctx, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	imageID, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
 	err = wrapBuildError(err, false)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-
-	if in.Quiet {
-		fmt.Println(imageID)
-	}
-	return res, nil
+	return resp, res, nil
 }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (imageID string, res *build.ResultContext, err error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
@@ -222,9 +191,10 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		fmt.Sprintf("%s:%s", ng.Driver, ng.Name),
 	))
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
+	var res *build.ResultContext
 	var mu sync.Mutex
 	var idx int
 	resp, err := build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan), func(driverIndex int, gotRes *build.ResultContext) {
@@ -239,12 +209,12 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		err = err1
 	}
 	if err != nil {
-		return "", nil, err
+		return nil, nil, err
 	}
 
 	if len(metadataFile) > 0 && resp != nil {
 		if err := writeMetadataFile(metadataFile, decodeExporterResponse(resp[defaultTargetName].ExporterResponse)); err != nil {
-			return "", nil, err
+			return nil, nil, err
 		}
 	}
 
@@ -253,12 +223,12 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 	for k := range resp {
 		if opts[k].PrintFunc != nil {
 			if err := printResult(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
-				return "", nil, err
+				return nil, nil, err
 			}
 		}
 	}
 
-	return resp[defaultTargetName].ExporterResponse["containerimage.digest"], res, err
+	return resp[defaultTargetName], res, err
 }
 
 func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
@@ -299,46 +269,6 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
 		fmt.Fprintf(w, "\n")
 
 	}
-}
-
-func listToMap(values []string, defaultEnv bool) map[string]string {
-	result := make(map[string]string, len(values))
-	for _, value := range values {
-		kv := strings.SplitN(value, "=", 2)
-		if len(kv) == 1 {
-			if defaultEnv {
-				v, ok := os.LookupEnv(kv[0])
-				if ok {
-					result[kv[0]] = v
-				}
-			} else {
-				result[kv[0]] = ""
-			}
-		} else {
-			result[kv[0]] = kv[1]
-		}
-	}
-	return result
-}
-
-func parseContextNames(values []string) (map[string]build.NamedContext, error) {
-	if len(values) == 0 {
-		return nil, nil
-	}
-	result := make(map[string]build.NamedContext, len(values))
-	for _, value := range values {
-		kv := strings.SplitN(value, "=", 2)
-		if len(kv) != 2 {
-			return nil, errors.Errorf("invalid context value: %s, expected key=value", value)
-		}
-		named, err := reference.ParseNormalizedNamed(kv[0])
-		if err != nil {
-			return nil, errors.Wrapf(err, "invalid context name %s", kv[0])
-		}
-		name := strings.TrimSuffix(reference.FamiliarString(named), ":latest")
-		result[name] = build.NamedContext{Path: kv[1]}
-	}
-	return result, nil
 }
 
 func parsePrintFunc(str string) (*build.PrintFunc, error) {

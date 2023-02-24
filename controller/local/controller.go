@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 )
 
@@ -24,6 +25,15 @@ type localController struct {
 	dockerCli command.Cli
 	ref       string
 	resultCtx *build.ResultContext
+}
+
+func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, *client.SolveResponse, error) {
+	resp, res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
+	if err != nil {
+		return "", nil, err
+	}
+	b.resultCtx = res
+	return b.ref, resp, nil
 }
 
 func (b *localController) Invoke(ctx context.Context, ref string, cfg controllerapi.ContainerConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
@@ -50,15 +60,6 @@ func (b *localController) Invoke(ctx context.Context, ref string, cfg controller
 		ccfg.Cwd = &cfg.Cwd
 	}
 	return build.Invoke(ctx, ccfg)
-}
-
-func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, error) {
-	res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
-	if err != nil {
-		return "", err
-	}
-	b.resultCtx = res
-	return b.ref, nil
 }
 
 func (b *localController) Kill(context.Context) error {

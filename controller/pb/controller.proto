@@ -25,30 +25,56 @@ message BuildOptions {
   string ContextPath = 1;
   string DockerfileName = 2;
   string PrintFunc = 3;
+  map<string, string> NamedContexts = 4;
 
-  repeated string Allow = 4;
-  repeated string Attests = 5; // TODO
-  repeated string BuildArgs = 6;
-  repeated string CacheFrom = 7;
-  repeated string CacheTo = 8;
-  string CgroupParent = 9;
-  repeated string Contexts = 10;
-  repeated string ExtraHosts = 11;
-  string ImageIDFile = 12;
-  repeated string Labels = 13;
+  repeated string Allow = 5;
+  repeated Attest Attests = 6;
+  map<string, string> BuildArgs = 7;
+  repeated CacheOptionsEntry CacheFrom = 8;
+  repeated CacheOptionsEntry CacheTo = 9;
+  string CgroupParent = 10;
+  repeated ExportEntry Exports = 11;
+  repeated string ExtraHosts = 12;
+  map<string, string> Labels = 13;
   string NetworkMode = 14;
   repeated string NoCacheFilter = 15;
-  repeated string Outputs = 16;
-  repeated string Platforms = 17;
-  bool Quiet = 18;
-  repeated string Secrets = 19;
-  int64 ShmSize = 20;
-  repeated string SSH = 21;
-  repeated string Tags = 22;
-  string Target = 23;
-  UlimitOpt Ulimits = 24;
-  // string Invoke: provided via Invoke API
-  CommonOptions Opts = 25;
+  repeated string Platforms = 16;
+  repeated Secret Secrets = 17;
+  int64 ShmSize = 18;
+  repeated SSH SSH = 19;
+  repeated string Tags = 20;
+  string Target = 21;
+  UlimitOpt Ulimits = 22;
+
+  CommonOptions Opts = 24;
+}
+
+message ExportEntry {
+  string Type = 1;
+  map<string, string> Attrs = 2;
+  string Destination = 3;
+}
+
+message CacheOptionsEntry {
+  string Type = 1;
+  map<string, string> Attrs = 2;
+}
+
+message Attest {
+  string Type = 1;
+  bool Disabled = 2;
+  string Attrs = 3;
+}
+
+message SSH {
+  string ID = 1;
+  repeated string Paths = 2;
+}
+
+message Secret {
+  string ID = 1;
+  string FilePath = 2;
+  string Env = 3;
 }
 
 message UlimitOpt {
@@ -69,11 +95,11 @@ message CommonOptions {
   bool Pull = 4;
   bool ExportPush = 5;
   bool ExportLoad = 6;
-  string SBOM       = 7; // TODO
-  string Provenance = 8; // TODO
 }
 
-message BuildResponse {}
+message BuildResponse {
+	map<string, string> ExporterResponse = 1;
+}
 
 message DisconnectRequest {
   string Ref = 1;

@@ -3,32 +3,27 @@ package buildflags
 import (
 	"strings"
 
-	"github.com/moby/buildkit/session"
-	"github.com/moby/buildkit/session/sshforward/sshprovider"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/moby/buildkit/util/gitutil"
 )
 
-func ParseSSHSpecs(sl []string) (session.Attachable, error) {
-	configs := make([]sshprovider.AgentConfig, 0, len(sl))
-	for _, v := range sl {
-		c, err := parseSSH(v)
-		if err != nil {
-			return nil, err
-		}
-		configs = append(configs, *c)
+func ParseSSHSpecs(sl []string) ([]*controllerapi.SSH, error) {
+	var outs []*controllerapi.SSH
+	if len(sl) == 0 {
+		return nil, nil
 	}
-	return sshprovider.NewSSHAgentProvider(configs)
-}
 
-func parseSSH(value string) (*sshprovider.AgentConfig, error) {
-	parts := strings.SplitN(value, "=", 2)
-	cfg := sshprovider.AgentConfig{
-		ID: parts[0],
+	for _, s := range sl {
+		parts := strings.SplitN(s, "=", 2)
+		out := controllerapi.SSH{
+			ID: parts[0],
+		}
+		if len(parts) > 1 {
+			out.Paths = strings.Split(parts[1], ",")
+		}
+		outs = append(outs, &out)
 	}
-	if len(parts) > 1 {
-		cfg.Paths = strings.Split(parts[1], ",")
-	}
-	return &cfg, nil
+	return outs, nil
 }
 
 // IsGitSSH returns true if the given repo URL is accessed over ssh
