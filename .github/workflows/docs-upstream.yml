@@ -59,3 +59,4 @@ jobs:
       repo: https://github.com/${{ github.repository }}
       data-files-id: docs-yaml
       data-files-folder: buildx
+      data-files-placeholder-folder: engine/reference/commandline
