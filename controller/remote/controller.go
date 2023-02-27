@@ -152,6 +152,16 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress, true)
 			})
 			defer b.Close()
+			sessionsDoneCh := make(chan struct{})
+			go func() {
+				for {
+					if !b.isUsed() {
+						sessionsDoneCh <- struct{}{}
+						break
+					}
+					time.Sleep(10 * time.Second)
+				}
+			}()
 
 			// serve server
 			addr := filepath.Join(root, defaultSocketFilename)
@@ -187,6 +197,9 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			signal.Notify(sigCh, syscall.SIGINT)
 			signal.Notify(sigCh, syscall.SIGTERM)
 			select {
+			case <-sessionsDoneCh:
+				logrus.Infof("all sessions finished")
+				return nil
 			case err := <-errCh:
 				logrus.Errorf("got error %s, exiting", err)
 				return err
