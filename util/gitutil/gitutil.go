@@ -3,6 +3,7 @@ package gitutil
 import (
 	"bytes"
 	"context"
+	"net/url"
 	"os"
 	"os/exec"
 	"strings"
@@ -70,11 +71,11 @@ func (c *Git) RootDir() (string, error) {
 func (c *Git) RemoteURL() (string, error) {
 	// Try to get the remote URL from the origin remote first
 	if ru, err := c.clean(c.run("remote", "get-url", "origin")); err == nil && ru != "" {
-		return ru, nil
+		return stripCredentials(ru), nil
 	}
 	// If that fails, try to get the remote URL from the upstream remote
 	if ru, err := c.clean(c.run("remote", "get-url", "upstream")); err == nil && ru != "" {
-		return ru, nil
+		return stripCredentials(ru), nil
 	}
 	return "", errors.New("no remote URL found for either origin or upstream")
 }
@@ -146,4 +147,17 @@ func IsUnknownRevision(err error) bool {
 	// https://github.com/git/git/blob/a6a323b31e2bcbac2518bddec71ea7ad558870eb/setup.c#L204
 	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "unknown revision or path not in the working tree") || strings.Contains(errMsg, "bad revision")
+}
+
+// stripCredentials takes a URL and strips username and password from it.
+// e.g. "https://user:password@host.tld/path.git" will be changed to
+// "https://host.tld/path.git".
+// TODO: remove this function once fix from BuildKit is vendored here
+func stripCredentials(s string) string {
+	ru, err := url.Parse(s)
+	if err != nil {
+		return s // string is not a URL, just return it
+	}
+	ru.User = nil
+	return ru.String()
 }
