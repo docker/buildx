@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/containerd/console"
+	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
@@ -35,6 +36,7 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
+	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -75,7 +77,13 @@ type buildOptions struct {
 	progress string
 	quiet    bool
 
-	controllerapi.CommonOptions
+	builder      string
+	metadataFile string
+	noCache      bool
+	pull         bool
+	exportPush   bool
+	exportLoad   bool
+
 	control.ControlOptions
 }
 
@@ -97,7 +105,12 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		Tags:           o.tags,
 		Target:         o.target,
 		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
-		Opts:           &o.CommonOptions,
+		Builder:        o.builder,
+		MetadataFile:   o.metadataFile,
+		NoCache:        o.noCache,
+		Pull:           o.pull,
+		ExportPush:     o.exportPush,
+		ExportLoad:     o.exportLoad,
 	}
 
 	inAttests := append([]string{}, o.attests...)
@@ -179,7 +192,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if err != nil {
 		return err
 	}
-	progress, err := in.toProgress()
+	progressMode, err := in.toProgress()
 	if err != nil {
 		return err
 	}
@@ -190,7 +203,20 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 			return errors.Wrap(err, "removing image ID file")
 		}
 	}
-	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, progress, nil)
+	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, cbuild.ProgressConfig{
+		Printer: func(ctx2 context.Context, ng *store.NodeGroup) (*progress.Printer, error) {
+			return progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
+				fmt.Sprintf("building with %q instance using %s driver", ng.Name, ng.Driver),
+				fmt.Sprintf("%s:%s", ng.Driver, ng.Name),
+			))
+		},
+		PrintWarningsFunc: func(warnings []client.VertexWarning) {
+			cbuild.PrintWarnings(os.Stderr, warnings, progressMode)
+		},
+		PrintResultFunc: func(f *build.PrintFunc, res map[string]string) error {
+			return cbuild.PrintResult(os.Stdout, f, res)
+		},
+	})
 	if err != nil {
 		return err
 	}
@@ -218,15 +244,15 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.contextPath = args[0]
-			options.Builder = rootOpts.builder
-			options.MetadataFile = cFlags.metadataFile
-			options.NoCache = false
+			options.builder = rootOpts.builder
+			options.metadataFile = cFlags.metadataFile
+			options.noCache = false
 			if cFlags.noCache != nil {
-				options.NoCache = *cFlags.noCache
+				options.noCache = *cFlags.noCache
 			}
-			options.Pull = false
+			options.pull = false
 			if cFlags.pull != nil {
-				options.Pull = *cFlags.pull
+				options.pull = *cFlags.pull
 			}
 			options.progress = cFlags.progress
 			cmd.Flags().VisitAll(checkWarnedFlags)
@@ -267,7 +293,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
-	flags.BoolVar(&options.ExportLoad, "load", false, `Shorthand for "--output=type=docker"`)
+	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--output=type=docker"`)
 
 	flags.StringVar(&options.networkMode, "network", "default", `Set the networking mode for the "RUN" instructions during build`)
 
@@ -281,7 +307,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
 	}
 
-	flags.BoolVar(&options.ExportPush, "push", false, `Shorthand for "--output=type=registry"`)
+	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 
@@ -523,7 +549,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		return err
 	}
 	opts = *optsP
-	ref, resp, err := c.Build(ctx, opts, pr, os.Stdout, os.Stderr, progress)
+	ref, resp, err := control.Build(ctx, c, opts, pr, os.Stdout, os.Stderr, progress)
 	if err != nil {
 		return errors.Wrapf(err, "failed to build") // TODO: allow invoke even on error
 	}
@@ -805,8 +831,8 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 	options.SSH = ssh
 
-	if options.Opts != nil && options.Opts.MetadataFile != "" {
-		options.Opts.MetadataFile, err = filepath.Abs(options.Opts.MetadataFile)
+	if options.MetadataFile != "" {
+		options.MetadataFile, err = filepath.Abs(options.MetadataFile)
 		if err != nil {
 			return nil, err
 		}

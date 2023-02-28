@@ -69,7 +69,12 @@ message BuildOptions {
   string Target = 21;
   UlimitOpt Ulimits = 22;
 
-  CommonOptions Opts = 24;
+  string Builder = 23;
+  string MetadataFile = 24;
+  bool NoCache = 25;
+  bool Pull = 26;
+  bool ExportPush = 27;
+  bool ExportLoad = 28;
 }
 
 message ExportEntry {
@@ -108,16 +113,6 @@ message Ulimit {
   string Name = 1;
   int64 Hard = 2;
   int64 Soft = 3;
-}
-
-message CommonOptions {
-  string Builder = 1;
-  string MetadataFile = 2;
-  bool NoCache = 3;
-  // string Progress: no progress view on server side
-  bool Pull = 4;
-  bool ExportPush = 5;
-  bool ExportLoad = 6;
 }
 
 message BuildResponse {
@@ -214,10 +209,29 @@ message StatusRequest {
 }
 
 message StatusResponse {
+  oneof Status {
+    SolveStatusMessage SolveStatus = 1;
+    NodeInfoMessage NodeInfo = 2;
+    ResultInfoMessage ResultInfo = 3;
+  }
+}
+
+message SolveStatusMessage {
   repeated moby.buildkit.v1.Vertex vertexes = 1;
   repeated moby.buildkit.v1.VertexStatus statuses = 2;
   repeated moby.buildkit.v1.VertexLog logs = 3;
   repeated moby.buildkit.v1.VertexWarning warnings = 4;
+}
+
+message NodeInfoMessage {
+  string Name = 1;
+  string Driver = 2;
+}
+
+message ResultInfoMessage {
+  map<string, string> Result = 1;
+  string Name = 2;
+  string Format = 3;
 }
 
 message InfoRequest {}

@@ -12,13 +12,12 @@ import (
 	"github.com/docker/buildx/controller/processes"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/version"
-	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
-type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (resp *client.SolveResponse, res *build.ResultContext, err error)
+type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, statusChan chan *pb.StatusResponse) (resp *client.SolveResponse, res *build.ResultContext, err error)
 
 func NewServer(buildFunc BuildFunc) *Server {
 	return &Server{
@@ -34,7 +33,7 @@ type Server struct {
 
 type session struct {
 	buildOnGoing atomic.Bool
-	statusChan   chan *client.SolveStatus
+	statusChan   chan *pb.StatusResponse
 	cancelBuild  func()
 	inputPipe    *io.PipeWriter
 
@@ -156,7 +155,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 		s.buildOnGoing.Store(true)
 	}
 	s.processes = processes.NewManager()
-	statusChan := make(chan *client.SolveStatus)
+	statusChan := make(chan *pb.StatusResponse)
 	s.statusChan = statusChan
 	inR, inW := io.Pipe()
 	defer inR.Close()
@@ -204,7 +203,7 @@ func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer
 	}
 
 	// Wait and get status channel prepared by Build()
-	var statusChan <-chan *client.SolveStatus
+	var statusChan <-chan *pb.StatusResponse
 	for {
 		// TODO: timeout?
 		m.sessionMu.Lock()
@@ -223,7 +222,7 @@ func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer
 		if ss == nil {
 			break
 		}
-		cs := toControlStatus(ss)
+		cs := ss
 		if err := stream.Send(cs); err != nil {
 			return err
 		}
@@ -403,52 +402,4 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 	})
 
 	return eg.Wait()
-}
-
-func toControlStatus(s *client.SolveStatus) *pb.StatusResponse {
-	resp := pb.StatusResponse{}
-	for _, v := range s.Vertexes {
-		resp.Vertexes = append(resp.Vertexes, &controlapi.Vertex{
-			Digest:        v.Digest,
-			Inputs:        v.Inputs,
-			Name:          v.Name,
-			Started:       v.Started,
-			Completed:     v.Completed,
-			Error:         v.Error,
-			Cached:        v.Cached,
-			ProgressGroup: v.ProgressGroup,
-		})
-	}
-	for _, v := range s.Statuses {
-		resp.Statuses = append(resp.Statuses, &controlapi.VertexStatus{
-			ID:        v.ID,
-			Vertex:    v.Vertex,
-			Name:      v.Name,
-			Total:     v.Total,
-			Current:   v.Current,
-			Timestamp: v.Timestamp,
-			Started:   v.Started,
-			Completed: v.Completed,
-		})
-	}
-	for _, v := range s.Logs {
-		resp.Logs = append(resp.Logs, &controlapi.VertexLog{
-			Vertex:    v.Vertex,
-			Stream:    int64(v.Stream),
-			Msg:       v.Data,
-			Timestamp: v.Timestamp,
-		})
-	}
-	for _, v := range s.Warnings {
-		resp.Warnings = append(resp.Warnings, &controlapi.VertexWarning{
-			Vertex: v.Vertex,
-			Level:  int64(v.Level),
-			Short:  v.Short,
-			Detail: v.Detail,
-			Url:    v.URL,
-			Info:   v.SourceInfo,
-			Ranges: v.Range,
-		})
-	}
-	return &resp
 }

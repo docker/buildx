@@ -228,14 +228,10 @@ func TestResolvePaths(t *testing.T) {
 		{
 			name: "metadatafile",
 			options: controllerapi.BuildOptions{
-				Opts: &controllerapi.CommonOptions{
-					MetadataFile: "test1",
-				},
+				MetadataFile: "test1",
 			},
 			want: controllerapi.BuildOptions{
-				Opts: &controllerapi.CommonOptions{
-					MetadataFile: filepath.Join(tmpwd, "test1"),
-				},
+				MetadataFile: filepath.Join(tmpwd, "test1"),
 			},
 		},
 	}

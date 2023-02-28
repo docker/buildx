@@ -1,12 +1,10 @@
 package build
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,19 +28,23 @@ import (
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
-	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/grpcerrors"
-	"github.com/moby/buildkit/util/progress/progressui"
-	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 )
 
 const defaultTargetName = "default"
 
-func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
-	if in.Opts.NoCache && len(in.NoCacheFilter) > 0 {
+// ProgressConfig is configuration about how the progress information is printed.
+type ProgressConfig struct {
+	Printer           func(ctx context.Context, ng *store.NodeGroup) (*progress.Printer, error)
+	PrintWarningsFunc func(warnings []client.VertexWarning)
+	PrintResultFunc   func(f *build.PrintFunc, res map[string]string) error
+}
+
+// RunBuild builds the specified build with providing the build status information through ProgressConfig.
+func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressConfig ProgressConfig) (*client.SolveResponse, *build.ResultContext, error) {
+	if in.NoCache && len(in.NoCacheFilter) > 0 {
 		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
 
@@ -67,9 +69,9 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		ExtraHosts:    in.ExtraHosts,
 		Labels:        in.Labels,
 		NetworkMode:   in.NetworkMode,
-		NoCache:       in.Opts.NoCache,
+		NoCache:       in.NoCache,
 		NoCacheFilter: in.NoCacheFilter,
-		Pull:          in.Opts.Pull,
+		Pull:          in.Pull,
 		ShmSize:       dockeropts.MemBytes(in.ShmSize),
 		Tags:          in.Tags,
 		Target:        in.Target,
@@ -106,8 +108,8 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	if err != nil {
 		return nil, nil, err
 	}
-	if in.Opts.ExportPush {
-		if in.Opts.ExportLoad {
+	if in.ExportPush {
+		if in.ExportLoad {
 			return nil, nil, errors.Errorf("push and load may not be set together at the moment")
 		}
 		if len(outputs) == 0 {
@@ -126,7 +128,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			}
 		}
 	}
-	if in.Opts.ExportLoad {
+	if in.ExportLoad {
 		if len(outputs) == 0 {
 			outputs = []client.ExportEntry{{
 				Type:  "docker",
@@ -160,7 +162,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 
 	b, err := builder.New(dockerCli,
-		builder.WithName(in.Opts.Builder),
+		builder.WithName(in.Builder),
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
@@ -174,7 +176,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressConfig, in.MetadataFile)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return nil, nil, err
@@ -182,14 +184,11 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	return resp, res, nil
 }
 
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressConfig ProgressConfig, metadataFile string) (*client.SolveResponse, *build.ResultContext, error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
-		fmt.Sprintf("building with %q instance using %s driver", ng.Name, ng.Driver),
-		fmt.Sprintf("%s:%s", ng.Driver, ng.Name),
-	))
+	printer, err := progressConfig.Printer(ctx2, ng)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -197,7 +196,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 	var res *build.ResultContext
 	var mu sync.Mutex
 	var idx int
-	resp, err := build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan), func(driverIndex int, gotRes *build.ResultContext) {
+	resp, err := build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer, func(driverIndex int, gotRes *build.ResultContext) {
 		mu.Lock()
 		defer mu.Unlock()
 		if res == nil || driverIndex < idx {
@@ -218,57 +217,19 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		}
 	}
 
-	printWarnings(os.Stderr, printer.Warnings(), progressMode)
+	if f := progressConfig.PrintWarningsFunc; f != nil {
+		f(printer.Warnings())
+	}
 
 	for k := range resp {
 		if opts[k].PrintFunc != nil {
-			if err := printResult(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
+			if err := progressConfig.PrintResultFunc(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
 				return nil, nil, err
 			}
 		}
 	}
 
 	return resp[defaultTargetName], res, err
-}
-
-func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
-	if len(warnings) == 0 || mode == progress.PrinterModeQuiet {
-		return
-	}
-	fmt.Fprintf(w, "\n ")
-	sb := &bytes.Buffer{}
-	if len(warnings) == 1 {
-		fmt.Fprintf(sb, "1 warning found")
-	} else {
-		fmt.Fprintf(sb, "%d warnings found", len(warnings))
-	}
-	if logrus.GetLevel() < logrus.DebugLevel {
-		fmt.Fprintf(sb, " (use --debug to expand)")
-	}
-	fmt.Fprintf(sb, ":\n")
-	fmt.Fprint(w, aec.Apply(sb.String(), aec.YellowF))
-
-	for _, warn := range warnings {
-		fmt.Fprintf(w, " - %s\n", warn.Short)
-		if logrus.GetLevel() < logrus.DebugLevel {
-			continue
-		}
-		for _, d := range warn.Detail {
-			fmt.Fprintf(w, "%s\n", d)
-		}
-		if warn.URL != "" {
-			fmt.Fprintf(w, "More info: %s\n", warn.URL)
-		}
-		if warn.SourceInfo != nil && warn.Range != nil {
-			src := errdefs.Source{
-				Info:   warn.SourceInfo,
-				Ranges: warn.Range,
-			}
-			src.Print(w)
-		}
-		fmt.Fprintf(w, "\n")
-
-	}
 }
 
 func parsePrintFunc(str string) (*build.PrintFunc, error) {

@@ -5,7 +5,6 @@ import (
 	"io"
 	"sync/atomic"
 
-	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
@@ -34,13 +33,13 @@ type localController struct {
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, *client.SolveResponse, error) {
+func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, statusChan chan *controllerapi.StatusResponse) (string, *client.SolveResponse, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
 		return "", nil, errors.New("build ongoing")
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
+	resp, res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, control.ForwardProgress(statusChan))
 	if err != nil {
 		return "", nil, err
 	}

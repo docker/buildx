@@ -125,7 +125,7 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 							fmt.Println("disconnect error", err)
 						}
 					}
-					ref, _, err := c.Build(ctx, options, nil, stdout, stderr, progressMode) // TODO: support stdin, hold build ref
+					ref, _, err := control.Build(ctx, c, options, nil, stdout, stderr, progressMode) // TODO: support stdin if needed
 					if err != nil {
 						fmt.Printf("failed to reload: %v\n", err)
 					} else {

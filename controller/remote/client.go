@@ -6,11 +6,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containerd/console"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/pkg/dialer"
 	"github.com/docker/buildx/controller/pb"
-	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
@@ -104,38 +102,13 @@ func (c *Client) Invoke(ctx context.Context, ref string, pid string, invokeConfi
 	})
 }
 
-func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, *client.SolveResponse, error) {
+func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, statusChan chan *pb.StatusResponse) (string, *client.SolveResponse, error) {
 	ref := identity.NewID()
-	pw, err := progress.NewPrinter(context.TODO(), w, out, progressMode)
-	if err != nil {
-		return "", nil, err
-	}
-	statusChan := make(chan *client.SolveStatus)
-	statusDone := make(chan struct{})
-	eg, egCtx := errgroup.WithContext(ctx)
-	var resp *client.SolveResponse
-	eg.Go(func() error {
-		defer close(statusChan)
-		var err error
-		resp, err = c.build(egCtx, ref, options, in, statusChan)
-		return err
-	})
-	eg.Go(func() error {
-		defer close(statusDone)
-		for s := range statusChan {
-			st := s
-			pw.Write(st)
-		}
-		return nil
-	})
-	eg.Go(func() error {
-		<-statusDone
-		return pw.Wait()
-	})
-	return ref, resp, eg.Wait()
+	resp, err := c.build(ctx, ref, options, in, statusChan)
+	return ref, resp, err
 }
 
-func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, statusChan chan *client.SolveStatus) (*client.SolveResponse, error) {
+func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, statusChan chan *pb.StatusResponse) (*client.SolveResponse, error) {
 	eg, egCtx := errgroup.WithContext(ctx)
 	done := make(chan struct{})
 
@@ -170,51 +143,7 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 				}
 				return errors.Wrap(err, "failed to receive status")
 			}
-			s := client.SolveStatus{}
-			for _, v := range resp.Vertexes {
-				s.Vertexes = append(s.Vertexes, &client.Vertex{
-					Digest:        v.Digest,
-					Inputs:        v.Inputs,
-					Name:          v.Name,
-					Started:       v.Started,
-					Completed:     v.Completed,
-					Error:         v.Error,
-					Cached:        v.Cached,
-					ProgressGroup: v.ProgressGroup,
-				})
-			}
-			for _, v := range resp.Statuses {
-				s.Statuses = append(s.Statuses, &client.VertexStatus{
-					ID:        v.ID,
-					Vertex:    v.Vertex,
-					Name:      v.Name,
-					Total:     v.Total,
-					Current:   v.Current,
-					Timestamp: v.Timestamp,
-					Started:   v.Started,
-					Completed: v.Completed,
-				})
-			}
-			for _, v := range resp.Logs {
-				s.Logs = append(s.Logs, &client.VertexLog{
-					Vertex:    v.Vertex,
-					Stream:    int(v.Stream),
-					Data:      v.Msg,
-					Timestamp: v.Timestamp,
-				})
-			}
-			for _, v := range resp.Warnings {
-				s.Warnings = append(s.Warnings, &client.VertexWarning{
-					Vertex:     v.Vertex,
-					Level:      int(v.Level),
-					Short:      v.Short,
-					Detail:     v.Detail,
-					URL:        v.Url,
-					SourceInfo: v.Info,
-					Range:      v.Ranges,
-				})
-			}
-			statusChan <- &s
+			statusChan <- resp
 		}
 	})
 	if in != nil {
