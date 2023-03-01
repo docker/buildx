@@ -1,3 +1,3 @@
 # Buildx drivers overview
 
-Moved to [docs.docker.com](https://docs.docker.com/build/building/drivers)
+This page has moved to [Docker Docs website](https://docs.docker.com/build/building/drivers)

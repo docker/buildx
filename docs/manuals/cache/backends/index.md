@@ -1,3 +1,3 @@
 # Cache storage backends
 
-Moved to [docs.docker.com](https://docs.docker.com/build/building/cache/backends)
+This page has moved to [Docker Docs website](https://docs.docker.com/build/building/cache/backends)
