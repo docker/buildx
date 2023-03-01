@@ -297,7 +297,7 @@ func (c *buildxController) Kill(ctx context.Context) error {
 
 func launch(ctx context.Context, logFile string, args ...string) (func() error, error) {
 	// set absolute path of binary, since we set the working directory to the root
-	pathname, err := filepath.Abs(os.Args[0])
+	pathname, err := os.Executable()
 	if err != nil {
 		return nil, err
 	}
