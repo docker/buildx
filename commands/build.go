@@ -676,19 +676,28 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 	var contexts map[string]string
 	for k, v := range options.NamedContexts {
-		p := v
-		if !urlutil.IsGitURL(p) && !urlutil.IsURL(p) && !strings.HasPrefix(p, "docker-image://") && !strings.HasPrefix(p, "oci-layout://") {
-			// named context can specify non-path value
-			// https://github.com/docker/buildx/blob/v0.10.3/docs/reference/buildx_build.md#-additional-build-contexts---build-context
+		if urlutil.IsGitURL(v) || urlutil.IsURL(v) || strings.HasPrefix(v, "docker-image://") {
+			// url prefix, this is a remote path
+		} else if strings.HasPrefix(v, "oci-layout://") {
+			// oci layout prefix, this is a local path
+			p := strings.TrimPrefix(v, "oci-layout://")
 			p, err = filepath.Abs(p)
 			if err != nil {
 				return nil, err
 			}
+			v = "oci-layout://" + p
+		} else {
+			// no prefix, assume local path
+			v, err = filepath.Abs(v)
+			if err != nil {
+				return nil, err
+			}
 		}
+
 		if contexts == nil {
 			contexts = make(map[string]string)
 		}
-		contexts[k] = p
+		contexts[k] = v
 	}
 	options.NamedContexts = contexts
 
