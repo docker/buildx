@@ -131,6 +131,7 @@ func TestGetGitAttributes(t *testing.T) {
 
 func TestGetGitAttributesDirty(t *testing.T) {
 	setupTest(t)
+	t.Setenv("BUILDX_GIT_CHECK_DIRTY", "true")
 
 	// make a change to test dirty flag
 	df := []byte("FROM alpine:edge\n")
