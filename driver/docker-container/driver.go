@@ -108,6 +108,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		cfg.Cmd = d.InitConfig.BuildkitFlags
 	}
 
+	useInit := true // let it cleanup exited processes created by BuildKit's container API
 	if err := l.Wrap("creating container "+d.Name, func() error {
 		hc := &container.HostConfig{
 			Privileged: true,
@@ -118,6 +119,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 					Target: confutil.DefaultBuildKitStateDir,
 				},
 			},
+			Init: &useInit,
 		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)

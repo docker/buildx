@@ -471,10 +471,10 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		// stdin must be usable for monitor
 		return errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
 	}
-	var invokeConfig controllerapi.ContainerConfig
+	var invokeConfig controllerapi.InvokeConfig
 	if inv := options.invoke; inv != "" {
 		var err error
-		invokeConfig, err = parseInvokeConfig(inv) // TODO: produce *controller.ContainerConfig directly.
+		invokeConfig, err = parseInvokeConfig(inv)
 		if err != nil {
 			return err
 		}
@@ -575,7 +575,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	return nil
 }
 
-func parseInvokeConfig(invoke string) (cfg controllerapi.ContainerConfig, err error) {
+func parseInvokeConfig(invoke string) (cfg controllerapi.InvokeConfig, err error) {
 	cfg.Tty = true
 	if invoke == "default" {
 		return cfg, nil

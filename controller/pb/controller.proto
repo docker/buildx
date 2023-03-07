@@ -14,6 +14,29 @@ service Controller {
   rpc List(ListRequest) returns (ListResponse);
   rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
   rpc Info(InfoRequest) returns (InfoResponse);
+  rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
+  rpc DisconnectProcess(DisconnectProcessRequest) returns (DisconnectProcessResponse);
+}
+
+message ListProcessesRequest {
+  string Ref = 1;
+}
+
+message ListProcessesResponse {
+  repeated ProcessInfo Infos = 1;
+}
+
+message ProcessInfo {
+  string ProcessID = 1;
+  InvokeConfig InvokeConfig = 2;
+}
+
+message DisconnectProcessRequest {
+  string Ref = 1;
+  string ProcessID = 2;
+}
+
+message DisconnectProcessResponse {
 }
 
 message BuildRequest {
@@ -149,10 +172,14 @@ message Message {
 
 message InitMessage {
   string Ref = 1;
-  ContainerConfig ContainerConfig = 2;
+
+  // If ProcessID already exists in the server, it tries to connect to it
+  // instead of invoking the new one. In this case, InvokeConfig will be ignored.
+  string ProcessID = 2;
+  InvokeConfig InvokeConfig = 3;
 }
 
-message ContainerConfig {
+message InvokeConfig {
   repeated string Entrypoint = 1;
   repeated string Cmd = 2;
   repeated string Env = 3;
@@ -161,6 +188,7 @@ message ContainerConfig {
   string Cwd = 6;
   bool NoCwd = 7; // Do not set cwd but use the image's default
   bool Tty = 8;
+  bool Rollback = 9; // Kill all process in the container and recreate it.
 }
 
 message FdMessage {

@@ -7,12 +7,15 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"text/tabwriter"
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/ioset"
+	"github.com/moby/buildkit/identity"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )
@@ -22,7 +25,9 @@ Available commands are:
   reload     reloads the context and build it.
   rollback   re-runs the interactive container with initial rootfs contents.
   list       list buildx sessions.
-  attach     attach to a buildx server.
+  attach     attach to a buildx server or a process in the container.
+  exec       execute a process in the interactive container.
+  ps         list processes invoked by "exec". Use "attach" to attach IO to that process.
   disconnect disconnect a client from a buildx server. Specific session ID can be specified an arg.
   kill       kill buildx server.
   exit       exits monitor.
@@ -30,7 +35,7 @@ Available commands are:
 `
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildOptions, invokeConfig controllerapi.ContainerConfig, c control.BuildxController, progressMode string, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File) error {
+func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, progressMode string, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File) error {
 	defer func() {
 		if err := c.Disconnect(ctx, curRef); err != nil {
 			logrus.Warnf("disconnect error: %v", err)
@@ -70,18 +75,17 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 		}, []ioset.MuxOut{monitorOutCtx, containerOutCtx}, 1, func(prev int, res int) string {
 			if prev == 0 && res == 0 {
 				// No toggle happened because container I/O isn't enabled.
-				return "No running interactive containers. You can start one by issuing rollback command\n"
+				return "Process isn't attached (previous \"exec\" exited?). Use \"attach\" for attaching or \"rollback\" or \"exec\" for running new one.\n"
 			}
 			return "Switched IO\n"
 		}),
-		invokeFunc: func(ctx context.Context, ref string, in io.ReadCloser, out io.WriteCloser, err io.WriteCloser) error {
-			return c.Invoke(ctx, ref, invokeConfig, in, out, err)
-		},
+		invokeFunc: c.Invoke,
 	}
 
 	// Start container automatically
 	fmt.Fprintf(stdout, "Launching interactive container. Press Ctrl-a-c to switch to monitor console\n")
-	m.rollback(ctx, curRef)
+	id := m.rollback(ctx, curRef, invokeConfig)
+	fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 
 	// Serve monitor commands
 	monitorForwarder := ioset.NewForwarder()
@@ -127,12 +131,17 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 					} else {
 						curRef = ref
 						// rollback the running container with the new result
-						m.rollback(ctx, curRef)
-						fmt.Fprint(stdout, "Interactive container was restarted. Press Ctrl-a-c to switch to the new container\n")
+						id := m.rollback(ctx, curRef, invokeConfig)
+						fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 					}
 				case "rollback":
-					m.rollback(ctx, curRef)
-					fmt.Fprint(stdout, "Interactive container was restarted. Press Ctrl-a-c to switch to the new container\n")
+					cfg := invokeConfig
+					if len(args) >= 2 {
+						cfg.Entrypoint = []string{args[1]}
+						cfg.Cmd = args[2:]
+					}
+					id := m.rollback(ctx, curRef, cfg)
+					fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 				case "list":
 					refs, err := c.List(ctx)
 					if err != nil {
@@ -150,6 +159,14 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 					if len(args) >= 2 {
 						target = args[1]
 					}
+					isProcess, err := isProcessID(ctx, c, curRef, target)
+					if err == nil && isProcess {
+						if err := c.DisconnectProcess(ctx, curRef, target); err != nil {
+							fmt.Printf("disconnect process failed %v\n", target)
+							continue
+						}
+						continue
+					}
 					if err := c.Disconnect(ctx, target); err != nil {
 						fmt.Println("disconnect error", err)
 					}
@@ -163,8 +180,68 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 						continue
 					}
 					ref := args[1]
-					m.rollback(ctx, ref)
-					curRef = ref
+					var id string
+
+					isProcess, err := isProcessID(ctx, c, curRef, ref)
+					if err == nil && isProcess {
+						m.attach(ctx, curRef, ref)
+						id = ref
+					}
+					if id == "" {
+						refs, err := c.List(ctx)
+						if err != nil {
+							fmt.Printf("failed to get the list of sessions: %v\n", err)
+							continue
+						}
+						found := false
+						for _, s := range refs {
+							if s == ref {
+								found = true
+								break
+							}
+						}
+						if !found {
+							fmt.Printf("unknown ID: %q\n", ref)
+							continue
+						}
+						if m.invokeCancel != nil {
+							m.invokeCancel() // Finish existing attach
+						}
+						curRef = ref
+					}
+					fmt.Fprintf(stdout, "Attached to process %q. Press Ctrl-a-c to switch to the new container\n", id)
+				case "exec":
+					if len(args) < 2 {
+						fmt.Println("exec: server name must be passed")
+						continue
+					}
+					if curRef == "" {
+						fmt.Println("attach to a session first")
+						continue
+					}
+					cfg := controllerapi.InvokeConfig{
+						Entrypoint: []string{args[1]},
+						Cmd:        args[2:],
+						// TODO: support other options as well via flags
+						Env:  invokeConfig.Env,
+						User: invokeConfig.User,
+						Cwd:  invokeConfig.Cwd,
+						Tty:  true,
+					}
+					pid := m.exec(ctx, curRef, cfg)
+					fmt.Fprintf(stdout, "Process %q started. Press Ctrl-a-c to switch to that process.\n", pid)
+				case "ps":
+					plist, err := c.ListProcesses(ctx, curRef)
+					if err != nil {
+						fmt.Println("cannot list process:", err)
+						continue
+					}
+					tw := tabwriter.NewWriter(stdout, 1, 8, 1, '\t', 0)
+					fmt.Fprintln(tw, "PID\tCURRENT_SESSION\tCOMMAND")
+					for _, p := range plist {
+						fmt.Fprintf(tw, "%-20s\t%v\t%v\n", p.ProcessID, p.ProcessID == m.attachedPid.Load(), append(p.InvokeConfig.Entrypoint, p.InvokeConfig.Cmd...))
+					}
+					tw.Flush()
 				case "exit":
 					return
 				case "help":
@@ -177,14 +254,10 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 		}()
 		select {
 		case <-doneCh:
-			if m.curInvokeCancel != nil {
-				m.curInvokeCancel()
-			}
+			m.invokeCancel()
 			return nil
 		case err := <-errCh:
-			if m.curInvokeCancel != nil {
-				m.curInvokeCancel()
-			}
+			m.invokeCancel()
 			return err
 		case <-monitorDisableCh:
 		}
@@ -198,34 +271,58 @@ type readWriter struct {
 }
 
 type monitor struct {
-	muxIO           *ioset.MuxIO
-	invokeIO        *ioset.Forwarder
-	invokeFunc      func(context.Context, string, io.ReadCloser, io.WriteCloser, io.WriteCloser) error
-	curInvokeCancel func()
+	muxIO        *ioset.MuxIO
+	invokeIO     *ioset.Forwarder
+	invokeFunc   func(ctx context.Context, ref, pid string, cfg controllerapi.InvokeConfig, in io.ReadCloser, out io.WriteCloser, err io.WriteCloser) error
+	invokeCancel func()
+	attachedPid  atomic.Value
 }
 
-func (m *monitor) rollback(ctx context.Context, ref string) {
-	if m.curInvokeCancel != nil {
-		m.curInvokeCancel() // Finish the running container if exists
+func (m *monitor) rollback(ctx context.Context, ref string, cfg controllerapi.InvokeConfig) string {
+	pid := identity.NewID()
+	cfg1 := cfg
+	cfg1.Rollback = true
+	return m.startInvoke(ctx, ref, pid, cfg1)
+}
+
+func (m *monitor) exec(ctx context.Context, ref string, cfg controllerapi.InvokeConfig) string {
+	return m.startInvoke(ctx, ref, identity.NewID(), cfg)
+}
+
+func (m *monitor) attach(ctx context.Context, ref, pid string) {
+	m.startInvoke(ctx, ref, pid, controllerapi.InvokeConfig{})
+}
+
+func (m *monitor) startInvoke(ctx context.Context, ref, pid string, cfg controllerapi.InvokeConfig) string {
+	if m.invokeCancel != nil {
+		m.invokeCancel() // Finish existing attach
 	}
 	go func() {
-		// Start a new container
-		if err := m.invoke(ctx, ref); err != nil {
+		// Start a new invoke
+		if err := m.invoke(ctx, ref, pid, cfg); err != nil {
 			logrus.Debugf("invoke error: %v", err)
 		}
+		if pid == m.attachedPid.Load() {
+			m.attachedPid.Store("")
+		}
 	}()
+	m.attachedPid.Store(pid)
+	return pid
 }
 
-func (m *monitor) invoke(ctx context.Context, ref string) error {
+func (m *monitor) invoke(ctx context.Context, ref, pid string, cfg controllerapi.InvokeConfig) error {
 	m.muxIO.Enable(1)
 	defer m.muxIO.Disable(1)
+	if err := m.muxIO.SwitchTo(1); err != nil {
+		return errors.Errorf("failed to switch to process IO: %v", err)
+	}
 	invokeCtx, invokeCancel := context.WithCancel(ctx)
 
 	containerIn, containerOut := ioset.Pipe()
 	m.invokeIO.SetOut(&containerOut)
 	waitInvokeDoneCh := make(chan struct{})
 	var cancelOnce sync.Once
-	curInvokeCancel := func() {
+	invokeCancelAndDetachFn := func() {
 		cancelOnce.Do(func() {
 			containerIn.Close()
 			m.invokeIO.SetOut(nil)
@@ -233,10 +330,10 @@ func (m *monitor) invoke(ctx context.Context, ref string) error {
 		})
 		<-waitInvokeDoneCh
 	}
-	defer curInvokeCancel()
-	m.curInvokeCancel = curInvokeCancel
+	defer invokeCancelAndDetachFn()
+	m.invokeCancel = invokeCancelAndDetachFn
 
-	err := m.invokeFunc(invokeCtx, ref, containerIn.Stdin, containerIn.Stdout, containerIn.Stderr)
+	err := m.invokeFunc(invokeCtx, ref, pid, cfg, containerIn.Stdin, containerIn.Stdout, containerIn.Stderr)
 	close(waitInvokeDoneCh)
 
 	return err
@@ -247,3 +344,16 @@ type nopCloser struct {
 }
 
 func (c nopCloser) Close() error { return nil }
+
+func isProcessID(ctx context.Context, c control.BuildxController, curRef, ref string) (bool, error) {
+	infos, err := c.ListProcesses(ctx, curRef)
+	if err != nil {
+		return false, err
+	}
+	for _, p := range infos {
+		if p.ProcessID == ref {
+			return true, nil
+		}
+	}
+	return false, nil
+}
