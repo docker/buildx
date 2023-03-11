@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/opts"
@@ -115,6 +116,7 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.builder = rootOpts.builder
 			return runDiskUsage(dockerCli, options)
 		},
+		ValidArgsFunction: cobrautil.NoCompletion,
 	}
 
 	flags := cmd.Flags()

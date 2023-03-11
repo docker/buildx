@@ -126,6 +126,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runLs(dockerCli, options)
 		},
+		ValidArgsFunction: cobrautil.NoCompletion,
 	}
 
 	// hide builder persistent flag for this command

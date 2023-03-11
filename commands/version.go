@@ -23,6 +23,7 @@ func versionCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVersion(dockerCli)
 		},
+		ValidArgsFunction: cobrautil.NoCompletion,
 	}
 
 	// hide builder persistent flag for this command

@@ -309,6 +309,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(dockerCli, options, args)
 		},
+		ValidArgsFunction: cobrautil.NoCompletion,
 	}
 
 	flags := cmd.Flags()

@@ -23,6 +23,9 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		Annotations: map[string]string{
 			annotation.CodeDelimiter: `"`,
 		},
+		CompletionOptions: cobra.CompletionOptions{
+			HiddenDefaultCmd: true,
+		},
 	}
 	if isPlugin {
 		cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {

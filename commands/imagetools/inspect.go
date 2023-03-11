@@ -2,6 +2,7 @@ package commands
 
 import (
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
@@ -52,6 +53,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			options.builder = *rootOpts.Builder
 			return runInspect(dockerCli, options, args[0])
 		},
+		ValidArgsFunction: cobrautil.NoCompletion,
 	}
 
 	flags := cmd.Flags()

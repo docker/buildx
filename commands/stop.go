@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
@@ -46,6 +47,7 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runStop(dockerCli, options)
 		},
+		ValidArgsFunction: cobrautil.NoCompletion,
 	}
 
 	return cmd

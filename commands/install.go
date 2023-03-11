@@ -46,7 +46,8 @@ func installCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInstall(dockerCli, options)
 		},
-		Hidden: true,
+		Hidden:            true,
+		ValidArgsFunction: cobrautil.NoCompletion,
 	}
 
 	// hide builder persistent flag for this command
