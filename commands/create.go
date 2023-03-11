@@ -12,6 +12,7 @@ import (
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	k8sutil "github.com/docker/buildx/driver/kubernetes/util"
 	remoteutil "github.com/docker/buildx/driver/remote/util"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
@@ -175,12 +176,21 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 			if len(args) > 0 {
 				logrus.Warnf("kubernetes driver does not support endpoint args %q", args[0])
 			}
+			// generate node name if not provided to avoid duplicated endpoint
+			// error: https://github.com/docker/setup-buildx-action/issues/215
+			nodeName := in.nodeName
+			if nodeName == "" {
+				nodeName, err = k8sutil.GenerateNodeName(name, txn)
+				if err != nil {
+					return err
+				}
+			}
 			// naming endpoint to make --append works
 			ep = (&url.URL{
 				Scheme: driverName,
-				Path:   "/" + in.name,
+				Path:   "/" + name,
 				RawQuery: (&url.Values{
-					"deployment": {in.nodeName},
+					"deployment": {nodeName},
 					"kubeconfig": {os.Getenv("KUBECONFIG")},
 				}).Encode(),
 			}).String()
