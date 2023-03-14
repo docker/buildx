@@ -1027,6 +1027,7 @@ k8s.io/apimachinery/pkg/util/json
 k8s.io/apimachinery/pkg/util/managedfields
 k8s.io/apimachinery/pkg/util/naming
 k8s.io/apimachinery/pkg/util/net
+k8s.io/apimachinery/pkg/util/rand
 k8s.io/apimachinery/pkg/util/remotecommand
 k8s.io/apimachinery/pkg/util/runtime
 k8s.io/apimachinery/pkg/util/sets
@@ -1038,6 +1039,9 @@ k8s.io/apimachinery/pkg/version
 k8s.io/apimachinery/pkg/watch
 k8s.io/apimachinery/third_party/forked/golang/netutil
 k8s.io/apimachinery/third_party/forked/golang/reflect
+# k8s.io/apiserver v0.25.4 => k8s.io/apiserver v0.22.4
+## explicit; go 1.16
+k8s.io/apiserver/pkg/storage/names
 # k8s.io/client-go v0.25.4 => k8s.io/client-go v0.22.4
 ## explicit; go 1.16
 k8s.io/client-go/applyconfigurations/admissionregistration/v1
@@ -1181,4 +1185,5 @@ sigs.k8s.io/structured-merge-diff/v4/value
 sigs.k8s.io/yaml
 # k8s.io/api => k8s.io/api v0.22.4
 # k8s.io/apimachinery => k8s.io/apimachinery v0.22.4
+# k8s.io/apiserver => k8s.io/apiserver v0.22.4
 # k8s.io/client-go => k8s.io/client-go v0.22.4

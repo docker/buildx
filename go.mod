@@ -16,6 +16,7 @@ require (
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.2
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
+	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 	github.com/hashicorp/hcl/v2 v2.8.2
 	github.com/moby/buildkit v0.11.0-rc3.0.20230216100651-46e4e7e51b01
@@ -40,6 +41,7 @@ require (
 	gopkg.in/yaml.v3 v3.0.1
 	k8s.io/api v0.25.4
 	k8s.io/apimachinery v0.25.4
+	k8s.io/apiserver v0.25.4
 	k8s.io/client-go v0.25.4
 )
 
@@ -99,7 +101,6 @@ require (
 	github.com/google/certificate-transparency-go v1.1.4 // indirect
 	github.com/google/go-cmp v0.5.9 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
-	github.com/google/uuid v1.3.0 // indirect
 	github.com/googleapis/gnostic v0.5.5 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
@@ -177,5 +178,6 @@ require (
 replace (
 	k8s.io/api => k8s.io/api v0.22.4
 	k8s.io/apimachinery => k8s.io/apimachinery v0.22.4
+	k8s.io/apiserver => k8s.io/apiserver v0.22.4
 	k8s.io/client-go => k8s.io/client-go v0.22.4
 )

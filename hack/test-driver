@@ -54,10 +54,14 @@ if [ "$DRIVER" != "docker" ]; then
       if [ "$firstNode" = "0" ]; then
         createFlags="$createFlags --append"
       fi
+      nodeName=""
+      if [ "$DRIVER" != "kubernetes" ]; then
+        nodeName="${builderName}-${platform/\//-}"
+      fi
       buildxCmd create ${createFlags} \
         --bootstrap \
         --name="${builderName}" \
-        --node="${builderName}-${platform/\//-}" \
+        --node="${nodeName}" \
         --platform="${platform}" \
         --driver="${DRIVER}" \
         ${driverOpt:+"--driver-opt=${driverOpt}"} \
