@@ -21,36 +21,68 @@ func TestResolvePaths(t *testing.T) {
 		want    controllerapi.BuildOptions
 	}{
 		{
-			name:    "contextpath",
-			options: controllerapi.BuildOptions{ContextPath: "test"},
-			want:    controllerapi.BuildOptions{ContextPath: filepath.Join(tmpwd, "test")},
+			name: "contextpath",
+			options: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{ContextPath: "test"},
+			},
+			want: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{ContextPath: filepath.Join(tmpwd, "test")},
+			},
 		},
 		{
-			name:    "contextpath-cwd",
-			options: controllerapi.BuildOptions{ContextPath: "."},
-			want:    controllerapi.BuildOptions{ContextPath: tmpwd},
+			name: "contextpath-cwd",
+			options: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{ContextPath: "."},
+			},
+			want: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{ContextPath: tmpwd},
+			},
 		},
 		{
-			name:    "contextpath-dash",
-			options: controllerapi.BuildOptions{ContextPath: "-"},
-			want:    controllerapi.BuildOptions{ContextPath: "-"},
+			name: "contextpath-dash",
+			options: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{ContextPath: "-"},
+			},
+			want: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{ContextPath: "-"},
+			},
 		},
 		{
-			name:    "dockerfilename",
-			options: controllerapi.BuildOptions{DockerfileName: "test"},
-			want:    controllerapi.BuildOptions{DockerfileName: filepath.Join(tmpwd, "test")},
+			name: "dockerfilename",
+			options: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{DockerfileName: "test"},
+			},
+			want: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{DockerfileName: filepath.Join(tmpwd, "test")},
+			},
 		},
 		{
-			name:    "dockerfilename-dash",
-			options: controllerapi.BuildOptions{DockerfileName: "-"},
-			want:    controllerapi.BuildOptions{DockerfileName: "-"},
+			name: "dockerfilename-dash",
+			options: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{DockerfileName: "-"},
+			},
+			want: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{DockerfileName: "-"},
+			},
 		},
 		{
 			name: "contexts",
-			options: controllerapi.BuildOptions{NamedContexts: map[string]string{"a": "test1", "b": "test2",
-				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git"}},
-			want: controllerapi.BuildOptions{NamedContexts: map[string]string{"a": filepath.Join(tmpwd, "test1"), "b": filepath.Join(tmpwd, "test2"),
-				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git"}},
+			options: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{NamedContexts: map[string]*controllerapi.NamedContext{
+					"a":       {Path: "test1"},
+					"b":       {Path: "test2"},
+					"alpine":  {Path: "docker-image://alpine@sha256:0123456789"},
+					"project": {Path: "https://github.com/myuser/project.git"},
+				},
+				}},
+			want: controllerapi.BuildOptions{
+				Inputs: &controllerapi.Inputs{NamedContexts: map[string]*controllerapi.NamedContext{
+					"a":       {Path: filepath.Join(tmpwd, "test1")},
+					"b":       {Path: filepath.Join(tmpwd, "test2")},
+					"alpine":  {Path: "docker-image://alpine@sha256:0123456789"},
+					"project": {Path: "https://github.com/myuser/project.git"},
+				},
+				}},
 		},
 		{
 			name: "cache-from",

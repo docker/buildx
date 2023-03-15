@@ -3,6 +3,7 @@ syntax = "proto3";
 package buildx.controller.v1;
 
 import "github.com/moby/buildkit/api/services/control/control.proto";
+import "github.com/moby/buildkit/solver/pb/ops.proto";
 
 option go_package = "pb";
 
@@ -44,32 +45,39 @@ message BuildRequest {
   BuildOptions Options = 2;
 }
 
-message BuildOptions {
+message Inputs {
   string ContextPath = 1;
   string DockerfileName = 2;
-  string PrintFunc = 3;
-  map<string, string> NamedContexts = 4;
+  string DockerfileInline = 3;
+  pb.Definition ContextDefinition = 4;
+  map<string, NamedContext> NamedContexts = 5;
+  // io.Reader InStream = ???;
+}
 
-  repeated string Allow = 5;
-  repeated Attest Attests = 6;
-  map<string, string> BuildArgs = 7;
-  repeated CacheOptionsEntry CacheFrom = 8;
-  repeated CacheOptionsEntry CacheTo = 9;
-  string CgroupParent = 10;
-  repeated ExportEntry Exports = 11;
-  repeated string ExtraHosts = 12;
-  map<string, string> Labels = 13;
-  string NetworkMode = 14;
-  repeated string NoCacheFilter = 15;
-  repeated string Platforms = 16;
-  repeated Secret Secrets = 17;
-  int64 ShmSize = 18;
-  repeated SSH SSH = 19;
-  repeated string Tags = 20;
-  string Target = 21;
-  UlimitOpt Ulimits = 22;
+message BuildOptions {
+  Inputs inputs = 1;
+  string PrintFunc = 2;
 
-  CommonOptions Opts = 24;
+  repeated string Allow = 3;
+  repeated Attest Attests = 4;
+  map<string, string> BuildArgs = 5;
+  repeated CacheOptionsEntry CacheFrom = 6;
+  repeated CacheOptionsEntry CacheTo = 7;
+  string CgroupParent = 8;
+  repeated ExportEntry Exports = 9;
+  repeated string ExtraHosts = 10;
+  map<string, string> Labels = 11;
+  string NetworkMode = 12;
+  repeated string NoCacheFilter = 13;
+  repeated string Platforms = 14;
+  repeated Secret Secrets = 15;
+  int64 ShmSize = 16;
+  repeated SSH SSH = 17;
+  repeated string Tags = 18;
+  string Target = 19;
+  UlimitOpt Ulimits = 20;
+
+  CommonOptions Opts = 21;
 }
 
 message ExportEntry {
@@ -100,6 +108,11 @@ message Secret {
   string Env = 3;
 }
 
+message NamedContext {
+  string Path = 1;
+  pb.Definition Definition = 2;
+}
+
 message UlimitOpt {
   map<string, Ulimit> values = 1;
 }
@@ -118,6 +131,11 @@ message CommonOptions {
   bool Pull = 4;
   bool ExportPush = 5;
   bool ExportLoad = 6;
+  // TODO: we should remove Linked from the controllerapi, it's only used to
+  // produce a single warning. To allow this, we need to move the default
+  // export detection out from the controller server, as well as load the
+  // driver on the controller client.
+  bool Linked = 7;
 }
 
 message BuildResponse {

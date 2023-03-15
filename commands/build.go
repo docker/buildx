@@ -81,23 +81,32 @@ type buildOptions struct {
 
 func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error) {
 	var err error
-	opts := controllerapi.BuildOptions{
-		Allow:          o.allow,
-		BuildArgs:      listToMap(o.buildArgs, true),
-		CgroupParent:   o.cgroupParent,
+
+	inputs := controllerapi.Inputs{
 		ContextPath:    o.contextPath,
 		DockerfileName: o.dockerfileName,
-		ExtraHosts:     o.extraHosts,
-		Labels:         listToMap(o.labels, false),
-		NetworkMode:    o.networkMode,
-		NoCacheFilter:  o.noCacheFilter,
-		Platforms:      o.platforms,
-		PrintFunc:      o.printFunc,
-		ShmSize:        int64(o.shmSize),
-		Tags:           o.tags,
-		Target:         o.target,
-		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
-		Opts:           &o.CommonOptions,
+	}
+	inputs.NamedContexts, err = buildflags.ParseContextNames(o.contexts)
+	if err != nil {
+		return controllerapi.BuildOptions{}, err
+	}
+
+	opts := controllerapi.BuildOptions{
+		Inputs:        &inputs,
+		Allow:         o.allow,
+		BuildArgs:     listToMap(o.buildArgs, true),
+		CgroupParent:  o.cgroupParent,
+		ExtraHosts:    o.extraHosts,
+		Labels:        listToMap(o.labels, false),
+		NetworkMode:   o.networkMode,
+		NoCacheFilter: o.noCacheFilter,
+		Platforms:     o.platforms,
+		PrintFunc:     o.printFunc,
+		ShmSize:       int64(o.shmSize),
+		Tags:          o.tags,
+		Target:        o.target,
+		Ulimits:       dockerUlimitToControllerUlimit(o.ulimits),
+		Opts:          &o.CommonOptions,
 	}
 
 	inAttests := append([]string{}, o.attests...)
@@ -108,11 +117,6 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", o.sbom))
 	}
 	opts.Attests, err = buildflags.ParseAttests(inAttests)
-	if err != nil {
-		return controllerapi.BuildOptions{}, err
-	}
-
-	opts.NamedContexts, err = buildflags.ParseContextNames(o.contexts)
 	if err != nil {
 		return controllerapi.BuildOptions{}, err
 	}
@@ -662,45 +666,6 @@ func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.Ulim
 // resolvePaths resolves all paths contained in controllerapi.BuildOptions
 // and replaces them to absolute paths.
 func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOptions, err error) {
-	if options.ContextPath != "" && options.ContextPath != "-" {
-		options.ContextPath, err = filepath.Abs(options.ContextPath)
-		if err != nil {
-			return nil, err
-		}
-	}
-	if options.DockerfileName != "" && options.DockerfileName != "-" {
-		options.DockerfileName, err = filepath.Abs(options.DockerfileName)
-		if err != nil {
-			return nil, err
-		}
-	}
-	var contexts map[string]string
-	for k, v := range options.NamedContexts {
-		if urlutil.IsGitURL(v) || urlutil.IsURL(v) || strings.HasPrefix(v, "docker-image://") {
-			// url prefix, this is a remote path
-		} else if strings.HasPrefix(v, "oci-layout://") {
-			// oci layout prefix, this is a local path
-			p := strings.TrimPrefix(v, "oci-layout://")
-			p, err = filepath.Abs(p)
-			if err != nil {
-				return nil, err
-			}
-			v = "oci-layout://" + p
-		} else {
-			// no prefix, assume local path
-			v, err = filepath.Abs(v)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if contexts == nil {
-			contexts = make(map[string]string)
-		}
-		contexts[k] = v
-	}
-	options.NamedContexts = contexts
-
 	var cacheFrom []*controllerapi.CacheOptionsEntry
 	for _, co := range options.CacheFrom {
 		switch co.Type {
@@ -811,6 +776,51 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 			return nil, err
 		}
 	}
+
+	if options.Inputs == nil {
+		return options, nil
+	}
+	if options.Inputs.ContextPath != "" && options.Inputs.ContextPath != "-" {
+		options.Inputs.ContextPath, err = filepath.Abs(options.Inputs.ContextPath)
+		if err != nil {
+			return nil, err
+		}
+	}
+	if options.Inputs.DockerfileName != "" && options.Inputs.DockerfileName != "-" {
+		options.Inputs.DockerfileName, err = filepath.Abs(options.Inputs.DockerfileName)
+		if err != nil {
+			return nil, err
+		}
+	}
+	var contexts map[string]*controllerapi.NamedContext
+	for k, v := range options.Inputs.NamedContexts {
+		v := *v
+		if v.Definition != nil {
+			// definition, no path
+		} else if urlutil.IsGitURL(v.Path) || urlutil.IsURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") {
+			// url prefix, this is a remote path
+		} else if strings.HasPrefix(v.Path, "oci-layout://") {
+			// oci layout prefix, this is a local path
+			p := strings.TrimPrefix(v.Path, "oci-layout://")
+			p, err = filepath.Abs(p)
+			if err != nil {
+				return nil, err
+			}
+			v.Path = "oci-layout://" + p
+		} else {
+			// no prefix, assume local path
+			v.Path, err = filepath.Abs(v.Path)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if contexts == nil {
+			contexts = make(map[string]*controllerapi.NamedContext)
+		}
+		contexts[k] = &v
+	}
+	options.Inputs.NamedContexts = contexts
 
 	return options, nil
 }
