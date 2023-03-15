@@ -125,7 +125,6 @@ Same as [`docker build` command](https://docs.docker.com/engine/reference/comman
 There are also useful built-in build args like:
 
 * `BUILDKIT_CONTEXT_KEEP_GIT_DIR=<bool>` trigger git context to keep the `.git` directory
-* `BUILDKIT_INLINE_BUILDINFO_ATTRS=<bool>` inline build info attributes in image config or not
 * `BUILDKIT_INLINE_CACHE=<bool>` inline cache metadata to image config or not
 * `BUILDKIT_MULTI_PLATFORM=<bool>` opt into deterministic output regardless of multi-platform output or not
 
@@ -286,26 +285,6 @@ $ cat metadata.json
 ```
 ```json
 {
-  "containerimage.buildinfo": {
-    "frontend": "dockerfile.v0",
-    "attrs": {
-      "context": "https://github.com/crazy-max/buildkit-buildsources-test.git#master",
-      "filename": "Dockerfile",
-      "source": "docker/dockerfile:master"
-    },
-    "sources": [
-      {
-        "type": "docker-image",
-        "ref": "docker.io/docker/buildx-bin:0.6.1@sha256:a652ced4a4141977c7daaed0a074dcd9844a78d7d2615465b12f433ae6dd29f0",
-        "pin": "sha256:a652ced4a4141977c7daaed0a074dcd9844a78d7d2615465b12f433ae6dd29f0"
-      },
-      {
-        "type": "docker-image",
-        "ref": "docker.io/library/alpine:3.13",
-        "pin": "sha256:026f721af4cf2843e07bba648e158fb35ecc876d822130633cc49f707f0fc88c"
-      }
-    ]
-  },
   "containerimage.config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
   "containerimage.descriptor": {
     "annotations": {
