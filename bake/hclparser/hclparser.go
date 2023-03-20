@@ -124,11 +124,13 @@ func (p *parser) loadDeps(ectx *hcl.EvalContext, exp hcl.Expression, exclude map
 					}
 				}
 			}
-			if err := p.resolveBlock(blocks[0], target); err != nil {
-				if allowMissing && errors.Is(err, errUndefined) {
-					continue
+			for _, block := range blocks {
+				if err := p.resolveBlock(block, target, true); err != nil {
+					if allowMissing && errors.Is(err, errUndefined) {
+						continue
+					}
+					return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 				}
-				return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 			}
 		} else {
 			if err := p.resolveValue(ectx, v.RootName()); err != nil {
@@ -301,17 +303,20 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 // resolveBlock force evaluates a block, storing the result in the parser. If a
 // target schema is provided, only the attributes and blocks present in the
 // schema will be evaluated.
-func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err error) {
-	name := block.Labels[0]
-	if err := p.opt.ValidateLabel(name); err != nil {
-		return wrapErrorDiagnostic("Invalid name", err, &block.LabelRanges[0], &block.LabelRanges[0])
-	}
-
+func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema, resolveName bool) (err error) {
 	if _, ok := p.doneB[block]; !ok {
 		p.doneB[block] = map[string]struct{}{}
 	}
 	if _, ok := p.progressB[block]; !ok {
 		p.progressB[block] = map[string]struct{}{}
+	}
+
+	name, err := p.resolveBlockName(block, resolveName)
+	if err != nil {
+		return err
+	}
+	if err := p.opt.ValidateLabel(name); err != nil {
+		return wrapErrorDiagnostic("Invalid name", err, &block.LabelRanges[0], &block.LabelRanges[0])
 	}
 
 	if target != nil {
@@ -379,7 +384,6 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		ectx = p.blockEvalCtx[block]
 	} else {
 		output = reflect.New(t)
-		setLabel(output, block.Labels[0]) // early attach labels, so we can reference them
 
 		type ectxI interface {
 			EvalContext(base *hcl.EvalContext, block *hcl.Block) *hcl.EvalContext
@@ -398,6 +402,9 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 
 	// load dependencies from all targeted properties
 	schema, _ := gohcl.ImpliedBodySchema(reflect.New(t).Interface())
+	if nameKey, ok := getNameKey(output); ok {
+		schema.Attributes = append(schema.Attributes, hcl.AttributeSchema{Name: nameKey})
+	}
 	content, _, diag := body().PartialContent(schema)
 	if diag.HasErrors() {
 		return diag
@@ -409,7 +416,7 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		}
 	}
 	for _, b := range content.Blocks {
-		err := p.resolveBlock(b, nil)
+		err := p.resolveBlock(b, nil, true)
 		if err != nil {
 			return err
 		}
@@ -420,6 +427,22 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 	if diag.HasErrors() {
 		return diag
 	}
+	if nameKey, ok := getNameKey(output); ok {
+		for k, v := range content.Attributes {
+			if k == nameKey {
+				var name2 string
+				diag = gohcl.DecodeExpression(v.Expr, ectx, &name)
+				if diag.HasErrors() {
+					return diag
+				}
+				if name2 != "" {
+					name = name2
+				}
+				break
+			}
+		}
+	}
+	setName(output, name)
 
 	// mark all targeted properties as done
 	for _, a := range content.Attributes {
@@ -457,6 +480,66 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 	p.ectx.Variables[block.Type] = cty.MapVal(m)
 
 	return nil
+}
+
+// resolveBlockName returns the name of the block, calling resolveBlock to
+// evaluate any label fields to correctly resolve the name.
+func (p *parser) resolveBlockName(block *hcl.Block, resolveName bool) (string, error) {
+	defaultName := block.Labels[0]
+	if !resolveName {
+		return defaultName, nil
+	}
+
+	t, ok := p.blockTypes[block.Type]
+	if !ok {
+		return "", nil
+	}
+	lbl, ok := getNameKey(reflect.New(t))
+	if !ok {
+		return defaultName, nil
+	}
+
+	if prev, ok := p.blockValues[block]; ok {
+		// will have previously set name
+		name, ok := getName(prev)
+		if ok {
+			return name, nil
+		}
+		return "", errors.New("failed to get label")
+	}
+
+	target := &hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{{Name: lbl}},
+		Blocks:     []hcl.BlockHeaderSchema{{Type: lbl}},
+	}
+	if err := p.resolveBlock(block, target, false); err != nil {
+		return "", err
+	}
+
+	name, ok := getName(p.blockValues[block])
+	if !ok {
+		return "", errors.New("failed to get label")
+	}
+
+	// move block to new name
+	if name != defaultName {
+		p.blocks[block.Type][name] = append(p.blocks[block.Type][name], block)
+
+		filtered := make([]*hcl.Block, 0, len(p.blocks[block.Type][defaultName])-1)
+		for _, b := range p.blocks[block.Type][defaultName] {
+			if b == block {
+				continue
+			}
+			filtered = append(filtered, b)
+		}
+		if len(filtered) != 0 {
+			p.blocks[block.Type][defaultName] = filtered
+		} else {
+			delete(p.blocks[block.Type], defaultName)
+		}
+	}
+
+	return name, nil
 }
 
 func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
@@ -649,7 +732,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 	for _, b := range content.Blocks {
 		v := reflect.ValueOf(val)
 
-		err := p.resolveBlock(b, nil)
+		err := p.resolveBlock(b, nil, true)
 		if err != nil {
 			if diag, ok := err.(hcl.Diagnostics); ok {
 				if diag.HasErrors() {
@@ -664,13 +747,13 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		vv := p.blockValues[b]
 
 		t := types[b.Type]
-		lblIndex := setLabel(vv, b.Labels[0])
-
-		oldValue, exists := t.values[b.Labels[0]]
-		if !exists && lblIndex != -1 {
+		lblIndex, lblExists := getNameIndex(vv)
+		lblName, _ := getName(vv)
+		oldValue, exists := t.values[lblName]
+		if !exists && lblExists {
 			if v.Elem().Field(t.idx).Type().Kind() == reflect.Slice {
 				for i := 0; i < v.Elem().Field(t.idx).Len(); i++ {
-					if b.Labels[0] == v.Elem().Field(t.idx).Index(i).Elem().Field(lblIndex).String() {
+					if lblName == v.Elem().Field(t.idx).Index(i).Elem().Field(lblIndex).String() {
 						exists = true
 						oldValue = value{Value: v.Elem().Field(t.idx).Index(i), idx: i}
 						break
@@ -689,7 +772,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 			if slice.IsNil() {
 				slice = reflect.New(t.typ).Elem()
 			}
-			t.values[b.Labels[0]] = value{Value: vv, idx: slice.Len()}
+			t.values[lblName] = value{Value: vv, idx: slice.Len()}
 			v.Elem().Field(t.idx).Set(reflect.Append(slice, vv))
 		}
 	}
@@ -730,18 +813,55 @@ func wrapErrorDiagnostic(message string, err error, subject *hcl.Range, context 
 	}
 }
 
-func setLabel(v reflect.Value, lbl string) int {
-	// cache field index?
+func setName(v reflect.Value, name string) {
 	numFields := v.Elem().Type().NumField()
 	for i := 0; i < numFields; i++ {
-		for _, t := range strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",") {
+		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
+		for _, t := range parts[1:] {
 			if t == "label" {
-				v.Elem().Field(i).Set(reflect.ValueOf(lbl))
-				return i
+				v.Elem().Field(i).Set(reflect.ValueOf(name))
 			}
 		}
 	}
-	return -1
+}
+
+func getName(v reflect.Value) (string, bool) {
+	numFields := v.Elem().Type().NumField()
+	for i := 0; i < numFields; i++ {
+		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
+		for _, t := range parts[1:] {
+			if t == "label" {
+				return v.Elem().Field(i).String(), true
+			}
+		}
+	}
+	return "", false
+}
+
+func getNameKey(v reflect.Value) (string, bool) {
+	numFields := v.Elem().Type().NumField()
+	for i := 0; i < numFields; i++ {
+		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
+		for _, t := range parts[1:] {
+			if t == "label" {
+				return parts[0], true
+			}
+		}
+	}
+	return "", false
+}
+
+func getNameIndex(v reflect.Value) (int, bool) {
+	numFields := v.Elem().Type().NumField()
+	for i := 0; i < numFields; i++ {
+		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
+		for _, t := range parts[1:] {
+			if t == "label" {
+				return i, true
+			}
+		}
+	}
+	return 0, false
 }
 
 func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}, vars map[string]*variable) hcl.Diagnostics {

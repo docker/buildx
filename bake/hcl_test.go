@@ -634,6 +634,134 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	require.Equal(t, ptrstr("pre-ghi"), c.Targets[0].Args["v1"])
 }
 
+func TestHCLDuplicateTarget(t *testing.T) {
+	dt := []byte(`
+		target "app" {
+			dockerfile = "x"
+		}
+		target "app" {
+			dockerfile = "y"
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, "app", c.Targets[0].Name)
+	require.Equal(t, "y", *c.Targets[0].Dockerfile)
+}
+
+func TestHCLRenameTargetAttrs(t *testing.T) {
+	dt := []byte(`
+		target "abc" {
+			name = "xyz"
+			dockerfile = "foo"
+		}
+
+		target "def" {
+			dockerfile = target.xyz.dockerfile
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "xyz", c.Targets[0].Name)
+	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+	require.Equal(t, "def", c.Targets[1].Name)
+	require.Equal(t, "foo", *c.Targets[1].Dockerfile)
+
+	dt = []byte(`
+		target "abc" {
+			name = "xyz"
+			dockerfile = "foo"
+		}
+
+		target "def" {
+			dockerfile = target.abc.dockerfile
+		}
+		`)
+
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+}
+
+func TestHCLRenameTarget(t *testing.T) {
+	dt := []byte(`
+		target "abc" {
+			name = "xyz"
+			dockerfile = "foo"
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, "xyz", c.Targets[0].Name)
+	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+}
+
+func TestHCLRenameMerge(t *testing.T) {
+	dt := []byte(`
+		target "x" {
+			name = "y"
+			dockerfile = "foo"
+		}
+
+		target "x" {
+			name = "z"
+			dockerfile = "bar"
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "y", c.Targets[0].Name)
+	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+	require.Equal(t, "z", c.Targets[1].Name)
+	require.Equal(t, "bar", *c.Targets[1].Dockerfile)
+}
+
+func TestHCLRenameMultiFile(t *testing.T) {
+	dt := []byte(`
+		target "foo" {
+			name = "bar"
+			dockerfile = "x"
+		}
+		`)
+	dt2 := []byte(`
+		target "foo" {
+			context = "y"
+		}
+		`)
+	dt3 := []byte(`
+		target "bar" {
+			target = "z"
+		}
+		`)
+
+	c, err := ParseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+		{Data: dt2, Name: "c2.hcl"},
+		{Data: dt3, Name: "c3.hcl"},
+	}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+
+	require.Equal(t, c.Targets[0].Name, "bar")
+	require.Equal(t, *c.Targets[0].Dockerfile, "x")
+	require.Equal(t, *c.Targets[0].Target, "z")
+
+	require.Equal(t, c.Targets[1].Name, "foo")
+	require.Equal(t, *c.Targets[1].Context, "y")
+}
+
 func TestJSONAttributes(t *testing.T) {
 	dt := []byte(`{"FOO": "abc", "variable": {"BAR": {"default": "def"}}, "target": { "app": { "args": {"v1": "pre-${FOO}-${BAR}"}} } }`)
 
