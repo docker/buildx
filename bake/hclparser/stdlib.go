@@ -124,3 +124,11 @@ var timestampFunc = function.New(&function.Spec{
 		return cty.StringVal(time.Now().UTC().Format(time.RFC3339)), nil
 	},
 })
+
+func Stdlib() map[string]function.Function {
+	funcs := make(map[string]function.Function, len(stdlibFunctions))
+	for k, v := range stdlibFunctions {
+		funcs[k] = v
+	}
+	return funcs
+}
