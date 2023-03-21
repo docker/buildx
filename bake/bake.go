@@ -23,6 +23,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
+	"github.com/zclconf/go-cty/cty"
 )
 
 var (
@@ -777,6 +778,54 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 		}
 	}
 	return nil
+}
+
+func (t *Target) EvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error) {
+	content, _, err := block.Body.PartialContent(&hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{{Name: "matrix"}},
+	})
+	if err != nil {
+		return nil, err
+	}
+
+	attr, ok := content.Attributes["matrix"]
+	if !ok {
+		return []*hcl.EvalContext{ectx}, nil
+	}
+	if diags := loadDeps(attr.Expr); diags.HasErrors() {
+		return nil, diags
+	}
+	value, err := attr.Expr.Value(ectx)
+	if err != nil {
+		return nil, err
+	}
+
+	if !value.CanIterateElements() {
+		return nil, errors.Errorf("matrix must be a map")
+	}
+	matrix := value.AsValueMap()
+
+	ectxs := []*hcl.EvalContext{ectx}
+	for k, expr := range matrix {
+		if !expr.CanIterateElements() {
+			return nil, errors.Errorf("matrix values must be a list")
+		}
+
+		ectxs2 := []*hcl.EvalContext{}
+		for _, v := range expr.AsValueSlice() {
+			for _, e := range ectxs {
+				e2 := ectx.NewChild()
+				e2.Variables = make(map[string]cty.Value)
+				for k, v := range e.Variables {
+					e2.Variables[k] = v
+				}
+				e2.Variables[k] = v
+				ectxs2 = append(ectxs2, e2)
+			}
+		}
+		ectxs = ectxs2
+	}
+	return ectxs, nil
 }
 
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {

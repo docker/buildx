@@ -652,6 +652,22 @@ func TestHCLDuplicateTarget(t *testing.T) {
 	require.Equal(t, "y", *c.Targets[0].Dockerfile)
 }
 
+func TestHCLRenameTarget(t *testing.T) {
+	dt := []byte(`
+		target "abc" {
+			name = "xyz"
+			dockerfile = "foo"
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, "xyz", c.Targets[0].Name)
+	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+}
+
 func TestHCLRenameTargetAttrs(t *testing.T) {
 	dt := []byte(`
 		target "abc" {
@@ -666,11 +682,29 @@ func TestHCLRenameTargetAttrs(t *testing.T) {
 
 	c, err := ParseFile(dt, "docker-bake.hcl")
 	require.NoError(t, err)
-
 	require.Equal(t, 2, len(c.Targets))
 	require.Equal(t, "xyz", c.Targets[0].Name)
 	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
 	require.Equal(t, "def", c.Targets[1].Name)
+	require.Equal(t, "foo", *c.Targets[1].Dockerfile)
+
+	dt = []byte(`
+		target "def" {
+			dockerfile = target.xyz.dockerfile
+		}
+
+		target "abc" {
+			name = "xyz"
+			dockerfile = "foo"
+		}
+		`)
+
+	c, err = ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "def", c.Targets[0].Name)
+	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+	require.Equal(t, "xyz", c.Targets[1].Name)
 	require.Equal(t, "foo", *c.Targets[1].Dockerfile)
 
 	dt = []byte(`
@@ -686,22 +720,20 @@ func TestHCLRenameTargetAttrs(t *testing.T) {
 
 	_, err = ParseFile(dt, "docker-bake.hcl")
 	require.Error(t, err)
-}
 
-func TestHCLRenameTarget(t *testing.T) {
-	dt := []byte(`
+	dt = []byte(`
+		target "def" {
+			dockerfile = target.abc.dockerfile
+		}
+
 		target "abc" {
 			name = "xyz"
 			dockerfile = "foo"
 		}
 		`)
 
-	c, err := ParseFile(dt, "docker-bake.hcl")
-	require.NoError(t, err)
-
-	require.Equal(t, 1, len(c.Targets))
-	require.Equal(t, "xyz", c.Targets[0].Name)
-	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
 }
 
 func TestHCLRenameMerge(t *testing.T) {
@@ -760,6 +792,102 @@ func TestHCLRenameMultiFile(t *testing.T) {
 
 	require.Equal(t, c.Targets[1].Name, "foo")
 	require.Equal(t, *c.Targets[1].Context, "y")
+}
+
+func TestHCLMatrixBasic(t *testing.T) {
+	dt := []byte(`
+		target "default" {
+			matrix = {
+				foo = ["x", "y"]
+			}
+			name = foo
+			dockerfile = "${foo}.Dockerfile"
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "x")
+	require.Equal(t, c.Targets[1].Name, "y")
+	require.Equal(t, *c.Targets[0].Dockerfile, "x.Dockerfile")
+	require.Equal(t, *c.Targets[1].Dockerfile, "y.Dockerfile")
+}
+
+func TestHCLMatrixMultiple(t *testing.T) {
+	dt := []byte(`
+		target "default" {
+			matrix = {
+				foo = ["a"]
+				bar = ["b", "c"]
+				baz = ["d", "e", "f"]
+			}
+			name = "${foo}-${bar}-${baz}"
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 6, len(c.Targets))
+	names := make([]string, len(c.Targets))
+	for i, t := range c.Targets {
+		names[i] = t.Name
+	}
+	require.ElementsMatch(t, names, []string{"a-b-d", "a-b-e", "a-b-f", "a-c-d", "a-c-e", "a-c-f"})
+}
+
+func TestHCLMatrixArgs(t *testing.T) {
+	dt := []byte(`
+		a = 1
+		variable "b" {
+			default = 2
+		}
+		target "default" {
+			matrix = {
+				foo = [a, b]
+			}
+			name = foo
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "1")
+	require.Equal(t, c.Targets[1].Name, "2")
+}
+
+func TestHCLMatrixErrors(t *testing.T) {
+	dt := []byte(`
+		target "default" {
+			matrix = "test"
+		}
+		`)
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+
+	dt = []byte(`
+		target "default" {
+			matrix = {
+				["a"] = ["b"]
+			}
+		}
+		`)
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+
+	dt = []byte(`
+		target "default" {
+			matrix = {
+				a = "b"
+			}
+		}
+		`)
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
 }
 
 func TestJSONAttributes(t *testing.T) {
