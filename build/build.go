@@ -604,13 +604,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		}
 	}
 
-	// Propagate SOURCE_DATE_EPOCH from the client env
-	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
-		if _, ok := so.FrontendAttrs["build-arg:SOURCE_DATE_EPOCH"]; !ok {
-			so.FrontendAttrs["build-arg:SOURCE_DATE_EPOCH"] = v
-		}
-	}
-
 	// set platforms
 	if len(opt.Platforms) != 0 {
 		pp := make([]string, len(opt.Platforms))

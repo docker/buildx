@@ -149,6 +149,19 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		return err
 	}
 
+	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
+		// TODO: extract env var parsing to a method easily usable by library consumers
+		for _, t := range tgts {
+			if _, ok := t.Args["SOURCE_DATE_EPOCH"]; ok {
+				continue
+			}
+			if t.Args == nil {
+				t.Args = map[string]*string{}
+			}
+			t.Args["SOURCE_DATE_EPOCH"] = &v
+		}
+	}
+
 	// this function can update target context string from the input so call before printOnly check
 	bo, err := bake.TargetsToBuildOpt(tgts, inp)
 	if err != nil {

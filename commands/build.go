@@ -100,6 +100,13 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		Opts:           &o.CommonOptions,
 	}
 
+	// TODO: extract env var parsing to a method easily usable by library consumers
+	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
+		if _, ok := opts.BuildArgs["SOURCE_DATE_EPOCH"]; !ok {
+			opts.BuildArgs["SOURCE_DATE_EPOCH"] = v
+		}
+	}
+
 	inAttests := append([]string{}, o.attests...)
 	if o.provenance != "" {
 		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", o.provenance))
