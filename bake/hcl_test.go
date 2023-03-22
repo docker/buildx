@@ -666,6 +666,37 @@ func TestHCLRenameTarget(t *testing.T) {
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "xyz", c.Targets[0].Name)
 	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "abc", c.Groups[0].Name)
+	require.Equal(t, []string{"xyz"}, c.Groups[0].Targets)
+}
+
+func TestHCLRenameGroup(t *testing.T) {
+	dt := []byte(`
+		group "foo" {
+			name = "bar"
+			targets = ["x", "y"]
+		}
+
+		target "x" {
+		}
+		target "y" {
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "x", c.Targets[0].Name)
+	require.Equal(t, "y", c.Targets[1].Name)
+
+	require.Equal(t, 2, len(c.Groups))
+	require.Equal(t, "bar", c.Groups[0].Name)
+	require.Equal(t, []string{"x", "y"}, c.Groups[0].Targets)
+	require.Equal(t, "foo", c.Groups[1].Name)
+	require.Equal(t, []string{"bar"}, c.Groups[1].Targets)
 }
 
 func TestHCLRenameTargetAttrs(t *testing.T) {
@@ -736,7 +767,7 @@ func TestHCLRenameTargetAttrs(t *testing.T) {
 	require.Error(t, err)
 }
 
-func TestHCLRenameMerge(t *testing.T) {
+func TestHCLRenameSplit(t *testing.T) {
 	dt := []byte(`
 		target "x" {
 			name = "y"
@@ -757,6 +788,10 @@ func TestHCLRenameMerge(t *testing.T) {
 	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
 	require.Equal(t, "z", c.Targets[1].Name)
 	require.Equal(t, "bar", *c.Targets[1].Dockerfile)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "x", c.Groups[0].Name)
+	require.Equal(t, []string{"y", "z"}, c.Groups[0].Targets)
 }
 
 func TestHCLRenameMultiFile(t *testing.T) {
@@ -813,9 +848,13 @@ func TestHCLMatrixBasic(t *testing.T) {
 	require.Equal(t, c.Targets[1].Name, "y")
 	require.Equal(t, *c.Targets[0].Dockerfile, "x.Dockerfile")
 	require.Equal(t, *c.Targets[1].Dockerfile, "y.Dockerfile")
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	require.Equal(t, []string{"x", "y"}, c.Groups[0].Targets)
 }
 
-func TestHCLMatrixMultiple(t *testing.T) {
+func TestHCLMatrixMultipleKeys(t *testing.T) {
 	dt := []byte(`
 		target "default" {
 			matrix = {
@@ -835,7 +874,54 @@ func TestHCLMatrixMultiple(t *testing.T) {
 	for i, t := range c.Targets {
 		names[i] = t.Name
 	}
-	require.ElementsMatch(t, names, []string{"a-b-d", "a-b-e", "a-b-f", "a-c-d", "a-c-e", "a-c-f"})
+	require.ElementsMatch(t, []string{"a-b-d", "a-b-e", "a-b-f", "a-c-d", "a-c-e", "a-c-f"}, names)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	require.ElementsMatch(t, []string{"a-b-d", "a-b-e", "a-b-f", "a-c-d", "a-c-e", "a-c-f"}, c.Groups[0].Targets)
+}
+
+func TestHCLMatrixMultipleTargets(t *testing.T) {
+	dt := []byte(`
+		target "x" {
+			matrix = {
+				foo = ["a", "b"]
+			}
+			name = foo
+		}
+		target "y" {
+			matrix = {
+				bar = ["c", "d"]
+			}
+			name = bar
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 4, len(c.Targets))
+	names := make([]string, len(c.Targets))
+	for i, t := range c.Targets {
+		names[i] = t.Name
+	}
+	require.ElementsMatch(t, []string{"a", "b", "c", "d"}, names)
+
+	require.Equal(t, 2, len(c.Groups))
+	names = make([]string, len(c.Groups))
+	for i, c := range c.Groups {
+		names[i] = c.Name
+	}
+	require.ElementsMatch(t, []string{"x", "y"}, names)
+
+	for _, g := range c.Groups {
+		switch g.Name {
+		case "x":
+			require.Equal(t, []string{"a", "b"}, g.Targets)
+		case "y":
+			require.Equal(t, []string{"c", "d"}, g.Targets)
+		}
+	}
 }
 
 func TestHCLMatrixArgs(t *testing.T) {

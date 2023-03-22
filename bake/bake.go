@@ -246,13 +246,28 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 	}
 
 	if len(hclFiles) > 0 {
-		if err := hclparser.Parse(hcl.MergeFiles(hclFiles), hclparser.Opt{
+		renamed, err := hclparser.Parse(hcl.MergeFiles(hclFiles), hclparser.Opt{
 			LookupVar:     os.LookupEnv,
 			Vars:          defaults,
 			ValidateLabel: validateTargetName,
-		}, &c); err.HasErrors() {
+		}, &c)
+		if err.HasErrors() {
 			return nil, err
 		}
+
+		for _, renamed := range renamed {
+			for oldName, newNames := range renamed {
+				newNames = dedupSlice(newNames)
+				if len(newNames) == 1 && oldName == newNames[0] {
+					continue
+				}
+				c.Groups = append(c.Groups, &Group{
+					Name:    oldName,
+					Targets: newNames,
+				})
+			}
+		}
+		c = dedupeConfig(c)
 	}
 
 	return &c, nil

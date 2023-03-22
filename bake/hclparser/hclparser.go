@@ -531,7 +531,7 @@ func (p *parser) resolveBlockNames(block *hcl.Block) ([]string, error) {
 	return names, nil
 }
 
-func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
+func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string, hcl.Diagnostics) {
 	reserved := map[string]struct{}{}
 	schema, _ := gohcl.ImpliedBodySchema(val)
 
@@ -544,7 +544,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 	var defs inputs
 	if err := gohcl.DecodeBody(b, nil, &defs); err != nil {
-		return err
+		return nil, err
 	}
 	defsSchema, _ := gohcl.ImpliedBodySchema(defs)
 
@@ -599,18 +599,18 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 	content, b, diags := b.PartialContent(schema)
 	if diags.HasErrors() {
-		return diags
+		return nil, diags
 	}
 
 	blocks, b, diags := b.PartialContent(defsSchema)
 	if diags.HasErrors() {
-		return diags
+		return nil, diags
 	}
 
 	attrs, diags := b.JustAttributes()
 	if diags.HasErrors() {
 		if d := removeAttributesDiags(diags, reserved, p.vars); len(d) > 0 {
-			return d
+			return nil, d
 		}
 	}
 
@@ -627,7 +627,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 	}
 
 	for _, a := range content.Attributes {
-		return hcl.Diagnostics{
+		return nil, hcl.Diagnostics{
 			&hcl.Diagnostic{
 				Severity: hcl.DiagError,
 				Summary:  "Invalid attribute",
@@ -641,17 +641,17 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 	for k := range p.vars {
 		if err := p.resolveValue(p.ectx, k); err != nil {
 			if diags, ok := err.(hcl.Diagnostics); ok {
-				return diags
+				return nil, diags
 			}
 			r := p.vars[k].Body.MissingItemRange()
-			return wrapErrorDiagnostic("Invalid value", err, &r, &r)
+			return nil, wrapErrorDiagnostic("Invalid value", err, &r, &r)
 		}
 	}
 
 	for k := range p.funcs {
 		if err := p.resolveFunction(p.ectx, k); err != nil {
 			if diags, ok := err.(hcl.Diagnostics); ok {
-				return diags
+				return nil, diags
 			}
 			var subject *hcl.Range
 			var context *hcl.Range
@@ -667,7 +667,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 					}
 				}
 			}
-			return wrapErrorDiagnostic("Invalid function", err, subject, context)
+			return nil, wrapErrorDiagnostic("Invalid function", err, subject, context)
 		}
 	}
 
@@ -681,6 +681,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		values map[string]value
 	}
 	types := map[string]field{}
+	renamed := map[string]map[string][]string{}
 	vt := reflect.ValueOf(val).Elem().Type()
 	for i := 0; i < vt.NumField(); i++ {
 		tags := strings.Split(vt.Field(i).Tag.Get("hcl"), ",")
@@ -691,12 +692,13 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 			typ:    vt.Field(i).Type,
 			values: make(map[string]value),
 		}
+		renamed[tags[0]] = map[string][]string{}
 	}
 
 	tmpBlocks := map[string]map[string][]*hcl.Block{}
 	for _, b := range content.Blocks {
 		if len(b.Labels) == 0 || len(b.Labels) > 1 {
-			return hcl.Diagnostics{
+			return nil, hcl.Diagnostics{
 				&hcl.Diagnostic{
 					Severity: hcl.DiagError,
 					Summary:  "Invalid block",
@@ -715,10 +717,11 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 		names, err := p.resolveBlockNames(b)
 		if err != nil {
-			return wrapErrorDiagnostic("Invalid name", err, &b.LabelRanges[0], &b.LabelRanges[0])
+			return nil, wrapErrorDiagnostic("Invalid name", err, &b.LabelRanges[0], &b.LabelRanges[0])
 		}
 		for _, name := range names {
 			bm[name] = append(bm[name], b)
+			renamed[b.Type][b.Labels[0]] = append(renamed[b.Type][b.Labels[0]], name)
 		}
 	}
 	p.blocks = tmpBlocks
@@ -735,7 +738,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 					continue
 				}
 			} else {
-				return wrapErrorDiagnostic("Invalid block", err, &b.LabelRanges[0], &b.DefRange)
+				return nil, wrapErrorDiagnostic("Invalid block", err, &b.LabelRanges[0], &b.DefRange)
 			}
 		}
 
@@ -773,19 +776,19 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		}
 	}
 	if diags.HasErrors() {
-		return diags
+		return nil, diags
 	}
 
 	for k := range p.attrs {
 		if err := p.resolveValue(p.ectx, k); err != nil {
 			if diags, ok := err.(hcl.Diagnostics); ok {
-				return diags
+				return nil, diags
 			}
-			return wrapErrorDiagnostic("Invalid attribute", err, &p.attrs[k].Range, &p.attrs[k].Range)
+			return nil, wrapErrorDiagnostic("Invalid attribute", err, &p.attrs[k].Range, &p.attrs[k].Range)
 		}
 	}
 
-	return nil
+	return renamed, nil
 }
 
 // wrapErrorDiagnostic wraps an error into a hcl.Diagnostics object.
