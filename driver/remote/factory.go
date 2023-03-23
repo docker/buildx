@@ -98,11 +98,11 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		if tls.caCert == "" {
 			missing = append(missing, "cacert")
 		}
-		if tls.cert == "" {
-			missing = append(missing, "cert")
-		}
-		if tls.key == "" {
+		if tls.cert != "" && tls.key == "" {
 			missing = append(missing, "key")
+		}
+		if tls.key != "" && tls.cert == "" {
+			missing = append(missing, "cert")
 		}
 		if len(missing) > 0 {
 			return nil, errors.Errorf("tls enabled, but missing keys %s", strings.Join(missing, ", "))
