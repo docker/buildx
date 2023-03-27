@@ -59,7 +59,7 @@ body:
     attributes:
       label: Buildx version
       description: |
-        Can be found using the `docker buildx version` command.
+        Output of `docker buildx version` command.
         Example: `github.com/docker/buildx v0.8.1 5fac64c2c49dae1320f2b51f1a899ca451935554`
     validations:
       required: true
@@ -68,31 +68,24 @@ body:
     attributes:
       label: Docker info
       description: |
-        Output of `docker info`.
-      placeholder: |
-        ```
-        
-        ```
-      render: markdown
+        Output of `docker info` command.
+      render: text
 
   - type: textarea
     attributes:
       label: Builders list
       description: |
-        Output of `docker buildx ls`.
-      placeholder: |
-        ```
-        
-        ```
-      render: markdown
+        Output of `docker buildx ls` command.
+      render: text
     validations:
       required: true
 
   - type: textarea
     attributes:
       label: Configuration
-      description: |
-        Please provide a minimal Dockerfile, bake definition (if applicable) and invoked command to reproduce the bug.
+      description: >
+        Please provide a minimal Dockerfile, bake definition (if applicable) and
+        invoked commands to help reproducing your issue.
       placeholder: |
         ```dockerfile
         FROM alpine
@@ -113,20 +106,15 @@ body:
         $ docker buildx build .
         $ docker buildx bake
         ```
-      render: markdown
     validations:
       required: true
 
   - type: textarea
     attributes:
-      label: Logs
+      label: Build logs
       description: |
-        Please provide Buildx logs (also BuildKit logs if applicable).
-      placeholder: |
-        ```
-        
-        ```
-      render: markdown
+        Please provide logs output (and/or BuildKit logs if applicable).
+      render: text
     validations:
       required: false
 
