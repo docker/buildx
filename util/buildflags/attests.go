@@ -14,7 +14,7 @@ func CanonicalizeAttest(attestType string, in string) string {
 		return ""
 	}
 	if b, err := strconv.ParseBool(in); err == nil {
-		return fmt.Sprintf("type=%s,enabled=%t", attestType, b)
+		return fmt.Sprintf("type=%s,disabled=%t", attestType, !b)
 	}
 	return fmt.Sprintf("type=%s,%s", attestType, in)
 }
@@ -23,7 +23,7 @@ func ParseAttests(in []string) (map[string]*string, error) {
 	out := map[string]*string{}
 	for _, in := range in {
 		in := in
-		attestType, enabled, err := parseAttest(in)
+		attestType, disabled, err := parseAttest(in)
 		if err != nil {
 			return nil, err
 		}
@@ -32,10 +32,10 @@ func ParseAttests(in []string) (map[string]*string, error) {
 		if _, ok := out[k]; ok {
 			return nil, errors.Errorf("duplicate attestation field %s", attestType)
 		}
-		if enabled {
-			out[k] = &in
-		} else {
+		if disabled {
 			out[k] = nil
+		} else {
+			out[k] = &in
 		}
 	}
 	return out, nil
@@ -53,7 +53,7 @@ func parseAttest(in string) (string, bool, error) {
 	}
 
 	attestType := ""
-	enabled := true
+	disabled := true
 	for _, field := range fields {
 		key, value, ok := strings.Cut(field, "=")
 		if !ok {
@@ -64,8 +64,8 @@ func parseAttest(in string) (string, bool, error) {
 		switch key {
 		case "type":
 			attestType = value
-		case "enabled":
-			enabled, err = strconv.ParseBool(value)
+		case "disabled":
+			disabled, err = strconv.ParseBool(value)
 			if err != nil {
 				return "", false, err
 			}
@@ -75,5 +75,5 @@ func parseAttest(in string) (string, bool, error) {
 		return "", false, errors.Errorf("attestation type not specified")
 	}
 
-	return attestType, enabled, nil
+	return attestType, disabled, nil
 }
