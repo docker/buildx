@@ -1358,3 +1358,110 @@ func TestJSONNullVars(t *testing.T) {
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, m["default"].Args)
 }
+
+func TestAttestDuplicates(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "default" {
+				attest = ["type=sbom", "type=sbom,generator=custom"]
+			}`),
+	}
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+
+	_, err = TargetsToBuildOpt(m, &Input{})
+	require.Error(t, err)
+}
+
+func TestAttestOverride(t *testing.T) {
+	ctx := context.TODO()
+
+	// file without attest set
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`target "default" {}`),
+	}
+
+	// no override
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Empty(t, m["default"].Attest)
+
+	opts, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Empty(t, opts["default"].Attests)
+
+	// with override
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,generator=custom"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"type=sbom,generator=custom"}, m["default"].Attest)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"attest:sbom": ptrstr("type=sbom,generator=custom")}, opts["default"].Attests)
+
+	// with disabled=true override
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"type=sbom,disabled=true"}, m["default"].Attest)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"attest:sbom": nil}, opts["default"].Attests)
+
+	// with disabled=false override
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=false"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"type=sbom,disabled=false"}, m["default"].Attest)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"attest:sbom": ptrstr("type=sbom,disabled=false")}, opts["default"].Attests)
+
+	// file with attest set
+	fp = File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "default" {
+				attest = ["type=sbom,generator=custom"]
+			}`),
+	}
+
+	// no override
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"type=sbom,generator=custom"}, m["default"].Attest)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"attest:sbom": ptrstr("type=sbom,generator=custom")}, opts["default"].Attests)
+
+	// with duplicate override
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,generator=custom"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"type=sbom,generator=custom"}, m["default"].Attest)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"attest:sbom": ptrstr("type=sbom,generator=custom")}, opts["default"].Attests)
+
+	// with disabled=true override
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"type=sbom,generator=custom", "type=sbom,disabled=true"}, m["default"].Attest)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"attest:sbom": nil}, opts["default"].Attests)
+
+	// with disabled=false override
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=false"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"type=sbom,generator=custom", "type=sbom,disabled=false"}, m["default"].Attest)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"attest:sbom": ptrstr("type=sbom,generator=custom")}, opts["default"].Attests)
+}
