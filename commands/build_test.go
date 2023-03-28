@@ -36,6 +36,11 @@ func TestResolvePaths(t *testing.T) {
 			want:    controllerapi.BuildOptions{ContextPath: "-"},
 		},
 		{
+			name:    "contextpath-ssh",
+			options: controllerapi.BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
+			want:    controllerapi.BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
+		},
+		{
 			name:    "dockerfilename",
 			options: controllerapi.BuildOptions{DockerfileName: "test"},
 			want:    controllerapi.BuildOptions{DockerfileName: filepath.Join(tmpwd, "test")},
