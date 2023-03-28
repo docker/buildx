@@ -14,14 +14,12 @@ import (
 
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
+	cbuild "github.com/docker/buildx/controller/build"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
-	"github.com/docker/buildx/util/platformutil"
-	"github.com/docker/cli/cli/config"
 	"github.com/docker/docker/builder/remotecontext/urlutil"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 )
 
@@ -769,7 +767,11 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
-		bo, err := toBuildOpt(v, inp)
+		opts, err := toControllerOpt(v, inp)
+		if err != nil {
+			return nil, err
+		}
+		bo, err := cbuild.ToBuildOpts(*opts, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -778,14 +780,14 @@ func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Optio
 	return m2, nil
 }
 
-func updateContext(t *build.Inputs, inp *Input) {
+func updateContext(t *controllerapi.Inputs, inp *Input) error {
 	if inp == nil || inp.State == nil {
-		return
+		return nil
 	}
 
 	for k, v := range t.NamedContexts {
 		if v.Path == "." {
-			t.NamedContexts[k] = build.NamedContext{Path: inp.URL}
+			t.NamedContexts[k] = &controllerapi.NamedContext{Path: inp.URL}
 		}
 		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
 			continue
@@ -794,27 +796,36 @@ func updateContext(t *build.Inputs, inp *Input) {
 			continue
 		}
 		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
-		t.NamedContexts[k] = build.NamedContext{State: &st}
+		def, err := st.Marshal(context.TODO())
+		if err != nil {
+			return err
+		}
+		t.NamedContexts[k] = &controllerapi.NamedContext{Definition: def.ToPB()}
 	}
 
 	if t.ContextPath == "." {
 		t.ContextPath = inp.URL
-		return
+		return nil
 	}
 	if strings.HasPrefix(t.ContextPath, "cwd://") {
-		return
+		return nil
 	}
 	if IsRemoteURL(t.ContextPath) {
-		return
+		return nil
 	}
 	st := llb.Scratch().File(llb.Copy(*inp.State, t.ContextPath, "/"), llb.WithCustomNamef("set context to %s", t.ContextPath))
-	t.ContextState = &st
+	def, err := st.Marshal(context.TODO())
+	if err != nil {
+		return err
+	}
+	t.ContextDefinition = def.ToPB()
+	return nil
 }
 
 // validateContextsEntitlements is a basic check to ensure contexts do not
 // escape local directories when loaded from remote sources. This is to be
 // replaced with proper entitlements support in the future.
-func validateContextsEntitlements(t build.Inputs, inp *Input) error {
+func validateContextsEntitlements(t controllerapi.Inputs, inp *Input) error {
 	if inp == nil || inp.State == nil {
 		return nil
 	}
@@ -823,13 +834,13 @@ func validateContextsEntitlements(t build.Inputs, inp *Input) error {
 			return nil
 		}
 	}
-	if t.ContextState == nil {
+	if t.ContextDefinition == nil {
 		if err := checkPath(t.ContextPath); err != nil {
 			return err
 		}
 	}
 	for _, v := range t.NamedContexts {
-		if v.State != nil {
+		if v.Definition != nil {
 			continue
 		}
 		if err := checkPath(v.Path); err != nil {
@@ -864,7 +875,7 @@ func checkPath(p string) error {
 	return nil
 }
 
-func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
+func toControllerOpt(t *Target, inp *Input) (*controllerapi.BuildOptions, error) {
 	if v := t.Context; v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
@@ -917,9 +928,9 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		networkMode = *t.NetworkMode
 	}
 
-	bi := build.Inputs{
+	bi := controllerapi.Inputs{
 		ContextPath:    contextPath,
-		DockerfilePath: dockerfilePath,
+		DockerfileName: dockerfilePath,
 		NamedContexts:  toNamedContexts(t.Contexts),
 	}
 	if t.DockerfileInline != nil {
@@ -931,7 +942,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	for k, v := range bi.NamedContexts {
 		if strings.HasPrefix(v.Path, "cwd://") {
-			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
+			bi.NamedContexts[k] = &controllerapi.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
 		}
 	}
 
@@ -941,82 +952,55 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 	t.Context = &bi.ContextPath
 
-	bo := &build.Options{
-		Inputs:        bi,
+	opts := &controllerapi.BuildOptions{
+		Inputs:        &bi,
 		Tags:          t.Tags,
 		BuildArgs:     args,
 		Labels:        labels,
-		NoCache:       noCache,
 		NoCacheFilter: t.NoCacheFilter,
-		Pull:          pull,
 		NetworkMode:   networkMode,
-		Linked:        t.linked,
+		Opts: &controllerapi.CommonOptions{
+			NoCache: noCache,
+			Pull:    pull,
+			Linked:  t.linked,
+		},
+		Platforms: t.Platforms,
 	}
-
-	platforms, err := platformutil.Parse(t.Platforms)
-	if err != nil {
-		return nil, err
-	}
-	bo.Platforms = platforms
-
-	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(dockerConfig))
-
-	secrets, err := buildflags.ParseSecretSpecs(t.Secrets)
-	if err != nil {
-		return nil, err
-	}
-	secretAttachment, err := controllerapi.CreateSecrets(secrets)
-	if err != nil {
-		return nil, err
-	}
-	bo.Session = append(bo.Session, secretAttachment)
-
-	sshSpecs, err := buildflags.ParseSSHSpecs(t.SSH)
-	if err != nil {
-		return nil, err
-	}
-	if len(sshSpecs) == 0 && buildflags.IsGitSSH(contextPath) {
-		sshSpecs = append(sshSpecs, &controllerapi.SSH{ID: "default"})
-	}
-	sshAttachment, err := controllerapi.CreateSSH(sshSpecs)
-	if err != nil {
-		return nil, err
-	}
-	bo.Session = append(bo.Session, sshAttachment)
+	var err error
 
 	if t.Target != nil {
-		bo.Target = *t.Target
+		opts.Target = *t.Target
 	}
 
-	cacheImports, err := buildflags.ParseCacheEntry(t.CacheFrom)
+	opts.Secrets, err = buildflags.ParseSecretSpecs(t.Secrets)
 	if err != nil {
 		return nil, err
 	}
-	bo.CacheFrom = controllerapi.CreateCaches(cacheImports)
-
-	cacheExports, err := buildflags.ParseCacheEntry(t.CacheTo)
-	if err != nil {
-		return nil, err
-	}
-	bo.CacheTo = controllerapi.CreateCaches(cacheExports)
-
-	outputs, err := buildflags.ParseExports(t.Outputs)
-	if err != nil {
-		return nil, err
-	}
-	bo.Exports, err = controllerapi.CreateExports(outputs)
+	opts.SSH, err = buildflags.ParseSSHSpecs(t.SSH)
 	if err != nil {
 		return nil, err
 	}
 
-	attests, err := buildflags.ParseAttests(t.Attest)
+	opts.CacheFrom, err = buildflags.ParseCacheEntry(t.CacheFrom)
 	if err != nil {
 		return nil, err
 	}
-	bo.Attests = controllerapi.CreateAttestations(attests)
+	opts.CacheTo, err = buildflags.ParseCacheEntry(t.CacheTo)
+	if err != nil {
+		return nil, err
+	}
 
-	return bo, nil
+	opts.Exports, err = buildflags.ParseExports(t.Outputs)
+	if err != nil {
+		return nil, err
+	}
+
+	opts.Attests, err = buildflags.ParseAttests(t.Attest)
+	if err != nil {
+		return nil, err
+	}
+
+	return opts, nil
 }
 
 func defaultTarget() *Target {
@@ -1089,10 +1073,10 @@ func sliceEqual(s1, s2 []string) bool {
 	return true
 }
 
-func toNamedContexts(m map[string]string) map[string]build.NamedContext {
-	m2 := make(map[string]build.NamedContext, len(m))
+func toNamedContexts(m map[string]string) map[string]*controllerapi.NamedContext {
+	m2 := make(map[string]*controllerapi.NamedContext, len(m))
 	for k, v := range m {
-		m2[k] = build.NamedContext{Path: v}
+		m2[k] = &controllerapi.NamedContext{Path: v}
 	}
 	return m2
 }
