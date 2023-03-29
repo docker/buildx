@@ -555,12 +555,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 				}
 			}
 		}
-		if e.Type == "docker" || e.Type == "image" || e.Type == "oci" {
-			// inline buildinfo attrs from build arg
-			if v, ok := opt.BuildArgs["BUILDKIT_INLINE_BUILDINFO_ATTRS"]; ok {
-				e.Attrs["buildinfo-attrs"] = v
-			}
-		}
 	}
 
 	so.Exports = opt.Exports
@@ -1487,9 +1481,6 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 				if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey+"/"+platform]; ok {
 					metadata[exptypes.ExporterImageConfigKey] = dt
 				}
-				if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo+"/"+platform]; ok {
-					metadata[exptypes.ExporterBuildInfo] = dt
-				}
 				if len(metadata) > 0 {
 					dt, err := json.Marshal(metadata)
 					if err != nil {
@@ -1510,9 +1501,6 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 			metadata := make(map[string][]byte)
 			if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey]; ok {
 				metadata[exptypes.ExporterImageConfigKey] = dt
-			}
-			if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo]; ok {
-				metadata[exptypes.ExporterBuildInfo] = dt
 			}
 			if len(metadata) > 0 {
 				dt, err := json.Marshal(metadata)
