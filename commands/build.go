@@ -670,9 +670,11 @@ func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.Ulim
 // and replaces them to absolute paths.
 func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOptions, err error) {
 	if options.ContextPath != "" && options.ContextPath != "-" {
-		options.ContextPath, err = filepath.Abs(options.ContextPath)
-		if err != nil {
-			return nil, err
+		if !urlutil.IsGitURL(options.ContextPath) && !urlutil.IsURL(options.ContextPath) {
+			options.ContextPath, err = filepath.Abs(options.ContextPath)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	if options.DockerfileName != "" && options.DockerfileName != "-" {
