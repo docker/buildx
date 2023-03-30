@@ -1487,8 +1487,8 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 				if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey+"/"+platform]; ok {
 					metadata[exptypes.ExporterImageConfigKey] = dt
 				}
-				if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo+"/"+platform]; ok {
-					metadata[exptypes.ExporterBuildInfo] = dt
+				if dt, ok := rr.Metadata["containerimage.buildinfo/"+platform]; ok {
+					metadata["containerimage.buildinfo"] = dt
 				}
 				if len(metadata) > 0 {
 					dt, err := json.Marshal(metadata)
@@ -1511,8 +1511,8 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 			if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey]; ok {
 				metadata[exptypes.ExporterImageConfigKey] = dt
 			}
-			if dt, ok := rr.Metadata[exptypes.ExporterBuildInfo]; ok {
-				metadata[exptypes.ExporterBuildInfo] = dt
+			if dt, ok := rr.Metadata["containerimage.buildinfo"]; ok {
+				metadata["containerimage.buildinfo"] = dt
 			}
 			if len(metadata) > 0 {
 				dt, err := json.Marshal(metadata)

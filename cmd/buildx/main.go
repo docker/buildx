@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/containerd/containerd/pkg/seed"
 	"github.com/docker/buildx/commands"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
@@ -15,6 +14,9 @@ import (
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/stack"
+
+	//nolint:staticcheck // vendored dependencies may still use this
+	"github.com/containerd/containerd/pkg/seed"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/azure"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
@@ -28,7 +30,9 @@ import (
 )
 
 func init() {
+	//nolint:staticcheck
 	seed.WithTimeAndRand()
+
 	stack.SetVersionInfo(version.Version, version.Revision)
 }
 
