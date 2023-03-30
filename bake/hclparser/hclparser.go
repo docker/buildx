@@ -54,6 +54,7 @@ type parser struct {
 	blocks       map[string]map[string][]*hcl.Block
 	blockValues  map[*hcl.Block][]reflect.Value
 	blockEvalCtx map[*hcl.Block][]*hcl.EvalContext
+	blockNames   map[*hcl.Block][]string
 	blockTypes   map[string]reflect.Type
 
 	ectx *hcl.EvalContext
@@ -62,6 +63,14 @@ type parser struct {
 	progressF map[uint64]struct{}
 	progressB map[uint64]map[string]struct{}
 	doneB     map[uint64]map[string]struct{}
+}
+
+type WithEvalContexts interface {
+	GetEvalContexts(base *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error)
+}
+
+type WithGetName interface {
+	GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) (string, error)
 }
 
 var errUndefined = errors.New("undefined")
@@ -306,6 +315,11 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 // target schema is provided, only the attributes and blocks present in the
 // schema will be evaluated.
 func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err error) {
+	// prepare the variable map for this type
+	if _, ok := p.ectx.Variables[block.Type]; !ok {
+		p.ectx.Variables[block.Type] = cty.MapValEmpty(cty.Map(cty.String))
+	}
+
 	// prepare the output destination and evaluation context
 	t, ok := p.blockTypes[block.Type]
 	if !ok {
@@ -317,11 +331,8 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		outputs = prev
 		ectxs = p.blockEvalCtx[block]
 	} else {
-		type ectxI interface {
-			EvalContexts(base *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error)
-		}
-		if v, ok := reflect.New(t).Interface().(ectxI); ok {
-			ectxs, err = v.EvalContexts(p.ectx, block, func(expr hcl.Expression) hcl.Diagnostics {
+		if v, ok := reflect.New(t).Interface().(WithEvalContexts); ok {
+			ectxs, err = v.GetEvalContexts(p.ectx, block, func(expr hcl.Expression) hcl.Diagnostics {
 				return p.loadDeps(p.ectx, expr, nil, true)
 			})
 			if err != nil {
@@ -345,12 +356,9 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 	for i, output := range outputs {
 		target := target
 		ectx := ectxs[i]
-		name, _ := getName(output)
-		if name == "" {
-			name = block.Labels[0]
-		}
-		if err := p.opt.ValidateLabel(name); err != nil {
-			return err
+		name := block.Labels[0]
+		if names, ok := p.blockNames[block]; ok {
+			name = names[i]
 		}
 
 		if _, ok := p.doneB[key(block, ectx)]; !ok {
@@ -415,9 +423,6 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 
 		// load dependencies from all targeted properties
 		schema, _ := gohcl.ImpliedBodySchema(reflect.New(t).Interface())
-		if nameKey, ok := getNameKey(output); ok {
-			schema.Attributes = append(schema.Attributes, hcl.AttributeSchema{Name: nameKey})
-		}
 		content, _, diag := body().PartialContent(schema)
 		if diag.HasErrors() {
 			return diag
@@ -440,22 +445,6 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		if diag.HasErrors() {
 			return diag
 		}
-		if nameKey, ok := getNameKey(output); ok {
-			for k, v := range content.Attributes {
-				if k == nameKey {
-					var name2 string
-					diag = gohcl.DecodeExpression(v.Expr, ectx, &name)
-					if diag.HasErrors() {
-						return diag
-					}
-					if name2 != "" {
-						name = name2
-					}
-					break
-				}
-			}
-		}
-		setName(output, name)
 
 		// mark all targeted properties as done
 		for _, a := range content.Attributes {
@@ -499,35 +488,49 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 // resolveBlockNames returns the names of the block, calling resolveBlock to
 // evaluate any label fields to correctly resolve the name.
 func (p *parser) resolveBlockNames(block *hcl.Block) ([]string, error) {
-	t, ok := p.blockTypes[block.Type]
-	if !ok {
-		return nil, errors.Errorf("internal error: unknown block type %s", block.Type)
+	if names, ok := p.blockNames[block]; ok {
+		return names, nil
 	}
 
-	nameKey, ok := getNameKey(reflect.New(t))
-	if ok {
-		target := &hcl.BodySchema{
-			Attributes: []hcl.AttributeSchema{{Name: nameKey}},
-			Blocks:     []hcl.BlockHeaderSchema{{Type: nameKey}},
-		}
-		if err := p.resolveBlock(block, target); err != nil {
-			return nil, err
-		}
-	} else {
-		if err := p.resolveBlock(block, &hcl.BodySchema{}); err != nil {
-			return nil, err
-		}
+	if err := p.resolveBlock(block, &hcl.BodySchema{}); err != nil {
+		return nil, err
 	}
 
 	names := make([]string, 0, len(p.blockValues[block]))
-	for _, prev := range p.blockValues[block] {
-		name, ok := getName(prev)
-		if !ok {
-			return nil, errors.New("internal error: failed to get name")
+	for i, val := range p.blockValues[block] {
+		ectx := p.blockEvalCtx[block][i]
+
+		name := block.Labels[0]
+		if err := p.opt.ValidateLabel(name); err != nil {
+			return nil, err
 		}
+
+		if v, ok := val.Interface().(WithGetName); ok {
+			var err error
+			name, err = v.GetName(ectx, block, func(expr hcl.Expression) hcl.Diagnostics {
+				return p.loadDeps(ectx, expr, nil, true)
+			})
+			if err != nil {
+				return nil, err
+			}
+			if err := p.opt.ValidateLabel(name); err != nil {
+				return nil, err
+			}
+		}
+
+		setName(val, name)
 		names = append(names, name)
 	}
 
+	found := map[string]struct{}{}
+	for _, name := range names {
+		if _, ok := found[name]; ok {
+			return nil, errors.Errorf("duplicate name %q", name)
+		}
+		found[name] = struct{}{}
+	}
+
+	p.blockNames[block] = names
 	return names, nil
 }
 
@@ -570,6 +573,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 		blocks:       map[string]map[string][]*hcl.Block{},
 		blockValues:  map[*hcl.Block][]reflect.Value{},
 		blockEvalCtx: map[*hcl.Block][]*hcl.EvalContext{},
+		blockNames:   map[*hcl.Block][]string{},
 		blockTypes:   map[string]reflect.Type{},
 		ectx: &hcl.EvalContext{
 			Variables: map[string]cty.Value{},
@@ -831,19 +835,6 @@ func getName(v reflect.Value) (string, bool) {
 		for _, t := range parts[1:] {
 			if t == "label" {
 				return v.Elem().Field(i).String(), true
-			}
-		}
-	}
-	return "", false
-}
-
-func getNameKey(v reflect.Value) (string, bool) {
-	numFields := v.Elem().Type().NumField()
-	for i := 0; i < numFields; i++ {
-		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
-		for _, t := range parts[1:] {
-			if t == "label" {
-				return parts[0], true
 			}
 		}
 	}

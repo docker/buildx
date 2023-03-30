@@ -660,16 +660,8 @@ func TestHCLRenameTarget(t *testing.T) {
 		}
 		`)
 
-	c, err := ParseFile(dt, "docker-bake.hcl")
-	require.NoError(t, err)
-
-	require.Equal(t, 1, len(c.Targets))
-	require.Equal(t, "xyz", c.Targets[0].Name)
-	require.Equal(t, "foo", *c.Targets[0].Dockerfile)
-
-	require.Equal(t, 1, len(c.Groups))
-	require.Equal(t, "abc", c.Groups[0].Name)
-	require.Equal(t, []string{"xyz"}, c.Groups[0].Targets)
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "requires matrix")
 }
 
 func TestHCLRenameGroup(t *testing.T) {
@@ -678,31 +670,28 @@ func TestHCLRenameGroup(t *testing.T) {
 			name = "bar"
 			targets = ["x", "y"]
 		}
+		`)
 
-		target "x" {
-		}
-		target "y" {
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "not supported")
+
+	dt = []byte(`
+		group "foo" {
+			matrix = {
+				name = ["x", "y"]
+			}
 		}
 		`)
 
-	c, err := ParseFile(dt, "docker-bake.hcl")
-	require.NoError(t, err)
-
-	require.Equal(t, 2, len(c.Targets))
-	require.Equal(t, "x", c.Targets[0].Name)
-	require.Equal(t, "y", c.Targets[1].Name)
-
-	require.Equal(t, 2, len(c.Groups))
-	require.Equal(t, "bar", c.Groups[0].Name)
-	require.Equal(t, []string{"x", "y"}, c.Groups[0].Targets)
-	require.Equal(t, "foo", c.Groups[1].Name)
-	require.Equal(t, []string{"bar"}, c.Groups[1].Targets)
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "not supported")
 }
 
 func TestHCLRenameTargetAttrs(t *testing.T) {
 	dt := []byte(`
 		target "abc" {
 			name = "xyz"
+			matrix = {}
 			dockerfile = "foo"
 		}
 
@@ -726,6 +715,7 @@ func TestHCLRenameTargetAttrs(t *testing.T) {
 
 		target "abc" {
 			name = "xyz"
+			matrix = {}
 			dockerfile = "foo"
 		}
 		`)
@@ -741,6 +731,7 @@ func TestHCLRenameTargetAttrs(t *testing.T) {
 	dt = []byte(`
 		target "abc" {
 			name = "xyz"
+			matrix  = {}
 			dockerfile = "foo"
 		}
 
@@ -750,7 +741,7 @@ func TestHCLRenameTargetAttrs(t *testing.T) {
 		`)
 
 	_, err = ParseFile(dt, "docker-bake.hcl")
-	require.Error(t, err)
+	require.ErrorContains(t, err, "abc")
 
 	dt = []byte(`
 		target "def" {
@@ -759,23 +750,26 @@ func TestHCLRenameTargetAttrs(t *testing.T) {
 
 		target "abc" {
 			name = "xyz"
+			matrix = {}
 			dockerfile = "foo"
 		}
 		`)
 
 	_, err = ParseFile(dt, "docker-bake.hcl")
-	require.Error(t, err)
+	require.ErrorContains(t, err, "abc")
 }
 
 func TestHCLRenameSplit(t *testing.T) {
 	dt := []byte(`
 		target "x" {
 			name = "y"
+			matrix = {}
 			dockerfile = "foo"
 		}
 
 		target "x" {
 			name = "z"
+			matrix = {}
 			dockerfile = "bar"
 		}
 		`)
@@ -798,6 +792,7 @@ func TestHCLRenameMultiFile(t *testing.T) {
 	dt := []byte(`
 		target "foo" {
 			name = "bar"
+			matrix = {}
 			dockerfile = "x"
 		}
 		`)
@@ -979,6 +974,20 @@ func TestHCLMatrixMultipleTargets(t *testing.T) {
 	}
 }
 
+func TestHCLMatrixDuplicateNames(t *testing.T) {
+	dt := []byte(`
+		target "default" {
+			matrix = {
+				foo = ["a", "b"]
+			}
+			name = "c"
+		}
+		`)
+
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+}
+
 func TestHCLMatrixArgs(t *testing.T) {
 	dt := []byte(`
 		a = 1
@@ -1033,7 +1042,7 @@ func TestHCLMatrixArgsOverride(t *testing.T) {
 	require.Equal(t, ptrstr("33"), c.Targets[2].Args["foo"])
 }
 
-func TestHCLMatrixErrors(t *testing.T) {
+func TestHCLMatrixBadTypes(t *testing.T) {
 	dt := []byte(`
 		target "default" {
 			matrix = "test"

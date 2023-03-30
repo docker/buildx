@@ -24,6 +24,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/convert"
 )
 
 var (
@@ -612,6 +613,11 @@ type Target struct {
 	linked bool
 }
 
+var _ hclparser.WithEvalContexts = &Target{}
+var _ hclparser.WithGetName = &Target{}
+var _ hclparser.WithEvalContexts = &Group{}
+var _ hclparser.WithGetName = &Group{}
+
 func (t *Target) normalize() {
 	t.Attest = removeDupes(t.Attest)
 	t.Tags = removeDupes(t.Tags)
@@ -795,7 +801,20 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 	return nil
 }
 
-func (t *Target) EvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error) {
+func (g *Group) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error) {
+	content, _, err := block.Body.PartialContent(&hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{{Name: "matrix"}},
+	})
+	if err != nil {
+		return nil, err
+	}
+	if _, ok := content.Attributes["matrix"]; ok {
+		return nil, errors.Errorf("matrix is not supported for groups")
+	}
+	return []*hcl.EvalContext{ectx}, nil
+}
+
+func (t *Target) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error) {
 	content, _, err := block.Body.PartialContent(&hcl.BodySchema{
 		Attributes: []hcl.AttributeSchema{{Name: "matrix"}},
 	})
@@ -841,6 +860,53 @@ func (t *Target) EvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDeps 
 		ectxs = ectxs2
 	}
 	return ectxs, nil
+}
+
+func (g *Group) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) (string, error) {
+	content, _, diags := block.Body.PartialContent(&hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{{Name: "name"}, {Name: "matrix"}},
+	})
+	if diags != nil {
+		return "", diags
+	}
+
+	if _, ok := content.Attributes["name"]; ok {
+		return "", errors.Errorf("name is not supported for groups")
+	}
+	if _, ok := content.Attributes["matrix"]; ok {
+		return "", errors.Errorf("matrix is not supported for groups")
+	}
+	return block.Labels[0], nil
+}
+
+func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) (string, error) {
+	content, _, diags := block.Body.PartialContent(&hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{{Name: "name"}, {Name: "matrix"}},
+	})
+	if diags != nil {
+		return "", diags
+	}
+
+	attr, ok := content.Attributes["name"]
+	if !ok {
+		return block.Labels[0], nil
+	}
+	if _, ok := content.Attributes["matrix"]; !ok {
+		return "", errors.Errorf("name requires matrix")
+	}
+	if diags := loadDeps(attr.Expr); diags.HasErrors() {
+		return "", diags
+	}
+	value, diags := attr.Expr.Value(ectx)
+	if diags != nil {
+		return "", diags
+	}
+
+	value, err := convert.Convert(value, cty.String)
+	if err != nil {
+		return "", err
+	}
+	return value.AsString(), nil
 }
 
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
