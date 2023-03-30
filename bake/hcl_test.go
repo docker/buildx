@@ -881,6 +881,61 @@ func TestHCLMatrixMultipleKeys(t *testing.T) {
 	require.ElementsMatch(t, []string{"a-b-d", "a-b-e", "a-b-f", "a-c-d", "a-c-e", "a-c-f"}, c.Groups[0].Targets)
 }
 
+func TestHCLMatrixLists(t *testing.T) {
+	dt := []byte(`
+	target "foo" {
+		matrix = {
+			aa = [["aa", "bb"], ["cc", "dd"]]
+		}
+		name = aa[0]
+		args = {
+			target = "val${aa[1]}"
+		}
+	}
+	`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "aa", c.Targets[0].Name)
+	require.Equal(t, ptrstr("valbb"), c.Targets[0].Args["target"])
+	require.Equal(t, "cc", c.Targets[1].Name)
+	require.Equal(t, ptrstr("valdd"), c.Targets[1].Args["target"])
+}
+
+func TestHCLMatrixMaps(t *testing.T) {
+	dt := []byte(`
+	target "foo" {
+		matrix = {
+			aa = [
+				{
+					foo = "aa"
+					bar = "bb"
+				},
+				{
+					foo = "cc"
+					bar = "dd"
+				}
+			]
+		}
+		name = aa.foo
+		args = {
+			target = "val${aa.bar}"
+		}
+	}
+	`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "aa")
+	require.Equal(t, c.Targets[0].Args["target"], ptrstr("valbb"))
+	require.Equal(t, c.Targets[1].Name, "cc")
+	require.Equal(t, c.Targets[1].Args["target"], ptrstr("valdd"))
+}
+
 func TestHCLMatrixMultipleTargets(t *testing.T) {
 	dt := []byte(`
 		target "x" {
@@ -942,8 +997,40 @@ func TestHCLMatrixArgs(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(c.Targets))
-	require.Equal(t, c.Targets[0].Name, "1")
-	require.Equal(t, c.Targets[1].Name, "2")
+	require.Equal(t, "1", c.Targets[0].Name)
+	require.Equal(t, "2", c.Targets[1].Name)
+}
+
+func TestHCLMatrixArgsOverride(t *testing.T) {
+	dt := []byte(`
+	variable "ABC" {
+		default = "def"
+	}
+
+	target "bar" {
+		matrix = {
+			aa = split(",", ABC)
+		}
+		name = "bar-${aa}"
+		args = {
+			foo = aa
+		}
+	}
+	`)
+
+	c, err := ParseFiles([]File{
+		{Data: dt, Name: "docker-bake.hcl"},
+	}, map[string]string{"ABC": "11,22,33"})
+	require.NoError(t, err)
+
+	require.Equal(t, 3, len(c.Targets))
+	require.Equal(t, "bar-11", c.Targets[0].Name)
+	require.Equal(t, "bar-22", c.Targets[1].Name)
+	require.Equal(t, "bar-33", c.Targets[2].Name)
+
+	require.Equal(t, ptrstr("11"), c.Targets[0].Args["foo"])
+	require.Equal(t, ptrstr("22"), c.Targets[1].Args["foo"])
+	require.Equal(t, ptrstr("33"), c.Targets[2].Args["foo"])
 }
 
 func TestHCLMatrixErrors(t *testing.T) {
