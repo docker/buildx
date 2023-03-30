@@ -6,8 +6,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/moby/buildkit/util/bklog"
 	"github.com/morikuni/aec"
+	"github.com/sirupsen/logrus"
 )
 
 var termColorMap = map[string]aec.ANSI{
@@ -41,7 +41,7 @@ func setUserDefinedTermColors(colorsEnv string) {
 		k, v, ok := strings.Cut(field, "=")
 		if !ok || strings.Contains(v, "=") {
 			err := errors.New("A valid entry must have exactly two fields")
-			bklog.L.WithError(err).Warnf("Could not parse BUILDKIT_COLORS component: %s", field)
+			logrus.WithError(err).Warnf("Could not parse BUILDKIT_COLORS component: %s", field)
 			continue
 		}
 		k = strings.ToLower(k)
@@ -53,7 +53,7 @@ func setUserDefinedTermColors(colorsEnv string) {
 			}
 		} else {
 			err := errors.New("Colors must be a name from the pre-defined list or a valid 3-part RGB value")
-			bklog.L.WithError(err).Warnf("Unknown color value found in BUILDKIT_COLORS: %s=%s", k, v)
+			logrus.WithError(err).Warnf("Unknown color value found in BUILDKIT_COLORS: %s=%s", k, v)
 		}
 	}
 }
@@ -63,7 +63,7 @@ func readBuildkitColorsEnv(colorsEnv string) []string {
 	csvReader.Comma = ':'
 	fields, err := csvReader.Read()
 	if err != nil {
-		bklog.L.WithError(err).Warnf("Could not parse BUILDKIT_COLORS. Falling back to defaults.")
+		logrus.WithError(err).Warnf("Could not parse BUILDKIT_COLORS. Falling back to defaults.")
 		return nil
 	}
 	return fields
@@ -73,12 +73,12 @@ func readRGB(v string) aec.ANSI {
 	csvReader := csv.NewReader(strings.NewReader(v))
 	fields, err := csvReader.Read()
 	if err != nil {
-		bklog.L.WithError(err).Warnf("Could not parse value %s as valid comma-separated RGB color. Ignoring.", v)
+		logrus.WithError(err).Warnf("Could not parse value %s as valid comma-separated RGB color. Ignoring.", v)
 		return nil
 	}
 	if len(fields) != 3 {
 		err = errors.New("A valid RGB color must have three fields")
-		bklog.L.WithError(err).Warnf("Could not parse value %s as valid RGB color. Ignoring.", v)
+		logrus.WithError(err).Warnf("Could not parse value %s as valid RGB color. Ignoring.", v)
 		return nil
 	}
 	ok := isValidRGB(fields)
@@ -103,7 +103,7 @@ func parseKeys(k string, c aec.ANSI) {
 	case "warning":
 		colorWarning = c
 	default:
-		bklog.L.Warnf("Unknown key found in BUILDKIT_COLORS (expected: run, cancel, error, or warning): %s", k)
+		logrus.Warnf("Unknown key found in BUILDKIT_COLORS (expected: run, cancel, error, or warning): %s", k)
 	}
 }
 
@@ -111,14 +111,14 @@ func isValidRGB(s []string) bool {
 	for _, n := range s {
 		num, err := strconv.Atoi(n)
 		if err != nil {
-			bklog.L.Warnf("A field in BUILDKIT_COLORS appears to contain an RGB value that is not an integer: %s", strings.Join(s, ","))
+			logrus.Warnf("A field in BUILDKIT_COLORS appears to contain an RGB value that is not an integer: %s", strings.Join(s, ","))
 			return false
 		}
 		ok := isValidRGBValue(num)
 		if ok {
 			continue
 		} else {
-			bklog.L.Warnf("A field in BUILDKIT_COLORS appears to contain an RGB value that is not within the valid range of 0-255: %s", strings.Join(s, ","))
+			logrus.Warnf("A field in BUILDKIT_COLORS appears to contain an RGB value that is not within the valid range of 0-255: %s", strings.Join(s, ","))
 			return false
 		}
 	}

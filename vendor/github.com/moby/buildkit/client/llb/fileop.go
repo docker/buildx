@@ -702,7 +702,7 @@ func (f *FileOp) Marshal(ctx context.Context, c *Constraints) (digest.Digest, []
 	pop.Inputs = state.inputs
 
 	for i, st := range state.actions {
-		output := pb.SkipOutput
+		output := pb.OutputIndex(-1)
 		if i+1 == len(state.actions) {
 			output = 0
 		}

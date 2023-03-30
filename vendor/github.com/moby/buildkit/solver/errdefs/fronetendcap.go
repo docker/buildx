@@ -3,7 +3,7 @@ package errdefs
 import (
 	fmt "fmt"
 
-	"github.com/containerd/typeurl/v2"
+	"github.com/containerd/typeurl"
 	"github.com/moby/buildkit/util/grpcerrors"
 )
 

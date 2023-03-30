@@ -20,18 +20,15 @@ const (
 )
 
 type StoreIndex struct {
-	indexPath  string
-	lockPath   string
-	layoutPath string
+	indexPath string
+	lockPath  string
 }
 
 func NewStoreIndex(storePath string) StoreIndex {
 	indexPath := path.Join(storePath, indexFile)
-	layoutPath := path.Join(storePath, ocispecs.ImageLayoutFile)
 	return StoreIndex{
-		indexPath:  indexPath,
-		lockPath:   indexPath + lockFileSuffix,
-		layoutPath: layoutPath,
+		indexPath: indexPath,
+		lockPath:  indexPath + lockFileSuffix,
 	}
 }
 
@@ -61,7 +58,6 @@ func (s StoreIndex) Read() (*ocispecs.Index, error) {
 }
 
 func (s StoreIndex) Put(tag string, desc ocispecs.Descriptor) error {
-	// lock the store to prevent concurrent access
 	lock := flock.New(s.lockPath)
 	locked, err := lock.TryLock()
 	if err != nil {
@@ -75,33 +71,20 @@ func (s StoreIndex) Put(tag string, desc ocispecs.Descriptor) error {
 		os.RemoveAll(s.lockPath)
 	}()
 
-	// create the oci-layout file
-	layout := ocispecs.ImageLayout{
-		Version: ocispecs.ImageLayoutVersion,
-	}
-	layoutData, err := json.Marshal(layout)
-	if err != nil {
-		return err
-	}
-	if err := os.WriteFile(s.layoutPath, layoutData, 0644); err != nil {
-		return err
-	}
-
-	// modify the index file
-	idxFile, err := os.OpenFile(s.indexPath, os.O_RDWR|os.O_CREATE, 0644)
+	f, err := os.OpenFile(s.indexPath, os.O_RDWR|os.O_CREATE, 0644)
 	if err != nil {
 		return errors.Wrapf(err, "could not open %s", s.indexPath)
 	}
-	defer idxFile.Close()
+	defer f.Close()
 
 	var idx ocispecs.Index
-	idxData, err := io.ReadAll(idxFile)
+	b, err := io.ReadAll(f)
 	if err != nil {
 		return errors.Wrapf(err, "could not read %s", s.indexPath)
 	}
-	if len(idxData) > 0 {
-		if err := json.Unmarshal(idxData, &idx); err != nil {
-			return errors.Wrapf(err, "could not unmarshal %s (%q)", s.indexPath, string(idxData))
+	if len(b) > 0 {
+		if err := json.Unmarshal(b, &idx); err != nil {
+			return errors.Wrapf(err, "could not unmarshal %s (%q)", s.indexPath, string(b))
 		}
 	}
 
@@ -109,15 +92,15 @@ func (s StoreIndex) Put(tag string, desc ocispecs.Descriptor) error {
 		return err
 	}
 
-	idxData, err = json.Marshal(idx)
+	b, err = json.Marshal(idx)
 	if err != nil {
 		return err
 	}
-	if _, err = idxFile.WriteAt(idxData, 0); err != nil {
-		return errors.Wrapf(err, "could not write %s", s.indexPath)
+	if _, err = f.WriteAt(b, 0); err != nil {
+		return err
 	}
-	if err = idxFile.Truncate(int64(len(idxData))); err != nil {
-		return errors.Wrapf(err, "could not truncate %s", s.indexPath)
+	if err = f.Truncate(int64(len(b))); err != nil {
+		return err
 	}
 	return nil
 }

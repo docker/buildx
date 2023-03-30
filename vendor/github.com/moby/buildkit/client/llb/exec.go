@@ -339,7 +339,7 @@ func (e *ExecOp) Marshal(ctx context.Context, c *Constraints) (digest.Digest, []
 			inputIndex = pb.Empty
 		}
 
-		outputIndex := pb.SkipOutput
+		outputIndex := pb.OutputIndex(-1)
 		if !m.noOutput && !m.readonly && m.cacheID == "" && !m.tmpfs {
 			outputIndex = pb.OutputIndex(outIndex)
 			outIndex++

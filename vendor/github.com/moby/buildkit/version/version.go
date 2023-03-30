@@ -23,7 +23,7 @@ import (
 )
 
 const (
-	defaultVersion = "v0.0.0+unknown"
+	defaultVersion = "0.0.0+unknown"
 )
 
 var (

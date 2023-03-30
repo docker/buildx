@@ -190,7 +190,7 @@ func (c *grpcClient) Run(ctx context.Context, f client.BuildFunc) (retError erro
 				}
 			}
 			if retError != nil {
-				st, _ := status.FromError(grpcerrors.ToGRPC(ctx, retError))
+				st, _ := status.FromError(grpcerrors.ToGRPC(retError))
 				stp := st.Proto()
 				req.Error = &rpc.Status{
 					Code:    stp.Code,
@@ -792,7 +792,6 @@ func (c *grpcClient) NewContainer(ctx context.Context, req client.NewContainerRe
 		Constraints: req.Constraints,
 		Network:     req.NetMode,
 		ExtraHosts:  req.ExtraHosts,
-		Hostname:    req.Hostname,
 	})
 	if err != nil {
 		return nil, err
@@ -928,11 +927,11 @@ func (ctr *container) Start(ctx context.Context, req client.StartRequest) (clien
 
 			if msg == nil {
 				// empty message from ctx cancel, so just start shutting down
-				// input
+				// input, but continue processing more exit/done messages
 				closeDoneOnce.Do(func() {
 					close(done)
 				})
-				return ctx.Err()
+				continue
 			}
 
 			if file := msg.GetFile(); file != nil {

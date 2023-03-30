@@ -1,17 +1,16 @@
 package grpcerrors
 
 import (
-	"context"
 	"encoding/json"
 	"errors"
 
-	"github.com/containerd/typeurl/v2"
+	"github.com/containerd/typeurl"
 	rpc "github.com/gogo/googleapis/google/rpc"
 	gogotypes "github.com/gogo/protobuf/types"
 	"github.com/golang/protobuf/proto" //nolint:staticcheck
 	"github.com/golang/protobuf/ptypes/any"
-	"github.com/moby/buildkit/util/bklog"
 	"github.com/moby/buildkit/util/stack"
+	"github.com/sirupsen/logrus"
 	spb "google.golang.org/genproto/googleapis/rpc/status"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -26,7 +25,7 @@ type TypedErrorProto interface {
 	WrapError(error) error
 }
 
-func ToGRPC(ctx context.Context, err error) error {
+func ToGRPC(err error) error {
 	if err == nil {
 		return nil
 	}
@@ -65,7 +64,7 @@ func ToGRPC(ctx context.Context, err error) error {
 	})
 
 	if len(details) > 0 {
-		if st2, err := withDetails(ctx, st, details...); err == nil {
+		if st2, err := withDetails(st, details...); err == nil {
 			st = st2
 		}
 	}
@@ -73,7 +72,7 @@ func ToGRPC(ctx context.Context, err error) error {
 	return st.Err()
 }
 
-func withDetails(ctx context.Context, s *status.Status, details ...proto.Message) (*status.Status, error) {
+func withDetails(s *status.Status, details ...proto.Message) (*status.Status, error) {
 	if s.Code() == codes.OK {
 		return nil, errors.New("no error details for status with code OK")
 	}
@@ -81,7 +80,7 @@ func withDetails(ctx context.Context, s *status.Status, details ...proto.Message
 	for _, detail := range details {
 		url, err := typeurl.TypeURL(detail)
 		if err != nil {
-			bklog.G(ctx).Warnf("ignoring typed error %T: not registered", detail)
+			logrus.Warnf("ignoring typed error %T: not registered", detail)
 			continue
 		}
 		dt, err := json.Marshal(detail)
