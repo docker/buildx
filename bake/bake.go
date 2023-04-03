@@ -789,7 +789,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
 			continue
 		}
-		if IsRemoteURL(v.Path) {
+		if build.IsRemoteURL(v.Path) {
 			continue
 		}
 		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
@@ -803,7 +803,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 	if strings.HasPrefix(t.ContextPath, "cwd://") {
 		return
 	}
-	if IsRemoteURL(t.ContextPath) {
+	if build.IsRemoteURL(t.ContextPath) {
 		return
 	}
 	st := llb.Scratch().File(llb.Copy(*inp.State, t.ContextPath, "/"), llb.WithCustomNamef("set context to %s", t.ContextPath))
@@ -839,7 +839,7 @@ func validateContextsEntitlements(t build.Inputs, inp *Input) error {
 }
 
 func checkPath(p string) error {
-	if IsRemoteURL(p) || strings.HasPrefix(p, "target:") || strings.HasPrefix(p, "docker-image:") {
+	if build.IsRemoteURL(p) || strings.HasPrefix(p, "target:") || strings.HasPrefix(p, "docker-image:") {
 		return nil
 	}
 	p, err := filepath.EvalSymlinks(p)
@@ -875,7 +875,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.Context != nil {
 		contextPath = *t.Context
 	}
-	if !strings.HasPrefix(contextPath, "cwd://") && !IsRemoteURL(contextPath) {
+	if !strings.HasPrefix(contextPath, "cwd://") && !build.IsRemoteURL(contextPath) {
 		contextPath = path.Clean(contextPath)
 	}
 	dockerfilePath := "Dockerfile"

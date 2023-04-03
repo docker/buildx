@@ -83,16 +83,6 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 	return files, inp, nil
 }
 
-func IsRemoteURL(url string) bool {
-	if _, _, ok := detectHTTPContext(url); ok {
-		return true
-	}
-	if _, ok := detectGitContext(url); ok {
-		return true
-	}
-	return false
-}
-
 func detectHTTPContext(url string) (*llb.State, string, bool) {
 	if httpPrefix.MatchString(url) {
 		httpContext := llb.HTTP(url, llb.Filename("context"), llb.WithCustomName("[internal] load remote build context"))
