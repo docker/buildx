@@ -42,7 +42,7 @@ import (
 const defaultTargetName = "default"
 
 func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
-	if in.Opts.NoCache && len(in.NoCacheFilter) > 0 {
+	if in.NoCache && len(in.NoCacheFilter) > 0 {
 		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
 
@@ -67,9 +67,9 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		ExtraHosts:    in.ExtraHosts,
 		Labels:        in.Labels,
 		NetworkMode:   in.NetworkMode,
-		NoCache:       in.Opts.NoCache,
+		NoCache:       in.NoCache,
 		NoCacheFilter: in.NoCacheFilter,
-		Pull:          in.Opts.Pull,
+		Pull:          in.Pull,
 		ShmSize:       dockeropts.MemBytes(in.ShmSize),
 		Tags:          in.Tags,
 		Target:        in.Target,
@@ -106,8 +106,8 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	if err != nil {
 		return nil, nil, err
 	}
-	if in.Opts.ExportPush {
-		if in.Opts.ExportLoad {
+	if in.ExportPush {
+		if in.ExportLoad {
 			return nil, nil, errors.Errorf("push and load may not be set together at the moment")
 		}
 		if len(outputs) == 0 {
@@ -126,7 +126,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			}
 		}
 	}
-	if in.Opts.ExportLoad {
+	if in.ExportLoad {
 		if len(outputs) == 0 {
 			outputs = []client.ExportEntry{{
 				Type:  "docker",
@@ -160,7 +160,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 
 	b, err := builder.New(dockerCli,
-		builder.WithName(in.Opts.Builder),
+		builder.WithName(in.Builder),
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
@@ -174,7 +174,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.Opts.MetadataFile, statusChan)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.MetadataFile, statusChan)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return nil, nil, err
