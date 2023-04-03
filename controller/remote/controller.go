@@ -21,6 +21,7 @@ import (
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/client"
@@ -142,8 +143,8 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			}()
 
 			// prepare server
-			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
-				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, "quiet", statusChan, true)
+			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, progress progress.Writer) (*client.SolveResponse, *build.ResultContext, error) {
+				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress, true)
 			})
 			defer b.Close()
 

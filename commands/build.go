@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/csv"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
@@ -35,8 +37,11 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
+	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -200,7 +205,22 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 	if err != nil {
 		return err
 	}
-	progress, err := in.toProgress()
+
+	progressMode, err := in.toProgress()
+	if err != nil {
+		return err
+	}
+	b, err := builder.New(dockerCli,
+		builder.WithName(opts.Builder),
+		builder.WithContextPathHash(opts.ContextPath),
+	)
+	if err != nil {
+		return err
+	}
+	printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
+		fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
+		fmt.Sprintf("%s:%s", b.Driver, b.Name),
+	))
 	if err != nil {
 		return err
 	}
@@ -211,10 +231,14 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 			return errors.Wrap(err, "removing image ID file")
 		}
 	}
-	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, progress, nil, false)
+	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, printer, false)
+	if err1 := printer.Wait(); err == nil {
+		err = err1
+	}
 	if err != nil {
 		return err
 	}
+	printWarnings(os.Stderr, printer.Warnings(), progressMode)
 	if in.quiet {
 		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
 	}
@@ -517,7 +541,22 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	if err != nil {
 		return err
 	}
-	progress, err := options.toProgress()
+
+	progressMode, err := options.toProgress()
+	if err != nil {
+		return err
+	}
+	b, err := builder.New(dockerCli,
+		builder.WithName(opts.Builder),
+		builder.WithContextPathHash(opts.ContextPath),
+	)
+	if err != nil {
+		return err
+	}
+	printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
+		fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
+		fmt.Sprintf("%s:%s", b.Driver, b.Name),
+	))
 	if err != nil {
 		return err
 	}
@@ -550,7 +589,10 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		}
 
 		var resp *client.SolveResponse
-		ref, resp, err = c.Build(ctx, opts, pr, os.Stdout, os.Stderr, progress)
+		ref, resp, err = c.Build(ctx, opts, pr, printer)
+		if err1 := printer.Wait(); err == nil {
+			err = err1
+		}
 		if err != nil {
 			var be *controllererrors.BuildError
 			if errors.As(err, &be) {
@@ -561,6 +603,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 				return errors.Wrapf(err, "failed to build")
 			}
 		}
+		printWarnings(os.Stderr, printer.Warnings(), progressMode)
 		if err := pw.Close(); err != nil {
 			logrus.Debug("failed to close stdin pipe writer")
 		}
@@ -595,7 +638,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 			}
 			return errors.Errorf("failed to configure terminal: %v", err)
 		}
-		err = monitor.RunMonitor(ctx, ref, &opts, options.invoke.InvokeConfig, c, progress, pr2, os.Stdout, os.Stderr)
+		err = monitor.RunMonitor(ctx, ref, &opts, options.invoke.InvokeConfig, c, pr2, os.Stdout, os.Stderr, printer)
 		con.Reset()
 		if err := pw2.Close(); err != nil {
 			logrus.Debug("failed to close monitor stdin pipe reader")
@@ -880,4 +923,44 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 
 	return options, nil
+}
+
+func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
+	if len(warnings) == 0 || mode == progress.PrinterModeQuiet {
+		return
+	}
+	fmt.Fprintf(w, "\n ")
+	sb := &bytes.Buffer{}
+	if len(warnings) == 1 {
+		fmt.Fprintf(sb, "1 warning found")
+	} else {
+		fmt.Fprintf(sb, "%d warnings found", len(warnings))
+	}
+	if logrus.GetLevel() < logrus.DebugLevel {
+		fmt.Fprintf(sb, " (use --debug to expand)")
+	}
+	fmt.Fprintf(sb, ":\n")
+	fmt.Fprint(w, aec.Apply(sb.String(), aec.YellowF))
+
+	for _, warn := range warnings {
+		fmt.Fprintf(w, " - %s\n", warn.Short)
+		if logrus.GetLevel() < logrus.DebugLevel {
+			continue
+		}
+		for _, d := range warn.Detail {
+			fmt.Fprintf(w, "%s\n", d)
+		}
+		if warn.URL != "" {
+			fmt.Fprintf(w, "More info: %s\n", warn.URL)
+		}
+		if warn.SourceInfo != nil && warn.Range != nil {
+			src := errdefs.Source{
+				Info:   warn.SourceInfo,
+				Ranges: warn.Range,
+			}
+			src.Print(w)
+		}
+		fmt.Fprintf(w, "\n")
+
+	}
 }

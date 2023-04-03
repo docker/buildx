@@ -15,6 +15,7 @@ import (
 	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/ioset"
+	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -36,7 +37,7 @@ Available commands are:
 `
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options *controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, progressMode string, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File) error {
+func RunMonitor(ctx context.Context, curRef string, options *controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress progress.Writer) error {
 	defer func() {
 		if err := c.Disconnect(ctx, curRef); err != nil {
 			logrus.Warnf("disconnect error: %v", err)
@@ -145,7 +146,7 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 						}
 					}
 					var resultUpdated bool
-					ref, _, err := c.Build(ctx, *bo, nil, stdout, stderr, progressMode) // TODO: support stdin, hold build ref
+					ref, _, err := c.Build(ctx, *bo, nil, progress) // TODO: support stdin, hold build ref
 					if err != nil {
 						var be *controllererrors.BuildError
 						if errors.As(err, &be) {
