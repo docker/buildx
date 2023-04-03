@@ -75,7 +75,13 @@ type buildOptions struct {
 	progress string
 	quiet    bool
 
-	controllerapi.CommonOptions
+	builder      string
+	metadataFile string
+	noCache      bool
+	pull         bool
+	exportPush   bool
+	exportLoad   bool
+
 	control.ControlOptions
 }
 
@@ -97,7 +103,12 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		Tags:           o.tags,
 		Target:         o.target,
 		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
-		Opts:           &o.CommonOptions,
+		Builder:        o.builder,
+		MetadataFile:   o.metadataFile,
+		NoCache:        o.noCache,
+		Pull:           o.pull,
+		ExportPush:     o.exportPush,
+		ExportLoad:     o.exportLoad,
 	}
 
 	// TODO: extract env var parsing to a method easily usable by library consumers
@@ -225,15 +236,15 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.contextPath = args[0]
-			options.Builder = rootOpts.builder
-			options.MetadataFile = cFlags.metadataFile
-			options.NoCache = false
+			options.builder = rootOpts.builder
+			options.metadataFile = cFlags.metadataFile
+			options.noCache = false
 			if cFlags.noCache != nil {
-				options.NoCache = *cFlags.noCache
+				options.noCache = *cFlags.noCache
 			}
-			options.Pull = false
+			options.pull = false
 			if cFlags.pull != nil {
-				options.Pull = *cFlags.pull
+				options.pull = *cFlags.pull
 			}
 			options.progress = cFlags.progress
 			cmd.Flags().VisitAll(checkWarnedFlags)
@@ -274,7 +285,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
-	flags.BoolVar(&options.ExportLoad, "load", false, `Shorthand for "--output=type=docker"`)
+	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--output=type=docker"`)
 
 	flags.StringVar(&options.networkMode, "network", "default", `Set the networking mode for the "RUN" instructions during build`)
 
@@ -288,7 +299,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
 	}
 
-	flags.BoolVar(&options.ExportPush, "push", false, `Shorthand for "--output=type=registry"`)
+	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 
@@ -814,8 +825,8 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 	options.SSH = ssh
 
-	if options.Opts != nil && options.Opts.MetadataFile != "" {
-		options.Opts.MetadataFile, err = filepath.Abs(options.Opts.MetadataFile)
+	if options.MetadataFile != "" {
+		options.MetadataFile, err = filepath.Abs(options.MetadataFile)
 		if err != nil {
 			return nil, err
 		}
