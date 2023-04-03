@@ -18,7 +18,6 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli/config"
-	"github.com/docker/docker/builder/remotecontext/urlutil"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
@@ -884,7 +883,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		dockerfilePath = *t.Dockerfile
 	}
 
-	if !isRemoteResource(contextPath) && !path.IsAbs(dockerfilePath) {
+	if !build.IsRemoteURL(contextPath) && !path.IsAbs(dockerfilePath) {
 		dockerfilePath = path.Join(contextPath, dockerfilePath)
 	}
 
@@ -1038,10 +1037,6 @@ func removeDupes(s []string) []string {
 		i++
 	}
 	return s[:i]
-}
-
-func isRemoteResource(str string) bool {
-	return urlutil.IsGitURL(str) || urlutil.IsURL(str)
 }
 
 func parseOutputType(str string) string {
