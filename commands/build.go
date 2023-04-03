@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	"github.com/containerd/console"
+	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
@@ -29,7 +30,6 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
-	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -670,7 +670,7 @@ func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.Ulim
 // and replaces them to absolute paths.
 func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOptions, err error) {
 	if options.ContextPath != "" && options.ContextPath != "-" {
-		if !urlutil.IsGitURL(options.ContextPath) && !urlutil.IsURL(options.ContextPath) {
+		if !build.IsRemoteURL(options.ContextPath) {
 			options.ContextPath, err = filepath.Abs(options.ContextPath)
 			if err != nil {
 				return nil, err
@@ -685,7 +685,7 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 	var contexts map[string]string
 	for k, v := range options.NamedContexts {
-		if urlutil.IsGitURL(v) || urlutil.IsURL(v) || strings.HasPrefix(v, "docker-image://") {
+		if build.IsRemoteURL(v) || strings.HasPrefix(v, "docker-image://") {
 			// url prefix, this is a remote path
 		} else if strings.HasPrefix(v, "oci-layout://") {
 			// oci layout prefix, this is a local path

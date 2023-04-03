@@ -1278,7 +1278,6 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 				target.LocalDirs["context"] = inp.ContextPath
 			}
 		}
-
 	case isLocalDir(inp.ContextPath):
 		target.LocalDirs["context"] = inp.ContextPath
 		switch inp.DockerfilePath {
@@ -1290,8 +1289,7 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 			dockerfileDir = filepath.Dir(inp.DockerfilePath)
 			dockerfileName = filepath.Base(inp.DockerfilePath)
 		}
-
-	case urlutil.IsGitURL(inp.ContextPath), urlutil.IsURL(inp.ContextPath):
+	case IsRemoteURL(inp.ContextPath):
 		if inp.DockerfilePath == "-" {
 			dockerfileReader = inp.InStream
 		}
@@ -1346,7 +1344,7 @@ func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Wr
 			continue
 		}
 
-		if urlutil.IsGitURL(v.Path) || urlutil.IsURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
+		if IsRemoteURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
 			target.FrontendAttrs["context:"+k] = v.Path
 			continue
 		}

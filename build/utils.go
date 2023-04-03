@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/docker/cli/opts"
+	"github.com/docker/docker/builder/remotecontext/urlutil"
+	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
 
@@ -19,6 +21,16 @@ const (
 	// host.docker.internal to the host IP
 	mobyHostGatewayName = "host-gateway"
 )
+
+func IsRemoteURL(c string) bool {
+	if urlutil.IsURL(c) {
+		return true
+	}
+	if _, err := gitutil.ParseGitRef(c); err == nil {
+		return true
+	}
+	return false
+}
 
 func isLocalDir(c string) bool {
 	st, err := os.Stat(c)

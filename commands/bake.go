@@ -47,11 +47,11 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	cmdContext := "cwd://"
 
 	if len(targets) > 0 {
-		if bake.IsRemoteURL(targets[0]) {
+		if build.IsRemoteURL(targets[0]) {
 			url = targets[0]
 			targets = targets[1:]
 			if len(targets) > 0 {
-				if bake.IsRemoteURL(targets[0]) {
+				if build.IsRemoteURL(targets[0]) {
 					cmdContext = targets[0]
 					targets = targets[1:]
 				}
