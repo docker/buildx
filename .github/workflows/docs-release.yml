@@ -8,7 +8,7 @@ on:
 jobs:
   open-pr:
     runs-on: ubuntu-22.04
-    if: "!github.event.release.prerelease"
+    if: ${{ github.event.release.prerelease != true && github.repository == 'docker/buildx' }}
     steps:
       -
         name: Checkout docs repo
