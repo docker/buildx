@@ -7,11 +7,13 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/builder"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/session"
 	"github.com/pkg/errors"
 )
 
@@ -21,9 +23,15 @@ type Input struct {
 }
 
 func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, names []string, pw progress.Writer) ([]File, *Input, error) {
+	var session []session.Attachable
 	var filename string
 	st, ok := detectGitContext(url)
-	if !ok {
+	if ok {
+		ssh, err := controllerapi.CreateSSH([]*controllerapi.SSH{{ID: "default"}})
+		if err == nil {
+			session = append(session, ssh)
+		}
+	} else {
 		st, filename, ok = detectHTTPContext(url)
 		if !ok {
 			return nil, nil, errors.Errorf("not url context")
@@ -51,7 +59,7 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 
 	ch, done := progress.NewChannel(pw)
 	defer func() { <-done }()
-	_, err = c.Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+	_, err = c.Build(ctx, client.SolveOpt{Session: session}, "buildx", func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		def, err := st.Marshal(ctx)
 		if err != nil {
 			return nil, err
