@@ -1,7 +1,9 @@
 package hclparser
 
 import (
+	"encoding/binary"
 	"fmt"
+	"hash/fnv"
 	"math"
 	"math/big"
 	"reflect"
@@ -49,29 +51,38 @@ type parser struct {
 	attrs map[string]*hcl.Attribute
 	funcs map[string]*functionDef
 
-	blocks      map[string]map[string][]*hcl.Block
-	blockValues map[*hcl.Block]reflect.Value
-	blockTypes  map[string]reflect.Type
+	blocks       map[string]map[string][]*hcl.Block
+	blockValues  map[*hcl.Block][]reflect.Value
+	blockEvalCtx map[*hcl.Block][]*hcl.EvalContext
+	blockNames   map[*hcl.Block][]string
+	blockTypes   map[string]reflect.Type
 
 	ectx *hcl.EvalContext
 
-	progress  map[string]struct{}
-	progressF map[string]struct{}
-	progressB map[*hcl.Block]map[string]struct{}
-	doneF     map[string]struct{}
-	doneB     map[*hcl.Block]map[string]struct{}
+	progressV map[uint64]struct{}
+	progressF map[uint64]struct{}
+	progressB map[uint64]map[string]struct{}
+	doneB     map[uint64]map[string]struct{}
+}
+
+type WithEvalContexts interface {
+	GetEvalContexts(base *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error)
+}
+
+type WithGetName interface {
+	GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) (string, error)
 }
 
 var errUndefined = errors.New("undefined")
 
-func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}, allowMissing bool) hcl.Diagnostics {
+func (p *parser) loadDeps(ectx *hcl.EvalContext, exp hcl.Expression, exclude map[string]struct{}, allowMissing bool) hcl.Diagnostics {
 	fns, hcldiags := funcCalls(exp)
 	if hcldiags.HasErrors() {
 		return hcldiags
 	}
 
 	for _, fn := range fns {
-		if err := p.resolveFunction(fn); err != nil {
+		if err := p.resolveFunction(ectx, fn); err != nil {
 			if allowMissing && errors.Is(err, errUndefined) {
 				continue
 			}
@@ -124,14 +135,16 @@ func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}, allow
 					}
 				}
 			}
-			if err := p.resolveBlock(blocks[0], target); err != nil {
-				if allowMissing && errors.Is(err, errUndefined) {
-					continue
+			for _, block := range blocks {
+				if err := p.resolveBlock(block, target); err != nil {
+					if allowMissing && errors.Is(err, errUndefined) {
+						continue
+					}
+					return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 				}
-				return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
 			}
 		} else {
-			if err := p.resolveValue(v.RootName()); err != nil {
+			if err := p.resolveValue(ectx, v.RootName()); err != nil {
 				if allowMissing && errors.Is(err, errUndefined) {
 					continue
 				}
@@ -145,21 +158,21 @@ func (p *parser) loadDeps(exp hcl.Expression, exclude map[string]struct{}, allow
 
 // resolveFunction forces evaluation of a function, storing the result into the
 // parser.
-func (p *parser) resolveFunction(name string) error {
-	if _, ok := p.doneF[name]; ok {
+func (p *parser) resolveFunction(ectx *hcl.EvalContext, name string) error {
+	if _, ok := p.ectx.Functions[name]; ok {
+		return nil
+	}
+	if _, ok := ectx.Functions[name]; ok {
 		return nil
 	}
 	f, ok := p.funcs[name]
 	if !ok {
-		if _, ok := p.ectx.Functions[name]; ok {
-			return nil
-		}
-		return errors.Wrapf(errUndefined, "function %q does not exit", name)
+		return errors.Wrapf(errUndefined, "function %q does not exist", name)
 	}
-	if _, ok := p.progressF[name]; ok {
+	if _, ok := p.progressF[key(ectx, name)]; ok {
 		return errors.Errorf("function cycle not allowed for %s", name)
 	}
-	p.progressF[name] = struct{}{}
+	p.progressF[key(ectx, name)] = struct{}{}
 
 	if f.Result == nil {
 		return errors.Errorf("empty result not allowed for %s", name)
@@ -204,7 +217,7 @@ func (p *parser) resolveFunction(name string) error {
 		return diags
 	}
 
-	if diags := p.loadDeps(f.Result.Expr, params, false); diags.HasErrors() {
+	if diags := p.loadDeps(p.ectx, f.Result.Expr, params, false); diags.HasErrors() {
 		return diags
 	}
 
@@ -214,7 +227,6 @@ func (p *parser) resolveFunction(name string) error {
 	if diags.HasErrors() {
 		return diags
 	}
-	p.doneF[name] = struct{}{}
 	p.ectx.Functions[name] = v
 
 	return nil
@@ -222,14 +234,17 @@ func (p *parser) resolveFunction(name string) error {
 
 // resolveValue forces evaluation of a named value, storing the result into the
 // parser.
-func (p *parser) resolveValue(name string) (err error) {
+func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	if _, ok := p.ectx.Variables[name]; ok {
 		return nil
 	}
-	if _, ok := p.progress[name]; ok {
+	if _, ok := ectx.Variables[name]; ok {
+		return nil
+	}
+	if _, ok := p.progressV[key(ectx, name)]; ok {
 		return errors.Errorf("variable cycle not allowed for %s", name)
 	}
-	p.progress[name] = struct{}{}
+	p.progressV[key(ectx, name)] = struct{}{}
 
 	var v *cty.Value
 	defer func() {
@@ -242,9 +257,10 @@ func (p *parser) resolveValue(name string) (err error) {
 	if _, builtin := p.opt.Vars[name]; !ok && !builtin {
 		vr, ok := p.vars[name]
 		if !ok {
-			return errors.Wrapf(errUndefined, "variable %q does not exit", name)
+			return errors.Wrapf(errUndefined, "variable %q does not exist", name)
 		}
 		def = vr.Default
+		ectx = p.ectx
 	}
 
 	if def == nil {
@@ -257,10 +273,10 @@ func (p *parser) resolveValue(name string) (err error) {
 		return
 	}
 
-	if diags := p.loadDeps(def.Expr, nil, true); diags.HasErrors() {
+	if diags := p.loadDeps(ectx, def.Expr, nil, true); diags.HasErrors() {
 		return diags
 	}
-	vv, diags := def.Expr.Value(p.ectx)
+	vv, diags := def.Expr.Value(ectx)
 	if diags.HasErrors() {
 		return diags
 	}
@@ -299,147 +315,226 @@ func (p *parser) resolveValue(name string) (err error) {
 // target schema is provided, only the attributes and blocks present in the
 // schema will be evaluated.
 func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err error) {
-	name := block.Labels[0]
-	if err := p.opt.ValidateLabel(name); err != nil {
-		return wrapErrorDiagnostic("Invalid name", err, &block.LabelRanges[0], &block.LabelRanges[0])
+	// prepare the variable map for this type
+	if _, ok := p.ectx.Variables[block.Type]; !ok {
+		p.ectx.Variables[block.Type] = cty.MapValEmpty(cty.Map(cty.String))
 	}
 
-	if _, ok := p.doneB[block]; !ok {
-		p.doneB[block] = map[string]struct{}{}
-	}
-	if _, ok := p.progressB[block]; !ok {
-		p.progressB[block] = map[string]struct{}{}
-	}
-
-	if target != nil {
-		// filter out attributes and blocks that are already evaluated
-		original := target
-		target = &hcl.BodySchema{}
-		for _, a := range original.Attributes {
-			if _, ok := p.doneB[block][a.Name]; !ok {
-				target.Attributes = append(target.Attributes, a)
-			}
-		}
-		for _, b := range original.Blocks {
-			if _, ok := p.doneB[block][b.Type]; !ok {
-				target.Blocks = append(target.Blocks, b)
-			}
-		}
-		if len(target.Attributes) == 0 && len(target.Blocks) == 0 {
-			return nil
-		}
-	}
-
-	if target != nil {
-		// detect reference cycles
-		for _, a := range target.Attributes {
-			if _, ok := p.progressB[block][a.Name]; ok {
-				return errors.Errorf("reference cycle not allowed for %s.%s.%s", block.Type, name, a.Name)
-			}
-		}
-		for _, b := range target.Blocks {
-			if _, ok := p.progressB[block][b.Type]; ok {
-				return errors.Errorf("reference cycle not allowed for %s.%s.%s", block.Type, name, b.Type)
-			}
-		}
-		for _, a := range target.Attributes {
-			p.progressB[block][a.Name] = struct{}{}
-		}
-		for _, b := range target.Blocks {
-			p.progressB[block][b.Type] = struct{}{}
-		}
-	}
-
-	// create a filtered body that contains only the target properties
-	body := func() hcl.Body {
-		if target != nil {
-			return FilterIncludeBody(block.Body, target)
-		}
-
-		filter := &hcl.BodySchema{}
-		for k := range p.doneB[block] {
-			filter.Attributes = append(filter.Attributes, hcl.AttributeSchema{Name: k})
-			filter.Blocks = append(filter.Blocks, hcl.BlockHeaderSchema{Type: k})
-		}
-		return FilterExcludeBody(block.Body, filter)
-	}
-
-	// load dependencies from all targeted properties
+	// prepare the output destination and evaluation context
 	t, ok := p.blockTypes[block.Type]
 	if !ok {
 		return nil
 	}
-	schema, _ := gohcl.ImpliedBodySchema(reflect.New(t).Interface())
-	content, _, diag := body().PartialContent(schema)
-	if diag.HasErrors() {
-		return diag
+	var outputs []reflect.Value
+	var ectxs []*hcl.EvalContext
+	if prev, ok := p.blockValues[block]; ok {
+		outputs = prev
+		ectxs = p.blockEvalCtx[block]
+	} else {
+		if v, ok := reflect.New(t).Interface().(WithEvalContexts); ok {
+			ectxs, err = v.GetEvalContexts(p.ectx, block, func(expr hcl.Expression) hcl.Diagnostics {
+				return p.loadDeps(p.ectx, expr, nil, true)
+			})
+			if err != nil {
+				return err
+			}
+			for _, ectx := range ectxs {
+				if ectx != p.ectx && ectx.Parent() != p.ectx {
+					return errors.Errorf("EvalContext must return a context with the correct parent")
+				}
+			}
+		} else {
+			ectxs = append([]*hcl.EvalContext{}, p.ectx)
+		}
+		for range ectxs {
+			outputs = append(outputs, reflect.New(t))
+		}
 	}
-	for _, a := range content.Attributes {
-		diag := p.loadDeps(a.Expr, nil, true)
+	p.blockValues[block] = outputs
+	p.blockEvalCtx[block] = ectxs
+
+	for i, output := range outputs {
+		target := target
+		ectx := ectxs[i]
+		name := block.Labels[0]
+		if names, ok := p.blockNames[block]; ok {
+			name = names[i]
+		}
+
+		if _, ok := p.doneB[key(block, ectx)]; !ok {
+			p.doneB[key(block, ectx)] = map[string]struct{}{}
+		}
+		if _, ok := p.progressB[key(block, ectx)]; !ok {
+			p.progressB[key(block, ectx)] = map[string]struct{}{}
+		}
+
+		if target != nil {
+			// filter out attributes and blocks that are already evaluated
+			original := target
+			target = &hcl.BodySchema{}
+			for _, a := range original.Attributes {
+				if _, ok := p.doneB[key(block, ectx)][a.Name]; !ok {
+					target.Attributes = append(target.Attributes, a)
+				}
+			}
+			for _, b := range original.Blocks {
+				if _, ok := p.doneB[key(block, ectx)][b.Type]; !ok {
+					target.Blocks = append(target.Blocks, b)
+				}
+			}
+			if len(target.Attributes) == 0 && len(target.Blocks) == 0 {
+				return nil
+			}
+		}
+
+		if target != nil {
+			// detect reference cycles
+			for _, a := range target.Attributes {
+				if _, ok := p.progressB[key(block, ectx)][a.Name]; ok {
+					return errors.Errorf("reference cycle not allowed for %s.%s.%s", block.Type, name, a.Name)
+				}
+			}
+			for _, b := range target.Blocks {
+				if _, ok := p.progressB[key(block, ectx)][b.Type]; ok {
+					return errors.Errorf("reference cycle not allowed for %s.%s.%s", block.Type, name, b.Type)
+				}
+			}
+			for _, a := range target.Attributes {
+				p.progressB[key(block, ectx)][a.Name] = struct{}{}
+			}
+			for _, b := range target.Blocks {
+				p.progressB[key(block, ectx)][b.Type] = struct{}{}
+			}
+		}
+
+		// create a filtered body that contains only the target properties
+		body := func() hcl.Body {
+			if target != nil {
+				return FilterIncludeBody(block.Body, target)
+			}
+
+			filter := &hcl.BodySchema{}
+			for k := range p.doneB[key(block, ectx)] {
+				filter.Attributes = append(filter.Attributes, hcl.AttributeSchema{Name: k})
+				filter.Blocks = append(filter.Blocks, hcl.BlockHeaderSchema{Type: k})
+			}
+			return FilterExcludeBody(block.Body, filter)
+		}
+
+		// load dependencies from all targeted properties
+		schema, _ := gohcl.ImpliedBodySchema(reflect.New(t).Interface())
+		content, _, diag := body().PartialContent(schema)
 		if diag.HasErrors() {
 			return diag
 		}
-	}
-	for _, b := range content.Blocks {
-		err := p.resolveBlock(b, nil)
+		for _, a := range content.Attributes {
+			diag := p.loadDeps(ectx, a.Expr, nil, true)
+			if diag.HasErrors() {
+				return diag
+			}
+		}
+		for _, b := range content.Blocks {
+			err := p.resolveBlock(b, nil)
+			if err != nil {
+				return err
+			}
+		}
+
+		// decode!
+		diag = gohcl.DecodeBody(body(), ectx, output.Interface())
+		if diag.HasErrors() {
+			return diag
+		}
+
+		// mark all targeted properties as done
+		for _, a := range content.Attributes {
+			p.doneB[key(block, ectx)][a.Name] = struct{}{}
+		}
+		for _, b := range content.Blocks {
+			p.doneB[key(block, ectx)][b.Type] = struct{}{}
+		}
+		if target != nil {
+			for _, a := range target.Attributes {
+				p.doneB[key(block, ectx)][a.Name] = struct{}{}
+			}
+			for _, b := range target.Blocks {
+				p.doneB[key(block, ectx)][b.Type] = struct{}{}
+			}
+		}
+
+		// store the result into the evaluation context (so it can be referenced)
+		outputType, err := gocty.ImpliedType(output.Interface())
 		if err != nil {
 			return err
 		}
-	}
-
-	// decode!
-	var output reflect.Value
-	if prev, ok := p.blockValues[block]; ok {
-		output = prev
-	} else {
-		output = reflect.New(t)
-		setLabel(output, block.Labels[0]) // early attach labels, so we can reference them
-	}
-	diag = gohcl.DecodeBody(body(), p.ectx, output.Interface())
-	if diag.HasErrors() {
-		return diag
-	}
-	p.blockValues[block] = output
-
-	// mark all targeted properties as done
-	for _, a := range content.Attributes {
-		p.doneB[block][a.Name] = struct{}{}
-	}
-	for _, b := range content.Blocks {
-		p.doneB[block][b.Type] = struct{}{}
-	}
-	if target != nil {
-		for _, a := range target.Attributes {
-			p.doneB[block][a.Name] = struct{}{}
+		outputValue, err := gocty.ToCtyValue(output.Interface(), outputType)
+		if err != nil {
+			return err
 		}
-		for _, b := range target.Blocks {
-			p.doneB[block][b.Type] = struct{}{}
+		var m map[string]cty.Value
+		if m2, ok := p.ectx.Variables[block.Type]; ok {
+			m = m2.AsValueMap()
 		}
+		if m == nil {
+			m = map[string]cty.Value{}
+		}
+		m[name] = outputValue
+		p.ectx.Variables[block.Type] = cty.MapVal(m)
 	}
-
-	// store the result into the evaluation context (so if can be referenced)
-	outputType, err := gocty.ImpliedType(output.Interface())
-	if err != nil {
-		return err
-	}
-	outputValue, err := gocty.ToCtyValue(output.Interface(), outputType)
-	if err != nil {
-		return err
-	}
-	var m map[string]cty.Value
-	if m2, ok := p.ectx.Variables[block.Type]; ok {
-		m = m2.AsValueMap()
-	}
-	if m == nil {
-		m = map[string]cty.Value{}
-	}
-	m[name] = outputValue
-	p.ectx.Variables[block.Type] = cty.MapVal(m)
 
 	return nil
 }
 
-func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
+// resolveBlockNames returns the names of the block, calling resolveBlock to
+// evaluate any label fields to correctly resolve the name.
+func (p *parser) resolveBlockNames(block *hcl.Block) ([]string, error) {
+	if names, ok := p.blockNames[block]; ok {
+		return names, nil
+	}
+
+	if err := p.resolveBlock(block, &hcl.BodySchema{}); err != nil {
+		return nil, err
+	}
+
+	names := make([]string, 0, len(p.blockValues[block]))
+	for i, val := range p.blockValues[block] {
+		ectx := p.blockEvalCtx[block][i]
+
+		name := block.Labels[0]
+		if err := p.opt.ValidateLabel(name); err != nil {
+			return nil, err
+		}
+
+		if v, ok := val.Interface().(WithGetName); ok {
+			var err error
+			name, err = v.GetName(ectx, block, func(expr hcl.Expression) hcl.Diagnostics {
+				return p.loadDeps(ectx, expr, nil, true)
+			})
+			if err != nil {
+				return nil, err
+			}
+			if err := p.opt.ValidateLabel(name); err != nil {
+				return nil, err
+			}
+		}
+
+		setName(val, name)
+		names = append(names, name)
+	}
+
+	found := map[string]struct{}{}
+	for _, name := range names {
+		if _, ok := found[name]; ok {
+			return nil, errors.Errorf("duplicate name %q", name)
+		}
+		found[name] = struct{}{}
+	}
+
+	p.blockNames[block] = names
+	return names, nil
+}
+
+func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string, hcl.Diagnostics) {
 	reserved := map[string]struct{}{}
 	schema, _ := gohcl.ImpliedBodySchema(val)
 
@@ -452,7 +547,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 	var defs inputs
 	if err := gohcl.DecodeBody(b, nil, &defs); err != nil {
-		return err
+		return nil, err
 	}
 	defsSchema, _ := gohcl.ImpliedBodySchema(defs)
 
@@ -475,20 +570,20 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		attrs: map[string]*hcl.Attribute{},
 		funcs: map[string]*functionDef{},
 
-		blocks:      map[string]map[string][]*hcl.Block{},
-		blockValues: map[*hcl.Block]reflect.Value{},
-		blockTypes:  map[string]reflect.Type{},
-
-		progress:  map[string]struct{}{},
-		progressF: map[string]struct{}{},
-		progressB: map[*hcl.Block]map[string]struct{}{},
-
-		doneF: map[string]struct{}{},
-		doneB: map[*hcl.Block]map[string]struct{}{},
+		blocks:       map[string]map[string][]*hcl.Block{},
+		blockValues:  map[*hcl.Block][]reflect.Value{},
+		blockEvalCtx: map[*hcl.Block][]*hcl.EvalContext{},
+		blockNames:   map[*hcl.Block][]string{},
+		blockTypes:   map[string]reflect.Type{},
 		ectx: &hcl.EvalContext{
 			Variables: map[string]cty.Value{},
-			Functions: stdlibFunctions,
+			Functions: Stdlib(),
 		},
+
+		progressV: map[uint64]struct{}{},
+		progressF: map[uint64]struct{}{},
+		progressB: map[uint64]map[string]struct{}{},
+		doneB:     map[uint64]map[string]struct{}{},
 	}
 
 	for _, v := range defs.Variables {
@@ -508,18 +603,18 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 
 	content, b, diags := b.PartialContent(schema)
 	if diags.HasErrors() {
-		return diags
+		return nil, diags
 	}
 
 	blocks, b, diags := b.PartialContent(defsSchema)
 	if diags.HasErrors() {
-		return diags
+		return nil, diags
 	}
 
 	attrs, diags := b.JustAttributes()
 	if diags.HasErrors() {
 		if d := removeAttributesDiags(diags, reserved, p.vars); len(d) > 0 {
-			return d
+			return nil, d
 		}
 	}
 
@@ -532,11 +627,11 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 	delete(p.attrs, "function")
 
 	for k := range p.opt.Vars {
-		_ = p.resolveValue(k)
+		_ = p.resolveValue(p.ectx, k)
 	}
 
 	for _, a := range content.Attributes {
-		return hcl.Diagnostics{
+		return nil, hcl.Diagnostics{
 			&hcl.Diagnostic{
 				Severity: hcl.DiagError,
 				Summary:  "Invalid attribute",
@@ -548,19 +643,19 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 	}
 
 	for k := range p.vars {
-		if err := p.resolveValue(k); err != nil {
+		if err := p.resolveValue(p.ectx, k); err != nil {
 			if diags, ok := err.(hcl.Diagnostics); ok {
-				return diags
+				return nil, diags
 			}
 			r := p.vars[k].Body.MissingItemRange()
-			return wrapErrorDiagnostic("Invalid value", err, &r, &r)
+			return nil, wrapErrorDiagnostic("Invalid value", err, &r, &r)
 		}
 	}
 
 	for k := range p.funcs {
-		if err := p.resolveFunction(k); err != nil {
+		if err := p.resolveFunction(p.ectx, k); err != nil {
 			if diags, ok := err.(hcl.Diagnostics); ok {
-				return diags
+				return nil, diags
 			}
 			var subject *hcl.Range
 			var context *hcl.Range
@@ -576,30 +671,8 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 					}
 				}
 			}
-			return wrapErrorDiagnostic("Invalid function", err, subject, context)
+			return nil, wrapErrorDiagnostic("Invalid function", err, subject, context)
 		}
-	}
-
-	for _, b := range content.Blocks {
-		if len(b.Labels) == 0 || len(b.Labels) > 1 {
-			return hcl.Diagnostics{
-				&hcl.Diagnostic{
-					Severity: hcl.DiagError,
-					Summary:  "Invalid block",
-					Detail:   fmt.Sprintf("invalid block label: %v", b.Labels),
-					Subject:  &b.LabelRanges[0],
-					Context:  &b.LabelRanges[0],
-				},
-			}
-		}
-		bm, ok := p.blocks[b.Type]
-		if !ok {
-			bm = map[string][]*hcl.Block{}
-			p.blocks[b.Type] = bm
-		}
-
-		lbl := b.Labels[0]
-		bm[lbl] = append(bm[lbl], b)
 	}
 
 	type value struct {
@@ -612,7 +685,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 		values map[string]value
 	}
 	types := map[string]field{}
-
+	renamed := map[string]map[string][]string{}
 	vt := reflect.ValueOf(val).Elem().Type()
 	for i := 0; i < vt.NumField(); i++ {
 		tags := strings.Split(vt.Field(i).Tag.Get("hcl"), ",")
@@ -623,7 +696,39 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 			typ:    vt.Field(i).Type,
 			values: make(map[string]value),
 		}
+		renamed[tags[0]] = map[string][]string{}
 	}
+
+	tmpBlocks := map[string]map[string][]*hcl.Block{}
+	for _, b := range content.Blocks {
+		if len(b.Labels) == 0 || len(b.Labels) > 1 {
+			return nil, hcl.Diagnostics{
+				&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Invalid block",
+					Detail:   fmt.Sprintf("invalid block label: %v", b.Labels),
+					Subject:  &b.LabelRanges[0],
+					Context:  &b.LabelRanges[0],
+				},
+			}
+		}
+
+		bm, ok := tmpBlocks[b.Type]
+		if !ok {
+			bm = map[string][]*hcl.Block{}
+			tmpBlocks[b.Type] = bm
+		}
+
+		names, err := p.resolveBlockNames(b)
+		if err != nil {
+			return nil, wrapErrorDiagnostic("Invalid name", err, &b.LabelRanges[0], &b.LabelRanges[0])
+		}
+		for _, name := range names {
+			bm[name] = append(bm[name], b)
+			renamed[b.Type][b.Labels[0]] = append(renamed[b.Type][b.Labels[0]], name)
+		}
+	}
+	p.blocks = tmpBlocks
 
 	diags = hcl.Diagnostics{}
 	for _, b := range content.Blocks {
@@ -637,56 +742,57 @@ func Parse(b hcl.Body, opt Opt, val interface{}) hcl.Diagnostics {
 					continue
 				}
 			} else {
-				return wrapErrorDiagnostic("Invalid block", err, &b.LabelRanges[0], &b.DefRange)
+				return nil, wrapErrorDiagnostic("Invalid block", err, &b.LabelRanges[0], &b.DefRange)
 			}
 		}
 
-		vv := p.blockValues[b]
-
-		t := types[b.Type]
-		lblIndex := setLabel(vv, b.Labels[0])
-
-		oldValue, exists := t.values[b.Labels[0]]
-		if !exists && lblIndex != -1 {
-			if v.Elem().Field(t.idx).Type().Kind() == reflect.Slice {
-				for i := 0; i < v.Elem().Field(t.idx).Len(); i++ {
-					if b.Labels[0] == v.Elem().Field(t.idx).Index(i).Elem().Field(lblIndex).String() {
-						exists = true
-						oldValue = value{Value: v.Elem().Field(t.idx).Index(i), idx: i}
-						break
+		vvs := p.blockValues[b]
+		for _, vv := range vvs {
+			t := types[b.Type]
+			lblIndex, lblExists := getNameIndex(vv)
+			lblName, _ := getName(vv)
+			oldValue, exists := t.values[lblName]
+			if !exists && lblExists {
+				if v.Elem().Field(t.idx).Type().Kind() == reflect.Slice {
+					for i := 0; i < v.Elem().Field(t.idx).Len(); i++ {
+						if lblName == v.Elem().Field(t.idx).Index(i).Elem().Field(lblIndex).String() {
+							exists = true
+							oldValue = value{Value: v.Elem().Field(t.idx).Index(i), idx: i}
+							break
+						}
 					}
 				}
 			}
-		}
-		if exists {
-			if m := oldValue.Value.MethodByName("Merge"); m.IsValid() {
-				m.Call([]reflect.Value{vv})
+			if exists {
+				if m := oldValue.Value.MethodByName("Merge"); m.IsValid() {
+					m.Call([]reflect.Value{vv})
+				} else {
+					v.Elem().Field(t.idx).Index(oldValue.idx).Set(vv)
+				}
 			} else {
-				v.Elem().Field(t.idx).Index(oldValue.idx).Set(vv)
+				slice := v.Elem().Field(t.idx)
+				if slice.IsNil() {
+					slice = reflect.New(t.typ).Elem()
+				}
+				t.values[lblName] = value{Value: vv, idx: slice.Len()}
+				v.Elem().Field(t.idx).Set(reflect.Append(slice, vv))
 			}
-		} else {
-			slice := v.Elem().Field(t.idx)
-			if slice.IsNil() {
-				slice = reflect.New(t.typ).Elem()
-			}
-			t.values[b.Labels[0]] = value{Value: vv, idx: slice.Len()}
-			v.Elem().Field(t.idx).Set(reflect.Append(slice, vv))
 		}
 	}
 	if diags.HasErrors() {
-		return diags
+		return nil, diags
 	}
 
 	for k := range p.attrs {
-		if err := p.resolveValue(k); err != nil {
+		if err := p.resolveValue(p.ectx, k); err != nil {
 			if diags, ok := err.(hcl.Diagnostics); ok {
-				return diags
+				return nil, diags
 			}
-			return wrapErrorDiagnostic("Invalid attribute", err, &p.attrs[k].Range, &p.attrs[k].Range)
+			return nil, wrapErrorDiagnostic("Invalid attribute", err, &p.attrs[k].Range, &p.attrs[k].Range)
 		}
 	}
 
-	return nil
+	return renamed, nil
 }
 
 // wrapErrorDiagnostic wraps an error into a hcl.Diagnostics object.
@@ -710,18 +816,42 @@ func wrapErrorDiagnostic(message string, err error, subject *hcl.Range, context 
 	}
 }
 
-func setLabel(v reflect.Value, lbl string) int {
-	// cache field index?
+func setName(v reflect.Value, name string) {
 	numFields := v.Elem().Type().NumField()
 	for i := 0; i < numFields; i++ {
-		for _, t := range strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",") {
+		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
+		for _, t := range parts[1:] {
 			if t == "label" {
-				v.Elem().Field(i).Set(reflect.ValueOf(lbl))
-				return i
+				v.Elem().Field(i).Set(reflect.ValueOf(name))
 			}
 		}
 	}
-	return -1
+}
+
+func getName(v reflect.Value) (string, bool) {
+	numFields := v.Elem().Type().NumField()
+	for i := 0; i < numFields; i++ {
+		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
+		for _, t := range parts[1:] {
+			if t == "label" {
+				return v.Elem().Field(i).String(), true
+			}
+		}
+	}
+	return "", false
+}
+
+func getNameIndex(v reflect.Value) (int, bool) {
+	numFields := v.Elem().Type().NumField()
+	for i := 0; i < numFields; i++ {
+		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
+		for _, t := range parts[1:] {
+			if t == "label" {
+				return i, true
+			}
+		}
+	}
+	return 0, false
 }
 
 func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}, vars map[string]*variable) hcl.Diagnostics {
@@ -752,4 +882,22 @@ func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}, 
 		}
 	}
 	return fdiags
+}
+
+// key returns a unique hash for the given values
+func key(ks ...any) uint64 {
+	hash := fnv.New64a()
+	for _, k := range ks {
+		v := reflect.ValueOf(k)
+		switch v.Kind() {
+		case reflect.String:
+			hash.Write([]byte(v.String()))
+		case reflect.Pointer:
+			ptr := reflect.ValueOf(k).Pointer()
+			binary.Write(hash, binary.LittleEndian, uint64(ptr))
+		default:
+			panic(fmt.Sprintf("unknown key kind %s", v.Kind().String()))
+		}
+	}
+	return hash.Sum64()
 }
