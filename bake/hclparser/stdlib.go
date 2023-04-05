@@ -79,6 +79,7 @@ var stdlibFunctions = map[string]function.Function{
 	"regex_replace":          stdlib.RegexReplaceFunc,
 	"regex":                  stdlib.RegexFunc,
 	"regexall":               stdlib.RegexAllFunc,
+	"replace":                stdlib.ReplaceFunc,
 	"reverse":                stdlib.ReverseFunc,
 	"reverselist":            stdlib.ReverseListFunc,
 	"rsadecrypt":             crypto.RsaDecryptFunc,
