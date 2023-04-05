@@ -32,19 +32,6 @@ Key features:
   - [Building with buildx](#building-with-buildx)
   - [Working with builder instances](#working-with-builder-instances)
   - [Building multi-platform images](#building-multi-platform-images)
-- [Manuals](docs/manuals)
-  - [High-level build options with Bake](docs/manuals/bake/index.md)
-  - [Drivers](docs/manuals/drivers/index.md)
-  - [Exporters](docs/manuals/exporters/index.md)
-  - [Cache backends](docs/manuals/cache/backends/index.md)
-- [Guides](docs/guides)
-  - [CI/CD](docs/guides/cicd.md)
-  - [CNI networking](docs/guides/cni-networking.md)
-  - [Using a custom network](docs/guides/custom-network.md)
-  - [Using a custom registry configuration](docs/guides/custom-registry-config.md)
-  - [OpenTelemetry support](docs/guides/opentelemetry.md)
-  - [Registry mirror](docs/guides/registry-mirror.md)
-  - [Resource limiting](docs/guides/resource-limiting.md)
 - [Reference](docs/reference/buildx.md)
   - [`buildx bake`](docs/reference/buildx_bake.md)
   - [`buildx build`](docs/reference/buildx_build.md)
@@ -63,6 +50,9 @@ Key features:
   - [`buildx use`](docs/reference/buildx_use.md)
   - [`buildx version`](docs/reference/buildx_version.md)
 - [Contributing](#contributing)
+
+For more information on how to use Buildx, see
+[Docker Build docs](https://docs.docker.com/build/).
 
 # Installing
 
@@ -320,7 +310,7 @@ cross-compilation helpers for more advanced use-cases.
 
 ## High-level build options
 
-See [`docs/manuals/bake/index.md`](docs/manuals/bake/index.md) for more details.
+See [High-level builds with Bake](https://docs.docker.com/build/bake/) for more details.
 
 # Contributing
 
