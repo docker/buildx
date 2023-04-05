@@ -1053,8 +1053,26 @@ func TestHCLMatrixBadTypes(t *testing.T) {
 
 	dt = []byte(`
 		target "default" {
+			matrix = ["test"]
+		}
+		`)
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+
+	dt = []byte(`
+		target "default" {
 			matrix = {
 				["a"] = ["b"]
+			}
+		}
+		`)
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+
+	dt = []byte(`
+		target "default" {
+			matrix = {
+				1 = 2
 			}
 		}
 		`)
