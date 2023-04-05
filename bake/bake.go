@@ -820,7 +820,7 @@ func (t *Target) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDe
 		return nil, err
 	}
 
-	if !value.CanIterateElements() {
+	if !value.Type().IsMapType() && !value.Type().IsObjectType() {
 		return nil, errors.Errorf("matrix must be a map")
 	}
 	matrix := value.AsValueMap()
