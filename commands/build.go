@@ -18,6 +18,7 @@ import (
 	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
+	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
@@ -66,7 +67,8 @@ type buildOptions struct {
 	target         string
 	ulimits        *dockeropts.UlimitOpt
 
-	invoke string
+	invoke  *invokeConfig
+	noBuild bool
 
 	attests    []string
 	sbom       string
@@ -228,6 +230,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	options := buildOptions{}
 	cFlags := &commonFlags{}
+	var invokeFlag string
 
 	cmd := &cobra.Command{
 		Use:     "build [OPTIONS] PATH | URL | -",
@@ -249,6 +252,14 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.progress = cFlags.progress
 			cmd.Flags().VisitAll(checkWarnedFlags)
 			if isExperimental() {
+				if invokeFlag != "" {
+					invokeConfig, err := parseInvokeConfig(invokeFlag)
+					if err != nil {
+						return err
+					}
+					options.invoke = &invokeConfig
+					options.noBuild = invokeFlag == "debug-shell"
+				}
 				return launchControllerAndRunBuild(dockerCli, options)
 			}
 			return runBuild(dockerCli, options)
@@ -323,7 +334,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVar(&options.provenance, "provenance", "", `Shortand for "--attest=type=provenance"`)
 
 	if isExperimental() {
-		flags.StringVar(&options.invoke, "invoke", "", "Invoke a command after the build [experimental]")
+		flags.StringVar(&invokeFlag, "invoke", "", "Invoke a command after the build [experimental]")
 		flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect [experimental]")
 		flags.BoolVar(&options.Detach, "detach", runtime.GOOS == "linux", "Detach buildx server (supported only on linux) [experimental]")
 		flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server) [experimental]")
@@ -485,17 +496,9 @@ func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
 func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) error {
 	ctx := context.TODO()
 
-	if options.invoke != "" && (options.dockerfileName == "-" || options.contextPath == "-") {
+	if options.invoke != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
-	}
-	var invokeConfig controllerapi.InvokeConfig
-	if inv := options.invoke; inv != "" {
-		var err error
-		invokeConfig, err = parseInvokeConfig(inv)
-		if err != nil {
-			return err
-		}
 	}
 
 	c, err := controller.NewController(ctx, options.ControlOptions, dockerCli)
@@ -508,15 +511,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		}
 	}()
 
-	f := ioset.NewSingleForwarder()
-	pr, pw := io.Pipe()
-	f.SetWriter(pw, func() io.WriteCloser {
-		pw.Close() // propagate EOF
-		logrus.Debug("propagating stdin close")
-		return nil
-	})
-	f.SetReader(os.Stdin)
-
+	// Start build
 	opts, err := options.toControllerOptions()
 	if err != nil {
 		return err
@@ -526,14 +521,6 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		return err
 	}
 
-	// Avoid leaving a stale file if we eventually fail
-	if options.imageIDFile != "" {
-		if err := os.Remove(options.imageIDFile); err != nil && !os.IsNotExist(err) {
-			return errors.Wrap(err, "removing image ID file")
-		}
-	}
-
-	// Start build
 	// NOTE: buildx server has the current working directory different from the client
 	// so we need to resolve paths to abosolute ones in the client.
 	optsP, err := resolvePaths(&opts)
@@ -541,30 +528,60 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		return err
 	}
 	opts = *optsP
-	ref, resp, err := c.Build(ctx, opts, pr, os.Stdout, os.Stderr, progress)
-	if err != nil {
-		return errors.Wrapf(err, "failed to build") // TODO: allow invoke even on error
-	}
-	if err := pw.Close(); err != nil {
-		logrus.Debug("failed to close stdin pipe writer")
-	}
-	if err := pr.Close(); err != nil {
-		logrus.Debug("failed to close stdin pipe reader")
-	}
 
-	if options.quiet {
-		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
-	}
-	if options.imageIDFile != "" {
-		dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
-		if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
-			dgst = v
+	var ref string
+	var retErr error
+	f := ioset.NewSingleForwarder()
+	f.SetReader(os.Stdin)
+	if !options.noBuild {
+		pr, pw := io.Pipe()
+		f.SetWriter(pw, func() io.WriteCloser {
+			pw.Close() // propagate EOF
+			logrus.Debug("propagating stdin close")
+			return nil
+		})
+
+		// Avoid leaving a stale file if we eventually fail
+		if options.imageIDFile != "" {
+			if err := os.Remove(options.imageIDFile); err != nil && !os.IsNotExist(err) {
+				return errors.Wrap(err, "removing image ID file")
+			}
 		}
-		return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
+
+		var resp *client.SolveResponse
+		ref, resp, err = c.Build(ctx, opts, pr, os.Stdout, os.Stderr, progress)
+		if err != nil {
+			var be *controllererrors.BuildError
+			if errors.As(err, &be) {
+				ref = be.Ref
+				retErr = err
+				// We can proceed to monitor
+			} else {
+				return errors.Wrapf(err, "failed to build")
+			}
+		}
+		if err := pw.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe writer")
+		}
+		if err := pr.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe reader")
+		}
+
+		if options.quiet {
+			fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
+		}
+		if options.imageIDFile != "" {
+			dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
+			if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
+				dgst = v
+			}
+			return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
+		}
+
 	}
 
 	// post-build operations
-	if options.invoke != "" {
+	if options.invoke != nil && options.invoke.needsMonitor(retErr) {
 		pr2, pw2 := io.Pipe()
 		f.SetWriter(pw2, func() io.WriteCloser {
 			pw2.Close() // propagate EOF
@@ -577,7 +594,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 			}
 			return errors.Errorf("failed to configure terminal: %v", err)
 		}
-		err = monitor.RunMonitor(ctx, ref, opts, invokeConfig, c, options.progress, pr2, os.Stdout, os.Stderr)
+		err = monitor.RunMonitor(ctx, ref, &opts, options.invoke.InvokeConfig, c, progress, pr2, os.Stdout, os.Stderr)
 		con.Reset()
 		if err := pw2.Close(); err != nil {
 			logrus.Debug("failed to close monitor stdin pipe reader")
@@ -593,9 +610,33 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	return nil
 }
 
-func parseInvokeConfig(invoke string) (cfg controllerapi.InvokeConfig, err error) {
+type invokeConfig struct {
+	controllerapi.InvokeConfig
+	invokeFlag string
+}
+
+func (cfg *invokeConfig) needsMonitor(retErr error) bool {
+	switch cfg.invokeFlag {
+	case "debug-shell":
+		return true
+	case "on-error":
+		return retErr != nil
+	default:
+		return cfg.invokeFlag != ""
+	}
+}
+
+func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
+	cfg.invokeFlag = invoke
 	cfg.Tty = true
-	if invoke == "default" {
+	switch invoke {
+	case "default", "debug-shell":
+		return cfg, nil
+	case "on-error":
+		// NOTE: we overwrite the command to run because the original one should fail on the failed step.
+		// TODO: make this configurable via flags or restorable from LLB.
+		// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113295900
+		cfg.Cmd = []string{"/bin/sh"}
 		return cfg, nil
 	}
 
