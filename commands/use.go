@@ -4,6 +4,7 @@ import (
 	"os"
 
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -78,6 +79,7 @@ func useCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runUse(dockerCli, options)
 		},
+		ValidArgsFunction: completion.Disable,
 	}
 
 	flags := cmd.Flags()

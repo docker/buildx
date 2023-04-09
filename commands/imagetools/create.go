@@ -8,6 +8,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
@@ -273,6 +274,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 			options.builder = *opts.Builder
 			return runCreate(dockerCli, options, args)
 		},
+		ValidArgsFunction: completion.Disable,
 	}
 
 	flags := cmd.Flags()
