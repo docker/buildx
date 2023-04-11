@@ -93,7 +93,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runRm(dockerCli, options)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction: completion.BuilderNames(dockerCli),
 	}
 
 	flags := cmd.Flags()

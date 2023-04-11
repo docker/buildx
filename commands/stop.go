@@ -47,7 +47,7 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runStop(dockerCli, options)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction: completion.BuilderNames(dockerCli),
 	}
 
 	return cmd
