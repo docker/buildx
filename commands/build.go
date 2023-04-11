@@ -23,7 +23,6 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
-	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
@@ -254,7 +253,9 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runBuild(dockerCli, options)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+			return nil, cobra.ShellCompDirectiveFilterDirs
+		},
 	}
 
 	var platformsDefault []string
