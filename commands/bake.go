@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/progress"
@@ -230,6 +231,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
 			return runBake(dockerCli, args, options, cFlags)
 		},
+		ValidArgsFunction: completion.BakeTargets(options.files),
 	}
 
 	flags := cmd.Flags()
