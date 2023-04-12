@@ -4,7 +4,6 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
-	"strings"
 
 	"github.com/docker/buildx/builder"
 	controllerapi "github.com/docker/buildx/controller/pb"
@@ -12,6 +11,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/pkg/errors"
@@ -25,14 +25,14 @@ type Input struct {
 func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, names []string, pw progress.Writer) ([]File, *Input, error) {
 	var session []session.Attachable
 	var filename string
-	st, ok := detectGitContext(url)
+	st, ok := dockerui.DetectGitContext(url, false)
 	if ok {
 		ssh, err := controllerapi.CreateSSH([]*controllerapi.SSH{{ID: "default"}})
 		if err == nil {
 			session = append(session, ssh)
 		}
 	} else {
-		st, filename, ok = detectHTTPContext(url)
+		st, filename, ok = dockerui.DetectHTTPContext(url)
 		if !ok {
 			return nil, nil, errors.Errorf("not url context")
 		}
@@ -89,41 +89,6 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 	}
 
 	return files, inp, nil
-}
-
-func detectHTTPContext(url string) (*llb.State, string, bool) {
-	if httpPrefix.MatchString(url) {
-		httpContext := llb.HTTP(url, llb.Filename("context"), llb.WithCustomName("[internal] load remote build context"))
-		return &httpContext, "context", true
-	}
-	return nil, "", false
-}
-
-func detectGitContext(ref string) (*llb.State, bool) {
-	found := false
-	if httpPrefix.MatchString(ref) && gitURLPathWithFragmentSuffix.MatchString(ref) {
-		found = true
-	}
-
-	for _, prefix := range []string{"git://", "github.com/", "git@"} {
-		if strings.HasPrefix(ref, prefix) {
-			found = true
-			break
-		}
-	}
-	if !found {
-		return nil, false
-	}
-
-	parts := strings.SplitN(ref, "#", 2)
-	branch := ""
-	if len(parts) > 1 {
-		branch = parts[1]
-	}
-	gitOpts := []llb.GitOption{llb.WithCustomName("[internal] load git source " + ref)}
-
-	st := llb.Git(parts[0], branch, gitOpts...)
-	return &st, true
 }
 
 func isArchive(header []byte) bool {
