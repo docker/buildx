@@ -30,6 +30,7 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
+	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -689,9 +690,11 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 		}
 	}
 	if options.DockerfileName != "" && options.DockerfileName != "-" {
-		options.DockerfileName, err = filepath.Abs(options.DockerfileName)
-		if err != nil {
-			return nil, err
+		if !urlutil.IsURL(options.DockerfileName) {
+			options.DockerfileName, err = filepath.Abs(options.DockerfileName)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 	var contexts map[string]string

@@ -1102,7 +1102,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if err != nil {
 		return nil, err
 	}
-	if len(sshSpecs) == 0 && buildflags.IsGitSSH(contextPath) {
+	if len(sshSpecs) == 0 && (buildflags.IsGitSSH(bi.ContextPath) || (inp != nil && buildflags.IsGitSSH(inp.URL))) {
 		sshSpecs = append(sshSpecs, &controllerapi.SSH{ID: "default"})
 	}
 	sshAttachment, err := controllerapi.CreateSSH(sshSpecs)
