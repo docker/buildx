@@ -41,6 +41,11 @@ import (
 
 const defaultTargetName = "default"
 
+// RunBuild runs the specified build and returns the result.
+//
+// NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
+// this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
+// inspect the result and debug the cause of that error.
 func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	if in.NoCache && len(in.NoCacheFilter) > 0 {
 		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
@@ -177,11 +182,17 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.MetadataFile, statusChan)
 	err = wrapBuildError(err, false)
 	if err != nil {
-		return nil, nil, err
+		// NOTE: buildTargets can return *build.ResultContext even on error.
+		return nil, res, err
 	}
 	return resp, res, nil
 }
 
+// buildTargets runs the specified build and returns the result.
+//
+// NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
+// this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
+// inspect the result and debug the cause of that error.
 func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
@@ -209,10 +220,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		err = err1
 	}
 	if err != nil {
-		if res != nil {
-			err = wrapResultContext(err, res)
-		}
-		return nil, nil, err
+		return nil, res, err
 	}
 
 	if len(metadataFile) > 0 && resp != nil {
@@ -381,32 +389,4 @@ func controllerUlimitOpt2DockerUlimit(u *controllerapi.UlimitOpt) *dockeropts.Ul
 		}
 	}
 	return dockeropts.NewUlimitOpt(&values)
-}
-
-// ResultContextError is an error type used for passing ResultContext from this package
-// to the caller of RunBuild. This is only used when RunBuild fails with an error.
-// When it succeeds without error, ResultContext is returned via non-error returned value.
-//
-// Caller can extract ResultContext from the error returned by RunBuild as the following:
-//
-//	resp, res, buildErr := cbuild.RunBuild(ctx, req.Options, inR, statusChan)
-//	var re *cbuild.ResultContextError
-//	if errors.As(buildErr, &re) && re.ResultContext != nil {
-//		res = re.ResultContext
-//	}
-type ResultContextError struct {
-	ResultContext *build.ResultContext
-	error
-}
-
-// Unwrap returns the original error.
-func (e *ResultContextError) Unwrap() error {
-	return e.error
-}
-
-func wrapResultContext(wErr error, res *build.ResultContext) error {
-	if wErr == nil {
-		return nil
-	}
-	return &ResultContextError{ResultContext: res, error: wErr}
 }

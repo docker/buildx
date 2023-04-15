@@ -8,7 +8,6 @@ import (
 	"time"
 
 	"github.com/docker/buildx/build"
-	cbuild "github.com/docker/buildx/controller/build"
 	controllererrors "github.com/docker/buildx/controller/errdefs"
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
@@ -203,12 +202,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	resp, res, buildErr := m.buildFunc(ctx, req.Options, inR, statusChan)
 	m.sessionMu.Lock()
 	if s, ok := m.session[ref]; ok {
-		if buildErr != nil {
-			var re *cbuild.ResultContextError
-			if errors.As(buildErr, &re) && re.ResultContext != nil {
-				res = re.ResultContext
-			}
-		}
+		// NOTE: buildFunc can return *build.ResultContext even on error (e.g. when it's implemented using (github.com/docker/buildx/controller/build).RunBuild).
 		if res != nil {
 			s.result = res
 			s.cancelBuild = cancel
