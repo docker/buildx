@@ -73,13 +73,10 @@ func getResultAt(ctx context.Context, c *client.Client, solveOpt client.SolveOpt
 	resultCtxCh := make(chan *ResultContext)
 	errCh := make(chan error)
 	go func() {
-		resultCtx := ResultContext{
-			client:   c,
-			solveOpt: solveOpt,
-		}
 		_, err := c.Build(context.Background(), solveOpt, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			ctx, cancel := context.WithCancel(ctx)
 			defer cancel()
+			resultCtx := ResultContext{}
 			res2, err := c.Solve(ctx, gateway.SolveRequest{
 				Evaluate:   true,
 				Definition: target,
@@ -122,10 +119,7 @@ func getResultAt(ctx context.Context, c *client.Client, solveOpt client.SolveOpt
 
 // ResultContext is a build result with the client that built it.
 type ResultContext struct {
-	client   *client.Client
 	res      *gateway.Result
-	solveOpt client.SolveOpt
-
 	solveErr *errdefs.SolveError
 
 	gwClient   gateway.Client
