@@ -3,110 +3,68 @@ package build
 import (
 	"context"
 	_ "crypto/sha256" // ensure digests can be computed
-	"encoding/json"
-	"fmt"
 	"io"
 	"sync"
 	"sync/atomic"
 	"syscall"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
-	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
-	"github.com/moby/buildkit/solver/pb"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
-// ResultContext is a build result with the client that built it.
-type ResultContext struct {
-	Client *client.Client
-	Res    *gateway.Result
-}
-
 type Container struct {
 	cancelOnce      sync.Once
 	containerCancel func()
-
-	isUnavailable atomic.Bool
-
-	initStarted atomic.Bool
-
-	container gateway.Container
-	image     *specs.Image
-
-	releaseCh chan struct{}
+	isUnavailable   atomic.Bool
+	initStarted     atomic.Bool
+	container       gateway.Container
+	releaseCh       chan struct{}
+	resultCtx       *ResultContext
 }
 
-func NewContainer(ctx context.Context, resultCtx *ResultContext) (*Container, error) {
-	c, res := resultCtx.Client, resultCtx.Res
-
+func NewContainer(ctx context.Context, resultCtx *ResultContext, cfg *controllerapi.InvokeConfig) (*Container, error) {
 	mainCtx := ctx
 
 	ctrCh := make(chan *Container)
 	errCh := make(chan error)
 	go func() {
-		_, err := c.Build(context.TODO(), client.SolveOpt{}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		err := resultCtx.build(func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			ctx, cancel := context.WithCancel(ctx)
 			go func() {
 				<-mainCtx.Done()
 				cancel()
 			}()
 
-			if res.Ref == nil {
-				return nil, errors.Errorf("no reference is registered")
-			}
-			st, err := res.Ref.ToState()
-			if err != nil {
-				return nil, err
-			}
-			def, err := st.Marshal(ctx)
-			if err != nil {
-				return nil, err
-			}
-			imgRef, err := c.Solve(ctx, gateway.SolveRequest{
-				Definition: def.ToPB(),
-			})
+			containerCfg, err := resultCtx.getContainerConfig(ctx, c, cfg)
 			if err != nil {
 				return nil, err
 			}
 			containerCtx, containerCancel := context.WithCancel(ctx)
 			defer containerCancel()
-			bkContainer, err := c.NewContainer(containerCtx, gateway.NewContainerRequest{
-				Mounts: []gateway.Mount{
-					{
-						Dest:      "/",
-						MountType: pb.MountType_BIND,
-						Ref:       imgRef.Ref,
-					},
-				},
-			})
+			bkContainer, err := c.NewContainer(containerCtx, containerCfg)
 			if err != nil {
 				return nil, err
-			}
-			imgData := res.Metadata[exptypes.ExporterImageConfigKey]
-			var img *specs.Image
-			if len(imgData) > 0 {
-				img = &specs.Image{}
-				if err := json.Unmarshal(imgData, img); err != nil {
-					fmt.Println(err)
-					return nil, err
-				}
 			}
 			releaseCh := make(chan struct{})
 			container := &Container{
 				containerCancel: containerCancel,
 				container:       bkContainer,
-				image:           img,
 				releaseCh:       releaseCh,
+				resultCtx:       resultCtx,
 			}
+			doneCh := make(chan struct{})
+			defer close(doneCh)
+			resultCtx.registerCleanup(func() {
+				container.Cancel()
+				<-doneCh
+			})
 			ctrCh <- container
 			<-container.releaseCh
 
 			return nil, bkContainer.Release(ctx)
-		}, nil)
+		})
 		if err != nil {
 			errCh <- err
 		}
@@ -146,7 +104,7 @@ func (c *Container) Exec(ctx context.Context, cfg *controllerapi.InvokeConfig, s
 			c.markUnavailable()
 		}()
 	}
-	err := exec(ctx, cfg, c.container, c.image, stdin, stdout, stderr)
+	err := exec(ctx, c.resultCtx, cfg, c.container, stdin, stdout, stderr)
 	if err != nil {
 		// Container becomes unavailable if one of the processes fails in it.
 		c.markUnavailable()
@@ -154,48 +112,12 @@ func (c *Container) Exec(ctx context.Context, cfg *controllerapi.InvokeConfig, s
 	return err
 }
 
-func exec(ctx context.Context, cfg *controllerapi.InvokeConfig, ctr gateway.Container, img *specs.Image, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
-	user := ""
-	if !cfg.NoUser {
-		user = cfg.User
-	} else if img != nil {
-		user = img.Config.User
+func exec(ctx context.Context, resultCtx *ResultContext, cfg *controllerapi.InvokeConfig, ctr gateway.Container, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
+	processCfg, err := resultCtx.getProcessConfig(cfg, stdin, stdout, stderr)
+	if err != nil {
+		return err
 	}
-
-	cwd := ""
-	if !cfg.NoCwd {
-		cwd = cfg.Cwd
-	} else if img != nil {
-		cwd = img.Config.WorkingDir
-	}
-
-	env := []string{}
-	if img != nil {
-		env = append(env, img.Config.Env...)
-	}
-	env = append(env, cfg.Env...)
-
-	args := []string{}
-	if cfg.Entrypoint != nil {
-		args = append(args, cfg.Entrypoint...)
-	}
-	if cfg.Cmd != nil {
-		args = append(args, cfg.Cmd...)
-	}
-	// caller should always set args
-	if len(args) == 0 {
-		return errors.Errorf("specify args to execute")
-	}
-	proc, err := ctr.Start(ctx, gateway.StartRequest{
-		Args:   args,
-		Env:    env,
-		User:   user,
-		Cwd:    cwd,
-		Tty:    cfg.Tty,
-		Stdin:  stdin,
-		Stdout: stdout,
-		Stderr: stderr,
-	})
+	proc, err := ctr.Start(ctx, processCfg)
 	if err != nil {
 		return errors.Errorf("failed to start container: %v", err)
 	}

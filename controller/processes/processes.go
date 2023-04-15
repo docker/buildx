@@ -111,7 +111,7 @@ func (m *Manager) StartProcess(pid string, resultCtx *build.ResultContext, cfg *
 			go ctr.Cancel() // Finish the existing container
 		}
 		var err error
-		ctr, err = build.NewContainer(context.TODO(), resultCtx)
+		ctr, err = build.NewContainer(context.TODO(), resultCtx, cfg)
 		if err != nil {
 			return nil, errors.Errorf("failed to create container %v", err)
 		}

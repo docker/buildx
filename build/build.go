@@ -920,7 +920,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							}
 							results.Set(resultKey(dp.driverIndex, k), res)
 							if resultHandleFunc != nil {
-								resultHandleFunc(dp.driverIndex, &ResultContext{cc, res})
+								resultCtx, err := NewResultContext(cc, so, res)
+								if err == nil {
+									resultHandleFunc(dp.driverIndex, resultCtx)
+								} else {
+									logrus.Warnf("failed to record result: %s", err)
+								}
 							}
 							return res, nil
 						}

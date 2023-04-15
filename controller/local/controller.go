@@ -93,7 +93,7 @@ func (b *localController) Invoke(ctx context.Context, ref string, pid string, cf
 			return errors.New("no build result is registered")
 		}
 		var err error
-		proc, err = b.processes.StartProcess(pid, b.resultCtx, &cfg)
+		proc, err = b.processes.StartProcess(pid, b.buildConfig.resultCtx, &cfg)
 		if err != nil {
 			return err
 		}
