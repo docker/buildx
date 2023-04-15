@@ -26,11 +26,18 @@ func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli) contro
 	}
 }
 
+type buildConfig struct {
+	// TODO: these two structs should be merged
+	// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113279719
+	resultCtx    *build.ResultContext
+	buildOptions *controllerapi.BuildOptions
+}
+
 type localController struct {
-	dockerCli command.Cli
-	ref       string
-	resultCtx *build.ResultContext
-	processes *processes.Manager
+	dockerCli   command.Cli
+	ref         string
+	buildConfig buildConfig
+	processes   *processes.Manager
 
 	buildOnGoing atomic.Bool
 }
@@ -89,7 +96,7 @@ func (b *localController) Invoke(ctx context.Context, ref string, pid string, cf
 	proc, ok := b.processes.Get(pid)
 	if !ok {
 		// Start a new process.
-		if b.resultCtx == nil {
+		if b.buildConfig.resultCtx == nil {
 			return errors.New("no build result is registered")
 		}
 		var err error
@@ -114,12 +121,15 @@ func (b *localController) Invoke(ctx context.Context, ref string, pid string, cf
 }
 
 func (b *localController) Kill(context.Context) error {
-	b.cancelRunningProcesses()
+	b.Close()
 	return nil
 }
 
 func (b *localController) Close() error {
 	b.cancelRunningProcesses()
+	if b.buildConfig.resultCtx != nil {
+		b.buildConfig.resultCtx.Done()
+	}
 	// TODO: cancel ongoing builds?
 	return nil
 }
@@ -129,6 +139,13 @@ func (b *localController) List(ctx context.Context) (res []string, _ error) {
 }
 
 func (b *localController) Disconnect(ctx context.Context, key string) error {
-	b.cancelRunningProcesses()
+	b.Close()
 	return nil
+}
+
+func (b *localController) Inspect(ctx context.Context, ref string) (*controllerapi.InspectResponse, error) {
+	if ref != b.ref {
+		return nil, errors.Errorf("unknown ref %q", ref)
+	}
+	return &controllerapi.InspectResponse{Options: b.buildConfig.buildOptions}, nil
 }

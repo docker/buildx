@@ -200,6 +200,9 @@ func containerConfigFromResult(ctx context.Context, res *gateway.Result, c gatew
 	if res.Ref == nil {
 		return nil, errors.Errorf("no reference is registered")
 	}
+	if cfg.Initial {
+		return nil, errors.Errorf("starting from the container from the initial state of the step is supported only on the failed steps")
+	}
 	st, err := res.Ref.ToState()
 	if err != nil {
 		return nil, err
@@ -284,6 +287,9 @@ func containerConfigFromError(solveErr *errdefs.SolveError, cfg controllerapi.In
 	var mounts []gateway.Mount
 	for i, mnt := range exec.Mounts {
 		rid := solveErr.Solve.MountIDs[i]
+		if cfg.Initial {
+			rid = solveErr.Solve.InputIDs[i]
+		}
 		mounts = append(mounts, gateway.Mount{
 			Selector:  mnt.Selector,
 			Dest:      mnt.Dest,

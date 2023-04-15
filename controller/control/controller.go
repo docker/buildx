@@ -22,6 +22,7 @@ type BuildxController interface {
 	Disconnect(ctx context.Context, ref string) error
 	ListProcesses(ctx context.Context, ref string) (infos []*controllerapi.ProcessInfo, retErr error)
 	DisconnectProcess(ctx context.Context, ref, pid string) error
+	Inspect(ctx context.Context, ref string) (*controllerapi.InspectResponse, error)
 }
 
 type ControlOptions struct {

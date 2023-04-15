@@ -38,6 +38,7 @@ type session struct {
 	buildOnGoing atomic.Bool
 	statusChan   chan *client.SolveStatus
 	cancelBuild  func()
+	buildOptions *pb.BuildOptions
 	inputPipe    *io.PipeWriter
 
 	result *build.ResultContext
@@ -113,6 +114,9 @@ func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res
 			s.cancelBuild()
 		}
 		s.cancelRunningProcesses()
+		if s.result != nil {
+			s.result.Done()
+		}
 	}
 	delete(m.session, key)
 	m.sessionMu.Unlock()
@@ -132,6 +136,23 @@ func (m *Server) Close() error {
 	}
 	m.sessionMu.Unlock()
 	return nil
+}
+
+func (m *Server) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.InspectResponse, error) {
+	ref := req.Ref
+	if ref == "" {
+		return nil, errors.New("inspect: empty key")
+	}
+	var bo *pb.BuildOptions
+	m.sessionMu.Lock()
+	if s, ok := m.session[ref]; ok {
+		bo = s.buildOptions
+	} else {
+		m.sessionMu.Unlock()
+		return nil, errors.Errorf("inspect: unknown key %v", ref)
+	}
+	m.sessionMu.Unlock()
+	return &pb.InspectResponse{Options: bo}, nil
 }
 
 func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResponse, error) {

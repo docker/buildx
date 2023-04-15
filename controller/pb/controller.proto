@@ -8,6 +8,7 @@ option go_package = "pb";
 
 service Controller {
   rpc Build(BuildRequest) returns (BuildResponse);
+  rpc Inspect(InspectRequest) returns (InspectResponse);
   rpc Status(StatusRequest) returns (stream StatusResponse);
   rpc Input(stream InputMessage) returns (InputResponse);
   rpc Invoke(stream Message) returns (stream Message);
@@ -105,6 +106,14 @@ message Secret {
   string Env = 3;
 }
 
+message InspectRequest {
+  string Ref = 1;
+}
+
+message InspectResponse {
+  BuildOptions Options = 1;
+}
+
 message UlimitOpt {
   map<string, Ulimit> values = 1;
 }
@@ -184,6 +193,7 @@ message InvokeConfig {
   bool NoCwd = 7; // Do not set cwd but use the image's default
   bool Tty = 8;
   bool Rollback = 9; // Kill all process in the container and recreate it.
+  bool Initial = 10; // Run container from the initial state of that stage (supported only on the failed step)
 }
 
 message FdMessage {
