@@ -13,6 +13,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc"
@@ -33,6 +34,8 @@ func NewClient(ctx context.Context, addr string) (*Client, error) {
 		grpc.WithContextDialer(dialer.ContextDialer),
 		grpc.WithDefaultCallOptions(grpc.MaxCallRecvMsgSize(defaults.DefaultMaxRecvMsgSize)),
 		grpc.WithDefaultCallOptions(grpc.MaxCallSendMsgSize(defaults.DefaultMaxSendMsgSize)),
+		grpc.WithUnaryInterceptor(grpcerrors.UnaryClientInterceptor),
+		grpc.WithStreamInterceptor(grpcerrors.StreamClientInterceptor),
 	}
 	conn, err := grpc.DialContext(ctx, dialer.DialAddress(addr), gopts...)
 	if err != nil {

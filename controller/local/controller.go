@@ -9,6 +9,7 @@ import (
 	"github.com/docker/buildx/build"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
+	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
 	"github.com/docker/buildx/util/ioset"
@@ -40,11 +41,25 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
-	if err != nil {
-		return "", nil, err
+	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
+	if buildErr != nil {
+		var re *cbuild.ResultContextError
+		if errors.As(buildErr, &re) && re.ResultContext != nil {
+			res = re.ResultContext
+		}
 	}
-	b.resultCtx = res
+	if res != nil {
+		b.buildConfig = buildConfig{
+			resultCtx:    res,
+			buildOptions: &options,
+		}
+		if buildErr != nil {
+			buildErr = controllererrors.WrapBuild(buildErr, b.ref)
+		}
+	}
+	if buildErr != nil {
+		return "", nil, buildErr
+	}
 	return b.ref, resp, nil
 }
 

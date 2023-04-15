@@ -209,6 +209,9 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		err = err1
 	}
 	if err != nil {
+		if res != nil {
+			err = wrapResultContext(err, res)
+		}
 		return nil, nil, err
 	}
 
@@ -378,4 +381,32 @@ func controllerUlimitOpt2DockerUlimit(u *controllerapi.UlimitOpt) *dockeropts.Ul
 		}
 	}
 	return dockeropts.NewUlimitOpt(&values)
+}
+
+// ResultContextError is an error type used for passing ResultContext from this package
+// to the caller of RunBuild. This is only used when RunBuild fails with an error.
+// When it succeeds without error, ResultContext is returned via non-error returned value.
+//
+// Caller can extract ResultContext from the error returned by RunBuild as the following:
+//
+//	resp, res, buildErr := cbuild.RunBuild(ctx, req.Options, inR, statusChan)
+//	var re *cbuild.ResultContextError
+//	if errors.As(buildErr, &re) && re.ResultContext != nil {
+//		res = re.ResultContext
+//	}
+type ResultContextError struct {
+	ResultContext *build.ResultContext
+	error
+}
+
+// Unwrap returns the original error.
+func (e *ResultContextError) Unwrap() error {
+	return e.error
+}
+
+func wrapResultContext(wErr error, res *build.ResultContext) error {
+	if wErr == nil {
+		return nil
+	}
+	return &ResultContextError{ResultContext: res, error: wErr}
 }
