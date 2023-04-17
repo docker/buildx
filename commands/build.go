@@ -681,8 +681,10 @@ func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.Ulim
 // resolvePaths resolves all paths contained in controllerapi.BuildOptions
 // and replaces them to absolute paths.
 func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOptions, err error) {
+	localContext := false
 	if options.ContextPath != "" && options.ContextPath != "-" {
 		if !build.IsRemoteURL(options.ContextPath) {
+			localContext = true
 			options.ContextPath, err = filepath.Abs(options.ContextPath)
 			if err != nil {
 				return nil, err
@@ -690,13 +692,14 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 		}
 	}
 	if options.DockerfileName != "" && options.DockerfileName != "-" {
-		if !urlutil.IsURL(options.DockerfileName) {
+		if localContext && !urlutil.IsURL(options.DockerfileName) {
 			options.DockerfileName, err = filepath.Abs(options.DockerfileName)
 			if err != nil {
 				return nil, err
 			}
 		}
 	}
+
 	var contexts map[string]string
 	for k, v := range options.NamedContexts {
 		if build.IsRemoteURL(v) || strings.HasPrefix(v, "docker-image://") {
