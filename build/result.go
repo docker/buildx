@@ -7,6 +7,7 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
+	"time"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/moby/buildkit/client"
@@ -74,9 +75,11 @@ func getResultAt(ctx context.Context, c *client.Client, solveOpt client.SolveOpt
 	go func() {
 		solveOpt := solveOpt
 		solveOpt.Ref = ""
+		buildDoneCh := make(chan struct{})
 		_, err := c.Build(context.Background(), solveOpt, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-			ctx, cancel := context.WithCancel(ctx)
-			defer cancel()
+			doneErr := errors.Errorf("done")
+			ctx, cancel := context.WithCancelCause(ctx)
+			defer cancel(doneErr)
 			resultCtx := ResultContext{}
 			res2, err := c.Solve(ctx, gateway.SolveRequest{
 				Evaluate:   true,
@@ -94,15 +97,28 @@ func getResultAt(ctx context.Context, c *client.Client, solveOpt client.SolveOpt
 			resultCtx.res = res2
 			resultCtx.gwClient = c
 			resultCtx.gwCtx = ctx
-			resultCtx.gwDone = cancel
+			resultCtx.gwDone = func() {
+				cancel(doneErr)
+				// wait for Build() completion(or timeout) to ensure the Build's finalizing and avoiding an error "context canceled"
+				select {
+				case <-buildDoneCh:
+				case <-time.After(5 * time.Second):
+				}
+			}
 			select {
 			case resultCtxCh <- &resultCtx:
 			case <-ctx.Done():
 				return nil, ctx.Err()
 			}
+
+			// wait for cleanup or cancel
 			<-ctx.Done()
+			if context.Cause(ctx) != doneErr { // doneErr is not an error.
+				return nil, ctx.Err()
+			}
 			return nil, nil
 		}, ch)
+		close(buildDoneCh)
 		if err != nil {
 			errCh <- err
 		}
