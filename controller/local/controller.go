@@ -48,7 +48,7 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
+	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil, true)
 	// NOTE: RunBuild can return *build.ResultContext even on error.
 	if res != nil {
 		b.buildConfig = buildConfig{
