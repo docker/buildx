@@ -34,7 +34,7 @@ jobs:
           version: latest
       -
         name: Build reference YAML docs
-        uses: docker/bake-action@v2
+        uses: docker/bake-action@v3
         with:
           targets: update-docs
           set: |

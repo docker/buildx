@@ -40,7 +40,7 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Test
-        uses: docker/bake-action@v2
+        uses: docker/bake-action@v3
         with:
           targets: test
           set: |
@@ -151,7 +151,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
         name: Build and push image
-        uses: docker/bake-action@v2
+        uses: docker/bake-action@v3
         with:
           files: |
             ./docker-bake.hcl
@@ -219,6 +219,6 @@ jobs:
       -
         # Just run a bake target to check eveything runs fine
         name: Build
-        uses: docker/bake-action@v2
+        uses: docker/bake-action@v3
         with:
           targets: binaries
