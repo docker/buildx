@@ -46,7 +46,7 @@ const defaultTargetName = "default"
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
+func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
 	if in.NoCache && len(in.NoCacheFilter) > 0 {
 		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
@@ -179,7 +179,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.MetadataFile, statusChan)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.MetadataFile, statusChan, generateResult)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		// NOTE: buildTargets can return *build.ResultContext even on error.
@@ -193,7 +193,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
@@ -206,15 +206,20 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 	}
 
 	var res *build.ResultContext
-	var mu sync.Mutex
-	var idx int
-	resp, err := build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan), func(driverIndex int, gotRes *build.ResultContext) {
-		mu.Lock()
-		defer mu.Unlock()
-		if res == nil || driverIndex < idx {
-			idx, res = driverIndex, gotRes
-		}
-	})
+	var resp map[string]*client.SolveResponse
+	if generateResult {
+		var mu sync.Mutex
+		var idx int
+		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan), func(driverIndex int, gotRes *build.ResultContext) {
+			mu.Lock()
+			defer mu.Unlock()
+			if res == nil || driverIndex < idx {
+				idx, res = driverIndex, gotRes
+			}
+		})
+	} else {
+		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan))
+	}
 	err1 := printer.Wait()
 	if err == nil {
 		err = err1

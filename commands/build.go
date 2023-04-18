@@ -211,7 +211,7 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 			return errors.Wrap(err, "removing image ID file")
 		}
 	}
-	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, progress, nil)
+	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, progress, nil, false)
 	if err != nil {
 		return err
 	}
