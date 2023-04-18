@@ -248,7 +248,7 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 					fmt.Fprintf(stdout, "Attached to process %q. Press Ctrl-a-c to switch to the new container\n", id)
 				case "exec":
 					if len(args) < 2 {
-						fmt.Println("exec: server name must be passed")
+						fmt.Println("attach: command must be passed")
 						continue
 					}
 					if curRef == "" {
