@@ -1,0 +1,9 @@
+syntax = "proto3";
+
+package errdefs;
+
+import "github.com/moby/buildkit/solver/pb/ops.proto";
+
+message Build {
+  string Ref = 1;
+}

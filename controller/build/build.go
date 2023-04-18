@@ -41,6 +41,11 @@ import (
 
 const defaultTargetName = "default"
 
+// RunBuild runs the specified build and returns the result.
+//
+// NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
+// this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
+// inspect the result and debug the cause of that error.
 func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	if in.NoCache && len(in.NoCacheFilter) > 0 {
 		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
@@ -177,11 +182,17 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.MetadataFile, statusChan)
 	err = wrapBuildError(err, false)
 	if err != nil {
-		return nil, nil, err
+		// NOTE: buildTargets can return *build.ResultContext even on error.
+		return nil, res, err
 	}
 	return resp, res, nil
 }
 
+// buildTargets runs the specified build and returns the result.
+//
+// NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
+// this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
+// inspect the result and debug the cause of that error.
 func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
@@ -209,7 +220,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		err = err1
 	}
 	if err != nil {
-		return nil, nil, err
+		return nil, res, err
 	}
 
 	if len(metadataFile) > 0 && resp != nil {

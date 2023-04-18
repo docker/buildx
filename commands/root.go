@@ -89,6 +89,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 	)
 	if isExperimental() {
 		remote.AddControllerCommands(cmd, dockerCli)
+		addDebugShellCommand(cmd, dockerCli)
 	}
 }
 

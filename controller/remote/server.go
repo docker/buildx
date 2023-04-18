@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/build"
+	controllererrors "github.com/docker/buildx/controller/errdefs"
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
 	"github.com/docker/buildx/util/ioset"
@@ -36,6 +37,7 @@ type session struct {
 	buildOnGoing atomic.Bool
 	statusChan   chan *client.SolveStatus
 	cancelBuild  func()
+	buildOptions *pb.BuildOptions
 	inputPipe    *io.PipeWriter
 
 	result *build.ResultContext
@@ -111,6 +113,9 @@ func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res
 			s.cancelBuild()
 		}
 		s.cancelRunningProcesses()
+		if s.result != nil {
+			s.result.Done()
+		}
 	}
 	delete(m.session, key)
 	m.sessionMu.Unlock()
@@ -130,6 +135,23 @@ func (m *Server) Close() error {
 	}
 	m.sessionMu.Unlock()
 	return nil
+}
+
+func (m *Server) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.InspectResponse, error) {
+	ref := req.Ref
+	if ref == "" {
+		return nil, errors.New("inspect: empty key")
+	}
+	var bo *pb.BuildOptions
+	m.sessionMu.Lock()
+	if s, ok := m.session[ref]; ok {
+		bo = s.buildOptions
+	} else {
+		m.sessionMu.Unlock()
+		return nil, errors.Errorf("inspect: unknown key %v", ref)
+	}
+	m.sessionMu.Unlock()
+	return &pb.InspectResponse{Options: bo}, nil
 }
 
 func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResponse, error) {
@@ -177,24 +199,35 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	// Build the specified request
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	resp, res, err := m.buildFunc(ctx, req.Options, inR, statusChan)
+	resp, res, buildErr := m.buildFunc(ctx, req.Options, inR, statusChan)
 	m.sessionMu.Lock()
 	if s, ok := m.session[ref]; ok {
-		s.result = res
-		s.cancelBuild = cancel
-		m.session[ref] = s
+		// NOTE: buildFunc can return *build.ResultContext even on error (e.g. when it's implemented using (github.com/docker/buildx/controller/build).RunBuild).
+		if res != nil {
+			s.result = res
+			s.cancelBuild = cancel
+			s.buildOptions = req.Options
+			m.session[ref] = s
+			if buildErr != nil {
+				buildErr = controllererrors.WrapBuild(buildErr, ref)
+			}
+		}
 	} else {
 		m.sessionMu.Unlock()
 		return nil, errors.Errorf("build: unknown key %v", ref)
 	}
 	m.sessionMu.Unlock()
 
+	if buildErr != nil {
+		return nil, buildErr
+	}
+
 	if resp == nil {
 		resp = &client.SolveResponse{}
 	}
 	return &pb.BuildResponse{
 		ExporterResponse: resp.ExporterResponse,
-	}, err
+	}, nil
 }
 
 func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer) error {

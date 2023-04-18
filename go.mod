@@ -8,6 +8,7 @@ require (
 	github.com/compose-spec/compose-go v1.9.0
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.7.0
+	github.com/containerd/typeurl/v2 v2.1.0
 	github.com/docker/cli v23.0.1+incompatible
 	github.com/docker/cli-docs-tool v0.5.1
 	github.com/docker/distribution v2.8.1+incompatible
@@ -82,7 +83,6 @@ require (
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
 	github.com/containerd/continuity v0.3.0 // indirect
 	github.com/containerd/ttrpc v1.2.1 // indirect
-	github.com/containerd/typeurl/v2 v2.1.0 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/distribution/v3 v3.0.0-20221103125252-ebfa2a0ac0a9 // indirect

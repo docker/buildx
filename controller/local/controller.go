@@ -9,6 +9,7 @@ import (
 	"github.com/docker/buildx/build"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
+	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
 	"github.com/docker/buildx/util/ioset"
@@ -25,11 +26,18 @@ func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli) contro
 	}
 }
 
+type buildConfig struct {
+	// TODO: these two structs should be merged
+	// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113279719
+	resultCtx    *build.ResultContext
+	buildOptions *controllerapi.BuildOptions
+}
+
 type localController struct {
-	dockerCli command.Cli
-	ref       string
-	resultCtx *build.ResultContext
-	processes *processes.Manager
+	dockerCli   command.Cli
+	ref         string
+	buildConfig buildConfig
+	processes   *processes.Manager
 
 	buildOnGoing atomic.Bool
 }
@@ -40,11 +48,20 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
-	if err != nil {
-		return "", nil, err
+	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progressMode, nil)
+	// NOTE: RunBuild can return *build.ResultContext even on error.
+	if res != nil {
+		b.buildConfig = buildConfig{
+			resultCtx:    res,
+			buildOptions: &options,
+		}
+		if buildErr != nil {
+			buildErr = controllererrors.WrapBuild(buildErr, b.ref)
+		}
 	}
-	b.resultCtx = res
+	if buildErr != nil {
+		return "", nil, buildErr
+	}
 	return b.ref, resp, nil
 }
 
@@ -74,11 +91,11 @@ func (b *localController) Invoke(ctx context.Context, ref string, pid string, cf
 	proc, ok := b.processes.Get(pid)
 	if !ok {
 		// Start a new process.
-		if b.resultCtx == nil {
+		if b.buildConfig.resultCtx == nil {
 			return errors.New("no build result is registered")
 		}
 		var err error
-		proc, err = b.processes.StartProcess(pid, b.resultCtx, &cfg)
+		proc, err = b.processes.StartProcess(pid, b.buildConfig.resultCtx, &cfg)
 		if err != nil {
 			return err
 		}
@@ -99,12 +116,15 @@ func (b *localController) Invoke(ctx context.Context, ref string, pid string, cf
 }
 
 func (b *localController) Kill(context.Context) error {
-	b.cancelRunningProcesses()
+	b.Close()
 	return nil
 }
 
 func (b *localController) Close() error {
 	b.cancelRunningProcesses()
+	if b.buildConfig.resultCtx != nil {
+		b.buildConfig.resultCtx.Done()
+	}
 	// TODO: cancel ongoing builds?
 	return nil
 }
@@ -114,6 +134,13 @@ func (b *localController) List(ctx context.Context) (res []string, _ error) {
 }
 
 func (b *localController) Disconnect(ctx context.Context, key string) error {
-	b.cancelRunningProcesses()
+	b.Close()
 	return nil
+}
+
+func (b *localController) Inspect(ctx context.Context, ref string) (*controllerapi.InspectResponse, error) {
+	if ref != b.ref {
+		return nil, errors.Errorf("unknown ref %q", ref)
+	}
+	return &controllerapi.InspectResponse{Options: b.buildConfig.buildOptions}, nil
 }

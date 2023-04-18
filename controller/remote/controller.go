@@ -24,6 +24,7 @@ import (
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -161,7 +162,10 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			if err != nil {
 				return err
 			}
-			rpc := grpc.NewServer()
+			rpc := grpc.NewServer(
+				grpc.UnaryInterceptor(grpcerrors.UnaryServerInterceptor),
+				grpc.StreamInterceptor(grpcerrors.StreamServerInterceptor),
+			)
 			controllerapi.RegisterControllerServer(rpc, b)
 			doneCh := make(chan struct{})
 			errCh := make(chan error, 1)

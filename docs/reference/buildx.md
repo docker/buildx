@@ -15,6 +15,7 @@ Extended build capabilities with BuildKit
 | [`bake`](buildx_bake.md)                       | Build from a file                          |
 | [`build`](buildx_build.md)                     | Start a build                              |
 | [`create`](buildx_create.md)                   | Create a new builder instance              |
+| [`debug-shell`](buildx_debug-shell.md)         | Start a monitor                            |
 | [`du`](buildx_du.md)                           | Disk usage                                 |
 | [`imagetools`](buildx_imagetools.md)           | Commands to work on images in registry     |
 | [`inspect`](buildx_inspect.md)                 | Inspect current builder instance           |

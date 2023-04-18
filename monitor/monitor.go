@@ -12,6 +12,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/controller/control"
+	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/moby/buildkit/identity"
@@ -35,7 +36,7 @@ Available commands are:
 `
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, progressMode string, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File) error {
+func RunMonitor(ctx context.Context, curRef string, options *controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, progressMode string, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File) error {
 	defer func() {
 		if err := c.Disconnect(ctx, curRef); err != nil {
 			logrus.Warnf("disconnect error: %v", err)
@@ -84,6 +85,8 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 
 	// Start container automatically
 	fmt.Fprintf(stdout, "Launching interactive container. Press Ctrl-a-c to switch to monitor console\n")
+	invokeConfig.Rollback = false
+	invokeConfig.Initial = false
 	id := m.rollback(ctx, curRef, invokeConfig)
 	fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 
@@ -120,16 +123,42 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 				case "":
 					// nop
 				case "reload":
+					var bo *controllerapi.BuildOptions
+					if curRef != "" {
+						// Rebuilding an existing session; Restore the build option used for building this session.
+						res, err := c.Inspect(ctx, curRef)
+						if err != nil {
+							fmt.Printf("failed to inspect the current build session: %v\n", err)
+						} else {
+							bo = res.Options
+						}
+					} else {
+						bo = options
+					}
+					if bo == nil {
+						fmt.Println("reload: no build option is provided")
+						continue
+					}
 					if curRef != "" {
 						if err := c.Disconnect(ctx, curRef); err != nil {
 							fmt.Println("disconnect error", err)
 						}
 					}
-					ref, _, err := c.Build(ctx, options, nil, stdout, stderr, progressMode) // TODO: support stdin, hold build ref
+					var resultUpdated bool
+					ref, _, err := c.Build(ctx, *bo, nil, stdout, stderr, progressMode) // TODO: support stdin, hold build ref
 					if err != nil {
-						fmt.Printf("failed to reload: %v\n", err)
+						var be *controllererrors.BuildError
+						if errors.As(err, &be) {
+							curRef = be.Ref
+							resultUpdated = true
+						} else {
+							fmt.Printf("failed to reload: %v\n", err)
+						}
 					} else {
 						curRef = ref
+						resultUpdated = true
+					}
+					if resultUpdated {
 						// rollback the running container with the new result
 						id := m.rollback(ctx, curRef, invokeConfig)
 						fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
@@ -137,8 +166,15 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 				case "rollback":
 					cfg := invokeConfig
 					if len(args) >= 2 {
-						cfg.Entrypoint = []string{args[1]}
-						cfg.Cmd = args[2:]
+						cmds := args[1:]
+						if cmds[0] == "--init" {
+							cfg.Initial = true
+							cmds = cmds[1:]
+						}
+						if len(cmds) > 0 {
+							cfg.Entrypoint = []string{cmds[0]}
+							cfg.Cmd = cmds[1:]
+						}
 					}
 					id := m.rollback(ctx, curRef, cfg)
 					fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
@@ -254,10 +290,10 @@ func RunMonitor(ctx context.Context, curRef string, options controllerapi.BuildO
 		}()
 		select {
 		case <-doneCh:
-			m.invokeCancel()
+			m.close()
 			return nil
 		case err := <-errCh:
-			m.invokeCancel()
+			m.close()
 			return err
 		case <-monitorDisableCh:
 		}
@@ -293,9 +329,18 @@ func (m *monitor) attach(ctx context.Context, ref, pid string) {
 	m.startInvoke(ctx, ref, pid, controllerapi.InvokeConfig{})
 }
 
+func (m *monitor) close() {
+	if m.invokeCancel != nil {
+		m.invokeCancel()
+	}
+}
+
 func (m *monitor) startInvoke(ctx context.Context, ref, pid string, cfg controllerapi.InvokeConfig) string {
 	if m.invokeCancel != nil {
 		m.invokeCancel() // Finish existing attach
+	}
+	if len(cfg.Entrypoint) == 0 && len(cfg.Cmd) == 0 {
+		cfg.Entrypoint = []string{"sh"} // launch shell by default
 	}
 	go func() {
 		// Start a new invoke
@@ -315,6 +360,9 @@ func (m *monitor) invoke(ctx context.Context, ref, pid string, cfg controllerapi
 	defer m.muxIO.Disable(1)
 	if err := m.muxIO.SwitchTo(1); err != nil {
 		return errors.Errorf("failed to switch to process IO: %v", err)
+	}
+	if ref == "" {
+		return nil
 	}
 	invokeCtx, invokeCancel := context.WithCancel(ctx)
 
