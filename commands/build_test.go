@@ -42,13 +42,18 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name:    "dockerfilename",
-			options: controllerapi.BuildOptions{DockerfileName: "test"},
-			want:    controllerapi.BuildOptions{DockerfileName: filepath.Join(tmpwd, "test")},
+			options: controllerapi.BuildOptions{DockerfileName: "test", ContextPath: "."},
+			want:    controllerapi.BuildOptions{DockerfileName: filepath.Join(tmpwd, "test"), ContextPath: tmpwd},
 		},
 		{
 			name:    "dockerfilename-dash",
-			options: controllerapi.BuildOptions{DockerfileName: "-"},
-			want:    controllerapi.BuildOptions{DockerfileName: "-"},
+			options: controllerapi.BuildOptions{DockerfileName: "-", ContextPath: "."},
+			want:    controllerapi.BuildOptions{DockerfileName: "-", ContextPath: tmpwd},
+		},
+		{
+			name:    "dockerfilename-remote",
+			options: controllerapi.BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			want:    controllerapi.BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
 		},
 		{
 			name: "contexts",
