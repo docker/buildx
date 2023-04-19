@@ -792,320 +792,313 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	multiTarget := len(opt) > 1
 
 	for k, opt := range opt {
-		err := func(k string) error {
-			opt := opt
-			dps := m[k]
-			multiDriver := len(m[k]) > 1
+		k, opt := k, opt
+		dps := m[k]
+		multiDriver := len(m[k]) > 1
 
-			var span trace.Span
-			ctx := ctx
-			if multiTarget {
-				span, ctx = tracing.StartSpan(ctx, k)
-			}
-			baseCtx := ctx
+		var span trace.Span
+		ctx := ctx
+		if multiTarget {
+			span, ctx = tracing.StartSpan(ctx, k)
+		}
+		baseCtx := ctx
 
-			res := make([]*client.SolveResponse, len(dps))
-			eg2, ctx := errgroup.WithContext(ctx)
+		res := make([]*client.SolveResponse, len(dps))
+		eg2, ctx := errgroup.WithContext(ctx)
 
-			var pushNames string
-			var insecurePush bool
+		var pushNames string
+		var insecurePush bool
 
-			for i, dp := range dps {
-				i, dp, so := i, dp, *dp.so
-				if multiDriver {
-					for i, e := range so.Exports {
-						switch e.Type {
-						case "oci", "tar":
-							return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
-						case "image":
-							if pushNames == "" && e.Attrs["push"] != "" {
-								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-									pushNames = e.Attrs["name"]
-									if pushNames == "" {
-										return errors.Errorf("tag is needed when pushing to registry")
-									}
-									names, err := toRepoOnly(e.Attrs["name"])
-									if err != nil {
-										return err
-									}
-									if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
-										insecurePush = true
-									}
-									e.Attrs["name"] = names
-									e.Attrs["push-by-digest"] = "true"
-									so.Exports[i].Attrs = e.Attrs
+		for i, dp := range dps {
+			i, dp, so := i, dp, *dp.so
+			if multiDriver {
+				for i, e := range so.Exports {
+					switch e.Type {
+					case "oci", "tar":
+						return nil, errors.Errorf("%s for multi-node builds currently not supported", e.Type)
+					case "image":
+						if pushNames == "" && e.Attrs["push"] != "" {
+							if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+								pushNames = e.Attrs["name"]
+								if pushNames == "" {
+									return nil, errors.Errorf("tag is needed when pushing to registry")
 								}
+								names, err := toRepoOnly(e.Attrs["name"])
+								if err != nil {
+									return nil, err
+								}
+								if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
+									insecurePush = true
+								}
+								e.Attrs["name"] = names
+								e.Attrs["push-by-digest"] = "true"
+								so.Exports[i].Attrs = e.Attrs
 							}
 						}
 					}
 				}
+			}
 
-				pw := progress.WithPrefix(w, k, multiTarget)
+			pw := progress.WithPrefix(w, k, multiTarget)
 
-				c := clients[dp.driverIndex]
-				eg2.Go(func() error {
-					pw = progress.ResetTime(pw)
+			c := clients[dp.driverIndex]
+			eg2.Go(func() error {
+				pw = progress.ResetTime(pw)
 
-					if err := waitContextDeps(ctx, dp.driverIndex, results, &so); err != nil {
+				if err := waitContextDeps(ctx, dp.driverIndex, results, &so); err != nil {
+					return err
+				}
+
+				frontendInputs := make(map[string]*pb.Definition)
+				for key, st := range so.FrontendInputs {
+					def, err := st.Marshal(ctx)
+					if err != nil {
 						return err
 					}
+					frontendInputs[key] = def.ToPB()
+				}
 
-					frontendInputs := make(map[string]*pb.Definition)
-					for key, st := range so.FrontendInputs {
-						def, err := st.Marshal(ctx)
-						if err != nil {
-							return err
-						}
-						frontendInputs[key] = def.ToPB()
-					}
+				req := gateway.SolveRequest{
+					Frontend:       so.Frontend,
+					FrontendInputs: frontendInputs,
+					FrontendOpt:    make(map[string]string),
+				}
+				for k, v := range so.FrontendAttrs {
+					req.FrontendOpt[k] = v
+				}
+				so.Frontend = ""
+				so.FrontendInputs = nil
 
-					req := gateway.SolveRequest{
-						Frontend:       so.Frontend,
-						FrontendInputs: frontendInputs,
-						FrontendOpt:    make(map[string]string),
-					}
-					for k, v := range so.FrontendAttrs {
-						req.FrontendOpt[k] = v
-					}
-					so.Frontend = ""
-					so.FrontendInputs = nil
+				ch, done := progress.NewChannel(pw)
+				defer func() { <-done }()
 
-					ch, done := progress.NewChannel(pw)
-					defer func() { <-done }()
-
-					cc := c
-					var printRes map[string][]byte
-					rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-						var isFallback bool
-						var origErr error
-						for {
-							if opt.PrintFunc != nil {
-								if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
-									req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
-								} else {
-									req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
-								}
-								req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
-								if isFallback {
-									req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
-								}
+				cc := c
+				var printRes map[string][]byte
+				rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+					var isFallback bool
+					var origErr error
+					for {
+						if opt.PrintFunc != nil {
+							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
+								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
+							} else {
+								req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
 							}
-							res, err := c.Solve(ctx, req)
-							if err != nil {
-								if origErr != nil {
-									return nil, err
-								}
-								var reqErr *errdefs.UnsupportedSubrequestError
-								if !isFallback {
-									if errors.As(err, &reqErr) {
-										switch reqErr.Name {
-										case "frontend.outline", "frontend.targets":
-											isFallback = true
-											origErr = err
-											continue
-										}
-										return nil, err
-									}
-									// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
-									if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
+							req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
+							if isFallback {
+								req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
+							}
+						}
+						res, err := c.Solve(ctx, req)
+						if err != nil {
+							if origErr != nil {
+								return nil, err
+							}
+							var reqErr *errdefs.UnsupportedSubrequestError
+							if !isFallback {
+								if errors.As(err, &reqErr) {
+									switch reqErr.Name {
+									case "frontend.outline", "frontend.targets":
 										isFallback = true
 										origErr = err
 										continue
 									}
+									return nil, err
 								}
-								return nil, err
-							}
-							if opt.PrintFunc != nil {
-								printRes = res.Metadata
-							}
-							results.Set(resultKey(dp.driverIndex, k), res)
-							if resultHandleFunc != nil {
-								resultCtx, err := NewResultContext(cc, so, res)
-								if err == nil {
-									resultHandleFunc(dp.driverIndex, resultCtx)
-								} else {
-									logrus.Warnf("failed to record result: %s", err)
+								// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
+								if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
+									isFallback = true
+									origErr = err
+									continue
 								}
 							}
-							return res, nil
+							return nil, err
 						}
-					}, ch)
-					if err != nil {
-						return err
+						if opt.PrintFunc != nil {
+							printRes = res.Metadata
+						}
+						results.Set(resultKey(dp.driverIndex, k), res)
+						if resultHandleFunc != nil {
+							resultCtx, err := NewResultContext(cc, so, res)
+							if err == nil {
+								resultHandleFunc(dp.driverIndex, resultCtx)
+							} else {
+								logrus.Warnf("failed to record result: %s", err)
+							}
+						}
+						return res, nil
 					}
-					res[i] = rr
+				}, ch)
+				if err != nil {
+					return err
+				}
+				res[i] = rr
 
-					if rr.ExporterResponse == nil {
-						rr.ExporterResponse = map[string]string{}
-					}
-					for k, v := range printRes {
-						rr.ExporterResponse[k] = string(v)
-					}
+				if rr.ExporterResponse == nil {
+					rr.ExporterResponse = map[string]string{}
+				}
+				for k, v := range printRes {
+					rr.ExporterResponse[k] = string(v)
+				}
 
-					node := nodes[dp.driverIndex].Driver
-					if node.IsMobyDriver() {
-						for _, e := range so.Exports {
-							if e.Type == "moby" && e.Attrs["push"] != "" {
-								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-									pushNames = e.Attrs["name"]
-									if pushNames == "" {
-										return errors.Errorf("tag is needed when pushing to registry")
-									}
-									pw := progress.ResetTime(pw)
-									pushList := strings.Split(pushNames, ",")
-									for _, name := range pushList {
-										if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
-											return pushWithMoby(ctx, node, name, l)
-										}); err != nil {
-											return err
-										}
-									}
-									remoteDigest, err := remoteDigestWithMoby(ctx, node, pushList[0])
-									if err == nil && remoteDigest != "" {
-										// old daemons might not have containerimage.config.digest set
-										// in response so use containerimage.digest value for it if available
-										if _, ok := rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; !ok {
-											if v, ok := rr.ExporterResponse[exptypes.ExporterImageDigestKey]; ok {
-												rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey] = v
-											}
-										}
-										rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
-									} else if err != nil {
+				node := nodes[dp.driverIndex].Driver
+				if node.IsMobyDriver() {
+					for _, e := range so.Exports {
+						if e.Type == "moby" && e.Attrs["push"] != "" {
+							if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+								pushNames = e.Attrs["name"]
+								if pushNames == "" {
+									return errors.Errorf("tag is needed when pushing to registry")
+								}
+								pw := progress.ResetTime(pw)
+								pushList := strings.Split(pushNames, ",")
+								for _, name := range pushList {
+									if err := progress.Wrap(fmt.Sprintf("pushing %s with docker", name), pw.Write, func(l progress.SubLogger) error {
+										return pushWithMoby(ctx, node, name, l)
+									}); err != nil {
 										return err
 									}
 								}
+								remoteDigest, err := remoteDigestWithMoby(ctx, node, pushList[0])
+								if err == nil && remoteDigest != "" {
+									// old daemons might not have containerimage.config.digest set
+									// in response so use containerimage.digest value for it if available
+									if _, ok := rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; !ok {
+										if v, ok := rr.ExporterResponse[exptypes.ExporterImageDigestKey]; ok {
+											rr.ExporterResponse[exptypes.ExporterImageConfigDigestKey] = v
+										}
+									}
+									rr.ExporterResponse[exptypes.ExporterImageDigestKey] = remoteDigest
+								} else if err != nil {
+									return err
+								}
 							}
 						}
+					}
+				}
+				return nil
+			})
+		}
+
+		eg.Go(func() (err error) {
+			ctx := baseCtx
+			defer func() {
+				if span != nil {
+					tracing.FinishWithError(span, err)
+				}
+			}()
+			pw := progress.WithPrefix(w, "default", false)
+			if err := eg2.Wait(); err != nil {
+				return err
+			}
+
+			respMu.Lock()
+			resp[k] = res[0]
+			respMu.Unlock()
+			if len(res) == 1 {
+				return nil
+			}
+
+			if pushNames != "" {
+				progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
+					descs := make([]specs.Descriptor, 0, len(res))
+
+					for _, r := range res {
+						s, ok := r.ExporterResponse[exptypes.ExporterImageDescriptorKey]
+						if ok {
+							dt, err := base64.StdEncoding.DecodeString(s)
+							if err != nil {
+								return err
+							}
+							var desc specs.Descriptor
+							if err := json.Unmarshal(dt, &desc); err != nil {
+								return errors.Wrapf(err, "failed to unmarshal descriptor %s", s)
+							}
+							descs = append(descs, desc)
+							continue
+						}
+						// This is fallback for some very old buildkit versions.
+						// Note that the mediatype isn't really correct as most of the time it is image manifest and
+						// not manifest list but actually both are handled because for Docker mediatypes the
+						// mediatype value in the Accpet header does not seem to matter.
+						s, ok = r.ExporterResponse[exptypes.ExporterImageDigestKey]
+						if ok {
+							descs = append(descs, specs.Descriptor{
+								Digest:    digest.Digest(s),
+								MediaType: images.MediaTypeDockerSchema2ManifestList,
+								Size:      -1,
+							})
+						}
+					}
+					if len(descs) > 0 {
+						var imageopt imagetools.Opt
+						for _, dp := range dps {
+							imageopt = nodes[dp.driverIndex].ImageOpt
+							break
+						}
+						names := strings.Split(pushNames, ",")
+
+						if insecurePush {
+							insecureTrue := true
+							httpTrue := true
+							nn, err := reference.ParseNormalizedNamed(names[0])
+							if err != nil {
+								return err
+							}
+							imageopt.RegistryConfig = map[string]resolver.RegistryConfig{
+								reference.Domain(nn): {
+									Insecure:  &insecureTrue,
+									PlainHTTP: &httpTrue,
+								},
+							}
+						}
+
+						itpull := imagetools.New(imageopt)
+
+						ref, err := reference.ParseNormalizedNamed(names[0])
+						if err != nil {
+							return err
+						}
+						ref = reference.TagNameOnly(ref)
+
+						srcs := make([]*imagetools.Source, len(descs))
+						for i, desc := range descs {
+							srcs[i] = &imagetools.Source{
+								Desc: desc,
+								Ref:  ref,
+							}
+						}
+
+						dt, desc, err := itpull.Combine(ctx, srcs)
+						if err != nil {
+							return err
+						}
+
+						itpush := imagetools.New(imageopt)
+
+						for _, n := range names {
+							nn, err := reference.ParseNormalizedNamed(n)
+							if err != nil {
+								return err
+							}
+							if err := itpush.Push(ctx, nn, desc, dt); err != nil {
+								return err
+							}
+						}
+
+						respMu.Lock()
+						resp[k] = &client.SolveResponse{
+							ExporterResponse: map[string]string{
+								exptypes.ExporterImageDigestKey: desc.Digest.String(),
+							},
+						}
+						respMu.Unlock()
 					}
 					return nil
 				})
 			}
-
-			eg.Go(func() (err error) {
-				ctx := baseCtx
-				defer func() {
-					if span != nil {
-						tracing.FinishWithError(span, err)
-					}
-				}()
-				pw := progress.WithPrefix(w, "default", false)
-				if err := eg2.Wait(); err != nil {
-					return err
-				}
-
-				respMu.Lock()
-				resp[k] = res[0]
-				respMu.Unlock()
-				if len(res) == 1 {
-					return nil
-				}
-
-				if pushNames != "" {
-					progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
-						descs := make([]specs.Descriptor, 0, len(res))
-
-						for _, r := range res {
-							s, ok := r.ExporterResponse[exptypes.ExporterImageDescriptorKey]
-							if ok {
-								dt, err := base64.StdEncoding.DecodeString(s)
-								if err != nil {
-									return err
-								}
-								var desc specs.Descriptor
-								if err := json.Unmarshal(dt, &desc); err != nil {
-									return errors.Wrapf(err, "failed to unmarshal descriptor %s", s)
-								}
-								descs = append(descs, desc)
-								continue
-							}
-							// This is fallback for some very old buildkit versions.
-							// Note that the mediatype isn't really correct as most of the time it is image manifest and
-							// not manifest list but actually both are handled because for Docker mediatypes the
-							// mediatype value in the Accpet header does not seem to matter.
-							s, ok = r.ExporterResponse[exptypes.ExporterImageDigestKey]
-							if ok {
-								descs = append(descs, specs.Descriptor{
-									Digest:    digest.Digest(s),
-									MediaType: images.MediaTypeDockerSchema2ManifestList,
-									Size:      -1,
-								})
-							}
-						}
-						if len(descs) > 0 {
-							var imageopt imagetools.Opt
-							for _, dp := range dps {
-								imageopt = nodes[dp.driverIndex].ImageOpt
-								break
-							}
-							names := strings.Split(pushNames, ",")
-
-							if insecurePush {
-								insecureTrue := true
-								httpTrue := true
-								nn, err := reference.ParseNormalizedNamed(names[0])
-								if err != nil {
-									return err
-								}
-								imageopt.RegistryConfig = map[string]resolver.RegistryConfig{
-									reference.Domain(nn): {
-										Insecure:  &insecureTrue,
-										PlainHTTP: &httpTrue,
-									},
-								}
-							}
-
-							itpull := imagetools.New(imageopt)
-
-							ref, err := reference.ParseNormalizedNamed(names[0])
-							if err != nil {
-								return err
-							}
-							ref = reference.TagNameOnly(ref)
-
-							srcs := make([]*imagetools.Source, len(descs))
-							for i, desc := range descs {
-								srcs[i] = &imagetools.Source{
-									Desc: desc,
-									Ref:  ref,
-								}
-							}
-
-							dt, desc, err := itpull.Combine(ctx, srcs)
-							if err != nil {
-								return err
-							}
-
-							itpush := imagetools.New(imageopt)
-
-							for _, n := range names {
-								nn, err := reference.ParseNormalizedNamed(n)
-								if err != nil {
-									return err
-								}
-								if err := itpush.Push(ctx, nn, desc, dt); err != nil {
-									return err
-								}
-							}
-
-							respMu.Lock()
-							resp[k] = &client.SolveResponse{
-								ExporterResponse: map[string]string{
-									exptypes.ExporterImageDigestKey: desc.Digest.String(),
-								},
-							}
-							respMu.Unlock()
-						}
-						return nil
-					})
-				}
-				return nil
-			})
-
 			return nil
-		}(k)
-		if err != nil {
-			return nil, err
-		}
+		})
 	}
 
 	if err := eg.Wait(); err != nil {
