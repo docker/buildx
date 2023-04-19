@@ -117,7 +117,6 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		Target:         o.target,
 		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
 		Builder:        o.builder,
-		MetadataFile:   o.metadataFile,
 		NoCache:        o.noCache,
 		Pull:           o.pull,
 		ExportPush:     o.exportPush,
@@ -962,13 +961,6 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 		ssh = append(ssh, s)
 	}
 	options.SSH = ssh
-
-	if options.MetadataFile != "" {
-		options.MetadataFile, err = filepath.Abs(options.MetadataFile)
-		if err != nil {
-			return nil, err
-		}
-	}
 
 	return options, nil
 }

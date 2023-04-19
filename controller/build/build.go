@@ -166,7 +166,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, err
 	}
 
-	res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progress, in.MetadataFile)
+	res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progress)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return nil, err
@@ -175,12 +175,11 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 }
 
 // buildTargets runs the specified build and returns the result.
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, metadataFile string) (map[string]*build.ResultContext, error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer) (map[string]*build.ResultContext, error) {
 	res, err := build.BuildResults(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
 	if err != nil {
 		return nil, err
 	}
-
 	return res, err
 }
 

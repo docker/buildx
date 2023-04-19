@@ -235,15 +235,6 @@ func TestResolvePaths(t *testing.T) {
 				},
 			},
 		},
-		{
-			name: "metadatafile",
-			options: controllerapi.BuildOptions{
-				MetadataFile: "test1",
-			},
-			want: controllerapi.BuildOptions{
-				MetadataFile: filepath.Join(tmpwd, "test1"),
-			},
-		},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
