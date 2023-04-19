@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"sync"
-	"sync/atomic"
 	"time"
 
 	"github.com/docker/buildx/build"
@@ -14,12 +13,11 @@ import (
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/version"
-	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
-type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, progress progress.Writer) (resp *client.SolveResponse, res *build.ResultContext, err error)
+type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, progress progress.Writer) (res *build.ResultContext, err error)
 
 func NewServer(buildFunc BuildFunc) *Server {
 	return &Server{
@@ -34,7 +32,6 @@ type Server struct {
 }
 
 type session struct {
-	buildOnGoing atomic.Bool
 	statusChan   chan *pb.StatusResponse
 	cancelBuild  func()
 	buildOptions *pb.BuildOptions
@@ -101,28 +98,6 @@ func (m *Server) List(ctx context.Context, req *pb.ListRequest) (res *pb.ListRes
 	}, nil
 }
 
-func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res *pb.DisconnectResponse, err error) {
-	key := req.Ref
-	if key == "" {
-		return nil, errors.New("disconnect: empty key")
-	}
-
-	m.sessionMu.Lock()
-	if s, ok := m.session[key]; ok {
-		if s.cancelBuild != nil {
-			s.cancelBuild()
-		}
-		s.cancelRunningProcesses()
-		if s.result != nil {
-			s.result.Done()
-		}
-	}
-	delete(m.session, key)
-	m.sessionMu.Unlock()
-
-	return &pb.DisconnectResponse{}, nil
-}
-
 func (m *Server) Close() error {
 	m.sessionMu.Lock()
 	for k := range m.session {
@@ -167,15 +142,10 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	}
 	s, ok := m.session[ref]
 	if ok {
-		if !s.buildOnGoing.CompareAndSwap(false, true) {
-			m.sessionMu.Unlock()
-			return &pb.BuildResponse{}, errors.New("build ongoing")
-		}
 		s.cancelRunningProcesses()
 		s.result = nil
 	} else {
 		s = &session{}
-		s.buildOnGoing.Store(true)
 	}
 
 	s.processes = processes.NewManager()
@@ -186,33 +156,24 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	s.inputPipe = inW
 	m.session[ref] = s
 	m.sessionMu.Unlock()
-	defer func() {
-		close(statusChan)
-		m.sessionMu.Lock()
-		s, ok := m.session[ref]
-		if ok {
-			s.statusChan = nil
-			s.buildOnGoing.Store(false)
-		}
-		m.sessionMu.Unlock()
-	}()
 
 	pw := pb.NewProgressWriter(statusChan)
 
 	// Build the specified request
 	ctx, cancel := context.WithCancel(ctx)
 	defer cancel()
-	resp, res, buildErr := m.buildFunc(ctx, req.Options, inR, pw)
+	res, err := m.buildFunc(ctx, req.Options, inR, pw)
 	m.sessionMu.Lock()
 	if s, ok := m.session[ref]; ok {
-		// NOTE: buildFunc can return *build.ResultContext even on error (e.g. when it's implemented using (github.com/docker/buildx/controller/build).RunBuild).
 		if res != nil {
 			s.result = res
 			s.cancelBuild = cancel
 			s.buildOptions = req.Options
 			m.session[ref] = s
+
+			_, buildErr := s.result.Result(ctx)
 			if buildErr != nil {
-				buildErr = controllererrors.WrapBuild(buildErr, ref)
+				err = controllererrors.WrapBuild(buildErr, ref)
 			}
 		}
 	} else {
@@ -221,16 +182,67 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	}
 	m.sessionMu.Unlock()
 
-	if buildErr != nil {
-		return nil, buildErr
+	if err != nil {
+		return nil, err
 	}
 
-	if resp == nil {
-		resp = &client.SolveResponse{}
+	return &pb.BuildResponse{}, nil
+}
+
+func (m *Server) Finalize(ctx context.Context, req *pb.FinalizeRequest) (*pb.FinalizeResponse, error) {
+	key := req.Ref
+	if key == "" {
+		return nil, errors.New("finalize: empty key")
 	}
-	return &pb.BuildResponse{
+
+	m.sessionMu.Lock()
+	defer m.sessionMu.Unlock()
+
+	s, ok := m.session[key]
+	if !ok {
+		return nil, errors.Errorf("unknown ref %q", key)
+	}
+	if s.result == nil {
+		return nil, errors.Errorf("no build ongoing for %q", key)
+	}
+	resp, err := s.result.Wait(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if s.cancelBuild != nil {
+		s.cancelBuild()
+	}
+	s.cancelRunningProcesses()
+	close(s.statusChan)
+	delete(m.session, key)
+
+	return &pb.FinalizeResponse{
 		ExporterResponse: resp.ExporterResponse,
 	}, nil
+}
+
+func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res *pb.DisconnectResponse, err error) {
+	key := req.Ref
+	if key == "" {
+		return nil, errors.New("disconnect: empty key")
+	}
+
+	m.sessionMu.Lock()
+	defer m.sessionMu.Unlock()
+
+	if s, ok := m.session[key]; ok {
+		if s.cancelBuild != nil {
+			s.cancelBuild()
+		}
+		close(s.statusChan)
+		s.cancelRunningProcesses()
+		if s.result != nil {
+			s.result.Close()
+		}
+	}
+	delete(m.session, key)
+
+	return &pb.DisconnectResponse{}, nil
 }
 
 func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer) error {

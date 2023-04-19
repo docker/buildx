@@ -113,49 +113,30 @@ func (c *Client) Inspect(ctx context.Context, ref string) (*pb.InspectResponse, 
 	return c.client().Inspect(ctx, &pb.InspectRequest{Ref: ref})
 }
 
-func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, error) {
+func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, error) {
 	ref := identity.NewID()
-	statusChan := make(chan *client.SolveStatus)
-	eg, egCtx := errgroup.WithContext(ctx)
-	var resp *client.SolveResponse
-	eg.Go(func() error {
-		defer close(statusChan)
-		var err error
-		resp, err = c.build(egCtx, ref, options, in, statusChan)
-		return err
-	})
-	eg.Go(func() error {
-		for s := range statusChan {
-			st := s
-			progress.Write(st)
-		}
-		return nil
-	})
-	return ref, resp, eg.Wait()
+	if err := c.build(ctx, ref, options, in, progress); err != nil {
+		return "", err
+	}
+	return ref, nil
 }
 
-func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, statusChan chan *client.SolveStatus) (*client.SolveResponse, error) {
+func (c *Client) Finalize(ctx context.Context, ref string) (*client.SolveResponse, error) {
+	resp, err := c.client().Finalize(ctx, &pb.FinalizeRequest{Ref: ref})
+	if err != nil {
+		return nil, err
+	}
+	return &client.SolveResponse{
+		ExporterResponse: resp.ExporterResponse,
+	}, nil
+}
+
+func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, writer progress.Writer) error {
 	eg, egCtx := errgroup.WithContext(ctx)
 	done := make(chan struct{})
 
-	var resp *client.SolveResponse
-
-	eg.Go(func() error {
-		defer close(done)
-		pbResp, err := c.client().Build(egCtx, &pb.BuildRequest{
-			Ref:     ref,
-			Options: &options,
-		})
-		if err != nil {
-			return err
-		}
-		resp = &client.SolveResponse{
-			ExporterResponse: pbResp.ExporterResponse,
-		}
-		return nil
-	})
-	eg.Go(func() error {
-		stream, err := c.client().Status(egCtx, &pb.StatusRequest{
+	go func() error {
+		stream, err := c.client().Status(ctx, &pb.StatusRequest{
 			Ref: ref,
 		})
 		if err != nil {
@@ -169,8 +150,20 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 				}
 				return errors.Wrap(err, "failed to receive status")
 			}
-			statusChan <- pb.FromControlStatus(resp)
+			writer.Write(pb.FromControlStatus(resp))
 		}
+	}()
+
+	eg.Go(func() error {
+		defer close(done)
+		_, err := c.client().Build(egCtx, &pb.BuildRequest{
+			Ref:     ref,
+			Options: &options,
+		})
+		if err != nil {
+			return err
+		}
+		return nil
 	})
 	if in != nil {
 		eg.Go(func() error {
@@ -232,7 +225,7 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 			return eg2.Wait()
 		})
 	}
-	return resp, eg.Wait()
+	return eg.Wait()
 }
 
 func (c *Client) client() pb.ControllerClient {

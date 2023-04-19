@@ -29,6 +29,7 @@ type Printer struct {
 	warnings     []client.VertexWarning
 	logMu        sync.Mutex
 	logSourceMap map[digest.Digest]interface{}
+	paused       *bool
 }
 
 func (p *Printer) Wait() error {
@@ -43,6 +44,10 @@ func (p *Printer) Write(s *client.SolveStatus) {
 
 func (p *Printer) Warnings() []client.VertexWarning {
 	return p.warnings
+}
+
+func (p *Printer) Pause(v bool) {
+	*p.paused = v
 }
 
 func (p *Printer) ValidateLogSource(dgst digest.Digest, v interface{}) bool {
@@ -74,10 +79,12 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string,
 	statusCh := make(chan *client.SolveStatus)
 	doneCh := make(chan struct{})
 
+	paused := false
 	pw := &Printer{
 		status:       statusCh,
 		done:         doneCh,
 		logSourceMap: map[digest.Digest]interface{}{},
+		paused:       &paused,
 	}
 
 	if v := os.Getenv("BUILDKIT_PROGRESS"); v != "" && mode == PrinterModeAuto {
@@ -101,7 +108,7 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string,
 	go func() {
 		resumeLogs := logutil.Pause(logrus.StandardLogger())
 		// not using shared context to not disrupt display but let is finish reporting errors
-		pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, statusCh, solveStatusOpt...)
+		pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, statusCh, pw.paused, solveStatusOpt...)
 		resumeLogs()
 		close(doneCh)
 	}()

@@ -8,11 +8,13 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
@@ -33,10 +35,14 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
+	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/frontend/subrequests"
+	"github.com/moby/buildkit/frontend/subrequests/outline"
+	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
@@ -106,7 +112,6 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		NetworkMode:    o.networkMode,
 		NoCacheFilter:  o.noCacheFilter,
 		Platforms:      o.platforms,
-		PrintFunc:      o.printFunc,
 		ShmSize:        int64(o.shmSize),
 		Tags:           o.tags,
 		Target:         o.target,
@@ -151,6 +156,11 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 		if (e.Type == client.ExporterLocal || e.Type == client.ExporterTar) && o.imageIDFile != "" {
 			return controllerapi.BuildOptions{}, errors.Errorf("local and tar exporters are incompatible with image ID file")
 		}
+	}
+
+	opts.PrintFunc, err = parsePrintFunc(o.printFunc)
+	if err != nil {
+		return controllerapi.BuildOptions{}, err
 	}
 
 	opts.CacheFrom, err = buildflags.ParseCacheEntry(o.cacheFrom)
@@ -231,9 +241,13 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 			return errors.Wrap(err, "removing image ID file")
 		}
 	}
-	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, printer, false)
-	if err1 := printer.Wait(); err == nil {
-		err = err1
+	res, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, printer)
+	resp, err2 := res.Wait(ctx)
+	if err == nil {
+		err = err2
+	}
+	if err2 := printer.Wait(); err == nil {
+		err = err2
 	}
 	if err != nil {
 		return err
@@ -248,6 +262,16 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 			dgst = v
 		}
 		return os.WriteFile(in.imageIDFile, []byte(dgst), 0644)
+	}
+	if in.metadataFile != "" {
+		if err := writeMetadataFile(in.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
+			return err
+		}
+	}
+	if opts.PrintFunc != nil {
+		if err := printResult(opts.PrintFunc, resp.ExporterResponse); err != nil {
+			return err
+		}
 	}
 	return nil
 }
@@ -518,7 +542,7 @@ func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
 	return txn.UpdateLastActivity(ng)
 }
 
-func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) error {
+func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	ctx := context.TODO()
 
 	if options.invoke != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
@@ -560,6 +584,14 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 	if err != nil {
 		return err
 	}
+	printerCloseOnce := sync.Once{}
+	defer func() {
+		printerCloseOnce.Do(func() {
+			if err1 := printer.Wait(); err == nil {
+				err = err1
+			}
+		})
+	}()
 
 	// NOTE: buildx server has the current working directory different from the client
 	// so we need to resolve paths to abosolute ones in the client.
@@ -588,11 +620,7 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 			}
 		}
 
-		var resp *client.SolveResponse
-		ref, resp, err = c.Build(ctx, opts, pr, printer)
-		if err1 := printer.Wait(); err == nil {
-			err = err1
-		}
+		ref, err = c.Build(ctx, opts, pr, printer)
 		if err != nil {
 			var be *controllererrors.BuildError
 			if errors.As(err, &be) {
@@ -610,22 +638,13 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		if err := pr.Close(); err != nil {
 			logrus.Debug("failed to close stdin pipe reader")
 		}
-
-		if options.quiet {
-			fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
-		}
-		if options.imageIDFile != "" {
-			dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
-			if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
-				dgst = v
-			}
-			return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
-		}
-
 	}
 
 	// post-build operations
 	if options.invoke != nil && options.invoke.needsMonitor(retErr) {
+		// HACK: pause the printer to prevent interference with monitor
+		printer.Pause(true)
+
 		pr2, pw2 := io.Pipe()
 		f.SetWriter(pw2, func() io.WriteCloser {
 			pw2.Close() // propagate EOF
@@ -646,11 +665,40 @@ func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) er
 		if err != nil {
 			logrus.Warnf("failed to run monitor: %v", err)
 		}
-	} else {
-		if err := c.Disconnect(ctx, ref); err != nil {
-			logrus.Warnf("disconnect error: %v", err)
+
+		printer.Pause(false)
+	}
+
+	resp, err := c.Finalize(ctx, ref)
+	printerCloseOnce.Do(func() {
+		if err1 := printer.Wait(); err == nil {
+			err = err1
+		}
+	})
+	if err != nil {
+		return err
+	}
+	if options.quiet {
+		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
+	}
+	if options.imageIDFile != "" {
+		dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
+		if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
+			dgst = v
+		}
+		return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
+	}
+	if options.metadataFile != "" {
+		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
+			return err
 		}
 	}
+	if opts.PrintFunc != nil {
+		if err := printResult(opts.PrintFunc, resp.ExporterResponse); err != nil {
+			return err
+		}
+	}
+
 	return nil
 }
 
@@ -963,4 +1011,66 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
 		fmt.Fprintf(w, "\n")
 
 	}
+}
+
+func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
+	switch f.Name {
+	case "outline":
+		return printValue(outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
+	case "targets":
+		return printValue(targets.PrintTargets, targets.SubrequestsTargetsDefinition.Version, f.Format, res)
+	case "subrequests.describe":
+		return printValue(subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
+	default:
+		if dt, ok := res["result.txt"]; ok {
+			fmt.Print(dt)
+		} else {
+			log.Printf("%s %+v", f, res)
+		}
+	}
+	return nil
+}
+
+type printFunc func([]byte, io.Writer) error
+
+func printValue(printer printFunc, version string, format string, res map[string]string) error {
+	if format == "json" {
+		fmt.Fprintln(os.Stdout, res["result.json"])
+		return nil
+	}
+
+	if res["version"] != "" && versions.LessThan(version, res["version"]) && res["result.txt"] != "" {
+		// structure is too new and we don't know how to print it
+		fmt.Fprint(os.Stdout, res["result.txt"])
+		return nil
+	}
+	return printer([]byte(res["result.json"]), os.Stdout)
+}
+
+func parsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
+	if str == "" {
+		return nil, nil
+	}
+	csvReader := csv.NewReader(strings.NewReader(str))
+	fields, err := csvReader.Read()
+	if err != nil {
+		return nil, err
+	}
+	f := &controllerapi.PrintFunc{}
+	for _, field := range fields {
+		parts := strings.SplitN(field, "=", 2)
+		if len(parts) == 2 {
+			if parts[0] == "format" {
+				f.Format = parts[1]
+			} else {
+				return nil, errors.Errorf("invalid print field: %s", field)
+			}
+		} else {
+			if f.Name != "" {
+				return nil, errors.Errorf("invalid print value: %s", str)
+			}
+			f.Name = field
+		}
+	}
+	return f, nil
 }

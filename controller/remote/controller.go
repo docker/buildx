@@ -24,7 +24,6 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
@@ -143,8 +142,8 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			}()
 
 			// prepare server
-			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, progress progress.Writer) (*client.SolveResponse, *build.ResultContext, error) {
-				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress, true)
+			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, progress progress.Writer) (*build.ResultContext, error) {
+				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress)
 			})
 			defer b.Close()
 

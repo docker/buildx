@@ -42,27 +42,27 @@ type localController struct {
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, error) {
+func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
-		return "", nil, errors.New("build ongoing")
+		return "", errors.New("build ongoing")
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, true)
-	// NOTE: RunBuild can return *build.ResultContext even on error.
+	res, err := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress)
+	if err != nil {
+		return "", err
+	}
 	if res != nil {
 		b.buildConfig = buildConfig{
 			resultCtx:    res,
 			buildOptions: &options,
 		}
+		_, buildErr := b.buildConfig.resultCtx.Result(ctx)
 		if buildErr != nil {
-			buildErr = controllererrors.WrapBuild(buildErr, b.ref)
+			return "", controllererrors.WrapBuild(buildErr, b.ref)
 		}
 	}
-	if buildErr != nil {
-		return "", nil, buildErr
-	}
-	return b.ref, resp, nil
+	return b.ref, nil
 }
 
 func (b *localController) ListProcesses(ctx context.Context, ref string) (infos []*controllerapi.ProcessInfo, retErr error) {
@@ -123,7 +123,7 @@ func (b *localController) Kill(context.Context) error {
 func (b *localController) Close() error {
 	b.cancelRunningProcesses()
 	if b.buildConfig.resultCtx != nil {
-		b.buildConfig.resultCtx.Done()
+		b.buildConfig.resultCtx.Close()
 	}
 	// TODO: cancel ongoing builds?
 	return nil
@@ -133,9 +133,17 @@ func (b *localController) List(ctx context.Context) (res []string, _ error) {
 	return []string{b.ref}, nil
 }
 
+func (b *localController) Finalize(ctx context.Context, key string) (*client.SolveResponse, error) {
+	b.cancelRunningProcesses()
+
+	if b.buildConfig.resultCtx != nil {
+		return b.buildConfig.resultCtx.Wait(ctx)
+	}
+	return nil, nil
+}
+
 func (b *localController) Disconnect(ctx context.Context, key string) error {
-	b.Close()
-	return nil
+	return b.Close()
 }
 
 func (b *localController) Inspect(ctx context.Context, ref string) (*controllerapi.InspectResponse, error) {

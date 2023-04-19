@@ -38,11 +38,6 @@ Available commands are:
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
 func RunMonitor(ctx context.Context, curRef string, options *controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress progress.Writer) error {
-	defer func() {
-		if err := c.Disconnect(ctx, curRef); err != nil {
-			logrus.Warnf("disconnect error: %v", err)
-		}
-	}()
 	monitorIn, monitorOut := ioset.Pipe()
 	defer func() {
 		monitorIn.Close()
@@ -146,7 +141,7 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 						}
 					}
 					var resultUpdated bool
-					ref, _, err := c.Build(ctx, *bo, nil, progress) // TODO: support stdin, hold build ref
+					ref, err := c.Build(ctx, *bo, nil, progress) // TODO: support stdin, hold build ref
 					if err != nil {
 						var be *controllererrors.BuildError
 						if errors.As(err, &be) {

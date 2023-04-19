@@ -7,14 +7,19 @@ import "github.com/moby/buildkit/api/services/control/control.proto";
 option go_package = "pb";
 
 service Controller {
-  rpc Build(BuildRequest) returns (BuildResponse);
-  rpc Inspect(InspectRequest) returns (InspectResponse);
-  rpc Status(StatusRequest) returns (stream StatusResponse);
-  rpc Input(stream InputMessage) returns (InputResponse);
-  rpc Invoke(stream Message) returns (stream Message);
-  rpc List(ListRequest) returns (ListResponse);
-  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
   rpc Info(InfoRequest) returns (InfoResponse);
+
+  rpc Build(BuildRequest) returns (BuildResponse);
+  rpc Finalize(FinalizeRequest) returns (FinalizeResponse);
+  rpc Invoke(stream Message) returns (stream Message);
+  rpc Disconnect(DisconnectRequest) returns (DisconnectResponse);
+  rpc Status(StatusRequest) returns (stream StatusResponse);
+
+  rpc Inspect(InspectRequest) returns (InspectResponse);
+  rpc List(ListRequest) returns (ListResponse);
+
+  rpc Input(stream InputMessage) returns (InputResponse);
+
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
   rpc DisconnectProcess(DisconnectProcessRequest) returns (DisconnectProcessResponse);
 }
@@ -48,7 +53,7 @@ message BuildRequest {
 message BuildOptions {
   string ContextPath = 1;
   string DockerfileName = 2;
-  string PrintFunc = 3;
+  PrintFunc PrintFunc = 3;
   map<string, string> NamedContexts = 4;
 
   repeated string Allow = 5;
@@ -76,6 +81,19 @@ message BuildOptions {
   bool Pull = 26;
   bool ExportPush = 27;
   bool ExportLoad = 28;
+}
+
+message FinalizeRequest {
+  string Ref = 1;
+}
+
+message FinalizeResponse {
+	map<string, string> ExporterResponse = 1;
+}
+
+message PrintFunc {
+  string Name = 1;
+  string Format = 2;
 }
 
 message ExportEntry {
@@ -125,7 +143,6 @@ message Ulimit {
 }
 
 message BuildResponse {
-	map<string, string> ExporterResponse = 1;
 }
 
 message DisconnectRequest {

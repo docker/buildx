@@ -42,7 +42,7 @@ func WithDesc(text string, console string) DisplaySolveStatusOpt {
 	}
 }
 
-func DisplaySolveStatus(ctx context.Context, c console.Console, w io.Writer, ch chan *client.SolveStatus, opts ...DisplaySolveStatusOpt) ([]client.VertexWarning, error) {
+func DisplaySolveStatus(ctx context.Context, c console.Console, w io.Writer, ch chan *client.SolveStatus, paused *bool, opts ...DisplaySolveStatusOpt) ([]client.VertexWarning, error) {
 	modeConsole := c != nil
 
 	dsso := &displaySolveStatusOpts{}
@@ -78,6 +78,11 @@ func DisplaySolveStatus(ctx context.Context, c console.Console, w io.Writer, ch 
 
 	displayLimiter := rate.NewLimiter(rate.Every(displayTimeout), 1)
 
+	ispaused := false
+	if paused != nil {
+		ispaused = *paused
+	}
+
 	var height int
 	width, _ := disp.getSize()
 	for {
@@ -91,6 +96,10 @@ func DisplaySolveStatus(ctx context.Context, c console.Console, w io.Writer, ch 
 			} else {
 				done = true
 			}
+		}
+
+		if paused != nil && *paused && ispaused {
+			continue
 		}
 
 		if modeConsole {
@@ -114,6 +123,10 @@ func DisplaySolveStatus(ctx context.Context, c console.Console, w io.Writer, ch 
 				ticker.Stop()
 				ticker = time.NewTicker(tickerTimeout)
 			}
+		}
+
+		if paused != nil {
+			ispaused = *paused
 		}
 	}
 }
