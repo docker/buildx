@@ -1,81 +1,619 @@
----
-title: "Bake file definition"
-keywords: build, buildx, bake, buildkit, hcl, json, compose
-redirect_from:
-  - /build/customize/bake/file-definition/
----
+# Bake file reference
 
-`buildx bake` supports HCL, JSON and Compose file format for defining build
-[groups](#group), [targets](#target) as well as [variables](#variable) and
-[functions](#functions). It looks for build definition files in the current
-directory in the following order:
+The Bake file is a file for defining workflows that you run using `docker buildx bake`.
 
-- `docker-compose.yml`
-- `docker-compose.yaml`
-- `docker-bake.json`
-- `docker-bake.override.json`
-- `docker-bake.hcl`
-- `docker-bake.override.hcl`
+## File format
 
-## Specification
+You can define your Bake file in the following file formats:
 
-Inside a bake file you can declare group, target and variable blocks to define
-project specific reusable build flows.
+- HashiCorp Configuration Language (HCL)
+- JSON
+- YAML (Compose file)
 
-### Target
+By default, Bake uses the following lookup order to find the configuration file:
 
-A target reflects a single `docker build` invocation with the same options that
-you would specify for `docker build`:
+1. `docker-bake.override.hcl`
+2. `docker-bake.hcl`
+3. `docker-bake.override.json`
+4. `docker-bake.json`
+5. `docker-compose.yaml`
+6. `docker-compose.yml`
 
-```hcl
-# docker-bake.hcl
-target "webapp-dev" {
-  dockerfile = "Dockerfile.webapp"
-  tags = ["docker.io/username/webapp:latest"]
+Bake searches for the file in the current working directory.
+You can specify the file location explicitly using the `--file` flag:
+
+```console
+$ docker buildx bake --file=../docker/bake.hcl --print
+```
+
+## Syntax
+
+The Bake file supports the following property types:
+
+- `target`: build targets
+- `group`: collections of build targets
+- `variable`: build arguments and variables
+- `function`: custom Bake functions
+
+You define properties as hierarchical blocks in the Bake file.
+You can assign one or more attributes to a property.
+
+The following snippet shows a JSON representation of a simple Bake file.
+This Bake file defines three properties: a variable, a group, and a target.
+
+```json
+{
+  "variable": {
+    "TAG": {
+      "default": "latest"
+    }
+  },
+  "group": {
+    "default": {
+      "targets": ["webapp"]
+    }
+  },
+  "target": {
+    "webapp": {
+      "dockerfile": "Dockerfile",
+      "tags": ["docker.io/username/webapp:${TAG}"]
+    }
+  }
 }
 ```
 
-```console
-$ docker buildx bake webapp-dev
+In the JSON representation of a Bake file, properties are objects,
+and attributes are values assigned to those objects.
+
+The following example shows the same Bake file in the HCL format:
+
+```hcl
+variable "TAG" {
+  "default" = "latest"
+}
+
+group "default" {
+  "targets" = ["latest"]
+}
+
+target "webapp" {
+  "dockerfile" = "Dockerfile"
+  "tags" = ["docker.io/username/webapp:${TAG}"]
+}
 ```
 
-> **Note**
->
-> In the case of compose files, each service corresponds to a target.
-> If compose service name contains a dot it will be replaced with an underscore.
+HCL is the preferred format for Bake files.
+Aside from syntactic differences,
+HCL lets you use features that the JSON and YAML formats don't support.
 
-Complete list of valid target fields available for [HCL](#hcl-definition) and
-[JSON](#json-definition) definitions:
+The examples in this document use the HCL format.
 
-| Name                | Type   | Description                                                                                                                                                                 |
-| ------------------- | ------ | --------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| `args`              | Map    | Set build-time variables (same as [`--build-arg` flag](../../engine/reference/commandline/buildx_build.md))                                                                 |
-| `attest`            | List   | Define attestations that should be applied to the image, see [SBOM attestations](../attestations/sbom.md) and [Provenance attestations](../attestations/slsa-provenance.md) |
-| `cache-from`        | List   | External cache sources (same as [`--cache-from` flag](../../engine/reference/commandline/buildx_build.md))                                                                  |
-| `cache-to`          | List   | Cache export destinations (same as [`--cache-to` flag](../../engine/reference/commandline/buildx_build.md))                                                                 |
-| `context`           | String | Set of files located in the specified path or URL                                                                                                                           |
-| `contexts`          | Map    | Additional build contexts (same as [`--build-context` flag](../../engine/reference/commandline/buildx_build.md))                                                            |
-| `dockerfile-inline` | String | Inline Dockerfile content                                                                                                                                                   |
-| `dockerfile`        | String | Name of the Dockerfile (same as [`--file` flag](../../engine/reference/commandline/buildx_build.md))                                                                        |
-| `inherits`          | List   | [Inherit build options](#merging-and-inheritance) from other targets                                                                                                        |
-| `labels`            | Map    | Set metadata for an image (same as [`--label` flag](../../engine/reference/commandline/buildx_build.md))                                                                    |
-| `no-cache-filter`   | List   | Do not cache specified stages (same as [`--no-cache-filter` flag](../../engine/reference/commandline/buildx_build.md))                                                      |
-| `no-cache`          | Bool   | Do not use cache when building the image (same as [`--no-cache` flag](../../engine/reference/commandline/buildx_build.md))                                                  |
-| `output`            | List   | Output destination (same as [`--output` flag](../../engine/reference/commandline/buildx_build.md))                                                                          |
-| `platforms`         | List   | Set target platforms for build (same as [`--platform` flag](../../engine/reference/commandline/buildx_build.md))                                                            |
-| `pull`              | Bool   | Always attempt to pull all referenced images (same as [`--pull` flag](../../engine/reference/commandline/buildx_build.md))                                                  |
-| `secret`            | List   | Secret to expose to the build (same as [`--secret` flag](../../engine/reference/commandline/buildx_build.md))                                                               |
-| `ssh`               | List   | SSH agent socket or keys to expose to the build (same as [`--ssh` flag](../../engine/reference/commandline/buildx_build.md))                                                |
-| `tags`              | List   | Name and optionally a tag in the format `name:tag` (same as [`--tag` flag](../../engine/reference/commandline/buildx_build.md))                                             |
-| `target`            | String | Set the target build stage to build (same as [`--target` flag](../../engine/reference/commandline/buildx_build.md))                                                         |
+## Target
 
-### Group
+A target reflects a single `docker build` invocation.
+Consider the following build command:
 
-A group is a grouping of targets:
+```console
+$ docker build \
+  --file=Dockerfile.webapp \
+  --tag=docker.io/username/webapp:latest \
+  https://github.com/username/webapp
+```
+
+You can express this command in a Bake file as follows:
+
+```hcl
+target "webapp" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp:latest"]
+  context = "https://github.com/username/webapp"
+}
+```
+
+The following table shows the complete list of attributes that you can assign to a target:
+
+| Name                                            | Type    | Description                                                          |
+| ----------------------------------------------- | ------- | -------------------------------------------------------------------- |
+| [`args`](#targetargs)                           | Map     | Build arguments                                                      |
+| [`attest`](#targetattest)                       | List    | Build attestations                                                   |
+| [`cache-from`](#targetcache-from)               | List    | External cache sources                                               |
+| [`cache-to`](#targetcache-to)                   | List    | External cache destinations                                          |
+| [`context`](#targetcontext)                     | String  | Set of files located in the specified path or URL                    |
+| [`contexts`](#targetcontexts)                   | Map     | Additional build contexts                                            |
+| [`dockerfile-inline`](#targetdockerfile-inline) | String  | Inline Dockerfile string                                             |
+| [`dockerfile`](#targetdockerfile)               | String  | Dockerfile location                                                  |
+| [`inherits`](#targetinherits)                   | List    | Inherit attributes from other targets                                |
+| [`labels`](#targetlabels)                       | Map     | Metadata for images                                                  |
+| [`no-cache-filter`](#targetno-cache-filter)     | List    | Disable build cache for specific stages                              |
+| [`no-cache`](#targetno-cache)                   | Boolean | Disable build cache completely                                       |
+| [`output`](#targetoutput)                       | List    | Output destinations                                                  |
+| [`platforms`](#targetplatforms)                 | List    | Target platforms                                                     |
+| [`pull`](#targetpull)                           | Boolean | Always pull images                                                   |
+| [`secret`](#targetsecret)                       | List    | Secrets to expose to the build                                       |
+| [`ssh`](#targetssh)                             | List    | SSH agent sockets or keys to expose to the build                     |
+| [`tags`](#targettags)                           | List    | Image names and tags                                                 |
+| [`target`](#targettarget)                       | String  | Target build stage                                                   |
+
+### `target.args`
+
+Use the `args` attribute to define build arguments for the target.
+This has the same effect as passing a [`--build-arg`][build-arg] flag to the build command.
+
+```hcl
+target "default" {
+  args = {
+    VERSION = "0.0.0+unknown"
+  }
+}
+```
+
+You can set `args` attributes to use `null` values.
+Doing so forces the `target` to use the `ARG` value specified in the Dockerfile.
+
+```hcl
+variable "GO_VERSION" {
+  default = "1.20.3"
+}
+
+target "webapp" {
+  dockerfile = "webapp.Dockerfile"
+  tags = ["docker.io/username/webapp"]
+}
+
+target "db" {
+  args = {
+    GO_VERSION = null
+  }
+  dockerfile = "db.Dockerfile"
+  tags = ["docker.io/username/db"]
+}
+```
+
+### `target.attest`
+
+The `attest` attribute lets you apply [build attestations][attestations] to the target.
+This attribute accepts the long-form CSV version of attestation parameters.
+
+```hcl
+target "default" {
+  attest = [
+    "type=provenance,mode=min",
+    "type=sbom"
+  ]
+}
+```
+
+### `target.cache-from`
+
+Build cache sources.
+The builder imports cache from the locations you specify.
+It uses the [Buildx cache storage backends][cache-backends],
+and it works the same way as the [`--cache-from`][cache-from] flag.
+This takes a list value, so you can specify multiple cache sources.
+
+```hcl
+target "app" {
+  cache-from = [
+    "type=s3,region=eu-west-1,bucket=mybucket",
+    "user/repo:cache",
+  ]
+}
+```
+
+### `target.cache-to`
+
+Build cache export destinations.
+The builder exports its build cache to the locations you specify.
+It uses the [Buildx cache storage backends][cache-backends],
+and it works the same way as the [`--cache-to` flag][cache-to].
+This takes a list value, so you can specify multiple cache export targets.
+
+```hcl
+target "app" {
+  cache-to = [
+    "type=s3,region=eu-west-1,bucket=mybucket",
+    "type=inline"
+  ]
+}
+```
+
+### `target.context`
+
+Specifies the location of the build context to use for this target.
+Accepts a URL or a directory path.
+This is the same as the [build context][context] positional argument
+that you pass to the build command.
+
+```hcl
+target "app" {
+  context = "./src/www"
+}
+```
+
+This resolves to the current working directory (`"."`) by default.
+
+```console
+$ docker buildx bake --print -f - <<< 'target "default" {}'
+[+] Building 0.0s (0/0)
+{
+  "target": {
+    "default": {
+      "context": ".",
+      "dockerfile": "Dockerfile"
+    }
+  }
+}
+```
+
+### `target.contexts`
+
+Additional build contexts.
+This is the same as the [`--build-context` flag][build-context].
+This attribute takes a map, where keys result in named contexts that you can
+reference in your builds.
+
+You can specify different types of contexts, such local directories, Git URLs,
+and even other Bake targets. Bake automatically determines the type of
+a context based on the pattern of the context value.
+
+| Context type    | Example                                   |
+| --------------- | ----------------------------------------- |
+| Container image | `docker-image://alpine@sha256:0123456789` |
+| Git URL         | `https://github.com/user/proj.git`        |
+| HTTP URL        | `https://example.com/files`               |
+| Local directory | `../path/to/src`                          |
+| Bake target     | `target:base`                             |
+
+#### Pin an image version
 
 ```hcl
 # docker-bake.hcl
-group "build" {
+target "app" {
+    contexts = {
+        alpine = "docker-image://alpine:3.13"
+    }
+}
+```
+
+```Dockerfile
+# Dockerfile
+FROM alpine
+RUN echo "Hello world"
+```
+
+#### Use a local directory
+
+```hcl
+# docker-bake.hcl
+target "app" {
+    contexts = {
+        src = "../path/to/source"
+    }
+}
+```
+
+```Dockerfile
+# Dockerfile
+FROM scratch AS src
+FROM golang
+COPY --from=src . .
+```
+
+#### Use another target as base
+
+> **Note**
+>
+> You should prefer to use regular multi-stage builds over this option. You can
+> Use this feature when you have multiple Dockerfiles that can't be easily
+> merged into one.
+
+```hcl
+# docker-bake.hcl
+target "base" {
+    dockerfile = "baseapp.Dockerfile"
+}
+target "app" {
+    contexts = {
+        baseapp = "target:base"
+    }
+}
+```
+
+```Dockerfile
+# Dockerfile
+FROM baseapp
+RUN echo "Hello world"
+```
+
+### `target.dockerfile-inline`
+
+Uses the string value as an inline Dockerfile for the build target.
+
+```hcl
+target "default" {
+  dockerfile-inline = "FROM alpine\nENTRYPOINT [\"echo\", \"hello\"]"
+}
+```
+
+The `dockerfile-inline` takes precedence over the `dockerfile` attribute.
+If you specify both, Bake uses the inline version.
+
+### `target.dockerfile`
+
+Name of the Dockerfile to use for the build.
+This is the same as the [`--file` flag][file] for the `docker build` command.
+
+```hcl
+target "default" {
+  dockerfile = "./src/www/Dockerfile"
+}
+```
+
+Resolves to `"Dockerfile"` by default.
+
+```console
+$ docker buildx bake --print -f - <<< 'target "default" {}'
+[+] Building 0.0s (0/0)
+{
+  "target": {
+    "default": {
+      "context": ".",
+      "dockerfile": "Dockerfile"
+    }
+  }
+}
+```
+
+### `target.inherits`
+
+A target can inherit attributes from other targets.
+Use `inherits` to reference from one target to another.
+
+In the following example,
+the `app-dev` target specifies an image name and tag.
+The `app-release` target uses `inherits` to reuse the tag name.
+
+```hcl
+variable "TAG" {
+  default = "latest"
+}
+
+target "app-dev" {
+  tags = ["docker.io/username/myapp:${TAG}"]
+}
+
+target "app-release" {
+  inherits = ["app-dev"]
+  platforms = ["linux/amd64", "linux/arm64"]
+}
+```
+
+The `inherits` attribute is a list,
+meaning you can reuse attributes from multiple other targets.
+In the following example, the `app-release` target reuses attributes
+from both the `app-dev` and `_release` targets.
+
+```hcl
+target "app-dev" {
+  args = {
+    GO_VERSION = "1.20"
+    BUILDX_EXPERIMENTAL = 1
+  }
+  tags = ["docker.io/username/myapp"]
+  dockerfile = "app.Dockerfile"
+  labels = {
+    "org.opencontainers.image.source" = "https://github.com/username/myapp"
+  }
+}
+
+target "_release" {
+  args = {
+    BUILDKIT_CONTEXT_KEEP_GIT_DIR = 1
+    BUILDX_EXPERIMENTAL = 0
+  }
+}
+
+target "app-release" {
+  inherits = ["app-dev", "_release"]
+  platforms = ["linux/amd64", "linux/arm64"]
+}
+```
+
+When inheriting attributes from multiple targets and there's a conflict,
+the target that appears last in the `inherits` list takes precedence.
+The previous example defines the `BUILDX_EXPERIMENTAL` argument twice for the `app-release` target.
+It resolves to `0` because the `_release` target appears last in the inheritance chain:
+
+```console
+$ docker buildx bake --print app-release
+[+] Building 0.0s (0/0)
+{
+  "group": {
+    "default": {
+      "targets": [
+        "app-release"
+      ]
+    }
+  },
+  "target": {
+    "app-release": {
+      "context": ".",
+      "dockerfile": "app.Dockerfile",
+      "args": {
+        "BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1",
+        "BUILDX_EXPERIMENTAL": "0",
+        "GO_VERSION": "1.20"
+      },
+      "labels": {
+        "org.opencontainers.image.source": "https://github.com/username/myapp"
+      },
+      "tags": [
+        "docker.io/username/myapp"
+      ],
+      "platforms": [
+        "linux/amd64",
+        "linux/arm64"
+      ]
+    }
+  }
+}
+```
+
+### `target.labels`
+
+Assigns image labels to the build.
+This is the same as the `--label` flag for `docker build`.
+
+```hcl
+target "default" {
+  labels = {
+    "org.opencontainers.image.source" = "https://github.com/username/myapp"
+    "com.docker.image.source.entrypoint" = "Dockerfile"
+  }
+}
+```
+
+It's possible to use a `null` value for labels.
+If you do, the builder uses the label value specified in the Dockerfile.
+
+### `target.no-cache-filter`
+
+Don't use build cache for the specified stages.
+This is the same as the `--no-cache-filter` flag for `docker build`.
+The following example avoids build cache for the `foo` build stage.
+
+```hcl
+target "default" {
+  no-cache-filter = ["foo"]
+}
+```
+
+### `target.no-cache`
+
+Don't use cache when building the image.
+This is the same as the `--no-cache` flag for `docker build`.
+
+```hcl
+target "default" {
+  no-cache = 1
+}
+```
+
+### `target.output`
+
+Configuration for exporting the build output.
+This is the same as the [`--output` flag][output].
+The following example configures the target to use a cache-only output,
+
+```hcl
+target "default" {
+  output = ["type=cacheonly"]
+}
+```
+
+### `target.platforms`
+
+Set target platforms for the build target.
+This is the same as the [`--platform` flag][platform].
+The following example creates a multi-platform build for three architectures.
+
+```hcl
+target "default" {
+  platforms = ["linux/amd64", "linux/arm64", "linux/arm/v7"]
+}
+```
+
+### `target.pull`
+
+Configures whether the builder should attempt to pull images when building the target.
+This is the same as the `--pull` flag for `docker build`.
+The following example forces the builder to always pull all images referenced in the build target.
+
+```hcl
+target "default" {
+  pull = "always"
+}
+```
+
+### `target.secret`
+
+Defines secrets to expose to the build target.
+This is the same as the [`--secret` flag][secret].
+
+```hcl
+variable "HOME" {
+  default = null
+}
+
+target "default" {
+  secret = [
+    "type=env,id=KUBECONFIG",
+    "type=file,id=aws,src=${HOME}/.aws/credentials"
+  ]
+}
+```
+
+This lets you [mount the secret][run_mount_secret] in your Dockerfile.
+
+```dockerfile
+RUN --mount=type=secret,id=aws,target=/root/.aws/credentials \
+    aws cloudfront create-invalidation ...
+RUN --mount=type=secret,id=KUBECONFIG \
+    KUBECONFIG=$(cat /run/secrets/KUBECONFIG) helm upgrade --install
+```
+
+### `target.ssh`
+
+Defines SSH agent sockets or keys to expose to the build.
+This is the same as the [`--ssh` flag][ssh].
+This can be useful if you need to access private repositories during a build.
+
+```hcl
+target "default" {
+  ssh = ["default"]
+}
+```
+
+```dockerfile
+FROM alpine
+RUN --mount=type=ssh \
+    apk add git openssh-client \
+    && install -m 0700 -d ~/.ssh \
+    && ssh-keyscan github.com >> ~/.ssh/known_hosts \
+    && git clone git@github.com:user/my-private-repo.git
+```
+
+### `target.tags`
+
+Image names and tags to use for the build target.
+This is the same as the [`--tag` flag][tag].
+
+```hcl
+target "default" {
+  tags = [
+    "org/repo:latest",
+    "myregistry.azurecr.io/team/image:v1"
+  ]
+}
+```
+
+### `target.target`
+
+Set the target build stage to build.
+This is the same as the [`--target` flag][target].
+
+```hcl
+target "default" {
+  target = "binaries"
+}
+```
+
+## Group
+
+Groups allow you to invoke multiple builds (targets) at once.
+
+```hcl
+group "default" {
   targets = ["db", "webapp-dev"]
 }
 
@@ -90,19 +628,33 @@ target "db" {
 }
 ```
 
-```console
-$ docker buildx bake build
-```
-
-### Variable
-
-Similar to how Terraform provides a way to [define variables](https://www.terraform.io/docs/configuration/variables.html#declaring-an-input-variable){:target="blank" rel="noopener" class=""},
-the HCL file format also supports variable block definitions. These can be used
-to define variables with values provided by the current environment, or a
-default value when unset:
+Groups take precedence over targets, if both exist with the same name.
+The following bake file builds the `default` group.
+Bake ignores the `default` target.
 
 ```hcl
-# docker-bake.hcl
+target "default" {
+  dockerfile-inline = "FROM ubuntu"
+}
+
+group "default" {
+  targets = ["alpine", "debian"]
+}
+target "alpine" {
+  dockerfile-inline = "FROM alpine"
+}
+target "debian" {
+  dockerfile-inline = "FROM debian"
+}
+```
+
+## Variable
+
+The HCL file format supports variable block definitions.
+You can use variables as build arguments in your Dockerfile,
+or interpolate them in attribute values in your Bake file.
+
+```hcl
 variable "TAG" {
   default = "latest"
 }
@@ -113,74 +665,100 @@ target "webapp-dev" {
 }
 ```
 
+You can assign a default value for a variable in the Bake file,
+or assign a `null` value to it. If you assign a `null` value,
+Buildx uses the default value from the Dockerfile instead.
+
+You can override variable defaults set in the Bake file using environment variables.
+The following example sets the `TAG` variable to `dev`,
+overriding the default `latest` value shown in the previous example.
+
 ```console
-$ docker buildx bake webapp-dev          # will use the default value "latest"
-$ TAG=dev docker buildx bake webapp-dev  # will use the TAG environment variable value
+$ TAG=dev docker buildx bake webapp-dev
 ```
 
-> **Tip**
->
-> See also the [Configuring builds](configuring-build.md) page for advanced usage.
+### Built-in variables
 
-### Null values
+The following variables are built-ins that you can use with Bake without having
+to define them.
 
-Null values for `args` and `labels` are supported, so default sets in your
-Dockerfile will be used:
+| Variable              | Description                                                                         |
+| --------------------- | ----------------------------------------------------------------------------------- |
+| `BAKE_CMD_CONTEXT`    | Holds the main context when building using a remote Bake file.                      |
+| `BAKE_LOCAL_PLATFORM` | Returns the current platform’s default platform specification (e.g. `linux/amd64`). |
+
+### Use environment variable as default
+
+You can set a Bake variable to use the value of an environment variable as a default value:
 
 ```hcl
-# docker-bake.hcl
-variable "GO_VERSION" {
-  default = null
+variable "HOME" {
+  default = "$HOME"
 }
+```
+
+### Interpolate variables into attributes
+
+To interpolate a variable into an attribute string value,
+you must use curly brackets.
+The following doesn't work:
+
+```hcl
+variable "HOME" {
+  default = "$HOME"
+}
+
 target "default" {
-  args = {
-    GO_VERSION = GO_VERSION
-  }
+  ssh = ["default=$HOME/.ssh/id_rsa"]
 }
 ```
 
-```dockerfile
-ARG GO_VERSION="1.18"
-FROM golang:${GO_VERSION}
+Wrap the variable in curly brackets where you want to insert it:
+
+```diff
+  variable "HOME" {
+    default = "$HOME"
+  }
+
+  target "default" {
+-   ssh = ["default=$HOME/.ssh/id_rsa"]
++   ssh = ["default=${HOME}/.ssh/id_rsa"]
+  }
 ```
+
+Before you can interpolate a variable into an attribute,
+first you must declare it in the bake file,
+as demonstrated in the following example.
 
 ```console
-$ docker buildx bake --print
-```
-
-```json
-{
-  "target": {
-    "default": {
-      "context": ".",
-      "dockerfile": "Dockerfile"
-    }
-  }
+$ cat docker-bake.hcl
+target "default" {
+  dockerfile-inline = "FROM ${BASE_IMAGE}"
 }
-```
+$ docker buildx bake
+[+] Building 0.0s (0/0)
+docker-bake.hcl:2
+--------------------
+   1 |     target "default" {
+   2 | >>>   dockerfile-inline = "FROM ${BASE_IMAGE}"
+   3 |     }
+   4 |
+--------------------
+ERROR: docker-bake.hcl:2,31-41: Unknown variable; There is no variable named "BASE_IMAGE"., and 1 other diagnostic(s)
+$ cat >> docker-bake.hcl
 
-```console
-$ GO_VERSION=1.19 docker buildx bake --print
-```
-
-```json
-{
-  "target": {
-    "default": {
-      "context": ".",
-      "dockerfile": "Dockerfile",
-      "args": {
-        "GO_VERSION": "1.19"
-      }
-    }
-  }
+variable "BASE_IMAGE" {
+  default = "alpine"
 }
+
+$ docker buildx bake
+[+] Building 0.6s (5/5) FINISHED
 ```
 
-### Functions
+## Function
 
-A [set of generally useful functions](https://github.com/docker/buildx/blob/master/bake/hclparser/stdlib.go){:target="blank" rel="noopener" class=""}
-provided by [go-cty](https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib){:target="blank" rel="noopener" class=""}
+A [set of general-purpose functions][bake_stdlib]
+provided by [go-cty][go-cty]
 are available for use in HCL files:
 
 ```hcl
@@ -194,7 +772,7 @@ target "webapp-dev" {
 }
 ```
 
-In addition, [user defined functions](https://github.com/hashicorp/hcl/tree/main/ext/userfunc){:target="blank" rel="noopener" class=""}
+In addition, [user defined functions][userfunc]
 are also supported:
 
 ```hcl
@@ -215,287 +793,26 @@ target "webapp-dev" {
 
 > **Note**
 >
-> See [User defined HCL functions](hcl-funcs.md) page for more details.
+> See [User defined HCL functions][hcl-funcs] page for more details.
 
-## Built-in variables
+<!-- external links -->
 
-- `BAKE_CMD_CONTEXT` can be used to access the main `context` for bake command
-  from a bake file that has been [imported remotely](file-definition.md#remote-definition).
-- `BAKE_LOCAL_PLATFORM` returns the current platform's default platform
-  specification (e.g. `linux/amd64`).
-
-## Merging and inheritance
-
-Multiple files can include the same target and final build options will be
-determined by merging them together:
-
-```hcl
-# docker-bake.hcl
-target "webapp-dev" {
-  dockerfile = "Dockerfile.webapp"
-  tags = ["docker.io/username/webapp:latest"]
-}
-```
-
-```hcl
-# docker-bake2.hcl
-target "webapp-dev" {
-  tags = ["docker.io/username/webapp:dev"]
-}
-```
-
-```console
-$ docker buildx bake -f docker-bake.hcl -f docker-bake2.hcl webapp-dev
-```
-
-A group can specify its list of targets with the `targets` option. A target can
-inherit build options by setting the `inherits` option to the list of targets or
-groups to inherit from:
-
-```hcl
-# docker-bake.hcl
-target "webapp-dev" {
-  dockerfile = "Dockerfile.webapp"
-  tags = ["docker.io/username/webapp:${TAG}"]
-}
-
-target "webapp-release" {
-  inherits = ["webapp-dev"]
-  platforms = ["linux/amd64", "linux/arm64"]
-}
-```
-
-## `default` target/group
-
-When you invoke `bake` you specify what targets/groups you want to build. If no
-arguments is specified, the group/target named `default` will be built:
-
-```hcl
-# docker-bake.hcl
-target "default" {
-  dockerfile = "Dockerfile.webapp"
-  tags = ["docker.io/username/webapp:latest"]
-}
-```
-
-```console
-$ docker buildx bake
-```
-
-## Definitions
-
-### HCL definition
-
-HCL definition file is recommended as its experience is more aligned with buildx UX
-and also allows better code reuse, different target groups and extended features.
-
-```hcl
-# docker-bake.hcl
-variable "TAG" {
-  default = "latest"
-}
-
-group "default" {
-  targets = ["db", "webapp-dev"]
-}
-
-target "webapp-dev" {
-  dockerfile = "Dockerfile.webapp"
-  tags = ["docker.io/username/webapp:${TAG}"]
-}
-
-target "webapp-release" {
-  inherits = ["webapp-dev"]
-  platforms = ["linux/amd64", "linux/arm64"]
-}
-
-target "db" {
-  dockerfile = "Dockerfile.db"
-  tags = ["docker.io/username/db"]
-}
-```
-
-### JSON definition
-
-```json
-{
-  "variable": {
-    "TAG": {
-      "default": "latest"
-    }
-  },
-  "group": {
-    "default": {
-      "targets": ["db", "webapp-dev"]
-    }
-  },
-  "target": {
-    "webapp-dev": {
-      "dockerfile": "Dockerfile.webapp",
-      "tags": ["docker.io/username/webapp:${TAG}"]
-    },
-    "webapp-release": {
-      "inherits": ["webapp-dev"],
-      "platforms": ["linux/amd64", "linux/arm64"]
-    },
-    "db": {
-      "dockerfile": "Dockerfile.db",
-      "tags": ["docker.io/username/db"]
-    }
-  }
-}
-```
-
-### Compose file
-
-```yaml
-# docker-compose.yml
-services:
-  webapp:
-    image: docker.io/username/webapp:latest
-    build:
-      dockerfile: Dockerfile.webapp
-
-  db:
-    image: docker.io/username/db
-    build:
-      dockerfile: Dockerfile.db
-```
-
-> **Note**
->
-> See [Building from Compose file](compose-file.md) page for more details.
-
-## Remote definition
-
-You can also build bake files directly from a remote Git repository or HTTPS URL:
-
-```console
-$ docker buildx bake "https://github.com/docker/cli.git#v20.10.11" --print
-#1 [internal] load git source https://github.com/docker/cli.git#v20.10.11
-#1 0.745 e8f1871b077b64bcb4a13334b7146492773769f7       refs/tags/v20.10.11
-#1 2.022 From https://github.com/docker/cli
-#1 2.022  * [new tag]         v20.10.11  -> v20.10.11
-#1 DONE 2.9s
-```
-
-```json
-{
-  "group": {
-    "default": {
-      "targets": [
-        "binary"
-      ]
-    }
-  },
-  "target": {
-    "binary": {
-      "context": "https://github.com/docker/cli.git#v20.10.11",
-      "dockerfile": "Dockerfile",
-      "args": {
-        "BASE_VARIANT": "alpine",
-        "GO_STRIP": "",
-        "VERSION": ""
-      },
-      "target": "binary",
-      "platforms": [
-        "local"
-      ],
-      "output": [
-        "build"
-      ]
-    }
-  }
-}
-```
-
-As you can see the context is fixed to `https://github.com/docker/cli.git` even if
-[no context is actually defined](https://github.com/docker/cli/blob/2776a6d694f988c0c1df61cad4bfac0f54e481c8/docker-bake.hcl#L17-L26){:target="blank" rel="noopener" class=""}
-in the definition.
-
-If you want to access the main context for bake command from a bake file
-that has been imported remotely, you can use the [`BAKE_CMD_CONTEXT` built-in var](#built-in-variables).
-
-```console
-$ cat https://raw.githubusercontent.com/tonistiigi/buildx/remote-test/docker-bake.hcl
-```
-
-```hcl
-target "default" {
-  context = BAKE_CMD_CONTEXT
-  dockerfile-inline = <<EOT
-FROM alpine
-WORKDIR /src
-COPY . .
-RUN ls -l && stop
-EOT
-}
-```
-
-```console
-$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" --print
-```
-
-```json
-{
-  "target": {
-    "default": {
-      "context": ".",
-      "dockerfile": "Dockerfile",
-      "dockerfile-inline": "FROM alpine\nWORKDIR /src\nCOPY . .\nRUN ls -l \u0026\u0026 stop\n"
-    }
-  }
-}
-```
-
-```console
-$ touch foo bar
-$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test"
-```
-
-```text
-...
- > [4/4] RUN ls -l && stop:
-#8 0.101 total 0
-#8 0.102 -rw-r--r--    1 root     root             0 Jul 27 18:47 bar
-#8 0.102 -rw-r--r--    1 root     root             0 Jul 27 18:47 foo
-#8 0.102 /bin/sh: stop: not found
-```
-
-```console
-$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "https://github.com/docker/cli.git#v20.10.11" --print
-#1 [internal] load git source https://github.com/tonistiigi/buildx.git#remote-test
-#1 0.429 577303add004dd7efeb13434d69ea030d35f7888       refs/heads/remote-test
-#1 CACHED
-```
-
-```json
-{
-  "target": {
-    "default": {
-      "context": "https://github.com/docker/cli.git#v20.10.11",
-      "dockerfile": "Dockerfile",
-      "dockerfile-inline": "FROM alpine\nWORKDIR /src\nCOPY . .\nRUN ls -l \u0026\u0026 stop\n"
-    }
-  }
-}
-```
-
-```console
-$ docker buildx bake "https://github.com/tonistiigi/buildx.git#remote-test" "https://github.com/docker/cli.git#v20.10.11"
-```
-
-```text
-...
- > [4/4] RUN ls -l && stop:
-#8 0.136 drwxrwxrwx    5 root     root          4096 Jul 27 18:31 kubernetes
-#8 0.136 drwxrwxrwx    3 root     root          4096 Jul 27 18:31 man
-#8 0.136 drwxrwxrwx    2 root     root          4096 Jul 27 18:31 opts
-#8 0.136 -rw-rw-rw-    1 root     root          1893 Jul 27 18:31 poule.yml
-#8 0.136 drwxrwxrwx    7 root     root          4096 Jul 27 18:31 scripts
-#8 0.136 drwxrwxrwx    3 root     root          4096 Jul 27 18:31 service
-#8 0.136 drwxrwxrwx    2 root     root          4096 Jul 27 18:31 templates
-#8 0.136 drwxrwxrwx   10 root     root          4096 Jul 27 18:31 vendor
-#8 0.136 -rwxrwxrwx    1 root     root          9620 Jul 27 18:31 vendor.conf
-#8 0.136 /bin/sh: stop: not found
-```
+[attestations]: https://docs.docker.com/build/attestations/
+[bake_stdlib]: https://github.com/docker/buildx/blob/master/bake/hclparser/stdlib.go
+[build-arg]: https://docs.docker.com/engine/reference/commandline/build/#build-arg
+[build-context]: https://docs.docker.com/engine/reference/commandline/buildx_build/#build-context
+[cache-backends]: https://docs.docker.com/build/cache/backends/
+[cache-from]: https://docs.docker.com/engine/reference/commandline/buildx_build/#cache-from
+[cache-to]: https://docs.docker.com/engine/reference/commandline/buildx_build/#cache-to
+[context]: https://docs.docker.com/engine/reference/commandline/buildx_build/#build-context
+[file]: https://docs.docker.com/engine/reference/commandline/build/#file
+[go-cty]: https://github.com/zclconf/go-cty/tree/main/cty/function/stdlib
+[hcl-funcs]: https://docs.docker.com/build/bake/hcl-funcs/
+[output]: https://docs.docker.com/engine/reference/commandline/buildx_build/#output
+[platform]: https://docs.docker.com/engine/reference/commandline/buildx_build/#platform
+[run_mount_secret]: https://docs.docker.com/engine/reference/builder/#run---mounttypesecret
+[secret]: https://docs.docker.com/engine/reference/commandline/buildx_build/#secret
+[ssh]: https://docs.docker.com/engine/reference/commandline/buildx_build/#ssh
+[tag]: https://docs.docker.com/engine/reference/commandline/build/#tag
+[target]: https://docs.docker.com/engine/reference/commandline/build/#target
+[userfunc]: https://github.com/hashicorp/hcl/tree/main/ext/userfunc

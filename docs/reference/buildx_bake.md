@@ -87,8 +87,8 @@ target "db" {
 $ docker buildx bake -f docker-bake.dev.hcl db webapp-release
 ```
 
-See our [file definition](https://docs.docker.com/build/bake/file-definition/)
-guide for more details.
+See the [Bake file reference](https://docs.docker.com/build/bake/reference/)
+for more details.
 
 ### <a name="no-cache"></a> Do not use cache when building the image (--no-cache)
 
