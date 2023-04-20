@@ -1,3 +1,3 @@
 # Bake file definition
 
-Moved to [docs.docker.com](https://docs.docker.com/build/bake/file-definition)
+This page has moved to [docs/bake-reference.md](../../bake-reference.md)
