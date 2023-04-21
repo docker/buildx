@@ -180,51 +180,7 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 				}
 				return errors.Wrap(err, "failed to receive status")
 			}
-			s := client.SolveStatus{}
-			for _, v := range resp.Vertexes {
-				s.Vertexes = append(s.Vertexes, &client.Vertex{
-					Digest:        v.Digest,
-					Inputs:        v.Inputs,
-					Name:          v.Name,
-					Started:       v.Started,
-					Completed:     v.Completed,
-					Error:         v.Error,
-					Cached:        v.Cached,
-					ProgressGroup: v.ProgressGroup,
-				})
-			}
-			for _, v := range resp.Statuses {
-				s.Statuses = append(s.Statuses, &client.VertexStatus{
-					ID:        v.ID,
-					Vertex:    v.Vertex,
-					Name:      v.Name,
-					Total:     v.Total,
-					Current:   v.Current,
-					Timestamp: v.Timestamp,
-					Started:   v.Started,
-					Completed: v.Completed,
-				})
-			}
-			for _, v := range resp.Logs {
-				s.Logs = append(s.Logs, &client.VertexLog{
-					Vertex:    v.Vertex,
-					Stream:    int(v.Stream),
-					Data:      v.Msg,
-					Timestamp: v.Timestamp,
-				})
-			}
-			for _, v := range resp.Warnings {
-				s.Warnings = append(s.Warnings, &client.VertexWarning{
-					Vertex:     v.Vertex,
-					Level:      int(v.Level),
-					Short:      v.Short,
-					Detail:     v.Detail,
-					URL:        v.Url,
-					SourceInfo: v.Info,
-					Range:      v.Ranges,
-				})
-			}
-			statusChan <- &s
+			statusChan <- pb.FromControlStatus(resp)
 		}
 	})
 	if in != nil {
