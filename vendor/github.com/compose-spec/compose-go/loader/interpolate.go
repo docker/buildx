@@ -22,6 +22,7 @@ import (
 
 	interp "github.com/compose-spec/compose-go/interpolation"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 var interpolateTypeCastMapping = map[interp.Path]interp.Cast{
@@ -114,9 +115,15 @@ func toFloat32(value string) (interface{}, error) {
 // should match http://yaml.org/type/bool.html
 func toBoolean(value string) (interface{}, error) {
 	switch strings.ToLower(value) {
-	case "y", "yes", "true", "on":
+	case "true":
 		return true, nil
-	case "n", "no", "false", "off":
+	case "false":
+		return false, nil
+	case "y", "yes", "on":
+		logrus.Warnf("%q for boolean is not supported by YAML 1.2, please use `true`", value)
+		return true, nil
+	case "n", "no", "off":
+		logrus.Warnf("%q for boolean is not supported by YAML 1.2, please use `false`", value)
 		return false, nil
 	default:
 		return nil, errors.Errorf("invalid boolean: %s", value)

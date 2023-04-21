@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 
 	"github.com/compose-spec/compose-go/errdefs"
 	"github.com/compose-spec/compose-go/types"
@@ -27,8 +28,8 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// normalize compose project by moving deprecated attributes to their canonical position and injecting implicit defaults
-func normalize(project *types.Project, resolvePaths bool) error {
+// Normalize compose project by moving deprecated attributes to their canonical position and injecting implicit defaults
+func Normalize(project *types.Project, resolvePaths bool) error {
 	absWorkingDir, err := filepath.Abs(project.WorkingDir)
 	if err != nil {
 		return err
@@ -71,17 +72,26 @@ func normalize(project *types.Project, resolvePaths bool) error {
 		}
 
 		if s.Build != nil {
-			if s.Build.Dockerfile == "" {
+			if s.Build.Dockerfile == "" && s.Build.DockerfileInline == "" {
 				s.Build.Dockerfile = "Dockerfile"
 			}
-			localContext := absPath(project.WorkingDir, s.Build.Context)
-			if _, err := os.Stat(localContext); err == nil {
-				if resolvePaths {
+			if resolvePaths {
+				// Build context might be a remote http/git context. Unfortunately supported "remote"
+				// syntax is highly ambiguous in moby/moby and not defined by compose-spec,
+				// so let's assume runtime will check
+				localContext := absPath(project.WorkingDir, s.Build.Context)
+				if _, err := os.Stat(localContext); err == nil {
 					s.Build.Context = localContext
 				}
-				// } else {
-				// might be a remote http/git context. Unfortunately supported "remote" syntax is highly ambiguous
-				// in moby/moby and not defined by compose-spec, so let's assume runtime will check
+				for name, path := range s.Build.AdditionalContexts {
+					if strings.Contains(path, "://") { // `docker-image://` or any builder specific context type
+						continue
+					}
+					path = absPath(project.WorkingDir, path)
+					if _, err := os.Stat(path); err == nil {
+						s.Build.AdditionalContexts[name] = path
+					}
+				}
 			}
 			s.Build.Args = s.Build.Args.Resolve(fn)
 		}
@@ -89,6 +99,41 @@ func normalize(project *types.Project, resolvePaths bool) error {
 			s.EnvFile[j] = absPath(project.WorkingDir, f)
 		}
 		s.Environment = s.Environment.Resolve(fn)
+
+		if s.Extends != nil && s.Extends.File != "" {
+			s.Extends.File = absPath(project.WorkingDir, s.Extends.File)
+		}
+
+		for _, link := range s.Links {
+			parts := strings.Split(link, ":")
+			if len(parts) == 2 {
+				link = parts[0]
+			}
+			s.DependsOn = setIfMissing(s.DependsOn, link, types.ServiceDependency{
+				Condition: types.ServiceConditionStarted,
+				Restart:   true,
+			})
+		}
+
+		for _, namespace := range []string{s.NetworkMode, s.Ipc, s.Pid, s.Uts, s.Cgroup} {
+			if strings.HasPrefix(namespace, types.ServicePrefix) {
+				name := namespace[len(types.ServicePrefix):]
+				s.DependsOn = setIfMissing(s.DependsOn, name, types.ServiceDependency{
+					Condition: types.ServiceConditionStarted,
+					Restart:   true,
+				})
+			}
+		}
+
+		for _, vol := range s.VolumesFrom {
+			if !strings.HasPrefix(vol, types.ContainerPrefix) {
+				spec := strings.Split(vol, ":")
+				s.DependsOn = setIfMissing(s.DependsOn, spec[0], types.ServiceDependency{
+					Condition: types.ServiceConditionStarted,
+					Restart:   false,
+				})
+			}
+		}
 
 		err := relocateLogDriver(&s)
 		if err != nil {
@@ -126,9 +171,20 @@ func normalize(project *types.Project, resolvePaths bool) error {
 	return nil
 }
 
+// setIfMissing adds a ServiceDependency for service if not already defined
+func setIfMissing(d types.DependsOnConfig, service string, dep types.ServiceDependency) types.DependsOnConfig {
+	if d == nil {
+		d = types.DependsOnConfig{}
+	}
+	if _, ok := d[service]; !ok {
+		d[service] = dep
+	}
+	return d
+}
+
 func relocateScale(s *types.ServiceConfig) error {
 	scale := uint64(s.Scale)
-	if scale != 1 {
+	if scale > 1 {
 		logrus.Warn("`scale` is deprecated. Use the `deploy.replicas` element")
 		if s.Deploy == nil {
 			s.Deploy = &types.DeployConfig{}
