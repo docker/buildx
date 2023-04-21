@@ -2,6 +2,7 @@ package bake
 
 import (
 	"context"
+	"os"
 	"sort"
 	"strings"
 	"testing"
@@ -1362,4 +1363,57 @@ func TestJSONNullVars(t *testing.T) {
 	_, err = TargetsToBuildOpt(m, &Input{})
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, m["default"].Args)
+}
+
+func TestReadLocalFilesDefault(t *testing.T) {
+	tests := []struct {
+		filenames []string
+		expected  []string
+	}{
+		{
+			filenames: []string{"abc.yml", "docker-compose.yml"},
+			expected:  []string{"docker-compose.yml"},
+		},
+		{
+			filenames: []string{"test.foo", "compose.yml", "docker-bake.hcl"},
+			expected:  []string{"compose.yml", "docker-bake.hcl"},
+		},
+		{
+			filenames: []string{"compose.yaml", "docker-compose.yml", "docker-bake.hcl"},
+			expected:  []string{"compose.yaml", "docker-compose.yml", "docker-bake.hcl"},
+		},
+		{
+			filenames: []string{"test.txt", "compsoe.yaml"}, // intentional misspell
+			expected:  []string{},
+		},
+	}
+	pwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	for _, tt := range tests {
+		t.Run(strings.Join(tt.filenames, "-"), func(t *testing.T) {
+			dir := t.TempDir()
+			t.Cleanup(func() { _ = os.Chdir(pwd) })
+			require.NoError(t, os.Chdir(dir))
+			for _, tf := range tt.filenames {
+				require.NoError(t, os.WriteFile(tf, []byte(tf), 0644))
+			}
+			files, err := ReadLocalFiles(nil)
+			require.NoError(t, err)
+			if len(files) == 0 {
+				require.Equal(t, len(tt.expected), len(files))
+			} else {
+				found := false
+				for _, exp := range tt.expected {
+					for _, f := range files {
+						if f.Name == exp {
+							found = true
+							break
+						}
+					}
+					require.True(t, found, exp)
+				}
+			}
+		})
+	}
 }
