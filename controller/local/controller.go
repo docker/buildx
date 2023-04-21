@@ -18,7 +18,7 @@ import (
 	"github.com/pkg/errors"
 )
 
-func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli) control.BuildxController {
+func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli, logger progress.SubLogger) control.BuildxController {
 	return &localController{
 		dockerCli: dockerCli,
 		ref:       "local",

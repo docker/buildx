@@ -279,7 +279,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buil
 		return nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
 	}
 
-	c, err := controller.NewController(ctx, options.ControlOptions, dockerCli)
+	c, err := controller.NewController(ctx, options.ControlOptions, dockerCli, printer)
 	if err != nil {
 		return nil, err
 	}

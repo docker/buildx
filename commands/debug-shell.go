@@ -25,8 +25,13 @@ func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 		Use:   "debug-shell",
 		Short: "Start a monitor",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progressMode)
+			if err != nil {
+				return err
+			}
+
 			ctx := context.TODO()
-			c, err := controller.NewController(ctx, options, dockerCli)
+			c, err := controller.NewController(ctx, options, dockerCli, printer)
 			if err != nil {
 				return err
 			}
@@ -38,11 +43,6 @@ func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 			con := console.Current()
 			if err := con.SetRaw(); err != nil {
 				return errors.Errorf("failed to configure terminal: %v", err)
-			}
-
-			printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progressMode)
-			if err != nil {
-				return err
 			}
 
 			err = monitor.RunMonitor(ctx, "", nil, controllerapi.InvokeConfig{
