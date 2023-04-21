@@ -1,12 +1,10 @@
 package build
 
 import (
-	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/csv"
 	"encoding/json"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,12 +28,8 @@ import (
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
-	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/grpcerrors"
-	"github.com/moby/buildkit/util/progress/progressui"
-	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc/codes"
 )
 
@@ -46,7 +40,7 @@ const defaultTargetName = "default"
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progressMode string, statusChan chan *client.SolveStatus, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
+func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
 	if in.NoCache && len(in.NoCacheFilter) > 0 {
 		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
@@ -164,6 +158,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		contextPathHash = in.ContextPath
 	}
 
+	// TODO: this should not be loaded this side of the controller api
 	b, err := builder.New(dockerCli,
 		builder.WithName(in.Builder),
 		builder.WithContextPathHash(contextPathHash),
@@ -179,7 +174,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progressMode, in.MetadataFile, statusChan, generateResult)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progress, in.MetadataFile, generateResult)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		// NOTE: buildTargets can return *build.ResultContext even on error.
@@ -193,24 +188,14 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progressMode string, metadataFile string, statusChan chan *client.SolveStatus, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
-	ctx2, cancel := context.WithCancel(context.TODO())
-	defer cancel()
-
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
-		fmt.Sprintf("building with %q instance using %s driver", ng.Name, ng.Driver),
-		fmt.Sprintf("%s:%s", ng.Driver, ng.Name),
-	))
-	if err != nil {
-		return nil, nil, err
-	}
-
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, metadataFile string, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
 	var res *build.ResultContext
 	var resp map[string]*client.SolveResponse
+	var err error
 	if generateResult {
 		var mu sync.Mutex
 		var idx int
-		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan), func(driverIndex int, gotRes *build.ResultContext) {
+		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultContext) {
 			mu.Lock()
 			defer mu.Unlock()
 			if res == nil || driverIndex < idx {
@@ -218,11 +203,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 			}
 		})
 	} else {
-		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress.Tee(printer, statusChan))
-	}
-	err1 := printer.Wait()
-	if err == nil {
-		err = err1
+		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
 	}
 	if err != nil {
 		return nil, res, err
@@ -234,8 +215,6 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 		}
 	}
 
-	printWarnings(os.Stderr, printer.Warnings(), progressMode)
-
 	for k := range resp {
 		if opts[k].PrintFunc != nil {
 			if err := printResult(opts[k].PrintFunc, resp[k].ExporterResponse); err != nil {
@@ -245,46 +224,6 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 	}
 
 	return resp[defaultTargetName], res, err
-}
-
-func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
-	if len(warnings) == 0 || mode == progress.PrinterModeQuiet {
-		return
-	}
-	fmt.Fprintf(w, "\n ")
-	sb := &bytes.Buffer{}
-	if len(warnings) == 1 {
-		fmt.Fprintf(sb, "1 warning found")
-	} else {
-		fmt.Fprintf(sb, "%d warnings found", len(warnings))
-	}
-	if logrus.GetLevel() < logrus.DebugLevel {
-		fmt.Fprintf(sb, " (use --debug to expand)")
-	}
-	fmt.Fprintf(sb, ":\n")
-	fmt.Fprint(w, aec.Apply(sb.String(), aec.YellowF))
-
-	for _, warn := range warnings {
-		fmt.Fprintf(w, " - %s\n", warn.Short)
-		if logrus.GetLevel() < logrus.DebugLevel {
-			continue
-		}
-		for _, d := range warn.Detail {
-			fmt.Fprintf(w, "%s\n", d)
-		}
-		if warn.URL != "" {
-			fmt.Fprintf(w, "More info: %s\n", warn.URL)
-		}
-		if warn.SourceInfo != nil && warn.Range != nil {
-			src := errdefs.Source{
-				Info:   warn.SourceInfo,
-				Ranges: warn.Range,
-			}
-			src.Print(w)
-		}
-		fmt.Fprintf(w, "\n")
-
-	}
 }
 
 func parsePrintFunc(str string) (*build.PrintFunc, error) {

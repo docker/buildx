@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/csv"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
@@ -35,8 +37,11 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
+	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -202,7 +207,28 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		}
 	}
 
+	contextPathHash := options.contextPath
+	if absContextPath, err := filepath.Abs(contextPathHash); err == nil {
+		contextPathHash = absContextPath
+	}
+	b, err := builder.New(dockerCli,
+		builder.WithName(options.builder),
+		builder.WithContextPathHash(contextPathHash),
+	)
+	if err != nil {
+		return err
+	}
+
+	ctx2, cancel := context.WithCancel(context.TODO())
+	defer cancel()
 	progressMode, err := options.toProgress()
+	if err != nil {
+		return err
+	}
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
+		fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
+		fmt.Sprintf("%s:%s", b.Driver, b.Name),
+	))
 	if err != nil {
 		return err
 	}
@@ -210,10 +236,15 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	var resp *client.SolveResponse
 	var retErr error
 	if isExperimental() {
-		resp, retErr = runControllerBuild(ctx, dockerCli, options, progressMode)
+		resp, retErr = runControllerBuild(ctx, dockerCli, options, printer)
 	} else {
-		resp, retErr = runBasicBuild(ctx, dockerCli, options, progressMode)
+		resp, retErr = runBasicBuild(ctx, dockerCli, options, printer)
 	}
+
+	if err := printer.Wait(); retErr == nil {
+		retErr = err
+	}
+	printWarnings(os.Stderr, printer.Warnings(), progressMode)
 	if retErr != nil {
 		return retErr
 	}
@@ -232,17 +263,17 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	return nil
 }
 
-func runBasicBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, progressMode string) (*client.SolveResponse, error) {
+func runBasicBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
 	opts, err := options.toControllerOptions()
 	if err != nil {
 		return nil, err
 	}
 
-	resp, _, err := cbuild.RunBuild(ctx, dockerCli, *opts, os.Stdin, progressMode, nil, false)
+	resp, _, err := cbuild.RunBuild(ctx, dockerCli, *opts, os.Stdin, printer, false)
 	return resp, err
 }
 
-func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, progressMode string) (*client.SolveResponse, error) {
+func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
 	if options.invoke != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
@@ -284,7 +315,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buil
 			return nil
 		})
 
-		ref, resp, err = c.Build(ctx, *opts, pr, os.Stdout, os.Stderr, progressMode)
+		ref, resp, err = c.Build(ctx, *opts, pr, printer)
 		if err != nil {
 			var be *controllererrors.BuildError
 			if errors.As(err, &be) {
@@ -318,7 +349,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buil
 			}
 			return nil, errors.Errorf("failed to configure terminal: %v", err)
 		}
-		err = monitor.RunMonitor(ctx, ref, opts, options.invoke.InvokeConfig, c, progressMode, pr2, os.Stdout, os.Stderr)
+		err = monitor.RunMonitor(ctx, ref, opts, options.invoke.InvokeConfig, c, pr2, os.Stdout, os.Stderr, printer)
 		con.Reset()
 		if err := pw2.Close(); err != nil {
 			logrus.Debug("failed to close monitor stdin pipe reader")
@@ -868,4 +899,44 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 
 	return options, nil
+}
+
+func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
+	if len(warnings) == 0 || mode == progress.PrinterModeQuiet {
+		return
+	}
+	fmt.Fprintf(w, "\n ")
+	sb := &bytes.Buffer{}
+	if len(warnings) == 1 {
+		fmt.Fprintf(sb, "1 warning found")
+	} else {
+		fmt.Fprintf(sb, "%d warnings found", len(warnings))
+	}
+	if logrus.GetLevel() < logrus.DebugLevel {
+		fmt.Fprintf(sb, " (use --debug to expand)")
+	}
+	fmt.Fprintf(sb, ":\n")
+	fmt.Fprint(w, aec.Apply(sb.String(), aec.YellowF))
+
+	for _, warn := range warnings {
+		fmt.Fprintf(w, " - %s\n", warn.Short)
+		if logrus.GetLevel() < logrus.DebugLevel {
+			continue
+		}
+		for _, d := range warn.Detail {
+			fmt.Fprintf(w, "%s\n", d)
+		}
+		if warn.URL != "" {
+			fmt.Fprintf(w, "More info: %s\n", warn.URL)
+		}
+		if warn.SourceInfo != nil && warn.Range != nil {
+			src := errdefs.Source{
+				Info:   warn.SourceInfo,
+				Ranges: warn.Range,
+			}
+			src.Print(w)
+		}
+		fmt.Fprintf(w, "\n")
+
+	}
 }

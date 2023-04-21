@@ -1,9 +1,29 @@
 package pb
 
 import (
+	"github.com/docker/buildx/util/progress"
 	control "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
+	"github.com/opencontainers/go-digest"
 )
+
+type writer struct {
+	ch chan<- *StatusResponse
+}
+
+func NewProgressWriter(ch chan<- *StatusResponse) progress.Writer {
+	return &writer{ch: ch}
+}
+
+func (w *writer) Write(status *client.SolveStatus) {
+	w.ch <- ToControlStatus(status)
+}
+
+func (w *writer) ValidateLogSource(digest.Digest, interface{}) bool {
+	return true
+}
+
+func (w *writer) ClearLogSource(interface{}) {}
 
 func ToControlStatus(s *client.SolveStatus) *StatusResponse {
 	resp := StatusResponse{}

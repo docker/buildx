@@ -6,7 +6,6 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containerd/console"
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/pkg/dialer"
 	"github.com/docker/buildx/controller/pb"
@@ -114,14 +113,9 @@ func (c *Client) Inspect(ctx context.Context, ref string) (*pb.InspectResponse, 
 	return c.client().Inspect(ctx, &pb.InspectRequest{Ref: ref})
 }
 
-func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, w io.Writer, out console.File, progressMode string) (string, *client.SolveResponse, error) {
+func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, error) {
 	ref := identity.NewID()
-	pw, err := progress.NewPrinter(context.TODO(), w, out, progressMode)
-	if err != nil {
-		return "", nil, err
-	}
 	statusChan := make(chan *client.SolveStatus)
-	statusDone := make(chan struct{})
 	eg, egCtx := errgroup.WithContext(ctx)
 	var resp *client.SolveResponse
 	eg.Go(func() error {
@@ -131,16 +125,11 @@ func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadC
 		return err
 	})
 	eg.Go(func() error {
-		defer close(statusDone)
 		for s := range statusChan {
 			st := s
-			pw.Write(st)
+			progress.Write(st)
 		}
 		return nil
-	})
-	eg.Go(func() error {
-		<-statusDone
-		return pw.Wait()
 	})
 	return ref, resp, eg.Wait()
 }

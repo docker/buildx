@@ -23,8 +23,12 @@ const (
 )
 
 type Printer struct {
-	status       chan *client.SolveStatus
-	done         <-chan struct{}
+	status chan *client.SolveStatus
+
+	ready  chan struct{}
+	done   chan struct{}
+	paused chan struct{}
+
 	err          error
 	warnings     []client.VertexWarning
 	logMu        sync.Mutex
@@ -35,6 +39,16 @@ func (p *Printer) Wait() error {
 	close(p.status)
 	<-p.done
 	return p.err
+}
+
+func (p *Printer) Pause() error {
+	p.paused = make(chan struct{})
+	return p.Wait()
+}
+
+func (p *Printer) Unpause() {
+	close(p.paused)
+	<-p.ready
 }
 
 func (p *Printer) Write(s *client.SolveStatus) {
@@ -71,15 +85,6 @@ func (p *Printer) ClearLogSource(v interface{}) {
 }
 
 func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string, solveStatusOpt ...progressui.DisplaySolveStatusOpt) (*Printer, error) {
-	statusCh := make(chan *client.SolveStatus)
-	doneCh := make(chan struct{})
-
-	pw := &Printer{
-		status:       statusCh,
-		done:         doneCh,
-		logSourceMap: map[digest.Digest]interface{}{},
-	}
-
 	if v := os.Getenv("BUILDKIT_PROGRESS"); v != "" && mode == PrinterModeAuto {
 		mode = v
 	}
@@ -98,12 +103,35 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string,
 		}
 	}
 
+	pw := &Printer{
+		ready: make(chan struct{}),
+	}
 	go func() {
-		resumeLogs := logutil.Pause(logrus.StandardLogger())
-		// not using shared context to not disrupt display but let is finish reporting errors
-		pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, statusCh, solveStatusOpt...)
-		resumeLogs()
-		close(doneCh)
+		for {
+			pw.status = make(chan *client.SolveStatus)
+			pw.done = make(chan struct{})
+
+			pw.logMu.Lock()
+			pw.logSourceMap = map[digest.Digest]interface{}{}
+			pw.logMu.Unlock()
+
+			close(pw.ready)
+
+			resumeLogs := logutil.Pause(logrus.StandardLogger())
+			// not using shared context to not disrupt display but let is finish reporting errors
+			pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, pw.status, solveStatusOpt...)
+			resumeLogs()
+			close(pw.done)
+
+			if pw.paused == nil {
+				break
+			}
+
+			pw.ready = make(chan struct{})
+			<-pw.paused
+			pw.paused = nil
+		}
 	}()
+	<-pw.ready
 	return pw, nil
 }
