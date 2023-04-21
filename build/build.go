@@ -920,7 +920,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							}
 							results.Set(resultKey(dp.driverIndex, k), res)
 							if resultHandleFunc != nil {
-								resultCtx, err := NewResultContext(cc, so, res)
+								resultCtx, err := NewResultContext(ctx, cc, so, res)
 								if err == nil {
 									resultHandleFunc(dp.driverIndex, resultCtx)
 								} else {
