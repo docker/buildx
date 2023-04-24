@@ -48,7 +48,7 @@ message BuildRequest {
 message BuildOptions {
   string ContextPath = 1;
   string DockerfileName = 2;
-  string PrintFunc = 3;
+  PrintFunc PrintFunc = 3;
   map<string, string> NamedContexts = 4;
 
   repeated string Allow = 5;
@@ -103,6 +103,11 @@ message Secret {
   string ID = 1;
   string FilePath = 2;
   string Env = 3;
+}
+
+message PrintFunc {
+	string Name = 1;
+	string Format = 2;
 }
 
 message InspectRequest {
