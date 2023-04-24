@@ -2,9 +2,7 @@ package build
 
 import (
 	"context"
-	"encoding/base64"
 	"encoding/csv"
-	"encoding/json"
 	"io"
 	"os"
 	"path/filepath"
@@ -24,7 +22,6 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/config"
 	dockeropts "github.com/docker/cli/opts"
-	"github.com/docker/docker/pkg/ioutils"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
@@ -174,7 +171,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progress, in.MetadataFile, generateResult)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progress, generateResult)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		// NOTE: buildTargets can return *build.ResultContext even on error.
@@ -188,7 +185,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultContext,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, metadataFile string, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultContext, error) {
 	var res *build.ResultContext
 	var resp map[string]*client.SolveResponse
 	var err error
@@ -207,12 +204,6 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 	}
 	if err != nil {
 		return nil, res, err
-	}
-
-	if len(metadataFile) > 0 && resp != nil {
-		if err := writeMetadataFile(metadataFile, decodeExporterResponse(resp[defaultTargetName].ExporterResponse)); err != nil {
-			return nil, nil, err
-		}
 	}
 
 	for k := range resp {
@@ -252,32 +243,6 @@ func parsePrintFunc(str string) (*build.PrintFunc, error) {
 		}
 	}
 	return f, nil
-}
-
-func writeMetadataFile(filename string, dt interface{}) error {
-	b, err := json.MarshalIndent(dt, "", "  ")
-	if err != nil {
-		return err
-	}
-	return ioutils.AtomicWriteFile(filename, b, 0644)
-}
-
-func decodeExporterResponse(exporterResponse map[string]string) map[string]interface{} {
-	out := make(map[string]interface{})
-	for k, v := range exporterResponse {
-		dt, err := base64.StdEncoding.DecodeString(v)
-		if err != nil {
-			out[k] = v
-			continue
-		}
-		var raw map[string]interface{}
-		if err = json.Unmarshal(dt, &raw); err != nil || len(raw) == 0 {
-			out[k] = v
-			continue
-		}
-		out[k] = json.RawMessage(dt)
-	}
-	return out
 }
 
 func wrapBuildError(err error, bake bool) error {

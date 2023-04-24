@@ -71,11 +71,10 @@ message BuildOptions {
   UlimitOpt Ulimits = 22;
 
   string Builder = 23;
-  string MetadataFile = 24;
-  bool NoCache = 25;
-  bool Pull = 26;
-  bool ExportPush = 27;
-  bool ExportLoad = 28;
+  bool NoCache = 24;
+  bool Pull = 25;
+  bool ExportPush = 26;
+  bool ExportLoad = 27;
 }
 
 message ExportEntry {
