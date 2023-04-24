@@ -84,7 +84,12 @@ func (p *Printer) ClearLogSource(v interface{}) {
 	}
 }
 
-func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string, solveStatusOpt ...progressui.DisplaySolveStatusOpt) (*Printer, error) {
+func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string, opts ...PrinterOpt) (*Printer, error) {
+	opt := &printerOpts{}
+	for _, o := range opts {
+		o(opt)
+	}
+
 	if v := os.Getenv("BUILDKIT_PROGRESS"); v != "" && mode == PrinterModeAuto {
 		mode = v
 	}
@@ -119,10 +124,13 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string,
 
 			resumeLogs := logutil.Pause(logrus.StandardLogger())
 			// not using shared context to not disrupt display but let is finish reporting errors
-			pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, pw.status, solveStatusOpt...)
+			pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, pw.status, opt.displayOpts...)
 			resumeLogs()
 			close(pw.done)
 
+			if opt.onclose != nil {
+				opt.onclose()
+			}
 			if pw.paused == nil {
 				break
 			}
@@ -134,4 +142,30 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string,
 	}()
 	<-pw.ready
 	return pw, nil
+}
+
+type printerOpts struct {
+	displayOpts []progressui.DisplaySolveStatusOpt
+
+	onclose func()
+}
+
+type PrinterOpt func(b *printerOpts)
+
+func WithPhase(phase string) PrinterOpt {
+	return func(opt *printerOpts) {
+		opt.displayOpts = append(opt.displayOpts, progressui.WithPhase(phase))
+	}
+}
+
+func WithDesc(text string, console string) PrinterOpt {
+	return func(opt *printerOpts) {
+		opt.displayOpts = append(opt.displayOpts, progressui.WithDesc(text, console))
+	}
+}
+
+func WithOnClose(onclose func()) PrinterOpt {
+	return func(opt *printerOpts) {
+		opt.onclose = onclose
+	}
 }

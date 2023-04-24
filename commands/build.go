@@ -40,7 +40,6 @@ import (
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
-	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -225,10 +224,16 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	if err != nil {
 		return err
 	}
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode, progressui.WithDesc(
-		fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
-		fmt.Sprintf("%s:%s", b.Driver, b.Name),
-	))
+	var printer *progress.Printer
+	printer, err = progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode,
+		progress.WithDesc(
+			fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
+			fmt.Sprintf("%s:%s", b.Driver, b.Name),
+		),
+		progress.WithOnClose(func() {
+			printWarnings(os.Stderr, printer.Warnings(), progressMode)
+		}),
+	)
 	if err != nil {
 		return err
 	}
@@ -244,7 +249,6 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
-	printWarnings(os.Stderr, printer.Warnings(), progressMode)
 	if retErr != nil {
 		return retErr
 	}

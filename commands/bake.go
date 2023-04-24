@@ -17,7 +17,6 @@ import (
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
-	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -118,7 +117,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	}
 
 	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, cFlags.progress,
-		progressui.WithDesc(progressTextDesc, progressConsoleDesc),
+		progress.WithDesc(progressTextDesc, progressConsoleDesc),
 	)
 	if err != nil {
 		return err
