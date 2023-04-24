@@ -1,4 +1,4 @@
-package commands
+package pb
 
 import (
 	"os"
@@ -6,7 +6,6 @@ import (
 	"reflect"
 	"testing"
 
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -17,55 +16,55 @@ func TestResolvePaths(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpwd))
 	tests := []struct {
 		name    string
-		options controllerapi.BuildOptions
-		want    controllerapi.BuildOptions
+		options BuildOptions
+		want    BuildOptions
 	}{
 		{
 			name:    "contextpath",
-			options: controllerapi.BuildOptions{ContextPath: "test"},
-			want:    controllerapi.BuildOptions{ContextPath: filepath.Join(tmpwd, "test")},
+			options: BuildOptions{ContextPath: "test"},
+			want:    BuildOptions{ContextPath: filepath.Join(tmpwd, "test")},
 		},
 		{
 			name:    "contextpath-cwd",
-			options: controllerapi.BuildOptions{ContextPath: "."},
-			want:    controllerapi.BuildOptions{ContextPath: tmpwd},
+			options: BuildOptions{ContextPath: "."},
+			want:    BuildOptions{ContextPath: tmpwd},
 		},
 		{
 			name:    "contextpath-dash",
-			options: controllerapi.BuildOptions{ContextPath: "-"},
-			want:    controllerapi.BuildOptions{ContextPath: "-"},
+			options: BuildOptions{ContextPath: "-"},
+			want:    BuildOptions{ContextPath: "-"},
 		},
 		{
 			name:    "contextpath-ssh",
-			options: controllerapi.BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
-			want:    controllerapi.BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
+			options: BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
+			want:    BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
 		},
 		{
 			name:    "dockerfilename",
-			options: controllerapi.BuildOptions{DockerfileName: "test", ContextPath: "."},
-			want:    controllerapi.BuildOptions{DockerfileName: filepath.Join(tmpwd, "test"), ContextPath: tmpwd},
+			options: BuildOptions{DockerfileName: "test", ContextPath: "."},
+			want:    BuildOptions{DockerfileName: filepath.Join(tmpwd, "test"), ContextPath: tmpwd},
 		},
 		{
 			name:    "dockerfilename-dash",
-			options: controllerapi.BuildOptions{DockerfileName: "-", ContextPath: "."},
-			want:    controllerapi.BuildOptions{DockerfileName: "-", ContextPath: tmpwd},
+			options: BuildOptions{DockerfileName: "-", ContextPath: "."},
+			want:    BuildOptions{DockerfileName: "-", ContextPath: tmpwd},
 		},
 		{
 			name:    "dockerfilename-remote",
-			options: controllerapi.BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
-			want:    controllerapi.BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			options: BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			want:    BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
 		},
 		{
 			name: "contexts",
-			options: controllerapi.BuildOptions{NamedContexts: map[string]string{"a": "test1", "b": "test2",
+			options: BuildOptions{NamedContexts: map[string]string{"a": "test1", "b": "test2",
 				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git"}},
-			want: controllerapi.BuildOptions{NamedContexts: map[string]string{"a": filepath.Join(tmpwd, "test1"), "b": filepath.Join(tmpwd, "test2"),
+			want: BuildOptions{NamedContexts: map[string]string{"a": filepath.Join(tmpwd, "test1"), "b": filepath.Join(tmpwd, "test2"),
 				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git"}},
 		},
 		{
 			name: "cache-from",
-			options: controllerapi.BuildOptions{
-				CacheFrom: []*controllerapi.CacheOptionsEntry{
+			options: BuildOptions{
+				CacheFrom: []*CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"src": "test"},
@@ -76,8 +75,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: controllerapi.BuildOptions{
-				CacheFrom: []*controllerapi.CacheOptionsEntry{
+			want: BuildOptions{
+				CacheFrom: []*CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"src": filepath.Join(tmpwd, "test")},
@@ -91,8 +90,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "cache-to",
-			options: controllerapi.BuildOptions{
-				CacheTo: []*controllerapi.CacheOptionsEntry{
+			options: BuildOptions{
+				CacheTo: []*CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"dest": "test"},
@@ -103,8 +102,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: controllerapi.BuildOptions{
-				CacheTo: []*controllerapi.CacheOptionsEntry{
+			want: BuildOptions{
+				CacheTo: []*CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"dest": filepath.Join(tmpwd, "test")},
@@ -118,8 +117,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "exports",
-			options: controllerapi.BuildOptions{
-				Exports: []*controllerapi.ExportEntry{
+			options: BuildOptions{
+				Exports: []*ExportEntry{
 					{
 						Type:        "local",
 						Destination: "-",
@@ -146,8 +145,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: controllerapi.BuildOptions{
-				Exports: []*controllerapi.ExportEntry{
+			want: BuildOptions{
+				Exports: []*ExportEntry{
 					{
 						Type:        "local",
 						Destination: "-",
@@ -177,8 +176,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "secrets",
-			options: controllerapi.BuildOptions{
-				Secrets: []*controllerapi.Secret{
+			options: BuildOptions{
+				Secrets: []*Secret{
 					{
 						FilePath: "test1",
 					},
@@ -192,8 +191,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: controllerapi.BuildOptions{
-				Secrets: []*controllerapi.Secret{
+			want: BuildOptions{
+				Secrets: []*Secret{
 					{
 						FilePath: filepath.Join(tmpwd, "test1"),
 					},
@@ -210,8 +209,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "ssh",
-			options: controllerapi.BuildOptions{
-				SSH: []*controllerapi.SSH{
+			options: BuildOptions{
+				SSH: []*SSH{
 					{
 						ID:    "default",
 						Paths: []string{"test1", "test2"},
@@ -222,8 +221,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: controllerapi.BuildOptions{
-				SSH: []*controllerapi.SSH{
+			want: BuildOptions{
+				SSH: []*SSH{
 					{
 						ID:    "default",
 						Paths: []string{filepath.Join(tmpwd, "test1"), filepath.Join(tmpwd, "test2")},
@@ -238,7 +237,7 @@ func TestResolvePaths(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			got, err := resolvePaths(&tt.options)
+			got, err := ResolveOptionPaths(&tt.options)
 			require.NoError(t, err)
 			if !reflect.DeepEqual(tt.want, *got) {
 				t.Fatalf("expected %#v, got %#v", tt.want, *got)
