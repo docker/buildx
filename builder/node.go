@@ -20,6 +20,7 @@ import (
 
 type Node struct {
 	store.Node
+	Builder     string
 	Driver      driver.Driver
 	DriverInfo  *driver.Info
 	Platforms   []ocispecs.Platform
@@ -63,6 +64,7 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 					Node:        n,
 					ProxyConfig: storeutil.GetProxyConfig(b.opts.dockerCli),
 					Platforms:   n.Platforms,
+					Builder:     b.Name,
 				}
 				defer func() {
 					b.nodes[i] = node

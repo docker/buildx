@@ -25,6 +25,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
@@ -648,6 +649,12 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		return nil, nil, err
 	} else if len(ulimits) > 0 {
 		so.FrontendAttrs["ulimit"] = ulimits
+	}
+
+	// remember local state like directory path that is not sent to buildkit
+	so.Ref = identity.NewID()
+	if err := saveLocalState(so, opt, node, configDir); err != nil {
+		return nil, nil, err
 	}
 
 	return &so, releaseF, nil
@@ -1616,4 +1623,41 @@ func noPrintFunc(opt map[string]Options) bool {
 		}
 	}
 	return true
+}
+
+func saveLocalState(so client.SolveOpt, opt Options, node builder.Node, configDir string) error {
+	var err error
+
+	if so.Ref == "" {
+		return nil
+	}
+
+	lp := opt.Inputs.ContextPath
+	dp := opt.Inputs.DockerfilePath
+	if lp != "" || dp != "" {
+		if lp != "" {
+			lp, err = filepath.Abs(lp)
+			if err != nil {
+				return err
+			}
+		}
+		if dp != "" {
+			dp, err = filepath.Abs(dp)
+			if err != nil {
+				return err
+			}
+		}
+		ls, err := localstate.New(configDir)
+		if err != nil {
+			return err
+		}
+		if err := ls.SaveRef(node.Builder, node.Name, so.Ref, localstate.State{
+			LocalPath:      lp,
+			DockerfilePath: dp,
+		}); err != nil {
+			return err
+		}
+	}
+
+	return nil
 }
