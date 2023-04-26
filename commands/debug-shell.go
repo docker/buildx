@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -18,14 +19,19 @@ import (
 
 func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 	var options control.ControlOptions
-	var progress string
+	var progressMode string
 
 	cmd := &cobra.Command{
 		Use:   "debug-shell",
 		Short: "Start a monitor",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progressMode)
+			if err != nil {
+				return err
+			}
+
 			ctx := context.TODO()
-			c, err := controller.NewController(ctx, options, dockerCli)
+			c, err := controller.NewController(ctx, options, dockerCli, printer)
 			if err != nil {
 				return err
 			}
@@ -38,9 +44,10 @@ func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 			if err := con.SetRaw(); err != nil {
 				return errors.Errorf("failed to configure terminal: %v", err)
 			}
+
 			err = monitor.RunMonitor(ctx, "", nil, controllerapi.InvokeConfig{
 				Tty: true,
-			}, c, progress, os.Stdin, os.Stdout, os.Stderr)
+			}, c, os.Stdin, os.Stdout, os.Stderr, printer)
 			con.Reset()
 			return err
 		},
@@ -51,7 +58,7 @@ func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect [experimental]")
 	flags.BoolVar(&options.Detach, "detach", runtime.GOOS == "linux", "Detach buildx server (supported only on linux) [experimental]")
 	flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server) [experimental]")
-	flags.StringVar(&progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
+	flags.StringVar(&progressMode, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 
 	return cmd
 }

@@ -21,6 +21,7 @@ import (
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/client"
@@ -53,7 +54,7 @@ type serverConfig struct {
 	LogFile string `toml:"log_file"`
 }
 
-func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts control.ControlOptions) (control.BuildxController, error) {
+func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts control.ControlOptions, logger progress.SubLogger) (control.BuildxController, error) {
 	rootDir := opts.Root
 	if rootDir == "" {
 		rootDir = rootDataDir(dockerCli)
@@ -73,27 +74,32 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 	}
 
 	// start buildx server via subcommand
-	logrus.Info("no buildx server found; launching...")
-	launchFlags := []string{}
-	if opts.ServerConfig != "" {
-		launchFlags = append(launchFlags, "--config", opts.ServerConfig)
-	}
-	logFile, err := getLogFilePath(dockerCli, opts.ServerConfig)
-	if err != nil {
-		return nil, err
-	}
-	wait, err := launch(ctx, logFile, append([]string{serveCommandName}, launchFlags...)...)
-	if err != nil {
-		return nil, err
-	}
-	go wait()
+	err = logger.Wrap("no buildx server found; launching...", func() error {
+		launchFlags := []string{}
+		if opts.ServerConfig != "" {
+			launchFlags = append(launchFlags, "--config", opts.ServerConfig)
+		}
+		logFile, err := getLogFilePath(dockerCli, opts.ServerConfig)
+		if err != nil {
+			return err
+		}
+		wait, err := launch(ctx, logFile, append([]string{serveCommandName}, launchFlags...)...)
+		if err != nil {
+			return err
+		}
+		go wait()
 
-	// wait for buildx server to be ready
-	ctx2, cancel = context.WithTimeout(ctx, 10*time.Second)
-	c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
-	cancel()
+		// wait for buildx server to be ready
+		ctx2, cancel = context.WithTimeout(ctx, 10*time.Second)
+		c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
+		cancel()
+		if err != nil {
+			return errors.Wrap(err, "cannot connect to the buildx server")
+		}
+		return nil
+	})
 	if err != nil {
-		return nil, errors.Wrap(err, "cannot connect to the buildx server")
+		return nil, err
 	}
 	return &buildxController{c, serverRoot}, nil
 }
@@ -142,8 +148,8 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			}()
 
 			// prepare server
-			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, statusChan chan *client.SolveStatus) (*client.SolveResponse, *build.ResultContext, error) {
-				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, "quiet", statusChan, true)
+			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, progress progress.Writer) (*client.SolveResponse, *build.ResultContext, error) {
+				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress, true)
 			})
 			defer b.Close()
 

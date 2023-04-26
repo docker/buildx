@@ -19,8 +19,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-func NewResultContext(c *client.Client, solveOpt client.SolveOpt, res *gateway.Result) (*ResultContext, error) {
-	ctx := context.Background()
+func NewResultContext(ctx context.Context, c *client.Client, solveOpt client.SolveOpt, res *gateway.Result) (*ResultContext, error) {
 	def, err := getDefinition(ctx, res)
 	if err != nil {
 		return nil, err

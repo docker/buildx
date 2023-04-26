@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/csv"
@@ -15,6 +16,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
@@ -35,8 +37,10 @@ import (
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
+	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
@@ -88,7 +92,7 @@ type buildOptions struct {
 	control.ControlOptions
 }
 
-func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error) {
+func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error) {
 	var err error
 	opts := controllerapi.BuildOptions{
 		Allow:          o.allow,
@@ -130,43 +134,43 @@ func (o *buildOptions) toControllerOptions() (controllerapi.BuildOptions, error)
 	}
 	opts.Attests, err = buildflags.ParseAttests(inAttests)
 	if err != nil {
-		return controllerapi.BuildOptions{}, err
+		return nil, err
 	}
 
 	opts.NamedContexts, err = buildflags.ParseContextNames(o.contexts)
 	if err != nil {
-		return controllerapi.BuildOptions{}, err
+		return nil, err
 	}
 
 	opts.Exports, err = buildflags.ParseExports(o.outputs)
 	if err != nil {
-		return controllerapi.BuildOptions{}, err
+		return nil, err
 	}
 	for _, e := range opts.Exports {
 		if (e.Type == client.ExporterLocal || e.Type == client.ExporterTar) && o.imageIDFile != "" {
-			return controllerapi.BuildOptions{}, errors.Errorf("local and tar exporters are incompatible with image ID file")
+			return nil, errors.Errorf("local and tar exporters are incompatible with image ID file")
 		}
 	}
 
 	opts.CacheFrom, err = buildflags.ParseCacheEntry(o.cacheFrom)
 	if err != nil {
-		return controllerapi.BuildOptions{}, err
+		return nil, err
 	}
 	opts.CacheTo, err = buildflags.ParseCacheEntry(o.cacheTo)
 	if err != nil {
-		return controllerapi.BuildOptions{}, err
+		return nil, err
 	}
 
 	opts.Secrets, err = buildflags.ParseSecretSpecs(o.secrets)
 	if err != nil {
-		return controllerapi.BuildOptions{}, err
+		return nil, err
 	}
 	opts.SSH, err = buildflags.ParseSSHSpecs(o.ssh)
 	if err != nil {
-		return controllerapi.BuildOptions{}, err
+		return nil, err
 	}
 
-	return opts, nil
+	return &opts, nil
 }
 
 func (o *buildOptions) toProgress() (string, error) {
@@ -185,9 +189,8 @@ func (o *buildOptions) toProgress() (string, error) {
 	return o.progress, nil
 }
 
-func runBuild(dockerCli command.Cli, in buildOptions) error {
+func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	ctx := appcontext.Context()
-
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
 	if err != nil {
 		return err
@@ -196,36 +199,175 @@ func runBuild(dockerCli command.Cli, in buildOptions) error {
 		end(err)
 	}()
 
-	opts, err := in.toControllerOptions()
-	if err != nil {
-		return err
+	// Avoid leaving a stale file if we eventually fail
+	if options.imageIDFile != "" {
+		if err := os.Remove(options.imageIDFile); err != nil && !os.IsNotExist(err) {
+			return errors.Wrap(err, "removing image ID file")
+		}
 	}
-	progress, err := in.toProgress()
+
+	contextPathHash := options.contextPath
+	if absContextPath, err := filepath.Abs(contextPathHash); err == nil {
+		contextPathHash = absContextPath
+	}
+	b, err := builder.New(dockerCli,
+		builder.WithName(options.builder),
+		builder.WithContextPathHash(contextPathHash),
+	)
 	if err != nil {
 		return err
 	}
 
-	// Avoid leaving a stale file if we eventually fail
-	if in.imageIDFile != "" {
-		if err := os.Remove(in.imageIDFile); err != nil && !os.IsNotExist(err) {
-			return errors.Wrap(err, "removing image ID file")
-		}
-	}
-	resp, _, err := cbuild.RunBuild(ctx, dockerCli, opts, os.Stdin, progress, nil, false)
+	ctx2, cancel := context.WithCancel(context.TODO())
+	defer cancel()
+	progressMode, err := options.toProgress()
 	if err != nil {
 		return err
 	}
-	if in.quiet {
+	var printer *progress.Printer
+	printer, err = progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode,
+		progress.WithDesc(
+			fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
+			fmt.Sprintf("%s:%s", b.Driver, b.Name),
+		),
+		progress.WithOnClose(func() {
+			printWarnings(os.Stderr, printer.Warnings(), progressMode)
+		}),
+	)
+	if err != nil {
+		return err
+	}
+
+	var resp *client.SolveResponse
+	var retErr error
+	if isExperimental() {
+		resp, retErr = runControllerBuild(ctx, dockerCli, options, printer)
+	} else {
+		resp, retErr = runBasicBuild(ctx, dockerCli, options, printer)
+	}
+
+	if err := printer.Wait(); retErr == nil {
+		retErr = err
+	}
+	if retErr != nil {
+		return retErr
+	}
+
+	if options.quiet {
 		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
 	}
-	if in.imageIDFile != "" {
+	if options.imageIDFile != "" {
 		dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
 		if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
 			dgst = v
 		}
-		return os.WriteFile(in.imageIDFile, []byte(dgst), 0644)
+		return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
 	}
+
 	return nil
+}
+
+func runBasicBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
+	opts, err := options.toControllerOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	resp, _, err := cbuild.RunBuild(ctx, dockerCli, *opts, os.Stdin, printer, false)
+	return resp, err
+}
+
+func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
+	if options.invoke != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
+		// stdin must be usable for monitor
+		return nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
+	}
+
+	c, err := controller.NewController(ctx, options.ControlOptions, dockerCli, printer)
+	if err != nil {
+		return nil, err
+	}
+	defer func() {
+		if err := c.Close(); err != nil {
+			logrus.Warnf("failed to close server connection %v", err)
+		}
+	}()
+
+	// Start build
+	opts, err := options.toControllerOptions()
+	if err != nil {
+		return nil, err
+	}
+
+	// NOTE: buildx server has the current working directory different from the client
+	// so we need to resolve paths to abosolute ones in the client.
+	opts, err = resolvePaths(opts)
+	if err != nil {
+		return nil, err
+	}
+
+	var ref string
+	var retErr error
+	var resp *client.SolveResponse
+	f := ioset.NewSingleForwarder()
+	f.SetReader(os.Stdin)
+	if !options.noBuild {
+		pr, pw := io.Pipe()
+		f.SetWriter(pw, func() io.WriteCloser {
+			pw.Close() // propagate EOF
+			logrus.Debug("propagating stdin close")
+			return nil
+		})
+
+		ref, resp, err = c.Build(ctx, *opts, pr, printer)
+		if err != nil {
+			var be *controllererrors.BuildError
+			if errors.As(err, &be) {
+				ref = be.Ref
+				retErr = err
+				// We can proceed to monitor
+			} else {
+				return nil, errors.Wrapf(err, "failed to build")
+			}
+		}
+
+		if err := pw.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe writer")
+		}
+		if err := pr.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe reader")
+		}
+	}
+
+	// post-build operations
+	if options.invoke != nil && options.invoke.needsMonitor(retErr) {
+		pr2, pw2 := io.Pipe()
+		f.SetWriter(pw2, func() io.WriteCloser {
+			pw2.Close() // propagate EOF
+			return nil
+		})
+		con := console.Current()
+		if err := con.SetRaw(); err != nil {
+			if err := c.Disconnect(ctx, ref); err != nil {
+				logrus.Warnf("disconnect error: %v", err)
+			}
+			return nil, errors.Errorf("failed to configure terminal: %v", err)
+		}
+		err = monitor.RunMonitor(ctx, ref, opts, options.invoke.InvokeConfig, c, pr2, os.Stdout, os.Stderr, printer)
+		con.Reset()
+		if err := pw2.Close(); err != nil {
+			logrus.Debug("failed to close monitor stdin pipe reader")
+		}
+		if err != nil {
+			logrus.Warnf("failed to run monitor: %v", err)
+		}
+	} else {
+		if err := c.Disconnect(ctx, ref); err != nil {
+			logrus.Warnf("disconnect error: %v", err)
+		}
+	}
+
+	return resp, retErr
 }
 
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -252,16 +394,14 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			options.progress = cFlags.progress
 			cmd.Flags().VisitAll(checkWarnedFlags)
-			if isExperimental() {
-				if invokeFlag != "" {
-					invokeConfig, err := parseInvokeConfig(invokeFlag)
-					if err != nil {
-						return err
-					}
-					options.invoke = &invokeConfig
-					options.noBuild = invokeFlag == "debug-shell"
+
+			if invokeFlag != "" {
+				invoke, err := parseInvokeConfig(invokeFlag)
+				if err != nil {
+					return err
 				}
-				return launchControllerAndRunBuild(dockerCli, options)
+				options.invoke = &invoke
+				options.noBuild = invokeFlag == "debug-shell"
 			}
 			return runBuild(dockerCli, options)
 		},
@@ -492,123 +632,6 @@ func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
 	}
 	defer release()
 	return txn.UpdateLastActivity(ng)
-}
-
-func launchControllerAndRunBuild(dockerCli command.Cli, options buildOptions) error {
-	ctx := context.TODO()
-
-	if options.invoke != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
-		// stdin must be usable for monitor
-		return errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
-	}
-
-	c, err := controller.NewController(ctx, options.ControlOptions, dockerCli)
-	if err != nil {
-		return err
-	}
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Warnf("failed to close server connection %v", err)
-		}
-	}()
-
-	// Start build
-	opts, err := options.toControllerOptions()
-	if err != nil {
-		return err
-	}
-	progress, err := options.toProgress()
-	if err != nil {
-		return err
-	}
-
-	// NOTE: buildx server has the current working directory different from the client
-	// so we need to resolve paths to abosolute ones in the client.
-	optsP, err := resolvePaths(&opts)
-	if err != nil {
-		return err
-	}
-	opts = *optsP
-
-	var ref string
-	var retErr error
-	f := ioset.NewSingleForwarder()
-	f.SetReader(os.Stdin)
-	if !options.noBuild {
-		pr, pw := io.Pipe()
-		f.SetWriter(pw, func() io.WriteCloser {
-			pw.Close() // propagate EOF
-			logrus.Debug("propagating stdin close")
-			return nil
-		})
-
-		// Avoid leaving a stale file if we eventually fail
-		if options.imageIDFile != "" {
-			if err := os.Remove(options.imageIDFile); err != nil && !os.IsNotExist(err) {
-				return errors.Wrap(err, "removing image ID file")
-			}
-		}
-
-		var resp *client.SolveResponse
-		ref, resp, err = c.Build(ctx, opts, pr, os.Stdout, os.Stderr, progress)
-		if err != nil {
-			var be *controllererrors.BuildError
-			if errors.As(err, &be) {
-				ref = be.Ref
-				retErr = err
-				// We can proceed to monitor
-			} else {
-				return errors.Wrapf(err, "failed to build")
-			}
-		}
-		if err := pw.Close(); err != nil {
-			logrus.Debug("failed to close stdin pipe writer")
-		}
-		if err := pr.Close(); err != nil {
-			logrus.Debug("failed to close stdin pipe reader")
-		}
-
-		if options.quiet {
-			fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
-		}
-		if options.imageIDFile != "" {
-			dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
-			if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
-				dgst = v
-			}
-			return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
-		}
-
-	}
-
-	// post-build operations
-	if options.invoke != nil && options.invoke.needsMonitor(retErr) {
-		pr2, pw2 := io.Pipe()
-		f.SetWriter(pw2, func() io.WriteCloser {
-			pw2.Close() // propagate EOF
-			return nil
-		})
-		con := console.Current()
-		if err := con.SetRaw(); err != nil {
-			if err := c.Disconnect(ctx, ref); err != nil {
-				logrus.Warnf("disconnect error: %v", err)
-			}
-			return errors.Errorf("failed to configure terminal: %v", err)
-		}
-		err = monitor.RunMonitor(ctx, ref, &opts, options.invoke.InvokeConfig, c, progress, pr2, os.Stdout, os.Stderr)
-		con.Reset()
-		if err := pw2.Close(); err != nil {
-			logrus.Debug("failed to close monitor stdin pipe reader")
-		}
-		if err != nil {
-			logrus.Warnf("failed to run monitor: %v", err)
-		}
-	} else {
-		if err := c.Disconnect(ctx, ref); err != nil {
-			logrus.Warnf("disconnect error: %v", err)
-		}
-	}
-	return nil
 }
 
 type invokeConfig struct {
@@ -880,4 +903,44 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 
 	return options, nil
+}
+
+func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
+	if len(warnings) == 0 || mode == progress.PrinterModeQuiet {
+		return
+	}
+	fmt.Fprintf(w, "\n ")
+	sb := &bytes.Buffer{}
+	if len(warnings) == 1 {
+		fmt.Fprintf(sb, "1 warning found")
+	} else {
+		fmt.Fprintf(sb, "%d warnings found", len(warnings))
+	}
+	if logrus.GetLevel() < logrus.DebugLevel {
+		fmt.Fprintf(sb, " (use --debug to expand)")
+	}
+	fmt.Fprintf(sb, ":\n")
+	fmt.Fprint(w, aec.Apply(sb.String(), aec.YellowF))
+
+	for _, warn := range warnings {
+		fmt.Fprintf(w, " - %s\n", warn.Short)
+		if logrus.GetLevel() < logrus.DebugLevel {
+			continue
+		}
+		for _, d := range warn.Detail {
+			fmt.Fprintf(w, "%s\n", d)
+		}
+		if warn.URL != "" {
+			fmt.Fprintf(w, "More info: %s\n", warn.URL)
+		}
+		if warn.SourceInfo != nil && warn.Range != nil {
+			src := errdefs.Source{
+				Info:   warn.SourceInfo,
+				Ranges: warn.Range,
+			}
+			src.Print(w)
+		}
+		fmt.Fprintf(w, "\n")
+
+	}
 }
