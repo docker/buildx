@@ -61,7 +61,10 @@ func GetCurrentInstance(txn *store.Txn, dockerCli command.Cli) (*store.NodeGroup
 		return nil, err
 	}
 	if ng == nil {
-		ng, _ = GetNodeGroup(txn, dockerCli, dockerCli.CurrentContext())
+		ng, err = GetNodeGroup(txn, dockerCli, dockerCli.CurrentContext())
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return ng, nil

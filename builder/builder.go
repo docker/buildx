@@ -108,7 +108,7 @@ func New(dockerCli command.Cli, opts ...Option) (_ *Builder, err error) {
 
 // Validate validates builder context
 func (b *Builder) Validate() error {
-	if b.NodeGroup.DockerContext {
+	if b.NodeGroup != nil && b.NodeGroup.DockerContext {
 		list, err := b.opts.dockerCli.ContextStore().List()
 		if err != nil {
 			return err
