@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"io"
 	"sort"
-	"strings"
 	"sync"
 	"sync/atomic"
 	"text/tabwriter"
@@ -17,6 +16,7 @@ import (
 	"github.com/docker/buildx/monitor/types"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
+	"github.com/google/shlex"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
@@ -125,8 +125,11 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 					}
 					return
 				}
-				args := strings.Fields(l) // TODO: use shlex
-				if len(args) == 0 {
+				args, err := shlex.Split(l)
+				if err != nil {
+					fmt.Fprintf(stdout, "monitor: failed to parse command: %v", err)
+					continue
+				} else if len(args) == 0 {
 					continue
 				}
 
