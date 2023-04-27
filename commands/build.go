@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"os"
 	"path/filepath"
 	"runtime"
@@ -33,10 +34,14 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
+	"github.com/docker/docker/api/types/versions"
 	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/frontend/subrequests"
+	"github.com/moby/buildkit/frontend/subrequests/outline"
+	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
@@ -105,13 +110,11 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		NetworkMode:    o.networkMode,
 		NoCacheFilter:  o.noCacheFilter,
 		Platforms:      o.platforms,
-		PrintFunc:      o.printFunc,
 		ShmSize:        int64(o.shmSize),
 		Tags:           o.tags,
 		Target:         o.target,
 		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
 		Builder:        o.builder,
-		MetadataFile:   o.metadataFile,
 		NoCache:        o.noCache,
 		Pull:           o.pull,
 		ExportPush:     o.exportPush,
@@ -170,6 +173,11 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		return nil, err
 	}
 
+	opts.PrintFunc, err = buildflags.ParsePrintFunc(o.printFunc)
+	if err != nil {
+		return nil, err
+	}
+
 	return &opts, nil
 }
 
@@ -198,6 +206,11 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	defer func() {
 		end(err)
 	}()
+
+	opts, err := options.toControllerOptions()
+	if err != nil {
+		return err
+	}
 
 	// Avoid leaving a stale file if we eventually fail
 	if options.imageIDFile != "" {
@@ -241,9 +254,9 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	var resp *client.SolveResponse
 	var retErr error
 	if isExperimental() {
-		resp, retErr = runControllerBuild(ctx, dockerCli, options, printer)
+		resp, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
 	} else {
-		resp, retErr = runBasicBuild(ctx, dockerCli, options, printer)
+		resp, retErr = runBasicBuild(ctx, dockerCli, opts, options, printer)
 	}
 
 	if err := printer.Wait(); retErr == nil {
@@ -263,21 +276,25 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		}
 		return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
 	}
-
+	if options.metadataFile != "" {
+		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
+			return err
+		}
+	}
+	if opts.PrintFunc != nil {
+		if err := printResult(opts.PrintFunc, resp.ExporterResponse); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
-func runBasicBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
-	opts, err := options.toControllerOptions()
-	if err != nil {
-		return nil, err
-	}
-
+func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
 	resp, _, err := cbuild.RunBuild(ctx, dockerCli, *opts, os.Stdin, printer, false)
 	return resp, err
 }
 
-func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
+func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
 	if options.invoke != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
@@ -292,12 +309,6 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, options buil
 			logrus.Warnf("failed to close server connection %v", err)
 		}
 	}()
-
-	// Start build
-	opts, err := options.toControllerOptions()
-	if err != nil {
-		return nil, err
-	}
 
 	// NOTE: buildx server has the current working directory different from the client
 	// so we need to resolve paths to abosolute ones in the client.
@@ -895,13 +906,6 @@ func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOp
 	}
 	options.SSH = ssh
 
-	if options.MetadataFile != "" {
-		options.MetadataFile, err = filepath.Abs(options.MetadataFile)
-		if err != nil {
-			return nil, err
-		}
-	}
-
 	return options, nil
 }
 
@@ -943,4 +947,38 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
 		fmt.Fprintf(w, "\n")
 
 	}
+}
+
+func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
+	switch f.Name {
+	case "outline":
+		return printValue(outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
+	case "targets":
+		return printValue(targets.PrintTargets, targets.SubrequestsTargetsDefinition.Version, f.Format, res)
+	case "subrequests.describe":
+		return printValue(subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
+	default:
+		if dt, ok := res["result.txt"]; ok {
+			fmt.Print(dt)
+		} else {
+			log.Printf("%s %+v", f, res)
+		}
+	}
+	return nil
+}
+
+type printFunc func([]byte, io.Writer) error
+
+func printValue(printer printFunc, version string, format string, res map[string]string) error {
+	if format == "json" {
+		fmt.Fprintln(os.Stdout, res["result.json"])
+		return nil
+	}
+
+	if res["version"] != "" && versions.LessThan(version, res["version"]) && res["result.txt"] != "" {
+		// structure is too new and we don't know how to print it
+		fmt.Fprint(os.Stdout, res["result.txt"])
+		return nil
+	}
+	return printer([]byte(res["result.json"]), os.Stdout)
 }
