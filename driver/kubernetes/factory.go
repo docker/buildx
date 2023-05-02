@@ -145,6 +145,8 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			if _, isImage := cfg.DriverOpts["image"]; !isImage {
 				deploymentOpt.Image = bkimage.DefaultRootlessImage
 			}
+		case "serviceaccount":
+			deploymentOpt.ServiceAccountName = v
 		case "nodeselector":
 			kvs := strings.Split(strings.Trim(v, `"`), ",")
 			s := map[string]string{}
