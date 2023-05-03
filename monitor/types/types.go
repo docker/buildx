@@ -2,15 +2,15 @@ package types
 
 import (
 	"context"
-	"io"
 
+	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
-	"github.com/docker/buildx/util/progress"
-	"github.com/moby/buildkit/client"
 )
 
 // Monitor provides APIs for attaching and controlling the buildx server.
 type Monitor interface {
+	control.BuildxController
+
 	// Rollback re-runs the interactive container with initial rootfs contents.
 	Rollback(ctx context.Context, cfg controllerapi.InvokeConfig) string
 
@@ -34,27 +34,6 @@ type Monitor interface {
 
 	// AttachedSessionID returns the ID of the attached session.
 	AttachedSessionID() string
-
-	// Build executes the specified build and returns an ID of the session for debugging that build.
-	Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, err error)
-
-	// Kill kills the buildx server.
-	Kill(ctx context.Context) error
-
-	// List lists sessions.
-	List(ctx context.Context) (refs []string, _ error)
-
-	// ListPrcesses lists processes in the attached session.
-	ListProcesses(ctx context.Context) (infos []*controllerapi.ProcessInfo, retErr error)
-
-	// DisconnectProcess finishes the specified process.
-	DisconnectProcess(ctx context.Context, pid string) error
-
-	// Inspect returns information about the attached build.
-	Inspect(ctx context.Context) (*controllerapi.InspectResponse, error)
-
-	// Disconnect finishes the attached session.
-	Disconnect(ctx context.Context) error
 }
 
 // CommandInfo is information about a command.

@@ -58,7 +58,7 @@ func (cm *AttachCmd) Exec(ctx context.Context, args []string) error {
 }
 
 func isProcessID(ctx context.Context, c types.Monitor, ref string) (bool, error) {
-	infos, err := c.ListProcesses(ctx)
+	infos, err := c.ListProcesses(ctx, c.AttachedSessionID())
 	if err != nil {
 		return false, err
 	}

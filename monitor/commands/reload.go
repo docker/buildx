@@ -32,9 +32,9 @@ func (cm *ReloadCmd) Info() types.CommandInfo {
 
 func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 	var bo *controllerapi.BuildOptions
-	if cm.m.AttachedSessionID() != "" {
+	if ref := cm.m.AttachedSessionID(); ref != "" {
 		// Rebuilding an existing session; Restore the build option used for building this session.
-		res, err := cm.m.Inspect(ctx)
+		res, err := cm.m.Inspect(ctx, ref)
 		if err != nil {
 			fmt.Printf("failed to inspect the current build session: %v\n", err)
 		} else {
@@ -46,8 +46,8 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 	if bo == nil {
 		return errors.Errorf("no build option is provided")
 	}
-	if cm.m.AttachedSessionID() != "" {
-		if err := cm.m.Disconnect(ctx); err != nil {
+	if ref := cm.m.AttachedSessionID(); ref != "" {
+		if err := cm.m.Disconnect(ctx, ref); err != nil {
 			fmt.Println("disconnect error", err)
 		}
 	}

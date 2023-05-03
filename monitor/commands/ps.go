@@ -23,7 +23,8 @@ func (cm *PsCmd) Info() types.CommandInfo {
 }
 
 func (cm *PsCmd) Exec(ctx context.Context, args []string) error {
-	plist, err := cm.m.ListProcesses(ctx)
+	ref := cm.m.AttachedSessionID()
+	plist, err := cm.m.ListProcesses(ctx, ref)
 	if err != nil {
 		return err
 	}

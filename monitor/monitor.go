@@ -17,7 +17,6 @@ import (
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/google/shlex"
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -63,8 +62,8 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 	invokeForwarder := ioset.NewForwarder()
 	invokeForwarder.SetIn(&containerIn)
 	m := &monitor{
-		controllerRef: newControllerRef(c, curRef),
-		invokeIO:      invokeForwarder,
+		BuildxController: c,
+		invokeIO:         invokeForwarder,
 		muxIO: ioset.NewMuxIO(ioset.In{
 			Stdin:  io.NopCloser(stdin),
 			Stdout: nopCloser{stdout},
@@ -77,6 +76,7 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 			return "Switched IO\n"
 		}),
 	}
+	m.ref.Store(curRef)
 
 	// Start container automatically
 	fmt.Fprintf(stdout, "Launching interactive container. Press Ctrl-a-c to switch to monitor console\n")
@@ -203,7 +203,8 @@ type readWriter struct {
 }
 
 type monitor struct {
-	*controllerRef
+	control.BuildxController
+	ref atomic.Value
 
 	muxIO        *ioset.MuxIO
 	invokeIO     *ioset.Forwarder
@@ -212,15 +213,15 @@ type monitor struct {
 }
 
 func (m *monitor) DisconnectSession(ctx context.Context, targetID string) error {
-	return m.controllerRef.raw().Disconnect(ctx, targetID)
+	return m.Disconnect(ctx, targetID)
 }
 
 func (m *monitor) AttachSession(ref string) {
-	m.controllerRef.ref.Store(ref)
+	m.ref.Store(ref)
 }
 
 func (m *monitor) AttachedSessionID() string {
-	return m.controllerRef.ref.Load().(string)
+	return m.ref.Load().(string)
 }
 
 func (m *monitor) Rollback(ctx context.Context, cfg controllerapi.InvokeConfig) string {
@@ -298,85 +299,10 @@ func (m *monitor) invoke(ctx context.Context, pid string, cfg controllerapi.Invo
 	defer invokeCancelAndDetachFn()
 	m.invokeCancel = invokeCancelAndDetachFn
 
-	err := m.controllerRef.invoke(invokeCtx, pid, cfg, containerIn.Stdin, containerIn.Stdout, containerIn.Stderr)
+	err := m.Invoke(invokeCtx, m.AttachedSessionID(), pid, cfg, containerIn.Stdin, containerIn.Stdout, containerIn.Stderr)
 	close(waitInvokeDoneCh)
 
 	return err
-}
-
-func newControllerRef(c control.BuildxController, ref string) *controllerRef {
-	cr := &controllerRef{c: c}
-	cr.ref.Store(ref)
-	return cr
-}
-
-type controllerRef struct {
-	c   control.BuildxController
-	ref atomic.Value
-}
-
-func (c *controllerRef) raw() control.BuildxController {
-	return c.c
-}
-
-func (c *controllerRef) getRef() (string, error) {
-	ref := c.ref.Load()
-	if ref == "" {
-		return "", errors.Errorf("client is not attached to a session")
-	}
-	return ref.(string), nil
-}
-
-func (c *controllerRef) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, err error) {
-	return c.c.Build(ctx, options, in, progress)
-}
-
-func (c *controllerRef) invoke(ctx context.Context, pid string, options controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
-	ref, err := c.getRef()
-	if err != nil {
-		return err
-	}
-	return c.c.Invoke(ctx, ref, pid, options, ioIn, ioOut, ioErr)
-}
-
-func (c *controllerRef) Kill(ctx context.Context) error {
-	return c.c.Kill(ctx)
-}
-
-func (c *controllerRef) List(ctx context.Context) (refs []string, _ error) {
-	return c.c.List(ctx)
-}
-
-func (c *controllerRef) ListProcesses(ctx context.Context) (infos []*controllerapi.ProcessInfo, retErr error) {
-	ref, err := c.getRef()
-	if err != nil {
-		return nil, err
-	}
-	return c.c.ListProcesses(ctx, ref)
-}
-
-func (c *controllerRef) DisconnectProcess(ctx context.Context, pid string) error {
-	ref, err := c.getRef()
-	if err != nil {
-		return err
-	}
-	return c.c.DisconnectProcess(ctx, ref, pid)
-}
-
-func (c *controllerRef) Inspect(ctx context.Context) (*controllerapi.InspectResponse, error) {
-	ref, err := c.getRef()
-	if err != nil {
-		return nil, err
-	}
-	return c.c.Inspect(ctx, ref)
-}
-
-func (c *controllerRef) Disconnect(ctx context.Context) error {
-	ref, err := c.getRef()
-	if err != nil {
-		return err
-	}
-	return c.c.Disconnect(ctx, ref)
 }
 
 type nopCloser struct {

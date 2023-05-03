@@ -26,7 +26,7 @@ func (cm *DisconnectCmd) Exec(ctx context.Context, args []string) error {
 	}
 	isProcess, err := isProcessID(ctx, cm.m, target)
 	if err == nil && isProcess {
-		if err := cm.m.DisconnectProcess(ctx, target); err != nil {
+		if err := cm.m.DisconnectProcess(ctx, cm.m.AttachedSessionID(), target); err != nil {
 			return errors.Errorf("disconnecting from process failed %v", target)
 		}
 		return nil
