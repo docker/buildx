@@ -12,7 +12,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-func testEndpoint(server, defaultNamespace string, ca, cert, key []byte, skipTLSVerify bool) Endpoint {
+func testEndpoint(server, defaultNamespace string, ca, cert, key []byte, skipTLSVerify bool, proxyURL string) Endpoint {
 	var tlsData *context.TLSData
 	if ca != nil || cert != nil || key != nil {
 		tlsData = &context.TLSData{
@@ -28,6 +28,7 @@ func testEndpoint(server, defaultNamespace string, ca, cert, key []byte, skipTLS
 				SkipTLSVerify: skipTLSVerify,
 			},
 			DefaultNamespace: defaultNamespace,
+			ProxyURL:         proxyURL,
 		},
 		TLSData: tlsData,
 	}
@@ -45,9 +46,10 @@ func TestSaveLoadContexts(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(storeDir)
 	store := store.New(storeDir, testStoreCfg)
-	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, false), "raw-notls"))
-	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, true), "raw-notls-skip"))
-	require.NoError(t, save(store, testEndpoint("https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), true), "raw-tls"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, false, ""), "raw-notls"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, true, ""), "raw-notls-skip"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), true, ""), "raw-tls"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), true, ""), "proxy-url"))
 
 	kcFile, err := os.CreateTemp(os.TempDir(), "test-load-save-k8-context")
 	require.NoError(t, err)
@@ -59,18 +61,27 @@ func TestSaveLoadContexts(t *testing.T) {
 	cfg.Clusters["cluster1"] = clientcmdapi.NewCluster()
 	cfg.Contexts["context2"] = clientcmdapi.NewContext()
 	cfg.Clusters["cluster2"] = clientcmdapi.NewCluster()
+	cfg.Contexts["context3"] = clientcmdapi.NewContext()
+	cfg.Clusters["cluster3"] = clientcmdapi.NewCluster()
 	cfg.AuthInfos["user"].ClientCertificateData = []byte("cert")
 	cfg.AuthInfos["user"].ClientKeyData = []byte("key")
 	cfg.Clusters["cluster1"].Server = "https://server1"
 	cfg.Clusters["cluster1"].InsecureSkipTLSVerify = true
 	cfg.Clusters["cluster2"].Server = "https://server2"
 	cfg.Clusters["cluster2"].CertificateAuthorityData = []byte("ca")
+	cfg.Clusters["cluster3"].Server = "https://server3"
+	cfg.Clusters["cluster3"].CertificateAuthorityData = []byte("ca")
+	cfg.Clusters["cluster3"].ProxyURL = "http://proxy"
 	cfg.Contexts["context1"].AuthInfo = "user"
 	cfg.Contexts["context1"].Cluster = "cluster1"
 	cfg.Contexts["context1"].Namespace = "namespace1"
 	cfg.Contexts["context2"].AuthInfo = "user"
 	cfg.Contexts["context2"].Cluster = "cluster2"
 	cfg.Contexts["context2"].Namespace = "namespace2"
+	cfg.Contexts["context3"].AuthInfo = "user"
+	cfg.Contexts["context3"].Cluster = "cluster3"
+	cfg.Contexts["context3"].Namespace = "namespace3"
+
 	cfg.CurrentContext = "context1"
 	cfgData, err := clientcmd.Write(*cfg)
 	require.NoError(t, err)

@@ -19,6 +19,7 @@ import (
 type EndpointMeta struct {
 	context.EndpointMetaBase
 	DefaultNamespace string                           `json:",omitempty"`
+	ProxyURL         string                           `json:",omitempty"`
 	AuthProvider     *clientcmdapi.AuthProviderConfig `json:",omitempty"`
 	Exec             *clientcmdapi.ExecConfig         `json:",omitempty"`
 	UsernamePassword *UsernamePassword                `json:"usernamePassword,omitempty"`
@@ -62,6 +63,9 @@ func (c *Endpoint) KubernetesConfig() clientcmd.ClientConfig {
 	cfg := clientcmdapi.NewConfig()
 	cluster := clientcmdapi.NewCluster()
 	cluster.Server = c.Host
+	if c.ProxyURL != "" {
+		cluster.ProxyURL = c.ProxyURL
+	}
 	cluster.InsecureSkipTLSVerify = c.SkipTLSVerify
 	authInfo := clientcmdapi.NewAuthInfo()
 	if c.TLSData != nil {
