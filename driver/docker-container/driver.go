@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/docker/buildx/driver"
@@ -369,7 +370,11 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	}
 
 	var opts []client.ClientOpt
+	var counter int64
 	opts = append(opts, client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+		if atomic.AddInt64(&counter, 1) > 1 {
+			return nil, net.ErrClosed
+		}
 		return conn, nil
 	}))
 	if td, ok := exp.(client.TracerDelegate); ok {
@@ -395,7 +400,10 @@ func (d *Driver) Features() map[driver.Feature]bool {
 func demuxConn(c net.Conn) net.Conn {
 	pr, pw := io.Pipe()
 	// TODO: rewrite parser with Reader() to avoid goroutine switch
-	go stdcopy.StdCopy(pw, os.Stderr, c)
+	go func() {
+		_, err := stdcopy.StdCopy(pw, os.Stderr, c)
+		pw.CloseWithError(err)
+	}()
 	return &demux{
 		Conn:   c,
 		Reader: pr,
