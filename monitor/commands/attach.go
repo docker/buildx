@@ -25,7 +25,7 @@ func (cm *AttachCmd) Info() types.CommandInfo {
 
 func (cm *AttachCmd) Exec(ctx context.Context, args []string) error {
 	if len(args) < 2 {
-		return errors.Errorf("server name must be passed")
+		return errors.Errorf("ID of session or process must be passed")
 	}
 	ref := args[1]
 	var id string
@@ -58,7 +58,11 @@ func (cm *AttachCmd) Exec(ctx context.Context, args []string) error {
 }
 
 func isProcessID(ctx context.Context, c types.Monitor, ref string) (bool, error) {
-	infos, err := c.ListProcesses(ctx, c.AttachedSessionID())
+	sid := c.AttachedSessionID()
+	if sid == "" {
+		return false, errors.Errorf("no attaching session")
+	}
+	infos, err := c.ListProcesses(ctx, sid)
 	if err != nil {
 		return false, err
 	}

@@ -7,6 +7,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/docker/buildx/monitor/types"
+	"github.com/pkg/errors"
 )
 
 type PsCmd struct {
@@ -24,6 +25,9 @@ func (cm *PsCmd) Info() types.CommandInfo {
 
 func (cm *PsCmd) Exec(ctx context.Context, args []string) error {
 	ref := cm.m.AttachedSessionID()
+	if ref == "" {
+		return errors.Errorf("no attaching session")
+	}
 	plist, err := cm.m.ListProcesses(ctx, ref)
 	if err != nil {
 		return err

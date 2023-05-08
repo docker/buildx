@@ -23,10 +23,16 @@ func (cm *DisconnectCmd) Exec(ctx context.Context, args []string) error {
 	target := cm.m.AttachedSessionID()
 	if len(args) >= 2 {
 		target = args[1]
+	} else if target == "" {
+		return errors.Errorf("no attaching session")
 	}
 	isProcess, err := isProcessID(ctx, cm.m, target)
 	if err == nil && isProcess {
-		if err := cm.m.DisconnectProcess(ctx, cm.m.AttachedSessionID(), target); err != nil {
+		sid := cm.m.AttachedSessionID()
+		if sid == "" {
+			return errors.Errorf("no attaching session")
+		}
+		if err := cm.m.DisconnectProcess(ctx, sid, target); err != nil {
 			return errors.Errorf("disconnecting from process failed %v", target)
 		}
 		return nil
