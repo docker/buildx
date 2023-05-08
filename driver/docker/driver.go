@@ -69,6 +69,7 @@ func (d *Driver) Features() map[driver.Feature]bool {
 				useContainerdSnapshotter = true
 			}
 		}
+		c.Close()
 	}
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    useContainerdSnapshotter,
