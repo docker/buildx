@@ -46,6 +46,7 @@ import (
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
+	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/progress/progresswriter"
@@ -92,8 +93,9 @@ type Options struct {
 	Session []session.Attachable
 
 	// Linked marks this target as exclusively linked (not requested by the user).
-	Linked    bool
-	PrintFunc *PrintFunc
+	Linked       bool
+	PrintFunc    *PrintFunc
+	SourcePolicy *spb.Policy
 }
 
 type PrintFunc struct {
@@ -427,6 +429,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		CacheExports:        cacheTo,
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
+		SourcePolicy:        opt.SourcePolicy,
 	}
 
 	if opt.CgroupParent != "" {
@@ -1660,4 +1663,29 @@ func saveLocalState(so client.SolveOpt, opt Options, node builder.Node, configDi
 	}
 
 	return nil
+}
+
+// ReadSourcePolicy reads a source policy from a file.
+// The file path is taken from EXPERIMENTAL_BUILDKIT_SOURCE_POLICY env var.
+// if the env var is not set, this `returns nil, nil`
+func ReadSourcePolicy() (*spb.Policy, error) {
+	p := os.Getenv("EXPERIMENTAL_BUILDKIT_SOURCE_POLICY")
+	if p == "" {
+		return nil, nil
+	}
+
+	data, err := os.ReadFile(p)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to read policy file")
+	}
+	var pol spb.Policy
+	if err := json.Unmarshal(data, &pol); err != nil {
+		// maybe it's in protobuf format?
+		e2 := pol.Unmarshal(data)
+		if e2 != nil {
+			return nil, errors.Wrap(err, "failed to parse source policy")
+		}
+	}
+
+	return &pol, nil
 }

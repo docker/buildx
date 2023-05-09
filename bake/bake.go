@@ -1160,6 +1160,11 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	bo.Attests = controllerapi.CreateAttestations(attests)
 
+	bo.SourcePolicy, err = build.ReadSourcePolicy()
+	if err != nil {
+		return nil, err
+	}
+
 	return bo, nil
 }
 

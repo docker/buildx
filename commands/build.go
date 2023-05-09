@@ -128,6 +128,11 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		}
 	}
 
+	opts.SourcePolicy, err = build.ReadSourcePolicy()
+	if err != nil {
+		return nil, err
+	}
+
 	inAttests := append([]string{}, o.attests...)
 	if o.provenance != "" {
 		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", o.provenance))

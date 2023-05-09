@@ -136,6 +136,8 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	opts.Attests = controllerapi.CreateAttestations(in.Attests)
 
+	opts.SourcePolicy = in.SourcePolicy
+
 	allow, err := buildflags.ParseEntitlements(in.Allow)
 	if err != nil {
 		return nil, nil, err
