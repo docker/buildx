@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -112,6 +113,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runInspect(dockerCli, options)
 		},
+		ValidArgsFunction: completion.BuilderNames(dockerCli),
 	}
 
 	flags := cmd.Flags()

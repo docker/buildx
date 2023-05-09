@@ -85,6 +85,21 @@ func ReadLocalFiles(names []string) ([]File, error) {
 	return out, nil
 }
 
+func ListTargets(files []File) ([]string, error) {
+	c, err := ParseFiles(files, nil)
+	if err != nil {
+		return nil, err
+	}
+	var targets []string
+	for _, g := range c.Groups {
+		targets = append(targets, g.Name)
+	}
+	for _, t := range c.Targets {
+		targets = append(targets, t.Name)
+	}
+	return dedupSlice(targets), nil
+}
+
 func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, map[string]*Group, error) {
 	c, err := ParseFiles(files, defaults)
 	if err != nil {

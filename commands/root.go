@@ -5,6 +5,7 @@ import (
 
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	"github.com/docker/buildx/controller/remote"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/logutil"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
@@ -22,6 +23,9 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		Use:   name,
 		Annotations: map[string]string{
 			annotation.CodeDelimiter: `"`,
+		},
+		CompletionOptions: cobra.CompletionOptions{
+			HiddenDefaultCmd: true,
 		},
 	}
 	if isPlugin {
@@ -91,6 +95,11 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		remote.AddControllerCommands(cmd, dockerCli)
 		addDebugShellCommand(cmd, dockerCli)
 	}
+
+	cmd.RegisterFlagCompletionFunc( //nolint:errcheck
+		"builder",
+		completion.BuilderNames(dockerCli),
+	)
 }
 
 func rootFlags(options *rootOptions, flags *pflag.FlagSet) {

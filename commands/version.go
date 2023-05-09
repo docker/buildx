@@ -4,6 +4,7 @@ import (
 	"fmt"
 
 	"github.com/docker/buildx/util/cobrautil"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -23,6 +24,7 @@ func versionCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runVersion(dockerCli)
 		},
+		ValidArgsFunction: completion.Disable,
 	}
 
 	// hide builder persistent flag for this command

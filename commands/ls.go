@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/cobrautil"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -126,6 +127,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runLs(dockerCli, options)
 		},
+		ValidArgsFunction: completion.Disable,
 	}
 
 	// hide builder persistent flag for this command
