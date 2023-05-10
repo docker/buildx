@@ -111,8 +111,13 @@ func Read(filenames ...string) (map[string]string, error) {
 
 // UnmarshalBytesWithLookup parses env file from byte slice of chars, returning a map of keys and values.
 func UnmarshalBytesWithLookup(src []byte, lookupFn LookupFn) (map[string]string, error) {
+	return UnmarshalWithLookup(string(src), lookupFn)
+}
+
+// UnmarshalWithLookup parses env file from string, returning a map of keys and values.
+func UnmarshalWithLookup(src string, lookupFn LookupFn) (map[string]string, error) {
 	out := make(map[string]string)
-	err := newParser().parseBytes(src, out, lookupFn)
+	err := newParser().parse(src, out, lookupFn)
 	return out, err
 }
 

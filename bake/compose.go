@@ -28,10 +28,14 @@ func ParseComposeFiles(fs []File) (*Config, error) {
 }
 
 func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, error) {
+	if envs == nil {
+		envs = make(map[string]string)
+	}
 	cfg, err := loader.Load(compose.ConfigDetails{
 		ConfigFiles: cfgs,
 		Environment: envs,
 	}, func(options *loader.Options) {
+		options.SetProjectName("bake", false)
 		options.SkipNormalization = true
 	})
 	if err != nil {
@@ -145,6 +149,7 @@ func validateCompose(dt []byte, envs map[string]string) error {
 		},
 		Environment: envs,
 	}, func(options *loader.Options) {
+		options.SetProjectName("bake", false)
 		options.SkipNormalization = true
 		// consistency is checked later in ParseCompose to ensure multiple
 		// compose files can be merged together

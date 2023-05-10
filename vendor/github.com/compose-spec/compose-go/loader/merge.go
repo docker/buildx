@@ -130,7 +130,7 @@ func _merge(baseService *types.ServiceConfig, overrideService *types.ServiceConf
 	if overrideService.Command != nil {
 		baseService.Command = overrideService.Command
 	}
-	if overrideService.HealthCheck != nil {
+	if overrideService.HealthCheck != nil && overrideService.HealthCheck.Test != nil {
 		baseService.HealthCheck.Test = overrideService.HealthCheck.Test
 	}
 	if overrideService.Entrypoint != nil {
