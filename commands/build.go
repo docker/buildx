@@ -11,7 +11,6 @@ import (
 	"log"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strconv"
 	"strings"
 
@@ -496,7 +495,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	if isExperimental() {
 		flags.StringVar(&invokeFlag, "invoke", "", "Invoke a command after the build [experimental]")
 		flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect [experimental]")
-		flags.BoolVar(&options.Detach, "detach", runtime.GOOS == "linux", "Detach buildx server (supported only on linux) [experimental]")
+		flags.BoolVar(&options.Detach, "detach", false, "Detach buildx server (supported only on linux) [experimental]")
 		flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server) [experimental]")
 	}
 
