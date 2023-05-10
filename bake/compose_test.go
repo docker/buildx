@@ -33,6 +33,11 @@ services:
       secrets:
         - token
         - aws
+  webapp2:
+    build:
+      context: ./dir
+      dockerfile_inline: |
+        FROM alpine
 secrets:
   token:
     environment: ENV_TOKEN
@@ -46,9 +51,9 @@ secrets:
 	require.Equal(t, 1, len(c.Groups))
 	require.Equal(t, "default", c.Groups[0].Name)
 	sort.Strings(c.Groups[0].Targets)
-	require.Equal(t, []string{"db", "webapp"}, c.Groups[0].Targets)
+	require.Equal(t, []string{"db", "webapp", "webapp2"}, c.Groups[0].Targets)
 
-	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, 3, len(c.Targets))
 	sort.Slice(c.Targets, func(i, j int) bool {
 		return c.Targets[i].Name < c.Targets[j].Name
 	})
@@ -68,6 +73,10 @@ secrets:
 		"id=token,env=ENV_TOKEN",
 		"id=aws,src=/root/.aws/credentials",
 	}, c.Targets[1].Secrets)
+
+	require.Equal(t, "webapp2", c.Targets[2].Name)
+	require.Equal(t, "./dir", *c.Targets[2].Context)
+	require.Equal(t, "FROM alpine\n", *c.Targets[2].DockerfileInline)
 }
 
 func TestNoBuildOutOfTreeService(t *testing.T) {
