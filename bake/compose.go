@@ -75,6 +75,14 @@ func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, e
 				dockerfileInlineP = &dockerfileInline
 			}
 
+			var additionalContexts map[string]string
+			if s.Build.AdditionalContexts != nil {
+				additionalContexts = map[string]string{}
+				for k, v := range s.Build.AdditionalContexts {
+					additionalContexts[k] = v
+				}
+			}
+
 			var secrets []string
 			for _, bs := range s.Build.Secrets {
 				secret, err := composeToBuildkitSecret(bs, cfg.Secrets[bs.Source])
@@ -95,6 +103,7 @@ func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, e
 			t := &Target{
 				Name:             targetName,
 				Context:          contextPathP,
+				Contexts:         additionalContexts,
 				Dockerfile:       dockerfilePathP,
 				DockerfileInline: dockerfileInlineP,
 				Tags:             s.Build.Tags,
