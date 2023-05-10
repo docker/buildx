@@ -157,6 +157,10 @@ var mobyBuildkitVersions = []mobyBuildkitVersion{
 		BuildkitVersion:       "v0.10.6+70f2ad5",
 	},
 	{
+		MobyVersionConstraint: ">= 23.0.4-0, < 23.0.7-0",
+		BuildkitVersion:       "v0.10.6+d52b2d5",
+	},
+	{
 		MobyVersionConstraint: "~23-0",
 		BuildkitVersion:       "v0.10+unknown",
 	},

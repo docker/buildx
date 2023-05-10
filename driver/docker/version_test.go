@@ -112,7 +112,11 @@ func TestResolveBuildKitVersion(t *testing.T) {
 			expected:    "v0.10.6+70f2ad5",
 		},
 		{
-			mobyVersion: "23.0.4",
+			mobyVersion: "23.0.5",
+			expected:    "v0.10.6+d52b2d5",
+		},
+		{
+			mobyVersion: "23.0.7",
 			expected:    "v0.10+unknown",
 		},
 	}
