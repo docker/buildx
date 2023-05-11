@@ -34,7 +34,6 @@ import (
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -316,7 +315,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 
 	// NOTE: buildx server has the current working directory different from the client
 	// so we need to resolve paths to abosolute ones in the client.
-	opts, err = resolvePaths(opts)
+	opts, err = controllerapi.ResolveOptionPaths(opts)
 	if err != nil {
 		return nil, err
 	}
@@ -758,162 +757,6 @@ func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.Ulim
 		}
 	}
 	return &controllerapi.UlimitOpt{Values: values}
-}
-
-// resolvePaths resolves all paths contained in controllerapi.BuildOptions
-// and replaces them to absolute paths.
-func resolvePaths(options *controllerapi.BuildOptions) (_ *controllerapi.BuildOptions, err error) {
-	localContext := false
-	if options.ContextPath != "" && options.ContextPath != "-" {
-		if !build.IsRemoteURL(options.ContextPath) {
-			localContext = true
-			options.ContextPath, err = filepath.Abs(options.ContextPath)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	if options.DockerfileName != "" && options.DockerfileName != "-" {
-		if localContext && !urlutil.IsURL(options.DockerfileName) {
-			options.DockerfileName, err = filepath.Abs(options.DockerfileName)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	var contexts map[string]string
-	for k, v := range options.NamedContexts {
-		if build.IsRemoteURL(v) || strings.HasPrefix(v, "docker-image://") {
-			// url prefix, this is a remote path
-		} else if strings.HasPrefix(v, "oci-layout://") {
-			// oci layout prefix, this is a local path
-			p := strings.TrimPrefix(v, "oci-layout://")
-			p, err = filepath.Abs(p)
-			if err != nil {
-				return nil, err
-			}
-			v = "oci-layout://" + p
-		} else {
-			// no prefix, assume local path
-			v, err = filepath.Abs(v)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if contexts == nil {
-			contexts = make(map[string]string)
-		}
-		contexts[k] = v
-	}
-	options.NamedContexts = contexts
-
-	var cacheFrom []*controllerapi.CacheOptionsEntry
-	for _, co := range options.CacheFrom {
-		switch co.Type {
-		case "local":
-			var attrs map[string]string
-			for k, v := range co.Attrs {
-				if attrs == nil {
-					attrs = make(map[string]string)
-				}
-				switch k {
-				case "src":
-					p := v
-					if p != "" {
-						p, err = filepath.Abs(p)
-						if err != nil {
-							return nil, err
-						}
-					}
-					attrs[k] = p
-				default:
-					attrs[k] = v
-				}
-			}
-			co.Attrs = attrs
-			cacheFrom = append(cacheFrom, co)
-		default:
-			cacheFrom = append(cacheFrom, co)
-		}
-	}
-	options.CacheFrom = cacheFrom
-
-	var cacheTo []*controllerapi.CacheOptionsEntry
-	for _, co := range options.CacheTo {
-		switch co.Type {
-		case "local":
-			var attrs map[string]string
-			for k, v := range co.Attrs {
-				if attrs == nil {
-					attrs = make(map[string]string)
-				}
-				switch k {
-				case "dest":
-					p := v
-					if p != "" {
-						p, err = filepath.Abs(p)
-						if err != nil {
-							return nil, err
-						}
-					}
-					attrs[k] = p
-				default:
-					attrs[k] = v
-				}
-			}
-			co.Attrs = attrs
-			cacheTo = append(cacheTo, co)
-		default:
-			cacheTo = append(cacheTo, co)
-		}
-	}
-	options.CacheTo = cacheTo
-	var exports []*controllerapi.ExportEntry
-	for _, e := range options.Exports {
-		if e.Destination != "" && e.Destination != "-" {
-			e.Destination, err = filepath.Abs(e.Destination)
-			if err != nil {
-				return nil, err
-			}
-		}
-		exports = append(exports, e)
-	}
-	options.Exports = exports
-
-	var secrets []*controllerapi.Secret
-	for _, s := range options.Secrets {
-		if s.FilePath != "" {
-			s.FilePath, err = filepath.Abs(s.FilePath)
-			if err != nil {
-				return nil, err
-			}
-		}
-		secrets = append(secrets, s)
-	}
-	options.Secrets = secrets
-
-	var ssh []*controllerapi.SSH
-	for _, s := range options.SSH {
-		var ps []string
-		for _, pt := range s.Paths {
-			p := pt
-			if p != "" {
-				p, err = filepath.Abs(p)
-				if err != nil {
-					return nil, err
-				}
-			}
-			ps = append(ps, p)
-
-		}
-		s.Paths = ps
-		ssh = append(ssh, s)
-	}
-	options.SSH = ssh
-
-	return options, nil
 }
 
 func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
