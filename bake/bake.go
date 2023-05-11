@@ -951,7 +951,12 @@ func updateContext(t *build.Inputs, inp *Input) {
 	if build.IsRemoteURL(t.ContextPath) {
 		return
 	}
-	st := llb.Scratch().File(llb.Copy(*inp.State, t.ContextPath, "/"), llb.WithCustomNamef("set context to %s", t.ContextPath))
+	st := llb.Scratch().File(
+		llb.Copy(*inp.State, t.ContextPath, "/", &llb.CopyInfo{
+			CopyDirContentsOnly: true,
+		}),
+		llb.WithCustomNamef("set context to %s", t.ContextPath),
+	)
 	t.ContextState = &st
 }
 
@@ -1028,9 +1033,32 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		dockerfilePath = *t.Dockerfile
 	}
 
-	if !build.IsRemoteURL(contextPath) && !path.IsAbs(dockerfilePath) {
-		dockerfilePath = path.Join(contextPath, dockerfilePath)
+	bi := build.Inputs{
+		ContextPath:    contextPath,
+		DockerfilePath: dockerfilePath,
+		NamedContexts:  toNamedContexts(t.Contexts),
 	}
+	if t.DockerfileInline != nil {
+		bi.DockerfileInline = *t.DockerfileInline
+	}
+	updateContext(&bi, inp)
+	if !build.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && !path.IsAbs(bi.DockerfilePath) {
+		bi.DockerfilePath = path.Join(bi.ContextPath, bi.DockerfilePath)
+	}
+	if strings.HasPrefix(bi.ContextPath, "cwd://") {
+		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
+	}
+	for k, v := range bi.NamedContexts {
+		if strings.HasPrefix(v.Path, "cwd://") {
+			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
+		}
+	}
+
+	if err := validateContextsEntitlements(bi, inp); err != nil {
+		return nil, err
+	}
+
+	t.Context = &bi.ContextPath
 
 	args := map[string]string{}
 	for k, v := range t.Args {
@@ -1060,30 +1088,6 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.NetworkMode != nil {
 		networkMode = *t.NetworkMode
 	}
-
-	bi := build.Inputs{
-		ContextPath:    contextPath,
-		DockerfilePath: dockerfilePath,
-		NamedContexts:  toNamedContexts(t.Contexts),
-	}
-	if t.DockerfileInline != nil {
-		bi.DockerfileInline = *t.DockerfileInline
-	}
-	updateContext(&bi, inp)
-	if strings.HasPrefix(bi.ContextPath, "cwd://") {
-		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
-	}
-	for k, v := range bi.NamedContexts {
-		if strings.HasPrefix(v.Path, "cwd://") {
-			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
-		}
-	}
-
-	if err := validateContextsEntitlements(bi, inp); err != nil {
-		return nil, err
-	}
-
-	t.Context = &bi.ContextPath
 
 	bo := &build.Options{
 		Inputs:        bi,
