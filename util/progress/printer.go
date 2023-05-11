@@ -120,9 +120,8 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string,
 			pw.logSourceMap = map[digest.Digest]interface{}{}
 			pw.logMu.Unlock()
 
-			close(pw.ready)
-
 			resumeLogs := logutil.Pause(logrus.StandardLogger())
+			close(pw.ready)
 			// not using shared context to not disrupt display but let is finish reporting errors
 			pw.warnings, pw.err = progressui.DisplaySolveStatus(ctx, c, w, pw.status, opt.displayOpts...)
 			resumeLogs()
