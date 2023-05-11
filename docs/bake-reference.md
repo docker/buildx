@@ -124,6 +124,8 @@ The following table shows the complete list of attributes that you can assign to
 | [`dockerfile`](#targetdockerfile)               | String  | Dockerfile location                                                  |
 | [`inherits`](#targetinherits)                   | List    | Inherit attributes from other targets                                |
 | [`labels`](#targetlabels)                       | Map     | Metadata for images                                                  |
+| [`matrix`](#targetmatrix)                       | Map     | Define a set of variables that forks a target into multiple targets. |
+| [`name`](#targetname)                           | String  | Override the target name when using a matrix.                        |
 | [`no-cache-filter`](#targetno-cache-filter)     | List    | Disable build cache for specific stages                              |
 | [`no-cache`](#targetno-cache)                   | Boolean | Disable build cache completely                                       |
 | [`output`](#targetoutput)                       | List    | Output destinations                                                  |
@@ -475,6 +477,138 @@ target "default" {
 
 It's possible to use a `null` value for labels.
 If you do, the builder uses the label value specified in the Dockerfile.
+
+### `target.matrix`
+
+A matrix strategy lets you fork a single target into multiple different
+variants, based on parameters that you specify.
+This works in a similar way to [Matrix strategies for GitHub Actions].
+You can use this to reduce duplication in your bake definition.
+
+The `matrix` attribute is a map of parameter names to lists of values.
+Bake builds each possible combination of values as a separate target.
+
+Each generated target **must** have a unique name.
+To specify how target names should resolve, use the `name` attribute.
+
+The following example resolves the `app` target to `app-foo` and `app-bar`.
+It also uses the matrix value to define the [target build stage](#targettarget).
+
+```hcl
+target "app" {
+  name = "app-${tgt}"
+  matrix = {
+    tgt = ["foo", "bar"]
+  }
+  target = tgt
+}
+```
+
+```console
+$ docker buildx bake --print app
+[+] Building 0.0s (0/0)
+{
+  "group": {
+    "app": {
+      "targets": [
+        "app-foo",
+        "app-bar"
+      ]
+    },
+    "default": {
+      "targets": [
+        "app"
+      ]
+    }
+  },
+  "target": {
+    "app-bar": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "target": "bar"
+    },
+    "app-foo": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "target": "foo"
+    }
+  }
+}
+```
+
+#### Multiple axes
+
+You can specify multiple keys in your matrix to fork a target on multiple axes.
+When using multiple matrix keys, Bake builds every possible variant.
+
+The following example builds four targets:
+
+- `app-foo-1-0`
+- `app-foo-2-0`
+- `app-bar-1-0`
+- `app-bar-2-0`
+
+```hcl
+target "app" {
+  name = "app-${tgt}-${replace(version, ".", "-")}"
+  matrix = {
+    tgt = ["foo", "bar"]
+    version = ["1.0", "2.0"]
+  }
+  target = tgt
+  args = {
+    VERSION = version
+  }
+}
+```
+
+#### Multiple values per matrix target
+
+If you want to differentiate the matrix on more than just a single value,
+you can use maps as matrix values. Bake creates a target for each map,
+and you can access the nested values using dot notation.
+
+The following example builds two targets:
+
+- `app-foo-1-0`
+- `app-bar-2-0`
+
+```hcl
+target "app" {
+  name = "app-${item.tgt}-${replace(item.version, ".", "-")}"
+  matrix = {
+    item = [
+      {
+        tgt = "foo"
+        version = "1.0"
+      },
+      {
+        tgt = "bar"
+        version = "2.0"
+      }
+    ]
+  }
+  target = item.tgt
+  args = {
+    VERSION = item.version
+  }
+}
+```
+
+### `target.name`
+
+Specify name resolution for targets that use a matrix strategy.
+The following example resolves the `app` target to `app-foo` and `app-bar`.
+
+```hcl
+target "app" {
+  name = "app-${tgt}"
+  matrix = {
+    tgt = ["foo", "bar"]
+  }
+  target = tgt
+}
+```
 
 ### `target.no-cache-filter`
 
