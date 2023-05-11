@@ -12,7 +12,7 @@ import (
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
 
-func testEndpoint(server, defaultNamespace string, ca, cert, key []byte, skipTLSVerify bool) Endpoint {
+func testEndpoint(server, defaultNamespace string, ca, cert, key []byte, skipTLSVerify bool, proxyURL string) Endpoint {
 	var tlsData *context.TLSData
 	if ca != nil || cert != nil || key != nil {
 		tlsData = &context.TLSData{
@@ -28,6 +28,7 @@ func testEndpoint(server, defaultNamespace string, ca, cert, key []byte, skipTLS
 				SkipTLSVerify: skipTLSVerify,
 			},
 			DefaultNamespace: defaultNamespace,
+			ProxyURL:         proxyURL,
 		},
 		TLSData: tlsData,
 	}
@@ -45,9 +46,10 @@ func TestSaveLoadContexts(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(storeDir)
 	store := store.New(storeDir, testStoreCfg)
-	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, false), "raw-notls"))
-	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, true), "raw-notls-skip"))
-	require.NoError(t, save(store, testEndpoint("https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), true), "raw-tls"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, false, ""), "raw-notls"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", nil, nil, nil, true, ""), "raw-notls-skip"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), true, ""), "raw-tls"))
+	require.NoError(t, save(store, testEndpoint("https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), false, "http://testProxy"), "proxy-url"))
 
 	kcFile, err := os.CreateTemp(os.TempDir(), "test-load-save-k8-context")
 	require.NoError(t, err)
@@ -59,18 +61,27 @@ func TestSaveLoadContexts(t *testing.T) {
 	cfg.Clusters["cluster1"] = clientcmdapi.NewCluster()
 	cfg.Contexts["context2"] = clientcmdapi.NewContext()
 	cfg.Clusters["cluster2"] = clientcmdapi.NewCluster()
+	cfg.Contexts["context3"] = clientcmdapi.NewContext()
+	cfg.Clusters["cluster3"] = clientcmdapi.NewCluster()
 	cfg.AuthInfos["user"].ClientCertificateData = []byte("cert")
 	cfg.AuthInfos["user"].ClientKeyData = []byte("key")
 	cfg.Clusters["cluster1"].Server = "https://server1"
 	cfg.Clusters["cluster1"].InsecureSkipTLSVerify = true
 	cfg.Clusters["cluster2"].Server = "https://server2"
 	cfg.Clusters["cluster2"].CertificateAuthorityData = []byte("ca")
+	cfg.Clusters["cluster3"].Server = "https://server3"
+	cfg.Clusters["cluster3"].CertificateAuthorityData = []byte("ca")
+	cfg.Clusters["cluster3"].ProxyURL = "http://proxy"
 	cfg.Contexts["context1"].AuthInfo = "user"
 	cfg.Contexts["context1"].Cluster = "cluster1"
 	cfg.Contexts["context1"].Namespace = "namespace1"
 	cfg.Contexts["context2"].AuthInfo = "user"
 	cfg.Contexts["context2"].Cluster = "cluster2"
 	cfg.Contexts["context2"].Namespace = "namespace2"
+	cfg.Contexts["context3"].AuthInfo = "user"
+	cfg.Contexts["context3"].Cluster = "cluster3"
+	cfg.Contexts["context3"].Namespace = "namespace3"
+
 	cfg.CurrentContext = "context1"
 	cfgData, err := clientcmd.Write(*cfg)
 	require.NoError(t, err)
@@ -85,6 +96,10 @@ func TestSaveLoadContexts(t *testing.T) {
 	require.NoError(t, save(store, epDefault, "embed-default-context"))
 	require.NoError(t, save(store, epContext2, "embed-context2"))
 
+	epProxyURL, err := FromKubeConfig(kcFile.Name(), "context3", "namespace-override")
+	require.NoError(t, err)
+	require.NoError(t, save(store, epProxyURL, "embed-proxy-url"))
+
 	rawNoTLSMeta, err := store.GetMetadata("raw-notls")
 	require.NoError(t, err)
 	rawNoTLSSkipMeta, err := store.GetMetadata("raw-notls-skip")
@@ -95,31 +110,70 @@ func TestSaveLoadContexts(t *testing.T) {
 	require.NoError(t, err)
 	embededContext2Meta, err := store.GetMetadata("embed-context2")
 	require.NoError(t, err)
+	proxyURLMetadata, err := store.GetMetadata("proxy-url")
+	require.NoError(t, err)
+	embededProxyURL, err := store.GetMetadata("embed-proxy-url")
+	require.NoError(t, err)
 
 	rawNoTLS := EndpointFromContext(rawNoTLSMeta)
 	rawNoTLSSkip := EndpointFromContext(rawNoTLSSkipMeta)
 	rawTLS := EndpointFromContext(rawTLSMeta)
 	embededDefault := EndpointFromContext(embededDefaultMeta)
 	embededContext2 := EndpointFromContext(embededContext2Meta)
+	proxyURLEPMeta := EndpointFromContext(proxyURLMetadata)
+	embededProxyURLEPMeta := EndpointFromContext(embededProxyURL)
 
 	rawNoTLSEP, err := rawNoTLS.WithTLSData(store, "raw-notls")
 	require.NoError(t, err)
-	checkClientConfig(t, rawNoTLSEP, "https://test", "test", nil, nil, nil, false)
+	checkClientConfig(t, rawNoTLSEP, "https://test", "test",
+		nil, nil, nil, false, // tls
+		"", // proxy
+	)
+
 	rawNoTLSSkipEP, err := rawNoTLSSkip.WithTLSData(store, "raw-notls-skip")
 	require.NoError(t, err)
-	checkClientConfig(t, rawNoTLSSkipEP, "https://test", "test", nil, nil, nil, true)
+	checkClientConfig(t, rawNoTLSSkipEP, "https://test", "test",
+		nil, nil, nil, true, // tls
+		"", // proxy
+	)
+
 	rawTLSEP, err := rawTLS.WithTLSData(store, "raw-tls")
 	require.NoError(t, err)
-	checkClientConfig(t, rawTLSEP, "https://test", "test", []byte("ca"), []byte("cert"), []byte("key"), true)
+	checkClientConfig(t, rawTLSEP, "https://test", "test",
+		[]byte("ca"), []byte("cert"), []byte("key"), true, // tls
+		"", // proxy
+	)
+
 	embededDefaultEP, err := embededDefault.WithTLSData(store, "embed-default-context")
 	require.NoError(t, err)
-	checkClientConfig(t, embededDefaultEP, "https://server1", "namespace1", nil, []byte("cert"), []byte("key"), true)
+	checkClientConfig(t, embededDefaultEP, "https://server1", "namespace1",
+		nil, []byte("cert"), []byte("key"), true, // tls
+		"", // proxy
+	)
+
 	embededContext2EP, err := embededContext2.WithTLSData(store, "embed-context2")
 	require.NoError(t, err)
-	checkClientConfig(t, embededContext2EP, "https://server2", "namespace-override", []byte("ca"), []byte("cert"), []byte("key"), false)
+	checkClientConfig(t, embededContext2EP, "https://server2", "namespace-override",
+		[]byte("ca"), []byte("cert"), []byte("key"), false, // tls
+		"", // proxy
+	)
+
+	proxyURLEP, err := proxyURLEPMeta.WithTLSData(store, "proxy-url")
+	require.NoError(t, err)
+	checkClientConfig(t, proxyURLEP, "https://test", "test",
+		[]byte("ca"), []byte("cert"), []byte("key"), false, // tls
+		"http://testProxy", // proxy
+	)
+
+	embededProxyURLEP, err := embededProxyURLEPMeta.WithTLSData(store, "embed-proxy-url")
+	require.NoError(t, err)
+	checkClientConfig(t, embededProxyURLEP, "https://server3", "namespace-override",
+		[]byte("ca"), []byte("cert"), []byte("key"), false, // tls
+		"http://proxy", // proxy
+	)
 }
 
-func checkClientConfig(t *testing.T, ep Endpoint, server, namespace string, ca, cert, key []byte, skipTLSVerify bool) {
+func checkClientConfig(t *testing.T, ep Endpoint, server, namespace string, ca, cert, key []byte, skipTLSVerify bool, proxyURLString string) {
 	config := ep.KubernetesConfig()
 	cfg, err := config.ClientConfig()
 	require.NoError(t, err)
@@ -130,6 +184,15 @@ func checkClientConfig(t *testing.T, ep Endpoint, server, namespace string, ca, 
 	assert.Equal(t, cert, cfg.CertData)
 	assert.Equal(t, key, cfg.KeyData)
 	assert.Equal(t, skipTLSVerify, cfg.Insecure)
+	// proxy assertions
+	if proxyURLString != "" { // expected proxy is set
+		require.NotNil(t, cfg.Proxy, "expected proxy to be set, but is nil instead")
+		proxyURL, err := cfg.Proxy(nil)
+		require.NoError(t, err)
+		assert.Equal(t, proxyURLString, proxyURL.String())
+	} else {
+		assert.True(t, cfg.Proxy == nil, "expected proxy to be nil, but is not nil instead")
+	}
 }
 
 func save(s store.Writer, ep Endpoint, name string) error {
