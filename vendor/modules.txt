@@ -181,6 +181,7 @@ github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/filters
 github.com/containerd/containerd/identifiers
 github.com/containerd/containerd/images
+github.com/containerd/containerd/images/archive
 github.com/containerd/containerd/labels
 github.com/containerd/containerd/leases
 github.com/containerd/containerd/log
@@ -204,7 +205,13 @@ github.com/containerd/containerd/tracing
 github.com/containerd/containerd/version
 # github.com/containerd/continuity v0.3.0
 ## explicit; go 1.17
+github.com/containerd/continuity
+github.com/containerd/continuity/devices
+github.com/containerd/continuity/driver
 github.com/containerd/continuity/fs
+github.com/containerd/continuity/fs/fstest
+github.com/containerd/continuity/pathdriver
+github.com/containerd/continuity/proto
 github.com/containerd/continuity/sysx
 # github.com/containerd/ttrpc v1.2.1
 ## explicit; go 1.13
@@ -576,6 +583,9 @@ github.com/moby/buildkit/util/resolver/retryhandler
 github.com/moby/buildkit/util/sshutil
 github.com/moby/buildkit/util/stack
 github.com/moby/buildkit/util/system
+github.com/moby/buildkit/util/testutil
+github.com/moby/buildkit/util/testutil/dockerd
+github.com/moby/buildkit/util/testutil/integration
 github.com/moby/buildkit/util/tracing
 github.com/moby/buildkit/util/tracing/detect
 github.com/moby/buildkit/util/tracing/detect/delegated

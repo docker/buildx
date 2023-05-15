@@ -156,3 +156,29 @@ target "image-local" {
   inherits = ["image"]
   output = ["type=docker"]
 }
+
+variable "HTTP_PROXY" {
+  default = ""
+}
+variable "HTTPS_PROXY" {
+  default = ""
+}
+variable "NO_PROXY" {
+  default = ""
+}
+
+target "integration-test-base" {
+  inherits = ["_common"]
+  args = {
+    HTTP_PROXY = HTTP_PROXY
+    HTTPS_PROXY = HTTPS_PROXY
+    NO_PROXY = NO_PROXY
+  }
+  target = "integration-test-base"
+  output = ["type=cacheonly"]
+}
+
+target "integration-test" {
+  inherits = ["integration-test-base"]
+  target = "integration-test"
+}
