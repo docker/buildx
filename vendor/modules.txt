@@ -490,7 +490,7 @@ github.com/josharian/intern
 github.com/json-iterator/go
 # github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
 ## explicit
-# github.com/klauspost/compress v1.16.0
+# github.com/klauspost/compress v1.16.3
 ## explicit; go 1.18
 github.com/klauspost/compress
 github.com/klauspost/compress/fse
