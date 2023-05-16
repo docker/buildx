@@ -886,59 +886,60 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					cc := c
 					var printRes map[string][]byte
 					rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-						var isFallback bool
-						var origErr error
-						for {
-							if opt.PrintFunc != nil {
-								if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
-									req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
-								} else {
-									req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
-								}
-								req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
-								if isFallback {
-									req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
-								}
+						if opt.PrintFunc != nil {
+							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
+								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
+							} else {
+								req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
 							}
-							res, err := c.Solve(ctx, req)
-							if err != nil {
-								if origErr != nil {
+							req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
+						}
+
+						res, err := c.Solve(ctx, req)
+						if err != nil {
+							fallback := false
+							var reqErr *errdefs.UnsupportedSubrequestError
+							if errors.As(err, &reqErr) {
+								switch reqErr.Name {
+								case "frontend.outline", "frontend.targets":
+									fallback = true
+								default:
 									return nil, err
 								}
-								var reqErr *errdefs.UnsupportedSubrequestError
-								if !isFallback {
-									if errors.As(err, &reqErr) {
-										switch reqErr.Name {
-										case "frontend.outline", "frontend.targets":
-											isFallback = true
-											origErr = err
-											continue
-										}
-										return nil, err
-									}
-									// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
-									if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
-										isFallback = true
-										origErr = err
-										continue
-									}
-								}
+							} else {
 								return nil, err
 							}
-							if opt.PrintFunc != nil {
-								printRes = res.Metadata
+							// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
+							if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
+								fallback = true
 							}
-							results.Set(resultKey(dp.driverIndex, k), res)
-							if resultHandleFunc != nil {
-								resultCtx, err := NewResultContext(ctx, cc, so, res)
-								if err == nil {
-									resultHandleFunc(dp.driverIndex, resultCtx)
-								} else {
-									logrus.Warnf("failed to record result: %s", err)
+
+							if fallback {
+								fmt.Println("falling back!")
+								req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
+								res2, err2 := c.Solve(ctx, req)
+								if err2 != nil {
+									return nil, err
 								}
+								res = res2
+							} else {
+								return nil, err
 							}
-							return res, nil
 						}
+						if opt.PrintFunc != nil {
+							printRes = res.Metadata
+						}
+
+						results.Set(resultKey(dp.driverIndex, k), res)
+						if resultHandleFunc != nil {
+							resultCtx, err := NewResultContext(ctx, cc, so, res)
+							if err == nil {
+								resultHandleFunc(dp.driverIndex, resultCtx)
+							} else {
+								logrus.Warnf("failed to record result: %s", err)
+							}
+						}
+						return res, nil
 					}, ch)
 					if err != nil {
 						return err
