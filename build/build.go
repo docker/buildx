@@ -885,7 +885,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 
 					cc := c
 					var printRes map[string][]byte
-					rr, err := c.Build(ctx, so, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+					buildFunc := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 						if opt.PrintFunc != nil {
 							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
 								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
@@ -915,7 +915,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							}
 
 							if fallback {
-								fmt.Println("falling back!")
 								req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
 								res2, err2 := c.Solve(ctx, req)
 								if err2 != nil {
@@ -931,16 +930,16 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						}
 
 						results.Set(resultKey(dp.driverIndex, k), res)
-						if resultHandleFunc != nil {
-							resultCtx, err := NewResultContext(ctx, cc, so, res)
-							if err == nil {
-								resultHandleFunc(dp.driverIndex, resultCtx)
-							} else {
-								logrus.Warnf("failed to record result: %s", err)
-							}
-						}
 						return res, nil
-					}, ch)
+					}
+					var rr *client.SolveResponse
+					if resultHandleFunc != nil {
+						var resultCtx *ResultContext
+						resultCtx, rr, err = NewResultContext(ctx, cc, so, "buildx", buildFunc, ch)
+						resultHandleFunc(dp.driverIndex, resultCtx)
+					} else {
+						rr, err = c.Build(ctx, so, "buildx", buildFunc, ch)
+					}
 					if err != nil {
 						return err
 					}
