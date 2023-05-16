@@ -11,7 +11,7 @@ require (
 	github.com/containerd/continuity v0.3.0
 	github.com/containerd/typeurl/v2 v2.1.0
 	github.com/distribution/distribution/v3 v3.0.0-20230214150026-36d8c594d7aa
-	github.com/docker/cli v23.0.6+incompatible
+	github.com/docker/cli v24.0.0+incompatible
 	github.com/docker/cli-docs-tool v0.5.1
 	github.com/docker/distribution v2.8.2+incompatible
 	github.com/docker/docker v24.0.0+incompatible
