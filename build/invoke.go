@@ -113,7 +113,7 @@ func (c *Container) Exec(ctx context.Context, cfg *controllerapi.InvokeConfig, s
 }
 
 func exec(ctx context.Context, resultCtx *ResultContext, cfg *controllerapi.InvokeConfig, ctr gateway.Container, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
-	processCfg, err := resultCtx.getProcessConfig(cfg, stdin, stdout, stderr)
+	processCfg, err := resultCtx.getProcessConfig(ctx, cfg, stdin, stdout, stderr)
 	if err != nil {
 		return err
 	}
