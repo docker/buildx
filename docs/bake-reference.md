@@ -69,16 +69,16 @@ The following example shows the same Bake file in the HCL format:
 
 ```hcl
 variable "TAG" {
-  "default" = "latest"
+  default = "latest"
 }
 
 group "default" {
-  "targets" = ["latest"]
+  targets = ["webapp"]
 }
 
 target "webapp" {
-  "dockerfile" = "Dockerfile"
-  "tags" = ["docker.io/username/webapp:${TAG}"]
+  dockerfile = "Dockerfile"
+  tags = ["docker.io/username/webapp:${TAG}"]
 }
 ```
 
