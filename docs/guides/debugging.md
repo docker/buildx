@@ -24,7 +24,7 @@ build command to specify a command to launch in the resulting image.
 
 ```console
 $ docker buildx build --invoke /bin/sh .
-+] Building 4.2s (19/19) FINISHED
+[+] Building 4.2s (19/19) FINISHED
  => [internal] connecting to local controller                                                                                   0.0s
  => [internal] load build definition from Dockerfile                                                                            0.0s
  => => transferring dockerfile: 32B                                                                                             0.0s
@@ -93,7 +93,7 @@ immediately enter the monitor mode.
 
 ```console
 $ docker buildx debug-shell
-+] Building 0.0s (1/1) FINISHED                                                                                                                                                                                
+[+] Building 0.0s (1/1) FINISHED                                                                                                                                                                                
  => [internal] connecting to remote controller
 (buildx) list
 ID                              CURRENT_SESSION
