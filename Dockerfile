@@ -3,6 +3,9 @@
 ARG GO_VERSION=1.20
 ARG XX_VERSION=1.1.2
 ARG DOCKERD_VERSION=20.10.14
+ARG GOTESTSUM_VERSION=v1.9.0
+ARG REGISTRY_VERSION=2.8.0
+ARG BUILDKIT_VERSION=v0.11.6
 
 FROM docker:$DOCKERD_VERSION AS dockerd-release
 
@@ -17,6 +20,17 @@ RUN apk add --no-cache file git
 ENV GOFLAGS=-mod=vendor
 ENV CGO_ENABLED=0
 WORKDIR /src
+
+FROM registry:$REGISTRY_VERSION AS registry
+
+FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
+
+FROM gobase AS gotestsum
+ARG GOTESTSUM_VERSION
+ENV GOFLAGS=
+RUN --mount=target=/root/.cache,type=cache \
+  GOBIN=/out/ go install "gotest.tools/gotestsum@${GOTESTSUM_VERSION}" && \
+  /out/gotestsum --version
 
 FROM gobase AS buildx-version
 RUN --mount=type=bind,target=. <<EOT
@@ -39,6 +53,7 @@ RUN --mount=type=bind,target=. \
 EOT
 
 FROM gobase AS test
+ENV SKIP_INTEGRATION_TESTS=1
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
@@ -60,6 +75,17 @@ COPY --link --from=buildx-build /usr/bin/docker-buildx /buildx.exe
 FROM binaries-$TARGETOS AS binaries
 # enable scanning for this stage
 ARG BUILDKIT_SBOM_SCAN_STAGE=true
+
+FROM gobase AS integration-test-base
+RUN apk add --no-cache docker runc containerd
+COPY --link --from=gotestsum /out/gotestsum /usr/bin/
+COPY --link --from=registry /bin/registry /usr/bin/
+COPY --link --from=buildkit /usr/bin/buildkitd /usr/bin/
+COPY --link --from=buildkit /usr/bin/buildctl /usr/bin/
+COPY --link --from=binaries /buildx /usr/bin/
+
+FROM integration-test-base AS integration-test
+COPY . .
 
 # Release
 FROM --platform=$BUILDPLATFORM alpine AS releaser
