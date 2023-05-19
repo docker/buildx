@@ -63,6 +63,23 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 	}, nil
 }
 
+func (c *Client) Features(ctx context.Context, name string) map[Feature]bool {
+	features := make(map[Feature]bool)
+	if dapi, err := c.API(name); err == nil {
+		if info, err := dapi.Info(ctx); err == nil {
+			for _, v := range info.DriverStatus {
+				switch v[0] {
+				case "driver-type":
+					if v[1] == "io.containerd.snapshotter.v1" {
+						features[OCIImporter] = true
+					}
+				}
+			}
+		}
+	}
+	return features
+}
+
 type waitingWriter struct {
 	*io.PipeWriter
 	f      func()

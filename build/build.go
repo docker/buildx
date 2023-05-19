@@ -363,7 +363,7 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, dl dockerLoadCallback) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, docker *dockerutil.Client) (solveOpt *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
@@ -531,14 +531,22 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			return nil, nil, notSupported(nodeDriver, driver.OCIExporter)
 		}
 		if e.Type == "docker" {
-			if len(opt.Platforms) > 1 || len(attests) > 0 {
+			features := docker.Features(ctx, e.Attrs["context"])
+			if features[dockerutil.OCIImporter] && e.Output == nil {
+				// rely on oci importer if available (which supports
+				// multi-platform images), otherwise fall back to docker
+				opt.Exports[i].Type = "oci"
+			} else if len(opt.Platforms) > 1 || len(attests) > 0 {
+				if e.Output != nil {
+					return nil, nil, errors.Errorf("docker exporter does not support exporting manifest lists, use the oci exporter instead")
+				}
 				return nil, nil, errors.Errorf("docker exporter does not currently support exporting manifest lists")
 			}
 			if e.Output == nil {
 				if nodeDriver.IsMobyDriver() {
 					e.Type = "image"
 				} else {
-					w, cancel, err := dl(e.Attrs["context"])
+					w, cancel, err := docker.LoadImage(ctx, e.Attrs["context"], pw)
 					if err != nil {
 						return nil, nil, err
 					}
@@ -733,9 +741,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				hasMobyDriver = true
 			}
 			opt.Platforms = np.platforms
-			so, release, err := toSolveOpt(ctx, node, multiDriver, opt, np.bopts, configDir, w, func(name string) (io.WriteCloser, func(), error) {
-				return docker.LoadImage(ctx, name, w)
-			})
+			so, release, err := toSolveOpt(ctx, node, multiDriver, opt, np.bopts, configDir, w, docker)
 			if err != nil {
 				return nil, err
 			}
@@ -1542,8 +1548,6 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 func notSupported(d driver.Driver, f driver.Feature) error {
 	return errors.Errorf("%s feature is currently not supported for %s driver. Please switch to a different driver (eg. \"docker buildx create --use\")", f, d.Factory().Name())
 }
-
-type dockerLoadCallback func(name string) (io.WriteCloser, func(), error)
 
 func noDefaultLoad() bool {
 	v, ok := os.LookupEnv("BUILDX_NO_DEFAULT_LOAD")
