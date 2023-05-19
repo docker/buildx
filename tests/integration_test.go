@@ -4,7 +4,6 @@ import (
 	"os"
 	"testing"
 
-	"github.com/distribution/distribution/v3/reference"
 	"github.com/docker/buildx/tests/workers"
 	"github.com/moby/buildkit/util/testutil/integration"
 )
@@ -30,11 +29,9 @@ func testIntegration(t *testing.T, funcs ...func(t *testing.T, sb integration.Sa
 	mirroredImages := integration.OfficialImages("busybox:latest", "alpine:latest")
 	buildkitImage := "docker.io/moby/buildkit:buildx-stable-1"
 	if integration.IsTestDockerd() {
-		if img, ok := os.LookupEnv("TEST_BUILDKIT_IMAGE"); ok {
-			ref, err := reference.ParseNormalizedNamed(img)
-			if err == nil {
-				buildkitImage = ref.String()
-			}
+		if img, ok := os.LookupEnv("TEST_BUILDKIT_IMAGE"); ok && img != "" {
+			t.Log("using TEST_BUILDKIT_IMAGE", img)
+			buildkitImage = img
 		}
 	}
 	mirroredImages["moby/buildkit:buildx-stable-1"] = buildkitImage
