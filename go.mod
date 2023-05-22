@@ -10,7 +10,6 @@ require (
 	github.com/containerd/containerd v1.7.0
 	github.com/containerd/continuity v0.3.0
 	github.com/containerd/typeurl/v2 v2.1.0
-	github.com/distribution/distribution/v3 v3.0.0-20230214150026-36d8c594d7aa
 	github.com/docker/cli v24.0.0+incompatible
 	github.com/docker/cli-docs-tool v0.5.1
 	github.com/docker/distribution v2.8.2+incompatible
@@ -87,6 +86,7 @@ require (
 	github.com/containerd/ttrpc v1.2.1 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
+	github.com/distribution/distribution/v3 v3.0.0-20230214150026-36d8c594d7aa // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
