@@ -204,8 +204,7 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	}
 	containerName := pod.Spec.Containers[0].Name
 	cmd := []string{"buildctl", "dial-stdio"}
-	conn, err := execconn.ExecConn(restClient, restClientConfig,
-		pod.Namespace, pod.Name, containerName, cmd)
+	conn, err := execconn.ExecConn(ctx, restClient, restClientConfig, pod.Namespace, pod.Name, containerName, cmd)
 	if err != nil {
 		return nil, err
 	}

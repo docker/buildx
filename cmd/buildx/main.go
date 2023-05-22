@@ -18,8 +18,6 @@ import (
 	//nolint:staticcheck // vendored dependencies may still use this
 	"github.com/containerd/containerd/pkg/seed"
 
-	_ "k8s.io/client-go/plugin/pkg/client/auth/azure"
-	_ "k8s.io/client-go/plugin/pkg/client/auth/gcp"
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 
 	_ "github.com/docker/buildx/driver/docker"
