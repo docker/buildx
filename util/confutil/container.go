@@ -5,6 +5,7 @@ import (
 	"io"
 	"os"
 	"path"
+	"regexp"
 
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
@@ -18,6 +19,8 @@ const (
 	DefaultBuildKitStateDir  = "/var/lib/buildkit"
 	DefaultBuildKitConfigDir = "/etc/buildkit"
 )
+
+var reInvalidCertsDir = regexp.MustCompile(`[^a-zA-Z0-9.-]+`)
 
 // LoadConfigFiles creates a temp directory with BuildKit config and
 // registry certificates ready to be copied to a container.
@@ -60,7 +63,7 @@ func LoadConfigFiles(bkconfig string) (map[string][]byte, error) {
 			if regConf == nil {
 				continue
 			}
-			pfx := path.Join("certs", regName)
+			pfx := path.Join("certs", reInvalidCertsDir.ReplaceAllString(regName, "_"))
 			if regConf.Has("ca") {
 				regCAs := regConf.GetArray("ca").([]string)
 				if len(regCAs) > 0 {
