@@ -22,7 +22,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 	github.com/hashicorp/hcl/v2 v2.8.2
-	github.com/moby/buildkit v0.11.0-rc3.0.20230518115217-87afda3fbb9c
+	github.com/moby/buildkit v0.11.0-rc3.0.20230523090158-212ab16a39b1
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
