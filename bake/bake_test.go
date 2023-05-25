@@ -1417,3 +1417,36 @@ func TestReadLocalFilesDefault(t *testing.T) {
 		})
 	}
 }
+
+func TestAttestDuplicates(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "default" {
+                attest = ["type=sbom", "type=sbom,generator=custom", "type=sbom,foo=bar", "type=provenance,mode=max"]
+            }`),
+	}
+	ctx := context.TODO()
+
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	require.Equal(t, []string{"type=sbom,foo=bar", "type=provenance,mode=max"}, m["default"].Attest)
+	require.NoError(t, err)
+
+	opts, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{
+		"sbom":       ptrstr("type=sbom,foo=bar"),
+		"provenance": ptrstr("type=provenance,mode=max"),
+	}, opts["default"].Attests)
+
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil)
+	require.Equal(t, []string{"type=sbom,disabled=true", "type=provenance,mode=max"}, m["default"].Attest)
+	require.NoError(t, err)
+
+	opts, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{
+		"sbom":       nil,
+		"provenance": ptrstr("type=provenance,mode=max"),
+	}, opts["default"].Attests)
+}

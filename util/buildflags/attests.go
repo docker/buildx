@@ -25,7 +25,7 @@ func ParseAttests(in []string) ([]*controllerapi.Attest, error) {
 	found := map[string]struct{}{}
 	for _, in := range in {
 		in := in
-		attest, err := parseAttest(in)
+		attest, err := ParseAttest(in)
 		if err != nil {
 			return nil, err
 		}
@@ -40,7 +40,7 @@ func ParseAttests(in []string) ([]*controllerapi.Attest, error) {
 	return out, nil
 }
 
-func parseAttest(in string) (*controllerapi.Attest, error) {
+func ParseAttest(in string) (*controllerapi.Attest, error) {
 	if in == "" {
 		return nil, nil
 	}

@@ -620,7 +620,7 @@ var _ hclparser.WithEvalContexts = &Group{}
 var _ hclparser.WithGetName = &Group{}
 
 func (t *Target) normalize() {
-	t.Attest = removeDupes(t.Attest)
+	t.Attest = removeAttestDupes(t.Attest)
 	t.Tags = removeDupes(t.Tags)
 	t.Secrets = removeDupes(t.Secrets)
 	t.SSH = removeDupes(t.SSH)
@@ -682,6 +682,7 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.Attest != nil { // merge
 		t.Attest = append(t.Attest, t2.Attest...)
+		t.Attest = removeAttestDupes(t.Attest)
 	}
 	if t2.Secrets != nil { // merge
 		t.Secrets = append(t.Secrets, t2.Secrets...)
@@ -1191,6 +1192,26 @@ func removeDupes(s []string) []string {
 		i++
 	}
 	return s[:i]
+}
+
+func removeAttestDupes(s []string) []string {
+	res := []string{}
+	m := map[string]int{}
+	for _, v := range s {
+		att, err := buildflags.ParseAttest(v)
+		if err != nil {
+			res = append(res, v)
+			continue
+		}
+
+		if i, ok := m[att.Type]; ok {
+			res[i] = v
+		} else {
+			m[att.Type] = len(res)
+			res = append(res, v)
+		}
+	}
+	return res
 }
 
 func parseOutputType(str string) string {
