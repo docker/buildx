@@ -7,14 +7,15 @@ import (
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/moby/buildkit/util/testutil/integration"
+	"github.com/stretchr/testify/require"
 )
 
-func tmpdir(t *testing.T, appliers ...fstest.Applier) (string, error) {
+func tmpdir(t *testing.T, appliers ...fstest.Applier) string {
+	t.Helper()
 	tmpdir := t.TempDir()
-	if err := fstest.Apply(appliers...).Apply(tmpdir); err != nil {
-		return "", err
-	}
-	return tmpdir, nil
+	err := fstest.Apply(appliers...).Apply(tmpdir)
+	require.NoError(t, err)
+	return tmpdir
 }
 
 func buildxCmd(sb integration.Sandbox, args ...string) *exec.Cmd {

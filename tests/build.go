@@ -148,11 +148,10 @@ RUN cp /etc/foo /etc/bar
 FROM scratch
 COPY --from=base /etc/bar /bar
 `)
-	dir, err := tmpdir(
+	dir := tmpdir(
 		t,
 		fstest.CreateFile("Dockerfile", dockerfile, 0600),
 		fstest.CreateFile("foo", []byte("foo"), 0600),
 	)
-	require.NoError(t, err)
 	return dir
 }
