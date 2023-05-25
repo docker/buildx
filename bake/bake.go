@@ -1000,6 +1000,10 @@ func checkPath(p string) error {
 		}
 		return err
 	}
+	p, err = filepath.Abs(p)
+	if err != nil {
+		return err
+	}
 	wd, err := os.Getwd()
 	if err != nil {
 		return err
