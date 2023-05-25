@@ -22,6 +22,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemote,
 	testBakeRemoteCmdContext,
 	testBakeRemoteCmdContextOverride,
+	testBakeRemoteContextSubdir,
 }
 
 func testBakeRemote(t *testing.T, sb integration.Sandbox) {
@@ -126,4 +127,38 @@ EOT
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+// https://github.com/docker/buildx/issues/1738
+func testBakeRemoteContextSubdir(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target default {
+	context = "./bar"
+}
+`)
+	dockerfile := []byte(`
+FROM scratch
+COPY super-cool.txt /
+`)
+
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateDir("bar", 0700),
+		fstest.CreateFile("bar/Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("bar/super-cool.txt", []byte("super cool"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "docker-bake.hcl", "bar")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(sb, "/tmp", addr, "--set", "*.output=type=local,dest="+dirDest)
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest, "super-cool.txt"))
 }
