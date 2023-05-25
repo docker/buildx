@@ -6,6 +6,7 @@ import (
 	"net/url"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -66,6 +67,14 @@ func (c *Git) IsDirty() bool {
 
 func (c *Git) RootDir() (string, error) {
 	return c.clean(c.run("rev-parse", "--show-toplevel"))
+}
+
+func (c *Git) GitDir() (string, error) {
+	dir, err := c.RootDir()
+	if err != nil {
+		return "", err
+	}
+	return filepath.Join(dir, ".git"), nil
 }
 
 func (c *Git) RemoteURL() (string, error) {
