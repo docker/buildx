@@ -21,6 +21,7 @@ func bakeCmd(sb integration.Sandbox, dir string, args ...string) (string, error)
 var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemote,
 	testBakeRemoteCmdContext,
+	testBakeRemoteCmdContextOverride,
 }
 
 func testBakeRemote(t *testing.T, sb integration.Sandbox) {
@@ -82,6 +83,46 @@ EOT
 	addr := gitutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(sb, dirSrc, addr, "--set", "*.output=type=local,dest="+dirDest)
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBakeRemoteCmdContextOverride(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	context = BAKE_CMD_CONTEXT
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+	)
+	dirSrc := tmpdir(
+		t,
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	gitSpec, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	require.NoError(t, err)
+	gitutil.GitInit(gitSpec, t)
+	gitutil.GitAdd(gitSpec, t, "docker-bake.hcl")
+	gitutil.GitCommit(gitSpec, t, "initial commit")
+	addrSpec := gitutil.GitServeHTTP(gitSpec, t)
+
+	gitSrc, err := gitutil.New(gitutil.WithWorkingDir(dirSrc))
+	require.NoError(t, err)
+	gitutil.GitInit(gitSrc, t)
+	gitutil.GitAdd(gitSrc, t, "foo")
+	gitutil.GitCommit(gitSrc, t, "initial commit")
+	addrSrc := gitutil.GitServeHTTP(gitSrc, t)
+
+	out, err := bakeCmd(sb, "/tmp", addrSpec, addrSrc, "--set", "*.output=type=local,dest="+dirDest)
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
