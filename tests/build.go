@@ -1,9 +1,13 @@
 package tests
 
 import (
+	"bytes"
+	"encoding/json"
 	"errors"
 	"fmt"
 	"os"
+	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/containerd/containerd/platforms"
@@ -11,6 +15,7 @@ import (
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
+	"github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -23,6 +28,7 @@ func buildCmd(sb integration.Sandbox, args ...string) (string, error) {
 
 var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuild,
+	testImageIDOutput,
 	testBuildLocalExport,
 	testBuildRegistryExport,
 	testBuildTarExport,
@@ -81,6 +87,56 @@ func testBuildRegistryExport(t *testing.T, sb integration.Sandbox) {
 	require.NotNil(t, img)
 	require.Len(t, img.Layers, 1)
 	require.Equal(t, img.Layers[0]["bar"].Data, []byte("foo"))
+}
+
+func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`FROM busybox:latest`)
+
+	dir, err := tmpdir(t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+	require.NoError(t, err)
+
+	targetDir := t.TempDir()
+
+	outFlag := "--output=type=docker"
+
+	if sb.Name() == "remote" {
+		// there is no Docker atm to load the image
+		outFlag += ",dest=" + targetDir + "/image.tar"
+	}
+
+	cmd := buildxCmd(sb, "build", "-q", outFlag, "--iidfile", filepath.Join(targetDir, "iid.txt"), "--metadata-file", filepath.Join(targetDir, "md.json"), dir)
+	stdout := bytes.NewBuffer(nil)
+	cmd.Stdout = stdout
+	cmd.Stderr = os.Stderr
+	err = cmd.Run()
+
+	require.NoError(t, err)
+
+	dt, err := os.ReadFile(filepath.Join(targetDir, "iid.txt"))
+	require.NoError(t, err)
+
+	imageID := string(dt)
+	require.NotEmpty(t, imageID)
+
+	dgst, err := digest.Parse(string(dt))
+	require.NoError(t, err)
+
+	require.Equal(t, dgst.String(), strings.TrimSpace(stdout.String()))
+
+	dt, err = os.ReadFile(filepath.Join(targetDir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		ConfigDigest string `json:"containerimage.config.digest"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, md.ConfigDigest)
+	require.Equal(t, dgst, digest.Digest(md.ConfigDigest))
 }
 
 func createTestProject(t *testing.T) string {
