@@ -5,6 +5,7 @@ import (
 	"os"
 
 	"github.com/docker/buildx/commands"
+	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli-plugins/manager"
@@ -85,6 +86,9 @@ func main() {
 		fmt.Fprintf(cmd.Err(), "ERROR: %+v", stack.Formatter(err))
 	} else {
 		fmt.Fprintf(cmd.Err(), "ERROR: %v\n", err)
+	}
+	if ebr, ok := err.(*desktop.ErrorWithBuildRef); ok {
+		ebr.Print(cmd.Err())
 	}
 
 	os.Exit(1)

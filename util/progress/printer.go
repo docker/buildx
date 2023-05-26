@@ -33,6 +33,11 @@ type Printer struct {
 	warnings     []client.VertexWarning
 	logMu        sync.Mutex
 	logSourceMap map[digest.Digest]interface{}
+
+	// TODO: remove once we can use result context to pass build ref
+	//  see https://github.com/docker/buildx/pull/1861
+	buildRefsMu sync.Mutex
+	buildRefs   map[string]string
 }
 
 func (p *Printer) Wait() error {
@@ -141,6 +146,19 @@ func NewPrinter(ctx context.Context, w io.Writer, out console.File, mode string,
 	}()
 	<-pw.ready
 	return pw, nil
+}
+
+func (p *Printer) WriteBuildRef(target string, ref string) {
+	p.buildRefsMu.Lock()
+	defer p.buildRefsMu.Unlock()
+	if p.buildRefs == nil {
+		p.buildRefs = map[string]string{}
+	}
+	p.buildRefs[target] = ref
+}
+
+func (p *Printer) BuildRefs() map[string]string {
+	return p.buildRefs
 }
 
 type printerOpts struct {

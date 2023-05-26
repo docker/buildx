@@ -26,6 +26,7 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/localstate"
+	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
@@ -822,6 +823,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 
 			for i, dp := range dps {
 				i, dp, so := i, dp, *dp.so
+				node := nodes[dp.driverIndex]
 				if multiDriver {
 					for i, e := range so.Exports {
 						switch e.Type {
@@ -939,6 +941,16 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						resultHandleFunc(dp.driverIndex, resultHandle)
 					} else {
 						rr, err = c.Build(ctx, so, "buildx", buildFunc, ch)
+					}
+					if node.Driver.Features(ctx)[driver.HistoryAPI] && desktop.BuildBackendEnabled() {
+						buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
+						if err != nil {
+							return &desktop.ErrorWithBuildRef{
+								Ref: buildRef,
+								Err: err,
+							}
+						}
+						progress.WriteBuildRef(w, k, buildRef)
 					}
 					if err != nil {
 						return err
