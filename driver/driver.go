@@ -6,8 +6,11 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
 	clitypes "github.com/docker/cli/cli/config/types"
+	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc/codes"
 )
 
 var ErrNotRunning = errors.Errorf("driver not running")
@@ -88,4 +91,27 @@ func Boot(ctx, clientContext context.Context, d Driver, pw progress.Writer) (*cl
 		}
 		return c, nil
 	}
+}
+
+func HistoryAPISupported(ctx context.Context, c *client.Client) (res bool) {
+	res = true
+	checkErrF := func(err error) {
+		if s, ok := grpcerrors.AsGRPCStatus(err); ok {
+			if s.Code() == codes.Unimplemented {
+				res = false
+			}
+		}
+	}
+	cl, err := c.ControlClient().ListenBuildHistory(ctx, &controlapi.BuildHistoryRequest{
+		ActiveOnly: true,
+		Ref:        "buildx-dummy-ref", // dummy ref to check if the server supports the API
+		EarlyExit:  true,
+	})
+	if err != nil {
+		checkErrF(err)
+		return
+	}
+	_, err = cl.Recv()
+	checkErrF(err)
+	return
 }

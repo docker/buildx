@@ -7,3 +7,5 @@ const DockerExporter Feature = "Docker exporter"
 
 const CacheExport Feature = "cache export"
 const MultiPlatform Feature = "multiple platforms"
+
+const HistoryAPI Feature = "history api"
