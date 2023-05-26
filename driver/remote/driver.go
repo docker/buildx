@@ -90,7 +90,7 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 func (d *Driver) Features() map[driver.Feature]bool {
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    true,
-		driver.DockerExporter: false,
+		driver.DockerExporter: true,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true,
 	}
