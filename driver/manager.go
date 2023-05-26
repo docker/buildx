@@ -147,9 +147,11 @@ func GetFactories(instanceRequired bool) []Factory {
 
 type cachedDriver struct {
 	Driver
-	client *client.Client
-	err    error
-	once   sync.Once
+	client       *client.Client
+	err          error
+	once         sync.Once
+	featuresOnce sync.Once
+	features     map[Feature]bool
 }
 
 func (d *cachedDriver) Client(ctx context.Context) (*client.Client, error) {
@@ -157,4 +159,11 @@ func (d *cachedDriver) Client(ctx context.Context) (*client.Client, error) {
 		d.client, d.err = d.Driver.Client(ctx)
 	})
 	return d.client, d.err
+}
+
+func (d *cachedDriver) Features() map[Feature]bool {
+	d.featuresOnce.Do(func() {
+		d.features = d.Driver.Features()
+	})
+	return d.features
 }
