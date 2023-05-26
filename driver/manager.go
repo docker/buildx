@@ -161,9 +161,9 @@ func (d *cachedDriver) Client(ctx context.Context) (*client.Client, error) {
 	return d.client, d.err
 }
 
-func (d *cachedDriver) Features() map[Feature]bool {
+func (d *cachedDriver) Features(ctx context.Context) map[Feature]bool {
 	d.featuresOnce.Do(func() {
-		d.features = d.Driver.Features()
+		d.features = d.Driver.Features(ctx)
 	})
 	return d.features
 }

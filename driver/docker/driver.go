@@ -58,10 +58,9 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	}))
 }
 
-func (d *Driver) Features() map[driver.Feature]bool {
+func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	var useContainerdSnapshotter bool
 	var historyAPI bool
-	ctx := context.Background()
 	c, err := d.Client(ctx)
 	if err == nil {
 		workers, _ := c.ListWorkers(ctx)

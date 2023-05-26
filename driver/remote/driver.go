@@ -87,9 +87,8 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	return client.New(ctx, d.InitConfig.EndpointAddr, opts...)
 }
 
-func (d *Driver) Features() map[driver.Feature]bool {
+func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	var historyAPI bool
-	ctx := context.Background()
 	c, err := d.Client(ctx)
 	if err == nil {
 		historyAPI = driver.HistoryAPISupported(ctx, c)

@@ -60,7 +60,7 @@ type Driver interface {
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error
 	Client(ctx context.Context) (*client.Client, error)
-	Features() map[Feature]bool
+	Features(ctx context.Context) map[Feature]bool
 	IsMobyDriver() bool
 	Config() InitConfig
 }
