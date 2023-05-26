@@ -274,14 +274,12 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	}
 
 	if options.quiet {
-		fmt.Println(resp.ExporterResponse[exptypes.ExporterImageDigestKey])
+		fmt.Println(getImageID(resp.ExporterResponse))
 	}
 	if options.imageIDFile != "" {
-		dgst := resp.ExporterResponse[exptypes.ExporterImageDigestKey]
-		if v, ok := resp.ExporterResponse[exptypes.ExporterImageConfigDigestKey]; ok {
-			dgst = v
+		if err := os.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse)), 0644); err != nil {
+			return errors.Wrap(err, "writing image ID file")
 		}
-		return os.WriteFile(options.imageIDFile, []byte(dgst), 0644)
 	}
 	if options.metadataFile != "" {
 		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
@@ -294,6 +292,15 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		}
 	}
 	return nil
+}
+
+// getImageID returns the image ID - the digest of the image config
+func getImageID(resp map[string]string) string {
+	dgst := resp[exptypes.ExporterImageDigestKey]
+	if v, ok := resp[exptypes.ExporterImageConfigDigestKey]; ok {
+		dgst = v
+	}
+	return dgst
 }
 
 func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
