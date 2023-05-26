@@ -5,6 +5,7 @@ import (
 	"go.opentelemetry.io/otel"
 
 	_ "github.com/moby/buildkit/util/tracing/detect/delegated"
+	_ "github.com/moby/buildkit/util/tracing/detect/jaeger"
 	_ "github.com/moby/buildkit/util/tracing/env"
 )
 
