@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	"fmt"
 
 	"github.com/docker/buildx/monitor/types"
 	"github.com/pkg/errors"
@@ -16,7 +17,16 @@ func NewDisconnectCmd(m types.Monitor) types.Command {
 }
 
 func (cm *DisconnectCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: "disconnect a client from a buildx server. Specific session ID can be specified an arg"}
+	return types.CommandInfo{
+		Name:        "disconnect",
+		HelpMessage: "disconnect a client from a buildx server. Specific session ID can be specified an arg",
+		HelpMessageLong: fmt.Sprintf(`
+Usage:
+  disconnect [ID]
+
+ID is for a session (visible via list command). Default is %q.
+`, cm.m.AttachedSessionID()),
+	}
 }
 
 func (cm *DisconnectCmd) Exec(ctx context.Context, args []string) error {

@@ -22,7 +22,16 @@ func NewExecCmd(m types.Monitor, invokeConfig controllerapi.InvokeConfig, stdout
 }
 
 func (cm *ExecCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: "execute a process in the interactive container"}
+	return types.CommandInfo{
+		Name:        "exec",
+		HelpMessage: "execute a process in the interactive container",
+		HelpMessageLong: `
+Usage:
+  exec COMMAND [ARG...]
+
+COMMAND and ARG... will be executed in the container.
+`,
+	}
 }
 
 func (cm *ExecCmd) Exec(ctx context.Context, args []string) error {

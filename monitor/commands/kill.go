@@ -16,7 +16,16 @@ func NewKillCmd(m types.Monitor) types.Command {
 }
 
 func (cm *KillCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: "kill buildx server"}
+	return types.CommandInfo{
+		Name:        "kill",
+		HelpMessage: "kill buildx server",
+		HelpMessageLong: `
+Usage:
+  kill
+
+Kills the currently connecting buildx server process.
+`,
+	}
 }
 
 func (cm *KillCmd) Exec(ctx context.Context, args []string) error {

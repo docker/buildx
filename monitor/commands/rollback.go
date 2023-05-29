@@ -21,7 +21,19 @@ func NewRollbackCmd(m types.Monitor, invokeConfig controllerapi.InvokeConfig, st
 }
 
 func (cm *RollbackCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: "re-runs the interactive container with initial rootfs contents"}
+	return types.CommandInfo{
+		Name:        "rollback",
+		HelpMessage: "re-runs the interactive container with the step's rootfs contents",
+		HelpMessageLong: `
+Usage:
+  rollback [FLAGS] [COMMAND] [ARG...]
+
+Flags:
+  --init Run the container with the initial rootfs of that step.
+
+COMMAND and ARG... will be executed in the container.
+`,
+	}
 }
 
 func (cm *RollbackCmd) Exec(ctx context.Context, args []string) error {

@@ -38,9 +38,14 @@ type Monitor interface {
 
 // CommandInfo is information about a command.
 type CommandInfo struct {
+	// Name is the name of the command.
+	Name string
 
-	// HelpMessage is the message printed to the console when "help" command is invoked.
+	// HelpMessage is one-line message printed to the console when "help" command is invoked.
 	HelpMessage string
+
+	// HelpMessageLong is a detailed message printed to the console when "help" command prints this command's information.
+	HelpMessageLong string
 }
 
 // Command represents a command for debugging.
