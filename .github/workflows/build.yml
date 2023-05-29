@@ -188,6 +188,8 @@ jobs:
 
   bin-image:
     runs-on: ubuntu-22.04
+    needs:
+      - test
     if: ${{ github.event_name != 'pull_request' && github.repository == 'docker/buildx' }}
     steps:
       -
@@ -239,6 +241,7 @@ jobs:
   release:
     runs-on: ubuntu-22.04
     needs:
+      - test
       - binaries
     steps:
       -
