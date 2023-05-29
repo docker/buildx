@@ -116,6 +116,43 @@ commit automatically with `git commit -s`.
 
 ### Run the unit- and integration-tests
 
+Running tests:
+
+```bash
+make test
+```
+
+This runs all unit and integration tests, in a containerized environment.
+Locally, every package can be tested separately with standard Go tools, but
+integration tests are skipped if local user doesn't have enough permissions or
+worker binaries are not installed.
+
+```bash
+# run unit tests only
+make test-unit
+
+# run integration tests only
+make test-integration
+
+# test a specific package
+TESTPKGS=./bake make test
+
+# run all integration tests with a specific worker
+TESTFLAGS="--run=//worker=docker-container -v" make test
+```
+
+> **Note**
+>
+> Set `TEST_KEEP_CACHE=1` for the test framework to keep external dependant
+> images in a docker volume if you are repeatedly calling `make test`. This
+> helps to avoid rate limiting on the remote registry side.
+
+> **Note**
+>
+> If you are working behind a proxy, you can set some of or all
+> `HTTP_PROXY=http://ip:port`, `HTTPS_PROXY=http://ip:port`, `NO_PROXY=http://ip:port`
+> for the test framework to specify the proxy build args.
+
 To enter a demo container environment and experiment, you may run:
 
 ```
