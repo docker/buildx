@@ -6,11 +6,10 @@ set -eu -o pipefail
 : "${CACHE_FROM=}"
 : "${CACHE_TO=}"
 
-: ${TEST_INTEGRATION=}
-: ${TEST_REPORT_SUFFIX=}
-: ${TEST_KEEP_CACHE=}
-: ${TEST_DOCKERD=}
-: ${TEST_BUILDKIT_IMAGE=}
+: "${TEST_REPORT_SUFFIX=}"
+: "${TEST_KEEP_CACHE=}"
+: "${TEST_DOCKERD=}"
+: "${TEST_BUILDKIT_IMAGE=}"
 
 if [ -n "$CACHE_FROM" ]; then
   for cfrom in $CACHE_FROM; do
@@ -22,20 +21,6 @@ if [ -n "$CACHE_TO" ]; then
     setFlags+=(--set "*.cache-to=$cto")
   done
 fi
-
-if [ "$#" == 0 ]; then TEST_INTEGRATION=1; fi
-
-while test $# -gt 0; do
-  case "$1" in
-    integration)
-      TEST_INTEGRATION=1
-      ;;
-    *)
-      echo "unknown arg $1"
-      ;;
-  esac
-  shift
-done
 
 iid="buildx-tests"
 
@@ -52,10 +37,8 @@ if ! docker container inspect "$cacheVolume" >/dev/null 2>/dev/null; then
   docker create -v /root/.cache -v /root/.cache/registry -v /go/pkg/mod --name "$cacheVolume" alpine
 fi
 
-if [ "$TEST_INTEGRATION" == 1 ]; then
-  cid=$(docker create --rm -v /tmp $testReportsVol --volumes-from=$cacheVolume -e GITHUB_REF -e TEST_DOCKERD -e TEST_BUILDKIT_IMAGE -e SKIP_INTEGRATION_TESTS -e GOTESTSUM_FORMAT ${BUILDKIT_INTEGRATION_SNAPSHOTTER:+"-eBUILDKIT_INTEGRATION_SNAPSHOTTER"} -e BUILDKIT_REGISTRY_MIRROR_DIR=/root/.cache/registry --privileged $iid gotestsum $gotestsumArgs --packages="${TESTPKGS:-./...}" -- $gotestArgs ${TESTFLAGS:--v})
-  docker start -a -i $cid
-fi
+cid=$(docker create --rm -v /tmp $testReportsVol --volumes-from=$cacheVolume -e GITHUB_REF -e TEST_DOCKERD -e TEST_BUILDKIT_IMAGE -e SKIP_INTEGRATION_TESTS -e GOTESTSUM_FORMAT ${BUILDKIT_INTEGRATION_SNAPSHOTTER:+"-eBUILDKIT_INTEGRATION_SNAPSHOTTER"} -e BUILDKIT_REGISTRY_MIRROR_DIR=/root/.cache/registry --privileged $iid gotestsum $gotestsumArgs --packages="${TESTPKGS:-./...}" -- $gotestArgs ${TESTFLAGS:--v})
+docker start -a -i $cid
 
 if [ "$TEST_KEEP_CACHE" != "1" ]; then
   docker rm -v $cacheVolume

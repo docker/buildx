@@ -40,8 +40,6 @@ jobs:
           - remote
         pkg:
           - ./tests
-        typ:
-          - integration
         include:
           - pkg: ./...
             skip-integration-tests: 1
@@ -66,7 +64,7 @@ jobs:
         name: Test
         run: |
           export TEST_REPORT_SUFFIX=-${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.skip-integration-tests }}-${{ matrix.worker }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')
-          ./hack/test ${{ matrix.typ }}
+          ./hack/test
         env:
           TEST_DOCKERD: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker-container') && '1' || '0' }}"
           TESTFLAGS: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker-container') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
