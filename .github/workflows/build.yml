@@ -73,6 +73,12 @@ jobs:
           TESTPKGS: "${{ matrix.pkg }}"
           SKIP_INTEGRATION_TESTS: "${{ matrix.skip-integration-tests }}"
       -
+        name: Send to Codecov
+        if: always()
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ./bin/testreports
+      -
         name: Generate annotations
         if: always()
         uses: crazy-max/.github/.github/actions/gotest-annotations@1a64ea6d01db9a48aa61954cb20e265782c167d9
