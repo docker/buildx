@@ -23,14 +23,44 @@ env:
   BUILDKIT_IMAGE: "moby/buildkit:latest"
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
+  TEST_CACHE_SCOPE: "test"
 
 jobs:
+  prepare-test:
+    runs-on: ubuntu-22.04
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+          buildkitd-flags: --debug
+      -
+        name: Build
+        uses: docker/bake-action@v3
+        with:
+          targets: integration-test-base
+          set: |
+            *.cache-from=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
+            *.cache-to=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
+
   test:
     runs-on: ubuntu-22.04
+    needs:
+      - prepare-test
     env:
       TESTFLAGS: "-v --parallel=6 --timeout=30m"
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       GOTESTSUM_FORMAT: "standard-verbose"
+      TEST_IMAGE_BUILD: "0"
+      TEST_IMAGE_ID: "buildx-tests"
     strategy:
       fail-fast: false
       matrix:
@@ -48,9 +78,6 @@ jobs:
         name: Checkout
         uses: actions/checkout@v3
       -
-        name: Expose GitHub Runtime
-        uses: crazy-max/ghaction-github-runtime@v2
-      -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v2
       -
@@ -60,6 +87,14 @@ jobs:
           version: ${{ env.BUILDX_VERSION }}
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
           buildkitd-flags: --debug
+      -
+        name: Build test image
+        uses: docker/bake-action@v3
+        with:
+          targets: integration-test
+          set: |
+            *.cache-from=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
+            *.output=type=docker,name=${{ env.TEST_IMAGE_ID }}
       -
         name: Test
         run: |
