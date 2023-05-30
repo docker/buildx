@@ -23,14 +23,18 @@ env:
   BUILDKIT_IMAGE: "moby/buildkit:latest"
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
+  TEST_CACHE_SCOPE: "test"
 
 jobs:
-  test:
+  prepare-test:
     runs-on: ubuntu-22.04
     steps:
       -
         name: Checkout
         uses: actions/checkout@v3
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v2
@@ -39,20 +43,89 @@ jobs:
           driver-opts: image=${{ env.BUILDKIT_IMAGE }}
           buildkitd-flags: --debug
       -
-        name: Test
+        name: Build
         uses: docker/bake-action@v3
         with:
-          targets: test
+          targets: integration-test-base
           set: |
-            *.cache-from=type=gha,scope=test
-            *.cache-to=type=gha,scope=test
+            *.cache-from=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
+            *.cache-to=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
+
+  test:
+    runs-on: ubuntu-22.04
+    needs:
+      - prepare-test
+    env:
+      TESTFLAGS: "-v --parallel=6 --timeout=30m"
+      TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
+      GOTESTSUM_FORMAT: "standard-verbose"
+      TEST_IMAGE_BUILD: "0"
+      TEST_IMAGE_ID: "buildx-tests"
+    strategy:
+      fail-fast: false
+      matrix:
+        worker:
+          - docker
+          - docker-container
+          - remote
+        pkg:
+          - ./tests
+        include:
+          - pkg: ./...
+            skip-integration-tests: 1
+    steps:
       -
-        name: Upload coverage
+        name: Checkout
+        uses: actions/checkout@v3
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v2
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+        with:
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+          buildkitd-flags: --debug
+      -
+        name: Build test image
+        uses: docker/bake-action@v3
+        with:
+          targets: integration-test
+          set: |
+            *.cache-from=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
+            *.output=type=docker,name=${{ env.TEST_IMAGE_ID }}
+      -
+        name: Test
+        run: |
+          export TEST_REPORT_SUFFIX=-${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.skip-integration-tests }}-${{ matrix.worker }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')
+          ./hack/test
+        env:
+          TEST_DOCKERD: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker-container') && '1' || '0' }}"
+          TESTFLAGS: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker-container') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
+          TESTPKGS: "${{ matrix.pkg }}"
+          SKIP_INTEGRATION_TESTS: "${{ matrix.skip-integration-tests }}"
+      -
+        name: Send to Codecov
+        if: always()
         uses: codecov/codecov-action@v3
         with:
-          directory: ${{ env.DESTDIR }}/coverage
+          directory: ./bin/testreports
+      -
+        name: Generate annotations
+        if: always()
+        uses: crazy-max/.github/.github/actions/gotest-annotations@1a64ea6d01db9a48aa61954cb20e265782c167d9
+        with:
+          directory: ./bin/testreports
+      -
+        name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: ./bin/testreports
 
-  prepare:
+  prepare-binaries:
     runs-on: ubuntu-22.04
     outputs:
       matrix: ${{ steps.platforms.outputs.matrix }}
@@ -73,11 +146,11 @@ jobs:
   binaries:
     runs-on: ubuntu-22.04
     needs:
-      - prepare
+      - prepare-binaries
     strategy:
       fail-fast: false
       matrix:
-        platform: ${{ fromJson(needs.prepare.outputs.matrix) }}
+        platform: ${{ fromJson(needs.prepare-binaries.outputs.matrix) }}
     steps:
       -
         name: Prepare
@@ -115,6 +188,8 @@ jobs:
 
   bin-image:
     runs-on: ubuntu-22.04
+    needs:
+      - test
     if: ${{ github.event_name != 'pull_request' && github.repository == 'docker/buildx' }}
     steps:
       -
@@ -166,6 +241,7 @@ jobs:
   release:
     runs-on: ubuntu-22.04
     needs:
+      - test
       - binaries
     steps:
       -

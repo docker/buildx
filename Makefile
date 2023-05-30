@@ -45,7 +45,15 @@ lint:
 
 .PHONY: test
 test:
-	$(BUILDX_CMD) bake test
+	./hack/test
+
+.PHONY: test-unit
+test-unit:
+	TESTPKGS=./... SKIP_INTEGRATION_TESTS=1 ./hack/test
+
+.PHONY: test
+test-integration:
+	TESTPKGS=./tests ./hack/test
 
 .PHONY: validate-vendor
 validate-vendor:
