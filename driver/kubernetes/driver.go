@@ -228,12 +228,18 @@ func (d *Driver) Factory() driver.Factory {
 	return d.factory
 }
 
-func (d *Driver) Features() map[driver.Feature]bool {
+func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
+	var historyAPI bool
+	c, err := d.Client(ctx)
+	if err == nil {
+		historyAPI = driver.HistoryAPISupported(ctx, c)
+		c.Close()
+	}
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    true,
 		driver.DockerExporter: d.DockerAPI != nil,
-
-		driver.CacheExport:   true,
-		driver.MultiPlatform: true, // Untested (needs multiple Driver instances)
+		driver.CacheExport:    true,
+		driver.MultiPlatform:  true, // Untested (needs multiple Driver instances)
+		driver.HistoryAPI:     historyAPI,
 	}
 }

@@ -58,9 +58,9 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	}))
 }
 
-func (d *Driver) Features() map[driver.Feature]bool {
+func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	var useContainerdSnapshotter bool
-	ctx := context.Background()
+	var historyAPI bool
 	c, err := d.Client(ctx)
 	if err == nil {
 		workers, _ := c.ListWorkers(ctx)
@@ -69,6 +69,7 @@ func (d *Driver) Features() map[driver.Feature]bool {
 				useContainerdSnapshotter = true
 			}
 		}
+		historyAPI = driver.HistoryAPISupported(ctx, c)
 		c.Close()
 	}
 	return map[driver.Feature]bool{
@@ -76,6 +77,7 @@ func (d *Driver) Features() map[driver.Feature]bool {
 		driver.DockerExporter: useContainerdSnapshotter,
 		driver.CacheExport:    useContainerdSnapshotter,
 		driver.MultiPlatform:  useContainerdSnapshotter,
+		driver.HistoryAPI:     historyAPI,
 	}
 }
 

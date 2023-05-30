@@ -389,7 +389,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	}
 
 	for _, e := range opt.CacheTo {
-		if e.Type != "inline" && !nodeDriver.Features()[driver.CacheExport] {
+		if e.Type != "inline" && !nodeDriver.Features(ctx)[driver.CacheExport] {
 			return nil, nil, notSupported(nodeDriver, driver.CacheExport)
 		}
 	}
@@ -527,7 +527,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 
 	// set up exporters
 	for i, e := range opt.Exports {
-		if e.Type == "oci" && !nodeDriver.Features()[driver.OCIExporter] {
+		if e.Type == "oci" && !nodeDriver.Features(ctx)[driver.OCIExporter] {
 			return nil, nil, notSupported(nodeDriver, driver.OCIExporter)
 		}
 		if e.Type == "docker" {
@@ -545,7 +545,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 					defers = append(defers, cancel)
 					opt.Exports[i].Output = wrapWriteCloser(w)
 				}
-			} else if !nodeDriver.Features()[driver.DockerExporter] {
+			} else if !nodeDriver.Features(ctx)[driver.DockerExporter] {
 				return nil, nil, notSupported(nodeDriver, driver.DockerExporter)
 			}
 		}
@@ -614,7 +614,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		for i, p := range opt.Platforms {
 			pp[i] = platforms.Format(p)
 		}
-		if len(pp) > 1 && !nodeDriver.Features()[driver.MultiPlatform] {
+		if len(pp) > 1 && !nodeDriver.Features(ctx)[driver.MultiPlatform] {
 			return nil, nil, notSupported(nodeDriver, driver.MultiPlatform)
 		}
 		so.FrontendAttrs["platform"] = strings.Join(pp, ",")
