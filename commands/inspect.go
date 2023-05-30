@@ -10,10 +10,12 @@ import (
 	"time"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/debug"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
@@ -92,6 +94,18 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 					fmt.Fprintf(w, "Buildkit:\t%s\n", nodes[i].Version)
 				}
 				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Node.Platforms, n.Platforms), ", "))
+				if debug.IsEnabled() {
+					fmt.Fprintf(w, "Features:\n")
+					features := nodes[i].Driver.Features(ctx)
+					featKeys := make([]string, 0, len(features))
+					for k := range features {
+						featKeys = append(featKeys, string(k))
+					}
+					sort.Strings(featKeys)
+					for _, k := range featKeys {
+						fmt.Fprintf(w, "\t%s:\t%t\n", k, features[driver.Feature(k)])
+					}
+				}
 				if len(nodes[i].Labels) > 0 {
 					fmt.Fprintf(w, "Labels:\n")
 					for _, k := range sortedKeys(nodes[i].Labels) {

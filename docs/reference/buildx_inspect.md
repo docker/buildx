@@ -84,3 +84,9 @@ GC Policy rule#3:
  All:        true
  Keep Bytes: 24.21GiB
 ```
+
+`debug` flag can also be used to get more information about the builder:
+
+```console
+$ docker --debug buildx inspect elated_tesla
+```
