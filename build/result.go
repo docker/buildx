@@ -158,6 +158,8 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 		// NOTE: ideally this second connection should be lazily opened
 		opt := opt
 		opt.Ref = ""
+		opt.Exports = nil
+		opt.CacheExports = nil
 		_, respErr = cc.Build(ctx, opt, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			res, err := evalDefinition(ctx, c, def)
 			if err != nil {
