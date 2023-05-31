@@ -11,52 +11,6 @@ import (
 // ResolveOptionPaths resolves all paths contained in BuildOptions
 // and replaces them to absolute paths.
 func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
-	localContext := false
-	if options.ContextPath != "" && options.ContextPath != "-" {
-		if !isRemoteURL(options.ContextPath) {
-			localContext = true
-			options.ContextPath, err = filepath.Abs(options.ContextPath)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-	if options.DockerfileName != "" && options.DockerfileName != "-" {
-		if localContext && !urlutil.IsURL(options.DockerfileName) {
-			options.DockerfileName, err = filepath.Abs(options.DockerfileName)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	var contexts map[string]string
-	for k, v := range options.NamedContexts {
-		if isRemoteURL(v) || strings.HasPrefix(v, "docker-image://") {
-			// url prefix, this is a remote path
-		} else if strings.HasPrefix(v, "oci-layout://") {
-			// oci layout prefix, this is a local path
-			p := strings.TrimPrefix(v, "oci-layout://")
-			p, err = filepath.Abs(p)
-			if err != nil {
-				return nil, err
-			}
-			v = "oci-layout://" + p
-		} else {
-			// no prefix, assume local path
-			v, err = filepath.Abs(v)
-			if err != nil {
-				return nil, err
-			}
-		}
-
-		if contexts == nil {
-			contexts = make(map[string]string)
-		}
-		contexts[k] = v
-	}
-	options.NamedContexts = contexts
-
 	var cacheFrom []*CacheOptionsEntry
 	for _, co := range options.CacheFrom {
 		switch co.Type {
@@ -160,6 +114,59 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 		ssh = append(ssh, s)
 	}
 	options.SSH = ssh
+
+	if options.Inputs == nil {
+		return options, nil
+	}
+
+	localContext := false
+	if options.Inputs.ContextPath != "" && options.Inputs.ContextPath != "-" {
+		if !isRemoteURL(options.Inputs.ContextPath) {
+			localContext = true
+			options.Inputs.ContextPath, err = filepath.Abs(options.Inputs.ContextPath)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+	if options.Inputs.DockerfileName != "" && options.Inputs.DockerfileName != "-" {
+		if localContext && !urlutil.IsURL(options.Inputs.DockerfileName) {
+			options.Inputs.DockerfileName, err = filepath.Abs(options.Inputs.DockerfileName)
+			if err != nil {
+				return nil, err
+			}
+		}
+	}
+
+	var contexts map[string]*NamedContext
+	for k, v := range options.Inputs.NamedContexts {
+		v := *v
+		if v.Definition != nil {
+			// definition, no path
+		} else if urlutil.IsGitURL(v.Path) || urlutil.IsURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") {
+			// url prefix, this is a remote path
+		} else if strings.HasPrefix(v.Path, "oci-layout://") {
+			// oci layout prefix, this is a local path
+			p := strings.TrimPrefix(v.Path, "oci-layout://")
+			p, err = filepath.Abs(p)
+			if err != nil {
+				return nil, err
+			}
+			v.Path = "oci-layout://" + p
+		} else {
+			// no prefix, assume local path
+			v.Path, err = filepath.Abs(v.Path)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		if contexts == nil {
+			contexts = make(map[string]*NamedContext)
+		}
+		contexts[k] = &v
+	}
+	options.Inputs.NamedContexts = contexts
 
 	return options, nil
 }

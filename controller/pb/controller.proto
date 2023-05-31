@@ -4,6 +4,7 @@ package buildx.controller.v1;
 
 import "github.com/moby/buildkit/api/services/control/control.proto";
 import "github.com/moby/buildkit/sourcepolicy/pb/policy.proto";
+import "github.com/moby/buildkit/solver/pb/ops.proto";
 
 option go_package = "pb";
 
@@ -46,37 +47,59 @@ message BuildRequest {
   BuildOptions Options = 2;
 }
 
-message BuildOptions {
+message Inputs {
   string ContextPath = 1;
   string DockerfileName = 2;
-  PrintFunc PrintFunc = 3;
-  map<string, string> NamedContexts = 4;
+  string DockerfileInline = 3;
+  pb.Definition ContextDefinition = 4;
+  map<string, NamedContext> NamedContexts = 5;
+  // io.Reader InStream = ???;
+}
 
-  repeated string Allow = 5;
-  repeated Attest Attests = 6;
-  map<string, string> BuildArgs = 7;
-  repeated CacheOptionsEntry CacheFrom = 8;
-  repeated CacheOptionsEntry CacheTo = 9;
-  string CgroupParent = 10;
-  repeated ExportEntry Exports = 11;
-  repeated string ExtraHosts = 12;
-  map<string, string> Labels = 13;
-  string NetworkMode = 14;
-  repeated string NoCacheFilter = 15;
-  repeated string Platforms = 16;
-  repeated Secret Secrets = 17;
-  int64 ShmSize = 18;
-  repeated SSH SSH = 19;
-  repeated string Tags = 20;
-  string Target = 21;
-  UlimitOpt Ulimits = 22;
+message BuildOptions {
+  Inputs Inputs = 1;
+  PrintFunc PrintFunc = 2;
+  CommonOptions Opts = 3;
 
-  string Builder = 23;
-  bool NoCache = 24;
-  bool Pull = 25;
-  bool ExportPush = 26;
-  bool ExportLoad = 27;
-  moby.buildkit.v1.sourcepolicy.Policy SourcePolicy = 28;
+  repeated string Allow = 4;
+  repeated Attest Attests = 5;
+  map<string, string> BuildArgs = 6;
+  repeated CacheOptionsEntry CacheFrom = 7;
+  repeated CacheOptionsEntry CacheTo = 8;
+  string CgroupParent = 9;
+  repeated ExportEntry Exports = 10;
+  repeated string ExtraHosts = 11;
+  map<string, string> Labels = 12;
+  string NetworkMode = 13;
+  repeated string NoCacheFilter = 14;
+  repeated string Platforms = 15;
+  repeated Secret Secrets = 16;
+  int64 ShmSize = 17;
+  repeated SSH SSH = 18;
+  repeated string Tags = 19;
+  string Target = 20;
+  UlimitOpt Ulimits = 21;
+  moby.buildkit.v1.sourcepolicy.Policy SourcePolicy = 22;
+}
+
+message NamedContext {
+  string Path = 1;
+  pb.Definition Definition = 2;
+}
+
+message CommonOptions {
+  string Builder = 1;
+  string MetadataFile = 2;
+  bool NoCache = 3;
+  // string Progress: no progress view on server side
+  bool Pull = 4;
+  bool ExportPush = 5;
+  bool ExportLoad = 6;
+  // TODO: we should remove Linked from the controllerapi, it's only used to
+  // produce a single warning. To allow this, we need to move the default
+  // export detection out from the controller server, as well as load the
+  // driver on the controller client.
+  bool Linked = 7;
 }
 
 message ExportEntry {

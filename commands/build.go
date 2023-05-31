@@ -86,38 +86,38 @@ type buildOptions struct {
 	progress string
 	quiet    bool
 
-	builder      string
-	metadataFile string
-	noCache      bool
-	pull         bool
-	exportPush   bool
-	exportLoad   bool
-
+	controllerapi.CommonOptions
 	control.ControlOptions
 }
 
 func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error) {
 	var err error
-	opts := controllerapi.BuildOptions{
-		Allow:          o.allow,
-		BuildArgs:      listToMap(o.buildArgs, true),
-		CgroupParent:   o.cgroupParent,
+
+	inputs := controllerapi.Inputs{
 		ContextPath:    o.contextPath,
 		DockerfileName: o.dockerfileName,
-		ExtraHosts:     o.extraHosts,
-		Labels:         listToMap(o.labels, false),
-		NetworkMode:    o.networkMode,
-		NoCacheFilter:  o.noCacheFilter,
-		Platforms:      o.platforms,
-		ShmSize:        int64(o.shmSize),
-		Tags:           o.tags,
-		Target:         o.target,
-		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
-		Builder:        o.builder,
-		NoCache:        o.noCache,
-		Pull:           o.pull,
-		ExportPush:     o.exportPush,
-		ExportLoad:     o.exportLoad,
+	}
+	inputs.NamedContexts, err = buildflags.ParseContextNames(o.contexts)
+	if err != nil {
+		return nil, err
+	}
+
+	opts := controllerapi.BuildOptions{
+		Inputs: &inputs,
+		Opts:   &o.CommonOptions,
+
+		Allow:         o.allow,
+		BuildArgs:     listToMap(o.buildArgs, true),
+		CgroupParent:  o.cgroupParent,
+		ExtraHosts:    o.extraHosts,
+		Labels:        listToMap(o.labels, false),
+		NetworkMode:   o.networkMode,
+		NoCacheFilter: o.noCacheFilter,
+		Platforms:     o.platforms,
+		ShmSize:       int64(o.shmSize),
+		Tags:          o.tags,
+		Target:        o.target,
+		Ulimits:       dockerUlimitToControllerUlimit(o.ulimits),
 	}
 
 	// TODO: extract env var parsing to a method easily usable by library consumers
@@ -140,11 +140,6 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", o.sbom))
 	}
 	opts.Attests, err = buildflags.ParseAttests(inAttests)
-	if err != nil {
-		return nil, err
-	}
-
-	opts.NamedContexts, err = buildflags.ParseContextNames(o.contexts)
 	if err != nil {
 		return nil, err
 	}
@@ -228,7 +223,7 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		contextPathHash = absContextPath
 	}
 	b, err := builder.New(dockerCli,
-		builder.WithName(options.builder),
+		builder.WithName(options.Builder),
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
@@ -289,8 +284,8 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 			return errors.Wrap(err, "writing image ID file")
 		}
 	}
-	if options.metadataFile != "" {
-		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
+	if options.MetadataFile != "" {
+		if err := writeMetadataFile(options.MetadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
 			return err
 		}
 	}
@@ -418,15 +413,15 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Args:    cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.contextPath = args[0]
-			options.builder = rootOpts.builder
-			options.metadataFile = cFlags.metadataFile
-			options.noCache = false
+			options.Builder = rootOpts.builder
+			options.MetadataFile = cFlags.metadataFile
+			options.NoCache = false
 			if cFlags.noCache != nil {
-				options.noCache = *cFlags.noCache
+				options.NoCache = *cFlags.noCache
 			}
-			options.pull = false
+			options.Pull = false
 			if cFlags.pull != nil {
-				options.pull = *cFlags.pull
+				options.Pull = *cFlags.pull
 			}
 			options.progress = cFlags.progress
 			cmd.Flags().VisitAll(checkWarnedFlags)
@@ -476,7 +471,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
-	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--output=type=docker"`)
+	flags.BoolVar(&options.ExportLoad, "load", false, `Shorthand for "--output=type=docker"`)
 
 	flags.StringVar(&options.networkMode, "network", "default", `Set the networking mode for the "RUN" instructions during build`)
 
@@ -490,7 +485,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
 	}
 
-	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
+	flags.BoolVar(&options.ExportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 

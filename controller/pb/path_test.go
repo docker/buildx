@@ -20,46 +20,86 @@ func TestResolvePaths(t *testing.T) {
 		want    BuildOptions
 	}{
 		{
-			name:    "contextpath",
-			options: BuildOptions{ContextPath: "test"},
-			want:    BuildOptions{ContextPath: filepath.Join(tmpwd, "test")},
+			name: "contextpath",
+			options: BuildOptions{
+				Inputs: &Inputs{ContextPath: "test"},
+			},
+			want: BuildOptions{
+				Inputs: &Inputs{ContextPath: filepath.Join(tmpwd, "test")},
+			},
 		},
 		{
-			name:    "contextpath-cwd",
-			options: BuildOptions{ContextPath: "."},
-			want:    BuildOptions{ContextPath: tmpwd},
+			name: "contextpath-cwd",
+			options: BuildOptions{
+				Inputs: &Inputs{ContextPath: "."},
+			},
+			want: BuildOptions{
+				Inputs: &Inputs{ContextPath: tmpwd},
+			},
 		},
 		{
-			name:    "contextpath-dash",
-			options: BuildOptions{ContextPath: "-"},
-			want:    BuildOptions{ContextPath: "-"},
+			name: "contextpath-dash",
+			options: BuildOptions{
+				Inputs: &Inputs{ContextPath: "-"},
+			},
+			want: BuildOptions{
+				Inputs: &Inputs{ContextPath: "-"},
+			},
 		},
 		{
-			name:    "contextpath-ssh",
-			options: BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
-			want:    BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
+			name: "contextpath-ssh",
+			options: BuildOptions{
+				Inputs: &Inputs{ContextPath: "git@github.com:docker/buildx.git"},
+			},
+			want: BuildOptions{
+				Inputs: &Inputs{ContextPath: "git@github.com:docker/buildx.git"},
+			},
 		},
 		{
-			name:    "dockerfilename",
-			options: BuildOptions{DockerfileName: "test", ContextPath: "."},
-			want:    BuildOptions{DockerfileName: filepath.Join(tmpwd, "test"), ContextPath: tmpwd},
+			name: "dockerfilename",
+			options: BuildOptions{
+				Inputs: &Inputs{DockerfileName: "test", ContextPath: "."},
+			},
+			want: BuildOptions{
+				Inputs: &Inputs{DockerfileName: filepath.Join(tmpwd, "test"), ContextPath: tmpwd},
+			},
 		},
 		{
-			name:    "dockerfilename-dash",
-			options: BuildOptions{DockerfileName: "-", ContextPath: "."},
-			want:    BuildOptions{DockerfileName: "-", ContextPath: tmpwd},
+			name: "dockerfilename-dash",
+			options: BuildOptions{
+				Inputs: &Inputs{DockerfileName: "-", ContextPath: "."},
+			},
+			want: BuildOptions{
+				Inputs: &Inputs{DockerfileName: "-", ContextPath: tmpwd},
+			},
 		},
 		{
-			name:    "dockerfilename-remote",
-			options: BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
-			want:    BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			name: "dockerfilename-remote",
+			options: BuildOptions{
+				Inputs: &Inputs{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			},
+			want: BuildOptions{
+				Inputs: &Inputs{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			},
 		},
 		{
 			name: "contexts",
-			options: BuildOptions{NamedContexts: map[string]string{"a": "test1", "b": "test2",
-				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git"}},
-			want: BuildOptions{NamedContexts: map[string]string{"a": filepath.Join(tmpwd, "test1"), "b": filepath.Join(tmpwd, "test2"),
-				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git"}},
+			options: BuildOptions{
+				Inputs: &Inputs{NamedContexts: map[string]*NamedContext{
+					"a":       {Path: "test1"},
+					"b":       {Path: "test2"},
+					"alpine":  {Path: "docker-image://alpine@sha256:0123456789"},
+					"project": {Path: "https://github.com/myuser/project.git"},
+				},
+				}},
+			want: BuildOptions{
+				Inputs: &Inputs{NamedContexts: map[string]*NamedContext{
+					"a":       {Path: filepath.Join(tmpwd, "test1")},
+					"b":       {Path: filepath.Join(tmpwd, "test2")},
+					"alpine":  {Path: "docker-image://alpine@sha256:0123456789"},
+					"project": {Path: "https://github.com/myuser/project.git"},
+				},
+				}},
 		},
 		{
 			name: "cache-from",
