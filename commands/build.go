@@ -500,7 +500,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVar(&options.attests, "attest", []string{}, `Attestation parameters (format: "type=sbom,generator=image")`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--attest=type=sbom"`)
-	flags.StringVar(&options.provenance, "provenance", "", `Shortand for "--attest=type=provenance"`)
+	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--attest=type=provenance"`)
 
 	if isExperimental() {
 		flags.StringVar(&invokeFlag, "invoke", "", "Invoke a command after the build [experimental]")
