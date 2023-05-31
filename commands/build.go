@@ -297,7 +297,10 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 }
 
 func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
-	resp, _, err := cbuild.RunBuild(ctx, dockerCli, *opts, os.Stdin, printer, false)
+	resp, res, err := cbuild.RunBuild(ctx, dockerCli, *opts, os.Stdin, printer, false)
+	if res != nil {
+		res.Done()
+	}
 	return resp, err
 }
 
