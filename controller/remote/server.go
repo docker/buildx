@@ -19,7 +19,7 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, progress progress.Writer) (resp *client.SolveResponse, res *build.ResultContext, err error)
+type BuildFunc func(ctx context.Context, options *pb.BuildOptions, stdin io.Reader, progress progress.Writer) (resp *client.SolveResponse, res *build.ResultHandle, err error)
 
 func NewServer(buildFunc BuildFunc) *Server {
 	return &Server{
@@ -40,7 +40,7 @@ type session struct {
 	buildOptions *pb.BuildOptions
 	inputPipe    *io.PipeWriter
 
-	result *build.ResultContext
+	result *build.ResultHandle
 
 	processes *processes.Manager
 }
@@ -205,7 +205,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	resp, res, buildErr := m.buildFunc(ctx, req.Options, inR, pw)
 	m.sessionMu.Lock()
 	if s, ok := m.session[ref]; ok {
-		// NOTE: buildFunc can return *build.ResultContext even on error (e.g. when it's implemented using (github.com/docker/buildx/controller/build).RunBuild).
+		// NOTE: buildFunc can return *build.ResultHandle even on error (e.g. when it's implemented using (github.com/docker/buildx/controller/build).RunBuild).
 		if res != nil {
 			s.result = res
 			s.cancelBuild = cancel

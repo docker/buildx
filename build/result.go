@@ -20,21 +20,21 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// NewResultContext wraps a call to client.Build, additionally returning a
-// ResultContext alongside the standard response and error.
+// NewResultHandle wraps a call to client.Build, additionally returning a
+// ResultHandle alongside the standard response and error.
 //
-// This ResultContext can be used to execute additional build steps in the same
+// This ResultHandle can be used to execute additional build steps in the same
 // context as the build occurred, which can allow easy debugging of build
 // failures and successes.
 //
-// If the returned ResultContext is not nil, the caller must call Done() on it.
-func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOpt, product string, buildFunc gateway.BuildFunc, ch chan *client.SolveStatus) (*ResultContext, *client.SolveResponse, error) {
+// If the returned ResultHandle is not nil, the caller must call Done() on it.
+func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt, product string, buildFunc gateway.BuildFunc, ch chan *client.SolveStatus) (*ResultHandle, *client.SolveResponse, error) {
 	// Create a new context to wrap the original, and cancel it when the
 	// caller-provided context is cancelled.
 	//
 	// We derive the context from the background context so that we can forbid
 	// cancellation of the build request after <-done is closed (which we do
-	// before returning the ResultContext).
+	// before returning the ResultHandle).
 	baseCtx := ctx
 	ctx, cancel := context.WithCancelCause(context.Background())
 	done := make(chan struct{})
@@ -43,7 +43,7 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 		case <-baseCtx.Done():
 			cancel(baseCtx.Err())
 		case <-done:
-			// Once done is closed, we've recorded a ResultContext, so we
+			// Once done is closed, we've recorded a ResultHandle, so we
 			// shouldn't allow cancelling the underlying build request anymore.
 		}
 	}()
@@ -52,9 +52,9 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 	//
 	// We do this so that we can discard status messages after the main portion
 	// of the build is complete. This is necessary for the solve error case,
-	// where the original gateway is kept open until the ResultContext is
+	// where the original gateway is kept open until the ResultHandle is
 	// closed - we don't want progress messages from operations in that
-	// ResultContext to display after this function exits.
+	// ResultHandle to display after this function exits.
 	//
 	// Additionally, callers should wait for the progress channel to be closed.
 	// If we keep the session open and never close the progress channel, the
@@ -77,9 +77,9 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 	}()
 	defer close(baseCh)
 
-	var resCtx *ResultContext
 	var resp *client.SolveResponse
 	var respErr error
+	var respHandle *ResultHandle
 
 	go func() {
 		defer cancel(context.Canceled) // ensure no dangling processes
@@ -104,14 +104,14 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 				// Scenario 1: we failed to evaluate a node somewhere in the
 				// build graph.
 				//
-				// In this case, we construct a ResultContext from this
+				// In this case, we construct a ResultHandle from this
 				// original Build session, and return it alongside the original
 				// build error. We then need to keep the gateway session open
-				// until the caller explicitly closes the ResultContext.
+				// until the caller explicitly closes the ResultHandle.
 
 				var se *errdefs.SolveError
 				if errors.As(err, &se) {
-					resCtx = &ResultContext{
+					respHandle = &ResultHandle{
 						done:     make(chan struct{}),
 						solveErr: se,
 						gwClient: c,
@@ -120,21 +120,21 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 					respErr = se
 					close(done)
 
-					// Block until the caller closes the ResultContext.
+					// Block until the caller closes the ResultHandle.
 					select {
-					case <-resCtx.done:
+					case <-respHandle.done:
 					case <-ctx.Done():
 					}
 				}
 			}
 			return res, err
 		}, ch)
-		if resCtx != nil {
+		if respHandle != nil {
 			return
 		}
 		if err != nil {
 			// Something unexpected failed during the build, we didn't succeed,
-			// but we also didn't make it far enough to create a ResultContext.
+			// but we also didn't make it far enough to create a ResultHandle.
 			respErr = err
 			close(done)
 			return
@@ -144,7 +144,7 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 		//
 		// In this case, the original gateway session has now been closed
 		// since the Build has been completed. So, we need to create a new
-		// gateway session to populate the ResultContext. To do this, we
+		// gateway session to populate the ResultHandle. To do this, we
 		// need to re-evaluate the target result, in this new session. This
 		// should be instantaneous since the result should be cached.
 
@@ -165,7 +165,7 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 				// successfully evaluated the same result with no issues.
 				return nil, errors.Wrap(err, "inconsistent solve result")
 			}
-			resCtx = &ResultContext{
+			respHandle = &ResultHandle{
 				done:     make(chan struct{}),
 				res:      res,
 				gwClient: c,
@@ -173,14 +173,14 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 			}
 			close(done)
 
-			// Block until the caller closes the ResultContext.
+			// Block until the caller closes the ResultHandle.
 			select {
-			case <-resCtx.done:
+			case <-respHandle.done:
 			case <-ctx.Done():
 			}
 			return nil, ctx.Err()
 		}, nil)
-		if resCtx != nil {
+		if respHandle != nil {
 			return
 		}
 		close(done)
@@ -194,7 +194,7 @@ func NewResultContext(ctx context.Context, cc *client.Client, opt client.SolveOp
 			respErr = baseCtx.Err()
 		}
 	}
-	return resCtx, resp, respErr
+	return respHandle, resp, respErr
 }
 
 // getDefinition converts a gateway result into a collection of definitions for
@@ -248,8 +248,8 @@ func evalDefinition(ctx context.Context, c gateway.Client, defs *result.Result[*
 	return res, nil
 }
 
-// ResultContext is a build result with the client that built it.
-type ResultContext struct {
+// ResultHandle is a build result with the client that built it.
+type ResultHandle struct {
 	res      *gateway.Result
 	solveErr *errdefs.SolveError
 
@@ -263,7 +263,7 @@ type ResultContext struct {
 	cleanupsMu sync.Mutex
 }
 
-func (r *ResultContext) Done() {
+func (r *ResultHandle) Done() {
 	r.doneOnce.Do(func() {
 		r.cleanupsMu.Lock()
 		cleanups := r.cleanups
@@ -278,18 +278,18 @@ func (r *ResultContext) Done() {
 	})
 }
 
-func (r *ResultContext) registerCleanup(f func()) {
+func (r *ResultHandle) registerCleanup(f func()) {
 	r.cleanupsMu.Lock()
 	r.cleanups = append(r.cleanups, f)
 	r.cleanupsMu.Unlock()
 }
 
-func (r *ResultContext) build(buildFunc gateway.BuildFunc) (err error) {
+func (r *ResultHandle) build(buildFunc gateway.BuildFunc) (err error) {
 	_, err = buildFunc(r.gwCtx, r.gwClient)
 	return err
 }
 
-func (r *ResultContext) getContainerConfig(ctx context.Context, c gateway.Client, cfg *controllerapi.InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
+func (r *ResultHandle) getContainerConfig(ctx context.Context, c gateway.Client, cfg *controllerapi.InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
 	if r.res != nil && r.solveErr == nil {
 		logrus.Debugf("creating container from successful build")
 		ccfg, err := containerConfigFromResult(ctx, r.res, c, *cfg)
@@ -308,7 +308,7 @@ func (r *ResultContext) getContainerConfig(ctx context.Context, c gateway.Client
 	return containerCfg, nil
 }
 
-func (r *ResultContext) getProcessConfig(cfg *controllerapi.InvokeConfig, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) (_ gateway.StartRequest, err error) {
+func (r *ResultHandle) getProcessConfig(cfg *controllerapi.InvokeConfig, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) (_ gateway.StartRequest, err error) {
 	processCfg := newStartRequest(stdin, stdout, stderr)
 	if r.res != nil && r.solveErr == nil {
 		logrus.Debugf("creating container from successful build")
