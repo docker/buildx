@@ -63,6 +63,7 @@ type buildOptions struct {
 	dockerfileName string
 	extraHosts     []string
 	imageIDFile    string
+	metadataFile   string
 	labels         []string
 	networkMode    string
 	noCacheFilter  []string
@@ -75,16 +76,14 @@ type buildOptions struct {
 	tags           []string
 	target         string
 	ulimits        *dockeropts.UlimitOpt
+	attests        []string
+	sbom           string
+	provenance     string
+	progress       string
+	quiet          bool
 
 	invoke  *invokeConfig
 	noBuild bool
-
-	attests    []string
-	sbom       string
-	provenance string
-
-	progress string
-	quiet    bool
 
 	controllerapi.CommonOptions
 	control.ControlOptions
@@ -284,8 +283,8 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 			return errors.Wrap(err, "writing image ID file")
 		}
 	}
-	if options.MetadataFile != "" {
-		if err := writeMetadataFile(options.MetadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
+	if options.metadataFile != "" {
+		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
 			return err
 		}
 	}
@@ -414,7 +413,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.contextPath = args[0]
 			options.Builder = rootOpts.builder
-			options.MetadataFile = cFlags.metadataFile
+			options.metadataFile = cFlags.metadataFile
 			options.NoCache = false
 			if cFlags.noCache != nil {
 				options.NoCache = *cFlags.noCache

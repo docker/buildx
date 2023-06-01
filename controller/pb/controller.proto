@@ -90,17 +90,16 @@ message NamedContext {
 
 message CommonOptions {
   string Builder = 1;
-  string MetadataFile = 2;
-  bool NoCache = 3;
+  bool NoCache = 2;
   // string Progress: no progress view on server side
-  bool Pull = 4;
-  bool ExportPush = 5;
-  bool ExportLoad = 6;
+  bool Pull = 3;
+  bool ExportPush = 4;
+  bool ExportLoad = 5;
   // TODO: we should remove Linked from the controllerapi, it's only used to
   // produce a single warning. To allow this, we need to move the default
   // export detection out from the controller server, as well as load the
   // driver on the controller client.
-  bool Linked = 7;
+  bool Linked = 6;
 }
 
 message ExportEntry {

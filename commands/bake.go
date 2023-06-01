@@ -25,11 +25,12 @@ import (
 )
 
 type bakeOptions struct {
-	files      []string
-	overrides  []string
-	printOnly  bool
-	sbom       string
-	provenance string
+	files        []string
+	overrides    []string
+	printOnly    bool
+	sbom         string
+	provenance   string
+	metadataFile string
 
 	controllerapi.CommonOptions
 	//control.ControlOptions
@@ -212,12 +213,12 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		return wrapBuildError(err, true)
 	}
 
-	if len(in.MetadataFile) > 0 {
+	if len(in.metadataFile) > 0 {
 		dt := make(map[string]interface{})
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
 		}
-		if err := writeMetadataFile(in.MetadataFile, dt); err != nil {
+		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
 			return err
 		}
 	}
@@ -242,7 +243,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 				cFlags.pull = nil
 			}
 			options.Builder = rootOpts.builder
-			options.MetadataFile = cFlags.metadataFile
+			options.metadataFile = cFlags.metadataFile
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
 			return runBake(dockerCli, args, options, cFlags)
 		},
