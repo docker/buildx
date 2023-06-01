@@ -11,11 +11,11 @@ import (
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	cbuild "github.com/docker/buildx/controller/build"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
-	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
-	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
@@ -31,10 +31,8 @@ type bakeOptions struct {
 	sbom       string
 	provenance string
 
-	builder      string
-	metadataFile string
-	exportPush   bool
-	exportLoad   bool
+	controllerapi.CommonOptions
+	//control.ControlOptions
 }
 
 func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
@@ -69,12 +67,12 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	}
 
 	overrides := in.overrides
-	if in.exportPush {
-		if in.exportLoad {
+	if in.ExportPush {
+		if in.ExportLoad {
 			return errors.Errorf("push and load may not be set together at the moment")
 		}
 		overrides = append(overrides, "*.push=true")
-	} else if in.exportLoad {
+	} else if in.ExportLoad {
 		overrides = append(overrides, "*.output=type=docker")
 	}
 	if cFlags.noCache != nil {
@@ -102,7 +100,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	// instance only needed for reading remote bake files or building
 	if url != "" || !in.printOnly {
 		b, err := builder.New(dockerCli,
-			builder.WithName(in.builder),
+			builder.WithName(in.Builder),
 			builder.WithContextPathHash(contextPathHash),
 		)
 		if err != nil {
@@ -176,9 +174,17 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	}
 
 	// this function can update target context string from the input so call before printOnly check
-	bo, err := bake.TargetsToBuildOpt(tgts, inp)
+	opts, err := bake.TargetsToControllerOptions(tgts, inp)
 	if err != nil {
 		return err
+	}
+
+	// set builder name and context hash for all targets
+	updatedOpts := make(map[string]controllerapi.BuildOptions, len(opts))
+	for i, opt := range opts {
+		opt.Opts.Builder = in.Builder
+		opt.Inputs.ContextPathHash = contextPathHash
+		updatedOpts[i] = opt
 	}
 
 	if in.printOnly {
@@ -201,17 +207,17 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		return nil
 	}
 
-	resp, err := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, _, err := cbuild.RunBuilds(ctx, dockerCli, updatedOpts, os.Stdin, printer, false)
 	if err != nil {
 		return wrapBuildError(err, true)
 	}
 
-	if len(in.metadataFile) > 0 {
+	if len(in.MetadataFile) > 0 {
 		dt := make(map[string]interface{})
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
 		}
-		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
+		if err := writeMetadataFile(in.MetadataFile, dt); err != nil {
 			return err
 		}
 	}
@@ -235,8 +241,8 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			if !cmd.Flags().Lookup("pull").Changed {
 				cFlags.pull = nil
 			}
-			options.builder = rootOpts.builder
-			options.metadataFile = cFlags.metadataFile
+			options.Builder = rootOpts.builder
+			options.MetadataFile = cFlags.metadataFile
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
 			return runBake(dockerCli, args, options, cFlags)
 		},
@@ -246,9 +252,9 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags := cmd.Flags()
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
-	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
+	flags.BoolVar(&options.ExportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
-	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
+	flags.BoolVar(&options.ExportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)

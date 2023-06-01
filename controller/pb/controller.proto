@@ -49,10 +49,11 @@ message BuildRequest {
 
 message Inputs {
   string ContextPath = 1;
-  string DockerfileName = 2;
-  string DockerfileInline = 3;
-  pb.Definition ContextDefinition = 4;
-  map<string, NamedContext> NamedContexts = 5;
+  string ContextPathHash = 2;
+  string DockerfileName = 3;
+  string DockerfileInline = 4;
+  pb.Definition ContextDefinition = 5;
+  map<string, NamedContext> NamedContexts = 6;
   // io.Reader InStream = ???;
 }
 

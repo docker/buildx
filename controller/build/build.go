@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 
@@ -27,6 +26,7 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 )
 
@@ -38,19 +38,56 @@ const defaultTargetName = "default"
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
 func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, error) {
-	opts, err := ToBuildOpts(in, inStream)
-	if err != nil {
+	cResp, cRes, err := RunBuilds(ctx, dockerCli, map[string]controllerapi.BuildOptions{defaultTargetName: in}, inStream, progress, generateResult)
+	var resp *client.SolveResponse
+	if v, ok := cResp[defaultTargetName]; ok {
+		resp = v
+	}
+	var res *build.ResultHandle
+	if v, ok := cRes[defaultTargetName]; ok {
+		res = v
+	}
+	return resp, res, err
+}
+
+// RunBuilds same as RunBuild but runs multiple builds.
+func RunBuilds(ctx context.Context, dockerCli command.Cli, in map[string]controllerapi.BuildOptions, inStream io.Reader, progress progress.Writer, generateResult bool) (map[string]*client.SolveResponse, map[string]*build.ResultHandle, error) {
+	var err error
+	var builderName string
+	var contextPathHash string
+
+	opts := make(map[string]build.Options, len(in))
+	mu := sync.Mutex{}
+	eg, _ := errgroup.WithContext(ctx)
+	for t, o := range in {
+		func(t string, o controllerapi.BuildOptions) {
+			eg.Go(func() error {
+				opt, err := ToBuildOpts(o, inStream)
+				if err != nil {
+					return err
+				}
+				mu.Lock()
+				opts[t] = *opt
+				// we assume that all the targets are using the same builder and
+				// context path hash. This assumption is currently valid but, we
+				// may need to revisit this in the future.
+				if builderName == "" {
+					builderName = o.Opts.Builder
+				}
+				if contextPathHash == "" {
+					contextPathHash = o.Inputs.ContextPathHash
+				}
+				mu.Unlock()
+				return nil
+			})
+		}(t, o)
+	}
+	if err := eg.Wait(); err != nil {
 		return nil, nil, err
 	}
 
-	// key string used for kubernetes "sticky" mode
-	contextPathHash, err := filepath.Abs(in.Inputs.ContextPath)
-	if err != nil {
-		contextPathHash = in.Inputs.ContextPath
-	}
-
 	b, err := builder.New(dockerCli,
-		builder.WithName(in.Opts.Builder),
+		builder.WithName(builderName),
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
@@ -64,7 +101,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: *opts}, progress, generateResult)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, opts, progress, generateResult)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return nil, nil, err
@@ -216,19 +253,19 @@ func ToBuildOpts(in controllerapi.BuildOptions, inStream io.Reader) (*build.Opti
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultHandle,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, error) {
-	var res *build.ResultHandle
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (map[string]*client.SolveResponse, map[string]*build.ResultHandle, error) {
+	var res map[string]*build.ResultHandle
 	var resp map[string]*client.SolveResponse
 	var err error
 	if generateResult {
 		var mu sync.Mutex
-		var idx int
-		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
+		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(target string, gotRes *build.ResultHandle) {
 			mu.Lock()
 			defer mu.Unlock()
-			if res == nil || driverIndex < idx {
-				idx, res = driverIndex, gotRes
+			if res == nil {
+				res = make(map[string]*build.ResultHandle)
 			}
+			res[target] = gotRes
 		})
 	} else {
 		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
@@ -236,7 +273,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGrou
 	if err != nil {
 		return nil, res, err
 	}
-	return resp[defaultTargetName], res, err
+	return resp, res, err
 }
 
 func wrapBuildError(err error, bake bool) error {

@@ -668,7 +668,7 @@ func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, do
 	return BuildWithResultHandler(ctx, nodes, opt, docker, configDir, w, nil)
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(target string, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -938,7 +938,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					if resultHandleFunc != nil {
 						var resultHandle *ResultHandle
 						resultHandle, rr, err = NewResultHandle(ctx, cc, so, "buildx", buildFunc, ch)
-						resultHandleFunc(dp.driverIndex, resultHandle)
+						resultHandleFunc(k, resultHandle)
 					} else {
 						rr, err = c.Build(ctx, so, "buildx", buildFunc, ch)
 					}

@@ -15,7 +15,6 @@ import (
 	composecli "github.com/compose-spec/compose-go/cli"
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
-	cbuild "github.com/docker/buildx/controller/build"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
 	hcl "github.com/hashicorp/hcl/v2"
@@ -908,18 +907,14 @@ func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(
 	return value.AsString(), nil
 }
 
-func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
-	m2 := make(map[string]build.Options, len(m))
+func TargetsToControllerOptions(m map[string]*Target, inp *Input) (map[string]controllerapi.BuildOptions, error) {
+	m2 := make(map[string]controllerapi.BuildOptions, len(m))
 	for k, v := range m {
 		opts, err := toControllerOpt(v, inp)
 		if err != nil {
 			return nil, err
 		}
-		bo, err := cbuild.ToBuildOpts(*opts, nil)
-		if err != nil {
-			return nil, err
-		}
-		m2[k] = *bo
+		m2[k] = *opts
 	}
 	return m2, nil
 }

@@ -7,6 +7,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/buildx/controller/pb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -390,7 +391,7 @@ func TestHCLCwdPrefix(t *testing.T) {
 	_, ok := m["app"]
 	require.True(t, ok)
 
-	_, err = TargetsToBuildOpt(m, &Input{})
+	_, err = TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
 
 	require.Equal(t, "test", *m["app"].Dockerfile)
@@ -421,7 +422,7 @@ func TestOverrideMerge(t *testing.T) {
 	_, ok := m["app"]
 	require.True(t, ok)
 
-	_, err = TargetsToBuildOpt(m, &Input{})
+	_, err = TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
 
 	require.Equal(t, []string{"linux/arm", "linux/ppc64le"}, m["app"].Platforms)
@@ -456,7 +457,7 @@ func TestReadContexts(t *testing.T) {
 	_, ok := m["app"]
 	require.True(t, ok)
 
-	bo, err := TargetsToBuildOpt(m, &Input{})
+	bo, err := TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
 
 	ctxs := bo["app"].Inputs.NamedContexts
@@ -472,7 +473,7 @@ func TestReadContexts(t *testing.T) {
 	_, ok = m["app"]
 	require.True(t, ok)
 
-	bo, err = TargetsToBuildOpt(m, &Input{})
+	bo, err = TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
 
 	ctxs = bo["app"].Inputs.NamedContexts
@@ -490,7 +491,7 @@ func TestReadContexts(t *testing.T) {
 	_, ok = m["app"]
 	require.True(t, ok)
 
-	bo, err = TargetsToBuildOpt(m, &Input{})
+	bo, err = TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
 
 	ctxs = bo["app"].Inputs.NamedContexts
@@ -1325,7 +1326,7 @@ func TestHCLNullVars(t *testing.T) {
 	_, ok := m["default"]
 	require.True(t, ok)
 
-	_, err = TargetsToBuildOpt(m, &Input{})
+	_, err = TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, m["default"].Args)
 	require.Equal(t, map[string]*string{"com.docker.app.baz": ptrstr("foo")}, m["default"].Labels)
@@ -1360,7 +1361,7 @@ func TestJSONNullVars(t *testing.T) {
 	_, ok := m["default"]
 	require.True(t, ok)
 
-	_, err = TargetsToBuildOpt(m, &Input{})
+	_, err = TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, m["default"].Args)
 }
@@ -1432,21 +1433,34 @@ func TestAttestDuplicates(t *testing.T) {
 	require.Equal(t, []string{"type=sbom,foo=bar", "type=provenance,mode=max"}, m["default"].Attest)
 	require.NoError(t, err)
 
-	opts, err := TargetsToBuildOpt(m, &Input{})
+	opts, err := TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
-	require.Equal(t, map[string]*string{
-		"sbom":       ptrstr("type=sbom,foo=bar"),
-		"provenance": ptrstr("type=provenance,mode=max"),
+	require.Equal(t, []*pb.Attest{
+		{
+			Type:  "sbom",
+			Attrs: "type=sbom,foo=bar",
+		},
+		{
+			Type:  "provenance",
+			Attrs: "type=provenance,mode=max",
+		},
 	}, opts["default"].Attests)
 
 	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil)
 	require.Equal(t, []string{"type=sbom,disabled=true", "type=provenance,mode=max"}, m["default"].Attest)
 	require.NoError(t, err)
 
-	opts, err = TargetsToBuildOpt(m, &Input{})
+	opts, err = TargetsToControllerOptions(m, &Input{})
 	require.NoError(t, err)
-	require.Equal(t, map[string]*string{
-		"sbom":       nil,
-		"provenance": ptrstr("type=provenance,mode=max"),
+	require.Equal(t, []*pb.Attest{
+		{
+			Type:     "sbom",
+			Disabled: true,
+			Attrs:    "type=sbom,disabled=true",
+		},
+		{
+			Type:  "provenance",
+			Attrs: "type=provenance,mode=max",
+		},
 	}, opts["default"].Attests)
 }

@@ -94,8 +94,12 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	var err error
 
 	inputs := controllerapi.Inputs{
-		ContextPath:    o.contextPath,
-		DockerfileName: o.dockerfileName,
+		ContextPath:     o.contextPath,
+		ContextPathHash: o.contextPath,
+		DockerfileName:  o.dockerfileName,
+	}
+	if absContextPath, err := filepath.Abs(inputs.ContextPathHash); err == nil {
+		inputs.ContextPathHash = absContextPath
 	}
 	inputs.NamedContexts, err = buildflags.ParseContextNames(o.contexts)
 	if err != nil {
@@ -218,13 +222,9 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		}
 	}
 
-	contextPathHash := options.contextPath
-	if absContextPath, err := filepath.Abs(contextPathHash); err == nil {
-		contextPathHash = absContextPath
-	}
 	b, err := builder.New(dockerCli,
 		builder.WithName(options.Builder),
-		builder.WithContextPathHash(contextPathHash),
+		builder.WithContextPathHash(opts.Inputs.ContextPathHash),
 	)
 	if err != nil {
 		return err
