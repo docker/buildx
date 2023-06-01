@@ -138,7 +138,13 @@ make test-integration
 TESTPKGS=./bake make test
 
 # run all integration tests with a specific worker
-TESTFLAGS="--run=//worker=docker-container -v" make test
+TESTFLAGS="--run=//worker=remote -v" make test-integration
+
+# run a specific integration test
+TESTFLAGS="--run /TestBuild/worker=remote/ -v" make test-integration
+
+# run a selection of integration tests using a regexp
+TESTFLAGS="--run /TestBuild.*/worker=remote/ -v" make test-integration
 ```
 
 > **Note**
@@ -149,9 +155,20 @@ TESTFLAGS="--run=//worker=docker-container -v" make test
 
 > **Note**
 >
+> Set `TEST_DOCKERD=1` for the test framework to enable the docker workers,
+> specifically the `docker` and `docker-container` drivers.
+>
+> The docker tests cannot be run in parallel, so require passing `--parallel=1`
+> in `TESTFLAGS`.
+
+> **Note**
+>
 > If you are working behind a proxy, you can set some of or all
 > `HTTP_PROXY=http://ip:port`, `HTTPS_PROXY=http://ip:port`, `NO_PROXY=http://ip:port`
 > for the test framework to specify the proxy build args.
+
+
+### Run the helper commands
 
 To enter a demo container environment and experiment, you may run:
 
