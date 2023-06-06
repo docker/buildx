@@ -20,8 +20,8 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-// NewResultHandle wraps a call to client.Build, additionally returning a
-// ResultHandle alongside the standard response and error.
+// NewResultHandle makes a call to client.Build, additionally returning a
+// opaque ResultHandle alongside the standard response and error.
 //
 // This ResultHandle can be used to execute additional build steps in the same
 // context as the build occurred, which can allow easy debugging of build
