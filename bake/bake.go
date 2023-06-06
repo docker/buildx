@@ -1012,7 +1012,8 @@ func checkPath(p string) error {
 	if err != nil {
 		return err
 	}
-	if strings.HasPrefix(rel, ".."+string(os.PathSeparator)) {
+	parts := strings.Split(rel, string(os.PathSeparator))
+	if parts[0] == ".." {
 		return errors.Errorf("path %s is outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS=1", p)
 	}
 	return nil

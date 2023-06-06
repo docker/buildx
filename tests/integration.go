@@ -20,6 +20,12 @@ func tmpdir(t *testing.T, appliers ...fstest.Applier) string {
 
 type cmdOpt func(*exec.Cmd)
 
+func withEnv(env ...string) cmdOpt {
+	return func(cmd *exec.Cmd) {
+		cmd.Env = append(cmd.Env, env...)
+	}
+}
+
 func withArgs(args ...string) cmdOpt {
 	return func(cmd *exec.Cmd) {
 		cmd.Args = append(cmd.Args, args...)

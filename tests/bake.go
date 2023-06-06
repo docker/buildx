@@ -22,6 +22,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteCmdContext,
 	testBakeRemoteCmdContextOverride,
 	testBakeRemoteContextSubdir,
+	testBakeRemoteCmdContextEscapeRoot,
+	testBakeRemoteCmdContextEscapeRelative,
 }
 
 func testBakeRemote(t *testing.T, sb integration.Sandbox) {
@@ -160,4 +162,104 @@ COPY super-cool.txt /
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "super-cool.txt"))
+}
+
+func testBakeRemoteCmdContextEscapeRoot(t *testing.T, sb integration.Sandbox) {
+	dirSrc := tmpdir(
+		t,
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirSrc, err := filepath.Abs(dirSrc)
+	require.NoError(t, err)
+
+	dirCurrent := tmpdir(t)
+	dirCurrent, err = filepath.Abs(dirCurrent)
+	require.NoError(t, err)
+
+	bakefile := []byte(`
+target "default" {
+	context = "cwd://` + dirSrc + `"
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "docker-bake.hcl")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dirCurrent),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+	)
+	require.Error(t, err, out)
+	require.Contains(t, out, "outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS")
+
+	out, err = bakeCmd(
+		sb,
+		withDir(dirCurrent),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+		withEnv("BAKE_ALLOW_REMOTE_FS_ACCESS=1"),
+	)
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBakeRemoteCmdContextEscapeRelative(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	context = "cwd://../"
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+	)
+	dirSrc := tmpdir(
+		t,
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateDir("subdir", 0700),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "docker-bake.hcl")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(
+		sb,
+		withDir(filepath.Join(dirSrc, "subdir")),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+	)
+	require.Error(t, err, out)
+	require.Contains(t, out, "outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS")
+
+	out, err = bakeCmd(
+		sb,
+		withDir(filepath.Join(dirSrc, "subdir")),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+		withEnv("BAKE_ALLOW_REMOTE_FS_ACCESS=1"),
+	)
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
 }
