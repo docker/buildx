@@ -94,6 +94,13 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 					fmt.Fprintf(w, "Buildkit:\t%s\n", nodes[i].Version)
 				}
 				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Node.Platforms, n.Platforms), ", "))
+				if len(nodes[i].ProxyConfig) > 0 {
+					fmt.Fprintf(w, "Proxy config:\n")
+					for _, k := range sortedKeys(nodes[i].ProxyConfig) {
+						v := nodes[i].ProxyConfig[k]
+						fmt.Fprintf(w, "\t%s:\t%s\n", k, v)
+					}
+				}
 				if debug.IsEnabled() {
 					fmt.Fprintf(w, "Features:\n")
 					features := nodes[i].Driver.Features(ctx)
