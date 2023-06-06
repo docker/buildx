@@ -7,23 +7,49 @@ import (
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/moby/buildkit/util/testutil/integration"
+	"github.com/stretchr/testify/require"
 )
 
-func tmpdir(t *testing.T, appliers ...fstest.Applier) (string, error) {
+func tmpdir(t *testing.T, appliers ...fstest.Applier) string {
+	t.Helper()
 	tmpdir := t.TempDir()
-	if err := fstest.Apply(appliers...).Apply(tmpdir); err != nil {
-		return "", err
-	}
-	return tmpdir, nil
+	err := fstest.Apply(appliers...).Apply(tmpdir)
+	require.NoError(t, err)
+	return tmpdir
 }
 
-func buildxCmd(sb integration.Sandbox, args ...string) *exec.Cmd {
-	if builder := sb.Address(); builder != "" {
-		args = append([]string{"--builder=" + builder}, args...)
+type cmdOpt func(*exec.Cmd)
+
+func withEnv(env ...string) cmdOpt {
+	return func(cmd *exec.Cmd) {
+		cmd.Env = append(cmd.Env, env...)
 	}
-	cmd := exec.Command("buildx", args...)
+}
+
+func withArgs(args ...string) cmdOpt {
+	return func(cmd *exec.Cmd) {
+		cmd.Args = append(cmd.Args, args...)
+	}
+}
+
+func withDir(dir string) cmdOpt {
+	return func(cmd *exec.Cmd) {
+		cmd.Dir = dir
+	}
+}
+
+func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
+	cmd := exec.Command("buildx")
+	cmd.Env = append([]string{}, os.Environ()...)
+	for _, opt := range opts {
+		opt(cmd)
+	}
+
+	if builder := sb.Address(); builder != "" {
+		cmd.Args = append(cmd.Args, "--builder="+builder)
+	}
 	if context := sb.DockerAddress(); context != "" {
-		cmd.Env = append(os.Environ(), "DOCKER_CONTEXT="+context)
+		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
 	}
 
 	return cmd

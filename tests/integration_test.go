@@ -21,6 +21,7 @@ func init() {
 func TestIntegration(t *testing.T) {
 	var tests []func(t *testing.T, sb integration.Sandbox)
 	tests = append(tests, buildTests...)
+	tests = append(tests, bakeTests...)
 	tests = append(tests, inspectTests...)
 	tests = append(tests, lsTests...)
 	testIntegration(t, tests...)

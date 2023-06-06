@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func lsCmd(sb integration.Sandbox, args ...string) (string, error) {
-	args = append([]string{"ls"}, args...)
-	cmd := buildxCmd(sb, args...)
+func lsCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
+	opts = append([]cmdOpt{withArgs("ls")}, opts...)
+	cmd := buildxCmd(sb, opts...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

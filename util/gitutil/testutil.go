@@ -39,9 +39,10 @@ func GitCheckoutBranch(c *Git, tb testing.TB, name string) {
 	require.Empty(tb, out)
 }
 
-func GitAdd(c *Git, tb testing.TB, file string) {
+func GitAdd(c *Git, tb testing.TB, files ...string) {
 	tb.Helper()
-	_, err := fakeGit(c, "add", file)
+	args := append([]string{"add"}, files...)
+	_, err := fakeGit(c, args...)
 	require.NoError(tb, err)
 }
 
