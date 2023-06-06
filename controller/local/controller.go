@@ -29,7 +29,7 @@ func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli, logger
 type buildConfig struct {
 	// TODO: these two structs should be merged
 	// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113279719
-	resultCtx    *build.ResultContext
+	resultCtx    *build.ResultHandle
 	buildOptions *controllerapi.BuildOptions
 }
 
@@ -49,7 +49,7 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 	defer b.buildOnGoing.Store(false)
 
 	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, true)
-	// NOTE: RunBuild can return *build.ResultContext even on error.
+	// NOTE: RunBuild can return *build.ResultHandle even on error.
 	if res != nil {
 		b.buildConfig = buildConfig{
 			resultCtx:    res,

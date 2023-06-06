@@ -21,10 +21,10 @@ type Container struct {
 	initStarted     atomic.Bool
 	container       gateway.Container
 	releaseCh       chan struct{}
-	resultCtx       *ResultContext
+	resultCtx       *ResultHandle
 }
 
-func NewContainer(ctx context.Context, resultCtx *ResultContext, cfg *controllerapi.InvokeConfig) (*Container, error) {
+func NewContainer(ctx context.Context, resultCtx *ResultHandle, cfg *controllerapi.InvokeConfig) (*Container, error) {
 	mainCtx := ctx
 
 	ctrCh := make(chan *Container)
@@ -112,7 +112,7 @@ func (c *Container) Exec(ctx context.Context, cfg *controllerapi.InvokeConfig, s
 	return err
 }
 
-func exec(ctx context.Context, resultCtx *ResultContext, cfg *controllerapi.InvokeConfig, ctr gateway.Container, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
+func exec(ctx context.Context, resultCtx *ResultHandle, cfg *controllerapi.InvokeConfig, ctr gateway.Container, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
 	processCfg, err := resultCtx.getProcessConfig(cfg, stdin, stdout, stderr)
 	if err != nil {
 		return err
