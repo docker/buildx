@@ -3,7 +3,7 @@ module github.com/docker/buildx
 go 1.20
 
 require (
-	github.com/Masterminds/semver/v3 v3.2.0
+	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/aws/aws-sdk-go-v2/config v1.18.16
 	github.com/compose-spec/compose-go v1.13.4
 	github.com/containerd/console v1.0.3
