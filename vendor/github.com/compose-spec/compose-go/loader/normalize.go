@@ -155,6 +155,8 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 			return err
 		}
 
+		inferImplicitDependencies(&s)
+
 		project.Services[i] = s
 	}
 
@@ -169,6 +171,61 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 	setNameFromKey(project)
 
 	return nil
+}
+
+// IsServiceDependency check the relation set by ref refers to a service
+func IsServiceDependency(ref string) (string, bool) {
+	if strings.HasPrefix(
+		ref,
+		types.ServicePrefix,
+	) {
+		return ref[len(types.ServicePrefix):], true
+	}
+	return "", false
+}
+
+func inferImplicitDependencies(service *types.ServiceConfig) {
+	var dependencies []string
+
+	maybeReferences := []string{
+		service.NetworkMode,
+		service.Ipc,
+		service.Pid,
+		service.Uts,
+		service.Cgroup,
+	}
+	for _, ref := range maybeReferences {
+		if dep, ok := IsServiceDependency(ref); ok {
+			dependencies = append(dependencies, dep)
+		}
+	}
+
+	for _, vol := range service.VolumesFrom {
+		spec := strings.Split(vol, ":")
+		if len(spec) == 0 {
+			continue
+		}
+		if spec[0] == "container" {
+			continue
+		}
+		dependencies = append(dependencies, spec[0])
+	}
+
+	for _, link := range service.Links {
+		dependencies = append(dependencies, strings.Split(link, ":")[0])
+	}
+
+	if len(dependencies) > 0 && service.DependsOn == nil {
+		service.DependsOn = make(types.DependsOnConfig)
+	}
+
+	for _, d := range dependencies {
+		if _, ok := service.DependsOn[d]; !ok {
+			service.DependsOn[d] = types.ServiceDependency{
+				Condition: types.ServiceConditionStarted,
+			}
+		}
+	}
 }
 
 // setIfMissing adds a ServiceDependency for service if not already defined

@@ -134,27 +134,43 @@ func WithProfiles(profiles []string) func(*Options) {
 // ParseYAML reads the bytes from a file, parses the bytes into a mapping
 // structure, and returns it.
 func ParseYAML(source []byte) (map[string]interface{}, error) {
+	m, _, err := parseYAML(source)
+	return m, err
+}
+
+// PostProcessor is used to tweak compose model based on metadata extracted during yaml Unmarshal phase
+// that hardly can be implemented using go-yaml and mapstructure
+type PostProcessor interface {
+	yaml.Unmarshaler
+
+	// Apply changes to compose model based on recorder metadata
+	Apply(config *types.Config) error
+}
+
+func parseYAML(source []byte) (map[string]interface{}, PostProcessor, error) {
 	var cfg interface{}
-	if err := yaml.Unmarshal(source, &cfg); err != nil {
-		return nil, err
+	processor := ResetProcessor{target: &cfg}
+
+	if err := yaml.Unmarshal(source, &processor); err != nil {
+		return nil, nil, err
 	}
 	stringMap, ok := cfg.(map[string]interface{})
 	if ok {
 		converted, err := convertToStringKeysRecursive(stringMap, "")
 		if err != nil {
-			return nil, err
+			return nil, nil, err
 		}
-		return converted.(map[string]interface{}), nil
+		return converted.(map[string]interface{}), &processor, nil
 	}
 	cfgMap, ok := cfg.(map[interface{}]interface{})
 	if !ok {
-		return nil, errors.Errorf("Top-level object must be a mapping")
+		return nil, nil, errors.Errorf("Top-level object must be a mapping")
 	}
 	converted, err := convertToStringKeysRecursive(cfgMap, "")
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
-	return converted.(map[string]interface{}), nil
+	return converted.(map[string]interface{}), &processor, nil
 }
 
 // Load reads a ConfigDetails and returns a fully loaded configuration
@@ -180,8 +196,9 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 		return nil, err
 	}
 
-	var configs []*types.Config
+	var model *types.Config
 	for i, file := range configDetails.ConfigFiles {
+		var postProcessor PostProcessor
 		configDict := file.Config
 		if configDict == nil {
 			if len(file.Content) == 0 {
@@ -191,13 +208,14 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 				}
 				file.Content = content
 			}
-			dict, err := parseConfig(file.Content, opts)
+			dict, p, err := parseConfig(file.Content, opts)
 			if err != nil {
 				return nil, fmt.Errorf("parsing %s: %w", file.Filename, err)
 			}
 			configDict = dict
 			file.Config = dict
 			configDetails.ConfigFiles[i] = file
+			postProcessor = p
 		}
 
 		if !opts.SkipValidation {
@@ -212,12 +230,22 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 		if err != nil {
 			return nil, err
 		}
-		configs = append(configs, cfg)
-	}
 
-	model, err := merge(configs)
-	if err != nil {
-		return nil, err
+		if i == 0 {
+			model = cfg
+			continue
+		}
+		merged, err := merge([]*types.Config{model, cfg})
+		if err != nil {
+			return nil, err
+		}
+		if postProcessor != nil {
+			err = postProcessor.Apply(merged)
+			if err != nil {
+				return nil, err
+			}
+		}
+		model = merged
 	}
 
 	for _, s := range model.Services {
@@ -266,8 +294,8 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 
 func InvalidProjectNameErr(v string) error {
 	return fmt.Errorf(
-		"%q is not a valid project name: it must contain only "+
-			"characters from [a-z0-9_-] and start with [a-z0-9]", v,
+		"invalid project name %q: must consist only of lowercase alphanumeric characters, hyphens, and underscores as well as start with a letter or number",
+		v,
 	)
 }
 
@@ -343,15 +371,16 @@ func NormalizeProjectName(s string) string {
 	return strings.TrimLeft(s, "_-")
 }
 
-func parseConfig(b []byte, opts *Options) (map[string]interface{}, error) {
-	yml, err := ParseYAML(b)
+func parseConfig(b []byte, opts *Options) (map[string]interface{}, PostProcessor, error) {
+	yml, postProcessor, err := parseYAML(b)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	if !opts.SkipInterpolation {
-		return interp.Interpolate(yml, *opts.Interpolate)
+		interpolated, err := interp.Interpolate(yml, *opts.Interpolate)
+		return interpolated, postProcessor, err
 	}
-	return yml, err
+	return yml, postProcessor, err
 }
 
 const extensions = "#extensions" // Using # prefix, we prevent risk to conflict with an actual yaml key
@@ -441,6 +470,7 @@ func Transform(source interface{}, target interface{}, additionalTransformers ..
 			createTransformHook(additionalTransformers...),
 			mapstructure.StringToTimeDurationHookFunc()),
 		Result:   target,
+		TagName:  "yaml",
 		Metadata: &data,
 	}
 	decoder, err := mapstructure.NewDecoder(config)
@@ -626,7 +656,7 @@ func loadServiceWithExtends(filename, name string, servicesDict map[string]inter
 				return nil, err
 			}
 
-			baseFile, err := parseConfig(b, opts)
+			baseFile, _, err := parseConfig(b, opts)
 			if err != nil {
 				return nil, err
 			}

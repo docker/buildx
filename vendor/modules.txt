@@ -131,7 +131,7 @@ github.com/cenkalti/backoff/v4
 github.com/cespare/xxhash/v2
 # github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e
 ## explicit
-# github.com/compose-spec/compose-go v1.13.4
+# github.com/compose-spec/compose-go v1.14.0
 ## explicit; go 1.19
 github.com/compose-spec/compose-go/cli
 github.com/compose-spec/compose-go/consts
@@ -141,6 +141,7 @@ github.com/compose-spec/compose-go/interpolation
 github.com/compose-spec/compose-go/loader
 github.com/compose-spec/compose-go/schema
 github.com/compose-spec/compose-go/template
+github.com/compose-spec/compose-go/tree
 github.com/compose-spec/compose-go/types
 github.com/compose-spec/compose-go/utils
 # github.com/containerd/console v1.0.3
@@ -809,7 +810,7 @@ golang.org/x/net/trace
 ## explicit; go 1.17
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
-# golang.org/x/sync v0.1.0
+# golang.org/x/sync v0.2.0
 ## explicit
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore

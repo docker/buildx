@@ -255,9 +255,8 @@ func WithDotEnv(o *ProjectOptions) error {
 		return err
 	}
 	for k, v := range envMap {
-		o.Environment[k] = v
-		if osVal, ok := os.LookupEnv(k); ok {
-			o.Environment[k] = osVal
+		if _, set := o.Environment[k]; !set {
+			o.Environment[k] = v
 		}
 	}
 	return nil
@@ -304,15 +303,12 @@ func GetEnvFromFile(currentEnv map[string]string, workingDir string, filenames [
 		}
 
 		env, err := dotenv.ParseWithLookup(bytes.NewReader(b), func(k string) (string, bool) {
-			v, ok := envMap[k]
+			v, ok := currentEnv[k]
 			if ok {
 				return v, true
 			}
-			v, ok = currentEnv[k]
-			if !ok {
-				return "", false
-			}
-			return v, true
+			v, ok = envMap[k]
+			return v, ok
 		})
 		if err != nil {
 			return envMap, errors.Wrapf(err, "failed to read %s", dotEnvFile)
@@ -461,8 +457,9 @@ func withNamePrecedenceLoad(absWorkingDir string, options *ProjectOptions) func(
 
 func withConvertWindowsPaths(options *ProjectOptions) func(*loader.Options) {
 	return func(o *loader.Options) {
-		o.ConvertWindowsPaths = utils.StringToBool(options.Environment["COMPOSE_CONVERT_WINDOWS_PATHS"])
-		o.ResolvePaths = true
+		if o.ResolvePaths {
+			o.ConvertWindowsPaths = utils.StringToBool(options.Environment["COMPOSE_CONVERT_WINDOWS_PATHS"])
+		}
 	}
 }
 
