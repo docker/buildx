@@ -18,13 +18,32 @@ func tmpdir(t *testing.T, appliers ...fstest.Applier) string {
 	return tmpdir
 }
 
-func buildxCmd(sb integration.Sandbox, args ...string) *exec.Cmd {
-	if builder := sb.Address(); builder != "" {
-		args = append([]string{"--builder=" + builder}, args...)
+type cmdOpt func(*exec.Cmd)
+
+func withArgs(args ...string) cmdOpt {
+	return func(cmd *exec.Cmd) {
+		cmd.Args = append(cmd.Args, args...)
 	}
-	cmd := exec.Command("buildx", args...)
+}
+
+func withDir(dir string) cmdOpt {
+	return func(cmd *exec.Cmd) {
+		cmd.Dir = dir
+	}
+}
+
+func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
+	cmd := exec.Command("buildx")
+	cmd.Env = append([]string{}, os.Environ()...)
+	for _, opt := range opts {
+		opt(cmd)
+	}
+
+	if builder := sb.Address(); builder != "" {
+		cmd.Args = append(cmd.Args, "--builder="+builder)
+	}
 	if context := sb.DockerAddress(); context != "" {
-		cmd.Env = append(os.Environ(), "DOCKER_CONTEXT="+context)
+		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
 	}
 
 	return cmd

@@ -8,9 +8,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func inspectCmd(sb integration.Sandbox, args ...string) (string, error) {
-	args = append([]string{"inspect"}, args...)
-	cmd := buildxCmd(sb, args...)
+func inspectCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
+	opts = append([]cmdOpt{withArgs("inspect")}, opts...)
+	cmd := buildxCmd(sb, opts...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }

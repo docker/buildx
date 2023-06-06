@@ -10,10 +10,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func bakeCmd(sb integration.Sandbox, dir string, args ...string) (string, error) {
-	args = append([]string{"bake", "--progress=quiet"}, args...)
-	cmd := buildxCmd(sb, args...)
-	cmd.Dir = dir
+func bakeCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
+	opts = append([]cmdOpt{withArgs("bake", "--progress=quiet")}, opts...)
+	cmd := buildxCmd(sb, opts...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -49,7 +48,7 @@ EOT
 	gitutil.GitCommit(git, t, "initial commit")
 	addr := gitutil.GitServeHTTP(git, t)
 
-	out, err := bakeCmd(sb, dir, addr, "--set", "*.output=type=local,dest="+dirDest)
+	out, err := bakeCmd(sb, withDir(dir), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
@@ -83,7 +82,7 @@ EOT
 	gitutil.GitCommit(git, t, "initial commit")
 	addr := gitutil.GitServeHTTP(git, t)
 
-	out, err := bakeCmd(sb, dirSrc, addr, "--set", "*.output=type=local,dest="+dirDest)
+	out, err := bakeCmd(sb, withDir(dirSrc), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
@@ -123,7 +122,7 @@ EOT
 	gitutil.GitCommit(gitSrc, t, "initial commit")
 	addrSrc := gitutil.GitServeHTTP(gitSrc, t)
 
-	out, err := bakeCmd(sb, "/tmp", addrSpec, addrSrc, "--set", "*.output=type=local,dest="+dirDest)
+	out, err := bakeCmd(sb, withDir("/tmp"), withArgs(addrSpec, addrSrc, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
@@ -157,7 +156,7 @@ COPY super-cool.txt /
 	gitutil.GitCommit(git, t, "initial commit")
 	addr := gitutil.GitServeHTTP(git, t)
 
-	out, err := bakeCmd(sb, "/tmp", addr, "--set", "*.output=type=local,dest="+dirDest)
+	out, err := bakeCmd(sb, withDir("/tmp"), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "super-cool.txt"))

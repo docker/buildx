@@ -19,9 +19,9 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func buildCmd(sb integration.Sandbox, args ...string) (string, error) {
-	args = append([]string{"build", "--progress=quiet"}, args...)
-	cmd := buildxCmd(sb, args...)
+func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
+	opts = append([]cmdOpt{withArgs("build", "--progress=quiet")}, opts...)
+	cmd := buildxCmd(sb, opts...)
 	out, err := cmd.CombinedOutput()
 	return string(out), err
 }
@@ -36,13 +36,13 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
-	out, err := buildCmd(sb, dir)
+	out, err := buildCmd(sb, withArgs(dir))
 	require.NoError(t, err, string(out))
 }
 
 func testBuildLocalExport(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
-	out, err := buildCmd(sb, fmt.Sprintf("--output=type=local,dest=%s/result", dir), dir)
+	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=local,dest=%s/result", dir), dir))
 	require.NoError(t, err, string(out))
 
 	dt, err := os.ReadFile(dir + "/result/bar")
@@ -52,7 +52,7 @@ func testBuildLocalExport(t *testing.T, sb integration.Sandbox) {
 
 func testBuildTarExport(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
-	out, err := buildCmd(sb, fmt.Sprintf("--output=type=tar,dest=%s/result.tar", dir), dir)
+	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=tar,dest=%s/result.tar", dir), dir))
 	require.NoError(t, err, string(out))
 
 	dt, err := os.ReadFile(fmt.Sprintf("%s/result.tar", dir))
@@ -74,7 +74,7 @@ func testBuildRegistryExport(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 	target := registry + "/buildx/registry:latest"
 
-	out, err := buildCmd(sb, fmt.Sprintf("--output=type=image,name=%s,push=true", target), dir)
+	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), dir))
 	require.NoError(t, err, string(out))
 
 	desc, provider, err := contentutil.ProviderFromRef(target)
@@ -92,11 +92,9 @@ func testBuildRegistryExport(t *testing.T, sb integration.Sandbox) {
 func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 	dockerfile := []byte(`FROM busybox:latest`)
 
-	dir, err := tmpdir(t,
+	dir := tmpdir(t,
 		fstest.CreateFile("Dockerfile", dockerfile, 0600),
 	)
-	require.NoError(t, err)
-
 	targetDir := t.TempDir()
 
 	outFlag := "--output=type=docker"
@@ -106,12 +104,14 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 		outFlag += ",dest=" + targetDir + "/image.tar"
 	}
 
-	cmd := buildxCmd(sb, "build", "-q", outFlag, "--iidfile", filepath.Join(targetDir, "iid.txt"), "--metadata-file", filepath.Join(targetDir, "md.json"), dir)
+	cmd := buildxCmd(
+		sb,
+		withArgs("build", "-q", outFlag, "--iidfile", filepath.Join(targetDir, "iid.txt"), "--metadata-file", filepath.Join(targetDir, "md.json"), dir),
+	)
 	stdout := bytes.NewBuffer(nil)
 	cmd.Stdout = stdout
 	cmd.Stderr = os.Stderr
-	err = cmd.Run()
-
+	err := cmd.Run()
 	require.NoError(t, err)
 
 	dt, err := os.ReadFile(filepath.Join(targetDir, "iid.txt"))
