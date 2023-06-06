@@ -26,6 +26,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
@@ -238,6 +239,11 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		return err
 	}
 
+	var term bool
+	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
+		term = true
+	}
+
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 	progressMode, err := options.toProgress()
@@ -273,7 +279,9 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		return retErr
 	}
 
-	if options.quiet {
+	if progressMode != progress.PrinterModeQuiet {
+		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
+	} else {
 		fmt.Println(getImageID(resp.ExporterResponse))
 	}
 	if options.imageIDFile != "" {

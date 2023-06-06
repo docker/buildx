@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/containerd/console"
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
@@ -13,6 +14,7 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
@@ -117,6 +119,11 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		progressTextDesc = fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver)
 	}
 
+	var term bool
+	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
+		term = true
+	}
+
 	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, cFlags.progress,
 		progress.WithDesc(progressTextDesc, progressConsoleDesc),
 	)
@@ -129,6 +136,9 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 			err1 := printer.Wait()
 			if err == nil {
 				err = err1
+			}
+			if err == nil && cFlags.progress != progress.PrinterModeQuiet {
+				desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 			}
 		}
 	}()
