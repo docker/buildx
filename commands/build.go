@@ -273,7 +273,7 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		return retErr
 	}
 
-	if options.quiet {
+	if progressMode == progress.PrinterModeQuiet {
 		fmt.Println(getImageID(resp.ExporterResponse))
 	}
 	if options.imageIDFile != "" {
