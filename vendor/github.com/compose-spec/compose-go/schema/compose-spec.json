@@ -83,6 +83,7 @@
 
       "properties": {
         "deploy": {"$ref": "#/definitions/deployment"},
+        "annotations": {"$ref": "#/definitions/list_or_dict"},
         "build": {
           "oneOf": [
             {"type": "string"},

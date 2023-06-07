@@ -8,6 +8,8 @@ services:
         RUN echo "hello" > /world.txt
 
   foo:
+    annotations:
+      - com.example.foo=bar
     build:
       context: ./dir
       dockerfile: Dockerfile

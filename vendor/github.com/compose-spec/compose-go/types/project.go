@@ -36,12 +36,12 @@ import (
 type Project struct {
 	Name         string     `yaml:"name,omitempty" json:"name,omitempty"`
 	WorkingDir   string     `yaml:"-" json:"-"`
-	Services     Services   `json:"services"`
-	Networks     Networks   `yaml:",omitempty" json:"networks,omitempty"`
-	Volumes      Volumes    `yaml:",omitempty" json:"volumes,omitempty"`
-	Secrets      Secrets    `yaml:",omitempty" json:"secrets,omitempty"`
-	Configs      Configs    `yaml:",omitempty" json:"configs,omitempty"`
-	Extensions   Extensions `mapstructure:"#extensions" yaml:",inline" json:"-"` // https://github.com/golang/go/issues/6213
+	Services     Services   `yaml:"services" json:"services"`
+	Networks     Networks   `yaml:"networks,omitempty" json:"networks,omitempty"`
+	Volumes      Volumes    `yaml:"volumes,omitempty" json:"volumes,omitempty"`
+	Secrets      Secrets    `yaml:"secrets,omitempty" json:"secrets,omitempty"`
+	Configs      Configs    `yaml:"configs,omitempty" json:"configs,omitempty"`
+	Extensions   Extensions `yaml:"#extensions,inline" json:"-"` // https://github.com/golang/go/issues/6213
 	ComposeFiles []string   `yaml:"-" json:"-"`
 	Environment  Mapping    `yaml:"-" json:"-"`
 
@@ -396,6 +396,11 @@ func (p *Project) ForServices(names []string, options ...DependencyOption) error
 	var enabled Services
 	for _, s := range p.Services {
 		if _, ok := set[s.Name]; ok {
+			for _, option := range options {
+				if option == IgnoreDependencies {
+					s.DependsOn = nil
+				}
+			}
 			enabled = append(enabled, s)
 		} else {
 			p.DisabledServices = append(p.DisabledServices, s)
