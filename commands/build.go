@@ -726,6 +726,9 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 			cfg.Cmd = append(cfg.Cmd, value) // TODO: support JSON
 		case "entrypoint":
 			cfg.Entrypoint = append(cfg.Entrypoint, value) // TODO: support JSON
+			if cfg.Cmd == nil {
+				cfg.Cmd = []string{}
+			}
 		case "env":
 			cfg.Env = append(cfg.Env, value)
 		case "user":
