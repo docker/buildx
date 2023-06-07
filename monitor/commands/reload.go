@@ -27,7 +27,14 @@ func NewReloadCmd(m types.Monitor, stdout io.WriteCloser, progress *progress.Pri
 }
 
 func (cm *ReloadCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: "reloads the context and build it"}
+	return types.CommandInfo{
+		Name:        "reload",
+		HelpMessage: "reloads the context and build it",
+		HelpMessageLong: `
+Usage:
+  reload
+`,
+	}
 }
 
 func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {

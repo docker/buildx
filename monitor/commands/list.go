@@ -21,7 +21,14 @@ func NewListCmd(m types.Monitor, stdout io.WriteCloser) types.Command {
 }
 
 func (cm *ListCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: "list buildx sessions"}
+	return types.CommandInfo{
+		Name:        "list",
+		HelpMessage: "list buildx sessions",
+		HelpMessageLong: `
+Usage:
+  list
+`,
+	}
 }
 
 func (cm *ListCmd) Exec(ctx context.Context, args []string) error {

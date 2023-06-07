@@ -85,18 +85,22 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 	id := m.Rollback(ctx, invokeConfig)
 	fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 
-	registeredCommands := map[string]types.Command{
-		"reload":     commands.NewReloadCmd(m, stdout, progress, options, invokeConfig),
-		"rollback":   commands.NewRollbackCmd(m, invokeConfig, stdout),
-		"list":       commands.NewListCmd(m, stdout),
-		"disconnect": commands.NewDisconnectCmd(m),
-		"kill":       commands.NewKillCmd(m),
-		"attach":     commands.NewAttachCmd(m, stdout),
-		"exec":       commands.NewExecCmd(m, invokeConfig, stdout),
-		"ps":         commands.NewPsCmd(m, stdout),
+	availableCommands := []types.Command{
+		commands.NewReloadCmd(m, stdout, progress, options, invokeConfig),
+		commands.NewRollbackCmd(m, invokeConfig, stdout),
+		commands.NewListCmd(m, stdout),
+		commands.NewDisconnectCmd(m),
+		commands.NewKillCmd(m),
+		commands.NewAttachCmd(m, stdout),
+		commands.NewExecCmd(m, invokeConfig, stdout),
+		commands.NewPsCmd(m, stdout),
+	}
+	registeredCommands := make(map[string]types.Command)
+	for _, c := range availableCommands {
+		registeredCommands[c.Info().Name] = c
 	}
 	additionalHelpMessages := map[string]string{
-		"help": "shows this message",
+		"help": "shows this message. Optionally pass a command name as an argument to print the detailed usage.",
 		"exit": "exits monitor",
 	}
 
@@ -141,6 +145,10 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 				case "exit":
 					return
 				case "help":
+					if len(args) >= 2 {
+						printHelpMessageOfCommand(stdout, args[1], registeredCommands, additionalHelpMessages)
+						continue
+					}
 					printHelpMessage(stdout, registeredCommands, additionalHelpMessages)
 					continue
 				default:
@@ -168,6 +176,21 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 		case <-monitorDisableCh:
 		}
 		monitorForwarder.SetOut(nil)
+	}
+}
+
+func printHelpMessageOfCommand(out io.Writer, name string, registeredCommands map[string]types.Command, additional map[string]string) {
+	var target types.Command
+	if c, ok := registeredCommands[name]; ok {
+		target = c
+	} else {
+		fmt.Fprintf(out, "monitor: no help message for %q\n", name)
+		printHelpMessage(out, registeredCommands, additional)
+		return
+	}
+	fmt.Fprintln(out, target.Info().HelpMessage)
+	if h := target.Info().HelpMessageLong; h != "" {
+		fmt.Fprintln(out, h)
 	}
 }
 

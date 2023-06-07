@@ -20,7 +20,14 @@ func NewPsCmd(m types.Monitor, stdout io.WriteCloser) types.Command {
 }
 
 func (cm *PsCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: `list processes invoked by "exec". Use "attach" to attach IO to that process`}
+	return types.CommandInfo{
+		Name:        "ps",
+		HelpMessage: `list processes invoked by "exec". Use "attach" to attach IO to that process`,
+		HelpMessageLong: `
+Usage:
+  ps
+`,
+	}
 }
 
 func (cm *PsCmd) Exec(ctx context.Context, args []string) error {

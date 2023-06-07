@@ -20,7 +20,17 @@ func NewAttachCmd(m types.Monitor, stdout io.WriteCloser) types.Command {
 }
 
 func (cm *AttachCmd) Info() types.CommandInfo {
-	return types.CommandInfo{HelpMessage: "attach to a buildx server or a process in the container"}
+	return types.CommandInfo{
+		Name:        "attach",
+		HelpMessage: "attach to a buildx server or a process in the container",
+		HelpMessageLong: `
+Usage:
+  attach ID
+
+ID is for a session (visible via list command) or a process (visible via ps command).
+If you attached to a process, use Ctrl-c-a for switching the monitor to that process's STDIO.
+`,
+	}
 }
 
 func (cm *AttachCmd) Exec(ctx context.Context, args []string) error {
