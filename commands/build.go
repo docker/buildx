@@ -704,6 +704,7 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 	}
 
 	csvReader := csv.NewReader(strings.NewReader(invoke))
+	csvReader.LazyQuotes = true
 	fields, err := csvReader.Read()
 	if err != nil {
 		return cfg, err
@@ -723,14 +724,14 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 		value := parts[1]
 		switch key {
 		case "args":
-			cfg.Cmd = append(cfg.Cmd, value) // TODO: support JSON
+			cfg.Cmd = append(cfg.Cmd, maybeJSONArray(value)...)
 		case "entrypoint":
-			cfg.Entrypoint = append(cfg.Entrypoint, value) // TODO: support JSON
+			cfg.Entrypoint = append(cfg.Entrypoint, maybeJSONArray(value)...)
 			if cfg.Cmd == nil {
 				cfg.Cmd = []string{}
 			}
 		case "env":
-			cfg.Env = append(cfg.Env, value)
+			cfg.Env = append(cfg.Env, maybeJSONArray(value)...)
 		case "user":
 			cfg.User = value
 			cfg.NoUser = false
@@ -747,6 +748,14 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 		}
 	}
 	return cfg, nil
+}
+
+func maybeJSONArray(v string) []string {
+	var list []string
+	if err := json.Unmarshal([]byte(v), &list); err == nil {
+		return list
+	}
+	return []string{v}
 }
 
 func listToMap(values []string, defaultEnv bool) map[string]string {
