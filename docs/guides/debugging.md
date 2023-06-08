@@ -49,6 +49,16 @@ bin    etc    lib    mnt    proc   run    srv    tmp    var
 dev    home   media  opt    root   sbin   sys    usr    work
 ```
 
+Optional long form allows you specifying detailed configurations of the process. 
+It must be CSV-styled comma-separated key-value pairs.
+Supported keys are `args` (can be JSON array format), `entrypoint` (can be JSON array format), `env` (can be JSON array format), `user`, `cwd` and `tty` (bool).
+
+Example:
+
+```
+$ docker buildx build --invoke 'entrypoint=["sh"],"args=[""-c"", ""env | grep -e FOO -e AAA""]","env=[""FOO=bar"", ""AAA=bbb""]"' .
+```
+
 #### `on-error`
 
 If you want to start a debug session when a build fails, you can use
