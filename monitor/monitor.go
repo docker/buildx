@@ -282,6 +282,7 @@ func (m *monitor) startInvoke(ctx context.Context, pid string, cfg controllerapi
 	}
 	if len(cfg.Entrypoint) == 0 && len(cfg.Cmd) == 0 {
 		cfg.Entrypoint = []string{"sh"} // launch shell by default
+		cfg.Cmd = []string{}
 	}
 	go func() {
 		// Start a new invoke
