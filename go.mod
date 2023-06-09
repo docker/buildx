@@ -10,10 +10,10 @@ require (
 	github.com/containerd/containerd v1.7.2
 	github.com/containerd/continuity v0.4.1
 	github.com/containerd/typeurl/v2 v2.1.1
-	github.com/docker/cli v24.0.1+incompatible
+	github.com/docker/cli v24.0.2+incompatible
 	github.com/docker/cli-docs-tool v0.5.1
 	github.com/docker/distribution v2.8.2+incompatible
-	github.com/docker/docker v24.0.1+incompatible
+	github.com/docker/docker v24.0.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/protobuf v1.3.2
