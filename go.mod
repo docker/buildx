@@ -10,7 +10,7 @@ require (
 	github.com/containerd/containerd v1.7.1
 	github.com/containerd/continuity v0.4.1
 	github.com/containerd/typeurl/v2 v2.1.1
-	github.com/docker/cli v24.0.1+incompatible
+	github.com/docker/cli v24.0.2+incompatible
 	github.com/docker/cli-docs-tool v0.5.1
 	github.com/docker/distribution v2.8.2+incompatible
 	github.com/docker/docker v24.0.2+incompatible
