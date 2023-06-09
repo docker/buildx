@@ -47,7 +47,7 @@ func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 
 			err = monitor.RunMonitor(ctx, "", nil, controllerapi.InvokeConfig{
 				Tty: true,
-			}, c, os.Stdin, os.Stdout, os.Stderr, printer)
+			}, c, dockerCli.In(), os.Stdout, os.Stderr, printer)
 			con.Reset()
 			return err
 		},

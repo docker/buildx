@@ -312,7 +312,7 @@ func getImageID(resp map[string]string) string {
 }
 
 func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
-	resp, res, err := cbuild.RunBuild(ctx, dockerCli, *opts, os.Stdin, printer, false)
+	resp, res, err := cbuild.RunBuild(ctx, dockerCli, *opts, dockerCli.In(), printer, false)
 	if res != nil {
 		res.Done()
 	}
@@ -346,7 +346,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	var retErr error
 	var resp *client.SolveResponse
 	f := ioset.NewSingleForwarder()
-	f.SetReader(os.Stdin)
+	f.SetReader(dockerCli.In())
 	if !options.noBuild {
 		pr, pw := io.Pipe()
 		f.SetWriter(pw, func() io.WriteCloser {
