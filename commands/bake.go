@@ -146,7 +146,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	if url != "" {
 		files, inp, err = bake.ReadRemoteFiles(ctx, nodes, url, in.files, printer)
 	} else {
-		files, err = bake.ReadLocalFiles(in.files)
+		files, err = bake.ReadLocalFiles(in.files, dockerCli.In())
 	}
 	if err != nil {
 		return err

@@ -19,7 +19,7 @@ func Disable(cmd *cobra.Command, args []string, toComplete string) ([]string, co
 
 func BakeTargets(files []string) ValidArgsFn {
 	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
-		f, err := bake.ReadLocalFiles(files)
+		f, err := bake.ReadLocalFiles(files, nil)
 		if err != nil {
 			return nil, cobra.ShellCompDirectiveError
 		}

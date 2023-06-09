@@ -55,7 +55,7 @@ func defaultFilenames() []string {
 	return names
 }
 
-func ReadLocalFiles(names []string) ([]File, error) {
+func ReadLocalFiles(names []string, stdin io.Reader) ([]File, error) {
 	isDefault := false
 	if len(names) == 0 {
 		isDefault = true
@@ -67,7 +67,7 @@ func ReadLocalFiles(names []string) ([]File, error) {
 		var dt []byte
 		var err error
 		if n == "-" {
-			dt, err = io.ReadAll(os.Stdin)
+			dt, err = io.ReadAll(stdin)
 			if err != nil {
 				return nil, err
 			}
