@@ -7,7 +7,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.18.16
 	github.com/compose-spec/compose-go v1.14.0
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.7.1
+	github.com/containerd/containerd v1.7.2
 	github.com/containerd/continuity v0.4.1
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/docker/cli v24.0.1+incompatible
@@ -22,7 +22,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 	github.com/hashicorp/hcl/v2 v2.8.2
-	github.com/moby/buildkit v0.11.0-rc3.0.20230530080511-c36941f4a10e
+	github.com/moby/buildkit v0.11.0-rc3.0.20230609092854-67a08623b95a
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
