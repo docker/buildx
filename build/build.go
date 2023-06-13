@@ -948,7 +948,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					} else {
 						rr, err = c.Build(ctx, so, "buildx", buildFunc, ch)
 					}
-					if node.Driver.Features(ctx)[driver.HistoryAPI] && desktop.BuildBackendEnabled() {
+					if desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
 						buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
 						if err != nil {
 							return &desktop.ErrorWithBuildRef{
@@ -1262,7 +1262,7 @@ func createTempDockerfile(r io.Reader) (string, error) {
 	return dir, err
 }
 
-func LoadInputs(ctx context.Context, d driver.Driver, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
+func LoadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}

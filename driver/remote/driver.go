@@ -88,18 +88,11 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 }
 
 func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
-	var historyAPI bool
-	c, err := d.Client(ctx)
-	if err == nil {
-		historyAPI = driver.HistoryAPISupported(ctx, c)
-		c.Close()
-	}
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    true,
 		driver.DockerExporter: true,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true,
-		driver.HistoryAPI:     historyAPI,
 	}
 }
 

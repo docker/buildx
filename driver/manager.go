@@ -104,7 +104,7 @@ func GetFactory(name string, instanceRequired bool) (Factory, error) {
 	return nil, errors.Errorf("failed to find driver %q", name)
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string) (Driver, error) {
+func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string) (*DriverHandle, error) {
 	ic := InitConfig{
 		EndpointAddr:     endpointAddr,
 		DockerAPI:        api,
@@ -128,7 +128,7 @@ func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string,
 	if err != nil {
 		return nil, err
 	}
-	return &cachedDriver{Driver: d}, nil
+	return &DriverHandle{Driver: d}, nil
 }
 
 func GetFactories(instanceRequired bool) []Factory {
@@ -145,25 +145,36 @@ func GetFactories(instanceRequired bool) []Factory {
 	return ds
 }
 
-type cachedDriver struct {
+type DriverHandle struct {
 	Driver
-	client       *client.Client
-	err          error
-	once         sync.Once
-	featuresOnce sync.Once
-	features     map[Feature]bool
+	client                  *client.Client
+	err                     error
+	once                    sync.Once
+	featuresOnce            sync.Once
+	features                map[Feature]bool
+	historyAPISupportedOnce sync.Once
+	historyAPISupported     bool
 }
 
-func (d *cachedDriver) Client(ctx context.Context) (*client.Client, error) {
+func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
 	d.once.Do(func() {
 		d.client, d.err = d.Driver.Client(ctx)
 	})
 	return d.client, d.err
 }
 
-func (d *cachedDriver) Features(ctx context.Context) map[Feature]bool {
+func (d *DriverHandle) Features(ctx context.Context) map[Feature]bool {
 	d.featuresOnce.Do(func() {
 		d.features = d.Driver.Features(ctx)
 	})
 	return d.features
+}
+
+func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
+	d.historyAPISupportedOnce.Do(func() {
+		if c, err := d.Client(ctx); err == nil {
+			d.historyAPISupported = historyAPISupported(ctx, c)
+		}
+	})
+	return d.historyAPISupported
 }
