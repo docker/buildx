@@ -22,7 +22,7 @@ import (
 type Node struct {
 	store.Node
 	Builder     string
-	Driver      driver.Driver
+	Driver      *driver.DriverHandle
 	DriverInfo  *driver.Info
 	Platforms   []ocispecs.Platform
 	GCPolicy    []client.PruneInfo

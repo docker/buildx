@@ -64,7 +64,7 @@ type Driver interface {
 	Config() InitConfig
 }
 
-func Boot(ctx, clientContext context.Context, d Driver, pw progress.Writer) (*client.Client, error) {
+func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Writer) (*client.Client, error) {
 	try := 0
 	for {
 		info, err := d.Info(ctx)
@@ -92,7 +92,7 @@ func Boot(ctx, clientContext context.Context, d Driver, pw progress.Writer) (*cl
 	}
 }
 
-func HistoryAPISupported(ctx context.Context, c *client.Client) bool {
+func historyAPISupported(ctx context.Context, c *client.Client) bool {
 	cl, err := c.ControlClient().ListenBuildHistory(ctx, &controlapi.BuildHistoryRequest{
 		ActiveOnly: true,
 		Ref:        "buildx-test-history-api-feature", // dummy ref to check if the server supports the API
