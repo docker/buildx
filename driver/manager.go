@@ -147,11 +147,13 @@ func GetFactories(instanceRequired bool) []Factory {
 
 type DriverHandle struct {
 	Driver
-	client       *client.Client
-	err          error
-	once         sync.Once
-	featuresOnce sync.Once
-	features     map[Feature]bool
+	client                  *client.Client
+	err                     error
+	once                    sync.Once
+	featuresOnce            sync.Once
+	features                map[Feature]bool
+	historyAPISupportedOnce sync.Once
+	historyAPISupported     bool
 }
 
 func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
@@ -169,9 +171,10 @@ func (d *DriverHandle) Features(ctx context.Context) map[Feature]bool {
 }
 
 func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
-	client, err := d.Client(ctx)
-	if err != nil {
-		return false
-	}
-	return historyAPISupported(ctx, client)
+	d.historyAPISupportedOnce.Do(func() {
+		if c, err := d.Client(ctx); err == nil {
+			d.historyAPISupported = historyAPISupported(ctx, c)
+		}
+	})
+	return d.historyAPISupported
 }
