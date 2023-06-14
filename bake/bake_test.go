@@ -386,18 +386,19 @@ func TestHCLCwdPrefix(t *testing.T) {
 	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
 	require.NoError(t, err)
 
-	require.Equal(t, 1, len(m))
-	_, ok := m["app"]
-	require.True(t, ok)
-
-	_, err = TargetsToBuildOpt(m, &Input{})
+	bo, err := TargetsToBuildOpt(m, &Input{})
 	require.NoError(t, err)
-
-	require.Equal(t, "test", *m["app"].Dockerfile)
-	require.Equal(t, "foo", *m["app"].Context)
 
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"app"}, g["default"].Targets)
+
+	require.Equal(t, 1, len(m))
+	require.Contains(t, m, "app")
+	require.Equal(t, "test", *m["app"].Dockerfile)
+	require.Equal(t, "foo", *m["app"].Context)
+
+	require.Equal(t, "foo/test", bo["app"].Inputs.DockerfilePath)
+	require.Equal(t, "foo", bo["app"].Inputs.ContextPath)
 }
 
 func TestOverrideMerge(t *testing.T) {
