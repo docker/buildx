@@ -235,3 +235,26 @@ func TestNodeManagement(t *testing.T) {
 	require.NotNil(t, ng)
 	require.Equal(t, "mybuild", ng.Name)
 }
+
+func TestNodeInvalidName(t *testing.T) {
+	t.Parallel()
+	tmpdir := t.TempDir()
+
+	s, err := New(tmpdir)
+	require.NoError(t, err)
+
+	txn, release, err := s.Txn()
+	require.NoError(t, err)
+	defer release()
+
+	_, err = txn.NodeGroupByName("123builder")
+	require.Error(t, err)
+	require.True(t, IsErrInvalidName(err))
+
+	err = txn.Save(&NodeGroup{
+		Name:   "123builder",
+		Driver: "mydriver",
+	})
+	require.Error(t, err)
+	require.True(t, IsErrInvalidName(err))
+}
