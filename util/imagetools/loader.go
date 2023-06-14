@@ -33,7 +33,7 @@ type contentCache interface {
 	content.Ingester
 }
 
-type loader struct {
+type Loader struct {
 	resolver remotes.Resolver
 	cache    contentCache
 }
@@ -68,15 +68,15 @@ type result struct {
 	assets    map[string]asset
 }
 
-func newLoader(resolver remotes.Resolver) *loader {
-	return &loader{
+func NewLoader(resolver remotes.Resolver) *Loader {
+	return &Loader{
 		resolver: resolver,
 		cache:    contentutil.NewBuffer(),
 	}
 }
 
-func (l *loader) Load(ctx context.Context, ref string) (*result, error) {
-	named, err := parseRef(ref)
+func (l *Loader) Load(ctx context.Context, ref string) (*result, error) {
+	named, err := ParseRef(ref)
 	if err != nil {
 		return nil, err
 	}
@@ -147,7 +147,7 @@ func (l *loader) Load(ctx context.Context, ref string) (*result, error) {
 	return r, nil
 }
 
-func (l *loader) fetch(ctx context.Context, fetcher remotes.Fetcher, desc ocispec.Descriptor, r *result) error {
+func (l *Loader) fetch(ctx context.Context, fetcher remotes.Fetcher, desc ocispec.Descriptor, r *result) error {
 	_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, desc)
 	if err != nil {
 		return err
@@ -233,7 +233,7 @@ func (l *loader) fetch(ctx context.Context, fetcher remotes.Fetcher, desc ocispe
 	return nil
 }
 
-func (l *loader) readPlatformFromConfig(ctx context.Context, fetcher remotes.Fetcher, desc ocispec.Descriptor) (*ocispec.Platform, error) {
+func (l *Loader) readPlatformFromConfig(ctx context.Context, fetcher remotes.Fetcher, desc ocispec.Descriptor) (*ocispec.Platform, error) {
 	_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, desc)
 	if err != nil {
 		return nil, err
@@ -256,7 +256,7 @@ func (l *loader) readPlatformFromConfig(ctx context.Context, fetcher remotes.Fet
 	}, nil
 }
 
-func (l *loader) scanConfig(ctx context.Context, fetcher remotes.Fetcher, desc ocispec.Descriptor, as *asset) error {
+func (l *Loader) scanConfig(ctx context.Context, fetcher remotes.Fetcher, desc ocispec.Descriptor, as *asset) error {
 	_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, desc)
 	if err != nil {
 		return err
@@ -273,7 +273,7 @@ type sbomStub struct {
 	AdditionalSPDXs []interface{} `json:",omitempty"`
 }
 
-func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
+func (l *Loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 	as.deferredSbom = func() (*sbomStub, error) {
 		var sbom *sbomStub
@@ -317,7 +317,7 @@ type provenanceStub struct {
 	SLSA interface{} `json:",omitempty"`
 }
 
-func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
+func (l *Loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 	as.deferredProvenance = func() (*provenanceStub, error) {
 		var provenance *provenanceStub

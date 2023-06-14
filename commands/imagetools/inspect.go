@@ -2,66 +2,79 @@ package commands
 
 import (
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/util/cobrautil/completion"
-	"github.com/docker/buildx/util/imagetools"
-	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/util/appcontext"
-	"github.com/pkg/errors"
+	"github.com/docker/cli/cli/command/formatter"
+	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/spf13/cobra"
 )
 
 type inspectOptions struct {
-	builder string
-	format  string
-	raw     bool
+	builderName string
+	format      string
+	refs        []string
 }
 
-func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
-	ctx := appcontext.Context()
+func inspectCmd(dockerCLI command.Cli, rootOpts RootOptions) *cobra.Command {
+	var opts inspectOptions
 
-	if in.format != "" && in.raw {
-		return errors.Errorf("format and raw cannot be used together")
+	cmd := &cobra.Command{
+		Use:   "inspect [OPTIONS] IMAGE [IMAGE...]",
+		Short: "Show detailed information on one or more images in the registry",
+		Args:  cli.RequiresMinArgs(1),
+		RunE: func(cmd *cobra.Command, args []string) error {
+			opts.builderName = *rootOpts.Builder
+			opts.refs = args
+			return runInspect(dockerCLI, opts, args[0])
+		},
 	}
 
-	b, err := builder.New(dockerCli, builder.WithName(in.builder))
+	flags := cmd.Flags()
+	flags.StringVarP(&opts.format, "format", "f", "", cliflags.InspectFormatHelp)
+
+	return cmd
+}
+
+func runInspect(dockerCli command.Cli, opts inspectOptions, name string) error {
+	b, err := builder.New(dockerCli, builder.WithName(opts.builderName))
 	if err != nil {
 		return err
 	}
+
 	imageopt, err := b.ImageOpt()
 	if err != nil {
 		return err
 	}
 
-	p, err := imagetools.NewPrinter(ctx, imageopt, name, in.format)
-	if err != nil {
-		return err
-	}
-
-	return p.Print(in.raw, dockerCli.Out())
+	return inspectFormatWrite(formatter.Context{
+		Output: dockerCli.Out(),
+		Format: makeFormat(opts.format),
+	}, name, imageopt)
 }
 
-func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
-	var options inspectOptions
+// func runInspect(dockerCLI command.Cli, opts inspectOptions, name string) error {
+// 	b, err := builder.New(dockerCLI, builder.WithName(opts.builderName))
+// 	if err != nil {
+// 		return fmt.Errorf("new builder: %w", err)
+// 	}
 
-	cmd := &cobra.Command{
-		Use:   "inspect [OPTIONS] NAME",
-		Short: "Show details of an image in the registry",
-		Args:  cli.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
-			options.builder = *rootOpts.Builder
-			return runInspect(dockerCli, options, args[0])
-		},
-		ValidArgsFunction: completion.Disable,
-	}
+// 	imgopt, err := b.ImageOpt()
+// 	if err != nil {
+// 		return fmt.Errorf("image opt: %w", err)
+// 	}
 
-	flags := cmd.Flags()
+// 	resolver := imagetools.New(imgopt)
+// 	ctx := appcontext.Context()
+// 	return inspect.Inspect(dockerCLI.Out(), opts.refs, opts.format, func(ref string) (interface{}, []byte, error) {
+// 		newref, err := imagetools.ParseRef(ref)
+// 		if err != nil {
+// 			return nil, nil, err
+// 		}
 
-	flags.StringVar(&options.format, "format", "", "Format the output using the given Go template")
-	flags.SetAnnotation("format", annotation.DefaultValue, []string{`"{{.Manifest}}"`})
-
-	flags.BoolVar(&options.raw, "raw", false, "Show original, unformatted JSON manifest")
-
-	return cmd
-}
+// 		dt, mfst, err := resolver.Get(ctx, newref.String())
+// 		if err != nil {
+// 			return nil, nil, err
+// 		}
+// 		return mfst, dt, err
+// 	})
+// }

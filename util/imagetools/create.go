@@ -160,7 +160,7 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 
 	ref = reference.TagNameOnly(ref)
-	p, err := r.resolver().Pusher(ctx, ref.String())
+	p, err := r.Resolver().Pusher(ctx, ref.String())
 	if err != nil {
 		return err
 	}
@@ -183,13 +183,13 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) 
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 
 	dest = reference.TagNameOnly(dest)
-	p, err := r.resolver().Pusher(ctx, dest.String())
+	p, err := r.Resolver().Pusher(ctx, dest.String())
 	if err != nil {
 		return err
 	}
 
 	srcRef := reference.TagNameOnly(src.Ref)
-	f, err := r.resolver().Fetcher(ctx, srcRef.String())
+	f, err := r.Resolver().Fetcher(ctx, srcRef.String())
 	if err != nil {
 		return err
 	}
