@@ -62,3 +62,7 @@ func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 		context: name,
 	}, cl, nil
 }
+
+func (c dockerWorker) Close() error {
+	return nil
+}

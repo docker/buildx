@@ -61,3 +61,7 @@ func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 		builder: name,
 	}, cl, nil
 }
+
+func (w remoteWorker) Close() error {
+	return nil
+}
