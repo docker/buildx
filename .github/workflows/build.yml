@@ -102,7 +102,7 @@ jobs:
           ./hack/test
         env:
           TEST_DOCKERD: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker-container') && '1' || '0' }}"
-          TESTFLAGS: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker-container') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
+          TESTFLAGS: "${{ (matrix.worker == 'docker') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
           TESTPKGS: "${{ matrix.pkg }}"
           SKIP_INTEGRATION_TESTS: "${{ matrix.skip-integration-tests }}"
       -
