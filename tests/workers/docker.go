@@ -42,7 +42,7 @@ func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 		"--docker", "host="+bk.DockerAddress(),
 	)
 	if err := cmd.Run(); err != nil {
-		return nil, cl, errors.Wrapf(err, "failed to create buildx instance %s", name)
+		return bk, cl, errors.Wrapf(err, "failed to create buildx instance %s", name)
 	}
 
 	cl = func() error {
