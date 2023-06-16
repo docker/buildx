@@ -64,3 +64,7 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 		builder: name,
 	}, cl, nil
 }
+
+func (w *containerWorker) Close() error {
+	return nil
+}
