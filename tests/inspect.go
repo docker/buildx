@@ -33,6 +33,8 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 			driver = strings.TrimSpace(v)
 		}
 	}
+
 	require.Equal(t, sb.Address(), name)
-	require.Equal(t, sb.Name(), driver)
+	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
+	require.Equal(t, sbDriver, driver)
 }

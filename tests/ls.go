@@ -23,9 +23,10 @@ func testLs(t *testing.T, sb integration.Sandbox) {
 	out, err := lsCmd(sb)
 	require.NoError(t, err, string(out))
 
+	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
 	for _, line := range strings.Split(out, "\n") {
 		if strings.Contains(line, sb.Address()) {
-			require.Contains(t, line, sb.Name())
+			require.Contains(t, line, sbDriver)
 			return
 		}
 	}
