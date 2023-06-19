@@ -3,10 +3,12 @@ package build
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"net"
 	"os"
 	"strings"
 
+	"github.com/docker/buildx/driver"
 	"github.com/docker/cli/opts"
 	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/moby/buildkit/util/gitutil"
@@ -57,7 +59,7 @@ func isArchive(header []byte) bool {
 }
 
 // toBuildkitExtraHosts converts hosts from docker key:value format to buildkit's csv format
-func toBuildkitExtraHosts(inp []string, mobyDriver bool) (string, error) {
+func toBuildkitExtraHosts(ctx context.Context, inp []string, nodeDriver *driver.DriverHandle) (string, error) {
 	if len(inp) == 0 {
 		return "", nil
 	}
@@ -67,11 +69,16 @@ func toBuildkitExtraHosts(inp []string, mobyDriver bool) (string, error) {
 		if !ok || host == "" || ip == "" {
 			return "", errors.Errorf("invalid host %s", h)
 		}
-		// Skip IP address validation for "host-gateway" string with moby driver
-		if !mobyDriver || ip != mobyHostGatewayName {
-			if net.ParseIP(ip) == nil {
-				return "", errors.Errorf("invalid host %s", h)
+		// If the IP Address is a "host-gateway", replace this value with the
+		// IP address provided by the worker's label.
+		if ip == mobyHostGatewayName {
+			hgip, err := nodeDriver.HostGatewayIP(ctx)
+			if err != nil {
+				return "", errors.Wrap(err, "unable to derive the IP value for host-gateway")
 			}
+			ip = hgip.String()
+		} else if net.ParseIP(ip) == nil {
+			return "", errors.Errorf("invalid host %s", h)
 		}
 		hosts = append(hosts, host+"="+ip)
 	}

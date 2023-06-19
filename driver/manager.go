@@ -2,17 +2,17 @@ package driver
 
 import (
 	"context"
+	"net"
 	"os"
 	"sort"
 	"strings"
 	"sync"
 
-	"k8s.io/client-go/rest"
-
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"k8s.io/client-go/rest"
 )
 
 type Factory interface {
@@ -154,6 +154,9 @@ type DriverHandle struct {
 	features                map[Feature]bool
 	historyAPISupportedOnce sync.Once
 	historyAPISupported     bool
+	hostGatewayIPOnce       sync.Once
+	hostGatewayIP           net.IP
+	hostGatewayIPErr        error
 }
 
 func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
@@ -177,4 +180,37 @@ func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
 		}
 	})
 	return d.historyAPISupported
+}
+
+func (d *DriverHandle) HostGatewayIP(ctx context.Context) (net.IP, error) {
+	d.hostGatewayIPOnce.Do(func() {
+		if !d.Driver.IsMobyDriver() {
+			d.hostGatewayIPErr = errors.New("host-gateway is only supported with the docker driver")
+			return
+		}
+		c, err := d.Client(ctx)
+		if err != nil {
+			d.hostGatewayIPErr = err
+			return
+		}
+		workers, err := c.ListWorkers(ctx)
+		if err != nil {
+			d.hostGatewayIPErr = errors.Wrap(err, "listing workers")
+			return
+		}
+		for _, w := range workers {
+			// should match github.com/docker/docker/builder/builder-next/worker/label.HostGatewayIP const
+			if v, ok := w.Labels["org.mobyproject.buildkit.worker.moby.host-gateway-ip"]; ok && v != "" {
+				ip := net.ParseIP(v)
+				if ip == nil {
+					d.hostGatewayIPErr = errors.Errorf("failed to parse host-gateway IP: %s", v)
+					return
+				}
+				d.hostGatewayIP = ip
+				return
+			}
+		}
+		d.hostGatewayIPErr = errors.New("host-gateway IP not found")
+	})
+	return d.hostGatewayIP, d.hostGatewayIPErr
 }

@@ -642,7 +642,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	}
 
 	// setup extrahosts
-	extraHosts, err := toBuildkitExtraHosts(opt.ExtraHosts, nodeDriver.IsMobyDriver())
+	extraHosts, err := toBuildkitExtraHosts(ctx, opt.ExtraHosts, nodeDriver)
 	if err != nil {
 		return nil, nil, err
 	}
