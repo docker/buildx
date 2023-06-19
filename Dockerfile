@@ -2,12 +2,11 @@
 
 ARG GO_VERSION=1.20
 ARG XX_VERSION=1.2.1
-ARG DOCKERD_VERSION=20.10.14
+
+ARG DOCKER_VERSION=24.0.2
 ARG GOTESTSUM_VERSION=v1.9.0
 ARG REGISTRY_VERSION=2.8.0
 ARG BUILDKIT_VERSION=v0.11.6
-
-FROM docker:$DOCKERD_VERSION AS dockerd-release
 
 # xx is a helper for cross-compilation
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
@@ -24,6 +23,22 @@ WORKDIR /src
 FROM registry:$REGISTRY_VERSION AS registry
 
 FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
+
+FROM gobase AS docker
+ARG TARGETPLATFORM
+ARG DOCKER_VERSION
+WORKDIR /opt/docker
+RUN DOCKER_ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
+    "linux/amd64")   echo "x86_64"  ;; \
+    "linux/arm/v6")  echo "armel"   ;; \
+    "linux/arm/v7")  echo "armhf"   ;; \
+    "linux/arm64")   echo "aarch64" ;; \
+    "linux/ppc64le") echo "ppc64le" ;; \
+    "linux/s390x")   echo "s390x"   ;; \
+    *)               echo ""        ;; esac) \
+  && echo "DOCKER_ARCH=$DOCKER_ARCH" \
+  && wget -qO- "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz" | tar xvz --strip 1
+RUN ./dockerd --version && ./containerd --version && ./ctr --version && ./runc --version
 
 FROM gobase AS gotestsum
 ARG GOTESTSUM_VERSION
@@ -77,9 +92,20 @@ FROM binaries-$TARGETOS AS binaries
 ARG BUILDKIT_SBOM_SCAN_STAGE=true
 
 FROM gobase AS integration-test-base
-RUN apk add --no-cache docker runc containerd
+# https://github.com/docker/docker/blob/master/project/PACKAGERS.md#runtime-dependencies
+RUN apk add --no-cache \
+      btrfs-progs \
+      e2fsprogs \
+      e2fsprogs-extra \
+      ip6tables \
+      iptables \
+      openssl \
+      shadow-uidmap \
+      xfsprogs \
+      xz
 COPY --link --from=gotestsum /out/gotestsum /usr/bin/
 COPY --link --from=registry /bin/registry /usr/bin/
+COPY --link --from=docker /opt/docker/* /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildkitd /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildctl /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
@@ -102,7 +128,7 @@ FROM scratch AS release
 COPY --from=releaser /out/ /
 
 # Shell
-FROM docker:$DOCKERD_VERSION AS dockerd-release
+FROM docker:$DOCKER_VERSION AS dockerd-release
 FROM alpine AS shell
 RUN apk add --no-cache iptables tmux git vim less openssh
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
