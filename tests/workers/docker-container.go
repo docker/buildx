@@ -50,7 +50,11 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 		"--driver=docker-container",
 		"--driver-opt=network=host",
 	)
-	cmd.Env = append(os.Environ(), "DOCKER_CONTEXT="+w.docker.DockerAddress())
+	cmd.Env = append(
+		os.Environ(),
+		"BUILDX_CONFIG=/tmp/buildx-"+name,
+		"DOCKER_CONTEXT="+w.docker.DockerAddress(),
+	)
 	if err := cmd.Run(); err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s", name)
 	}
