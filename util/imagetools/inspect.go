@@ -45,7 +45,7 @@ func New(opt Opt) *Resolver {
 	}
 }
 
-func (r *Resolver) resolver() remotes.Resolver {
+func (r *Resolver) Resolver() remotes.Resolver {
 	return docker.NewResolver(docker.ResolverOptions{
 		Hosts: func(domain string) ([]docker.RegistryHost, error) {
 			res, err := r.hosts(domain)
@@ -68,12 +68,12 @@ func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispec.Desc
 	logger.Out = io.Discard
 	ctx = log.WithLogger(ctx, logrus.NewEntry(logger))
 
-	ref, err := parseRef(in)
+	ref, err := ParseRef(in)
 	if err != nil {
 		return "", ocispec.Descriptor{}, err
 	}
 
-	in, desc, err := r.resolver().Resolve(ctx, ref.String())
+	in, desc, err := r.Resolver().Resolve(ctx, ref.String())
 	if err != nil {
 		return "", ocispec.Descriptor{}, err
 	}
@@ -95,7 +95,7 @@ func (r *Resolver) Get(ctx context.Context, in string) ([]byte, ocispec.Descript
 }
 
 func (r *Resolver) GetDescriptor(ctx context.Context, in string, desc ocispec.Descriptor) ([]byte, error) {
-	fetcher, err := r.resolver().Fetcher(ctx, in)
+	fetcher, err := r.Resolver().Fetcher(ctx, in)
 	if err != nil {
 		return nil, err
 	}
@@ -115,7 +115,7 @@ func (r *Resolver) GetDescriptor(ctx context.Context, in string, desc ocispec.De
 	return buf.Bytes(), nil
 }
 
-func parseRef(s string) (reference.Named, error) {
+func ParseRef(s string) (reference.Named, error) {
 	ref, err := reference.ParseNormalizedNamed(s)
 	if err != nil {
 		return nil, err
@@ -144,7 +144,7 @@ func RegistryAuthForRef(ref string, a Auth) (string, error) {
 	if a == nil {
 		return "", nil
 	}
-	r, err := parseRef(ref)
+	r, err := ParseRef(ref)
 	if err != nil {
 		return "", err
 	}
@@ -168,5 +168,5 @@ func (r *Resolver) ImageConfig(ctx context.Context, in string, platform *ocispec
 	if err != nil {
 		return "", nil, err
 	}
-	return imageutil.Config(ctx, in, r.resolver(), r.buffer, nil, platform)
+	return imageutil.Config(ctx, in, r.Resolver(), r.buffer, nil, platform)
 }
