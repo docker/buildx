@@ -219,6 +219,10 @@ func (c Moby) New(ctx context.Context, cfg *BackendConfig) (b Backend, cl func()
 	}, cl, nil
 }
 
+func (c Moby) Close() error {
+	return nil
+}
+
 func waitForAPI(ctx context.Context, apiClient *client.Client, d time.Duration) error {
 	step := 50 * time.Millisecond
 	i := 0

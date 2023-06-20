@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"os"
 	"os/exec"
 
 	"github.com/moby/buildkit/identity"
@@ -41,6 +42,7 @@ func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 		"--driver=remote",
 		bk.Address(),
 	)
+	cmd.Env = append(os.Environ(), "BUILDX_CONFIG=/tmp/buildx-"+name)
 	if err := cmd.Run(); err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s", name)
 	}
@@ -60,4 +62,8 @@ func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 	return &backend{
 		builder: name,
 	}, cl, nil
+}
+
+func (w remoteWorker) Close() error {
+	return nil
 }
