@@ -106,7 +106,7 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 	cmd := buildxCmd(
 		sb,
-		withArgs("build", "-q", outFlag, "--iidfile", filepath.Join(targetDir, "iid.txt"), "--metadata-file", filepath.Join(targetDir, "md.json"), dir),
+		withArgs("build", "-q", "--provenance", "false", outFlag, "--iidfile", filepath.Join(targetDir, "iid.txt"), "--metadata-file", filepath.Join(targetDir, "md.json"), dir),
 	)
 	stdout := bytes.NewBuffer(nil)
 	cmd.Stdout = stdout

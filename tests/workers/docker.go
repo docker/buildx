@@ -14,10 +14,15 @@ func InitDockerWorker() {
 	integration.Register(&dockerWorker{
 		id: "docker",
 	})
+	integration.Register(&dockerWorker{
+		id:                    "docker+containerd",
+		containerdSnapshotter: true,
+	})
 }
 
 type dockerWorker struct {
-	id string
+	id                    string
+	containerdSnapshotter bool
 }
 
 func (c dockerWorker) Name() string {
@@ -30,7 +35,8 @@ func (c dockerWorker) Rootless() bool {
 
 func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (b integration.Backend, cl func() error, err error) {
 	moby := integration.Moby{
-		ID: c.id,
+		ID:                    c.id,
+		ContainerdSnapshotter: c.containerdSnapshotter,
 	}
 	bk, bkclose, err := moby.New(ctx, cfg)
 	if err != nil {
