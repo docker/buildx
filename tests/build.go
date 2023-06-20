@@ -32,6 +32,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildLocalExport,
 	testBuildRegistryExport,
 	testBuildTarExport,
+	testBuildMobyFromLocalImage,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -137,6 +138,53 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 	require.NotEmpty(t, md.ConfigDigest)
 	require.Equal(t, dgst, digest.Digest(md.ConfigDigest))
+}
+
+func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {
+	if !isDockerWorker(sb) {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	// pull image
+	cmd := dockerCmd(sb, withArgs("pull", "-q", "busybox:latest"))
+	stdout := bytes.NewBuffer(nil)
+	cmd.Stdout = stdout
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+	require.Equal(t, "docker.io/library/busybox:latest", strings.TrimSpace(stdout.String()))
+
+	// create local tag
+	cmd = dockerCmd(sb, withArgs("tag", "busybox:latest", "buildx-test:busybox"))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	// build image
+	dockerfile := []byte(`FROM buildx-test:busybox`)
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	cmd = buildxCmd(
+		sb,
+		withArgs("build", "-q", "--output=type=cacheonly", dir),
+	)
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	// create local tag matching a remote one
+	cmd = dockerCmd(sb, withArgs("tag", "busybox:latest", "busybox:1.36"))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	// build image and check that it uses the local tag
+	dockerfile = []byte(`
+FROM busybox:1.36
+RUN busybox | head -1 | grep v1.35.0
+`)
+	dir = tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	cmd = buildxCmd(
+		sb,
+		withArgs("build", "-q", "--output=type=cacheonly", dir),
+	)
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
 }
 
 func createTestProject(t *testing.T) string {
