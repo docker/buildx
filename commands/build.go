@@ -487,7 +487,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
 	if isExperimental() {
-		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets) [experimental]")
+		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
+		flags.SetAnnotation("print", "experimentalCLI", nil)
 	}
 
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
@@ -514,10 +515,14 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--attest=type=provenance"`)
 
 	if isExperimental() {
-		flags.StringVar(&invokeFlag, "invoke", "", "Invoke a command after the build [experimental]")
-		flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect [experimental]")
-		flags.BoolVar(&options.Detach, "detach", false, "Detach buildx server (supported only on linux) [experimental]")
-		flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server) [experimental]")
+		flags.StringVar(&invokeFlag, "invoke", "", "Invoke a command after the build")
+		flags.SetAnnotation("invoke", "experimentalCLI", nil)
+		flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect")
+		flags.SetAnnotation("root", "experimentalCLI", nil)
+		flags.BoolVar(&options.Detach, "detach", false, "Detach buildx server (supported only on linux)")
+		flags.SetAnnotation("detach", "experimentalCLI", nil)
+		flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server)")
+		flags.SetAnnotation("server-config", "experimentalCLI", nil)
 	}
 
 	// hidden flags
@@ -540,6 +545,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&ignoreBool, "squash", false, "Squash newly built layers into a single new layer")
 	flags.MarkHidden("squash")
 	flags.SetAnnotation("squash", "flag-warn", []string{"experimental flag squash is removed with BuildKit. You should squash inside build using a multi-stage Dockerfile for efficiency."})
+	flags.SetAnnotation("squash", "experimentalCLI", nil)
 
 	flags.StringVarP(&ignore, "memory", "m", "", "Memory limit")
 	flags.MarkHidden("memory")
