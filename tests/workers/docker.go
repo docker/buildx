@@ -2,6 +2,7 @@ package workers
 
 import (
 	"context"
+	"os"
 	"os/exec"
 
 	"github.com/moby/buildkit/identity"
@@ -41,6 +42,7 @@ func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 		name,
 		"--docker", "host="+bk.DockerAddress(),
 	)
+	cmd.Env = append(os.Environ(), "BUILDX_CONFIG=/tmp/buildx-"+name)
 	if err := cmd.Run(); err != nil {
 		return bk, cl, errors.Wrapf(err, "failed to create buildx instance %s", name)
 	}
