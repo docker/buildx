@@ -24,6 +24,9 @@ func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "debug-shell",
 		Short: "Start a monitor",
+		Annotations: map[string]string{
+			"experimentalCLI": "",
+		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progressMode)
 			if err != nil {
@@ -55,9 +58,15 @@ func debugShellCmd(dockerCli command.Cli) *cobra.Command {
 
 	flags := cmd.Flags()
 
-	flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect [experimental]")
-	flags.BoolVar(&options.Detach, "detach", runtime.GOOS == "linux", "Detach buildx server (supported only on linux) [experimental]")
-	flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server) [experimental]")
+	flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect")
+	flags.SetAnnotation("root", "experimentalCLI", nil)
+
+	flags.BoolVar(&options.Detach, "detach", runtime.GOOS == "linux", "Detach buildx server (supported only on linux)")
+	flags.SetAnnotation("detach", "experimentalCLI", nil)
+
+	flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server)")
+	flags.SetAnnotation("server-config", "experimentalCLI", nil)
+
 	flags.StringVar(&progressMode, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 
 	return cmd
