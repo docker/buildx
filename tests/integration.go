@@ -3,6 +3,7 @@ package tests
 import (
 	"os"
 	"os/exec"
+	"strings"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
@@ -54,4 +55,21 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	}
 
 	return cmd
+}
+
+func dockerCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
+	cmd := exec.Command("docker")
+	cmd.Env = append([]string{}, os.Environ()...)
+	for _, opt := range opts {
+		opt(cmd)
+	}
+	if context := sb.DockerAddress(); context != "" {
+		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
+	}
+	return cmd
+}
+
+func isDockerWorker(sb integration.Sandbox) bool {
+	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
+	return sbDriver == "docker"
 }
