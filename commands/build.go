@@ -145,8 +145,8 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	}
 
 	// TODO: extract env var parsing to a method easily usable by library consumers
-	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
-		if _, ok := opts.BuildArgs["SOURCE_DATE_EPOCH"]; !ok {
+	if _, ok := opts.BuildArgs["SOURCE_DATE_EPOCH"]; !ok {
+		if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
 			opts.BuildArgs["SOURCE_DATE_EPOCH"] = v
 		}
 	}
