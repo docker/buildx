@@ -165,6 +165,7 @@ github.com/containerd/containerd/leases
 github.com/containerd/containerd/log
 github.com/containerd/containerd/namespaces
 github.com/containerd/containerd/pkg/dialer
+github.com/containerd/containerd/pkg/epoch
 github.com/containerd/containerd/pkg/randutil
 github.com/containerd/containerd/pkg/seed
 github.com/containerd/containerd/pkg/userns
