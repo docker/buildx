@@ -37,6 +37,7 @@ func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, e
 	}, func(options *loader.Options) {
 		options.SetProjectName("bake", false)
 		options.SkipNormalization = true
+		options.Profiles = []string{"*"}
 	})
 	if err != nil {
 		return nil, err

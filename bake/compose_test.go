@@ -36,6 +36,8 @@ services:
         - token
         - aws
   webapp2:
+    profiles:
+      - test
     build:
       context: ./dir
       dockerfile_inline: |
