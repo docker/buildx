@@ -62,6 +62,7 @@ type cmdDoc struct {
 	InheritedOptions []cmdOption `yaml:"inherited_options,omitempty"`
 	Example          string      `yaml:"examples,omitempty"`
 	Deprecated       bool
+	Hidden           bool
 	MinAPIVersion    string `yaml:"min_api_version,omitempty"`
 	Experimental     bool
 	ExperimentalCLI  bool
@@ -155,6 +156,7 @@ func (c *Client) genYamlCustom(cmd *cobra.Command, w io.Writer) error {
 		Long:       forceMultiLine(cmd.Long, longMaxWidth),
 		Example:    cmd.Example,
 		Deprecated: len(cmd.Deprecated) > 0,
+		Hidden:     cmd.Hidden,
 	}
 
 	if len(cliDoc.Long) == 0 {
