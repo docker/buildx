@@ -28,7 +28,7 @@ Usage:
   attach ID
 
 ID is for a session (visible via list command) or a process (visible via ps command).
-If you attached to a process, use Ctrl-c-a for switching the monitor to that process's STDIO.
+If you attached to a process, use Ctrl-a-c for switching the monitor to that process's STDIO.
 `,
 	}
 }
