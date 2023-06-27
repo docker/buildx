@@ -106,12 +106,12 @@ Available commands are:
   disconnect	disconnect a client from a buildx server. Specific session ID can be specified an arg
   exec		execute a process in the interactive container
   exit		exits monitor
-  help		shows this message
+  help		shows this message. Optionally pass a command name as an argument to print the detailed usage.
   kill		kill buildx server
   list		list buildx sessions
   ps		list processes invoked by "exec". Use "attach" to attach IO to that process
   reload	reloads the context and build it
-  rollback	re-runs the interactive container with initial rootfs contents
+  rollback	re-runs the interactive container with the step's rootfs contents
 ```
 
 ## Build controllers
