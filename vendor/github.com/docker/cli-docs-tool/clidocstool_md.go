@@ -53,6 +53,12 @@ func (c *Client) GenMarkdownTree(cmd *cobra.Command) error {
 		return nil
 	}
 
+	// Skip hidden command
+	if cmd.Hidden {
+		log.Printf("INFO: Skipping Markdown for %q (hidden command)", cmd.CommandPath())
+		return nil
+	}
+
 	log.Printf("INFO: Generating Markdown for %q", cmd.CommandPath())
 	mdFile := mdFilename(cmd)
 	sourcePath := filepath.Join(c.source, mdFile)
@@ -208,6 +214,9 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 		b.WriteString("### Subcommands\n\n")
 		table := newMdTable("Name", "Description")
 		for _, c := range cmd.Commands() {
+			if c.Hidden {
+				continue
+			}
 			table.AddRow(fmt.Sprintf("[`%s`](%s)", c.Name(), mdFilename(c)), c.Short)
 		}
 		b.WriteString(table.String() + "\n")
