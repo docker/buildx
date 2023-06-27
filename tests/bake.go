@@ -18,12 +18,36 @@ func bakeCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 }
 
 var bakeTests = []func(t *testing.T, sb integration.Sandbox){
+	testBakeLocal,
 	testBakeRemote,
 	testBakeRemoteCmdContext,
 	testBakeRemoteCmdContextOverride,
 	testBakeRemoteContextSubdir,
 	testBakeRemoteCmdContextEscapeRoot,
 	testBakeRemoteCmdContextEscapeRelative,
+}
+
+func testBakeLocal(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+	bakefile := []byte(`
+target "default" {
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--set", "*.output=type=local,dest="+dirDest))
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
 }
 
 func testBakeRemote(t *testing.T, sb integration.Sandbox) {
