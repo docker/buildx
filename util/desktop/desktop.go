@@ -81,6 +81,6 @@ func (e *ErrorWithBuildRef) Print(w io.Writer) error {
 	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
 		term = true
 	}
-	fmt.Fprintf(w, "\n%s", BuildDetailsOutput(map[string]string{"default": e.Ref}, term))
+	fmt.Fprintf(w, "\n%s\n", BuildDetailsOutput(map[string]string{"default": e.Ref}, term))
 	return nil
 }
