@@ -43,7 +43,7 @@ func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.C
 		remoteAddr: dummyAddr{network: "dummy", s: "dummy-1"},
 	}
 	go func() {
-		serr := exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		serr := exec.Stream(remotecommand.StreamOptions{
 			Stdin:  stdinR,
 			Stdout: stdoutW,
 			Stderr: os.Stderr,
