@@ -98,6 +98,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		"builder",
 		completion.BuilderNames(dockerCli),
 	)
+	addDAPCommands(cmd, dockerCli) // hidden command; we need it for emacs DAP support
 }
 
 func rootFlags(options *rootOptions, flags *pflag.FlagSet) {

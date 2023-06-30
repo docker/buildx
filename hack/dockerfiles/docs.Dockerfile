@@ -22,7 +22,7 @@ rsync -a /context/. .
 docsgen --formats "$FORMATS" --source "docs/reference"
 mkdir /out
 cp -r docs/reference /out
-rm -f /out/reference/*__INTERNAL_SERVE.yaml /out/reference/*__INTERNAL_SERVE.md
+rm -f /out/reference/*__INTERNAL_*
 EOT
 
 FROM scratch AS update
