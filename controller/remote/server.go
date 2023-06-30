@@ -15,6 +15,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/version"
 	"github.com/moby/buildkit/client"
+	solverpb "github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -142,16 +143,21 @@ func (m *Server) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.Inspe
 	if ref == "" {
 		return nil, errors.New("inspect: empty key")
 	}
-	var bo *pb.BuildOptions
 	m.sessionMu.Lock()
-	if s, ok := m.session[ref]; ok {
-		bo = s.buildOptions
-	} else {
-		m.sessionMu.Unlock()
+	defer m.sessionMu.Unlock()
+	s, ok := m.session[ref]
+	if !ok {
 		return nil, errors.Errorf("inspect: unknown key %v", ref)
 	}
-	m.sessionMu.Unlock()
-	return &pb.InspectResponse{Options: bo}, nil
+	var curDef *solverpb.Definition
+	var origDef *solverpb.Definition
+	if s.result != nil {
+		curDef, _ = build.DefinitionFromResultHandler(context.TODO(), s.result)
+	}
+	if s.originalResult != nil {
+		origDef, _ = build.DefinitionFromResultHandler(context.TODO(), s.originalResult)
+	}
+	return &pb.InspectResponse{Options: s.buildOptions, Definition: origDef, CurrentDefinition: curDef}, nil
 }
 
 func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResponse, error) {

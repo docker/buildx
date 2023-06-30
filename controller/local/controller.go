@@ -146,7 +146,15 @@ func (b *localController) Inspect(ctx context.Context, ref string) (*controllera
 	if ref != b.ref {
 		return nil, errors.Errorf("unknown ref %q", ref)
 	}
-	return &controllerapi.InspectResponse{Options: b.buildConfig.buildOptions}, nil
+	var curDef *solverpb.Definition
+	var origDef *solverpb.Definition
+	if b.buildConfig.resultCtx != nil {
+		curDef, _ = build.DefinitionFromResultHandler(ctx, b.buildConfig.resultCtx)
+	}
+	if b.originalResult != nil {
+		origDef, _ = build.DefinitionFromResultHandler(ctx, b.originalResult)
+	}
+	return &controllerapi.InspectResponse{Options: b.buildConfig.buildOptions, Definition: origDef, CurrentDefinition: curDef}, nil
 }
 
 func (b *localController) Solve(ctx context.Context, ref string, target *solverpb.Definition, progress progress.Writer) error {

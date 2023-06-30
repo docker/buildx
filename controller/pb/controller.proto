@@ -124,6 +124,8 @@ message InspectRequest {
 
 message InspectResponse {
   BuildOptions Options = 1;
+  pb.Definition Definition = 2;
+  pb.Definition CurrentDefinition = 3;
 }
 
 message UlimitOpt {

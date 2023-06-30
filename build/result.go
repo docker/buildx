@@ -86,16 +86,23 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 		defer cancel(context.Canceled) // ensure no dangling processes
 
 		var res *gateway.Result
+		var singleDef *pb.Definition
 		var err error
 		resp, err = cc.Build(ctx, opt, product, func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 			var err error
 			res, err = buildFunc(ctx, c)
 
 			if res != nil && err == nil {
+				var defErr error
+				singleDef, defErr = getSingleDefinition(ctx, res) // TODO: support multi-platform
+				if defErr != nil {
+					return nil, defErr
+				}
 				if noEval {
 					respHandle = &ResultHandle{
 						client:   cc,
 						solveOpt: opt,
+						def:      singleDef,
 						done:     make(chan struct{}),
 						gwClient: c,
 						gwCtx:    ctx,
@@ -132,6 +139,7 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 					respHandle = &ResultHandle{
 						client:   cc,
 						solveOpt: opt,
+						def:      singleDef,
 						done:     make(chan struct{}),
 						solveErr: se,
 						gwClient: c,
@@ -191,6 +199,7 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 			respHandle = &ResultHandle{
 				client:   cc,
 				solveOpt: opt,
+				def:      singleDef,
 				done:     make(chan struct{}),
 				res:      res,
 				gwClient: c,
@@ -273,6 +282,29 @@ func evalDefinition(ctx context.Context, c gateway.Client, defs *result.Result[*
 	return res, nil
 }
 
+func getSingleDefinition(ctx context.Context, res *gateway.Result) (*pb.Definition, error) {
+	defs, err := getDefinition(ctx, res)
+	if err != nil {
+		return nil, err
+	}
+	ps, err := exptypes.ParsePlatforms(res.Metadata)
+	if err != nil {
+		return nil, err
+	}
+	def, ok := defs.FindRef(ps.Platforms[0].ID)
+	if !ok {
+		return nil, errors.Errorf("no reference found")
+	}
+	return def, nil
+}
+
+func DefinitionFromResultHandler(ctx context.Context, res *ResultHandle) (*pb.Definition, error) {
+	if res.def != nil {
+		return res.def, nil
+	}
+	return nil, errors.Errorf("result context doesn't contain build definition")
+}
+
 func SolveWithResultHandler(ctx context.Context, product string, resultCtx *ResultHandle, target *pb.Definition, pw progress.Writer) (*ResultHandle, error) {
 	opt := resultCtx.solveOpt
 	opt.Ref = ""
@@ -293,6 +325,7 @@ func SolveWithResultHandler(ctx context.Context, product string, resultCtx *Resu
 type ResultHandle struct {
 	client   *client.Client
 	solveOpt client.SolveOpt
+	def      *pb.Definition
 
 	res      *gateway.Result
 	solveErr *errdefs.SolveError
