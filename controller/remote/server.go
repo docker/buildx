@@ -43,6 +43,8 @@ type session struct {
 	result *build.ResultHandle
 
 	processes *processes.Manager
+
+	originalResult *build.ResultHandle
 }
 
 func (s *session) cancelRunningProcesses() {
@@ -206,6 +208,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 		// NOTE: buildFunc can return *build.ResultHandle even on error (e.g. when it's implemented using (github.com/docker/buildx/controller/build).RunBuild).
 		if res != nil {
 			s.result = res
+			s.originalResult = res
 			s.cancelBuild = cancel
 			s.buildOptions = req.Options
 			m.session[ref] = s
@@ -436,4 +439,65 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 	})
 
 	return eg.Wait()
+}
+
+func (m *Server) Solve(ctx context.Context, req *pb.SolveRequest) (*pb.SolveResponse, error) {
+	ref := req.Ref
+	if ref == "" {
+		return nil, errors.New("solve: empty key")
+	}
+
+	m.sessionMu.Lock()
+	if _, ok := m.session[ref]; !ok || m.session[ref].result == nil {
+		m.sessionMu.Unlock()
+		return &pb.SolveResponse{}, errors.Errorf("solve: unknown reference: %q", ref)
+	}
+	s := m.session[ref]
+	s.cancelRunningProcesses()
+	if s.originalResult == nil {
+		return &pb.SolveResponse{}, errors.Errorf("no build has been called")
+	}
+	resultCtx := s.originalResult
+	if s.statusChan != nil {
+		m.sessionMu.Unlock()
+		return &pb.SolveResponse{}, errors.New("solve: build or status ongoing or status didn't call")
+	}
+	statusChan := make(chan *pb.StatusResponse)
+	s.statusChan = statusChan
+	m.session[ref] = s
+	m.sessionMu.Unlock()
+
+	defer func() {
+		close(statusChan)
+		m.sessionMu.Lock()
+		s, ok := m.session[ref]
+		if ok {
+			s.statusChan = nil
+			m.session[ref] = s
+		}
+		m.sessionMu.Unlock()
+	}()
+
+	// Get the target result context
+	ctx, cancel := context.WithCancel(ctx)
+	defer cancel()
+	pw := pb.NewProgressWriter(statusChan)
+	res, err := build.SolveWithResultHandler(ctx, "buildx", resultCtx, req.Target, pw)
+	if err == nil {
+		m.sessionMu.Lock()
+		if s, ok := m.session[ref]; ok {
+			s.result = res
+			s.cancelBuild = cancel
+			m.session[ref] = s
+			if se := res.SolveError(); se != nil {
+				err = errors.Errorf("failed solve: %v", se)
+			}
+		} else {
+			m.sessionMu.Unlock()
+			return nil, errors.Errorf("build: unknown key %v", ref)
+		}
+		m.sessionMu.Unlock()
+	}
+
+	return &pb.SolveResponse{}, err
 }

@@ -12,6 +12,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
+	solverpb "github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -237,4 +238,53 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 
 func (c *Client) client() pb.ControllerClient {
 	return pb.NewControllerClient(c.conn)
+}
+
+func (c *Client) Solve(ctx context.Context, ref string, def *solverpb.Definition, progress progress.Writer) error {
+	statusChan := make(chan *client.SolveStatus)
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		defer close(statusChan)
+		return c.doSolve(egCtx, ref, def, statusChan)
+	})
+	eg.Go(func() error {
+		for s := range statusChan {
+			st := s
+			progress.Write(st)
+		}
+		return nil
+	})
+	return eg.Wait()
+}
+
+func (c *Client) doSolve(ctx context.Context, ref string, def *solverpb.Definition, statusChan chan *client.SolveStatus) error {
+	eg, egCtx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		if _, err := c.client().Solve(egCtx, &pb.SolveRequest{
+			Ref:    ref,
+			Target: def,
+		}); err != nil {
+			return err
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		stream, err := c.client().Status(egCtx, &pb.StatusRequest{
+			Ref: ref,
+		})
+		if err != nil {
+			return err
+		}
+		for {
+			resp, err := stream.Recv()
+			if err != nil {
+				if err == io.EOF {
+					return nil
+				}
+				return errors.Wrap(err, "failed to receive status")
+			}
+			statusChan <- pb.FromControlStatus(resp)
+		}
+	})
+	return eg.Wait()
 }

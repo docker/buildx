@@ -4,6 +4,7 @@ package buildx.controller.v1;
 
 import "github.com/moby/buildkit/api/services/control/control.proto";
 import "github.com/moby/buildkit/sourcepolicy/pb/policy.proto";
+import "github.com/moby/buildkit/solver/pb/ops.proto";
 
 option go_package = "pb";
 
@@ -18,6 +19,7 @@ service Controller {
   rpc Info(InfoRequest) returns (InfoResponse);
   rpc ListProcesses(ListProcessesRequest) returns (ListProcessesResponse);
   rpc DisconnectProcess(DisconnectProcessRequest) returns (DisconnectProcessResponse);
+  rpc Solve(SolveRequest) returns (SolveResponse);
 }
 
 message ListProcessesRequest {
@@ -247,3 +249,10 @@ message BuildxVersion {
   string version = 2;
   string revision = 3;
 }
+
+message SolveRequest {
+  string Ref = 1;
+  pb.Definition Target = 2;
+}
+
+message SolveResponse {}

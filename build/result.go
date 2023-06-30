@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
+	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
@@ -93,6 +94,8 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 			if res != nil && err == nil {
 				if noEval {
 					respHandle = &ResultHandle{
+						client:   cc,
+						solveOpt: opt,
 						done:     make(chan struct{}),
 						gwClient: c,
 						gwCtx:    ctx,
@@ -127,6 +130,8 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 				var se *errdefs.SolveError
 				if errors.As(err, &se) {
 					respHandle = &ResultHandle{
+						client:   cc,
+						solveOpt: opt,
 						done:     make(chan struct{}),
 						solveErr: se,
 						gwClient: c,
@@ -184,6 +189,8 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 				return nil, errors.Wrap(err, "inconsistent solve result")
 			}
 			respHandle = &ResultHandle{
+				client:   cc,
+				solveOpt: opt,
 				done:     make(chan struct{}),
 				res:      res,
 				gwClient: c,
@@ -266,8 +273,27 @@ func evalDefinition(ctx context.Context, c gateway.Client, defs *result.Result[*
 	return res, nil
 }
 
+func SolveWithResultHandler(ctx context.Context, product string, resultCtx *ResultHandle, target *pb.Definition, pw progress.Writer) (*ResultHandle, error) {
+	opt := resultCtx.solveOpt
+	opt.Ref = ""
+	opt.Exports = nil
+	opt.CacheExports = nil
+	ch, done := progress.NewChannel(pw)
+	defer func() { <-done }()
+	h, _, err := NewResultHandle(ctx, resultCtx.client, opt, product, func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		return c.Solve(ctx, gateway.SolveRequest{
+			Evaluate:   true,
+			Definition: target,
+		})
+	}, ch, false)
+	return h, err
+}
+
 // ResultHandle is a build result with the client that built it.
 type ResultHandle struct {
+	client   *client.Client
+	solveOpt client.SolveOpt
+
 	res      *gateway.Result
 	solveErr *errdefs.SolveError
 
@@ -294,6 +320,10 @@ func (r *ResultHandle) Done() {
 		close(r.done)
 		<-r.gwCtx.Done()
 	})
+}
+
+func (r *ResultHandle) SolveError() *errdefs.SolveError {
+	return r.solveErr
 }
 
 func (r *ResultHandle) registerCleanup(f func()) {

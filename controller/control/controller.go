@@ -7,6 +7,7 @@ import (
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	solverpb "github.com/moby/buildkit/solver/pb"
 )
 
 type BuildxController interface {
@@ -23,6 +24,7 @@ type BuildxController interface {
 	ListProcesses(ctx context.Context, ref string) (infos []*controllerapi.ProcessInfo, retErr error)
 	DisconnectProcess(ctx context.Context, ref, pid string) error
 	Inspect(ctx context.Context, ref string) (*controllerapi.InspectResponse, error)
+	Solve(ctx context.Context, ref string, def *solverpb.Definition, progress progress.Writer) error
 }
 
 type ControlOptions struct {
