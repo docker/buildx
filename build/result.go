@@ -28,7 +28,7 @@ import (
 // failures and successes.
 //
 // If the returned ResultHandle is not nil, the caller must call Done() on it.
-func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt, product string, buildFunc gateway.BuildFunc, ch chan *client.SolveStatus) (*ResultHandle, *client.SolveResponse, error) {
+func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt, product string, buildFunc gateway.BuildFunc, ch chan *client.SolveStatus, noEval bool) (*ResultHandle, *client.SolveResponse, error) {
 	// Create a new context to wrap the original, and cancel it when the
 	// caller-provided context is cancelled.
 	//
@@ -91,13 +91,28 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 			res, err = buildFunc(ctx, c)
 
 			if res != nil && err == nil {
-				// Force evaluation of the build result (otherwise, we likely
-				// won't get a solve error)
-				def, err2 := getDefinition(ctx, res)
-				if err2 != nil {
-					return nil, err2
+				if noEval {
+					respHandle = &ResultHandle{
+						done:     make(chan struct{}),
+						gwClient: c,
+						gwCtx:    ctx,
+					}
+					close(done)
+
+					// Block until the caller closes the ResultHandle.
+					select {
+					case <-respHandle.done:
+					case <-ctx.Done():
+					}
+				} else {
+					// Force evaluation of the build result (otherwise, we likely
+					// won't get a solve error)
+					def, err2 := getDefinition(ctx, res)
+					if err2 != nil {
+						return nil, err2
+					}
+					res, err = evalDefinition(ctx, c, def)
 				}
-				res, err = evalDefinition(ctx, c, def)
 			}
 
 			if err != nil {

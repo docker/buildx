@@ -176,7 +176,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progress, generateResult)
+	resp, res, err := buildTargets(ctx, dockerCli, b.NodeGroup, nodes, map[string]build.Options{defaultTargetName: opts}, progress, generateResult, in.Debug)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		// NOTE: buildTargets can return *build.ResultHandle even on error.
@@ -190,20 +190,24 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultHandle,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, ng *store.NodeGroup, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult, debug bool) (*client.SolveResponse, *build.ResultHandle, error) {
 	var res *build.ResultHandle
 	var resp map[string]*client.SolveResponse
 	var err error
 	if generateResult {
 		var mu sync.Mutex
 		var idx int
-		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
+		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) error {
 			mu.Lock()
 			defer mu.Unlock()
 			if res == nil || driverIndex < idx {
 				idx, res = driverIndex, gotRes
 			}
-		})
+			if debug {
+				return errors.Errorf("debug mode")
+			}
+			return nil
+		}, debug)
 	} else {
 		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
 	}
