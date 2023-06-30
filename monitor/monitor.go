@@ -14,8 +14,10 @@ import (
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/commands"
 	"github.com/docker/buildx/monitor/types"
+	"github.com/docker/buildx/monitor/utils"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/walker"
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
@@ -85,15 +87,30 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 	id := m.Rollback(ctx, invokeConfig)
 	fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 
+	st, err := c.Inspect(ctx, curRef)
+	if err != nil {
+		return err
+	}
+	wc := utils.NewWalkerController(m, stdout, invokeConfig, progress, st.Definition)
+	m.RegisterWalkerController(wc)
 	availableCommands := []types.Command{
 		commands.NewReloadCmd(m, stdout, progress, options, invokeConfig),
 		commands.NewRollbackCmd(m, invokeConfig, stdout),
 		commands.NewListCmd(m, stdout),
 		commands.NewDisconnectCmd(m),
 		commands.NewKillCmd(m),
-		commands.NewAttachCmd(m, stdout),
+		commands.NewAttachCmd(m, stdout, progress, invokeConfig),
 		commands.NewExecCmd(m, invokeConfig, stdout),
 		commands.NewPsCmd(m, stdout),
+
+		// breakpoint debugger
+		commands.NewBreakCmd(m),
+		commands.NewBreakpointsCmd(m),
+		commands.NewClearCmd(m),
+		commands.NewClearallCmd(m),
+		commands.NewContinueCmd(m),
+		commands.NewNextCmd(m),
+		commands.NewShowCmd(m, stdout),
 	}
 	registeredCommands := make(map[string]types.Command)
 	for _, c := range availableCommands {
@@ -233,6 +250,19 @@ type monitor struct {
 	invokeIO     *ioset.Forwarder
 	invokeCancel func()
 	attachedPid  atomic.Value
+
+	walkerController *walker.Controller
+}
+
+func (m *monitor) RegisterWalkerController(wc *walker.Controller) {
+	if m.walkerController != nil {
+		m.walkerController.Close()
+	}
+	m.walkerController = wc
+}
+
+func (m *monitor) GetWalkerController() *walker.Controller {
+	return m.walkerController
 }
 
 func (m *monitor) DisconnectSession(ctx context.Context, targetID string) error {

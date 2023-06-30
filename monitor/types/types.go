@@ -5,6 +5,7 @@ import (
 
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
+	"github.com/docker/buildx/util/walker"
 )
 
 // Monitor provides APIs for attaching and controlling the buildx server.
@@ -34,6 +35,12 @@ type Monitor interface {
 
 	// AttachedSessionID returns the ID of the attached session.
 	AttachedSessionID() string
+
+	// RegisterWalkerController registers the specified walker to the monitor.
+	RegisterWalkerController(wc *walker.Controller)
+
+	// GetWalkerController returns the currently registered walker.
+	GetWalkerController() *walker.Controller
 }
 
 // CommandInfo is information about a command.

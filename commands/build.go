@@ -371,6 +371,11 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		return nil
 	})
 
+	if options.invoke != nil && options.invoke.invokeFlag == "debug-step" {
+		// Special mode where we don't get the result but get only the build definition.
+		// In this mode, Build() doesn't perform the build therefore always fails.
+		opts.Debug = true
+	}
 	ref, resp, err = c.Build(ctx, *opts, pr, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
@@ -862,7 +867,7 @@ func (cfg *invokeConfig) parseInvokeConfig(invoke, on string) error {
 	switch invoke {
 	case "default", "":
 		return nil
-	case "on-error":
+	case "on-error", "debug-step":
 		// NOTE: we overwrite the command to run because the original one should fail on the failed step.
 		// TODO: make this configurable via flags or restorable from LLB.
 		// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113295900

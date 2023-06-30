@@ -5,18 +5,25 @@ import (
 	"fmt"
 	"io"
 
+	controllererrors "github.com/docker/buildx/controller/errdefs"
+	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/types"
+	"github.com/docker/buildx/monitor/utils"
+	"github.com/docker/buildx/util/progress"
+	solverpb "github.com/moby/buildkit/solver/pb"
 	"github.com/pkg/errors"
 )
 
 type AttachCmd struct {
 	m types.Monitor
 
-	stdout io.WriteCloser
+	stdout       io.WriteCloser
+	progress     *progress.Printer
+	invokeConfig controllerapi.InvokeConfig
 }
 
-func NewAttachCmd(m types.Monitor, stdout io.WriteCloser) types.Command {
-	return &AttachCmd{m, stdout}
+func NewAttachCmd(m types.Monitor, stdout io.WriteCloser, progress *progress.Printer, invokeConfig controllerapi.InvokeConfig) types.Command {
+	return &AttachCmd{m, stdout, progress, invokeConfig}
 }
 
 func (cm *AttachCmd) Info() types.CommandInfo {
@@ -40,7 +47,7 @@ func (cm *AttachCmd) Exec(ctx context.Context, args []string) error {
 	ref := args[1]
 	var id string
 
-	isProcess, err := isProcessID(ctx, cm.m, ref)
+	isProcess, err := utils.IsProcessID(ctx, cm.m, cm.m.AttachedSessionID(), ref)
 	if err == nil && isProcess {
 		cm.m.Attach(ctx, ref)
 		id = ref
@@ -63,23 +70,34 @@ func (cm *AttachCmd) Exec(ctx context.Context, args []string) error {
 		cm.m.Detach() // Finish existing attach
 		cm.m.AttachSession(ref)
 	}
+	if !isProcess && id != "" {
+		var walkerDef *solverpb.Definition
+		if res, err := cm.m.Inspect(ctx, id); err == nil {
+			walkerDef = res.Definition
+			if !utils.IsSameDefinition(res.Definition, res.CurrentDefinition) && res.Options != nil {
+				// Reload the current build if breakpoint debugger was ongoing on this session
+				ref, _, err := cm.m.Build(ctx, *res.Options, nil, cm.progress)
+				if err != nil {
+					var be *controllererrors.BuildError
+					if errors.As(err, &be) {
+						ref = be.Ref
+					} else {
+						return errors.Errorf("failed to reload after attach: %v", err)
+					}
+				}
+				st, err := cm.m.Inspect(ctx, ref)
+				if err != nil {
+					return err
+				}
+				walkerDef = st.Definition
+				cm.m.AttachSession(ref)
+				// rollback the running container with the new result
+				id := cm.m.Rollback(ctx, cm.invokeConfig)
+				fmt.Fprintf(cm.stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container", id)
+			}
+		}
+		cm.m.RegisterWalkerController(utils.NewWalkerController(cm.m, cm.stdout, cm.invokeConfig, cm.progress, walkerDef))
+	}
 	fmt.Fprintf(cm.stdout, "Attached to process %q. Press Ctrl-a-c to switch to the new container\n", id)
 	return nil
-}
-
-func isProcessID(ctx context.Context, c types.Monitor, ref string) (bool, error) {
-	sid := c.AttachedSessionID()
-	if sid == "" {
-		return false, errors.Errorf("no attaching session")
-	}
-	infos, err := c.ListProcesses(ctx, sid)
-	if err != nil {
-		return false, err
-	}
-	for _, p := range infos {
-		if p.ProcessID == ref {
-			return true, nil
-		}
-	}
-	return false, nil
 }

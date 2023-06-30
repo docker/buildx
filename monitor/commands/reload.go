@@ -8,6 +8,7 @@ import (
 	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/types"
+	"github.com/docker/buildx/monitor/utils"
 	"github.com/docker/buildx/util/progress"
 	"github.com/pkg/errors"
 )
@@ -58,6 +59,7 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 			fmt.Println("disconnect error", err)
 		}
 	}
+
 	var resultUpdated bool
 	cm.progress.Unpause()
 	ref, _, err := cm.m.Build(ctx, *bo, nil, cm.progress) // TODO: support stdin, hold build ref
@@ -74,6 +76,13 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 		resultUpdated = true
 	}
 	cm.m.AttachSession(ref)
+
+	st, err := cm.m.Inspect(ctx, ref)
+	if err != nil {
+		return err
+	}
+	cm.m.RegisterWalkerController(utils.NewWalkerController(cm.m, cm.stdout, cm.invokeConfig, cm.progress, st.Definition))
+
 	if resultUpdated {
 		// rollback the running container with the new result
 		id := cm.m.Rollback(ctx, cm.invokeConfig)

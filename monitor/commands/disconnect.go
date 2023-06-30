@@ -5,6 +5,7 @@ import (
 	"fmt"
 
 	"github.com/docker/buildx/monitor/types"
+	"github.com/docker/buildx/monitor/utils"
 	"github.com/pkg/errors"
 )
 
@@ -36,7 +37,7 @@ func (cm *DisconnectCmd) Exec(ctx context.Context, args []string) error {
 	} else if target == "" {
 		return errors.Errorf("no attaching session")
 	}
-	isProcess, err := isProcessID(ctx, cm.m, target)
+	isProcess, err := utils.IsProcessID(ctx, cm.m, cm.m.AttachedSessionID(), target)
 	if err == nil && isProcess {
 		sid := cm.m.AttachedSessionID()
 		if sid == "" {
