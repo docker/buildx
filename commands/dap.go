@@ -21,6 +21,7 @@ func addDAPCommands(cmd *cobra.Command, dockerCli command.Cli) {
 func dapCmd(dockerCli command.Cli) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:    "dap",
+		Short:  "Debug Adapter Protocol server",
 		Hidden: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			logrus.SetOutput(os.Stderr)

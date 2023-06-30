@@ -1,6 +1,8 @@
 # docker buildx dap
 
 <!---MARKER_GEN_START-->
+Debug Adapter Protocol server
+
 ### Options
 
 | Name        | Type     | Default | Description                              |
