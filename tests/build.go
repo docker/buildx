@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
 	"path"
 	"path/filepath"
@@ -13,6 +14,7 @@ import (
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
+	"github.com/creack/pty"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -36,6 +38,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildTarExport,
 	testBuildMobyFromLocalImage,
 	testBuildDetailsLink,
+	testBuildProgress,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -247,4 +250,30 @@ COPY --from=base /etc/bar /bar
 		fstest.CreateFile("foo", []byte("foo"), 0600),
 	)
 	return dir
+}
+
+func testBuildProgress(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	driver, _, _ := strings.Cut(sb.Name(), "+")
+	name := sb.Address()
+
+	// progress=tty
+	cmd := buildxCmd(sb, withArgs("build", "--progress=tty", "--output=type=cacheonly", dir))
+	f, err := pty.Start(cmd)
+	require.NoError(t, err)
+	buf := bytes.NewBuffer(nil)
+	io.Copy(buf, f)
+	ttyOutput := buf.String()
+	require.Contains(t, ttyOutput, "[+] Building")
+	require.Contains(t, ttyOutput, fmt.Sprintf("%s:%s", driver, name))
+	require.Contains(t, ttyOutput, "=> [internal] load build definition from Dockerfile")
+	require.Contains(t, ttyOutput, "=> [base 1/3] FROM docker.io/library/busybox:latest")
+
+	// progress=plain
+	cmd = buildxCmd(sb, withArgs("build", "--progress=plain", "--output=type=cacheonly", dir))
+	plainOutput, err := cmd.CombinedOutput()
+	require.NoError(t, err)
+	require.Contains(t, string(plainOutput), fmt.Sprintf(`#0 building with "%s" instance using %s driver`, name, driver))
+	require.Contains(t, string(plainOutput), "[internal] load build definition from Dockerfile")
+	require.Contains(t, string(plainOutput), "[base 1/3] FROM docker.io/library/busybox:latest")
 }
