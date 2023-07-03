@@ -12,7 +12,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/creack/pty v1.1.18
 	github.com/docker/cli v24.0.2+incompatible
-	github.com/docker/cli-docs-tool v0.5.1
+	github.com/docker/cli-docs-tool v0.6.0
 	github.com/docker/distribution v2.8.2+incompatible
 	github.com/docker/docker v24.0.2+incompatible
 	github.com/docker/go-units v0.5.0
