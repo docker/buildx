@@ -3,10 +3,11 @@ package tests
 import (
 	"bytes"
 	"encoding/json"
-	"errors"
 	"fmt"
 	"os"
+	"path"
 	"path/filepath"
+	"regexp"
 	"strings"
 	"testing"
 
@@ -16,6 +17,7 @@ import (
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/opencontainers/go-digest"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -32,6 +34,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildLocalExport,
 	testBuildRegistryExport,
 	testBuildTarExport,
+	testBuildDetailsLink,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -137,6 +140,48 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 	require.NotEmpty(t, md.ConfigDigest)
 	require.Equal(t, dgst, digest.Digest(md.ConfigDigest))
+}
+
+func testBuildDetailsLink(t *testing.T, sb integration.Sandbox) {
+	buildDetailsPattern := regexp.MustCompile(`(?m)^View build details: docker-desktop://dashboard/build/[^/]+/[^/]+/[^/]+\n$`)
+
+	// build simple dockerfile
+	dockerfile := []byte(`FROM busybox:latest
+RUN echo foo > /bar`)
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	cmd := buildxCmd(sb, withArgs("build", "--output=type=cacheonly", dir))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.False(t, buildDetailsPattern.MatchString(string(out)), fmt.Sprintf("build details link not expected in output, got %q", out))
+
+	// create desktop-build .lastaccess file
+	home, err := os.UserHomeDir() // TODO: sandbox should create a temp home dir and expose it through its interface
+	require.NoError(t, err)
+	dbDir := path.Join(home, ".docker", "desktop-build")
+	require.NoError(t, os.MkdirAll(dbDir, 0755))
+	dblaFile, err := os.Create(path.Join(dbDir, ".lastaccess"))
+	require.NoError(t, err)
+	defer func() {
+		dblaFile.Close()
+		if err := os.Remove(dblaFile.Name()); err != nil {
+			t.Fatal(err)
+		}
+	}()
+
+	// build again
+	cmd = buildxCmd(sb, withArgs("build", "--output=type=cacheonly", dir))
+	out, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.True(t, buildDetailsPattern.MatchString(string(out)), fmt.Sprintf("expected build details link in output, got %q", out))
+
+	// build erroneous dockerfile
+	dockerfile = []byte(`FROM busybox:latest
+RUN exit 1`)
+	dir = tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	cmd = buildxCmd(sb, withArgs("build", "--output=type=cacheonly", dir))
+	out, err = cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.True(t, buildDetailsPattern.MatchString(string(out)), fmt.Sprintf("expected build details link in output, got %q", out))
 }
 
 func createTestProject(t *testing.T) string {
