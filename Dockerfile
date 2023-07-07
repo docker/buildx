@@ -28,16 +28,7 @@ FROM gobase AS docker
 ARG TARGETPLATFORM
 ARG DOCKER_VERSION
 WORKDIR /opt/docker
-RUN DOCKER_ARCH=$(case ${TARGETPLATFORM:-linux/amd64} in \
-    "linux/amd64")   echo "x86_64"  ;; \
-    "linux/arm/v6")  echo "armel"   ;; \
-    "linux/arm/v7")  echo "armhf"   ;; \
-    "linux/arm64")   echo "aarch64" ;; \
-    "linux/ppc64le") echo "ppc64le" ;; \
-    "linux/s390x")   echo "s390x"   ;; \
-    *)               echo ""        ;; esac) \
-  && echo "DOCKER_ARCH=$DOCKER_ARCH" \
-  && wget -qO- "https://download.docker.com/linux/static/stable/${DOCKER_ARCH}/docker-${DOCKER_VERSION}.tgz" | tar xvz --strip 1
+RUN wget -qO- "https://download.docker.com/linux/static/stable/$(xx-info march)/docker-${DOCKER_VERSION}.tgz" | tar xvz --strip 1
 RUN ./dockerd --version && ./containerd --version && ./ctr --version && ./runc --version
 
 FROM gobase AS gotestsum
