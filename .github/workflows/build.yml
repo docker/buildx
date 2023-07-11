@@ -57,7 +57,6 @@ jobs:
       - prepare-test
     env:
       TESTFLAGS: "-v --parallel=6 --timeout=30m"
-      TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       GOTESTSUM_FORMAT: "standard-verbose"
       TEST_IMAGE_BUILD: "0"
       TEST_IMAGE_ID: "buildx-tests"
@@ -103,7 +102,7 @@ jobs:
           ./hack/test
         env:
           TEST_DOCKERD: "${{ startsWith(matrix.worker, 'docker') && '1' || '0' }}"
-          TESTFLAGS: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker\\+containerd') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
+          TESTFLAGS: "${{ env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
           TESTPKGS: "${{ matrix.pkg }}"
           SKIP_INTEGRATION_TESTS: "${{ matrix.skip-integration-tests }}"
       -
