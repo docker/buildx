@@ -136,6 +136,7 @@ func (c Moby) New(ctx context.Context, cfg *BackendConfig) (b Backend, cl func()
 
 	dockerdFlags := []string{
 		"--config-file", dockerdConfigFile,
+		"--iptables=false",
 		"--userland-proxy=false",
 		"--debug",
 	}
