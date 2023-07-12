@@ -415,9 +415,13 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Use:     "build [OPTIONS] PATH | URL | -",
 		Aliases: []string{"b"},
 		Short:   "Start a build",
-		Args:    cli.ExactArgs(1),
+		Args:    cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			options.contextPath = args[0]
+			if len(args) == 0 {
+				options.contextPath = "."
+			} else {
+				options.contextPath = args[0]
+			}
 			options.builder = rootOpts.builder
 			options.metadataFile = cFlags.metadataFile
 			options.noCache = false
