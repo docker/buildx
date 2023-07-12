@@ -1,5 +1,5 @@
 variable "GO_VERSION" {
-  default = "1.20"
+  default = "1.20.5"
 }
 variable "DOCS_FORMATS" {
   default = "md"
