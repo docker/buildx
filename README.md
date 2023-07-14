@@ -71,8 +71,9 @@ for Windows and macOS.
 
 ## Linux packages
 
-Docker Linux packages also include Docker Buildx when installed using the
-[DEB or RPM packages](https://docs.docker.com/engine/install/).
+Docker Engine package repositories contain Docker Buildx packages when installed according to the
+[Docker Enginer install documentation](https://docs.docker.com/engine/install/). Install the
+`docker-buildx-plugin` package to install the Buildx plugin.
 
 ## Manual download
 
