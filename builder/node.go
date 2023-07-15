@@ -82,12 +82,12 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 				contextStore := b.opts.dockerCli.ContextStore()
 
 				var kcc driver.KubeClientConfig
-				kcc, err = ctxkube.ConfigFromContext(n.Endpoint, contextStore)
+				kcc, err = ctxkube.ConfigFromEndpoint(n.Endpoint, contextStore)
 				if err != nil {
 					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
 					// try again with name="default".
 					// FIXME(@AkihiroSuda): n should retain real context name.
-					kcc, err = ctxkube.ConfigFromContext("default", contextStore)
+					kcc, err = ctxkube.ConfigFromEndpoint("default", contextStore)
 					if err != nil {
 						logrus.Error(err)
 					}
