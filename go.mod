@@ -22,7 +22,7 @@ require (
 	github.com/google/uuid v1.3.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 	github.com/hashicorp/hcl/v2 v2.8.2
-	github.com/moby/buildkit v0.11.0-rc3.0.20230620112432-2d91ddcceedc
+	github.com/moby/buildkit v0.12.1-0.20230717122532-faa0cc7da353 // v0.12.1-dev
 	github.com/moby/sys/mountinfo v0.6.2
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
@@ -75,6 +75,7 @@ require (
 	github.com/cenkalti/backoff/v4 v4.2.0 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
 	github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e // indirect
+	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/distribution/distribution/v3 v3.0.0-20230214150026-36d8c594d7aa // indirect

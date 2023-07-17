@@ -19,6 +19,7 @@ import (
 	"github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/flightcontrol"
+	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -76,7 +77,7 @@ type Client struct {
 	client      client.Client
 	ignoreCache []string
 	bctx        *buildContext
-	g           flightcontrol.Group
+	g           flightcontrol.Group[*buildContext]
 	bopts       client.BuildOpts
 
 	dockerignore []byte
@@ -96,6 +97,7 @@ type ContextOpt struct {
 	LocalOpts      []llb.LocalOption
 	Platform       *ocispecs.Platform
 	ResolveMode    string
+	CaptureDigest  *digest.Digest
 }
 
 func validateMinCaps(c client.Client) error {
@@ -278,7 +280,7 @@ func (bc *Client) init() error {
 }
 
 func (bc *Client) buildContext(ctx context.Context) (*buildContext, error) {
-	bctx, err := bc.g.Do(ctx, "initcontext", func(ctx context.Context) (interface{}, error) {
+	return bc.g.Do(ctx, "initcontext", func(ctx context.Context) (*buildContext, error) {
 		if bc.bctx != nil {
 			return bc.bctx, nil
 		}
@@ -288,10 +290,6 @@ func (bc *Client) buildContext(ctx context.Context) (*buildContext, error) {
 		}
 		return bctx, err
 	})
-	if err != nil {
-		return nil, err
-	}
-	return bctx.(*buildContext), nil
 }
 
 func (bc *Client) ReadEntrypoint(ctx context.Context, lang string, opts ...llb.LocalOption) (*Source, error) {
