@@ -157,9 +157,6 @@ TESTFLAGS="--run /TestBuild.*/worker=remote/ -v" make test-integration
 >
 > Set `TEST_DOCKERD=1` for the test framework to enable the docker workers,
 > specifically the `docker` and `docker-container` drivers.
->
-> The docker tests cannot be run in parallel, so require passing `--parallel=1`
-> in `TESTFLAGS`.
 
 > **Note**
 >
