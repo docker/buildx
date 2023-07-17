@@ -157,13 +157,10 @@ github.com/containerd/containerd/content/proxy
 github.com/containerd/containerd/defaults
 github.com/containerd/containerd/errdefs
 github.com/containerd/containerd/filters
-github.com/containerd/containerd/identifiers
 github.com/containerd/containerd/images
 github.com/containerd/containerd/images/archive
 github.com/containerd/containerd/labels
-github.com/containerd/containerd/leases
 github.com/containerd/containerd/log
-github.com/containerd/containerd/namespaces
 github.com/containerd/containerd/pkg/dialer
 github.com/containerd/containerd/pkg/randutil
 github.com/containerd/containerd/pkg/seed
@@ -191,9 +188,6 @@ github.com/containerd/continuity/fs/fstest
 github.com/containerd/continuity/pathdriver
 github.com/containerd/continuity/proto
 github.com/containerd/continuity/sysx
-# github.com/containerd/ttrpc v1.2.2
-## explicit; go 1.13
-github.com/containerd/ttrpc
 # github.com/containerd/typeurl/v2 v2.1.1
 ## explicit; go 1.13
 github.com/containerd/typeurl/v2
@@ -550,8 +544,6 @@ github.com/moby/buildkit/util/entitlements
 github.com/moby/buildkit/util/flightcontrol
 github.com/moby/buildkit/util/gitutil
 github.com/moby/buildkit/util/grpcerrors
-github.com/moby/buildkit/util/imageutil
-github.com/moby/buildkit/util/leaseutil
 github.com/moby/buildkit/util/progress
 github.com/moby/buildkit/util/progress/progressui
 github.com/moby/buildkit/util/progress/progresswriter
