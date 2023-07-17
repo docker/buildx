@@ -13,25 +13,36 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 	"github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/util/imageutil"
 	"github.com/pkg/errors"
 )
 
 const (
 	contextPrefix       = "context:"
 	inputMetadataPrefix = "input-metadata:"
+	maxContextRecursion = 10
 )
 
 func (bc *Client) namedContext(ctx context.Context, name string, nameWithPlatform string, opt ContextOpt) (*llb.State, *image.Image, error) {
+	return bc.namedContextRecursive(ctx, name, nameWithPlatform, opt, 0)
+}
+
+func (bc *Client) namedContextRecursive(ctx context.Context, name string, nameWithPlatform string, opt ContextOpt, count int) (*llb.State, *image.Image, error) {
 	opts := bc.bopts.Opts
 	v, ok := opts[contextPrefix+nameWithPlatform]
 	if !ok {
 		return nil, nil, nil
 	}
 
+	if count > maxContextRecursion {
+		return nil, nil, errors.New("context recursion limit exceeded; this may indicate a cycle in the provided source policies: " + v)
+	}
+
 	vv := strings.SplitN(v, ":", 2)
 	if len(vv) != 2 {
 		return nil, nil, errors.Errorf("invalid context specifier %s for %s", v, nameWithPlatform)
 	}
+
 	// allow git@ without protocol for SSH URLs for backwards compatibility
 	if strings.HasPrefix(vv[0], "git@") {
 		vv[0] = "git"
@@ -58,13 +69,17 @@ func (bc *Client) namedContext(ctx context.Context, name string, nameWithPlatfor
 
 		named = reference.TagNameOnly(named)
 
-		_, data, err := bc.client.ResolveImageConfig(ctx, named.String(), llb.ResolveImageConfigOpt{
+		ref, dgst, data, err := bc.client.ResolveImageConfig(ctx, named.String(), llb.ResolveImageConfigOpt{
 			Platform:     opt.Platform,
 			ResolveMode:  opt.ResolveMode,
 			LogName:      fmt.Sprintf("[context %s] load metadata for %s", nameWithPlatform, ref),
 			ResolverType: llb.ResolverTypeRegistry,
 		})
 		if err != nil {
+			e := &imageutil.ResolveToNonImageError{}
+			if errors.As(err, &e) {
+				return bc.namedContextRecursive(ctx, e.Updated, name, opt, count+1)
+			}
 			return nil, nil, err
 		}
 
@@ -78,6 +93,9 @@ func (bc *Client) namedContext(ctx context.Context, name string, nameWithPlatfor
 		st, err = st.WithImageConfig(data)
 		if err != nil {
 			return nil, nil, err
+		}
+		if opt.CaptureDigest != nil {
+			*opt.CaptureDigest = dgst
 		}
 		return &st, &img, nil
 	case "git":
@@ -119,7 +137,8 @@ func (bc *Client) namedContext(ctx context.Context, name string, nameWithPlatfor
 			return nil, nil, errors.Wrapf(err, "could not wrap %q with digest", name)
 		}
 
-		_, data, err := bc.client.ResolveImageConfig(ctx, dummyRef.String(), llb.ResolveImageConfigOpt{
+		// TODO: How should source policy be handled here with a dummy ref?
+		_, dgst, data, err := bc.client.ResolveImageConfig(ctx, dummyRef.String(), llb.ResolveImageConfigOpt{
 			Platform:     opt.Platform,
 			ResolveMode:  opt.ResolveMode,
 			LogName:      fmt.Sprintf("[context %s] load metadata for %s", nameWithPlatform, dummyRef.String()),
@@ -152,6 +171,9 @@ func (bc *Client) namedContext(ctx context.Context, name string, nameWithPlatfor
 		st, err = st.WithImageConfig(data)
 		if err != nil {
 			return nil, nil, err
+		}
+		if opt.CaptureDigest != nil {
+			*opt.CaptureDigest = dgst
 		}
 		return &st, &img, nil
 	case "local":

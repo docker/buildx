@@ -168,5 +168,6 @@ func (r *Resolver) ImageConfig(ctx context.Context, in string, platform *ocispec
 	if err != nil {
 		return "", nil, err
 	}
-	return imageutil.Config(ctx, in, r.resolver(), r.buffer, nil, platform)
+	_, dgst, data, err := imageutil.Config(ctx, in, r.resolver(), r.buffer, nil, platform, nil)
+	return dgst, data, err
 }
