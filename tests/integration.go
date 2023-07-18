@@ -47,6 +47,7 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 
 	if builder := sb.Address(); builder != "" {
 		cmd.Args = append(cmd.Args, "--builder="+builder)
+		cmd.Env = append(cmd.Env, "BUILDX_CONFIG=/tmp/buildx-"+builder)
 	}
 	if context := sb.DockerAddress(); context != "" {
 		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)

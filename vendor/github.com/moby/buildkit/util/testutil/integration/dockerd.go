@@ -137,6 +137,7 @@ func (c Moby) New(ctx context.Context, cfg *BackendConfig) (b Backend, cl func()
 	dockerdFlags := []string{
 		"--config-file", dockerdConfigFile,
 		"--userland-proxy=false",
+		"--tls=false",
 		"--debug",
 	}
 	if s := os.Getenv("BUILDKIT_INTEGRATION_DOCKERD_FLAGS"); s != "" {
@@ -217,6 +218,10 @@ func (c Moby) New(ctx context.Context, cfg *BackendConfig) (b Backend, cl func()
 		isDockerd:           true,
 		unsupportedFeatures: c.Unsupported,
 	}, cl, nil
+}
+
+func (c Moby) Close() error {
+	return nil
 }
 
 func waitForAPI(ctx context.Context, apiClient *client.Client, d time.Duration) error {
