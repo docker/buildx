@@ -209,7 +209,7 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/distribution/v3 v3.0.0-20230214150026-36d8c594d7aa
 ## explicit; go 1.18
 github.com/distribution/distribution/v3/reference
-# github.com/docker/cli v24.0.2+incompatible
+# github.com/docker/cli v24.0.4+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/manager
