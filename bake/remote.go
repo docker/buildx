@@ -59,7 +59,7 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 
 	ch, done := progress.NewChannel(pw)
 	defer func() { <-done }()
-	_, err = c.Build(ctx, client.SolveOpt{Session: session}, "buildx", func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+	_, err = c.Build(ctx, client.SolveOpt{Session: session, Internal: true}, "buildx", func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		def, err := st.Marshal(ctx)
 		if err != nil {
 			return nil, err
