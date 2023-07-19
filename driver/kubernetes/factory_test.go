@@ -47,13 +47,13 @@ func TestFactory_processDriverOpts(t *testing.T) {
 				"rootless":        "true",
 				"nodeselector":    "selector1=value1,selector2=value2",
 				"tolerations":     "key=tolerationKey1,value=tolerationValue1,operator=Equal,effect=NoSchedule,tolerationSeconds=60;key=tolerationKey2,operator=Exists",
+				"annotations":     "example.com/expires-after=annotation1,example.com/other=annotation2",
+				"labels":          "example.com/owner=label1,example.com/other=label2",
 				"loadbalance":     "random",
 				"qemu.install":    "true",
 				"qemu.image":      "qemu:latest",
 			}
-			ns := "test"
-
-			r, loadbalance, ns, err := f.processDriverOpts(cfg.Name, ns, cfg)
+			r, loadbalance, ns, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
 			nodeSelectors := map[string]string{
 				"selector1": "value1",
@@ -75,6 +75,16 @@ func TestFactory_processDriverOpts(t *testing.T) {
 				},
 			}
 
+			customAnnotations := map[string]string{
+				"example.com/expires-after": "annotation1",
+				"example.com/other":         "annotation2",
+			}
+
+			customLabels := map[string]string{
+				"example.com/owner": "label1",
+				"example.com/other": "label2",
+			}
+
 			require.NoError(t, err)
 
 			require.Equal(t, "test-ns", ns)
@@ -86,6 +96,8 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Equal(t, "64Mi", r.LimitsMemory)
 			require.True(t, r.Rootless)
 			require.Equal(t, nodeSelectors, r.NodeSelector)
+			require.Equal(t, customAnnotations, r.CustomAnnotations)
+			require.Equal(t, customLabels, r.CustomLabels)
 			require.Equal(t, tolerations, r.Tolerations)
 			require.Equal(t, LoadbalanceRandom, loadbalance)
 			require.True(t, r.Qemu.Install)
@@ -110,6 +122,8 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Equal(t, "", r.LimitsMemory)
 			require.False(t, r.Rootless)
 			require.Empty(t, r.NodeSelector)
+			require.Empty(t, r.CustomAnnotations)
+			require.Empty(t, r.CustomLabels)
 			require.Empty(t, r.Tolerations)
 			require.Equal(t, LoadbalanceSticky, loadbalance)
 			require.False(t, r.Qemu.Install)
@@ -137,6 +151,8 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Equal(t, "", r.LimitsMemory)
 			require.True(t, r.Rootless)
 			require.Empty(t, r.NodeSelector)
+			require.Empty(t, r.CustomAnnotations)
+			require.Empty(t, r.CustomLabels)
 			require.Empty(t, r.Tolerations)
 			require.Equal(t, LoadbalanceSticky, loadbalance)
 			require.False(t, r.Qemu.Install)
@@ -149,9 +165,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"replicas": "invalid",
 			}
-
 			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-
 			require.Error(t, err)
 		},
 	)
@@ -161,9 +175,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"rootless": "invalid",
 			}
-
 			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-
 			require.Error(t, err)
 		},
 	)
@@ -173,9 +185,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"tolerations": "key=foo,value=bar,invalid=foo2",
 			}
-
 			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-
 			require.Error(t, err)
 		},
 	)
@@ -185,9 +195,27 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"tolerations": "key=foo,value=bar,tolerationSeconds=invalid",
 			}
-
 			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.Error(t, err)
+		},
+	)
 
+	t.Run(
+		"InvalidCustomAnnotation", func(t *testing.T) {
+			cfg.DriverOpts = map[string]string{
+				"annotations": "key,value",
+			}
+			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.Error(t, err)
+		},
+	)
+
+	t.Run(
+		"InvalidCustomLabel", func(t *testing.T) {
+			cfg.DriverOpts = map[string]string{
+				"labels": "key=value=foo",
+			}
+			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -197,9 +225,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"loadbalance": "invalid",
 			}
-
 			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-
 			require.Error(t, err)
 		},
 	)
@@ -209,9 +235,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"qemu.install": "invalid",
 			}
-
 			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-
 			require.Error(t, err)
 		},
 	)
@@ -221,9 +245,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"invalid": "foo",
 			}
-
 			_, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-
 			require.Error(t, err)
 		},
 	)
