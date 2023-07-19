@@ -21,7 +21,7 @@ func createTempDockerfileFromURL(ctx context.Context, d *driver.DriverHandle, ur
 	var out string
 	ch, done := progress.NewChannel(pw)
 	defer func() { <-done }()
-	_, err = c.Build(ctx, client.SolveOpt{}, "buildx", func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
+	_, err = c.Build(ctx, client.SolveOpt{Internal: true}, "buildx", func(ctx context.Context, c gwclient.Client) (*gwclient.Result, error) {
 		def, err := llb.HTTP(url, llb.Filename("Dockerfile"), llb.WithCustomNamef("[internal] load %s", url)).Marshal(ctx)
 		if err != nil {
 			return nil, err
