@@ -7,6 +7,8 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/backoff"
 )
 
 type Driver struct {
@@ -23,25 +25,11 @@ type tlsOpts struct {
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
-	for i := 0; ; i++ {
-		info, err := d.Info(ctx)
-		if err != nil {
-			return err
-		}
-		if info.Status != driver.Inactive {
-			return nil
-		}
-
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		default:
-			if i > 10 {
-				i = 10
-			}
-			time.Sleep(time.Duration(i) * time.Second)
-		}
+	c, err := d.Client(ctx)
+	if err != nil {
+		return err
 	}
+	return c.Wait(ctx)
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
@@ -77,6 +65,13 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	opts := []client.ClientOpt{}
+
+	backoffConfig := backoff.DefaultConfig
+	backoffConfig.MaxDelay = 1 * time.Second
+	opts = append(opts, client.WithGRPCDialOption(
+		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoffConfig}),
+	))
+
 	if d.tlsOpts != nil {
 		opts = append(opts, []client.ClientOpt{
 			client.WithServerConfig(d.tlsOpts.serverName, d.tlsOpts.caCert),
