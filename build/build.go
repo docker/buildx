@@ -267,11 +267,11 @@ func resolveDriversBase(ctx context.Context, nodes []builder.Node, opt map[strin
 	}
 
 	undetectedPlatform := false
-	allPlatforms := map[string]int{}
+	allPlatforms := map[string]struct{}{}
 	for _, opt := range opt {
 		for _, p := range opt.Platforms {
 			k := platforms.Format(p)
-			allPlatforms[k] = -1
+			allPlatforms[k] = struct{}{}
 			if _, ok := availablePlatforms[k]; !ok {
 				undetectedPlatform = true
 			}
