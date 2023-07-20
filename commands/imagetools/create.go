@@ -25,6 +25,7 @@ type createOptions struct {
 	builder      string
 	files        []string
 	tags         []string
+	annotations  []string
 	dryrun       bool
 	actionAppend bool
 	progress     string
@@ -80,6 +81,11 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 
 	if len(repos) == 0 {
 		return errors.Errorf("no repositories specified, please set a reference in tag or source")
+	}
+
+	ann, err := parseAnnotations(in.annotations)
+	if err != nil {
+		return err
 	}
 
 	var defaultRepo *string
@@ -154,7 +160,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
-	dt, desc, err := r.Combine(ctx, srcs)
+	dt, desc, err := r.Combine(ctx, srcs, ann)
 	if err != nil {
 		return err
 	}
@@ -264,6 +270,18 @@ func parseSource(in string) (*imagetools.Source, error) {
 	return &s, nil
 }
 
+func parseAnnotations(in []string) (map[string]string, error) {
+	out := make(map[string]string)
+	for _, i := range in {
+		kv := strings.SplitN(i, "=", 2)
+		if len(kv) != 2 {
+			return nil, errors.Errorf("invalid annotation %q, expected key=value", in)
+		}
+		out[kv[0]] = kv[1]
+	}
+	return out, nil
+}
+
 func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	var options createOptions
 
@@ -283,6 +301,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	flags.BoolVar(&options.dryrun, "dry-run", false, "Show final image instead of pushing")
 	flags.BoolVar(&options.actionAppend, "append", false, "Append to existing manifest")
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
+	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 
 	return cmd
 }

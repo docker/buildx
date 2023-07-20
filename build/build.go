@@ -1101,7 +1101,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 								}
 							}
 
-							dt, desc, err := itpull.Combine(ctx, srcs)
+							dt, desc, err := itpull.Combine(ctx, srcs, nil)
 							if err != nil {
 								return err
 							}
