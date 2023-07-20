@@ -437,7 +437,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 					return err
 				}
 				options.invoke = &invoke
-				options.noBuild = invokeFlag == "debug-shell"
+				options.noBuild = invoke.isNoBuild()
 			}
 			return runBuild(dockerCli, options)
 		},
@@ -681,34 +681,59 @@ func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
 
 type invokeConfig struct {
 	controllerapi.InvokeConfig
-	invokeFlag string
+	invokeType string
+}
+
+const (
+	// invokeTypeDefault is a type of invoking that runs the monitor and the interactive container
+	// with the default configuration of the build step, after the build finished.
+	invokeTypeDefault = "default"
+
+	// invokeTypeConfig is a type of invoking that runs the monitor and the interactive container
+	// with the specified configuration of the build step, after the build finished.
+	invokeTypeConfig = "config"
+
+	// invokeTypeDebugShell is a type of invoking that doesn't perform a build but immediately
+	// launch the monitor.
+	invokeTypeDebugShell = "debug-shell"
+
+	// invokeTypeOnError is a type of invoking that starts the monitor and the interactive container
+	// when the build finished with error.
+	invokeTypeOnError = "on-error"
+)
+
+func (cfg *invokeConfig) isNoBuild() bool {
+	return cfg.invokeType == invokeTypeDebugShell
 }
 
 func (cfg *invokeConfig) needsMonitor(retErr error) bool {
-	switch cfg.invokeFlag {
-	case "debug-shell":
+	switch cfg.invokeType {
+	case invokeTypeDebugShell:
 		return true
-	case "on-error":
+	case invokeTypeOnError:
 		return retErr != nil
 	default:
-		return cfg.invokeFlag != ""
+		return cfg.invokeType != ""
 	}
 }
 
 func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
-	cfg.invokeFlag = invoke
 	cfg.Tty = true
 	switch invoke {
-	case "default", "debug-shell":
+	case invokeTypeDefault, invokeTypeDebugShell:
+		cfg.invokeType = invoke
 		return cfg, nil
-	case "on-error":
-		// NOTE: we overwrite the command to run because the original one should fail on the failed step.
-		// TODO: make this configurable via flags or restorable from LLB.
+	case invokeTypeOnError:
+		// NOTE: We overwrite the command to run because the original one should fail on the failed step.
+		//       User can use long-form (w/ "type=on-error") to customize the command.
+		// TODO: make this restorable from LLB if needed.
 		// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113295900
 		cfg.Cmd = []string{"/bin/sh"}
+		cfg.invokeType = invoke
 		return cfg, nil
 	}
 
+	cfg.invokeType = invokeTypeConfig
 	csvReader := csv.NewReader(strings.NewReader(invoke))
 	csvReader.LazyQuotes = true
 	fields, err := csvReader.Read()
@@ -749,6 +774,11 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 			if err != nil {
 				return cfg, errors.Errorf("failed to parse tty: %v", err)
 			}
+		case "type":
+			if value != invokeTypeOnError && value != invokeTypeConfig {
+				return cfg, errors.Errorf("\"on-error\" or \"config\" are only supported as the custom type")
+			}
+			cfg.invokeType = value
 		default:
 			return cfg, errors.Errorf("unknown key %q", key)
 		}

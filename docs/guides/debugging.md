@@ -51,12 +51,17 @@ dev    home   media  opt    root   sbin   sys    usr    work
 
 Optional long form allows you specifying detailed configurations of the process. 
 It must be CSV-styled comma-separated key-value pairs.
-Supported keys are `args` (can be JSON array format), `entrypoint` (can be JSON array format), `env` (can be JSON array format), `user`, `cwd` and `tty` (bool).
+Supported keys for configuring containers are `args` (can be JSON array format), `entrypoint` (can be JSON array format), `env` (can be JSON array format), `user`, `cwd` and `tty` (bool).
+You can also specify `type=on-error` if you want to change the configuration of the container (e.g. commands to execute) that will be executed from the failed step.
 
-Example:
+Examples:
 
 ```
 $ docker buildx build --invoke 'entrypoint=["sh"],"args=[""-c"", ""env | grep -e FOO -e AAA""]","env=[""FOO=bar"", ""AAA=bbb""]"' .
+```
+
+```
+$ docker buildx build --invoke 'type=on-error,args=bash' .
 ```
 
 #### `on-error`
@@ -84,6 +89,12 @@ Interactive container was restarted with process "edmzor60nrag7rh1mbi4o9lm8". Pr
 ```
 
 This allows you to explore the state of the image when the build failed.
+
+You can also use long-form flag with `type=on-error` option.
+
+```
+$ docker buildx build --invoke 'type=on-error,args=bash' .
+```
 
 #### `debug-shell`
 
