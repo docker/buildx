@@ -41,6 +41,7 @@ func (cm *ExecCmd) Exec(ctx context.Context, args []string) error {
 	cfg := controllerapi.InvokeConfig{
 		Entrypoint: []string{args[1]},
 		Cmd:        args[2:],
+		NoCmd:      false,
 		// TODO: support other options as well via flags
 		Env:  cm.invokeConfig.Env,
 		User: cm.invokeConfig.User,

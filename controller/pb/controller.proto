@@ -192,6 +192,7 @@ message InitMessage {
 message InvokeConfig {
   repeated string Entrypoint = 1;
   repeated string Cmd = 2;
+  bool NoCmd = 11; // Do not set cmd but use the image's default
   repeated string Env = 3;
   string User = 4;
   bool NoUser = 5; // Do not set user but use the image's default

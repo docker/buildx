@@ -47,6 +47,7 @@ func (cm *RollbackCmd) Exec(ctx context.Context, args []string) error {
 		if len(cmds) > 0 {
 			cfg.Entrypoint = []string{cmds[0]}
 			cfg.Cmd = cmds[1:]
+			cfg.NoCmd = false
 		}
 	}
 	id := cm.m.Rollback(ctx, cfg)
