@@ -223,7 +223,7 @@ building for the same platform.
 
 ```console
 $ docker buildx create --platform linux/amd64
-$ docker buildx create --platform linux/arm64,linux/arm/v8
+$ docker buildx create --platform linux/arm64,linux/arm/v7
 ```
 
 ### <a name="use"></a> Automatically switch to the newly created builder (--use)
