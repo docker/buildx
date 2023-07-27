@@ -62,11 +62,11 @@ secrets:
 		return c.Targets[i].Name < c.Targets[j].Name
 	})
 	require.Equal(t, "db", c.Targets[0].Name)
-	require.Equal(t, "./db", *c.Targets[0].Context)
+	require.Equal(t, "/src/bake/db", *c.Targets[0].Context)
 	require.Equal(t, []string{"docker.io/tonistiigi/db"}, c.Targets[0].Tags)
 
 	require.Equal(t, "webapp", c.Targets[1].Name)
-	require.Equal(t, "./dir", *c.Targets[1].Context)
+	require.Equal(t, "/src/bake/dir", *c.Targets[1].Context)
 	require.Equal(t, map[string]string{"foo": "/bar"}, c.Targets[1].Contexts)
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[1].Dockerfile)
 	require.Equal(t, 1, len(c.Targets[1].Args))
@@ -80,7 +80,7 @@ secrets:
 	}, c.Targets[1].Secrets)
 
 	require.Equal(t, "webapp2", c.Targets[2].Name)
-	require.Equal(t, "./dir", *c.Targets[2].Context)
+	require.Equal(t, "/src/bake/dir", *c.Targets[2].Context)
 	require.Equal(t, "FROM alpine\n", *c.Targets[2].DockerfileInline)
 }
 
