@@ -89,6 +89,7 @@ type ServiceConfig struct {
 	Profiles []string `yaml:"profiles,omitempty" json:"profiles,omitempty"`
 
 	Annotations  Mapping      `yaml:"annotations,omitempty" json:"annotations,omitempty"`
+	Attach       *bool        `yaml:"attach,omitempty" json:"attach,omitempty"`
 	Build        *BuildConfig `yaml:"build,omitempty" json:"build,omitempty"`
 	BlkioConfig  *BlkioConfig `yaml:"blkio_config,omitempty" json:"blkio_config,omitempty"`
 	CapAdd       []string     `yaml:"cap_add,omitempty" json:"cap_add,omitempty"`
@@ -602,12 +603,13 @@ type DeployConfig struct {
 
 // HealthCheckConfig the healthcheck configuration for a service
 type HealthCheckConfig struct {
-	Test        HealthCheckTest `yaml:"test,omitempty" json:"test,omitempty"`
-	Timeout     *Duration       `yaml:"timeout,omitempty" json:"timeout,omitempty"`
-	Interval    *Duration       `yaml:"interval,omitempty" json:"interval,omitempty"`
-	Retries     *uint64         `yaml:"retries,omitempty" json:"retries,omitempty"`
-	StartPeriod *Duration       `yaml:"start_period,omitempty" json:"start_period,omitempty"`
-	Disable     bool            `yaml:"disable,omitempty" json:"disable,omitempty"`
+	Test          HealthCheckTest `yaml:"test,omitempty" json:"test,omitempty"`
+	Timeout       *Duration       `yaml:"timeout,omitempty" json:"timeout,omitempty"`
+	Interval      *Duration       `yaml:"interval,omitempty" json:"interval,omitempty"`
+	Retries       *uint64         `yaml:"retries,omitempty" json:"retries,omitempty"`
+	StartPeriod   *Duration       `yaml:"start_period,omitempty" json:"start_period,omitempty"`
+	StartInterval *Duration       `yaml:"start_interval,omitempty" json:"start_interval,omitempty"`
+	Disable       bool            `yaml:"disable,omitempty" json:"disable,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline" json:"-"`
 }
@@ -815,6 +817,8 @@ const (
 	VolumeTypeTmpfs = "tmpfs"
 	// VolumeTypeNamedPipe is the type for mounting Windows named pipes
 	VolumeTypeNamedPipe = "npipe"
+	// VolumeTypeCluster is the type for mounting container storage interface (CSI) volumes
+	VolumeTypeCluster = "cluster"
 
 	// SElinuxShared share the volume content
 	SElinuxShared = "z"
@@ -1023,6 +1027,7 @@ type ServiceDependency struct {
 	Condition  string     `yaml:"condition,omitempty" json:"condition,omitempty"`
 	Restart    bool       `yaml:"restart,omitempty" json:"restart,omitempty"`
 	Extensions Extensions `yaml:"#extensions,inline" json:"-"`
+	Required   bool       `yaml:"required" json:"required"`
 }
 
 type ExtendsConfig struct {
@@ -1035,3 +1040,9 @@ type SecretConfig FileObjectConfig
 
 // ConfigObjConfig is the config for the swarm "Config" object
 type ConfigObjConfig FileObjectConfig
+
+type IncludeConfig struct {
+	Path             StringList `yaml:"path,omitempty" json:"path,omitempty"`
+	ProjectDirectory string     `yaml:"project_directory,omitempty" json:"project_directory,omitempty"`
+	EnvFile          StringList `yaml:"env_file,omitempty" json:"env_file,omitempty"`
+}

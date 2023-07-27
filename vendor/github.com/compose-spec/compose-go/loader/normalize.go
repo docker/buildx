@@ -18,8 +18,6 @@ package loader
 
 import (
 	"fmt"
-	"os"
-	"path/filepath"
 	"strings"
 
 	"github.com/compose-spec/compose-go/errdefs"
@@ -29,19 +27,7 @@ import (
 )
 
 // Normalize compose project by moving deprecated attributes to their canonical position and injecting implicit defaults
-func Normalize(project *types.Project, resolvePaths bool) error {
-	absWorkingDir, err := filepath.Abs(project.WorkingDir)
-	if err != nil {
-		return err
-	}
-	project.WorkingDir = absWorkingDir
-
-	absComposeFiles, err := absComposeFiles(project.ComposeFiles)
-	if err != nil {
-		return err
-	}
-	project.ComposeFiles = absComposeFiles
-
+func Normalize(project *types.Project) error {
 	if project.Networks == nil {
 		project.Networks = make(map[string]types.NetworkConfig)
 	}
@@ -51,8 +37,7 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 		project.Networks["default"] = types.NetworkConfig{}
 	}
 
-	err = relocateExternalName(project)
-	if err != nil {
+	if err := relocateExternalName(project); err != nil {
 		return err
 	}
 
@@ -72,37 +57,15 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 		}
 
 		if s.Build != nil {
+			if s.Build.Context == "" {
+				s.Build.Context = "."
+			}
 			if s.Build.Dockerfile == "" && s.Build.DockerfileInline == "" {
 				s.Build.Dockerfile = "Dockerfile"
 			}
-			if resolvePaths {
-				// Build context might be a remote http/git context. Unfortunately supported "remote"
-				// syntax is highly ambiguous in moby/moby and not defined by compose-spec,
-				// so let's assume runtime will check
-				localContext := absPath(project.WorkingDir, s.Build.Context)
-				if _, err := os.Stat(localContext); err == nil {
-					s.Build.Context = localContext
-				}
-				for name, path := range s.Build.AdditionalContexts {
-					if strings.Contains(path, "://") { // `docker-image://` or any builder specific context type
-						continue
-					}
-					path = absPath(project.WorkingDir, path)
-					if _, err := os.Stat(path); err == nil {
-						s.Build.AdditionalContexts[name] = path
-					}
-				}
-			}
 			s.Build.Args = s.Build.Args.Resolve(fn)
 		}
-		for j, f := range s.EnvFile {
-			s.EnvFile[j] = absPath(project.WorkingDir, f)
-		}
 		s.Environment = s.Environment.Resolve(fn)
-
-		if s.Extends != nil && s.Extends.File != "" {
-			s.Extends.File = absPath(project.WorkingDir, s.Extends.File)
-		}
 
 		for _, link := range s.Links {
 			parts := strings.Split(link, ":")
@@ -112,6 +75,7 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 			s.DependsOn = setIfMissing(s.DependsOn, link, types.ServiceDependency{
 				Condition: types.ServiceConditionStarted,
 				Restart:   true,
+				Required:  true,
 			})
 		}
 
@@ -121,6 +85,7 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 				s.DependsOn = setIfMissing(s.DependsOn, name, types.ServiceDependency{
 					Condition: types.ServiceConditionStarted,
 					Restart:   true,
+					Required:  true,
 				})
 			}
 		}
@@ -131,6 +96,7 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 				s.DependsOn = setIfMissing(s.DependsOn, spec[0], types.ServiceDependency{
 					Condition: types.ServiceConditionStarted,
 					Restart:   false,
+					Required:  true,
 				})
 			}
 		}
@@ -158,14 +124,6 @@ func Normalize(project *types.Project, resolvePaths bool) error {
 		inferImplicitDependencies(&s)
 
 		project.Services[i] = s
-	}
-
-	for name, config := range project.Volumes {
-		if config.Driver == "local" && config.DriverOpts["o"] == "bind" {
-			// This is actually a bind mount
-			config.DriverOpts["device"] = absPath(project.WorkingDir, config.DriverOpts["device"])
-			project.Volumes[name] = config
-		}
 	}
 
 	setNameFromKey(project)
@@ -223,6 +181,7 @@ func inferImplicitDependencies(service *types.ServiceConfig) {
 		if _, ok := service.DependsOn[d]; !ok {
 			service.DependsOn[d] = types.ServiceDependency{
 				Condition: types.ServiceConditionStarted,
+				Required:  true,
 			}
 		}
 	}
@@ -252,18 +211,6 @@ func relocateScale(s *types.ServiceConfig) error {
 		s.Deploy.Replicas = &scale
 	}
 	return nil
-}
-
-func absComposeFiles(composeFiles []string) ([]string, error) {
-	absComposeFiles := make([]string, len(composeFiles))
-	for i, composeFile := range composeFiles {
-		absComposefile, err := filepath.Abs(composeFile)
-		if err != nil {
-			return nil, err
-		}
-		absComposeFiles[i] = absComposefile
-	}
-	return absComposeFiles, nil
 }
 
 // Resources with no explicit name are actually named by their key in map

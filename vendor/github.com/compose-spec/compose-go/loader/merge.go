@@ -150,13 +150,12 @@ func unique(slice []string) []string {
 		return nil
 	}
 	uniqMap := make(map[string]struct{})
+	var uniqSlice []string
 	for _, v := range slice {
-		uniqMap[v] = struct{}{}
-	}
-
-	uniqSlice := make([]string, 0, len(uniqMap))
-	for v := range uniqMap {
-		uniqSlice = append(uniqSlice, v)
+		if _, ok := uniqMap[v]; !ok {
+			uniqSlice = append(uniqSlice, v)
+			uniqMap[v] = struct{}{}
+		}
 	}
 	return uniqSlice
 }

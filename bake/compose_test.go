@@ -656,6 +656,24 @@ services:
 	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, c.Targets[0].Args)
 }
 
+func TestDependsOn(t *testing.T) {
+	var dt = []byte(`
+services:
+  foo:
+    build:
+     context: .
+    ports:
+      - 3306:3306
+    depends_on:
+      - bar
+  bar:
+    build:
+     context: .
+`)
+	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
