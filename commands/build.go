@@ -698,6 +698,7 @@ func (cfg *invokeConfig) needsMonitor(retErr error) bool {
 func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 	cfg.invokeFlag = invoke
 	cfg.Tty = true
+	cfg.NoCmd = true
 	switch invoke {
 	case "default", "debug-shell":
 		return cfg, nil
@@ -706,6 +707,7 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 		// TODO: make this configurable via flags or restorable from LLB.
 		// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113295900
 		cfg.Cmd = []string{"/bin/sh"}
+		cfg.NoCmd = false
 		return cfg, nil
 	}
 
@@ -731,10 +733,12 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 		switch key {
 		case "args":
 			cfg.Cmd = append(cfg.Cmd, maybeJSONArray(value)...)
+			cfg.NoCmd = false
 		case "entrypoint":
 			cfg.Entrypoint = append(cfg.Entrypoint, maybeJSONArray(value)...)
 			if cfg.Cmd == nil {
 				cfg.Cmd = []string{}
+				cfg.NoCmd = false
 			}
 		case "env":
 			cfg.Env = append(cfg.Env, maybeJSONArray(value)...)

@@ -388,7 +388,7 @@ func populateProcessConfigFromResult(req *gateway.StartRequest, res *gateway.Res
 	} else if img != nil {
 		args = append(args, img.Config.Entrypoint...)
 	}
-	if cfg.Cmd != nil {
+	if !cfg.NoCmd {
 		args = append(args, cfg.Cmd...)
 	} else if img != nil {
 		args = append(args, img.Config.Cmd...)
