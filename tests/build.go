@@ -106,7 +106,7 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 	outFlag := "--output=type=docker"
 
-	if sb.Name() == "remote" {
+	if sb.DockerAddress() == "" {
 		// there is no Docker atm to load the image
 		outFlag += ",dest=" + targetDir + "/image.tar"
 	}
