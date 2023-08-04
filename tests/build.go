@@ -35,6 +35,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testImageIDOutput,
 	testBuildLocalExport,
 	testBuildRegistryExport,
+	testBuildRegistryExportAttestations,
 	testBuildTarExport,
 	testBuildMobyFromLocalImage,
 	testBuildDetailsLink,
@@ -94,6 +95,40 @@ func testBuildRegistryExport(t *testing.T, sb integration.Sandbox) {
 	require.NotNil(t, img)
 	require.Len(t, img.Layers, 1)
 	require.Equal(t, img.Layers[0]["bar"].Data, []byte("foo"))
+}
+
+func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/registry:latest"
+
+	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), "--provenance=true", dir))
+	if sb.Name() == "docker" {
+		require.Error(t, err)
+		require.Contains(t, out, "attestations are not supported")
+		return
+	}
+	require.NoError(t, err, string(out))
+
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+
+	pk := platforms.Format(platforms.Normalize(platforms.DefaultSpec()))
+	img := imgs.Find(pk)
+	require.NotNil(t, img)
+	require.Len(t, img.Layers, 1)
+	require.Equal(t, img.Layers[0]["bar"].Data, []byte("foo"))
+
+	att := imgs.FindAttestation(pk)
+	require.NotNil(t, att)
+	require.Len(t, att.Layers, 1)
 }
 
 func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
