@@ -20,6 +20,8 @@ func InitDockerContainerWorker() {
 type containerWorker struct {
 	id string
 
+	unsupported []string
+
 	docker      integration.Backend
 	dockerClose func() error
 	dockerErr   error
@@ -65,8 +67,9 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 	}
 
 	return &backend{
-		context: w.docker.DockerAddress(),
-		builder: name,
+		context:             w.docker.DockerAddress(),
+		builder:             name,
+		unsupportedFeatures: w.unsupported,
 	}, cl, nil
 }
 

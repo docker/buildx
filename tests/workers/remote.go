@@ -7,6 +7,7 @@ import (
 
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/testutil/integration"
+	bkworkers "github.com/moby/buildkit/util/testutil/workers"
 	"github.com/pkg/errors"
 )
 
@@ -17,7 +18,8 @@ func InitRemoteWorker() {
 }
 
 type remoteWorker struct {
-	id string
+	id          string
+	unsupported []string
 }
 
 func (w remoteWorker) Name() string {
@@ -29,7 +31,7 @@ func (w remoteWorker) Rootless() bool {
 }
 
 func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (b integration.Backend, cl func() error, err error) {
-	oci := integration.OCI{ID: w.id}
+	oci := bkworkers.OCI{ID: w.id}
 	bk, bkclose, err := oci.New(ctx, cfg)
 	if err != nil {
 		return bk, cl, err
@@ -60,7 +62,8 @@ func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 	}
 
 	return &backend{
-		builder: name,
+		builder:             name,
+		unsupportedFeatures: w.unsupported,
 	}, cl, nil
 }
 

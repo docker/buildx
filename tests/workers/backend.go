@@ -35,7 +35,7 @@ func (s *backend) Rootless() bool {
 	return false
 }
 
-func (b backend) Supports(feature string) bool {
+func (s backend) Supports(feature string) bool {
 	if enabledFeatures := os.Getenv("BUILDKIT_TEST_ENABLE_FEATURES"); enabledFeatures != "" {
 		for _, enabledFeature := range strings.Split(enabledFeatures, ",") {
 			if feature == enabledFeature {
@@ -50,7 +50,7 @@ func (b backend) Supports(feature string) bool {
 			}
 		}
 	}
-	for _, unsupportedFeature := range b.unsupportedFeatures {
+	for _, unsupportedFeature := range s.unsupportedFeatures {
 		if feature == unsupportedFeature {
 			return false
 		}

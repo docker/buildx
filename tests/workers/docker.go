@@ -7,6 +7,7 @@ import (
 
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/testutil/integration"
+	bkworkers "github.com/moby/buildkit/util/testutil/workers"
 	"github.com/pkg/errors"
 )
 
@@ -23,6 +24,7 @@ func InitDockerWorker() {
 type dockerWorker struct {
 	id                    string
 	containerdSnapshotter bool
+	unsupported           []string
 }
 
 func (c dockerWorker) Name() string {
@@ -34,7 +36,7 @@ func (c dockerWorker) Rootless() bool {
 }
 
 func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (b integration.Backend, cl func() error, err error) {
-	moby := integration.Moby{
+	moby := bkworkers.Moby{
 		ID:                    c.id,
 		ContainerdSnapshotter: c.containerdSnapshotter,
 	}
@@ -66,8 +68,9 @@ func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 	}
 
 	return &backend{
-		builder: name,
-		context: name,
+		builder:             name,
+		context:             name,
+		unsupportedFeatures: c.unsupported,
 	}, cl, nil
 }
 
