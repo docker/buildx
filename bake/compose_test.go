@@ -674,6 +674,48 @@ services:
 	require.NoError(t, err)
 }
 
+func TestInclude(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpdir, "compose-foo.yml"), []byte(`
+services:
+  foo:
+    build:
+     context: .
+     target: buildfoo
+    ports:
+      - 3306:3306
+`), 0644)
+	require.NoError(t, err)
+
+	var dt = []byte(`
+include:
+  - compose-foo.yml
+
+services:
+  bar:
+    build:
+     context: .
+     target: buildbar
+`)
+
+	chdir(t, tmpdir)
+	c, err := ParseComposeFiles([]File{{
+		Name: "compose.yml",
+		Data: dt,
+	}})
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	sort.Slice(c.Targets, func(i, j int) bool {
+		return c.Targets[i].Name < c.Targets[j].Name
+	})
+	require.Equal(t, "bar", c.Targets[0].Name)
+	require.Equal(t, "buildbar", *c.Targets[0].Target)
+	require.Equal(t, "foo", c.Targets[1].Name)
+	require.Equal(t, "buildfoo", *c.Targets[1].Target)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
