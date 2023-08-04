@@ -3,36 +3,36 @@ package workers
 import (
 	"os"
 	"strings"
-
-	"github.com/moby/buildkit/util/testutil/integration"
 )
 
 type backend struct {
-	builder             string
-	context             string
+	address             string
+	dockerAddress       string
+	containerdAddress   string
+	rootless            bool
+	snapshotter         string
 	unsupportedFeatures []string
+	isDockerd           bool
 }
 
-var _ integration.Backend = &backend{}
-
-func (s *backend) Address() string {
-	return s.builder
+func (b backend) Address() string {
+	return b.address
 }
 
-func (s *backend) DockerAddress() string {
-	return s.context
+func (b backend) DockerAddress() string {
+	return b.dockerAddress
 }
 
-func (s *backend) ContainerdAddress() string {
-	return ""
+func (b backend) ContainerdAddress() string {
+	return b.containerdAddress
 }
 
-func (s *backend) Snapshotter() string {
-	return ""
+func (b backend) Rootless() bool {
+	return b.rootless
 }
 
-func (s *backend) Rootless() bool {
-	return false
+func (b backend) Snapshotter() string {
+	return b.snapshotter
 }
 
 func (b backend) Supports(feature string) bool {

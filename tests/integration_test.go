@@ -7,10 +7,11 @@ import (
 	"github.com/docker/buildx/tests/workers"
 	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/testutil/integration"
+	bkworkers "github.com/moby/buildkit/util/testutil/workers"
 )
 
 func init() {
-	if integration.IsTestDockerd() {
+	if bkworkers.IsTestDockerd() {
 		workers.InitDockerWorker()
 		workers.InitDockerContainerWorker()
 	} else {
@@ -31,7 +32,7 @@ func TestIntegration(t *testing.T) {
 func testIntegration(t *testing.T, funcs ...func(t *testing.T, sb integration.Sandbox)) {
 	mirroredImages := integration.OfficialImages("busybox:latest", "alpine:latest")
 	buildkitImage := "docker.io/moby/buildkit:buildx-stable-1"
-	if integration.IsTestDockerd() {
+	if bkworkers.IsTestDockerd() {
 		if img, ok := os.LookupEnv("TEST_BUILDKIT_IMAGE"); ok {
 			ref, err := reference.ParseNormalizedNamed(img)
 			if err == nil {
