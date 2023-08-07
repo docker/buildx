@@ -11,6 +11,7 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/debug"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -40,6 +41,11 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		cmd.TraverseChildren = true
 		cmd.DisableFlagsInUseLine = true
 		cli.DisableFlagsInUseLine(cmd)
+
+		// DEBUG=1 should perform the same as --debug at the docker root level
+		if debug.IsEnabled() {
+			debug.Enable()
+		}
 	}
 
 	logrus.SetFormatter(&logutil.Formatter{})
