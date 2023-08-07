@@ -149,7 +149,7 @@ $ DOCKER_BUILDKIT=1 docker build --platform=local -o . "https://github.com/docke
 $ mkdir -p ~/.docker/cli-plugins
 $ mv buildx ~/.docker/cli-plugins/docker-buildx
 
-# Local 
+# Local
 $ git clone https://github.com/docker/buildx.git && cd buildx
 $ make install
 ```
@@ -241,7 +241,7 @@ When you invoke a build, you can set the `--platform` flag to specify the target
 platform for the build output, (for example, `linux/amd64`, `linux/arm64`, or
 `darwin/amd64`).
 
-When the current builder instance is backed by the `docker-container` or 
+When the current builder instance is backed by the `docker-container` or
 `kubernetes` driver, you can specify multiple platforms together. In this case,
 it builds a manifest list which contains images for all specified architectures.
 When you use this image in [`docker run`](https://docs.docker.com/engine/reference/commandline/run/)
