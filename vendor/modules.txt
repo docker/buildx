@@ -501,7 +501,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.12.1-0.20230717122532-faa0cc7da353
+# github.com/moby/buildkit v0.12.1-0.20230804094609-b49a8873179b
 ## explicit; go 1.20
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -569,6 +569,7 @@ github.com/moby/buildkit/util/system
 github.com/moby/buildkit/util/testutil
 github.com/moby/buildkit/util/testutil/dockerd
 github.com/moby/buildkit/util/testutil/integration
+github.com/moby/buildkit/util/testutil/workers
 github.com/moby/buildkit/util/tracing
 github.com/moby/buildkit/util/tracing/detect
 github.com/moby/buildkit/util/tracing/detect/delegated

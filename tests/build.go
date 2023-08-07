@@ -141,7 +141,7 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 	outFlag := "--output=type=docker"
 
-	if sb.Name() == "remote" {
+	if sb.DockerAddress() == "" {
 		// there is no Docker atm to load the image
 		outFlag += ",dest=" + targetDir + "/image.tar"
 	}
@@ -210,14 +210,15 @@ func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, cmd.Run())
 
 	// create local tag matching a remote one
-	cmd = dockerCmd(sb, withArgs("tag", "busybox:latest", "busybox:1.36"))
+	cmd = dockerCmd(sb, withArgs("tag", "busybox:latest", "busybox:1.35"))
 	cmd.Stderr = os.Stderr
 	require.NoError(t, cmd.Run())
 
 	// build image and check that it uses the local tag
+	// (note: the version check should match the version of busybox in pins.go)
 	dockerfile = []byte(`
-FROM busybox:1.36
-RUN busybox | head -1 | grep v1.35.0
+FROM busybox:1.35
+RUN busybox | head -1 | grep v1.36.1
 `)
 	dir = tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
 	cmd = buildxCmd(
