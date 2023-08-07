@@ -29,6 +29,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteCmdContextEscapeRelative,
 	testBakeRemoteDockerfileCwd,
 	testBakeRemoteLocalContextRemoteDockerfile,
+	testBakeRemoteComposeInclude,
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -425,4 +426,48 @@ COPY foo /foo
 	)
 	require.Error(t, err, out)
 	require.Contains(t, out, "reading a dockerfile for a remote build invocation is currently not supported")
+}
+
+func testBakeRemoteComposeInclude(t *testing.T, sb integration.Sandbox) {
+	composeFile := []byte(`
+include:
+  - compose-inc.yml
+
+services:
+  foo:
+    build:
+     context: .
+     dockerfile_inline: |
+       FROM busybox
+       RUN echo foo
+`)
+	composeIncFile := []byte(`
+services:
+  inc:
+    build:
+     context: .
+     dockerfile_inline: |
+       FROM busybox
+       RUN echo inc
+`)
+
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("compose.yml", composeFile, 0600),
+		fstest.CreateFile("compose-inc.yml", composeIncFile, 0600),
+	)
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "compose.yml", "compose-inc.yml")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(
+		sb,
+		withArgs(addr, "--set", "*.output=type=cacheonly"),
+	)
+	require.NoError(t, err, out)
 }
