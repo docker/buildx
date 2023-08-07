@@ -4,7 +4,11 @@ import (
 	"archive/tar"
 	"bytes"
 	"context"
+	"encoding/json"
+	"os"
 
+	"github.com/compose-spec/compose-go/loader"
+	compose "github.com/compose-spec/compose-go/types"
 	"github.com/docker/buildx/builder"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/driver"
@@ -182,19 +186,91 @@ func filesFromRef(ctx context.Context, ref gwclient.Reference, names []string) (
 	}
 
 	for _, name := range names {
-		_, err := ref.StatFile(ctx, gwclient.StatRequest{Path: name})
-		if err != nil {
-			if isDefault {
-				continue
+		f, err := readRefFile(name, func(name string) (*File, error) {
+			_, err := ref.StatFile(ctx, gwclient.StatRequest{Path: name})
+			if err != nil {
+				if isDefault {
+					return nil, nil
+				}
+				return nil, err
 			}
-			return nil, err
-		}
-		dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{Filename: name})
+			dt, err := ref.ReadFile(ctx, gwclient.ReadRequest{Filename: name})
+			if err != nil {
+				return nil, err
+			}
+			return &File{Name: name, Data: dt}, nil
+		}, nil)
 		if err != nil {
 			return nil, err
+		} else if len(f) == 0 {
+			continue
 		}
-		files = append(files, File{Name: name, Data: dt})
+		files = append(files, f...)
 	}
 
+	return files, nil
+}
+
+func readRefFile(name string, readFunc func(name string) (*File, error), files []File) ([]File, error) {
+	f, err := readFunc(name)
+	if err != nil {
+		return nil, err
+	} else if f == nil {
+		return files, nil
+	}
+	// if we have a compose file, we need to read it and extract the
+	// include files from it
+	_, err = loader.Load(compose.ConfigDetails{
+		ConfigFiles: []compose.ConfigFile{
+			{
+				Content: f.Data,
+			},
+		},
+		Environment: sliceToMap(os.Environ()),
+	}, func(options *loader.Options) {
+		options.SetProjectName("bake", false)
+		options.SkipNormalization = true
+		options.SkipConsistencyCheck = true
+		options.SkipInclude = true
+	})
+	if err == nil {
+		yml, err := loader.ParseYAML(f.Data)
+		if err != nil {
+			return nil, err
+		}
+		if v, ok := yml["include"]; ok && v != "" {
+			// include files will be read later and added to the list of files
+			// to be processed, so we can remote "include" from the yaml file
+			delete(yml, "include")
+			// marshal the yaml file again without the include key and add it
+			// to the list of files to be processed
+			newData, err := json.Marshal(yml)
+			if err != nil {
+				return nil, err
+			}
+			files = append(files, File{
+				Name: f.Name,
+				Data: newData,
+			})
+			// read include files
+			if idt, ok := v.([]interface{}); ok && len(idt) > 0 {
+				var includes []string
+				for _, i := range idt {
+					includes = append(includes, i.(string))
+				}
+				for _, include := range includes {
+					incf, err := readRefFile(include, readFunc, files)
+					if err != nil {
+						return nil, err
+					} else if incf == nil {
+						continue
+					}
+					files = append(files, incf...)
+				}
+			}
+		}
+	} else {
+		files = append(files, *f)
+	}
 	return files, nil
 }
