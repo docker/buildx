@@ -1,47 +1,76 @@
 package dockerutil
 
 import (
-	"errors"
+	"encoding/json"
 	"io"
 	"time"
 
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/cli/cli/streams"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/identity"
-	"github.com/opencontainers/go-digest"
 )
 
-func fromReader(w progress.Writer, name string, rc io.ReadCloser) error {
-	dgst := digest.FromBytes([]byte(identity.NewID()))
-	tm := time.Now()
+const minTimeDelta = 2 * time.Second
 
-	vtx := client.Vertex{
-		Digest:  dgst,
-		Name:    name,
-		Started: &tm,
-	}
+func fromReader(l progress.SubLogger, rc io.ReadCloser) error {
+	started := map[string]client.VertexStatus{}
 
-	w.Write(&client.SolveStatus{
-		Vertexes: []*client.Vertex{&vtx},
-	})
-
-	err := jsonmessage.DisplayJSONMessagesToStream(rc, streams.NewOut(io.Discard), nil)
-	if err != nil {
-		if jerr, ok := err.(*jsonmessage.JSONError); ok {
-			err = errors.New(jerr.Message)
+	defer func() {
+		for _, st := range started {
+			st := st
+			if st.Completed == nil {
+				now := time.Now()
+				st.Completed = &now
+				l.SetStatus(&st)
+			}
 		}
+	}()
+
+	dec := json.NewDecoder(rc)
+	var parsedErr error
+	var jm jsonmessage.JSONMessage
+	for {
+		if err := dec.Decode(&jm); err != nil {
+			if parsedErr != nil {
+				return parsedErr
+			}
+			if err == io.EOF {
+				break
+			}
+			return err
+		}
+		if jm.Error != nil {
+			parsedErr = jm.Error
+		}
+		if jm.ID == "" || jm.Progress == nil {
+			continue
+		}
+
+		id := "loading layer " + jm.ID
+		st, ok := started[id]
+		if !ok {
+			now := time.Now()
+			st = client.VertexStatus{
+				ID:      id,
+				Started: &now,
+			}
+		}
+		timeDelta := time.Now().Sub(st.Timestamp)
+		if timeDelta < minTimeDelta {
+			continue
+		}
+		st.Timestamp = time.Now()
+		if jm.Status == "Loading layer" {
+			st.Current = jm.Progress.Current
+			st.Total = jm.Progress.Total
+		}
+		if jm.Error != nil {
+			now := time.Now()
+			st.Completed = &now
+		}
+		started[id] = st
+		l.SetStatus(&st)
 	}
 
-	tm2 := time.Now()
-	vtx2 := vtx
-	vtx2.Completed = &tm2
-	if err != nil {
-		vtx2.Error = err.Error()
-	}
-	w.Write(&client.SolveStatus{
-		Vertexes: []*client.Vertex{&vtx2},
-	})
-	return err
+	return nil
 }
