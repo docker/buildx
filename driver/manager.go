@@ -9,7 +9,6 @@ import (
 	"sync"
 
 	dockerclient "github.com/docker/docker/client"
-	"github.com/moby/buildkit/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/rest"
@@ -147,7 +146,7 @@ func GetFactories(instanceRequired bool) []Factory {
 
 type DriverHandle struct {
 	Driver
-	client                  *client.Client
+	client                  Client
 	err                     error
 	once                    sync.Once
 	featuresOnce            sync.Once
@@ -159,7 +158,7 @@ type DriverHandle struct {
 	hostGatewayIPErr        error
 }
 
-func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
+func (d *DriverHandle) Client(ctx context.Context) (Client, error) {
 	d.once.Do(func() {
 		d.client, d.err = d.Driver.Client(ctx)
 	})
