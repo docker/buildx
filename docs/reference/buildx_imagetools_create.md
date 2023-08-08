@@ -11,6 +11,7 @@ Create a new image based on source images
 
 | Name                             | Type          | Default | Description                                                                              |
 |:---------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
+| `--annotation`                   | `stringArray` |         | Add annotation to the image                                                              |
 | [`--append`](#append)            |               |         | Append to existing manifest                                                              |
 | [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                 |
 | [`--dry-run`](#dry-run)          |               |         | Show final image instead of pushing                                                      |
