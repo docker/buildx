@@ -303,7 +303,7 @@ services:
 
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
-	require.Equal(t, ".", *m["webapp"].Context)
+	require.Equal(t, "/src/bake", *m["webapp"].Context)
 	require.Equal(t, ptrstr("1"), m["webapp"].Args["buildno"])
 	require.Equal(t, ptrstr("12"), m["webapp"].Args["buildno2"])
 
@@ -364,7 +364,7 @@ services:
 	_, ok = m["web_app"]
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
-	require.Equal(t, ".", *m["web_app"].Context)
+	require.Equal(t, "/src/bake", *m["web_app"].Context)
 	require.Equal(t, ptrstr("1"), m["web_app"].Args["buildno"])
 	require.Equal(t, ptrstr("12"), m["web_app"].Args["buildno2"])
 
@@ -555,7 +555,7 @@ services:
 	require.Equal(t, "Dockerfile", *m["app1"].Dockerfile)
 	require.Equal(t, ".", *m["app1"].Context)
 	require.Equal(t, "Dockerfile", *m["app2"].Dockerfile)
-	require.Equal(t, ".", *m["app2"].Context)
+	require.Equal(t, "/src/bake", *m["app2"].Context)
 }
 
 func TestReadContextFromTargetChain(t *testing.T) {

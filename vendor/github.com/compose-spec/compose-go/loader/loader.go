@@ -56,6 +56,8 @@ type Options struct {
 	SkipConsistencyCheck bool
 	// Skip extends
 	SkipExtends bool
+	// SkipInclude will ignore `include` and only load model from file(s) set by ConfigDetails
+	SkipInclude bool
 	// Interpolation options
 	Interpolate *interp.Options
 	// Discard 'env_file' entries after resolving to 'environment' section
@@ -66,6 +68,24 @@ type Options struct {
 	projectNameImperativelySet bool
 	// Profiles set profiles to enable
 	Profiles []string
+}
+
+func (o *Options) clone() *Options {
+	return &Options{
+		SkipValidation:             o.SkipValidation,
+		SkipInterpolation:          o.SkipInterpolation,
+		SkipNormalization:          o.SkipNormalization,
+		ResolvePaths:               o.ResolvePaths,
+		ConvertWindowsPaths:        o.ConvertWindowsPaths,
+		SkipConsistencyCheck:       o.SkipConsistencyCheck,
+		SkipExtends:                o.SkipExtends,
+		SkipInclude:                o.SkipInclude,
+		Interpolate:                o.Interpolate,
+		discardEnvFiles:            o.discardEnvFiles,
+		projectName:                o.projectName,
+		projectNameImperativelySet: o.projectNameImperativelySet,
+		Profiles:                   o.Profiles,
+	}
 }
 
 func (o *Options) SetProjectName(name string, imperativelySet bool) {
@@ -185,6 +205,7 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 			LookupValue:     configDetails.LookupEnv,
 			TypeCastMapping: interpolateTypeCastMapping,
 		},
+		ResolvePaths: true,
 	}
 
 	for _, op := range options {
@@ -195,8 +216,22 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 	if err != nil {
 		return nil, err
 	}
+	opts.projectName = projectName
+	return load(configDetails, opts, nil)
+}
 
+func load(configDetails types.ConfigDetails, opts *Options, loaded []string) (*types.Project, error) {
 	var model *types.Config
+
+	mainFile := configDetails.ConfigFiles[0].Filename
+	for _, f := range loaded {
+		if f == mainFile {
+			loaded = append(loaded, mainFile)
+			return nil, errors.Errorf("include cycle detected:\n%s\n include %s", loaded[0], strings.Join(loaded[1:], "\n include "))
+		}
+	}
+	loaded = append(loaded, mainFile)
+
 	for i, file := range configDetails.ConfigFiles {
 		var postProcessor PostProcessor
 		configDict := file.Config
@@ -231,10 +266,18 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 			return nil, err
 		}
 
+		if !opts.SkipInclude {
+			cfg, err = loadInclude(configDetails, cfg, opts, loaded)
+			if err != nil {
+				return nil, err
+			}
+		}
+
 		if i == 0 {
 			model = cfg
 			continue
 		}
+
 		merged, err := merge([]*types.Config{model, cfg})
 		if err != nil {
 			return nil, err
@@ -248,16 +291,8 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 		model = merged
 	}
 
-	for _, s := range model.Services {
-		var newEnvFiles types.StringList
-		for _, ef := range s.EnvFile {
-			newEnvFiles = append(newEnvFiles, absPath(configDetails.WorkingDir, ef))
-		}
-		s.EnvFile = newEnvFiles
-	}
-
 	project := &types.Project{
-		Name:        projectName,
+		Name:        opts.projectName,
 		WorkingDir:  configDetails.WorkingDir,
 		Services:    model.Services,
 		Networks:    model.Networks,
@@ -269,14 +304,30 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 	}
 
 	if !opts.SkipNormalization {
-		err = Normalize(project, opts.ResolvePaths)
+		err := Normalize(project)
 		if err != nil {
 			return nil, err
 		}
 	}
 
+	if opts.ResolvePaths {
+		err := ResolveRelativePaths(project)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if opts.ConvertWindowsPaths {
+		for i, service := range project.Services {
+			for j, volume := range service.Volumes {
+				service.Volumes[j] = convertVolumePath(volume)
+			}
+			project.Services[i] = service
+		}
+	}
+
 	if !opts.SkipConsistencyCheck {
-		err = checkConsistency(project)
+		err := checkConsistency(project)
 		if err != nil {
 			return nil, err
 		}
@@ -287,7 +338,7 @@ func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.
 	}
 	project.ApplyProfiles(opts.Profiles)
 
-	err = project.ResolveServicesEnvironment(opts.discardEnvFiles)
+	err := project.ResolveServicesEnvironment(opts.discardEnvFiles)
 
 	return project, err
 }
@@ -419,7 +470,6 @@ func loadSections(filename string, config map[string]interface{}, configDetails 
 	if err != nil {
 		return nil, err
 	}
-
 	cfg.Networks, err = LoadNetworks(getSection(config, "networks"))
 	if err != nil {
 		return nil, err
@@ -428,11 +478,15 @@ func loadSections(filename string, config map[string]interface{}, configDetails 
 	if err != nil {
 		return nil, err
 	}
-	cfg.Secrets, err = LoadSecrets(getSection(config, "secrets"), configDetails, opts.ResolvePaths)
+	cfg.Secrets, err = LoadSecrets(getSection(config, "secrets"))
 	if err != nil {
 		return nil, err
 	}
-	cfg.Configs, err = LoadConfigObjs(getSection(config, "configs"), configDetails, opts.ResolvePaths)
+	cfg.Configs, err = LoadConfigObjs(getSection(config, "configs"))
+	if err != nil {
+		return nil, err
+	}
+	cfg.Include, err = LoadIncludeConfig(getSequence(config, "include"))
 	if err != nil {
 		return nil, err
 	}
@@ -449,6 +503,14 @@ func getSection(config map[string]interface{}, key string) map[string]interface{
 		return make(map[string]interface{})
 	}
 	return section.(map[string]interface{})
+}
+
+func getSequence(config map[string]interface{}, key string) []interface{} {
+	section, ok := config[key]
+	if !ok {
+		return make([]interface{}, 0)
+	}
+	return section.([]interface{})
 }
 
 // ForbiddenPropertiesError is returned when there are properties in the Compose
@@ -515,6 +577,7 @@ func createTransformHook(additionalTransformers ...Transformer) mapstructure.Dec
 		reflect.TypeOf(types.ExtendsConfig{}):                    transformExtendsConfig,
 		reflect.TypeOf(types.DeviceRequest{}):                    transformServiceDeviceRequest,
 		reflect.TypeOf(types.SSHConfig{}):                        transformSSHConfig,
+		reflect.TypeOf(types.IncludeConfig{}):                    transformIncludeConfig,
 	}
 
 	for _, transformer := range additionalTransformers {
@@ -605,6 +668,7 @@ func LoadServices(filename string, servicesDict map[string]interface{}, workingD
 		for k, v := range x.(map[string]interface{}) {
 			servicesDict[k] = v
 		}
+		delete(servicesDict, extensions)
 	}
 
 	for name := range servicesDict {
@@ -633,7 +697,7 @@ func loadServiceWithExtends(filename, name string, servicesDict map[string]inter
 		target = map[string]interface{}{}
 	}
 
-	serviceConfig, err := LoadService(name, target.(map[string]interface{}), workingDir, lookupEnv, opts.ResolvePaths, opts.ConvertWindowsPaths)
+	serviceConfig, err := LoadService(name, target.(map[string]interface{}))
 	if err != nil {
 		return nil, err
 	}
@@ -671,21 +735,9 @@ func loadServiceWithExtends(filename, name string, servicesDict map[string]inter
 			// make the paths relative to `file` rather than `baseFilePath` so
 			// that the resulting paths won't be absolute if `file` isn't an
 			// absolute path.
+
 			baseFileParent := filepath.Dir(file)
-			if baseService.Build != nil {
-				baseService.Build.Context = resolveBuildContextPath(baseFileParent, baseService.Build.Context)
-			}
-
-			for i, vol := range baseService.Volumes {
-				if vol.Type != types.VolumeTypeBind {
-					continue
-				}
-				baseService.Volumes[i].Source = resolveMaybeUnixPath(vol.Source, baseFileParent, lookupEnv)
-			}
-
-			for i, envFile := range baseService.EnvFile {
-				baseService.EnvFile[i] = resolveMaybeUnixPath(envFile, baseFileParent, lookupEnv)
-			}
+			ResolveServiceRelativePaths(baseFileParent, baseService)
 		}
 
 		serviceConfig, err = _merge(baseService, serviceConfig)
@@ -698,22 +750,9 @@ func loadServiceWithExtends(filename, name string, servicesDict map[string]inter
 	return serviceConfig, nil
 }
 
-func resolveBuildContextPath(baseFileParent string, context string) string {
-	// Checks if the context is an HTTP(S) URL or a remote git repository URL
-	for _, prefix := range []string{"https://", "http://", "git://", "github.com/", "git@"} {
-		if strings.HasPrefix(context, prefix) {
-			return context
-		}
-	}
-
-	// Note that the Dockerfile is always defined relative to the
-	// build context, so there's no need to update the Dockerfile field.
-	return absPath(baseFileParent, context)
-}
-
 // LoadService produces a single ServiceConfig from a compose file Dict
 // the serviceDict is not validated if directly used. Use Load() to enable validation
-func LoadService(name string, serviceDict map[string]interface{}, workingDir string, lookupEnv template.Mapping, resolvePaths bool, convertPaths bool) (*types.ServiceConfig, error) {
+func LoadService(name string, serviceDict map[string]interface{}) (*types.ServiceConfig, error) {
 	serviceConfig := &types.ServiceConfig{
 		Scale: 1,
 	}
@@ -730,13 +769,6 @@ func LoadService(name string, serviceDict map[string]interface{}, workingDir str
 			return nil, errors.New(`invalid mount config for type "bind": field Source must not be empty`)
 		}
 
-		if resolvePaths || convertPaths {
-			volume = resolveVolumePath(volume, workingDir, lookupEnv)
-		}
-
-		if convertPaths {
-			volume = convertVolumePath(volume)
-		}
 		serviceConfig.Volumes[i] = volume
 	}
 
@@ -758,8 +790,8 @@ func convertVolumePath(volume types.ServiceVolumeConfig) types.ServiceVolumeConf
 	return volume
 }
 
-func resolveMaybeUnixPath(path string, workingDir string, lookupEnv template.Mapping) string {
-	filePath := expandUser(path, lookupEnv)
+func resolveMaybeUnixPath(workingDir string, path string) string {
+	filePath := expandUser(path)
 	// Check if source is an absolute path (either Unix or Windows), to
 	// handle a Windows client with a Unix daemon or vice-versa.
 	//
@@ -772,20 +804,8 @@ func resolveMaybeUnixPath(path string, workingDir string, lookupEnv template.Map
 	return filePath
 }
 
-func resolveVolumePath(volume types.ServiceVolumeConfig, workingDir string, lookupEnv template.Mapping) types.ServiceVolumeConfig {
-	volume.Source = resolveMaybeUnixPath(volume.Source, workingDir, lookupEnv)
-	return volume
-}
-
-func resolveSecretsPath(secret types.SecretConfig, workingDir string, lookupEnv template.Mapping) types.SecretConfig {
-	if !secret.External.External && secret.File != "" {
-		secret.File = resolveMaybeUnixPath(secret.File, workingDir, lookupEnv)
-	}
-	return secret
-}
-
 // TODO: make this more robust
-func expandUser(path string, lookupEnv template.Mapping) string {
+func expandUser(path string) string {
 	if strings.HasPrefix(path, "~") {
 		home, err := os.UserHomeDir()
 		if err != nil {
@@ -885,44 +905,39 @@ func LoadVolumes(source map[string]interface{}) (map[string]types.VolumeConfig, 
 
 // LoadSecrets produces a SecretConfig map from a compose file Dict
 // the source Dict is not validated if directly used. Use Load() to enable validation
-func LoadSecrets(source map[string]interface{}, details types.ConfigDetails, resolvePaths bool) (map[string]types.SecretConfig, error) {
+func LoadSecrets(source map[string]interface{}) (map[string]types.SecretConfig, error) {
 	secrets := make(map[string]types.SecretConfig)
 	if err := Transform(source, &secrets); err != nil {
 		return secrets, err
 	}
 	for name, secret := range secrets {
-		obj, err := loadFileObjectConfig(name, "secret", types.FileObjectConfig(secret), details, false)
+		obj, err := loadFileObjectConfig(name, "secret", types.FileObjectConfig(secret))
 		if err != nil {
 			return nil, err
 		}
-		secretConfig := types.SecretConfig(obj)
-		if resolvePaths {
-			secretConfig = resolveSecretsPath(secretConfig, details.WorkingDir, details.LookupEnv)
-		}
-		secrets[name] = secretConfig
+		secrets[name] = types.SecretConfig(obj)
 	}
 	return secrets, nil
 }
 
 // LoadConfigObjs produces a ConfigObjConfig map from a compose file Dict
 // the source Dict is not validated if directly used. Use Load() to enable validation
-func LoadConfigObjs(source map[string]interface{}, details types.ConfigDetails, resolvePaths bool) (map[string]types.ConfigObjConfig, error) {
+func LoadConfigObjs(source map[string]interface{}) (map[string]types.ConfigObjConfig, error) {
 	configs := make(map[string]types.ConfigObjConfig)
 	if err := Transform(source, &configs); err != nil {
 		return configs, err
 	}
 	for name, config := range configs {
-		obj, err := loadFileObjectConfig(name, "config", types.FileObjectConfig(config), details, resolvePaths)
+		obj, err := loadFileObjectConfig(name, "config", types.FileObjectConfig(config))
 		if err != nil {
 			return nil, err
 		}
-		configConfig := types.ConfigObjConfig(obj)
-		configs[name] = configConfig
+		configs[name] = types.ConfigObjConfig(obj)
 	}
 	return configs, nil
 }
 
-func loadFileObjectConfig(name string, objType string, obj types.FileObjectConfig, details types.ConfigDetails, resolvePaths bool) (types.FileObjectConfig, error) {
+func loadFileObjectConfig(name string, objType string, obj types.FileObjectConfig) (types.FileObjectConfig, error) {
 	// if "external: true"
 	switch {
 	case obj.External.External:
@@ -942,24 +957,9 @@ func loadFileObjectConfig(name string, objType string, obj types.FileObjectConfi
 		if obj.File != "" {
 			return obj, errors.Errorf("%[1]s %[2]s: %[1]s.driver and %[1]s.file conflict; only use %[1]s.driver", objType, name)
 		}
-	default:
-		if obj.File != "" && resolvePaths {
-			obj.File = absPath(details.WorkingDir, obj.File)
-		}
 	}
 
 	return obj, nil
-}
-
-func absPath(workingDir string, filePath string) string {
-	if strings.HasPrefix(filePath, "~") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, filePath[1:])
-	}
-	if filepath.IsAbs(filePath) {
-		return filePath
-	}
-	return filepath.Join(workingDir, filePath)
 }
 
 var transformMapStringString TransformerFunc = func(data interface{}) (interface{}, error) {
@@ -1088,13 +1088,24 @@ var transformDependsOnConfig TransformerFunc = func(data interface{}) (interface
 		for _, serviceIntf := range value {
 			service, ok := serviceIntf.(string)
 			if !ok {
-				return data, errors.Errorf("invalid type %T for service depends_on elementn, expected string", value)
+				return data, errors.Errorf("invalid type %T for service depends_on element, expected string", value)
 			}
-			transformed[service] = map[string]interface{}{"condition": types.ServiceConditionStarted}
+			transformed[service] = map[string]interface{}{"condition": types.ServiceConditionStarted, "required": true}
 		}
 		return transformed, nil
 	case map[string]interface{}:
-		return groupXFieldsIntoExtensions(data.(map[string]interface{})), nil
+		transformed := map[string]interface{}{}
+		for service, val := range value {
+			dependsConfigIntf, ok := val.(map[string]interface{})
+			if !ok {
+				return data, errors.Errorf("invalid type %T for service depends_on element", value)
+			}
+			if _, ok := dependsConfigIntf["required"]; !ok {
+				dependsConfigIntf["required"] = true
+			}
+			transformed[service] = dependsConfigIntf
+		}
+		return groupXFieldsIntoExtensions(transformed), nil
 	default:
 		return data, errors.Errorf("invalid type %T for service depends_on", value)
 	}
