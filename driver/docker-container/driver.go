@@ -22,6 +22,7 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	dockerclient "github.com/docker/docker/client"
+	"github.com/docker/docker/errdefs"
 	dockerarchive "github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/stdcopy"
@@ -148,14 +149,16 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 
 		}
 		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
-		if err != nil {
+		if err != nil && !errdefs.IsConflict(err) {
 			return err
 		}
-		if err := d.copyToContainer(ctx, d.InitConfig.Files); err != nil {
-			return err
-		}
-		if err := d.start(ctx, l); err != nil {
-			return err
+		if err == nil {
+			if err := d.copyToContainer(ctx, d.InitConfig.Files); err != nil {
+				return err
+			}
+			if err := d.start(ctx, l); err != nil {
+				return err
+			}
 		}
 		if err := d.wait(ctx, l); err != nil {
 			return err
