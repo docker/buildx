@@ -4,7 +4,9 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"os"
+	"strings"
 
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/platforms"
@@ -98,8 +100,6 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	defer cancel()
 
 	var nodes []builder.Node
-	var files []bake.File
-	var inp *bake.Input
 	var progressConsoleDesc, progressTextDesc string
 
 	// instance only needed for reading remote bake files or building
@@ -147,14 +147,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		}
 	}()
 
-	if url != "" {
-		files, inp, err = bake.ReadRemoteFiles(ctx, nodes, url, in.files, printer)
-	} else {
-		progress.Wrap("[internal] load local bake definitions", printer.Write, func(sub progress.SubLogger) error {
-			files, err = bake.ReadLocalFiles(in.files, dockerCli.In(), sub)
-			return nil
-		})
-	}
+	files, inp, err := readBakeFiles(ctx, nodes, url, in.files, dockerCli.In(), printer)
 	if err != nil {
 		return err
 	}
@@ -295,4 +288,43 @@ func saveLocalStateGroup(dockerCli command.Cli, ref string, lsg localstate.State
 		return err
 	}
 	return l.SaveGroup(ref, lsg)
+}
+
+func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names []string, stdin io.Reader, pw progress.Writer) (files []bake.File, inp *bake.Input, err error) {
+	var lnames []string
+	var rnames []string
+	for _, v := range names {
+		if strings.HasPrefix(v, "cwd://") {
+			lnames = append(lnames, strings.TrimPrefix(v, "cwd://"))
+		} else {
+			rnames = append(rnames, v)
+		}
+	}
+
+	if url != "" {
+		var rfiles []bake.File
+		rfiles, inp, err = bake.ReadRemoteFiles(ctx, nodes, url, rnames, pw)
+		if err != nil {
+			return nil, nil, err
+		}
+		files = append(files, rfiles...)
+	}
+
+	if len(lnames) > 0 || url == "" {
+		var lfiles []bake.File
+		progress.Wrap("[internal] load local bake definitions", pw.Write, func(sub progress.SubLogger) error {
+			if url != "" {
+				lfiles, err = bake.ReadLocalFiles(lnames, stdin, sub)
+			} else {
+				lfiles, err = bake.ReadLocalFiles(append(lnames, rnames...), stdin, sub)
+			}
+			return nil
+		})
+		if err != nil {
+			return nil, nil, err
+		}
+		files = append(files, lfiles...)
+	}
+
+	return
 }
