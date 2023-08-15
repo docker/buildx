@@ -9,21 +9,21 @@ Extended build capabilities with BuildKit
 
 ### Subcommands
 
-| Name                                   | Description                            |
-|:---------------------------------------|:---------------------------------------|
-| [`bake`](buildx_bake.md)               | Build from a file                      |
-| [`build`](buildx_build.md)             | Start a build                          |
-| [`create`](buildx_create.md)           | Create a new builder instance          |
-| [`debug-shell`](buildx_debug-shell.md) | Start a monitor                        |
-| [`du`](buildx_du.md)                   | Disk usage                             |
-| [`imagetools`](buildx_imagetools.md)   | Commands to work on images in registry |
-| [`inspect`](buildx_inspect.md)         | Inspect current builder instance       |
-| [`ls`](buildx_ls.md)                   | List builder instances                 |
-| [`prune`](buildx_prune.md)             | Remove build cache                     |
-| [`rm`](buildx_rm.md)                   | Remove a builder instance              |
-| [`stop`](buildx_stop.md)               | Stop builder instance                  |
-| [`use`](buildx_use.md)                 | Set the current builder instance       |
-| [`version`](buildx_version.md)         | Show buildx version information        |
+| Name                                 | Description                            |
+|:-------------------------------------|:---------------------------------------|
+| [`bake`](buildx_bake.md)             | Build from a file                      |
+| [`build`](buildx_build.md)           | Start a build                          |
+| [`create`](buildx_create.md)         | Create a new builder instance          |
+| [`debug`](buildx_debug.md)           | Start debugger                         |
+| [`du`](buildx_du.md)                 | Disk usage                             |
+| [`imagetools`](buildx_imagetools.md) | Commands to work on images in registry |
+| [`inspect`](buildx_inspect.md)       | Inspect current builder instance       |
+| [`ls`](buildx_ls.md)                 | List builder instances                 |
+| [`prune`](buildx_prune.md)           | Remove build cache                     |
+| [`rm`](buildx_rm.md)                 | Remove a builder instance              |
+| [`stop`](buildx_stop.md)             | Stop builder instance                  |
+| [`use`](buildx_use.md)               | Set the current builder instance       |
+| [`version`](buildx_version.md)       | Show buildx version information        |
 
 
 ### Options
