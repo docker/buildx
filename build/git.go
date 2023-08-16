@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/util/gitutil"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -49,7 +50,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 		wd, _ = filepath.Abs(filepath.Join(cwd, contextPath))
 	}
 
-	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
+	gitc, err := gitutil.New(bkgitutil.WithDir(wd))
 	if err != nil {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
 			return res, errors.New("buildx: git was not found in the system. Current commit information was not captured by the build")
@@ -57,14 +58,14 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 		return
 	}
 
-	if !gitc.IsInsideWorkTree() {
+	if !gitc.IsInsideWorkTree(ctx) {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
 			return res, errors.New("buildx: failed to read current commit information with git rev-parse --is-inside-work-tree")
 		}
 		return res, nil
 	}
 
-	if sha, err := gitc.FullCommit(); err != nil && !gitutil.IsUnknownRevision(err) {
+	if sha, err := gitc.FullCommit(ctx); err != nil && !gitutil.IsUnknownRevision(err) {
 		return res, errors.Wrapf(err, "buildx: failed to get git commit")
 	} else if sha != "" {
 		checkDirty := false
@@ -73,7 +74,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 				checkDirty = v
 			}
 		}
-		if checkDirty && gitc.IsDirty() {
+		if checkDirty && gitc.IsDirty(ctx) {
 			sha += "-dirty"
 		}
 		if setGitLabels {
@@ -84,7 +85,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 		}
 	}
 
-	if rurl, err := gitc.RemoteURL(); err == nil && rurl != "" {
+	if rurl, err := gitc.RemoteURL(ctx); err == nil && rurl != "" {
 		if setGitLabels {
 			res["label:"+specs.AnnotationSource] = rurl
 		}
@@ -94,7 +95,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	}
 
 	if setGitLabels {
-		if root, err := gitc.RootDir(); err != nil {
+		if root, err := gitc.WorkTree(ctx); err != nil {
 			return res, errors.Wrapf(err, "buildx: failed to get git root dir")
 		} else if root != "" {
 			if dockerfilePath == "" {

@@ -1,111 +1,73 @@
 package gitutil
 
 import (
-	"bytes"
 	"context"
 	"net/url"
-	"os"
-	"os/exec"
-	"path/filepath"
 	"strings"
 
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
 
-// Git represents an active git object
-type Git struct {
-	ctx     context.Context
-	wd      string
-	gitpath string
-}
-
-// Option provides a variadic option for configuring the git client.
-type Option func(b *Git)
-
-// WithContext sets context.
-func WithContext(ctx context.Context) Option {
-	return func(b *Git) {
-		b.ctx = ctx
-	}
-}
-
-// WithWorkingDir sets working directory.
-func WithWorkingDir(wd string) Option {
-	return func(b *Git) {
-		b.wd = wd
-	}
+// GitCLI represents an active git object
+type GitCLI struct {
+	bkgitutil.GitCLI
 }
 
 // New initializes a new git client
-func New(opts ...Option) (*Git, error) {
-	var err error
-	c := &Git{
-		ctx: context.Background(),
+func New(opts ...bkgitutil.Option) (*GitCLI, error) {
+	cli, err := bkgitutil.NewGitCLI(opts...)
+	if err != nil {
+		return nil, err
 	}
 
-	for _, opt := range opts {
-		opt(c)
-	}
-
-	c.gitpath, err = gitPath(c.wd)
+	gitpath, err := gitPath(cli.Dir())
 	if err != nil {
 		return nil, errors.New("git not found in PATH")
 	}
-
-	return c, nil
+	cli = cli.New(bkgitutil.WithGitBinary(gitpath))
+	return &GitCLI{*cli}, nil
 }
 
-func (c *Git) IsInsideWorkTree() bool {
-	out, err := c.clean(c.run("rev-parse", "--is-inside-work-tree"))
+func (cli *GitCLI) IsInsideWorkTree(ctx context.Context) bool {
+	out, err := cli.clean(cli.Run(ctx, "rev-parse", "--is-inside-work-tree"))
 	return out == "true" && err == nil
 }
 
-func (c *Git) IsDirty() bool {
-	out, err := c.run("status", "--porcelain", "--ignored")
-	return strings.TrimSpace(out) != "" || err != nil
+func (cli *GitCLI) IsDirty(ctx context.Context) bool {
+	out, err := cli.Run(ctx, "status", "--porcelain", "--ignored")
+	return strings.TrimSpace(string(out)) != "" || err != nil
 }
 
-func (c *Git) RootDir() (string, error) {
-	return c.clean(c.run("rev-parse", "--show-toplevel"))
-}
-
-func (c *Git) GitDir() (string, error) {
-	dir, err := c.RootDir()
-	if err != nil {
-		return "", err
-	}
-	return filepath.Join(dir, ".git"), nil
-}
-
-func (c *Git) RemoteURL() (string, error) {
+func (cli *GitCLI) RemoteURL(ctx context.Context) (string, error) {
 	// Try to get the remote URL from the origin remote first
-	if ru, err := c.clean(c.run("remote", "get-url", "origin")); err == nil && ru != "" {
+	if ru, err := cli.clean(cli.Run(ctx, "remote", "get-url", "origin")); err == nil && ru != "" {
 		return stripCredentials(ru), nil
 	}
 	// If that fails, try to get the remote URL from the upstream remote
-	if ru, err := c.clean(c.run("remote", "get-url", "upstream")); err == nil && ru != "" {
+	if ru, err := cli.clean(cli.Run(ctx, "remote", "get-url", "upstream")); err == nil && ru != "" {
 		return stripCredentials(ru), nil
 	}
 	return "", errors.New("no remote URL found for either origin or upstream")
 }
 
-func (c *Git) FullCommit() (string, error) {
-	return c.clean(c.run("show", "--format=%H", "HEAD", "--quiet", "--"))
+func (cli *GitCLI) FullCommit(ctx context.Context) (string, error) {
+	return cli.clean(cli.Run(ctx, "show", "--format=%H", "HEAD", "--quiet", "--"))
 }
 
-func (c *Git) ShortCommit() (string, error) {
-	return c.clean(c.run("show", "--format=%h", "HEAD", "--quiet", "--"))
+func (cli *GitCLI) ShortCommit(ctx context.Context) (string, error) {
+	return cli.clean(cli.Run(ctx, "show", "--format=%h", "HEAD", "--quiet", "--"))
 }
 
-func (c *Git) Tag() (string, error) {
+func (cli *GitCLI) Tag(ctx context.Context) (string, error) {
 	var tag string
 	var err error
 	for _, fn := range []func() (string, error){
 		func() (string, error) {
-			return c.clean(c.run("tag", "--points-at", "HEAD", "--sort", "-version:creatordate"))
+			return cli.clean(cli.Run(ctx, "tag", "--points-at", "HEAD", "--sort", "-version:creatordate"))
 		},
 		func() (string, error) {
-			return c.clean(c.run("describe", "--tags", "--abbrev=0"))
+			return cli.clean(cli.Run(ctx, "describe", "--tags", "--abbrev=0"))
 		},
 	} {
 		tag, err = fn()
@@ -116,32 +78,8 @@ func (c *Git) Tag() (string, error) {
 	return tag, err
 }
 
-func (c *Git) run(args ...string) (string, error) {
-	var extraArgs = []string{
-		"-c", "log.showSignature=false",
-	}
-
-	args = append(extraArgs, args...)
-	cmd := exec.CommandContext(c.ctx, c.gitpath, args...)
-	if c.wd != "" {
-		cmd.Dir = c.wd
-	}
-
-	// Override the locale to ensure consistent output
-	cmd.Env = append(os.Environ(), "LC_ALL=C")
-
-	stdout := bytes.Buffer{}
-	stderr := bytes.Buffer{}
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-
-	if err := cmd.Run(); err != nil {
-		return "", errors.New(stderr.String())
-	}
-	return stdout.String(), nil
-}
-
-func (c *Git) clean(out string, err error) (string, error) {
+func (cli *GitCLI) clean(dt []byte, err error) (string, error) {
+	out := string(dt)
 	out = strings.ReplaceAll(strings.Split(out, "\n")[0], "'", "")
 	if err != nil {
 		err = errors.New(strings.TrimSuffix(err.Error(), "\n"))
