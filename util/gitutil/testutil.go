@@ -1,6 +1,7 @@
 package gitutil
 
 import (
+	"context"
 	"os"
 	"strings"
 	"testing"
@@ -8,7 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func GitInit(c *Git, tb testing.TB) {
+func GitInit(c *GitCLI, tb testing.TB) {
 	tb.Helper()
 	out, err := fakeGit(c, "init")
 	require.NoError(tb, err)
@@ -18,35 +19,35 @@ func GitInit(c *Git, tb testing.TB) {
 	_, _ = fakeGit(c, "branch", "-D", "master")
 }
 
-func GitCommit(c *Git, tb testing.TB, msg string) {
+func GitCommit(c *GitCLI, tb testing.TB, msg string) {
 	tb.Helper()
 	out, err := fakeGit(c, "commit", "--allow-empty", "-m", msg)
 	require.NoError(tb, err)
 	require.Contains(tb, out, "main", msg)
 }
 
-func GitTag(c *Git, tb testing.TB, tag string) {
+func GitTag(c *GitCLI, tb testing.TB, tag string) {
 	tb.Helper()
 	out, err := fakeGit(c, "tag", tag)
 	require.NoError(tb, err)
 	require.Empty(tb, out)
 }
 
-func GitCheckoutBranch(c *Git, tb testing.TB, name string) {
+func GitCheckoutBranch(c *GitCLI, tb testing.TB, name string) {
 	tb.Helper()
 	out, err := fakeGit(c, "checkout", "-b", name)
 	require.NoError(tb, err)
 	require.Empty(tb, out)
 }
 
-func GitAdd(c *Git, tb testing.TB, files ...string) {
+func GitAdd(c *GitCLI, tb testing.TB, files ...string) {
 	tb.Helper()
 	args := append([]string{"add"}, files...)
 	_, err := fakeGit(c, args...)
 	require.NoError(tb, err)
 }
 
-func GitSetRemote(c *Git, tb testing.TB, name string, url string) {
+func GitSetRemote(c *GitCLI, tb testing.TB, name string, url string) {
 	tb.Helper()
 	_, err := fakeGit(c, "remote", "add", name, url)
 	require.NoError(tb, err)
@@ -64,7 +65,7 @@ func Mktmp(tb testing.TB) string {
 	return folder
 }
 
-func fakeGit(c *Git, args ...string) (string, error) {
+func fakeGit(c *GitCLI, args ...string) (string, error) {
 	allArgs := []string{
 		"-c", "user.name=buildx",
 		"-c", "user.email=buildx@docker.com",
@@ -73,7 +74,7 @@ func fakeGit(c *Git, args ...string) (string, error) {
 		"-c", "log.showSignature=false",
 	}
 	allArgs = append(allArgs, args...)
-	return c.clean(c.run(allArgs...))
+	return c.clean(c.Run(context.TODO(), allArgs...))
 }
 
 func IsAmbiguousArgument(err error) bool {

@@ -10,7 +10,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func GitServeHTTP(c *Git, t testing.TB) (url string) {
+func GitServeHTTP(c *GitCLI, t testing.TB) (url string) {
 	t.Helper()
 	gitUpdateServerInfo(c, t)
 	ctx, cancel := context.WithCancel(context.TODO())
@@ -19,7 +19,7 @@ func GitServeHTTP(c *Git, t testing.TB) (url string) {
 	done := make(chan struct{})
 
 	name := "test.git"
-	dir, err := c.GitDir()
+	dir, err := c.GitDir(context.TODO())
 	if err != nil {
 		cancel()
 	}
@@ -55,7 +55,7 @@ func GitServeHTTP(c *Git, t testing.TB) (url string) {
 	return fmt.Sprintf("http://%s/%s", addr, name)
 }
 
-func gitUpdateServerInfo(c *Git, tb testing.TB) {
+func gitUpdateServerInfo(c *GitCLI, tb testing.TB) {
 	tb.Helper()
 	_, err := fakeGit(c, "update-server-info")
 	require.NoError(tb, err)
