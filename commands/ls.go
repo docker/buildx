@@ -49,7 +49,7 @@ func runLs(dockerCli command.Cli, in lsOptions) error {
 	for _, b := range builders {
 		func(b *builder.Builder) {
 			eg.Go(func() error {
-				_, _ = b.LoadNodes(timeoutCtx, true)
+				_, _ = b.LoadNodes(timeoutCtx, builder.WithData())
 				return nil
 			})
 		}(b)

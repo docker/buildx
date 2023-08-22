@@ -252,7 +252,7 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	if err != nil {
 		return err
 	}
-	_, err = b.LoadNodes(ctx, false)
+	_, err = b.LoadNodes(ctx)
 	if err != nil {
 		return err
 	}

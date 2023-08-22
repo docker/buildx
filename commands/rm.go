@@ -55,7 +55,7 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		return err
 	}
 
-	nodes, err := b.LoadNodes(ctx, false)
+	nodes, err := b.LoadNodes(ctx)
 	if err != nil {
 		return err
 	}
@@ -139,7 +139,7 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 	for _, b := range builders {
 		func(b *builder.Builder) {
 			eg.Go(func() error {
-				nodes, err := b.LoadNodes(timeoutCtx, true)
+				nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())
 				if err != nil {
 					return errors.Wrapf(err, "cannot load %s", b.Name)
 				}
