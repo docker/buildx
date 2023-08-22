@@ -49,7 +49,7 @@ func New(opts ...Option) (*Git, error) {
 
 	c.gitpath, err = gitPath(c.wd)
 	if err != nil {
-		return nil, errors.New("git not found in PATH")
+		return nil, err
 	}
 
 	return c, nil

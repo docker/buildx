@@ -51,21 +51,21 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 
 	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
 	if err != nil {
-		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
-			return res, errors.New("buildx: git was not found in the system. Current commit information was not captured by the build")
+		if st, err1 := os.Stat(path.Join(wd, ".git")); err1 == nil && st.IsDir() {
+			return res, errors.Wrap(err, "git was not found in the system")
 		}
 		return
 	}
 
 	if !gitc.IsInsideWorkTree() {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
-			return res, errors.New("buildx: failed to read current commit information with git rev-parse --is-inside-work-tree")
+			return res, errors.New("failed to read current commit information with git rev-parse --is-inside-work-tree")
 		}
 		return res, nil
 	}
 
 	if sha, err := gitc.FullCommit(); err != nil && !gitutil.IsUnknownRevision(err) {
-		return res, errors.Wrapf(err, "buildx: failed to get git commit")
+		return res, errors.Wrap(err, "failed to get git commit")
 	} else if sha != "" {
 		checkDirty := false
 		if v, ok := os.LookupEnv("BUILDX_GIT_CHECK_DIRTY"); ok {
@@ -95,7 +95,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 
 	if setGitLabels {
 		if root, err := gitc.RootDir(); err != nil {
-			return res, errors.Wrapf(err, "buildx: failed to get git root dir")
+			return res, errors.Wrap(err, "failed to get git root dir")
 		} else if root != "" {
 			if dockerfilePath == "" {
 				dockerfilePath = filepath.Join(wd, "Dockerfile")

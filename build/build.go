@@ -737,7 +737,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		hasMobyDriver := false
 		gitattrs, err := getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
 		if err != nil {
-			logrus.Warn(err)
+			logrus.WithError(err).Warn("current commit information was not captured by the build")
 		}
 		for i, np := range m[k] {
 			node := nodes[np.driverIndex]
