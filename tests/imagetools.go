@@ -5,6 +5,7 @@ import (
 	"os/exec"
 	"testing"
 
+	"github.com/containerd/containerd/images"
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -14,8 +15,118 @@ import (
 )
 
 var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
+	testImagetoolsCopyManifest,
+	testImagetoolsCopyIndex,
 	testImagetoolsInspectAndFilter,
 	testImagetoolsAnnotation,
+}
+
+func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker-container" {
+		t.Skip("imagetools tests are not driver specific and only run on docker-container")
+	}
+
+	dir := createDockerfile(t)
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/imtools-manifest:latest"
+
+	out, err := buildCmd(sb, withArgs("-t", target, "--push", "--platform=linux/amd64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var mfst ocispecs.Manifest
+	err = json.Unmarshal(dt, &mfst)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2Manifest, mfst.MediaType)
+
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+	target2 := registry2 + "/buildx/imtools2-manifest:latest"
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target2, target))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx2 ocispecs.Index
+	err = json.Unmarshal(dt, &idx2)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx2.MediaType)
+	require.Equal(t, 1, len(idx2.Manifests))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2+"@"+string(idx2.Manifests[0].Digest), "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var mfst2 ocispecs.Manifest
+	err = json.Unmarshal(dt, &mfst2)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2Manifest, mfst2.MediaType)
+
+	require.Equal(t, mfst.Config.Digest, mfst2.Config.Digest)
+	require.Equal(t, len(mfst.Layers), len(mfst2.Layers))
+	for i := range mfst.Layers {
+		require.Equal(t, mfst.Layers[i].Digest, mfst2.Layers[i].Digest)
+	}
+}
+
+func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker-container" {
+		t.Skip("imagetools tests are not driver specific and only run on docker-container")
+	}
+
+	dir := createDockerfile(t)
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/imtools:latest"
+
+	out, err := buildCmd(sb, withArgs("-t", target, "--push", "--platform=linux/amd64,linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx ocispecs.Index
+	err = json.Unmarshal(dt, &idx)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx.MediaType)
+	require.Equal(t, 2, len(idx.Manifests))
+
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+	target2 := registry2 + "/buildx/imtools2:latest"
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target2, target))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx2 ocispecs.Index
+	err = json.Unmarshal(dt, &idx2)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx2.MediaType)
+
+	require.Equal(t, len(idx.Manifests), len(idx2.Manifests))
+	for i := range idx.Manifests {
+		require.Equal(t, idx.Manifests[i].Digest, idx2.Manifests[i].Digest)
+	}
 }
 
 func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
