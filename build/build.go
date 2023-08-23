@@ -1332,6 +1332,10 @@ func LoadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 	case IsRemoteURL(inp.ContextPath):
 		if inp.DockerfilePath == "-" {
 			dockerfileReader = inp.InStream
+		} else if filepath.IsAbs(inp.DockerfilePath) {
+			dockerfileDir = filepath.Dir(inp.DockerfilePath)
+			dockerfileName = filepath.Base(inp.DockerfilePath)
+			target.FrontendAttrs["dockerfilekey"] = "dockerfile"
 		}
 		target.FrontendAttrs["context"] = inp.ContextPath
 	default:

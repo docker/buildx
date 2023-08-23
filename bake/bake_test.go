@@ -3,10 +3,12 @@ package bake
 import (
 	"context"
 	"os"
+	"path/filepath"
 	"sort"
 	"strings"
 	"testing"
 
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -379,7 +381,7 @@ services:
 	require.Equal(t, []string{"web_app"}, g["default"].Targets)
 }
 
-func TestHCLCwdPrefix(t *testing.T) {
+func TestHCLContextCwdPrefix(t *testing.T) {
 	fp := File{
 		Name: "docker-bake.hcl",
 		Data: []byte(
@@ -400,11 +402,41 @@ func TestHCLCwdPrefix(t *testing.T) {
 
 	require.Equal(t, 1, len(m))
 	require.Contains(t, m, "app")
-	require.Equal(t, "test", *m["app"].Dockerfile)
-	require.Equal(t, "foo", *m["app"].Context)
+	assert.Equal(t, "test", *m["app"].Dockerfile)
+	assert.Equal(t, "foo", *m["app"].Context)
+	assert.Equal(t, "foo/test", bo["app"].Inputs.DockerfilePath)
+	assert.Equal(t, "foo", bo["app"].Inputs.ContextPath)
+}
 
-	require.Equal(t, "foo/test", bo["app"].Inputs.DockerfilePath)
-	require.Equal(t, "foo", bo["app"].Inputs.ContextPath)
+func TestHCLDockerfileCwdPrefix(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				context = "."
+				dockerfile = "cwd://Dockerfile.app"
+			}`),
+	}
+	ctx := context.TODO()
+
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"app"}, g["default"].Targets)
+
+	require.Equal(t, 1, len(m))
+	require.Contains(t, m, "app")
+	assert.Equal(t, "cwd://Dockerfile.app", *m["app"].Dockerfile)
+	assert.Equal(t, ".", *m["app"].Context)
+	assert.Equal(t, filepath.Join(cwd, "Dockerfile.app"), bo["app"].Inputs.DockerfilePath)
+	assert.Equal(t, ".", bo["app"].Inputs.ContextPath)
 }
 
 func TestOverrideMerge(t *testing.T) {

@@ -1044,6 +1044,9 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.Dockerfile != nil {
 		dockerfilePath = *t.Dockerfile
 	}
+	if !strings.HasPrefix(dockerfilePath, "cwd://") {
+		dockerfilePath = path.Clean(dockerfilePath)
+	}
 
 	bi := build.Inputs{
 		ContextPath:    contextPath,
@@ -1054,6 +1057,20 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		bi.DockerfileInline = *t.DockerfileInline
 	}
 	updateContext(&bi, inp)
+	if strings.HasPrefix(bi.DockerfilePath, "cwd://") {
+		// If Dockerfile is local for a remote invocation, we first check if
+		// it's not outside the working directory and then resolve it to an
+		// absolute path.
+		bi.DockerfilePath = path.Clean(strings.TrimPrefix(bi.DockerfilePath, "cwd://"))
+		if err := checkPath(bi.DockerfilePath); err != nil {
+			return nil, err
+		}
+		var err error
+		bi.DockerfilePath, err = filepath.Abs(bi.DockerfilePath)
+		if err != nil {
+			return nil, err
+		}
+	}
 	if strings.HasPrefix(bi.ContextPath, "cwd://") {
 		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
 	}

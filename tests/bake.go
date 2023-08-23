@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"os"
 	"path/filepath"
 	"testing"
 
@@ -25,6 +26,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteContextSubdir,
 	testBakeRemoteCmdContextEscapeRoot,
 	testBakeRemoteCmdContextEscapeRelative,
+	testBakeRemoteDockerfileCwd,
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -286,4 +288,63 @@ EOT
 	)
 	require.NoError(t, err, out)
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBakeRemoteDockerfileCwd(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	context = "."
+	dockerfile = "cwd://Dockerfile.app"
+}
+`)
+	dockerfile := []byte(`
+FROM scratch
+COPY bar /bar
+	`)
+	dockerfileApp := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("bar", []byte("bar"), 0600),
+	)
+	dirSrc := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile.app", dockerfileApp, 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "docker-bake.hcl")
+	gitutil.GitAdd(git, t, "Dockerfile")
+	gitutil.GitAdd(git, t, "foo")
+	gitutil.GitAdd(git, t, "bar")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dirSrc),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+	)
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
+
+	err = os.Remove(filepath.Join(dirSrc, "Dockerfile.app"))
+	require.NoError(t, err)
+
+	out, err = bakeCmd(
+		sb,
+		withDir(dirSrc),
+		withArgs(addr, "--set", "*.output=type=cacheonly"),
+	)
+	require.Error(t, err, out)
 }
