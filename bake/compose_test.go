@@ -22,7 +22,7 @@ services:
     build:
       context: ./dir
       additional_contexts:
-        foo: /bar
+        foo: ./bar
       dockerfile: Dockerfile-alternate
       network:
         none
@@ -49,6 +49,9 @@ secrets:
     file: /root/.aws/credentials
 `)
 
+	cwd, err := os.Getwd()
+	require.NoError(t, err)
+
 	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 
@@ -62,12 +65,12 @@ secrets:
 		return c.Targets[i].Name < c.Targets[j].Name
 	})
 	require.Equal(t, "db", c.Targets[0].Name)
-	require.Equal(t, "/src/bake/db", *c.Targets[0].Context)
+	require.Equal(t, filepath.Join(cwd, "db"), *c.Targets[0].Context)
 	require.Equal(t, []string{"docker.io/tonistiigi/db"}, c.Targets[0].Tags)
 
 	require.Equal(t, "webapp", c.Targets[1].Name)
-	require.Equal(t, "/src/bake/dir", *c.Targets[1].Context)
-	require.Equal(t, map[string]string{"foo": "/bar"}, c.Targets[1].Contexts)
+	require.Equal(t, filepath.Join(cwd, "dir"), *c.Targets[1].Context)
+	require.Equal(t, map[string]string{"foo": filepath.Join(cwd, "bar")}, c.Targets[1].Contexts)
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[1].Dockerfile)
 	require.Equal(t, 1, len(c.Targets[1].Args))
 	require.Equal(t, ptrstr("123"), c.Targets[1].Args["buildno"])
@@ -80,7 +83,7 @@ secrets:
 	}, c.Targets[1].Secrets)
 
 	require.Equal(t, "webapp2", c.Targets[2].Name)
-	require.Equal(t, "/src/bake/dir", *c.Targets[2].Context)
+	require.Equal(t, filepath.Join(cwd, "dir"), *c.Targets[2].Context)
 	require.Equal(t, "FROM alpine\n", *c.Targets[2].DockerfileInline)
 }
 
