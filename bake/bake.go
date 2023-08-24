@@ -587,9 +587,9 @@ type Target struct {
 	Name string `json:"-" hcl:"name,label" cty:"name"`
 
 	// Inherits is the only field that cannot be overridden with --set
-	Attest   []string `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
 
+	Attest           []string           `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
 	Context          *string            `json:"context,omitempty" hcl:"context,optional" cty:"context"`
 	Contexts         map[string]string  `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
 	Dockerfile       *string            `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
