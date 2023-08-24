@@ -5,7 +5,6 @@ import (
 	"context"
 	"encoding/json"
 	"net/url"
-	"regexp"
 	"strings"
 
 	"github.com/containerd/containerd/content"
@@ -14,6 +13,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/distribution/reference"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/opencontainers/go-digest"
@@ -28,7 +28,7 @@ type Source struct {
 	Ref  reference.Named
 }
 
-func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[string]string) ([]byte, ocispec.Descriptor, error) {
+func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann []string) ([]byte, ocispec.Descriptor, error) {
 	eg, ctx := errgroup.WithContext(ctx)
 
 	dts := make([][]byte, len(srcs))
@@ -143,7 +143,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[string]s
 	// annotations are only allowed on OCI indexes
 	indexAnnotation := make(map[string]string)
 	if mt == ocispec.MediaTypeImageIndex {
-		annotations, err := parseAnnotations(ann)
+		annotations, err := buildflags.ParseAnnotations(ann)
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
 		}
@@ -296,41 +296,4 @@ func detectMediaType(dt []byte) (string, error) {
 	}
 
 	return images.MediaTypeDockerSchema2ManifestList, nil
-}
-
-func parseAnnotations(ann map[string]string) (map[exptypes.AnnotationKey]string, error) {
-	// TODO: use buildkit's annotation parser once it supports setting custom prefix and ":" separator
-	annotationRegexp := regexp.MustCompile(`^(?:([a-z-]+)(?:\[([A-Za-z0-9_/-]+)\])?:)?(\S+)$`)
-	annotations := make(map[exptypes.AnnotationKey]string)
-	for k, v := range ann {
-		groups := annotationRegexp.FindStringSubmatch(k)
-		if groups == nil {
-			return nil, errors.Errorf("invalid annotation format, expected <type>:<key>=<value>, got %q", k)
-		}
-
-		typ, platform, key := groups[1], groups[2], groups[3]
-		switch typ {
-		case "":
-		case exptypes.AnnotationIndex, exptypes.AnnotationIndexDescriptor, exptypes.AnnotationManifest, exptypes.AnnotationManifestDescriptor:
-		default:
-			return nil, errors.Errorf("unknown annotation type %q", typ)
-		}
-
-		var ociPlatform *ocispec.Platform
-		if platform != "" {
-			p, err := platforms.Parse(platform)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid platform %q", platform)
-			}
-			ociPlatform = &p
-		}
-
-		ak := exptypes.AnnotationKey{
-			Type:     typ,
-			Platform: ociPlatform,
-			Key:      key,
-		}
-		annotations[ak] = v
-	}
-	return annotations, nil
 }

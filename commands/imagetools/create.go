@@ -83,11 +83,6 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		return errors.Errorf("no repositories specified, please set a reference in tag or source")
 	}
 
-	ann, err := parseAnnotations(in.annotations)
-	if err != nil {
-		return err
-	}
-
 	var defaultRepo *string
 	if len(repos) == 1 {
 		for repo := range repos {
@@ -160,7 +155,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 		}
 	}
 
-	dt, desc, err := r.Combine(ctx, srcs, ann)
+	dt, desc, err := r.Combine(ctx, srcs, in.annotations)
 	if err != nil {
 		return err
 	}
@@ -268,18 +263,6 @@ func parseSource(in string) (*imagetools.Source, error) {
 		return nil, errors.WithStack(err)
 	}
 	return &s, nil
-}
-
-func parseAnnotations(in []string) (map[string]string, error) {
-	out := make(map[string]string)
-	for _, i := range in {
-		kv := strings.SplitN(i, "=", 2)
-		if len(kv) != 2 {
-			return nil, errors.Errorf("invalid annotation %q, expected key=value", in)
-		}
-		out[kv[0]] = kv[1]
-	}
-	return out, nil
 }
 
 func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
