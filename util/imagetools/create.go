@@ -147,17 +147,15 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[string]s
 		if err != nil {
 			return nil, ocispec.Descriptor{}, err
 		}
-		if len(annotations[exptypes.AnnotationIndex]) > 0 {
-			for k, v := range annotations[exptypes.AnnotationIndex] {
+		for k, v := range annotations {
+			switch k.Type {
+			case exptypes.AnnotationIndex:
 				indexAnnotation[k.Key] = v
-			}
-		}
-		if len(annotations[exptypes.AnnotationManifestDescriptor]) > 0 {
-			for i := 0; i < len(newDescs); i++ {
-				if newDescs[i].Annotations == nil {
-					newDescs[i].Annotations = map[string]string{}
-				}
-				for k, v := range annotations[exptypes.AnnotationManifestDescriptor] {
+			case exptypes.AnnotationManifestDescriptor:
+				for i := 0; i < len(newDescs); i++ {
+					if newDescs[i].Annotations == nil {
+						newDescs[i].Annotations = map[string]string{}
+					}
 					if k.Platform == nil || k.PlatformString() == platforms.Format(*newDescs[i].Platform) {
 						newDescs[i].Annotations[k.Key] = v
 					}
@@ -296,11 +294,10 @@ func detectMediaType(dt []byte) (string, error) {
 	return images.MediaTypeDockerSchema2ManifestList, nil
 }
 
-func parseAnnotations(ann map[string]string) (map[string]map[exptypes.AnnotationKey]string, error) {
+func parseAnnotations(ann map[string]string) (map[exptypes.AnnotationKey]string, error) {
 	// TODO: use buildkit's annotation parser once it supports setting custom prefix and ":" separator
 	annotationRegexp := regexp.MustCompile(`^([a-z-]+)(?:\[([A-Za-z0-9_/-]+)\])?:(\S+)$`)
-	indexAnnotations := make(map[exptypes.AnnotationKey]string)
-	manifestDescriptorAnnotations := make(map[exptypes.AnnotationKey]string)
+	annotations := make(map[exptypes.AnnotationKey]string)
 	for k, v := range ann {
 		groups := annotationRegexp.FindStringSubmatch(k)
 		if groups == nil {
@@ -323,14 +320,14 @@ func parseAnnotations(ann map[string]string) (map[string]map[exptypes.Annotation
 				Platform: ociPlatform,
 				Key:      key,
 			}
-			indexAnnotations[ak] = v
+			annotations[ak] = v
 		case exptypes.AnnotationManifestDescriptor:
 			ak := exptypes.AnnotationKey{
 				Type:     typ,
 				Platform: ociPlatform,
 				Key:      key,
 			}
-			manifestDescriptorAnnotations[ak] = v
+			annotations[ak] = v
 		case exptypes.AnnotationManifest:
 			return nil, errors.Errorf("%q annotations are not supported yet", typ)
 		case exptypes.AnnotationIndexDescriptor:
@@ -339,8 +336,5 @@ func parseAnnotations(ann map[string]string) (map[string]map[exptypes.Annotation
 			return nil, errors.Errorf("unknown annotation type %q", typ)
 		}
 	}
-	return map[string]map[exptypes.AnnotationKey]string{
-		exptypes.AnnotationIndex:              indexAnnotations,
-		exptypes.AnnotationManifestDescriptor: manifestDescriptorAnnotations,
-	}, nil
+	return annotations, nil
 }
