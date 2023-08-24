@@ -1460,3 +1460,31 @@ func TestAttestDuplicates(t *testing.T) {
 		"provenance": ptrstr("type=provenance,mode=max"),
 	}, opts["default"].Attests)
 }
+
+func TestAnnotations(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				output = ["type=image,name=foo"]
+				annotations = ["manifest[linux/amd64]:foo=bar"]
+			}`),
+	}
+	ctx := context.TODO()
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"app"}, g["default"].Targets)
+
+	require.Equal(t, 1, len(m))
+	require.Contains(t, m, "app")
+	require.Equal(t, "type=image,name=foo", m["app"].Outputs[0])
+	require.Equal(t, "manifest[linux/amd64]:foo=bar", m["app"].Annotations[0])
+
+	require.Len(t, bo["app"].Exports, 1)
+	require.Equal(t, "bar", bo["app"].Exports[0].Attrs["annotation-manifest[linux/amd64].foo"])
+}

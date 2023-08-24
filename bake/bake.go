@@ -589,6 +589,7 @@ type Target struct {
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
 
+	Annotations      []string           `json:"annotations,omitempty" hcl:"annotations,optional" cty:"annotations"`
 	Attest           []string           `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
 	Context          *string            `json:"context,omitempty" hcl:"context,optional" cty:"context"`
 	Contexts         map[string]string  `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
@@ -620,6 +621,7 @@ var _ hclparser.WithEvalContexts = &Group{}
 var _ hclparser.WithGetName = &Group{}
 
 func (t *Target) normalize() {
+	t.Annotations = removeDupes(t.Annotations)
 	t.Attest = removeAttestDupes(t.Attest)
 	t.Tags = removeDupes(t.Tags)
 	t.Secrets = removeDupes(t.Secrets)
@@ -679,6 +681,9 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.Target != nil {
 		t.Target = t2.Target
+	}
+	if t2.Annotations != nil { // merge
+		t.Annotations = append(t.Annotations, t2.Annotations...)
 	}
 	if t2.Attest != nil { // merge
 		t.Attest = append(t.Attest, t2.Attest...)
@@ -766,6 +771,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.Platforms = o.ArrValue
 		case "output":
 			t.Outputs = o.ArrValue
+		case "annotations":
+			t.Annotations = append(t.Annotations, o.ArrValue...)
 		case "attest":
 			t.Attest = append(t.Attest, o.ArrValue...)
 		case "no-cache":
@@ -1162,6 +1169,16 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	bo.Exports, err = controllerapi.CreateExports(outputs)
 	if err != nil {
 		return nil, err
+	}
+
+	annotations, err := buildflags.ParseAnnotations(t.Annotations)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range bo.Exports {
+		for k, v := range annotations {
+			e.Attrs[k.String()] = v
+		}
 	}
 
 	attests, err := buildflags.ParseAttests(t.Attest)

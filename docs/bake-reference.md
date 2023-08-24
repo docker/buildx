@@ -115,6 +115,7 @@ The following table shows the complete list of attributes that you can assign to
 | Name                                            | Type    | Description                                                          |
 | ----------------------------------------------- | ------- | -------------------------------------------------------------------- |
 | [`args`](#targetargs)                           | Map     | Build arguments                                                      |
+| [`annotations`](#targetannotations)             | List    | Exporter annotations                                                 |
 | [`attest`](#targetattest)                       | List    | Build attestations                                                   |
 | [`cache-from`](#targetcache-from)               | List    | External cache sources                                               |
 | [`cache-to`](#targetcache-to)                   | List    | External cache destinations                                          |
@@ -168,6 +169,26 @@ target "db" {
   }
   dockerfile = "db.Dockerfile"
   tags = ["docker.io/username/db"]
+}
+```
+
+### `target.annotations`
+
+The `annotations` attribute is a shortcut to allow you to easily set a list of
+annotations on the target.
+
+```hcl
+target "default" {
+  output = ["type=image,name=foo"]
+  annotations = ["key=value"]
+}
+```
+
+is the same as
+
+```hcl
+target "default" {
+  output = ["type=image,name=foo,annotation.key=value"]
 }
 ```
 
