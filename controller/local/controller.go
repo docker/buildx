@@ -21,7 +21,6 @@ import (
 func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli, logger progress.SubLogger) control.BuildxController {
 	return &localController{
 		dockerCli: dockerCli,
-		ref:       "local",
 		processes: processes.NewManager(),
 	}
 }
@@ -48,6 +47,7 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 	}
 	defer b.buildOnGoing.Store(false)
 
+	b.ref = "local"
 	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, true)
 	// NOTE: RunBuild can return *build.ResultHandle even on error.
 	if res != nil {
@@ -121,6 +121,7 @@ func (b *localController) Kill(context.Context) error {
 }
 
 func (b *localController) Close() error {
+	b.ref = ""
 	b.cancelRunningProcesses()
 	if b.buildConfig.resultCtx != nil {
 		b.buildConfig.resultCtx.Done()
@@ -130,6 +131,9 @@ func (b *localController) Close() error {
 }
 
 func (b *localController) List(ctx context.Context) (res []string, _ error) {
+	if b.ref == "" {
+		return nil, nil
+	}
 	return []string{b.ref}, nil
 }
 
