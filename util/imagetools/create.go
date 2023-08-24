@@ -160,6 +160,10 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[string]s
 						newDescs[i].Annotations[k.Key] = v
 					}
 				}
+			case exptypes.AnnotationManifest, "":
+				return nil, ocispec.Descriptor{}, errors.Errorf("%q annotations are not supported yet", k.Type)
+			case exptypes.AnnotationIndexDescriptor:
+				return nil, ocispec.Descriptor{}, errors.Errorf("%q annotations are invalid while creating an image", k.Type)
 			}
 		}
 	}
@@ -296,7 +300,7 @@ func detectMediaType(dt []byte) (string, error) {
 
 func parseAnnotations(ann map[string]string) (map[exptypes.AnnotationKey]string, error) {
 	// TODO: use buildkit's annotation parser once it supports setting custom prefix and ":" separator
-	annotationRegexp := regexp.MustCompile(`^([a-z-]+)(?:\[([A-Za-z0-9_/-]+)\])?:(\S+)$`)
+	annotationRegexp := regexp.MustCompile(`^(?:([a-z-]+)(?:\[([A-Za-z0-9_/-]+)\])?:)?(\S+)$`)
 	annotations := make(map[exptypes.AnnotationKey]string)
 	for k, v := range ann {
 		groups := annotationRegexp.FindStringSubmatch(k)
@@ -305,6 +309,13 @@ func parseAnnotations(ann map[string]string) (map[exptypes.AnnotationKey]string,
 		}
 
 		typ, platform, key := groups[1], groups[2], groups[3]
+		switch typ {
+		case "":
+		case exptypes.AnnotationIndex, exptypes.AnnotationIndexDescriptor, exptypes.AnnotationManifest, exptypes.AnnotationManifestDescriptor:
+		default:
+			return nil, errors.Errorf("unknown annotation type %q", typ)
+		}
+
 		var ociPlatform *ocispec.Platform
 		if platform != "" {
 			p, err := platforms.Parse(platform)
@@ -313,28 +324,13 @@ func parseAnnotations(ann map[string]string) (map[exptypes.AnnotationKey]string,
 			}
 			ociPlatform = &p
 		}
-		switch typ {
-		case exptypes.AnnotationIndex:
-			ak := exptypes.AnnotationKey{
-				Type:     typ,
-				Platform: ociPlatform,
-				Key:      key,
-			}
-			annotations[ak] = v
-		case exptypes.AnnotationManifestDescriptor:
-			ak := exptypes.AnnotationKey{
-				Type:     typ,
-				Platform: ociPlatform,
-				Key:      key,
-			}
-			annotations[ak] = v
-		case exptypes.AnnotationManifest:
-			return nil, errors.Errorf("%q annotations are not supported yet", typ)
-		case exptypes.AnnotationIndexDescriptor:
-			return nil, errors.Errorf("%q annotations are invalid while creating an image", typ)
-		default:
-			return nil, errors.Errorf("unknown annotation type %q", typ)
+
+		ak := exptypes.AnnotationKey{
+			Type:     typ,
+			Platform: ociPlatform,
+			Key:      key,
 		}
+		annotations[ak] = v
 	}
 	return annotations, nil
 }
