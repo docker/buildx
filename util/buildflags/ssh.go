@@ -28,6 +28,6 @@ func ParseSSHSpecs(sl []string) ([]*controllerapi.SSH, error) {
 
 // IsGitSSH returns true if the given repo URL is accessed over ssh
 func IsGitSSH(url string) bool {
-	_, gitProtocol := gitutil.ParseProtocol(url)
-	return gitProtocol == gitutil.SSHProtocol
+	remote, err := gitutil.ParseURL(url)
+	return err == nil && remote.Scheme == gitutil.SSHProtocol
 }
