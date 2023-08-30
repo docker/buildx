@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
+	"github.com/distribution/reference"
 	"github.com/docker/buildx/tests/workers"
-	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/testutil/integration"
 	bkworkers "github.com/moby/buildkit/util/testutil/workers"
 )

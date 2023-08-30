@@ -5,15 +5,15 @@ go 1.20
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/aws/aws-sdk-go-v2/config v1.18.16
-	github.com/compose-spec/compose-go v1.18.3
+	github.com/compose-spec/compose-go v1.18.4
 	github.com/containerd/console v1.0.3
 	github.com/containerd/containerd v1.7.2
 	github.com/containerd/continuity v0.4.1
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/creack/pty v1.1.18
+	github.com/distribution/reference v0.5.0
 	github.com/docker/cli v24.0.5+incompatible
 	github.com/docker/cli-docs-tool v0.6.0
-	github.com/docker/distribution v2.8.2+incompatible
 	github.com/docker/docker v24.0.5+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
@@ -75,7 +75,7 @@ require (
 	github.com/containerd/ttrpc v1.2.2 // indirect
 	github.com/cyphar/filepath-securejoin v0.2.3 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
-	github.com/distribution/distribution/v3 v3.0.0-20230214150026-36d8c594d7aa // indirect
+	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.7.0 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect
 	github.com/docker/go-connections v0.4.0 // indirect
