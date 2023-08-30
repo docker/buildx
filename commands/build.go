@@ -719,6 +719,7 @@ func parseInvokeConfig(invoke string) (cfg invokeConfig, err error) {
 	}
 	if len(fields) == 1 && !strings.Contains(fields[0], "=") {
 		cfg.Cmd = []string{fields[0]}
+		cfg.NoCmd = false
 		return cfg, nil
 	}
 	cfg.NoUser = true
