@@ -57,9 +57,7 @@ func (m *Server) ListProcesses(ctx context.Context, req *pb.ListProcessesRequest
 		return nil, errors.Errorf("unknown ref %q", req.Ref)
 	}
 	res = new(pb.ListProcessesResponse)
-	for _, p := range s.processes.ListProcesses() {
-		res.Infos = append(res.Infos, p)
-	}
+	res.Infos = append(res.Infos, s.processes.ListProcesses()...)
 	return res, nil
 }
 
