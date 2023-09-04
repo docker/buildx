@@ -1,5 +1,12 @@
 # Changelog
 
+## [v0.7.0](https://github.com/docker/notary/releases/tag/v0.7.0) 12/01/2021
++ Switch to Go modules [#1523](https://github.com/theupdateframework/notary/pull/1523)
++ Use golang/x/crypto for ed25519 [#1344](https://github.com/theupdateframework/notary/pull/1344)
++ Update Go version
++ Update dependency versions
++ Fixes from using Gosec for source analysis
+
 ## [v0.6.1](https://github.com/docker/notary/releases/tag/v0.6.0) 04/10/2018
 + Fixed bug where CLI requested admin privileges for all metadata operations, including listing targets on a repo [#1315](https://github.com/theupdateframework/notary/pull/1315)
 + Prevented notary signer from being dumpable or ptraceable in Linux, except in debug mode [#1327](https://github.com/theupdateframework/notary/pull/1327)

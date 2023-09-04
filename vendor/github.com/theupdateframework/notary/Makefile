@@ -1,6 +1,8 @@
 # Set an output prefix, which is the local directory if not specified
 PREFIX?=$(shell pwd)
 
+GOFLAGS := -mod=vendor
+
 # Populate version variables
 # Add to compile time flags
 NOTARY_PKG := github.com/theupdateframework/notary
@@ -16,14 +18,6 @@ GO_LDFLAGS_STATIC=-ldflags "-w $(CTIMEVAR) -extldflags -static"
 GOOSES = darwin linux windows
 NOTARY_BUILDTAGS ?= pkcs11
 NOTARYDIR := /go/src/github.com/theupdateframework/notary
-
-GO_VERSION := $(shell go version | grep "1\.\(7\|8\|9\|10\)\(\.[0-9]+\)*\|devel")
-# check to make sure we have the right version. development versions of Go are
-# not officially supported, but allowed for building
-
-ifeq ($(strip $(GO_VERSION))$(SKIPENVCHECK),)
-$(error Bad Go version - please install Go >= 1.7)
-endif
 
 # check to be sure pkcs11 lib is always imported with a build tag
 GO_LIST_PKCS11 := $(shell go list -tags "${NOTARY_BUILDTAGS}" -e -f '{{join .Deps "\n"}}' ./... | grep -v /vendor/ | xargs go list -e -f '{{if not .Standard}}{{.ImportPath}}{{end}}' | grep -q pkcs11)
@@ -104,7 +98,7 @@ ifeq ($(shell uname -s), Darwin)
 else
 	@test -z "$(shell find . -iname *test*.go | grep -v _test.go | grep -v vendor | xargs -r echo "This file should end with '_test':"  | tee /dev/stderr)"
 endif
-	@test -z "$$(go tool vet -printf=false . 2>&1 | grep -v vendor/ | tee /dev/stderr)"
+	@test -z "$$(go vet -printf=false . 2>&1 | grep -v vendor/ | tee /dev/stderr)"
 	# gocyclo - we require cyclomatic complexity to be < 16
 	@test -z "$(shell find . -type f -name "*.go" -not -path "./vendor/*" -not -name "*.pb.*" -exec gocyclo -over 15 {} \; | tee /dev/stderr)"
 	# misspell - requires that the following be run first:
@@ -113,9 +107,10 @@ endif
 	# ineffassign - requires that the following be run first:
 	#    go get -u github.com/gordonklaus/ineffassign
 	@test -z "$(shell find . -type f -name "*.go" -not -path "./vendor/*" -not -name "*.pb.*" -exec ineffassign {} \; | tee /dev/stderr)"
-	# gas - requires that the following be run first:
-	#    go get -u github.com/HewlettPackard/gas
-	# @gas -skip=vendor -skip=*/*_test.go -skip=*/*/*_test.go -fmt=csv -out=gas_output.csv ./... && test -z "$$(cat gas_output.csv | tee /dev/stderr)"
+	# gosec - requires that the following be run first:
+	#    go get -u github.com/securego/gosec/cmd/gosec/...
+	@rm -f gosec_output.csv
+	@gosec -fmt=csv -out=gosec_output.csv -exclude=G104,G304 ./... || (cat gosec_output.csv >&2; exit 1)
 
 build:
 	@echo "+ $@"
@@ -148,7 +143,7 @@ protos:
 # be run first
 gen-cover:
 gen-cover:
-	@python -u buildscripts/covertest.py --tags "$(NOTARY_BUILDTAGS)" --pkgs="$(PKGS)" --testopts="${TESTOPTS}" --debug
+	@python -u buildscripts/covertest.py --tags "$(NOTARY_BUILDTAGS)" --pkgs="$(PKGS)" --testopts="${TESTOPTS}"
 
 # Generates the cover binaries and runs them all in serial, so this can be used
 # run all tests with a yubikey without any problems

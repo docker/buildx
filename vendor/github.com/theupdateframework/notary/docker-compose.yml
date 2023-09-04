@@ -34,7 +34,7 @@ services:
     volumes:
       - ./notarysql/mysql-initdb.d:/docker-entrypoint-initdb.d
       - notary_data:/var/lib/mysql
-    image: mariadb:10.1.28
+    image: mariadb:10.4
     environment:
       - TERM=dumb
       - MYSQL_ALLOW_EMPTY_PASSWORD="true"
