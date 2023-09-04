@@ -17,6 +17,7 @@
 package cli
 
 import (
+	"context"
 	"io"
 	"os"
 	"path/filepath"
@@ -35,6 +36,8 @@ import (
 
 // ProjectOptions provides common configuration for loading a project.
 type ProjectOptions struct {
+	ctx context.Context
+
 	// Name is a valid Compose project name to be used or empty.
 	//
 	// If empty, the project loader will automatically infer a reasonable
@@ -63,7 +66,7 @@ type ProjectOptions struct {
 	// NOTE: For security, the loader does not automatically expose any
 	// process environment variables. For convenience, WithOsEnv can be
 	// used if appropriate.
-	Environment map[string]string
+	Environment types.Mapping
 
 	// EnvFiles are file paths to ".env" files with additional environment
 	// variable data.
@@ -191,7 +194,7 @@ func WithEnv(env []string) ProjectOptionsFn {
 	}
 }
 
-// WithDiscardEnvFiles sets discards the `env_file` section after resolving to
+// WithDiscardEnvFile sets discards the `env_file` section after resolving to
 // the `environment` section
 func WithDiscardEnvFile(o *ProjectOptions) error {
 	o.loadOptions = append(o.loadOptions, loader.WithDiscardEnvFiles)
@@ -204,6 +207,15 @@ func WithLoadOptions(loadOptions ...func(*loader.Options)) ProjectOptionsFn {
 		o.loadOptions = append(o.loadOptions, loadOptions...)
 		return nil
 	}
+}
+
+// WithDefaultProfiles uses the provided profiles (if any), and falls back to
+// profiles specified via the COMPOSE_PROFILES environment variable otherwise.
+func WithDefaultProfiles(profile ...string) ProjectOptionsFn {
+	if len(profile) == 0 {
+		profile = strings.Split(os.Getenv(consts.ComposeProfiles), ",")
+	}
+	return WithProfiles(profile)
 }
 
 // WithProfiles sets profiles to be activated
@@ -225,8 +237,9 @@ func WithOsEnv(o *ProjectOptions) error {
 	return nil
 }
 
-// WithEnvFile set an alternate env file
-// deprecated - use WithEnvFiles
+// WithEnvFile sets an alternate env file.
+//
+// Deprecated: use WithEnvFiles instead.
 func WithEnvFile(file string) ProjectOptionsFn {
 	var files []string
 	if file != "" {
@@ -253,11 +266,7 @@ func WithDotEnv(o *ProjectOptions) error {
 	if err != nil {
 		return err
 	}
-	for k, v := range envMap {
-		if _, set := o.Environment[k]; !set {
-			o.Environment[k] = v
-		}
-	}
+	o.Environment.Merge(envMap)
 	return nil
 }
 
@@ -296,6 +305,24 @@ func WithResolvedPaths(resolve bool) ProjectOptionsFn {
 	return func(o *ProjectOptions) error {
 		o.loadOptions = append(o.loadOptions, func(options *loader.Options) {
 			options.ResolvePaths = resolve
+		})
+		return nil
+	}
+}
+
+// WithContext sets the context used to load model and resources
+func WithContext(ctx context.Context) ProjectOptionsFn {
+	return func(o *ProjectOptions) error {
+		o.ctx = ctx
+		return nil
+	}
+}
+
+// WithResourceLoader register support for ResourceLoader to manage remote resources
+func WithResourceLoader(r loader.ResourceLoader) ProjectOptionsFn {
+	return func(o *ProjectOptions) error {
+		o.loadOptions = append(o.loadOptions, func(options *loader.Options) {
+			options.ResourceLoaders = append(options.ResourceLoaders, r)
 		})
 		return nil
 	}
@@ -367,7 +394,12 @@ func ProjectFromOptions(options *ProjectOptions) (*types.Project, error) {
 		withNamePrecedenceLoad(absWorkingDir, options),
 		withConvertWindowsPaths(options))
 
-	project, err := loader.Load(types.ConfigDetails{
+	ctx := options.ctx
+	if ctx == nil {
+		ctx = context.Background()
+	}
+
+	project, err := loader.LoadWithContext(ctx, types.ConfigDetails{
 		ConfigFiles: configs,
 		WorkingDir:  workingDir,
 		Environment: options.Environment,

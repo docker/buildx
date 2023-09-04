@@ -36,16 +36,22 @@ import (
 
 // Project is the result of loading a set of compose files
 type Project struct {
-	Name         string     `yaml:"name,omitempty" json:"name,omitempty"`
-	WorkingDir   string     `yaml:"-" json:"-"`
-	Services     Services   `yaml:"services" json:"services"`
-	Networks     Networks   `yaml:"networks,omitempty" json:"networks,omitempty"`
-	Volumes      Volumes    `yaml:"volumes,omitempty" json:"volumes,omitempty"`
-	Secrets      Secrets    `yaml:"secrets,omitempty" json:"secrets,omitempty"`
-	Configs      Configs    `yaml:"configs,omitempty" json:"configs,omitempty"`
-	Extensions   Extensions `yaml:"#extensions,inline" json:"-"` // https://github.com/golang/go/issues/6213
-	ComposeFiles []string   `yaml:"-" json:"-"`
-	Environment  Mapping    `yaml:"-" json:"-"`
+	Name       string     `yaml:"name,omitempty" json:"name,omitempty"`
+	WorkingDir string     `yaml:"-" json:"-"`
+	Services   Services   `yaml:"services" json:"services"`
+	Networks   Networks   `yaml:"networks,omitempty" json:"networks,omitempty"`
+	Volumes    Volumes    `yaml:"volumes,omitempty" json:"volumes,omitempty"`
+	Secrets    Secrets    `yaml:"secrets,omitempty" json:"secrets,omitempty"`
+	Configs    Configs    `yaml:"configs,omitempty" json:"configs,omitempty"`
+	Extensions Extensions `yaml:"#extensions,inline" json:"-"` // https://github.com/golang/go/issues/6213
+
+	// IncludeReferences is keyed by Compose YAML filename and contains config for
+	// other Compose YAML files it directly triggered a load of via `include`.
+	//
+	// Note: this is
+	IncludeReferences map[string][]IncludeConfig `yaml:"-" json:"-"`
+	ComposeFiles      []string                   `yaml:"-" json:"-"`
+	Environment       Mapping                    `yaml:"-" json:"-"`
 
 	// DisabledServices track services which have been disable as profile is not active
 	DisabledServices Services `yaml:"-" json:"-"`
@@ -423,11 +429,22 @@ func (p *Project) ForServices(names []string, options ...DependencyOption) error
 			}
 			enabled = append(enabled, s)
 		} else {
-			p.DisabledServices = append(p.DisabledServices, s)
+			p.DisableService(s)
 		}
 	}
 	p.Services = enabled
 	return nil
+}
+
+func (p *Project) DisableService(service ServiceConfig) {
+	// We should remove all dependencies which reference the disabled service
+	for i, s := range p.Services {
+		if _, ok := s.DependsOn[service.Name]; ok {
+			delete(s.DependsOn, service.Name)
+			p.Services[i] = s
+		}
+	}
+	p.DisabledServices = append(p.DisabledServices, service)
 }
 
 // ResolveImages updates services images to include digest computed by a resolver function

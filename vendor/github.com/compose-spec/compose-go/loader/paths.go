@@ -64,6 +64,25 @@ func ResolveRelativePaths(project *types.Project) error {
 			project.Volumes[name] = config
 		}
 	}
+
+	// don't coerce a nil map to an empty map
+	if project.IncludeReferences != nil {
+		absIncludes := make(map[string][]types.IncludeConfig, len(project.IncludeReferences))
+		for filename, config := range project.IncludeReferences {
+			filename = absPath(project.WorkingDir, filename)
+			absConfigs := make([]types.IncludeConfig, len(config))
+			for i, c := range config {
+				absConfigs[i] = types.IncludeConfig{
+					Path:             resolvePaths(project.WorkingDir, c.Path),
+					ProjectDirectory: absPath(project.WorkingDir, c.ProjectDirectory),
+					EnvFile:          resolvePaths(project.WorkingDir, c.EnvFile),
+				}
+			}
+			absIncludes[filename] = absConfigs
+		}
+		project.IncludeReferences = absIncludes
+	}
+
 	return nil
 }
 
@@ -132,4 +151,15 @@ func isRemoteContext(maybeURL string) bool {
 		}
 	}
 	return false
+}
+
+func resolvePaths(basePath string, in types.StringList) types.StringList {
+	if in == nil {
+		return nil
+	}
+	ret := make(types.StringList, len(in))
+	for i := range in {
+		ret[i] = absPath(basePath, in[i])
+	}
+	return ret
 }

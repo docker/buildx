@@ -119,7 +119,7 @@ github.com/cenkalti/backoff/v4
 # github.com/cespare/xxhash/v2 v2.2.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/compose-spec/compose-go v1.17.0
+# github.com/compose-spec/compose-go v1.18.3
 ## explicit; go 1.19
 github.com/compose-spec/compose-go/cli
 github.com/compose-spec/compose-go/consts
