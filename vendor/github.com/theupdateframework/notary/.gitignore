@@ -14,3 +14,4 @@ cross
 *.iml
 *.test
 coverage*.txt
+gosec_output.csv

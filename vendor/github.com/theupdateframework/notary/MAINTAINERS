@@ -16,6 +16,7 @@
 			"endophage",
 			"ecordell",
 			"hukeping",
+			"justincormack",
 			"nathanmccauley",
 			"riyazdf",
 		]
@@ -52,6 +53,11 @@
 	Name = "Hu Keping"
 	Email = "hukeping@huawei.com"
 	GitHub = "hukeping"
+
+	[people.justincormack]
+	Name = "Justin Cormack"
+	Email = "justin.cormack@docker.com"
+	GitHub = "justincormack"
 
 	[people.nathanmccauley]
 	Name = "Nathan McCauley"

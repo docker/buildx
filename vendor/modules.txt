@@ -18,10 +18,6 @@ github.com/Microsoft/go-winio/pkg/guid
 # github.com/agext/levenshtein v1.2.3
 ## explicit
 github.com/agext/levenshtein
-# github.com/agl/ed25519 v0.0.0-20170116200512-5312a6153412
-## explicit
-github.com/agl/ed25519
-github.com/agl/ed25519/edwards25519
 # github.com/apparentlymart/go-cidr v1.0.1
 ## explicit
 github.com/apparentlymart/go-cidr/cidr
@@ -117,20 +113,12 @@ github.com/aws/smithy-go/transport/http/internal/io
 # github.com/beorn7/perks v1.0.1
 ## explicit; go 1.11
 github.com/beorn7/perks/quantile
-# github.com/bugsnag/bugsnag-go v1.4.1
-## explicit
-# github.com/bugsnag/panicwrap v1.2.0
-## explicit
-# github.com/cenkalti/backoff v2.1.1+incompatible
-## explicit
 # github.com/cenkalti/backoff/v4 v4.2.0
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
 # github.com/cespare/xxhash/v2 v2.2.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/cloudflare/cfssl v0.0.0-20181213083726-b94e044bb51e
-## explicit
 # github.com/compose-spec/compose-go v1.17.0
 ## explicit; go 1.19
 github.com/compose-spec/compose-go/cli
@@ -309,10 +297,6 @@ github.com/docker/go-metrics
 # github.com/docker/go-units v0.5.0
 ## explicit
 github.com/docker/go-units
-# github.com/docker/libtrust v0.0.0-20150526203908-9cbd2a1374f4
-## explicit
-# github.com/elazarl/goproxy v0.0.0-20191011121108-aa519ddbe484
-## explicit
 # github.com/emicklei/go-restful/v3 v3.10.1
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
@@ -340,8 +324,6 @@ github.com/go-openapi/jsonreference/internal
 # github.com/go-openapi/swag v0.19.14
 ## explicit; go 1.11
 github.com/go-openapi/swag
-# github.com/go-sql-driver/mysql v1.6.0
-## explicit; go 1.10
 # github.com/gofrs/flock v0.8.1
 ## explicit
 github.com/gofrs/flock
@@ -390,8 +372,6 @@ github.com/golang/protobuf/ptypes
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/duration
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/google/certificate-transparency-go v1.1.4
-## explicit; go 1.17
 # github.com/google/gnostic v0.5.7-v3refs
 ## explicit; go 1.12
 github.com/google/gnostic/compiler
@@ -427,8 +407,6 @@ github.com/grpc-ecosystem/go-grpc-middleware
 github.com/grpc-ecosystem/grpc-gateway/v2/internal/httprule
 github.com/grpc-ecosystem/grpc-gateway/v2/runtime
 github.com/grpc-ecosystem/grpc-gateway/v2/utilities
-# github.com/hailocab/go-hostpool v0.0.0-20160125115350-e80d13ce29ed
-## explicit
 # github.com/hashicorp/go-cty-funcs v0.0.0-20200930094925-2721b1e36840
 ## explicit; go 1.14
 github.com/hashicorp/go-cty-funcs/cidr
@@ -458,18 +436,12 @@ github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2
 # github.com/inconshreveable/mousetrap v1.1.0
 ## explicit; go 1.18
 github.com/inconshreveable/mousetrap
-# github.com/jinzhu/gorm v1.9.2
-## explicit
-# github.com/jinzhu/inflection v0.0.0-20180308033659-04140366298a
-## explicit
 # github.com/josharian/intern v1.0.0
 ## explicit; go 1.5
 github.com/josharian/intern
 # github.com/json-iterator/go v1.1.12
 ## explicit; go 1.12
 github.com/json-iterator/go
-# github.com/kardianos/osext v0.0.0-20190222173326-2bc1f35cddc0
-## explicit
 # github.com/klauspost/compress v1.16.3
 ## explicit; go 1.18
 github.com/klauspost/compress
@@ -479,8 +451,6 @@ github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/snapref
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
-# github.com/kr/pretty v0.2.1
-## explicit; go 1.12
 # github.com/mailru/easyjson v0.7.6
 ## explicit; go 1.12
 github.com/mailru/easyjson/buffer
@@ -653,8 +623,6 @@ github.com/prometheus/procfs/internal/util
 ## explicit; go 1.17
 github.com/secure-systems-lab/go-securesystemslib/cjson
 github.com/secure-systems-lab/go-securesystemslib/dsse
-# github.com/sergi/go-diff v1.2.0
-## explicit; go 1.12
 # github.com/serialx/hashring v0.0.0-20190422032157-8b2912629002
 ## explicit
 github.com/serialx/hashring
@@ -670,14 +638,12 @@ github.com/spf13/cobra
 # github.com/spf13/pflag v1.0.5
 ## explicit; go 1.12
 github.com/spf13/pflag
-# github.com/spf13/viper v1.14.0
-## explicit; go 1.17
 # github.com/stretchr/testify v1.8.4
 ## explicit; go 1.20
 github.com/stretchr/testify/assert
 github.com/stretchr/testify/require
-# github.com/theupdateframework/notary v0.6.1
-## explicit
+# github.com/theupdateframework/notary v0.7.0
+## explicit; go 1.12
 github.com/theupdateframework/notary
 github.com/theupdateframework/notary/client
 github.com/theupdateframework/notary/client/changelist
@@ -799,7 +765,6 @@ golang.org/x/crypto/pbkdf2
 golang.org/x/crypto/ssh
 golang.org/x/crypto/ssh/agent
 golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
-golang.org/x/crypto/ssh/terminal
 # golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1
 ## explicit; go 1.20
 golang.org/x/exp/constraints
@@ -980,12 +945,6 @@ google.golang.org/protobuf/types/known/structpb
 google.golang.org/protobuf/types/known/timestamppb
 google.golang.org/protobuf/types/known/wrapperspb
 google.golang.org/protobuf/types/pluginpb
-# gopkg.in/dancannon/gorethink.v3 v3.0.5
-## explicit
-# gopkg.in/fatih/pool.v2 v2.0.0
-## explicit
-# gopkg.in/gorethink/gorethink.v3 v3.0.5
-## explicit
 # gopkg.in/inf.v0 v0.9.1
 ## explicit
 gopkg.in/inf.v0
