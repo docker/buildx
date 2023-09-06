@@ -7,6 +7,7 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/tracing/detect"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/backoff"
 )
@@ -71,6 +72,14 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	opts = append(opts, client.WithGRPCDialOption(
 		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoffConfig}),
 	))
+
+	exp, err := detect.Exporter()
+	if err != nil {
+		return nil, err
+	}
+	if td, ok := exp.(client.TracerDelegate); ok {
+		opts = append(opts, client.WithTracerDelegate(td))
+	}
 
 	if d.tlsOpts != nil {
 		opts = append(opts, []client.ClientOpt{
