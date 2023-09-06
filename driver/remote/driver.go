@@ -2,14 +2,11 @@ package remote
 
 import (
 	"context"
-	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/detect"
-	"google.golang.org/grpc"
-	"google.golang.org/grpc/backoff"
 )
 
 type Driver struct {
@@ -66,12 +63,6 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	opts := []client.ClientOpt{}
-
-	backoffConfig := backoff.DefaultConfig
-	backoffConfig.MaxDelay = 1 * time.Second
-	opts = append(opts, client.WithGRPCDialOption(
-		grpc.WithConnectParams(grpc.ConnectParams{Backoff: backoffConfig}),
-	))
 
 	exp, err := detect.Exporter()
 	if err != nil {
