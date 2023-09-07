@@ -1121,7 +1121,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	bo.Platforms = platforms
 
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(dockerConfig))
+	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(dockerConfig, nil))
 
 	secrets, err := buildflags.ParseSecretSpecs(t.Secrets)
 	if err != nil {

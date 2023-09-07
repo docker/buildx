@@ -10,15 +10,15 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/platforms"
-	"github.com/docker/distribution/reference"
+	"github.com/distribution/reference"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
 	"github.com/moby/buildkit/frontend/attestations"
-	"github.com/moby/buildkit/frontend/dockerfile/dockerignore"
 	"github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/flightcontrol"
+	"github.com/moby/patternmatcher/ignorefile"
 	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -442,7 +442,7 @@ func (bc *Client) MainContext(ctx context.Context, opts ...llb.LocalOption) (*ll
 
 	var excludes []string
 	if len(bc.dockerignore) != 0 {
-		excludes, err = dockerignore.ReadAll(bytes.NewBuffer(bc.dockerignore))
+		excludes, err = ignorefile.ReadAll(bytes.NewBuffer(bc.dockerignore))
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed parsing %s", bc.dockerignoreName)
 		}
@@ -492,6 +492,15 @@ func (bc *Client) IsNoCache(name string) bool {
 		}
 	}
 	return false
+}
+
+func DefaultMainContext(opts ...llb.LocalOption) *llb.State {
+	opts = append([]llb.LocalOption{
+		llb.SharedKeyHint(DefaultLocalNameContext),
+		WithInternalName("load build context"),
+	}, opts...)
+	st := llb.Local(DefaultLocalNameContext, opts...)
+	return &st
 }
 
 func WithInternalName(name string) llb.ConstraintsOpt {
