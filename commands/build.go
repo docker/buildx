@@ -44,6 +44,7 @@ import (
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
+	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -207,20 +208,15 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	return &opts, nil
 }
 
-func (o *buildOptions) toProgress() (string, error) {
-	switch o.progress {
-	case progress.PrinterModeAuto, progress.PrinterModeTty, progress.PrinterModePlain, progress.PrinterModeQuiet:
-	default:
-		return "", errors.Errorf("progress=%s is not a valid progress option", o.progress)
-	}
-
+func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
+	progress := progressui.DisplayMode(o.progress)
 	if o.quiet {
-		if o.progress != progress.PrinterModeAuto && o.progress != progress.PrinterModeQuiet {
+		if progress != progressui.AutoMode && progress != progressui.QuietMode {
 			return "", errors.Errorf("progress=%s and quiet cannot be used together", o.progress)
 		}
-		return progress.PrinterModeQuiet, nil
+		return progressui.QuietMode, nil
 	}
-	return o.progress, nil
+	return progress, nil
 }
 
 func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
@@ -268,12 +264,12 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	progressMode, err := options.toProgress()
+	progressMode, err := options.toDisplayMode()
 	if err != nil {
 		return err
 	}
 	var printer *progress.Printer
-	printer, err = progress.NewPrinter(ctx2, os.Stderr, os.Stderr, progressMode,
+	printer, err = progress.NewPrinter(ctx2, os.Stderr, progressMode,
 		progress.WithDesc(
 			fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
 			fmt.Sprintf("%s:%s", b.Driver, b.Name),
@@ -301,7 +297,7 @@ func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 		return retErr
 	}
 
-	if progressMode != progress.PrinterModeQuiet {
+	if progressMode != progressui.QuietMode {
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	} else {
 		fmt.Println(getImageID(resp.ExporterResponse))
@@ -828,8 +824,8 @@ func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.Ulim
 	return &controllerapi.UlimitOpt{Values: values}
 }
 
-func printWarnings(w io.Writer, warnings []client.VertexWarning, mode string) {
-	if len(warnings) == 0 || mode == progress.PrinterModeQuiet {
+func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui.DisplayMode) {
+	if len(warnings) == 0 || mode == progressui.QuietMode {
 		return
 	}
 	fmt.Fprintf(w, "\n ")
