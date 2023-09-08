@@ -7,12 +7,12 @@ import (
 	"os"
 	"strings"
 
+	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	"github.com/docker/distribution/reference"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"

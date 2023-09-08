@@ -491,6 +491,16 @@ func NewMapping(values []string) Mapping {
 	return mapping
 }
 
+// convert values into a set of KEY=VALUE strings
+func (m Mapping) Values() []string {
+	values := make([]string, 0, len(m))
+	for k, v := range m {
+		values = append(values, fmt.Sprintf("%s=%s", k, v))
+	}
+	sort.Strings(values)
+	return values
+}
+
 // ToMappingWithEquals converts Mapping into a MappingWithEquals with pointer references
 func (m Mapping) ToMappingWithEquals() MappingWithEquals {
 	mapping := MappingWithEquals{}
@@ -504,6 +514,24 @@ func (m Mapping) ToMappingWithEquals() MappingWithEquals {
 func (m Mapping) Resolve(s string) (string, bool) {
 	v, ok := m[s]
 	return v, ok
+}
+
+func (m Mapping) Clone() Mapping {
+	clone := Mapping{}
+	for k, v := range m {
+		clone[k] = v
+	}
+	return clone
+}
+
+// Merge adds all values from second mapping which are not already defined
+func (m Mapping) Merge(o Mapping) Mapping {
+	for k, v := range o {
+		if _, set := m[k]; !set {
+			m[k] = v
+		}
+	}
+	return m
 }
 
 // Labels is a mapping type for labels
