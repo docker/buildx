@@ -124,6 +124,8 @@ func NewPrinter(ctx context.Context, out console.File, mode progressui.DisplayMo
 			pw.ready = make(chan struct{})
 			<-pw.paused
 			pw.paused = nil
+
+			d, _ = progressui.NewDisplay(out, mode, opt.displayOpts...)
 		}
 	}()
 	<-pw.ready
