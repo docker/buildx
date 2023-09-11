@@ -5,7 +5,7 @@
 # Copyright The Buildx Authors.
 # Licensed under the Apache License, Version 2.0
 
-ARG GO_VERSION="1.20.7"
+ARG GO_VERSION="1.20.8"
 ARG PROTOC_VERSION="3.11.4"
 
 # protoc is dynamically linked to glibc so can't use alpine base
