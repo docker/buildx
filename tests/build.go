@@ -42,6 +42,8 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildDetailsLink,
 	testBuildProgress,
 	testBuildAnnotations,
+	testBuildBuildArgNoKey,
+	testBuildLabelNoKey,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -357,4 +359,20 @@ func testBuildAnnotations(t *testing.T, sb integration.Sandbox) {
 
 	require.NotNil(t, img.Desc)
 	assert.Equal(t, "zzz", img.Desc.Annotations["example4"])
+}
+
+func testBuildBuildArgNoKey(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	cmd := buildxCmd(sb, withArgs("build", "--build-arg", "=TEST_STRING", dir))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Equal(t, strings.TrimSpace(string(out)), `ERROR: invalid key-value pair "=TEST_STRING": empty key`)
+}
+
+func testBuildLabelNoKey(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	cmd := buildxCmd(sb, withArgs("build", "--label", "=TEST_STRING", dir))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Equal(t, strings.TrimSpace(string(out)), `ERROR: invalid key-value pair "=TEST_STRING": empty key`)
 }

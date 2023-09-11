@@ -99,14 +99,25 @@ type buildOptions struct {
 
 func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error) {
 	var err error
+
+	buildArgs, err := listToMap(o.buildArgs, true)
+	if err != nil {
+		return nil, err
+	}
+
+	labels, err := listToMap(o.labels, false)
+	if err != nil {
+		return nil, err
+	}
+
 	opts := controllerapi.BuildOptions{
 		Allow:          o.allow,
-		BuildArgs:      listToMap(o.buildArgs, true),
+		BuildArgs:      buildArgs,
 		CgroupParent:   o.cgroupParent,
 		ContextPath:    o.contextPath,
 		DockerfileName: o.dockerfileName,
 		ExtraHosts:     o.extraHosts,
-		Labels:         listToMap(o.labels, false),
+		Labels:         labels,
 		NetworkMode:    o.networkMode,
 		NoCacheFilter:  o.noCacheFilter,
 		Platforms:      o.platforms,
@@ -782,24 +793,24 @@ func maybeJSONArray(v string) []string {
 	return []string{v}
 }
 
-func listToMap(values []string, defaultEnv bool) map[string]string {
+func listToMap(values []string, defaultEnv bool) (map[string]string, error) {
 	result := make(map[string]string, len(values))
 	for _, value := range values {
-		kv := strings.SplitN(value, "=", 2)
-		if len(kv) == 1 {
-			if defaultEnv {
-				v, ok := os.LookupEnv(kv[0])
-				if ok {
-					result[kv[0]] = v
-				}
-			} else {
-				result[kv[0]] = ""
+		k, v, hasValue := strings.Cut(value, "=")
+		if k == "" {
+			return nil, errors.Errorf("invalid key-value pair %q: empty key", value)
+		}
+		if hasValue {
+			result[k] = v
+		} else if defaultEnv {
+			if envVal, ok := os.LookupEnv(k); ok {
+				result[k] = envVal
 			}
 		} else {
-			result[kv[0]] = kv[1]
+			result[k] = ""
 		}
 	}
-	return result
+	return result, nil
 }
 
 func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.UlimitOpt {
