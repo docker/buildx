@@ -54,6 +54,7 @@ import (
 
 type buildOptions struct {
 	allow          []string
+	annotations    []string
 	buildArgs      []string
 	cacheFrom      []string
 	cacheTo        []string
@@ -156,6 +157,16 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	for _, e := range opts.Exports {
 		if (e.Type == client.ExporterLocal || e.Type == client.ExporterTar) && o.imageIDFile != "" {
 			return nil, errors.Errorf("local and tar exporters are incompatible with image ID file")
+		}
+	}
+
+	annotations, err := buildflags.ParseAnnotations(o.annotations)
+	if err != nil {
+		return nil, err
+	}
+	for _, e := range opts.Exports {
+		for k, v := range annotations {
+			e.Attrs[k.String()] = v
 		}
 	}
 
@@ -457,6 +468,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.SetAnnotation("add-host", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/build/#add-host"})
 
 	flags.StringSliceVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
+
+	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 
 	flags.StringArrayVar(&options.buildArgs, "build-arg", []string{}, "Set build-time variables")
 
