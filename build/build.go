@@ -26,7 +26,6 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
-	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
@@ -1647,43 +1646,6 @@ func noPrintFunc(opt map[string]Options) bool {
 		}
 	}
 	return true
-}
-
-func saveLocalState(so client.SolveOpt, opt Options, node builder.Node, configDir string) error {
-	var err error
-
-	if so.Ref == "" {
-		return nil
-	}
-
-	lp := opt.Inputs.ContextPath
-	dp := opt.Inputs.DockerfilePath
-	if lp != "" || dp != "" {
-		if lp != "" {
-			lp, err = filepath.Abs(lp)
-			if err != nil {
-				return err
-			}
-		}
-		if dp != "" {
-			dp, err = filepath.Abs(dp)
-			if err != nil {
-				return err
-			}
-		}
-		ls, err := localstate.New(configDir)
-		if err != nil {
-			return err
-		}
-		if err := ls.SaveRef(node.Builder, node.Name, so.Ref, localstate.State{
-			LocalPath:      lp,
-			DockerfilePath: dp,
-		}); err != nil {
-			return err
-		}
-	}
-
-	return nil
 }
 
 // ReadSourcePolicy reads a source policy from a file.
