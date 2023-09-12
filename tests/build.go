@@ -44,6 +44,9 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildAnnotations,
 	testBuildBuildArgNoKey,
 	testBuildLabelNoKey,
+	testBuildCacheExportNotSupported,
+	testBuildOCIExportNotSupported,
+	testBuildMultiPlatformNotSupported,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -375,4 +378,40 @@ func testBuildLabelNoKey(t *testing.T, sb integration.Sandbox) {
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err, string(out))
 	require.Equal(t, strings.TrimSpace(string(out)), `ERROR: invalid key-value pair "=TEST_STRING": empty key`)
+}
+
+func testBuildCacheExportNotSupported(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	dir := createTestProject(t)
+	cmd := buildxCmd(sb, withArgs("build", "--cache-to=type=registry", dir))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "Cache export is not supported")
+}
+
+func testBuildOCIExportNotSupported(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	dir := createTestProject(t)
+	cmd := buildxCmd(sb, withArgs("build", fmt.Sprintf("--output=type=oci,dest=%s/result", dir), dir))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "OCI exporter is not supported")
+}
+
+func testBuildMultiPlatformNotSupported(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	dir := createTestProject(t)
+	cmd := buildxCmd(sb, withArgs("build", "--platform=linux/amd64,linux/arm64", dir))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "Multi-platform build is not supported")
 }
