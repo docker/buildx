@@ -44,7 +44,7 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Build
-        uses: docker/bake-action@v3
+        uses: docker/bake-action@v4
         with:
           targets: integration-test-base
           set: |
@@ -92,7 +92,7 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Build test image
-        uses: docker/bake-action@v3
+        uses: docker/bake-action@v4
         with:
           targets: integration-test
           set: |
@@ -229,7 +229,7 @@ jobs:
           password: ${{ secrets.DOCKERHUB_TOKEN }}
       -
         name: Build and push image
-        uses: docker/bake-action@v3
+        uses: docker/bake-action@v4
         with:
           files: |
             ./docker-bake.hcl
@@ -297,6 +297,6 @@ jobs:
       -
         # Just run a bake target to check eveything runs fine
         name: Build
-        uses: docker/bake-action@v3
+        uses: docker/bake-action@v4
         with:
           targets: binaries
