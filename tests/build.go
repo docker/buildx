@@ -42,11 +42,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildDetailsLink,
 	testBuildProgress,
 	testBuildAnnotations,
-	testBuildBuildArgNoKey,
-	testBuildLabelNoKey,
-	testBuildCacheExportNotSupported,
-	testBuildOCIExportNotSupported,
-	testBuildMultiPlatformNotSupported,
+	testInvalidArgs,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -364,54 +360,54 @@ func testBuildAnnotations(t *testing.T, sb integration.Sandbox) {
 	assert.Equal(t, "zzz", img.Desc.Annotations["example4"])
 }
 
-func testBuildBuildArgNoKey(t *testing.T, sb integration.Sandbox) {
+func testInvalidArgs(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
-	cmd := buildxCmd(sb, withArgs("build", "--build-arg", "=TEST_STRING", dir))
-	out, err := cmd.CombinedOutput()
-	require.Error(t, err, string(out))
-	require.Equal(t, strings.TrimSpace(string(out)), `ERROR: invalid key-value pair "=TEST_STRING": empty key`)
-}
 
-func testBuildLabelNoKey(t *testing.T, sb integration.Sandbox) {
-	dir := createTestProject(t)
-	cmd := buildxCmd(sb, withArgs("build", "--label", "=TEST_STRING", dir))
-	out, err := cmd.CombinedOutput()
-	require.Error(t, err, string(out))
-	require.Equal(t, strings.TrimSpace(string(out)), `ERROR: invalid key-value pair "=TEST_STRING": empty key`)
-}
-
-func testBuildCacheExportNotSupported(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	tests := []struct {
+		name        string
+		args        []string
+		expectedErr string
+		driver      string
+	}{
+		{
+			name:        "build-arg without key",
+			args:        []string{"--build-arg", "=TEST_STRING", dir},
+			expectedErr: `ERROR: invalid key-value pair "=TEST_STRING": empty key`,
+		},
+		{
+			name:        "label without key",
+			args:        []string{"--label", "=TEST_STRING", dir},
+			expectedErr: `ERROR: invalid key-value pair "=TEST_STRING": empty key`,
+		},
+		{
+			name:        "cache-to not supported",
+			args:        []string{"--cache-to=type=registry", dir},
+			expectedErr: "Cache export is not supported",
+			driver:      "docker",
+		},
+		{
+			name:        "oci not supported",
+			args:        []string{fmt.Sprintf("--output=type=oci,dest=%s/result", dir), dir},
+			expectedErr: "OCI exporter is not supported",
+			driver:      "docker",
+		},
+		{
+			name:        "multiple platforms not supported",
+			args:        []string{"--platform=linux/amd64,linux/arm64", dir},
+			expectedErr: "Multi-platform build is not supported",
+			driver:      "docker",
+		},
 	}
+	for _, tc := range tests {
+		tc := tc
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.driver != "" && sb.Name() != tc.driver {
+				t.Skipf("skipping test for non-%s workers", tc.driver)
+			}
 
-	dir := createTestProject(t)
-	cmd := buildxCmd(sb, withArgs("build", "--cache-to=type=registry", dir))
-	out, err := cmd.CombinedOutput()
-	require.Error(t, err, string(out))
-	require.Contains(t, string(out), "Cache export is not supported")
-}
-
-func testBuildOCIExportNotSupported(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+			out, err := buildxCmd(sb, withCommandAndArgs("build", tc.args...)).CombinedOutput()
+			require.Error(t, err, string(out))
+			require.Contains(t, string(out), tc.expectedErr)
+		})
 	}
-
-	dir := createTestProject(t)
-	cmd := buildxCmd(sb, withArgs("build", fmt.Sprintf("--output=type=oci,dest=%s/result", dir), dir))
-	out, err := cmd.CombinedOutput()
-	require.Error(t, err, string(out))
-	require.Contains(t, string(out), "OCI exporter is not supported")
-}
-
-func testBuildMultiPlatformNotSupported(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
-	}
-
-	dir := createTestProject(t)
-	cmd := buildxCmd(sb, withArgs("build", "--platform=linux/amd64,linux/arm64", dir))
-	out, err := cmd.CombinedOutput()
-	require.Error(t, err, string(out))
-	require.Contains(t, string(out), "Multi-platform build is not supported")
 }
