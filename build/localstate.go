@@ -8,15 +8,13 @@ import (
 	"github.com/moby/buildkit/client"
 )
 
-func saveLocalState(so client.SolveOpt, opt Options, node builder.Node, configDir string) error {
+func saveLocalState(so *client.SolveOpt, target string, opts Options, node builder.Node, configDir string) error {
 	var err error
-
 	if so.Ref == "" {
 		return nil
 	}
-
-	lp := opt.Inputs.ContextPath
-	dp := opt.Inputs.DockerfilePath
+	lp := opts.Inputs.ContextPath
+	dp := opts.Inputs.DockerfilePath
 	if lp != "" || dp != "" {
 		if lp != "" {
 			lp, err = filepath.Abs(lp)
@@ -35,12 +33,12 @@ func saveLocalState(so client.SolveOpt, opt Options, node builder.Node, configDi
 			return err
 		}
 		if err := ls.SaveRef(node.Builder, node.Name, so.Ref, localstate.State{
+			Target:         target,
 			LocalPath:      lp,
 			DockerfilePath: dp,
 		}); err != nil {
 			return err
 		}
 	}
-
 	return nil
 }

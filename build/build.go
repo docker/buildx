@@ -423,6 +423,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	}
 
 	so := client.SolveOpt{
+		Ref:                 identity.NewID(),
 		Frontend:            "dockerfile.v0",
 		FrontendAttrs:       map[string]string{},
 		LocalDirs:           map[string]string{},
@@ -665,12 +666,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		so.FrontendAttrs["ulimit"] = ulimits
 	}
 
-	// remember local state like directory path that is not sent to buildkit
-	so.Ref = identity.NewID()
-	if err := saveLocalState(so, opt, node, configDir); err != nil {
-		return nil, nil, err
-	}
-
 	return &so, releaseF, nil
 }
 
@@ -746,6 +741,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			opt.Platforms = np.platforms
 			so, release, err := toSolveOpt(ctx, node, multiDriver, opt, np.bopts, configDir, w, docker)
 			if err != nil {
+				return nil, err
+			}
+			if err := saveLocalState(so, k, opt, node, configDir); err != nil {
 				return nil, err
 			}
 			for k, v := range gitattrs {

@@ -12,6 +12,7 @@ import (
 const refsDir = "refs"
 
 type State struct {
+	Target         string
 	LocalPath      string
 	DockerfilePath string
 }
