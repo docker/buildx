@@ -552,7 +552,9 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 						return nil, nil, err
 					}
 					defers = append(defers, cancel)
-					opt.Exports[i].Output = wrapWriteCloser(w)
+					opt.Exports[i].Output = func(_ map[string]string) (io.WriteCloser, error) {
+						return w, nil
+					}
 				}
 			} else if !nodeDriver.Features(ctx)[driver.DockerExporter] {
 				return nil, nil, notSupported(driver.DockerExporter, nodeDriver, "https:/docs.docker.com/go/build-exporters/")
@@ -1607,12 +1609,6 @@ func handleLowercaseDockerfile(dir, p string) string {
 		return filepath.Join(filepath.Dir(p), "dockerfile")
 	}
 	return p
-}
-
-func wrapWriteCloser(wc io.WriteCloser) func(map[string]string) (io.WriteCloser, error) {
-	return func(map[string]string) (io.WriteCloser, error) {
-		return wc, nil
-	}
 }
 
 var nodeIdentifierMu sync.Mutex

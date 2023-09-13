@@ -60,8 +60,10 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 				return
 			}
 
-			prog := progress.WithPrefix(status, "", false)
-			if err := fromReader(prog, "importing to docker", resp.Body); err != nil {
+			status = progress.ResetTime(status)
+			if err := progress.Wrap("importing to docker", status.Write, func(l progress.SubLogger) error {
+				return fromReader(l, resp.Body)
+			}); err != nil {
 				handleErr(err)
 			}
 		},
