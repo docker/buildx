@@ -1,12 +1,16 @@
 package localstate
 
 import (
+	"context"
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"sync"
 
 	"github.com/docker/docker/pkg/ioutils"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 const (
@@ -110,7 +114,33 @@ func (ls *LocalState) RemoveBuilder(builderName string) error {
 	if builderName == "" {
 		return errors.Errorf("builder name empty")
 	}
-	return os.RemoveAll(filepath.Join(ls.root, refsDir, builderName))
+
+	dir := filepath.Join(ls.root, refsDir, builderName)
+	if _, err := os.Lstat(dir); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	fis, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	eg, _ := errgroup.WithContext(context.TODO())
+	for _, fi := range fis {
+		func(fi os.DirEntry) {
+			eg.Go(func() error {
+				return ls.RemoveBuilderNode(builderName, fi.Name())
+			})
+		}(fi)
+	}
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	return os.RemoveAll(dir)
 }
 
 func (ls *LocalState) RemoveBuilderNode(builderName string, nodeName string) error {
@@ -120,7 +150,76 @@ func (ls *LocalState) RemoveBuilderNode(builderName string, nodeName string) err
 	if nodeName == "" {
 		return errors.Errorf("node name empty")
 	}
-	return os.RemoveAll(filepath.Join(ls.root, refsDir, builderName, nodeName))
+
+	dir := filepath.Join(ls.root, refsDir, builderName, nodeName)
+	if _, err := os.Lstat(dir); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+
+	fis, err := os.ReadDir(dir)
+	if err != nil {
+		return err
+	}
+
+	var murefs sync.Mutex
+	grefs := make(map[string][]string)
+	srefs := make(map[string][]string)
+	eg, _ := errgroup.WithContext(context.TODO())
+	for _, fi := range fis {
+		func(fi os.DirEntry) {
+			eg.Go(func() error {
+				st, err := ls.ReadRef(builderName, nodeName, fi.Name())
+				if err != nil {
+					return err
+				}
+				if st.GroupRef == "" {
+					return nil
+				}
+				murefs.Lock()
+				defer murefs.Unlock()
+				if _, ok := grefs[st.GroupRef]; !ok {
+					if grp, err := ls.ReadGroup(st.GroupRef); err == nil {
+						grefs[st.GroupRef] = grp.Refs
+					}
+				}
+				srefs[st.GroupRef] = append(srefs[st.GroupRef], fmt.Sprintf("%s/%s/%s", builderName, nodeName, fi.Name()))
+				return nil
+			})
+		}(fi)
+	}
+	if err := eg.Wait(); err != nil {
+		return err
+	}
+
+	for gid, refs := range grefs {
+		if s, ok := srefs[gid]; ok {
+			if len(s) != len(refs) {
+				continue
+			}
+			if err := ls.removeGroup(gid); err != nil {
+				return err
+			}
+		}
+	}
+
+	return os.RemoveAll(dir)
+}
+
+func (ls *LocalState) removeGroup(id string) error {
+	if id == "" {
+		return errors.Errorf("group ref empty")
+	}
+	f := filepath.Join(ls.root, refsDir, groupDir, id)
+	if _, err := os.Lstat(f); err != nil {
+		if !os.IsNotExist(err) {
+			return err
+		}
+		return nil
+	}
+	return os.Remove(f)
 }
 
 func (ls *LocalState) validate(builderName, nodeName, id string) error {
