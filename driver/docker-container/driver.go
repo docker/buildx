@@ -17,6 +17,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/cli/opts"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
@@ -40,6 +41,13 @@ type Driver struct {
 	factory      driver.Factory
 	netMode      string
 	image        string
+	memory       opts.MemBytes
+	memorySwap   opts.MemSwapBytes
+	cpuQuota     int64
+	cpuPeriod    int64
+	cpuShares    int64
+	cpusetCpus   string
+	cpusetMems   string
 	cgroupParent string
 	env          []string
 }
@@ -125,6 +133,27 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		}
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
+		}
+		if d.memory != 0 {
+			hc.Resources.Memory = int64(d.memory)
+		}
+		if d.memorySwap != 0 {
+			hc.Resources.MemorySwap = int64(d.memorySwap)
+		}
+		if d.cpuQuota != 0 {
+			hc.Resources.CPUQuota = d.cpuQuota
+		}
+		if d.cpuPeriod != 0 {
+			hc.Resources.CPUPeriod = d.cpuPeriod
+		}
+		if d.cpuShares != 0 {
+			hc.Resources.CPUShares = d.cpuShares
+		}
+		if d.cpusetCpus != "" {
+			hc.Resources.CpusetCpus = d.cpusetCpus
+		}
+		if d.cpusetMems != "" {
+			hc.Resources.CpusetMems = d.cpusetMems
 		}
 		if info, err := d.DockerAPI.Info(ctx); err == nil {
 			if info.CgroupDriver == "cgroupfs" {

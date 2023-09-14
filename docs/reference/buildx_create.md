@@ -150,9 +150,18 @@ No driver options.
 
 #### `docker-container` driver
 
-- `image=IMAGE` - Sets the container image to be used for running buildkit.
-- `network=NETMODE` - Sets the network mode for running the buildkit container.
-- `cgroup-parent=CGROUP` - Sets the cgroup parent of the buildkit container if docker is using the "cgroupfs" driver. Defaults to `/docker/buildx`.
+- `image=IMAGE` - Sets the BuildKit image to use for the container.
+- `memory=MEMORY` - Sets the amount of memory the container can use.
+- `memory-swap=MEMORY_SWAP` - Sets the memory swap limit for the container.
+- `cpu-quota=CPU_QUOTA` - Imposes a CPU CFS quota on the container.
+- `cpu-period=CPU_PERIOD` - Sets the CPU CFS scheduler period for the container.
+- `cpu-shares=CPU_SHARES` - Configures CPU shares (relative weight) of the container.
+- `cpuset-cpus=CPUSET_CPUS` - Limits the set of CPU cores the container can use.
+- `cpuset-mems=CPUSET_MEMS` - Limits the set of CPU memory nodes the container can use.
+- `network=NETMODE` - Sets the network mode for the container.
+- `cgroup-parent=CGROUP` - Sets the cgroup parent of the container if docker is using the "cgroupfs" driver. Defaults to `/docker/buildx`.
+
+Before you configure the resource limits for the container, read about [configuring runtime resource constraints for containers](https://docs.docker.com/config/containers/resource_constraints/).
 
 #### `kubernetes` driver
 
