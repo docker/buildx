@@ -95,6 +95,7 @@ type Options struct {
 	Linked       bool // Linked marks this target as exclusively linked (not requested by the user).
 	PrintFunc    *PrintFunc
 	SourcePolicy *spb.Policy
+	GroupRef     string
 }
 
 type PrintFunc struct {

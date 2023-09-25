@@ -9,12 +9,31 @@ import (
 	"github.com/pkg/errors"
 )
 
-const refsDir = "refs"
+const (
+	refsDir  = "refs"
+	groupDir = "__group__"
+)
 
 type State struct {
-	Target         string
-	LocalPath      string
+	// Target is the name of the invoked target (default if empty)
+	Target string
+	// LocalPath is the absolute path to the context
+	LocalPath string
+	// DockerfilePath is the absolute path to the Dockerfile
 	DockerfilePath string
+	// GroupRef is the ref of the state group that this ref belongs to
+	GroupRef string `json:",omitempty"`
+}
+
+type StateGroup struct {
+	// Definition is the raw representation of the group (bake definition)
+	Definition []byte
+	// Targets are the targets invoked
+	Targets []string `json:",omitempty"`
+	// Inputs are the user inputs (bake overrides)
+	Inputs []string `json:",omitempty"`
+	// Refs are used to track all the refs that belong to the same group
+	Refs []string
 }
 
 type LocalState struct {
@@ -57,6 +76,30 @@ func (ls *LocalState) SaveRef(builderName, nodeName, id string, st State) error 
 		return err
 	}
 	dt, err := json.Marshal(st)
+	if err != nil {
+		return err
+	}
+	return ioutils.AtomicWriteFile(filepath.Join(refDir, id), dt, 0600)
+}
+
+func (ls *LocalState) ReadGroup(id string) (*StateGroup, error) {
+	dt, err := os.ReadFile(filepath.Join(ls.root, refsDir, groupDir, id))
+	if err != nil {
+		return nil, err
+	}
+	var stg StateGroup
+	if err := json.Unmarshal(dt, &stg); err != nil {
+		return nil, err
+	}
+	return &stg, nil
+}
+
+func (ls *LocalState) SaveGroup(id string, stg StateGroup) error {
+	refDir := filepath.Join(ls.root, refsDir, groupDir)
+	if err := os.MkdirAll(refDir, 0700); err != nil {
+		return err
+	}
+	dt, err := json.Marshal(stg)
 	if err != nil {
 		return err
 	}

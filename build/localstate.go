@@ -28,17 +28,16 @@ func saveLocalState(so *client.SolveOpt, target string, opts Options, node build
 				return err
 			}
 		}
-		ls, err := localstate.New(configDir)
+		l, err := localstate.New(configDir)
 		if err != nil {
 			return err
 		}
-		if err := ls.SaveRef(node.Builder, node.Name, so.Ref, localstate.State{
+		return l.SaveRef(node.Builder, node.Name, so.Ref, localstate.State{
 			Target:         target,
 			LocalPath:      lp,
 			DockerfilePath: dp,
-		}); err != nil {
-			return err
-		}
+			GroupRef:       opts.GroupRef,
+		})
 	}
 	return nil
 }

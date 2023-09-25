@@ -66,6 +66,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		Tags:          in.Tags,
 		Target:        in.Target,
 		Ulimits:       controllerUlimitOpt2DockerUlimit(in.Ulimits),
+		GroupRef:      in.GroupRef,
 	}
 
 	platforms, err := platformutil.Parse(in.Platforms)
