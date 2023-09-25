@@ -18,10 +18,10 @@ import (
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
-
 	"github.com/docker/cli/cli/config"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
@@ -1104,6 +1104,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 	bo := &build.Options{
 		Inputs:        bi,
+		Ref:           identity.NewID(),
 		Tags:          t.Tags,
 		BuildArgs:     args,
 		Labels:        labels,

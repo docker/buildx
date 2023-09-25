@@ -71,6 +71,7 @@ const (
 type Options struct {
 	Inputs Inputs
 
+	Ref           string
 	Allow         []entitlements.Entitlement
 	Attests       map[string]*string
 	BuildArgs     map[string]string
@@ -90,10 +91,8 @@ type Options struct {
 	Target        string
 	Ulimits       *opts.UlimitOpt
 
-	Session []session.Attachable
-
-	// Linked marks this target as exclusively linked (not requested by the user).
-	Linked       bool
+	Session      []session.Attachable
+	Linked       bool // Linked marks this target as exclusively linked (not requested by the user).
 	PrintFunc    *PrintFunc
 	SourcePolicy *spb.Policy
 }
@@ -423,7 +422,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	}
 
 	so := client.SolveOpt{
-		Ref:                 identity.NewID(),
+		Ref:                 opt.Ref,
 		Frontend:            "dockerfile.v0",
 		FrontendAttrs:       map[string]string{},
 		LocalDirs:           map[string]string{},
@@ -431,6 +430,10 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
 		SourcePolicy:        opt.SourcePolicy,
+	}
+
+	if so.Ref == "" {
+		so.Ref = identity.NewID()
 	}
 
 	if opt.CgroupParent != "" {

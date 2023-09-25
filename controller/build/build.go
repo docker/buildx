@@ -53,6 +53,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 			InStream:       inStream,
 			NamedContexts:  contexts,
 		},
+		Ref:           in.Ref,
 		BuildArgs:     in.BuildArgs,
 		CgroupParent:  in.CgroupParent,
 		ExtraHosts:    in.ExtraHosts,
