@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 
 	"github.com/moby/buildkit/identity"
@@ -36,7 +37,7 @@ func (w *containerWorker) Rootless() bool {
 	return false
 }
 
-func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (integration.Backend, func() error, error) {
+func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (b integration.Backend, cl func() error, err error) {
 	w.dockerOnce.Do(func() {
 		w.docker, w.dockerClose, w.dockerErr = dockerWorker{id: w.id}.New(ctx, cfg)
 	})
@@ -44,11 +45,29 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 		return w.docker, w.dockerClose, w.dockerErr
 	}
 
+	deferF := &integration.MultiCloser{}
+	cl = deferF.F()
+
+	defer func() {
+		if err != nil {
+			deferF.F()()
+			cl = nil
+		}
+	}()
+
+	cfgFile, err := integration.WriteConfig(cfg.DaemonConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	deferF.Append(func() error {
+		return os.RemoveAll(filepath.Dir(cfgFile))
+	})
+
 	name := "integration-container-" + identity.NewID()
 	cmd := exec.Command("buildx", "create",
 		"--bootstrap",
 		"--name="+name,
-		"--config="+cfg.ConfigFile,
+		"--config="+cfgFile,
 		"--driver=docker-container",
 		"--driver-opt=network=host",
 	)
@@ -60,11 +79,10 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 	if err := cmd.Run(); err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s", name)
 	}
-
-	cl := func() error {
+	deferF.Append(func() error {
 		cmd := exec.Command("buildx", "rm", "-f", name)
 		return cmd.Run()
-	}
+	})
 
 	return &backend{
 		context:             w.docker.DockerAddress(),
