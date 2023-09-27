@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/containerd/containerd/platforms"
-	"github.com/docker/distribution/reference"
+	"github.com/distribution/reference"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/image"
@@ -492,6 +492,15 @@ func (bc *Client) IsNoCache(name string) bool {
 		}
 	}
 	return false
+}
+
+func DefaultMainContext(opts ...llb.LocalOption) *llb.State {
+	opts = append([]llb.LocalOption{
+		llb.SharedKeyHint(DefaultLocalNameContext),
+		WithInternalName("load build context"),
+	}, opts...)
+	st := llb.Local(DefaultLocalNameContext, opts...)
+	return &st
 }
 
 func WithInternalName(name string) llb.ConstraintsOpt {
