@@ -13,6 +13,7 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -157,7 +158,7 @@ func (b *Builder) Boot(ctx context.Context) (bool, error) {
 		return false, nil
 	}
 
-	printer, err := progress.NewPrinter(context.TODO(), os.Stderr, os.Stderr, progress.PrinterModeAuto)
+	printer, err := progress.NewPrinter(context.TODO(), os.Stderr, progressui.AutoMode)
 	if err != nil {
 		return false, err
 	}

@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"sync"
 
 	"github.com/moby/buildkit/identity"
@@ -44,11 +45,16 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 		return w.docker, w.dockerClose, w.dockerErr
 	}
 
+	cfgfile, err := integration.WriteConfig(cfg.DaemonConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	defer os.RemoveAll(filepath.Dir(cfgfile))
 	name := "integration-container-" + identity.NewID()
 	cmd := exec.Command("buildx", "create",
 		"--bootstrap",
 		"--name="+name,
-		"--config="+cfg.ConfigFile,
+		"--config="+cfgfile,
 		"--driver=docker-container",
 		"--driver-opt=network=host",
 	)

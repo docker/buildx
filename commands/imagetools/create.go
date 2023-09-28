@@ -14,6 +14,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
+	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -170,7 +171,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, os.Stderr, in.progress)
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, progressui.DisplayMode(in.progress))
 	if err != nil {
 		return err
 	}
