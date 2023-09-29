@@ -72,6 +72,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	if err != nil {
 		return err
 	}
+	// Ensure the file lock gets released no matter what happens.
 	defer release()
 
 	name := in.name
@@ -299,6 +300,10 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 			return err
 		}
 	}
+
+	// The store is no longer used from this point.
+	// Release it so we aren't holding the file lock during the boot.
+	release()
 
 	if in.bootstrap {
 		if _, err = b.Boot(ctx); err != nil {
