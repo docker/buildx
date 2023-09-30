@@ -719,6 +719,25 @@ services:
 	require.Equal(t, "buildfoo", *c.Targets[1].Target)
 }
 
+func TestDevelop(t *testing.T) {
+	var dt = []byte(`
+services:
+  scratch:
+    build:
+     context: ./webapp
+    develop:
+      watch: 
+        - path: ./webapp/html
+          action: sync
+          target: /var/www
+          ignore:
+            - node_modules/
+`)
+
+	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
