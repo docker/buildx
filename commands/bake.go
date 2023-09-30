@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
@@ -19,6 +20,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
@@ -183,14 +185,16 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		return err
 	}
 
+	def := struct {
+		Group  map[string]*bake.Group  `json:"group,omitempty"`
+		Target map[string]*bake.Target `json:"target"`
+	}{
+		Group:  grps,
+		Target: tgts,
+	}
+
 	if in.printOnly {
-		dt, err := json.MarshalIndent(struct {
-			Group  map[string]*bake.Group  `json:"group,omitempty"`
-			Target map[string]*bake.Target `json:"target"`
-		}{
-			grps,
-			tgts,
-		}, "", "  ")
+		dt, err := json.MarshalIndent(def, "", "  ")
 		if err != nil {
 			return err
 		}
@@ -201,6 +205,28 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		}
 		fmt.Fprintln(dockerCli.Out(), string(dt))
 		return nil
+	}
+
+	// local state group
+	groupRef := identity.NewID()
+	var refs []string
+	for k, b := range bo {
+		b.Ref = identity.NewID()
+		b.GroupRef = groupRef
+		refs = append(refs, b.Ref)
+		bo[k] = b
+	}
+	dt, err := json.Marshal(def)
+	if err != nil {
+		return err
+	}
+	if err := saveLocalStateGroup(dockerCli, groupRef, localstate.StateGroup{
+		Definition: dt,
+		Targets:    targets,
+		Inputs:     overrides,
+		Refs:       refs,
+	}); err != nil {
+		return err
 	}
 
 	resp, err := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
@@ -258,4 +284,12 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	commonBuildFlags(&cFlags, flags)
 
 	return cmd
+}
+
+func saveLocalStateGroup(dockerCli command.Cli, ref string, lsg localstate.StateGroup) error {
+	l, err := localstate.New(confutil.ConfigDir(dockerCli))
+	if err != nil {
+		return err
+	}
+	return l.SaveGroup(ref, lsg)
 }

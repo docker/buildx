@@ -77,6 +77,8 @@ message BuildOptions {
   bool ExportPush = 26;
   bool ExportLoad = 27;
   moby.buildkit.v1.sourcepolicy.Policy SourcePolicy = 28;
+  string Ref = 29;
+  string GroupRef = 30;
 }
 
 message ExportEntry {
