@@ -93,7 +93,10 @@ func runInspect(dockerCli command.Cli, in inspectOptions) error {
 				if nodes[i].Version != "" {
 					fmt.Fprintf(w, "Buildkit:\t%s\n", nodes[i].Version)
 				}
-				fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platformutil.FormatInGroups(n.Node.Platforms, n.Platforms), ", "))
+				platforms := platformutil.FormatInGroups(n.Node.Platforms, n.Platforms)
+				if len(platforms) > 0 {
+					fmt.Fprintf(w, "Platforms:\t%s\n", strings.Join(platforms, ", "))
+				}
 				if debug.IsEnabled() {
 					fmt.Fprintf(w, "Features:\n")
 					features := nodes[i].Driver.Features(ctx)
