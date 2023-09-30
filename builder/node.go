@@ -2,6 +2,7 @@ package builder
 
 import (
 	"context"
+	"sort"
 
 	"github.com/docker/buildx/driver"
 	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
@@ -24,13 +25,16 @@ type Node struct {
 	Builder     string
 	Driver      *driver.DriverHandle
 	DriverInfo  *driver.Info
-	Platforms   []ocispecs.Platform
-	GCPolicy    []client.PruneInfo
-	Labels      map[string]string
 	ImageOpt    imagetools.Opt
 	ProxyConfig map[string]string
 	Version     string
 	Err         error
+
+	// worker settings
+	IDs       []string
+	Platforms []ocispecs.Platform
+	GCPolicy  []client.PruneInfo
+	Labels    map[string]string
 }
 
 // Nodes returns nodes for this builder.
@@ -188,12 +192,14 @@ func (n *Node) loadData(ctx context.Context) error {
 			return errors.Wrap(err, "listing workers")
 		}
 		for idx, w := range workers {
+			n.IDs = append(n.IDs, w.ID)
 			n.Platforms = append(n.Platforms, w.Platforms...)
 			if idx == 0 {
 				n.GCPolicy = w.GCPolicy
 				n.Labels = w.Labels
 			}
 		}
+		sort.Strings(n.IDs)
 		n.Platforms = platformutil.Dedupe(n.Platforms)
 		inf, err := driverClient.Info(ctx)
 		if err != nil {
