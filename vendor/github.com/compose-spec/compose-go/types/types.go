@@ -88,23 +88,24 @@ type ServiceConfig struct {
 	Name     string   `yaml:"-" json:"-"`
 	Profiles []string `yaml:"profiles,omitempty" json:"profiles,omitempty"`
 
-	Annotations  Mapping      `yaml:"annotations,omitempty" json:"annotations,omitempty"`
-	Attach       *bool        `yaml:"attach,omitempty" json:"attach,omitempty"`
-	Build        *BuildConfig `yaml:"build,omitempty" json:"build,omitempty"`
-	BlkioConfig  *BlkioConfig `yaml:"blkio_config,omitempty" json:"blkio_config,omitempty"`
-	CapAdd       []string     `yaml:"cap_add,omitempty" json:"cap_add,omitempty"`
-	CapDrop      []string     `yaml:"cap_drop,omitempty" json:"cap_drop,omitempty"`
-	CgroupParent string       `yaml:"cgroup_parent,omitempty" json:"cgroup_parent,omitempty"`
-	Cgroup       string       `yaml:"cgroup,omitempty" json:"cgroup,omitempty"`
-	CPUCount     int64        `yaml:"cpu_count,omitempty" json:"cpu_count,omitempty"`
-	CPUPercent   float32      `yaml:"cpu_percent,omitempty" json:"cpu_percent,omitempty"`
-	CPUPeriod    int64        `yaml:"cpu_period,omitempty" json:"cpu_period,omitempty"`
-	CPUQuota     int64        `yaml:"cpu_quota,omitempty" json:"cpu_quota,omitempty"`
-	CPURTPeriod  int64        `yaml:"cpu_rt_period,omitempty" json:"cpu_rt_period,omitempty"`
-	CPURTRuntime int64        `yaml:"cpu_rt_runtime,omitempty" json:"cpu_rt_runtime,omitempty"`
-	CPUS         float32      `yaml:"cpus,omitempty" json:"cpus,omitempty"`
-	CPUSet       string       `yaml:"cpuset,omitempty" json:"cpuset,omitempty"`
-	CPUShares    int64        `yaml:"cpu_shares,omitempty" json:"cpu_shares,omitempty"`
+	Annotations  Mapping        `yaml:"annotations,omitempty" json:"annotations,omitempty"`
+	Attach       *bool          `yaml:"attach,omitempty" json:"attach,omitempty"`
+	Build        *BuildConfig   `yaml:"build,omitempty" json:"build,omitempty"`
+	Develop      *DevelopConfig `yaml:"develop,omitempty" json:"develop,omitempty"`
+	BlkioConfig  *BlkioConfig   `yaml:"blkio_config,omitempty" json:"blkio_config,omitempty"`
+	CapAdd       []string       `yaml:"cap_add,omitempty" json:"cap_add,omitempty"`
+	CapDrop      []string       `yaml:"cap_drop,omitempty" json:"cap_drop,omitempty"`
+	CgroupParent string         `yaml:"cgroup_parent,omitempty" json:"cgroup_parent,omitempty"`
+	Cgroup       string         `yaml:"cgroup,omitempty" json:"cgroup,omitempty"`
+	CPUCount     int64          `yaml:"cpu_count,omitempty" json:"cpu_count,omitempty"`
+	CPUPercent   float32        `yaml:"cpu_percent,omitempty" json:"cpu_percent,omitempty"`
+	CPUPeriod    int64          `yaml:"cpu_period,omitempty" json:"cpu_period,omitempty"`
+	CPUQuota     int64          `yaml:"cpu_quota,omitempty" json:"cpu_quota,omitempty"`
+	CPURTPeriod  int64          `yaml:"cpu_rt_period,omitempty" json:"cpu_rt_period,omitempty"`
+	CPURTRuntime int64          `yaml:"cpu_rt_runtime,omitempty" json:"cpu_rt_runtime,omitempty"`
+	CPUS         float32        `yaml:"cpus,omitempty" json:"cpus,omitempty"`
+	CPUSet       string         `yaml:"cpuset,omitempty" json:"cpuset,omitempty"`
+	CPUShares    int64          `yaml:"cpu_shares,omitempty" json:"cpu_shares,omitempty"`
 
 	// Command for the service containers.
 	// If set, overrides COMMAND from the image.

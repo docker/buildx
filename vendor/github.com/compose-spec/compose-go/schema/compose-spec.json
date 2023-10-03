@@ -91,6 +91,7 @@
       "type": "object",
 
       "properties": {
+        "develop": {"$ref": "#/definitions/development"},
         "deploy": {"$ref": "#/definitions/deployment"},
         "annotations": {"$ref": "#/definitions/list_or_dict"},
         "attach": {"type": "boolean"},
@@ -462,6 +463,26 @@
       },
       "additionalProperties": false,
       "patternProperties": {"^x-": {}}
+    },
+    "development": {
+      "id": "#/definitions/development",
+      "type": ["object", "null"],
+      "properties": {
+        "watch": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "ignore": {"type": "array", "items": {"type": "string"}},
+              "path": {"type": "string"},
+              "action": {"type": "string", "enum": ["rebuild", "sync"]},
+              "target": {"type": "string"}
+            }
+          },
+          "additionalProperties": false,
+          "patternProperties": {"^x-": {}}
+        }
+      }
     },
     "deployment": {
       "id": "#/definitions/deployment",
