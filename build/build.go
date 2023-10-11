@@ -164,8 +164,8 @@ func allIndexes(l int) []int {
 	return out
 }
 
-func ensureBooted(ctx context.Context, nodes []builder.Node, idxs []int, pw progress.Writer) ([]*client.Client, error) {
-	clients := make([]*client.Client, len(nodes))
+func ensureBooted(ctx context.Context, nodes []builder.Node, idxs []int, pw progress.Writer) ([]driver.Client, error) {
+	clients := make([]driver.Client, len(nodes))
 
 	baseCtx := ctx
 	eg, ctx := errgroup.WithContext(ctx)
@@ -214,7 +214,7 @@ func splitToDriverPairs(availablePlatforms map[string]int, opt map[string]Option
 	return m
 }
 
-func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []driver.Client, error) {
 	dps, clients, err := resolveDriversBase(ctx, nodes, opt, pw)
 	if err != nil {
 		return nil, nil, err
@@ -230,7 +230,7 @@ func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Op
 			continue
 		}
 
-		func(i int, c *client.Client) {
+		func(i int, c driver.Client) {
 			eg.Go(func() error {
 				clients[i].Build(ctx, client.SolveOpt{
 					Internal: true,
@@ -257,7 +257,7 @@ func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Op
 	return dps, clients, nil
 }
 
-func resolveDriversBase(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []*client.Client, error) {
+func resolveDriversBase(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]driverPair, []driver.Client, error) {
 	availablePlatforms := map[string]int{}
 	for i, node := range nodes {
 		for _, p := range node.Platforms {

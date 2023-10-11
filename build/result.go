@@ -8,6 +8,7 @@ import (
 	"sync"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
+	"github.com/docker/buildx/driver"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
@@ -28,7 +29,7 @@ import (
 // failures and successes.
 //
 // If the returned ResultHandle is not nil, the caller must call Done() on it.
-func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt, product string, buildFunc gateway.BuildFunc, ch chan *client.SolveStatus) (*ResultHandle, *client.SolveResponse, error) {
+func NewResultHandle(ctx context.Context, cc driver.Client, opt client.SolveOpt, product string, buildFunc gateway.BuildFunc, ch chan *client.SolveStatus) (*ResultHandle, *client.SolveResponse, error) {
 	// Create a new context to wrap the original, and cancel it when the
 	// caller-provided context is cancelled.
 	//
