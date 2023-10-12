@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-	"net"
 	"os"
 	"sort"
 	"strings"
@@ -150,13 +149,8 @@ type DriverHandle struct {
 	client                  *client.Client
 	err                     error
 	once                    sync.Once
-	featuresOnce            sync.Once
-	features                map[Feature]bool
 	historyAPISupportedOnce sync.Once
 	historyAPISupported     bool
-	hostGatewayIPOnce       sync.Once
-	hostGatewayIP           net.IP
-	hostGatewayIPErr        error
 }
 
 func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
@@ -166,13 +160,6 @@ func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
 	return d.client, d.err
 }
 
-func (d *DriverHandle) Features(ctx context.Context) map[Feature]bool {
-	d.featuresOnce.Do(func() {
-		d.features = d.Driver.Features(ctx)
-	})
-	return d.features
-}
-
 func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
 	d.historyAPISupportedOnce.Do(func() {
 		if c, err := d.Client(ctx); err == nil {
@@ -180,37 +167,4 @@ func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
 		}
 	})
 	return d.historyAPISupported
-}
-
-func (d *DriverHandle) HostGatewayIP(ctx context.Context) (net.IP, error) {
-	d.hostGatewayIPOnce.Do(func() {
-		if !d.Driver.IsMobyDriver() {
-			d.hostGatewayIPErr = errors.New("host-gateway is only supported with the docker driver")
-			return
-		}
-		c, err := d.Client(ctx)
-		if err != nil {
-			d.hostGatewayIPErr = err
-			return
-		}
-		workers, err := c.ListWorkers(ctx)
-		if err != nil {
-			d.hostGatewayIPErr = errors.Wrap(err, "listing workers")
-			return
-		}
-		for _, w := range workers {
-			// should match github.com/docker/docker/builder/builder-next/worker/label.HostGatewayIP const
-			if v, ok := w.Labels["org.mobyproject.buildkit.worker.moby.host-gateway-ip"]; ok && v != "" {
-				ip := net.ParseIP(v)
-				if ip == nil {
-					d.hostGatewayIPErr = errors.Errorf("failed to parse host-gateway IP: %s", v)
-					return
-				}
-				d.hostGatewayIP = ip
-				return
-			}
-		}
-		d.hostGatewayIPErr = errors.New("host-gateway IP not found")
-	})
-	return d.hostGatewayIP, d.hostGatewayIPErr
 }
