@@ -359,7 +359,7 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	return nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+func (d *Driver) Client(ctx context.Context, copts ...driver.ClientOption) (*client.Client, error) {
 	_, conn, err := d.exec(ctx, []string{"buildctl", "dial-stdio"})
 	if err != nil {
 		return nil, err

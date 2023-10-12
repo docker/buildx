@@ -55,7 +55,7 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	return nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+func (d *Driver) Client(ctx context.Context, copts ...driver.ClientOption) (*client.Client, error) {
 	opts := []client.ClientOpt{
 		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", nil)
@@ -83,13 +83,13 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	d.features.once.Do(func() {
 		var useContainerdSnapshotter bool
 		if c, err := d.Client(ctx); err == nil {
+			defer c.Close()
 			workers, _ := c.ListWorkers(ctx)
 			for _, w := range workers {
 				if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
 					useContainerdSnapshotter = true
 				}
 			}
-			c.Close()
 		}
 		d.features.list = map[driver.Feature]bool{
 			driver.OCIExporter:    useContainerdSnapshotter,

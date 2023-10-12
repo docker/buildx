@@ -189,7 +189,7 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	return nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+func (d *Driver) Client(ctx context.Context, copts ...driver.ClientOption) (*client.Client, error) {
 	restClient := d.clientset.CoreV1().RESTClient()
 	restClientConfig, err := d.KubeClientConfig.ClientConfig()
 	if err != nil {

@@ -153,18 +153,39 @@ type DriverHandle struct {
 	historyAPISupported     bool
 }
 
-func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
-	d.once.Do(func() {
-		d.client, d.err = d.Driver.Client(ctx)
-	})
-	return d.client, d.err
+func (d *DriverHandle) Client(ctx context.Context, copts ...ClientOption) (*client.Client, error) {
+	co := ClientOptions{
+		cachedClient: true,
+	}
+	for _, opt := range copts {
+		opt(&co)
+	}
+	if co.cachedClient {
+		d.once.Do(func() {
+			d.client, d.err = d.Driver.Client(ctx, copts...)
+		})
+		return d.client, d.err
+	}
+	return d.Driver.Client(ctx, copts...)
 }
 
-func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
+func (d *DriverHandle) HistoryAPISupported(ctx context.Context, copts ...ClientOption) bool {
 	d.historyAPISupportedOnce.Do(func() {
-		if c, err := d.Client(ctx); err == nil {
+		if c, err := d.Client(ctx, copts...); err == nil {
 			d.historyAPISupported = historyAPISupported(ctx, c)
 		}
 	})
 	return d.historyAPISupported
+}
+
+type ClientOption func(*ClientOptions)
+
+type ClientOptions struct {
+	cachedClient bool
+}
+
+func WithCachedClient(enabled bool) ClientOption {
+	return func(o *ClientOptions) {
+		o.cachedClient = enabled
+	}
 }

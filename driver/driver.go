@@ -59,14 +59,14 @@ type Driver interface {
 	Version(context.Context) (string, error)
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error
-	Client(ctx context.Context) (*client.Client, error)
+	Client(ctx context.Context, copts ...ClientOption) (*client.Client, error)
 	Features(ctx context.Context) map[Feature]bool
 	HostGatewayIP(ctx context.Context) (net.IP, error)
 	IsMobyDriver() bool
 	Config() InitConfig
 }
 
-func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Writer) (*client.Client, error) {
+func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Writer, copts ...ClientOption) (*client.Client, error) {
 	try := 0
 	for {
 		info, err := d.Info(ctx)
@@ -83,7 +83,7 @@ func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Write
 			}
 		}
 
-		c, err := d.Client(clientContext)
+		c, err := d.Client(clientContext, copts...)
 		if err != nil {
 			if errors.Cause(err) == ErrNotRunning && try <= 2 {
 				continue

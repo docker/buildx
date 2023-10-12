@@ -45,7 +45,8 @@ func (b *Builder) Nodes() []Node {
 type LoadNodesOption func(*loadNodesOptions)
 
 type loadNodesOptions struct {
-	data bool
+	data         bool
+	cachedClient bool
 }
 
 func WithData() LoadNodesOption {
@@ -54,11 +55,18 @@ func WithData() LoadNodesOption {
 	}
 }
 
+func WithCachedClient(enabled bool) LoadNodesOption {
+	return func(o *loadNodesOptions) {
+		o.cachedClient = enabled
+	}
+}
+
 // LoadNodes loads and returns nodes for this builder.
 // TODO: this should be a method on a Node object and lazy load data for each driver.
 func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []Node, err error) {
 	lno := loadNodesOptions{
-		data: false,
+		data:         false,
+		cachedClient: true,
 	}
 	for _, opt := range opts {
 		opt(&lno)
@@ -141,7 +149,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 				node.ImageOpt = imageopt
 
 				if lno.data {
-					if err := node.loadData(ctx); err != nil {
+					if err := node.loadData(ctx, lno.cachedClient); err != nil {
 						node.Err = err
 					}
 				}
@@ -192,7 +200,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 	return b.nodes, nil
 }
 
-func (n *Node) loadData(ctx context.Context) error {
+func (n *Node) loadData(ctx context.Context, cachedClient bool) error {
 	if n.Driver == nil {
 		return nil
 	}
@@ -202,11 +210,15 @@ func (n *Node) loadData(ctx context.Context) error {
 	}
 	n.DriverInfo = info
 	if n.DriverInfo.Status == driver.Running {
-		driverClient, err := n.Driver.Client(ctx)
+		c, err := n.Driver.Client(ctx, driver.WithCachedClient(cachedClient))
 		if err != nil {
 			return err
 		}
-		workers, err := driverClient.ListWorkers(ctx)
+		if !cachedClient {
+			defer c.Close()
+		}
+
+		workers, err := c.ListWorkers(ctx)
 		if err != nil {
 			return errors.Wrap(err, "listing workers")
 		}
@@ -220,7 +232,8 @@ func (n *Node) loadData(ctx context.Context) error {
 		}
 		sort.Strings(n.IDs)
 		n.Platforms = platformutil.Dedupe(n.Platforms)
-		inf, err := driverClient.Info(ctx)
+
+		inf, err := c.Info(ctx)
 		if err != nil {
 			if st, ok := grpcerrors.AsGRPCStatus(err); ok && st.Code() == codes.Unimplemented {
 				n.Version, err = n.Driver.Version(ctx)
