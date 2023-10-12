@@ -236,3 +236,7 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 		driver.MultiPlatform:  true, // Untested (needs multiple Driver instances)
 	}
 }
+
+func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
+	return nil, errors.New("host-gateway is not supported by the kubernetes driver")
+}

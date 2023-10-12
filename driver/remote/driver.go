@@ -2,6 +2,8 @@ package remote
 
 import (
 	"context"
+	"errors"
+	"net"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
@@ -89,6 +91,10 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true,
 	}
+}
+
+func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
+	return nil, errors.New("host-gateway is not supported by the remote driver")
 }
 
 func (d *Driver) Factory() driver.Factory {

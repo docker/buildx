@@ -3,6 +3,7 @@ package driver
 import (
 	"context"
 	"io"
+	"net"
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
@@ -60,6 +61,7 @@ type Driver interface {
 	Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error
 	Client(ctx context.Context) (*client.Client, error)
 	Features(ctx context.Context) map[Feature]bool
+	HostGatewayIP(ctx context.Context) (net.IP, error)
 	IsMobyDriver() bool
 	Config() InitConfig
 }

@@ -4,6 +4,7 @@ import (
 	"context"
 	"net"
 	"strings"
+	"sync"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
@@ -15,6 +16,9 @@ import (
 type Driver struct {
 	factory driver.Factory
 	driver.InitConfig
+
+	features    features
+	hostGateway hostGateway
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
@@ -70,24 +74,67 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	return client.New(ctx, "", opts...)
 }
 
+type features struct {
+	once sync.Once
+	list map[driver.Feature]bool
+}
+
 func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
-	var useContainerdSnapshotter bool
-	c, err := d.Client(ctx)
-	if err == nil {
-		workers, _ := c.ListWorkers(ctx)
+	d.features.once.Do(func() {
+		var useContainerdSnapshotter bool
+		if c, err := d.Client(ctx); err == nil {
+			workers, _ := c.ListWorkers(ctx)
+			for _, w := range workers {
+				if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
+					useContainerdSnapshotter = true
+				}
+			}
+			c.Close()
+		}
+		d.features.list = map[driver.Feature]bool{
+			driver.OCIExporter:    useContainerdSnapshotter,
+			driver.DockerExporter: useContainerdSnapshotter,
+			driver.CacheExport:    useContainerdSnapshotter,
+			driver.MultiPlatform:  useContainerdSnapshotter,
+		}
+	})
+	return d.features.list
+}
+
+type hostGateway struct {
+	once sync.Once
+	ip   net.IP
+	err  error
+}
+
+func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
+	d.hostGateway.once.Do(func() {
+		c, err := d.Client(ctx)
+		if err != nil {
+			d.hostGateway.err = err
+			return
+		}
+		defer c.Close()
+		workers, err := c.ListWorkers(ctx)
+		if err != nil {
+			d.hostGateway.err = errors.Wrap(err, "listing workers")
+			return
+		}
 		for _, w := range workers {
-			if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
-				useContainerdSnapshotter = true
+			// should match github.com/docker/docker/builder/builder-next/worker/label.HostGatewayIP const
+			if v, ok := w.Labels["org.mobyproject.buildkit.worker.moby.host-gateway-ip"]; ok && v != "" {
+				ip := net.ParseIP(v)
+				if ip == nil {
+					d.hostGateway.err = errors.Errorf("failed to parse host-gateway IP: %s", v)
+					return
+				}
+				d.hostGateway.ip = ip
+				return
 			}
 		}
-		c.Close()
-	}
-	return map[driver.Feature]bool{
-		driver.OCIExporter:    useContainerdSnapshotter,
-		driver.DockerExporter: useContainerdSnapshotter,
-		driver.CacheExport:    useContainerdSnapshotter,
-		driver.MultiPlatform:  useContainerdSnapshotter,
-	}
+		d.hostGateway.err = errors.New("host-gateway IP not found")
+	})
+	return d.hostGateway.ip, d.hostGateway.err
 }
 
 func (d *Driver) Factory() driver.Factory {

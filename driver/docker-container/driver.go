@@ -399,6 +399,10 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	}
 }
 
+func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
+	return nil, errors.New("host-gateway is not supported by the docker-container driver")
+}
+
 func demuxConn(c net.Conn) net.Conn {
 	pr, pw := io.Pipe()
 	// TODO: rewrite parser with Reader() to avoid goroutine switch
