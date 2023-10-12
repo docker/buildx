@@ -3,6 +3,7 @@ package docker
 import (
 	"context"
 	"fmt"
+	"strconv"
 	"strings"
 
 	"github.com/docker/buildx/driver"
@@ -49,6 +50,36 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			}
 		case k == "image":
 			d.image = v
+		case k == "memory":
+			if err := d.memory.Set(v); err == nil {
+				return nil, err
+			}
+		case k == "memory-swap":
+			if err := d.memorySwap.Set(v); err == nil {
+				return nil, err
+			}
+		case k == "cpu-period":
+			vv, err := strconv.ParseInt(v, 10, 0)
+			if err != nil {
+				return nil, err
+			}
+			d.cpuPeriod = vv
+		case k == "cpu-quota":
+			vv, err := strconv.ParseInt(v, 10, 0)
+			if err != nil {
+				return nil, err
+			}
+			d.cpuQuota = vv
+		case k == "cpu-shares":
+			vv, err := strconv.ParseInt(v, 10, 0)
+			if err != nil {
+				return nil, err
+			}
+			d.cpuShares = vv
+		case k == "cpuset-cpus":
+			d.cpusetCpus = v
+		case k == "cpuset-mems":
+			d.cpusetMems = v
 		case k == "cgroup-parent":
 			d.cgroupParent = v
 		case strings.HasPrefix(k, "env."):
