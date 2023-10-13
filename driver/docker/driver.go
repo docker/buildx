@@ -56,9 +56,14 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 }
 
 func (d *Driver) Client(ctx context.Context, copts ...driver.ClientOption) (*client.Client, error) {
+	co := driver.ClientOptions{}
+	for _, opt := range copts {
+		opt(&co)
+	}
+
 	opts := []client.ClientOpt{
 		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", nil)
+			return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", co.DialMeta)
 		}), client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
 			return d.DockerAPI.DialHijack(ctx, "/session", proto, meta)
 		}),
@@ -82,7 +87,7 @@ type features struct {
 func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	d.features.once.Do(func() {
 		var useContainerdSnapshotter bool
-		if c, err := d.Client(ctx); err == nil {
+		if c, err := d.Client(ctx, driver.WithDialMeta(d.DialMeta)); err == nil {
 			defer c.Close()
 			workers, _ := c.ListWorkers(ctx)
 			for _, w := range workers {
@@ -109,7 +114,7 @@ type hostGateway struct {
 
 func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
 	d.hostGateway.once.Do(func() {
-		c, err := d.Client(ctx)
+		c, err := d.Client(ctx, driver.WithDialMeta(d.DialMeta))
 		if err != nil {
 			d.hostGateway.err = err
 			return

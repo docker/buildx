@@ -17,7 +17,7 @@ import (
 type Factory interface {
 	Name() string
 	Usage() string
-	Priority(ctx context.Context, endpoint string, api dockerclient.APIClient) int
+	Priority(ctx context.Context, endpoint string, api dockerclient.APIClient, copts ...ClientOption) int
 	New(ctx context.Context, cfg InitConfig) (Driver, error)
 	AllowsInstances() bool
 }
@@ -57,8 +57,8 @@ type InitConfig struct {
 	DriverOpts       map[string]string
 	Auth             Auth
 	Platforms        []specs.Platform
-	// ContextPathHash can be used for determining pods in the driver instance
-	ContextPathHash string
+	ContextPathHash  string // ContextPathHash can be used for determining pods in the driver instance
+	DialMeta         map[string][]string
 }
 
 var drivers map[string]Factory
@@ -70,7 +70,7 @@ func Register(f Factory) {
 	drivers[f.Name()] = f
 }
 
-func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient, instanceRequired bool) (Factory, error) {
+func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient, instanceRequired bool, dialMeta map[string][]string) (Factory, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("no drivers available")
 	}
@@ -83,7 +83,7 @@ func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient,
 		if instanceRequired && !f.AllowsInstances() {
 			continue
 		}
-		dd = append(dd, p{f: f, priority: f.Priority(ctx, ep, c)})
+		dd = append(dd, p{f: f, priority: f.Priority(ctx, ep, c, WithDialMeta(dialMeta))})
 	}
 	sort.Slice(dd, func(i, j int) bool {
 		return dd[i].priority < dd[j].priority
@@ -103,7 +103,7 @@ func GetFactory(name string, instanceRequired bool) (Factory, error) {
 	return nil, errors.Errorf("failed to find driver %q", name)
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string) (*DriverHandle, error) {
+func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string, dialMeta map[string][]string) (*DriverHandle, error) {
 	ic := InitConfig{
 		EndpointAddr:     endpointAddr,
 		DockerAPI:        api,
@@ -114,11 +114,12 @@ func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string,
 		Auth:             auth,
 		Platforms:        platforms,
 		ContextPathHash:  contextPathHash,
+		DialMeta:         dialMeta,
 		Files:            files,
 	}
 	if f == nil {
 		var err error
-		f, err = GetDefaultFactory(ctx, endpointAddr, api, false)
+		f, err = GetDefaultFactory(ctx, endpointAddr, api, false, dialMeta)
 		if err != nil {
 			return nil, err
 		}
@@ -169,9 +170,9 @@ func (d *DriverHandle) Client(ctx context.Context, copts ...ClientOption) (*clie
 	return d.Driver.Client(ctx, copts...)
 }
 
-func (d *DriverHandle) HistoryAPISupported(ctx context.Context, copts ...ClientOption) bool {
+func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
 	d.historyAPISupportedOnce.Do(func() {
-		if c, err := d.Client(ctx, copts...); err == nil {
+		if c, err := d.Client(ctx, WithDialMeta(d.Config().DialMeta)); err == nil {
 			d.historyAPISupported = historyAPISupported(ctx, c)
 		}
 	})
@@ -182,10 +183,18 @@ type ClientOption func(*ClientOptions)
 
 type ClientOptions struct {
 	cachedClient bool
+
+	DialMeta map[string][]string
 }
 
 func WithCachedClient(enabled bool) ClientOption {
 	return func(o *ClientOptions) {
 		o.cachedClient = enabled
+	}
+}
+
+func WithDialMeta(dialMeta map[string][]string) ClientOption {
+	return func(o *ClientOptions) {
+		o.DialMeta = dialMeta
 	}
 }

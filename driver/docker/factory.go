@@ -26,12 +26,17 @@ func (*factory) Usage() string {
 	return "docker"
 }
 
-func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient) int {
+func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient, copts ...driver.ClientOption) int {
 	if api == nil {
 		return priorityUnsupported
 	}
 
-	c, err := api.DialHijack(ctx, "/grpc", "h2c", nil)
+	co := driver.ClientOptions{}
+	for _, opt := range copts {
+		opt(&co)
+	}
+
+	c, err := api.DialHijack(ctx, "/grpc", "h2c", co.DialMeta)
 	if err != nil {
 		return priorityUnsupported
 	}
