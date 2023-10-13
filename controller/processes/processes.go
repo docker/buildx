@@ -137,7 +137,11 @@ func (m *Manager) StartProcess(pid string, resultCtx *build.ResultHandle, cfg *p
 	go func() {
 		var err error
 		if err = ctr.Exec(ctx, cfg, in.Stdin, in.Stdout, in.Stderr); err != nil {
-			logrus.Errorf("failed to exec process: %v", err)
+			if errors.Is(err, context.Canceled) {
+				logrus.Debugf("process canceled: %v", err)
+			} else {
+				logrus.Errorf("failed to exec process: %v", err)
+			}
 		}
 		logrus.Debugf("finished process %s %v", pid, cfg.Entrypoint)
 		m.processes.Delete(pid)
