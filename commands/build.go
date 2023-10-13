@@ -391,6 +391,11 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	}
 
 	if options.invokeConfig != nil && options.invokeConfig.needsDebug(retErr) {
+		// Print errors before launching monitor
+		if err := printError(retErr, printer); err != nil {
+			logrus.Warnf("failed to print error information: %v", err)
+		}
+
 		pr2, pw2 := io.Pipe()
 		f.SetWriter(pw2, func() io.WriteCloser {
 			pw2.Close() // propagate EOF
@@ -410,6 +415,18 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	}
 
 	return resp, retErr
+}
+
+func printError(err error, printer *progress.Printer) error {
+	if err := printer.Pause(); err != nil {
+		return err
+	}
+	defer printer.Unpause()
+	for _, s := range errdefs.Sources(err) {
+		s.Print(os.Stderr)
+	}
+	fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+	return nil
 }
 
 func newDebuggableBuild(dockerCli command.Cli, rootOpts *rootOptions) debug.DebuggableCmd {
