@@ -77,7 +77,7 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&options.InvokeFlag, "invoke", "", "Launch a monitor with executing specified command")
 	flags.SetAnnotation("invoke", "experimentalCLI", nil)
-	flags.StringVar(&options.OnFlag, "on", "", "When to launch the monitor ([always, error])")
+	flags.StringVar(&options.OnFlag, "on", "error", "When to launch the monitor ([always, error])")
 	flags.SetAnnotation("on", "experimentalCLI", nil)
 
 	flags.StringVar(&controlOptions.Root, "root", "", "Specify root directory of server to connect for the monitor")
