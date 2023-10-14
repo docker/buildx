@@ -128,6 +128,9 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 	}
 
 	progressMode := progressui.DisplayMode(cFlags.progress)
+	if in.printOnly {
+		progressMode = progressui.QuietMode
+	}
 	printer, err := progress.NewPrinter(ctx2, os.Stderr, progressMode,
 		progress.WithDesc(progressTextDesc, progressConsoleDesc),
 	)
