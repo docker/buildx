@@ -52,11 +52,11 @@ jobs:
           retention-days: 1
 
   validate:
-    uses: docker/docs/.github/workflows/validate-upstream.yml@main
+    uses: dvdksn/docs/.github/workflows/validate-upstream.yml@fix-validate-upstream
     needs:
       - docs-yaml
     with:
-      repo: https://github.com/${{ github.repository }}
+      module-name: docker/buildx
       data-files-id: docs-yaml
       data-files-folder: buildx
       data-files-placeholder-folder: engine/reference/commandline
