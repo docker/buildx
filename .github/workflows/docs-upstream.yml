@@ -56,7 +56,7 @@ jobs:
     needs:
       - docs-yaml
     with:
-      repo: https://github.com/${{ github.repository }}
+      module-name: docker/buildx
       data-files-id: docs-yaml
       data-files-folder: buildx
       data-files-placeholder-folder: engine/reference/commandline
