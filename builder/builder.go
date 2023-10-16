@@ -208,7 +208,7 @@ type driverFactory struct {
 }
 
 // Factory returns the driver factory.
-func (b *Builder) Factory(ctx context.Context) (_ driver.Factory, err error) {
+func (b *Builder) Factory(ctx context.Context, dialMeta map[string][]string) (_ driver.Factory, err error) {
 	b.driverFactory.once.Do(func() {
 		if b.Driver != "" {
 			b.driverFactory.Factory, err = driver.GetFactory(b.Driver, true)
@@ -231,7 +231,7 @@ func (b *Builder) Factory(ctx context.Context) (_ driver.Factory, err error) {
 			if _, err = dockerapi.Ping(ctx); err != nil {
 				return
 			}
-			b.driverFactory.Factory, err = driver.GetDefaultFactory(ctx, ep, dockerapi, false)
+			b.driverFactory.Factory, err = driver.GetDefaultFactory(ctx, ep, dockerapi, false, dialMeta)
 			if err != nil {
 				return
 			}

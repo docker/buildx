@@ -34,7 +34,7 @@ func (*factory) Usage() string {
 	return DriverName
 }
 
-func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient) int {
+func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient, dialMeta map[string][]string) int {
 	if api == nil {
 		return priorityUnsupported
 	}

@@ -2,7 +2,6 @@ package driver
 
 import (
 	"context"
-	"net"
 	"os"
 	"sort"
 	"strings"
@@ -18,7 +17,7 @@ import (
 type Factory interface {
 	Name() string
 	Usage() string
-	Priority(ctx context.Context, endpoint string, api dockerclient.APIClient) int
+	Priority(ctx context.Context, endpoint string, api dockerclient.APIClient, dialMeta map[string][]string) int
 	New(ctx context.Context, cfg InitConfig) (Driver, error)
 	AllowsInstances() bool
 }
@@ -58,8 +57,8 @@ type InitConfig struct {
 	DriverOpts       map[string]string
 	Auth             Auth
 	Platforms        []specs.Platform
-	// ContextPathHash can be used for determining pods in the driver instance
-	ContextPathHash string
+	ContextPathHash  string // can be used for determining pods in the driver instance
+	DialMeta         map[string][]string
 }
 
 var drivers map[string]Factory
@@ -71,7 +70,7 @@ func Register(f Factory) {
 	drivers[f.Name()] = f
 }
 
-func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient, instanceRequired bool) (Factory, error) {
+func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient, instanceRequired bool, dialMeta map[string][]string) (Factory, error) {
 	if len(drivers) == 0 {
 		return nil, errors.Errorf("no drivers available")
 	}
@@ -84,7 +83,7 @@ func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient,
 		if instanceRequired && !f.AllowsInstances() {
 			continue
 		}
-		dd = append(dd, p{f: f, priority: f.Priority(ctx, ep, c)})
+		dd = append(dd, p{f: f, priority: f.Priority(ctx, ep, c, dialMeta)})
 	}
 	sort.Slice(dd, func(i, j int) bool {
 		return dd[i].priority < dd[j].priority
@@ -104,7 +103,7 @@ func GetFactory(name string, instanceRequired bool) (Factory, error) {
 	return nil, errors.Errorf("failed to find driver %q", name)
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string) (*DriverHandle, error) {
+func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string, dialMeta map[string][]string) (*DriverHandle, error) {
 	ic := InitConfig{
 		EndpointAddr:     endpointAddr,
 		DockerAPI:        api,
@@ -115,11 +114,12 @@ func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string,
 		Auth:             auth,
 		Platforms:        platforms,
 		ContextPathHash:  contextPathHash,
+		DialMeta:         dialMeta,
 		Files:            files,
 	}
 	if f == nil {
 		var err error
-		f, err = GetDefaultFactory(ctx, endpointAddr, api, false)
+		f, err = GetDefaultFactory(ctx, endpointAddr, api, false, dialMeta)
 		if err != nil {
 			return nil, err
 		}
@@ -150,13 +150,8 @@ type DriverHandle struct {
 	client                  *client.Client
 	err                     error
 	once                    sync.Once
-	featuresOnce            sync.Once
-	features                map[Feature]bool
 	historyAPISupportedOnce sync.Once
 	historyAPISupported     bool
-	hostGatewayIPOnce       sync.Once
-	hostGatewayIP           net.IP
-	hostGatewayIPErr        error
 }
 
 func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
@@ -166,13 +161,6 @@ func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
 	return d.client, d.err
 }
 
-func (d *DriverHandle) Features(ctx context.Context) map[Feature]bool {
-	d.featuresOnce.Do(func() {
-		d.features = d.Driver.Features(ctx)
-	})
-	return d.features
-}
-
 func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
 	d.historyAPISupportedOnce.Do(func() {
 		if c, err := d.Client(ctx); err == nil {
@@ -180,37 +168,4 @@ func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
 		}
 	})
 	return d.historyAPISupported
-}
-
-func (d *DriverHandle) HostGatewayIP(ctx context.Context) (net.IP, error) {
-	d.hostGatewayIPOnce.Do(func() {
-		if !d.Driver.IsMobyDriver() {
-			d.hostGatewayIPErr = errors.New("host-gateway is only supported with the docker driver")
-			return
-		}
-		c, err := d.Client(ctx)
-		if err != nil {
-			d.hostGatewayIPErr = err
-			return
-		}
-		workers, err := c.ListWorkers(ctx)
-		if err != nil {
-			d.hostGatewayIPErr = errors.Wrap(err, "listing workers")
-			return
-		}
-		for _, w := range workers {
-			// should match github.com/docker/docker/builder/builder-next/worker/label.HostGatewayIP const
-			if v, ok := w.Labels["org.mobyproject.buildkit.worker.moby.host-gateway-ip"]; ok && v != "" {
-				ip := net.ParseIP(v)
-				if ip == nil {
-					d.hostGatewayIPErr = errors.Errorf("failed to parse host-gateway IP: %s", v)
-					return
-				}
-				d.hostGatewayIP = ip
-				return
-			}
-		}
-		d.hostGatewayIPErr = errors.New("host-gateway IP not found")
-	})
-	return d.hostGatewayIP, d.hostGatewayIPErr
 }

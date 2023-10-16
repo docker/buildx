@@ -35,7 +35,7 @@ func (*factory) Usage() string {
 	return "remote"
 }
 
-func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient) int {
+func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient, dialMeta map[string][]string) int {
 	if util.IsValidEndpoint(endpoint) != nil {
 		return priorityUnsupported
 	}

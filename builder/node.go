@@ -42,9 +42,35 @@ func (b *Builder) Nodes() []Node {
 	return b.nodes
 }
 
+type LoadNodesOption func(*loadNodesOptions)
+
+type loadNodesOptions struct {
+	data     bool
+	dialMeta map[string][]string
+}
+
+func WithData() LoadNodesOption {
+	return func(o *loadNodesOptions) {
+		o.data = true
+	}
+}
+
+func WithDialMeta(dialMeta map[string][]string) LoadNodesOption {
+	return func(o *loadNodesOptions) {
+		o.dialMeta = dialMeta
+	}
+}
+
 // LoadNodes loads and returns nodes for this builder.
 // TODO: this should be a method on a Node object and lazy load data for each driver.
-func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err error) {
+func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []Node, err error) {
+	lno := loadNodesOptions{
+		data: false,
+	}
+	for _, opt := range opts {
+		opt(&lno)
+	}
+
 	eg, _ := errgroup.WithContext(ctx)
 	b.nodes = make([]Node, len(b.NodeGroup.Nodes))
 
@@ -54,7 +80,7 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 		}
 	}()
 
-	factory, err := b.Factory(ctx)
+	factory, err := b.Factory(ctx, lno.dialMeta)
 	if err != nil {
 		return nil, err
 	}
@@ -113,7 +139,7 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash, lno.dialMeta)
 				if err != nil {
 					node.Err = err
 					return nil
@@ -121,7 +147,7 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 				node.Driver = d
 				node.ImageOpt = imageopt
 
-				if withData {
+				if lno.data {
 					if err := node.loadData(ctx); err != nil {
 						node.Err = err
 					}
@@ -136,7 +162,7 @@ func (b *Builder) LoadNodes(ctx context.Context, withData bool) (_ []Node, err e
 	}
 
 	// TODO: This should be done in the routine loading driver data
-	if withData {
+	if lno.data {
 		kubernetesDriverCount := 0
 		for _, d := range b.nodes {
 			if d.DriverInfo != nil && len(d.DriverInfo.DynamicNodes) > 0 {

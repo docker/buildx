@@ -123,7 +123,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 			if len(args) > 0 {
 				arg = args[0]
 			}
-			f, err := driver.GetDefaultFactory(ctx, arg, dockerCli.Client(), true)
+			f, err := driver.GetDefaultFactory(ctx, arg, dockerCli.Client(), true, nil)
 			if err != nil {
 				return err
 			}
@@ -270,7 +270,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
 	defer cancel()
 
-	nodes, err := b.LoadNodes(timeoutCtx, true)
+	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())
 	if err != nil {
 		return err
 	}

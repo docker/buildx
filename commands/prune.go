@@ -60,7 +60,7 @@ func runPrune(dockerCli command.Cli, opts pruneOptions) error {
 		return err
 	}
 
-	nodes, err := b.LoadNodes(ctx, false)
+	nodes, err := b.LoadNodes(ctx)
 	if err != nil {
 		return err
 	}

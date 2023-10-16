@@ -171,7 +171,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to update builder last activity time")
 	}
-	nodes, err := b.LoadNodes(ctx, false)
+	nodes, err := b.LoadNodes(ctx)
 	if err != nil {
 		return nil, nil, err
 	}
