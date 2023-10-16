@@ -45,12 +45,19 @@ func (b *Builder) Nodes() []Node {
 type LoadNodesOption func(*loadNodesOptions)
 
 type loadNodesOptions struct {
-	data bool
+	data     bool
+	dialMeta map[string][]string
 }
 
 func WithData() LoadNodesOption {
 	return func(o *loadNodesOptions) {
 		o.data = true
+	}
+}
+
+func WithDialMeta(dialMeta map[string][]string) LoadNodesOption {
+	return func(o *loadNodesOptions) {
+		o.dialMeta = dialMeta
 	}
 }
 
@@ -73,7 +80,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 		}
 	}()
 
-	factory, err := b.Factory(ctx)
+	factory, err := b.Factory(ctx, lno.dialMeta)
 	if err != nil {
 		return nil, err
 	}
@@ -132,7 +139,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash, lno.dialMeta)
 				if err != nil {
 					node.Err = err
 					return nil

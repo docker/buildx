@@ -123,7 +123,7 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 			if len(args) > 0 {
 				arg = args[0]
 			}
-			f, err := driver.GetDefaultFactory(ctx, arg, dockerCli.Client(), true)
+			f, err := driver.GetDefaultFactory(ctx, arg, dockerCli.Client(), true, nil)
 			if err != nil {
 				return err
 			}
