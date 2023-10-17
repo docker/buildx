@@ -47,6 +47,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildCacheExportNotSupported,
 	testBuildOCIExportNotSupported,
 	testBuildMultiPlatformNotSupported,
+	testDockerHostGateway,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -414,4 +415,20 @@ func testBuildMultiPlatformNotSupported(t *testing.T, sb integration.Sandbox) {
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err, string(out))
 	require.Contains(t, string(out), "Multi-platform build is not supported")
+}
+
+func testDockerHostGateway(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox
+RUN ping -c 1 buildx.host-gateway-ip.local
+`)
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	cmd := buildxCmd(sb, withArgs("build", "--add-host=buildx.host-gateway-ip.local:host-gateway", "--output=type=cacheonly", dir))
+	out, err := cmd.CombinedOutput()
+	if !isDockerWorker(sb) {
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "host-gateway is not supported")
+	} else {
+		require.NoError(t, err, string(out))
+	}
 }

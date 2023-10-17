@@ -25,6 +25,7 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 
 	var name string
 	var driver string
+	var hostGatewayIP string
 	for _, line := range strings.Split(out, "\n") {
 		if v, ok := strings.CutPrefix(line, "Name:"); ok && name == "" {
 			name = strings.TrimSpace(v)
@@ -32,9 +33,17 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 		if v, ok := strings.CutPrefix(line, "Driver:"); ok && driver == "" {
 			driver = strings.TrimSpace(v)
 		}
+		if v, ok := strings.CutPrefix(line, " org.mobyproject.buildkit.worker.moby.host-gateway-ip:"); ok {
+			hostGatewayIP = strings.TrimSpace(v)
+		}
 	}
 
 	require.Equal(t, sb.Address(), name)
 	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
 	require.Equal(t, sbDriver, driver)
+	if isDockerWorker(sb) {
+		require.NotEmpty(t, hostGatewayIP, "host-gateway-ip worker label should be set with docker driver")
+	} else {
+		require.Empty(t, hostGatewayIP, "host-gateway-ip worker label should not be set with non-docker driver")
+	}
 }
