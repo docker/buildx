@@ -27,6 +27,13 @@ func withEnv(env ...string) cmdOpt {
 	}
 }
 
+func withCommandAndArgs(command string, args ...string) cmdOpt {
+	return func(cmd *exec.Cmd) {
+		cmd.Args = append(cmd.Args, command)
+		cmd.Args = append(cmd.Args, args...)
+	}
+}
+
 func withArgs(args ...string) cmdOpt {
 	return func(cmd *exec.Cmd) {
 		cmd.Args = append(cmd.Args, args...)
