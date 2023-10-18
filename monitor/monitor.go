@@ -302,7 +302,11 @@ func (m *monitor) startInvoke(ctx context.Context, pid string, cfg controllerapi
 	go func() {
 		// Start a new invoke
 		if err := m.invoke(ctx, pid, cfg); err != nil {
-			logrus.Debugf("invoke error: %v", err)
+			if errors.Is(err, context.Canceled) {
+				logrus.Debugf("process canceled: %v", err)
+			} else {
+				logrus.Errorf("invoke: %v", err)
+			}
 		}
 		if pid == m.attachedPid.Load() {
 			m.attachedPid.Store("")
