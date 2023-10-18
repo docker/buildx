@@ -401,12 +401,16 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 			pw2.Close() // propagate EOF
 			return nil
 		})
-		err = options.invokeConfig.runDebug(ctx, ref, opts, c, pr2, os.Stdout, os.Stderr, printer)
+		monitorBuildResult, err := options.invokeConfig.runDebug(ctx, ref, opts, c, pr2, os.Stdout, os.Stderr, printer)
 		if err := pw2.Close(); err != nil {
 			logrus.Debug("failed to close monitor stdin pipe reader")
 		}
 		if err != nil {
 			logrus.Warnf("failed to run monitor: %v", err)
+		}
+		if monitorBuildResult != nil {
+			// Update return values with the last build result from monitor
+			resp, retErr = monitorBuildResult.Resp, monitorBuildResult.Err
 		}
 	} else {
 		if err := c.Disconnect(ctx, ref); err != nil {
@@ -844,14 +848,14 @@ func (cfg *invokeConfig) needsDebug(retErr error) bool {
 	}
 }
 
-func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *controllerapi.BuildOptions, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) error {
+func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *controllerapi.BuildOptions, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
 	con := console.Current()
 	if err := con.SetRaw(); err != nil {
 		// TODO: run disconnect in build command (on error case)
 		if err := c.Disconnect(ctx, ref); err != nil {
 			logrus.Warnf("disconnect error: %v", err)
 		}
-		return errors.Errorf("failed to configure terminal: %v", err)
+		return nil, errors.Errorf("failed to configure terminal: %v", err)
 	}
 	defer con.Reset()
 	return monitor.RunMonitor(ctx, ref, options, cfg.InvokeConfig, c, stdin, stdout, stderr, progress)
