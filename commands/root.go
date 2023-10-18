@@ -3,6 +3,7 @@ package commands
 import (
 	"os"
 
+	debugcmd "github.com/docker/buildx/commands/debug"
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	"github.com/docker/buildx/controller/remote"
 	"github.com/docker/buildx/util/cobrautil/completion"
@@ -71,7 +72,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 	rootFlags(opts, cmd.PersistentFlags())
 
 	cmd.AddCommand(
-		buildCmd(dockerCli, opts),
+		buildCmd(dockerCli, opts, nil),
 		bakeCmd(dockerCli, opts),
 		createCmd(dockerCli),
 		rmCmd(dockerCli, opts),
@@ -87,8 +88,10 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		imagetoolscmd.RootCmd(dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
 	)
 	if isExperimental() {
+		cmd.AddCommand(debugcmd.RootCmd(dockerCli,
+			newDebuggableBuild(dockerCli, opts),
+		))
 		remote.AddControllerCommands(cmd, dockerCli)
-		addDebugShellCommand(cmd, dockerCli)
 	}
 
 	cmd.RegisterFlagCompletionFunc( //nolint:errcheck

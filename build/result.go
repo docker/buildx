@@ -117,7 +117,7 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 						gwClient: c,
 						gwCtx:    ctx,
 					}
-					respErr = se
+					respErr = err // return original error to preserve stacktrace
 					close(done)
 
 					// Block until the caller closes the ResultHandle.

@@ -35,6 +35,9 @@ COMMAND and ARG... will be executed in the container.
 }
 
 func (cm *ExecCmd) Exec(ctx context.Context, args []string) error {
+	if ref := cm.m.AttachedSessionID(); ref == "" {
+		return errors.Errorf("no attaching session")
+	}
 	if len(args) < 2 {
 		return errors.Errorf("command must be passed")
 	}
