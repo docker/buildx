@@ -36,6 +36,7 @@ import (
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/urfave/cli"
@@ -375,7 +376,7 @@ func (s *Server) launchDebugger(cfg LaunchConfig) (retErr error) {
 		}
 	}()
 	var printer *progress.Printer
-	printer, err = progress.NewPrinter(ctx, s.outputStdoutWriter(), nil, "plain",
+	printer, err = progress.NewPrinter(ctx, s.outputStdoutWriter(), progressui.PlainMode,
 		progress.WithOnClose(func() {
 			printWarnings(s.outputStdoutWriter(), printer.Warnings())
 		}),

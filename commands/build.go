@@ -371,7 +371,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		return nil
 	})
 
-	if options.invoke != nil && options.invoke.invokeFlag == "debug-step" {
+	if options.invokeConfig != nil && options.invokeConfig.invokeFlag == "debug-step" {
 		// Special mode where we don't get the result but get only the build definition.
 		// In this mode, Build() doesn't perform the build therefore always fails.
 		opts.Debug = true
