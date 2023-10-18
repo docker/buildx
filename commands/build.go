@@ -418,6 +418,9 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 }
 
 func printError(err error, printer *progress.Printer) error {
+	if err == nil {
+		return nil
+	}
 	if err := printer.Pause(); err != nil {
 		return err
 	}
