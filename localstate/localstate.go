@@ -127,22 +127,17 @@ func (ls *LocalState) RemoveBuilder(builderName string) error {
 	if err != nil {
 		return err
 	}
-
-	eg, _ := errgroup.WithContext(context.TODO())
 	for _, fi := range fis {
-		func(fi os.DirEntry) {
-			eg.Go(func() error {
-				return ls.RemoveBuilderNode(builderName, fi.Name())
-			})
-		}(fi)
-	}
-	if err := eg.Wait(); err != nil {
-		return err
+		if err := ls.RemoveBuilderNode(builderName, fi.Name()); err != nil {
+			return err
+		}
 	}
 
 	return os.RemoveAll(dir)
 }
 
+// RemoveBuilderNode removes all refs for a builder node.
+// This func is not safe for concurrent use from multiple goroutines.
 func (ls *LocalState) RemoveBuilderNode(builderName string, nodeName string) error {
 	if builderName == "" {
 		return errors.Errorf("builder name empty")
