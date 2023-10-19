@@ -1044,6 +1044,9 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.Dockerfile != nil {
 		dockerfilePath = *t.Dockerfile
 	}
+	if !strings.HasPrefix(dockerfilePath, "cwd://") {
+		dockerfilePath = path.Clean(dockerfilePath)
+	}
 
 	bi := build.Inputs{
 		ContextPath:    contextPath,
@@ -1054,6 +1057,38 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		bi.DockerfileInline = *t.DockerfileInline
 	}
 	updateContext(&bi, inp)
+	if strings.HasPrefix(bi.DockerfilePath, "cwd://") {
+		// If Dockerfile is local for a remote invocation, we first check if
+		// it's not outside the working directory and then resolve it to an
+		// absolute path.
+		bi.DockerfilePath = path.Clean(strings.TrimPrefix(bi.DockerfilePath, "cwd://"))
+		if err := checkPath(bi.DockerfilePath); err != nil {
+			return nil, err
+		}
+		var err error
+		bi.DockerfilePath, err = filepath.Abs(bi.DockerfilePath)
+		if err != nil {
+			return nil, err
+		}
+	} else if !build.IsRemoteURL(bi.DockerfilePath) && strings.HasPrefix(bi.ContextPath, "cwd://") && (inp != nil && build.IsRemoteURL(inp.URL)) {
+		// We don't currently support reading a remote Dockerfile with a local
+		// context when doing a remote invocation because we automatically
+		// derive the dockerfile from the context atm:
+		//
+		// target "default" {
+		//  context = BAKE_CMD_CONTEXT
+		//  dockerfile = "Dockerfile.app"
+		// }
+		//
+		// > docker buildx bake https://github.com/foo/bar.git
+		// failed to solve: failed to read dockerfile: open /var/lib/docker/tmp/buildkit-mount3004544897/Dockerfile.app: no such file or directory
+		//
+		// To avoid mistakenly reading a local Dockerfile, we check if the
+		// Dockerfile exists locally and if so, we error out.
+		if _, err := os.Stat(filepath.Join(path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://")), bi.DockerfilePath)); err == nil {
+			return nil, errors.Errorf("reading a dockerfile for a remote build invocation is currently not supported")
+		}
+	}
 	if strings.HasPrefix(bi.ContextPath, "cwd://") {
 		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
 	}
