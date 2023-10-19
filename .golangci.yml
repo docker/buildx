@@ -26,12 +26,13 @@ linters:
 
 linters-settings:
   depguard:
-    list-type: blacklist
-    include-go-root: true
-    packages:
-      # The io/ioutil package has been deprecated.
-      # https://go.dev/doc/go1.16#ioutil
-      - io/ioutil
+    rules:
+      main:
+        deny:
+          # The io/ioutil package has been deprecated.
+          # https://go.dev/doc/go1.16#ioutil
+          - pkg: "io/ioutil"
+            desc: The io/ioutil package has been deprecated.
   forbidigo:
     forbid:
       - '^fmt\.Errorf(# use errors\.Errorf instead)?$'
@@ -47,3 +48,22 @@ issues:
     - linters:
         - revive
       text: "stutters"
+    - linters:
+        - revive
+      text: "empty-block"
+    - linters:
+        - revive
+      text: "superfluous-else"
+    - linters:
+        - revive
+      text: "unused-parameter"
+    - linters:
+        - revive
+      text: "redefines-builtin-id"
+    - linters:
+        - revive
+      text: "if-return"
+
+# show all
+max-issues-per-linter: 0
+max-same-issues: 0
