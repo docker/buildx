@@ -65,6 +65,7 @@ var (
 )
 
 const (
+	//nolint:gosec // G101: false-positive
 	printFallbackImage = "docker/dockerfile:1.5.2-labs@sha256:f2e91734a84c0922ff47aa4098ab775f1dfa932430d2888dd5cad5251fafdac4"
 )
 

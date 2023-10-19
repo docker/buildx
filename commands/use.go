@@ -35,10 +35,7 @@ func runUse(dockerCli command.Cli, in useOptions) error {
 				if err != nil {
 					return err
 				}
-				if err := txn.SetCurrent(ep, "", false, false); err != nil {
-					return err
-				}
-				return nil
+				return txn.SetCurrent(ep, "", false, false)
 			}
 			list, err := dockerCli.ContextStore().List()
 			if err != nil {
@@ -58,11 +55,7 @@ func runUse(dockerCli command.Cli, in useOptions) error {
 	if err != nil {
 		return err
 	}
-	if err := txn.SetCurrent(ep, in.builder, in.isGlobal, in.isDefault); err != nil {
-		return err
-	}
-
-	return nil
+	return txn.SetCurrent(ep, in.builder, in.isGlobal, in.isDefault)
 }
 
 func useCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {

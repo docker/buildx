@@ -631,13 +631,14 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 	}
 
 	for _, a := range content.Attributes {
+		a := a
 		return nil, hcl.Diagnostics{
 			&hcl.Diagnostic{
 				Severity: hcl.DiagError,
 				Summary:  "Invalid attribute",
 				Detail:   "global attributes currently not supported",
-				Subject:  &a.Range,
-				Context:  &a.Range,
+				Subject:  a.Range.Ptr(),
+				Context:  a.Range.Ptr(),
 			},
 		}
 	}
@@ -660,13 +661,14 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 			var subject *hcl.Range
 			var context *hcl.Range
 			if p.funcs[k].Params != nil {
-				subject = &p.funcs[k].Params.Range
+				subject = p.funcs[k].Params.Range.Ptr()
 				context = subject
 			} else {
 				for _, block := range blocks.Blocks {
+					block := block
 					if block.Type == "function" && len(block.Labels) == 1 && block.Labels[0] == k {
-						subject = &block.LabelRanges[0]
-						context = &block.DefRange
+						subject = block.LabelRanges[0].Ptr()
+						context = block.DefRange.Ptr()
 						break
 					}
 				}
@@ -732,6 +734,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 
 	diags = hcl.Diagnostics{}
 	for _, b := range content.Blocks {
+		b := b
 		v := reflect.ValueOf(val)
 
 		err := p.resolveBlock(b, nil)
@@ -742,7 +745,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 					continue
 				}
 			} else {
-				return nil, wrapErrorDiagnostic("Invalid block", err, &b.LabelRanges[0], &b.DefRange)
+				return nil, wrapErrorDiagnostic("Invalid block", err, b.LabelRanges[0].Ptr(), b.DefRange.Ptr())
 			}
 		}
 

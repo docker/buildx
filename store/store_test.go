@@ -18,9 +18,9 @@ func TestEmptyStartup(t *testing.T) {
 	s, err := New(tmpdir)
 	require.NoError(t, err)
 
-	txn, close, err := s.Txn()
+	txn, release, err := s.Txn()
 	require.NoError(t, err)
-	defer close()
+	defer release()
 
 	ng, err := txn.Current("foo")
 	require.NoError(t, err)

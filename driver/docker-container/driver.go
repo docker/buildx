@@ -73,10 +73,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 			if err := d.start(ctx, sub); err != nil {
 				return err
 			}
-			if err := d.wait(ctx, sub); err != nil {
-				return err
-			}
-			return nil
+			return d.wait(ctx, sub)
 		})
 	})
 }
@@ -119,7 +116,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	}
 
 	useInit := true // let it cleanup exited processes created by BuildKit's container API
-	if err := l.Wrap("creating container "+d.Name, func() error {
+	return l.Wrap("creating container "+d.Name, func() error {
 		hc := &container.HostConfig{
 			Privileged: true,
 			Mounts: []mount.Mount{
@@ -189,14 +186,8 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				return err
 			}
 		}
-		if err := d.wait(ctx, l); err != nil {
-			return err
-		}
-		return nil
-	}); err != nil {
-		return err
-	}
-	return nil
+		return d.wait(ctx, l)
+	})
 }
 
 func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
