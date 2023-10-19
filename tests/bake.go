@@ -27,6 +27,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteCmdContextEscapeRoot,
 	testBakeRemoteCmdContextEscapeRelative,
 	testBakeRemoteDockerfileCwd,
+	testBakeRemoteLocalContextRemoteDockerfile,
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -347,4 +348,43 @@ COPY foo /foo
 		withArgs(addr, "--set", "*.output=type=cacheonly"),
 	)
 	require.Error(t, err, out)
+}
+
+func testBakeRemoteLocalContextRemoteDockerfile(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	context = BAKE_CMD_CONTEXT
+	dockerfile = "Dockerfile.app"
+}
+`)
+	dockerfileApp := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+	)
+	dirSrc := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile.app", dockerfileApp, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "docker-bake.hcl")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dirSrc),
+		withArgs(addr, "--set", "*.output=type=cacheonly"),
+	)
+	require.Error(t, err, out)
+	require.Contains(t, out, "reading a dockerfile for a remote build invocation is currently not supported")
 }
