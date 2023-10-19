@@ -1,10 +1,13 @@
+// Copyright (c) HashiCorp, Inc.
+// SPDX-License-Identifier: MPL-2.0
+
 package hclwrite
 
 import (
 	"bytes"
 	"io"
 
-	"github.com/apparentlymart/go-textseg/v12/textseg"
+	"github.com/apparentlymart/go-textseg/v15/textseg"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/hashicorp/hcl/v2/hclsyntax"
 )
@@ -112,6 +115,16 @@ func (ts Tokens) walkChildNodes(w internalWalkFunc) {
 
 func (ts Tokens) BuildTokens(to Tokens) Tokens {
 	return append(to, ts...)
+}
+
+// ObjectAttrTokens represents the raw tokens for the name and value of
+// one attribute in an object constructor expression.
+//
+// This is defined primarily for use with function TokensForObject. See
+// that function's documentation for more information.
+type ObjectAttrTokens struct {
+	Name  Tokens
+	Value Tokens
 }
 
 func newIdentToken(name string) *Token {
