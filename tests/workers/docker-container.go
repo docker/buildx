@@ -80,8 +80,8 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 }
 
 func (w *containerWorker) Close() error {
-	if close := w.dockerClose; close != nil {
-		return close()
+	if c := w.dockerClose; c != nil {
+		return c()
 	}
 
 	// reset the worker to be ready to go again

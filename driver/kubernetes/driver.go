@@ -87,10 +87,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 		return sub.Wrap(
 			fmt.Sprintf("waiting for %d pods to be ready", d.minReplicas),
 			func() error {
-				if err := d.wait(ctx); err != nil {
-					return err
-				}
-				return nil
+				return d.wait(ctx)
 			})
 	})
 }
@@ -228,7 +225,7 @@ func (d *Driver) Factory() driver.Factory {
 	return d.factory
 }
 
-func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
+func (d *Driver) Features(_ context.Context) map[driver.Feature]bool {
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    true,
 		driver.DockerExporter: d.DockerAPI != nil,
@@ -237,6 +234,6 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	}
 }
 
-func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
+func (d *Driver) HostGatewayIP(_ context.Context) (net.IP, error) {
 	return nil, errors.New("host-gateway is not supported by the kubernetes driver")
 }

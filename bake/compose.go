@@ -51,6 +51,7 @@ func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, e
 		g := &Group{Name: "default"}
 
 		for _, s := range cfg.Services {
+			s := s
 			if s.Build == nil {
 				continue
 			}
