@@ -121,7 +121,7 @@ func (mb mergedBodies) JustAttributes() (hcl.Attributes, hcl.Diagnostics) {
 							"Argument %q was already set at %s",
 							name, existing.NameRange.String(),
 						),
-						Subject: &attr.NameRange,
+						Subject: thisAttrs[name].NameRange.Ptr(),
 					})
 				}
 				attrs[name] = attr
@@ -192,7 +192,7 @@ func (mb mergedBodies) mergedContent(schema *hcl.BodySchema, partial bool) (*hcl
 							"Argument %q was already set at %s",
 							name, existing.NameRange.String(),
 						),
-						Subject: &attr.NameRange,
+						Subject: thisContent.Attributes[name].NameRange.Ptr(),
 					})
 				}
 				content.Attributes[name] = attr
