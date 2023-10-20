@@ -33,7 +33,8 @@ import (
 )
 
 const (
-	volumeStateSuffix = "_state"
+	volumeStateSuffix   = "_state"
+	buildkitdConfigFile = "buildkitd.toml"
 )
 
 type Driver struct {
@@ -114,9 +115,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		Image: imageName,
 		Env:   d.env,
 	}
-	if d.InitConfig.BuildkitFlags != nil {
-		cfg.Cmd = d.InitConfig.BuildkitFlags
-	}
+	cfg.Cmd = getBuildkitFlags(d.InitConfig)
 
 	useInit := true // let it cleanup exited processes created by BuildKit's container API
 	if err := l.Wrap("creating container "+d.Name, func() error {
@@ -259,7 +258,9 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 		return err
 	}
 	defer srcArchive.Close()
-	return d.DockerAPI.CopyToContainer(ctx, d.Name, "/", srcArchive, dockertypes.CopyToContainerOptions{})
+
+	baseDir := path.Dir(confutil.DefaultBuildKitConfigDir)
+	return d.DockerAPI.CopyToContainer(ctx, d.Name, baseDir, srcArchive, dockertypes.CopyToContainerOptions{})
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
@@ -475,15 +476,34 @@ func writeConfigFiles(m map[string][]byte) (_ string, err error) {
 			os.RemoveAll(tmpDir)
 		}
 	}()
+	configDir := filepath.Base(confutil.DefaultBuildKitConfigDir)
 	for f, dt := range m {
-		f = path.Join(confutil.DefaultBuildKitConfigDir, f)
-		p := filepath.Join(tmpDir, f)
-		if err := os.MkdirAll(filepath.Dir(p), 0700); err != nil {
+		p := filepath.Join(tmpDir, configDir, f)
+		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(p, dt, 0600); err != nil {
+		if err := os.WriteFile(p, dt, 0644); err != nil {
 			return "", err
 		}
 	}
 	return tmpDir, nil
+}
+
+func getBuildkitFlags(initConfig driver.InitConfig) []string {
+	flags := initConfig.BuildkitFlags
+	if _, ok := initConfig.Files[buildkitdConfigFile]; ok {
+		// There's no way for us to determine the appropriate default configuration
+		// path and the default path can vary depending on if the image is normal
+		// or rootless.
+		//
+		// In order to ensure that --config works, copy to a specific path and
+		// specify the location.
+		//
+		// This should be appended before the user-specified arguments
+		// so that this option could be overwritten by the user.
+		newFlags := make([]string, 0, len(flags)+2)
+		newFlags = append(newFlags, "--config", path.Join("/etc/buildkit", buildkitdConfigFile))
+		flags = append(newFlags, flags...)
+	}
+	return flags
 }
