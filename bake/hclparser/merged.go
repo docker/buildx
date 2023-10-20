@@ -123,9 +123,7 @@ func (mb mergedBodies) JustAttributes() (hcl.Attributes, hcl.Diagnostics) {
 						),
 						Subject: &attr.NameRange,
 					})
-					continue
 				}
-
 				attrs[name] = attr
 			}
 		}
@@ -196,7 +194,6 @@ func (mb mergedBodies) mergedContent(schema *hcl.BodySchema, partial bool) (*hcl
 						),
 						Subject: &attr.NameRange,
 					})
-					continue
 				}
 				content.Attributes[name] = attr
 			}
