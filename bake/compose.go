@@ -1,6 +1,7 @@
 package bake
 
 import (
+	"context"
 	"os"
 	"path/filepath"
 	"strings"
@@ -31,7 +32,7 @@ func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, e
 	if envs == nil {
 		envs = make(map[string]string)
 	}
-	cfg, err := loader.Load(compose.ConfigDetails{
+	cfg, err := loader.LoadWithContext(context.Background(), compose.ConfigDetails{
 		ConfigFiles: cfgs,
 		Environment: envs,
 	}, func(options *loader.Options) {
