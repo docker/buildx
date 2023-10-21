@@ -16,21 +16,31 @@
 
 package types
 
-type DevelopConfig struct {
-	Watch []Trigger `json:"watch,omitempty"`
-}
+import (
+	"fmt"
 
-type WatchAction string
-
-const (
-	WatchActionSync        WatchAction = "sync"
-	WatchActionRebuild     WatchAction = "rebuild"
-	WatchActionSyncRestart WatchAction = "sync+restart"
+	"github.com/pkg/errors"
 )
 
-type Trigger struct {
-	Path   string      `json:"path,omitempty"`
-	Action WatchAction `json:"action,omitempty"`
-	Target string      `json:"target,omitempty"`
-	Ignore []string    `json:"ignore,omitempty"`
+// Options is a mapping type for options we pass as-is to container runtime
+type Options map[string]string
+
+func (d *Options) DecodeMapstructure(value interface{}) error {
+	switch v := value.(type) {
+	case map[string]interface{}:
+		m := make(map[string]string)
+		for key, e := range v {
+			if e == nil {
+				m[key] = ""
+			} else {
+				m[key] = fmt.Sprint(e)
+			}
+		}
+		*d = m
+	case map[string]string:
+		*d = v
+	default:
+		return errors.Errorf("invalid type %T for options", value)
+	}
+	return nil
 }

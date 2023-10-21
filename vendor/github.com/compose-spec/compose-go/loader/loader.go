@@ -28,15 +28,12 @@ import (
 	"regexp"
 	"strconv"
 	"strings"
-	"time"
 
 	"github.com/compose-spec/compose-go/consts"
 	interp "github.com/compose-spec/compose-go/interpolation"
 	"github.com/compose-spec/compose-go/schema"
 	"github.com/compose-spec/compose-go/template"
 	"github.com/compose-spec/compose-go/types"
-	"github.com/docker/go-units"
-	"github.com/mattn/go-shellwords"
 	"github.com/mitchellh/mapstructure"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -241,6 +238,15 @@ func LoadWithContext(ctx context.Context, configDetails types.ConfigDetails, opt
 		return nil, err
 	}
 	opts.projectName = projectName
+
+	// TODO(milas): this should probably ALWAYS set (overriding any existing)
+	if _, ok := configDetails.Environment[consts.ComposeProjectName]; !ok && projectName != "" {
+		if configDetails.Environment == nil {
+			configDetails.Environment = map[string]string{}
+		}
+		configDetails.Environment[consts.ComposeProjectName] = projectName
+	}
+
 	return load(ctx, configDetails, opts, nil)
 }
 
@@ -464,10 +470,6 @@ func projectName(details types.ConfigDetails, opts *Options) (string, error) {
 		return "", InvalidProjectNameErr(projectName)
 	}
 
-	// TODO(milas): this should probably ALWAYS set (overriding any existing)
-	if _, ok := details.Environment[consts.ComposeProjectName]; !ok && projectName != "" {
-		details.Environment[consts.ComposeProjectName] = projectName
-	}
 	return projectName, nil
 }
 
@@ -586,7 +588,7 @@ func Transform(source interface{}, target interface{}, additionalTransformers ..
 	config := &mapstructure.DecoderConfig{
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			createTransformHook(additionalTransformers...),
-			mapstructure.StringToTimeDurationHookFunc()),
+			decoderHook),
 		Result:   target,
 		TagName:  "yaml",
 		Metadata: &data,
@@ -610,28 +612,20 @@ type Transformer struct {
 func createTransformHook(additionalTransformers ...Transformer) mapstructure.DecodeHookFuncType {
 	transforms := map[reflect.Type]func(interface{}) (interface{}, error){
 		reflect.TypeOf(types.External{}):                         transformExternal,
-		reflect.TypeOf(types.HealthCheckTest{}):                  transformHealthCheckTest,
-		reflect.TypeOf(types.ShellCommand{}):                     transformShellCommand,
-		reflect.TypeOf(types.StringList{}):                       transformStringList,
-		reflect.TypeOf(map[string]string{}):                      transformMapStringString,
+		reflect.TypeOf(types.Options{}):                          transformOptions,
 		reflect.TypeOf(types.UlimitsConfig{}):                    transformUlimits,
-		reflect.TypeOf(types.UnitBytes(0)):                       transformSize,
 		reflect.TypeOf([]types.ServicePortConfig{}):              transformServicePort,
 		reflect.TypeOf(types.ServiceSecretConfig{}):              transformFileReferenceConfig,
 		reflect.TypeOf(types.ServiceConfigObjConfig{}):           transformFileReferenceConfig,
-		reflect.TypeOf(types.StringOrNumberList{}):               transformStringOrNumberList,
 		reflect.TypeOf(map[string]*types.ServiceNetworkConfig{}): transformServiceNetworkMap,
 		reflect.TypeOf(types.Mapping{}):                          transformMappingOrListFunc("=", false),
 		reflect.TypeOf(types.MappingWithEquals{}):                transformMappingOrListFunc("=", true),
-		reflect.TypeOf(types.Labels{}):                           transformMappingOrListFunc("=", false),
 		reflect.TypeOf(types.MappingWithColon{}):                 transformMappingOrListFunc(":", false),
 		reflect.TypeOf(types.HostsList{}):                        transformMappingOrListFunc(":", false),
 		reflect.TypeOf(types.ServiceVolumeConfig{}):              transformServiceVolumeConfig,
 		reflect.TypeOf(types.BuildConfig{}):                      transformBuildConfig,
-		reflect.TypeOf(types.Duration(0)):                        transformStringToDuration,
 		reflect.TypeOf(types.DependsOnConfig{}):                  transformDependsOnConfig,
 		reflect.TypeOf(types.ExtendsConfig{}):                    transformExtendsConfig,
-		reflect.TypeOf(types.DeviceRequest{}):                    transformServiceDeviceRequest,
 		reflect.TypeOf(types.SSHConfig{}):                        transformSSHConfig,
 		reflect.TypeOf(types.IncludeConfig{}):                    transformIncludeConfig,
 	}
@@ -1031,7 +1025,7 @@ func loadFileObjectConfig(name string, objType string, obj types.FileObjectConfi
 	return obj, nil
 }
 
-var transformMapStringString TransformerFunc = func(data interface{}) (interface{}, error) {
+var transformOptions TransformerFunc = func(data interface{}) (interface{}, error) {
 	switch value := data.(type) {
 	case map[string]interface{}:
 		return toMapStringString(value, false), nil
@@ -1091,35 +1085,6 @@ var transformServicePort TransformerFunc = func(data interface{}) (interface{}, 
 		return ports, nil
 	default:
 		return data, errors.Errorf("invalid type %T for port", entries)
-	}
-}
-
-var transformServiceDeviceRequest TransformerFunc = func(data interface{}) (interface{}, error) {
-	switch value := data.(type) {
-	case map[string]interface{}:
-		count, ok := value["count"]
-		if ok {
-			switch val := count.(type) {
-			case int:
-				return value, nil
-			case string:
-				if strings.ToLower(val) == "all" {
-					value["count"] = -1
-					return value, nil
-				}
-				i, err := strconv.ParseInt(val, 10, 64)
-				if err == nil {
-					value["count"] = i
-					return value, nil
-				}
-				return data, errors.Errorf("invalid string value for 'count' (the only value allowed is 'all' or a number)")
-			default:
-				return data, errors.Errorf("invalid type %T for device count", val)
-			}
-		}
-		return data, nil
-	default:
-		return data, errors.Errorf("invalid type %T for resource reservation", value)
 	}
 }
 
@@ -1258,26 +1223,6 @@ func ParseShortSSHSyntax(value string) ([]types.SSHKey, error) {
 	return result, nil
 }
 
-var transformStringOrNumberList TransformerFunc = func(value interface{}) (interface{}, error) {
-	list := value.([]interface{})
-	result := make([]string, len(list))
-	for i, item := range list {
-		result[i] = fmt.Sprint(item)
-	}
-	return result, nil
-}
-
-var transformStringList TransformerFunc = func(data interface{}) (interface{}, error) {
-	switch value := data.(type) {
-	case string:
-		return []string{value}, nil
-	case []interface{}:
-		return value, nil
-	default:
-		return data, errors.Errorf("invalid type %T for string list", value)
-	}
-}
-
 func transformMappingOrListFunc(sep string, allowNil bool) TransformerFunc {
 	return func(data interface{}) (interface{}, error) {
 		return transformMappingOrList(data, sep, allowNil)
@@ -1309,52 +1254,6 @@ func transformValueToMapEntry(value string, separator string, allowNil bool) (st
 		return key, ""
 	default:
 		return key, parts[1]
-	}
-}
-
-var transformShellCommand TransformerFunc = func(value interface{}) (interface{}, error) {
-	if str, ok := value.(string); ok {
-		return shellwords.Parse(str)
-	}
-	return value, nil
-}
-
-var transformHealthCheckTest TransformerFunc = func(data interface{}) (interface{}, error) {
-	switch value := data.(type) {
-	case string:
-		return append([]string{"CMD-SHELL"}, value), nil
-	case []interface{}:
-		return value, nil
-	default:
-		return value, errors.Errorf("invalid type %T for healthcheck.test", value)
-	}
-}
-
-var transformSize TransformerFunc = func(value interface{}) (interface{}, error) {
-	switch value := value.(type) {
-	case int:
-		return int64(value), nil
-	case int64, types.UnitBytes:
-		return value, nil
-	case string:
-		return units.RAMInBytes(value)
-	default:
-		return value, errors.Errorf("invalid type for size %T", value)
-	}
-}
-
-var transformStringToDuration TransformerFunc = func(value interface{}) (interface{}, error) {
-	switch value := value.(type) {
-	case string:
-		d, err := time.ParseDuration(value)
-		if err != nil {
-			return value, err
-		}
-		return types.Duration(d), nil
-	case types.Duration:
-		return value, nil
-	default:
-		return value, errors.Errorf("invalid type %T for duration", value)
 	}
 }
 

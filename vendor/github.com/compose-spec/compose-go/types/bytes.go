@@ -16,21 +16,27 @@
 
 package types
 
-type DevelopConfig struct {
-	Watch []Trigger `json:"watch,omitempty"`
-}
+import (
+	"fmt"
 
-type WatchAction string
-
-const (
-	WatchActionSync        WatchAction = "sync"
-	WatchActionRebuild     WatchAction = "rebuild"
-	WatchActionSyncRestart WatchAction = "sync+restart"
+	"github.com/docker/go-units"
 )
 
-type Trigger struct {
-	Path   string      `json:"path,omitempty"`
-	Action WatchAction `json:"action,omitempty"`
-	Target string      `json:"target,omitempty"`
-	Ignore []string    `json:"ignore,omitempty"`
+// UnitBytes is the bytes type
+type UnitBytes int64
+
+// MarshalYAML makes UnitBytes implement yaml.Marshaller
+func (u UnitBytes) MarshalYAML() (interface{}, error) {
+	return fmt.Sprintf("%d", u), nil
+}
+
+// MarshalJSON makes UnitBytes implement json.Marshaler
+func (u UnitBytes) MarshalJSON() ([]byte, error) {
+	return []byte(fmt.Sprintf(`"%d"`, u)), nil
+}
+
+func (u *UnitBytes) DecodeMapstructure(value interface{}) error {
+	v, err := units.RAMInBytes(fmt.Sprint(value))
+	*u = UnitBytes(v)
+	return err
 }
