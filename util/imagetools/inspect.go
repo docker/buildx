@@ -8,9 +8,9 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/containerd/containerd/log"
 	"github.com/containerd/containerd/remotes"
 	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/log"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/util/resolver"
 	clitypes "github.com/docker/cli/cli/config/types"
