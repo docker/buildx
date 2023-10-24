@@ -11,6 +11,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"time"
 
 	composecli "github.com/compose-spec/compose-go/cli"
 	"github.com/docker/buildx/bake/hclparser"
@@ -18,8 +19,10 @@ import (
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
+	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/config"
 	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
@@ -54,7 +57,7 @@ func defaultFilenames() []string {
 	return names
 }
 
-func ReadLocalFiles(names []string, stdin io.Reader) ([]File, error) {
+func ReadLocalFiles(names []string, stdin io.Reader, l progress.SubLogger) ([]File, error) {
 	isDefault := false
 	if len(names) == 0 {
 		isDefault = true
@@ -62,26 +65,114 @@ func ReadLocalFiles(names []string, stdin io.Reader) ([]File, error) {
 	}
 	out := make([]File, 0, len(names))
 
+	setStatus := func(st *client.VertexStatus) {
+		if l != nil {
+			l.SetStatus(st)
+		}
+	}
+
 	for _, n := range names {
 		var dt []byte
 		var err error
 		if n == "-" {
-			dt, err = io.ReadAll(stdin)
+			dt, err = readWithProgress(stdin, setStatus)
 			if err != nil {
 				return nil, err
 			}
 		} else {
-			dt, err = os.ReadFile(n)
+			dt, err = readFileWithProgress(n, isDefault, setStatus)
+			if dt == nil && err == nil {
+				continue
+			}
 			if err != nil {
-				if isDefault && errors.Is(err, os.ErrNotExist) {
-					continue
-				}
 				return nil, err
 			}
 		}
 		out = append(out, File{Name: n, Data: dt})
 	}
 	return out, nil
+}
+
+func readFileWithProgress(fname string, isDefault bool, setStatus func(st *client.VertexStatus)) (dt []byte, err error) {
+	st := &client.VertexStatus{
+		ID: "reading " + fname,
+	}
+
+	defer func() {
+		now := time.Now()
+		st.Completed = &now
+		if dt != nil || err != nil {
+			setStatus(st)
+		}
+	}()
+
+	now := time.Now()
+	st.Started = &now
+
+	f, err := os.Open(fname)
+	if err != nil {
+		if isDefault && errors.Is(err, os.ErrNotExist) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	defer f.Close()
+	setStatus(st)
+
+	info, err := f.Stat()
+	if err != nil {
+		return nil, err
+	}
+	st.Total = info.Size()
+	setStatus(st)
+
+	buf := make([]byte, 1024)
+	for {
+		n, err := f.Read(buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		dt = append(dt, buf[:n]...)
+		st.Current += int64(n)
+		setStatus(st)
+	}
+
+	return dt, nil
+}
+
+func readWithProgress(r io.Reader, setStatus func(st *client.VertexStatus)) (dt []byte, err error) {
+	st := &client.VertexStatus{
+		ID: "reading from stdin",
+	}
+
+	defer func() {
+		now := time.Now()
+		st.Completed = &now
+		setStatus(st)
+	}()
+
+	now := time.Now()
+	st.Started = &now
+	setStatus(st)
+
+	buf := make([]byte, 1024)
+	for {
+		n, err := r.Read(buf)
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+		dt = append(dt, buf[:n]...)
+		st.Current += int64(n)
+		setStatus(st)
+	}
+
+	return dt, nil
 }
 
 func ListTargets(files []File) ([]string, error) {

@@ -1440,7 +1440,7 @@ func TestReadLocalFilesDefault(t *testing.T) {
 			for _, tf := range tt.filenames {
 				require.NoError(t, os.WriteFile(tf, []byte(tf), 0644))
 			}
-			files, err := ReadLocalFiles(nil, nil)
+			files, err := ReadLocalFiles(nil, nil, nil)
 			require.NoError(t, err)
 			if len(files) == 0 {
 				require.Equal(t, len(tt.expected), len(files))
