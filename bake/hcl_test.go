@@ -634,6 +634,29 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	require.Equal(t, ptrstr("pre-ghi"), c.Targets[0].Args["v1"])
 }
 
+func TestHCLMultiFileGlobalAttrs(t *testing.T) {
+	dt := []byte(`
+		FOO = "abc"
+		target "app" {
+			args = {
+				v1 = "pre-${FOO}"
+			}
+		}
+		`)
+	dt2 := []byte(`
+		FOO = "def"
+		`)
+
+	c, err := ParseFiles([]File{
+		{Data: dt, Name: "c1.hcl"},
+		{Data: dt2, Name: "c2.hcl"},
+	}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, c.Targets[0].Name, "app")
+	require.Equal(t, "pre-def", *c.Targets[0].Args["v1"])
+}
+
 func TestHCLDuplicateTarget(t *testing.T) {
 	dt := []byte(`
 		target "app" {

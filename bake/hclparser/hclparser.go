@@ -613,7 +613,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 
 	attrs, diags := b.JustAttributes()
 	if diags.HasErrors() {
-		if d := removeAttributesDiags(diags, reserved, p.vars); len(d) > 0 {
+		if d := removeAttributesDiags(diags, reserved, p.vars, attrs); len(d) > 0 {
 			return nil, d
 		}
 	}
@@ -857,7 +857,7 @@ func getNameIndex(v reflect.Value) (int, bool) {
 	return 0, false
 }
 
-func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}, vars map[string]*variable) hcl.Diagnostics {
+func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}, vars map[string]*variable, attrs hcl.Attributes) hcl.Diagnostics {
 	var fdiags hcl.Diagnostics
 	for _, d := range diags {
 		if fout := func(d *hcl.Diagnostic) bool {
@@ -876,6 +876,12 @@ func removeAttributesDiags(diags hcl.Diagnostics, reserved map[string]struct{}, 
 			for v := range vars {
 				// Do the same for global variables
 				if strings.HasPrefix(d.Detail, fmt.Sprintf(`Argument "%s" was already set at `, v)) {
+					return true
+				}
+			}
+			for a := range attrs {
+				// Do the same for attributes
+				if strings.HasPrefix(d.Detail, fmt.Sprintf(`Argument "%s" was already set at `, a)) {
 					return true
 				}
 			}
