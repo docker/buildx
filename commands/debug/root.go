@@ -66,7 +66,7 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 				return errors.Errorf("failed to configure terminal: %v", err)
 			}
 
-			err = monitor.RunMonitor(ctx, "", nil, controllerapi.InvokeConfig{
+			_, err = monitor.RunMonitor(ctx, "", nil, controllerapi.InvokeConfig{
 				Tty: true,
 			}, c, dockerCli.In(), os.Stdout, os.Stderr, printer)
 			con.Reset()

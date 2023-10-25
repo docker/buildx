@@ -17,14 +17,20 @@ import (
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/google/shlex"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )
 
+type MonitorBuildResult struct {
+	Resp *client.SolveResponse
+	Err  error
+}
+
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options *controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) error {
+func RunMonitor(ctx context.Context, curRef string, options *controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
 	defer func() {
 		if err := c.Disconnect(ctx, curRef); err != nil {
 			logrus.Warnf("disconnect error: %v", err)
@@ -32,7 +38,7 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 	}()
 
 	if err := progress.Pause(); err != nil {
-		return err
+		return nil, err
 	}
 	defer progress.Unpause()
 
@@ -169,10 +175,10 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 		select {
 		case <-doneCh:
 			m.close()
-			return nil
+			return m.lastBuildResult, nil
 		case err := <-errCh:
 			m.close()
-			return err
+			return m.lastBuildResult, err
 		case <-monitorDisableCh:
 		}
 		monitorForwarder.SetOut(nil)
@@ -233,6 +239,14 @@ type monitor struct {
 	invokeIO     *ioset.Forwarder
 	invokeCancel func()
 	attachedPid  atomic.Value
+
+	lastBuildResult *MonitorBuildResult
+}
+
+func (m *monitor) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, err error) {
+	ref, resp, err = m.BuildxController.Build(ctx, options, in, progress)
+	m.lastBuildResult = &MonitorBuildResult{Resp: resp, Err: err} // Record build result
+	return
 }
 
 func (m *monitor) DisconnectSession(ctx context.Context, targetID string) error {
@@ -288,7 +302,11 @@ func (m *monitor) startInvoke(ctx context.Context, pid string, cfg controllerapi
 	go func() {
 		// Start a new invoke
 		if err := m.invoke(ctx, pid, cfg); err != nil {
-			logrus.Debugf("invoke error: %v", err)
+			if errors.Is(err, context.Canceled) {
+				logrus.Debugf("process canceled: %v", err)
+			} else {
+				logrus.Errorf("invoke: %v", err)
+			}
 		}
 		if pid == m.attachedPid.Load() {
 			m.attachedPid.Store("")

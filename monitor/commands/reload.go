@@ -9,6 +9,7 @@ import (
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/types"
 	"github.com/docker/buildx/util/progress"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
 )
 
@@ -70,6 +71,11 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 		} else {
 			fmt.Printf("failed to reload: %v\n", err)
 		}
+		// report error
+		for _, s := range errdefs.Sources(err) {
+			s.Print(cm.stdout)
+		}
+		fmt.Fprintf(cm.stdout, "ERROR: %v\n", err)
 	} else {
 		resultUpdated = true
 	}
