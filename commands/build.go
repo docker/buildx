@@ -113,6 +113,7 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 
 	opts := controllerapi.BuildOptions{
 		Allow:          o.allow,
+		Annotations:    o.annotations,
 		BuildArgs:      buildArgs,
 		CgroupParent:   o.cgroupParent,
 		ContextPath:    o.contextPath,
@@ -169,16 +170,6 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	for _, e := range opts.Exports {
 		if (e.Type == client.ExporterLocal || e.Type == client.ExporterTar) && o.imageIDFile != "" {
 			return nil, errors.Errorf("local and tar exporters are incompatible with image ID file")
-		}
-	}
-
-	annotations, err := buildflags.ParseAnnotations(o.annotations)
-	if err != nil {
-		return nil, err
-	}
-	for _, e := range opts.Exports {
-		for k, v := range annotations {
-			e.Attrs[k.String()] = v
 		}
 	}
 
