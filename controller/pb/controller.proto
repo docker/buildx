@@ -79,6 +79,7 @@ message BuildOptions {
   moby.buildkit.v1.sourcepolicy.Policy SourcePolicy = 28;
   string Ref = 29;
   string GroupRef = 30;
+  repeated string Annotations = 31;
 }
 
 message ExportEntry {
