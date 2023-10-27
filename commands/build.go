@@ -15,6 +15,7 @@ import (
 	"strings"
 
 	"github.com/containerd/console"
+	"github.com/containerd/containerd/pkg/epoch"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/commands/debug"
@@ -134,10 +135,13 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		ExportLoad:     o.exportLoad,
 	}
 
-	// TODO: extract env var parsing to a method easily usable by library consumers
-	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
-		if _, ok := opts.BuildArgs["SOURCE_DATE_EPOCH"]; !ok {
-			opts.BuildArgs["SOURCE_DATE_EPOCH"] = v
+	if _, ok := opts.BuildArgs[epoch.SourceDateEpochEnv]; !ok {
+		v, err := epoch.SourceDateEpoch()
+		if err != nil {
+			return nil, err
+		}
+		if v != nil {
+			opts.BuildArgs[epoch.SourceDateEpochEnv] = strconv.FormatInt(v.Unix(), 10)
 		}
 	}
 
