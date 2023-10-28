@@ -29,6 +29,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteCmdContextEscapeRelative,
 	testBakeRemoteDockerfileCwd,
 	testBakeRemoteLocalContextRemoteDockerfile,
+	testBakeEmpty,
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -425,4 +426,10 @@ COPY foo /foo
 	)
 	require.Error(t, err, out)
 	require.Contains(t, out, "reading a dockerfile for a remote build invocation is currently not supported")
+}
+
+func testBakeEmpty(t *testing.T, sb integration.Sandbox) {
+	out, err := bakeCmd(sb)
+	require.Error(t, err, out)
+	require.Contains(t, out, "couldn't find a bake definition")
 }
