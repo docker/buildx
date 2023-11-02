@@ -23,6 +23,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeLocalMulti,
 	testBakeRemote,
 	testBakeRemoteCmdContext,
+	testBakeRemoteLocalOverride,
 	testBakeRemoteCmdContextOverride,
 	testBakeRemoteContextSubdir,
 	testBakeRemoteCmdContextEscapeRoot,
@@ -46,6 +47,7 @@ target "default" {
 		fstest.CreateFile("Dockerfile", dockerfile, 0600),
 		fstest.CreateFile("foo", []byte("foo"), 0600),
 	)
+
 	dirDest := t.TempDir()
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--set", "*.output=type=local,dest="+dirDest))
@@ -79,16 +81,23 @@ services:
 		fstest.CreateFile("Dockerfile", dockerfile, 0600),
 		fstest.CreateFile("foo", []byte("foo"), 0600),
 	)
+
 	dirDest := t.TempDir()
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--set", "*.output=type=local,dest="+dirDest))
-	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, out)
-	require.Contains(t, string(out), `#1 [internal] load local bake definitions`)
-	require.Contains(t, string(out), `#1 reading compose.yaml`)
-	require.Contains(t, string(out), `#1 reading docker-bake.hcl`)
-
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+	require.Contains(t, string(dt), `#1 reading compose.yaml`)
+	require.Contains(t, string(dt), `#1 reading docker-bake.hcl`)
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+
+	dirDest2 := t.TempDir()
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--file", "cwd://docker-bake.hcl", "--set", "*.output=type=local,dest="+dirDest2))
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest2, "foo"))
 }
 
 func testBakeRemote(t *testing.T, sb integration.Sandbox) {
@@ -119,6 +128,48 @@ EOT
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBakeRemoteLocalOverride(t *testing.T, sb integration.Sandbox) {
+	remoteBakefile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+	localBakefile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY bar /bar
+EOT
+}
+`)
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", remoteBakefile, 0600),
+		fstest.CreateFile("bar", []byte("bar"), 0600),
+	)
+	dirSrc := tmpdir(
+		t,
+		fstest.CreateFile("local-docker-bake.hcl", localBakefile, 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "docker-bake.hcl", "bar")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(sb, withDir(dirSrc), withArgs(addr, "--file", "cwd://local-docker-bake.hcl", "--set", "*.output=type=local,dest="+dirDest))
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest, "bar"))
 }
 
 func testBakeRemoteCmdContext(t *testing.T, sb integration.Sandbox) {
