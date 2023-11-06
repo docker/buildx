@@ -949,8 +949,10 @@ func (t *Target) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDe
 			for _, e := range ectxs {
 				e2 := ectx.NewChild()
 				e2.Variables = make(map[string]cty.Value)
-				for k, v := range e.Variables {
-					e2.Variables[k] = v
+				if e != ectx {
+					for k, v := range e.Variables {
+						e2.Variables[k] = v
+					}
 				}
 				e2.Variables[k] = v
 				ectxs2 = append(ectxs2, e2)

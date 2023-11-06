@@ -1113,6 +1113,27 @@ func TestHCLMatrixBadTypes(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestHCLMatrixWithGlobalTarget(t *testing.T) {
+	dt := []byte(`
+		target "x" {
+			tags = ["a", "b"]
+		}
+		
+		target "default" {
+			tags = target.x.tags
+			matrix = {
+				dummy = [""]
+			}
+		}
+	`)
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "x", c.Targets[0].Name)
+	require.Equal(t, "default", c.Targets[1].Name)
+	require.Equal(t, []string{"a", "b"}, c.Targets[1].Tags)
+}
+
 func TestJSONAttributes(t *testing.T) {
 	dt := []byte(`{"FOO": "abc", "variable": {"BAR": {"default": "def"}}, "target": { "app": { "args": {"v1": "pre-${FOO}-${BAR}"}} } }`)
 
