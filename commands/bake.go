@@ -152,6 +152,10 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 		return err
 	}
 
+	if len(files) == 0 {
+		return errors.New("couldn't find a bake definition")
+	}
+
 	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
 		// don't forget to update documentation if you add a new
 		// built-in variable: docs/bake-reference.md#built-in-variables
