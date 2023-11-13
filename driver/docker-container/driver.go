@@ -384,13 +384,20 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	return nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	_, conn, err := d.exec(ctx, []string{"buildctl", "dial-stdio"})
 	if err != nil {
 		return nil, err
 	}
-
 	conn = demuxConn(conn)
+	return conn, nil
+}
+
+func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+	conn, err := d.Dial(ctx)
+	if err != nil {
+		return nil, err
+	}
 
 	exp, _, err := detect.Exporter()
 	if err != nil {

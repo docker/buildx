@@ -189,7 +189,7 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	return nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	restClient := d.clientset.CoreV1().RESTClient()
 	restClientConfig, err := d.KubeClientConfig.ClientConfig()
 	if err != nil {
@@ -208,7 +208,10 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	if err != nil {
 		return nil, err
 	}
+	return conn, nil
+}
 
+func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	exp, _, err := detect.Exporter()
 	if err != nil {
 		return nil, err
@@ -216,7 +219,7 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 
 	var opts []client.ClientOpt
 	opts = append(opts, client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-		return conn, nil
+		return d.Dial(ctx)
 	}))
 	if td, ok := exp.(client.TracerDelegate); ok {
 		opts = append(opts, client.WithTracerDelegate(td))
