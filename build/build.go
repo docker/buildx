@@ -814,6 +814,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	results := waitmap.New()
 
 	multiTarget := len(opt) > 1
+	childTargets := calculateChildTargets(m, opt)
 
 	for k, opt := range opt {
 		err := func(k string) error {
@@ -944,7 +945,26 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							printRes = res.Metadata
 						}
 
-						results.Set(resultKey(dp.driverIndex, k), res)
+						rKey := resultKey(dp.driverIndex, k)
+						results.Set(rKey, res)
+
+						if children, ok := childTargets[rKey]; ok && len(children) > 0 {
+							// we need to wait until the child targets have completed before we can release
+							eg, ctx := errgroup.WithContext(ctx)
+							eg.Go(func() error {
+								return res.EachRef(func(ref gateway.Reference) error {
+									return ref.Evaluate(ctx)
+								})
+							})
+							eg.Go(func() error {
+								_, err := results.Get(ctx, children...)
+								return err
+							})
+							if err := eg.Wait(); err != nil {
+								return nil, err
+							}
+						}
+
 						return res, nil
 					}
 					var rr *client.SolveResponse
@@ -1480,6 +1500,24 @@ func LoadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 
 func resultKey(index int, name string) string {
 	return fmt.Sprintf("%d-%s", index, name)
+}
+
+// calculateChildTargets returns all the targets that depend on current target for reverse index
+func calculateChildTargets(drivers map[string][]driverPair, opt map[string]Options) map[string][]string {
+	out := make(map[string][]string)
+	for src := range opt {
+		dps := drivers[src]
+		for _, dp := range dps {
+			so := *dp.so
+			for k, v := range so.FrontendAttrs {
+				if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
+					target := resultKey(dp.driverIndex, strings.TrimPrefix(v, "target:"))
+					out[target] = append(out[target], resultKey(dp.driverIndex, src))
+				}
+			}
+		}
+	}
+	return out
 }
 
 func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *client.SolveOpt) error {
