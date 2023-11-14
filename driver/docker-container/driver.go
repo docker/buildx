@@ -22,6 +22,7 @@ import (
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
+	"github.com/docker/docker/api/types/system"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	dockerarchive "github.com/docker/docker/pkg/archive"
@@ -161,7 +162,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				}
 			}
 
-			secOpts, err := dockertypes.DecodeSecurityOptions(info.SecurityOptions)
+			secOpts, err := system.DecodeSecurityOptions(info.SecurityOptions)
 			if err != nil {
 				return err
 			}
@@ -220,7 +221,7 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 }
 
 func (d *Driver) copyLogs(ctx context.Context, l progress.SubLogger) error {
-	rc, err := d.DockerAPI.ContainerLogs(ctx, d.Name, dockertypes.ContainerLogsOptions{
+	rc, err := d.DockerAPI.ContainerLogs(ctx, d.Name, container.LogsOptions{
 		ShowStdout: true, ShowStderr: true,
 	})
 	if err != nil {
@@ -298,7 +299,7 @@ func (d *Driver) run(ctx context.Context, cmd []string, stdout, stderr io.Writer
 }
 
 func (d *Driver) start(ctx context.Context, l progress.SubLogger) error {
-	return d.DockerAPI.ContainerStart(ctx, d.Name, dockertypes.ContainerStartOptions{})
+	return d.DockerAPI.ContainerStart(ctx, d.Name, container.StartOptions{})
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
@@ -356,18 +357,18 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 		return err
 	}
 	if info.Status != driver.Inactive {
-		container, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
+		ctr, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 		if err != nil {
 			return err
 		}
 		if rmDaemon {
-			if err := d.DockerAPI.ContainerRemove(ctx, d.Name, dockertypes.ContainerRemoveOptions{
+			if err := d.DockerAPI.ContainerRemove(ctx, d.Name, container.RemoveOptions{
 				RemoveVolumes: true,
 				Force:         force,
 			}); err != nil {
 				return err
 			}
-			for _, v := range container.Mounts {
+			for _, v := range ctr.Mounts {
 				if v.Name != d.Name+volumeStateSuffix {
 					continue
 				}
