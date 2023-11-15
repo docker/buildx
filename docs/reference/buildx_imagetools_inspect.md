@@ -1,6 +1,6 @@
 # buildx imagetools inspect
 
-```
+```text
 docker buildx imagetools inspect [OPTIONS] NAME
 ```
 
@@ -123,12 +123,13 @@ Manifests:
 
 #### JSON output
 
-A `json` go template func is also available if you want to render fields as
-JSON bytes:
+A `json` template function is also available if you want to render fields in
+JSON format:
 
 ```console
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Manifest}}"
 ```
+
 ```json
 {
   "schemaVersion": 2,
@@ -165,6 +166,7 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Ma
 ```console
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Image}}"
 ```
+
 ```json
 {
   "created": "2022-12-01T11:46:47.713777178Z",
@@ -207,6 +209,7 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Im
 ```console
 $ docker buildx imagetools inspect moby/buildkit:master --format "{{json .Manifest}}"
 ```
+
 ```json
 {
   "schemaVersion": 2,
@@ -357,6 +360,7 @@ JSON output:
 ```console
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Provenance}}"
 ```
+
 ```json
 {
   "SLSA": {
@@ -417,6 +421,7 @@ JSON output:
 ```console
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .SBOM}}"
 ```
+
 ```json
 {
   "SPDX": {
@@ -441,6 +446,7 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .SB
 ```console
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .}}"
 ```
+
 ```json
 {
   "name": "crazymax/buildkit:attest",
@@ -522,6 +528,7 @@ go template function:
 ```console
 $ docker buildx imagetools inspect --format '{{json (index .Image "linux/s390x")}}' moby/buildkit:master
 ```
+
 ```json
 {
   "created": "2022-11-30T17:42:26.414957336Z",
@@ -588,15 +595,14 @@ $ docker buildx imagetools inspect --format '{{json (index .Image "linux/s390x")
 }
 ```
 
-### <a name="raw"></a> Show original, unformatted JSON manifest (--raw)
+### <a name="raw"></a> Show original JSON manifest (--raw)
 
-Use the `--raw` option to print the unformatted JSON manifest bytes.
-
-> `jq` is used here to get a better rendering of the output result.
+Use the `--raw` option to print the raw JSON manifest.
 
 ```console
-$ docker buildx imagetools inspect --raw crazymax/loop | jq
+$ docker buildx imagetools inspect --raw crazymax/loop
 ```
+
 ```json
 {
   "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
@@ -629,6 +635,7 @@ $ docker buildx imagetools inspect --raw crazymax/loop | jq
 ```console
 $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
 ```
+
 ```json
 {
   "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",

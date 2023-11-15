@@ -1,6 +1,6 @@
 # buildx rm
 
-```
+```text
 docker buildx rm [NAME]
 ```
 
@@ -50,10 +50,13 @@ $ docker buildx rm --all-inactive --force
 
 ### <a name="keep-daemon"></a> Keep the buildkitd daemon running (--keep-daemon)
 
-Keep the buildkitd daemon running after the buildx context is removed. This is useful when you manage buildkitd daemons and buildx contexts independently.
-Currently, only supported by the [`docker-container` and `kubernetes` drivers](buildx_create.md#driver).
+Keep the BuildKit daemon running after the buildx context is removed. This is
+useful when you manage buildkitd daemons and buildx contexts independently.
+Only supported by the
+[`docker-container`](https://docs.docker.com/build/drivers/docker-container/)
+and [`kubernetes`](https://docs.docker.com/build/drivers/kubernetes/) drivers.
 
 ### <a name="keep-state"></a> Keep BuildKit state (--keep-state)
 
 Keep BuildKit state, so it can be reused by a new builder with the same name.
-Currently, only supported by the [`docker-container` driver](buildx_create.md#driver).
+Currently, only supported by the [`docker-container` driver](https://docs.docker.com/build/drivers/docker-container/).

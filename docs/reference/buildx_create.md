@@ -1,6 +1,6 @@
 # buildx create
 
-```
+```text
 docker buildx create [OPTIONS] [CONTEXT|ENDPOINT]
 ```
 
@@ -29,9 +29,9 @@ Create a new builder instance
 
 ## Description
 
-Create makes a new builder instance pointing to a docker context or endpoint,
+Create makes a new builder instance pointing to a Docker context or endpoint,
 where context is the name of a context from `docker context ls` and endpoint is
-the address for docker socket (eg. `DOCKER_HOST` value).
+the address for Docker socket (eg. `DOCKER_HOST` value).
 
 By default, the current Docker configuration is used for determining the
 context/endpoint value.
@@ -57,7 +57,7 @@ eager_beaver
 
 ### <a name="buildkitd-flags"></a> Specify options for the buildkitd daemon (--buildkitd-flags)
 
-```
+```text
 --buildkitd-flags FLAGS
 ```
 
@@ -65,13 +65,13 @@ Adds flags when starting the buildkitd daemon. They take precedence over the
 configuration file specified by [`--config`](#config). See `buildkitd --help`
 for the available flags.
 
-```
+```text
 --buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
 ```
 
 ### <a name="config"></a> Specify a configuration file for the buildkitd daemon (--config)
 
-```
+```text
 --config FILE
 ```
 
@@ -79,7 +79,8 @@ Specifies the configuration file for the buildkitd daemon to use. The configurat
 can be overridden by [`--buildkitd-flags`](#buildkitd-flags).
 See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
-If the configuration file is not specified, will look for one by default in:
+If you don't specify a configuration file, Buildx looks for one by default in:
+
 * `$BUILDX_CONFIG/buildkitd.default.toml`
 * `$DOCKER_CONFIG/buildx/buildkitd.default.toml`
 * `~/.docker/buildx/buildkitd.default.toml`
@@ -91,23 +92,30 @@ will be updated to reflect that.
 
 ### <a name="driver"></a> Set the builder driver to use (--driver)
 
-```
+```text
 --driver DRIVER
 ```
 
-Sets the builder driver to be used. There are two available drivers, each have
-their own specificities.
+Sets the builder driver to be used. A driver is a configuration of a BuildKit
+backend. Buildx supports the following drivers:
+
+* `docker` (default)
+* `docker-container`
+* `kubernetes`
+* `remote`
+
+For more information about build drivers, see [here](https://docs.docker.com/build/drivers/).
 
 #### `docker` driver
 
-Uses the builder that is built into the docker daemon. With this driver,
+Uses the builder that is built into the Docker daemon. With this driver,
 the [`--load`](buildx_build.md#load) flag is implied by default on
 `buildx build`. However, building multi-platform images or exporting cache is
 not currently supported.
 
 #### `docker-container` driver
 
-Uses a BuildKit container that will be spawned via docker. With this driver,
+Uses a BuildKit container that will be spawned via Docker. With this driver,
 both building multi-platform images and exporting cache are supported.
 
 Unlike `docker` driver, built images will not automatically appear in
@@ -116,7 +124,7 @@ to achieve that.
 
 #### `kubernetes` driver
 
-Uses a kubernetes pods. With this driver, you can spin up pods with defined
+Uses Kubernetes pods. With this driver, you can spin up pods with defined
 BuildKit container image to build your images.
 
 Unlike `docker` driver, built images will not automatically appear in
@@ -135,59 +143,18 @@ to achieve that.
 
 ### <a name="driver-opt"></a> Set additional driver-specific options (--driver-opt)
 
-```
+```text
 --driver-opt OPTIONS
 ```
 
 Passes additional driver-specific options.
+For information about available driver options, refer to the detailed
+documentation for the specific driver:
 
-Note: When using quoted values for the `nodeselector`, `annotations`, `labels` or
-`tolerations` options, ensure that quotes are escaped correctly for your shell.
-
-#### `docker` driver
-
-No driver options.
-
-#### `docker-container` driver
-
-- `image=IMAGE` - Sets the BuildKit image to use for the container.
-- `memory=MEMORY` - Sets the amount of memory the container can use.
-- `memory-swap=MEMORY_SWAP` - Sets the memory swap limit for the container.
-- `cpu-quota=CPU_QUOTA` - Imposes a CPU CFS quota on the container.
-- `cpu-period=CPU_PERIOD` - Sets the CPU CFS scheduler period for the container.
-- `cpu-shares=CPU_SHARES` - Configures CPU shares (relative weight) of the container.
-- `cpuset-cpus=CPUSET_CPUS` - Limits the set of CPU cores the container can use.
-- `cpuset-mems=CPUSET_MEMS` - Limits the set of CPU memory nodes the container can use.
-- `network=NETMODE` - Sets the network mode for the container.
-- `cgroup-parent=CGROUP` - Sets the cgroup parent of the container if docker is using the "cgroupfs" driver. Defaults to `/docker/buildx`.
-
-Before you configure the resource limits for the container, read about [configuring runtime resource constraints for containers](https://docs.docker.com/config/containers/resource_constraints/).
-
-#### `kubernetes` driver
-
-- `image=IMAGE` - Sets the container image to be used for running buildkit.
-- `namespace=NS` - Sets the Kubernetes namespace. Defaults to the current namespace.
-- `replicas=N` - Sets the number of `Pod` replicas. Defaults to 1.
-- `requests.cpu` - Sets the request CPU value specified in units of Kubernetes CPU. Example `requests.cpu=100m`, `requests.cpu=2`
-- `requests.memory` - Sets the request memory value specified in bytes or with a valid suffix. Example `requests.memory=500Mi`, `requests.memory=4G`
-- `limits.cpu` - Sets the limit CPU value specified in units of Kubernetes CPU. Example `limits.cpu=100m`, `limits.cpu=2`
-- `limits.memory` - Sets the limit memory value specified in bytes or with a valid suffix. Example `limits.memory=500Mi`, `limits.memory=4G`
-- `serviceaccount` - Sets the created pod's service account. Example `serviceaccount=example-sa`
-- `"nodeselector=label1=value1,label2=value2"` - Sets the kv of `Pod` nodeSelector. No Defaults. Example `nodeselector=kubernetes.io/arch=arm64`
-- `"annotations=domain/thing1=value1,domain/thing2=value2"` - Sets additional annotations on the deployments and pods. No Defaults. Example `annotations=example.com/owner=sarah`
-- `"labels=domain/thing1=value1,domain/thing2=value2"` - Sets additional labels on the deployments and pods. No Defaults. Example `labels=example.com/team=rd`
-- `"tolerations=key=foo,value=bar;key=foo2,operator=exists;key=foo3,effect=NoSchedule"` - Sets the `Pod` tolerations. Accepts the same values as the kube manifest tolera>tions. Key-value pairs are separated by `,`, tolerations are separated by `;`. No Defaults. Example `tolerations=operator=exists`
-- `rootless=(true|false)` - Run the container as a non-root user without `securityContext.privileged`. Needs Kubernetes 1.19 or later. [Using Ubuntu host kernel is recommended](https://github.com/moby/buildkit/blob/master/docs/rootless.md). Defaults to false.
-- `loadbalance=(sticky|random)` - Load-balancing strategy. If set to "sticky", the pod is chosen using the hash of the context path. Defaults to "sticky"
-- `qemu.install=(true|false)` - Install QEMU emulation for multi platforms support.
-- `qemu.image=IMAGE` - Sets the QEMU emulation image. Defaults to `tonistiigi/binfmt:latest`
-
-#### `remote` driver
-
-- `key=KEY` - Sets the TLS client key.
-- `cert=CERT` - Sets the TLS client certificate to present to buildkitd.
-- `cacert=CACERT` - Sets the TLS certificate authority used for validation.
-- `servername=SERVER` - Sets the TLS server name to be used in requests (defaults to the endpoint hostname).
+* [`docker` driver](https://docs.docker.com/build/drivers/docker/)
+* [`docker-container` driver](https://docs.docker.com/build/drivers/docker-container/)
+* [`kubernetes` driver](https://docs.docker.com/build/drivers/kubernetes/)
+* [`remote` driver](https://docs.docker.com/build/drivers/remote/)
 
 ### <a name="leave"></a> Remove a node from a builder (--leave)
 
@@ -201,7 +168,7 @@ $ docker buildx create --name mybuilder --node mybuilder0 --leave
 
 ### <a name="name"></a> Specify the name of the builder (--name)
 
-```
+```text
 --name NAME
 ```
 
@@ -210,17 +177,17 @@ If none is specified, one will be automatically generated.
 
 ### <a name="node"></a> Specify the name of the node (--node)
 
-```
+```text
 --node NODE
 ```
 
 The `--node` flag specifies the name of the node to be created or modified. If
-none is specified, it is the name of the builder it belongs to, with an index
-number suffix.
+you don't specify a name, the node name defaults to the name of the builder it
+belongs to, with an index number suffix.
 
 ### <a name="platform"></a> Set the platforms supported by the node (--platform)
 
-```
+```text
 --platform PLATFORMS
 ```
 
