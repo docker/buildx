@@ -1,6 +1,6 @@
 # buildx prune
 
-```
+```text
 docker buildx prune
 ```
 

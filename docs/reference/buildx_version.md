@@ -1,6 +1,6 @@
 # buildx version
 
-```
+```text
 docker buildx version
 ```
 
@@ -16,5 +16,5 @@ View version information
 
 ```console
 $ docker buildx version
-github.com/docker/buildx v0.5.1-docker 11057da37336192bfc57d81e02359ba7ba848e4a
+github.com/docker/buildx v0.11.2 9872040b6626fb7d87ef7296fd5b832e8cc2ad17
 ```

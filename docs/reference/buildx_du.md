@@ -1,6 +1,6 @@
 # buildx du
 
-```
+```text
 docker buildx du
 ```
 
