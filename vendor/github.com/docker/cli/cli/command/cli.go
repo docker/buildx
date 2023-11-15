@@ -189,7 +189,7 @@ func (cli *DockerCli) ManifestStore() manifeststore.Store {
 // registry
 func (cli *DockerCli) RegistryClient(allowInsecure bool) registryclient.RegistryClient {
 	resolver := func(ctx context.Context, index *registry.IndexInfo) registry.AuthConfig {
-		return ResolveAuthConfig(ctx, cli, index)
+		return ResolveAuthConfig(cli.ConfigFile(), index)
 	}
 	return registryclient.NewRegistryClient(resolver, UserAgent(), allowInsecure)
 }
@@ -260,17 +260,15 @@ func NewAPIClientFromFlags(opts *cliflags.ClientOptions, configFile *configfile.
 }
 
 func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigFile) (client.APIClient, error) {
-	clientOpts, err := ep.ClientOpts()
+	opts, err := ep.ClientOpts()
 	if err != nil {
 		return nil, err
 	}
-	customHeaders := make(map[string]string, len(configFile.HTTPHeaders))
-	for k, v := range configFile.HTTPHeaders {
-		customHeaders[k] = v
+	if len(configFile.HTTPHeaders) > 0 {
+		opts = append(opts, client.WithHTTPHeaders(configFile.HTTPHeaders))
 	}
-	customHeaders["User-Agent"] = UserAgent()
-	clientOpts = append(clientOpts, client.WithHTTPHeaders(customHeaders))
-	return client.NewClientWithOpts(clientOpts...)
+	opts = append(opts, client.WithUserAgent(UserAgent()))
+	return client.NewClientWithOpts(opts...)
 }
 
 func resolveDockerEndpoint(s store.Reader, contextName string) (docker.Endpoint, error) {
@@ -364,7 +362,7 @@ func (cli *DockerCli) ContextStore() store.Store {
 // order of preference:
 //
 //  1. The "--context" command-line option.
-//  2. The "DOCKER_CONTEXT" environment variable.
+//  2. The "DOCKER_CONTEXT" environment variable ([EnvOverrideContext]).
 //  3. The current context as configured through the in "currentContext"
 //     field in the CLI configuration file ("~/.docker/config.json").
 //  4. If no context is configured, use the "default" context.
@@ -406,7 +404,7 @@ func resolveContextName(opts *cliflags.ClientOptions, config *configfile.ConfigF
 	if os.Getenv(client.EnvOverrideHost) != "" {
 		return DefaultContextName
 	}
-	if ctxName := os.Getenv("DOCKER_CONTEXT"); ctxName != "" {
+	if ctxName := os.Getenv(EnvOverrideContext); ctxName != "" {
 		return ctxName
 	}
 	if config != nil && config.CurrentContext != "" {

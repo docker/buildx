@@ -3,7 +3,6 @@ package client // import "github.com/docker/docker/client"
 import (
 	"bufio"
 	"context"
-	"crypto/tls"
 	"fmt"
 	"net"
 	"net/http"
@@ -13,8 +12,12 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/go-connections/sockets"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/codes"
+	"go.opentelemetry.io/otel/propagation"
+	"go.opentelemetry.io/otel/semconv/v1.17.0/httpconv"
+	"go.opentelemetry.io/otel/trace"
 )
 
 // postHijacked sends a POST request and hijacks the connection.
@@ -23,11 +26,11 @@ func (cli *Client) postHijacked(ctx context.Context, path string, query url.Valu
 	if err != nil {
 		return types.HijackedResponse{}, err
 	}
-	req, err := cli.buildRequest(http.MethodPost, cli.getAPIPath(ctx, path, query), bodyEncoded, headers)
+	req, err := cli.buildRequest(ctx, http.MethodPost, cli.getAPIPath(ctx, path, query), bodyEncoded, headers)
 	if err != nil {
 		return types.HijackedResponse{}, err
 	}
-	conn, mediaType, err := cli.setupHijackConn(ctx, req, "tcp")
+	conn, mediaType, err := cli.setupHijackConn(req, "tcp")
 	if err != nil {
 		return types.HijackedResponse{}, err
 	}
@@ -37,31 +40,41 @@ func (cli *Client) postHijacked(ctx context.Context, path string, query url.Valu
 
 // DialHijack returns a hijacked connection with negotiated protocol proto.
 func (cli *Client) DialHijack(ctx context.Context, url, proto string, meta map[string][]string) (net.Conn, error) {
-	req, err := http.NewRequest(http.MethodPost, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, url, nil)
 	if err != nil {
 		return nil, err
 	}
 	req = cli.addHeaders(req, meta)
 
-	conn, _, err := cli.setupHijackConn(ctx, req, proto)
+	conn, _, err := cli.setupHijackConn(req, proto)
 	return conn, err
 }
 
-// fallbackDial is used when WithDialer() was not called.
-// See cli.Dialer().
-func fallbackDial(proto, addr string, tlsConfig *tls.Config) (net.Conn, error) {
-	if tlsConfig != nil && proto != "unix" && proto != "npipe" {
-		return tls.Dial(proto, addr, tlsConfig)
-	}
-	if proto == "npipe" {
-		return sockets.DialPipe(addr, 32*time.Second)
-	}
-	return net.Dial(proto, addr)
-}
-
-func (cli *Client) setupHijackConn(ctx context.Context, req *http.Request, proto string) (net.Conn, string, error) {
+func (cli *Client) setupHijackConn(req *http.Request, proto string) (_ net.Conn, _ string, retErr error) {
+	ctx := req.Context()
 	req.Header.Set("Connection", "Upgrade")
 	req.Header.Set("Upgrade", proto)
+
+	// We aren't using the configured RoundTripper here so manually inject the trace context
+	tp := cli.tp
+	if tp == nil {
+		if span := trace.SpanFromContext(ctx); span.SpanContext().IsValid() {
+			tp = span.TracerProvider()
+		} else {
+			tp = otel.GetTracerProvider()
+		}
+	}
+
+	ctx, span := tp.Tracer("").Start(ctx, req.Method+" "+req.URL.Path, trace.WithSpanKind(trace.SpanKindClient))
+	span.SetAttributes(httpconv.ClientRequest(req)...)
+	defer func() {
+		if retErr != nil {
+			span.RecordError(retErr)
+			span.SetStatus(codes.Error, retErr.Error())
+		}
+		span.End()
+	}()
+	otel.GetTextMapPropagator().Inject(ctx, propagation.HeaderCarrier(req.Header))
 
 	dialer := cli.Dialer()
 	conn, err := dialer(ctx)
@@ -84,6 +97,9 @@ func (cli *Client) setupHijackConn(ctx context.Context, req *http.Request, proto
 
 	// Server hijacks the connection, error 'connection closed' expected
 	resp, err := clientconn.Do(req)
+	if resp != nil {
+		span.SetStatus(httpconv.ClientStatus(resp.StatusCode))
+	}
 
 	//nolint:staticcheck // ignore SA1019 for connecting to old (pre go1.8) daemons
 	if err != httputil.ErrPersistEOF {
