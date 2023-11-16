@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"time"
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
@@ -76,22 +77,35 @@ func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Write
 		try++
 		if info.Status != Running {
 			if try > 2 {
-				return nil, errors.Errorf("failed to bootstrap %T driver in attempts", d)
+				return nil, errors.Errorf("failed to bootstrap %s driver after %d attempts", d.Factory().Name(), try)
 			}
-			if err := d.Bootstrap(ctx, pw.Write); err != nil {
+
+			if err := boot(ctx, d, pw); err != nil {
+				if errors.Is(err, context.DeadlineExceeded) {
+					continue
+				}
 				return nil, err
 			}
 		}
 
 		c, err := d.Client(clientContext)
 		if err != nil {
-			if errors.Cause(err) == ErrNotRunning && try <= 2 {
+			if errors.Is(err, ErrNotRunning) && try <= 2 {
 				continue
 			}
 			return nil, err
 		}
 		return c, nil
 	}
+}
+
+const bootTimeout = 20 * time.Second
+
+func boot(ctx context.Context, d *DriverHandle, pw progress.Writer) error {
+	ctx, cancel := context.WithTimeout(ctx, bootTimeout)
+	defer cancel()
+
+	return d.Bootstrap(ctx, pw.Write)
 }
 
 func historyAPISupported(ctx context.Context, c *client.Client) bool {
