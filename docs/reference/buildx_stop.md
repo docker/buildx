@@ -18,7 +18,7 @@ Stop builder instance
 
 ## Description
 
-Stops the specified or current builder. This will not prevent buildx build to
+Stops the specified or current builder. This does not prevent buildx build to
 restart the builder. The implementation of stop depends on the driver.
 
 ## Examples

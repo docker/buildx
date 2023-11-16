@@ -1,6 +1,6 @@
 # buildx bake
 
-```
+```text
 docker buildx bake [OPTIONS] [TARGET...]
 ```
 
@@ -33,7 +33,7 @@ Build from a file
 
 ## Description
 
-Bake is a high-level build command. Each specified target will run in parallel
+Bake is a high-level build command. Each specified target runs in parallel
 as part of the build.
 
 Read [High-level build options with Bake](https://docs.docker.com/build/bake/)
@@ -54,8 +54,8 @@ Same as [`buildx --builder`](buildx.md#builder).
 ### <a name="file"></a> Specify a build definition file (-f, --file)
 
 Use the `-f` / `--file` option to specify the build definition file to use.
-The file can be an HCL, JSON or Compose file. If multiple files are specified
-they are all read and configurations are combined.
+The file can be an HCL, JSON or Compose file. If multiple files are specified,
+all are read and the build configurations are combined.
 
 You can pass the names of the targets to build, to build only specific target(s).
 The following example builds the `db` and `webapp-release` targets that are
@@ -90,9 +90,9 @@ $ docker buildx bake -f docker-bake.dev.hcl db webapp-release
 See the [Bake file reference](https://docs.docker.com/build/bake/reference/)
 for more details.
 
-### <a name="no-cache"></a> Do not use cache when building the image (--no-cache)
+### <a name="no-cache"></a> Don't use cache when building the image (--no-cache)
 
-Same as `build --no-cache`. Do not use cache when building the image.
+Same as `build --no-cache`. Don't use cache when building the image.
 
 ### <a name="print"></a> Print the options without building (--print)
 
@@ -154,7 +154,7 @@ $ docker buildx bake --set *.platform=linux/arm64     # overrides platform for a
 $ docker buildx bake --set foo*.no-cache              # bypass caching only for targets starting with 'foo'
 ```
 
-Complete list of overridable fields:
+You can override the following fields:
 
 * `args`
 * `cache-from`

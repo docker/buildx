@@ -1,6 +1,6 @@
 # buildx imagetools create
 
-```
+```text
 docker buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]
 ```
 
