@@ -40,7 +40,10 @@ const (
 
 type Driver struct {
 	driver.InitConfig
-	factory      driver.Factory
+	factory driver.Factory
+
+	// if you add fields, remember to update docs:
+	// https://github.com/docker/docs/blob/main/content/build/drivers/docker-container.md
 	netMode      string
 	image        string
 	memory       opts.MemBytes

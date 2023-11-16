@@ -38,7 +38,10 @@ const (
 
 type Driver struct {
 	driver.InitConfig
-	factory          driver.Factory
+	factory driver.Factory
+
+	// if you add fields, remember to update docs:
+	// https://github.com/docker/docs/blob/main/content/build/drivers/kubernetes.md
 	minReplicas      int
 	deployment       *appsv1.Deployment
 	configMaps       []*corev1.ConfigMap
