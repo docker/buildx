@@ -17,6 +17,8 @@ type Driver struct {
 	factory driver.Factory
 	driver.InitConfig
 
+	// if you add fields, remember to update docs:
+	// https://github.com/docker/docs/blob/main/content/build/drivers/docker.md
 	features    features
 	hostGateway hostGateway
 }
