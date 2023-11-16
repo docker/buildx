@@ -1,6 +1,6 @@
 # buildx ls
 
-```
+```text
 docker buildx ls
 ```
 
