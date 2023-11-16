@@ -65,7 +65,10 @@ func toBuildkitExtraHosts(ctx context.Context, inp []string, nodeDriver *driver.
 	}
 	hosts := make([]string, 0, len(inp))
 	for _, h := range inp {
-		host, ip, ok := strings.Cut(h, ":")
+		host, ip, ok := strings.Cut(h, "=")
+		if !ok {
+			host, ip, ok = strings.Cut(h, ":")
+		}
 		if !ok || host == "" || ip == "" {
 			return "", errors.Errorf("invalid host %s", h)
 		}
@@ -77,8 +80,16 @@ func toBuildkitExtraHosts(ctx context.Context, inp []string, nodeDriver *driver.
 				return "", errors.Wrap(err, "unable to derive the IP value for host-gateway")
 			}
 			ip = hgip.String()
-		} else if net.ParseIP(ip) == nil {
-			return "", errors.Errorf("invalid host %s", h)
+		} else {
+			// If the address is enclosed in square brackets, extract it (for IPv6, but
+			// permit it for IPv4 as well; we don't know the address family here, but it's
+			// unambiguous).
+			if len(ip) > 2 && ip[0] == '[' && ip[len(ip)-1] == ']' {
+				ip = ip[1 : len(ip)-1]
+			}
+			if net.ParseIP(ip) == nil {
+				return "", errors.Errorf("invalid host %s", h)
+			}
 		}
 		hosts = append(hosts, host+"="+ip)
 	}
