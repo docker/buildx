@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"net"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
@@ -32,7 +33,11 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	if err != nil {
 		return err
 	}
-	return c.Wait(ctx)
+	return progress.Wrap("[internal] waiting for connection", l, func(_ progress.SubLogger) error {
+		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		defer cancel()
+		return c.Wait(ctx)
+	})
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
