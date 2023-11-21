@@ -13,7 +13,7 @@ Disk usage
 |:------------------------|:---------|:--------|:-----------------------------------------|
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance |
 | `--filter`              | `filter` |         | Provide filter values                    |
-| `--verbose`             |          |         | Provide a more verbose output            |
+| [`--verbose`](#verbose) |          |         | Provide a more verbose output            |
 
 
 <!---MARKER_GEN_END-->
@@ -49,7 +49,7 @@ If `RECLAIMABLE` is false, the `docker buildx du prune` command won't delete
 the record, even if you use `--all`. That's because the record is actively in
 use by some component of the builder.
 
-The asterisks (\*) in the output indicate the following:
+The asterisks (\*) in the default output indicate the following:
 
 - An asterisk next to an ID (`zu7m6evdpebh5h8kfkpw9dlf2*`) indicates that the record
   is mutable. The size of the record may change, or another build can take ownership of
@@ -59,6 +59,35 @@ The asterisks (\*) in the output indicate the following:
   Storage of the record is shared with some other resource, typically an image.
   If you prune such a record then you will lose build cache but only metadata
   will be deleted as the image still needs to actual storage layers.
+
+### <a name="verbose"></a> Use verbose output (--verbose)
+
+The verbose output of the `docker buildx du` command is useful for inspecting
+the disk usage records in more detail. The verbose output shows the mutable and
+shared states more clearly, as well as additional information about the
+corresponding layer.
+
+```console
+$ docker buildx du --verbose
+...
+Last used:      2 days ago
+Type:           regular
+
+ID:             05d0elirb4mmvpmnzbrp3ssrg
+Parent:         e8sfdn4mygrg7msi9ak1dy6op
+Created at:     2023-11-20 09:53:30.881558721 +0000 UTC
+Mutable:        false
+Reclaimable:    true
+Shared:         false
+Size:           0B
+Description:    [gobase 3/3] WORKDIR /src
+Usage count:    3
+Last used:      24 hours ago
+Type:           regular
+
+Reclaimable:    4.453GB
+Total:          4.453GB
+```
 
 ### <a name="builder"></a> Override the configured builder instance (--builder)
 
