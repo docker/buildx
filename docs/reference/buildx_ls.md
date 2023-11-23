@@ -9,10 +9,11 @@ List builder instances
 
 ### Options
 
-| Name                  | Type     | Default | Description          |
-|:----------------------|:---------|:--------|:---------------------|
-| `-D`, `--debug`       | `bool`   |         | Enable debug logging |
-| [`--format`](#format) | `string` | `table` | Format the output    |
+| Name                  | Type     | Default | Description           |
+|:----------------------|:---------|:--------|:----------------------|
+| `-D`, `--debug`       | `bool`   |         | Enable debug logging  |
+| [`--format`](#format) | `string` | `table` | Format the output     |
+| `--no-trunc`          | `bool`   |         | Don't truncate output |
 
 
 <!---MARKER_GEN_END-->

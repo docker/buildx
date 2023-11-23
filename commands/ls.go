@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
@@ -35,7 +36,8 @@ const (
 )
 
 type lsOptions struct {
-	format string
+	format  string
+	noTrunc bool
 }
 
 func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
@@ -72,7 +74,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 		return err
 	}
 
-	if hasErrors, err := lsPrint(dockerCli, current, builders, in.format); err != nil {
+	if hasErrors, err := lsPrint(dockerCli, current, builders, in); err != nil {
 		return err
 	} else if hasErrors {
 		_, _ = fmt.Fprintf(dockerCli.Err(), "\n")
@@ -107,6 +109,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVar(&options.format, "format", formatter.TableFormatKey, "Format the output")
+	flags.BoolVar(&options.noTrunc, "no-trunc", false, "Don't truncate output")
 
 	// hide builder persistent flag for this command
 	cobrautil.HideInheritedFlags(cmd, "builder")
@@ -114,14 +117,15 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 	return cmd
 }
 
-func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builder.Builder, format string) (hasErrors bool, _ error) {
-	if format == formatter.TableFormatKey {
-		format = lsDefaultTableFormat
+func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builder.Builder, in lsOptions) (hasErrors bool, _ error) {
+	if in.format == formatter.TableFormatKey {
+		in.format = lsDefaultTableFormat
 	}
 
 	ctx := formatter.Context{
 		Output: dockerCli.Out(),
-		Format: formatter.Format(format),
+		Format: formatter.Format(in.format),
+		Trunc:  !in.noTrunc,
 	}
 
 	sort.SliceStable(builders, func(i, j int) bool {
@@ -138,11 +142,12 @@ func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builde
 	render := func(format func(subContext formatter.SubContext) error) error {
 		for _, b := range builders {
 			if err := format(&lsContext{
+				format: ctx.Format,
+				trunc:  ctx.Trunc,
 				Builder: &lsBuilder{
 					Builder: b,
 					Current: b.Name == current.Name,
 				},
-				format: ctx.Format,
 			}); err != nil {
 				return err
 			}
@@ -160,6 +165,7 @@ func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builde
 				}
 				if err := format(&lsContext{
 					format: ctx.Format,
+					trunc:  ctx.Trunc,
 					Builder: &lsBuilder{
 						Builder: b,
 						Current: b.Name == current.Name,
@@ -196,6 +202,7 @@ type lsContext struct {
 	Builder *lsBuilder
 
 	format formatter.Format
+	trunc  bool
 	node   builder.Node
 }
 
@@ -261,7 +268,11 @@ func (c *lsContext) Platforms() string {
 	if c.node.Name == "" {
 		return ""
 	}
-	return strings.Join(platformutil.FormatInGroups(c.node.Node.Platforms, c.node.Platforms), ", ")
+	pfs := platformutil.FormatInGroups(c.node.Node.Platforms, c.node.Platforms)
+	if c.trunc && c.format.IsTable() {
+		return truncPlatforms(pfs, 4).String()
+	}
+	return strings.Join(pfs, ", ")
 }
 
 func (c *lsContext) Error() string {
@@ -271,4 +282,128 @@ func (c *lsContext) Error() string {
 		return err.Error()
 	}
 	return ""
+}
+
+var truncMajorPlatforms = []string{
+	"linux/amd64",
+	"linux/arm64",
+	"linux/arm",
+	"linux/ppc64le",
+	"linux/s390x",
+	"linux/riscv64",
+	"linux/mips64",
+}
+
+type truncatedPlatforms struct {
+	res   map[string][]string
+	input []string
+	max   int
+}
+
+func (tp truncatedPlatforms) List() map[string][]string {
+	return tp.res
+}
+
+func (tp truncatedPlatforms) String() string {
+	var out []string
+	var count int
+
+	seen := make(map[string]struct{})
+	for _, mpf := range truncMajorPlatforms {
+		if tpf, ok := tp.res[mpf]; ok {
+			seen[mpf] = struct{}{}
+			if len(tpf) == 1 {
+				out = append(out, fmt.Sprintf("%s", tpf[0]))
+				count++
+			} else {
+				hasPreferredPlatform := false
+				for _, pf := range tpf {
+					if strings.HasSuffix(pf, "*") {
+						hasPreferredPlatform = true
+						break
+					}
+				}
+				mainpf := mpf
+				if hasPreferredPlatform {
+					mainpf += "*"
+				}
+				out = append(out, fmt.Sprintf("%s (+%d)", mainpf, len(tpf)))
+				count += len(tpf)
+			}
+		}
+	}
+
+	for mpf, pf := range tp.res {
+		if len(out) >= tp.max {
+			break
+		}
+		if _, ok := seen[mpf]; ok {
+			continue
+		}
+		if len(pf) == 1 {
+			out = append(out, fmt.Sprintf("%s", pf[0]))
+			count++
+		} else {
+			hasPreferredPlatform := false
+			for _, pf := range pf {
+				if strings.HasSuffix(pf, "*") {
+					hasPreferredPlatform = true
+					break
+				}
+			}
+			mainpf := mpf
+			if hasPreferredPlatform {
+				mainpf += "*"
+			}
+			out = append(out, fmt.Sprintf("%s (+%d)", mainpf, len(pf)))
+			count += len(pf)
+		}
+	}
+
+	left := len(tp.input) - count
+	if left > 0 {
+		out = append(out, fmt.Sprintf("(%d more)", left))
+	}
+
+	return strings.Join(out, ", ")
+}
+
+func truncPlatforms(pfs []string, max int) truncatedPlatforms {
+	res := make(map[string][]string)
+	for _, mpf := range truncMajorPlatforms {
+		for _, pf := range pfs {
+			if len(res) >= max {
+				break
+			}
+			pp, err := platforms.Parse(strings.TrimSuffix(pf, "*"))
+			if err != nil {
+				continue
+			}
+			if pp.OS+"/"+pp.Architecture == mpf {
+				res[mpf] = append(res[mpf], pf)
+			}
+		}
+	}
+	left := make(map[string][]string)
+	for _, pf := range pfs {
+		if len(res) >= max {
+			break
+		}
+		pp, err := platforms.Parse(strings.TrimSuffix(pf, "*"))
+		if err != nil {
+			continue
+		}
+		ppf := strings.TrimSuffix(pp.OS+"/"+pp.Architecture, "*")
+		if _, ok := res[ppf]; !ok {
+			left[ppf] = append(left[ppf], pf)
+		}
+	}
+	for k, v := range left {
+		res[k] = v
+	}
+	return truncatedPlatforms{
+		res:   res,
+		input: pfs,
+		max:   max,
+	}
 }
