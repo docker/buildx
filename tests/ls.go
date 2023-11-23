@@ -20,15 +20,37 @@ var lsTests = []func(t *testing.T, sb integration.Sandbox){
 }
 
 func testLs(t *testing.T, sb integration.Sandbox) {
-	out, err := lsCmd(sb)
-	require.NoError(t, err, string(out))
+	tests := []struct {
+		name string
+		args []string
+	}{
+		{
+			name: "no args",
+			args: []string{},
+		},
+		{
+			name: "format",
+			args: []string{"--format", "{{.Name}}: {{.DriverEndpoint}}"},
+		},
+	}
 
 	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
-	for _, line := range strings.Split(out, "\n") {
-		if strings.Contains(line, sb.Address()) {
-			require.Contains(t, line, sbDriver)
-			return
-		}
+	for _, tt := range tests {
+		tt := tt
+		t.Run(tt.name, func(t *testing.T) {
+			out, err := lsCmd(sb, withArgs(tt.args...))
+			require.NoError(t, err, out)
+			found := false
+			for _, line := range strings.Split(out, "\n") {
+				if strings.Contains(line, sb.Address()) {
+					found = true
+					require.Contains(t, line, sbDriver)
+					break
+				}
+			}
+			if !found {
+				require.Fail(t, out)
+			}
+		})
 	}
-	require.Fail(t, out)
 }
