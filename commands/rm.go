@@ -9,7 +9,6 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/cobrautil/completion"
-	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
@@ -18,7 +17,7 @@ import (
 )
 
 type rmOptions struct {
-	builder     string
+	builders    []string
 	keepState   bool
 	keepDaemon  bool
 	allInactive bool
@@ -46,33 +45,52 @@ func runRm(dockerCli command.Cli, in rmOptions) error {
 		return rmAllInactive(ctx, txn, dockerCli, in)
 	}
 
-	b, err := builder.New(dockerCli,
-		builder.WithName(in.builder),
-		builder.WithStore(txn),
-		builder.WithSkippedValidation(),
-	)
-	if err != nil {
-		return err
+	eg, _ := errgroup.WithContext(ctx)
+	for _, name := range in.builders {
+		func(name string) {
+			eg.Go(func() (err error) {
+				defer func() {
+					if err == nil {
+						_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", name)
+					} else {
+						_, _ = fmt.Fprintf(dockerCli.Err(), "failed to remove %s: %v\n", name, err)
+					}
+				}()
+
+				b, err := builder.New(dockerCli,
+					builder.WithName(name),
+					builder.WithStore(txn),
+					builder.WithSkippedValidation(),
+				)
+				if err != nil {
+					return err
+				}
+
+				nodes, err := b.LoadNodes(ctx)
+				if err != nil {
+					return err
+				}
+
+				if cb := b.ContextName(); cb != "" {
+					return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb)
+				}
+
+				err1 := rm(ctx, nodes, in)
+				if err := txn.Remove(b.Name); err != nil {
+					return err
+				}
+				if err1 != nil {
+					return err1
+				}
+
+				return nil
+			})
+		}(name)
 	}
 
-	nodes, err := b.LoadNodes(ctx)
-	if err != nil {
-		return err
+	if err := eg.Wait(); err != nil {
+		return errors.New("failed to remove one or more builders")
 	}
-
-	if cb := b.ContextName(); cb != "" {
-		return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb)
-	}
-
-	err1 := rm(ctx, nodes, in)
-	if err := txn.Remove(b.Name); err != nil {
-		return err
-	}
-	if err1 != nil {
-		return err1
-	}
-
-	_, _ = fmt.Fprintf(dockerCli.Err(), "%s removed\n", b.Name)
 	return nil
 }
 
@@ -80,16 +98,15 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options rmOptions
 
 	cmd := &cobra.Command{
-		Use:   "rm [NAME]",
-		Short: "Remove a builder instance",
-		Args:  cli.RequiresMaxArgs(1),
+		Use:   "rm [OPTIONS] [NAME] [NAME...]",
+		Short: "Remove one or more builder instances",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			options.builder = rootOpts.builder
+			options.builders = []string{rootOpts.builder}
 			if len(args) > 0 {
 				if options.allInactive {
 					return errors.New("cannot specify builder name when --all-inactive is set")
 				}
-				options.builder = args[0]
+				options.builders = args
 			}
 			return runRm(dockerCli, options)
 		},

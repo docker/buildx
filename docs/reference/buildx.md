@@ -20,7 +20,7 @@ Extended build capabilities with BuildKit
 | [`inspect`](buildx_inspect.md)       | Inspect current builder instance       |
 | [`ls`](buildx_ls.md)                 | List builder instances                 |
 | [`prune`](buildx_prune.md)           | Remove build cache                     |
-| [`rm`](buildx_rm.md)                 | Remove a builder instance              |
+| [`rm`](buildx_rm.md)                 | Remove one or more builder instances   |
 | [`stop`](buildx_stop.md)             | Stop builder instance                  |
 | [`use`](buildx_use.md)               | Set the current builder instance       |
 | [`version`](buildx_version.md)       | Show buildx version information        |
