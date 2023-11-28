@@ -509,10 +509,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	if err != nil {
 		return nil, err
 	}
-	driversSolveOpts := make(map[string][]*client.SolveOpt, len(drivers))
-	for k, dps := range drivers {
-		driversSolveOpts[k] = make([]*client.SolveOpt, len(dps))
-	}
 
 	defers := make([]func(), 0, 2)
 	defer func() {
@@ -532,7 +528,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		if err != nil {
 			logrus.WithError(err).Warn("current commit information was not captured by the build")
 		}
-		for i, np := range drivers[k] {
+		for _, np := range drivers[k] {
 			if np.Node().Driver.IsMobyDriver() {
 				hasMobyDriver = true
 			}
@@ -552,7 +548,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				so.FrontendAttrs[k] = v
 			}
 			defers = append(defers, release)
-			driversSolveOpts[k][i] = so
+			np.SolveOpt = so
 		}
 		for _, at := range opt.Session {
 			if s, ok := at.(interface {
@@ -566,8 +562,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 
 		// validate for multi-node push
 		if hasMobyDriver && multiDriver {
-			for _, so := range driversSolveOpts[k] {
-				for _, e := range so.Exports {
+			for _, np := range drivers[k] {
+				for _, e := range np.SolveOpt.Exports {
 					if e.Type == "moby" {
 						if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
 							return nil, errors.Errorf("multi-node push can't currently be performed with the docker driver, please switch to a different driver")
@@ -582,7 +578,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	for name := range opt {
 		dps := drivers[name]
 		for i, dp := range dps {
-			so := driversSolveOpts[name][i]
+			so := drivers[name][i].SolveOpt
 			for k, v := range so.FrontendAttrs {
 				if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
 					k2 := strings.TrimPrefix(v, "target:")
@@ -610,7 +606,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	results := waitmap.New()
 
 	multiTarget := len(opt) > 1
-	childTargets := calculateChildTargets(drivers, driversSolveOpts, opt)
+	childTargets := calculateChildTargets(drivers, opt)
 
 	for k, opt := range opt {
 		err := func(k string) error {
@@ -634,7 +630,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			for i, dp := range dps {
 				i, dp := i, dp
 				node := dp.Node()
-				so := driversSolveOpts[k][i]
+				so := drivers[k][i].SolveOpt
 				if multiDriver {
 					for i, e := range so.Exports {
 						switch e.Type {
@@ -1303,12 +1299,12 @@ func resultKey(index int, name string) string {
 }
 
 // calculateChildTargets returns all the targets that depend on current target for reverse index
-func calculateChildTargets(drivers map[string][]*resolvedNode, driversSolveOpts map[string][]*client.SolveOpt, opt map[string]Options) map[string][]string {
+func calculateChildTargets(drivers map[string][]*resolvedNode, opt map[string]Options) map[string][]string {
 	out := make(map[string][]string)
 	for name := range opt {
 		dps := drivers[name]
 		for i, dp := range dps {
-			so := driversSolveOpts[name][i]
+			so := drivers[name][i].SolveOpt
 			for k, v := range so.FrontendAttrs {
 				if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
 					target := resultKey(dp.driverIndex, strings.TrimPrefix(v, "target:"))

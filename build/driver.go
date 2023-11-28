@@ -19,6 +19,8 @@ import (
 )
 
 type resolvedNode struct {
+	SolveOpt *client.SolveOpt
+
 	resolver    *nodeResolver
 	driverIndex int
 	platforms   []specs.Platform
