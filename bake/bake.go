@@ -1011,12 +1011,17 @@ func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(
 }
 
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
+	// make sure local credentials are loaded multiple times for different targets
+	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+	authProvider := authprovider.NewDockerAuthProvider(dockerConfig, nil)
+
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
 		bo, err := toBuildOpt(v, inp)
 		if err != nil {
 			return nil, err
 		}
+		bo.Session = append(bo.Session, authProvider)
 		m2[k] = *bo
 	}
 	return m2, nil
@@ -1246,9 +1251,6 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		return nil, err
 	}
 	bo.Platforms = platforms
-
-	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-	bo.Session = append(bo.Session, authprovider.NewDockerAuthProvider(dockerConfig, nil))
 
 	secrets, err := buildflags.ParseSecretSpecs(t.Secrets)
 	if err != nil {
