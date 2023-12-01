@@ -52,6 +52,15 @@ func GitSetRemote(c *Git, tb testing.TB, name string, url string) {
 	require.NoError(tb, err)
 }
 
+func GitSetMainUpstream(c *Git, tb testing.TB, remote, target string) {
+	tb.Helper()
+	_, err := fakeGit(c, "fetch", "--depth", "1", remote, target)
+	require.NoError(tb, err)
+
+	_, err = fakeGit(c, "branch", "--set-upstream-to", remote+"/"+target, "main")
+	require.NoError(tb, err)
+}
+
 func Mktmp(tb testing.TB) string {
 	tb.Helper()
 	folder := tb.TempDir()

@@ -106,8 +106,9 @@ func TestGitDescribeTags(t *testing.T) {
 
 func TestGitRemoteURL(t *testing.T) {
 	type remote struct {
-		name string
-		url  string
+		name     string
+		url      string
+		tracking string
 	}
 
 	cases := []struct {
@@ -165,6 +166,36 @@ func TestGitRemoteURL(t *testing.T) {
 			},
 			fail: true,
 		},
+		{
+			name: "single tracking branch",
+			remotes: []remote{
+				{
+					name:     "foo",
+					url:      "https://github.com/tonistiigi/buildx.git",
+					tracking: "master",
+				},
+			},
+			expected: "https://github.com/tonistiigi/buildx.git",
+		},
+		{
+			name: "fork tracking branch",
+			remotes: []remote{
+				{
+					name: "origin",
+					url:  "git@github.com:crazy-max/buildx.git",
+				},
+				{
+					name:     "foobranch",
+					url:      "https://github.com/tonistiigi/buildx.git",
+					tracking: "master",
+				},
+				{
+					name: "crazymax",
+					url:  "git@github.com:crazy-max/buildx.git",
+				},
+			},
+			expected: "https://github.com/tonistiigi/buildx.git",
+		},
 	}
 	for _, tt := range cases {
 		tt := tt
@@ -177,6 +208,9 @@ func TestGitRemoteURL(t *testing.T) {
 			GitCommit(c, t, "initial commit")
 			for _, r := range tt.remotes {
 				GitSetRemote(c, t, r.name, r.url)
+				if r.tracking != "" {
+					GitSetMainUpstream(c, t, r.name, r.tracking)
+				}
 			}
 
 			ru, err := c.RemoteURL()
