@@ -74,7 +74,7 @@ Use the `--dry-run` flag to not push the image, just show it.
 
 ### <a name="file"></a> Read source descriptor from a file (-f, --file)
 
-```
+```text
 -f FILE or --file FILE
 ```
 
@@ -95,7 +95,7 @@ The supported fields for the descriptor are defined in [OCI spec](https://github
 
 ### <a name="tag"></a> Set reference for new image  (-t, --tag)
 
-```
+```text
 -t IMAGE or --tag IMAGE
 ```
 
