@@ -29,8 +29,10 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/ioset"
+	"github.com/docker/buildx/util/metrics"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
+	"github.com/docker/buildx/version"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -51,6 +53,9 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.opentelemetry.io/otel"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
 )
 
@@ -212,6 +217,15 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 
 func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
 	ctx := appcontext.Context()
+
+	mp, report, err := metrics.MeterProvider(dockerCli)
+	if err != nil {
+		return err
+	}
+	defer report()
+
+	recordVersionInfo(mp, "build")
+
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
 	if err != nil {
 		return err
@@ -925,4 +939,31 @@ func maybeJSONArray(v string) []string {
 		return list
 	}
 	return []string{v}
+}
+
+func recordVersionInfo(mp metric.MeterProvider, command string) {
+	// Still in the process of testing/stabilizing these counters.
+	if !isExperimental() {
+		return
+	}
+
+	meter := mp.Meter("github.com/docker/buildx",
+		metric.WithInstrumentationVersion(version.Version),
+	)
+
+	counter, err := meter.Int64Counter("docker.cli.count",
+		metric.WithDescription("Number of invocations of the docker buildx command."),
+	)
+	if err != nil {
+		otel.Handle(err)
+	}
+
+	counter.Add(context.Background(), 1,
+		metric.WithAttributes(
+			attribute.String("command", command),
+			attribute.String("package", version.Package),
+			attribute.String("version", version.Version),
+			attribute.String("revision", version.Revision),
+		),
+	)
 }
