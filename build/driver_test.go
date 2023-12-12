@@ -22,6 +22,7 @@ func TestFindDriverSanity(t *testing.T) {
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
 	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, []specs.Platform{platforms.DefaultSpec()}, res[0].platforms)
 }
 
 func TestFindDriverEmpty(t *testing.T) {
@@ -216,7 +217,7 @@ func TestSelectNodePreferExact(t *testing.T) {
 	require.Equal(t, "bbb", res[0].Node().Builder)
 }
 
-func TestSelectNodeCurrentPlatform(t *testing.T) {
+func TestSelectNodeNoPlatform(t *testing.T) {
 	r := makeTestResolver(map[string][]specs.Platform{
 		"aaa": {platforms.MustParse("linux/foobar")},
 		"bbb": {platforms.DefaultSpec()},
@@ -226,7 +227,8 @@ func TestSelectNodeCurrentPlatform(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Empty(t, res[0].platforms)
 }
 
 func TestSelectNodeAdditionalPlatforms(t *testing.T) {

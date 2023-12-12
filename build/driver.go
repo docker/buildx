@@ -162,10 +162,6 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []specs.Platform, pw prog
 		return nil, true, nil
 	}
 
-	if len(ps) == 0 {
-		ps = []specs.Platform{platforms.DefaultSpec()}
-	}
-
 	perfect := true
 	nodeIdxs := make([]int, 0)
 	for _, p := range ps {
@@ -178,13 +174,24 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []specs.Platform, pw prog
 	}
 
 	var nodes []*resolvedNode
-	for i, idx := range nodeIdxs {
+	if len(nodeIdxs) == 0 {
 		nodes = append(nodes, &resolvedNode{
 			resolver:    r,
-			driverIndex: idx,
-			platforms:   []specs.Platform{ps[i]},
+			driverIndex: 0,
 		})
+	} else {
+		for i, idx := range nodeIdxs {
+			node := &resolvedNode{
+				resolver:    r,
+				driverIndex: idx,
+			}
+			if len(ps) > 0 {
+				node.platforms = []specs.Platform{ps[i]}
+			}
+			nodes = append(nodes, node)
+		}
 	}
+
 	nodes = recombineNodes(nodes)
 	if _, err := r.boot(ctx, nodeIdxs, pw); err != nil {
 		return nil, false, err
