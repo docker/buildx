@@ -17,7 +17,7 @@ Start a build
 |:-------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------|:----------|:----------------------------------------------------------------------------------------------------|
 | [`--add-host`](https://docs.docker.com/engine/reference/commandline/build/#add-host)                                                                   | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                 |
 | [`--allow`](#allow)                                                                                                                                    | `stringSlice` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)                      |
-| `--annotation`                                                                                                                                         | `stringArray` |           | Add annotation to the image                                                                         |
+| [`--annotation`](#annotation)                                                                                                                          | `stringArray` |           | Add annotation to the image                                                                         |
 | [`--attest`](#attest)                                                                                                                                  | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                        |
 | [`--build-arg`](#build-arg)                                                                                                                            | `stringArray` |           | Set build-time variables                                                                            |
 | [`--build-context`](#build-context)                                                                                                                    | `stringArray` |           | Additional build contexts (e.g., name=path)                                                         |
@@ -68,6 +68,52 @@ documentation](https://docs.docker.com/engine/reference/commandline/build/).
 This page describes a subset of the new flags.
 
 ## Examples
+
+### <a name="annotation"></a> Create annotations (--annotation)
+
+```text
+--annotation="key=value"
+--annotation="[type:]key=value"
+```
+
+Add OCI annotations to the image index, manifest, or descriptor.
+The following example adds the `foo=bar` annotation to the image manifests:
+
+```console
+$ docker buildx build -t TAG --annotation "foo=bar" --push .
+```
+
+You can optionally add a type prefix to specify the level of the annotation. By
+default, the image manifest is annotated. The following example adds the
+`foo=bar` annotation the image index instead of the manifests:
+
+```console
+$ docker buildx build -t TAG --annotation "index:foo=bar" --push .
+```
+
+You can specify multiple types, separated by a comma (,) to add the annotation
+to multiple image components. The following example adds the `foo=bar`
+annotation to image index, descriptors, manifests:
+
+```console
+$ docker buildx build -t TAG --annotation "index,manifest,manifest-descriptor:foo=bar" --push .
+```
+
+You can also specify a platform qualifier in square brackets (`[os/arch]`) in
+the type prefix, to apply the annotation to a subset of manifests with the
+matching platform. The following example adds the `foo=bar` annotation only to
+the manifest with the `linux/amd64` platform:
+
+```console
+$ docker buildx build -t TAG --annotation "manifest[linux/amd64]:foo=bar" --push .
+```
+
+Wildcards are not supported in the platform qualifier; you can't specify a type
+prefix like `manifest[linux/*]` to add annotations only to manifests which has
+`linux` as the OS platform.
+
+For more information about annotations, see
+[Annotations](https://docs.docker.com/build/building/annotations/).
 
 ### <a name="attest"></a> Create attestations (--attest)
 
