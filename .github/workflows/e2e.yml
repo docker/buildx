@@ -103,7 +103,7 @@ jobs:
         if: matrix.driver == 'docker' || matrix.driver == 'docker-container'
       -
         name: Install buildx
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
           name: binary
           path: /home/runner/.docker/cli-plugins
