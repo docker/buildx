@@ -11,7 +11,7 @@ Create a new image based on source images
 
 | Name                             | Type          | Default | Description                                                                              |
 |:---------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
-| `--annotation`                   | `stringArray` |         | Add annotation to the image                                                              |
+| [`--annotation`](#annotation)    | `stringArray` |         | Add annotation to the image                                                              |
 | [`--append`](#append)            |               |         | Append to existing manifest                                                              |
 | [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                 |
 | [`--dry-run`](#dry-run)          |               |         | Show final image instead of pushing                                                      |
@@ -31,6 +31,34 @@ specified, create performs a carbon copy.
 
 ## Examples
 
+### <a name="annotation"></a> Add annotations to an image (--annotation)
+
+The `--annotation` flag lets you add annotations the image index, manifest,
+and descriptors when creating a new image.
+
+The following command creates a `foo/bar:latest` image with the
+`org.opencontainers.image.authors` annotation on the image index.
+
+```console
+$ docker buildx imagetools create \
+  --annotation "index:org.opencontainers.image.authors=dvdksn" \
+  --tag foo/bar:latest \
+  foo/bar:alpha foo/bar:beta foo/bar:gamma
+```
+
+> **Note**
+>
+> The `imagetools create` command supports adding annotations to the image
+> index and descriptor, using the following type prefixes:
+>
+> - `index:`
+> - `manifest-descriptor:`
+>
+> It doesn't support annotating manifests or OCI layouts.
+
+For more information about annotations, see
+[Annotations](https://docs.docker.com/build/building/annotations/).
+
 ### <a name="append"></a> Append new sources to an existing manifest list (--append)
 
 Use the `--append` flag to append the new sources to an existing manifest list
@@ -46,7 +74,7 @@ Use the `--dry-run` flag to not push the image, just show it.
 
 ### <a name="file"></a> Read source descriptor from a file (-f, --file)
 
-```
+```text
 -f FILE or --file FILE
 ```
 
@@ -67,7 +95,7 @@ The supported fields for the descriptor are defined in [OCI spec](https://github
 
 ### <a name="tag"></a> Set reference for new image  (-t, --tag)
 
-```
+```text
 -t IMAGE or --tag IMAGE
 ```
 
