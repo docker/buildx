@@ -225,7 +225,7 @@ jobs:
         if: github.event_name != 'pull_request'
         uses: docker/login-action@v3
         with:
-          username: ${{ secrets.DOCKERPUBLICBOT_USERNAME }}
+          username: ${{ vars.DOCKERPUBLICBOT_USERNAME }}
           password: ${{ secrets.DOCKERPUBLICBOT_WRITE_PAT }}
       -
         name: Build and push image
