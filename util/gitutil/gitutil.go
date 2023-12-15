@@ -66,7 +66,11 @@ func (c *Git) IsDirty() bool {
 }
 
 func (c *Git) RootDir() (string, error) {
-	return c.clean(c.run("rev-parse", "--show-toplevel"))
+	root, err := c.clean(c.run("rev-parse", "--show-toplevel"))
+	if err != nil {
+		return "", err
+	}
+	return sanitizePath(root), nil
 }
 
 func (c *Git) GitDir() (string, error) {
