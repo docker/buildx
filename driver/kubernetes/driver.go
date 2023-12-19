@@ -209,7 +209,7 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 		return nil, err
 	}
 
-	exp, err := detect.Exporter()
+	exp, _, err := detect.Exporter()
 	if err != nil {
 		return nil, err
 	}

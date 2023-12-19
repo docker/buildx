@@ -74,7 +74,7 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	opts := []client.ClientOpt{}
 
-	exp, err := detect.Exporter()
+	exp, _, err := detect.Exporter()
 	if err != nil {
 		return nil, err
 	}

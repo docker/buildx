@@ -392,7 +392,7 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 
 	conn = demuxConn(conn)
 
-	exp, err := detect.Exporter()
+	exp, _, err := detect.Exporter()
 	if err != nil {
 		return nil, err
 	}
