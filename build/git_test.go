@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/buildx/util/gitutil"
+	"github.com/moby/buildkit/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -30,7 +31,7 @@ func setupTest(tb testing.TB) {
 }
 
 func TestGetGitAttributesNotGitRepo(t *testing.T) {
-	_, err := getGitAttributes(context.Background(), t.TempDir(), "Dockerfile")
+	_, _, err := getGitAttributes(context.Background(), t.TempDir(), "Dockerfile")
 	assert.NoError(t, err)
 }
 
@@ -38,14 +39,14 @@ func TestGetGitAttributesBadGitRepo(t *testing.T) {
 	tmp := t.TempDir()
 	require.NoError(t, os.MkdirAll(path.Join(tmp, ".git"), 0755))
 
-	_, err := getGitAttributes(context.Background(), tmp, "Dockerfile")
+	_, _, err := getGitAttributes(context.Background(), tmp, "Dockerfile")
 	assert.Error(t, err)
 }
 
 func TestGetGitAttributesNoContext(t *testing.T) {
 	setupTest(t)
 
-	gitattrs, err := getGitAttributes(context.Background(), "", "Dockerfile")
+	gitattrs, _, err := getGitAttributes(context.Background(), "", "Dockerfile")
 	assert.NoError(t, err)
 	assert.Empty(t, gitattrs)
 }
@@ -114,7 +115,7 @@ func TestGetGitAttributes(t *testing.T) {
 			if tt.envGitInfo != "" {
 				t.Setenv("BUILDX_GIT_INFO", tt.envGitInfo)
 			}
-			gitattrs, err := getGitAttributes(context.Background(), ".", "Dockerfile")
+			gitattrs, _, err := getGitAttributes(context.Background(), ".", "Dockerfile")
 			require.NoError(t, err)
 			for _, e := range tt.expected {
 				assert.Contains(t, gitattrs, e)
@@ -139,7 +140,7 @@ func TestGetGitAttributesDirty(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join("dir", "Dockerfile"), df, 0644))
 
 	t.Setenv("BUILDX_GIT_LABELS", "true")
-	gitattrs, _ := getGitAttributes(context.Background(), ".", "Dockerfile")
+	gitattrs, _, _ := getGitAttributes(context.Background(), ".", "Dockerfile")
 	assert.Equal(t, 5, len(gitattrs))
 
 	assert.Contains(t, gitattrs, "label:"+DockerfileLabel)
@@ -153,4 +154,60 @@ func TestGetGitAttributesDirty(t *testing.T) {
 	assert.Equal(t, "git@github.com:docker/buildx.git", gitattrs["vcs:source"])
 	assert.Contains(t, gitattrs, "vcs:revision")
 	assert.True(t, strings.HasSuffix(gitattrs["vcs:revision"], "-dirty"))
+}
+
+func TestLocalDirs(t *testing.T) {
+	setupTest(t)
+
+	so := &client.SolveOpt{
+		FrontendAttrs: map[string]string{},
+		LocalDirs: map[string]string{
+			"context":    ".",
+			"dockerfile": ".",
+		},
+	}
+
+	_, addVCSLocalDir, err := getGitAttributes(context.Background(), ".", "Dockerfile")
+	require.NoError(t, err)
+	require.NotNil(t, addVCSLocalDir)
+
+	addVCSLocalDir(so)
+	require.Contains(t, so.FrontendAttrs, "vcs:localdir:context")
+	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:context"])
+	require.Contains(t, so.FrontendAttrs, "vcs:localdir:dockerfile")
+	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:dockerfile"])
+}
+
+func TestLocalDirsSub(t *testing.T) {
+	gitutil.Mktmp(t)
+
+	c, err := gitutil.New()
+	require.NoError(t, err)
+	gitutil.GitInit(c, t)
+
+	df := []byte("FROM alpine:latest\n")
+	assert.NoError(t, os.MkdirAll("app", 0755))
+	assert.NoError(t, os.WriteFile("app/Dockerfile", df, 0644))
+
+	gitutil.GitAdd(c, t, "app/Dockerfile")
+	gitutil.GitCommit(c, t, "initial commit")
+	gitutil.GitSetRemote(c, t, "origin", "git@github.com:docker/buildx.git")
+
+	so := &client.SolveOpt{
+		FrontendAttrs: map[string]string{},
+		LocalDirs: map[string]string{
+			"context":    ".",
+			"dockerfile": "app",
+		},
+	}
+
+	_, addVCSLocalDir, err := getGitAttributes(context.Background(), ".", "app/Dockerfile")
+	require.NoError(t, err)
+	require.NotNil(t, addVCSLocalDir)
+
+	addVCSLocalDir(so)
+	require.Contains(t, so.FrontendAttrs, "vcs:localdir:context")
+	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:context"])
+	require.Contains(t, so.FrontendAttrs, "vcs:localdir:dockerfile")
+	assert.Equal(t, "app", so.FrontendAttrs["vcs:localdir:dockerfile"])
 }

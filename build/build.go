@@ -530,7 +530,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	for k, opt := range opt {
 		multiDriver := len(drivers[k]) > 1
 		hasMobyDriver := false
-		gitattrs, err := getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
+		gitattrs, addVCSLocalDir, err := getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
 		if err != nil {
 			logrus.WithError(err).Warn("current commit information was not captured by the build")
 		}
@@ -553,6 +553,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			}
 			for k, v := range gitattrs {
 				so.FrontendAttrs[k] = v
+			}
+			if addVCSLocalDir != nil {
+				addVCSLocalDir(so)
 			}
 			defers = append(defers, release)
 			reqn = append(reqn, &reqForNode{
