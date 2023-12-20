@@ -19,6 +19,8 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-22.04
+    env:
+      GOLANGCI_LINT_MULTIPLATFORM: 1
     strategy:
       fail-fast: false
       matrix:
