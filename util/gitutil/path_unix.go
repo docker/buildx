@@ -7,6 +7,8 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"regexp"
+	"strings"
 
 	"github.com/moby/sys/mountinfo"
 )
@@ -39,4 +41,19 @@ func gitPath(wd string) (string, error) {
 		}
 	}
 	return exec.LookPath("git")
+}
+
+var windowsPathRegex = regexp.MustCompile(`^[A-Za-z]:[\\/].*$`)
+
+func sanitizePath(path string) string {
+	// If we're running in WSL, we need to convert Windows paths to Unix paths.
+	// This is because the git binary can be invoked through `git.exe` and
+	// therefore returns Windows paths.
+	if os.Getenv("WSL_DISTRO_NAME") != "" && windowsPathRegex.MatchString(path) {
+		unixPath := strings.ReplaceAll(path, "\\", "/")
+		drive := strings.ToLower(string(unixPath[0]))
+		rest := filepath.Clean(unixPath[3:])
+		return filepath.Join("/mnt", drive, rest)
+	}
+	return filepath.Clean(path)
 }
