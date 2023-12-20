@@ -33,7 +33,7 @@ Start a build
 | [`--metadata-file`](#metadata-file)                                                                                                                | `string`      |           | Write build result metadata to the file                                                             |
 | `--network`                                                                                                                                        | `string`      | `default` | Set the networking mode for the `RUN` instructions during build                                     |
 | `--no-cache`                                                                                                                                       |               |           | Do not use cache when building the image                                                            |
-| `--no-cache-filter`                                                                                                                                | `stringArray` |           | Do not cache specified stages                                                                       |
+| [`--no-cache-filter`](#no-cache-filter)                                                                                                            | `stringArray` |           | Do not cache specified stages                                                                       |
 | [`-o`](#output), [`--output`](#output)                                                                                                             | `stringArray` |           | Output destination (format: `type=local,dest=path`)                                                 |
 | [`--platform`](#platform)                                                                                                                          | `stringArray` |           | Set target platform for build                                                                       |
 | `--print`                                                                                                                                          | `string`      |           | Print result of information request (e.g., outline, targets)                                        |
@@ -340,6 +340,61 @@ $ cat metadata.json
   "containerimage.digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3"
 }
 ```
+
+### <a name="no-cache-filter"></a> Ignore build cache for specific stages (--no-cache-filter)
+
+The `--no-cache-filter` lets you specify one or more stages of a multi-stage
+Dockerfile for which build cache should be ignored. To specify multiple stages,
+use a comma-separated syntax:
+
+```console
+$ docker buildx build --no-cache-filter stage1,stage2,stage3 .
+```
+
+For example, the following Dockerfile contains four stages:
+
+- `base`
+- `install`
+- `test`
+- `release`
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+FROM oven/bun:1 as base
+WORKDIR /app
+
+FROM base AS install
+WORKDIR /temp/dev
+RUN --mount=type=bind,source=package.json,target=package.json \
+    --mount=type=bind,source=bun.lockb,target=bun.lockb \
+    bun install --frozen-lockfile
+
+FROM base AS test
+COPY --from=install /temp/dev/node_modules node_modules
+COPY . .
+RUN bun test
+
+FROM base AS release
+ENV NODE_ENV=production
+COPY --from=install /temp/dev/node_modules node_modules
+COPY . .
+ENTRYPOINT ["bun", "run", "index.js"]
+```
+
+To ignore the cache for the `install` stage:
+
+```console
+$ docker buildx build --no-cache-filter install .
+```
+
+To ignore the cache the `install` and `release` stages:
+
+```console
+$ docker buildx build --no-cache-filter install,release .
+```
+
+The arguments for the `--no-cache-filter` flag must be names of stages.
 
 ### <a name="output"></a> Set the export action for the build result (-o, --output)
 
