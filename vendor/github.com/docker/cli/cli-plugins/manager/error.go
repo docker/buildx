@@ -1,3 +1,6 @@
+// FIXME(thaJeztah): remove once we are a module; the go:build directive prevents go from downgrading language version to go1.16:
+//go:build go1.19
+
 package manager
 
 import (
@@ -43,6 +46,6 @@ func wrapAsPluginError(err error, msg string) error {
 
 // NewPluginError creates a new pluginError, analogous to
 // errors.Errorf.
-func NewPluginError(msg string, args ...interface{}) error {
+func NewPluginError(msg string, args ...any) error {
 	return &pluginError{cause: errors.Errorf(msg, args...)}
 }
