@@ -27,6 +27,7 @@ func TestIntegration(t *testing.T) {
 	tests = append(tests, lsTests...)
 	tests = append(tests, imagetoolsTests...)
 	tests = append(tests, versionTests...)
+	tests = append(tests, createTests...)
 	testIntegration(t, tests...)
 }
 
