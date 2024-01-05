@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -134,10 +135,10 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Use:   "prune",
 		Short: "Remove build cache",
 		Args:  cli.NoArgs,
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder
 			return runPrune(cmd.Context(), dockerCli, options)
-		},
+		}),
 		ValidArgsFunction: completion.Disable,
 	}
 

@@ -9,6 +9,7 @@ import (
 
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
@@ -269,10 +270,10 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "create [OPTIONS] [SOURCE] [SOURCE...]",
 		Short: "Create a new image based on source images",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
 			options.builder = *opts.Builder
 			return runCreate(cmd.Context(), dockerCli, options, args)
-		},
+		}),
 		ValidArgsFunction: completion.Disable,
 	}
 

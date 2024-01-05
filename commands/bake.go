@@ -15,6 +15,7 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -261,7 +262,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Use:     "bake [OPTIONS] [TARGET...]",
 		Aliases: []string{"f"},
 		Short:   "Build from a file",
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
 			// reset to nil to avoid override is unset
 			if !cmd.Flags().Lookup("no-cache").Changed {
 				cFlags.noCache = nil
@@ -273,7 +274,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.metadataFile = cFlags.metadataFile
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
 			return runBake(cmd.Context(), dockerCli, args, options, cFlags)
-		},
+		}),
 		ValidArgsFunction: completion.BakeTargets(options.files),
 	}
 

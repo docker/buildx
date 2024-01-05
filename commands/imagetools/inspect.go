@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli-docs-tool/annotation"
@@ -48,10 +49,10 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 		Use:   "inspect [OPTIONS] NAME",
 		Short: "Show details of an image in the registry",
 		Args:  cli.ExactArgs(1),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
 			options.builder = *rootOpts.Builder
 			return runInspect(cmd.Context(), dockerCli, options, args[0])
-		},
+		}),
 		ValidArgsFunction: completion.Disable,
 	}
 

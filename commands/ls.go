@@ -99,9 +99,9 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 		Use:   "ls",
 		Short: "List builder instances",
 		Args:  cli.ExactArgs(0),
-		RunE: func(cmd *cobra.Command, args []string) error {
+		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
 			return runLs(cmd.Context(), dockerCli, options)
-		},
+		}),
 		ValidArgsFunction: completion.Disable,
 	}
 
