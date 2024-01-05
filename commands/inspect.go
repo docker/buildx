@@ -17,7 +17,6 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
 	"github.com/docker/go-units"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
 )
 
@@ -26,9 +25,7 @@ type inspectOptions struct {
 	builder   string
 }
 
-func runInspect(dockerCli command.Cli, in inspectOptions) error {
-	ctx := appcontext.Context()
-
+func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) error {
 	b, err := builder.New(dockerCli,
 		builder.WithName(in.builder),
 		builder.WithSkippedValidation(),
@@ -150,7 +147,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			if len(args) > 0 {
 				options.builder = args[0]
 			}
-			return runInspect(dockerCli, options)
+			return runInspect(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.BuilderNames(dockerCli),
 	}

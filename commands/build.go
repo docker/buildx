@@ -46,7 +46,6 @@ import (
 	"github.com/moby/buildkit/frontend/subrequests/outline"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/errdefs"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/morikuni/aec"
@@ -216,9 +215,7 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 	return progress, nil
 }
 
-func runBuild(dockerCli command.Cli, options buildOptions) (err error) {
-	ctx := appcontext.Context()
-
+func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
 	mp, report, err := metrics.MeterProvider(dockerCli)
 	if err != nil {
 		return err
@@ -487,7 +484,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 				options.invokeConfig = iConfig
 			}
 
-			return runBuild(dockerCli, *options)
+			return runBuild(cmd.Context(), dockerCli, *options)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return nil, cobra.ShellCompDirectiveFilterDirs

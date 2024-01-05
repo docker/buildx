@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 
 	"github.com/docker/buildx/builder"
@@ -11,7 +12,6 @@ import (
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
 )
 
@@ -30,9 +30,7 @@ type createOptions struct {
 	// upgrade      bool // perform upgrade of the driver
 }
 
-func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
-	ctx := appcontext.Context()
-
+func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, args []string) error {
 	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
@@ -98,7 +96,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Create a new builder instance",
 		Args:  cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runCreate(dockerCli, options, args)
+			return runCreate(cmd.Context(), dockerCli, options, args)
 		},
 		ValidArgsFunction: completion.Disable,
 	}

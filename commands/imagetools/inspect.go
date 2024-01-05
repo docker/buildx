@@ -1,13 +1,14 @@
 package commands
 
 import (
+	"context"
+
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -18,9 +19,7 @@ type inspectOptions struct {
 	raw     bool
 }
 
-func runInspect(dockerCli command.Cli, in inspectOptions, name string) error {
-	ctx := appcontext.Context()
-
+func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions, name string) error {
 	if in.format != "" && in.raw {
 		return errors.Errorf("format and raw cannot be used together")
 	}
@@ -51,7 +50,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 		Args:  cli.ExactArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = *rootOpts.Builder
-			return runInspect(dockerCli, options, args[0])
+			return runInspect(cmd.Context(), dockerCli, options, args[0])
 		},
 		ValidArgsFunction: completion.Disable,
 	}
