@@ -1,11 +1,11 @@
 # buildx rm
 
 ```text
-docker buildx rm [NAME]
+docker buildx rm [OPTIONS] [NAME] [NAME...]
 ```
 
 <!---MARKER_GEN_START-->
-Remove a builder instance
+Remove one or more builder instances
 
 ### Options
 
