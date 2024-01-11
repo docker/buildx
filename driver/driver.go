@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"sync"
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
@@ -111,4 +112,21 @@ func historyAPISupported(ctx context.Context, c *client.Client) bool {
 			return false
 		}
 	}
+}
+
+// ClientFactory is used to create a new client. The client is only created
+// once and is reused when retrieved again.
+type ClientFactory struct {
+	New func(ctx context.Context) (*client.Client, error)
+
+	client *client.Client
+	err    error
+	once   sync.Once
+}
+
+func (cf *ClientFactory) Client(ctx context.Context) (*client.Client, error) {
+	cf.once.Do(func() {
+		cf.client, cf.err = cf.New(ctx)
+	})
+	return cf.client, cf.err
 }

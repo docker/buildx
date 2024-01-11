@@ -8,6 +8,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/syncutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
@@ -21,6 +22,7 @@ type Driver struct {
 	// https://github.com/docker/docs/blob/main/content/build/drivers/docker.md
 	features    features
 	hostGateway hostGateway
+	client      syncutil.OnceValue[*client.Client]
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
@@ -58,6 +60,12 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 }
 
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+	return d.client.Do(func() (*client.Client, error) {
+		return d.newClient(ctx)
+	})
+}
+
+func (d *Driver) newClient(ctx context.Context) (*client.Client, error) {
 	opts := []client.ClientOpt{
 		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", d.DialMeta)

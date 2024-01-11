@@ -8,6 +8,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/syncutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/detect"
 )
@@ -19,6 +20,7 @@ type Driver struct {
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/remote.md
 	*tlsOpts
+	client syncutil.OnceValue[*client.Client]
 }
 
 type tlsOpts struct {
@@ -72,6 +74,12 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 }
 
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+	return d.client.Do(func() (*client.Client, error) {
+		return d.newClient(ctx)
+	})
+}
+
+func (d *Driver) newClient(ctx context.Context) (*client.Client, error) {
 	opts := []client.ClientOpt{}
 
 	exp, _, err := detect.Exporter()
