@@ -5,6 +5,7 @@ import (
 	"bytes"
 	"context"
 	"crypto/rand"
+	"crypto/sha256"
 	_ "crypto/sha256" // ensure digests can be computed
 	"encoding/base64"
 	"encoding/hex"
@@ -55,6 +56,8 @@ import (
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
 )
@@ -469,11 +472,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	return &so, releaseF, nil
 }
 
-func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, nodes, opt, docker, configDir, w, nil)
+func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, mp metric.MeterProvider) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, nodes, opt, docker, configDir, w, mp, nil)
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, mp metric.MeterProvider, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -686,6 +689,14 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						return err
 					}
 
+					buildAttributes := attribute.NewSet(
+						driverAttribute(dp),
+						buildIdentityAttribute(so),
+						buildRefAttribute(so),
+					)
+					pw, record := progress.Metrics(mp, pw,
+						metric.WithAttributeSet(buildAttributes))
+
 					frontendInputs := make(map[string]*pb.Definition)
 					for key, st := range so.FrontendInputs {
 						def, err := st.Marshal(ctx)
@@ -785,6 +796,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					} else {
 						rr, err = c.Build(ctx, *so, "buildx", buildFunc, ch)
 					}
+
 					if desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
 						buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
 						if err != nil {
@@ -842,6 +854,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 							}
 						}
 					}
+
+					// Record the result of the build.
+					record(ctx)
 					return nil
 				})
 			}
@@ -1522,4 +1537,36 @@ func ReadSourcePolicy() (*spb.Policy, error) {
 	}
 
 	return &pol, nil
+}
+
+// driverAttribute is a utility to retrieve the backend attribute from a resolvedNode.
+func driverAttribute(dp *resolvedNode) attribute.KeyValue {
+	driverName := dp.Node().Driver.Factory().Name()
+	return attribute.String("driver", driverName)
+}
+
+// buildIdentityAttribute is a utility to retrieve the build id attribute from the solve options.
+// This value should be consistent between builds.
+func buildIdentityAttribute(so *client.SolveOpt) attribute.KeyValue {
+	vcs := so.FrontendAttrs["vcs:source"]
+	target := so.FrontendAttrs["target"]
+	context := so.FrontendAttrs["context"]
+	filename := so.FrontendAttrs["filename"]
+
+	buildID := ""
+	if vcs != "" || target != "" || context != "" || filename != "" {
+		h := sha256.New()
+		for _, s := range []string{vcs, target, context, filename} {
+			_, _ = io.WriteString(h, s)
+			h.Write([]byte{0})
+		}
+		buildID = hex.EncodeToString(h.Sum(nil))
+	}
+	return attribute.String("build.identity", buildID)
+}
+
+// buildRefAttribute is a utility to retrieve the build ref attribute from the solve options.
+// This value should be unique to each build.
+func buildRefAttribute(so *client.SolveOpt) attribute.KeyValue {
+	return attribute.String("build.ref", so.Ref)
 }

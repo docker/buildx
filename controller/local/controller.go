@@ -16,13 +16,19 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
-func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli, logger progress.SubLogger) control.BuildxController {
+func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli, logger progress.SubLogger, mp metric.MeterProvider) control.BuildxController {
+	if mp == nil {
+		mp = noop.NewMeterProvider()
+	}
 	return &localController{
 		dockerCli: dockerCli,
 		ref:       "local",
 		processes: processes.NewManager(),
+		mp:        mp,
 	}
 }
 
@@ -38,6 +44,7 @@ type localController struct {
 	ref         string
 	buildConfig buildConfig
 	processes   *processes.Manager
+	mp          metric.MeterProvider
 
 	buildOnGoing atomic.Bool
 }
@@ -48,7 +55,7 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, true)
+	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, b.mp, true)
 	// NOTE: RunBuild can return *build.ResultHandle even on error.
 	if res != nil {
 		b.buildConfig = buildConfig{

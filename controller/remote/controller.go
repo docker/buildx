@@ -30,6 +30,8 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/metric"
+	"go.opentelemetry.io/otel/metric/noop"
 	"google.golang.org/grpc"
 )
 
@@ -54,7 +56,7 @@ type serverConfig struct {
 	LogFile string `toml:"log_file"`
 }
 
-func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts control.ControlOptions, logger progress.SubLogger) (control.BuildxController, error) {
+func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts control.ControlOptions, logger progress.SubLogger, mp metric.MeterProvider) (control.BuildxController, error) {
 	rootDir := opts.Root
 	if rootDir == "" {
 		rootDir = rootDataDir(dockerCli)
@@ -149,7 +151,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 
 			// prepare server
 			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, progress progress.Writer) (*client.SolveResponse, *build.ResultHandle, error) {
-				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress, true)
+				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress, noop.NewMeterProvider(), true)
 			})
 			defer b.Close()
 

@@ -1,4 +1,4 @@
-package metrics
+package metric
 
 import (
 	"context"
@@ -35,13 +35,9 @@ func detectOtlpExporter(ctx context.Context) (sdkmetric.Exporter, error) {
 
 	switch proto {
 	case "grpc":
-		return otlpmetricgrpc.New(ctx,
-			otlpmetricgrpc.WithTemporalitySelector(deltaTemporality),
-		)
+		return otlpmetricgrpc.New(ctx)
 	case "http/protobuf":
-		return otlpmetrichttp.New(ctx,
-			otlpmetrichttp.WithTemporalitySelector(deltaTemporality),
-		)
+		return otlpmetrichttp.New(ctx)
 	// case "http/json": // unsupported by library
 	default:
 		return nil, errors.Errorf("unsupported otlp protocol %v", proto)

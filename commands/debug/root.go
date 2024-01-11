@@ -17,6 +17,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/metric/noop"
 )
 
 // DebugConfig is a user-specified configuration for the debugger.
@@ -50,7 +51,7 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 			}
 
 			ctx := context.TODO()
-			c, err := controller.NewController(ctx, controlOptions, dockerCli, printer)
+			c, err := controller.NewController(ctx, controlOptions, dockerCli, printer, noop.NewMeterProvider())
 			if err != nil {
 				return err
 			}

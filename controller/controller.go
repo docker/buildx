@@ -10,9 +10,10 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel/metric"
 )
 
-func NewController(ctx context.Context, opts control.ControlOptions, dockerCli command.Cli, pw progress.Writer) (control.BuildxController, error) {
+func NewController(ctx context.Context, opts control.ControlOptions, dockerCli command.Cli, pw progress.Writer, mp metric.MeterProvider) (control.BuildxController, error) {
 	var name string
 	if opts.Detach {
 		name = "remote"
@@ -23,9 +24,9 @@ func NewController(ctx context.Context, opts control.ControlOptions, dockerCli c
 	var c control.BuildxController
 	err := progress.Wrap(fmt.Sprintf("[internal] connecting to %s controller", name), pw.Write, func(l progress.SubLogger) (err error) {
 		if opts.Detach {
-			c, err = remote.NewRemoteBuildxController(ctx, dockerCli, opts, l)
+			c, err = remote.NewRemoteBuildxController(ctx, dockerCli, opts, l, mp)
 		} else {
-			c = local.NewLocalBuildxController(ctx, dockerCli, l)
+			c = local.NewLocalBuildxController(ctx, dockerCli, l, mp)
 		}
 		return err
 	})

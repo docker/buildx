@@ -14,12 +14,12 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
+	sdkmetric "github.com/docker/buildx/otel/sdk/metric"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
-	"github.com/docker/buildx/util/metrics"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
@@ -43,13 +43,11 @@ type bakeOptions struct {
 }
 
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
-	mp, report, err := metrics.MeterProvider(dockerCli)
+	mp, err := sdkmetric.NewMeterProvider(ctx, dockerCli)
 	if err != nil {
 		return err
 	}
-	defer report()
-
-	recordVersionInfo(mp, "bake")
+	defer mp.Report(context.Background())
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "bake")
 	if err != nil {
@@ -235,7 +233,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	resp, err := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, err := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer, mp)
 	if err != nil {
 		return wrapBuildError(err, true)
 	}

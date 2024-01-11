@@ -1,4 +1,4 @@
-package metrics
+package metric
 
 import (
 	"context"
@@ -7,8 +7,9 @@ import (
 	"path"
 	"time"
 
+	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/metric"
@@ -20,75 +21,93 @@ import (
 
 const (
 	otelConfigFieldName = "otel"
-	shutdownTimeout     = 2 * time.Second
+	reportTimeout       = 2 * time.Second
 )
 
-// ReportFunc is invoked to signal the metrics should be sent to the
-// desired endpoint. It should be invoked on application shutdown.
-type ReportFunc func()
+// MeterProvider holds a MeterProvider for metric generation and the configured
+// exporters for reporting metrics from the CLI.
+type MeterProvider struct {
+	metric.MeterProvider
+	reader    *sdkmetric.ManualReader
+	exporters []sdkmetric.Exporter
+}
 
-// MeterProvider returns a MeterProvider suitable for CLI usage.
-// The primary difference between this metric reader and a more typical
-// usage is that metric reporting only happens once when ReportFunc
-// is invoked.
-func MeterProvider(cli command.Cli) (metric.MeterProvider, ReportFunc, error) {
+// NewMeterProvider configures a MeterProvider from the CLI context.
+func NewMeterProvider(ctx context.Context, cli command.Cli) (*MeterProvider, error) {
 	var exps []sdkmetric.Exporter
 
-	if exp, err := dockerOtelExporter(cli); err != nil {
-		return nil, nil, err
-	} else if exp != nil {
-		exps = append(exps, exp)
-	}
+	// Only metric exporters if the experimental flag is set.
+	if confutil.IsExperimental() {
+		if exp, err := dockerOtelExporter(cli); err != nil {
+			return nil, err
+		} else if exp != nil {
+			exps = append(exps, exp)
+		}
 
-	if exp, err := detectOtlpExporter(context.Background()); err != nil {
-		return nil, nil, err
-	} else if exp != nil {
-		exps = append(exps, exp)
+		if exp, err := detectOtlpExporter(ctx); err != nil {
+			return nil, err
+		} else if exp != nil {
+			exps = append(exps, exp)
+		}
 	}
 
 	if len(exps) == 0 {
 		// No exporters are configured so use a noop provider.
-		return noop.NewMeterProvider(), func() {}, nil
+		return &MeterProvider{
+			MeterProvider: noop.NewMeterProvider(),
+		}, nil
 	}
 
-	// Use delta temporality because, since this is a CLI program, we can never
-	// know the cumulative value.
 	reader := sdkmetric.NewManualReader(
 		sdkmetric.WithTemporalitySelector(deltaTemporality),
 	)
 	mp := sdkmetric.NewMeterProvider(
-		sdkmetric.WithResource(detect.Resource()),
+		sdkmetric.WithResource(Resource()),
 		sdkmetric.WithReader(reader),
 	)
-	return mp, reportFunc(reader, exps), nil
+	return &MeterProvider{
+		MeterProvider: mp,
+		reader:        reader,
+		exporters:     exps,
+	}, nil
 }
 
-// reportFunc returns a ReportFunc for collecting ResourceMetrics and then
-// exporting them to the configured Exporter.
-func reportFunc(reader sdkmetric.Reader, exps []sdkmetric.Exporter) ReportFunc {
-	return func() {
-		ctx, cancel := context.WithTimeout(context.Background(), shutdownTimeout)
-		defer cancel()
-
-		var rm metricdata.ResourceMetrics
-		if err := reader.Collect(ctx, &rm); err != nil {
-			// Error when collecting metrics. Do not send any.
-			return
-		}
-
-		var eg errgroup.Group
-		for _, exp := range exps {
-			exp := exp
-			eg.Go(func() error {
-				_ = exp.Export(ctx, &rm)
-				_ = exp.Shutdown(ctx)
-				return nil
-			})
-		}
-
-		// Can't report an error because we don't allow it to.
-		_ = eg.Wait()
+// Report exports metrics to the configured exporter. This should be done before the CLI
+// exits.
+func (m *MeterProvider) Report(ctx context.Context) {
+	if m.reader == nil {
+		// Not configured.
+		return
 	}
+
+	ctx, cancel := context.WithTimeout(ctx, reportTimeout)
+	defer cancel()
+
+	var rm metricdata.ResourceMetrics
+	if err := m.reader.Collect(ctx, &rm); err != nil {
+		// Error when collecting metrics. Do not send any.
+		return
+	}
+
+	var eg errgroup.Group
+	for _, exp := range m.exporters {
+		exp := exp
+		eg.Go(func() error {
+			_ = exp.Export(ctx, &rm)
+			_ = exp.Shutdown(ctx)
+			return nil
+		})
+	}
+
+	// Can't report an error because we don't allow it to.
+	_ = eg.Wait()
+}
+
+// Meter returns a Meter from the MetricProvider that indicates the measurement
+// comes from buildx with the appropriate version.
+func Meter(mp metric.MeterProvider) metric.Meter {
+	return mp.Meter(version.Package,
+		metric.WithInstrumentationVersion(version.Version))
 }
 
 // dockerOtelExporter reads the CLI metadata to determine an OTLP exporter
@@ -184,6 +203,13 @@ func otelExporterOtlpEndpoint(cli command.Cli) (string, error) {
 }
 
 // deltaTemporality sets the Temporality of every instrument to delta.
+//
+// This isn't really needed since we create a unique resource on each invocation,
+// but it can help with cardinality concerns for downstream processors since they can
+// perform aggregation for a time interval and then discard the data once that time
+// period has passed. Cumulative temporality would imply to the downstream processor
+// that they might receive a successive point and they may unnecessarily keep state
+// they really shouldn't.
 func deltaTemporality(_ sdkmetric.InstrumentKind) metricdata.Temporality {
 	return metricdata.DeltaTemporality
 }
