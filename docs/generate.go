@@ -3,6 +3,7 @@ package main
 import (
 	"log"
 	"os"
+	"strings"
 
 	"github.com/docker/buildx/commands"
 	clidocstool "github.com/docker/cli-docs-tool"
@@ -24,6 +25,28 @@ const defaultSourcePath = "docs/reference/"
 type options struct {
 	source  string
 	formats []string
+}
+
+// fixUpExperimentalCLI trims the " (EXPERIMENTAL)" suffix from the CLI output,
+// as docs.docker.com already displays "experimental (CLI)",
+//
+// https://github.com/docker/buildx/pull/2188#issuecomment-1889487022
+func fixUpExperimentalCLI(cmd *cobra.Command) {
+	const (
+		annotationExperimentalCLI = "experimentalCLI"
+		suffixExperimental        = " (EXPERIMENTAL)"
+	)
+	if _, ok := cmd.Annotations[annotationExperimentalCLI]; ok {
+		cmd.Short = strings.TrimSuffix(cmd.Short, suffixExperimental)
+	}
+	cmd.Flags().VisitAll(func(f *pflag.Flag) {
+		if _, ok := f.Annotations[annotationExperimentalCLI]; ok {
+			f.Usage = strings.TrimSuffix(f.Usage, suffixExperimental)
+		}
+	})
+	for _, c := range cmd.Commands() {
+		fixUpExperimentalCLI(c)
+	}
 }
 
 func gen(opts *options) error {
@@ -57,6 +80,8 @@ func gen(opts *options) error {
 				return err
 			}
 		case "yaml":
+			// fix up is needed only for yaml (used for generating docs.docker.com contents)
+			fixUpExperimentalCLI(cmd)
 			if err = c.GenYamlTree(cmd); err != nil {
 				return err
 			}
