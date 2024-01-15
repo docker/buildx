@@ -4,7 +4,9 @@ package imagetools
 
 import (
 	"context"
+	"encoding/base64"
 	"encoding/json"
+	"regexp"
 	"sort"
 	"strings"
 	"sync"
@@ -20,6 +22,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
+
+const inTotoGenericMime = "application/vnd.in-toto+json"
 
 var (
 	annotationReferences = []string{
@@ -274,7 +278,7 @@ type sbomStub struct {
 }
 
 func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
-	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, inTotoGenericMime, "intoto")
 	as.deferredSbom = func() (*sbomStub, error) {
 		var sbom *sbomStub
 		for _, dgst := range refs {
@@ -283,7 +287,8 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 				return nil, errors.Errorf("referenced image %s not found", dgst)
 			}
 			for _, layer := range mfst.manifest.Layers {
-				if layer.MediaType == "application/vnd.in-toto+json" && layer.Annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document" {
+				if (layer.MediaType == inTotoGenericMime || isInTotoDSSE(layer.MediaType)) &&
+					layer.Annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document" {
 					_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, layer)
 					if err != nil {
 						return nil, err
@@ -292,6 +297,12 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 					if err != nil {
 						return nil, err
 					}
+
+					dt, err = decodeDSSE(dt, layer.MediaType)
+					if err != nil {
+						return nil, err
+					}
+
 					var spdx struct {
 						Predicate interface{} `json:"predicate"`
 					}
@@ -318,7 +329,7 @@ type provenanceStub struct {
 }
 
 func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
-	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, inTotoGenericMime, "intoto")
 	as.deferredProvenance = func() (*provenanceStub, error) {
 		var provenance *provenanceStub
 		for _, dgst := range refs {
@@ -327,7 +338,8 @@ func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r 
 				return nil, errors.Errorf("referenced image %s not found", dgst)
 			}
 			for _, layer := range mfst.manifest.Layers {
-				if layer.MediaType == "application/vnd.in-toto+json" && strings.HasPrefix(layer.Annotations["in-toto.io/predicate-type"], "https://slsa.dev/provenance/") {
+				if (layer.MediaType == inTotoGenericMime || isInTotoDSSE(layer.MediaType)) &&
+					strings.HasPrefix(layer.Annotations["in-toto.io/predicate-type"], "https://slsa.dev/provenance/") {
 					_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, layer)
 					if err != nil {
 						return nil, err
@@ -336,6 +348,12 @@ func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r 
 					if err != nil {
 						return nil, err
 					}
+
+					dt, err = decodeDSSE(dt, layer.MediaType)
+					if err != nil {
+						return nil, err
+					}
+
 					var slsa struct {
 						Predicate interface{} `json:"predicate"`
 					}
@@ -414,4 +432,30 @@ func (r *result) SBOM() (map[string]sbomStub, error) {
 		res[p] = *a.sbom
 	}
 	return res, nil
+}
+
+func isInTotoDSSE(mime string) bool {
+	isDSSE, _ := regexp.MatchString("application/vnd\\.in-toto\\..*\\+dsse", mime)
+
+	return isDSSE
+}
+
+func decodeDSSE(dt []byte, mime string) ([]byte, error) {
+	if isInTotoDSSE(mime) {
+		var dsse struct {
+			Payload string `json:"payload"`
+		}
+		if err := json.Unmarshal(dt, &dsse); err != nil {
+			return nil, err
+		}
+
+		decoded, err := base64.StdEncoding.DecodeString(dsse.Payload)
+		if err != nil {
+			return nil, err
+		}
+
+		dt = decoded
+	}
+
+	return dt, nil
 }
