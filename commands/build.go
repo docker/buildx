@@ -13,6 +13,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"sync/atomic"
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
@@ -368,15 +370,22 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	var retErr error
 	var resp *client.SolveResponse
 	f := ioset.NewSingleForwarder()
-	f.SetReader(dockerCli.In())
 	pr, pw := io.Pipe()
-	f.SetWriter(pw, func() io.WriteCloser {
-		pw.Close() // propagate EOF
-		logrus.Debug("propagating stdin close")
-		return nil
-	})
+	isForwardStarted := false
+	prReader := &readCloserWithCallback{
+		rc: pr,
+		onRead: func() {
+			f.SetWriter(pw, func() io.WriteCloser {
+				pw.Close() // propagate EOF
+				logrus.Debug("propagating stdin close")
+				return nil
+			})
+			f.SetReader(dockerCli.In())
+			isForwardStarted = true
+		},
+	}
 
-	ref, resp, err = c.Build(ctx, *opts, pr, printer)
+	ref, resp, err = c.Build(ctx, *opts, prReader, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
@@ -391,7 +400,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	if err := pw.Close(); err != nil {
 		logrus.Debug("failed to close stdin pipe writer")
 	}
-	if err := pr.Close(); err != nil {
+	if err := prReader.Close(); err != nil {
 		logrus.Debug("failed to close stdin pipe reader")
 	}
 
@@ -401,6 +410,9 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 			logrus.Warnf("failed to print error information: %v", err)
 		}
 
+		if !isForwardStarted {
+			f.SetReader(dockerCli.In())
+		}
 		pr2, pw2 := io.Pipe()
 		f.SetWriter(pw2, func() io.WriteCloser {
 			pw2.Close() // propagate EOF
@@ -966,4 +978,23 @@ func recordVersionInfo(mp metric.MeterProvider, command string) {
 			attribute.String("revision", version.Revision),
 		),
 	)
+}
+
+type readCloserWithCallback struct {
+	rc         io.ReadCloser
+	onRead     func()
+	closed     atomic.Bool
+	onReadOnce sync.Once
+}
+
+func (r *readCloserWithCallback) Read(p []byte) (int, error) {
+	if !r.closed.Load() && r.onRead != nil {
+		r.onReadOnce.Do(r.onRead)
+	}
+	return r.rc.Read(p)
+}
+
+func (r *readCloserWithCallback) Close() error {
+	r.closed.Store(true)
+	return r.rc.Close()
 }
