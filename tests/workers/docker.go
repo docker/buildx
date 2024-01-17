@@ -35,6 +35,10 @@ func (c dockerWorker) Rootless() bool {
 	return false
 }
 
+func (c *dockerWorker) NetNSDetached() bool {
+	return false
+}
+
 func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (b integration.Backend, cl func() error, err error) {
 	moby := bkworkers.Moby{
 		ID:                    c.id,

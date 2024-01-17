@@ -317,8 +317,8 @@ github.com/felixge/httpsnoop
 # github.com/fvbommel/sortorder v1.0.1
 ## explicit; go 1.13
 github.com/fvbommel/sortorder
-# github.com/go-logr/logr v1.2.4
-## explicit; go 1.16
+# github.com/go-logr/logr v1.3.0
+## explicit; go 1.18
 github.com/go-logr/logr
 github.com/go-logr/logr/funcr
 # github.com/go-logr/stdr v1.2.2
@@ -487,7 +487,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
-# github.com/moby/buildkit v0.13.0-beta1.0.20240105171016-6e200afad512
+# github.com/moby/buildkit v0.13.0-beta1.0.20240126101002-6bd81372ad6f
 ## explicit; go 1.21
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
