@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/progress/progressui"
@@ -42,9 +43,6 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 		Use:   "debug",
 		Short: "Start debugger",
 		Args:  cobra.NoArgs,
-		Annotations: map[string]string{
-			"experimentalCLI": "",
-		},
 		RunE: func(cmd *cobra.Command, args []string) error {
 			printer, err := progress.NewPrinter(context.TODO(), os.Stderr, progressui.DisplayMode(progressMode))
 			if err != nil {
@@ -73,20 +71,18 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 			return err
 		},
 	}
+	cobrautil.MarkCommandExperimental(cmd)
 
 	flags := cmd.Flags()
 	flags.StringVar(&options.InvokeFlag, "invoke", "", "Launch a monitor with executing specified command")
-	flags.SetAnnotation("invoke", "experimentalCLI", nil)
 	flags.StringVar(&options.OnFlag, "on", "error", "When to launch the monitor ([always, error])")
-	flags.SetAnnotation("on", "experimentalCLI", nil)
 
 	flags.StringVar(&controlOptions.Root, "root", "", "Specify root directory of server to connect for the monitor")
-	flags.SetAnnotation("root", "experimentalCLI", nil)
 	flags.BoolVar(&controlOptions.Detach, "detach", runtime.GOOS == "linux", "Detach buildx server for the monitor (supported only on linux)")
-	flags.SetAnnotation("detach", "experimentalCLI", nil)
 	flags.StringVar(&controlOptions.ServerConfig, "server-config", "", "Specify buildx server config file for the monitor (used only when launching new server)")
-	flags.SetAnnotation("server-config", "experimentalCLI", nil)
 	flags.StringVar(&progressMode, "progress", "auto", `Set type of progress output ("auto", "plain", "tty") for the monitor. Use plain to show container output`)
+
+	cobrautil.MarkFlagsExperimental(flags, "invoke", "on", "root", "detach", "server-config")
 
 	for _, c := range children {
 		cmd.AddCommand(c.NewDebugger(&options))

@@ -27,6 +27,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metrics"
@@ -537,7 +538,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 
 	if isExperimental() {
 		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
-		flags.SetAnnotation("print", "experimentalCLI", nil)
+		cobrautil.MarkFlagsExperimental(flags, "print")
 	}
 
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
@@ -566,11 +567,9 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	if isExperimental() {
 		// TODO: move this to debug command if needed
 		flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect")
-		flags.SetAnnotation("root", "experimentalCLI", nil)
 		flags.BoolVar(&options.Detach, "detach", false, "Detach buildx server (supported only on linux)")
-		flags.SetAnnotation("detach", "experimentalCLI", nil)
 		flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server)")
-		flags.SetAnnotation("server-config", "experimentalCLI", nil)
+		cobrautil.MarkFlagsExperimental(flags, "root", "detach", "server-config")
 	}
 
 	// hidden flags
@@ -593,7 +592,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.BoolVar(&ignoreBool, "squash", false, "Squash newly built layers into a single new layer")
 	flags.MarkHidden("squash")
 	flags.SetAnnotation("squash", "flag-warn", []string{"experimental flag squash is removed with BuildKit. You should squash inside build using a multi-stage Dockerfile for efficiency."})
-	flags.SetAnnotation("squash", "experimentalCLI", nil)
+	cobrautil.MarkFlagsExperimental(flags, "squash")
 
 	flags.StringVarP(&ignore, "memory", "m", "", "Memory limit")
 	flags.MarkHidden("memory")
