@@ -14,10 +14,10 @@ const (
 )
 
 func init() {
-	appcontext.Register(InitContext)
+	appcontext.Register(initContext)
 }
 
-func InitContext(ctx context.Context) context.Context {
+func initContext(ctx context.Context) context.Context {
 	// open-telemetry/opentelemetry-specification#740
 	parent := os.Getenv("TRACEPARENT")
 	state := os.Getenv("TRACESTATE")

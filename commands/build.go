@@ -461,7 +461,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 		Aliases: []string{"b"},
 		Short:   "Start a build",
 		Args:    cli.ExactArgs(1),
-		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			options.contextPath = args[0]
 			options.builder = rootOpts.builder
 			options.metadataFile = cFlags.metadataFile
@@ -485,7 +485,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 			}
 
 			return runBuild(cmd.Context(), dockerCli, *options)
-		}),
+		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return nil, cobra.ShellCompDirectiveFilterDirs
 		},

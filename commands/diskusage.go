@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -111,10 +110,10 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Use:   "du",
 		Short: "Disk usage",
 		Args:  cli.NoArgs,
-		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder
 			return runDiskUsage(cmd.Context(), dockerCli, options)
-		}),
+		},
 		ValidArgsFunction: completion.Disable,
 	}
 

@@ -95,9 +95,9 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 		Use:   "create [OPTIONS] [CONTEXT|ENDPOINT]",
 		Short: "Create a new builder instance",
 		Args:  cli.RequiresMaxArgs(1),
-		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(cmd.Context(), dockerCli, options, args)
-		}),
+		},
 		ValidArgsFunction: completion.Disable,
 	}
 

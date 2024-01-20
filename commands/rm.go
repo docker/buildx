@@ -8,7 +8,6 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
-	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
@@ -98,7 +97,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "rm [OPTIONS] [NAME] [NAME...]",
 		Short: "Remove one or more builder instances",
-		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builders = []string{rootOpts.builder}
 			if len(args) > 0 {
 				if options.allInactive {
@@ -107,7 +106,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 				options.builders = args
 			}
 			return runRm(cmd.Context(), dockerCli, options)
-		}),
+		},
 		ValidArgsFunction: completion.BuilderNames(dockerCli),
 	}
 

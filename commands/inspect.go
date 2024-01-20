@@ -11,7 +11,6 @@ import (
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
-	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
@@ -143,13 +142,13 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Use:   "inspect [NAME]",
 		Short: "Inspect current builder instance",
 		Args:  cli.RequiresMaxArgs(1),
-		RunE: cobrautil.ConfigureContext(func(cmd *cobra.Command, args []string) error {
+		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder
 			if len(args) > 0 {
 				options.builder = args[0]
 			}
 			return runInspect(cmd.Context(), dockerCli, options)
-		}),
+		},
 		ValidArgsFunction: completion.BuilderNames(dockerCli),
 	}
 
