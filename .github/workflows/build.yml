@@ -69,6 +69,7 @@ jobs:
           - docker\+containerd  # same as docker, but with containerd snapshotter
           - docker-container
           - remote
+          - kubernetes
         pkg:
           - ./tests
         include:
