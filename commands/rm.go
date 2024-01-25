@@ -10,7 +10,6 @@ import (
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -28,9 +27,7 @@ const (
 	rmInactiveWarning = `WARNING! This will remove all builders that are not in running state. Are you sure you want to continue?`
 )
 
-func runRm(dockerCli command.Cli, in rmOptions) error {
-	ctx := appcontext.Context()
-
+func runRm(ctx context.Context, dockerCli command.Cli, in rmOptions) error {
 	if in.allInactive && !in.force && !command.PromptForConfirmation(dockerCli.In(), dockerCli.Out(), rmInactiveWarning) {
 		return nil
 	}
@@ -108,7 +105,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 				}
 				options.builders = args
 			}
-			return runRm(dockerCli, options)
+			return runRm(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.BuilderNames(dockerCli),
 	}

@@ -24,7 +24,6 @@ import (
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/identity"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -43,9 +42,7 @@ type bakeOptions struct {
 	exportLoad   bool
 }
 
-func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
-	ctx := appcontext.Context()
-
+func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
 	mp, report, err := metrics.MeterProvider(dockerCli)
 	if err != nil {
 		return err
@@ -275,7 +272,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.builder = rootOpts.builder
 			options.metadataFile = cFlags.metadataFile
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
-			return runBake(dockerCli, args, options, cFlags)
+			return runBake(cmd.Context(), dockerCli, args, options, cFlags)
 		},
 		ValidArgsFunction: completion.BakeTargets(options.files),
 	}

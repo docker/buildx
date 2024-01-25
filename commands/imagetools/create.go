@@ -13,7 +13,6 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -32,7 +31,7 @@ type createOptions struct {
 	progress     string
 }
 
-func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
+func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, args []string) error {
 	if len(args) == 0 && len(in.files) == 0 {
 		return errors.Errorf("no sources specified")
 	}
@@ -112,8 +111,6 @@ func runCreate(dockerCli command.Cli, in createOptions, args []string) error {
 			}
 		}
 	}
-
-	ctx := appcontext.Context()
 
 	b, err := builder.New(dockerCli, builder.WithName(in.builder))
 	if err != nil {
@@ -274,7 +271,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 		Short: "Create a new image based on source images",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = *opts.Builder
-			return runCreate(dockerCli, options, args)
+			return runCreate(cmd.Context(), dockerCli, options, args)
 		},
 		ValidArgsFunction: completion.Disable,
 	}

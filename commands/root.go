@@ -13,6 +13,7 @@ import (
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
+	"github.com/moby/buildkit/util/appcontext"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
@@ -29,12 +30,15 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		CompletionOptions: cobra.CompletionOptions{
 			HiddenDefaultCmd: true,
 		},
-	}
-	if isPlugin {
-		cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+			cmd.SetContext(appcontext.Context())
+			if !isPlugin {
+				return nil
+			}
 			return plugin.PersistentPreRunE(cmd, args)
-		}
-	} else {
+		},
+	}
+	if !isPlugin {
 		// match plugin behavior for standalone mode
 		// https://github.com/docker/cli/blob/6c9eb708fa6d17765d71965f90e1c59cea686ee9/cli-plugins/plugin/plugin.go#L117-L127
 		cmd.SilenceUsage = true

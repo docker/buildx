@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"os"
@@ -15,7 +16,6 @@ import (
 	"github.com/docker/cli/opts"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -26,9 +26,7 @@ type duOptions struct {
 	verbose bool
 }
 
-func runDiskUsage(dockerCli command.Cli, opts duOptions) error {
-	ctx := appcontext.Context()
-
+func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) error {
 	pi, err := toBuildkitPruneInfo(opts.filter.Value())
 	if err != nil {
 		return err
@@ -114,7 +112,7 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder
-			return runDiskUsage(dockerCli, options)
+			return runDiskUsage(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.Disable,
 	}

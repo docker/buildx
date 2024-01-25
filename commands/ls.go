@@ -17,7 +17,6 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/formatter"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -39,9 +38,7 @@ type lsOptions struct {
 	format string
 }
 
-func runLs(dockerCli command.Cli, in lsOptions) error {
-	ctx := appcontext.Context()
-
+func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 	txn, release, err := storeutil.GetStore(dockerCli)
 	if err != nil {
 		return err
@@ -103,7 +100,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "List builder instances",
 		Args:  cli.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			return runLs(dockerCli, options)
+			return runLs(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.Disable,
 	}

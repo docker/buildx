@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"context"
 	"fmt"
 	"os"
 	"strings"
@@ -15,7 +16,6 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/appcontext"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -35,9 +35,7 @@ const (
 	allCacheWarning = `WARNING! This will remove all build cache. Are you sure you want to continue?`
 )
 
-func runPrune(dockerCli command.Cli, opts pruneOptions) error {
-	ctx := appcontext.Context()
-
+func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) error {
 	pruneFilters := opts.filter.Value()
 	pruneFilters = command.PruneFilters(dockerCli, pruneFilters)
 
@@ -138,7 +136,7 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder
-			return runPrune(dockerCli, options)
+			return runPrune(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.Disable,
 	}
