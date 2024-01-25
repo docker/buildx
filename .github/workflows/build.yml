@@ -24,9 +24,13 @@ env:
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
   TEST_CACHE_SCOPE: "test"
+  TESTFLAGS: "-v --parallel=6 --timeout=30m"
+  GOTESTSUM_FORMAT: "standard-verbose"
+  GO_VERSION: "1.21.6"
+  GOTESTSUM_VERSION: "v1.9.0"  # same as one in Dockerfile
 
 jobs:
-  prepare-test:
+  prepare-test-integration:
     runs-on: ubuntu-22.04
     steps:
       -
@@ -51,14 +55,12 @@ jobs:
             *.cache-from=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
             *.cache-to=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
 
-  test:
+  test-integration:
     runs-on: ubuntu-22.04
     needs:
-      - prepare-test
+      - prepare-test-integration
     env:
-      TESTFLAGS: "-v --parallel=6 --timeout=30m"
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
-      GOTESTSUM_FORMAT: "standard-verbose"
       TEST_IMAGE_BUILD: "0"
       TEST_IMAGE_ID: "buildx-tests"
     strategy:
@@ -71,9 +73,6 @@ jobs:
           - remote
         pkg:
           - ./tests
-        include:
-          - pkg: ./...
-            skip-integration-tests: 1
     steps:
       -
         name: Checkout
@@ -101,19 +100,19 @@ jobs:
       -
         name: Test
         run: |
-          export TEST_REPORT_SUFFIX=-${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.skip-integration-tests }}-${{ matrix.worker }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')
+          export TEST_REPORT_SUFFIX=-${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.worker }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')
           ./hack/test
         env:
           TEST_DOCKERD: "${{ startsWith(matrix.worker, 'docker') && '1' || '0' }}"
           TESTFLAGS: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker\\+containerd') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
           TESTPKGS: "${{ matrix.pkg }}"
-          SKIP_INTEGRATION_TESTS: "${{ matrix.skip-integration-tests }}"
       -
         name: Send to Codecov
         if: always()
         uses: codecov/codecov-action@v3
         with:
           directory: ./bin/testreports
+          flags: integration
       -
         name: Generate annotations
         if: always()
@@ -127,6 +126,75 @@ jobs:
         with:
           name: test-reports
           path: ./bin/testreports
+
+  test-unit:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-22.04
+          - macos-12
+          - windows-2022
+    env:
+      SKIP_INTEGRATION_TESTS: 1
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up Go
+        uses: actions/setup-go@v4
+        with:
+          go-version: "${{ env.GO_VERSION }}"
+      -
+        name: Prepare
+        run: |
+          testreportsBaseDir=./bin/testreports
+          testreportsDir=$testreportsBaseDir/unit-${{ matrix.os }}
+          echo "TESTREPORTS_BASEDIR=$testreportsBaseDir" >> $GITHUB_ENV
+          echo "TESTREPORTS_DIR=$testreportsDir" >> $GITHUB_ENV
+          mkdir -p $testreportsDir
+        shell: bash
+      -
+        name: Install gotestsum
+        run: |
+          go install gotest.tools/gotestsum@${{ env.GOTESTSUM_VERSION }}
+      -
+        name: Test
+        env:
+          TMPDIR: ${{ runner.temp }}
+        run: |
+          gotestsum \
+            --jsonfile="${{ env.TESTREPORTS_DIR }}/go-test-report.json" \
+            --junitfile="${{ env.TESTREPORTS_DIR }}/junit-report.xml" \
+            --packages="./..." \
+            -- \
+              "-mod=vendor" \
+              "-coverprofile" "${{ env.TESTREPORTS_DIR }}/coverage.txt" \
+              "-covermode" "atomic" ${{ env.TESTFLAGS }}
+        shell: bash
+      -
+        name: Send to Codecov
+        if: always()
+        uses: codecov/codecov-action@v3
+        with:
+          directory: ${{ env.TESTREPORTS_DIR }}
+          env_vars: RUNNER_OS
+          flags: unit
+      -
+        name: Generate annotations
+        if: always()
+        uses: crazy-max/.github/.github/actions/gotest-annotations@1a64ea6d01db9a48aa61954cb20e265782c167d9
+        with:
+          directory: ${{ env.TESTREPORTS_DIR }}
+      -
+        name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v3
+        with:
+          name: test-reports
+          path: ${{ env.TESTREPORTS_BASEDIR }}
 
   prepare-binaries:
     runs-on: ubuntu-22.04
@@ -192,7 +260,8 @@ jobs:
   bin-image:
     runs-on: ubuntu-22.04
     needs:
-      - test
+      - test-integration
+      - test-unit
     if: ${{ github.event_name != 'pull_request' && github.repository == 'docker/buildx' }}
     steps:
       -
@@ -244,7 +313,8 @@ jobs:
   release:
     runs-on: ubuntu-22.04
     needs:
-      - test
+      - test-integration
+      - test-unit
       - binaries
     steps:
       -
