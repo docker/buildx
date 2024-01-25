@@ -45,9 +45,9 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	if filepath.IsAbs(contextPath) {
 		wd = contextPath
 	} else {
-		cwd, _ := os.Getwd()
-		wd, _ = filepath.Abs(filepath.Join(cwd, contextPath))
+		wd, _ = filepath.Abs(filepath.Join(getWd(), contextPath))
 	}
+	wd = gitutil.SanitizePath(wd)
 
 	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
 	if err != nil {
@@ -101,8 +101,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 				dockerfilePath = filepath.Join(wd, "Dockerfile")
 			}
 			if !filepath.IsAbs(dockerfilePath) {
-				cwd, _ := os.Getwd()
-				dockerfilePath = filepath.Join(cwd, dockerfilePath)
+				dockerfilePath = filepath.Join(getWd(), dockerfilePath)
 			}
 			dockerfilePath, _ = filepath.Rel(root, dockerfilePath)
 			if !strings.HasPrefix(dockerfilePath, "..") {
@@ -112,4 +111,12 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	}
 
 	return
+}
+
+func getWd() string {
+	wd, _ := os.Getwd()
+	if lp, err := getLongPathName(wd); err == nil {
+		return lp
+	}
+	return wd
 }
