@@ -7,5 +7,5 @@ import (
 )
 
 func TestSanitizePathWindows(t *testing.T) {
-	assert.Equal(t, "C:\\Users\\foobar", sanitizePath("C:/Users/foobar"))
+	assert.Equal(t, "C:\\Users\\foobar", SanitizePath("C:/Users/foobar"))
 }

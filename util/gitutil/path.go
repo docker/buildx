@@ -45,7 +45,7 @@ func gitPath(wd string) (string, error) {
 
 var windowsPathRegex = regexp.MustCompile(`^[A-Za-z]:[\\/].*$`)
 
-func sanitizePath(path string) string {
+func SanitizePath(path string) string {
 	// If we're running in WSL, we need to convert Windows paths to Unix paths.
 	// This is because the git binary can be invoked through `git.exe` and
 	// therefore returns Windows paths.
