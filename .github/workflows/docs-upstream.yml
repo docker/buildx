@@ -45,14 +45,14 @@ jobs:
           DOCS_FORMATS: yaml
       -
         name: Upload reference YAML docs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docs-yaml
           path: /tmp/buildx-docs/out/reference
           retention-days: 1
 
   validate:
-    uses: docker/docs/.github/workflows/validate-upstream.yml@main
+    uses: docker/docs/.github/workflows/validate-upstream.yml@919a9b9104a34a40b30d116529bcce589a544d1c  # pin for artifact v4 support: https://github.com/docker/docs/pull/19220
     needs:
       - docs-yaml
     with:
