@@ -9,6 +9,6 @@ func gitPath(wd string) (string, error) {
 	return exec.LookPath("git.exe")
 }
 
-func sanitizePath(path string) string {
+func SanitizePath(path string) string {
 	return filepath.ToSlash(filepath.Clean(path))
 }

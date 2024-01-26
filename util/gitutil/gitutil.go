@@ -70,7 +70,7 @@ func (c *Git) RootDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return sanitizePath(root), nil
+	return SanitizePath(root), nil
 }
 
 func (c *Git) GitDir() (string, error) {
