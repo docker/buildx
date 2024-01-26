@@ -7,25 +7,25 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.18.16
 	github.com/compose-spec/compose-go v1.20.0
 	github.com/containerd/console v1.0.3
-	github.com/containerd/containerd v1.7.11
+	github.com/containerd/containerd v1.7.12
 	github.com/containerd/continuity v0.4.2
 	github.com/containerd/log v0.1.0
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/creack/pty v1.1.18
 	github.com/distribution/reference v0.5.0
-	github.com/docker/cli v25.0.0-rc.1+incompatible
+	github.com/docker/cli v25.0.1+incompatible
 	github.com/docker/cli-docs-tool v0.6.0
-	github.com/docker/docker v25.0.0-rc.1+incompatible
+	github.com/docker/docker v25.0.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/protobuf v1.3.2
 	github.com/golang/protobuf v1.5.3
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
-	github.com/google/uuid v1.3.0
+	github.com/google/uuid v1.5.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
 	github.com/hashicorp/hcl/v2 v2.19.1
-	github.com/moby/buildkit v0.13.0-beta1.0.20240105171016-6e200afad512 // master (v0.13.0-dev)
-	github.com/moby/sys/mountinfo v0.6.2
+	github.com/moby/buildkit v0.13.0-beta1.0.20240126101002-6bd81372ad6f // master (v0.13.0-dev)
+	github.com/moby/sys/mountinfo v0.7.1
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
@@ -44,9 +44,9 @@ require (
 	go.opentelemetry.io/otel/metric v1.19.0
 	go.opentelemetry.io/otel/sdk/metric v1.19.0
 	go.opentelemetry.io/otel/trace v1.19.0
-	golang.org/x/mod v0.11.0
-	golang.org/x/sync v0.3.0
-	golang.org/x/sys v0.15.0
+	golang.org/x/mod v0.13.0
+	golang.org/x/sync v0.4.0
+	golang.org/x/sys v0.16.0
 	golang.org/x/term v0.15.0
 	google.golang.org/grpc v1.58.3
 	gopkg.in/yaml.v3 v3.0.1
@@ -89,14 +89,14 @@ require (
 	github.com/emicklei/go-restful/v3 v3.10.1 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fvbommel/sortorder v1.0.1 // indirect
-	github.com/go-logr/logr v1.2.4 // indirect
+	github.com/go-logr/logr v1.3.0 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
 	github.com/go-openapi/jsonpointer v0.19.5 // indirect
 	github.com/go-openapi/jsonreference v0.20.0 // indirect
 	github.com/go-openapi/swag v0.19.14 // indirect
 	github.com/gogo/googleapis v1.4.1 // indirect
 	github.com/google/gnostic v0.5.7-v3refs // indirect
-	github.com/google/go-cmp v0.5.9 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
@@ -155,7 +155,7 @@ require (
 	golang.org/x/oauth2 v0.10.0 // indirect
 	golang.org/x/text v0.14.0 // indirect
 	golang.org/x/time v0.3.0 // indirect
-	golang.org/x/tools v0.10.0 // indirect
+	golang.org/x/tools v0.14.0 // indirect
 	google.golang.org/appengine v1.6.7 // indirect
 	google.golang.org/genproto v0.0.0-20230711160842-782d3b101e98 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20230711160842-782d3b101e98 // indirect

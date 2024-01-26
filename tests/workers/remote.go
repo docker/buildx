@@ -30,6 +30,10 @@ func (w remoteWorker) Rootless() bool {
 	return false
 }
 
+func (w remoteWorker) NetNSDetached() bool {
+	return false
+}
+
 func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (b integration.Backend, cl func() error, err error) {
 	oci := bkworkers.OCI{ID: w.id}
 	bk, bkclose, err := oci.New(ctx, cfg)
