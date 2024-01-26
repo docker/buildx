@@ -75,6 +75,10 @@ jobs:
           - ./tests
     steps:
       -
+        name: Prepare
+        run: |
+          echo "TESTREPORTS_NAME=${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.worker }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+      -
         name: Checkout
         uses: actions/checkout@v4
         with:
@@ -100,9 +104,9 @@ jobs:
       -
         name: Test
         run: |
-          export TEST_REPORT_SUFFIX=-${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.worker }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')
           ./hack/test
         env:
+          TEST_REPORT_SUFFIX: "-${{ env.TESTREPORTS_NAME }}"
           TEST_DOCKERD: "${{ startsWith(matrix.worker, 'docker') && '1' || '0' }}"
           TESTFLAGS: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker\\+containerd') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
           TESTPKGS: "${{ matrix.pkg }}"
@@ -122,9 +126,9 @@ jobs:
       -
         name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ./bin/testreports
 
   test-unit:
@@ -150,8 +154,10 @@ jobs:
       -
         name: Prepare
         run: |
+          testreportsName=${{ github.job }}--${{ matrix.os }}
           testreportsBaseDir=./bin/testreports
-          testreportsDir=$testreportsBaseDir/unit-${{ matrix.os }}
+          testreportsDir=$testreportsBaseDir/$testreportsName
+          echo "TESTREPORTS_NAME=$testreportsName" >> $GITHUB_ENV
           echo "TESTREPORTS_BASEDIR=$testreportsBaseDir" >> $GITHUB_ENV
           echo "TESTREPORTS_DIR=$testreportsDir" >> $GITHUB_ENV
           mkdir -p $testreportsDir
@@ -191,9 +197,9 @@ jobs:
       -
         name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: test-reports
+          name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ${{ env.TESTREPORTS_BASEDIR }}
 
   prepare-binaries:
@@ -251,9 +257,9 @@ jobs:
           CACHE_TO: type=gha,scope=binaries-${{ env.PLATFORM_PAIR }},mode=max
       -
         name: Upload artifacts
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
-          name: buildx
+          name: buildx-${{ env.PLATFORM_PAIR }}
           path: ${{ env.DESTDIR }}/*
           if-no-files-found: error
 
@@ -322,10 +328,11 @@ jobs:
         uses: actions/checkout@v4
       -
         name: Download binaries
-        uses: actions/download-artifact@v3
+        uses: actions/download-artifact@v4
         with:
-          name: buildx
           path: ${{ env.DESTDIR }}
+          pattern: buildx-*
+          merge-multiple: true
       -
         name: Create checksums
         run: ./hack/hash-files
