@@ -30,10 +30,9 @@ import (
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/ioset"
-	"github.com/docker/buildx/util/metrics"
+	"github.com/docker/buildx/util/metricutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
-	"github.com/docker/buildx/version"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -53,9 +52,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"go.opentelemetry.io/otel"
-	"go.opentelemetry.io/otel/attribute"
-	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
 )
 
@@ -216,13 +212,11 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 }
 
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
-	mp, report, err := metrics.MeterProvider(dockerCli)
+	mp, err := metricutil.NewMeterProvider(ctx, dockerCli)
 	if err != nil {
 		return err
 	}
-	defer report()
-
-	recordVersionInfo(mp, "build")
+	defer mp.Report(context.Background())
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
 	if err != nil {
@@ -935,31 +929,4 @@ func maybeJSONArray(v string) []string {
 		return list
 	}
 	return []string{v}
-}
-
-func recordVersionInfo(mp metric.MeterProvider, command string) {
-	// Still in the process of testing/stabilizing these counters.
-	if !isExperimental() {
-		return
-	}
-
-	meter := mp.Meter("github.com/docker/buildx",
-		metric.WithInstrumentationVersion(version.Version),
-	)
-
-	counter, err := meter.Int64Counter("docker.cli.count",
-		metric.WithDescription("Number of invocations of the docker buildx command."),
-	)
-	if err != nil {
-		otel.Handle(err)
-	}
-
-	counter.Add(context.Background(), 1,
-		metric.WithAttributes(
-			attribute.String("command", command),
-			attribute.String("package", version.Package),
-			attribute.String("version", version.Version),
-			attribute.String("revision", version.Revision),
-		),
-	)
 }
