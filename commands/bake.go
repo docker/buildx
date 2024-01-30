@@ -19,7 +19,6 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
-	"github.com/docker/buildx/util/metrics"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
@@ -43,14 +42,6 @@ type bakeOptions struct {
 }
 
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
-	mp, report, err := metrics.MeterProvider(dockerCli)
-	if err != nil {
-		return err
-	}
-	defer report()
-
-	recordVersionInfo(mp, "bake")
-
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "bake")
 	if err != nil {
 		return err
