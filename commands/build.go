@@ -3,8 +3,10 @@ package commands
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +15,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
@@ -29,8 +32,10 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/desktop"
+	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metricutil"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli-docs-tool/annotation"
@@ -52,6 +57,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.opentelemetry.io/otel/attribute"
 	"google.golang.org/grpc/codes"
 )
 
@@ -211,6 +217,88 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 	return progress, nil
 }
 
+func (o *buildOptions) newBuilder(dockerCli command.Cli) (*builder.Builder, error) {
+	contextPathHash := o.contextPath
+	if absContextPath, err := filepath.Abs(contextPathHash); err == nil {
+		contextPathHash = absContextPath
+	}
+	return builder.New(dockerCli,
+		builder.WithName(o.builder),
+		builder.WithContextPathHash(contextPathHash),
+	)
+}
+
+func (o *buildOptions) Attributes(dockerCli command.Cli) attribute.Set {
+	return attribute.NewSet(
+		attribute.String("driver.name", o.builder),
+		attribute.Stringer("driver.type", &buildOptionsDriverType{buildOptions: o, dockerCli: dockerCli}),
+		attribute.Stringer("build.options.hash", &buildOptionsHash{buildOptions: o}),
+	)
+}
+
+// buildOptionsDriverType retrieves the builder type as part of the String method
+// to comply with the fmt.Stringer interface.
+type buildOptionsDriverType struct {
+	*buildOptions
+	dockerCli  command.Cli
+	result     string
+	resultOnce sync.Once
+}
+
+func (o *buildOptionsDriverType) String() string {
+	o.resultOnce.Do(func() {
+		driverType := "unknown"
+		if b, err := o.newBuilder(o.dockerCli); err == nil {
+			driverType = b.Driver
+		}
+		o.result = driverType
+	})
+	return o.result
+}
+
+// buildOptionsHash computes a hash for the buildOptions when the String method is invoked.
+// This is done so we can delay the computation of the hash until needed by OTEL using
+// the fmt.Stringer interface.
+type buildOptionsHash struct {
+	*buildOptions
+	result     string
+	resultOnce sync.Once
+}
+
+func (o *buildOptionsHash) String() string {
+	o.resultOnce.Do(func() {
+		target := o.target
+		contextPath := o.contextPath
+		dockerfile := o.dockerfileName
+		vcs := getVCSPath(o.contextPath)
+
+		h := sha256.New()
+		for _, s := range []string{vcs, target, contextPath, dockerfile} {
+			_, _ = io.WriteString(h, s)
+			h.Write([]byte{0})
+		}
+		o.result = hex.EncodeToString(h.Sum(nil))
+	})
+	return o.result
+}
+
+// getVCSPath returns the vcs:source attribute for a context path.
+func getVCSPath(contextPath string) string {
+	var wd string
+	if filepath.IsAbs(contextPath) {
+		wd = contextPath
+	} else {
+		wd, _ = filepath.Abs(filepath.Join(osutil.GetWd(), contextPath))
+	}
+	wd = gitutil.SanitizePath(wd)
+
+	var vcs string
+	if gitc, err := gitutil.New(gitutil.WithWorkingDir(wd)); err == nil {
+		vcs, _ = gitc.RemoteURL()
+	}
+	return vcs
+}
+
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
 	mp, err := metricutil.NewMeterProvider(ctx, dockerCli)
 	if err != nil {
@@ -238,14 +326,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		}
 	}
 
-	contextPathHash := options.contextPath
-	if absContextPath, err := filepath.Abs(contextPathHash); err == nil {
-		contextPathHash = absContextPath
-	}
-	b, err := builder.New(dockerCli,
-		builder.WithName(options.builder),
-		builder.WithContextPathHash(contextPathHash),
-	)
+	b, err := options.newBuilder(dockerCli)
 	if err != nil {
 		return err
 	}

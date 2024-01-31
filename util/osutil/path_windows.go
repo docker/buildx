@@ -1,10 +1,10 @@
-package build
+package osutil
 
 import "golang.org/x/sys/windows"
 
-// getLongPathName converts Windows short pathnames to full pathnames.
+// GetLongPathName converts Windows short pathnames to full pathnames.
 // For example C:\Users\ADMIN~1 --> C:\Users\Administrator.
-func getLongPathName(path string) (string, error) {
+func GetLongPathName(path string) (string, error) {
 	// See https://groups.google.com/forum/#!topic/golang-dev/1tufzkruoTg
 	p, err := windows.UTF16FromString(path)
 	if err != nil {

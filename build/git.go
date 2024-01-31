@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -46,7 +47,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 	if filepath.IsAbs(contextPath) {
 		wd = contextPath
 	} else {
-		wd, _ = filepath.Abs(filepath.Join(getWd(), contextPath))
+		wd, _ = filepath.Abs(filepath.Join(osutil.GetWd(), contextPath))
 	}
 	wd = gitutil.SanitizePath(wd)
 
@@ -104,7 +105,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 			dockerfilePath = filepath.Join(wd, "Dockerfile")
 		}
 		if !filepath.IsAbs(dockerfilePath) {
-			dockerfilePath = filepath.Join(getWd(), dockerfilePath)
+			dockerfilePath = filepath.Join(osutil.GetWd(), dockerfilePath)
 		}
 		if r, err := filepath.Rel(root, dockerfilePath); err == nil && !strings.HasPrefix(r, "..") {
 			res["label:"+DockerfileLabel] = r
@@ -124,7 +125,7 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 			if err != nil {
 				continue
 			}
-			if lp, err := getLongPathName(dir); err == nil {
+			if lp, err := osutil.GetLongPathName(dir); err == nil {
 				dir = lp
 			}
 			dir = gitutil.SanitizePath(dir)
@@ -133,12 +134,4 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 			}
 		}
 	}, nil
-}
-
-func getWd() string {
-	wd, _ := os.Getwd()
-	if lp, err := getLongPathName(wd); err == nil {
-		return lp
-	}
-	return wd
 }
