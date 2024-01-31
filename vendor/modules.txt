@@ -121,19 +121,25 @@ github.com/cenkalti/backoff/v4
 # github.com/cespare/xxhash/v2 v2.2.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/compose-spec/compose-go v1.20.0
-## explicit; go 1.19
-github.com/compose-spec/compose-go/cli
-github.com/compose-spec/compose-go/consts
-github.com/compose-spec/compose-go/dotenv
-github.com/compose-spec/compose-go/errdefs
-github.com/compose-spec/compose-go/interpolation
-github.com/compose-spec/compose-go/loader
-github.com/compose-spec/compose-go/schema
-github.com/compose-spec/compose-go/template
-github.com/compose-spec/compose-go/tree
-github.com/compose-spec/compose-go/types
-github.com/compose-spec/compose-go/utils
+# github.com/compose-spec/compose-go/v2 v2.0.0-rc.3
+## explicit; go 1.20
+github.com/compose-spec/compose-go/v2/cli
+github.com/compose-spec/compose-go/v2/consts
+github.com/compose-spec/compose-go/v2/dotenv
+github.com/compose-spec/compose-go/v2/errdefs
+github.com/compose-spec/compose-go/v2/format
+github.com/compose-spec/compose-go/v2/graph
+github.com/compose-spec/compose-go/v2/interpolation
+github.com/compose-spec/compose-go/v2/loader
+github.com/compose-spec/compose-go/v2/override
+github.com/compose-spec/compose-go/v2/paths
+github.com/compose-spec/compose-go/v2/schema
+github.com/compose-spec/compose-go/v2/template
+github.com/compose-spec/compose-go/v2/transform
+github.com/compose-spec/compose-go/v2/tree
+github.com/compose-spec/compose-go/v2/types
+github.com/compose-spec/compose-go/v2/utils
+github.com/compose-spec/compose-go/v2/validation
 # github.com/containerd/console v1.0.3
 ## explicit; go 1.13
 github.com/containerd/console
@@ -481,12 +487,18 @@ github.com/matttproud/golang_protobuf_extensions/pbutil
 # github.com/miekg/pkcs11 v1.1.1
 ## explicit; go 1.12
 github.com/miekg/pkcs11
+# github.com/mitchellh/copystructure v1.2.0
+## explicit; go 1.15
+github.com/mitchellh/copystructure
 # github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7
 ## explicit
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
 github.com/mitchellh/mapstructure
+# github.com/mitchellh/reflectwalk v1.0.2
+## explicit
+github.com/mitchellh/reflectwalk
 # github.com/moby/buildkit v0.13.0-beta1.0.20240126101002-6bd81372ad6f
 ## explicit; go 1.21
 github.com/moby/buildkit/api/services/control
@@ -820,6 +832,7 @@ golang.org/x/crypto/ssh/internal/bcrypt_pbkdf
 # golang.org/x/exp v0.0.0-20230713183714-613f0c0eb8a1
 ## explicit; go 1.20
 golang.org/x/exp/constraints
+golang.org/x/exp/maps
 golang.org/x/exp/slices
 # golang.org/x/mod v0.13.0
 ## explicit; go 1.18

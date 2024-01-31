@@ -297,9 +297,6 @@ services:
 
 	ctx := context.TODO()
 
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-
 	m, g, err := ReadTargets(ctx, []File{fp, fp2, fp3}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
 
@@ -308,7 +305,7 @@ services:
 
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
-	require.Equal(t, cwd, *m["webapp"].Context)
+	require.Equal(t, ".", *m["webapp"].Context)
 	require.Equal(t, ptrstr("1"), m["webapp"].Args["buildno"])
 	require.Equal(t, ptrstr("12"), m["webapp"].Args["buildno2"])
 
@@ -347,9 +344,6 @@ services:
 
 	ctx := context.TODO()
 
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-
 	m, _, err := ReadTargets(ctx, []File{fp}, []string{"web.app"}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(m))
@@ -372,7 +366,7 @@ services:
 	_, ok = m["web_app"]
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
-	require.Equal(t, cwd, *m["web_app"].Context)
+	require.Equal(t, ".", *m["web_app"].Context)
 	require.Equal(t, ptrstr("1"), m["web_app"].Args["buildno"])
 	require.Equal(t, ptrstr("12"), m["web_app"].Args["buildno2"])
 
@@ -581,9 +575,6 @@ services:
 
 	ctx := context.TODO()
 
-	cwd, err := os.Getwd()
-	require.NoError(t, err)
-
 	m, _, err := ReadTargets(ctx, []File{fp, fp2}, []string{"app1", "app2"}, nil, nil)
 	require.NoError(t, err)
 
@@ -596,7 +587,7 @@ services:
 	require.Equal(t, "Dockerfile", *m["app1"].Dockerfile)
 	require.Equal(t, ".", *m["app1"].Context)
 	require.Equal(t, "Dockerfile", *m["app2"].Dockerfile)
-	require.Equal(t, cwd, *m["app2"].Context)
+	require.Equal(t, ".", *m["app2"].Context)
 }
 
 func TestReadContextFromTargetChain(t *testing.T) {

@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/compose-spec/compose-go/dotenv"
-	"github.com/compose-spec/compose-go/loader"
-	compose "github.com/compose-spec/compose-go/types"
+	"github.com/compose-spec/compose-go/v2/dotenv"
+	"github.com/compose-spec/compose-go/v2/loader"
+	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -18,9 +18,9 @@ func ParseComposeFiles(fs []File) (*Config, error) {
 	if err != nil {
 		return nil, err
 	}
-	var cfgs []compose.ConfigFile
+	var cfgs []composetypes.ConfigFile
 	for _, f := range fs {
-		cfgs = append(cfgs, compose.ConfigFile{
+		cfgs = append(cfgs, composetypes.ConfigFile{
 			Filename: f.Name,
 			Content:  f.Data,
 		})
@@ -28,11 +28,11 @@ func ParseComposeFiles(fs []File) (*Config, error) {
 	return ParseCompose(cfgs, envs)
 }
 
-func ParseCompose(cfgs []compose.ConfigFile, envs map[string]string) (*Config, error) {
+func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Config, error) {
 	if envs == nil {
 		envs = make(map[string]string)
 	}
-	cfg, err := loader.LoadWithContext(context.Background(), compose.ConfigDetails{
+	cfg, err := loader.LoadWithContext(context.Background(), composetypes.ConfigDetails{
 		ConfigFiles: cfgs,
 		Environment: envs,
 	}, func(options *loader.Options) {
@@ -159,8 +159,8 @@ func validateComposeFile(dt []byte, fn string) (bool, error) {
 }
 
 func validateCompose(dt []byte, envs map[string]string) error {
-	_, err := loader.Load(compose.ConfigDetails{
-		ConfigFiles: []compose.ConfigFile{
+	_, err := loader.Load(composetypes.ConfigDetails{
+		ConfigFiles: []composetypes.ConfigFile{
 			{
 				Content: dt,
 			},
@@ -223,7 +223,7 @@ func loadDotEnv(curenv map[string]string, workingDir string) (map[string]string,
 	return curenv, nil
 }
 
-func flatten(in compose.MappingWithEquals) map[string]*string {
+func flatten(in composetypes.MappingWithEquals) map[string]*string {
 	if len(in) == 0 {
 		return nil
 	}
@@ -327,8 +327,8 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 
 // composeToBuildkitSecret converts secret from compose format to buildkit's
 // csv format.
-func composeToBuildkitSecret(inp compose.ServiceSecretConfig, psecret compose.SecretConfig) (string, error) {
-	if psecret.External.External {
+func composeToBuildkitSecret(inp composetypes.ServiceSecretConfig, psecret composetypes.SecretConfig) (string, error) {
+	if psecret.External {
 		return "", errors.Errorf("unsupported external secret %s", psecret.Name)
 	}
 
