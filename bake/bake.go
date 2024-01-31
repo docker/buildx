@@ -13,7 +13,7 @@ import (
 	"strings"
 	"time"
 
-	composecli "github.com/compose-spec/compose-go/cli"
+	composecli "github.com/compose-spec/compose-go/v2/cli"
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	controllerapi "github.com/docker/buildx/controller/pb"

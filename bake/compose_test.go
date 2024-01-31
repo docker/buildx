@@ -6,7 +6,7 @@ import (
 	"sort"
 	"testing"
 
-	compose "github.com/compose-spec/compose-go/types"
+	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -52,7 +52,7 @@ secrets:
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Groups))
@@ -95,7 +95,7 @@ services:
     webapp:
         build: ./db
 `)
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Groups))
 	require.Equal(t, 1, len(c.Targets))
@@ -114,7 +114,7 @@ services:
       target: webapp
 `)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(c.Targets))
@@ -139,7 +139,7 @@ services:
       target: webapp
 `)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(c.Targets))
 	sort.Slice(c.Targets, func(i, j int) bool {
@@ -170,7 +170,7 @@ services:
 	t.Setenv("BAR", "foo")
 	t.Setenv("ZZZ_BAR", "zzz_foo")
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, sliceToMap(os.Environ()))
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, sliceToMap(os.Environ()))
 	require.NoError(t, err)
 	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["FOO"])
 	require.Equal(t, ptrstr("zzz_foo"), c.Targets[0].Args["BAR"])
@@ -184,7 +184,7 @@ services:
     entrypoint: echo 1
 `)
 
-	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.Error(t, err)
 }
 
@@ -209,7 +209,7 @@ networks:
           gateway: 10.5.0.254
 `)
 
-	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 }
 
@@ -226,7 +226,7 @@ services:
         - bar
 `)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, []string{"foo", "bar"}, c.Targets[0].Tags)
 }
@@ -263,7 +263,7 @@ networks:
     name: test-net
 `)
 
-	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 }
 
@@ -316,7 +316,7 @@ services:
         no-cache: true
 `)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, 2, len(c.Targets))
 	sort.Slice(c.Targets, func(i, j int) bool {
@@ -360,7 +360,7 @@ services:
           - type=local,dest=path/to/cache
 `)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, []string{"ct-addon:foo", "ct-addon:baz"}, c.Targets[0].Tags)
@@ -393,7 +393,7 @@ services:
       - ` + envf.Name() + `
 `)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"CT_ECR": ptrstr("foo"), "FOO": ptrstr("bsdf -csdf"), "NODE_ENV": ptrstr("test")}, c.Targets[0].Args)
 }
@@ -439,7 +439,7 @@ services:
         published: "3306"
         protocol: tcp
 `)
-	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 }
 
@@ -485,7 +485,7 @@ func TestServiceName(t *testing.T) {
 	for _, tt := range cases {
 		tt := tt
 		t.Run(tt.svc, func(t *testing.T) {
-			_, err := ParseCompose([]compose.ConfigFile{{Content: []byte(`
+			_, err := ParseCompose([]composetypes.ConfigFile{{Content: []byte(`
 services:
   ` + tt.svc + `:
     build:
@@ -556,7 +556,7 @@ services:
 	for _, tt := range cases {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			_, err := ParseCompose([]compose.ConfigFile{{Content: tt.dt}}, nil)
+			_, err := ParseCompose([]composetypes.ConfigFile{{Content: tt.dt}}, nil)
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -654,7 +654,7 @@ services:
         bar: "baz"
 `)
 
-	c, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"bar": ptrstr("baz")}, c.Targets[0].Args)
 }
@@ -673,7 +673,7 @@ services:
     build:
      context: .
 `)
-	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 }
 
@@ -704,7 +704,7 @@ services:
 
 	chdir(t, tmpdir)
 	c, err := ParseComposeFiles([]File{{
-		Name: "compose.yml",
+		Name: "composetypes.yml",
 		Data: dt,
 	}})
 	require.NoError(t, err)
@@ -734,7 +734,7 @@ services:
             - node_modules/
 `)
 
-	_, err := ParseCompose([]compose.ConfigFile{{Content: dt}}, nil)
+	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 }
 
