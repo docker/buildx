@@ -3,8 +3,10 @@ package commands
 import (
 	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/base64"
 	"encoding/csv"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +15,8 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"sync"
+	"time"
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
@@ -28,9 +32,11 @@ import (
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metricutil"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli-docs-tool/annotation"
@@ -52,6 +58,8 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
 )
 
@@ -211,6 +219,52 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 	return progress, nil
 }
 
+func buildMetricAttributes(dockerCli command.Cli, b *builder.Builder, options *buildOptions) attribute.Set {
+	return attribute.NewSet(
+		attribute.String("command.name", "build"),
+		attribute.Stringer("command.options.hash", &buildOptionsHash{
+			buildOptions: options,
+			configDir:    confutil.ConfigDir(dockerCli),
+		}),
+		attribute.String("driver.name", options.builder),
+		attribute.String("driver.type", b.Driver),
+	)
+}
+
+// buildOptionsHash computes a hash for the buildOptions when the String method is invoked.
+// This is done so we can delay the computation of the hash until needed by OTEL using
+// the fmt.Stringer interface.
+type buildOptionsHash struct {
+	*buildOptions
+	configDir  string
+	result     string
+	resultOnce sync.Once
+}
+
+func (o *buildOptionsHash) String() string {
+	o.resultOnce.Do(func() {
+		target := o.target
+		contextPath := o.contextPath
+		dockerfile := o.dockerfileName
+		if dockerfile == "" {
+			dockerfile = "Dockerfile"
+		}
+
+		if contextPath != "-" && osutil.IsLocalDir(contextPath) {
+			contextPath = osutil.ToAbs(contextPath)
+		}
+		salt := confutil.TryNodeIdentifier(o.configDir)
+
+		h := sha256.New()
+		for _, s := range []string{target, contextPath, dockerfile, salt} {
+			_, _ = io.WriteString(h, s)
+			h.Write([]byte{0})
+		}
+		o.result = hex.EncodeToString(h.Sum(nil))
+	})
+	return o.result
+}
+
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
 	mp, err := metricutil.NewMeterProvider(ctx, dockerCli)
 	if err != nil {
@@ -279,6 +333,8 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		return err
 	}
 
+	attributes := buildMetricAttributes(dockerCli, b, &options)
+	done := timeBuildCommand(mp, attributes)
 	var resp *client.SolveResponse
 	var retErr error
 	if isExperimental() {
@@ -290,6 +346,8 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
+
+	done(retErr)
 	if retErr != nil {
 		return retErr
 	}
@@ -932,4 +990,39 @@ func maybeJSONArray(v string) []string {
 		return list
 	}
 	return []string{v}
+}
+
+// timeBuildCommand will start a timer for timing the build command. It records the time when the returned
+// function is invoked into a metric.
+func timeBuildCommand(mp metric.MeterProvider, attrs attribute.Set) func(err error) {
+	meter := metricutil.Meter(mp)
+	counter, _ := meter.Float64Counter("command.time",
+		metric.WithDescription("Measures the duration of the build command."),
+		metric.WithUnit("ms"),
+	)
+
+	start := time.Now()
+	return func(err error) {
+		dur := float64(time.Since(start)) / float64(time.Millisecond)
+		extraAttrs := attribute.NewSet()
+		if err != nil {
+			extraAttrs = attribute.NewSet(
+				attribute.String("error.type", otelErrorType(err)),
+			)
+		}
+		counter.Add(context.Background(), dur,
+			metric.WithAttributeSet(attrs),
+			metric.WithAttributeSet(extraAttrs),
+		)
+	}
+}
+
+// otelErrorType returns an attribute for the error type based on the error category.
+// If nil, this function returns an invalid attribute.
+func otelErrorType(err error) string {
+	name := "generic"
+	if errors.Is(err, context.Canceled) {
+		name = "canceled"
+	}
+	return name
 }

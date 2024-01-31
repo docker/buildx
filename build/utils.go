@@ -5,7 +5,6 @@ import (
 	"bytes"
 	"context"
 	"net"
-	"os"
 	"strings"
 
 	"github.com/docker/buildx/driver"
@@ -32,11 +31,6 @@ func IsRemoteURL(c string) bool {
 		return true
 	}
 	return false
-}
-
-func isLocalDir(c string) bool {
-	st, err := os.Stat(c)
-	return err == nil && st.IsDir()
 }
 
 func isArchive(header []byte) bool {
