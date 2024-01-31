@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"strings"
+	"sync"
 
 	"github.com/containerd/containerd/content"
 	"github.com/containerd/containerd/errdefs"
@@ -26,6 +27,7 @@ import (
 type Source struct {
 	Desc ocispec.Descriptor
 	Ref  reference.Named
+	mu   sync.Mutex
 }
 
 func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann []string) ([]byte, ocispec.Descriptor, error) {
@@ -231,10 +233,12 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) 
 		return err
 	}
 	source, repo := u.Hostname(), strings.TrimPrefix(u.Path, "/")
+	src.mu.Lock()
 	if src.Desc.Annotations == nil {
 		src.Desc.Annotations = make(map[string]string)
 	}
 	src.Desc.Annotations["containerd.io/distribution.source."+source] = repo
+	src.mu.Unlock()
 
 	err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), src.Desc)
 	if err != nil {
