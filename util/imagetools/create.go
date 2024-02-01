@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"maps"
 	"net/url"
 	"strings"
 
@@ -230,13 +231,17 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) 
 	if err != nil {
 		return err
 	}
-	source, repo := u.Hostname(), strings.TrimPrefix(u.Path, "/")
-	if src.Desc.Annotations == nil {
-		src.Desc.Annotations = make(map[string]string)
-	}
-	src.Desc.Annotations["containerd.io/distribution.source."+source] = repo
 
-	err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), src.Desc)
+	desc := src.Desc
+	desc.Annotations = maps.Clone(desc.Annotations)
+	if desc.Annotations == nil {
+		desc.Annotations = make(map[string]string)
+	}
+
+	source, repo := u.Hostname(), strings.TrimPrefix(u.Path, "/")
+	desc.Annotations["containerd.io/distribution.source."+source] = repo
+
+	err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), desc)
 	if err != nil {
 		return err
 	}
