@@ -24,6 +24,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemote,
 	testBakeRemoteCmdContext,
 	testBakeRemoteLocalOverride,
+	testBakeLocalCwdOverride,
 	testBakeRemoteCmdContextOverride,
 	testBakeRemoteContextSubdir,
 	testBakeRemoteCmdContextEscapeRoot,
@@ -170,6 +171,41 @@ EOT
 	out, err := bakeCmd(sb, withDir(dirSrc), withArgs(addr, "--file", "cwd://local-docker-bake.hcl", "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
 
+	require.FileExists(t, filepath.Join(dirDest, "bar"))
+}
+
+func testBakeLocalCwdOverride(t *testing.T, sb integration.Sandbox) {
+	bakeFile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+	cwdBakefile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY bar /bar
+EOT
+}
+`)
+
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakeFile, 0600),
+		fstest.CreateFile("docker-bake-cwd.hcl", cwdBakefile, 0600),
+		fstest.CreateFile("bar", []byte("bar"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--file", "docker-bake.hcl", "--file", "cwd://docker-bake-cwd.hcl", "--progress=plain", "--set", "*.output=type=local,dest="+dirDest))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+	require.Contains(t, string(dt), `#1 reading docker-bake.hcl`)
+	require.Contains(t, string(dt), `#1 reading docker-bake-cwd.hcl`)
 	require.FileExists(t, filepath.Join(dirDest, "bar"))
 }
 
