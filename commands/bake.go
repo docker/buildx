@@ -292,13 +292,17 @@ func saveLocalStateGroup(dockerCli command.Cli, ref string, lsg localstate.State
 }
 
 func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names []string, stdin io.Reader, pw progress.Writer) (files []bake.File, inp *bake.Input, err error) {
-	var lnames []string
-	var rnames []string
+	var lnames []string // local
+	var rnames []string // remote
+	var anames []string // both
 	for _, v := range names {
 		if strings.HasPrefix(v, "cwd://") {
-			lnames = append(lnames, strings.TrimPrefix(v, "cwd://"))
+			tname := strings.TrimPrefix(v, "cwd://")
+			lnames = append(lnames, tname)
+			anames = append(anames, tname)
 		} else {
 			rnames = append(rnames, v)
+			anames = append(anames, v)
 		}
 	}
 
@@ -317,7 +321,7 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 			if url != "" {
 				lfiles, err = bake.ReadLocalFiles(lnames, stdin, sub)
 			} else {
-				lfiles, err = bake.ReadLocalFiles(append(lnames, rnames...), stdin, sub)
+				lfiles, err = bake.ReadLocalFiles(anames, stdin, sub)
 			}
 			return nil
 		})
