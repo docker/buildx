@@ -9,6 +9,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
+	dockeropts "github.com/docker/cli/opts"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -86,6 +87,13 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				}
 			}
 
+			var shmSize *string
+			if s.Build.ShmSize > 0 {
+				shmSizeBytes := dockeropts.MemBytes(s.Build.ShmSize)
+				shmSizeStr := shmSizeBytes.String()
+				shmSize = &shmSizeStr
+			}
+
 			var secrets []string
 			for _, bs := range s.Build.Secrets {
 				secret, err := composeToBuildkitSecret(bs, cfg.Secrets[bs.Source])
@@ -122,6 +130,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				CacheTo:     s.Build.CacheTo,
 				NetworkMode: &s.Build.Network,
 				Secrets:     secrets,
+				ShmSize:     shmSize,
 			}
 			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err

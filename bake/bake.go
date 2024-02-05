@@ -21,6 +21,7 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/config"
+	dockeropts "github.com/docker/cli/opts"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
@@ -699,6 +700,7 @@ type Target struct {
 	NoCache          *bool              `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
 	NetworkMode      *string            `json:"-" hcl:"-" cty:"-"`
 	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
+	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -809,6 +811,9 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.NoCacheFilter != nil { // merge
 		t.NoCacheFilter = append(t.NoCacheFilter, t2.NoCacheFilter...)
 	}
+	if t2.ShmSize != nil { // no merge
+		t.ShmSize = t2.ShmSize
+	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
@@ -873,6 +878,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.NoCache = &noCache
 		case "no-cache-filter":
 			t.NoCacheFilter = o.ArrValue
+		case "shm-size":
+			t.ShmSize = &value
 		case "pull":
 			pull, err := strconv.ParseBool(value)
 			if err != nil {
@@ -1233,6 +1240,12 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.NetworkMode != nil {
 		networkMode = *t.NetworkMode
 	}
+	shmSize := new(dockeropts.MemBytes)
+	if t.ShmSize != nil {
+		if err := shmSize.Set(*t.ShmSize); err != nil {
+			return nil, errors.Errorf("invalid value %s for membytes key shm-size", *t.ShmSize)
+		}
+	}
 
 	bo := &build.Options{
 		Inputs:        bi,
@@ -1244,6 +1257,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		Pull:          pull,
 		NetworkMode:   networkMode,
 		Linked:        t.linked,
+		ShmSize:       *shmSize,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)
