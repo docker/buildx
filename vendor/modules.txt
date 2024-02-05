@@ -140,7 +140,7 @@ github.com/compose-spec/compose-go/v2/tree
 github.com/compose-spec/compose-go/v2/types
 github.com/compose-spec/compose-go/v2/utils
 github.com/compose-spec/compose-go/v2/validation
-# github.com/containerd/console v1.0.4-0.20230706203907-8f6c4e4faef5
+# github.com/containerd/console v1.0.4
 ## explicit; go 1.13
 github.com/containerd/console
 # github.com/containerd/containerd v1.7.12
