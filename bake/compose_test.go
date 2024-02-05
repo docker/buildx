@@ -304,6 +304,10 @@ services:
         CT_ECR: foo
         CT_TAG: bar
       shm_size: 128m
+      ulimits:
+        nofile:
+          soft: 1024
+          hard: 1024
       x-bake:
         secret:
           - id=mysecret,src=/local/secret
@@ -334,6 +338,7 @@ services:
 	require.Equal(t, []string{"type=docker"}, c.Targets[1].Outputs)
 	require.Equal(t, newBool(true), c.Targets[1].NoCache)
 	require.Equal(t, ptrstr("128MiB"), c.Targets[1].ShmSize)
+	require.Equal(t, []string{"nofile=1024:1024"}, c.Targets[1].Ulimits)
 }
 
 func TestComposeExtDedup(t *testing.T) {

@@ -701,6 +701,7 @@ type Target struct {
 	NetworkMode      *string            `json:"-" hcl:"-" cty:"-"`
 	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
+	Ulimits          []string           `json:"ulimits,omitempty" hcl:"ulimits,optional"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -723,6 +724,7 @@ func (t *Target) normalize() {
 	t.CacheTo = removeDupes(t.CacheTo)
 	t.Outputs = removeDupes(t.Outputs)
 	t.NoCacheFilter = removeDupes(t.NoCacheFilter)
+	t.Ulimits = removeDupes(t.Ulimits)
 
 	for k, v := range t.Contexts {
 		if v == "" {
@@ -814,6 +816,9 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.ShmSize != nil { // no merge
 		t.ShmSize = t2.ShmSize
 	}
+	if t2.Ulimits != nil { // merge
+		t.Ulimits = append(t.Ulimits, t2.Ulimits...)
+	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
@@ -880,6 +885,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.NoCacheFilter = o.ArrValue
 		case "shm-size":
 			t.ShmSize = &value
+		case "ulimits":
+			t.Ulimits = o.ArrValue
 		case "pull":
 			pull, err := strconv.ParseBool(value)
 			if err != nil {
@@ -1334,6 +1341,14 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	ulimits := dockeropts.NewUlimitOpt(nil)
+	for _, field := range t.Ulimits {
+		if err := ulimits.Set(field); err != nil {
+			return nil, err
+		}
+	}
+	bo.Ulimits = ulimits
 
 	return bo, nil
 }

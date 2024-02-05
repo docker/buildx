@@ -23,6 +23,7 @@ target "webDEP" {
 	}
 	no-cache = true
 	shm-size = "128m"
+	ulimits = ["nofile=1024:1024"]
 }
 
 target "webapp" {
@@ -47,6 +48,7 @@ target "webapp" {
 		require.Equal(t, ptrstr("webDEP"), m["webapp"].Args["VAR_INHERITED"])
 		require.Equal(t, true, *m["webapp"].NoCache)
 		require.Equal(t, "128m", *m["webapp"].ShmSize)
+		require.Equal(t, []string{"nofile=1024:1024"}, m["webapp"].Ulimits)
 		require.Nil(t, m["webapp"].Pull)
 
 		require.Equal(t, 1, len(g))

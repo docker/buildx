@@ -237,6 +237,7 @@ The following table shows the complete list of attributes that you can assign to
 | [`ssh`](#targetssh)                             | List    | SSH agent sockets or keys to expose to the build                     |
 | [`tags`](#targettags)                           | List    | Image names and tags                                                 |
 | [`target`](#targettarget)                       | String  | Target build stage                                                   |
+| [`ulimits`](#targetulimits)                     | List    | Ulimit options                                                       |
 
 ### `target.args`
 
@@ -892,6 +893,25 @@ target "default" {
   target = "binaries"
 }
 ```
+
+### `target.ulimits`
+
+Ulimits are specified with a soft and hard limit as such:
+`<type>=<soft limit>[:<hard limit>]`, for example:
+
+```hcl
+target "app" {
+  ulimits = [
+    "nofile=1024:1024"
+  ]
+}
+```
+
+> **Note**
+>
+> If you do not provide a `hard limit`, the `soft limit` is used
+> for both values. If no `ulimits` are set, they are inherited from
+> the default `ulimits` set on the daemon.
 
 ## Group
 

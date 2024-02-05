@@ -2,6 +2,7 @@ package bake
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"strings"
@@ -10,6 +11,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/loader"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	dockeropts "github.com/docker/cli/opts"
+	"github.com/docker/go-units"
 	"github.com/pkg/errors"
 	"gopkg.in/yaml.v3"
 )
@@ -94,6 +96,17 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				shmSize = &shmSizeStr
 			}
 
+			var ulimits []string
+			if s.Build.Ulimits != nil {
+				for n, u := range s.Build.Ulimits {
+					ulimit, err := units.ParseUlimit(fmt.Sprintf("%s=%d:%d", n, u.Soft, u.Hard))
+					if err != nil {
+						return nil, err
+					}
+					ulimits = append(ulimits, ulimit.String())
+				}
+			}
+
 			var secrets []string
 			for _, bs := range s.Build.Secrets {
 				secret, err := composeToBuildkitSecret(bs, cfg.Secrets[bs.Source])
@@ -131,6 +144,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				NetworkMode: &s.Build.Network,
 				Secrets:     secrets,
 				ShmSize:     shmSize,
+				Ulimits:     ulimits,
 			}
 			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err
