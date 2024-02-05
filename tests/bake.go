@@ -54,7 +54,7 @@ target "default" {
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--set", "*.output=type=local,dest="+dirDest))
 	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, out)
+	require.NoError(t, err, string(out))
 	require.Contains(t, string(out), `#1 [internal] load local bake definitions`)
 	require.Contains(t, string(out), `#1 reading docker-bake.hcl`)
 
