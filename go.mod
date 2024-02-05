@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/aws/aws-sdk-go-v2/config v1.18.16
 	github.com/compose-spec/compose-go v1.20.0
-	github.com/containerd/console v1.0.4-0.20230706203907-8f6c4e4faef5 // include https://github.com/containerd/console/pull/66, which is not yet in a release.
+	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.7
 	github.com/containerd/continuity v0.4.2
 	github.com/containerd/log v0.1.0
