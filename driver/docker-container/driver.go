@@ -44,17 +44,18 @@ type Driver struct {
 
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/docker-container.md
-	netMode      string
-	image        string
-	memory       opts.MemBytes
-	memorySwap   opts.MemSwapBytes
-	cpuQuota     int64
-	cpuPeriod    int64
-	cpuShares    int64
-	cpusetCpus   string
-	cpusetMems   string
-	cgroupParent string
-	env          []string
+	netMode       string
+	image         string
+	memory        opts.MemBytes
+	memorySwap    opts.MemSwapBytes
+	cpuQuota      int64
+	cpuPeriod     int64
+	cpuShares     int64
+	cpusetCpus    string
+	cpusetMems    string
+	cgroupParent  string
+	restartPolicy container.RestartPolicy
+	env           []string
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -121,7 +122,8 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	useInit := true // let it cleanup exited processes created by BuildKit's container API
 	return l.Wrap("creating container "+d.Name, func() error {
 		hc := &container.HostConfig{
-			Privileged: true,
+			Privileged:    true,
+			RestartPolicy: d.restartPolicy,
 			Mounts: []mount.Mount{
 				{
 					Type:   mount.TypeVolume,
