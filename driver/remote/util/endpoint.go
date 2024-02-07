@@ -12,6 +12,7 @@ var schemes = map[string]struct{}{
 	"ssh":              {},
 	"docker-container": {},
 	"kube-pod":         {},
+	"npipe":            {},
 }
 
 func IsValidEndpoint(ep string) error {
