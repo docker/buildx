@@ -15,7 +15,7 @@ Start debugger
 | Name              | Type     | Default | Description                                                                                              |
 |:------------------|:---------|:--------|:---------------------------------------------------------------------------------------------------------|
 | `--builder`       | `string` |         | Override the configured builder instance                                                                 |
-| `--detach`        |          |         | Detach buildx server for the monitor (supported only on linux)                                           |
+| `--detach`        | `bool`   | `true`  | Detach buildx server for the monitor (supported only on linux)                                           |
 | `--invoke`        | `string` |         | Launch a monitor with executing specified command                                                        |
 | `--on`            | `string` | `error` | When to launch the monitor ([always, error])                                                             |
 | `--progress`      | `string` | `auto`  | Set type of progress output (`auto`, `plain`, `tty`) for the monitor. Use plain to show container output |

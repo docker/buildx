@@ -487,7 +487,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags := cmd.Flags()
 
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
-	flags.SetAnnotation("add-host", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/image_build/#add-host"})
+	flags.SetAnnotation("add-host", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#add-host"})
 
 	flags.StringSliceVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
 
@@ -500,12 +500,12 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringArrayVar(&options.cacheTo, "cache-to", []string{}, `Cache export destinations (e.g., "user/app:cache", "type=local,dest=path/to/dir")`)
 
 	flags.StringVar(&options.cgroupParent, "cgroup-parent", "", `Set the parent cgroup for the "RUN" instructions during build`)
-	flags.SetAnnotation("cgroup-parent", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/image_build/#cgroup-parent"})
+	flags.SetAnnotation("cgroup-parent", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#cgroup-parent"})
 
 	flags.StringArrayVar(&options.contexts, "build-context", []string{}, "Additional build contexts (e.g., name=path)")
 
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
-	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/image_build/#file"})
+	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#file"})
 
 	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
 
@@ -537,10 +537,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringArrayVar(&options.ssh, "ssh", []string{}, `SSH agent socket or keys to expose to the build (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
 
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, `Name and optionally a tag (format: "name:tag")`)
-	flags.SetAnnotation("tag", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/image_build/#tag"})
+	flags.SetAnnotation("tag", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#tag"})
 
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build")
-	flags.SetAnnotation("target", annotation.ExternalURL, []string{"https://docs.docker.com/engine/reference/commandline/image_build/#target"})
+	flags.SetAnnotation("target", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#target"})
 
 	options.ulimits = dockeropts.NewUlimitOpt(nil)
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
