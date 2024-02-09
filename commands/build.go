@@ -294,10 +294,13 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		return retErr
 	}
 
-	if progressMode != progressui.QuietMode {
-		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
-	} else {
+	switch progressMode {
+	case progressui.RawJSONMode:
+		// no additional display
+	case progressui.QuietMode:
 		fmt.Println(getImageID(resp.ExporterResponse))
+	default:
+		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
 	if options.imageIDFile != "" {
 		if err := os.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse)), 0644); err != nil {
@@ -753,7 +756,7 @@ func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.Ulim
 }
 
 func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui.DisplayMode) {
-	if len(warnings) == 0 || mode == progressui.QuietMode {
+	if len(warnings) == 0 || mode == progressui.QuietMode || mode == progressui.RawJSONMode {
 		return
 	}
 	fmt.Fprintf(w, "\n ")
