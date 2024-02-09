@@ -141,7 +141,7 @@ func runBake(dockerCli command.Cli, targets []string, in bakeOptions, cFlags com
 			if err == nil {
 				err = err1
 			}
-			if err == nil && progressMode != progressui.QuietMode {
+			if err == nil && progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
 				desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 			}
 		}
