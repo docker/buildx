@@ -59,6 +59,7 @@ type Driver interface {
 	Version(context.Context) (string, error)
 	Stop(ctx context.Context, force bool) error
 	Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error
+	Dial(ctx context.Context) (net.Conn, error)
 	Client(ctx context.Context) (*client.Client, error)
 	Features(ctx context.Context) map[Feature]bool
 	HostGatewayIP(ctx context.Context) (net.IP, error)

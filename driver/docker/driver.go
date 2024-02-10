@@ -57,10 +57,14 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	return nil
 }
 
+func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
+	return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", d.DialMeta)
+}
+
 func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 	opts := []client.ClientOpt{
 		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", d.DialMeta)
+			return d.Dial(ctx)
 		}), client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
 			return d.DockerAPI.DialHijack(ctx, "/session", proto, meta)
 		}),

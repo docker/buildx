@@ -2,14 +2,18 @@ package remote
 
 import (
 	"context"
-	"errors"
+	"crypto/tls"
+	"crypto/x509"
 	"net"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/detect"
+	"github.com/pkg/errors"
 )
 
 type Driver struct {
@@ -82,14 +86,61 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 		opts = append(opts, client.WithTracerDelegate(td))
 	}
 
-	if d.tlsOpts != nil {
-		opts = append(opts, []client.ClientOpt{
-			client.WithServerConfig(d.tlsOpts.serverName, d.tlsOpts.caCert),
-			client.WithCredentials(d.tlsOpts.cert, d.tlsOpts.key),
-		}...)
+	opts = append(opts, client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+		return d.Dial(ctx)
+	}))
+
+	return client.New(ctx, "", opts...)
+}
+
+func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
+	network, addr, ok := strings.Cut(d.InitConfig.EndpointAddr, "://")
+	if !ok {
+		return nil, errors.Errorf("invalid endpoint address: %s", d.InitConfig.EndpointAddr)
 	}
 
-	return client.New(ctx, d.InitConfig.EndpointAddr, opts...)
+	dialer := &net.Dialer{}
+
+	conn, err := dialer.DialContext(ctx, network, addr)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+
+	if d.tlsOpts != nil {
+		cfg, err := loadTLS(d.tlsOpts)
+		if err != nil {
+			return nil, errors.Wrap(err, "error loading tls config")
+		}
+		conn = tls.Client(conn, cfg)
+	}
+	return conn, nil
+}
+
+func loadTLS(opts *tlsOpts) (*tls.Config, error) {
+	cfg := &tls.Config{
+		ServerName: opts.serverName,
+		RootCAs:    x509.NewCertPool(),
+	}
+
+	if opts.caCert != "" {
+		ca, err := os.ReadFile(opts.caCert)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not read ca certificate")
+		}
+		if ok := cfg.RootCAs.AppendCertsFromPEM(ca); !ok {
+			return nil, errors.New("failed to append ca certs")
+		}
+	}
+
+	if opts.cert != "" || opts.key != "" {
+		cert, err := tls.LoadX509KeyPair(opts.cert, opts.key)
+		if err != nil {
+			return nil, errors.Wrap(err, "could not read certificate/key")
+		}
+		cfg.Certificates = append(cfg.Certificates, cert)
+	}
+
+	return cfg, nil
 }
 
 func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {

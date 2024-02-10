@@ -83,6 +83,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		buildCmd(dockerCli, opts, nil),
 		bakeCmd(dockerCli, opts),
 		createCmd(dockerCli),
+		dialStdioCmd(dockerCli, opts),
 		rmCmd(dockerCli, opts),
 		lsCmd(dockerCli),
 		useCmd(dockerCli, opts),
