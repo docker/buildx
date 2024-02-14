@@ -4,6 +4,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/docker/buildx/util/osutil"
 	"github.com/stretchr/testify/assert"
 )
 
@@ -12,7 +13,7 @@ func TestSanitizePathWindows(t *testing.T) {
 	if isGitBash() {
 		expected = "C:/Users/foobar"
 	}
-	assert.Equal(t, expected, SanitizePath("C:/Users/foobar"))
+	assert.Equal(t, expected, osutil.SanitizePath("C:/Users/foobar"))
 }
 
 func isGitBash() bool {

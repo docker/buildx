@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc"
 	"go.opentelemetry.io/otel/metric"
 	"go.opentelemetry.io/otel/metric/noop"
@@ -86,6 +87,7 @@ func (m *MeterProvider) Report(ctx context.Context) {
 	var rm metricdata.ResourceMetrics
 	if err := m.reader.Collect(ctx, &rm); err != nil {
 		// Error when collecting metrics. Do not send any.
+		otel.Handle(err)
 		return
 	}
 
@@ -93,7 +95,9 @@ func (m *MeterProvider) Report(ctx context.Context) {
 	for _, exp := range m.exporters {
 		exp := exp
 		eg.Go(func() error {
-			_ = exp.Export(ctx, &rm)
+			if err := exp.Export(ctx, &rm); err != nil {
+				otel.Handle(err)
+			}
 			_ = exp.Shutdown(ctx)
 			return nil
 		})

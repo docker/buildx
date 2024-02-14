@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"strings"
 
+	"github.com/docker/buildx/util/osutil"
 	"github.com/pkg/errors"
 )
 
@@ -70,7 +71,7 @@ func (c *Git) RootDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return SanitizePath(root), nil
+	return osutil.SanitizePath(root), nil
 }
 
 func (c *Git) GitDir() (string, error) {

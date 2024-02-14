@@ -4,10 +4,8 @@ import (
 	"bufio"
 	"bytes"
 	"context"
-	"crypto/rand"
 	_ "crypto/sha256" // ensure digests can be computed
 	"encoding/base64"
-	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -26,9 +24,11 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/buildx/util/waitmap"
@@ -389,7 +389,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		if p, err := filepath.Abs(sharedKey); err == nil {
 			sharedKey = filepath.Base(p)
 		}
-		so.SharedKey = sharedKey + ":" + tryNodeIdentifier(configDir)
+		so.SharedKey = sharedKey + ":" + confutil.TryNodeIdentifier(configDir)
 	}
 
 	if opt.Pull {
@@ -1148,7 +1148,7 @@ func LoadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 				target.LocalDirs["context"] = inp.ContextPath
 			}
 		}
-	case isLocalDir(inp.ContextPath):
+	case osutil.IsLocalDir(inp.ContextPath):
 		target.LocalDirs["context"] = inp.ContextPath
 		switch inp.DockerfilePath {
 		case "-":
@@ -1463,31 +1463,6 @@ func handleLowercaseDockerfile(dir, p string) string {
 		return filepath.Join(filepath.Dir(p), "dockerfile")
 	}
 	return p
-}
-
-var nodeIdentifierMu sync.Mutex
-
-func tryNodeIdentifier(configDir string) (out string) {
-	nodeIdentifierMu.Lock()
-	defer nodeIdentifierMu.Unlock()
-	sessionFile := filepath.Join(configDir, ".buildNodeID")
-	if _, err := os.Lstat(sessionFile); err != nil {
-		if os.IsNotExist(err) { // create a new file with stored randomness
-			b := make([]byte, 8)
-			if _, err := rand.Read(b); err != nil {
-				return out
-			}
-			if err := os.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0600); err != nil {
-				return out
-			}
-		}
-	}
-
-	dt, err := os.ReadFile(sessionFile)
-	if err == nil {
-		return string(dt)
-	}
-	return
 }
 
 func noPrintFunc(opt map[string]Options) bool {
