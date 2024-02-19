@@ -229,6 +229,7 @@ The following table shows the complete list of attributes that you can assign to
 | [`name`](#targetname)                           | String  | Override the target name when using a matrix.                        |
 | [`no-cache-filter`](#targetno-cache-filter)     | List    | Disable build cache for specific stages                              |
 | [`no-cache`](#targetno-cache)                   | Boolean | Disable build cache completely                                       |
+| [`opts`](#targetopts)                           | Map     | Set BuildKit frontend option directly                                |
 | [`output`](#targetoutput)                       | List    | Output destinations                                                  |
 | [`platforms`](#targetplatforms)                 | List    | Target platforms                                                     |
 | [`pull`](#targetpull)                           | Boolean | Always pull images                                                   |
@@ -770,6 +771,11 @@ target "default" {
   no-cache = 1
 }
 ```
+
+### `target.opts`
+
+This is the same as the `--opt` flag for `buildctl build`.
+This attribute is experimental.
 
 ### `target.output`
 

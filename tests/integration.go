@@ -27,6 +27,10 @@ func withEnv(env ...string) cmdOpt {
 	}
 }
 
+func withExperimental() cmdOpt {
+	return withEnv("BUILDX_EXPERIMENTAL=1")
+}
+
 func withArgs(args ...string) cmdOpt {
 	return func(cmd *exec.Cmd) {
 		cmd.Args = append(cmd.Args, args...)

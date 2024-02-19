@@ -50,6 +50,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildCacheExportNotSupported,
 	testBuildOCIExportNotSupported,
 	testBuildMultiPlatformNotSupported,
+	testBuildOpt,
 	testDockerHostGateway,
 	testBuildNetworkModeBridge,
 	testBuildShmSize,
@@ -407,6 +408,36 @@ func testBuildMultiPlatformNotSupported(t *testing.T, sb integration.Sandbox) {
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err, string(out))
 	require.Contains(t, string(out), "Multi-platform build is not supported")
+}
+
+func testBuildOpt(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/registry:latest"
+
+	labels := []string{
+		"--label", "label0=foo",
+		"--opt", "label:label0=bar", // higher precedence
+	}
+	out, err := buildCmd(sb, withExperimental(), withArgs(labels...), withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), dir))
+	require.NoError(t, err, string(out))
+
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+
+	pk := platforms.Format(platforms.Normalize(platforms.DefaultSpec()))
+	img := imgs.Find(pk)
+	require.NotNil(t, img)
+
+	require.NotNil(t, img.Manifest)
+	assert.Equal(t, "bar", img.Img.Config.Labels["label0"])
 }
 
 func testDockerHostGateway(t *testing.T, sb integration.Sandbox) {

@@ -105,6 +105,8 @@ type buildOptions struct {
 	control.ControlOptions
 
 	invokeConfig *invokeConfig
+
+	rawOpts []string
 }
 
 func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error) {
@@ -116,6 +118,11 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	}
 
 	labels, err := listToMap(o.labels, false)
+	if err != nil {
+		return nil, err
+	}
+
+	rawOpts, err := listToMap(o.rawOpts, true)
 	if err != nil {
 		return nil, err
 	}
@@ -141,6 +148,7 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		Pull:           o.pull,
 		ExportPush:     o.exportPush,
 		ExportLoad:     o.exportLoad,
+		RawOpts:        rawOpts,
 	}
 
 	// TODO: extract env var parsing to a method easily usable by library consumers
@@ -591,7 +599,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 
 	if isExperimental() {
 		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
-		cobrautil.MarkFlagsExperimental(flags, "print")
+		flags.StringArrayVar(&options.rawOpts, "opt", []string{}, "Set BuildKit frontend option directly")
+		cobrautil.MarkFlagsExperimental(flags, "print", "opt")
 	}
 
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)

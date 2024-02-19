@@ -97,6 +97,8 @@ type Options struct {
 	PrintFunc    *PrintFunc
 	SourcePolicy *spb.Policy
 	GroupRef     string
+
+	RawOpts map[string]string
 }
 
 type PrintFunc struct {
@@ -225,6 +227,16 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
 		SourcePolicy:        opt.SourcePolicy,
+	}
+	if opt.RawOpts != nil {
+		defer func() {
+			for k, v := range opt.RawOpts {
+				if oldV, ok := so.FrontendAttrs[k]; ok {
+					logrus.Debugf("Overriding frontend opt %s=%q with %q", k, oldV, v)
+				}
+				so.FrontendAttrs[k] = v
+			}
+		}()
 	}
 
 	if so.Ref == "" {

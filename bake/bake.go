@@ -555,9 +555,9 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 					o.Value = v
 				}
 				fallthrough
-			case "contexts":
+			case "contexts", "opts":
 				if len(keys) != 3 {
-					return nil, errors.Errorf("invalid key %s, contexts requires name", parts[0])
+					return nil, errors.Errorf("invalid key %s, %s requires name", parts[0], keys[1])
 				}
 				fallthrough
 			default:
@@ -702,6 +702,7 @@ type Target struct {
 	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
 	Ulimits          []string           `json:"ulimits,omitempty" hcl:"ulimits,optional"`
+	Opts             map[string]string  `json:"opts,omitempty" hcl:"opts,optional" cty:"opts"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -819,6 +820,12 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.Ulimits != nil { // merge
 		t.Ulimits = append(t.Ulimits, t2.Ulimits...)
 	}
+	for k, v := range t2.Opts {
+		if t.Opts == nil {
+			t.Opts = map[string]string{}
+		}
+		t.Opts[k] = v
+	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
@@ -907,6 +914,14 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 					}
 				}
 			}
+		case "opts":
+			if len(keys) != 2 {
+				return errors.Errorf("opts require name")
+			}
+			if t.Opts == nil {
+				t.Opts = map[string]string{}
+			}
+			t.Opts[keys[1]] = value
 		default:
 			return errors.Errorf("unknown key: %s", keys[0])
 		}
@@ -1265,6 +1280,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		NetworkMode:   networkMode,
 		Linked:        t.linked,
 		ShmSize:       *shmSize,
+		RawOpts:       t.Opts,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)
