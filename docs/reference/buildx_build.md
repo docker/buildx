@@ -46,7 +46,7 @@ Start a build
 | [`--sbom`](#sbom)                                                                                                                                  | `string`      |           | Shorthand for `--attest=type=sbom`                                                                  |
 | [`--secret`](#secret)                                                                                                                              | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                           |
 | `--server-config`                                                                                                                                  | `string`      |           | Specify buildx server config file (used only when launching new server) (EXPERIMENTAL)              |
-| [`--shm-size`](#shm-size)                                                                                                                          | `bytes`       | `0`       | Size of `/dev/shm`                                                                                  |
+| [`--shm-size`](#shm-size)                                                                                                                          | `bytes`       | `0`       | Shared memory size for build containers                                                             |
 | [`--ssh`](#ssh)                                                                                                                                    | `stringArray` |           | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
 | [`-t`](https://docs.docker.com/reference/cli/docker/image/build/#tag), [`--tag`](https://docs.docker.com/reference/cli/docker/image/build/#tag)    | `stringArray` |           | Name and optionally a tag (format: `name:tag`)                                                      |
 | [`--target`](https://docs.docker.com/reference/cli/docker/image/build/#target)                                                                     | `string`      |           | Set the target build stage to build                                                                 |
@@ -653,11 +653,20 @@ RUN --mount=type=bind,target=. \
 $ SECRET_TOKEN=token docker buildx build --secret id=SECRET_TOKEN .
 ```
 
-### <a name="shm-size"></a> Size of /dev/shm (--shm-size)
+### <a name="shm-size"></a> Shared memory size for build containers (--shm-size)
+
+Sets the size of the shared memory allocated for build containers when using
+`RUN` instructions.
 
 The format is `<number><unit>`. `number` must be greater than `0`. Unit is
 optional and can be `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`
 (gigabytes). If you omit the unit, the system uses bytes.
+
+> **Note**
+>
+> In most cases, it is recommended to let the builder automatically determine
+> the appropriate configurations. Manual adjustments should only be considered
+> when specific performance tuning is required for complex build scenarios.
 
 ### <a name="ssh"></a> SSH agent socket or keys to expose to the build (--ssh)
 
@@ -692,7 +701,8 @@ $ docker buildx build --ssh default=$SSH_AUTH_SOCK .
 
 ### <a name="ulimit"></a> Set ulimits (--ulimit)
 
-`--ulimit` is specified with a soft and hard limit as such:
+`--ulimit` overrides the default ulimits of build's containers when using `RUN`
+instructions and are specified with a soft and hard limit as such:
 `<type>=<soft limit>[:<hard limit>]`, for example:
 
 ```console
@@ -704,3 +714,9 @@ $ docker buildx build --ulimit nofile=1024:1024 .
 > If you don't provide a `hard limit`, the `soft limit` is used
 > for both values. If no `ulimits` are set, they're inherited from
 > the default `ulimits` set on the daemon.
+
+> **Note**
+>
+> In most cases, it is recommended to let the builder automatically determine
+> the appropriate configurations. Manual adjustments should only be considered
+> when specific performance tuning is required for complex build scenarios.

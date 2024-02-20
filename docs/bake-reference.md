@@ -836,6 +836,9 @@ RUN --mount=type=secret,id=KUBECONFIG \
 
 ### `target.shm-size`
 
+Sets the size of the shared memory allocated for build containers when using
+`RUN` instructions.
+
 The format is `<number><unit>`. `number` must be greater than `0`. Unit is
 optional and can be `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`
 (gigabytes). If you omit the unit, the system uses bytes.
@@ -847,6 +850,12 @@ target "default" {
   shm-size = "128m"
 }
 ```
+
+> **Note**
+>
+> In most cases, it is recommended to let the builder automatically determine
+> the appropriate configurations. Manual adjustments should only be considered
+> when specific performance tuning is required for complex build scenarios.
 
 ### `target.ssh`
 
@@ -896,7 +905,8 @@ target "default" {
 
 ### `target.ulimits`
 
-Ulimits are specified with a soft and hard limit as such:
+Ulimits overrides the default ulimits of build's containers when using `RUN`
+instructions and are specified with a soft and hard limit as such:
 `<type>=<soft limit>[:<hard limit>]`, for example:
 
 ```hcl
@@ -912,6 +922,12 @@ target "app" {
 > If you do not provide a `hard limit`, the `soft limit` is used
 > for both values. If no `ulimits` are set, they are inherited from
 > the default `ulimits` set on the daemon.
+
+> **Note**
+>
+> In most cases, it is recommended to let the builder automatically determine
+> the appropriate configurations. Manual adjustments should only be considered
+> when specific performance tuning is required for complex build scenarios.
 
 ## Group
 

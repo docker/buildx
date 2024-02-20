@@ -599,7 +599,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 
 	flags.StringArrayVar(&options.secrets, "secret", []string{}, `Secret to expose to the build (format: "id=mysecret[,src=/local/secret]")`)
 
-	flags.Var(&options.shmSize, "shm-size", `Size of "/dev/shm"`)
+	flags.Var(&options.shmSize, "shm-size", `Shared memory size for build containers`)
 
 	flags.StringArrayVar(&options.ssh, "ssh", []string{}, `SSH agent socket or keys to expose to the build (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
 
