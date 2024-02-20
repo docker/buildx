@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
@@ -34,6 +35,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeEmpty,
 	testBakeShmSize,
 	testBakeUlimits,
+	testBakeRefs,
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -585,4 +587,47 @@ target "default" {
 	dt, err := os.ReadFile(filepath.Join(dirDest, "ulimit"))
 	require.NoError(t, err)
 	require.Contains(t, string(dt), `1024`)
+}
+
+func testBakeRefs(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+	bakefile := []byte(`
+target "default" {
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	dirDest := t.TempDir()
+
+	outFlag := "default.output=type=docker"
+	if sb.DockerAddress() == "" {
+		// there is no Docker atm to load the image
+		outFlag += ",dest=" + dirDest + "/image.tar"
+	}
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", outFlag))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, out)
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		Default struct {
+			BuildRef string `json:"buildx.build.ref"`
+		} `json:"default"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, md.Default.BuildRef)
 }

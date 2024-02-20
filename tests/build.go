@@ -53,6 +53,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildNetworkModeBridge,
 	testBuildShmSize,
 	testBuildUlimit,
+	testBuildRef,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -284,23 +285,6 @@ RUN exit 1`)
 	require.True(t, buildDetailsPattern.MatchString(string(out)), fmt.Sprintf("expected build details link in output, got %q", out))
 }
 
-func createTestProject(t *testing.T) string {
-	dockerfile := []byte(`
-FROM busybox:latest AS base
-COPY foo /etc/foo
-RUN cp /etc/foo /etc/bar
-
-FROM scratch
-COPY --from=base /etc/bar /bar
-`)
-	dir := tmpdir(
-		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
-	)
-	return dir
-}
-
 func testBuildProgress(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
 	driver, _, _ := strings.Cut(sb.Name(), "+")
@@ -529,4 +513,48 @@ COPY --from=build /ulimit /
 	dt, err := os.ReadFile(filepath.Join(dir, "ulimit"))
 	require.NoError(t, err)
 	require.Contains(t, string(dt), `1024`)
+}
+
+func testBuildRef(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	dirDest := t.TempDir()
+
+	outFlag := "--output=type=docker"
+	if sb.DockerAddress() == "" {
+		// there is no Docker atm to load the image
+		outFlag += ",dest=" + dirDest + "/image.tar"
+	}
+
+	cmd := buildxCmd(sb, withArgs("build", outFlag, "--metadata-file", filepath.Join(dirDest, "md.json"), dir))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildRef string `json:"buildx.build.ref"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, md.BuildRef)
+}
+
+func createTestProject(t *testing.T) string {
+	dockerfile := []byte(`
+FROM busybox:latest AS base
+COPY foo /etc/foo
+RUN cp /etc/foo /etc/bar
+
+FROM scratch
+COPY --from=base /etc/bar /bar
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	return dir
 }
