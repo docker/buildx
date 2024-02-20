@@ -29,6 +29,9 @@ var (
 	// for our use-case; DO NOT consider using this as a generic regex, or at least
 	// not before reading https://stackoverflow.com/a/1732454/1811501.
 	htmlAnchor = regexp.MustCompile(`<a\s+(?:name|id)="?([^"]+)"?\s*></a>\s*`)
+	// relativeLink matches parts of internal links between .md documents
+	// e.g. "](buildx_build.md)"
+	relativeLink = regexp.MustCompile(`\]\((\.\/)?[a-z-_]+\.md(#.*)?\)`)
 )
 
 // getSections returns all H2 sections by title (lowercase)
@@ -57,6 +60,16 @@ func cleanupMarkDown(mdString string) (md string, anchors []string) {
 	mdString = strings.TrimSpace(mdString)
 	mdString = strings.ReplaceAll(mdString, "\t", "    ")
 	mdString = strings.ReplaceAll(mdString, "https://docs.docker.com", "")
+
+	// Rewrite internal links, replacing relative paths with absolute path
+	// e.g. from [docker buildx build](buildx_build.md#build-arg)
+	// to [docker buildx build](/reference/cli/docker/buildx/build/#build-arg)
+	mdString = relativeLink.ReplaceAllStringFunc(mdString, func(link string) string {
+		link = strings.TrimLeft(link, "](./")
+		link = strings.ReplaceAll(link, "_", "/")
+		link = strings.ReplaceAll(link, ".md", "/")
+		return "](/reference/cli/docker/" + link
+	})
 
 	var id string
 	// replace trailing whitespace per line, and handle custom anchors

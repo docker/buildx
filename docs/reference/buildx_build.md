@@ -13,44 +13,44 @@ Start a build
 
 ### Options
 
-| Name                                                                                                                                                               | Type          | Default   | Description                                                                                         |
-|:-------------------------------------------------------------------------------------------------------------------------------------------------------------------|:--------------|:----------|:----------------------------------------------------------------------------------------------------|
-| [`--add-host`](https://docs.docker.com/engine/reference/commandline/image_build/#add-host)                                                                         | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                 |
-| [`--allow`](#allow)                                                                                                                                                | `stringSlice` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)                      |
-| [`--annotation`](#annotation)                                                                                                                                      | `stringArray` |           | Add annotation to the image                                                                         |
-| [`--attest`](#attest)                                                                                                                                              | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                        |
-| [`--build-arg`](#build-arg)                                                                                                                                        | `stringArray` |           | Set build-time variables                                                                            |
-| [`--build-context`](#build-context)                                                                                                                                | `stringArray` |           | Additional build contexts (e.g., name=path)                                                         |
-| [`--builder`](#builder)                                                                                                                                            | `string`      |           | Override the configured builder instance                                                            |
-| [`--cache-from`](#cache-from)                                                                                                                                      | `stringArray` |           | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`)                       |
-| [`--cache-to`](#cache-to)                                                                                                                                          | `stringArray` |           | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`)                   |
-| [`--cgroup-parent`](https://docs.docker.com/engine/reference/commandline/image_build/#cgroup-parent)                                                               | `string`      |           | Set the parent cgroup for the `RUN` instructions during build                                       |
-| `--detach`                                                                                                                                                         |               |           | Detach buildx server (supported only on linux)                                                      |
-| [`-f`](https://docs.docker.com/engine/reference/commandline/image_build/#file), [`--file`](https://docs.docker.com/engine/reference/commandline/image_build/#file) | `string`      |           | Name of the Dockerfile (default: `PATH/Dockerfile`)                                                 |
-| `--iidfile`                                                                                                                                                        | `string`      |           | Write the image ID to the file                                                                      |
-| `--label`                                                                                                                                                          | `stringArray` |           | Set metadata for an image                                                                           |
-| [`--load`](#load)                                                                                                                                                  |               |           | Shorthand for `--output=type=docker`                                                                |
-| [`--metadata-file`](#metadata-file)                                                                                                                                | `string`      |           | Write build result metadata to the file                                                             |
-| `--network`                                                                                                                                                        | `string`      | `default` | Set the networking mode for the `RUN` instructions during build                                     |
-| `--no-cache`                                                                                                                                                       |               |           | Do not use cache when building the image                                                            |
-| `--no-cache-filter`                                                                                                                                                | `stringArray` |           | Do not cache specified stages                                                                       |
-| [`-o`](#output), [`--output`](#output)                                                                                                                             | `stringArray` |           | Output destination (format: `type=local,dest=path`)                                                 |
-| [`--platform`](#platform)                                                                                                                                          | `stringArray` |           | Set target platform for build                                                                       |
-| `--print`                                                                                                                                                          | `string`      |           | Print result of information request (e.g., outline, targets)                                        |
-| [`--progress`](#progress)                                                                                                                                          | `string`      | `auto`    | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output            |
-| [`--provenance`](#provenance)                                                                                                                                      | `string`      |           | Shorthand for `--attest=type=provenance`                                                            |
-| `--pull`                                                                                                                                                           |               |           | Always attempt to pull all referenced images                                                        |
-| [`--push`](#push)                                                                                                                                                  |               |           | Shorthand for `--output=type=registry`                                                              |
-| `-q`, `--quiet`                                                                                                                                                    |               |           | Suppress the build output and print image ID on success                                             |
-| `--root`                                                                                                                                                           | `string`      |           | Specify root directory of server to connect                                                         |
-| [`--sbom`](#sbom)                                                                                                                                                  | `string`      |           | Shorthand for `--attest=type=sbom`                                                                  |
-| [`--secret`](#secret)                                                                                                                                              | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                           |
-| `--server-config`                                                                                                                                                  | `string`      |           | Specify buildx server config file (used only when launching new server)                             |
-| [`--shm-size`](#shm-size)                                                                                                                                          | `bytes`       | `0`       | Size of `/dev/shm`                                                                                  |
-| [`--ssh`](#ssh)                                                                                                                                                    | `stringArray` |           | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
-| [`-t`](https://docs.docker.com/engine/reference/commandline/image_build/#tag), [`--tag`](https://docs.docker.com/engine/reference/commandline/image_build/#tag)    | `stringArray` |           | Name and optionally a tag (format: `name:tag`)                                                      |
-| [`--target`](https://docs.docker.com/engine/reference/commandline/image_build/#target)                                                                             | `string`      |           | Set the target build stage to build                                                                 |
-| [`--ulimit`](#ulimit)                                                                                                                                              | `ulimit`      |           | Ulimit options                                                                                      |
+| Name                                                                                                                                               | Type          | Default   | Description                                                                                         |
+|:---------------------------------------------------------------------------------------------------------------------------------------------------|:--------------|:----------|:----------------------------------------------------------------------------------------------------|
+| [`--add-host`](https://docs.docker.com/reference/cli/docker/image/build/#add-host)                                                                 | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                 |
+| [`--allow`](#allow)                                                                                                                                | `stringSlice` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)                      |
+| [`--annotation`](#annotation)                                                                                                                      | `stringArray` |           | Add annotation to the image                                                                         |
+| [`--attest`](#attest)                                                                                                                              | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                        |
+| [`--build-arg`](#build-arg)                                                                                                                        | `stringArray` |           | Set build-time variables                                                                            |
+| [`--build-context`](#build-context)                                                                                                                | `stringArray` |           | Additional build contexts (e.g., name=path)                                                         |
+| [`--builder`](#builder)                                                                                                                            | `string`      |           | Override the configured builder instance                                                            |
+| [`--cache-from`](#cache-from)                                                                                                                      | `stringArray` |           | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`)                       |
+| [`--cache-to`](#cache-to)                                                                                                                          | `stringArray` |           | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`)                   |
+| [`--cgroup-parent`](https://docs.docker.com/reference/cli/docker/image/build/#cgroup-parent)                                                       | `string`      |           | Set the parent cgroup for the `RUN` instructions during build                                       |
+| `--detach`                                                                                                                                         |               |           | Detach buildx server (supported only on linux)                                                      |
+| [`-f`](https://docs.docker.com/reference/cli/docker/image/build/#file), [`--file`](https://docs.docker.com/reference/cli/docker/image/build/#file) | `string`      |           | Name of the Dockerfile (default: `PATH/Dockerfile`)                                                 |
+| `--iidfile`                                                                                                                                        | `string`      |           | Write the image ID to the file                                                                      |
+| `--label`                                                                                                                                          | `stringArray` |           | Set metadata for an image                                                                           |
+| [`--load`](#load)                                                                                                                                  |               |           | Shorthand for `--output=type=docker`                                                                |
+| [`--metadata-file`](#metadata-file)                                                                                                                | `string`      |           | Write build result metadata to the file                                                             |
+| `--network`                                                                                                                                        | `string`      | `default` | Set the networking mode for the `RUN` instructions during build                                     |
+| `--no-cache`                                                                                                                                       |               |           | Do not use cache when building the image                                                            |
+| `--no-cache-filter`                                                                                                                                | `stringArray` |           | Do not cache specified stages                                                                       |
+| [`-o`](#output), [`--output`](#output)                                                                                                             | `stringArray` |           | Output destination (format: `type=local,dest=path`)                                                 |
+| [`--platform`](#platform)                                                                                                                          | `stringArray` |           | Set target platform for build                                                                       |
+| `--print`                                                                                                                                          | `string`      |           | Print result of information request (e.g., outline, targets)                                        |
+| [`--progress`](#progress)                                                                                                                          | `string`      | `auto`    | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output            |
+| [`--provenance`](#provenance)                                                                                                                      | `string`      |           | Shorthand for `--attest=type=provenance`                                                            |
+| `--pull`                                                                                                                                           |               |           | Always attempt to pull all referenced images                                                        |
+| [`--push`](#push)                                                                                                                                  |               |           | Shorthand for `--output=type=registry`                                                              |
+| `-q`, `--quiet`                                                                                                                                    |               |           | Suppress the build output and print image ID on success                                             |
+| `--root`                                                                                                                                           | `string`      |           | Specify root directory of server to connect                                                         |
+| [`--sbom`](#sbom)                                                                                                                                  | `string`      |           | Shorthand for `--attest=type=sbom`                                                                  |
+| [`--secret`](#secret)                                                                                                                              | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                           |
+| `--server-config`                                                                                                                                  | `string`      |           | Specify buildx server config file (used only when launching new server)                             |
+| [`--shm-size`](#shm-size)                                                                                                                          | `bytes`       | `0`       | Size of `/dev/shm`                                                                                  |
+| [`--ssh`](#ssh)                                                                                                                                    | `stringArray` |           | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`) |
+| [`-t`](https://docs.docker.com/reference/cli/docker/image/build/#tag), [`--tag`](https://docs.docker.com/reference/cli/docker/image/build/#tag)    | `stringArray` |           | Name and optionally a tag (format: `name:tag`)                                                      |
+| [`--target`](https://docs.docker.com/reference/cli/docker/image/build/#target)                                                                     | `string`      |           | Set the target build stage to build                                                                 |
+| [`--ulimit`](#ulimit)                                                                                                                              | `ulimit`      |           | Ulimit options                                                                                      |
 
 
 <!---MARKER_GEN_END-->
@@ -64,7 +64,7 @@ The `buildx build` command starts a build using BuildKit. This command is simila
 to the UI of `docker build` command and takes the same flags and arguments.
 
 For documentation on most of these flags, refer to the [`docker build`
-documentation](https://docs.docker.com/engine/reference/commandline/image_build/).
+documentation](https://docs.docker.com/reference/cli/docker/image/build/).
 This page describes a subset of the new flags.
 
 ## Examples
@@ -152,7 +152,7 @@ Allow extra privileged entitlement. List of entitlements:
 
 - `network.host` - Allows executions with host networking.
 - `security.insecure` - Allows executions without sandbox. See
-  [related Dockerfile extensions](https://docs.docker.com/engine/reference/builder/#run---securitysandbox).
+  [related Dockerfile extensions](https://docs.docker.com/reference/dockerfile/#run---securitysandbox).
 
 For entitlements to be enabled, the `buildkitd` daemon also needs to allow them
 with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#buildkitd-flags)).
@@ -164,7 +164,7 @@ $ docker buildx build --allow security.insecure .
 
 ### <a name="build-arg"></a> Set build-time variables (--build-arg)
 
-Same as [`docker build` command](https://docs.docker.com/engine/reference/commandline/image_build/#build-arg).
+Same as [`docker build` command](https://docs.docker.com/reference/cli/docker/image/build/#build-arg).
 
 There are also useful built-in build arguments, such as:
 
@@ -176,7 +176,7 @@ There are also useful built-in build arguments, such as:
 $ docker buildx build --build-arg BUILDKIT_MULTI_PLATFORM=1 .
 ```
 
-Learn more about the built-in build arguments in the [Dockerfile reference docs](https://docs.docker.com/engine/reference/builder/#buildkit-built-in-build-args).
+Learn more about the built-in build arguments in the [Dockerfile reference docs](https://docs.docker.com/reference/dockerfile/#buildkit-built-in-build-args).
 
 ### <a name="build-context"></a> Additional build contexts (--build-context)
 
@@ -462,7 +462,7 @@ instance supports by running `docker buildx inspect --bootstrap`.
 
 Inside a `Dockerfile`, you can access the current platform value through
 `TARGETPLATFORM` build argument. Refer to the [`docker build`
-documentation](https://docs.docker.com/engine/reference/builder/#automatic-platform-args-in-the-global-scope)
+documentation](https://docs.docker.com/reference/dockerfile/#automatic-platform-args-in-the-global-scope)
 for the full description of automatic platform argument variants .
 
 You can find the formatting definition for the platform specifier in the
@@ -556,7 +556,7 @@ For more information, see [here](https://docs.docker.com/build/attestations/sbom
 ```
 
 Exposes secret to the build. The secret can be used by the build using
-[`RUN --mount=type=secret` mount](https://docs.docker.com/engine/reference/builder/#run---mounttypesecret).
+[`RUN --mount=type=secret` mount](https://docs.docker.com/reference/dockerfile/#run---mounttypesecret).
 
 If `type` is unset it will be detected. Supported types are:
 
@@ -614,7 +614,7 @@ This can be useful when some commands in your Dockerfile need specific SSH
 authentication (e.g., cloning a private repository).
 
 `--ssh` exposes SSH agent socket or keys to the build and can be used with the
-[`RUN --mount=type=ssh` mount](https://docs.docker.com/engine/reference/builder/#run---mounttypessh).
+[`RUN --mount=type=ssh` mount](https://docs.docker.com/reference/dockerfile/#run---mounttypessh).
 
 Example to access Gitlab using an SSH agent socket:
 

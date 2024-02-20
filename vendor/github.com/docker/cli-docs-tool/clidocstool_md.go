@@ -241,7 +241,7 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 			name += mdMakeLink("`--"+f.Name+"`", f.Name, f, isLink)
 
 			var ftype string
-			if f.Value.Type() != "bool" {
+			if f.Value.Type() != "bool" || (f.Value.Type() == "bool" && f.DefValue == "true") {
 				ftype = "`" + f.Value.Type() + "`"
 			}
 
@@ -253,7 +253,7 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 				} else if cd, ok := cmd.Annotations[annotation.CodeDelimiter]; ok {
 					defval = strings.ReplaceAll(defval, cd, "`")
 				}
-			} else if f.DefValue != "" && (f.Value.Type() != "bool" && f.DefValue != "true") && f.DefValue != "[]" {
+			} else if f.DefValue != "" && ((f.Value.Type() != "bool" && f.DefValue != "true") || (f.Value.Type() == "bool" && f.DefValue == "true")) && f.DefValue != "[]" {
 				defval = "`" + f.DefValue + "`"
 			}
 
