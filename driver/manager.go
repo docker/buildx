@@ -52,7 +52,7 @@ type InitConfig struct {
 	EndpointAddr     string
 	DockerAPI        dockerclient.APIClient
 	KubeClientConfig KubeClientConfig
-	BuildkitFlags    []string
+	BuildkitdFlags   []string
 	Files            map[string][]byte
 	DriverOpts       map[string]string
 	Auth             Auth
@@ -103,13 +103,13 @@ func GetFactory(name string, instanceRequired bool) (Factory, error) {
 	return nil, errors.Errorf("failed to find driver %q", name)
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, flags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string, dialMeta map[string][]string) (*DriverHandle, error) {
+func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, buildkitdFlags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string, dialMeta map[string][]string) (*DriverHandle, error) {
 	ic := InitConfig{
 		EndpointAddr:     endpointAddr,
 		DockerAPI:        api,
 		KubeClientConfig: kcc,
 		Name:             name,
-		BuildkitFlags:    flags,
+		BuildkitdFlags:   buildkitdFlags,
 		DriverOpts:       do,
 		Auth:             auth,
 		Platforms:        platforms,

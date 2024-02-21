@@ -28,8 +28,8 @@ func TestNodeGroupUpdate(t *testing.T) {
 	require.Equal(t, []string{"linux/arm64"}, platformutil.Format(ng.Nodes[1].Platforms))
 
 	require.Equal(t, "foo2", ng.Nodes[0].Endpoint)
-	require.Equal(t, []string{"--debug"}, ng.Nodes[0].Flags)
-	require.Equal(t, []string(nil), ng.Nodes[1].Flags)
+	require.Equal(t, []string{"--debug"}, ng.Nodes[0].BuildkitdFlags)
+	require.Equal(t, []string(nil), ng.Nodes[1].BuildkitdFlags)
 
 	// duplicate endpoint
 	err = ng.Update("foo1", "foo2", nil, true, false, nil, "", nil)

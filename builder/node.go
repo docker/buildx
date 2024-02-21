@@ -142,7 +142,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.Flags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash, lno.dialMeta)
+				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.BuildkitdFlags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash, lno.dialMeta)
 				if err != nil {
 					node.Err = err
 					return nil
@@ -217,33 +217,33 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 		pp = append(pp, platforms.Format(p))
 	}
 	return json.Marshal(struct {
-		Name        string
-		Endpoint    string
-		Flags       []string           `json:",omitempty"`
-		DriverOpts  map[string]string  `json:",omitempty"`
-		Files       map[string][]byte  `json:",omitempty"`
-		Status      string             `json:",omitempty"`
-		ProxyConfig map[string]string  `json:",omitempty"`
-		Version     string             `json:",omitempty"`
-		Err         string             `json:",omitempty"`
-		IDs         []string           `json:",omitempty"`
-		Platforms   []string           `json:",omitempty"`
-		GCPolicy    []client.PruneInfo `json:",omitempty"`
-		Labels      map[string]string  `json:",omitempty"`
+		Name           string
+		Endpoint       string
+		BuildkitdFlags []string           `json:"Flags,omitempty"`
+		DriverOpts     map[string]string  `json:",omitempty"`
+		Files          map[string][]byte  `json:",omitempty"`
+		Status         string             `json:",omitempty"`
+		ProxyConfig    map[string]string  `json:",omitempty"`
+		Version        string             `json:",omitempty"`
+		Err            string             `json:",omitempty"`
+		IDs            []string           `json:",omitempty"`
+		Platforms      []string           `json:",omitempty"`
+		GCPolicy       []client.PruneInfo `json:",omitempty"`
+		Labels         map[string]string  `json:",omitempty"`
 	}{
-		Name:        n.Name,
-		Endpoint:    n.Endpoint,
-		Flags:       n.Flags,
-		DriverOpts:  n.DriverOpts,
-		Files:       n.Files,
-		Status:      status,
-		ProxyConfig: n.ProxyConfig,
-		Version:     n.Version,
-		Err:         nerr,
-		IDs:         n.IDs,
-		Platforms:   pp,
-		GCPolicy:    n.GCPolicy,
-		Labels:      n.Labels,
+		Name:           n.Name,
+		Endpoint:       n.Endpoint,
+		BuildkitdFlags: n.BuildkitdFlags,
+		DriverOpts:     n.DriverOpts,
+		Files:          n.Files,
+		Status:         status,
+		ProxyConfig:    n.ProxyConfig,
+		Version:        n.Version,
+		Err:            nerr,
+		IDs:            n.IDs,
+		Platforms:      pp,
+		GCPolicy:       n.GCPolicy,
+		Labels:         n.Labels,
 	})
 }
 

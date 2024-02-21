@@ -105,7 +105,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		Name:          deploymentName,
 		Image:         bkimage.DefaultImage,
 		Replicas:      1,
-		BuildkitFlags: cfg.BuildkitFlags,
+		BuildkitFlags: cfg.BuildkitdFlags,
 		Rootless:      false,
 		Platforms:     cfg.Platforms,
 		ConfigFiles:   cfg.Files,

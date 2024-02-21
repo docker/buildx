@@ -112,7 +112,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.BoolVar(&options.keepState, "keep-state", false, "Keep BuildKit state")
-	flags.BoolVar(&options.keepDaemon, "keep-daemon", false, "Keep the buildkitd daemon running")
+	flags.BoolVar(&options.keepDaemon, "keep-daemon", false, "Keep the BuildKit daemon running")
 	flags.BoolVar(&options.allInactive, "all-inactive", false, "Remove all inactive builders")
 	flags.BoolVarP(&options.force, "force", "f", false, "Do not prompt for confirmation")
 
