@@ -58,7 +58,7 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 	cmd := exec.Command("buildx", "create",
 		"--bootstrap",
 		"--name="+name,
-		"--config="+cfgfile,
+		"--buildkitd-config="+cfgfile,
 		"--driver=docker-container",
 		"--driver-opt=network=host",
 	)

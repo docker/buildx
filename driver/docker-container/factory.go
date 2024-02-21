@@ -56,7 +56,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		case k == "network":
 			d.netMode = v
 			if v == "host" {
-				d.InitConfig.BuildkitFlags = append(d.InitConfig.BuildkitFlags, "--allow-insecure-entitlement=network.host")
+				d.InitConfig.BuildkitdFlags = append(d.InitConfig.BuildkitdFlags, "--allow-insecure-entitlement=network.host")
 			}
 		case k == "image":
 			d.image = v

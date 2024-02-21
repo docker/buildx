@@ -49,7 +49,7 @@ if [ "$DRIVER" != "docker" ]; then
     for platform in ${PLATFORMS//,/ }; do
       createFlags=""
       if [ -f "$BUILDKIT_CFG" ]; then
-        createFlags="$createFlags --config=${BUILDKIT_CFG}"
+        createFlags="$createFlags --buildkitd-config=${BUILDKIT_CFG}"
       fi
       if [ "$firstNode" = "0" ]; then
         createFlags="$createFlags --append"
@@ -71,7 +71,7 @@ if [ "$DRIVER" != "docker" ]; then
   else
     createFlags=""
     if [ -f "$BUILDKIT_CFG" ]; then
-      createFlags="$createFlags --config=${BUILDKIT_CFG}"
+      createFlags="$createFlags --buildkitd-config=${BUILDKIT_CFG}"
     fi
     buildxCmd create ${createFlags} \
       --bootstrap \

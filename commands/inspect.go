@@ -84,11 +84,11 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 				fmt.Fprintf(w, "Error:\t%s\n", err.Error())
 			} else {
 				fmt.Fprintf(w, "Status:\t%s\n", nodes[i].DriverInfo.Status)
-				if len(n.Flags) > 0 {
-					fmt.Fprintf(w, "Flags:\t%s\n", strings.Join(n.Flags, " "))
+				if len(n.BuildkitdFlags) > 0 {
+					fmt.Fprintf(w, "BuildKit daemon flags:\t%s\n", strings.Join(n.BuildkitdFlags, " "))
 				}
 				if nodes[i].Version != "" {
-					fmt.Fprintf(w, "Buildkit:\t%s\n", nodes[i].Version)
+					fmt.Fprintf(w, "BuildKit version:\t%s\n", nodes[i].Version)
 				}
 				platforms := platformutil.FormatInGroups(n.Node.Platforms, n.Platforms)
 				if len(platforms) > 0 {

@@ -46,7 +46,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	if len(cfg.Files) > 0 {
 		return nil, errors.Errorf("setting config file is not supported for remote driver")
 	}
-	if len(cfg.BuildkitFlags) > 0 {
+	if len(cfg.BuildkitdFlags) > 0 {
 		return nil, errors.Errorf("setting buildkit flags is not supported for remote driver")
 	}
 

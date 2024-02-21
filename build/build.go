@@ -255,7 +255,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	supportsAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) && nodeDriver.Features(ctx)[driver.MultiPlatform]
 	if len(attests) > 0 {
 		if !supportsAttestations {
-			return nil, nil, errors.Errorf("attestations are not supported by the current buildkitd")
+			return nil, nil, errors.Errorf("attestations are not supported by the current BuildKit daemon")
 		}
 		for k, v := range attests {
 			so.FrontendAttrs["attest:"+k] = v
