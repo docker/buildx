@@ -759,6 +759,11 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						results.Set(rKey, res)
 
 						if children, ok := childTargets[rKey]; ok && len(children) > 0 {
+							// wait for the child targets to register their LLB before evaluating
+							_, err := results.Get(ctx, children...)
+							if err != nil {
+								return nil, err
+							}
 							// we need to wait until the child targets have completed before we can release
 							eg, ctx := errgroup.WithContext(ctx)
 							eg.Go(func() error {
