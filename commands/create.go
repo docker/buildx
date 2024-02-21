@@ -26,6 +26,7 @@ type createOptions struct {
 	driverOpts          []string
 	buildkitdFlags      string
 	buildkitdConfigFile string
+	buildkitdNetmode    string
 	bootstrap           bool
 	// upgrade      bool // perform upgrade of the driver
 }
@@ -58,6 +59,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		DriverOpts:          in.driverOpts,
 		BuildkitdFlags:      in.buildkitdFlags,
 		BuildkitdConfigFile: in.buildkitdConfigFile,
+		BuildkitdNetmode:    in.buildkitdNetmode,
 		Use:                 in.use,
 		Endpoint:            ep,
 		Append:              in.actionAppend,
@@ -115,6 +117,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.buildkitdConfigFile, "config", "", "BuildKit daemon config file")
 	flags.MarkHidden("config")
 
+	flags.StringVar(&options.buildkitdNetmode, "buildkitd-netmode", "auto", "BuildKit daemon network mode")
 	flags.BoolVar(&options.bootstrap, "bootstrap", false, "Boot builder after creation")
 	flags.BoolVar(&options.actionAppend, "append", false, "Append a node to builder instead of changing it")
 	flags.BoolVar(&options.actionLeave, "leave", false, "Remove a node from builder instead of changing it")

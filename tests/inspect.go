@@ -17,6 +17,7 @@ func inspectCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 
 var inspectTests = []func(t *testing.T, sb integration.Sandbox){
 	testInspect,
+	testInspectNetmodeBridge,
 }
 
 func testInspect(t *testing.T, sb integration.Sandbox) {
@@ -46,4 +47,34 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 	} else {
 		require.Empty(t, hostGatewayIP, "host-gateway-ip worker label should not be set with non-docker driver")
 	}
+}
+
+func testInspectNetmodeBridge(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker-container" {
+		t.Skip("only testing for docker-container driver")
+	}
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--buildkitd-netmode=bridge"))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	out, err = inspectCmd(sb, withArgs(builderName))
+	require.NoError(t, err, out)
+
+	for _, line := range strings.Split(out, "\n") {
+		if v, ok := strings.CutPrefix(line, "BuildKit daemon flags:"); ok {
+			require.Contains(t, v, "--oci-worker-net=bridge")
+			return
+		}
+	}
+	require.Fail(t, "bridge network mode not found in inspect output")
 }

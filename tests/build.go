@@ -48,6 +48,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildOCIExportNotSupported,
 	testBuildMultiPlatformNotSupported,
 	testDockerHostGateway,
+	testBuildNetmodeBridge,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -431,4 +432,34 @@ RUN ping -c 1 buildx.host-gateway-ip.local
 	} else {
 		require.NoError(t, err, string(out))
 	}
+}
+
+func testBuildNetmodeBridge(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	// TODO: use stable buildkit image when v0.13.0 released
+	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--buildkitd-netmode=bridge", "--driver-opt", "image=moby/buildkit:master"))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	dockerfile := []byte(`
+FROM alpine
+RUN apk add --no-cache curl`)
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+
+	cmd := buildxCmd(sb, withArgs("build", "--output=type=cacheonly", dir))
+	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+	outb, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(outb))
 }

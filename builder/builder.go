@@ -338,6 +338,7 @@ type CreateOpts struct {
 	Platforms           []string
 	BuildkitdFlags      string
 	BuildkitdConfigFile string
+	BuildkitdNetmode    string
 	DriverOpts          []string
 	Use                 bool
 	Endpoint            string
@@ -434,6 +435,14 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		buildkitdFlags, err = shlex.Split(opts.BuildkitdFlags)
 		if err != nil {
 			return nil, errors.Wrap(err, "failed to parse BuildKit daemon flags")
+		}
+	}
+
+	if opts.BuildkitdNetmode != "" && opts.BuildkitdNetmode != "auto" {
+		if driverName == "kubernetes" || driverName == "docker-container" {
+			buildkitdFlags = append(buildkitdFlags, "--oci-worker-net="+opts.BuildkitdNetmode)
+		} else {
+			return nil, errors.Errorf("BuildKit daemon network mode is only supported for kubernetes and docker-container drivers")
 		}
 	}
 
