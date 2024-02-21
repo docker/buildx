@@ -37,14 +37,14 @@ type MeterProvider struct {
 func NewMeterProvider(ctx context.Context, cli command.Cli) (*MeterProvider, error) {
 	var exps []sdkmetric.Exporter
 
-	// Only metric exporters if the experimental flag is set.
-	if confutil.IsExperimental() {
-		if exp, err := dockerOtelExporter(cli); err != nil {
-			return nil, err
-		} else if exp != nil {
-			exps = append(exps, exp)
-		}
+	if exp, err := dockerOtelExporter(cli); err != nil {
+		return nil, err
+	} else if exp != nil {
+		exps = append(exps, exp)
+	}
 
+	if confutil.IsExperimental() {
+		// Expose the user-facing metric exporter only if the experimental flag is set.
 		if exp, err := detectOtlpExporter(ctx); err != nil {
 			return nil, err
 		} else if exp != nil {
