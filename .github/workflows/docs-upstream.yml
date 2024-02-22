@@ -45,18 +45,18 @@ jobs:
           DOCS_FORMATS: yaml
       -
         name: Upload reference YAML docs
-        uses: actions/upload-artifact@v3
+        uses: actions/upload-artifact@v4
         with:
           name: docs-yaml
           path: /tmp/buildx-docs/out/reference
           retention-days: 1
 
   validate:
-    uses: docker/docs/.github/workflows/validate-upstream.yml@e864c797e391fa35aecf1ddcecdbdeb683546424  # pin for artifact v3 support
+    uses: docker/docs/.github/workflows/validate-upstream.yml@6b73b05acb21edf7995cc5b3c6672d8e314cee7a  # pin for artifact v4 support: https://github.com/docker/docs/pull/19220
     needs:
       - docs-yaml
     with:
       module-name: docker/buildx
       data-files-id: docs-yaml
       data-files-folder: buildx
-      data-files-placeholder-folder: engine/reference/commandline
+      create-placeholder-stubs: true
