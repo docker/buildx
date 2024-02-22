@@ -252,17 +252,21 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			attests[k] = *v
 		}
 	}
-	supportsAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) && nodeDriver.Features(ctx)[driver.MultiPlatform]
+
+	supportAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) && nodeDriver.Features(ctx)[driver.MultiPlatform]
 	if len(attests) > 0 {
-		if !supportsAttestations {
-			return nil, nil, errors.Errorf("attestations are not supported by the current BuildKit daemon")
+		if !supportAttestations {
+			if !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+				return nil, nil, notSupported("Attestation", nodeDriver, "https://docs.docker.com/go/attestations/")
+			}
+			return nil, nil, errors.Errorf("Attestations are not supported by the current BuildKit daemon")
 		}
 		for k, v := range attests {
 			so.FrontendAttrs["attest:"+k] = v
 		}
 	}
 
-	if _, ok := opt.Attests["provenance"]; !ok && supportsAttestations {
+	if _, ok := opt.Attests["provenance"]; !ok && supportAttestations {
 		const noAttestEnv = "BUILDX_NO_DEFAULT_ATTESTATIONS"
 		var noProv bool
 		if v, ok := os.LookupEnv(noAttestEnv); ok {
