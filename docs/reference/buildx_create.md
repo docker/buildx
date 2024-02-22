@@ -90,6 +90,22 @@ configuration file specified by [`--buildkitd-config`](#buildkitd-config). See
 --buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
 ```
 
+#### BuildKit daemon network mode
+
+You can specify the network mode for the BuildKit daemon with either the
+configuration file specified by [`--buildkitd-config`](#buildkitd-config) using the
+`worker.oci.networkMode` option or `--oci-worker-net` flag here. The default
+value is `auto` and can be one of `bridge`, `cni`, `host`:
+
+```text
+--buildkitd-flags '--oci-worker-net bridge'
+```
+
+> **Note**
+>
+> Network mode "bridge" is supported since BuildKit v0.13 and will become the
+> default in next v0.14.
+
 ### <a name="driver"></a> Set the builder driver to use (--driver)
 
 ```text
