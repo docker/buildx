@@ -24,7 +24,7 @@ require (
 	github.com/google/uuid v1.5.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
 	github.com/hashicorp/hcl/v2 v2.19.1
-	github.com/moby/buildkit v0.13.0-rc1.0.20240221065707-db304eb93126 // master (v0.13.0-dev)
+	github.com/moby/buildkit v0.13.0-rc1.0.20240222164755-8e3fe35738c2 // master (v0.13.0-dev)
 	github.com/moby/sys/mountinfo v0.7.1
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
