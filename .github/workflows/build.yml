@@ -117,6 +117,7 @@ jobs:
         with:
           directory: ./bin/testreports
           flags: integration
+          token: ${{ secrets.CODECOV_TOKEN }}
       -
         name: Generate annotations
         if: always()
@@ -188,6 +189,7 @@ jobs:
           directory: ${{ env.TESTREPORTS_DIR }}
           env_vars: RUNNER_OS
           flags: unit
+          token: ${{ secrets.CODECOV_TOKEN }}
       -
         name: Generate annotations
         if: always()
