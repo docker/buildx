@@ -32,6 +32,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteDockerfileCwd,
 	testBakeRemoteLocalContextRemoteDockerfile,
 	testBakeEmpty,
+	testBakeShmSize,
+	testBakeUlimits,
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -54,7 +56,7 @@ target "default" {
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--set", "*.output=type=local,dest="+dirDest))
 	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, out)
+	require.NoError(t, err, string(out))
 	require.Contains(t, string(out), `#1 [internal] load local bake definitions`)
 	require.Contains(t, string(out), `#1 reading docker-bake.hcl`)
 
@@ -519,4 +521,68 @@ func testBakeEmpty(t *testing.T, sb integration.Sandbox) {
 	out, err := bakeCmd(sb)
 	require.Error(t, err, out)
 	require.Contains(t, out, "couldn't find a bake definition")
+}
+
+func testBakeShmSize(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox AS build
+RUN mount | grep /dev/shm > /shmsize
+FROM scratch
+COPY --from=build /shmsize /
+	`)
+	bakefile := []byte(`
+target "default" {
+  shm-size = "128m"
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	dirDest := t.TempDir()
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dir),
+		withArgs("--set", "*.output=type=local,dest="+dirDest),
+	)
+	require.NoError(t, err, out)
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "shmsize"))
+	require.NoError(t, err)
+	require.Contains(t, string(dt), `size=131072k`)
+}
+
+func testBakeUlimits(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox AS build
+RUN ulimit -n > first > /ulimit
+FROM scratch
+COPY --from=build /ulimit /
+	`)
+	bakefile := []byte(`
+target "default" {
+  ulimits = ["nofile=1024:1024"]
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	dirDest := t.TempDir()
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dir),
+		withArgs("--set", "*.output=type=local,dest="+dirDest),
+	)
+	require.NoError(t, err, out)
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "ulimit"))
+	require.NoError(t, err)
+	require.Contains(t, string(dt), `1024`)
 }

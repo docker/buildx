@@ -22,6 +22,8 @@ target "webDEP" {
 		VAR_BOTH = "webDEP"
 	}
 	no-cache = true
+	shm-size = "128m"
+	ulimits = ["nofile=1024:1024"]
 }
 
 target "webapp" {
@@ -45,6 +47,8 @@ target "webapp" {
 		require.Equal(t, ".", *m["webapp"].Context)
 		require.Equal(t, ptrstr("webDEP"), m["webapp"].Args["VAR_INHERITED"])
 		require.Equal(t, true, *m["webapp"].NoCache)
+		require.Equal(t, "128m", *m["webapp"].ShmSize)
+		require.Equal(t, []string{"nofile=1024:1024"}, m["webapp"].Ulimits)
 		require.Nil(t, m["webapp"].Pull)
 
 		require.Equal(t, 1, len(g))
@@ -127,6 +131,12 @@ target "webapp" {
 		require.Equal(t, false, *m["webapp"].NoCache)
 		require.Equal(t, 1, len(g))
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
+	})
+
+	t.Run("ShmSizeOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.shm-size=256m"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, "256m", *m["webapp"].ShmSize)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
