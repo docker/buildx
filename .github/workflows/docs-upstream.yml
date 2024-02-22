@@ -52,11 +52,11 @@ jobs:
           retention-days: 1
 
   validate:
-    uses: docker/docs/.github/workflows/validate-upstream.yml@919a9b9104a34a40b30d116529bcce589a544d1c  # pin for artifact v4 support: https://github.com/docker/docs/pull/19220
+    uses: docker/docs/.github/workflows/validate-upstream.yml@6b73b05acb21edf7995cc5b3c6672d8e314cee7a  # pin for artifact v4 support: https://github.com/docker/docs/pull/19220
     needs:
       - docs-yaml
     with:
       module-name: docker/buildx
       data-files-id: docs-yaml
       data-files-folder: buildx
-      data-files-placeholder-folder: engine/reference/commandline
+      create-placeholder-stubs: true
