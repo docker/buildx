@@ -118,7 +118,7 @@ func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
 	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), "--provenance=true", dir))
 	if sb.Name() == "docker" {
 		require.Error(t, err)
-		require.Contains(t, out, "attestations are not supported")
+		require.Contains(t, out, "Attestation is not supported")
 		return
 	}
 	require.NoError(t, err, string(out))

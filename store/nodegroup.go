@@ -24,11 +24,11 @@ type NodeGroup struct {
 }
 
 type Node struct {
-	Name       string
-	Endpoint   string
-	Platforms  []specs.Platform
-	Flags      []string
-	DriverOpts map[string]string
+	Name           string
+	Endpoint       string
+	Platforms      []specs.Platform
+	DriverOpts     map[string]string
+	BuildkitdFlags []string `json:"Flags"` // keep the field name for backward compatibility
 
 	Files map[string][]byte
 }
@@ -48,7 +48,7 @@ func (ng *NodeGroup) Leave(name string) error {
 	return nil
 }
 
-func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool, flags []string, configFile string, do map[string]string) error {
+func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpointsSet bool, actionAppend bool, buildkitdFlags []string, buildkitdConfigFile string, do map[string]string) error {
 	if ng.Dynamic {
 		return errors.New("dynamic node group does not support Update")
 	}
@@ -66,8 +66,8 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 	}
 
 	var files map[string][]byte
-	if configFile != "" {
-		files, err = confutil.LoadConfigFiles(configFile)
+	if buildkitdConfigFile != "" {
+		files, err = confutil.LoadConfigFiles(buildkitdConfigFile)
 		if err != nil {
 			return err
 		}
@@ -83,15 +83,15 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 		if len(platforms) > 0 {
 			n.Platforms = pp
 		}
-		if flags != nil {
-			n.Flags = flags
+		if buildkitdFlags != nil {
+			n.BuildkitdFlags = buildkitdFlags
 			needsRestart = true
 		}
 		if do != nil {
 			n.DriverOpts = do
 			needsRestart = true
 		}
-		if configFile != "" {
+		if buildkitdConfigFile != "" {
 			for k, v := range files {
 				n.Files[k] = v
 			}
@@ -115,12 +115,12 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 	}
 
 	n := Node{
-		Name:       name,
-		Endpoint:   endpoint,
-		Platforms:  pp,
-		Flags:      flags,
-		DriverOpts: do,
-		Files:      files,
+		Name:           name,
+		Endpoint:       endpoint,
+		Platforms:      pp,
+		DriverOpts:     do,
+		BuildkitdFlags: buildkitdFlags,
+		Files:          files,
 	}
 
 	ng.Nodes = append(ng.Nodes, n)
@@ -143,8 +143,8 @@ func (ng *NodeGroup) Copy() *NodeGroup {
 func (n *Node) Copy() *Node {
 	platforms := []specs.Platform{}
 	copy(platforms, n.Platforms)
-	flags := []string{}
-	copy(flags, n.Flags)
+	buildkitdFlags := []string{}
+	copy(buildkitdFlags, n.BuildkitdFlags)
 	driverOpts := map[string]string{}
 	for k, v := range n.DriverOpts {
 		driverOpts[k] = v
@@ -156,12 +156,12 @@ func (n *Node) Copy() *Node {
 		files[k] = vv
 	}
 	return &Node{
-		Name:       n.Name,
-		Endpoint:   n.Endpoint,
-		Platforms:  platforms,
-		Flags:      flags,
-		DriverOpts: driverOpts,
-		Files:      files,
+		Name:           n.Name,
+		Endpoint:       n.Endpoint,
+		Platforms:      platforms,
+		BuildkitdFlags: buildkitdFlags,
+		DriverOpts:     driverOpts,
+		Files:          files,
 	}
 }
 

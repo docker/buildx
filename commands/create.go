@@ -16,17 +16,17 @@ import (
 )
 
 type createOptions struct {
-	name         string
-	driver       string
-	nodeName     string
-	platform     []string
-	actionAppend bool
-	actionLeave  bool
-	use          bool
-	flags        string
-	configFile   string
-	driverOpts   []string
-	bootstrap    bool
+	name                string
+	driver              string
+	nodeName            string
+	platform            []string
+	actionAppend        bool
+	actionLeave         bool
+	use                 bool
+	driverOpts          []string
+	buildkitdFlags      string
+	buildkitdConfigFile string
+	bootstrap           bool
 	// upgrade      bool // perform upgrade of the driver
 }
 
@@ -51,16 +51,16 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	}
 
 	b, err := builder.Create(ctx, txn, dockerCli, builder.CreateOpts{
-		Name:       in.name,
-		Driver:     in.driver,
-		NodeName:   in.nodeName,
-		Platforms:  in.platform,
-		Flags:      in.flags,
-		ConfigFile: in.configFile,
-		DriverOpts: in.driverOpts,
-		Use:        in.use,
-		Endpoint:   ep,
-		Append:     in.actionAppend,
+		Name:                in.name,
+		Driver:              in.driver,
+		NodeName:            in.nodeName,
+		Platforms:           in.platform,
+		DriverOpts:          in.driverOpts,
+		BuildkitdFlags:      in.buildkitdFlags,
+		BuildkitdConfigFile: in.buildkitdConfigFile,
+		Use:                 in.use,
+		Endpoint:            ep,
+		Append:              in.actionAppend,
 	})
 	if err != nil {
 		return err
@@ -106,12 +106,16 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 	flags.StringVar(&options.name, "name", "", "Builder instance name")
 	flags.StringVar(&options.driver, "driver", "", fmt.Sprintf("Driver to use (available: %s)", drivers.String()))
 	flags.StringVar(&options.nodeName, "node", "", "Create/modify node with given name")
-	flags.StringVar(&options.flags, "buildkitd-flags", "", "Flags for buildkitd daemon")
-	flags.StringVar(&options.configFile, "config", "", "BuildKit config file")
 	flags.StringArrayVar(&options.platform, "platform", []string{}, "Fixed platforms for current node")
 	flags.StringArrayVar(&options.driverOpts, "driver-opt", []string{}, "Options for the driver")
-	flags.BoolVar(&options.bootstrap, "bootstrap", false, "Boot builder after creation")
+	flags.StringVar(&options.buildkitdFlags, "buildkitd-flags", "", "BuildKit daemon flags")
 
+	// we allow for both "--config" and "--buildkitd-config", although the latter is the recommended way to avoid ambiguity.
+	flags.StringVar(&options.buildkitdConfigFile, "buildkitd-config", "", "BuildKit daemon config file")
+	flags.StringVar(&options.buildkitdConfigFile, "config", "", "BuildKit daemon config file")
+	flags.MarkHidden("config")
+
+	flags.BoolVar(&options.bootstrap, "bootstrap", false, "Boot builder after creation")
 	flags.BoolVar(&options.actionAppend, "append", false, "Append a node to builder instead of changing it")
 	flags.BoolVar(&options.actionLeave, "leave", false, "Remove a node from builder instead of changing it")
 	flags.BoolVar(&options.use, "use", false, "Set the current builder instance")

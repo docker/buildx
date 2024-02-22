@@ -154,7 +154,7 @@ Allow extra privileged entitlement. List of entitlements:
 - `security.insecure` - Allows executions without sandbox. See
   [related Dockerfile extensions](https://docs.docker.com/reference/dockerfile/#run---securitysandbox).
 
-For entitlements to be enabled, the `buildkitd` daemon also needs to allow them
+For entitlements to be enabled, the BuildKit daemon also needs to allow them
 with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#buildkitd-flags)).
 
 ```console

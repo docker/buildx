@@ -494,7 +494,7 @@ func writeConfigFiles(m map[string][]byte) (_ string, err error) {
 }
 
 func getBuildkitFlags(initConfig driver.InitConfig) []string {
-	flags := initConfig.BuildkitFlags
+	flags := initConfig.BuildkitdFlags
 	if _, ok := initConfig.Files[buildkitdConfigFile]; ok {
 		// There's no way for us to determine the appropriate default configuration
 		// path and the default path can vary depending on if the image is normal

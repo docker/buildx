@@ -14,7 +14,7 @@ Remove one or more builder instances
 | [`--all-inactive`](#all-inactive)   |          |         | Remove all inactive builders             |
 | [`--builder`](#builder)             | `string` |         | Override the configured builder instance |
 | [`-f`](#force), [`--force`](#force) |          |         | Do not prompt for confirmation           |
-| [`--keep-daemon`](#keep-daemon)     |          |         | Keep the buildkitd daemon running        |
+| [`--keep-daemon`](#keep-daemon)     |          |         | Keep the BuildKit daemon running         |
 | [`--keep-state`](#keep-state)       |          |         | Keep BuildKit state                      |
 
 
@@ -48,10 +48,10 @@ Do not prompt for confirmation before removing inactive builders.
 $ docker buildx rm --all-inactive --force
 ```
 
-### <a name="keep-daemon"></a> Keep the buildkitd daemon running (--keep-daemon)
+### <a name="keep-daemon"></a> Keep the BuildKit daemon running (--keep-daemon)
 
 Keep the BuildKit daemon running after the buildx context is removed. This is
-useful when you manage buildkitd daemons and buildx contexts independently.
+useful when you manage BuildKit daemons and buildx contexts independently.
 Only supported by the
 [`docker-container`](https://docs.docker.com/build/drivers/docker-container/)
 and [`kubernetes`](https://docs.docker.com/build/drivers/kubernetes/) drivers.

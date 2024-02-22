@@ -332,16 +332,16 @@ func GetBuilders(dockerCli command.Cli, txn *store.Txn) ([]*Builder, error) {
 }
 
 type CreateOpts struct {
-	Name       string
-	Driver     string
-	NodeName   string
-	Platforms  []string
-	Flags      string
-	ConfigFile string
-	DriverOpts []string
-	Use        bool
-	Endpoint   string
-	Append     bool
+	Name                string
+	Driver              string
+	NodeName            string
+	Platforms           []string
+	BuildkitdFlags      string
+	BuildkitdConfigFile string
+	DriverOpts          []string
+	Use                 bool
+	Endpoint            string
+	Append              bool
 }
 
 func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts CreateOpts) (*Builder, error) {
@@ -429,11 +429,11 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		}
 	}
 
-	var flags []string
-	if opts.Flags != "" {
-		flags, err = shlex.Split(opts.Flags)
+	var buildkitdFlags []string
+	if opts.BuildkitdFlags != "" {
+		buildkitdFlags, err = shlex.Split(opts.BuildkitdFlags)
 		if err != nil {
-			return nil, errors.Wrap(err, "failed to parse buildkit flags")
+			return nil, errors.Wrap(err, "failed to parse BuildKit daemon flags")
 		}
 	}
 
@@ -493,21 +493,21 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		setEp = false
 	}
 
-	m, err := csvToMap(opts.DriverOpts)
+	driverOpts, err := csvToMap(opts.DriverOpts)
 	if err != nil {
 		return nil, err
 	}
 
-	configFile := opts.ConfigFile
-	if configFile == "" {
-		// if buildkit config is not provided, check if the default one is
-		// available and use it
+	buildkitdConfigFile := opts.BuildkitdConfigFile
+	if buildkitdConfigFile == "" {
+		// if buildkit daemon config is not provided, check if the default one
+		// is available and use it
 		if f, ok := confutil.DefaultConfigFile(dockerCli); ok {
-			configFile = f
+			buildkitdConfigFile = f
 		}
 	}
 
-	if err := ng.Update(opts.NodeName, ep, opts.Platforms, setEp, opts.Append, flags, configFile, m); err != nil {
+	if err := ng.Update(opts.NodeName, ep, opts.Platforms, setEp, opts.Append, buildkitdFlags, buildkitdConfigFile, driverOpts); err != nil {
 		return nil, err
 	}
 

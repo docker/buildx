@@ -9,19 +9,19 @@ Create a new builder instance
 
 ### Options
 
-| Name                                    | Type          | Default | Description                                                           |
-|:----------------------------------------|:--------------|:--------|:----------------------------------------------------------------------|
-| [`--append`](#append)                   |               |         | Append a node to builder instead of changing it                       |
-| `--bootstrap`                           |               |         | Boot builder after creation                                           |
-| [`--buildkitd-flags`](#buildkitd-flags) | `string`      |         | Flags for buildkitd daemon                                            |
-| [`--config`](#config)                   | `string`      |         | BuildKit config file                                                  |
-| [`--driver`](#driver)                   | `string`      |         | Driver to use (available: `docker-container`, `kubernetes`, `remote`) |
-| [`--driver-opt`](#driver-opt)           | `stringArray` |         | Options for the driver                                                |
-| [`--leave`](#leave)                     |               |         | Remove a node from builder instead of changing it                     |
-| [`--name`](#name)                       | `string`      |         | Builder instance name                                                 |
-| [`--node`](#node)                       | `string`      |         | Create/modify node with given name                                    |
-| [`--platform`](#platform)               | `stringArray` |         | Fixed platforms for current node                                      |
-| [`--use`](#use)                         |               |         | Set the current builder instance                                      |
+| Name                                      | Type          | Default | Description                                                           |
+|:------------------------------------------|:--------------|:--------|:----------------------------------------------------------------------|
+| [`--append`](#append)                     |               |         | Append a node to builder instead of changing it                       |
+| `--bootstrap`                             |               |         | Boot builder after creation                                           |
+| [`--buildkitd-config`](#buildkitd-config) | `string`      |         | BuildKit daemon config file                                           |
+| [`--buildkitd-flags`](#buildkitd-flags)   | `string`      |         | BuildKit daemon flags                                                 |
+| [`--driver`](#driver)                     | `string`      |         | Driver to use (available: `docker-container`, `kubernetes`, `remote`) |
+| [`--driver-opt`](#driver-opt)             | `stringArray` |         | Options for the driver                                                |
+| [`--leave`](#leave)                       |               |         | Remove a node from builder instead of changing it                     |
+| [`--name`](#name)                         | `string`      |         | Builder instance name                                                 |
+| [`--node`](#node)                         | `string`      |         | Create/modify node with given name                                    |
+| [`--platform`](#platform)                 | `stringArray` |         | Fixed platforms for current node                                      |
+| [`--use`](#use)                           |               |         | Set the current builder instance                                      |
 
 
 <!---MARKER_GEN_END-->
@@ -55,29 +55,15 @@ $ docker buildx create --name eager_beaver --append mycontext2
 eager_beaver
 ```
 
-### <a name="buildkitd-flags"></a> Specify options for the buildkitd daemon (--buildkitd-flags)
+### <a name="buildkitd-config"></a> Specify a configuration file for the BuildKit daemon (--buildkitd-config)
 
 ```text
---buildkitd-flags FLAGS
+--buildkitd-config FILE
 ```
 
-Adds flags when starting the buildkitd daemon. They take precedence over the
-configuration file specified by [`--config`](#config). See `buildkitd --help`
-for the available flags.
-
-```text
---buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
-```
-
-### <a name="config"></a> Specify a configuration file for the buildkitd daemon (--config)
-
-```text
---config FILE
-```
-
-Specifies the configuration file for the buildkitd daemon to use. The configuration
-can be overridden by [`--buildkitd-flags`](#buildkitd-flags).
-See an [example buildkitd configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
+Specifies the configuration file for the BuildKit daemon to use. The
+configuration can be overridden by [`--buildkitd-flags`](#buildkitd-flags).
+See an [example BuildKit daemon configuration file](https://github.com/moby/buildkit/blob/master/docs/buildkitd.toml.md).
 
 If you don't specify a configuration file, Buildx looks for one by default in:
 
@@ -89,6 +75,20 @@ Note that if you create a `docker-container` builder and have specified
 certificates for registries in the `buildkitd.toml` configuration, the files
 will be copied into the container under `/etc/buildkit/certs` and configuration
 will be updated to reflect that.
+
+### <a name="buildkitd-flags"></a> Specify options for the BuildKit daemon (--buildkitd-flags)
+
+```text
+--buildkitd-flags FLAGS
+```
+
+Adds flags when starting the BuildKit daemon. They take precedence over the
+configuration file specified by [`--buildkitd-config`](#buildkitd-config). See
+`buildkitd --help` for the available flags.
+
+```text
+--buildkitd-flags '--debug --debugaddr 0.0.0.0:6666'
+```
 
 ### <a name="driver"></a> Set the builder driver to use (--driver)
 
@@ -133,8 +133,8 @@ to achieve that.
 
 #### `remote` driver
 
-Uses a remote instance of buildkitd over an arbitrary connection. With this
-driver, you manually create and manage instances of buildkit yourself, and
+Uses a remote instance of BuildKit daemon over an arbitrary connection. With
+this driver, you manually create and manage instances of buildkit yourself, and
 configure buildx to point at it.
 
 Unlike `docker` driver, built images will not automatically appear in
