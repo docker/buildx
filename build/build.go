@@ -786,6 +786,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 
 						return res, nil
 					}
+					buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
 					var rr *client.SolveResponse
 					if resultHandleFunc != nil {
 						var resultHandle *ResultHandle
@@ -795,7 +796,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						rr, err = c.Build(ctx, *so, "buildx", buildFunc, ch)
 					}
 					if desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
-						buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
 						if err != nil {
 							return &desktop.ErrorWithBuildRef{
 								Ref: buildRef,
@@ -815,6 +815,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					for k, v := range printRes {
 						rr.ExporterResponse[k] = string(v)
 					}
+					rr.ExporterResponse["buildx.build.ref"] = buildRef
 
 					node := dp.Node().Driver
 					if node.IsMobyDriver() {

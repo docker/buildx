@@ -327,6 +327,7 @@ $ cat metadata.json
 
 ```json
 {
+  "buildx.build.ref": "mybuilder/mybuilder0/0fjb6ubs52xx3vygf6fgdl611",
   "containerimage.config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
   "containerimage.descriptor": {
     "annotations": {
