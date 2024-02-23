@@ -18,6 +18,7 @@ func inspectCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 var inspectTests = []func(t *testing.T, sb integration.Sandbox){
 	testInspect,
 	testInspectBuildkitdFlags,
+	testInspectNetworkHostEntitlement,
 }
 
 func testInspect(t *testing.T, sb integration.Sandbox) {
@@ -77,4 +78,34 @@ func testInspectBuildkitdFlags(t *testing.T, sb integration.Sandbox) {
 		}
 	}
 	require.Fail(t, "--oci-worker-net=bridge not found in inspect output")
+}
+
+func testInspectNetworkHostEntitlement(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker-container" {
+		t.Skip("only testing for docker-container driver")
+	}
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	out, err := createCmd(sb, withArgs("--driver", "docker-container"))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	out, err = inspectCmd(sb, withArgs(builderName))
+	require.NoError(t, err, out)
+
+	for _, line := range strings.Split(out, "\n") {
+		if v, ok := strings.CutPrefix(line, "BuildKit daemon flags:"); ok {
+			require.Contains(t, v, "--allow-insecure-entitlement=network.host")
+			return
+		}
+	}
+	require.Fail(t, "network.host insecure entitlement not found in inspect output")
 }

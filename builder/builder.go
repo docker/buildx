@@ -26,6 +26,7 @@ import (
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
+	"github.com/spf13/pflag"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -429,12 +430,14 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		}
 	}
 
-	var buildkitdFlags []string
-	if opts.BuildkitdFlags != "" {
-		buildkitdFlags, err = shlex.Split(opts.BuildkitdFlags)
-		if err != nil {
-			return nil, errors.Wrap(err, "failed to parse BuildKit daemon flags")
-		}
+	driverOpts, err := csvToMap(opts.DriverOpts)
+	if err != nil {
+		return nil, err
+	}
+
+	buildkitdFlags, err := parseBuildkitdFlags(opts.BuildkitdFlags, driverName, driverOpts)
+	if err != nil {
+		return nil, err
 	}
 
 	var ep string
@@ -491,11 +494,6 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 			return nil, err
 		}
 		setEp = false
-	}
-
-	driverOpts, err := csvToMap(opts.DriverOpts)
-	if err != nil {
-		return nil, err
 	}
 
 	buildkitdConfigFile := opts.BuildkitdConfigFile
@@ -641,4 +639,39 @@ func validateBuildkitEndpoint(ep string) (string, error) {
 		return "", err
 	}
 	return ep, nil
+}
+
+// parseBuildkitdFlags parses buildkit flags
+func parseBuildkitdFlags(inp string, driver string, driverOpts map[string]string) (res []string, err error) {
+	if inp != "" {
+		res, err = shlex.Split(inp)
+		if err != nil {
+			return nil, errors.Wrap(err, "failed to parse buildkit flags")
+		}
+	}
+
+	var allowInsecureEntitlements []string
+	flags := pflag.NewFlagSet("buildkitd", pflag.ContinueOnError)
+	flags.Usage = func() {}
+	flags.StringArrayVar(&allowInsecureEntitlements, "allow-insecure-entitlement", nil, "")
+	_ = flags.Parse(res)
+
+	var hasNetworkHostEntitlement bool
+	for _, e := range allowInsecureEntitlements {
+		if e == "network.host" {
+			hasNetworkHostEntitlement = true
+			break
+		}
+	}
+
+	if v, ok := driverOpts["network"]; ok && v == "host" && !hasNetworkHostEntitlement && driver == "docker-container" {
+		// always set network.host entitlement if user has set network=host
+		res = append(res, "--allow-insecure-entitlement=network.host")
+	} else if len(allowInsecureEntitlements) == 0 && (driver == "kubernetes" || driver == "docker-container") {
+		// set network.host entitlement if user does not provide any as
+		// network is isolated for container drivers.
+		res = append(res, "--allow-insecure-entitlement=network.host")
+	}
+
+	return res, nil
 }
