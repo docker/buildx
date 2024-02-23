@@ -320,8 +320,8 @@ github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyua
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
 github.com/mitchellh/reflectwalk v1.0.2 h1:G2LzWKi524PWgd3mLHV8Y5k7s6XUvT0Gef6zxSIeXaQ=
 github.com/mitchellh/reflectwalk v1.0.2/go.mod h1:mSTlrgnPZtwu0c4WaC2kGObEpuNDbx0jmZXqmk4esnw=
-github.com/moby/buildkit v0.13.0-rc1.0.20240221065707-db304eb93126 h1:aXdgP8jLyDnKEOXis4Aydp4VlXYpg2loUJarhygTOuU=
-github.com/moby/buildkit v0.13.0-rc1.0.20240221065707-db304eb93126/go.mod h1:XaLDo1L55QqXS/04FE91+mAbwjkr0vZu9g6zZlzvXL8=
+github.com/moby/buildkit v0.13.0-rc1.0.20240222164755-8e3fe35738c2 h1:e3FYb+yyx1SM1w4Mjn8L9WP5h/6u23P/xCAPZXx4m2Y=
+github.com/moby/buildkit v0.13.0-rc1.0.20240222164755-8e3fe35738c2/go.mod h1:XaLDo1L55QqXS/04FE91+mAbwjkr0vZu9g6zZlzvXL8=
 github.com/moby/docker-image-spec v1.3.1 h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0=
 github.com/moby/docker-image-spec v1.3.1/go.mod h1:eKmb5VW8vQEh/BAr2yvVNvuiJuY6UIocYsFu/DxxRpo=
 github.com/moby/locker v1.0.1 h1:fOXqR41zeveg4fFODix+1Ch4mj/gT0NE1XJbp/epuBg=

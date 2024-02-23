@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"os"
 	"path"
 	"path/filepath"
@@ -15,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/creack/pty"
+	"github.com/moby/buildkit/util/appdefaults"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -48,6 +50,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildOCIExportNotSupported,
 	testBuildMultiPlatformNotSupported,
 	testDockerHostGateway,
+	testBuildNetworkModeBridge,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -431,4 +434,55 @@ RUN ping -c 1 buildx.host-gateway-ip.local
 	} else {
 		require.NoError(t, err, string(out))
 	}
+}
+
+func testBuildNetworkModeBridge(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	// TODO: use stable buildkit image when v0.13.0 released
+	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--buildkitd-flags=--oci-worker-net=bridge --allow-insecure-entitlement=network.host", "--driver-opt", "image=moby/buildkit:master"))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	dockerfile := []byte(`
+FROM busybox AS build
+RUN ip a show eth0 | awk '/inet / {split($2, a, "/"); print a[1]}' > /ip-bridge.txt
+RUN --network=host ip a show eth0 | awk '/inet / {split($2, a, "/"); print a[1]}' > /ip-host.txt
+FROM scratch
+COPY --from=build /ip*.txt /`)
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+
+	cmd := buildxCmd(sb, withArgs("build", "--allow=network.host", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
+	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+	outb, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(outb))
+
+	dt, err := os.ReadFile(filepath.Join(dir, "ip-bridge.txt"))
+	require.NoError(t, err)
+
+	ipBridge := net.ParseIP(strings.TrimSpace(string(dt)))
+	require.NotNil(t, ipBridge)
+
+	_, subnet, err := net.ParseCIDR(appdefaults.BridgeSubnet)
+	require.NoError(t, err)
+	require.True(t, subnet.Contains(ipBridge))
+
+	dt, err = os.ReadFile(filepath.Join(dir, "ip-host.txt"))
+	require.NoError(t, err)
+
+	ip := net.ParseIP(strings.TrimSpace(string(dt)))
+	require.NotNil(t, ip)
+
+	require.NotEqual(t, ip, ipBridge)
 }

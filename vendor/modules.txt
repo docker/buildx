@@ -509,7 +509,7 @@ github.com/mitchellh/mapstructure
 # github.com/mitchellh/reflectwalk v1.0.2
 ## explicit
 github.com/mitchellh/reflectwalk
-# github.com/moby/buildkit v0.13.0-rc1.0.20240221065707-db304eb93126
+# github.com/moby/buildkit v0.13.0-rc1.0.20240222164755-8e3fe35738c2
 ## explicit; go 1.21
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
