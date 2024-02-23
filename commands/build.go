@@ -312,6 +312,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
 		term = true
 	}
+	attributes := buildMetricAttributes(dockerCli, b, &options)
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
@@ -325,6 +326,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 			fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
 			fmt.Sprintf("%s:%s", b.Driver, b.Name),
 		),
+		progress.WithMetrics(mp, attributes),
 		progress.WithOnClose(func() {
 			printWarnings(os.Stderr, printer.Warnings(), progressMode)
 		}),
@@ -333,7 +335,6 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		return err
 	}
 
-	attributes := buildMetricAttributes(dockerCli, b, &options)
 	done := timeBuildCommand(mp, attributes)
 	var resp *client.SolveResponse
 	var retErr error

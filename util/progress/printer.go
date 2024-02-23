@@ -6,11 +6,14 @@ import (
 	"sync"
 
 	"github.com/containerd/console"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/logutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
+	"go.opentelemetry.io/otel/attribute"
+	"go.opentelemetry.io/otel/metric"
 )
 
 type Printer struct {
@@ -24,6 +27,7 @@ type Printer struct {
 	warnings     []client.VertexWarning
 	logMu        sync.Mutex
 	logSourceMap map[digest.Digest]interface{}
+	metrics      *metricWriter
 
 	// TODO: remove once we can use result context to pass build ref
 	//  see https://github.com/docker/buildx/pull/1861
@@ -49,6 +53,9 @@ func (p *Printer) Unpause() {
 
 func (p *Printer) Write(s *client.SolveStatus) {
 	p.status <- s
+	if p.metrics != nil {
+		p.metrics.Write(s)
+	}
 }
 
 func (p *Printer) Warnings() []client.VertexWarning {
@@ -96,7 +103,8 @@ func NewPrinter(ctx context.Context, out console.File, mode progressui.DisplayMo
 	}
 
 	pw := &Printer{
-		ready: make(chan struct{}),
+		ready:   make(chan struct{}),
+		metrics: opt.mw,
 	}
 	go func() {
 		for {
@@ -147,6 +155,7 @@ func (p *Printer) BuildRefs() map[string]string {
 
 type printerOpts struct {
 	displayOpts []progressui.DisplayOpt
+	mw          *metricWriter
 
 	onclose func()
 }
@@ -162,6 +171,14 @@ func WithPhase(phase string) PrinterOpt {
 func WithDesc(text string, console string) PrinterOpt {
 	return func(opt *printerOpts) {
 		opt.displayOpts = append(opt.displayOpts, progressui.WithDesc(text, console))
+	}
+}
+
+func WithMetrics(mp metric.MeterProvider, attrs attribute.Set) PrinterOpt {
+	return func(opt *printerOpts) {
+		if confutil.IsExperimental() {
+			opt.mw = newMetrics(mp, attrs)
+		}
 	}
 }
 
