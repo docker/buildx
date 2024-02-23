@@ -51,6 +51,8 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildMultiPlatformNotSupported,
 	testDockerHostGateway,
 	testBuildNetworkModeBridge,
+	testBuildShmSize,
+	testBuildUlimit,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -485,4 +487,46 @@ COPY --from=build /ip*.txt /`)
 	require.NotNil(t, ip)
 
 	require.NotEqual(t, ip, ipBridge)
+}
+
+func testBuildShmSize(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox AS build
+RUN mount | grep /dev/shm > /shmsize
+FROM scratch
+COPY --from=build /shmsize /
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	cmd := buildxCmd(sb, withArgs("build", "--shm-size=128m", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dir, "shmsize"))
+	require.NoError(t, err)
+	require.Contains(t, string(dt), `size=131072k`)
+}
+
+func testBuildUlimit(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox AS build
+RUN ulimit -n > first > /ulimit
+FROM scratch
+COPY --from=build /ulimit /
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	cmd := buildxCmd(sb, withArgs("build", "--ulimit=nofile=1024:1024", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dir, "ulimit"))
+	require.NoError(t, err)
+	require.Contains(t, string(dt), `1024`)
 }
