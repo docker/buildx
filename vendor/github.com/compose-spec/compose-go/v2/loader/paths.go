@@ -37,25 +37,6 @@ func ResolveRelativePaths(project *types.Project) error {
 		return err
 	}
 	project.ComposeFiles = absComposeFiles
-
-	// don't coerce a nil map to an empty map
-	if project.IncludeReferences != nil {
-		absIncludes := make(map[string][]types.IncludeConfig, len(project.IncludeReferences))
-		for filename, config := range project.IncludeReferences {
-			filename = absPath(project.WorkingDir, filename)
-			absConfigs := make([]types.IncludeConfig, len(config))
-			for i, c := range config {
-				absConfigs[i] = types.IncludeConfig{
-					Path:             resolvePaths(project.WorkingDir, c.Path),
-					ProjectDirectory: absPath(project.WorkingDir, c.ProjectDirectory),
-					EnvFile:          resolvePaths(project.WorkingDir, c.EnvFile),
-				}
-			}
-			absIncludes[filename] = absConfigs
-		}
-		project.IncludeReferences = absIncludes
-	}
-
 	return nil
 }
 

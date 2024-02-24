@@ -455,6 +455,7 @@
           "type": "array",
           "items": {
             "type": "object",
+            "required": ["path", "action"],
             "properties": {
               "ignore": {"type": "array", "items": {"type": "string"}},
               "path": {"type": "string"},
@@ -462,7 +463,6 @@
               "target": {"type": "string"}
             }
           },
-          "required": ["path", "action"],
           "additionalProperties": false,
           "patternProperties": {"^x-": {}}
         }

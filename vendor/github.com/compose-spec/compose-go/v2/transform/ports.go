@@ -48,7 +48,7 @@ func transformPorts(data any, p tree.Path) (any, error) {
 			case string:
 				parsed, err := types.ParsePortConfig(value)
 				if err != nil {
-					return data, err
+					return data, nil
 				}
 				if err != nil {
 					return nil, err

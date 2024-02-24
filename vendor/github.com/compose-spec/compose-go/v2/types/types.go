@@ -162,6 +162,9 @@ func (s *ServiceConfig) NetworksByPriority() []string {
 		})
 	}
 	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].priority == keys[j].priority {
+			return keys[i].name < keys[j].name
+		}
 		return keys[i].priority > keys[j].priority
 	})
 	var sorted []string
