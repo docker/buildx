@@ -64,6 +64,8 @@ type Options struct {
 	SkipInclude bool
 	// SkipResolveEnvironment will ignore computing `environment` for services
 	SkipResolveEnvironment bool
+	// SkipDefaultValues will ignore missing required attributes
+	SkipDefaultValues bool
 	// Interpolation options
 	Interpolate *interp.Options
 	// Discard 'env_file' entries after resolving to 'environment' section
@@ -76,6 +78,19 @@ type Options struct {
 	Profiles []string
 	// ResourceLoaders manages support for remote resources
 	ResourceLoaders []ResourceLoader
+	// KnownExtensions manages x-* attribute we know and the corresponding go structs
+	KnownExtensions map[string]any
+	// Metada for telemetry
+	Listeners []Listener
+}
+
+type Listener = func(event string, metadata map[string]any)
+
+// Invoke all listeners for an event
+func (o *Options) ProcessEvent(event string, metadata map[string]any) {
+	for _, l := range o.Listeners {
+		l(event, metadata)
+	}
 }
 
 // ResourceLoader is a plugable remote resource resolver
@@ -148,6 +163,8 @@ func (o *Options) clone() *Options {
 		projectNameImperativelySet: o.projectNameImperativelySet,
 		Profiles:                   o.Profiles,
 		ResourceLoaders:            o.ResourceLoaders,
+		KnownExtensions:            o.KnownExtensions,
+		Listeners:                  o.Listeners,
 	}
 }
 
@@ -288,18 +305,17 @@ func LoadWithContext(ctx context.Context, configDetails types.ConfigDetails, opt
 	}
 	opts.ResourceLoaders = append(opts.ResourceLoaders, localResourceLoader{configDetails.WorkingDir})
 
-	projectName, err := projectName(configDetails, opts)
+	err := projectName(configDetails, opts)
 	if err != nil {
 		return nil, err
 	}
-	opts.projectName = projectName
 
 	// TODO(milas): this should probably ALWAYS set (overriding any existing)
-	if _, ok := configDetails.Environment[consts.ComposeProjectName]; !ok && projectName != "" {
+	if _, ok := configDetails.Environment[consts.ComposeProjectName]; !ok && opts.projectName != "" {
 		if configDetails.Environment == nil {
 			configDetails.Environment = map[string]string{}
 		}
-		configDetails.Environment[consts.ComposeProjectName] = projectName
+		configDetails.Environment[consts.ComposeProjectName] = opts.projectName
 	}
 
 	return load(ctx, configDetails, opts, nil)
@@ -312,7 +328,7 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 	)
 	for _, file := range config.ConfigFiles {
 		fctx := context.WithValue(ctx, consts.ComposeFileKey{}, file.Filename)
-		if len(file.Content) == 0 && file.Config == nil {
+		if file.Content == nil && file.Config == nil {
 			content, err := os.ReadFile(file.Filename)
 			if err != nil {
 				return nil, err
@@ -348,6 +364,14 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 
 			for _, processor := range processors {
 				if err := processor.Apply(dict); err != nil {
+					return err
+				}
+			}
+
+			if !opts.SkipInclude {
+				included = append(included, config.ConfigFiles[0].Filename)
+				err = ApplyInclude(ctx, config, cfg, opts, included)
+				if err != nil {
 					return err
 				}
 			}
@@ -400,9 +424,14 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 		return nil, err
 	}
 
-	if !opts.SkipInclude {
-		included = append(included, config.ConfigFiles[0].Filename)
-		err = ApplyInclude(ctx, config, dict, opts, included)
+	// Canonical transformation can reveal duplicates, typically as ports can be a range and conflict with an override
+	dict, err = override.EnforceUnicity(dict)
+	if err != nil {
+		return nil, err
+	}
+
+	if !opts.SkipDefaultValues {
+		dict, err = transform.SetDefaultValues(dict)
 		if err != nil {
 			return nil, err
 		}
@@ -424,6 +453,7 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 			return nil, err
 		}
 	}
+	resolveServicesEnvironment(dict, config)
 
 	return dict, nil
 }
@@ -438,8 +468,6 @@ func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options,
 	}
 	loaded = append(loaded, mainFile)
 
-	includeRefs := make(map[string][]types.IncludeConfig)
-
 	dict, err := loadYamlModel(ctx, configDetails, opts, &cycleTracker{}, nil)
 	if err != nil {
 		return nil, err
@@ -449,6 +477,10 @@ func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options,
 		return nil, errors.New("empty compose file")
 	}
 
+	if opts.projectName == "" {
+		return nil, errors.New("project name must not be empty")
+	}
+
 	project := &types.Project{
 		Name:        opts.projectName,
 		WorkingDir:  configDetails.WorkingDir,
@@ -456,14 +488,14 @@ func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options,
 	}
 	delete(dict, "name") // project name set by yaml must be identified by caller as opts.projectName
 
-	dict = groupXFieldsIntoExtensions(dict, tree.NewPath())
-	err = Transform(dict, project)
+	dict, err = processExtensions(dict, tree.NewPath(), opts.KnownExtensions)
 	if err != nil {
 		return nil, err
 	}
 
-	if len(includeRefs) != 0 {
-		project.IncludeReferences = includeRefs
+	err = Transform(dict, project)
+	if err != nil {
+		return nil, err
 	}
 
 	if !opts.SkipNormalization {
@@ -516,69 +548,68 @@ func InvalidProjectNameErr(v string) error {
 //
 // TODO(milas): restructure loading so that we don't need to re-parse the YAML
 // here, as it's both wasteful and makes this code error-prone.
-func projectName(details types.ConfigDetails, opts *Options) (string, error) {
-	projectName, projectNameImperativelySet := opts.GetProjectName()
+func projectName(details types.ConfigDetails, opts *Options) error {
+	if opts.projectNameImperativelySet {
+		if NormalizeProjectName(opts.projectName) != opts.projectName {
+			return InvalidProjectNameErr(opts.projectName)
+		}
+		return nil
+	}
+
+	type named struct {
+		Name string `yaml:"name"`
+	}
 
 	// if user did NOT provide a name explicitly, then see if one is defined
 	// in any of the config files
-	if !projectNameImperativelySet {
-		var pjNameFromConfigFile string
-		for _, configFile := range details.ConfigFiles {
-			content := configFile.Content
-			if content == nil {
-				// This can be hit when Filename is set but Content is not. One
-				// example is when using ToConfigFiles().
-				d, err := os.ReadFile(configFile.Filename)
-				if err != nil {
-					return "", fmt.Errorf("failed to read file %q: %w", configFile.Filename, err)
-				}
-				content = d
+	var pjNameFromConfigFile string
+	for _, configFile := range details.ConfigFiles {
+		content := configFile.Content
+		if content == nil {
+			// This can be hit when Filename is set but Content is not. One
+			// example is when using ToConfigFiles().
+			d, err := os.ReadFile(configFile.Filename)
+			if err != nil {
+				return fmt.Errorf("failed to read file %q: %w", configFile.Filename, err)
 			}
-			yml, err := ParseYAML(content)
+			content = d
+			configFile.Content = d
+		}
+		var n named
+		r := bytes.NewReader(content)
+		decoder := yaml.NewDecoder(r)
+		for {
+			err := decoder.Decode(&n)
+			if err != nil && errors.Is(err, io.EOF) {
+				break
+			}
 			if err != nil {
 				// HACK: the way that loading is currently structured, this is
 				// a duplicative parse just for the `name`. if it fails, we
 				// give up but don't return the error, knowing that it'll get
 				// caught downstream for us
-				return "", nil
+				break
 			}
-			if val, ok := yml["name"]; ok && val != "" {
-				sVal, ok := val.(string)
-				if !ok {
-					// HACK: see above - this is a temporary parsed version
-					// that hasn't been schema-validated, but we don't want
-					// to be the ones to actually report that, so give up,
-					// knowing that it'll get caught downstream for us
-					return "", nil
-				}
-				pjNameFromConfigFile = sVal
+			if n.Name != "" {
+				pjNameFromConfigFile = n.Name
 			}
 		}
-		if !opts.SkipInterpolation {
-			interpolated, err := interp.Interpolate(
-				map[string]interface{}{"name": pjNameFromConfigFile},
-				*opts.Interpolate,
-			)
-			if err != nil {
-				return "", err
-			}
-			pjNameFromConfigFile = interpolated["name"].(string)
+	}
+	if !opts.SkipInterpolation {
+		interpolated, err := interp.Interpolate(
+			map[string]interface{}{"name": pjNameFromConfigFile},
+			*opts.Interpolate,
+		)
+		if err != nil {
+			return err
 		}
-		pjNameFromConfigFile = NormalizeProjectName(pjNameFromConfigFile)
-		if pjNameFromConfigFile != "" {
-			projectName = pjNameFromConfigFile
-		}
+		pjNameFromConfigFile = interpolated["name"].(string)
 	}
-
-	if projectName == "" {
-		return "", errors.New("project name must not be empty")
+	pjNameFromConfigFile = NormalizeProjectName(pjNameFromConfigFile)
+	if pjNameFromConfigFile != "" {
+		opts.projectName = pjNameFromConfigFile
 	}
-
-	if NormalizeProjectName(projectName) != projectName {
-		return "", InvalidProjectNameErr(projectName)
-	}
-
-	return projectName, nil
+	return nil
 }
 
 func NormalizeProjectName(s string) string {
@@ -596,8 +627,9 @@ var userDefinedKeys = []tree.Path{
 	"configs",
 }
 
-func groupXFieldsIntoExtensions(dict map[string]interface{}, p tree.Path) map[string]interface{} {
-	extras := map[string]interface{}{}
+func processExtensions(dict map[string]any, p tree.Path, extensions map[string]any) (map[string]interface{}, error) {
+	extras := map[string]any{}
+	var err error
 	for key, value := range dict {
 		skip := false
 		for _, uk := range userDefinedKeys {
@@ -613,19 +645,35 @@ func groupXFieldsIntoExtensions(dict map[string]interface{}, p tree.Path) map[st
 		}
 		switch v := value.(type) {
 		case map[string]interface{}:
-			dict[key] = groupXFieldsIntoExtensions(v, p.Next(key))
+			dict[key], err = processExtensions(v, p.Next(key), extensions)
+			if err != nil {
+				return nil, err
+			}
 		case []interface{}:
 			for i, e := range v {
 				if m, ok := e.(map[string]interface{}); ok {
-					v[i] = groupXFieldsIntoExtensions(m, p.Next(strconv.Itoa(i)))
+					v[i], err = processExtensions(m, p.Next(strconv.Itoa(i)), extensions)
+					if err != nil {
+						return nil, err
+					}
 				}
 			}
+		}
+	}
+	for name, val := range extras {
+		if typ, ok := extensions[name]; ok {
+			target := reflect.New(reflect.TypeOf(typ)).Elem().Interface()
+			err = Transform(val, &target)
+			if err != nil {
+				return nil, err
+			}
+			extras[name] = target
 		}
 	}
 	if len(extras) > 0 {
 		dict[consts.Extensions] = extras
 	}
-	return dict
+	return dict, nil
 }
 
 // Transform converts the source into the target struct with compose types transformer

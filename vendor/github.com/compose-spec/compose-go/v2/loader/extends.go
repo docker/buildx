@@ -20,6 +20,7 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
+	"strings"
 
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/override"
@@ -60,11 +61,8 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 		return s, nil
 	}
 	filename := ctx.Value(consts.ComposeFileKey{}).(string)
-	tracker, err := tracker.Add(filename, name)
-	if err != nil {
-		return nil, err
-	}
 	var (
+		err  error
 		ref  string
 		file any
 	)
@@ -72,14 +70,16 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 	case map[string]any:
 		ref = v["service"].(string)
 		file = v["file"]
+		opts.ProcessEvent("extends", v)
 	case string:
 		ref = v
+		opts.ProcessEvent("extends", map[string]any{"service": ref})
 	}
 
 	var base any
 	if file != nil {
-		path := file.(string)
-		services, err = getExtendsBaseFromFile(ctx, ref, path, opts, tracker)
+		filename = file.(string)
+		services, err = getExtendsBaseFromFile(ctx, ref, filename, opts, tracker)
 		if err != nil {
 			return nil, err
 		}
@@ -89,6 +89,12 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 			return nil, fmt.Errorf("cannot extend service %q in %s: service not found", name, filename)
 		}
 	}
+
+	tracker, err = tracker.Add(filename, name)
+	if err != nil {
+		return nil, err
+	}
+
 	// recursively apply `extends`
 	base, err = applyServiceExtends(ctx, ref, services, opts, tracker, post...)
 	if err != nil {
@@ -99,6 +105,12 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 		return service, nil
 	}
 	source := deepClone(base).(map[string]any)
+
+	err = validateExtendSource(source, ref)
+	if err != nil {
+		return nil, err
+	}
+
 	for _, processor := range post {
 		processor.Apply(map[string]any{
 			"services": map[string]any{
@@ -111,7 +123,32 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 		return nil, err
 	}
 	delete(merged, "extends")
+	services[name] = merged
 	return merged, nil
+}
+
+// validateExtendSource check the source for `extends` doesn't refer to another container/service
+func validateExtendSource(source map[string]any, ref string) error {
+	forbidden := []string{"links", "volumes_from", "depends_on"}
+	for _, key := range forbidden {
+		if _, ok := source[key]; ok {
+			return fmt.Errorf("service %q can't be used with `extends` as it declare `%s`", ref, key)
+		}
+	}
+
+	sharedNamespace := []string{"network_mode", "ipc", "pid", "net", "cgroup", "userns_mode", "uts"}
+	for _, key := range sharedNamespace {
+		if v, ok := source[key]; ok {
+			val := v.(string)
+			if strings.HasPrefix(val, types.ContainerPrefix) {
+				return fmt.Errorf("service %q can't be used with `extends` as it shares `%s` with another container", ref, key)
+			}
+			if strings.HasPrefix(val, types.ServicePrefix) {
+				return fmt.Errorf("service %q can't be used with `extends` as it shares `%s` with another service", ref, key)
+			}
+		}
+	}
+	return nil
 }
 
 func getExtendsBaseFromFile(ctx context.Context, name string, path string, opts *Options, ct *cycleTracker) (map[string]any, error) {
@@ -137,6 +174,7 @@ func getExtendsBaseFromFile(ctx context.Context, name string, path string, opts 
 		extendsOpts.SkipInclude = true
 		extendsOpts.SkipExtends = true    // we manage extends recursively based on raw service definition
 		extendsOpts.SkipValidation = true // we validate the merge result
+		extendsOpts.SkipDefaultValues = true
 		source, err := loadYamlModel(ctx, types.ConfigDetails{
 			WorkingDir: relworkingdir,
 			ConfigFiles: []types.ConfigFile{

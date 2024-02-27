@@ -29,6 +29,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/mitchellh/copystructure"
 	godigest "github.com/opencontainers/go-digest"
+	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 )
@@ -46,13 +47,8 @@ type Project struct {
 	Configs    Configs    `yaml:"configs,omitempty" json:"configs,omitempty"`
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"` // https://github.com/golang/go/issues/6213
 
-	// IncludeReferences is keyed by Compose YAML filename and contains config for
-	// other Compose YAML files it directly triggered a load of via `include`.
-	//
-	// Note: this is
-	IncludeReferences map[string][]IncludeConfig `yaml:"-" json:"-"`
-	ComposeFiles      []string                   `yaml:"-" json:"-"`
-	Environment       Mapping                    `yaml:"-" json:"-"`
+	ComposeFiles []string `yaml:"-" json:"-"`
+	Environment  Mapping  `yaml:"-" json:"-"`
 
 	// DisabledServices track services which have been disable as profile is not active
 	DisabledServices Services `yaml:"-" json:"-"`
@@ -117,6 +113,58 @@ func (p *Project) ConfigNames() []string {
 	}
 	sort.Strings(names)
 	return names
+}
+
+func (p *Project) ServicesWithBuild() []string {
+	servicesBuild := p.Services.Filter(func(s ServiceConfig) bool {
+		return s.Build != nil && s.Build.Context != ""
+	})
+	return maps.Keys(servicesBuild)
+}
+
+func (p *Project) ServicesWithExtends() []string {
+	servicesExtends := p.Services.Filter(func(s ServiceConfig) bool {
+		return s.Extends != nil && *s.Extends != (ExtendsConfig{})
+	})
+	return maps.Keys(servicesExtends)
+}
+
+func (p *Project) ServicesWithDependsOn() []string {
+	servicesDependsOn := p.Services.Filter(func(s ServiceConfig) bool {
+		return len(s.DependsOn) > 0
+	})
+	return maps.Keys(servicesDependsOn)
+}
+
+func (p *Project) ServicesWithCapabilities() ([]string, []string, []string) {
+	capabilities := []string{}
+	gpu := []string{}
+	tpu := []string{}
+	for _, service := range p.Services {
+		deploy := service.Deploy
+		if deploy == nil {
+			continue
+		}
+		reservation := deploy.Resources.Reservations
+		if reservation == nil {
+			continue
+		}
+		devices := reservation.Devices
+		for _, d := range devices {
+			if len(d.Capabilities) > 0 {
+				capabilities = append(capabilities, service.Name)
+			}
+			for _, c := range d.Capabilities {
+				if c == "gpu" {
+					gpu = append(gpu, service.Name)
+				} else if c == "tpu" {
+					tpu = append(tpu, service.Name)
+				}
+			}
+		}
+	}
+
+	return utils.RemoveDuplicates(capabilities), utils.RemoveDuplicates(gpu), utils.RemoveDuplicates(tpu)
 }
 
 // GetServices retrieve services by names, or return all services if no name specified

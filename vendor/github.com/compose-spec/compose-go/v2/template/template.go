@@ -258,7 +258,7 @@ func getFirstBraceClosingIndex(s string) int {
 				return i
 			}
 		}
-		if strings.HasPrefix(s[i:], "${") {
+		if s[i] == '{' {
 			openVariableBraces++
 			i++
 		}

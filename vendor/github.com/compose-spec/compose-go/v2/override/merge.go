@@ -17,6 +17,7 @@
 package override
 
 import (
+	"cmp"
 	"fmt"
 	"strings"
 
@@ -40,10 +41,13 @@ var mergeSpecials = map[tree.Path]merger{}
 
 func init() {
 	mergeSpecials["networks.*.ipam.config"] = mergeIPAMConfig
+	mergeSpecials["networks.*.labels"] = mergeToSequence
+	mergeSpecials["volumes.*.labels"] = mergeToSequence
 	mergeSpecials["services.*.annotations"] = mergeToSequence
 	mergeSpecials["services.*.build"] = mergeBuild
 	mergeSpecials["services.*.build.args"] = mergeToSequence
 	mergeSpecials["services.*.build.additional_contexts"] = mergeToSequence
+	mergeSpecials["services.*.build.extra_hosts"] = mergeToSequence
 	mergeSpecials["services.*.build.labels"] = mergeToSequence
 	mergeSpecials["services.*.command"] = override
 	mergeSpecials["services.*.depends_on"] = mergeDependsOn
@@ -178,8 +182,8 @@ func convertIntoSequence(value any) []any {
 			}
 			i++
 		}
-		slices.SortFunc(seq, func(a, b any) bool {
-			return a.(string) < b.(string)
+		slices.SortFunc(seq, func(a, b any) int {
+			return cmp.Compare(a.(string), b.(string))
 		})
 		return seq
 	case []any:

@@ -34,6 +34,14 @@ func loadIncludeConfig(source any) ([]types.IncludeConfig, error) {
 	if source == nil {
 		return nil, nil
 	}
+	configs := source.([]any)
+	for i, config := range configs {
+		if v, ok := config.(string); ok {
+			configs[i] = map[string]any{
+				"path": v,
+			}
+		}
+	}
 	var requires []types.IncludeConfig
 	err := Transform(source, &requires)
 	return requires, err
@@ -45,6 +53,13 @@ func ApplyInclude(ctx context.Context, configDetails types.ConfigDetails, model 
 		return err
 	}
 	for _, r := range includeConfig {
+		for _, listener := range options.Listeners {
+			listener("include", map[string]any{
+				"path":       r.Path,
+				"workingdir": configDetails.WorkingDir,
+			})
+		}
+
 		for i, p := range r.Path {
 			for _, loader := range options.ResourceLoaders {
 				if loader.Accept(p) {
@@ -56,7 +71,7 @@ func ApplyInclude(ctx context.Context, configDetails types.ConfigDetails, model 
 					break
 				}
 			}
-			r.Path[i] = absPath(configDetails.WorkingDir, p)
+			r.Path[i] = p
 		}
 
 		mainFile := r.Path[0]
@@ -70,17 +85,41 @@ func ApplyInclude(ctx context.Context, configDetails types.ConfigDetails, model 
 		if r.ProjectDirectory == "" {
 			r.ProjectDirectory = filepath.Dir(mainFile)
 		}
+		relworkingdir, err := filepath.Rel(configDetails.WorkingDir, r.ProjectDirectory)
+		if err != nil {
+			// included file path is not inside project working directory => use absolute path
+			relworkingdir = r.ProjectDirectory
+		}
 
 		loadOptions := options.clone()
 		loadOptions.ResolvePaths = true
 		loadOptions.SkipNormalization = true
 		loadOptions.SkipConsistencyCheck = true
+		loadOptions.ResourceLoaders = append(loadOptions.RemoteResourceLoaders(), localResourceLoader{
+			WorkingDir: relworkingdir,
+		})
 
 		if len(r.EnvFile) == 0 {
 			f := filepath.Join(r.ProjectDirectory, ".env")
 			if s, err := os.Stat(f); err == nil && !s.IsDir() {
 				r.EnvFile = types.StringList{f}
 			}
+		} else {
+			envFile := []string{}
+			for _, f := range r.EnvFile {
+				if !filepath.IsAbs(f) {
+					f = filepath.Join(configDetails.WorkingDir, f)
+					s, err := os.Stat(f)
+					if err != nil {
+						return err
+					}
+					if s.IsDir() {
+						return fmt.Errorf("%s is not a file", f)
+					}
+				}
+				envFile = append(envFile, f)
+			}
+			r.EnvFile = envFile
 		}
 
 		envFromFile, err := dotenv.GetEnvFromFile(configDetails.Environment, r.EnvFile)
@@ -89,7 +128,7 @@ func ApplyInclude(ctx context.Context, configDetails types.ConfigDetails, model 
 		}
 
 		config := types.ConfigDetails{
-			WorkingDir:  r.ProjectDirectory,
+			WorkingDir:  relworkingdir,
 			ConfigFiles: types.ToConfigFiles(r.Path),
 			Environment: configDetails.Environment.Clone().Merge(envFromFile),
 		}

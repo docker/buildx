@@ -107,13 +107,17 @@ func enforceUnicity(value any, p tree.Path) (any, error) {
 	return value, nil
 }
 
-func keyValueIndexer(y any, _ tree.Path) (string, error) {
-	value := y.(string)
-	key, _, found := strings.Cut(value, "=")
-	if !found {
-		return value, nil
+func keyValueIndexer(y any, p tree.Path) (string, error) {
+	switch value := y.(type) {
+	case string:
+		key, _, found := strings.Cut(value, "=")
+		if !found {
+			return value, nil
+		}
+		return key, nil
+	default:
+		return "", fmt.Errorf("%s: unexpected type %T", p, y)
 	}
-	return key, nil
 }
 
 func volumeIndexer(y any, p tree.Path) (string, error) {

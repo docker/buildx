@@ -25,9 +25,6 @@ import (
 func transformBuild(data any, p tree.Path) (any, error) {
 	switch v := data.(type) {
 	case map[string]any:
-		if _, ok := v["context"]; !ok {
-			v["context"] = "." // TODO(ndeloof) maybe we miss an explicit "set-defaults" loading phase
-		}
 		return transformMapping(v, p)
 	case string:
 		return map[string]any{
@@ -35,5 +32,17 @@ func transformBuild(data any, p tree.Path) (any, error) {
 		}, nil
 	default:
 		return data, fmt.Errorf("%s: invalid type %T for build", p, v)
+	}
+}
+
+func defaultBuildContext(data any, _ tree.Path) (any, error) {
+	switch v := data.(type) {
+	case map[string]any:
+		if _, ok := v["context"]; !ok {
+			v["context"] = "."
+		}
+		return v, nil
+	default:
+		return data, nil
 	}
 }

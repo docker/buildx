@@ -33,3 +33,13 @@ func (s Services) GetProfiles() []string {
 	}
 	return profiles
 }
+
+func (s Services) Filter(predicate func(ServiceConfig) bool) Services {
+	services := Services{}
+	for name, service := range s {
+		if predicate(service) {
+			services[name] = service
+		}
+	}
+	return services
+}

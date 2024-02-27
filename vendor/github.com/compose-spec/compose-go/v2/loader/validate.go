@@ -29,6 +29,7 @@ import (
 
 // checkConsistency validate a compose model is consistent
 func checkConsistency(project *types.Project) error {
+	containerNames := map[string]string{}
 	for _, s := range project.Services {
 		if s.Build == nil && s.Image == "" {
 			return fmt.Errorf("service %q has neither an image nor a build context specified: %w", s.Name, errdefs.ErrInvalid)
@@ -123,6 +124,13 @@ func checkConsistency(project *types.Project) error {
 			s.Deploy.Replicas = s.Scale
 		}
 
+		if s.ContainerName != "" {
+			if existing, ok := containerNames[s.ContainerName]; ok {
+				return fmt.Errorf(`"services.%s": container name "%s" is already in use by "services.%s": %w`, s.Name, s.ContainerName, existing, errdefs.ErrInvalid)
+			}
+			containerNames[s.ContainerName] = s.Name
+		}
+
 		if s.GetScale() > 1 && s.ContainerName != "" {
 			attr := "scale"
 			if s.Scale == nil {
@@ -130,6 +138,15 @@ func checkConsistency(project *types.Project) error {
 			}
 			return fmt.Errorf("services.%s: can't set container_name and %s as container name must be unique: %w", attr,
 				s.Name, errdefs.ErrInvalid)
+		}
+
+		if s.Develop != nil && s.Develop.Watch != nil {
+			for _, watch := range s.Develop.Watch {
+				if watch.Action != types.WatchActionRebuild && watch.Target == "" {
+					return fmt.Errorf("services.%s.develop.watch: target is required for non-rebuild actions: %w", s.Name, errdefs.ErrInvalid)
+				}
+			}
+
 		}
 	}
 
