@@ -10,6 +10,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/driver"
+	util "github.com/docker/buildx/driver/remote/util"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/detect"
@@ -99,9 +100,8 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 		return nil, errors.Errorf("invalid endpoint address: %s", d.InitConfig.EndpointAddr)
 	}
 
-	dialer := &net.Dialer{}
+	conn, err := util.DialContext(ctx, network, addr)
 
-	conn, err := dialer.DialContext(ctx, network, addr)
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
