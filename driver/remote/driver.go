@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Microsoft/go-winio"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
@@ -101,7 +102,16 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 
 	dialer := &net.Dialer{}
 
-	conn, err := dialer.DialContext(ctx, network, addr)
+	var conn net.Conn
+	var err error
+
+	// dial context doesn't support named pipes
+	if network == "npipe" {
+		conn, err = winio.DialPipeContext(ctx, addr)
+	} else {
+		conn, err = dialer.DialContext(ctx, network, addr)
+	}
+
 	if err != nil {
 		return nil, errors.WithStack(err)
 	}
