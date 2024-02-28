@@ -28,8 +28,12 @@ const (
 )
 
 func runRm(ctx context.Context, dockerCli command.Cli, in rmOptions) error {
-	if in.allInactive && !in.force && !command.PromptForConfirmation(dockerCli.In(), dockerCli.Out(), rmInactiveWarning) {
-		return nil
+	if in.allInactive && !in.force {
+		if ok, err := prompt(ctx, dockerCli.In(), dockerCli.Out(), rmInactiveWarning); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
 	}
 
 	txn, release, err := storeutil.GetStore(dockerCli)
