@@ -15,6 +15,7 @@ func CreateExports(entries []*ExportEntry) ([]client.ExportEntry, error) {
 	if len(entries) == 0 {
 		return nil, nil
 	}
+	var stdoutUsed bool
 	for _, entry := range entries {
 		if entry.Type == "" {
 			return nil, errors.Errorf("type is required for output")
@@ -68,10 +69,14 @@ func CreateExports(entries []*ExportEntry) ([]client.ExportEntry, error) {
 				entry.Destination = "-"
 			}
 			if entry.Destination == "-" {
+				if stdoutUsed {
+					return nil, errors.Errorf("multiple outputs configured to write to stdout")
+				}
 				if _, err := console.ConsoleFromFile(os.Stdout); err == nil {
 					return nil, errors.Errorf("dest file is required for %s exporter. refusing to write to console", out.Type)
 				}
 				out.Output = wrapWriteCloser(os.Stdout)
+				stdoutUsed = true
 			} else if entry.Destination != "" {
 				fi, err := os.Stat(entry.Destination)
 				if err != nil && !os.IsNotExist(err) {
