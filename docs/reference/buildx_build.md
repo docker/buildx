@@ -424,6 +424,10 @@ $ docker buildx build -o type=docker,dest=- . > myimage.tar
 $ docker buildx build -t tonistiigi/foo -o type=registry
 ```
 
+> **Note **
+>
+> Since BuildKit v0.13.0 multiple outputs can be specified by repeating the flag.
+
 Supported exported types are:
 
 #### `local`

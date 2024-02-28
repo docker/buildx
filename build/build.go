@@ -290,7 +290,9 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 			opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
 		}
 	default:
-		return nil, nil, errors.Errorf("multiple outputs currently unsupported")
+		if err := bopts.LLBCaps.Supports(pb.CapMultipleExporters); err != nil {
+			return nil, nil, errors.Errorf("multiple outputs currently unsupported by the current BuildKit daemon, please upgrade to version v0.13+ or use a single output")
+		}
 	}
 
 	// fill in image exporter names from tags
