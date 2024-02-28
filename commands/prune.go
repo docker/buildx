@@ -49,8 +49,12 @@ func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) err
 		warning = allCacheWarning
 	}
 
-	if !opts.force && !command.PromptForConfirmation(dockerCli.In(), dockerCli.Out(), warning) {
-		return nil
+	if !opts.force {
+		if ok, err := prompt(ctx, dockerCli.In(), dockerCli.Out(), warning); err != nil {
+			return err
+		} else if !ok {
+			return nil
+		}
 	}
 
 	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
