@@ -20,7 +20,7 @@ jobs:
       -
         name: Prepare
         run: |
-          rm -rf ./_data/buildx/*
+          rm -rf ./data/buildx/*
           rm -rf ./_vendor/github.com/docker/buildx
       -
         name: Set up Docker Buildx
@@ -38,7 +38,7 @@ jobs:
       -
         name: Copy yaml
         run: |
-          cp /tmp/buildx-docs/out/reference/*.yaml ./_data/buildx/
+          cp /tmp/buildx-docs/out/reference/*.yaml ./data/buildx/
       -
         name: Update vendor
         uses: docker/bake-action@v4
