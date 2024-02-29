@@ -21,11 +21,12 @@ jobs:
         name: Prepare
         run: |
           rm -rf ./_data/buildx/*
+          rm -rf ./_vendor/github.com/docker/buildx
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
       -
-        name: Build docs
+        name: Generate yaml
         uses: docker/bake-action@v4
         with:
           source: ${{ github.server_url }}/${{ github.repository }}.git#${{ github.event.release.name }}
@@ -35,20 +36,24 @@ jobs:
         env:
           DOCS_FORMATS: yaml
       -
-        name: Copy files
+        name: Copy yaml
         run: |
           cp /tmp/buildx-docs/out/reference/*.yaml ./_data/buildx/
       -
-        name: Commit changes
-        run: |
-          git add -A .
+        name: Update vendor
+        uses: docker/bake-action@v4
+        with:
+          source: ${{ github.server_url }}/${{ github.repository }}.git#${{ github.event.release.name }}
+          targets: vendor
+          set: |
+            vendor.args.MODULE=github.com/docker/buildx@${{ github.event.release.name }}
       -
         name: Create PR on docs repo
         uses: peter-evans/create-pull-request@a4f52f8033a6168103c2538976c07b467e8163bc
         with:
           token: ${{ secrets.GHPAT_DOCS_DISPATCH }}
           push-to-fork: docker-tools-robot/docker.github.io
-          commit-message: "build: update buildx reference to ${{ github.event.release.name }}"
+          commit-message: "vendor: github.com/docker/buildx ${{ github.event.release.name }}"
           signoff: true
           branch: dispatch/buildx-ref-${{ github.event.release.name }}
           delete-branch: true
