@@ -23,7 +23,11 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-const inTotoGenericMime = "application/vnd.in-toto+json"
+const (
+	inTotoGenericMime        = "application/vnd.in-toto+json"
+	inTotoSPDXDSSEMime       = "application/vnd.in-toto.spdx+dsse"
+	inTotoProvenanceDSSEMime = "application/vnd.in-toto.provenance+dsse"
+)
 
 var (
 	annotationReferences = []string{
@@ -278,7 +282,7 @@ type sbomStub struct {
 }
 
 func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
-	ctx = remotes.WithMediaTypeKeyPrefix(ctx, inTotoGenericMime, "intoto")
+	ctx = withIntotoMediaTypes(ctx)
 	as.deferredSbom = func() (*sbomStub, error) {
 		var sbom *sbomStub
 		for _, dgst := range refs {
@@ -329,7 +333,7 @@ type provenanceStub struct {
 }
 
 func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
-	ctx = remotes.WithMediaTypeKeyPrefix(ctx, inTotoGenericMime, "intoto")
+	ctx = withIntotoMediaTypes(ctx)
 	as.deferredProvenance = func() (*provenanceStub, error) {
 		var provenance *provenanceStub
 		for _, dgst := range refs {
@@ -458,4 +462,11 @@ func decodeDSSE(dt []byte, mime string) ([]byte, error) {
 	}
 
 	return dt, nil
+}
+
+func withIntotoMediaTypes(ctx context.Context) context.Context {
+	for _, mime := range []string{inTotoGenericMime, inTotoSPDXDSSEMime, inTotoProvenanceDSSEMime} {
+		ctx = remotes.WithMediaTypeKeyPrefix(ctx, mime, "intoto")
+	}
+	return ctx
 }
