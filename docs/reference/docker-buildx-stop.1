@@ -1,0 +1,43 @@
+.nh
+.TH "DOCKER-BUILDX-STOP" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-stop - Stop builder instance
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx stop [NAME]\fP
+
+
+.SH DESCRIPTION
+.PP
+Stops the specified or current builder. This does not prevent buildx build to
+restart the builder. The implementation of stop depends on the driver.
+
+
+.SH OPTIONS
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for stop
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Override the configured builder instance (--builder) {#builder}
+
+Same as [`buildx --builder`](/reference/cli/docker/buildx/#builder).
+
+.EE
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP

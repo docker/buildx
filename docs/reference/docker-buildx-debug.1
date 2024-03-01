@@ -1,0 +1,57 @@
+.nh
+.TH "DOCKER-BUILDX-DEBUG" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-debug - Start debugger
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx debug\fP
+
+
+.SH DESCRIPTION
+.PP
+Start debugger
+
+
+.SH OPTIONS
+.PP
+\fB--detach\fP[=true]
+	Detach buildx server for the monitor (supported only on linux)
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for debug
+
+.PP
+\fB--invoke\fP=""
+	Launch a monitor with executing specified command
+
+.PP
+\fB--on\fP="error"
+	When to launch the monitor ([always, error])
+
+.PP
+\fB--progress\fP="auto"
+	Set type of progress output ("auto", "plain", "tty") for the monitor. Use plain to show container output
+
+.PP
+\fB--root\fP=""
+	Specify root directory of server to connect for the monitor
+
+.PP
+\fB--server-config\fP=""
+	Specify buildx server config file for the monitor (used only when launching new server)
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP, \fBdocker-buildx-debug-build(1)\fP

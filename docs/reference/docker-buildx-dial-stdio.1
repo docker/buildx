@@ -1,0 +1,74 @@
+.nh
+.TH "DOCKER-BUILDX-DIAL-STDIO" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-dial-stdio - Proxy current stdio streams to builder instance
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx dial-stdio\fP
+
+
+.SH DESCRIPTION
+.PP
+dial-stdio uses the stdin and stdout streams of the command to proxy to the configured builder instance.
+It is not intended to be used by humans, but rather by other tools that want to interact with the builder instance via BuildKit API.
+
+
+.SH OPTIONS
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for dial-stdio
+
+.PP
+\fB--platform\fP=""
+	Target platform: this is used for node selection
+
+.PP
+\fB--progress\fP="quiet"
+	Set type of progress output (auto, plain, tty).
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+Example go program that uses the dial-stdio command wire up a buildkit client.
+This is for example use only and may not be suitable for production use.
+
+```go
+client.New(ctx, "", client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+    c1, c2 := net.Pipe()
+    cmd := exec.Command("docker", "buildx", "dial-stdio")
+    cmd.Stdin = c1
+    cmd.Stdout = c1
+
+    if err := cmd.Start(); err != nil {
+        c1.Close()
+        c2.Close()
+        return nil, err
+    }
+
+    go func() {
+        cmd.Wait()
+        c2.Close()
+    }()
+
+    return c2
+}))
+
+.EE
+
+.PP
+```
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP

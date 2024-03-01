@@ -1,29 +1,40 @@
-# buildx inspect
+.nh
+.TH "DOCKER-BUILDX-INSPECT" "1" "Mar 2024" "" ""
 
-```text
-docker buildx inspect [NAME]
-```
-
-<!---MARKER_GEN_START-->
-Inspect current builder instance
-
-### Options
-
-| Name                        | Type     | Default | Description                                 |
-|:----------------------------|:---------|:--------|:--------------------------------------------|
-| [`--bootstrap`](#bootstrap) | `bool`   |         | Ensure builder has booted before inspecting |
-| [`--builder`](#builder)     | `string` |         | Override the configured builder instance    |
+.SH NAME
+.PP
+docker-buildx-inspect - Inspect current builder instance
 
 
-<!---MARKER_GEN_END-->
+.SH SYNOPSIS
+.PP
+\fBdocker buildx inspect [NAME]\fP
 
-## Description
 
+.SH DESCRIPTION
+.PP
 Shows information about the current or specified builder.
 
-## Examples
 
-### <a name="bootstrap"></a> Ensure that the builder is running before inspecting (--bootstrap)
+.SH OPTIONS
+.PP
+\fB--bootstrap\fP[=false]
+	Ensure builder has booted before inspecting
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for inspect
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Ensure that the builder is running before inspecting (--bootstrap) {#bootstrap}
 
 Use the `--bootstrap` option to ensure that the builder is running before
 inspecting it. If the driver is `docker-container`, then `--bootstrap` starts
@@ -32,9 +43,9 @@ automatically done during build, and therefore not necessary. The same BuildKit
 container is used during the lifetime of the associated builder node (as
 displayed in `buildx ls`).
 
-### <a name="builder"></a> Override the configured builder instance (--builder)
+### Override the configured builder instance (--builder) {#builder}
 
-Same as [`buildx --builder`](buildx.md#builder).
+Same as [`buildx --builder`](/reference/cli/docker/buildx/#builder).
 
 ### Get information about a builder instance
 
@@ -85,10 +96,21 @@ GC Policy rule#2:
 GC Policy rule#3:
  All:        true
  Keep Bytes: 24.21GiB
-```
 
-`debug` flag can also be used to get more information about the builder:
+.EE
 
-```console
+.PP
+\fBdebug\fR flag can also be used to get more information about the builder:
+
+.EX
 $ docker --debug buildx inspect elated_tesla
+
+.EE
+
+.PP
 ```
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP

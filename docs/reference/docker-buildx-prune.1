@@ -1,0 +1,93 @@
+.nh
+.TH "DOCKER-BUILDX-PRUNE" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-prune - Remove build cache
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx prune\fP
+
+
+.SH DESCRIPTION
+.PP
+Clears the build cache of the selected builder.
+
+.PP
+You can finely control what cache data is kept using:
+
+.RS
+.IP \(bu 2
+The \fB--filter=until=<duration>\fR flag to keep images that have been used in
+the last \fB<duration>\fR time.
+
+.RE
+
+.PP
+\fB<duration>\fR is a duration string, e.g. \fB24h\fR or \fB2h30m\fR, with allowable
+  units of \fB(h)ours\fR, \fB(m)inutes\fR and \fB(s)econds\fR\&.
+
+.RS
+.IP \(bu 2
+The \fB--keep-storage=<size>\fR flag to keep \fB<size>\fR bytes of data in the cache.
+
+.RE
+
+.PP
+\fB<size>\fR is a human-readable memory string, e.g. \fB128mb\fR, \fB2gb\fR, etc. Units
+  are case-insensitive.
+
+.RS
+.IP \(bu 2
+The \fB--all\fR flag to allow clearing internal helper images and frontend images
+set using the \fB#syntax=\fR directive or the \fBBUILDKIT_SYNTAX\fR build argument.
+
+.RE
+
+
+.SH OPTIONS
+.PP
+\fB-a\fP, \fB--all\fP[=false]
+	Include internal/frontend images
+
+.PP
+\fB--filter\fP=
+	Provide filter values (e.g., "until=24h")
+
+.PP
+\fB-f\fP, \fB--force\fP[=false]
+	Do not prompt for confirmation
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for prune
+
+.PP
+\fB--keep-storage\fP=0
+	Amount of disk space to keep for cache
+
+.PP
+\fB--verbose\fP[=false]
+	Provide a more verbose output
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Override the configured builder instance (--builder) {#builder}
+
+Same as [`buildx --builder`](/reference/cli/docker/buildx/#builder).
+
+.EE
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP

@@ -12,9 +12,9 @@ Create a new image based on source images
 | Name                             | Type          | Default | Description                                                                              |
 |:---------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
 | [`--annotation`](#annotation)    | `stringArray` |         | Add annotation to the image                                                              |
-| [`--append`](#append)            |               |         | Append to existing manifest                                                              |
+| [`--append`](#append)            | `bool`        |         | Append to existing manifest                                                              |
 | [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                 |
-| [`--dry-run`](#dry-run)          |               |         | Show final image instead of pushing                                                      |
+| [`--dry-run`](#dry-run)          | `bool`        |         | Show final image instead of pushing                                                      |
 | [`-f`](#file), [`--file`](#file) | `stringArray` |         | Read source descriptor from file                                                         |
 | `--progress`                     | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
 | [`-t`](#tag), [`--tag`](#tag)    | `stringArray` |         | Set reference for new image                                                              |

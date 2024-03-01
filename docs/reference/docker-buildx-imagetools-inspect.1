@@ -1,28 +1,21 @@
-# buildx imagetools inspect
+.nh
+.TH "DOCKER-BUILDX-IMAGETOOLS-INSPECT" "1" "Mar 2024" "" ""
 
-```text
-docker buildx imagetools inspect [OPTIONS] NAME
-```
-
-<!---MARKER_GEN_START-->
-Show details of an image in the registry
-
-### Options
-
-| Name                    | Type     | Default         | Description                                   |
-|:------------------------|:---------|:----------------|:----------------------------------------------|
-| [`--builder`](#builder) | `string` |                 | Override the configured builder instance      |
-| [`--format`](#format)   | `string` | `{{.Manifest}}` | Format the output using the given Go template |
-| [`--raw`](#raw)         | `bool`   |                 | Show original, unformatted JSON manifest      |
+.SH NAME
+.PP
+docker-buildx-imagetools-inspect - Show details of an image in the registry
 
 
-<!---MARKER_GEN_END-->
+.SH SYNOPSIS
+.PP
+\fBdocker buildx imagetools inspect [OPTIONS] NAME\fP
 
-## Description
 
+.SH DESCRIPTION
+.PP
 Show details of an image in the registry.
 
-```console
+.EX
 $ docker buildx imagetools inspect alpine
 Name:      docker.io/library/alpine:latest
 MediaType: application/vnd.docker.distribution.manifest.list.v2+json
@@ -56,15 +49,37 @@ Manifests:
   Name:      docker.io/library/alpine:latest@sha256:49e322ab6690e73a4909f787bcbdb873631264ff4a108cddfd9f9c249ba1d58e
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/s390x
-```
 
-## Examples
+.EE
 
-### <a name="builder"></a> Override the configured builder instance (--builder)
 
-Same as [`buildx --builder`](buildx.md#builder).
+.SH OPTIONS
+.PP
+\fB--format\fP=""
+	Format the output using the given Go template
 
-### <a name="format"></a> Format the output (--format)
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for inspect
+
+.PP
+\fB--raw\fP[=false]
+	Show original, unformatted JSON manifest
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Override the configured builder instance (--builder) {#builder}
+
+Same as [`buildx --builder`](/reference/cli/docker/buildx/#builder).
+
+### Format the output (--format) {#format}
 
 Format the output using the given Go template. Defaults to `{{.Manifest}}` if
 unset. Following fields are available:
@@ -78,18 +93,19 @@ unset. Following fields are available:
 ```console
 $ docker buildx imagetools inspect alpine --format "{{.Name}}"
 Name: docker.io/library/alpine:latest
-```
 
-#### `.Manifest`
+.EE
 
-```console
+.SS \fB\&.Manifest\fR
+.EX
 $ docker buildx imagetools inspect crazymax/loop --format "{{.Manifest}}"
 Name:      docker.io/crazymax/loop:latest
 MediaType: application/vnd.docker.distribution.manifest.v2+json
 Digest:    sha256:08602e7340970e92bde5e0a2e887c1fde4d9ae753d1e05efb4c8ef3b609f97f1
-```
 
-```console
+.EE
+
+.EX
 $ docker buildx imagetools inspect moby/buildkit:master --format "{{.Manifest}}"
 Name:      docker.io/moby/buildkit:master
 MediaType: application/vnd.docker.distribution.manifest.list.v2+json
@@ -119,18 +135,20 @@ Manifests:
   Name:      docker.io/moby/buildkit:master@sha256:c04c57765304ab84f4f9807fff3e11605c3a60e16435c734b02c723680f6bd6e
   MediaType: application/vnd.docker.distribution.manifest.v2+json
   Platform:  linux/riscv64
-```
 
-#### JSON output
+.EE
 
-A `json` template function is also available if you want to render fields in
+.SS JSON output
+.PP
+A \fBjson\fR template function is also available if you want to render fields in
 JSON format:
 
-```console
+.EX
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Manifest}}"
-```
 
-```json
+.EE
+
+.EX
 {
   "schemaVersion": 2,
   "mediaType": "application/vnd.oci.image.index.v1+json",
@@ -161,13 +179,15 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Ma
     }
   ]
 }
-```
 
-```console
+.EE
+
+.EX
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Image}}"
-```
 
-```json
+.EE
+
+.EX
 {
   "created": "2022-12-01T11:46:47.713777178Z",
   "architecture": "amd64",
@@ -194,7 +214,7 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Im
     },
     {
       "created": "2022-11-22T22:19:29.008562326Z",
-      "created_by": "/bin/sh -c #(nop)  CMD [\"/bin/sh\"]",
+      "created_by": "/bin/sh -c #(nop)  CMD [\\"/bin/sh\\"]",
       "empty_layer": true
     },
     {
@@ -204,13 +224,15 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Im
     }
   ]
 }
-```
 
-```console
+.EE
+
+.EX
 $ docker buildx imagetools inspect moby/buildkit:master --format "{{json .Manifest}}"
-```
 
-```json
+.EE
+
+.EX
 {
   "schemaVersion": 2,
   "mediaType": "application/vnd.oci.image.index.v1+json",
@@ -352,16 +374,20 @@ $ docker buildx imagetools inspect moby/buildkit:master --format "{{json .Manife
     }
   ]
 }
-```
 
-The following command provides [SLSA](https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-provenance.md)
+.EE
+
+.PP
+The following command provides SLSA
+\[la]https://github.com/moby/buildkit/blob/master/docs/attestations/slsa\-provenance.md\[ra]
 JSON output:
 
-```console
+.EX
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Provenance}}"
-```
 
-```json
+.EE
+
+.EX
 {
   "SLSA": {
     "builder": {
@@ -413,16 +439,20 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .Pr
     }
   }
 }
-```
 
-The following command provides [SBOM](https://github.com/moby/buildkit/blob/master/docs/attestations/sbom.md)
+.EE
+
+.PP
+The following command provides SBOM
+\[la]https://github.com/moby/buildkit/blob/master/docs/attestations/sbom.md\[ra]
 JSON output:
 
-```console
+.EX
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .SBOM}}"
-```
 
-```json
+.EE
+
+.EX
 {
   "SPDX": {
     "SPDXID": "SPDXRef-DOCUMENT",
@@ -441,13 +471,15 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .SB
     "spdxVersion": "SPDX-2.2"
   }
 }
-```
 
-```console
+.EE
+
+.EX
 $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .}}"
-```
 
-```json
+.EE
+
+.EX
 {
   "name": "crazymax/buildkit:attest",
   "manifest": {
@@ -506,7 +538,7 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .}}
       },
       {
         "created": "2022-11-22T22:19:29.008562326Z",
-        "created_by": "/bin/sh -c #(nop)  CMD [\"/bin/sh\"]",
+        "created_by": "/bin/sh -c #(nop)  CMD [\\"/bin/sh\\"]",
         "empty_layer": true
       },
       {
@@ -517,19 +549,21 @@ $ docker buildx imagetools inspect crazymax/buildkit:attest --format "{{json .}}
     ]
   }
 }
-```
 
-#### Multi-platform
+.EE
 
-Multi-platform images are supported for `.Image`, `.SLSA` and `.SBOM` fields.
-If you want to pick up a specific platform, you can specify it using the `index`
+.SS Multi-platform
+.PP
+Multi-platform images are supported for \fB\&.Image\fR, \fB\&.SLSA\fR and \fB\&.SBOM\fR fields.
+If you want to pick up a specific platform, you can specify it using the \fBindex\fR
 go template function:
 
-```console
+.EX
 $ docker buildx imagetools inspect --format '{{json (index .Image "linux/s390x")}}' moby/buildkit:master
-```
 
-```json
+.EE
+
+.EX
 {
   "created": "2022-11-30T17:42:26.414957336Z",
   "architecture": "s390x",
@@ -561,12 +595,12 @@ $ docker buildx imagetools inspect --format '{{json (index .Image "linux/s390x")
     },
     {
       "created": "2021-11-24T20:41:23.94211262Z",
-      "created_by": "/bin/sh -c #(nop)  CMD [\"/bin/sh\"]",
+      "created_by": "/bin/sh -c #(nop)  CMD [\\"/bin/sh\\"]",
       "empty_layer": true
     },
     {
       "created": "2022-01-26T18:15:21.449825391Z",
-      "created_by": "RUN /bin/sh -c apk add --no-cache fuse3 git openssh pigz xz   \u0026\u0026 ln -s fusermount3 /usr/bin/fusermount # buildkit",
+      "created_by": "RUN /bin/sh -c apk add --no-cache fuse3 git openssh pigz xz   \\u0026\\u0026 ln -s fusermount3 /usr/bin/fusermount # buildkit",
       "comment": "buildkit.dockerfile.v0"
     },
     {
@@ -587,23 +621,25 @@ $ docker buildx imagetools inspect --format '{{json (index .Image "linux/s390x")
     },
     {
       "created": "2022-11-30T17:42:26.414957336Z",
-      "created_by": "ENTRYPOINT [\"buildkitd\"]",
+      "created_by": "ENTRYPOINT [\\"buildkitd\\"]",
       "comment": "buildkit.dockerfile.v0",
       "empty_layer": true
     }
   ]
 }
-```
 
-### <a name="raw"></a> Show original JSON manifest (--raw)
+.EE
 
-Use the `--raw` option to print the raw JSON manifest.
+.SS Show original JSON manifest (--raw) {#raw}
+.PP
+Use the \fB--raw\fR option to print the raw JSON manifest.
 
-```console
+.EX
 $ docker buildx imagetools inspect --raw crazymax/loop
-```
 
-```json
+.EE
+
+.EX
 {
   "mediaType": "application/vnd.docker.distribution.manifest.v2+json",
   "schemaVersion": 2,
@@ -630,13 +666,15 @@ $ docker buildx imagetools inspect --raw crazymax/loop
     }
   ]
 }
-```
 
-```console
+.EE
+
+.EX
 $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
-```
 
-```json
+.EE
+
+.EX
 {
   "mediaType": "application/vnd.docker.distribution.manifest.list.v2+json",
   "schemaVersion": 2,
@@ -698,4 +736,13 @@ $ docker buildx imagetools inspect --raw moby/buildkit:master | jq
     }
   ]
 }
+
+.EE
+
+.PP
 ```
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx-imagetools(1)\fP

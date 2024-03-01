@@ -1,0 +1,44 @@
+.nh
+.TH "DOCKER-BUILDX-IMAGETOOLS" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-imagetools - Commands to work on images in registry
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx imagetools\fP
+
+
+.SH DESCRIPTION
+.PP
+The \fBimagetools\fR commands contains subcommands for working with manifest lists
+in container registries. These commands are useful for inspecting manifests
+to check multi-platform configuration and attestations.
+
+
+.SH OPTIONS
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for imagetools
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Override the configured builder instance (--builder) {#builder}
+
+Same as [`buildx --builder`](/reference/cli/docker/buildx/#builder).
+
+.EE
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP, \fBdocker-buildx-imagetools-create(1)\fP, \fBdocker-buildx-imagetools-inspect(1)\fP

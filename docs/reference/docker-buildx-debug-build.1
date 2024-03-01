@@ -1,0 +1,173 @@
+.nh
+.TH "DOCKER-BUILDX-DEBUG-BUILD" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-debug-build - Start a build
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx debug build [OPTIONS] PATH | URL | -\fP
+
+
+.SH DESCRIPTION
+.PP
+Start a build
+
+
+.SH OPTIONS
+.PP
+\fB--add-host\fP=[]
+	Add a custom host-to-IP mapping (format: "host:ip")
+
+.PP
+\fB--allow\fP=[]
+	Allow extra privileged entitlement (e.g., "network.host", "security.insecure")
+
+.PP
+\fB--annotation\fP=[]
+	Add annotation to the image
+
+.PP
+\fB--attest\fP=[]
+	Attestation parameters (format: "type=sbom,generator=image")
+
+.PP
+\fB--build-arg\fP=[]
+	Set build-time variables
+
+.PP
+\fB--build-context\fP=[]
+	Additional build contexts (e.g., name=path)
+
+.PP
+\fB--cache-from\fP=[]
+	External cache sources (e.g., "user/app:cache", "type=local,src=path/to/dir")
+
+.PP
+\fB--cache-to\fP=[]
+	Cache export destinations (e.g., "user/app:cache", "type=local,dest=path/to/dir")
+
+.PP
+\fB--cgroup-parent\fP=""
+	Set the parent cgroup for the "RUN" instructions during build
+
+.PP
+\fB--detach\fP[=false]
+	Detach buildx server (supported only on linux)
+
+.PP
+\fB-f\fP, \fB--file\fP=""
+	Name of the Dockerfile (default: "PATH/Dockerfile")
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for build
+
+.PP
+\fB--iidfile\fP=""
+	Write the image ID to the file
+
+.PP
+\fB--label\fP=[]
+	Set metadata for an image
+
+.PP
+\fB--load\fP[=false]
+	Shorthand for "--output=type=docker"
+
+.PP
+\fB--metadata-file\fP=""
+	Write build result metadata to the file
+
+.PP
+\fB--network\fP="default"
+	Set the networking mode for the "RUN" instructions during build
+
+.PP
+\fB--no-cache\fP[=false]
+	Do not use cache when building the image
+
+.PP
+\fB--no-cache-filter\fP=[]
+	Do not cache specified stages
+
+.PP
+\fB-o\fP, \fB--output\fP=[]
+	Output destination (format: "type=local,dest=path")
+
+.PP
+\fB--platform\fP=[]
+	Set target platform for build
+
+.PP
+\fB--print\fP=""
+	Print result of information request (e.g., outline, targets)
+
+.PP
+\fB--progress\fP="auto"
+	Set type of progress output ("auto", "plain", "tty"). Use plain to show container output
+
+.PP
+\fB--provenance\fP=""
+	Shorthand for "--attest=type=provenance"
+
+.PP
+\fB--pull\fP[=false]
+	Always attempt to pull all referenced images
+
+.PP
+\fB--push\fP[=false]
+	Shorthand for "--output=type=registry"
+
+.PP
+\fB-q\fP, \fB--quiet\fP[=false]
+	Suppress the build output and print image ID on success
+
+.PP
+\fB--root\fP=""
+	Specify root directory of server to connect
+
+.PP
+\fB--sbom\fP=""
+	Shorthand for "--attest=type=sbom"
+
+.PP
+\fB--secret\fP=[]
+	Secret to expose to the build (format: "id=mysecret[,src=/local/secret]")
+
+.PP
+\fB--server-config\fP=""
+	Specify buildx server config file (used only when launching new server)
+
+.PP
+\fB--shm-size\fP=0
+	Shared memory size for build containers
+
+.PP
+\fB--ssh\fP=[]
+	SSH agent socket or keys to expose to the build (format: "default|[=|[,]]")
+
+.PP
+\fB-t\fP, \fB--tag\fP=[]
+	Name and optionally a tag (format: "name:tag")
+
+.PP
+\fB--target\fP=""
+	Set the target build stage to build
+
+.PP
+\fB--ulimit\fP=[]
+	Ulimit options
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx-debug(1)\fP

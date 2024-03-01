@@ -1,0 +1,52 @@
+.nh
+.TH "DOCKER-BUILDX-USE" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-use - Set the current builder instance
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx use [OPTIONS] NAME\fP
+
+
+.SH DESCRIPTION
+.PP
+Switches the current builder instance. Build commands invoked after this command
+will run on a specified builder. Alternatively, a context name can be used to
+switch to the default builder of that context.
+
+
+.SH OPTIONS
+.PP
+\fB--default\fP[=false]
+	Set builder as default for current context
+
+.PP
+\fB--global\fP[=false]
+	Builder persists context changes
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for use
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Override the configured builder instance (--builder) {#builder}
+
+Same as [`buildx --builder`](/reference/cli/docker/buildx/#builder).
+
+.EE
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP

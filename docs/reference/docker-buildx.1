@@ -1,0 +1,40 @@
+.nh
+.TH "DOCKER-BUILDX" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx - Docker Buildx
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx\fP
+
+
+.SH DESCRIPTION
+.PP
+Extended build capabilities with BuildKit
+
+
+.SH OPTIONS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for buildx
+
+
+.SH EXAMPLE
+.EX
+### Override the configured builder instance (--builder) {#builder}
+
+You can also use the `BUILDX_BUILDER` environment variable.
+
+.EE
+
+
+.SH SEE ALSO
+.PP
+\fBdocker(1)\fP, \fBdocker-buildx-bake(1)\fP, \fBdocker-buildx-build(1)\fP, \fBdocker-buildx-create(1)\fP, \fBdocker-buildx-debug(1)\fP, \fBdocker-buildx-dial-stdio(1)\fP, \fBdocker-buildx-du(1)\fP, \fBdocker-buildx-imagetools(1)\fP, \fBdocker-buildx-inspect(1)\fP, \fBdocker-buildx-ls(1)\fP, \fBdocker-buildx-prune(1)\fP, \fBdocker-buildx-rm(1)\fP, \fBdocker-buildx-stop(1)\fP, \fBdocker-buildx-use(1)\fP, \fBdocker-buildx-version(1)\fP

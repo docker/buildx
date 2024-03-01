@@ -1,0 +1,253 @@
+.nh
+.TH "DOCKER-BUILDX-BAKE" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-bake - Build from a file
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx bake [OPTIONS] [TARGET...]\fP
+
+
+.SH DESCRIPTION
+.PP
+Bake is a high-level build command. Each specified target runs in parallel
+as part of the build.
+
+.PP
+Read High-level build options with Bake
+\[la]/build/bake/\[ra]
+guide for introduction to writing bake files.
+
+.PP
+.RS
+
+.PP
+\fBNote\fP
+
+.PP
+\fBbuildx bake\fR command may receive backwards incompatible features in the future
+if needed. We are looking for feedback on improving the command and extending
+the functionality further.
+
+.RE
+
+
+.SH OPTIONS
+.PP
+\fB-f\fP, \fB--file\fP=[]
+	Build definition file
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for bake
+
+.PP
+\fB--load\fP[=false]
+	Shorthand for "--set=*.output=type=docker"
+
+.PP
+\fB--metadata-file\fP=""
+	Write build result metadata to the file
+
+.PP
+\fB--no-cache\fP[=false]
+	Do not use cache when building the image
+
+.PP
+\fB--print\fP[=false]
+	Print the options without building
+
+.PP
+\fB--progress\fP="auto"
+	Set type of progress output ("auto", "plain", "tty"). Use plain to show container output
+
+.PP
+\fB--provenance\fP=""
+	Shorthand for "--set=*.attest=type=provenance"
+
+.PP
+\fB--pull\fP[=false]
+	Always attempt to pull all referenced images
+
+.PP
+\fB--push\fP[=false]
+	Shorthand for "--set=*.output=type=registry"
+
+.PP
+\fB--sbom\fP=""
+	Shorthand for "--set=*.attest=type=sbom"
+
+.PP
+\fB--set\fP=[]
+	Override target value (e.g., "targetpattern.key=value")
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Override the configured builder instance (--builder) {#builder}
+
+Same as [`buildx --builder`](/reference/cli/docker/buildx/#builder).
+
+### Specify a build definition file (-f, --file) {#file}
+
+Use the `-f` / `--file` option to specify the build definition file to use.
+The file can be an HCL, JSON or Compose file. If multiple files are specified,
+all are read and the build configurations are combined.
+
+You can pass the names of the targets to build, to build only specific target(s).
+The following example builds the `db` and `webapp-release` targets that are
+defined in the `docker-bake.dev.hcl` file:
+
+```hcl
+# docker-bake.dev.hcl
+group "default" {
+  targets = ["db", "webapp-dev"]
+}
+
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp"]
+}
+
+target "webapp-release" {
+  inherits = ["webapp-dev"]
+  platforms = ["linux/amd64", "linux/arm64"]
+}
+
+target "db" {
+  dockerfile = "Dockerfile.db"
+  tags = ["docker.io/username/db"]
+}
+
+.EE
+
+.EX
+$ docker buildx bake -f docker-bake.dev.hcl db webapp-release
+
+.EE
+
+.PP
+See the Bake file reference
+\[la]/build/bake/reference/\[ra]
+for more details.
+
+.SS Don't use cache when building the image (--no-cache) {#no-cache}
+.PP
+Same as \fBbuild --no-cache\fR\&. Don't use cache when building the image.
+
+.SS Print the options without building (--print) {#print}
+.PP
+Prints the resulting options of the targets desired to be built, in a JSON
+format, without starting a build.
+
+.EX
+$ docker buildx bake -f docker-bake.hcl --print db
+{
+  "group": {
+    "default": {
+      "targets": [
+        "db"
+      ]
+    }
+  },
+  "target": {
+    "db": {
+      "context": "./",
+      "dockerfile": "Dockerfile",
+      "tags": [
+        "docker.io/tiborvass/db"
+      ]
+    }
+  }
+}
+
+.EE
+
+.SS Set type of progress output (--progress) {#progress}
+.PP
+Same as 
+\[la]/reference/cli/docker/buildx/build/#progress\[ra]\&.
+
+.SS Create provenance attestations (--provenance) {#provenance}
+.PP
+Same as 
+\[la]/reference/cli/docker/buildx/build/#provenance\[ra]\&.
+
+.SS Always attempt to pull a newer version of the image (--pull) {#pull}
+.PP
+Same as \fBbuild --pull\fR\&.
+
+.SS Create SBOM attestations (--sbom) {#sbom}
+.PP
+Same as 
+\[la]/reference/cli/docker/buildx/build/#sbom\[ra]\&.
+
+.SS Override target configurations from command line (--set) {#set}
+.EX
+--set targetpattern.key[.subkey]=value
+
+.EE
+
+.PP
+Override target configurations from command line. The pattern matching syntax
+is defined in https://golang.org/pkg/path/#Match.
+
+.EX
+$ docker buildx bake --set target.args.mybuildarg=value
+$ docker buildx bake --set target.platform=linux/arm64
+$ docker buildx bake --set foo*.args.mybuildarg=value # overrides build arg for all targets starting with 'foo'
+$ docker buildx bake --set *.platform=linux/arm64     # overrides platform for all targets
+$ docker buildx bake --set foo*.no-cache              # bypass caching only for targets starting with 'foo'
+
+.EE
+
+.PP
+You can override the following fields:
+
+.RS
+.IP \(bu 2
+\fBargs\fR
+.IP \(bu 2
+\fBcache-from\fR
+.IP \(bu 2
+\fBcache-to\fR
+.IP \(bu 2
+\fBcontext\fR
+.IP \(bu 2
+\fBdockerfile\fR
+.IP \(bu 2
+\fBlabels\fR
+.IP \(bu 2
+\fBno-cache\fR
+.IP \(bu 2
+\fBno-cache-filter\fR
+.IP \(bu 2
+\fBoutput\fR
+.IP \(bu 2
+\fBplatform\fR
+.IP \(bu 2
+\fBpull\fR
+.IP \(bu 2
+\fBpush\fR
+.IP \(bu 2
+\fBsecrets\fR
+.IP \(bu 2
+\fBssh\fR
+.IP \(bu 2
+\fBtags\fR
+.IP \(bu 2
+\fBtarget\fR
+```
+# SEE ALSO
+\fBdocker-buildx(1)\fP
+
+.RE

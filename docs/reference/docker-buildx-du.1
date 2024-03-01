@@ -1,25 +1,43 @@
-# buildx du
+.nh
+.TH "DOCKER-BUILDX-DU" "1" "Mar 2024" "" ""
 
-```text
-docker buildx du
-```
+.SH NAME
+.PP
+docker-buildx-du - Disk usage
 
-<!---MARKER_GEN_START-->
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx du\fP
+
+
+.SH DESCRIPTION
+.PP
 Disk usage
 
-### Options
 
-| Name                    | Type     | Default | Description                              |
-|:------------------------|:---------|:--------|:-----------------------------------------|
-| [`--builder`](#builder) | `string` |         | Override the configured builder instance |
-| `--filter`              | `filter` |         | Provide filter values                    |
-| [`--verbose`](#verbose) | `bool`   |         | Provide a more verbose output            |
+.SH OPTIONS
+.PP
+\fB--filter\fP=
+	Provide filter values
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for du
+
+.PP
+\fB--verbose\fP[=false]
+	Provide a more verbose output
 
 
-<!---MARKER_GEN_END-->
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
 
-## Examples
 
+.SH EXAMPLE
+.EX
 ### Show disk usage
 
 The `docker buildx du` command shows the disk usage for the currently selected
@@ -43,31 +61,39 @@ Shared:        115.5MB
 Private:       10.25GB
 Reclaimable:   10.36GB
 Total:         10.36GB
-```
 
-If `RECLAIMABLE` is false, the `docker buildx du prune` command won't delete
-the record, even if you use `--all`. That's because the record is actively in
+.EE
+
+.PP
+If \fBRECLAIMABLE\fR is false, the \fBdocker buildx du prune\fR command won't delete
+the record, even if you use \fB--all\fR\&. That's because the record is actively in
 use by some component of the builder.
 
-The asterisks (\*) in the default output indicate the following:
+.PP
+The asterisks (*) in the default output indicate the following:
 
-- An asterisk next to an ID (`zu7m6evdpebh5h8kfkpw9dlf2*`) indicates that the record
-  is mutable. The size of the record may change, or another build can take ownership of
-  it and change or commit to it. If you run the `du` command again, this item may
-  not be there anymore, or the size might be different.
-- An asterisk next to a size (`8.288kB*`) indicates that the record is shared.
-  Storage of the record is shared with some other resource, typically an image.
-  If you prune such a record then you will lose build cache but only metadata
-  will be deleted as the image still needs to actual storage layers.
+.RS
+.IP \(bu 2
+An asterisk next to an ID (\fBzu7m6evdpebh5h8kfkpw9dlf2*\fR) indicates that the record
+is mutable. The size of the record may change, or another build can take ownership of
+it and change or commit to it. If you run the \fBdu\fR command again, this item may
+not be there anymore, or the size might be different.
+.IP \(bu 2
+An asterisk next to a size (\fB8.288kB*\fR) indicates that the record is shared.
+Storage of the record is shared with some other resource, typically an image.
+If you prune such a record then you will lose build cache but only metadata
+will be deleted as the image still needs to actual storage layers.
 
-### <a name="verbose"></a> Use verbose output (--verbose)
+.RE
 
-The verbose output of the `docker buildx du` command is useful for inspecting
+.SS Use verbose output (--verbose) {#verbose}
+.PP
+The verbose output of the \fBdocker buildx du\fR command is useful for inspecting
 the disk usage records in more detail. The verbose output shows the mutable and
 shared states more clearly, as well as additional information about the
 corresponding layer.
 
-```console
+.EX
 $ docker buildx du --verbose
 ...
 Last used:      2 days ago
@@ -87,13 +113,14 @@ Type:           regular
 
 Reclaimable:    4.453GB
 Total:          4.453GB
-```
 
-### <a name="builder"></a> Override the configured builder instance (--builder)
+.EE
 
-Use the `--builder` flag to inspect the disk usage of a particular builder.
+.SS Override the configured builder instance (--builder) {#builder}
+.PP
+Use the \fB--builder\fR flag to inspect the disk usage of a particular builder.
 
-```console
+.EX
 $ docker buildx du --builder youthful_shtern
 ID                                RECLAIMABLE    SIZE          LAST ACCESSED
 g41agepgdczekxg2mtw0dujsv*        true           1.312GB       47 hours ago
@@ -115,4 +142,13 @@ fkt31oiv793nd26h42llsjcw7*        true           11.87MB       2 days ago
 uj802yxtvkcjysnjb4kgwvn2v         true           11.68MB       45 hours ago
 Reclaimable:    2.627GB
 Total:          2.627GB
+
+.EE
+
+.PP
 ```
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP

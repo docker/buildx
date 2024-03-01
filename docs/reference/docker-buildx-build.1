@@ -1,0 +1,1085 @@
+.nh
+.TH "DOCKER-BUILDX-BUILD" "1" "Mar 2024" "" ""
+
+.SH NAME
+.PP
+docker-buildx-build - Start a build
+
+
+.SH SYNOPSIS
+.PP
+\fBdocker buildx build [OPTIONS] PATH | URL | -\fP
+
+
+.SH DESCRIPTION
+.PP
+The \fBbuildx build\fR command starts a build using BuildKit. This command is similar
+to the UI of \fBdocker build\fR command and takes the same flags and arguments.
+
+.PP
+For documentation on most of these flags, refer to the 
+\[la]/reference/cli/docker/image/build/\[ra]\&.
+This page describes a subset of the new flags.
+
+
+.SH OPTIONS
+.PP
+\fB--add-host\fP=[]
+	Add a custom host-to-IP mapping (format: "host:ip")
+
+.PP
+\fB--allow\fP=[]
+	Allow extra privileged entitlement (e.g., "network.host", "security.insecure")
+
+.PP
+\fB--annotation\fP=[]
+	Add annotation to the image
+
+.PP
+\fB--attest\fP=[]
+	Attestation parameters (format: "type=sbom,generator=image")
+
+.PP
+\fB--build-arg\fP=[]
+	Set build-time variables
+
+.PP
+\fB--build-context\fP=[]
+	Additional build contexts (e.g., name=path)
+
+.PP
+\fB--cache-from\fP=[]
+	External cache sources (e.g., "user/app:cache", "type=local,src=path/to/dir")
+
+.PP
+\fB--cache-to\fP=[]
+	Cache export destinations (e.g., "user/app:cache", "type=local,dest=path/to/dir")
+
+.PP
+\fB--cgroup-parent\fP=""
+	Set the parent cgroup for the "RUN" instructions during build
+
+.PP
+\fB--detach\fP[=false]
+	Detach buildx server (supported only on linux)
+
+.PP
+\fB-f\fP, \fB--file\fP=""
+	Name of the Dockerfile (default: "PATH/Dockerfile")
+
+.PP
+\fB-h\fP, \fB--help\fP[=false]
+	help for build
+
+.PP
+\fB--iidfile\fP=""
+	Write the image ID to the file
+
+.PP
+\fB--label\fP=[]
+	Set metadata for an image
+
+.PP
+\fB--load\fP[=false]
+	Shorthand for "--output=type=docker"
+
+.PP
+\fB--metadata-file\fP=""
+	Write build result metadata to the file
+
+.PP
+\fB--network\fP="default"
+	Set the networking mode for the "RUN" instructions during build
+
+.PP
+\fB--no-cache\fP[=false]
+	Do not use cache when building the image
+
+.PP
+\fB--no-cache-filter\fP=[]
+	Do not cache specified stages
+
+.PP
+\fB-o\fP, \fB--output\fP=[]
+	Output destination (format: "type=local,dest=path")
+
+.PP
+\fB--platform\fP=[]
+	Set target platform for build
+
+.PP
+\fB--print\fP=""
+	Print result of information request (e.g., outline, targets)
+
+.PP
+\fB--progress\fP="auto"
+	Set type of progress output ("auto", "plain", "tty"). Use plain to show container output
+
+.PP
+\fB--provenance\fP=""
+	Shorthand for "--attest=type=provenance"
+
+.PP
+\fB--pull\fP[=false]
+	Always attempt to pull all referenced images
+
+.PP
+\fB--push\fP[=false]
+	Shorthand for "--output=type=registry"
+
+.PP
+\fB-q\fP, \fB--quiet\fP[=false]
+	Suppress the build output and print image ID on success
+
+.PP
+\fB--root\fP=""
+	Specify root directory of server to connect
+
+.PP
+\fB--sbom\fP=""
+	Shorthand for "--attest=type=sbom"
+
+.PP
+\fB--secret\fP=[]
+	Secret to expose to the build (format: "id=mysecret[,src=/local/secret]")
+
+.PP
+\fB--server-config\fP=""
+	Specify buildx server config file (used only when launching new server)
+
+.PP
+\fB--shm-size\fP=0
+	Shared memory size for build containers
+
+.PP
+\fB--ssh\fP=[]
+	SSH agent socket or keys to expose to the build (format: "default|[=|[,]]")
+
+.PP
+\fB-t\fP, \fB--tag\fP=[]
+	Name and optionally a tag (format: "name:tag")
+
+.PP
+\fB--target\fP=""
+	Set the target build stage to build
+
+.PP
+\fB--ulimit\fP=[]
+	Ulimit options
+
+
+.SH OPTIONS INHERITED FROM PARENT COMMANDS
+.PP
+\fB--builder\fP=""
+	Override the configured builder instance
+
+
+.SH EXAMPLE
+.EX
+### Create annotations (--annotation) {#annotation}
+
+```text
+--annotation="key=value"
+--annotation="[type:]key=value"
+
+.EE
+
+.PP
+Add OCI annotations to the image index, manifest, or descriptor.
+The following example adds the \fBfoo=bar\fR annotation to the image manifests:
+
+.EX
+$ docker buildx build -t TAG --annotation "foo=bar" --push .
+
+.EE
+
+.PP
+You can optionally add a type prefix to specify the level of the annotation. By
+default, the image manifest is annotated. The following example adds the
+\fBfoo=bar\fR annotation the image index instead of the manifests:
+
+.EX
+$ docker buildx build -t TAG --annotation "index:foo=bar" --push .
+
+.EE
+
+.PP
+You can specify multiple types, separated by a comma (,) to add the annotation
+to multiple image components. The following example adds the \fBfoo=bar\fR
+annotation to image index, descriptors, manifests:
+
+.EX
+$ docker buildx build -t TAG --annotation "index,manifest,manifest-descriptor:foo=bar" --push .
+
+.EE
+
+.PP
+You can also specify a platform qualifier in square brackets (\fB[os/arch]\fR) in
+the type prefix, to apply the annotation to a subset of manifests with the
+matching platform. The following example adds the \fBfoo=bar\fR annotation only to
+the manifest with the \fBlinux/amd64\fR platform:
+
+.EX
+$ docker buildx build -t TAG --annotation "manifest[linux/amd64]:foo=bar" --push .
+
+.EE
+
+.PP
+Wildcards are not supported in the platform qualifier; you can't specify a type
+prefix like \fBmanifest[linux/*]\fR to add annotations only to manifests which has
+\fBlinux\fR as the OS platform.
+
+.PP
+For more information about annotations, see
+Annotations
+\[la]/build/building/annotations/\[ra]\&.
+
+.SS Create attestations (--attest) {#attest}
+.EX
+--attest=type=sbom,...
+--attest=type=provenance,...
+
+.EE
+
+.PP
+Create image attestations
+\[la]/build/attestations/\[ra]\&.
+BuildKit currently supports:
+
+.RS
+.IP \(bu 2
+\fBsbom\fR - Software Bill of Materials.
+
+.RE
+
+.PP
+Use \fB--attest=type=sbom\fR to generate an SBOM for an image at build-time.
+  Alternatively, you can use the 
+\[la]#sbom\[ra]\&.
+
+.PP
+For more information, see here
+\[la]/build/attestations/sbom/\[ra]\&.
+
+.RS
+.IP \(bu 2
+\fBprovenance\fR - SLSA Provenance
+
+.RE
+
+.PP
+Use \fB--attest=type=provenance\fR to generate provenance for an image at
+  build-time. Alternatively, you can use the 
+\[la]#provenance\[ra]\&.
+
+.PP
+By default, a minimal provenance attestation will be created for the build
+  result, which will only be attached for images pushed to registries.
+
+.PP
+For more information, see here
+\[la]/build/attestations/slsa\-provenance/\[ra]\&.
+
+.SS Allow extra privileged entitlement (--allow) {#allow}
+.EX
+--allow=ENTITLEMENT
+
+.EE
+
+.PP
+Allow extra privileged entitlement. List of entitlements:
+
+.RS
+.IP \(bu 2
+\fBnetwork.host\fR - Allows executions with host networking.
+.IP \(bu 2
+\fBsecurity.insecure\fR - Allows executions without sandbox. See
+related Dockerfile extensions
+\[la]/reference/dockerfile/#run\-\-\-securitysandbox\[ra]\&.
+
+.RE
+
+.PP
+For entitlements to be enabled, the BuildKit daemon also needs to allow them
+with \fB--allow-insecure-entitlement\fR (see 
+\[la]/reference/cli/docker/buildx/create/#buildkitd\-flags\[ra]).
+
+.EX
+$ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
+$ docker buildx build --allow security.insecure .
+
+.EE
+
+.SS Set build-time variables (--build-arg) {#build-arg}
+.PP
+Same as 
+\[la]/reference/cli/docker/image/build/#build\-arg\[ra]\&.
+
+.PP
+There are also useful built-in build arguments, such as:
+
+.RS
+.IP \(bu 2
+\fBBUILDKIT_CONTEXT_KEEP_GIT_DIR=<bool>\fR: trigger git context to keep the \fB\&.git\fR directory
+.IP \(bu 2
+\fBBUILDKIT_INLINE_CACHE=<bool>\fR: inline cache metadata to image config or not
+.IP \(bu 2
+\fBBUILDKIT_MULTI_PLATFORM=<bool>\fR: opt into deterministic output regardless of multi-platform output or not
+
+.RE
+
+.EX
+$ docker buildx build --build-arg BUILDKIT_MULTI_PLATFORM=1 .
+
+.EE
+
+.PP
+Learn more about the built-in build arguments in the Dockerfile reference docs
+\[la]/reference/dockerfile/#buildkit\-built\-in\-build\-args\[ra]\&.
+
+.SS Additional build contexts (--build-context) {#build-context}
+.EX
+--build-context=name=VALUE
+
+.EE
+
+.PP
+Define additional build context with specified contents. In Dockerfile the context can be accessed when \fBFROM name\fR or \fB--from=name\fR is used.
+When Dockerfile defines a stage with the same name it is overwritten.
+
+.PP
+The value can be a local source directory, local OCI layout compliant directory
+\[la]https://github.com/opencontainers/image\-spec/blob/main/image\-layout.md\[ra], container image (with docker-image:// prefix), Git or HTTP URL.
+
+.PP
+Replace \fBalpine:latest\fR with a pinned one:
+
+.EX
+$ docker buildx build --build-context alpine=docker-image://alpine@sha256:0123456789 .
+
+.EE
+
+.PP
+Expose a secondary local source directory:
+
+.EX
+$ docker buildx build --build-context project=path/to/project/source .
+# docker buildx build --build-context project=https://github.com/myuser/project.git .
+
+.EE
+
+.EX
+# syntax=docker/dockerfile:1
+FROM alpine
+COPY --from=project myfile /
+
+.EE
+
+.SS Use an OCI layout directory as build context {#source-oci-layout}
+.PP
+Source an image from a local OCI layout compliant directory
+\[la]https://github.com/opencontainers/image\-spec/blob/main/image\-layout.md\[ra],
+either by tag, or by digest:
+
+.EX
+$ docker buildx build --build-context foo=oci-layout:///path/to/local/layout:<tag>
+$ docker buildx build --build-context foo=oci-layout:///path/to/local/layout@sha256:<digest>
+
+.EE
+
+.EX
+# syntax=docker/dockerfile:1
+FROM alpine
+RUN apk add git
+COPY --from=foo myfile /
+
+FROM foo
+
+.EE
+
+.PP
+The OCI layout directory must be compliant with the OCI layout specification
+\[la]https://github.com/opencontainers/image\-spec/blob/main/image\-layout.md\[ra]\&.
+You can reference an image in the layout using either tags, or the exact digest.
+
+.SS Override the configured builder instance (--builder) {#builder}
+.PP
+Same as 
+\[la]/reference/cli/docker/buildx/#builder\[ra]\&.
+
+.SS Use an external cache source for a build (--cache-from) {#cache-from}
+.EX
+--cache-from=[NAME|type=TYPE[,KEY=VALUE]]
+
+.EE
+
+.PP
+Use an external cache source for a build. Supported types are \fBregistry\fR,
+\fBlocal\fR, \fBgha\fR and \fBs3\fR\&.
+
+.RS
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#registry\-push\-image\-and\-cache\-separately\[ra]
+can import cache from a cache manifest or (special) image configuration on the
+registry.
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#local\-directory\-1\[ra] can
+import cache from local files previously exported with \fB--cache-to\fR\&.
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#github\-actions\-cache\-experimental\[ra]
+can import cache from a previously exported cache with \fB--cache-to\fR in your
+GitHub repository
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#s3\-cache\-experimental\[ra]
+can import cache from a previously exported cache with \fB--cache-to\fR in your
+S3 bucket
+
+.RE
+
+.PP
+If no type is specified, \fBregistry\fR exporter is used with a specified reference.
+
+.PP
+\fBdocker\fR driver currently only supports importing build cache from the registry.
+
+.EX
+$ docker buildx build --cache-from=user/app:cache .
+$ docker buildx build --cache-from=user/app .
+$ docker buildx build --cache-from=type=registry,ref=user/app .
+$ docker buildx build --cache-from=type=local,src=path/to/cache .
+$ docker buildx build --cache-from=type=gha .
+$ docker buildx build --cache-from=type=s3,region=eu-west-1,bucket=mybucket .
+
+.EE
+
+.PP
+More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
+
+.SS Export build cache to an external cache destination (--cache-to) {#cache-to}
+.EX
+--cache-to=[NAME|type=TYPE[,KEY=VALUE]]
+
+.EE
+
+.PP
+Export build cache to an external cache destination. Supported types are
+\fBregistry\fR, \fBlocal\fR, \fBinline\fR, \fBgha\fR and \fBs3\fR\&.
+
+.RS
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#registry\-push\-image\-and\-cache\-separately\[ra] exports build cache to a cache manifest in the registry.
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#local\-directory\-1\[ra] exports
+cache to a local directory on the client.
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#inline\-push\-image\-and\-cache\-together\[ra]
+writes the cache metadata into the image configuration.
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#github\-actions\-cache\-experimental\[ra]
+exports cache through the GitHub Actions Cache service API
+\[la]https://github.com/tonistiigi/go\-actions\-cache/blob/master/api.md#authentication\[ra]\&.
+.IP \(bu 2
+
+\[la]https://github.com/moby/buildkit#s3\-cache\-experimental\[ra] exports
+cache to a S3 bucket.
+
+.RE
+
+.PP
+The \fBdocker\fR driver only supports cache exports using the \fBinline\fR and \fBlocal\fR
+cache backends.
+
+.PP
+Attribute key:
+
+.RS
+.IP \(bu 2
+\fBmode\fR - Specifies how many layers are exported with the cache. \fBmin\fR on only
+exports layers already in the final build stage, \fBmax\fR exports layers for
+all stages. Metadata is always exported for the whole build.
+
+.RE
+
+.EX
+$ docker buildx build --cache-to=user/app:cache .
+$ docker buildx build --cache-to=type=inline .
+$ docker buildx build --cache-to=type=registry,ref=user/app .
+$ docker buildx build --cache-to=type=local,dest=path/to/cache .
+$ docker buildx build --cache-to=type=gha .
+$ docker buildx build --cache-to=type=s3,region=eu-west-1,bucket=mybucket .
+
+.EE
+
+.PP
+More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
+
+.SS Load the single-platform build result to \fBdocker images\fR (--load) {#load}
+.PP
+Shorthand for 
+\[la]#docker\[ra]\&. Will automatically load the
+single-platform build result to \fBdocker images\fR\&.
+
+.SS Write build result metadata to the file (--metadata-file) {#metadata-file}
+.PP
+To output build metadata such as the image digest, pass the \fB--metadata-file\fR flag.
+The metadata will be written as a JSON object to the specified file. The
+directory of the specified file must already exist and be writable.
+
+.EX
+$ docker buildx build --load --metadata-file metadata.json .
+$ cat metadata.json
+
+.EE
+
+.EX
+{
+  "buildx.build.ref": "mybuilder/mybuilder0/0fjb6ubs52xx3vygf6fgdl611",
+  "containerimage.config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
+  "containerimage.descriptor": {
+    "annotations": {
+      "config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
+      "org.opencontainers.image.created": "2022-02-08T21:28:03Z"
+    },
+    "digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3",
+    "mediaType": "application/vnd.oci.image.manifest.v1+json",
+    "size": 506
+  },
+  "containerimage.digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3"
+}
+
+.EE
+
+.SS Ignore build cache for specific stages (--no-cache-filter) {#no-cache-filter}
+.PP
+The \fB--no-cache-filter\fR lets you specify one or more stages of a multi-stage
+Dockerfile for which build cache should be ignored. To specify multiple stages,
+use a comma-separated syntax:
+
+.EX
+$ docker buildx build --no-cache-filter stage1,stage2,stage3 .
+
+.EE
+
+.PP
+For example, the following Dockerfile contains four stages:
+
+.RS
+.IP \(bu 2
+\fBbase\fR
+.IP \(bu 2
+\fBinstall\fR
+.IP \(bu 2
+\fBtest\fR
+.IP \(bu 2
+\fBrelease\fR
+
+.RE
+
+.EX
+# syntax=docker/dockerfile:1
+
+FROM oven/bun:1 as base
+WORKDIR /app
+
+FROM base AS install
+WORKDIR /temp/dev
+RUN --mount=type=bind,source=package.json,target=package.json \\
+    --mount=type=bind,source=bun.lockb,target=bun.lockb \\
+    bun install --frozen-lockfile
+
+FROM base AS test
+COPY --from=install /temp/dev/node_modules node_modules
+COPY . .
+RUN bun test
+
+FROM base AS release
+ENV NODE_ENV=production
+COPY --from=install /temp/dev/node_modules node_modules
+COPY . .
+ENTRYPOINT ["bun", "run", "index.js"]
+
+.EE
+
+.PP
+To ignore the cache for the \fBinstall\fR stage:
+
+.EX
+$ docker buildx build --no-cache-filter install .
+
+.EE
+
+.PP
+To ignore the cache the \fBinstall\fR and \fBrelease\fR stages:
+
+.EX
+$ docker buildx build --no-cache-filter install,release .
+
+.EE
+
+.PP
+The arguments for the \fB--no-cache-filter\fR flag must be names of stages.
+
+.SS Set the export action for the build result (-o, --output) {#output}
+.EX
+-o, --output=[PATH,-,type=TYPE[,KEY=VALUE]
+
+.EE
+
+.PP
+Sets the export action for the build result. In \fBdocker build\fR all builds finish
+by creating a container image and exporting it to \fBdocker images\fR\&. \fBbuildx\fR makes
+this step configurable allowing results to be exported directly to the client,
+OCI image tarballs, registry etc.
+
+.PP
+Buildx with \fBdocker\fR driver currently only supports local, tarball exporter and
+image exporter. \fBdocker-container\fR driver supports all the exporters.
+
+.PP
+If just the path is specified as a value, \fBbuildx\fR will use the local exporter
+with this path as the destination. If the value is "-", \fBbuildx\fR will use \fBtar\fR
+exporter and write to \fBstdout\fR\&.
+
+.EX
+$ docker buildx build -o . .
+$ docker buildx build -o outdir .
+$ docker buildx build -o - - > out.tar
+$ docker buildx build -o type=docker .
+$ docker buildx build -o type=docker,dest=- . > myimage.tar
+$ docker buildx build -t tonistiigi/foo -o type=registry
+
+.EE
+
+.PP
+.RS
+
+.PP
+**Note **
+
+.PP
+Since BuildKit v0.13.0 multiple outputs can be specified by repeating the flag.
+
+.RE
+
+.PP
+Supported exported types are:
+
+.SS \fBlocal\fR
+.PP
+The \fBlocal\fR export type writes all result files to a directory on the client. The
+new files will be owned by the current user. On multi-platform builds, all results
+will be put in subdirectories by their platform.
+
+.PP
+Attribute key:
+
+.RS
+.IP \(bu 2
+\fBdest\fR - destination directory where files will be written
+
+.RE
+
+.SS \fBtar\fR
+.PP
+The \fBtar\fR export type writes all result files as a single tarball on the client.
+On multi-platform builds all results will be put in subdirectories by their platform.
+
+.PP
+Attribute key:
+
+.RS
+.IP \(bu 2
+\fBdest\fR - destination path where tarball will be written. “-” writes to stdout.
+
+.RE
+
+.SS \fBoci\fR
+.PP
+The \fBoci\fR export type writes the result image or manifest list as an OCI image
+layout
+\[la]https://github.com/opencontainers/image\-spec/blob/v1.0.1/image\-layout.md\[ra]
+tarball on the client.
+
+.PP
+Attribute key:
+
+.RS
+.IP \(bu 2
+\fBdest\fR - destination path where tarball will be written. “-” writes to stdout.
+
+.RE
+
+.SS \fBdocker\fR
+.PP
+The \fBdocker\fR export type writes the single-platform result image as a Docker image
+specification
+\[la]https://github.com/docker/docker/blob/v20.10.2/image/spec/v1.2.md\[ra]
+tarball on the client. Tarballs created by this exporter are also OCI compatible.
+
+.PP
+The default image store in Docker Engine doesn't support loading multi-platform
+images. You can enable the containerd image store, or push multi-platform images
+is to directly push to a registry, see 
+\[la]#registry\[ra]\&.
+
+.PP
+Attribute keys:
+
+.RS
+.IP \(bu 2
+\fBdest\fR - destination path where tarball will be written. If not specified,
+the tar will be loaded automatically to the local image store.
+.IP \(bu 2
+\fBcontext\fR - name for the Docker context where to import the result
+
+.RE
+
+.SS \fBimage\fR
+.PP
+The \fBimage\fR exporter writes the build result as an image or a manifest list. When
+using \fBdocker\fR driver the image will appear in \fBdocker images\fR\&. Optionally, image
+can be automatically pushed to a registry by specifying attributes.
+
+.PP
+Attribute keys:
+
+.RS
+.IP \(bu 2
+\fBname\fR - name (references) for the new image.
+.IP \(bu 2
+\fBpush\fR - Boolean to automatically push the image.
+
+.RE
+
+.SS \fBregistry\fR
+.PP
+The \fBregistry\fR exporter is a shortcut for \fBtype=image,push=true\fR\&.
+
+.SS Set the target platforms for the build (--platform) {#platform}
+.EX
+--platform=value[,value]
+
+.EE
+
+.PP
+Set the target platform for the build. All \fBFROM\fR commands inside the Dockerfile
+without their own \fB--platform\fR flag will pull base images for this platform and
+this value will also be the platform of the resulting image.
+
+.PP
+The default value is the platform of the BuildKit daemon where the build runs.
+The value takes the form of \fBos/arch\fR or \fBos/arch/variant\fR\&. For example,
+\fBlinux/amd64\fR or \fBlinux/arm/v7\fR\&. Additionally, the \fB--platform\fR flag also supports
+a special \fBlocal\fR value, which tells BuildKit to use the platform of the BuildKit
+client that invokes the build.
+
+.PP
+When using \fBdocker-container\fR driver with \fBbuildx\fR, this flag can accept multiple
+values as an input separated by a comma. With multiple values the result will be
+built for all of the specified platforms and joined together into a single manifest
+list.
+
+.PP
+If the \fBDockerfile\fR needs to invoke the \fBRUN\fR command, the builder needs runtime
+support for the specified platform. In a clean setup, you can only execute \fBRUN\fR
+commands for your system architecture.
+If your kernel supports 
+\[la]https://en.wikipedia.org/wiki/Binfmt_misc\[ra]
+launchers for secondary architectures, buildx will pick them up automatically.
+Docker desktop releases come with \fBbinfmt_misc\fR automatically configured for \fBarm64\fR
+and \fBarm\fR architectures. You can see what runtime platforms your current builder
+instance supports by running \fBdocker buildx inspect --bootstrap\fR\&.
+
+.PP
+Inside a \fBDockerfile\fR, you can access the current platform value through
+\fBTARGETPLATFORM\fR build argument. Refer to the 
+\[la]/reference/dockerfile/#automatic\-platform\-args\-in\-the\-global\-scope\[ra]
+for the full description of automatic platform argument variants .
+
+.PP
+You can find the formatting definition for the platform specifier in the
+containerd source code
+\[la]https://github.com/containerd/containerd/blob/v1.4.3/platforms/platforms.go#L63\[ra]\&.
+
+.EX
+$ docker buildx build --platform=linux/arm64 .
+$ docker buildx build --platform=linux/amd64,linux/arm64,linux/arm/v7 .
+$ docker buildx build --platform=darwin .
+
+.EE
+
+.SS Set type of progress output (--progress) {#progress}
+.EX
+--progress=VALUE
+
+.EE
+
+.PP
+Set type of progress output (\fBauto\fR, \fBplain\fR, \fBtty\fR). Use plain to show container
+output (default "auto").
+
+.PP
+.RS
+
+.PP
+\fBNote\fP
+
+.PP
+You can also use the \fBBUILDKIT_PROGRESS\fR environment variable to set its value.
+
+.RE
+
+.PP
+The following example uses \fBplain\fR output during the build:
+
+.EX
+$ docker buildx build --load --progress=plain .
+
+#1 [internal] load build definition from Dockerfile
+#1 transferring dockerfile: 227B 0.0s done
+#1 DONE 0.1s
+
+#2 [internal] load .dockerignore
+#2 transferring context: 129B 0.0s done
+#2 DONE 0.0s
+...
+
+.EE
+
+.PP
+.RS
+
+.PP
+\fBNote\fP
+
+.PP
+Check also our Color output controls guide
+\[la]https://github.com/docker/buildx/blob/master/docs/guides/color\-output.md\[ra]
+for modifying the colors that are used to output information to the terminal.
+
+.RE
+
+.SS Create provenance attestations (--provenance) {#provenance}
+.PP
+Shorthand for 
+\[la]#attest\[ra], used to configure
+provenance attestations for the build result. For example,
+\fB--provenance=mode=max\fR can be used as an abbreviation for
+\fB--attest=type=provenance,mode=max\fR\&.
+
+.PP
+Additionally, \fB--provenance\fR can be used with Boolean values to enable or disable
+provenance attestations. For example, \fB--provenance=false\fR disables all provenance attestations,
+while \fB--provenance=true\fR enables all provenance attestations.
+
+.PP
+By default, a minimal provenance attestation will be created for the build
+result. Note that the default image store in Docker Engine doesn't support
+attestations. Provenance attestations only persist for images pushed directly
+to a registry if you use the default image store. Alternatively, you can switch
+to using the containerd image store.
+
+.PP
+For more information about provenance attestations, see
+here
+\[la]/build/attestations/slsa\-provenance/\[ra]\&.
+
+.SS Push the build result to a registry (--push) {#push}
+.PP
+Shorthand for 
+\[la]#registry\[ra]\&. Will automatically push the
+build result to registry.
+
+.SS Create SBOM attestations (--sbom) {#sbom}
+.PP
+Shorthand for 
+\[la]#attest\[ra], used to configure SBOM
+attestations for the build result. For example,
+\fB--sbom=generator=<user>/<generator-image>\fR can be used as an abbreviation for
+\fB--attest=type=sbom,generator=<user>/<generator-image>\fR\&.
+
+.PP
+Additionally, \fB--sbom\fR can be used with Boolean values to enable or disable
+SBOM attestations. For example, \fB--sbom=false\fR disables all SBOM attestations.
+
+.PP
+Note that the default image store in Docker Engine doesn't support
+attestations. Provenance attestations only persist for images pushed directly
+to a registry if you use the default image store. Alternatively, you can switch
+to using the containerd image store.
+
+.PP
+For more information, see here
+\[la]/build/attestations/sbom/\[ra]\&.
+
+.SS Secret to expose to the build (--secret) {#secret}
+.EX
+--secret=[type=TYPE[,KEY=VALUE]
+
+.EE
+
+.PP
+Exposes secret to the build. The secret can be used by the build using
+
+\[la]/reference/dockerfile/#run\-\-\-mounttypesecret\[ra]\&.
+
+.PP
+If \fBtype\fR is unset it will be detected. Supported types are:
+
+.SS \fBfile\fR
+.PP
+Attribute keys:
+
+.RS
+.IP \(bu 2
+\fBid\fR - ID of the secret. Defaults to base name of the \fBsrc\fR path.
+.IP \(bu 2
+\fBsrc\fR, \fBsource\fR - Secret filename. \fBid\fR used if unset.
+
+.RE
+
+.EX
+# syntax=docker/dockerfile:1
+FROM python:3
+RUN pip install awscli
+RUN --mount=type=secret,id=aws,target=/root/.aws/credentials \\
+  aws s3 cp s3://... ...
+
+.EE
+
+.EX
+$ docker buildx build --secret id=aws,src=$HOME/.aws/credentials .
+
+.EE
+
+.SS \fBenv\fR
+.PP
+Attribute keys:
+
+.RS
+.IP \(bu 2
+\fBid\fR - ID of the secret. Defaults to \fBenv\fR name.
+.IP \(bu 2
+\fBenv\fR - Secret environment variable. \fBid\fR used if unset, otherwise will look for \fBsrc\fR, \fBsource\fR if \fBid\fR unset.
+
+.RE
+
+.EX
+# syntax=docker/dockerfile:1
+FROM node:alpine
+RUN --mount=type=bind,target=. \\
+  --mount=type=secret,id=SECRET_TOKEN \\
+  SECRET_TOKEN=$(cat /run/secrets/SECRET_TOKEN) yarn run test
+
+.EE
+
+.EX
+$ SECRET_TOKEN=token docker buildx build --secret id=SECRET_TOKEN .
+
+.EE
+
+.SS Shared memory size for build containers (--shm-size) {#shm-size}
+.PP
+Sets the size of the shared memory allocated for build containers when using
+\fBRUN\fR instructions.
+
+.PP
+The format is \fB<number><unit>\fR\&. \fBnumber\fR must be greater than \fB0\fR\&. Unit is
+optional and can be \fBb\fR (bytes), \fBk\fR (kilobytes), \fBm\fR (megabytes), or \fBg\fR
+(gigabytes). If you omit the unit, the system uses bytes.
+
+.PP
+.RS
+
+.PP
+\fBNote\fP
+
+.PP
+In most cases, it is recommended to let the builder automatically determine
+the appropriate configurations. Manual adjustments should only be considered
+when specific performance tuning is required for complex build scenarios.
+
+.RE
+
+.SS SSH agent socket or keys to expose to the build (--ssh) {#ssh}
+.EX
+--ssh=default|<id>[=<socket>|<key>[,<key>]]
+
+.EE
+
+.PP
+This can be useful when some commands in your Dockerfile need specific SSH
+authentication (e.g., cloning a private repository).
+
+.PP
+\fB--ssh\fR exposes SSH agent socket or keys to the build and can be used with the
+
+\[la]/reference/dockerfile/#run\-\-\-mounttypessh\[ra]\&.
+
+.PP
+Example to access Gitlab using an SSH agent socket:
+
+.EX
+# syntax=docker/dockerfile:1
+FROM alpine
+RUN apk add --no-cache openssh-client
+RUN mkdir -p -m 0700 ~/.ssh && ssh-keyscan gitlab.com >> ~/.ssh/known_hosts
+RUN --mount=type=ssh ssh -q -T git@gitlab.com 2>&1 | tee /hello
+# "Welcome to GitLab, @GITLAB_USERNAME_ASSOCIATED_WITH_SSHKEY" should be printed here
+# with the type of build progress is defined as `plain`.
+
+.EE
+
+.EX
+$ eval $(ssh-agent)
+$ ssh-add ~/.ssh/id_rsa
+(Input your passphrase here)
+$ docker buildx build --ssh default=$SSH_AUTH_SOCK .
+
+.EE
+
+.SS Set ulimits (--ulimit) {#ulimit}
+.PP
+\fB--ulimit\fR overrides the default ulimits of build's containers when using \fBRUN\fR
+instructions and are specified with a soft and hard limit as such:
+\fB<type>=<soft limit>[:<hard limit>]\fR, for example:
+
+.EX
+$ docker buildx build --ulimit nofile=1024:1024 .
+
+.EE
+
+.PP
+.RS
+
+.PP
+\fBNote\fP
+
+.PP
+If you don't provide a \fBhard limit\fR, the \fBsoft limit\fR is used
+for both values. If no \fBulimits\fR are set, they're inherited from
+the default \fBulimits\fR set on the daemon.
+
+.PP
+\fBNote\fP
+
+.PP
+In most cases, it is recommended to let the builder automatically determine
+the appropriate configurations. Manual adjustments should only be considered
+when specific performance tuning is required for complex build scenarios.
+```
+
+
+.SH SEE ALSO
+.PP
+\fBdocker-buildx(1)\fP
+
+.RE
