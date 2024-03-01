@@ -3,7 +3,7 @@
 set -eu -o pipefail
 
 : "${BUILDX_CMD=docker buildx}"
-: "${FORMATS=md}"
+: "${FORMATS=md,yaml,man}"
 
 output=$(mktemp -d -t buildx-output.XXXXXXXXXX)
 (set -x ; DOCS_FORMATS=$FORMATS ${BUILDX_CMD} bake --set "*.output=$output" update-docs)

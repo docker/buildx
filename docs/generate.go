@@ -85,6 +85,10 @@ func gen(opts *options) error {
 			if err = c.GenYamlTree(cmd); err != nil {
 				return err
 			}
+		case "man":
+			if err = c.GenManTree(cmd); err != nil {
+				return err
+			}
 		default:
 			return errors.Errorf("unknown format %q", format)
 		}
@@ -97,7 +101,7 @@ func run() error {
 	opts := &options{}
 	flags := pflag.NewFlagSet(os.Args[0], pflag.ContinueOnError)
 	flags.StringVar(&opts.source, "source", defaultSourcePath, "Docs source folder")
-	flags.StringSliceVar(&opts.formats, "formats", []string{}, "Format (md, yaml)")
+	flags.StringSliceVar(&opts.formats, "formats", []string{}, "Format (md, yaml, man)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		return err
 	}

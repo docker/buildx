@@ -78,7 +78,7 @@ type cmdDoc struct {
 // it is undefined which help output will be in the file `cmd-sub-third.1`.
 func (c *Client) GenYamlTree(cmd *cobra.Command) error {
 	emptyStr := func(s string) string { return "" }
-	if err := c.loadLongDescription(cmd); err != nil {
+	if err := c.loadLongDescription(cmd, "yaml"); err != nil {
 		return err
 	}
 	return c.genYamlTreeCustom(cmd, emptyStr)
@@ -369,63 +369,6 @@ func hasSeeAlso(cmd *cobra.Command) bool {
 		return true
 	}
 	return false
-}
-
-// loadLongDescription gets long descriptions and examples from markdown.
-func (c *Client) loadLongDescription(parentCmd *cobra.Command) error {
-	for _, cmd := range parentCmd.Commands() {
-		if cmd.HasSubCommands() {
-			if err := c.loadLongDescription(cmd); err != nil {
-				return err
-			}
-		}
-		name := cmd.CommandPath()
-		if i := strings.Index(name, " "); i >= 0 {
-			// remove root command / binary name
-			name = name[i+1:]
-		}
-		if name == "" {
-			continue
-		}
-		mdFile := strings.ReplaceAll(name, " ", "_") + ".md"
-		sourcePath := filepath.Join(c.source, mdFile)
-		content, err := os.ReadFile(sourcePath)
-		if os.IsNotExist(err) {
-			log.Printf("WARN: %s does not exist, skipping Markdown examples for YAML doc\n", mdFile)
-			continue
-		}
-		if err != nil {
-			return err
-		}
-		applyDescriptionAndExamples(cmd, string(content))
-	}
-	return nil
-}
-
-// applyDescriptionAndExamples fills in cmd.Long and cmd.Example with the
-// "Description" and "Examples" H2 sections in  mdString (if present).
-func applyDescriptionAndExamples(cmd *cobra.Command, mdString string) {
-	sections := getSections(mdString)
-	var (
-		anchors []string
-		md      string
-	)
-	if sections["description"] != "" {
-		md, anchors = cleanupMarkDown(sections["description"])
-		cmd.Long = md
-		anchors = append(anchors, md)
-	}
-	if sections["examples"] != "" {
-		md, anchors = cleanupMarkDown(sections["examples"])
-		cmd.Example = md
-		anchors = append(anchors, md)
-	}
-	if len(anchors) > 0 {
-		if cmd.Annotations == nil {
-			cmd.Annotations = make(map[string]string)
-		}
-		cmd.Annotations["anchors"] = strings.Join(anchors, ",")
-	}
 }
 
 type byName []*cobra.Command
