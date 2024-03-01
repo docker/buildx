@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/containerd/remotes"
 	"github.com/distribution/reference"
+	intoto "github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/opencontainers/go-digest"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
@@ -292,7 +293,7 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 			}
 			for _, layer := range mfst.manifest.Layers {
 				if (layer.MediaType == inTotoGenericMime || isInTotoDSSE(layer.MediaType)) &&
-					layer.Annotations["in-toto.io/predicate-type"] == "https://spdx.dev/Document" {
+					layer.Annotations["in-toto.io/predicate-type"] == intoto.PredicateSPDX {
 					_, err := remotes.FetchHandler(l.cache, fetcher)(ctx, layer)
 					if err != nil {
 						return nil, err
