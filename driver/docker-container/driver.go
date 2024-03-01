@@ -20,6 +20,7 @@ import (
 	"github.com/docker/cli/opts"
 	dockertypes "github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/system"
@@ -95,7 +96,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, dockertypes.ImageCreateOptions{
+		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, imagetypes.CreateOptions{
 			RegistryAuth: ra,
 		})
 		if err != nil {
