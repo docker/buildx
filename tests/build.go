@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/creack/pty"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/appdefaults"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
@@ -54,6 +55,8 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildShmSize,
 	testBuildUlimit,
 	testBuildRef,
+	testBuildMultiExporters,
+	testBuildLoadPush,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -437,7 +440,7 @@ func testBuildNetworkModeBridge(t *testing.T, sb integration.Sandbox) {
 	})
 
 	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--buildkitd-flags=--oci-worker-net=bridge --allow-insecure-entitlement=network.host", "--driver-opt", "image=moby/buildkit:master"))
+	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--buildkitd-flags=--oci-worker-net=bridge --allow-insecure-entitlement=network.host", "--driver-opt", "image=moby/buildkit:v0.13.0-rc3"))
 	require.NoError(t, err, out)
 	builderName = strings.TrimSpace(out)
 
@@ -540,6 +543,136 @@ func testBuildRef(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 
 	require.NotEmpty(t, md.BuildRef)
+}
+
+func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	targetReg := registry + "/buildx/registry:latest"
+	targetStore := "buildx:local-" + identity.NewID()
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+
+		cmd := dockerCmd(sb, withArgs("image", "rm", targetStore))
+		cmd.Stderr = os.Stderr
+		require.NoError(t, cmd.Run())
+
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	// TODO: use stable buildkit image when v0.13.0 released
+	out, err := createCmd(sb, withArgs(
+		"--driver", "docker-container",
+		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
+		"--driver-opt", "network=host",
+		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
+	))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	dir := createTestProject(t)
+
+	outputs := []string{
+		"--output", fmt.Sprintf("type=image,name=%s,push=true", targetReg),
+		"--output", fmt.Sprintf("type=docker,name=%s", targetStore),
+		"--output", fmt.Sprintf("type=oci,dest=%s/result", dir),
+	}
+	cmd := buildxCmd(sb, withArgs("build"), withArgs(outputs...), withArgs(dir))
+	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+	outb, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(outb))
+
+	// test registry
+	desc, provider, err := contentutil.ProviderFromRef(targetReg)
+	require.NoError(t, err)
+	_, err = testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+
+	// test docker store
+	cmd = dockerCmd(sb, withArgs("image", "inspect", targetStore))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	// test oci
+	_, err = os.ReadFile(fmt.Sprintf("%s/result", dir))
+	require.NoError(t, err)
+
+	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
+}
+
+func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	target := registry + "/buildx/registry:" + identity.NewID()
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+
+		cmd := dockerCmd(sb, withArgs("image", "rm", target))
+		cmd.Stderr = os.Stderr
+		require.NoError(t, cmd.Run())
+
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	// TODO: use stable buildkit image when v0.13.0 released
+	out, err := createCmd(sb, withArgs(
+		"--driver", "docker-container",
+		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
+		"--driver-opt", "network=host",
+		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
+	))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	dir := createTestProject(t)
+
+	cmd := buildxCmd(sb, withArgs(
+		"build", "--push", "--load",
+		fmt.Sprintf("-t=%s", target),
+		dir,
+	))
+	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+	outb, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(outb))
+
+	// test registry
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+	_, err = testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+
+	// test docker store
+	cmd = dockerCmd(sb, withArgs("image", "inspect", target))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
 }
 
 func createTestProject(t *testing.T) string {
