@@ -2,13 +2,19 @@ package tests
 
 import (
 	"encoding/json"
+	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/util/gitutil"
+	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/util/contentutil"
+	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -36,6 +42,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeShmSize,
 	testBakeUlimits,
 	testBakeRefs,
+	testBakeMultiExporters,
+	testBakeLoadPush,
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -630,4 +638,156 @@ target "default" {
 	require.NoError(t, err)
 
 	require.NotEmpty(t, md.Default.BuildRef)
+}
+
+func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	targetReg := registry + "/buildx/registry:latest"
+	targetStore := "buildx:local-" + identity.NewID()
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+
+		cmd := dockerCmd(sb, withArgs("image", "rm", targetStore))
+		cmd.Stderr = os.Stderr
+		require.NoError(t, cmd.Run())
+
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	// TODO: use stable buildkit image when v0.13.0 released
+	out, err := createCmd(sb, withArgs(
+		"--driver", "docker-container",
+		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
+		"--driver-opt", "network=host",
+		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
+	))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+	bakefile := []byte(`
+target "default" {
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	outputs := []string{
+		"--set", fmt.Sprintf("*.output=type=image,name=%s,push=true", targetReg),
+		"--set", fmt.Sprintf("*.output=type=docker,name=%s", targetStore),
+		"--set", fmt.Sprintf("*.output=type=oci,dest=%s/result", dir),
+	}
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake"), withArgs(outputs...))
+	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+	outb, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(outb))
+
+	// test registry
+	desc, provider, err := contentutil.ProviderFromRef(targetReg)
+	require.NoError(t, err)
+	_, err = testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+
+	// test docker store
+	cmd = dockerCmd(sb, withArgs("image", "inspect", targetStore))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	// test oci
+	_, err = os.ReadFile(fmt.Sprintf("%s/result", dir))
+	require.NoError(t, err)
+
+	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
+}
+
+func testBakeLoadPush(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	target := registry + "/buildx/registry:" + identity.NewID()
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+
+		cmd := dockerCmd(sb, withArgs("image", "rm", target))
+		cmd.Stderr = os.Stderr
+		require.NoError(t, cmd.Run())
+
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	// TODO: use stable buildkit image when v0.13.0 released
+	out, err := createCmd(sb, withArgs(
+		"--driver", "docker-container",
+		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
+		"--driver-opt", "network=host",
+		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
+	))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+	bakefile := []byte(`
+target "default" {
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--push", "--load", fmt.Sprintf("--set=*.tags=%s", target)))
+	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+	outb, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(outb))
+
+	// test registry
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+	_, err = testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+
+	// test docker store
+	cmd = dockerCmd(sb, withArgs("image", "inspect", target))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
 }
