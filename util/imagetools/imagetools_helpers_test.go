@@ -3,6 +3,7 @@ package imagetools
 import (
 	"context"
 	"encoding/base64"
+	"encoding/json"
 	"fmt"
 	"io"
 	"strings"
@@ -31,13 +32,27 @@ type mockResolver struct {
 	pusher  remotes.Pusher
 }
 
+var manifests = make(map[digest.Digest]manifest)
+var indexes = make(map[digest.Digest]index)
+
 func (f mockFetcher) Fetch(ctx context.Context, desc ocispec.Descriptor) (io.ReadCloser, error) {
-	reader := io.NopCloser(strings.NewReader(desc.Annotations["test_content"]))
-	return reader, nil
+	switch desc.MediaType {
+	case ocispec.MediaTypeImageIndex:
+		reader := io.NopCloser(strings.NewReader(indexes[desc.Digest].desc.Annotations["test_content"]))
+		return reader, nil
+	case ocispec.MediaTypeImageManifest:
+		reader := io.NopCloser(strings.NewReader(manifests[desc.Digest].desc.Annotations["test_content"]))
+		return reader, nil
+	default:
+		reader := io.NopCloser(strings.NewReader(desc.Annotations["test_content"]))
+		return reader, nil
+	}
+
 }
 
 func (r mockResolver) Resolve(ctx context.Context, ref string) (name string, desc ocispec.Descriptor, err error) {
-	return "", ocispec.Descriptor{}, nil
+	d := digest.Digest(strings.ReplaceAll(ref, "docker.io/library/test@", ""))
+	return string(d), indexes[d].desc, nil
 }
 
 func (r mockResolver) Fetcher(ctx context.Context, ref string) (remotes.Fetcher, error) {
@@ -57,84 +72,213 @@ func getMockResolver() remotes.Resolver {
 }
 
 func getImageNoAttestation() *result {
-	r := &result{
-		indexes:   make(map[digest.Digest]index),
-		manifests: make(map[digest.Digest]manifest),
-		images:    make(map[string]digest.Digest),
-		refs:      make(map[digest.Digest][]digest.Digest),
-		assets:    make(map[string]asset),
-	}
-
-	r.images["linux/amd64"] = "sha256:linux/amd64"
-	r.images["linux/arm64"] = "sha256:linux/arm64"
-
-	r.manifests["sha256:linux/amd64-manifest"] = manifest{
-		desc: ocispec.Descriptor{
-			MediaType: v1.MediaTypeImageManifest,
-			Digest:    "sha256:linux/amd64-manifest",
-			Platform: &v1.Platform{
-				Architecture: "amd64",
-				OS:           "linux",
-			},
-		},
-		manifest: ocispec.Manifest{
-			MediaType: v1.MediaTypeImageManifest,
-			Layers: []v1.Descriptor{
-				{
-					MediaType: v1.MediaTypeImageLayerGzip,
-					Digest:    "sha256:linux/amd64-content",
-					Size:      1234,
-				},
-			},
-		},
-	}
-	r.manifests["sha256:linux/arm64-manifest"] = manifest{
-		desc: ocispec.Descriptor{
-			MediaType: v1.MediaTypeImageManifest,
-			Digest:    "sha256:linux/arm64-manifest",
-			Platform: &v1.Platform{
-				Architecture: "arm64",
-				OS:           "linux",
-			},
-		},
-		manifest: ocispec.Manifest{
-			MediaType: v1.MediaTypeImageManifest,
-			Layers: []v1.Descriptor{
-				{
-					MediaType: v1.MediaTypeImageLayerGzip,
-					Digest:    "sha256:linux/arm64-content",
-					Size:      1234,
-				},
-			},
-		},
-	}
-
-	return r
+	return getImageFromManifests(getBaseManifests())
 }
 
 func getImageWithAttestation(t attestationType) *result {
-	r := getImageNoAttestation()
+	manifestList := getBaseManifests()
 
-	r.manifests["sha256:linux/amd64-attestation"] = manifest{
+	objManifest := ocispec.Manifest{
+		MediaType: v1.MediaTypeImageManifest,
+		Layers:    getAttestationLayers(t),
+		Annotations: map[string]string{
+			"platform": "linux/amd64",
+		},
+	}
+	jsonContent, _ := json.Marshal(objManifest)
+	jsonString := string(jsonContent)
+	d := digest.FromString(jsonString)
+
+	manifestList[d] = manifest{
 		desc: ocispec.Descriptor{
 			MediaType: v1.MediaTypeImageManifest,
-			Digest:    "sha256:linux/amd64-attestation",
+			Digest:    d,
+			Size:      int64(len(jsonString)),
 			Annotations: map[string]string{
-				"vnd.docker.reference.digest": "sha256:linux/amd64",
+				"vnd.docker.reference.digest": string(getManifestDigestForArch(manifestList, "linux", "amd64")),
 				"vnd.docker.reference.type":   "attestation-manifest",
+				"test_content":                jsonString,
 			},
 			Platform: &v1.Platform{
 				Architecture: "unknown",
 				OS:           "unknown",
 			},
 		},
-		manifest: ocispec.Manifest{
+		manifest: objManifest,
+	}
+
+	objManifest = ocispec.Manifest{
+		MediaType: v1.MediaTypeImageManifest,
+		Layers:    getAttestationLayers(t),
+		Annotations: map[string]string{
+			"platform": "linux/arm64",
+		},
+	}
+	jsonContent, _ = json.Marshal(objManifest)
+	jsonString = string(jsonContent)
+	d = digest.FromString(jsonString)
+	manifestList[d] = manifest{
+		desc: ocispec.Descriptor{
 			MediaType: v1.MediaTypeImageManifest,
-			Layers:    getAttestationLayers(t),
+			Digest:    d,
+			Size:      int64(len(jsonString)),
+			Annotations: map[string]string{
+				"vnd.docker.reference.digest": string(getManifestDigestForArch(manifestList, "linux", "arm64")),
+				"vnd.docker.reference.type":   "attestation-manifest",
+				"test_content":                jsonString,
+			},
+			Platform: &v1.Platform{
+				Architecture: "unknown",
+				OS:           "unknown",
+			},
 		},
 	}
 
+	return getImageFromManifests(manifestList)
+}
+
+func getImageFromManifests(manifests map[digest.Digest]manifest) *result {
+	r := &result{
+		indexes:   make(map[digest.Digest]index),
+		manifests: manifests,
+		images:    make(map[string]digest.Digest),
+		refs:      make(map[digest.Digest][]digest.Digest),
+		assets:    make(map[string]asset),
+	}
+
+	r.images["linux/amd64"] = getManifestDigestForArch(manifests, "linux", "amd64")
+	r.images["linux/arm64"] = getManifestDigestForArch(manifests, "linux", "arm64")
+
+	manifestsDesc := []v1.Descriptor{}
+	for _, val := range manifests {
+		manifestsDesc = append(manifestsDesc, val.desc)
+	}
+
+	objIndex := v1.Index{
+		MediaType: v1.MediaTypeImageIndex,
+		Manifests: manifestsDesc,
+	}
+	jsonContent, _ := json.Marshal(objIndex)
+	jsonString := string(jsonContent)
+	d := digest.FromString(jsonString)
+
+	if _, ok := indexes[d]; !ok {
+		indexes[d] = index{
+			desc: ocispec.Descriptor{
+				MediaType: v1.MediaTypeImageIndex,
+				Digest:    d,
+				Size:      int64(len(jsonString)),
+				Annotations: map[string]string{
+					"test_content": jsonString,
+				},
+			},
+			index: objIndex,
+		}
+	}
+
+	r.indexes[d] = indexes[d]
 	return r
+}
+
+func getManifestDigestForArch(manifests map[digest.Digest]manifest, os string, arch string) digest.Digest {
+	for d, m := range manifests {
+		if m.desc.Platform.OS == os && m.desc.Platform.Architecture == arch {
+			return d
+		}
+	}
+
+	return digest.Digest("")
+}
+
+func getBaseManifests() map[digest.Digest]manifest {
+	if len(manifests) == 0 {
+		config := getConfig()
+		content := "amd64-content"
+		objManifest := ocispec.Manifest{
+			MediaType: v1.MediaTypeImageManifest,
+			Config:    config,
+			Layers: []v1.Descriptor{
+				{
+					MediaType: v1.MediaTypeImageLayerGzip,
+					Digest:    digest.FromString(content),
+					Size:      int64(len(content)),
+				},
+			},
+		}
+		jsonContent, _ := json.Marshal(objManifest)
+		jsonString := string(jsonContent)
+		d := digest.FromString(jsonString)
+
+		manifests[d] = manifest{
+			desc: ocispec.Descriptor{
+				MediaType: v1.MediaTypeImageManifest,
+				Digest:    d,
+				Size:      int64(len(jsonString)),
+				Platform: &v1.Platform{
+					Architecture: "amd64",
+					OS:           "linux",
+				},
+				Annotations: map[string]string{
+					"test_content": jsonString,
+				},
+			},
+			manifest: objManifest,
+		}
+
+		content = "arm64-content"
+		objManifest = ocispec.Manifest{
+			MediaType: v1.MediaTypeImageManifest,
+			Config:    config,
+			Layers: []v1.Descriptor{
+				{
+					MediaType: v1.MediaTypeImageLayerGzip,
+					Digest:    digest.FromString(content),
+					Size:      int64(len(content)),
+				},
+			},
+		}
+		jsonContent, _ = json.Marshal(objManifest)
+		jsonString = string(jsonContent)
+		d = digest.FromString(jsonString)
+
+		manifests[d] = manifest{
+			desc: ocispec.Descriptor{
+				MediaType: v1.MediaTypeImageManifest,
+				Digest:    d,
+				Size:      int64(len(jsonString)),
+				Platform: &v1.Platform{
+					Architecture: "arm64",
+					OS:           "linux",
+				},
+				Annotations: map[string]string{
+					"test_content": jsonString,
+				},
+			},
+			manifest: objManifest,
+		}
+	}
+
+	return manifests
+}
+
+func getConfig() v1.Descriptor {
+	config := v1.ImageConfig{
+		Env: []string{
+			"config",
+		},
+	}
+	jsonContent, _ := json.Marshal(config)
+	jsonString := string(jsonContent)
+	d := digest.FromString(jsonString)
+
+	return v1.Descriptor{
+		MediaType: ocispec.MediaTypeImageConfig,
+		Digest:    d,
+		Size:      int64(len(jsonString)),
+		Annotations: map[string]string{
+			"test_content": jsonString,
+		},
+	}
 }
 
 func getAttestationLayers(t attestationType) []v1.Descriptor {
