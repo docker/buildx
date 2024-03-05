@@ -99,37 +99,37 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, err
 	}
 	if in.ExportPush {
-		if in.ExportLoad {
-			return nil, nil, errors.Errorf("push and load may not be set together at the moment")
+		var pushUsed bool
+		for i := range outputs {
+			if outputs[i].Type == client.ExporterImage {
+				outputs[i].Attrs["push"] = "true"
+				pushUsed = true
+			}
 		}
-		if len(outputs) == 0 {
-			outputs = []client.ExportEntry{{
-				Type: "image",
+		if !pushUsed {
+			outputs = append(outputs, client.ExportEntry{
+				Type: client.ExporterImage,
 				Attrs: map[string]string{
 					"push": "true",
 				},
-			}}
-		} else {
-			switch outputs[0].Type {
-			case "image":
-				outputs[0].Attrs["push"] = "true"
-			default:
-				return nil, nil, errors.Errorf("push and %q output can't be used together", outputs[0].Type)
-			}
+			})
 		}
 	}
 	if in.ExportLoad {
-		if len(outputs) == 0 {
-			outputs = []client.ExportEntry{{
-				Type:  "docker",
-				Attrs: map[string]string{},
-			}}
-		} else {
-			switch outputs[0].Type {
-			case "docker":
-			default:
-				return nil, nil, errors.Errorf("load and %q output can't be used together", outputs[0].Type)
+		var loadUsed bool
+		for i := range outputs {
+			if outputs[i].Type == client.ExporterDocker {
+				if _, ok := outputs[i].Attrs["dest"]; !ok {
+					loadUsed = true
+					break
+				}
 			}
+		}
+		if !loadUsed {
+			outputs = append(outputs, client.ExportEntry{
+				Type:  client.ExporterDocker,
+				Attrs: map[string]string{},
+			})
 		}
 	}
 
