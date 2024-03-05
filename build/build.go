@@ -33,7 +33,7 @@ import (
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/buildx/util/waitmap"
 	"github.com/docker/cli/opts"
-	"github.com/docker/docker/api/types"
+	imagetypes "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
@@ -1002,7 +1002,7 @@ func pushWithMoby(ctx context.Context, d driver.Driver, name string, l progress.
 		return err
 	}
 
-	rc, err := api.ImagePush(ctx, name, types.ImagePushOptions{
+	rc, err := api.ImagePush(ctx, name, imagetypes.PushOptions{
 		RegistryAuth: creds,
 	})
 	if err != nil {
