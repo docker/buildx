@@ -1,6 +1,11 @@
 name: docs-release
 
 on:
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: 'Git tag'
+        required: true
   release:
     types:
       - released
@@ -8,7 +13,7 @@ on:
 jobs:
   open-pr:
     runs-on: ubuntu-22.04
-    if: ${{ github.event.release.prerelease != true && github.repository == 'docker/buildx' }}
+    if: ${{ (github.event.release.prerelease != true || github.event.inputs.tag != '') && github.repository == 'docker/buildx' }}
     steps:
       -
         name: Checkout docs repo
@@ -22,6 +27,11 @@ jobs:
         run: |
           rm -rf ./data/buildx/*
           rm -rf ./_vendor/github.com/docker/buildx
+          if [ -n "${{ github.event.inputs.tag }}" ]; then
+            echo "RELEASE_NAME=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
+          else
+            echo "RELEASE_NAME=${{ github.event.release.name }}" >> $GITHUB_ENV
+          fi
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -29,7 +39,7 @@ jobs:
         name: Generate yaml
         uses: docker/bake-action@v4
         with:
-          source: ${{ github.server_url }}/${{ github.repository }}.git#${{ github.event.release.name }}
+          source: ${{ github.server_url }}/${{ github.repository }}.git#${{ env.RELEASE_NAME }}
           targets: update-docs
           set: |
             *.output=/tmp/buildx-docs
@@ -45,18 +55,18 @@ jobs:
         with:
           targets: vendor
           set: |
-            vendor.args.MODULE=github.com/docker/buildx@${{ github.event.release.name }}
+            vendor.args.MODULE=github.com/docker/buildx@${{ env.RELEASE_NAME }}
       -
         name: Create PR on docs repo
         uses: peter-evans/create-pull-request@a4f52f8033a6168103c2538976c07b467e8163bc
         with:
           token: ${{ secrets.GHPAT_DOCS_DISPATCH }}
           push-to-fork: docker-tools-robot/docker.github.io
-          commit-message: "vendor: github.com/docker/buildx ${{ github.event.release.name }}"
+          commit-message: "vendor: github.com/docker/buildx ${{ env.RELEASE_NAME }}"
           signoff: true
-          branch: dispatch/buildx-ref-${{ github.event.release.name }}
+          branch: dispatch/buildx-ref-${{ env.RELEASE_NAME }}
           delete-branch: true
-          title: Update buildx reference to ${{ github.event.release.name }}
+          title: Update buildx reference to ${{ env.RELEASE_NAME }}
           body: |
-            Update the buildx reference documentation to keep in sync with the latest release `${{ github.event.release.name }}`
+            Update the buildx reference documentation to keep in sync with the latest release `${{ env.RELEASE_NAME }}`
           draft: false
