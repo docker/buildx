@@ -26,7 +26,6 @@ jobs:
         name: Prepare
         run: |
           rm -rf ./data/buildx/*
-          rm -rf ./_vendor/github.com/docker/buildx
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             echo "RELEASE_NAME=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
           else
@@ -50,12 +49,21 @@ jobs:
         run: |
           cp /tmp/buildx-docs/out/reference/*.yaml ./data/buildx/
       -
+        name: Make vendoring temp dir
+        run: |
+          mkdir -p /tmp/hugo_vendor_output
+      -
         name: Update vendor
         uses: docker/bake-action@v4
         with:
           targets: vendor
           set: |
+            vendor.output=type=local,dest=/tmp/hugo_vendor_output
             vendor.args.MODULE=github.com/docker/buildx@${{ env.RELEASE_NAME }}
+      -
+        name: Copy vendor
+        run: |
+          cp -TRv /tmp/hugo_vendor_output/ .
       -
         name: Create PR on docs repo
         uses: peter-evans/create-pull-request@a4f52f8033a6168103c2538976c07b467e8163bc
