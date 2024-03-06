@@ -43,7 +43,6 @@ jobs:
         name: Update vendor
         uses: docker/bake-action@v4
         with:
-          source: ${{ github.server_url }}/${{ github.repository }}.git#${{ github.event.release.name }}
           targets: vendor
           set: |
             vendor.args.MODULE=github.com/docker/buildx@${{ github.event.release.name }}
