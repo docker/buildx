@@ -25,6 +25,7 @@ func newMetrics(mp metric.MeterProvider, attrs attribute.Set) *metricWriter {
 			newLocalSourceTransferMetricRecorder(meter, attrs),
 			newImageSourceTransferMetricRecorder(meter, attrs),
 			newExecMetricRecorder(meter, attrs),
+			newExportImageMetricRecorder(meter, attrs),
 		},
 		attrs: attrs,
 	}
@@ -275,4 +276,60 @@ var reExecType = regexp.MustCompile(`^\[.*] RUN `)
 
 func detectExecType(vertexName string) bool {
 	return reExecType.MatchString(vertexName)
+}
+
+type (
+	exportImageMetricRecorder struct {
+		// Attributes holds the attributes for the export image metric.
+		Attributes attribute.Set
+
+		// Duration tracks the duration of image exporting.
+		Duration metric.Float64Counter
+	}
+)
+
+func newExportImageMetricRecorder(meter metric.Meter, attrs attribute.Set) *exportImageMetricRecorder {
+	mr := &exportImageMetricRecorder{
+		Attributes: attrs,
+	}
+	mr.Duration, _ = meter.Float64Counter("export.image.time",
+		metric.WithDescription("Measures the length of time spent exporting the image."),
+		metric.WithUnit("ms"))
+	return mr
+}
+
+func (mr *exportImageMetricRecorder) Record(ss *client.SolveStatus) {
+	for _, v := range ss.Vertexes {
+		if v.Started == nil || v.Completed == nil {
+			continue
+		}
+
+		format := detectExportImageType(v.Name)
+		if format == "" {
+			continue
+		}
+
+		dur := float64(v.Completed.Sub(*v.Started)) / float64(time.Millisecond)
+		mr.Duration.Add(context.Background(), dur,
+			metric.WithAttributeSet(mr.Attributes),
+			metric.WithAttributes(
+				attribute.String("image.format", format),
+			),
+		)
+	}
+}
+
+var reExportImageType = regexp.MustCompile(`^exporting to (image|(?P<format>\w+) image format)$`)
+
+func detectExportImageType(vertexName string) string {
+	m := reExportImageType.FindStringSubmatch(vertexName)
+	if m == nil {
+		return ""
+	}
+
+	format := "docker"
+	if m[2] != "" {
+		format = m[2]
+	}
+	return format
 }
