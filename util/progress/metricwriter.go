@@ -24,6 +24,7 @@ func newMetrics(mp metric.MeterProvider, attrs attribute.Set) *metricWriter {
 		recorders: []metricRecorder{
 			newLocalSourceTransferMetricRecorder(meter, attrs),
 			newImageSourceTransferMetricRecorder(meter, attrs),
+			newExecMetricRecorder(meter, attrs),
 		},
 		attrs: attrs,
 	}
@@ -237,4 +238,41 @@ var reImageSourceType = regexp.MustCompile(`^\[.*] FROM `)
 
 func detectImageSourceType(vertexName string) bool {
 	return reImageSourceType.MatchString(vertexName)
+}
+
+type (
+	execMetricRecorder struct {
+		// Attributes holds the attributes for this metric recorder.
+		Attributes attribute.Set
+
+		// Duration tracks the duration of exec statements.
+		Duration metric.Float64Counter
+	}
+)
+
+func newExecMetricRecorder(meter metric.Meter, attrs attribute.Set) *execMetricRecorder {
+	mr := &execMetricRecorder{
+		Attributes: attrs,
+	}
+	mr.Duration, _ = meter.Float64Counter("exec.command.time",
+		metric.WithDescription("Measures the length of time spent executing run statements."),
+		metric.WithUnit("ms"))
+	return mr
+}
+
+func (mr *execMetricRecorder) Record(ss *client.SolveStatus) {
+	for _, v := range ss.Vertexes {
+		if v.Started == nil || v.Completed == nil || !detectExecType(v.Name) {
+			continue
+		}
+
+		dur := float64(v.Completed.Sub(*v.Started)) / float64(time.Millisecond)
+		mr.Duration.Add(context.Background(), dur, metric.WithAttributeSet(mr.Attributes))
+	}
+}
+
+var reExecType = regexp.MustCompile(`^\[.*] RUN `)
+
+func detectExecType(vertexName string) bool {
+	return reExecType.MatchString(vertexName)
 }
