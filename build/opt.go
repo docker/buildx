@@ -262,7 +262,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	so.Exports = opt.Exports
 	so.Session = opt.Session
 
-	releaseLoad, err := LoadInputs(ctx, nodeDriver, opt.Inputs, pw, &so)
+	releaseLoad, err := loadInputs(ctx, nodeDriver, opt.Inputs, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -352,7 +352,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	return &so, releaseF, nil
 }
 
-func LoadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
+func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
