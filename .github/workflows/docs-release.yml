@@ -41,6 +41,7 @@ jobs:
         with:
           source: ${{ github.server_url }}/${{ github.repository }}.git#${{ env.RELEASE_NAME }}
           targets: update-docs
+          provenance: false
           set: |
             *.output=/tmp/buildx-docs
         env:
@@ -54,6 +55,7 @@ jobs:
         uses: docker/bake-action@v4
         with:
           targets: vendor
+          provenance: false
           set: |
             vendor.args.MODULE=github.com/docker/buildx@${{ env.RELEASE_NAME }}
       -
