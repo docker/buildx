@@ -219,7 +219,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			if err != nil {
 				return nil, err
 			}
-			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, opt, gatewayOpts, configDir, w, docker)
+			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, opt, gatewayOpts, configDir, addVCSLocalDir, w, docker)
 			if err != nil {
 				return nil, err
 			}
@@ -228,9 +228,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			}
 			for k, v := range gitattrs {
 				so.FrontendAttrs[k] = v
-			}
-			if addVCSLocalDir != nil {
-				addVCSLocalDir(so)
 			}
 			defers = append(defers, release)
 			reqn = append(reqn, &reqForNode{
