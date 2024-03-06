@@ -5,6 +5,8 @@ import (
 	"bytes"
 	"context"
 	"net"
+	"os"
+	"strconv"
 	"strings"
 
 	"github.com/docker/buildx/driver"
@@ -12,6 +14,7 @@ import (
 	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 const (
@@ -100,4 +103,22 @@ func toBuildkitUlimits(inp *opts.UlimitOpt) (string, error) {
 		ulimits = append(ulimits, ulimit.String())
 	}
 	return strings.Join(ulimits, ","), nil
+}
+
+func notSupported(f driver.Feature, d driver.Driver, docs string) error {
+	return errors.Errorf(`%s is not supported for the %s driver.
+Switch to a different driver, or turn on the containerd image store, and try again.
+Learn more at %s`, f, d.Factory().Name(), docs)
+}
+
+func noDefaultLoad() bool {
+	v, ok := os.LookupEnv("BUILDX_NO_DEFAULT_LOAD")
+	if !ok {
+		return false
+	}
+	b, err := strconv.ParseBool(v)
+	if err != nil {
+		logrus.Warnf("invalid non-bool value for BUILDX_NO_DEFAULT_LOAD: %s", v)
+	}
+	return b
 }
