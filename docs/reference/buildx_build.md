@@ -152,7 +152,7 @@ Allow extra privileged entitlement. List of entitlements:
 
 - `network.host` - Allows executions with host networking.
 - `security.insecure` - Allows executions without sandbox. See
-  [related Dockerfile extensions](https://docs.docker.com/reference/dockerfile/#run---securitysandbox).
+  [related Dockerfile extensions](https://docs.docker.com/reference/dockerfile/#run---security).
 
 For entitlements to be enabled, the BuildKit daemon also needs to allow them
 with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#buildkitd-flags)).
