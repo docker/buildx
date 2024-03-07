@@ -3,7 +3,9 @@ package progress
 import (
 	"context"
 	"regexp"
+	"sort"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/docker/buildx/util/metricutil"
@@ -26,6 +28,7 @@ func newMetrics(mp metric.MeterProvider, attrs attribute.Set) *metricWriter {
 			newImageSourceTransferMetricRecorder(meter, attrs),
 			newExecMetricRecorder(meter, attrs),
 			newExportImageMetricRecorder(meter, attrs),
+			newIdleMetricRecorder(meter, attrs),
 		},
 		attrs: attrs,
 	}
@@ -332,4 +335,94 @@ func detectExportImageType(vertexName string) string {
 		format = m[2]
 	}
 	return format
+}
+
+type idleMetricRecorder struct {
+	// Attributes holds the set of base attributes for all metrics produced.
+	Attributes attribute.Set
+
+	// Duration tracks the amount of time spent idle during this build.
+	Duration metric.Float64ObservableGauge
+
+	// Started stores the set of times when tasks were started.
+	Started []time.Time
+
+	// Completed stores the set of times when tasks were completed.
+	Completed []time.Time
+
+	mu sync.Mutex
+}
+
+func newIdleMetricRecorder(meter metric.Meter, attrs attribute.Set) *idleMetricRecorder {
+	mr := &idleMetricRecorder{
+		Attributes: attrs,
+	}
+	mr.Duration, _ = meter.Float64ObservableGauge("builder.idle.time",
+		metric.WithDescription("Measures the length of time the builder spends idle."),
+		metric.WithUnit("ms"),
+		metric.WithFloat64Callback(mr.calculateIdleTime))
+	return mr
+}
+
+func (mr *idleMetricRecorder) Record(ss *client.SolveStatus) {
+	mr.mu.Lock()
+	defer mr.mu.Unlock()
+
+	for _, v := range ss.Vertexes {
+		if v.Started == nil || v.Completed == nil {
+			continue
+		}
+		mr.Started = append(mr.Started, *v.Started)
+		mr.Completed = append(mr.Completed, *v.Completed)
+	}
+}
+
+// calculateIdleTime will use the recorded vertices that have been completed to determine the
+// amount of time spent idle.
+//
+// This calculation isn't accurate until the build itself is completed. At the moment,
+// metrics are only ever sent when a build is completed. If that changes, this calculation
+// will likely be inaccurate.
+func (mr *idleMetricRecorder) calculateIdleTime(_ context.Context, o metric.Float64Observer) error {
+	mr.mu.Lock()
+	defer mr.mu.Unlock()
+
+	dur := calculateIdleTime(mr.Started, mr.Completed)
+	o.Observe(float64(dur)/float64(time.Millisecond), metric.WithAttributeSet(mr.Attributes))
+	return nil
+}
+
+func calculateIdleTime(started, completed []time.Time) time.Duration {
+	sort.Slice(started, func(i, j int) bool {
+		return started[i].Before(started[j])
+	})
+	sort.Slice(completed, func(i, j int) bool {
+		return completed[i].Before(completed[j])
+	})
+
+	if len(started) == 0 {
+		return 0
+	}
+
+	var (
+		idleStart time.Time
+		elapsed   time.Duration
+	)
+	for active := 0; len(started) > 0 && len(completed) > 0; {
+		if started[0].Before(completed[0]) {
+			if active == 0 && !idleStart.IsZero() {
+				elapsed += started[0].Sub(idleStart)
+			}
+			active++
+			started = started[1:]
+			continue
+		}
+
+		active--
+		if active == 0 {
+			idleStart = completed[0]
+		}
+		completed = completed[1:]
+	}
+	return elapsed
 }
