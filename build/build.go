@@ -169,6 +169,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	if noMobyDriver != nil && !noDefaultLoad() && noPrintFunc(opt) {
 		var noOutputTargets []string
 		for name, opt := range opt {
+			if noMobyDriver.Features(ctx)[driver.DefaultLoad] {
+				continue
+			}
+
 			if !opt.Linked && len(opt.Exports) == 0 {
 				noOutputTargets = append(noOutputTargets, name)
 			}

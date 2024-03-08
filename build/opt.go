@@ -162,10 +162,14 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	case 1:
 		// valid
 	case 0:
-		if nodeDriver.IsMobyDriver() && !noDefaultLoad() {
-			// backwards compat for docker driver only:
-			// this ensures the build results in a docker image.
-			opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
+		if !noDefaultLoad() {
+			if nodeDriver.IsMobyDriver() {
+				// backwards compat for docker driver only:
+				// this ensures the build results in a docker image.
+				opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
+			} else if nodeDriver.Features(ctx)[driver.DefaultLoad] {
+				opt.Exports = []client.ExportEntry{{Type: "docker", Attrs: map[string]string{}}}
+			}
 		}
 	default:
 		if err := bopts.LLBCaps.Supports(pb.CapMultipleExporters); err != nil {

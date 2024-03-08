@@ -4,6 +4,7 @@ import (
 	"context"
 	"net/url"
 	"path/filepath"
+	"strconv"
 	"strings"
 
 	// import connhelpers for special url schemes
@@ -80,6 +81,12 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			}
 			tls.key = v
 			tlsEnabled = true
+		case "default-load":
+			parsed, err := strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
+			}
+			d.defaultLoad = parsed
 		default:
 			return nil, errors.Errorf("invalid driver option %s for remote driver", k)
 		}
