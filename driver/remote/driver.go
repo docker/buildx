@@ -13,6 +13,7 @@ import (
 	util "github.com/docker/buildx/driver/remote/util"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/connhelper"
 	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 )
@@ -95,7 +96,16 @@ func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
 }
 
 func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
-	network, addr, ok := strings.Cut(d.InitConfig.EndpointAddr, "://")
+	addr := d.InitConfig.EndpointAddr
+	ch, err := connhelper.GetConnectionHelper(addr)
+	if err != nil {
+		return nil, err
+	}
+	if ch != nil {
+		return ch.ContextDialer(ctx, addr)
+	}
+
+	network, addr, ok := strings.Cut(addr, "://")
 	if !ok {
 		return nil, errors.Errorf("invalid endpoint address: %s", d.InitConfig.EndpointAddr)
 	}
