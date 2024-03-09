@@ -29,7 +29,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 	}
 
 	cfg := driver.InitConfig{
-		Name:             "buildx_buildkit_test",
+		Name:             driver.BuilderName("test"),
 		KubeClientConfig: &kcc,
 	}
 	f := factory{}
