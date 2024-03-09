@@ -125,7 +125,7 @@ func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
 	target := registry + "/buildx/registry:latest"
 
 	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), "--provenance=true", dir))
-	if sb.Name() == "docker" {
+	if isMobyWorker(sb) {
 		require.Error(t, err)
 		require.Contains(t, out, "Attestation is not supported")
 		return
@@ -200,7 +200,7 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {
 	if !isDockerWorker(sb) {
-		t.Skip("skipping test for non-docker workers")
+		t.Skip("only testing with docker workers")
 	}
 
 	// pull image
@@ -290,7 +290,7 @@ RUN exit 1`)
 
 func testBuildProgress(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
-	driver, _, _ := strings.Cut(sb.Name(), "+")
+	sbDriver, _ := driverName(sb.Name())
 	name := sb.Address()
 
 	// progress=tty
@@ -301,7 +301,7 @@ func testBuildProgress(t *testing.T, sb integration.Sandbox) {
 	io.Copy(buf, f)
 	ttyOutput := buf.String()
 	require.Contains(t, ttyOutput, "[+] Building")
-	require.Contains(t, ttyOutput, fmt.Sprintf("%s:%s", driver, name))
+	require.Contains(t, ttyOutput, fmt.Sprintf("%s:%s", sbDriver, name))
 	require.Contains(t, ttyOutput, "=> [internal] load build definition from Dockerfile")
 	require.Contains(t, ttyOutput, "=> [base 1/3] FROM docker.io/library/busybox:latest")
 
@@ -309,13 +309,13 @@ func testBuildProgress(t *testing.T, sb integration.Sandbox) {
 	cmd = buildxCmd(sb, withArgs("build", "--progress=plain", "--output=type=cacheonly", dir))
 	plainOutput, err := cmd.CombinedOutput()
 	require.NoError(t, err)
-	require.Contains(t, string(plainOutput), fmt.Sprintf(`#0 building with "%s" instance using %s driver`, name, driver))
+	require.Contains(t, string(plainOutput), fmt.Sprintf(`#0 building with "%s" instance using %s driver`, name, sbDriver))
 	require.Contains(t, string(plainOutput), "[internal] load build definition from Dockerfile")
 	require.Contains(t, string(plainOutput), "[base 1/3] FROM docker.io/library/busybox:latest")
 }
 
 func testBuildAnnotations(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() == "docker" {
+	if isMobyWorker(sb) {
 		t.Skip("annotations not supported on docker worker")
 	}
 
@@ -374,8 +374,8 @@ func testBuildLabelNoKey(t *testing.T, sb integration.Sandbox) {
 }
 
 func testBuildCacheExportNotSupported(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isMobyWorker(sb) {
+		t.Skip("only testing with docker worker")
 	}
 
 	dir := createTestProject(t)
@@ -386,8 +386,8 @@ func testBuildCacheExportNotSupported(t *testing.T, sb integration.Sandbox) {
 }
 
 func testBuildOCIExportNotSupported(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isMobyWorker(sb) {
+		t.Skip("only testing with docker worker")
 	}
 
 	dir := createTestProject(t)
@@ -398,8 +398,8 @@ func testBuildOCIExportNotSupported(t *testing.T, sb integration.Sandbox) {
 }
 
 func testBuildMultiPlatformNotSupported(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isMobyWorker(sb) {
+		t.Skip("only testing with docker worker")
 	}
 
 	dir := createTestProject(t)
@@ -426,8 +426,8 @@ RUN ping -c 1 buildx.host-gateway-ip.local
 }
 
 func testBuildNetworkModeBridge(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
 	}
 
 	var builderName string
@@ -546,8 +546,8 @@ func testBuildRef(t *testing.T, sb integration.Sandbox) {
 }
 
 func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
 	}
 
 	registry, err := sb.NewRegistry()
@@ -614,8 +614,8 @@ func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {
 }
 
 func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
 	}
 
 	registry, err := sb.NewRegistry()

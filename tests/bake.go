@@ -641,8 +641,8 @@ target "default" {
 }
 
 func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
 	}
 
 	registry, err := sb.NewRegistry()
@@ -722,8 +722,8 @@ target "default" {
 }
 
 func testBakeLoadPush(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
 	}
 
 	registry, err := sb.NewRegistry()

@@ -22,8 +22,8 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 }
 
 func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker-container" {
-		t.Skip("imagetools tests are not driver specific and only run on docker-container")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
 	}
 
 	dir := createDockerfile(t)
@@ -81,8 +81,8 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 }
 
 func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker-container" {
-		t.Skip("imagetools tests are not driver specific and only run on docker-container")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
 	}
 
 	dir := createDockerfile(t)
@@ -130,8 +130,8 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 }
 
 func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker-container" {
-		t.Skip("imagetools tests are not driver specific and only run on docker-container")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
 	}
 
 	dir := createDockerfile(t)
@@ -181,8 +181,8 @@ func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
 }
 
 func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker-container" {
-		t.Skip("imagetools tests are not driver specific and only run on docker-container")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
 	}
 
 	dir := createDockerfile(t)
