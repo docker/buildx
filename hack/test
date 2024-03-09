@@ -26,7 +26,7 @@ gotestArgs="-mod=vendor -coverprofile=/testreports/coverage-report$TEST_REPORT_S
 
 cacheVolume="buildx-test-cache"
 if ! docker container inspect "$cacheVolume" >/dev/null 2>/dev/null; then
-  docker create -v /root/.cache -v /root/.cache/registry -v /go/pkg/mod --name "$cacheVolume" alpine
+  docker create -v /root/.cache -v /root/.cache/registry -v /root/.cache/undock -v /go/pkg/mod --name "$cacheVolume" alpine
 fi
 if [ "$TEST_KEEP_CACHE" != "1" ]; then
   trap 'docker rm -v $cacheVolume' EXIT

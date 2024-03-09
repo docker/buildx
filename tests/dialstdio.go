@@ -61,6 +61,7 @@ func testDialStdio(t *testing.T, sb integration.Sandbox) {
 			}
 		}()
 
+		skipNoCompatBuildKit(t, sb, ">= 0.11.0-0", "unknown method Info for service moby.buildkit.v1.Control")
 		_, err = c.Info(sb.Context())
 		require.NoError(t, err)
 
