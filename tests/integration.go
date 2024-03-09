@@ -11,6 +11,8 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+const defaultBuildKitTag = "buildx-stable-1"
+
 func tmpdir(t *testing.T, appliers ...fstest.Applier) string {
 	t.Helper()
 	tmpdir := t.TempDir()
@@ -94,4 +96,11 @@ func driverName(sbName string) (string, bool) {
 		hasFeature = true
 	}
 	return name, hasFeature
+}
+
+func buildkitTag() string {
+	if v := os.Getenv("TEST_BUILDKIT_TAG"); v != "" {
+		return v
+	}
+	return defaultBuildKitTag
 }

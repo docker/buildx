@@ -10,6 +10,7 @@ set -eu -o pipefail
 : "${TEST_REPORT_SUFFIX=}"
 : "${TEST_KEEP_CACHE=}"
 : "${TEST_DOCKERD=}"
+: "${TEST_BUILDKIT_TAG=}"
 : "${TEST_BUILDKIT_IMAGE=}"
 
 if [ "$TEST_IMAGE_BUILD" = "1" ]; then
@@ -30,5 +31,5 @@ if [ "$TEST_KEEP_CACHE" != "1" ]; then
   trap 'docker rm -v $cacheVolume' EXIT
 fi
 
-cid=$(docker create --rm -v /tmp $testReportsVol --volumes-from=$cacheVolume -e GITHUB_REF -e TEST_DOCKERD -e TEST_BUILDKIT_IMAGE -e SKIP_INTEGRATION_TESTS -e GOTESTSUM_FORMAT ${BUILDKIT_INTEGRATION_SNAPSHOTTER:+"-eBUILDKIT_INTEGRATION_SNAPSHOTTER"} -e BUILDKIT_REGISTRY_MIRROR_DIR=/root/.cache/registry --privileged $TEST_IMAGE_ID gotestsum $gotestsumArgs --packages="${TESTPKGS:-./...}" -- $gotestArgs ${TESTFLAGS:--v})
+cid=$(docker create --rm -v /tmp $testReportsVol --volumes-from=$cacheVolume -e GITHUB_REF -e TEST_DOCKERD -e TEST_BUILDKIT_IMAGE -e TEST_BUILDKIT_TAG -e SKIP_INTEGRATION_TESTS -e GOTESTSUM_FORMAT ${BUILDKIT_INTEGRATION_SNAPSHOTTER:+"-eBUILDKIT_INTEGRATION_SNAPSHOTTER"} -e BUILDKIT_REGISTRY_MIRROR_DIR=/root/.cache/registry --privileged $TEST_IMAGE_ID gotestsum $gotestsumArgs --packages="${TESTPKGS:-./...}" -- $gotestArgs ${TESTFLAGS:--v})
 docker start -a -i $cid
