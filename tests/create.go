@@ -1,9 +1,13 @@
 package tests
 
 import (
+	"fmt"
+	"os"
 	"strings"
 	"testing"
 
+	"github.com/docker/buildx/driver"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/stretchr/testify/require"
 )
@@ -18,6 +22,7 @@ func createCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 var createTests = []func(t *testing.T, sb integration.Sandbox){
 	testCreateMemoryLimit,
 	testCreateRestartAlways,
+	testCreateRemoteContainer,
 }
 
 func testCreateMemoryLimit(t *testing.T, sb integration.Sandbox) {
@@ -56,4 +61,42 @@ func testCreateRestartAlways(t *testing.T, sb integration.Sandbox) {
 	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--driver-opt", "restart-policy=always"))
 	require.NoError(t, err, out)
 	builderName = strings.TrimSpace(out)
+}
+
+func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
+	if sb.Name() != "docker" {
+		t.Skip("skipping test for non-docker workers")
+	}
+
+	ctnBuilderName := "ctn-builder-" + identity.NewID()
+	remoteBuilderName := "remote-builder-" + identity.NewID()
+	var hasCtnBuilder, hasRemoteBuilder bool
+	t.Cleanup(func() {
+		if hasCtnBuilder {
+			out, err := rmCmd(sb, withArgs(ctnBuilderName))
+			require.NoError(t, err, out)
+		}
+		if hasRemoteBuilder {
+			out, err := rmCmd(sb, withArgs(remoteBuilderName))
+			require.NoError(t, err, out)
+		}
+	})
+
+	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--name", ctnBuilderName))
+	require.NoError(t, err, out)
+	hasCtnBuilder = true
+
+	out, err = inspectCmd(sb, withArgs("--bootstrap", ctnBuilderName))
+	require.NoError(t, err, out)
+
+	cmd := dockerCmd(sb, withArgs("container", "inspect", fmt.Sprintf("%s%s0", driver.BuilderNamePrefix, ctnBuilderName)))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
+
+	out, err = createCmd(sb, withArgs("--driver", "remote", "--name", remoteBuilderName, fmt.Sprintf("docker-container://%s%s0", driver.BuilderNamePrefix, ctnBuilderName)))
+	require.NoError(t, err, out)
+	hasRemoteBuilder = true
+
+	out, err = inspectCmd(sb, withArgs(remoteBuilderName))
+	require.NoError(t, err, out)
 }

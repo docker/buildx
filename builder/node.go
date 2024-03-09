@@ -142,7 +142,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 					}
 				}
 
-				d, err := driver.GetDriver(ctx, "buildx_buildkit_"+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.BuildkitdFlags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash, lno.dialMeta)
+				d, err := driver.GetDriver(ctx, driver.BuilderNamePrefix+n.Name, factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.BuildkitdFlags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash, lno.dialMeta)
 				if err != nil {
 					node.Err = err
 					return nil

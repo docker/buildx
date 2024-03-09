@@ -244,10 +244,10 @@ func (f *factory) AllowsInstances() bool {
 // eg. "buildx_buildkit_loving_mendeleev0" -> "loving-mendeleev0"
 func buildxNameToDeploymentName(bx string) (string, error) {
 	// TODO: commands.util.go should not pass "buildx_buildkit_" prefix to drivers
-	if !strings.HasPrefix(bx, "buildx_buildkit_") {
-		return "", errors.Errorf("expected a string with \"buildx_buildkit_\", got %q", bx)
+	if !strings.HasPrefix(bx, driver.BuilderNamePrefix) {
+		return "", errors.Errorf("expected a string with %q, got %q", driver.BuilderNamePrefix, bx)
 	}
-	s := strings.TrimPrefix(bx, "buildx_buildkit_")
+	s := strings.TrimPrefix(bx, driver.BuilderNamePrefix)
 	s = strings.ReplaceAll(s, "_", "-")
 	return s, nil
 }

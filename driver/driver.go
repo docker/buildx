@@ -24,6 +24,8 @@ const (
 	Running
 	Stopping
 	Stopped
+
+	BuilderNamePrefix = "buildx_buildkit_"
 )
 
 func (s Status) String() string {
