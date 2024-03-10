@@ -43,8 +43,9 @@ jobs:
           - master
           - latest
           - buildx-stable-1
+          - v0.13.1
+          - v0.12.5
           - v0.11.6
-          - v0.10.6
         worker:
           - docker
           - docker\+containerd  # same as docker, but with containerd snapshotter
