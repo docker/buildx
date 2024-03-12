@@ -4,6 +4,7 @@ import (
 	"context"
 	"io"
 	"net"
+	"strings"
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
@@ -65,6 +66,19 @@ type Driver interface {
 	HostGatewayIP(ctx context.Context) (net.IP, error)
 	IsMobyDriver() bool
 	Config() InitConfig
+}
+
+const builderNamePrefix = "buildx_buildkit_"
+
+func BuilderName(name string) string {
+	return builderNamePrefix + name
+}
+
+func ParseBuilderName(name string) (string, error) {
+	if !strings.HasPrefix(name, builderNamePrefix) {
+		return "", errors.Errorf("invalid builder name %q, must have %q prefix", name, builderNamePrefix)
+	}
+	return strings.TrimPrefix(name, builderNamePrefix), nil
 }
 
 func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Writer) (*client.Client, error) {
