@@ -72,7 +72,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 
 	overrides := in.overrides
 	if in.exportPush {
-		overrides = append(overrides, "*.output=type=registry")
+		overrides = append(overrides, "*.push=true")
 	}
 	if in.exportLoad {
 		overrides = append(overrides, "*.output=type=docker")

@@ -259,6 +259,25 @@ func TestPushOverride(t *testing.T) {
 
 	require.Equal(t, 1, len(m["app"].Outputs))
 	require.Equal(t, "type=image,push=true", m["app"].Outputs[0])
+
+	fp = File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "foo" {
+		  		output = [ "type=local,dest=out" ]
+			}
+			target "bar" {
+			}`),
+	}
+	ctx = context.TODO()
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"foo", "bar"}, []string{"*.push=true"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(m))
+	require.Equal(t, 1, len(m["foo"].Outputs))
+	require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+	require.Equal(t, 1, len(m["bar"].Outputs))
+	require.Equal(t, []string{"type=image,push=true"}, m["bar"].Outputs)
 }
 
 func TestReadTargetsCompose(t *testing.T) {
