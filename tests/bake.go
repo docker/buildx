@@ -814,11 +814,11 @@ target "default" {
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 
-	// TODO: test registry when --load case fixed for bake (currently overrides --push)
-	//desc, provider, err := contentutil.ProviderFromRef(target)
-	//require.NoError(t, err)
-	//_, err = testutil.ReadImages(sb.Context(), provider, desc)
-	//require.NoError(t, err)
+	// test registry
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+	_, err = testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
 
 	// test docker store
 	cmd = dockerCmd(sb, withArgs("image", "inspect", target))
