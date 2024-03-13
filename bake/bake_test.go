@@ -280,6 +280,101 @@ func TestPushOverride(t *testing.T) {
 	require.Equal(t, []string{"type=image,push=true"}, m["bar"].Outputs)
 }
 
+func TestLoadOverride(t *testing.T) {
+	t.Parallel()
+
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+			}`),
+	}
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(m["app"].Outputs))
+	require.Equal(t, "type=docker", m["app"].Outputs[0])
+
+	fp = File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				output = ["type=image"]
+			}`),
+	}
+	ctx = context.TODO()
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(m["app"].Outputs))
+	require.Equal(t, []string{"type=image", "type=docker"}, m["app"].Outputs)
+
+	fp = File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				output = ["type=docker,dest=out"]
+			}`),
+	}
+	ctx = context.TODO()
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(m["app"].Outputs))
+	require.Equal(t, []string{"type=docker,dest=out", "type=docker"}, m["app"].Outputs)
+
+	fp = File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "foo" {
+		  		output = [ "type=local,dest=out" ]
+			}
+			target "bar" {
+			}`),
+	}
+	ctx = context.TODO()
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"foo", "bar"}, []string{"*.load=true"}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(m))
+	require.Equal(t, 1, len(m["foo"].Outputs))
+	require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+	require.Equal(t, 1, len(m["bar"].Outputs))
+	require.Equal(t, []string{"type=docker"}, m["bar"].Outputs)
+}
+
+func TestLoadAndPushOverride(t *testing.T) {
+	t.Parallel()
+
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "foo" {
+		  		output = [ "type=local,dest=out" ]
+			}
+			target "bar" {
+			}`),
+	}
+	ctx := context.TODO()
+
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"foo", "bar"}, []string{"*.load=true", "*.push=true"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(m))
+	require.Equal(t, 1, len(m["foo"].Outputs))
+	require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+	require.Equal(t, 2, len(m["bar"].Outputs))
+	require.Equal(t, []string{"type=docker", "type=image,push=true"}, m["bar"].Outputs)
+
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"foo", "bar"}, []string{"*.push=true", "*.load=true"}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 2, len(m))
+	require.Equal(t, 1, len(m["foo"].Outputs))
+	require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+	require.Equal(t, 2, len(m["bar"].Outputs))
+	require.Equal(t, []string{"type=image,push=true", "type=docker"}, m["bar"].Outputs)
+}
+
 func TestReadTargetsCompose(t *testing.T) {
 	t.Parallel()
 

@@ -894,17 +894,50 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			}
 			t.Pull = &pull
 		case "push":
-			_, err := strconv.ParseBool(value)
+			push, err := strconv.ParseBool(value)
 			if err != nil {
 				return errors.Errorf("invalid value %s for boolean key push", value)
 			}
-			if len(t.Outputs) == 0 {
+			setPush := true
+			for i, output := range t.Outputs {
+				if typ := parseOutputType(output); typ == "image" || typ == "registry" {
+					t.Outputs[i] = t.Outputs[i] + ",push=" + value
+					setPush = false
+					break
+				} else if typ != "docker" {
+					// if there is any output that is not docker, don't set
+					// "push"
+					setPush = false
+					break
+				}
+			}
+			if push && setPush {
 				t.Outputs = append(t.Outputs, "type=image,push=true")
-			} else {
-				for i, output := range t.Outputs {
-					if typ := parseOutputType(output); typ == "image" || typ == "registry" {
-						t.Outputs[i] = t.Outputs[i] + ",push=" + value
+			}
+		case "load":
+			load, err := strconv.ParseBool(value)
+			if err != nil {
+				return errors.Errorf("invalid value %s for boolean key load", value)
+			}
+			if load {
+				setLoad := true
+				for _, output := range t.Outputs {
+					if typ := parseOutputType(output); typ == "docker" {
+						if v := parseOutput(output); v != nil {
+							if _, ok := v["dest"]; !ok {
+								setLoad = false
+								break
+							}
+						}
+					} else if typ != "image" && typ != "registry" {
+						// if there is any output that is not an image or
+						// registry, don't set "load" similar to push override
+						setLoad = false
+						break
 					}
+				}
+				if setLoad {
+					t.Outputs = append(t.Outputs, "type=docker")
 				}
 			}
 		default:
@@ -1394,18 +1427,26 @@ func removeAttestDupes(s []string) []string {
 	return res
 }
 
-func parseOutputType(str string) string {
+func parseOutput(str string) map[string]string {
 	csvReader := csv.NewReader(strings.NewReader(str))
 	fields, err := csvReader.Read()
 	if err != nil {
-		return ""
+		return nil
 	}
+	res := map[string]string{}
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		if len(parts) == 2 {
-			if parts[0] == "type" {
-				return parts[1]
-			}
+			res[parts[0]] = parts[1]
+		}
+	}
+	return res
+}
+
+func parseOutputType(str string) string {
+	if out := parseOutput(str); out != nil {
+		if v, ok := out["type"]; ok {
+			return v
 		}
 	}
 	return ""

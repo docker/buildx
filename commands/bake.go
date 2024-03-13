@@ -75,7 +75,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		overrides = append(overrides, "*.push=true")
 	}
 	if in.exportLoad {
-		overrides = append(overrides, "*.output=type=docker")
+		overrides = append(overrides, "*.load=true")
 	}
 	if cFlags.noCache != nil {
 		overrides = append(overrides, fmt.Sprintf("*.no-cache=%t", *cFlags.noCache))
