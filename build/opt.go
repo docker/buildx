@@ -32,9 +32,10 @@ import (
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/fsutil"
 )
 
-func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, docker *dockerutil.Client) (solveOpt *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, addVCSLocalDir func(key, dir string, so *client.SolveOpt), pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
@@ -97,7 +98,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		Ref:                 opt.Ref,
 		Frontend:            "dockerfile.v0",
 		FrontendAttrs:       map[string]string{},
-		LocalDirs:           map[string]string{},
+		LocalMounts:         map[string]fsutil.FS{},
 		CacheExports:        cacheTo,
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
@@ -262,7 +263,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	so.Exports = opt.Exports
 	so.Session = opt.Session
 
-	releaseLoad, err := loadInputs(ctx, nodeDriver, opt.Inputs, pw, &so)
+	releaseLoad, err := loadInputs(ctx, nodeDriver, opt.Inputs, addVCSLocalDir, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -352,7 +353,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	return &so, releaseF, nil
 }
 
-func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
+func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSLocalDir func(key, dir string, so *client.SolveOpt), pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
@@ -398,11 +399,15 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 				dockerfileReader = buf
 				inp.ContextPath, _ = os.MkdirTemp("", "empty-dir")
 				toRemove = append(toRemove, inp.ContextPath)
-				target.LocalDirs["context"] = inp.ContextPath
+				if err := setLocalMount("context", inp.ContextPath, target, addVCSLocalDir); err != nil {
+					return nil, err
+				}
 			}
 		}
 	case osutil.IsLocalDir(inp.ContextPath):
-		target.LocalDirs["context"] = inp.ContextPath
+		if err := setLocalMount("context", inp.ContextPath, target, addVCSLocalDir); err != nil {
+			return nil, err
+		}
 		switch inp.DockerfilePath {
 		case "-":
 			dockerfileReader = inp.InStream
@@ -454,7 +459,9 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 	}
 
 	if dockerfileDir != "" {
-		target.LocalDirs["dockerfile"] = dockerfileDir
+		if err := setLocalMount("dockerfile", dockerfileDir, target, addVCSLocalDir); err != nil {
+			return nil, err
+		}
 		dockerfileName = handleLowercaseDockerfile(dockerfileDir, dockerfileName)
 	}
 
@@ -549,7 +556,9 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 		if k == "context" || k == "dockerfile" {
 			localName = "_" + k // underscore to avoid collisions
 		}
-		target.LocalDirs[localName] = v.Path
+		if err := setLocalMount(localName, v.Path, target, addVCSLocalDir); err != nil {
+			return nil, err
+		}
 		target.FrontendAttrs["context:"+k] = "local:" + localName
 	}
 
@@ -559,6 +568,25 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 		}
 	}
 	return release, nil
+}
+
+func setLocalMount(name, root string, so *client.SolveOpt, addVCSLocalDir func(key, dir string, so *client.SolveOpt)) error {
+	lm, err := fsutil.NewFS(root)
+	if err != nil {
+		return err
+	}
+	root, err = filepath.EvalSymlinks(root) // keep same behavior as fsutil.NewFS
+	if err != nil {
+		return err
+	}
+	if so.LocalMounts == nil {
+		so.LocalMounts = map[string]fsutil.FS{}
+	}
+	so.LocalMounts[name] = lm
+	if addVCSLocalDir != nil {
+		addVCSLocalDir(name, root, so)
+	}
+	return nil
 }
 
 func createTempDockerfile(r io.Reader) (string, error) {

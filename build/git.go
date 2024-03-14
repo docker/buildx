@@ -17,7 +17,7 @@ import (
 
 const DockerfileLabel = "com.docker.image.source.entrypoint"
 
-func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath string) (map[string]string, func(*client.SolveOpt), error) {
+func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath string) (map[string]string, func(key, dir string, so *client.SolveOpt), error) {
 	res := make(map[string]string)
 	if contextPath == "" {
 		return nil, nil, nil
@@ -112,26 +112,20 @@ func getGitAttributes(ctx context.Context, contextPath string, dockerfilePath st
 		}
 	}
 
-	return res, func(so *client.SolveOpt) {
+	return res, func(key, dir string, so *client.SolveOpt) {
 		if !setGitInfo || root == "" {
 			return
 		}
-		for k, dir := range so.LocalDirs {
-			dir, err = filepath.EvalSymlinks(dir)
-			if err != nil {
-				continue
-			}
-			dir, err = filepath.Abs(dir)
-			if err != nil {
-				continue
-			}
-			if lp, err := osutil.GetLongPathName(dir); err == nil {
-				dir = lp
-			}
-			dir = osutil.SanitizePath(dir)
-			if r, err := filepath.Rel(root, dir); err == nil && !strings.HasPrefix(r, "..") {
-				so.FrontendAttrs["vcs:localdir:"+k] = r
-			}
+		dir, err := filepath.Abs(dir)
+		if err != nil {
+			return
+		}
+		if lp, err := osutil.GetLongPathName(dir); err == nil {
+			dir = lp
+		}
+		dir = osutil.SanitizePath(dir)
+		if r, err := filepath.Rel(root, dir); err == nil && !strings.HasPrefix(r, "..") {
+			so.FrontendAttrs["vcs:localdir:"+key] = r
 		}
 	}, nil
 }

@@ -161,19 +161,17 @@ func TestLocalDirs(t *testing.T) {
 
 	so := &client.SolveOpt{
 		FrontendAttrs: map[string]string{},
-		LocalDirs: map[string]string{
-			"context":    ".",
-			"dockerfile": ".",
-		},
 	}
 
 	_, addVCSLocalDir, err := getGitAttributes(context.Background(), ".", "Dockerfile")
 	require.NoError(t, err)
 	require.NotNil(t, addVCSLocalDir)
 
-	addVCSLocalDir(so)
+	require.NoError(t, setLocalMount("context", ".", so, addVCSLocalDir))
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:context")
 	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:context"])
+
+	require.NoError(t, setLocalMount("dockerfile", ".", so, addVCSLocalDir))
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:dockerfile")
 	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:dockerfile"])
 }
@@ -195,19 +193,17 @@ func TestLocalDirsSub(t *testing.T) {
 
 	so := &client.SolveOpt{
 		FrontendAttrs: map[string]string{},
-		LocalDirs: map[string]string{
-			"context":    ".",
-			"dockerfile": "app",
-		},
 	}
 
 	_, addVCSLocalDir, err := getGitAttributes(context.Background(), ".", "app/Dockerfile")
 	require.NoError(t, err)
 	require.NotNil(t, addVCSLocalDir)
 
-	addVCSLocalDir(so)
+	require.NoError(t, setLocalMount("context", ".", so, addVCSLocalDir))
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:context")
 	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:context"])
+
+	require.NoError(t, setLocalMount("dockerfile", "app", so, addVCSLocalDir))
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:dockerfile")
 	assert.Equal(t, "app", so.FrontendAttrs["vcs:localdir:dockerfile"])
 }
