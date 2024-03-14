@@ -23,6 +23,7 @@ func newMetrics(mp metric.MeterProvider, attrs attribute.Set) *metricWriter {
 	return &metricWriter{
 		recorders: []metricRecorder{
 			newLocalSourceTransferMetricRecorder(meter, attrs),
+			newImageSourceTransferMetricRecorder(meter, attrs),
 		},
 		attrs: attrs,
 	}
@@ -148,4 +149,92 @@ func detectLocalSourceType(vertexName string) attribute.KeyValue {
 	}
 	// No matches found.
 	return attribute.KeyValue{}
+}
+
+type (
+	imageSourceMetricRecorder struct {
+		// BaseAttributes holds the set of base attributes for all metrics produced.
+		BaseAttributes attribute.Set
+
+		// State holds the state for an individual digest. It is mostly used to check
+		// if a status belongs to an image source since this recorder doesn't maintain
+		// individual digest state.
+		State map[digest.Digest]struct{}
+
+		// TransferSize holds the counter for the transfer size.
+		TransferSize metric.Int64Counter
+
+		// TransferDuration holds the counter for the transfer duration.
+		TransferDuration metric.Float64Counter
+
+		// ExtractDuration holds the counter for the duration of image extraction.
+		ExtractDuration metric.Float64Counter
+	}
+)
+
+func newImageSourceTransferMetricRecorder(meter metric.Meter, attrs attribute.Set) *imageSourceMetricRecorder {
+	mr := &imageSourceMetricRecorder{
+		BaseAttributes: attrs,
+		State:          make(map[digest.Digest]struct{}),
+	}
+	mr.TransferSize, _ = meter.Int64Counter("source.image.transfer.io",
+		metric.WithDescription("Measures the number of bytes transferred for image content."),
+		metric.WithUnit("By"))
+
+	mr.TransferDuration, _ = meter.Float64Counter("source.image.transfer.time",
+		metric.WithDescription("Measures the length of time spent transferring image content."),
+		metric.WithUnit("ms"))
+
+	mr.ExtractDuration, _ = meter.Float64Counter("source.image.extract.time",
+		metric.WithDescription("Measures the length of time spent extracting image content."),
+		metric.WithUnit("ms"))
+	return mr
+}
+
+func (mr *imageSourceMetricRecorder) Record(ss *client.SolveStatus) {
+	for _, v := range ss.Vertexes {
+		if _, ok := mr.State[v.Digest]; !ok {
+			if !detectImageSourceType(v.Name) {
+				continue
+			}
+			mr.State[v.Digest] = struct{}{}
+		}
+	}
+
+	for _, status := range ss.Statuses {
+		// For this image type, we're only interested in completed statuses.
+		if status.Completed == nil {
+			continue
+		}
+
+		if status.Name == "extracting" {
+			dur := float64(status.Completed.Sub(*status.Started)) / float64(time.Millisecond)
+			mr.ExtractDuration.Add(context.Background(), dur,
+				metric.WithAttributeSet(mr.BaseAttributes),
+			)
+			continue
+		}
+
+		// Remaining statuses will be associated with the from node.
+		if _, ok := mr.State[status.Vertex]; !ok {
+			continue
+		}
+
+		if strings.HasPrefix(status.ID, "sha256:") {
+			// Signals a transfer. Record the duration and the size.
+			dur := float64(status.Completed.Sub(*status.Started)) / float64(time.Millisecond)
+			mr.TransferDuration.Add(context.Background(), dur,
+				metric.WithAttributeSet(mr.BaseAttributes),
+			)
+			mr.TransferSize.Add(context.Background(), status.Total,
+				metric.WithAttributeSet(mr.BaseAttributes),
+			)
+		}
+	}
+}
+
+var reImageSourceType = regexp.MustCompile(`^\[.*] FROM `)
+
+func detectImageSourceType(vertexName string) bool {
+	return reImageSourceType.MatchString(vertexName)
 }
