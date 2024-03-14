@@ -19,8 +19,6 @@ on:
 jobs:
   validate:
     runs-on: ubuntu-22.04
-    env:
-      GOLANGCI_LINT_MULTIPLATFORM: 1
     strategy:
       fail-fast: false
       matrix:
@@ -30,6 +28,12 @@ jobs:
           - validate-docs
           - validate-generated-files
     steps:
+      -
+        name: Prepare
+        run: |
+          if [ "$GITHUB_REPOSITORY" = "docker/buildx" ]; then
+            echo "GOLANGCI_LINT_MULTIPLATFORM=1" >> $GITHUB_ENV
+          fi
       -
         name: Checkout
         uses: actions/checkout@v4
