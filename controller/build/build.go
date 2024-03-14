@@ -3,7 +3,6 @@ package build
 import (
 	"context"
 	"io"
-	"os"
 	"path/filepath"
 	"strings"
 	"sync"
@@ -19,7 +18,6 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	"github.com/docker/cli/cli/config"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/container"
 	"github.com/moby/buildkit/client"
@@ -76,7 +74,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 	opts.Platforms = platforms
 
-	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+	dockerConfig := dockerCli.ConfigFile()
 	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(dockerConfig, nil))
 
 	secrets, err := controllerapi.CreateSecrets(in.Secrets)
