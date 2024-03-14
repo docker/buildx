@@ -26,7 +26,6 @@ jobs:
         name: Prepare
         run: |
           rm -rf ./data/buildx/*
-          rm -rf ./_vendor/github.com/docker/buildx
           if [ -n "${{ github.event.inputs.tag }}" ]; then
             echo "RELEASE_NAME=${{ github.event.inputs.tag }}" >> $GITHUB_ENV
           else
@@ -41,6 +40,7 @@ jobs:
         with:
           source: ${{ github.server_url }}/${{ github.repository }}.git#${{ env.RELEASE_NAME }}
           targets: update-docs
+          provenance: false
           set: |
             *.output=/tmp/buildx-docs
         env:
@@ -51,11 +51,10 @@ jobs:
           cp /tmp/buildx-docs/out/reference/*.yaml ./data/buildx/
       -
         name: Update vendor
-        uses: docker/bake-action@v4
-        with:
-          targets: vendor
-          set: |
-            vendor.args.MODULE=github.com/docker/buildx@${{ env.RELEASE_NAME }}
+        run: |
+          make vendor
+        env:
+          VENDOR_MODULE: github.com/docker/buildx@${{ env.RELEASE_NAME }}
       -
         name: Create PR on docs repo
         uses: peter-evans/create-pull-request@a4f52f8033a6168103c2538976c07b467e8163bc

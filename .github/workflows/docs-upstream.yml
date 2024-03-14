@@ -37,6 +37,7 @@ jobs:
         uses: docker/bake-action@v4
         with:
           targets: update-docs
+          provenance: false
           set: |
             *.output=/tmp/buildx-docs
             *.cache-from=type=gha,scope=docs-yaml
