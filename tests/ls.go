@@ -34,7 +34,7 @@ func testLs(t *testing.T, sb integration.Sandbox) {
 		},
 	}
 
-	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
+	sbDriver, _ := driverName(sb.Name())
 	for _, tt := range tests {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {

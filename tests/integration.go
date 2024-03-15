@@ -71,7 +71,27 @@ func dockerCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	return cmd
 }
 
+func isMobyWorker(sb integration.Sandbox) bool {
+	name, hasFeature := driverName(sb.Name())
+	return name == "docker" && !hasFeature
+}
+
 func isDockerWorker(sb integration.Sandbox) bool {
-	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
-	return sbDriver == "docker"
+	name, _ := driverName(sb.Name())
+	return name == "docker"
+}
+
+func isDockerContainerWorker(sb integration.Sandbox) bool {
+	name, _ := driverName(sb.Name())
+	return name == "docker-container"
+}
+
+func driverName(sbName string) (string, bool) {
+	name := sbName
+	var hasFeature bool
+	if b, _, ok := strings.Cut(name, "+"); ok {
+		name = b
+		hasFeature = true
+	}
+	return name, hasFeature
 }

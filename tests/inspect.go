@@ -41,7 +41,7 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 	}
 
 	require.Equal(t, sb.Address(), name)
-	sbDriver, _, _ := strings.Cut(sb.Name(), "+")
+	sbDriver, _ := driverName(sb.Name())
 	require.Equal(t, sbDriver, driver)
 	if isDockerWorker(sb) {
 		require.NotEmpty(t, hostGatewayIP, "host-gateway-ip worker label should be set with docker driver")
@@ -51,8 +51,8 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 }
 
 func testInspectBuildkitdFlags(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker-container" {
-		t.Skip("only testing for docker-container driver")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
 	}
 
 	var builderName string
@@ -81,8 +81,8 @@ func testInspectBuildkitdFlags(t *testing.T, sb integration.Sandbox) {
 }
 
 func testInspectNetworkHostEntitlement(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker-container" {
-		t.Skip("only testing for docker-container driver")
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
 	}
 
 	var builderName string
