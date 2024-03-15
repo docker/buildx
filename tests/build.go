@@ -17,6 +17,7 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/creack/pty"
 	"github.com/moby/buildkit/identity"
+	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/appdefaults"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
@@ -55,7 +56,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildNetworkModeBridge,
 	testBuildShmSize,
 	testBuildUlimit,
-	testBuildRef,
+	testBuildMetadata,
 	testBuildMultiExporters,
 	testBuildLoadPush,
 	testBuildSecret,
@@ -555,7 +556,19 @@ COPY --from=build /ulimit /
 	require.Contains(t, string(dt), `1024`)
 }
 
-func testBuildRef(t *testing.T, sb integration.Sandbox) {
+func testBuildMetadata(t *testing.T, sb integration.Sandbox) {
+	t.Run("max", func(t *testing.T) {
+		buildMetadata(t, sb, "max")
+	})
+	t.Run("min", func(t *testing.T) {
+		buildMetadata(t, sb, "min")
+	})
+	t.Run("disabled", func(t *testing.T) {
+		buildMetadata(t, sb, "disabled")
+	})
+}
+
+func buildMetadata(t *testing.T, sb integration.Sandbox, metadataMode string) {
 	dir := createTestProject(t)
 	dirDest := t.TempDir()
 
@@ -565,7 +578,11 @@ func testBuildRef(t *testing.T, sb integration.Sandbox) {
 		outFlag += ",dest=" + dirDest + "/image.tar"
 	}
 
-	cmd := buildxCmd(sb, withArgs("build", outFlag, "--metadata-file", filepath.Join(dirDest, "md.json"), dir))
+	cmd := buildxCmd(
+		sb,
+		withArgs("build", outFlag, "--metadata-file", filepath.Join(dirDest, "md.json"), dir),
+		withEnv("BUILDX_METADATA_PROVENANCE="+metadataMode),
+	)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 
@@ -573,13 +590,26 @@ func testBuildRef(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 
 	type mdT struct {
-		BuildRef string `json:"buildx.build.ref"`
+		BuildRef        string                 `json:"buildx.build.ref"`
+		BuildProvenance map[string]interface{} `json:"buildx.build.provenance"`
 	}
 	var md mdT
 	err = json.Unmarshal(dt, &md)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, md.BuildRef)
+	if metadataMode == "disabled" {
+		require.Empty(t, md.BuildProvenance)
+		return
+	}
+	require.NotEmpty(t, md.BuildProvenance)
+
+	dtprv, err := json.Marshal(md.BuildProvenance)
+	require.NoError(t, err)
+
+	var prv provenancetypes.ProvenancePredicate
+	require.NoError(t, json.Unmarshal(dtprv, &prv))
+	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
 }
 
 func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {

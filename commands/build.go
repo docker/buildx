@@ -121,26 +121,27 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	}
 
 	opts := controllerapi.BuildOptions{
-		Allow:          o.allow,
-		Annotations:    o.annotations,
-		BuildArgs:      buildArgs,
-		CgroupParent:   o.cgroupParent,
-		ContextPath:    o.contextPath,
-		DockerfileName: o.dockerfileName,
-		ExtraHosts:     o.extraHosts,
-		Labels:         labels,
-		NetworkMode:    o.networkMode,
-		NoCacheFilter:  o.noCacheFilter,
-		Platforms:      o.platforms,
-		ShmSize:        int64(o.shmSize),
-		Tags:           o.tags,
-		Target:         o.target,
-		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
-		Builder:        o.builder,
-		NoCache:        o.noCache,
-		Pull:           o.pull,
-		ExportPush:     o.exportPush,
-		ExportLoad:     o.exportLoad,
+		Allow:                  o.allow,
+		Annotations:            o.annotations,
+		BuildArgs:              buildArgs,
+		CgroupParent:           o.cgroupParent,
+		ContextPath:            o.contextPath,
+		DockerfileName:         o.dockerfileName,
+		ExtraHosts:             o.extraHosts,
+		Labels:                 labels,
+		NetworkMode:            o.networkMode,
+		NoCacheFilter:          o.noCacheFilter,
+		Platforms:              o.platforms,
+		ShmSize:                int64(o.shmSize),
+		Tags:                   o.tags,
+		Target:                 o.target,
+		Ulimits:                dockerUlimitToControllerUlimit(o.ulimits),
+		Builder:                o.builder,
+		NoCache:                o.noCache,
+		Pull:                   o.pull,
+		ExportPush:             o.exportPush,
+		ExportLoad:             o.exportLoad,
+		WithProvenanceResponse: len(o.metadataFile) > 0,
 	}
 
 	// TODO: extract env var parsing to a method easily usable by library consumers
@@ -582,7 +583,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
 	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#file"})
 
-	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to a file")
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
@@ -697,7 +698,7 @@ func commonBuildFlags(options *commonFlags, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 	options.pull = flags.Bool("pull", false, "Always attempt to pull all referenced images")
-	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to the file")
+	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to a file")
 }
 
 func checkWarnedFlags(f *pflag.Flag) {

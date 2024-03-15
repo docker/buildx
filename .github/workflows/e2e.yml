@@ -82,6 +82,8 @@ jobs:
             driver-opt: qemu.install=true
           - driver: remote
             endpoint: tcp://localhost:1234
+          - driver: docker-container
+            metadata-provenance: max
         exclude:
           - driver: docker
             multi-node: mnode-true
@@ -128,6 +130,9 @@ jobs:
             echo "MULTI_NODE=1" >> $GITHUB_ENV
           else
             echo "MULTI_NODE=0" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ matrix.metadata-provenance }}" ]; then
+            echo "BUILDX_METADATA_PROVENANCE=${{ matrix.metadata-provenance }}" >> $GITHUB_ENV
           fi
       -
         name: Install k3s
