@@ -338,7 +338,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	done := timeBuildCommand(mp, attributes)
 	var resp *client.SolveResponse
 	var retErr error
-	if isExperimental() {
+	if confutil.IsExperimental() {
 		resp, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
 	} else {
 		resp, retErr = runBasicBuild(ctx, dockerCli, opts, options, printer)
@@ -589,7 +589,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
-	if isExperimental() {
+	if confutil.IsExperimental() {
 		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
 		cobrautil.MarkFlagsExperimental(flags, "print")
 	}
@@ -617,7 +617,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--attest=type=provenance"`)
 
-	if isExperimental() {
+	if confutil.IsExperimental() {
 		// TODO: move this to debug command if needed
 		flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect")
 		flags.BoolVar(&options.Detach, "detach", false, "Detach buildx server (supported only on linux)")
@@ -760,14 +760,6 @@ func (w *wrapped) Error() string {
 
 func (w *wrapped) Unwrap() error {
 	return w.err
-}
-
-func isExperimental() bool {
-	if v, ok := os.LookupEnv("BUILDX_EXPERIMENTAL"); ok {
-		vv, _ := strconv.ParseBool(v)
-		return vv
-	}
-	return false
 }
 
 func updateLastActivity(dockerCli command.Cli, ng *store.NodeGroup) error {
