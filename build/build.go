@@ -484,6 +484,11 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						rr.ExporterResponse[k] = string(v)
 					}
 					rr.ExporterResponse["buildx.build.ref"] = buildRef
+					if node.Driver.HistoryAPISupported(ctx) {
+						if err := setRecordProvenance(ctx, c, rr, so.Ref, pw); err != nil {
+							return err
+						}
+					}
 
 					node := dp.Node().Driver
 					if node.IsMobyDriver() {

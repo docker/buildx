@@ -575,7 +575,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
 	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#file"})
 
-	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to a file")
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
@@ -690,7 +690,7 @@ func commonBuildFlags(options *commonFlags, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 	options.pull = flags.Bool("pull", false, "Always attempt to pull all referenced images")
-	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to the file")
+	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to a file")
 }
 
 func checkWarnedFlags(f *pflag.Flag) {
