@@ -7,6 +7,7 @@ import (
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	"github.com/docker/buildx/controller/remote"
 	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/logutil"
 	"github.com/docker/cli-docs-tool/annotation"
 	"github.com/docker/cli/cli"
@@ -63,7 +64,7 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 		"using default config store",
 	))
 
-	if !isExperimental() {
+	if !confutil.IsExperimental() {
 		cmd.SetHelpTemplate(cmd.HelpTemplate() + "\nExperimental commands and flags are hidden. Set BUILDX_EXPERIMENTAL=1 to show them.\n")
 	}
 
@@ -96,7 +97,7 @@ func addCommands(cmd *cobra.Command, dockerCli command.Cli) {
 		duCmd(dockerCli, opts),
 		imagetoolscmd.RootCmd(dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
 	)
-	if isExperimental() {
+	if confutil.IsExperimental() {
 		cmd.AddCommand(debugcmd.RootCmd(dockerCli,
 			newDebuggableBuild(dockerCli, opts),
 		))
