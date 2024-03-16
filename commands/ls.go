@@ -35,7 +35,8 @@ const (
 )
 
 type lsOptions struct {
-	format string
+	format  string
+	noTrunc bool
 }
 
 func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
@@ -72,7 +73,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 		return err
 	}
 
-	if hasErrors, err := lsPrint(dockerCli, current, builders, in.format); err != nil {
+	if hasErrors, err := lsPrint(dockerCli, current, builders, in); err != nil {
 		return err
 	} else if hasErrors {
 		_, _ = fmt.Fprintf(dockerCli.Err(), "\n")
@@ -107,6 +108,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVar(&options.format, "format", formatter.TableFormatKey, "Format the output")
+	flags.BoolVar(&options.noTrunc, "no-trunc", false, "Don't truncate output")
 
 	// hide builder persistent flag for this command
 	cobrautil.HideInheritedFlags(cmd, "builder")
@@ -114,14 +116,15 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 	return cmd
 }
 
-func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builder.Builder, format string) (hasErrors bool, _ error) {
-	if format == formatter.TableFormatKey {
-		format = lsDefaultTableFormat
+func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builder.Builder, in lsOptions) (hasErrors bool, _ error) {
+	if in.format == formatter.TableFormatKey {
+		in.format = lsDefaultTableFormat
 	}
 
 	ctx := formatter.Context{
 		Output: dockerCli.Out(),
-		Format: formatter.Format(format),
+		Format: formatter.Format(in.format),
+		Trunc:  !in.noTrunc,
 	}
 
 	sort.SliceStable(builders, func(i, j int) bool {
@@ -138,11 +141,12 @@ func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builde
 	render := func(format func(subContext formatter.SubContext) error) error {
 		for _, b := range builders {
 			if err := format(&lsContext{
+				format: ctx.Format,
+				trunc:  ctx.Trunc,
 				Builder: &lsBuilder{
 					Builder: b,
 					Current: b.Name == current.Name,
 				},
-				format: ctx.Format,
 			}); err != nil {
 				return err
 			}
@@ -160,6 +164,7 @@ func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builde
 				}
 				if err := format(&lsContext{
 					format: ctx.Format,
+					trunc:  ctx.Trunc,
 					Builder: &lsBuilder{
 						Builder: b,
 						Current: b.Name == current.Name,
@@ -196,6 +201,7 @@ type lsContext struct {
 	Builder *lsBuilder
 
 	format formatter.Format
+	trunc  bool
 	node   builder.Node
 }
 
@@ -261,7 +267,17 @@ func (c *lsContext) Platforms() string {
 	if c.node.Name == "" {
 		return ""
 	}
-	return strings.Join(platformutil.FormatInGroups(c.node.Node.Platforms, c.node.Platforms), ", ")
+	platforms := platformutil.FormatInGroups(c.node.Node.Platforms, c.node.Platforms)
+	if c.trunc && c.format.IsTable() {
+		tplatforms := truncPlatforms(platforms, 4)
+		left := len(platforms) - len(tplatforms)
+		out := strings.Join(tplatforms, ", ")
+		if left > 0 {
+			out += fmt.Sprintf(", (+%d)", left)
+		}
+		return out
+	}
+	return strings.Join(platforms, ", ")
 }
 
 func (c *lsContext) Error() string {
@@ -271,4 +287,58 @@ func (c *lsContext) Error() string {
 		return err.Error()
 	}
 	return ""
+}
+
+func truncPlatforms(platforms []string, max int) []string {
+	popularPlatforms := []string{
+		"linux/amd64",
+		"linux/arm64",
+		"linux/arm/v7",
+		"linux/ppc64le",
+		"linux/s390x",
+		"linux/riscv64",
+		"linux/mips64",
+	}
+	var res []string
+	m := map[string]struct{}{}
+	for _, prefp := range popularPlatforms {
+		for _, p := range platforms {
+			if len(res) >= max {
+				break
+			}
+			pp := strings.TrimSuffix(p, "*")
+			if _, ok := m[pp]; ok {
+				continue
+			}
+			if pp == prefp {
+				res = append(res, p)
+				m[pp] = struct{}{}
+			}
+		}
+	}
+	var left []string
+	for _, p := range platforms {
+		pp := strings.TrimSuffix(p, "*")
+		if _, ok := m[pp]; !ok {
+			left = append(left, p)
+		}
+	}
+	if len(left) > 0 && len(res) < max {
+		cl := max - len(res)
+		if cl > len(left) {
+			cl = len(left)
+		}
+		res = append(res, left[:cl]...)
+	}
+	sort.SliceStable(res, func(i, j int) bool {
+		ipref := strings.HasSuffix(res[i], "*")
+		jpref := strings.HasSuffix(res[j], "*")
+		if ipref && !jpref {
+			return true
+		} else if !ipref && jpref {
+			return false
+		}
+		return i < j
+	})
+	return res
 }
