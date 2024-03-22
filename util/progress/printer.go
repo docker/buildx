@@ -6,7 +6,6 @@ import (
 	"sync"
 
 	"github.com/containerd/console"
-	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/logutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
@@ -176,9 +175,7 @@ func WithDesc(text string, console string) PrinterOpt {
 
 func WithMetrics(mp metric.MeterProvider, attrs attribute.Set) PrinterOpt {
 	return func(opt *printerOpts) {
-		if confutil.IsExperimental() {
-			opt.mw = newMetrics(mp, attrs)
-		}
+		opt.mw = newMetrics(mp, attrs)
 	}
 }
 
