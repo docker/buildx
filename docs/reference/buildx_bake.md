@@ -162,6 +162,7 @@ You can override the following fields:
 * `context`
 * `dockerfile`
 * `labels`
+* `load`
 * `no-cache`
 * `no-cache-filter`
 * `output`
