@@ -215,9 +215,10 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/reference v0.5.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v26.0.0+incompatible
+# github.com/docker/cli v26.0.1-0.20240401150816-155dc5e4e406+incompatible
 ## explicit
 github.com/docker/cli/cli
+github.com/docker/cli/cli-plugins/hooks
 github.com/docker/cli/cli-plugins/manager
 github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli-plugins/socket
