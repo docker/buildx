@@ -50,7 +50,7 @@ func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) err
 	}
 
 	if !opts.force {
-		if ok, err := prompt(ctx, dockerCli.In(), dockerCli.Out(), warning); err != nil {
+		if ok, err := command.PromptForConfirmation(ctx, dockerCli.In(), dockerCli.Out(), warning); err != nil {
 			return err
 		} else if !ok {
 			return nil
