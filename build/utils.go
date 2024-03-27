@@ -105,7 +105,7 @@ func toBuildkitUlimits(inp *opts.UlimitOpt) (string, error) {
 	return strings.Join(ulimits, ","), nil
 }
 
-func notSupported(f driver.Feature, d driver.Driver, docs string) error {
+func notSupported(f driver.Feature, d *driver.DriverHandle, docs string) error {
 	return errors.Errorf(`%s is not supported for the %s driver.
 Switch to a different driver, or turn on the containerd image store, and try again.
 Learn more at %s`, f, d.Factory().Name(), docs)

@@ -15,7 +15,6 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -211,19 +210,12 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	return conn, nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
-	exp, _, err := detect.Exporter()
-	if err != nil {
-		return nil, err
-	}
-
-	var opts []client.ClientOpt
-	opts = append(opts, client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-		return d.Dial(ctx)
-	}))
-	if td, ok := exp.(client.TracerDelegate); ok {
-		opts = append(opts, client.WithTracerDelegate(td))
-	}
+func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
+	opts = append([]client.ClientOpt{
+		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+			return d.Dial(ctx)
+		}),
+	}, opts...)
 	return client.New(ctx, "", opts...)
 }
 

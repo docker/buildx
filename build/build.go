@@ -158,7 +158,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		return nil, errors.Wrapf(err, "no valid drivers found")
 	}
 
-	var noMobyDriver driver.Driver
+	var noMobyDriver *driver.DriverHandle
 	for _, n := range nodes {
 		if !n.Driver.IsMobyDriver() {
 			noMobyDriver = n.Driver
@@ -658,7 +658,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	return resp, nil
 }
 
-func pushWithMoby(ctx context.Context, d driver.Driver, name string, l progress.SubLogger) error {
+func pushWithMoby(ctx context.Context, d *driver.DriverHandle, name string, l progress.SubLogger) error {
 	api := d.Config().DockerAPI
 	if api == nil {
 		return errors.Errorf("invalid empty Docker API reference") // should never happen
@@ -738,7 +738,7 @@ func pushWithMoby(ctx context.Context, d driver.Driver, name string, l progress.
 	return nil
 }
 
-func remoteDigestWithMoby(ctx context.Context, d driver.Driver, name string) (string, error) {
+func remoteDigestWithMoby(ctx context.Context, d *driver.DriverHandle, name string) (string, error) {
 	api := d.Config().DockerAPI
 	if api == nil {
 		return "", errors.Errorf("invalid empty Docker API reference") // should never happen
