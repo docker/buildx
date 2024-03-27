@@ -11,6 +11,7 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/identity"
+	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -41,7 +42,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeEmpty,
 	testBakeShmSize,
 	testBakeUlimits,
-	testBakeRefs,
+	testBakeMetadata,
 	testBakeMultiExporters,
 	testBakeLoadPush,
 }
@@ -597,7 +598,16 @@ target "default" {
 	require.Contains(t, string(dt), `1024`)
 }
 
-func testBakeRefs(t *testing.T, sb integration.Sandbox) {
+func testBakeMetadata(t *testing.T, sb integration.Sandbox) {
+	t.Run("max", func(t *testing.T) {
+		bakeMetadata(t, sb, "max")
+	})
+	t.Run("min", func(t *testing.T) {
+		bakeMetadata(t, sb, "min")
+	})
+}
+
+func bakeMetadata(t *testing.T, sb integration.Sandbox, metadataMode string) {
 	dockerfile := []byte(`
 FROM scratch
 COPY foo /foo
@@ -621,7 +631,12 @@ target "default" {
 		outFlag += ",dest=" + dirDest + "/image.tar"
 	}
 
-	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", outFlag))
+	cmd := buildxCmd(
+		sb,
+		withDir(dir),
+		withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", outFlag),
+		withEnv("BUILDX_METADATA_PROVENANCE="+metadataMode),
+	)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, out)
 
@@ -630,7 +645,8 @@ target "default" {
 
 	type mdT struct {
 		Default struct {
-			BuildRef string `json:"buildx.build.ref"`
+			BuildRef        string                 `json:"buildx.build.ref"`
+			BuildProvenance map[string]interface{} `json:"buildx.build.provenance"`
 		} `json:"default"`
 	}
 	var md mdT
@@ -638,6 +654,14 @@ target "default" {
 	require.NoError(t, err)
 
 	require.NotEmpty(t, md.Default.BuildRef)
+	require.NotEmpty(t, md.Default.BuildProvenance)
+
+	dtprv, err := json.Marshal(md.Default.BuildProvenance)
+	require.NoError(t, err)
+
+	var prv provenancetypes.ProvenancePredicate
+	require.NoError(t, json.Unmarshal(dtprv, &prv))
+	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
 }
 
 func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
