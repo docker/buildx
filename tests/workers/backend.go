@@ -39,6 +39,10 @@ func (s *backend) NetNSDetached() bool {
 	return false
 }
 
+func (s *backend) ExtraEnv() []string {
+	return nil
+}
+
 func (s backend) Supports(feature string) bool {
 	if enabledFeatures := os.Getenv("BUILDKIT_TEST_ENABLE_FEATURES"); enabledFeatures != "" {
 		for _, enabledFeature := range strings.Split(enabledFeatures, ",") {
