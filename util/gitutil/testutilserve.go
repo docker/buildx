@@ -10,10 +10,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func GitServeHTTP(c *Git, t testing.TB) (url string) {
+type gitServe struct {
+	token string
+}
+
+type GitServeOpt func(*gitServe)
+
+func WithAccessToken(token string) GitServeOpt {
+	return func(s *gitServe) {
+		s.token = token
+	}
+}
+
+func GitServeHTTP(c *Git, t testing.TB, opts ...GitServeOpt) (url string) {
 	t.Helper()
 	gitUpdateServerInfo(c, t)
 	ctx, cancel := context.WithCancel(context.TODO())
+
+	gs := &gitServe{}
+	for _, opt := range opts {
+		opt(gs)
+	}
 
 	ready := make(chan struct{})
 	done := make(chan struct{})
@@ -28,7 +45,25 @@ func GitServeHTTP(c *Git, t testing.TB) (url string) {
 	go func() {
 		mux := http.NewServeMux()
 		prefix := fmt.Sprintf("/%s/", name)
-		mux.Handle(prefix, http.StripPrefix(prefix, http.FileServer(http.Dir(dir))))
+
+		handler := func(next http.Handler) http.Handler {
+			var tokenChecked bool
+			return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+				if gs.token != "" && !tokenChecked {
+					t.Logf("git access token to check: %q", gs.token)
+					user, pass, _ := r.BasicAuth()
+					t.Logf("basic auth: user=%q pass=%q", user, pass)
+					if pass != gs.token {
+						http.Error(w, "Unauthorized", http.StatusUnauthorized)
+						return
+					}
+					tokenChecked = true
+				}
+				next.ServeHTTP(w, r)
+			})
+		}
+
+		mux.Handle(prefix, handler(http.StripPrefix(prefix, http.FileServer(http.Dir(dir)))))
 		l, err := net.Listen("tcp", "localhost:0")
 		if err != nil {
 			panic(err)
