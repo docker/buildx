@@ -30,7 +30,6 @@ import (
 	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 )
 
@@ -396,28 +395,21 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	return conn, nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
+func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
 	conn, err := d.Dial(ctx)
 	if err != nil {
 		return nil, err
 	}
 
-	exp, _, err := detect.Exporter()
-	if err != nil {
-		return nil, err
-	}
-
-	var opts []client.ClientOpt
 	var counter int64
-	opts = append(opts, client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-		if atomic.AddInt64(&counter, 1) > 1 {
-			return nil, net.ErrClosed
-		}
-		return conn, nil
-	}))
-	if td, ok := exp.(client.TracerDelegate); ok {
-		opts = append(opts, client.WithTracerDelegate(td))
-	}
+	opts = append([]client.ClientOpt{
+		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+			if atomic.AddInt64(&counter, 1) > 1 {
+				return nil, net.ErrClosed
+			}
+			return conn, nil
+		}),
+	}, opts...)
 	return client.New(ctx, "", opts...)
 }
 

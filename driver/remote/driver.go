@@ -14,7 +14,6 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/connhelper"
-	"github.com/moby/buildkit/util/tracing/detect"
 	"github.com/pkg/errors"
 )
 
@@ -77,21 +76,12 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 	return nil
 }
 
-func (d *Driver) Client(ctx context.Context) (*client.Client, error) {
-	opts := []client.ClientOpt{}
-
-	exp, _, err := detect.Exporter()
-	if err != nil {
-		return nil, err
-	}
-	if td, ok := exp.(client.TracerDelegate); ok {
-		opts = append(opts, client.WithTracerDelegate(td))
-	}
-
-	opts = append(opts, client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-		return d.Dial(ctx)
-	}))
-
+func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
+	opts = append([]client.ClientOpt{
+		client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return d.Dial(ctx)
+		}),
+	}, opts...)
 	return client.New(ctx, "", opts...)
 }
 
