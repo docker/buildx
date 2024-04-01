@@ -133,10 +133,14 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			deploymentOpt.RequestsCPU = v
 		case "requests.memory":
 			deploymentOpt.RequestsMemory = v
+		case "requests.ephemeral-storage":
+			deploymentOpt.RequestsEphemeralStorage = v
 		case "limits.cpu":
 			deploymentOpt.LimitsCPU = v
 		case "limits.memory":
 			deploymentOpt.LimitsMemory = v
+		case "limits.ephemeral-storage":
+			deploymentOpt.LimitsEphemeralStorage = v
 		case "rootless":
 			deploymentOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
