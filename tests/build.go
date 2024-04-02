@@ -36,6 +36,7 @@ func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 
 var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuild,
+	testBuildStdin,
 	testImageIDOutput,
 	testBuildLocalExport,
 	testBuildRegistryExport,
@@ -62,6 +63,26 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 func testBuild(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
 	out, err := buildCmd(sb, withArgs(dir))
+	require.NoError(t, err, string(out))
+}
+
+func testBuildStdin(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox:latest AS base
+COPY foo /etc/foo
+RUN cp /etc/foo /etc/bar
+
+FROM scratch
+COPY --from=base /etc/bar /bar
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("build", "--progress=quiet", "-f-", dir))
+	cmd.Stdin = bytes.NewReader(dockerfile)
+	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 }
 
