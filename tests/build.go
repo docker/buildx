@@ -58,6 +58,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildRef,
 	testBuildMultiExporters,
 	testBuildLoadPush,
+	testBuildSecret,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -694,6 +695,49 @@ func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, cmd.Run())
 
 	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
+}
+
+func testBuildSecret(t *testing.T, sb integration.Sandbox) {
+	token := "abcd1234"
+	dockerfile := []byte(`
+FROM busybox AS build
+RUN --mount=type=secret,id=token cat /run/secrets/token | tee /token
+FROM scratch
+COPY --from=build /token /
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("tokenfile", []byte(token), 0600),
+	)
+
+	t.Run("env", func(t *testing.T) {
+		t.Cleanup(func() {
+			_ = os.Remove(filepath.Join(dir, "token"))
+		})
+
+		cmd := buildxCmd(sb, withEnv("TOKEN="+token), withArgs("build", "--secret=id=token,env=TOKEN", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		dt, err := os.ReadFile(filepath.Join(dir, "token"))
+		require.NoError(t, err)
+		require.Equal(t, token, string(dt))
+	})
+
+	t.Run("file", func(t *testing.T) {
+		t.Cleanup(func() {
+			_ = os.Remove(filepath.Join(dir, "token"))
+		})
+
+		cmd := buildxCmd(sb, withArgs("build", "--secret=id=token,src="+path.Join(dir, "tokenfile"), fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		dt, err := os.ReadFile(filepath.Join(dir, "token"))
+		require.NoError(t, err)
+		require.Equal(t, token, string(dt))
+	})
 }
 
 func createTestProject(t *testing.T) string {
