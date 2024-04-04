@@ -3,6 +3,7 @@ package tests
 import (
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -55,6 +56,9 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	if context := sb.DockerAddress(); context != "" {
 		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
 	}
+	if isExperimental() {
+		cmd.Env = append(cmd.Env, "BUILDX_EXPERIMENTAL=1")
+	}
 
 	return cmd
 }
@@ -94,4 +98,12 @@ func driverName(sbName string) (string, bool) {
 		hasFeature = true
 	}
 	return name, hasFeature
+}
+
+func isExperimental() bool {
+	if v, ok := os.LookupEnv("TEST_BUILDX_EXPERIMENTAL"); ok {
+		vv, _ := strconv.ParseBool(v)
+		return vv
+	}
+	return false
 }
