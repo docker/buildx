@@ -266,11 +266,8 @@ func (o *buildOptionsHash) String() string {
 }
 
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
-	mp, err := metricutil.NewMeterProvider(ctx, dockerCli)
-	if err != nil {
-		return err
-	}
-	defer mp.Report(context.Background())
+	mp := dockerCli.MeterProvider(ctx)
+	defer metricutil.Shutdown(ctx, mp)
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
 	if err != nil {

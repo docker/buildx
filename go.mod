@@ -14,7 +14,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/creack/pty v1.1.18
 	github.com/distribution/reference v0.5.0
-	github.com/docker/cli v26.0.0+incompatible
+	github.com/docker/cli v26.0.1-0.20240401150816-155dc5e4e406+incompatible
 	github.com/docker/cli-docs-tool v0.7.0
 	github.com/docker/docker v26.0.0+incompatible
 	github.com/docker/go-units v0.5.0
@@ -42,11 +42,11 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20240301111122-7525a1af2bb5
 	github.com/zclconf/go-cty v1.14.1
 	go.opentelemetry.io/otel v1.21.0
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.42.0
-	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v0.42.0
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.42.0 // indirect
+	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v0.42.0 // indirect
 	go.opentelemetry.io/otel/metric v1.21.0
-	go.opentelemetry.io/otel/sdk v1.21.0
-	go.opentelemetry.io/otel/sdk/metric v1.21.0
+	go.opentelemetry.io/otel/sdk v1.21.0 // indirect
+	go.opentelemetry.io/otel/sdk/metric v1.21.0 // indirect
 	go.opentelemetry.io/otel/trace v1.21.0
 	golang.org/x/mod v0.14.0
 	golang.org/x/sync v0.6.0
