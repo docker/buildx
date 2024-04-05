@@ -94,6 +94,11 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if err != nil {
 				return nil, err
 			}
+		case k == "default-load":
+			d.defaultLoad, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
+			}
 		case strings.HasPrefix(k, "env."):
 			envName := strings.TrimPrefix(k, "env.")
 			if envName == "" {
