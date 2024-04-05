@@ -852,7 +852,9 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 	case "subrequests.describe":
 		return printValue(subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
 	default:
-		if dt, ok := res["result.txt"]; ok {
+		if dt, ok := res["result.json"]; ok && f.Format == "json" {
+			fmt.Println(dt)
+		} else if dt, ok := res["result.txt"]; ok {
 			fmt.Print(dt)
 		} else {
 			log.Printf("%s %+v", f, res)
