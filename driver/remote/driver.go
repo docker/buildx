@@ -24,6 +24,7 @@ type Driver struct {
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/remote.md
 	*tlsOpts
+	defaultLoad bool
 }
 
 type tlsOpts struct {
@@ -149,6 +150,7 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 		driver.DockerExporter: true,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true,
+		driver.DefaultLoad:    d.defaultLoad,
 	}
 }
 

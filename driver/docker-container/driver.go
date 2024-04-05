@@ -56,6 +56,7 @@ type Driver struct {
 	cgroupParent  string
 	restartPolicy container.RestartPolicy
 	env           []string
+	defaultLoad   bool
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -423,6 +424,7 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 		driver.DockerExporter: true,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true,
+		driver.DefaultLoad:    d.defaultLoad,
 	}
 }
 
