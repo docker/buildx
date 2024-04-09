@@ -20,6 +20,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
 
 	"github.com/docker/go-connections/nat"
@@ -365,13 +366,37 @@ type Resources struct {
 // Resource is a resource to be limited or reserved
 type Resource struct {
 	// TODO: types to convert from units and ratios
-	NanoCPUs         string            `yaml:"cpus,omitempty" json:"cpus,omitempty"`
+	NanoCPUs         NanoCPUs          `yaml:"cpus,omitempty" json:"cpus,omitempty"`
 	MemoryBytes      UnitBytes         `yaml:"memory,omitempty" json:"memory,omitempty"`
 	Pids             int64             `yaml:"pids,omitempty" json:"pids,omitempty"`
 	Devices          []DeviceRequest   `yaml:"devices,omitempty" json:"devices,omitempty"`
 	GenericResources []GenericResource `yaml:"generic_resources,omitempty" json:"generic_resources,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
+}
+
+type NanoCPUs float32
+
+func (n *NanoCPUs) DecodeMapstructure(a any) error {
+	switch v := a.(type) {
+	case string:
+		f, err := strconv.ParseFloat(v, 64)
+		if err != nil {
+			return err
+		}
+		*n = NanoCPUs(f)
+	case float32:
+		*n = NanoCPUs(v)
+	case float64:
+		*n = NanoCPUs(v)
+	default:
+		return fmt.Errorf("unexpected value type %T for cpus", v)
+	}
+	return nil
+}
+
+func (n *NanoCPUs) Value() float32 {
+	return float32(*n)
 }
 
 // GenericResource represents a "user defined" resource which can
@@ -433,11 +458,13 @@ type ServiceNetworkConfig struct {
 
 // ServicePortConfig is the port configuration for a service
 type ServicePortConfig struct {
-	Mode      string `yaml:"mode,omitempty" json:"mode,omitempty"`
-	HostIP    string `yaml:"host_ip,omitempty" json:"host_ip,omitempty"`
-	Target    uint32 `yaml:"target,omitempty" json:"target,omitempty"`
-	Published string `yaml:"published,omitempty" json:"published,omitempty"`
-	Protocol  string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	Name        string `yaml:"name,omitempty" json:"name,omitempty"`
+	Mode        string `yaml:"mode,omitempty" json:"mode,omitempty"`
+	HostIP      string `yaml:"host_ip,omitempty" json:"host_ip,omitempty"`
+	Target      uint32 `yaml:"target,omitempty" json:"target,omitempty"`
+	Published   string `yaml:"published,omitempty" json:"published,omitempty"`
+	Protocol    string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+	AppProtocol string `yaml:"app_protocol,omitempty" json:"app_protocol,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
@@ -511,6 +538,9 @@ func (s ServiceVolumeConfig) String() string {
 	if s.Volume != nil && s.Volume.NoCopy {
 		options = append(options, "nocopy")
 	}
+	if s.Volume != nil && s.Volume.Subpath != "" {
+		options = append(options, s.Volume.Subpath)
+	}
 	return fmt.Sprintf("%s:%s:%s", s.Source, s.Target, strings.Join(options, ","))
 }
 
@@ -567,7 +597,8 @@ const (
 
 // ServiceVolumeVolume are options for a service volume of type volume
 type ServiceVolumeVolume struct {
-	NoCopy bool `yaml:"nocopy,omitempty" json:"nocopy,omitempty"`
+	NoCopy  bool   `yaml:"nocopy,omitempty" json:"nocopy,omitempty"`
+	Subpath string `yaml:"subpath,omitempty" json:"subpath,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
