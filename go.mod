@@ -40,7 +40,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/tonistiigi/fsutil v0.0.0-20240301111122-7525a1af2bb5
-	github.com/zclconf/go-cty v1.14.1
+	github.com/zclconf/go-cty v1.14.4
 	go.opentelemetry.io/otel v1.21.0
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetricgrpc v0.42.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlpmetric/otlpmetrichttp v0.42.0 // indirect
