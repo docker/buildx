@@ -615,10 +615,18 @@ For more information, see [here](https://docs.docker.com/build/attestations/sbom
 --secret=[type=TYPE[,KEY=VALUE]
 ```
 
-Exposes secret to the build. The secret can be used by the build using
-[`RUN --mount=type=secret` mount](https://docs.docker.com/reference/dockerfile/#run---mounttypesecret).
+Exposes secrets (authentication credentials, tokens) to the build.
+A secret can be mounted into the build using a `RUN --mount=type=secret` mount in the
+[Dockerfile](https://docs.docker.com/reference/dockerfile/#run---mounttypesecret).
+For more information about how to use build secrets, see
+[Build secrets](https://docs.docker.com/build/building/secrets/).
 
-If `type` is unset it will be detected. Supported types are:
+Supported types are:
+
+- [`file`](#file)
+- [`env`](#env)
+
+Buildx attempts to detect the `type` automatically if unset.
 
 #### `file`
 
