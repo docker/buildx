@@ -418,14 +418,22 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	var ref string
 	var retErr error
 	var resp *client.SolveResponse
-	f := ioset.NewSingleForwarder()
-	f.SetReader(dockerCli.In())
-	pr, pw := io.Pipe()
-	f.SetWriter(pw, func() io.WriteCloser {
-		pw.Close() // propagate EOF
-		logrus.Debug("propagating stdin close")
-		return nil
-	})
+
+	var f *ioset.SingleForwarder
+	var pr io.ReadCloser
+	var pw io.WriteCloser
+	if options.invokeConfig == nil {
+		pr = dockerCli.In()
+	} else {
+		f = ioset.NewSingleForwarder()
+		f.SetReader(dockerCli.In())
+		pr, pw = io.Pipe()
+		f.SetWriter(pw, func() io.WriteCloser {
+			pw.Close() // propagate EOF
+			logrus.Debug("propagating stdin close")
+			return nil
+		})
+	}
 
 	ref, resp, err = c.Build(ctx, *opts, pr, printer)
 	if err != nil {
@@ -439,11 +447,13 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		}
 	}
 
-	if err := pw.Close(); err != nil {
-		logrus.Debug("failed to close stdin pipe writer")
-	}
-	if err := pr.Close(); err != nil {
-		logrus.Debug("failed to close stdin pipe reader")
+	if options.invokeConfig != nil {
+		if err := pw.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe writer")
+		}
+		if err := pr.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe reader")
+		}
 	}
 
 	if options.invokeConfig != nil && options.invokeConfig.needsDebug(retErr) {
