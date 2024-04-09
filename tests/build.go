@@ -69,11 +69,6 @@ func testBuild(t *testing.T, sb integration.Sandbox) {
 }
 
 func testBuildStdin(t *testing.T, sb integration.Sandbox) {
-	if isExperimental() {
-		// FIXME: https://github.com/docker/buildx/issues/2368
-		t.Skip("build from stdin hangs in experimental mode: https://github.com/docker/buildx/issues/2368")
-	}
-
 	dockerfile := []byte(`
 FROM busybox:latest AS base
 COPY foo /etc/foo
