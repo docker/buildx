@@ -418,7 +418,7 @@ exporter and write to `stdout`.
 ```console
 $ docker buildx build -o . .
 $ docker buildx build -o outdir .
-$ docker buildx build -o - - > out.tar
+$ docker buildx build -o - . > out.tar
 $ docker buildx build -o type=docker .
 $ docker buildx build -o type=docker,dest=- . > myimage.tar
 $ docker buildx build -t tonistiigi/foo -o type=registry
