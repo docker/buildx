@@ -446,7 +446,7 @@ github.com/hashicorp/go-cty-funcs/cidr
 github.com/hashicorp/go-cty-funcs/crypto
 github.com/hashicorp/go-cty-funcs/encoding
 github.com/hashicorp/go-cty-funcs/uuid
-# github.com/hashicorp/hcl/v2 v2.19.1
+# github.com/hashicorp/hcl/v2 v2.20.1
 ## explicit; go 1.18
 github.com/hashicorp/hcl/v2
 github.com/hashicorp/hcl/v2/ext/customdecode
@@ -727,7 +727,7 @@ github.com/xeipuuv/gojsonreference
 # github.com/xeipuuv/gojsonschema v1.2.0
 ## explicit
 github.com/xeipuuv/gojsonschema
-# github.com/zclconf/go-cty v1.14.1
+# github.com/zclconf/go-cty v1.14.4
 ## explicit; go 1.18
 github.com/zclconf/go-cty/cty
 github.com/zclconf/go-cty/cty/convert

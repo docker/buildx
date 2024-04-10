@@ -24,7 +24,7 @@ require (
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
-	github.com/hashicorp/hcl/v2 v2.19.1
+	github.com/hashicorp/hcl/v2 v2.20.1
 	github.com/in-toto/in-toto-golang v0.5.0
 	github.com/moby/buildkit v0.13.0-rc3.0.20240328152707-25bec7145b39 // v0.14.0-dev
 	github.com/moby/sys/mountinfo v0.7.1
@@ -40,7 +40,7 @@ require (
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
 	github.com/tonistiigi/fsutil v0.0.0-20240301111122-7525a1af2bb5
-	github.com/zclconf/go-cty v1.14.1
+	github.com/zclconf/go-cty v1.14.4
 	go.opentelemetry.io/otel v1.21.0
 	go.opentelemetry.io/otel/metric v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
