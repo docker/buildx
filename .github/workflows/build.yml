@@ -51,9 +51,9 @@ jobs:
           - remote
         pkg:
           - ./tests
-        experimental:
+        mode:
           - ""
-          - 1
+          - experimental
         include:
           - worker: docker
             pkg: ./tests
@@ -61,15 +61,15 @@ jobs:
             pkg: ./tests
           - worker: docker
             pkg: ./tests
-            experimental: 1
+            mode: experimental
           - worker: docker+containerd  # same as docker, but with containerd snapshotter
             pkg: ./tests
-            experimental: 1
+            mode: experimental
     steps:
       -
         name: Prepare
         run: |
-          echo "TESTREPORTS_NAME=${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.buildkit }}-${{ matrix.worker }}-${{ matrix.experimental }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "TESTREPORTS_NAME=${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.buildkit }}-${{ matrix.worker }}-${{ matrix.mode }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
           if [ -n "${{ matrix.buildkit }}" ]; then
             echo "TEST_BUILDKIT_TAG=${{ matrix.buildkit }}" >> $GITHUB_ENV
           fi
@@ -84,6 +84,9 @@ jobs:
           esac
           if [[ "${{ matrix.worker }}" == "docker"* ]]; then
             echo "TEST_DOCKERD=1" >> $GITHUB_ENV
+          fi
+          if [ "${{ matrix.mode }}" = "experimental" ]; then
+            echo "TEST_BUILDX_EXPERIMENTAL=1" >> $GITHUB_ENV
           fi
       -
         name: Checkout
@@ -113,7 +116,6 @@ jobs:
           ./hack/test
         env:
           TEST_REPORT_SUFFIX: "-${{ env.TESTREPORTS_NAME }}"
-          TEST_BUILDX_EXPERIMENTAL: ${{ matrix.experimental }}
           TESTPKGS: "${{ matrix.pkg }}"
       -
         name: Send to Codecov
