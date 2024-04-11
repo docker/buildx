@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
@@ -680,6 +679,7 @@ func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.13.0-0", "multi exporters")
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -690,29 +690,11 @@ func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
 	targetReg := registry + "/buildx/registry:latest"
 	targetStore := "buildx:local-" + identity.NewID()
 
-	var builderName string
 	t.Cleanup(func() {
-		if builderName == "" {
-			return
-		}
-
 		cmd := dockerCmd(sb, withArgs("image", "rm", targetStore))
 		cmd.Stderr = os.Stderr
 		require.NoError(t, cmd.Run())
-
-		out, err := rmCmd(sb, withArgs(builderName))
-		require.NoError(t, err, out)
 	})
-
-	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs(
-		"--driver", "docker-container",
-		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
-		"--driver-opt", "network=host",
-		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
-	))
-	require.NoError(t, err, out)
-	builderName = strings.TrimSpace(out)
 
 	dockerfile := []byte(`
 FROM scratch
@@ -735,7 +717,6 @@ target "default" {
 		"--set", fmt.Sprintf("*.output=type=oci,dest=%s/result", dir),
 	}
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake"), withArgs(outputs...))
-	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 
@@ -761,6 +742,7 @@ func testBakeLoadPush(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.13.0-0", "multi exporters")
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -770,29 +752,11 @@ func testBakeLoadPush(t *testing.T, sb integration.Sandbox) {
 
 	target := registry + "/buildx/registry:" + identity.NewID()
 
-	var builderName string
 	t.Cleanup(func() {
-		if builderName == "" {
-			return
-		}
-
 		cmd := dockerCmd(sb, withArgs("image", "rm", target))
 		cmd.Stderr = os.Stderr
 		require.NoError(t, cmd.Run())
-
-		out, err := rmCmd(sb, withArgs(builderName))
-		require.NoError(t, err, out)
 	})
-
-	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs(
-		"--driver", "docker-container",
-		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
-		"--driver-opt", "network=host",
-		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
-	))
-	require.NoError(t, err, out)
-	builderName = strings.TrimSpace(out)
 
 	dockerfile := []byte(`
 FROM scratch
@@ -810,7 +774,6 @@ target "default" {
 	)
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--push", "--load", fmt.Sprintf("--set=*.tags=%s", target)))
-	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 

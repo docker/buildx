@@ -30,35 +30,8 @@ env:
   GOTESTSUM_VERSION: "v1.9.0"  # same as one in Dockerfile
 
 jobs:
-  prepare-test-integration:
-    runs-on: ubuntu-22.04
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          version: ${{ env.BUILDX_VERSION }}
-          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
-          buildkitd-flags: --debug
-      -
-        name: Build
-        uses: docker/bake-action@v4
-        with:
-          targets: integration-test-base
-          set: |
-            *.cache-from=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
-            *.cache-to=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
-
   test-integration:
     runs-on: ubuntu-22.04
-    needs:
-      - prepare-test-integration
     env:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       TEST_IMAGE_BUILD: "0"
@@ -66,21 +39,55 @@ jobs:
     strategy:
       fail-fast: false
       matrix:
+        buildkit:
+          - master
+          - latest
+          - buildx-stable-1
+          - v0.13.1
+          - v0.12.5
+          - v0.11.6
         worker:
-          - docker
-          - docker\+containerd  # same as docker, but with containerd snapshotter
           - docker-container
           - remote
         pkg:
           - ./tests
-        experimental:
+        mode:
           - ""
-          - 1
+          - experimental
+        include:
+          - worker: docker
+            pkg: ./tests
+          - worker: docker+containerd  # same as docker, but with containerd snapshotter
+            pkg: ./tests
+          - worker: docker
+            pkg: ./tests
+            mode: experimental
+          - worker: docker+containerd  # same as docker, but with containerd snapshotter
+            pkg: ./tests
+            mode: experimental
     steps:
       -
         name: Prepare
         run: |
-          echo "TESTREPORTS_NAME=${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.worker }}-${{ matrix.experimental }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          echo "TESTREPORTS_NAME=${{ github.job }}-$(echo "${{ matrix.pkg }}-${{ matrix.buildkit }}-${{ matrix.worker }}-${{ matrix.mode }}" | tr -dc '[:alnum:]-\n\r' | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+          if [ -n "${{ matrix.buildkit }}" ]; then
+            echo "TEST_BUILDKIT_TAG=${{ matrix.buildkit }}" >> $GITHUB_ENV
+          fi
+          testFlags="--run=//worker=$(echo "${{ matrix.worker }}" | sed 's/\+/\\+/g')$"
+          case "${{ matrix.worker }}" in
+            docker | docker+containerd)
+              echo "TESTFLAGS=${{ env.TESTFLAGS_DOCKER }} $testFlags" >> $GITHUB_ENV
+              ;;
+            *)
+              echo "TESTFLAGS=${{ env.TESTFLAGS }} $testFlags" >> $GITHUB_ENV
+              ;;
+          esac
+          if [[ "${{ matrix.worker }}" == "docker"* ]]; then
+            echo "TEST_DOCKERD=1" >> $GITHUB_ENV
+          fi
+          if [ "${{ matrix.mode }}" = "experimental" ]; then
+            echo "TEST_BUILDX_EXPERIMENTAL=1" >> $GITHUB_ENV
+          fi
       -
         name: Checkout
         uses: actions/checkout@v4
@@ -102,7 +109,6 @@ jobs:
         with:
           targets: integration-test
           set: |
-            *.cache-from=type=gha,scope=${{ env.TEST_CACHE_SCOPE }}
             *.output=type=docker,name=${{ env.TEST_IMAGE_ID }}
       -
         name: Test
@@ -110,9 +116,6 @@ jobs:
           ./hack/test
         env:
           TEST_REPORT_SUFFIX: "-${{ env.TESTREPORTS_NAME }}"
-          TEST_BUILDX_EXPERIMENTAL: ${{ matrix.experimental }}
-          TEST_DOCKERD: "${{ startsWith(matrix.worker, 'docker') && '1' || '0' }}"
-          TESTFLAGS: "${{ (matrix.worker == 'docker' || matrix.worker == 'docker\\+containerd') && env.TESTFLAGS_DOCKER || env.TESTFLAGS }} --run=//worker=${{ matrix.worker }}$"
           TESTPKGS: "${{ matrix.pkg }}"
       -
         name: Send to Codecov
@@ -359,27 +362,3 @@ jobs:
         with:
           draft: true
           files: ${{ env.DESTDIR }}/*
-
-  buildkit-edge:
-    runs-on: ubuntu-22.04
-    continue-on-error: true
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          version: ${{ env.BUILDX_VERSION }}
-          driver-opts: image=moby/buildkit:master
-          buildkitd-flags: --debug
-      -
-        # Just run a bake target to check eveything runs fine
-        name: Build
-        uses: docker/bake-action@v4
-        with:
-          targets: binaries
