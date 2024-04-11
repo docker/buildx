@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.26.6
 	github.com/compose-spec/compose-go/v2 v2.0.2
 	github.com/containerd/console v1.0.4
-	github.com/containerd/containerd v1.7.14
+	github.com/containerd/containerd v1.7.15
 	github.com/containerd/continuity v0.4.3
 	github.com/containerd/log v0.1.0
 	github.com/containerd/typeurl/v2 v2.1.1
@@ -20,13 +20,13 @@ require (
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/protobuf v1.3.2
-	github.com/golang/protobuf v1.5.3
+	github.com/golang/protobuf v1.5.4
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
 	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
 	github.com/hashicorp/hcl/v2 v2.20.1
 	github.com/in-toto/in-toto-golang v0.5.0
-	github.com/moby/buildkit v0.13.0-rc3.0.20240328152707-25bec7145b39 // v0.14.0-dev
+	github.com/moby/buildkit v0.13.0-rc3.0.20240411143343-549891b34890 // v0.14.0-dev
 	github.com/moby/sys/mountinfo v0.7.1
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
@@ -100,7 +100,6 @@ require (
 	github.com/google/gofuzz v1.2.0 // indirect
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
-	github.com/grpc-ecosystem/go-grpc-middleware v1.3.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
@@ -166,7 +165,7 @@ require (
 	google.golang.org/genproto v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20231016165738-49dd2c1f3d0b // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20231016165738-49dd2c1f3d0b // indirect
-	google.golang.org/protobuf v1.31.0 // indirect
+	google.golang.org/protobuf v1.33.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog/v2 v2.110.1 // indirect
