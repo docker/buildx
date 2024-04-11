@@ -894,19 +894,17 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			}
 			t.Pull = &pull
 		case "push":
-			_, err := strconv.ParseBool(value)
+			push, err := strconv.ParseBool(value)
 			if err != nil {
 				return errors.Errorf("invalid value %s for boolean key push", value)
 			}
-			if len(t.Outputs) == 0 {
-				t.Outputs = append(t.Outputs, "type=image,push=true")
-			} else {
-				for i, output := range t.Outputs {
-					if typ := parseOutputType(output); typ == "image" || typ == "registry" {
-						t.Outputs[i] = t.Outputs[i] + ",push=" + value
-					}
-				}
+			t.Outputs = setPushOverride(t.Outputs, push)
+		case "load":
+			load, err := strconv.ParseBool(value)
+			if err != nil {
+				return errors.Errorf("invalid value %s for boolean key load", value)
 			}
+			t.Outputs = setLoadOverride(t.Outputs, load)
 		default:
 			return errors.Errorf("unknown key: %s", keys[0])
 		}
@@ -1394,21 +1392,88 @@ func removeAttestDupes(s []string) []string {
 	return res
 }
 
-func parseOutputType(str string) string {
+func parseOutput(str string) map[string]string {
 	csvReader := csv.NewReader(strings.NewReader(str))
 	fields, err := csvReader.Read()
 	if err != nil {
-		return ""
+		return nil
 	}
+	res := map[string]string{}
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		if len(parts) == 2 {
-			if parts[0] == "type" {
-				return parts[1]
-			}
+			res[parts[0]] = parts[1]
+		}
+	}
+	return res
+}
+
+func parseOutputType(str string) string {
+	if out := parseOutput(str); out != nil {
+		if v, ok := out["type"]; ok {
+			return v
 		}
 	}
 	return ""
+}
+
+func setPushOverride(outputs []string, push bool) []string {
+	var out []string
+	setPush := true
+	for _, output := range outputs {
+		typ := parseOutputType(output)
+		if typ == "image" || typ == "registry" {
+			// no need to set push if image or registry types already defined
+			setPush = false
+			if typ == "registry" {
+				if !push {
+					// don't set registry output if "push" is false
+					continue
+				}
+				// no need to set "push" attribute to true for registry
+				out = append(out, output)
+				continue
+			}
+			out = append(out, output+",push="+strconv.FormatBool(push))
+		} else {
+			if typ != "docker" {
+				// if there is any output that is not docker, don't set "push"
+				setPush = false
+			}
+			out = append(out, output)
+		}
+	}
+	if push && setPush {
+		out = append(out, "type=image,push=true")
+	}
+	return out
+}
+
+func setLoadOverride(outputs []string, load bool) []string {
+	if !load {
+		return outputs
+	}
+	setLoad := true
+	for _, output := range outputs {
+		if typ := parseOutputType(output); typ == "docker" {
+			if v := parseOutput(output); v != nil {
+				// dest set means we want to output as tar so don't set load
+				if _, ok := v["dest"]; !ok {
+					setLoad = false
+					break
+				}
+			}
+		} else if typ != "image" && typ != "registry" && typ != "oci" {
+			// if there is any output that is not an image, registry
+			// or oci, don't set "load" similar to push override
+			setLoad = false
+			break
+		}
+	}
+	if setLoad {
+		outputs = append(outputs, "type=docker")
+	}
+	return outputs
 }
 
 func validateTargetName(name string) error {

@@ -17,6 +17,7 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/creack/pty"
 	"github.com/moby/buildkit/identity"
+	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/appdefaults"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
@@ -55,9 +56,11 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildNetworkModeBridge,
 	testBuildShmSize,
 	testBuildUlimit,
-	testBuildRef,
+	testBuildMetadata,
 	testBuildMultiExporters,
 	testBuildLoadPush,
+	testBuildSecret,
+	testBuildDefaultLoad,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -149,6 +152,10 @@ func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
 	if isMobyWorker(sb) {
 		require.Error(t, err)
 		require.Contains(t, out, "Attestation is not supported")
+		return
+	} else if !isMobyContainerdSnapWorker(sb) && !matchesBuildKitVersion(t, sb, ">= 0.11.0-0") {
+		require.Error(t, err)
+		require.Contains(t, out, "Attestations are not supported by the current BuildKit daemon")
 		return
 	}
 	require.NoError(t, err, string(out))
@@ -268,6 +275,7 @@ RUN busybox | head -1 | grep v1.36.1
 }
 
 func testBuildDetailsLink(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.11.0-0", "build details link")
 	buildDetailsPattern := regexp.MustCompile(`(?m)^View build details: docker-desktop://dashboard/build/[^/]+/[^/]+/[^/]+\n$`)
 
 	// build simple dockerfile
@@ -298,6 +306,11 @@ RUN echo foo > /bar`)
 	out, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 	require.True(t, buildDetailsPattern.MatchString(string(out)), fmt.Sprintf("expected build details link in output, got %q", out))
+
+	if isExperimental() {
+		// FIXME: https://github.com/docker/buildx/issues/2382
+		t.Skip("build details link not displayed in experimental mode when build fails: https://github.com/docker/buildx/issues/2382")
+	}
 
 	// build erroneous dockerfile
 	dockerfile = []byte(`FROM busybox:latest
@@ -339,6 +352,7 @@ func testBuildAnnotations(t *testing.T, sb integration.Sandbox) {
 	if isMobyWorker(sb) {
 		t.Skip("annotations not supported on docker worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.11.0-0", "annotations")
 
 	dir := createTestProject(t)
 
@@ -450,6 +464,7 @@ func testBuildNetworkModeBridge(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.13.0-0", "network bridge")
 
 	var builderName string
 	t.Cleanup(func() {
@@ -460,8 +475,10 @@ func testBuildNetworkModeBridge(t *testing.T, sb integration.Sandbox) {
 		require.NoError(t, err, out)
 	})
 
-	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--buildkitd-flags=--oci-worker-net=bridge --allow-insecure-entitlement=network.host", "--driver-opt", "image=moby/buildkit:v0.13.0-rc3"))
+	out, err := createCmd(sb, withArgs(
+		"--driver", "docker-container",
+		"--buildkitd-flags=--oci-worker-net=bridge --allow-insecure-entitlement=network.host",
+	))
 	require.NoError(t, err, out)
 	builderName = strings.TrimSpace(out)
 
@@ -539,7 +556,19 @@ COPY --from=build /ulimit /
 	require.Contains(t, string(dt), `1024`)
 }
 
-func testBuildRef(t *testing.T, sb integration.Sandbox) {
+func testBuildMetadata(t *testing.T, sb integration.Sandbox) {
+	t.Run("max", func(t *testing.T) {
+		buildMetadata(t, sb, "max")
+	})
+	t.Run("min", func(t *testing.T) {
+		buildMetadata(t, sb, "min")
+	})
+	t.Run("disabled", func(t *testing.T) {
+		buildMetadata(t, sb, "disabled")
+	})
+}
+
+func buildMetadata(t *testing.T, sb integration.Sandbox, metadataMode string) {
 	dir := createTestProject(t)
 	dirDest := t.TempDir()
 
@@ -549,7 +578,11 @@ func testBuildRef(t *testing.T, sb integration.Sandbox) {
 		outFlag += ",dest=" + dirDest + "/image.tar"
 	}
 
-	cmd := buildxCmd(sb, withArgs("build", outFlag, "--metadata-file", filepath.Join(dirDest, "md.json"), dir))
+	cmd := buildxCmd(
+		sb,
+		withArgs("build", outFlag, "--metadata-file", filepath.Join(dirDest, "md.json"), dir),
+		withEnv("BUILDX_METADATA_PROVENANCE="+metadataMode),
+	)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 
@@ -557,19 +590,33 @@ func testBuildRef(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 
 	type mdT struct {
-		BuildRef string `json:"buildx.build.ref"`
+		BuildRef        string                 `json:"buildx.build.ref"`
+		BuildProvenance map[string]interface{} `json:"buildx.build.provenance"`
 	}
 	var md mdT
 	err = json.Unmarshal(dt, &md)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, md.BuildRef)
+	if metadataMode == "disabled" {
+		require.Empty(t, md.BuildProvenance)
+		return
+	}
+	require.NotEmpty(t, md.BuildProvenance)
+
+	dtprv, err := json.Marshal(md.BuildProvenance)
+	require.NoError(t, err)
+
+	var prv provenancetypes.ProvenancePredicate
+	require.NoError(t, json.Unmarshal(dtprv, &prv))
+	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
 }
 
 func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.13.0-0", "multi exporters")
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -580,29 +627,11 @@ func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {
 	targetReg := registry + "/buildx/registry:latest"
 	targetStore := "buildx:local-" + identity.NewID()
 
-	var builderName string
 	t.Cleanup(func() {
-		if builderName == "" {
-			return
-		}
-
 		cmd := dockerCmd(sb, withArgs("image", "rm", targetStore))
 		cmd.Stderr = os.Stderr
 		require.NoError(t, cmd.Run())
-
-		out, err := rmCmd(sb, withArgs(builderName))
-		require.NoError(t, err, out)
 	})
-
-	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs(
-		"--driver", "docker-container",
-		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
-		"--driver-opt", "network=host",
-		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
-	))
-	require.NoError(t, err, out)
-	builderName = strings.TrimSpace(out)
 
 	dir := createTestProject(t)
 
@@ -612,7 +641,6 @@ func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {
 		"--output", fmt.Sprintf("type=oci,dest=%s/result", dir),
 	}
 	cmd := buildxCmd(sb, withArgs("build"), withArgs(outputs...), withArgs(dir))
-	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 
@@ -638,6 +666,7 @@ func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.13.0-0", "multi exporters")
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -647,29 +676,11 @@ func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
 
 	target := registry + "/buildx/registry:" + identity.NewID()
 
-	var builderName string
 	t.Cleanup(func() {
-		if builderName == "" {
-			return
-		}
-
 		cmd := dockerCmd(sb, withArgs("image", "rm", target))
 		cmd.Stderr = os.Stderr
 		require.NoError(t, cmd.Run())
-
-		out, err := rmCmd(sb, withArgs(builderName))
-		require.NoError(t, err, out)
 	})
-
-	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs(
-		"--driver", "docker-container",
-		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
-		"--driver-opt", "network=host",
-		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
-	))
-	require.NoError(t, err, out)
-	builderName = strings.TrimSpace(out)
 
 	dir := createTestProject(t)
 
@@ -678,7 +689,6 @@ func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
 		fmt.Sprintf("-t=%s", target),
 		dir,
 	))
-	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 
@@ -694,6 +704,93 @@ func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, cmd.Run())
 
 	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
+}
+
+func testBuildSecret(t *testing.T, sb integration.Sandbox) {
+	token := "abcd1234"
+	dockerfile := []byte(`
+FROM busybox AS build
+RUN --mount=type=secret,id=token cat /run/secrets/token | tee /token
+FROM scratch
+COPY --from=build /token /
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("tokenfile", []byte(token), 0600),
+	)
+
+	t.Run("env", func(t *testing.T) {
+		t.Cleanup(func() {
+			_ = os.Remove(filepath.Join(dir, "token"))
+		})
+
+		cmd := buildxCmd(sb, withEnv("TOKEN="+token), withArgs("build", "--secret=id=token,env=TOKEN", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		dt, err := os.ReadFile(filepath.Join(dir, "token"))
+		require.NoError(t, err)
+		require.Equal(t, token, string(dt))
+	})
+
+	t.Run("file", func(t *testing.T) {
+		t.Cleanup(func() {
+			_ = os.Remove(filepath.Join(dir, "token"))
+		})
+
+		cmd := buildxCmd(sb, withArgs("build", "--secret=id=token,src="+path.Join(dir, "tokenfile"), fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		dt, err := os.ReadFile(filepath.Join(dir, "token"))
+		require.NoError(t, err)
+		require.Equal(t, token, string(dt))
+	})
+}
+
+func testBuildDefaultLoad(t *testing.T, sb integration.Sandbox) {
+	if !isDockerWorker(sb) {
+		t.Skip("only testing with docker workers")
+	}
+
+	tag := "buildx/build:" + identity.NewID()
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+
+		cmd := dockerCmd(sb, withArgs("image", "rm", tag))
+		cmd.Stderr = os.Stderr
+		require.NoError(t, cmd.Run())
+
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	out, err := createCmd(sb, withArgs(
+		"--driver", "docker-container",
+		"--driver-opt", "default-load=true",
+	))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	dir := createTestProject(t)
+
+	cmd := buildxCmd(sb, withArgs(
+		"build",
+		fmt.Sprintf("-t=%s", tag),
+		dir,
+	))
+	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+	outb, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(outb))
+
+	cmd = dockerCmd(sb, withArgs("image", "inspect", tag))
+	cmd.Stderr = os.Stderr
+	require.NoError(t, cmd.Run())
 }
 
 func createTestProject(t *testing.T) string {

@@ -20,7 +20,6 @@ import (
 	"context"
 	"fmt"
 	"path/filepath"
-	"strings"
 
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/override"
@@ -106,11 +105,6 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 	}
 	source := deepClone(base).(map[string]any)
 
-	err = validateExtendSource(source, ref)
-	if err != nil {
-		return nil, err
-	}
-
 	for _, processor := range post {
 		processor.Apply(map[string]any{
 			"services": map[string]any{
@@ -125,30 +119,6 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 	delete(merged, "extends")
 	services[name] = merged
 	return merged, nil
-}
-
-// validateExtendSource check the source for `extends` doesn't refer to another container/service
-func validateExtendSource(source map[string]any, ref string) error {
-	forbidden := []string{"links", "volumes_from", "depends_on"}
-	for _, key := range forbidden {
-		if _, ok := source[key]; ok {
-			return fmt.Errorf("service %q can't be used with `extends` as it declare `%s`", ref, key)
-		}
-	}
-
-	sharedNamespace := []string{"network_mode", "ipc", "pid", "net", "cgroup", "userns_mode", "uts"}
-	for _, key := range sharedNamespace {
-		if v, ok := source[key]; ok {
-			val := v.(string)
-			if strings.HasPrefix(val, types.ContainerPrefix) {
-				return fmt.Errorf("service %q can't be used with `extends` as it shares `%s` with another container", ref, key)
-			}
-			if strings.HasPrefix(val, types.ServicePrefix) {
-				return fmt.Errorf("service %q can't be used with `extends` as it shares `%s` with another service", ref, key)
-			}
-		}
-	}
-	return nil
 }
 
 func getExtendsBaseFromFile(ctx context.Context, name string, path string, opts *Options, ct *cycleTracker) (map[string]any, error) {

@@ -60,35 +60,33 @@ func ApplyInclude(ctx context.Context, configDetails types.ConfigDetails, model 
 			})
 		}
 
+		var relworkingdir string
 		for i, p := range r.Path {
 			for _, loader := range options.ResourceLoaders {
-				if loader.Accept(p) {
-					path, err := loader.Load(ctx, p)
-					if err != nil {
-						return err
+				if !loader.Accept(p) {
+					continue
+				}
+				path, err := loader.Load(ctx, p)
+				if err != nil {
+					return err
+				}
+				p = path
+
+				if i == 0 { // This is the "main" file, used to define project-directory. Others are overrides
+					relworkingdir = loader.Dir(path)
+					if r.ProjectDirectory == "" {
+						r.ProjectDirectory = filepath.Dir(path)
 					}
-					p = path
-					break
+
+					for _, f := range included {
+						if f == path {
+							included = append(included, path)
+							return fmt.Errorf("include cycle detected:\n%s\n include %s", included[0], strings.Join(included[1:], "\n include "))
+						}
+					}
 				}
 			}
 			r.Path[i] = p
-		}
-
-		mainFile := r.Path[0]
-		for _, f := range included {
-			if f == mainFile {
-				included = append(included, mainFile)
-				return fmt.Errorf("include cycle detected:\n%s\n include %s", included[0], strings.Join(included[1:], "\n include "))
-			}
-		}
-
-		if r.ProjectDirectory == "" {
-			r.ProjectDirectory = filepath.Dir(mainFile)
-		}
-		relworkingdir, err := filepath.Rel(configDetails.WorkingDir, r.ProjectDirectory)
-		if err != nil {
-			// included file path is not inside project working directory => use absolute path
-			relworkingdir = r.ProjectDirectory
 		}
 
 		loadOptions := options.clone()
@@ -96,7 +94,7 @@ func ApplyInclude(ctx context.Context, configDetails types.ConfigDetails, model 
 		loadOptions.SkipNormalization = true
 		loadOptions.SkipConsistencyCheck = true
 		loadOptions.ResourceLoaders = append(loadOptions.RemoteResourceLoaders(), localResourceLoader{
-			WorkingDir: relworkingdir,
+			WorkingDir: r.ProjectDirectory,
 		})
 
 		if len(r.EnvFile) == 0 {

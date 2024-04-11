@@ -44,7 +44,7 @@ var patternString = fmt.Sprintf(
 	groupInvalid,
 )
 
-var defaultPattern = regexp.MustCompile(patternString)
+var DefaultPattern = regexp.MustCompile(patternString)
 
 // InvalidTemplateError is returned when a variable template is not in a valid
 // format
@@ -121,7 +121,7 @@ func SubstituteWithOptions(template string, mapping Mapping, options ...Option) 
 	var returnErr error
 
 	cfg := &Config{
-		pattern:         defaultPattern,
+		pattern:         DefaultPattern,
 		replacementFunc: DefaultReplacementFunc,
 		logging:         true,
 	}
@@ -268,14 +268,14 @@ func getFirstBraceClosingIndex(s string) int {
 
 // Substitute variables in the string with their values
 func Substitute(template string, mapping Mapping) (string, error) {
-	return SubstituteWith(template, mapping, defaultPattern)
+	return SubstituteWith(template, mapping, DefaultPattern)
 }
 
 // ExtractVariables returns a map of all the variables defined in the specified
 // composefile (dict representation) and their default value if any.
 func ExtractVariables(configDict map[string]interface{}, pattern *regexp.Regexp) map[string]Variable {
 	if pattern == nil {
-		pattern = defaultPattern
+		pattern = DefaultPattern
 	}
 	return recurseExtract(configDict, pattern)
 }

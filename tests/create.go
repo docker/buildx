@@ -64,8 +64,8 @@ func testCreateRestartAlways(t *testing.T, sb integration.Sandbox) {
 }
 
 func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
-	if sb.Name() != "docker" {
-		t.Skip("skipping test for non-docker workers")
+	if !isDockerWorker(sb) {
+		t.Skip("only testing with docker workers")
 	}
 
 	ctnBuilderName := "ctn-builder-" + identity.NewID()

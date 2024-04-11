@@ -13,20 +13,20 @@ Build from a file
 
 ### Options
 
-| Name                             | Type          | Default | Description                                                                              |
-|:---------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
-| [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                 |
-| [`-f`](#file), [`--file`](#file) | `stringArray` |         | Build definition file                                                                    |
-| `--load`                         |               |         | Shorthand for `--set=*.output=type=docker`                                               |
-| `--metadata-file`                | `string`      |         | Write build result metadata to the file                                                  |
-| [`--no-cache`](#no-cache)        |               |         | Do not use cache when building the image                                                 |
-| [`--print`](#print)              |               |         | Print the options without building                                                       |
-| [`--progress`](#progress)        | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| [`--provenance`](#provenance)    | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                           |
-| [`--pull`](#pull)                |               |         | Always attempt to pull all referenced images                                             |
-| `--push`                         |               |         | Shorthand for `--set=*.output=type=registry`                                             |
-| [`--sbom`](#sbom)                | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                 |
-| [`--set`](#set)                  | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                  |
+| Name                                | Type          | Default | Description                                                                              |
+|:------------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
+| [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                 |
+| [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                    |
+| `--load`                            |               |         | Shorthand for `--set=*.output=type=docker`                                               |
+| [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                    |
+| [`--no-cache`](#no-cache)           |               |         | Do not use cache when building the image                                                 |
+| [`--print`](#print)                 |               |         | Print the options without building                                                       |
+| [`--progress`](#progress)           | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
+| [`--provenance`](#provenance)       | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                           |
+| [`--pull`](#pull)                   |               |         | Always attempt to pull all referenced images                                             |
+| `--push`                            |               |         | Shorthand for `--set=*.output=type=registry`                                             |
+| [`--sbom`](#sbom)                   | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                 |
+| [`--set`](#set)                     | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                  |
 
 
 <!---MARKER_GEN_END-->
@@ -89,6 +89,77 @@ $ docker buildx bake -f docker-bake.dev.hcl db webapp-release
 
 See the [Bake file reference](https://docs.docker.com/build/bake/reference/)
 for more details.
+
+### <a name="metadata-file"></a> Write build results metadata to a file (--metadata-file)
+
+Similar to [`buildx build --metadata-file`](buildx_build.md#metadata-file) but
+writes a map of results for each target such as:
+
+```hcl
+# docker-bake.hcl
+group "default" {
+  targets = ["db", "webapp-dev"]
+}
+
+target "db" {
+  dockerfile = "Dockerfile.db"
+  tags = ["docker.io/username/db"]
+}
+
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  tags = ["docker.io/username/webapp"]
+}
+```
+
+```console
+$ docker buildx bake --load --metadata-file metadata.json .
+$ cat metadata.json
+```
+
+```json
+{
+  "db": {
+    "buildx.build.provenance": {},
+    "buildx.build.ref": "mybuilder/mybuilder0/0fjb6ubs52xx3vygf6fgdl611",
+    "containerimage.config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
+    "containerimage.descriptor": {
+      "annotations": {
+        "config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
+        "org.opencontainers.image.created": "2022-02-08T21:28:03Z"
+      },
+      "digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3",
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 506
+    },
+    "containerimage.digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3"
+  },
+  "webapp-dev": {
+    "buildx.build.provenance": {},
+    "buildx.build.ref": "mybuilder/mybuilder0/kamngmcgyzebqxwu98b4lfv3n",
+    "containerimage.config.digest": "sha256:9651cc2b3c508f697c9c43b67b64c8359c2865c019e680aac1c11f4b875b67e0",
+    "containerimage.descriptor": {
+      "annotations": {
+        "config.digest": "sha256:9651cc2b3c508f697c9c43b67b64c8359c2865c019e680aac1c11f4b875b67e0",
+        "org.opencontainers.image.created": "2022-02-08T21:28:15Z"
+      },
+      "digest": "sha256:6d9ac9237a84afe1516540f40a0fafdc86859b2141954b4d643af7066d598b74",
+      "mediaType": "application/vnd.oci.image.manifest.v1+json",
+      "size": 506
+    },
+    "containerimage.digest": "sha256:6d9ac9237a84afe1516540f40a0fafdc86859b2141954b4d643af7066d598b74"
+  }
+}
+```
+
+> **Note**
+>
+> Build record [provenance](https://docs.docker.com/build/attestations/slsa-provenance/#provenance-attestation-example)
+> (`buildx.build.provenance`) includes minimal provenance by default. Set the
+> `BUILDX_METADATA_PROVENANCE` environment variable to customize this behavior:
+> * `min` sets minimal provenance (default).
+> * `max` sets full provenance.
+> * `disabled`, `false` or `0` does not set any provenance.
 
 ### <a name="no-cache"></a> Don't use cache when building the image (--no-cache)
 
@@ -162,6 +233,7 @@ You can override the following fields:
 * `context`
 * `dockerfile`
 * `labels`
+* `load`
 * `no-cache`
 * `no-cache-filter`
 * `output`

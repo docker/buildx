@@ -49,6 +49,7 @@ type Driver struct {
 	podClient        clientcorev1.PodInterface
 	configMapClient  clientcorev1.ConfigMapInterface
 	podChooser       podchooser.PodChooser
+	defaultLoad      bool
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -229,6 +230,7 @@ func (d *Driver) Features(_ context.Context) map[driver.Feature]bool {
 		driver.DockerExporter: d.DockerAPI != nil,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true, // Untested (needs multiple Driver instances)
+		driver.DefaultLoad:    d.defaultLoad,
 	}
 }
 

@@ -80,6 +80,7 @@ message BuildOptions {
   string Ref = 29;
   string GroupRef = 30;
   repeated string Annotations = 31;
+  bool WithProvenanceResponse = 32;
 }
 
 message ExportEntry {

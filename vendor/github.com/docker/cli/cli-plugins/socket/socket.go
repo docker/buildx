@@ -7,24 +7,114 @@ import (
 	"io"
 	"net"
 	"os"
+	"runtime"
+	"sync"
 )
 
-// EnvKey represents the well-known environment variable used to pass the plugin being
-// executed the socket name it should listen on to coordinate with the host CLI.
+// EnvKey represents the well-known environment variable used to pass the
+// plugin being executed the socket name it should listen on to coordinate with
+// the host CLI.
 const EnvKey = "DOCKER_CLI_PLUGIN_SOCKET"
 
-// SetupConn sets up a Unix socket listener, establishes a goroutine to handle connections
-// and update the conn pointer, and returns the listener for the socket (which the caller
-// is responsible for closing when it's no longer needed).
-func SetupConn(conn **net.UnixConn) (*net.UnixListener, error) {
-	listener, err := listen("docker_cli_" + randomID())
+// NewPluginServer creates a plugin server that listens on a new Unix domain
+// socket. h is called for each new connection to the socket in a goroutine.
+func NewPluginServer(h func(net.Conn)) (*PluginServer, error) {
+	// Listen on a Unix socket, with the address being platform-dependent.
+	// When a non-abstract address is used, Go will unlink(2) the socket
+	// for us once the listener is closed, as documented in
+	// [net.UnixListener.SetUnlinkOnClose].
+	l, err := net.ListenUnix("unix", &net.UnixAddr{
+		Name: socketName("docker_cli_" + randomID()),
+		Net:  "unix",
+	})
 	if err != nil {
 		return nil, err
 	}
 
-	accept(listener, conn)
+	if h == nil {
+		h = func(net.Conn) {}
+	}
 
-	return listener, nil
+	pl := &PluginServer{
+		l: l,
+		h: h,
+	}
+
+	go func() {
+		defer pl.Close()
+		for {
+			err := pl.accept()
+			if err != nil {
+				return
+			}
+		}
+	}()
+
+	return pl, nil
+}
+
+type PluginServer struct {
+	mu     sync.Mutex
+	conns  []net.Conn
+	l      *net.UnixListener
+	h      func(net.Conn)
+	closed bool
+}
+
+func (pl *PluginServer) accept() error {
+	conn, err := pl.l.Accept()
+	if err != nil {
+		return err
+	}
+
+	pl.mu.Lock()
+	defer pl.mu.Unlock()
+
+	if pl.closed {
+		// Handle potential race between Close and accept.
+		conn.Close()
+		return errors.New("plugin server is closed")
+	}
+
+	pl.conns = append(pl.conns, conn)
+
+	go pl.h(conn)
+	return nil
+}
+
+// Addr returns the [net.Addr] of the underlying [net.Listener].
+func (pl *PluginServer) Addr() net.Addr {
+	return pl.l.Addr()
+}
+
+// Close ensures that the server is no longer accepting new connections and
+// closes all existing connections. Existing connections will receive [io.EOF].
+//
+// The error value is that of the underlying [net.Listner.Close] call.
+func (pl *PluginServer) Close() error {
+	// Close connections first to ensure the connections get io.EOF instead
+	// of a connection reset.
+	pl.closeAllConns()
+
+	// Try to ensure that any active connections have a chance to receive
+	// io.EOF.
+	runtime.Gosched()
+
+	return pl.l.Close()
+}
+
+func (pl *PluginServer) closeAllConns() {
+	pl.mu.Lock()
+	defer pl.mu.Unlock()
+
+	// Prevent new connections from being accepted.
+	pl.closed = true
+
+	for _, conn := range pl.conns {
+		conn.Close()
+	}
+
+	pl.conns = nil
 }
 
 func randomID() string {
@@ -33,18 +123,6 @@ func randomID() string {
 		panic(err) // This shouldn't happen
 	}
 	return hex.EncodeToString(b)
-}
-
-func accept(listener *net.UnixListener, conn **net.UnixConn) {
-	go func() {
-		for {
-			// ignore error here, if we failed to accept a connection,
-			// conn is nil and we fallback to previous behavior
-			*conn, _ = listener.AcceptUnix()
-			// perform any platform-specific actions on accept (e.g. unlink non-abstract sockets)
-			onAccept(*conn, listener)
-		}
-	}()
 }
 
 // ConnectAndWait connects to the socket passed via well-known env var,

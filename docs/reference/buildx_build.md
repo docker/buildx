@@ -27,10 +27,10 @@ Start a build
 | [`--cgroup-parent`](https://docs.docker.com/reference/cli/docker/image/build/#cgroup-parent)                                                       | `string`      |           | Set the parent cgroup for the `RUN` instructions during build                                       |
 | `--detach`                                                                                                                                         |               |           | Detach buildx server (supported only on linux) (EXPERIMENTAL)                                       |
 | [`-f`](https://docs.docker.com/reference/cli/docker/image/build/#file), [`--file`](https://docs.docker.com/reference/cli/docker/image/build/#file) | `string`      |           | Name of the Dockerfile (default: `PATH/Dockerfile`)                                                 |
-| `--iidfile`                                                                                                                                        | `string`      |           | Write the image ID to the file                                                                      |
+| `--iidfile`                                                                                                                                        | `string`      |           | Write the image ID to a file                                                                        |
 | `--label`                                                                                                                                          | `stringArray` |           | Set metadata for an image                                                                           |
 | [`--load`](#load)                                                                                                                                  |               |           | Shorthand for `--output=type=docker`                                                                |
-| [`--metadata-file`](#metadata-file)                                                                                                                | `string`      |           | Write build result metadata to the file                                                             |
+| [`--metadata-file`](#metadata-file)                                                                                                                | `string`      |           | Write build result metadata to a file                                                               |
 | `--network`                                                                                                                                        | `string`      | `default` | Set the networking mode for the `RUN` instructions during build                                     |
 | `--no-cache`                                                                                                                                       |               |           | Do not use cache when building the image                                                            |
 | [`--no-cache-filter`](#no-cache-filter)                                                                                                            | `stringArray` |           | Do not cache specified stages                                                                       |
@@ -314,7 +314,7 @@ More info about cache exporters and available attributes: https://github.com/mob
 Shorthand for [`--output=type=docker`](#docker). Will automatically load the
 single-platform build result to `docker images`.
 
-### <a name="metadata-file"></a> Write build result metadata to the file (--metadata-file)
+### <a name="metadata-file"></a> Write build result metadata to a file (--metadata-file)
 
 To output build metadata such as the image digest, pass the `--metadata-file` flag.
 The metadata will be written as a JSON object to the specified file. The
@@ -327,6 +327,7 @@ $ cat metadata.json
 
 ```json
 {
+  "buildx.build.provenance": {},
   "buildx.build.ref": "mybuilder/mybuilder0/0fjb6ubs52xx3vygf6fgdl611",
   "containerimage.config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
   "containerimage.descriptor": {
@@ -341,6 +342,15 @@ $ cat metadata.json
   "containerimage.digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3"
 }
 ```
+
+> **Note**
+>
+> Build record [provenance](https://docs.docker.com/build/attestations/slsa-provenance/#provenance-attestation-example)
+> (`buildx.build.provenance`) includes minimal provenance by default. Set the
+> `BUILDX_METADATA_PROVENANCE` environment variable to customize this behavior:
+> * `min` sets minimal provenance (default).
+> * `max` sets full provenance.
+> * `disabled`, `false` or `0` does not set any provenance.
 
 ### <a name="no-cache-filter"></a> Ignore build cache for specific stages (--no-cache-filter)
 
@@ -418,7 +428,7 @@ exporter and write to `stdout`.
 ```console
 $ docker buildx build -o . .
 $ docker buildx build -o outdir .
-$ docker buildx build -o - - > out.tar
+$ docker buildx build -o - . > out.tar
 $ docker buildx build -o type=docker .
 $ docker buildx build -o type=docker,dest=- . > myimage.tar
 $ docker buildx build -t tonistiigi/foo -o type=registry
@@ -615,10 +625,18 @@ For more information, see [here](https://docs.docker.com/build/attestations/sbom
 --secret=[type=TYPE[,KEY=VALUE]
 ```
 
-Exposes secret to the build. The secret can be used by the build using
-[`RUN --mount=type=secret` mount](https://docs.docker.com/reference/dockerfile/#run---mounttypesecret).
+Exposes secrets (authentication credentials, tokens) to the build.
+A secret can be mounted into the build using a `RUN --mount=type=secret` mount in the
+[Dockerfile](https://docs.docker.com/reference/dockerfile/#run---mounttypesecret).
+For more information about how to use build secrets, see
+[Build secrets](https://docs.docker.com/build/building/secrets/).
 
-If `type` is unset it will be detected. Supported types are:
+Supported types are:
+
+- [`file`](#file)
+- [`env`](#env)
+
+Buildx attempts to detect the `type` automatically if unset.
 
 #### `file`
 

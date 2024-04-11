@@ -121,26 +121,27 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	}
 
 	opts := controllerapi.BuildOptions{
-		Allow:          o.allow,
-		Annotations:    o.annotations,
-		BuildArgs:      buildArgs,
-		CgroupParent:   o.cgroupParent,
-		ContextPath:    o.contextPath,
-		DockerfileName: o.dockerfileName,
-		ExtraHosts:     o.extraHosts,
-		Labels:         labels,
-		NetworkMode:    o.networkMode,
-		NoCacheFilter:  o.noCacheFilter,
-		Platforms:      o.platforms,
-		ShmSize:        int64(o.shmSize),
-		Tags:           o.tags,
-		Target:         o.target,
-		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
-		Builder:        o.builder,
-		NoCache:        o.noCache,
-		Pull:           o.pull,
-		ExportPush:     o.exportPush,
-		ExportLoad:     o.exportLoad,
+		Allow:                  o.allow,
+		Annotations:            o.annotations,
+		BuildArgs:              buildArgs,
+		CgroupParent:           o.cgroupParent,
+		ContextPath:            o.contextPath,
+		DockerfileName:         o.dockerfileName,
+		ExtraHosts:             o.extraHosts,
+		Labels:                 labels,
+		NetworkMode:            o.networkMode,
+		NoCacheFilter:          o.noCacheFilter,
+		Platforms:              o.platforms,
+		ShmSize:                int64(o.shmSize),
+		Tags:                   o.tags,
+		Target:                 o.target,
+		Ulimits:                dockerUlimitToControllerUlimit(o.ulimits),
+		Builder:                o.builder,
+		NoCache:                o.noCache,
+		Pull:                   o.pull,
+		ExportPush:             o.exportPush,
+		ExportLoad:             o.exportLoad,
+		WithProvenanceResponse: len(o.metadataFile) > 0,
 	}
 
 	// TODO: extract env var parsing to a method easily usable by library consumers
@@ -266,11 +267,8 @@ func (o *buildOptionsHash) String() string {
 }
 
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
-	mp, err := metricutil.NewMeterProvider(ctx, dockerCli)
-	if err != nil {
-		return err
-	}
-	defer mp.Report(context.Background())
+	mp := dockerCli.MeterProvider(ctx)
+	defer metricutil.Shutdown(ctx, mp)
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
 	if err != nil {
@@ -421,14 +419,22 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	var ref string
 	var retErr error
 	var resp *client.SolveResponse
-	f := ioset.NewSingleForwarder()
-	f.SetReader(dockerCli.In())
-	pr, pw := io.Pipe()
-	f.SetWriter(pw, func() io.WriteCloser {
-		pw.Close() // propagate EOF
-		logrus.Debug("propagating stdin close")
-		return nil
-	})
+
+	var f *ioset.SingleForwarder
+	var pr io.ReadCloser
+	var pw io.WriteCloser
+	if options.invokeConfig == nil {
+		pr = dockerCli.In()
+	} else {
+		f = ioset.NewSingleForwarder()
+		f.SetReader(dockerCli.In())
+		pr, pw = io.Pipe()
+		f.SetWriter(pw, func() io.WriteCloser {
+			pw.Close() // propagate EOF
+			logrus.Debug("propagating stdin close")
+			return nil
+		})
+	}
 
 	ref, resp, err = c.Build(ctx, *opts, pr, printer)
 	if err != nil {
@@ -442,11 +448,13 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		}
 	}
 
-	if err := pw.Close(); err != nil {
-		logrus.Debug("failed to close stdin pipe writer")
-	}
-	if err := pr.Close(); err != nil {
-		logrus.Debug("failed to close stdin pipe reader")
+	if options.invokeConfig != nil {
+		if err := pw.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe writer")
+		}
+		if err := pr.Close(); err != nil {
+			logrus.Debug("failed to close stdin pipe reader")
+		}
 	}
 
 	if options.invokeConfig != nil && options.invokeConfig.needsDebug(retErr) {
@@ -575,7 +583,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringVarP(&options.dockerfileName, "file", "f", "", `Name of the Dockerfile (default: "PATH/Dockerfile")`)
 	flags.SetAnnotation("file", annotation.ExternalURL, []string{"https://docs.docker.com/reference/cli/docker/image/build/#file"})
 
-	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to the file")
+	flags.StringVar(&options.imageIDFile, "iidfile", "", "Write the image ID to a file")
 
 	flags.StringArrayVar(&options.labels, "label", []string{}, "Set metadata for an image")
 
@@ -690,7 +698,7 @@ func commonBuildFlags(options *commonFlags, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
 	options.pull = flags.Bool("pull", false, "Always attempt to pull all referenced images")
-	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to the file")
+	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to a file")
 }
 
 func checkWarnedFlags(f *pflag.Flag) {
@@ -855,7 +863,9 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 	case "subrequests.describe":
 		return printValue(subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
 	default:
-		if dt, ok := res["result.txt"]; ok {
+		if dt, ok := res["result.json"]; ok && f.Format == "json" {
+			fmt.Println(dt)
+		} else if dt, ok := res["result.txt"]; ok {
 			fmt.Print(dt)
 		} else {
 			log.Printf("%s %+v", f, res)

@@ -5,12 +5,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"strings"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/identity"
+	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -29,6 +29,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeRemote,
+	testBakeRemoteAuth,
 	testBakeRemoteCmdContext,
 	testBakeRemoteLocalOverride,
 	testBakeLocalCwdOverride,
@@ -41,7 +42,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeEmpty,
 	testBakeShmSize,
 	testBakeUlimits,
-	testBakeRefs,
+	testBakeMetadata,
 	testBakeMultiExporters,
 	testBakeLoadPush,
 }
@@ -139,6 +140,41 @@ EOT
 	addr := gitutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(sb, withDir(dir), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBakeRemoteAuth(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "docker-bake.hcl", "foo")
+	gitutil.GitCommit(git, t, "initial commit")
+
+	token := identity.NewID()
+	addr := gitutil.GitServeHTTP(git, t, gitutil.WithAccessToken(token))
+
+	out, err := bakeCmd(sb, withDir(dir),
+		withEnv("BUILDX_BAKE_GIT_AUTH_TOKEN="+token),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+	)
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
@@ -597,7 +633,19 @@ target "default" {
 	require.Contains(t, string(dt), `1024`)
 }
 
-func testBakeRefs(t *testing.T, sb integration.Sandbox) {
+func testBakeMetadata(t *testing.T, sb integration.Sandbox) {
+	t.Run("max", func(t *testing.T) {
+		bakeMetadata(t, sb, "max")
+	})
+	t.Run("min", func(t *testing.T) {
+		bakeMetadata(t, sb, "min")
+	})
+	t.Run("disabled", func(t *testing.T) {
+		bakeMetadata(t, sb, "disabled")
+	})
+}
+
+func bakeMetadata(t *testing.T, sb integration.Sandbox, metadataMode string) {
 	dockerfile := []byte(`
 FROM scratch
 COPY foo /foo
@@ -621,7 +669,12 @@ target "default" {
 		outFlag += ",dest=" + dirDest + "/image.tar"
 	}
 
-	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", outFlag))
+	cmd := buildxCmd(
+		sb,
+		withDir(dir),
+		withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", outFlag),
+		withEnv("BUILDX_METADATA_PROVENANCE="+metadataMode),
+	)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, out)
 
@@ -630,7 +683,8 @@ target "default" {
 
 	type mdT struct {
 		Default struct {
-			BuildRef string `json:"buildx.build.ref"`
+			BuildRef        string                 `json:"buildx.build.ref"`
+			BuildProvenance map[string]interface{} `json:"buildx.build.provenance"`
 		} `json:"default"`
 	}
 	var md mdT
@@ -638,12 +692,25 @@ target "default" {
 	require.NoError(t, err)
 
 	require.NotEmpty(t, md.Default.BuildRef)
+	if metadataMode == "disabled" {
+		require.Empty(t, md.Default.BuildProvenance)
+		return
+	}
+	require.NotEmpty(t, md.Default.BuildProvenance)
+
+	dtprv, err := json.Marshal(md.Default.BuildProvenance)
+	require.NoError(t, err)
+
+	var prv provenancetypes.ProvenancePredicate
+	require.NoError(t, json.Unmarshal(dtprv, &prv))
+	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
 }
 
 func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.13.0-0", "multi exporters")
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -654,29 +721,11 @@ func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
 	targetReg := registry + "/buildx/registry:latest"
 	targetStore := "buildx:local-" + identity.NewID()
 
-	var builderName string
 	t.Cleanup(func() {
-		if builderName == "" {
-			return
-		}
-
 		cmd := dockerCmd(sb, withArgs("image", "rm", targetStore))
 		cmd.Stderr = os.Stderr
 		require.NoError(t, cmd.Run())
-
-		out, err := rmCmd(sb, withArgs(builderName))
-		require.NoError(t, err, out)
 	})
-
-	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs(
-		"--driver", "docker-container",
-		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
-		"--driver-opt", "network=host",
-		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
-	))
-	require.NoError(t, err, out)
-	builderName = strings.TrimSpace(out)
 
 	dockerfile := []byte(`
 FROM scratch
@@ -699,7 +748,6 @@ target "default" {
 		"--set", fmt.Sprintf("*.output=type=oci,dest=%s/result", dir),
 	}
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake"), withArgs(outputs...))
-	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 
@@ -725,6 +773,7 @@ func testBakeLoadPush(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker")
 	}
+	skipNoCompatBuildKit(t, sb, ">= 0.13.0-0", "multi exporters")
 
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -734,29 +783,11 @@ func testBakeLoadPush(t *testing.T, sb integration.Sandbox) {
 
 	target := registry + "/buildx/registry:" + identity.NewID()
 
-	var builderName string
 	t.Cleanup(func() {
-		if builderName == "" {
-			return
-		}
-
 		cmd := dockerCmd(sb, withArgs("image", "rm", target))
 		cmd.Stderr = os.Stderr
 		require.NoError(t, cmd.Run())
-
-		out, err := rmCmd(sb, withArgs(builderName))
-		require.NoError(t, err, out)
 	})
-
-	// TODO: use stable buildkit image when v0.13.0 released
-	out, err := createCmd(sb, withArgs(
-		"--driver", "docker-container",
-		"--buildkitd-flags=--allow-insecure-entitlement=network.host",
-		"--driver-opt", "network=host",
-		"--driver-opt", "image=moby/buildkit:v0.13.0-rc3",
-	))
-	require.NoError(t, err, out)
-	builderName = strings.TrimSpace(out)
 
 	dockerfile := []byte(`
 FROM scratch
@@ -774,15 +805,14 @@ target "default" {
 	)
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--push", "--load", fmt.Sprintf("--set=*.tags=%s", target)))
-	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 
-	// TODO: test registry when --load case fixed for bake (currently overrides --push)
-	//desc, provider, err := contentutil.ProviderFromRef(target)
-	//require.NoError(t, err)
-	//_, err = testutil.ReadImages(sb.Context(), provider, desc)
-	//require.NoError(t, err)
+	// test registry
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+	_, err = testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
 
 	// test docker store
 	cmd = dockerCmd(sb, withArgs("image", "inspect", target))

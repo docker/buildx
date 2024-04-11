@@ -217,67 +217,252 @@ target "webapp" {
 }
 
 func TestPushOverride(t *testing.T) {
-	t.Parallel()
+	t.Run("empty output", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m["app"].Outputs))
+		require.Equal(t, "type=image,push=true", m["app"].Outputs[0])
+	})
 
-	fp := File{
-		Name: "docker-bake.hcl",
-		Data: []byte(
-			`target "app" {
+	t.Run("type image", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
 				output = ["type=image,compression=zstd"]
 			}`),
-	}
-	ctx := context.TODO()
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
-	require.NoError(t, err)
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m["app"].Outputs))
+		require.Equal(t, "type=image,compression=zstd,push=true", m["app"].Outputs[0])
+	})
 
-	require.Equal(t, 1, len(m["app"].Outputs))
-	require.Equal(t, "type=image,compression=zstd,push=true", m["app"].Outputs[0])
-
-	fp = File{
-		Name: "docker-bake.hcl",
-		Data: []byte(
-			`target "app" {
+	t.Run("type image push false", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
 				output = ["type=image,compression=zstd"]
 			}`),
-	}
-	ctx = context.TODO()
-	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.push=false"}, nil)
-	require.NoError(t, err)
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=false"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m["app"].Outputs))
+		require.Equal(t, "type=image,compression=zstd,push=false", m["app"].Outputs[0])
+	})
 
-	require.Equal(t, 1, len(m["app"].Outputs))
-	require.Equal(t, "type=image,compression=zstd,push=false", m["app"].Outputs[0])
-
-	fp = File{
-		Name: "docker-bake.hcl",
-		Data: []byte(
-			`target "app" {
+	t.Run("type registry", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=registry"]
 			}`),
-	}
-	ctx = context.TODO()
-	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
-	require.NoError(t, err)
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m["app"].Outputs))
+		require.Equal(t, "type=registry", m["app"].Outputs[0])
+	})
 
-	require.Equal(t, 1, len(m["app"].Outputs))
-	require.Equal(t, "type=image,push=true", m["app"].Outputs[0])
+	t.Run("type registry push false", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=registry"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=false"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 0, len(m["app"].Outputs))
+	})
 
-	fp = File{
-		Name: "docker-bake.hcl",
-		Data: []byte(
-			`target "foo" {
+	t.Run("type local and empty target", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "foo" {
 		  		output = [ "type=local,dest=out" ]
 			}
 			target "bar" {
 			}`),
-	}
-	ctx = context.TODO()
-	m, _, err = ReadTargets(ctx, []File{fp}, []string{"foo", "bar"}, []string{"*.push=true"}, nil)
-	require.NoError(t, err)
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.push=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(m))
+		require.Equal(t, 1, len(m["foo"].Outputs))
+		require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+		require.Equal(t, 1, len(m["bar"].Outputs))
+		require.Equal(t, []string{"type=image,push=true"}, m["bar"].Outputs)
+	})
+}
 
-	require.Equal(t, 2, len(m))
-	require.Equal(t, 1, len(m["foo"].Outputs))
-	require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
-	require.Equal(t, 1, len(m["bar"].Outputs))
-	require.Equal(t, []string{"type=image,push=true"}, m["bar"].Outputs)
+func TestLoadOverride(t *testing.T) {
+	t.Run("empty output", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m["app"].Outputs))
+		require.Equal(t, "type=docker", m["app"].Outputs[0])
+	})
+
+	t.Run("type docker", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=docker"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m["app"].Outputs))
+		require.Equal(t, []string{"type=docker"}, m["app"].Outputs)
+	})
+
+	t.Run("type image", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=image"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(m["app"].Outputs))
+		require.Equal(t, []string{"type=image", "type=docker"}, m["app"].Outputs)
+	})
+
+	t.Run("type image load false", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=image"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=false"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m["app"].Outputs))
+		require.Equal(t, []string{"type=image"}, m["app"].Outputs)
+	})
+
+	t.Run("type registry", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=registry"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(m["app"].Outputs))
+		require.Equal(t, []string{"type=registry", "type=docker"}, m["app"].Outputs)
+	})
+
+	t.Run("type oci", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=oci,dest=out"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(m["app"].Outputs))
+		require.Equal(t, []string{"type=oci,dest=out", "type=docker"}, m["app"].Outputs)
+	})
+
+	t.Run("type docker with dest", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "app" {
+				output = ["type=docker,dest=out"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(m["app"].Outputs))
+		require.Equal(t, []string{"type=docker,dest=out", "type=docker"}, m["app"].Outputs)
+	})
+
+	t.Run("type local and empty target", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "foo" {
+		  		output = [ "type=local,dest=out" ]
+			}
+			target "bar" {
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.load=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(m))
+		require.Equal(t, 1, len(m["foo"].Outputs))
+		require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+		require.Equal(t, 1, len(m["bar"].Outputs))
+		require.Equal(t, []string{"type=docker"}, m["bar"].Outputs)
+	})
+}
+
+func TestLoadAndPushOverride(t *testing.T) {
+	t.Run("type local and empty target", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "foo" {
+		  		output = [ "type=local,dest=out" ]
+			}
+			target "bar" {
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.load=true", "*.push=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 2, len(m))
+
+		require.Equal(t, 1, len(m["foo"].Outputs))
+		sort.Strings(m["foo"].Outputs)
+		require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+
+		require.Equal(t, 2, len(m["bar"].Outputs))
+		sort.Strings(m["bar"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=image,push=true"}, m["bar"].Outputs)
+	})
+
+	t.Run("type registry", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "foo" {
+		  		output = [ "type=registry" ]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo"}, []string{"*.load=true", "*.push=true"}, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(m))
+
+		require.Equal(t, 2, len(m["foo"].Outputs))
+		sort.Strings(m["foo"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=registry"}, m["foo"].Outputs)
+	})
 }
 
 func TestReadTargetsCompose(t *testing.T) {
