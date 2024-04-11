@@ -53,7 +53,7 @@ var stdlibFunctions = map[string]function.Function{
 	"hasindex":               stdlib.HasIndexFunc,
 	"indent":                 stdlib.IndentFunc,
 	"index":                  stdlib.IndexFunc,
-	"indexof":                IndexOfFunc, // behaving as expected by hcl definition of index (stdlib.IndexFunc is not compatible)
+	"indexof":                indexOfFunc,
 	"int":                    stdlib.IntFunc,
 	"join":                   stdlib.JoinFunc,
 	"jsondecode":             stdlib.JSONDecodeFunc,
@@ -117,10 +117,9 @@ var stdlibFunctions = map[string]function.Function{
 	"zipmap":                 stdlib.ZipmapFunc,
 }
 
-// IndexOfFunc constructs a function that finds the element index for a given value in a list.
-//
-// This function was imported from terraform's collection functions.
-var IndexOfFunc = function.New(&function.Spec{
+// indexOfFunc constructs a function that finds the element index for a given
+// value in a list.
+var indexOfFunc = function.New(&function.Spec{
 	Params: []function.Parameter{
 		{
 			Name: "list",

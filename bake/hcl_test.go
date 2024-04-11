@@ -1445,6 +1445,39 @@ func TestVarUnsupportedType(t *testing.T) {
 	require.Error(t, err)
 }
 
+func TestHCLIndexOfFunc(t *testing.T) {
+	dt := []byte(`
+		variable "APP_VERSIONS" {
+		  default = [
+			"1.42.4",
+			"1.42.3"
+		  ]
+		}
+		target "default" {
+			args = {
+				APP_VERSION = app_version
+			}
+			matrix = {
+				app_version = APP_VERSIONS
+			}
+			name="app-${replace(app_version, ".", "-")}"
+			tags = [
+				"app:${app_version}",
+				indexof(APP_VERSIONS, app_version) == 0 ? "app:latest" : "",
+			]
+		}
+		`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+
+	require.Equal(t, 2, len(c.Targets))
+	require.Equal(t, "app-1-42-4", c.Targets[0].Name)
+	require.Equal(t, "app:latest", c.Targets[0].Tags[1])
+	require.Equal(t, "app-1-42-3", c.Targets[1].Name)
+	require.Empty(t, c.Targets[1].Tags[1])
+}
+
 func ptrstr(s interface{}) *string {
 	var n *string
 	if reflect.ValueOf(s).Kind() == reflect.String {
