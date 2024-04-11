@@ -9,6 +9,7 @@ import (
 	"github.com/hashicorp/go-cty-funcs/uuid"
 	"github.com/hashicorp/hcl/v2/ext/tryfunc"
 	"github.com/hashicorp/hcl/v2/ext/typeexpr"
+	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/function"
 	"github.com/zclconf/go-cty/cty/function/stdlib"
@@ -52,6 +53,7 @@ var stdlibFunctions = map[string]function.Function{
 	"hasindex":               stdlib.HasIndexFunc,
 	"indent":                 stdlib.IndentFunc,
 	"index":                  stdlib.IndexFunc,
+	"indexof":                indexOfFunc,
 	"int":                    stdlib.IntFunc,
 	"join":                   stdlib.JoinFunc,
 	"jsondecode":             stdlib.JSONDecodeFunc,
@@ -114,6 +116,51 @@ var stdlibFunctions = map[string]function.Function{
 	"values":                 stdlib.ValuesFunc,
 	"zipmap":                 stdlib.ZipmapFunc,
 }
+
+// indexOfFunc constructs a function that finds the element index for a given
+// value in a list.
+var indexOfFunc = function.New(&function.Spec{
+	Params: []function.Parameter{
+		{
+			Name: "list",
+			Type: cty.DynamicPseudoType,
+		},
+		{
+			Name: "value",
+			Type: cty.DynamicPseudoType,
+		},
+	},
+	Type: function.StaticReturnType(cty.Number),
+	Impl: func(args []cty.Value, retType cty.Type) (ret cty.Value, err error) {
+		if !(args[0].Type().IsListType() || args[0].Type().IsTupleType()) {
+			return cty.NilVal, errors.New("argument must be a list or tuple")
+		}
+
+		if !args[0].IsKnown() {
+			return cty.UnknownVal(cty.Number), nil
+		}
+
+		if args[0].LengthInt() == 0 { // Easy path
+			return cty.NilVal, errors.New("cannot search an empty list")
+		}
+
+		for it := args[0].ElementIterator(); it.Next(); {
+			i, v := it.Element()
+			eq, err := stdlib.Equal(v, args[1])
+			if err != nil {
+				return cty.NilVal, err
+			}
+			if !eq.IsKnown() {
+				return cty.UnknownVal(cty.Number), nil
+			}
+			if eq.True() {
+				return i, nil
+			}
+		}
+		return cty.NilVal, errors.New("item not found")
+
+	},
+})
 
 // timestampFunc constructs a function that returns a string representation of the current date and time.
 //
