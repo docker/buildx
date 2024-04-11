@@ -528,6 +528,7 @@ github.com/moby/buildkit/client/llb
 github.com/moby/buildkit/client/llb/sourceresolver
 github.com/moby/buildkit/client/ociindex
 github.com/moby/buildkit/cmd/buildkitd/config
+github.com/moby/buildkit/executor/resources/types
 github.com/moby/buildkit/exporter/containerimage/exptypes
 github.com/moby/buildkit/exporter/exptypes
 github.com/moby/buildkit/frontend/attestations
@@ -552,6 +553,7 @@ github.com/moby/buildkit/session/sshforward/sshprovider
 github.com/moby/buildkit/session/upload
 github.com/moby/buildkit/session/upload/uploadprovider
 github.com/moby/buildkit/solver/errdefs
+github.com/moby/buildkit/solver/llbsolver/provenance/types
 github.com/moby/buildkit/solver/pb
 github.com/moby/buildkit/solver/result
 github.com/moby/buildkit/source/types
