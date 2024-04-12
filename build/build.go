@@ -403,38 +403,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 
 						res, err := c.Solve(ctx, req)
 						if err != nil {
-							fallback := false
-							fallbackLint := false
-							var reqErr *errdefs.UnsupportedSubrequestError
-							if errors.As(err, &reqErr) {
-								switch reqErr.Name {
-								case "frontend.lint":
-									fallbackLint = true
-									fallthrough
-								case "frontend.outline", "frontend.targets":
-									fallback = true
-								default:
-									return nil, err
-								}
-							}
-
-							// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
-							if opt.PrintFunc != nil {
-								for _, req := range []string{"frontend.outline", "frontend.targets", "frontend.lint"} {
-									if strings.Contains(err.Error(), "unsupported request "+req) {
-										fallback = true
-									}
-									if req == "frontend.lint" {
-										fallbackLint = true
-									}
-								}
-							}
-
-							if fallback {
-								req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
-								if fallbackLint {
-									req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printLintFallbackImage
-								}
+							req, ok := fallbackPrintError(err, req)
+							if ok {
 								res2, err2 := c.Solve(ctx, req)
 								if err2 != nil {
 									return nil, err
@@ -893,6 +863,46 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 		}
 	}
 	return nil
+}
+
+func fallbackPrintError(err error, req gateway.SolveRequest) (gateway.SolveRequest, bool) {
+	if _, ok := req.FrontendOpt["requestid"]; !ok {
+		return req, false
+	}
+
+	fallback := false
+	fallbackLint := false
+	var reqErr *errdefs.UnsupportedSubrequestError
+	if errors.As(err, &reqErr) {
+		switch reqErr.Name {
+		case "frontend.lint":
+			fallbackLint = true
+			fallthrough
+		case "frontend.outline", "frontend.targets":
+			fallback = true
+		default:
+			return req, false
+		}
+	}
+
+	// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
+	for _, req := range []string{"frontend.outline", "frontend.targets", "frontend.lint"} {
+		if strings.Contains(err.Error(), "unsupported request "+req) {
+			fallback = true
+		}
+		if req == "frontend.lint" {
+			fallbackLint = true
+		}
+	}
+
+	if fallback {
+		req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
+		if fallbackLint {
+			req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printLintFallbackImage
+		}
+		return req, true
+	}
+	return req, false
 }
 
 func noPrintFunc(opt map[string]Options) bool {
