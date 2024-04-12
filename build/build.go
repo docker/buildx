@@ -53,7 +53,10 @@ var (
 
 const (
 	//nolint:gosec // G101: false-positive
-	printFallbackImage = "docker/dockerfile:1.5.2-labs@sha256:f2e91734a84c0922ff47aa4098ab775f1dfa932430d2888dd5cad5251fafdac4"
+	printFallbackImage = "docker/dockerfile:1.5@sha256:dbbd5e059e8a07ff7ea6233b213b36aa516b4c53c645f1817a4dd18b83cbea56"
+	// https://github.com/moby/buildkit/commit/3fd813cfa5eec6633b21da8164e93673d005df02
+	//nolint:gosec // G101: false-positive
+	printLintFallbackImage = "docker/dockerfile-upstream@sha256:2e302d1450bb1c3d9ef9b52800d2f3738cdfd21ead73a403e32a9bc275290e7c"
 )
 
 type Options struct {
@@ -401,24 +404,37 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						res, err := c.Solve(ctx, req)
 						if err != nil {
 							fallback := false
+							fallbackLint := false
 							var reqErr *errdefs.UnsupportedSubrequestError
 							if errors.As(err, &reqErr) {
 								switch reqErr.Name {
+								case "frontend.lint":
+									fallbackLint = true
+									fallthrough
 								case "frontend.outline", "frontend.targets":
 									fallback = true
 								default:
 									return nil, err
 								}
-							} else {
-								return nil, err
 							}
+
 							// buildkit v0.8 vendored in Docker 20.10 does not support typed errors
-							if strings.Contains(err.Error(), "unsupported request frontend.outline") || strings.Contains(err.Error(), "unsupported request frontend.targets") {
-								fallback = true
+							if opt.PrintFunc != nil {
+								for _, req := range []string{"frontend.outline", "frontend.targets", "frontend.lint"} {
+									if strings.Contains(err.Error(), "unsupported request "+req) {
+										fallback = true
+									}
+									if req == "frontend.lint" {
+										fallbackLint = true
+									}
+								}
 							}
 
 							if fallback {
 								req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printFallbackImage
+								if fallbackLint {
+									req.FrontendOpt["build-arg:BUILDKIT_SYNTAX"] = printLintFallbackImage
+								}
 								res2, err2 := c.Solve(ctx, req)
 								if err2 != nil {
 									return nil, err
