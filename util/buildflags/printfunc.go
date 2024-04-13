@@ -2,6 +2,7 @@ package buildflags
 
 import (
 	"encoding/csv"
+	"strconv"
 	"strings"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
@@ -21,9 +22,16 @@ func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		if len(parts) == 2 {
-			if parts[0] == "format" {
+			switch parts[0] {
+			case "format":
 				f.Format = parts[1]
-			} else {
+			case "ignorestatus":
+				v, err := strconv.ParseBool(parts[1])
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid ignorestatus print value: %s", parts[1])
+				}
+				f.IgnoreStatus = v
+			default:
 				return nil, errors.Errorf("invalid print field: %s", field)
 			}
 		} else {

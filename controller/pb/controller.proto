@@ -112,8 +112,9 @@ message Secret {
 }
 
 message PrintFunc {
-	string Name = 1;
-	string Format = 2;
+  string Name = 1;
+  string Format = 2;
+  bool IgnoreStatus = 3;
 }
 
 message InspectRequest {
