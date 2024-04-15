@@ -874,6 +874,11 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 			log.Printf("%s %+v", f, res)
 		}
 	}
+	if v, ok := res["result.statuscode"]; !f.IgnoreStatus && ok {
+		if n, err := strconv.Atoi(v); err == nil && n != 0 {
+			os.Exit(n)
+		}
+	}
 	return nil
 }
 

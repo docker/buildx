@@ -91,8 +91,9 @@ type Options struct {
 }
 
 type PrintFunc struct {
-	Name   string
-	Format string
+	Name         string
+	Format       string
+	IgnoreStatus bool
 }
 
 type Inputs struct {

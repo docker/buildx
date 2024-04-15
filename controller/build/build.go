@@ -161,8 +161,9 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	if in.PrintFunc != nil {
 		opts.PrintFunc = &build.PrintFunc{
-			Name:   in.PrintFunc.Name,
-			Format: in.PrintFunc.Format,
+			Name:         in.PrintFunc.Name,
+			Format:       in.PrintFunc.Format,
+			IgnoreStatus: in.PrintFunc.IgnoreStatus,
 		}
 	}
 
