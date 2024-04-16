@@ -153,6 +153,8 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			if _, isImage := cfg.DriverOpts["image"]; !isImage {
 				deploymentOpt.Image = bkimage.DefaultRootlessImage
 			}
+		case "schedulername":
+			deploymentOpt.SchedulerName = v
 		case "serviceaccount":
 			deploymentOpt.ServiceAccountName = v
 		case "nodeselector":

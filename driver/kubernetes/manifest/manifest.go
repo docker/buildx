@@ -20,6 +20,7 @@ type DeploymentOpt struct {
 	Image              string
 	Replicas           int
 	ServiceAccountName string
+	SchedulerName      string
 
 	// Qemu
 	Qemu struct {
@@ -107,6 +108,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 				},
 				Spec: corev1.PodSpec{
 					ServiceAccountName: opt.ServiceAccountName,
+					SchedulerName:      opt.SchedulerName,
 					Containers: []corev1.Container{
 						{
 							Name:  containerName,
