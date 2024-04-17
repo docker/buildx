@@ -26,7 +26,7 @@ require (
 	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
 	github.com/hashicorp/hcl/v2 v2.20.1
 	github.com/in-toto/in-toto-golang v0.5.0
-	github.com/moby/buildkit v0.13.0-rc3.0.20240411143343-549891b34890 // v0.14.0-dev
+	github.com/moby/buildkit v0.13.0-rc3.0.20240417151852-71f99c52a669 // v0.14.0-dev
 	github.com/moby/sys/mountinfo v0.7.1
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
