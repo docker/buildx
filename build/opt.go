@@ -354,6 +354,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		so.FrontendAttrs["ulimit"] = ulimits
 	}
 
+	// mark info request as internal
+	if opt.PrintFunc != nil {
+		so.Internal = true
+	}
+
 	return &so, releaseF, nil
 }
 
