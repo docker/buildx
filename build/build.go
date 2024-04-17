@@ -455,7 +455,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					} else {
 						rr, err = c.Build(ctx, *so, "buildx", buildFunc, ch)
 					}
-					if desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
+					if !so.Internal && desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
 						if err != nil {
 							return &desktop.ErrorWithBuildRef{
 								Ref: buildRef,
