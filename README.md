@@ -187,12 +187,12 @@ through various "drivers". Each driver defines how and where a build should
 run, and have different feature sets.
 
 We currently support the following drivers:
-- The `docker` driver ([guide](docs/manuals/drivers/docker.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `docker-container` driver ([guide](docs/manuals/drivers/docker-container.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `kubernetes` driver ([guide](docs/manuals/drivers/kubernetes.md), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
-- The `remote` driver ([guide](docs/manuals/drivers/remote.md))
+- The `docker` driver ([guide](https://docs.docker.com/build/drivers/docker/), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `docker-container` driver ([guide](https://docs.docker.com/build/drivers/docker-container/), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `kubernetes` driver ([guide](https://docs.docker.com/build/drivers/kubernetes/), [reference](https://docs.docker.com/engine/reference/commandline/buildx_create/#driver))
+- The `remote` driver ([guide](https://docs.docker.com/build/drivers/remote/))
 
-For more information on drivers, see the [drivers guide](docs/manuals/drivers/index.md).
+For more information on drivers, see the [drivers guide](https://docs.docker.com/build/drivers/).
 
 ## Working with builder instances
 
