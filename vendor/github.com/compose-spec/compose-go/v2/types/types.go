@@ -266,6 +266,7 @@ type BuildConfig struct {
 	Context            string                    `yaml:"context,omitempty" json:"context,omitempty"`
 	Dockerfile         string                    `yaml:"dockerfile,omitempty" json:"dockerfile,omitempty"`
 	DockerfileInline   string                    `yaml:"dockerfile_inline,omitempty" json:"dockerfile_inline,omitempty"`
+	Entitlements       []string                  `yaml:"entitlements,omitempty" json:"entitlements,omitempty"`
 	Args               MappingWithEquals         `yaml:"args,omitempty" json:"args,omitempty"`
 	SSH                SSHConfig                 `yaml:"ssh,omitempty" json:"ssh,omitempty"`
 	Labels             Labels                    `yaml:"labels,omitempty" json:"labels,omitempty"`

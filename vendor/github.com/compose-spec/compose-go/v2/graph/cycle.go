@@ -50,8 +50,8 @@ func (g *graph[T]) checkCycle() error {
 func searchCycle[T any](path []string, v *vertex[T]) error {
 	names := utils.MapKeys(v.children)
 	for _, name := range names {
-		if i := slices.Index(path, name); i > 0 {
-			return fmt.Errorf("dependency cycle detected: %s", strings.Join(path[i:], " -> "))
+		if i := slices.Index(path, name); i >= 0 {
+			return fmt.Errorf("dependency cycle detected: %s -> %s", strings.Join(path[i:], " -> "), name)
 		}
 		ch := v.children[name]
 		err := searchCycle(append(path, name), ch)

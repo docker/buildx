@@ -24,7 +24,7 @@ import (
 	"github.com/mitchellh/mapstructure"
 )
 
-func transformPorts(data any, p tree.Path) (any, error) {
+func transformPorts(data any, p tree.Path, ignoreParseError bool) (any, error) {
 	switch entries := data.(type) {
 	case []any:
 		// We process the list instead of individual items here.
@@ -48,7 +48,10 @@ func transformPorts(data any, p tree.Path) (any, error) {
 			case string:
 				parsed, err := types.ParsePortConfig(value)
 				if err != nil {
-					return data, nil
+					if ignoreParseError {
+						return data, nil
+					}
+					return nil, err
 				}
 				if err != nil {
 					return nil, err

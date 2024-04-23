@@ -283,6 +283,9 @@ func WithEnvFiles(file ...string) ProjectOptionsFn {
 		if os.IsNotExist(err) {
 			return nil
 		}
+		if err != nil {
+			return err
+		}
 		if !s.IsDir() {
 			o.EnvFiles = []string{defaultDotEnv}
 		}

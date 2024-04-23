@@ -39,7 +39,7 @@ func SetDefaultValues(yaml map[string]any) (map[string]any, error) {
 func setDefaults(data any, p tree.Path) (any, error) {
 	for pattern, transformer := range defaultValues {
 		if p.Matches(pattern) {
-			t, err := transformer(data, p)
+			t, err := transformer(data, p, false)
 			if err != nil {
 				return nil, err
 			}

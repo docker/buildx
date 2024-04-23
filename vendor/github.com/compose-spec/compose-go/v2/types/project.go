@@ -696,3 +696,17 @@ func (p *Project) WithServicesTransform(fn func(name string, s ServiceConfig) (S
 	}
 	return newProject, eg.Wait()
 }
+
+// CheckContainerNameUnicity validate project doesn't have services declaring the same container_name
+func (p *Project) CheckContainerNameUnicity() error {
+	names := utils.Set[string]{}
+	for name, s := range p.Services {
+		if s.ContainerName != "" {
+			if existing, ok := names[s.ContainerName]; ok {
+				return fmt.Errorf(`services.%s: container name %q is already in use by service %s"`, name, s.ContainerName, existing)
+			}
+			names.Add(s.ContainerName)
+		}
+	}
+	return nil
+}

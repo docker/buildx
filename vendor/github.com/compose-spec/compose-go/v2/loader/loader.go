@@ -148,13 +148,24 @@ func (l localResourceLoader) Load(_ context.Context, p string) (string, error) {
 	return l.abs(p), nil
 }
 
-func (l localResourceLoader) Dir(path string) string {
-	path = l.abs(filepath.Dir(path))
+func (l localResourceLoader) Dir(originalPath string) string {
+	path := l.abs(originalPath)
+	if !l.isDir(path) {
+		path = l.abs(filepath.Dir(originalPath))
+	}
 	rel, err := filepath.Rel(l.WorkingDir, path)
 	if err != nil {
 		return path
 	}
 	return rel
+}
+
+func (l localResourceLoader) isDir(path string) bool {
+	fileInfo, err := os.Stat(path)
+	if err != nil {
+		return false
+	}
+	return fileInfo.IsDir()
 }
 
 func (o *Options) clone() *Options {
@@ -452,7 +463,7 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 		}
 	}
 
-	dict, err = transform.Canonical(dict)
+	dict, err = transform.Canonical(dict, opts.SkipInterpolation)
 	if err != nil {
 		return nil, err
 	}
