@@ -162,7 +162,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	case 1:
 		// valid
 	case 0:
-		if !noDefaultLoad() {
+		if !noDefaultLoad() && opt.PrintFunc == nil {
 			if nodeDriver.IsMobyDriver() {
 				// backwards compat for docker driver only:
 				// this ensures the build results in a docker image.
