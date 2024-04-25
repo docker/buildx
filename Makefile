@@ -8,6 +8,8 @@ endif
 
 export BUILDX_CMD ?= docker buildx
 
+BAKE_TARGETS := binaries binaries-cross lint lint-gopls validate-vendor validate-docs validate-authors validate-generated-files
+
 .PHONY: all
 all: binaries
 
@@ -19,13 +21,9 @@ build:
 shell:
 	./hack/shell
 
-.PHONY: binaries
-binaries:
-	$(BUILDX_CMD) bake binaries
-
-.PHONY: binaries-cross
-binaries-cross:
-	$(BUILDX_CMD) bake binaries-cross
+.PHONY: $(BAKE_TARGETS)
+$(BAKE_TARGETS):
+	$(BUILDX_CMD) bake $@
 
 .PHONY: install
 install: binaries
@@ -39,14 +37,6 @@ release:
 .PHONY: validate-all
 validate-all: lint test validate-vendor validate-docs validate-generated-files
 
-.PHONY: lint
-lint:
-	$(BUILDX_CMD) bake lint
-
-.PHONY: lint-gopls
-lint-gopls:
-	$(BUILDX_CMD) bake lint-gopls
-
 .PHONY: test
 test:
 	./hack/test
@@ -58,22 +48,6 @@ test-unit:
 .PHONY: test
 test-integration:
 	TESTPKGS=./tests ./hack/test
-
-.PHONY: validate-vendor
-validate-vendor:
-	$(BUILDX_CMD) bake validate-vendor
-
-.PHONY: validate-docs
-validate-docs:
-	$(BUILDX_CMD) bake validate-docs
-
-.PHONY: validate-authors
-validate-authors:
-	$(BUILDX_CMD) bake validate-authors
-
-.PHONY: validate-generated-files
-validate-generated-files:
-	$(BUILDX_CMD) bake validate-generated-files
 
 .PHONY: test-driver
 test-driver:
