@@ -203,14 +203,12 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 		bufStderr := &bytes.Buffer{}
 		if err := d.run(ctx, []string{"buildctl", "debug", "workers"}, bufStdout, bufStderr); err != nil {
 			if try > 15 {
-				if err != nil {
-					d.copyLogs(context.TODO(), l)
-					if bufStdout.Len() != 0 {
-						l.Log(1, bufStdout.Bytes())
-					}
-					if bufStderr.Len() != 0 {
-						l.Log(2, bufStderr.Bytes())
-					}
+				d.copyLogs(context.TODO(), l)
+				if bufStdout.Len() != 0 {
+					l.Log(1, bufStdout.Bytes())
+				}
+				if bufStderr.Len() != 0 {
+					l.Log(2, bufStderr.Bytes())
 				}
 				return err
 			}

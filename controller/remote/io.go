@@ -358,7 +358,7 @@ func copyToStream(fd uint32, snd msgStream, r io.Reader) error {
 			}
 			return err
 		} else if n > 0 {
-			if snd.Send(&pb.Message{
+			if err := snd.Send(&pb.Message{
 				Input: &pb.Message_File{
 					File: &pb.FdMessage{
 						Fd:   fd,

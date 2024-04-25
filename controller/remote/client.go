@@ -210,7 +210,7 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 						}
 						return err
 					} else if n > 0 {
-						if stream.Send(&pb.InputMessage{
+						if err := stream.Send(&pb.InputMessage{
 							Input: &pb.InputMessage_Data{
 								Data: &pb.DataMessage{
 									Data: buf[:n],

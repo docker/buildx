@@ -54,10 +54,7 @@ func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 	}
 
 	cl = func() error {
-		var err error
-		if err1 := bkclose(); err == nil {
-			err = err1
-		}
+		err := bkclose()
 		cmd := exec.Command("buildx", "rm", "-f", name)
 		if err1 := cmd.Run(); err == nil {
 			err = err1
