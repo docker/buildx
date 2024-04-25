@@ -340,7 +340,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	if confutil.IsExperimental() {
 		resp, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
 	} else {
-		resp, retErr = runBasicBuild(ctx, dockerCli, opts, options, printer)
+		resp, retErr = runBasicBuild(ctx, dockerCli, opts, printer)
 	}
 
 	if err := printer.Wait(); retErr == nil {
@@ -387,7 +387,7 @@ func getImageID(resp map[string]string) string {
 	return dgst
 }
 
-func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
+func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
 	resp, res, err := cbuild.RunBuild(ctx, dockerCli, *opts, dockerCli.In(), printer, false)
 	if res != nil {
 		res.Done()

@@ -186,7 +186,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 						if pl := di.DriverInfo.DynamicNodes[i].Platforms; len(pl) > 0 {
 							diClone.Platforms = pl
 						}
-						nodes = append(nodes, di)
+						nodes = append(nodes, diClone)
 					}
 					dynamicNodes = append(dynamicNodes, di.DriverInfo.DynamicNodes...)
 				}

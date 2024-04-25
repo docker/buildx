@@ -37,7 +37,7 @@ func NewContainer(ctx context.Context, resultCtx *ResultHandle, cfg *controllera
 				cancel()
 			}()
 
-			containerCfg, err := resultCtx.getContainerConfig(ctx, c, cfg)
+			containerCfg, err := resultCtx.getContainerConfig(cfg)
 			if err != nil {
 				return nil, err
 			}

@@ -52,10 +52,8 @@ var (
 )
 
 const (
-	//nolint:gosec // G101: false-positive
 	printFallbackImage = "docker/dockerfile:1.5@sha256:dbbd5e059e8a07ff7ea6233b213b36aa516b4c53c645f1817a4dd18b83cbea56"
 	// https://github.com/moby/buildkit/commit/71f99c52a669dc0322b5ea57bc28a09c20427227
-	//nolint:gosec // G101: false-positive
 	printLintFallbackImage = "docker.io/docker/dockerfile-upstream@sha256:47663570b6cc49ed90dc6e3215090a366989ab934d12dc93856a8ae0d27a95e7"
 )
 

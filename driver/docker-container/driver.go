@@ -77,7 +77,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 			return err
 		}
 		return sub.Wrap("starting container "+d.Name, func() error {
-			if err := d.start(ctx, sub); err != nil {
+			if err := d.start(ctx); err != nil {
 				return err
 			}
 			return d.wait(ctx, sub)
@@ -188,7 +188,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			if err := d.copyToContainer(ctx, d.InitConfig.Files); err != nil {
 				return err
 			}
-			if err := d.start(ctx, l); err != nil {
+			if err := d.start(ctx); err != nil {
 				return err
 			}
 		}
@@ -203,14 +203,12 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 		bufStderr := &bytes.Buffer{}
 		if err := d.run(ctx, []string{"buildctl", "debug", "workers"}, bufStdout, bufStderr); err != nil {
 			if try > 15 {
-				if err != nil {
-					d.copyLogs(context.TODO(), l)
-					if bufStdout.Len() != 0 {
-						l.Log(1, bufStdout.Bytes())
-					}
-					if bufStderr.Len() != 0 {
-						l.Log(2, bufStderr.Bytes())
-					}
+				d.copyLogs(context.TODO(), l)
+				if bufStdout.Len() != 0 {
+					l.Log(1, bufStdout.Bytes())
+				}
+				if bufStderr.Len() != 0 {
+					l.Log(2, bufStderr.Bytes())
 				}
 				return err
 			}
@@ -304,7 +302,7 @@ func (d *Driver) run(ctx context.Context, cmd []string, stdout, stderr io.Writer
 	return nil
 }
 
-func (d *Driver) start(ctx context.Context, l progress.SubLogger) error {
+func (d *Driver) start(ctx context.Context) error {
 	return d.DockerAPI.ContainerStart(ctx, d.Name, container.StartOptions{})
 }
 

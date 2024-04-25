@@ -28,7 +28,7 @@ group "default" {
 }
 
 group "validate" {
-  targets = ["lint", "validate-vendor", "validate-docs"]
+  targets = ["lint", "lint-gopls", "validate-vendor", "validate-docs"]
 }
 
 target "lint" {
@@ -46,6 +46,11 @@ target "lint" {
     "windows/amd64",
     "windows/arm64"
   ] : []
+}
+
+target "lint-gopls" {
+  inherits = ["lint"]
+  target = "gopls-analyze"
 }
 
 target "validate-vendor" {

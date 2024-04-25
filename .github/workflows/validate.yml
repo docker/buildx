@@ -24,6 +24,7 @@ jobs:
       matrix:
         target:
           - lint
+          - lint-gopls
           - validate-vendor
           - validate-docs
           - validate-generated-files

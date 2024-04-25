@@ -11,7 +11,7 @@ import (
 	"github.com/spf13/cobra"
 )
 
-func runVersion(dockerCli command.Cli) error {
+func runVersion(_ command.Cli) error {
 	fmt.Println(version.Package, version.Version, version.Revision)
 	return nil
 }

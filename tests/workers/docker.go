@@ -60,12 +60,9 @@ func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 	}
 
 	cl = func() error {
-		var err error
-		if err1 := bkclose(); err == nil {
-			err = err1
-		}
+		err := bkclose()
 		cmd := exec.Command("docker", "context", "rm", "-f", name)
-		if err1 := cmd.Run(); err1 != nil {
+		if err1 := cmd.Run(); err == nil {
 			err = errors.Wrapf(err1, "failed to remove buildx instance %s", name)
 		}
 		return err

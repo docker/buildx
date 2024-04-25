@@ -43,6 +43,10 @@ validate-all: lint test validate-vendor validate-docs validate-generated-files
 lint:
 	$(BUILDX_CMD) bake lint
 
+.PHONY: lint-gopls
+lint-gopls:
+	$(BUILDX_CMD) bake lint-gopls
+
 .PHONY: test
 test:
 	./hack/test

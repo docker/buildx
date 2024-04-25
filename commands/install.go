@@ -15,7 +15,7 @@ import (
 type installOptions struct {
 }
 
-func runInstall(dockerCli command.Cli, in installOptions) error {
+func runInstall(_ command.Cli, _ installOptions) error {
 	dir := config.Dir()
 	if err := os.MkdirAll(dir, 0755); err != nil {
 		return errors.Wrap(err, "could not create docker config")

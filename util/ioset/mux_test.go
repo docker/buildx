@@ -120,14 +120,14 @@ func TestMuxIO(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			inBuf, end, in := newTestIn(t)
+			inBuf, end, in := newTestIn()
 			var outBufs []*outBuf
 			var outs []MuxOut
 			if tt.outputsNum != len(tt.wants) {
 				t.Fatalf("wants != outputsNum")
 			}
 			for i := 0; i < tt.outputsNum; i++ {
-				outBuf, out := newTestOut(t, i)
+				outBuf, out := newTestOut(i)
 				outBufs = append(outBufs, outBuf)
 				outs = append(outs, MuxOut{out, nil, nil})
 			}
@@ -223,7 +223,7 @@ type inBuf struct {
 	doneCh chan struct{}
 }
 
-func newTestIn(t *testing.T) (*inBuf, Out, In) {
+func newTestIn() (*inBuf, Out, In) {
 	ti := &inBuf{
 		doneCh: make(chan struct{}),
 	}
@@ -262,7 +262,7 @@ type outBuf struct {
 	doneCh chan struct{}
 }
 
-func newTestOut(t *testing.T, idx int) (*outBuf, Out) {
+func newTestOut(idx int) (*outBuf, Out) {
 	to := &outBuf{
 		idx:    idx,
 		doneCh: make(chan struct{}),
@@ -285,7 +285,7 @@ func newTestOut(t *testing.T, idx int) (*outBuf, Out) {
 			errW.CloseWithError(err)
 			return
 		}
-		to.stdin = string(buf.Bytes())
+		to.stdin = buf.String()
 		outW.Close()
 		errW.Close()
 		close(to.doneCh)

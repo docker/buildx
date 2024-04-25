@@ -4,6 +4,6 @@ import (
 	"os/exec"
 )
 
-func gitPath(wd string) (string, error) {
+func gitPath(_ string) (string, error) {
 	return exec.LookPath("git.exe")
 }
