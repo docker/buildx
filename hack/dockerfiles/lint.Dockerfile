@@ -2,9 +2,10 @@
 
 ARG GO_VERSION=1.21
 ARG XX_VERSION=1.3.0
-ARG GOLANGCI_LINT_VERSION=1.54.2
+ARG GOLANGCI_LINT_VERSION=1.57.2
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
+
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine
 RUN apk add --no-cache git gcc musl-dev
 ENV GOFLAGS="-buildvcs=false"
