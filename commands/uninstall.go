@@ -15,7 +15,7 @@ import (
 type uninstallOptions struct {
 }
 
-func runUninstall(dockerCli command.Cli, in uninstallOptions) error {
+func runUninstall(_ command.Cli, _ uninstallOptions) error {
 	dir := config.Dir()
 	cfg, err := config.Load(dir)
 	if err != nil {

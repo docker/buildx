@@ -292,10 +292,10 @@ func (r *ResultHandle) build(buildFunc gateway.BuildFunc) (err error) {
 	return err
 }
 
-func (r *ResultHandle) getContainerConfig(ctx context.Context, c gateway.Client, cfg *controllerapi.InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
+func (r *ResultHandle) getContainerConfig(cfg *controllerapi.InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
 	if r.res != nil && r.solveErr == nil {
 		logrus.Debugf("creating container from successful build")
-		ccfg, err := containerConfigFromResult(ctx, r.res, c, *cfg)
+		ccfg, err := containerConfigFromResult(r.res, *cfg)
 		if err != nil {
 			return containerCfg, err
 		}
@@ -327,7 +327,7 @@ func (r *ResultHandle) getProcessConfig(cfg *controllerapi.InvokeConfig, stdin i
 	return processCfg, nil
 }
 
-func containerConfigFromResult(ctx context.Context, res *gateway.Result, c gateway.Client, cfg controllerapi.InvokeConfig) (*gateway.NewContainerRequest, error) {
+func containerConfigFromResult(res *gateway.Result, cfg controllerapi.InvokeConfig) (*gateway.NewContainerRequest, error) {
 	if cfg.Initial {
 		return nil, errors.Errorf("starting from the container from the initial state of the step is supported only on the failed steps")
 	}
