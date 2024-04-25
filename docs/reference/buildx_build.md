@@ -574,8 +574,8 @@ $ docker buildx build --load --progress=plain .
 
 > **Note**
 >
-> Check also our [Color output controls guide](https://github.com/docker/buildx/blob/master/docs/guides/color-output.md)
-> for modifying the colors that are used to output information to the terminal.
+> Check also the [`BUILDKIT_COLORS`](https://docs.docker.com/build/building/variables/#buildkit_colors)
+> environment variable for modifying the colors of the terminal output.
 
 ### <a name="provenance"></a> Create provenance attestations (--provenance)
 
