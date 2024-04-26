@@ -309,9 +309,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 
 	var term bool
 	if _, err := console.ConsoleFromFile(os.Stdout); err == nil {
-		if _, exists := os.LookupEnv("NO_COLOR"); !exists {
-			term = true
-		}
+		term = true
 	}
 	attributes := buildMetricAttributes(dockerCli, b, &options)
 
