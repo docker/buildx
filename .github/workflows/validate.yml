@@ -17,17 +17,63 @@ on:
       - '.github/releases.json'
 
 jobs:
+  prepare:
+    runs-on: ubuntu-22.04
+    outputs:
+      includes: ${{ steps.matrix.outputs.includes }}
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Matrix
+        id: matrix
+        uses: actions/github-script@v7
+        with:
+          script: |
+            let def = {};
+            await core.group(`Parsing definition`, async () => {
+              const printEnv = Object.assign({}, process.env, {
+                GOLANGCI_LINT_MULTIPLATFORM: process.env.GITHUB_REPOSITORY === 'docker/buildx' ? '1' : ''
+              });
+              const resPrint = await exec.getExecOutput('docker', ['buildx', 'bake', 'validate', '--print'], {
+                ignoreReturnCode: true,
+                env: printEnv
+              });
+              if (resPrint.stderr.length > 0 && resPrint.exitCode != 0) {
+                throw new Error(res.stderr);
+              }
+              def = JSON.parse(resPrint.stdout.trim());
+            });
+            await core.group(`Generating matrix`, async () => {
+              const includes = [];
+              for (const targetName of Object.keys(def.target)) {
+                const target = def.target[targetName];
+                if (target.platforms && target.platforms.length > 0) {
+                  target.platforms.forEach(platform => {
+                    includes.push({
+                      target: targetName,
+                      platform: platform
+                    });
+                  });
+                } else {
+                  includes.push({
+                    target: targetName
+                  });
+                }
+              }
+              core.info(JSON.stringify(includes, null, 2));
+              core.setOutput('includes', JSON.stringify(includes));
+            });
+
   validate:
     runs-on: ubuntu-22.04
+    needs:
+      - prepare
     strategy:
       fail-fast: false
       matrix:
-        target:
-          - lint
-          - lint-gopls
-          - validate-vendor
-          - validate-docs
-          - validate-generated-files
+        include: ${{ fromJson(needs.prepare.outputs.includes) }}
     steps:
       -
         name: Prepare
@@ -44,6 +90,9 @@ jobs:
         with:
           version: latest
       -
-        name: Run
-        run: |
-          make ${{ matrix.target }}
+        name: Validate
+        uses: docker/bake-action@v4
+        with:
+          targets: ${{ matrix.target }}
+          set: |
+            *.platform=${{ matrix.platform }}
