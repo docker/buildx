@@ -6,6 +6,17 @@ labels:
   - status/triage
 
 body:
+  - type: checkboxes
+    attributes:
+      label: This is a feature that ...
+      description: |
+        Make sure that your request fulfills all of the following requirements.
+        If one requirement cannot be satisfied, explain in detail why.
+      options:
+        - label: ... the existing functionality does not satisfy my request
+        - label: ... is not a duplicate of any open or closed issues
+        - label: ... is not a question or discussion topic
+
   - type: textarea
     id: description
     attributes:
@@ -13,3 +24,4 @@ body:
       description: What is the feature you want to see?
     validations:
       required: true
+
