@@ -8,7 +8,7 @@ variable "DESTDIR" {
   default = "./bin"
 }
 variable "GOLANGCI_LINT_MULTIPLATFORM" {
-  default = null
+  default = ""
 }
 
 # Special target: https://github.com/docker/metadata-action#bake-definition
@@ -35,7 +35,7 @@ target "lint" {
   inherits = ["_common"]
   dockerfile = "./hack/dockerfiles/lint.Dockerfile"
   output = ["type=cacheonly"]
-  platforms = GOLANGCI_LINT_MULTIPLATFORM != null ? [
+  platforms = GOLANGCI_LINT_MULTIPLATFORM != "" ? [
     "darwin/amd64",
     "darwin/arm64",
     "linux/amd64",
