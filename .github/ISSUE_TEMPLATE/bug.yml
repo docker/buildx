@@ -55,11 +55,11 @@ body:
     validations:
       required: true
 
-  - type: input
+  - type: textarea
     attributes:
-      label: Buildx version
+      label: Additional context
       description: |
-        Output of `docker buildx version` command.
-        Example: `github.com/docker/buildx v0.8.1 5fac64c2c49dae1320f2b51f1a899ca451935554`
+        Please provide any additional context such as version information, logs, or configuration.
     validations:
       required: false
+

@@ -66,19 +66,19 @@ body:
 
   - type: textarea
     attributes:
-      label: Docker info
-      description: |
-        Output of `docker info` command.
-      render: text
-
-  - type: textarea
-    attributes:
       label: Builders list
       description: |
         Output of `docker buildx ls` command.
       render: text
     validations:
       required: true
+
+  - type: textarea
+    attributes:
+      label: Docker info
+      description: |
+        Output of `docker info` command.
+      render: text
 
   - type: textarea
     attributes:
