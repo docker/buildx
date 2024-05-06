@@ -1,6 +1,6 @@
 # https://docs.github.com/en/communities/using-templates-to-encourage-useful-issues-and-pull-requests/syntax-for-githubs-form-schema
-name: Bug Report
-description: Report a bug.
+name: Bug Report (Recommended)
+description: Report a bug with supporting information to help us reproduce it.
 labels:
   - status/triage
   - kind/maybe-bug
@@ -9,7 +9,7 @@ body:
   - type: markdown
     attributes:
       value: |
-        Thank you for taking the time to report a bug!
+        Thank you for taking the time to report a bug and provide logs!
         If this is a security issue please report it to the [Docker Security team](mailto:security@docker.com).
 
   - type: checkboxes
@@ -62,4 +62,64 @@ body:
         Output of `docker buildx version` command.
         Example: `github.com/docker/buildx v0.8.1 5fac64c2c49dae1320f2b51f1a899ca451935554`
     validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Docker info
+      description: |
+        Output of `docker info` command.
+      render: text
+
+  - type: textarea
+    attributes:
+      label: Builders list
+      description: |
+        Output of `docker buildx ls` command.
+      render: text
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Configuration
+      description: >
+        Please provide a minimal Dockerfile, bake definition (if applicable) and
+        invoked commands to help reproducing your issue.
+      placeholder: |
+        ```dockerfile
+        FROM alpine
+        echo hello
+        ```
+        
+        ```hcl
+        group "default" {
+          targets = ["app"]
+        }
+        target "app" {
+          dockerfile = "Dockerfile"
+          target = "build"
+        }
+        ```
+        
+        ```console
+        $ docker buildx build .
+        $ docker buildx bake
+        ```
+    validations:
+      required: true
+
+  - type: textarea
+    attributes:
+      label: Build logs
+      description: |
+        Please provide logs output (and/or BuildKit logs if applicable).
+      render: text
+    validations:
       required: false
+
+  - type: textarea
+    attributes:
+      label: Additional info
+      description: |
+        Please provide any additional information that could be useful.
