@@ -1,0 +1,91 @@
+# Configuration for Label Actions - https://github.com/dessant/label-actions
+
+# When a discussion is resolved, lock the discussion
+'status/resolved':
+  discussions:
+    close: true
+    close-reason: 'resolved'
+    lock: true
+
+# Request more information from the author
+'auto/needs-more-info':
+  comment: >
+    :wave: @{issue-author}, please provide the requested information.
+  issues:
+    label: 
+      - 'status/needs-more-info' 
+  prs:
+    label: 
+      - 'status/needs-more-info' 
+
+# Thank the author for their response, remove auto-labels
+'auto/got-info':
+  comment: >
+    :wave: @{issue-author}, thank you for your response!
+  issues:
+    unlabel: 
+      - 'auto/needs-more-info'
+      - 'status/needs-more-info'
+  prs:
+    unlabel: 
+      - 'auto/needs-more-info'
+      - 'status/needs-more-info'
+
+# Comment that the issue will be transferred to another repository
+'auto/transfer':
+  comment: >
+    :wave: @{issue-author}, this issue will be transferred to another repository.
+  lock: true
+  lock-reason: 'off-topic'
+  issues:
+    label: 
+      - 'needs/transfer'
+      - 'status/wontfix'
+
+# Thank the author for their contribution
+'auto/thank-you':
+  comment: >
+    :wave: @{issue-author}, thank you for your contribution!
+
+# Mark issue for conversion to discussion
+'auto/make-discussion':
+  comment: >
+    :wave: @{issue-author}, this issue will be converted to a discussion. If you think this was a mistake, please let us know.
+  issues:
+    label: 
+      - 'needs/convert-to-discussion'
+
+# Label as duplicate, prompt author to search
+'auto/duplicate':
+  comment: >
+    :wave: @{issue-author}, this item appears to be a duplicate of a previous one. Please check if it already exists and add any additional information as a comment.
+  issues:
+    label: 'kind/duplicate'
+  prs:
+    label: 'kind/duplicate'
+
+# Prompt author to provide a minimal reproduction
+'auto/needs-reproduction':
+  comment: >
+    :wave: @{issue-author}, please provide a minimal reproduction of the issue.
+  issues:
+    label: 
+      - 'needs/reproduction'
+      - 'status/blocked'
+  prs:
+    label: 
+      - 'needs/reproduction'
+      - 'status/blocked'
+
+# Use template
+'auto/use-template':
+  comment: >
+    :wave: @{issue-author}, please use one the provided templates.
+  issues:
+    label: 
+      - 'needs/template'
+      - 'status/blocked'
+  prs:
+    label: 
+      - 'needs/template'
+      - 'status/blocked'
