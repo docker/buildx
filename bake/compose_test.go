@@ -32,6 +32,9 @@ services:
         - type=local,src=path/to/cache
       cache_to:
         - type=local,dest=path/to/cache
+      ssh:
+        - key=path/to/key
+        - default
       secrets:
         - token
         - aws
@@ -74,6 +77,7 @@ secrets:
 	require.Equal(t, []string{"type=local,src=path/to/cache"}, c.Targets[1].CacheFrom)
 	require.Equal(t, []string{"type=local,dest=path/to/cache"}, c.Targets[1].CacheTo)
 	require.Equal(t, "none", *c.Targets[1].NetworkMode)
+	require.Equal(t, []string{"default", "key=path/to/key"}, c.Targets[1].SSH)
 	require.Equal(t, []string{
 		"id=token,env=ENV_TOKEN",
 		"id=aws,src=/root/.aws/credentials",
@@ -278,6 +282,8 @@ services:
         - user/app:cache
       tags:
         - ct-addon:baz
+      ssh:
+        key: path/to/key
       args:
         CT_ECR: foo
         CT_TAG: bar
@@ -287,6 +293,9 @@ services:
         tags:
           - ct-addon:foo
           - ct-addon:alp
+        ssh:
+          - default
+          - other=path/to/otherkey
         platforms:
           - linux/amd64
           - linux/arm64
@@ -329,6 +338,7 @@ services:
 	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Targets[0].Platforms)
 	require.Equal(t, []string{"user/app:cache", "type=local,src=path/to/cache"}, c.Targets[0].CacheFrom)
 	require.Equal(t, []string{"user/app:cache", "type=local,dest=path/to/cache"}, c.Targets[0].CacheTo)
+	require.Equal(t, []string{"default", "key=path/to/key", "other=path/to/otherkey"}, c.Targets[0].SSH)
 	require.Equal(t, newBool(true), c.Targets[0].Pull)
 	require.Equal(t, map[string]string{"alpine": "docker-image://alpine:3.13"}, c.Targets[0].Contexts)
 	require.Equal(t, []string{"ct-fake-aws:bar"}, c.Targets[1].Tags)
@@ -353,6 +363,8 @@ services:
         - user/app:cache
       tags:
         - ct-addon:foo
+      ssh:
+        - default
       x-bake:
         tags:
           - ct-addon:foo
@@ -362,6 +374,9 @@ services:
           - type=local,src=path/to/cache
         cache-to:
           - type=local,dest=path/to/cache
+        ssh:
+          - default
+          - key=path/to/key
 `)
 
 	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
@@ -370,6 +385,7 @@ services:
 	require.Equal(t, []string{"ct-addon:foo", "ct-addon:baz"}, c.Targets[0].Tags)
 	require.Equal(t, []string{"user/app:cache", "type=local,src=path/to/cache"}, c.Targets[0].CacheFrom)
 	require.Equal(t, []string{"user/app:cache", "type=local,dest=path/to/cache"}, c.Targets[0].CacheTo)
+	require.Equal(t, []string{"default", "key=path/to/key"}, c.Targets[0].SSH)
 }
 
 func TestEnv(t *testing.T) {
