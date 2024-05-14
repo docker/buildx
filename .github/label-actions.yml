@@ -80,7 +80,7 @@
 # Use template
 'auto/use-template':
   comment: >
-    :wave: @{issue-author}, please use one the provided templates.
+    :wave: @{issue-author}, please use one the provided [forms](https://github.com/docker/buildx/issues/new/choose).
   issues:
     label: 
       - 'needs/template'
