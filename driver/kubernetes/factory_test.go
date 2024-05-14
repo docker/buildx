@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"testing"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
@@ -37,22 +38,23 @@ func TestFactory_processDriverOpts(t *testing.T) {
 	t.Run(
 		"ValidOptions", func(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
-				"namespace":       "test-ns",
-				"image":           "test:latest",
-				"replicas":        "2",
-				"requests.cpu":    "100m",
-				"requests.memory": "32Mi",
-				"limits.cpu":      "200m",
-				"limits.memory":   "64Mi",
-				"rootless":        "true",
-				"nodeselector":    "selector1=value1,selector2=value2",
-				"tolerations":     "key=tolerationKey1,value=tolerationValue1,operator=Equal,effect=NoSchedule,tolerationSeconds=60;key=tolerationKey2,operator=Exists",
-				"annotations":     "example.com/expires-after=annotation1,example.com/other=annotation2",
-				"labels":          "example.com/owner=label1,example.com/other=label2",
-				"loadbalance":     "random",
-				"qemu.install":    "true",
-				"qemu.image":      "qemu:latest",
-				"default-load":    "true",
+				"namespace":           "test-ns",
+				"image":               "test:latest",
+				"replicas":            "2",
+				"provisioningTimeout": "300s",
+				"requests.cpu":        "100m",
+				"requests.memory":     "32Mi",
+				"limits.cpu":          "200m",
+				"limits.memory":       "64Mi",
+				"rootless":            "true",
+				"nodeselector":        "selector1=value1,selector2=value2",
+				"tolerations":         "key=tolerationKey1,value=tolerationValue1,operator=Equal,effect=NoSchedule,tolerationSeconds=60;key=tolerationKey2,operator=Exists",
+				"annotations":         "example.com/expires-after=annotation1,example.com/other=annotation2",
+				"labels":              "example.com/owner=label1,example.com/other=label2",
+				"loadbalance":         "random",
+				"qemu.install":        "true",
+				"qemu.image":          "qemu:latest",
+				"default-load":        "true",
 			}
 			r, loadbalance, ns, defaultLoad, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
@@ -91,6 +93,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Equal(t, "test-ns", ns)
 			require.Equal(t, "test:latest", r.Image)
 			require.Equal(t, 2, r.Replicas)
+			require.Equal(t, 300*time.Second, r.ProvisioningTimeout)
 			require.Equal(t, "100m", r.RequestsCPU)
 			require.Equal(t, "32Mi", r.RequestsMemory)
 			require.Equal(t, "200m", r.LimitsCPU)
@@ -118,6 +121,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Equal(t, "test", ns)
 			require.Equal(t, bkimage.DefaultImage, r.Image)
 			require.Equal(t, 1, r.Replicas)
+			require.Equal(t, 120*time.Second, r.ProvisioningTimeout)
 			require.Equal(t, "", r.RequestsCPU)
 			require.Equal(t, "", r.RequestsMemory)
 			require.Equal(t, "", r.LimitsCPU)
@@ -148,6 +152,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Equal(t, "test", ns)
 			require.Equal(t, bkimage.DefaultRootlessImage, r.Image)
 			require.Equal(t, 1, r.Replicas)
+			require.Equal(t, 120*time.Second, r.ProvisioningTimeout)
 			require.Equal(t, "", r.RequestsCPU)
 			require.Equal(t, "", r.RequestsMemory)
 			require.Equal(t, "", r.LimitsCPU)
@@ -168,6 +173,16 @@ func TestFactory_processDriverOpts(t *testing.T) {
 		"InvalidReplicas", func(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"replicas": "invalid",
+			}
+			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.Error(t, err)
+		},
+	)
+
+	t.Run(
+		"InvalidProvisioningTimeout", func(t *testing.T) {
+			cfg.DriverOpts = map[string]string{
+				"ProvisioningTimeout": "invalid",
 			}
 			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)

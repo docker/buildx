@@ -31,7 +31,7 @@ install: binaries
 	install bin/build/buildx ~/.docker/cli-plugins/docker-buildx
 
 .PHONY: release
-release:
+release:t
 	./hack/release
 
 .PHONY: validate-all

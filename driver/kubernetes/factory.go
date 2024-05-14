@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -82,6 +83,8 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 
 	d.minReplicas = deploymentOpt.Replicas
 
+	d.provisioningTimeout = deploymentOpt.ProvisioningTimeout
+
 	d.deploymentClient = clientset.AppsV1().Deployments(namespace)
 	d.podClient = clientset.CoreV1().Pods(namespace)
 	d.configMapClient = clientset.CoreV1().ConfigMaps(namespace)
@@ -104,13 +107,14 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 
 func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg driver.InitConfig) (*manifest.DeploymentOpt, string, string, bool, error) {
 	deploymentOpt := &manifest.DeploymentOpt{
-		Name:          deploymentName,
-		Image:         bkimage.DefaultImage,
-		Replicas:      1,
-		BuildkitFlags: cfg.BuildkitdFlags,
-		Rootless:      false,
-		Platforms:     cfg.Platforms,
-		ConfigFiles:   cfg.Files,
+		Name:                deploymentName,
+		Image:               bkimage.DefaultImage,
+		Replicas:            1,
+		ProvisioningTimeout: 120 * time.Second,
+		BuildkitFlags:       cfg.BuildkitdFlags,
+		Rootless:            false,
+		Platforms:           cfg.Platforms,
+		ConfigFiles:         cfg.Files,
 	}
 
 	defaultLoad := false
@@ -229,6 +233,8 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			if err != nil {
 				return nil, "", "", false, err
 			}
+		case "provisioningTimeout":
+			deploymentOpt.ProvisioningTimeout, err = time.ParseDuration(v)
 		default:
 			return nil, "", "", false, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
 		}

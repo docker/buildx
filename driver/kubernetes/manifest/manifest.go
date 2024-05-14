@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"path"
 	"strings"
+	"time"
 
 	"github.com/docker/buildx/util/platformutil"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
@@ -15,12 +16,13 @@ import (
 )
 
 type DeploymentOpt struct {
-	Namespace          string
-	Name               string
-	Image              string
-	Replicas           int
-	ServiceAccountName string
-	SchedulerName      string
+	Namespace           string
+	Name                string
+	Image               string
+	Replicas            int
+	ProvisioningTimeout time.Duration
+	ServiceAccountName  string
+	SchedulerName       string
 
 	// Qemu
 	Qemu struct {
