@@ -41,15 +41,16 @@ type Driver struct {
 
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/kubernetes.md
-	minReplicas      int
-	deployment       *appsv1.Deployment
-	configMaps       []*corev1.ConfigMap
-	clientset        *kubernetes.Clientset
-	deploymentClient clientappsv1.DeploymentInterface
-	podClient        clientcorev1.PodInterface
-	configMapClient  clientcorev1.ConfigMapInterface
-	podChooser       podchooser.PodChooser
-	defaultLoad      bool
+	minReplicas         int
+	deployment          *appsv1.Deployment
+	configMaps          []*corev1.ConfigMap
+	clientset           *kubernetes.Clientset
+	deploymentClient    clientappsv1.DeploymentInterface
+	podClient           clientcorev1.PodInterface
+	configMapClient     clientcorev1.ConfigMapInterface
+	podChooser          podchooser.PodChooser
+	defaultLoad         bool
+	provisioningTimeout time.Duration
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -88,7 +89,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 			}
 		}
 		return sub.Wrap(
-			fmt.Sprintf("waiting for %d pods to be ready", d.minReplicas),
+			fmt.Sprintf("waiting for %d pods to be ready, timeout: %ds", d.minReplicas, d.provisioningTimeout/time.Second),
 			func() error {
 				return d.wait(ctx)
 			})
@@ -101,22 +102,33 @@ func (d *Driver) wait(ctx context.Context) error {
 		err  error
 		depl *appsv1.Deployment
 	)
-	for try := 0; try < 100; try++ {
-		depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
-		if err == nil {
-			if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
-				return nil
-			}
-			err = errors.Errorf("expected %d replicas to be ready, got %d",
-				d.minReplicas, depl.Status.ReadyReplicas)
-		}
+	timeoutChan := time.After(d.provisioningTimeout)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	tryCounter := 0
+	defer ticker.Stop()
+
+	for {
 		select {
+		case <-ticker.C:
+			if tryCounter < 100 {
+				tryCounter++
+			}
+			ticker.Stop()
+			ticker = time.NewTicker(time.Duration(100+tryCounter*20) * time.Millisecond)
+			depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
+			if err == nil {
+				if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
+					return nil
+				}
+				err = errors.Errorf("expected %d replicas to be ready, got %d", d.minReplicas, depl.Status.ReadyReplicas)
+			}
+		case <-timeoutChan:
+			return errors.Errorf("timeout after %s: last error: %v", d.provisioningTimeout, err)
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(100+try*20) * time.Millisecond):
 		}
 	}
-	return err
+
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
