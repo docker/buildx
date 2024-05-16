@@ -14,7 +14,7 @@ require (
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/creack/pty v1.1.18
 	github.com/distribution/reference v0.5.0
-	github.com/docker/cli v26.0.1-0.20240410153731-b6c552212837+incompatible // v26.1.0-dev
+	github.com/docker/cli v26.1.3+incompatible
 	github.com/docker/cli-docs-tool v0.7.0
 	github.com/docker/docker v26.0.0+incompatible
 	github.com/docker/go-units v0.5.0
