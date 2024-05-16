@@ -1,6 +1,7 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"os"
 
@@ -15,6 +16,7 @@ import (
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/stack"
+	"go.opentelemetry.io/otel"
 
 	//nolint:staticcheck // vendored dependencies may still use this
 	"github.com/containerd/containerd/pkg/seed"
@@ -38,8 +40,25 @@ func runStandalone(cmd *command.DockerCli) error {
 	if err := cmd.Initialize(cliflags.NewClientOptions()); err != nil {
 		return err
 	}
+	defer flushMetrics(cmd)
+
 	rootCmd := commands.NewRootCmd(os.Args[0], false, cmd)
 	return rootCmd.Execute()
+}
+
+// flushMetrics will manually flush metrics from the configured
+// meter provider. This is needed when running in standalone mode
+// because the meter provider is initialized by the cli library,
+// but the mechanism for forcing it to report is not presently
+// exposed and not invoked when run in standalone mode.
+// There are plans to fix that in the next release, but this is
+// needed temporarily until the API for this is more thorough.
+func flushMetrics(cmd *command.DockerCli) {
+	if mp, ok := cmd.MeterProvider().(command.MeterProvider); ok {
+		if err := mp.ForceFlush(context.Background()); err != nil {
+			otel.Handle(err)
+		}
+	}
 }
 
 func runPlugin(cmd *command.DockerCli) error {
