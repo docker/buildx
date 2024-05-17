@@ -148,13 +148,13 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 			Data: cfg.files,
 		}
 
-		d.Spec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{{
-			Name:      cfg.name,
+		d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+			Name:      cc.Name,
 			MountPath: path.Join("/etc/buildkit", cfg.path),
-		}}
+		})
 
-		d.Spec.Template.Spec.Volumes = []corev1.Volume{{
-			Name: "config",
+		d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, corev1.Volume{
+			Name: cc.Name,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
 					LocalObjectReference: corev1.LocalObjectReference{
@@ -162,7 +162,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 					},
 				},
 			},
-		}}
+		})
 		c = append(c, cc)
 	}
 
