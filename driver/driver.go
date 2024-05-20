@@ -83,6 +83,11 @@ func ParseBuilderName(name string) (string, error) {
 
 func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Writer) (*client.Client, error) {
 	try := 0
+	logger := discardLogger
+	if pw != nil {
+		logger = pw.Write
+	}
+
 	for {
 		info, err := d.Info(ctx)
 		if err != nil {
@@ -93,7 +98,7 @@ func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Write
 			if try > 2 {
 				return nil, errors.Errorf("failed to bootstrap %T driver in attempts", d)
 			}
-			if err := d.Bootstrap(ctx, pw.Write); err != nil {
+			if err := d.Bootstrap(ctx, logger); err != nil {
 				return nil, err
 			}
 		}
@@ -108,6 +113,8 @@ func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Write
 		return c, nil
 	}
 }
+
+func discardLogger(*client.SolveStatus) {}
 
 func historyAPISupported(ctx context.Context, c *client.Client) bool {
 	cl, err := c.ControlClient().ListenBuildHistory(ctx, &controlapi.BuildHistoryRequest{
