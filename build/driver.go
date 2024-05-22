@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"fmt"
+	"sync"
 
 	"github.com/containerd/containerd/platforms"
 	"github.com/docker/buildx/builder"
@@ -46,10 +47,22 @@ func (dp resolvedNode) BuildOpts(ctx context.Context) (gateway.BuildOpts, error)
 
 type matchMaker func(specs.Platform) platforms.MatchComparer
 
+type cachedGroup[T any] struct {
+	g       flightcontrol.Group[T]
+	cache   map[int]T
+	cacheMu sync.Mutex
+}
+
+func newCachedGroup[T any]() cachedGroup[T] {
+	return cachedGroup[T]{
+		cache: map[int]T{},
+	}
+}
+
 type nodeResolver struct {
-	nodes   []builder.Node
-	clients flightcontrol.Group[*client.Client]
-	opt     flightcontrol.Group[gateway.BuildOpts]
+	nodes     []builder.Node
+	clients   cachedGroup[*client.Client]
+	buildOpts cachedGroup[gateway.BuildOpts]
 }
 
 func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]*resolvedNode, error) {
@@ -63,7 +76,9 @@ func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Op
 
 func newDriverResolver(nodes []builder.Node) *nodeResolver {
 	r := &nodeResolver{
-		nodes: nodes,
+		nodes:     nodes,
+		clients:   newCachedGroup[*client.Client](),
+		buildOpts: newCachedGroup[gateway.BuildOpts](),
 	}
 	return r
 }
@@ -179,6 +194,7 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []specs.Platform, pw prog
 			resolver:    r,
 			driverIndex: 0,
 		})
+		nodeIdxs = append(nodeIdxs, 0)
 	} else {
 		for i, idx := range nodeIdxs {
 			node := &resolvedNode{
@@ -237,11 +253,24 @@ func (r *nodeResolver) boot(ctx context.Context, idxs []int, pw progress.Writer)
 	for i, idx := range idxs {
 		i, idx := i, idx
 		eg.Go(func() error {
-			c, err := r.clients.Do(ctx, fmt.Sprint(idx), func(ctx context.Context) (*client.Client, error) {
+			c, err := r.clients.g.Do(ctx, fmt.Sprint(idx), func(ctx context.Context) (*client.Client, error) {
 				if r.nodes[idx].Driver == nil {
 					return nil, nil
 				}
-				return driver.Boot(ctx, baseCtx, r.nodes[idx].Driver, pw)
+				r.clients.cacheMu.Lock()
+				c, ok := r.clients.cache[idx]
+				r.clients.cacheMu.Unlock()
+				if ok {
+					return c, nil
+				}
+				c, err := driver.Boot(ctx, baseCtx, r.nodes[idx].Driver, pw)
+				if err != nil {
+					return nil, err
+				}
+				r.clients.cacheMu.Lock()
+				r.clients.cache[idx] = c
+				r.clients.cacheMu.Unlock()
+				return c, nil
 			})
 			if err != nil {
 				return err
@@ -272,14 +301,25 @@ func (r *nodeResolver) opts(ctx context.Context, idxs []int, pw progress.Writer)
 			continue
 		}
 		eg.Go(func() error {
-			opt, err := r.opt.Do(ctx, fmt.Sprint(idx), func(ctx context.Context) (gateway.BuildOpts, error) {
-				opt := gateway.BuildOpts{}
+			opt, err := r.buildOpts.g.Do(ctx, fmt.Sprint(idx), func(ctx context.Context) (gateway.BuildOpts, error) {
+				r.buildOpts.cacheMu.Lock()
+				opt, ok := r.buildOpts.cache[idx]
+				r.buildOpts.cacheMu.Unlock()
+				if ok {
+					return opt, nil
+				}
 				_, err := c.Build(ctx, client.SolveOpt{
 					Internal: true,
 				}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
 					opt = c.BuildOpts()
 					return nil, nil
 				}, nil)
+				if err != nil {
+					return gateway.BuildOpts{}, err
+				}
+				r.buildOpts.cacheMu.Lock()
+				r.buildOpts.cache[idx] = opt
+				r.buildOpts.cacheMu.Unlock()
 				return opt, err
 			})
 			if err != nil {

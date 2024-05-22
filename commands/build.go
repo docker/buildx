@@ -122,27 +122,26 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 	}
 
 	opts := controllerapi.BuildOptions{
-		Allow:                  o.allow,
-		Annotations:            o.annotations,
-		BuildArgs:              buildArgs,
-		CgroupParent:           o.cgroupParent,
-		ContextPath:            o.contextPath,
-		DockerfileName:         o.dockerfileName,
-		ExtraHosts:             o.extraHosts,
-		Labels:                 labels,
-		NetworkMode:            o.networkMode,
-		NoCacheFilter:          o.noCacheFilter,
-		Platforms:              o.platforms,
-		ShmSize:                int64(o.shmSize),
-		Tags:                   o.tags,
-		Target:                 o.target,
-		Ulimits:                dockerUlimitToControllerUlimit(o.ulimits),
-		Builder:                o.builder,
-		NoCache:                o.noCache,
-		Pull:                   o.pull,
-		ExportPush:             o.exportPush,
-		ExportLoad:             o.exportLoad,
-		WithProvenanceResponse: len(o.metadataFile) > 0,
+		Allow:          o.allow,
+		Annotations:    o.annotations,
+		BuildArgs:      buildArgs,
+		CgroupParent:   o.cgroupParent,
+		ContextPath:    o.contextPath,
+		DockerfileName: o.dockerfileName,
+		ExtraHosts:     o.extraHosts,
+		Labels:         labels,
+		NetworkMode:    o.networkMode,
+		NoCacheFilter:  o.noCacheFilter,
+		Platforms:      o.platforms,
+		ShmSize:        int64(o.shmSize),
+		Tags:           o.tags,
+		Target:         o.target,
+		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
+		Builder:        o.builder,
+		NoCache:        o.noCache,
+		Pull:           o.pull,
+		ExportPush:     o.exportPush,
+		ExportLoad:     o.exportLoad,
 	}
 
 	// TODO: extract env var parsing to a method easily usable by library consumers
@@ -207,6 +206,8 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		return nil, err
 	}
 
+	opts.WithProvenanceResponse = opts.PrintFunc == nil && len(o.metadataFile) > 0
+
 	return &opts, nil
 }
 
@@ -268,8 +269,7 @@ func (o *buildOptionsHash) String() string {
 }
 
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
-	mp := dockerCli.MeterProvider(ctx)
-	defer metricutil.Shutdown(ctx, mp)
+	mp := dockerCli.MeterProvider()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
 	if err != nil {
@@ -365,13 +365,12 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 			return errors.Wrap(err, "writing image ID file")
 		}
 	}
-	if options.metadataFile != "" {
-		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
-			return err
-		}
-	}
 	if opts.PrintFunc != nil {
 		if err := printResult(opts.PrintFunc, resp.ExporterResponse); err != nil {
+			return err
+		}
+	} else if options.metadataFile != "" {
+		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
 			return err
 		}
 	}

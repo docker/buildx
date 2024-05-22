@@ -541,7 +541,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				}
 
 				if pushNames != "" {
-					progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
+					err := progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
 						descs := make([]specs.Descriptor, 0, len(res))
 
 						for _, r := range res {
@@ -637,6 +637,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						}
 						return nil
 					})
+					if err != nil {
+						return err
+					}
 				}
 				return nil
 			})
@@ -781,11 +784,11 @@ func calculateChildTargets(reqs map[string][]*reqForNode, opt map[string]Options
 }
 
 func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *client.SolveOpt) error {
-	m := map[string]string{}
+	m := map[string][]string{}
 	for k, v := range so.FrontendAttrs {
 		if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
 			target := resultKey(index, strings.TrimPrefix(v, "target:"))
-			m[target] = k
+			m[target] = append(m[target], k)
 		}
 	}
 	if len(m) == 0 {
@@ -800,7 +803,7 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 		return err
 	}
 
-	for k, v := range m {
+	for k, contexts := range m {
 		r, ok := res[k]
 		if !ok {
 			continue
@@ -815,19 +818,45 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 		if so.FrontendInputs == nil {
 			so.FrontendInputs = map[string]llb.State{}
 		}
-		if len(rr.Refs) > 0 {
-			for platform, r := range rr.Refs {
-				st, err := r.ToState()
+
+		for _, v := range contexts {
+			if len(rr.Refs) > 0 {
+				for platform, r := range rr.Refs {
+					st, err := r.ToState()
+					if err != nil {
+						return err
+					}
+					so.FrontendInputs[k+"::"+platform] = st
+					so.FrontendAttrs[v+"::"+platform] = "input:" + k + "::" + platform
+					metadata := make(map[string][]byte)
+					if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey+"/"+platform]; ok {
+						metadata[exptypes.ExporterImageConfigKey] = dt
+					}
+					if dt, ok := rr.Metadata["containerimage.buildinfo/"+platform]; ok {
+						metadata["containerimage.buildinfo"] = dt
+					}
+					if len(metadata) > 0 {
+						dt, err := json.Marshal(metadata)
+						if err != nil {
+							return err
+						}
+						so.FrontendAttrs["input-metadata:"+k+"::"+platform] = string(dt)
+					}
+				}
+				delete(so.FrontendAttrs, v)
+			}
+			if rr.Ref != nil {
+				st, err := rr.Ref.ToState()
 				if err != nil {
 					return err
 				}
-				so.FrontendInputs[k+"::"+platform] = st
-				so.FrontendAttrs[v+"::"+platform] = "input:" + k + "::" + platform
+				so.FrontendInputs[k] = st
+				so.FrontendAttrs[v] = "input:" + k
 				metadata := make(map[string][]byte)
-				if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey+"/"+platform]; ok {
+				if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey]; ok {
 					metadata[exptypes.ExporterImageConfigKey] = dt
 				}
-				if dt, ok := rr.Metadata["containerimage.buildinfo/"+platform]; ok {
+				if dt, ok := rr.Metadata["containerimage.buildinfo"]; ok {
 					metadata["containerimage.buildinfo"] = dt
 				}
 				if len(metadata) > 0 {
@@ -835,31 +864,8 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 					if err != nil {
 						return err
 					}
-					so.FrontendAttrs["input-metadata:"+k+"::"+platform] = string(dt)
+					so.FrontendAttrs["input-metadata:"+k] = string(dt)
 				}
-			}
-			delete(so.FrontendAttrs, v)
-		}
-		if rr.Ref != nil {
-			st, err := rr.Ref.ToState()
-			if err != nil {
-				return err
-			}
-			so.FrontendInputs[k] = st
-			so.FrontendAttrs[v] = "input:" + k
-			metadata := make(map[string][]byte)
-			if dt, ok := rr.Metadata[exptypes.ExporterImageConfigKey]; ok {
-				metadata[exptypes.ExporterImageConfigKey] = dt
-			}
-			if dt, ok := rr.Metadata["containerimage.buildinfo"]; ok {
-				metadata["containerimage.buildinfo"] = dt
-			}
-			if len(metadata) > 0 {
-				dt, err := json.Marshal(metadata)
-				if err != nil {
-					return err
-				}
-				so.FrontendAttrs["input-metadata:"+k] = string(dt)
 			}
 		}
 	}
