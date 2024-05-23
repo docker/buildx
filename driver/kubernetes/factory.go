@@ -81,6 +81,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	}
 
 	d.minReplicas = deploymentOpt.Replicas
+	d.waitTimeout = waitTimeout
 
 	d.deploymentClient = clientset.AppsV1().Deployments(namespace)
 	d.podClient = clientset.CoreV1().Pods(namespace)
@@ -118,6 +119,9 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
 
 	loadbalance := LoadbalanceSticky
+
+	waitTimeout := 120 * time.Second
+
 	var err error
 
 	for k, v := range cfg.DriverOpts {
@@ -229,6 +233,12 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			if err != nil {
 				return nil, "", "", false, err
 			}
+        case "wait.timeout":
+            timeoutSec, err := strconv.Atoi(v)
+            if err != nil {
+                return nil, "", "", false, err
+            }
+            waitTimeout = time.Duration(timeoutSec) * time.Second
 		default:
 			return nil, "", "", false, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
 		}

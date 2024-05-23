@@ -50,6 +50,7 @@ type Driver struct {
 	configMapClient  clientcorev1.ConfigMapInterface
 	podChooser       podchooser.PodChooser
 	defaultLoad      bool
+	waitTimeout 	 time.Duration
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -96,27 +97,32 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 }
 
 func (d *Driver) wait(ctx context.Context) error {
-	// TODO: use watch API
-	var (
-		err  error
-		depl *appsv1.Deployment
-	)
-	for try := 0; try < 100; try++ {
-		depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
-		if err == nil {
-			if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
-				return nil
-			}
-			err = errors.Errorf("expected %d replicas to be ready, got %d",
-				d.minReplicas, depl.Status.ReadyReplicas)
-		}
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case <-time.After(time.Duration(100+try*20) * time.Millisecond):
-		}
-	}
-	return err
+    // TODO: use watch API
+    var (
+        err  error
+        depl *appsv1.Deployment
+    )
+    timeoutChan := time.After(d.waitTimeout)
+    ticker := time.NewTicker(100 * time.Millisecond)
+    defer ticker.Stop()
+
+    for {
+        select {
+        case <-ctx.Done():
+            return ctx.Err()
+        case <-timeoutChan:
+            return err
+        case <-ticker.C:
+            depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
+            if err == nil {
+                if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
+                    return nil
+                }
+                err = errors.Errorf("expected %d replicas to be ready, got %d",
+                    d.minReplicas, depl.Status.ReadyReplicas)
+            }
+        }
+    }
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
