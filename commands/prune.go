@@ -195,6 +195,8 @@ func toBuildkitPruneInfo(f filters.Args) (*client.PruneInfo, error) {
 		case 1:
 			if filterKey == "id" {
 				filters = append(filters, filterKey+"~="+values[0])
+			} else if strings.HasSuffix(filterKey, "!") || strings.HasSuffix(filterKey, "~") {
+				filters = append(filters, filterKey+"="+values[0])
 			} else {
 				filters = append(filters, filterKey+"=="+values[0])
 			}
