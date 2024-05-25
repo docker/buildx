@@ -542,12 +542,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 			}
 			target.OCIStores[storeName] = store
 
-			layout := "oci-layout://" + storeName + ":" + tag
-			if hasDigest {
-				layout += "@" + dig
-			}
-
-			target.FrontendAttrs["context:"+k] = layout
+			target.FrontendAttrs["context:"+k] = "oci-layout://" + storeName + ":" + tag + "@" + dig
 			continue
 		}
 		st, err := os.Stat(v.Path)
