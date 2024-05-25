@@ -500,7 +500,6 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 			localPath, tag, hasTag := strings.Cut(localPath, ":")
 			if !hasTag {
 				tag = "latest"
-				hasTag = true
 			}
 			idx := ociindex.NewStoreIndex(localPath)
 			if !hasDigest {
@@ -543,10 +542,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 			}
 			target.OCIStores[storeName] = store
 
-			layout := "oci-layout://" + storeName
-			if hasTag {
-				layout += ":" + tag
-			}
+			layout := "oci-layout://" + storeName + ":" + tag
 			if hasDigest {
 				layout += "@" + dig
 			}
