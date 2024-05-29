@@ -493,44 +493,18 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 
 		// handle OCI layout
 		if strings.HasPrefix(v.Path, "oci-layout://") {
-			pathAlone := strings.TrimPrefix(v.Path, "oci-layout://")
-			localPath := pathAlone
+			localPath := strings.TrimPrefix(v.Path, "oci-layout://")
 			localPath, dig, hasDigest := strings.Cut(localPath, "@")
 			localPath, tag, hasTag := strings.Cut(localPath, ":")
 			if !hasTag {
 				tag = "latest"
 			}
-			idx := ociindex.NewStoreIndex(localPath)
 			if !hasDigest {
-				// lookup by name
-				desc, err := idx.Get(tag)
+				dig, err = resolveDigest(localPath, tag)
 				if err != nil {
-					return nil, err
-				}
-				if desc != nil {
-					dig = string(desc.Digest)
-					hasDigest = true
+					return nil, errors.Wrapf(err, "oci-layout reference %q could not be resolved", v.Path)
 				}
 			}
-			if !hasDigest {
-				// lookup single
-				desc, err := idx.GetSingle()
-				if err != nil {
-					return nil, err
-				}
-				if desc != nil {
-					dig = string(desc.Digest)
-					hasDigest = true
-				}
-			}
-			if !hasDigest {
-				return nil, errors.Errorf("oci-layout reference %q could not be resolved", v.Path)
-			}
-			_, err := digest.Parse(dig)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid oci-layout digest %s", dig)
-			}
-
 			store, err := local.NewStore(localPath)
 			if err != nil {
 				return nil, errors.Wrapf(err, "invalid store at %s", localPath)
@@ -563,10 +537,38 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 
 	release := func() {
 		for _, dir := range toRemove {
-			os.RemoveAll(dir)
+			_ = os.RemoveAll(dir)
 		}
 	}
 	return release, nil
+}
+
+func resolveDigest(localPath, tag string) (dig string, _ error) {
+	idx := ociindex.NewStoreIndex(localPath)
+
+	// lookup by name
+	desc, err := idx.Get(tag)
+	if err != nil {
+		return "", err
+	}
+	if desc == nil {
+		// lookup single
+		desc, err = idx.GetSingle()
+		if err != nil {
+			return "", err
+		}
+	}
+	if desc == nil {
+		return "", errors.New("failed to resolve digest")
+	}
+
+	dig = string(desc.Digest)
+	_, err = digest.Parse(dig)
+	if err != nil {
+		return "", errors.Wrapf(err, "invalid digest %s", dig)
+	}
+
+	return dig, nil
 }
 
 func setLocalMount(name, root string, so *client.SolveOpt, addVCSLocalDir func(key, dir string, so *client.SolveOpt)) error {
