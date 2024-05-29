@@ -4,7 +4,6 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/moby/buildkit/util/gitutil"
 )
 
@@ -22,7 +21,7 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 		}
 	}
 	if options.DockerfileName != "" && options.DockerfileName != "-" {
-		if localContext && !urlutil.IsURL(options.DockerfileName) {
+		if localContext && !isHTTPURL(options.DockerfileName) {
 			options.DockerfileName, err = filepath.Abs(options.DockerfileName)
 			if err != nil {
 				return nil, err
@@ -164,8 +163,15 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 	return options, nil
 }
 
+// isHTTPURL returns true if the provided str is an HTTP(S) URL by checking if it
+// has a http:// or https:// scheme. No validation is performed to verify if the
+// URL is well-formed.
+func isHTTPURL(str string) bool {
+	return strings.HasPrefix(str, "https://") || strings.HasPrefix(str, "http://")
+}
+
 func isRemoteURL(c string) bool {
-	if urlutil.IsURL(c) {
+	if isHTTPURL(c) {
 		return true
 	}
 	if _, err := gitutil.ParseGitRef(c); err == nil {

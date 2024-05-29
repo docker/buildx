@@ -20,7 +20,6 @@ import (
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/docker/builder/remotecontext/urlutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/ociindex"
@@ -452,7 +451,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 		dockerfileName = "Dockerfile"
 		target.FrontendAttrs["dockerfilekey"] = "dockerfile"
 	}
-	if urlutil.IsURL(inp.DockerfilePath) {
+	if isHTTPURL(inp.DockerfilePath) {
 		dockerfileDir, err = createTempDockerfileFromURL(ctx, d, inp.DockerfilePath, pw)
 		if err != nil {
 			return nil, err
