@@ -79,7 +79,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann []string) ([
 
 	// on single source, return original bytes
 	if len(srcs) == 1 && len(ann) == 0 {
-		if mt := srcs[0].Desc.MediaType; mt == images.MediaTypeDockerSchema2ManifestList || mt == ocispec.MediaTypeImageIndex {
+		if mt := srcs[0].Desc.MediaType; mt == images.MediaTypeDockerSchema2ManifestList || mt == images.MediaTypeDockerSchema2Manifest || mt == ocispec.MediaTypeImageIndex {
 			return dts[0], srcs[0].Desc, nil
 		}
 	}
