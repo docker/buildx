@@ -659,12 +659,12 @@ func (p *Project) WithServicesTransform(fn func(name string, s ServiceConfig) (S
 		name    string
 		service ServiceConfig
 	}
-	resultCh := make(chan result)
+	expect := len(p.Services)
+	resultCh := make(chan result, expect)
 	newProject := p.deepCopy()
 
 	eg, ctx := errgroup.WithContext(context.Background())
 	eg.Go(func() error {
-		expect := len(newProject.Services)
 		s := Services{}
 		for expect > 0 {
 			select {

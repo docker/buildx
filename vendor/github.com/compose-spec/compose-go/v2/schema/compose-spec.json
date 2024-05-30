@@ -296,6 +296,12 @@
                         "ipv6_address": {"type": "string"},
                         "link_local_ips": {"$ref": "#/definitions/list_of_strings"},
                         "mac_address": {"type": "string"},
+                        "driver_opts": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.+$": {"type": ["string", "number"]}
+                          }
+                        },
                         "priority": {"type": "number"}
                       },
                       "additionalProperties": false,

@@ -198,12 +198,15 @@ func portIndexer(y any, p tree.Path) (string, error) {
 	return "", nil
 }
 
-func envFileIndexer(y any, _ tree.Path) (string, error) {
+func envFileIndexer(y any, p tree.Path) (string, error) {
 	switch value := y.(type) {
 	case string:
 		return value, nil
 	case map[string]any:
-		return value["path"].(string), nil
+		if pathValue, ok := value["path"]; ok {
+			return pathValue.(string), nil
+		}
+		return "", fmt.Errorf("environment path attribut %s is missing", p)
 	}
 	return "", nil
 }

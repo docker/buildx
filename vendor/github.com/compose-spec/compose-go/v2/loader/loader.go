@@ -328,17 +328,9 @@ func loadModelWithContext(ctx context.Context, configDetails *types.ConfigDetail
 		return nil, errors.New("No files specified")
 	}
 
-	err := projectName(*configDetails, opts)
+	err := projectName(configDetails, opts)
 	if err != nil {
 		return nil, err
-	}
-
-	// TODO(milas): this should probably ALWAYS set (overriding any existing)
-	if _, ok := configDetails.Environment[consts.ComposeProjectName]; !ok && opts.projectName != "" {
-		if configDetails.Environment == nil {
-			configDetails.Environment = map[string]string{}
-		}
-		configDetails.Environment[consts.ComposeProjectName] = opts.projectName
 	}
 
 	return load(ctx, *configDetails, opts, nil)
@@ -595,10 +587,14 @@ func InvalidProjectNameErr(v string) error {
 // projectName determines the canonical name to use for the project considering
 // the loader Options as well as `name` fields in Compose YAML fields (which
 // also support interpolation).
-//
-// TODO(milas): restructure loading so that we don't need to re-parse the YAML
-// here, as it's both wasteful and makes this code error-prone.
-func projectName(details types.ConfigDetails, opts *Options) error {
+func projectName(details *types.ConfigDetails, opts *Options) error {
+	defer func() {
+		if details.Environment == nil {
+			details.Environment = map[string]string{}
+		}
+		details.Environment[consts.ComposeProjectName] = opts.projectName
+	}()
+
 	if opts.projectNameImperativelySet {
 		if NormalizeProjectName(opts.projectName) != opts.projectName {
 			return InvalidProjectNameErr(opts.projectName)
