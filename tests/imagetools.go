@@ -140,6 +140,24 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	for i := range idx.Manifests {
 		require.Equal(t, idx.Manifests[i].Digest, idx2.Manifests[i].Digest)
 	}
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--prefer-index=false", "-t", target2+"-still-index", target))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2+"-still-index", "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx3 ocispecs.Index
+	err = json.Unmarshal(dt, &idx3)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx3.MediaType)
+
+	require.Equal(t, len(idx.Manifests), len(idx3.Manifests))
+	for i := range idx.Manifests {
+		require.Equal(t, idx.Manifests[i].Digest, idx3.Manifests[i].Digest)
+	}
 }
 
 func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
