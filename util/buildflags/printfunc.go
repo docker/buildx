@@ -13,6 +13,14 @@ func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 	if str == "" {
 		return nil, nil
 	}
+
+	// "check" has been added as an alias for "lint",
+	// in order to maintain backwards compatibility
+	// we need to convert it.
+	if str == "check" {
+		str = "lint"
+	}
+
 	csvReader := csv.NewReader(strings.NewReader(str))
 	fields, err := csvReader.Read()
 	if err != nil {
