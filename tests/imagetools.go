@@ -61,7 +61,36 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	var idx2 ocispecs.Index
 	err = json.Unmarshal(dt, &idx2)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2Manifest, idx2.MediaType)
+	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx2.MediaType)
+	require.Equal(t, 1, len(idx2.Manifests))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2+"@"+string(idx2.Manifests[0].Digest), "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var mfst2 ocispecs.Manifest
+	err = json.Unmarshal(dt, &mfst2)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2Manifest, mfst2.MediaType)
+
+	require.Equal(t, mfst.Config.Digest, mfst2.Config.Digest)
+	require.Equal(t, len(mfst.Layers), len(mfst2.Layers))
+	for i := range mfst.Layers {
+		require.Equal(t, mfst.Layers[i].Digest, mfst2.Layers[i].Digest)
+	}
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--prefer-index=false", "-t", target2+"-not-index", target))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2+"-not-index", "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx3 ocispecs.Manifest
+	err = json.Unmarshal(dt, &idx3)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2Manifest, idx3.MediaType)
 }
 
 func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
@@ -145,15 +174,7 @@ func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
 	mfst = idx.Manifests[1]
 	require.Equal(t, "linux/arm64", platforms.Format(*mfst.Platform))
 
-	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+string(idx.Manifests[1].Digest), "--raw"))
-	dt, err = cmd.CombinedOutput()
-	require.NoError(t, err, string(dt))
-
-	var armMfst ocispecs.Manifest
-	err = json.Unmarshal(dt, &armMfst)
-	require.NoError(t, err)
-
-	// create arm64 only image
+	// create amd64 only image
 	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target+"-arm64", target+"@"+string(idx.Manifests[1].Digest)))
 	dt, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
@@ -162,12 +183,14 @@ func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
 	dt, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
 
-	var idx2 ocispecs.Manifest
+	var idx2 ocispecs.Index
 	err = json.Unmarshal(dt, &idx2)
 	require.NoError(t, err)
 
-	require.Equal(t, armMfst.Config.Digest, idx2.Config.Digest)
-	require.Equal(t, armMfst.MediaType, idx2.MediaType)
+	require.Equal(t, 1, len(idx2.Manifests))
+
+	require.Equal(t, idx.Manifests[1].Digest, idx2.Manifests[0].Digest)
+	require.Equal(t, platforms.Format(*idx.Manifests[1].Platform), platforms.Format(*idx2.Manifests[0].Platform))
 }
 
 func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
