@@ -23,7 +23,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/tree"
 )
 
-func transformKeyValue(data any, p tree.Path) (any, error) {
+func transformKeyValue(data any, p tree.Path, ignoreParseError bool) (any, error) {
 	switch v := data.(type) {
 	case map[string]any:
 		return v, nil
@@ -32,6 +32,9 @@ func transformKeyValue(data any, p tree.Path) (any, error) {
 		for _, e := range v {
 			before, after, found := strings.Cut(e.(string), "=")
 			if !found {
+				if ignoreParseError {
+					return data, nil
+				}
 				return nil, fmt.Errorf("%s: invalid value %s, expected key=value", p, e)
 			}
 			mapping[before] = after

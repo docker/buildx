@@ -104,6 +104,7 @@
                 "context": {"type": "string"},
                 "dockerfile": {"type": "string"},
                 "dockerfile_inline": {"type": "string"},
+                "entitlements": {"type": "array", "items": {"type": "string"}},
                 "args": {"$ref": "#/definitions/list_or_dict"},
                 "ssh": {"$ref": "#/definitions/list_or_dict"},
                 "labels": {"$ref": "#/definitions/list_or_dict"},
@@ -295,6 +296,12 @@
                         "ipv6_address": {"type": "string"},
                         "link_local_ips": {"$ref": "#/definitions/list_of_strings"},
                         "mac_address": {"type": "string"},
+                        "driver_opts": {
+                          "type": "object",
+                          "patternProperties": {
+                            "^.+$": {"type": ["string", "number"]}
+                          }
+                        },
                         "priority": {"type": "number"}
                       },
                       "additionalProperties": false,
