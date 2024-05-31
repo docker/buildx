@@ -52,9 +52,8 @@ var (
 )
 
 const (
-	printFallbackImage = "docker/dockerfile:1.5@sha256:dbbd5e059e8a07ff7ea6233b213b36aa516b4c53c645f1817a4dd18b83cbea56"
-	// https://github.com/moby/buildkit/commit/71f99c52a669dc0322b5ea57bc28a09c20427227
-	printLintFallbackImage = "docker.io/docker/dockerfile-upstream@sha256:47663570b6cc49ed90dc6e3215090a366989ab934d12dc93856a8ae0d27a95e7"
+	printFallbackImage     = "docker/dockerfile:1.5@sha256:dbbd5e059e8a07ff7ea6233b213b36aa516b4c53c645f1817a4dd18b83cbea56"
+	printLintFallbackImage = "docker.io/docker/dockerfile-upstream:1.8.0-rc1@sha256:da895c6c0363d9e4d4e04a0fdfa774cd12682834fd49af9d5d04afa269988251"
 )
 
 type Options struct {
