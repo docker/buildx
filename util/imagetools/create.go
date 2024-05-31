@@ -29,7 +29,7 @@ type Source struct {
 	Ref  reference.Named
 }
 
-func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann []string) ([]byte, ocispec.Descriptor, error) {
+func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann []string, preferIndex bool) ([]byte, ocispec.Descriptor, error) {
 	eg, ctx := errgroup.WithContext(ctx)
 
 	dts := make([][]byte, len(srcs))
@@ -79,8 +79,16 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann []string) ([
 
 	// on single source, return original bytes
 	if len(srcs) == 1 && len(ann) == 0 {
-		if mt := srcs[0].Desc.MediaType; mt == images.MediaTypeDockerSchema2ManifestList || mt == ocispec.MediaTypeImageIndex {
+		switch srcs[0].Desc.MediaType {
+		// if the source is already an image index or manifest list, there is no need to consider the value
+		// of preferIndex since if set to true then the source is already in the preferred format, and if false
+		// it doesn't matter since we're not going to split it into separate manifests
+		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
 			return dts[0], srcs[0].Desc, nil
+		default:
+			if !preferIndex {
+				return dts[0], srcs[0].Desc, nil
+			}
 		}
 	}
 

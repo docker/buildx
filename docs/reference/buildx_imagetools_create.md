@@ -9,15 +9,16 @@ Create a new image based on source images
 
 ### Options
 
-| Name                             | Type          | Default | Description                                                                              |
-|:---------------------------------|:--------------|:--------|:-----------------------------------------------------------------------------------------|
-| [`--annotation`](#annotation)    | `stringArray` |         | Add annotation to the image                                                              |
-| [`--append`](#append)            |               |         | Append to existing manifest                                                              |
-| [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                 |
-| [`--dry-run`](#dry-run)          |               |         | Show final image instead of pushing                                                      |
-| [`-f`](#file), [`--file`](#file) | `stringArray` |         | Read source descriptor from file                                                         |
-| `--progress`                     | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output |
-| [`-t`](#tag), [`--tag`](#tag)    | `stringArray` |         | Set reference for new image                                                              |
+| Name                             | Type          | Default | Description                                                                                                                   |
+|:---------------------------------|:--------------|:--------|:------------------------------------------------------------------------------------------------------------------------------|
+| [`--annotation`](#annotation)    | `stringArray` |         | Add annotation to the image                                                                                                   |
+| [`--append`](#append)            |               |         | Append to existing manifest                                                                                                   |
+| [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                                                      |
+| [`--dry-run`](#dry-run)          |               |         | Show final image instead of pushing                                                                                           |
+| [`-f`](#file), [`--file`](#file) | `stringArray` |         | Read source descriptor from file                                                                                              |
+| `--prefer-index`                 | `bool`        | `true`  | When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy |
+| `--progress`                     | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output                                      |
+| [`-t`](#tag), [`--tag`](#tag)    | `stringArray` |         | Set reference for new image                                                                                                   |
 
 
 <!---MARKER_GEN_END-->
@@ -26,8 +27,13 @@ Create a new image based on source images
 
 Create a new manifest list based on source manifests. The source manifests can
 be manifest lists or single platform distribution manifests and must already
-exist in the registry where the new manifest is created. If only one source is
-specified, create performs a carbon copy.
+exist in the registry where the new manifest is created.
+
+If only one source is specified and that source is a manifest list or image index,
+create performs a carbon copy. If one source is specified and that source is *not*
+a list or index, the output will be a manifest list, however you can disable this
+behavior with `--prefer-index=false` which attempts to preserve the source manifest
+format in the output.
 
 ## Examples
 
