@@ -4,11 +4,11 @@ go 1.21
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
-	github.com/Microsoft/go-winio v0.6.1
+	github.com/Microsoft/go-winio v0.6.2
 	github.com/aws/aws-sdk-go-v2/config v1.26.6
 	github.com/compose-spec/compose-go/v2 v2.1.1
 	github.com/containerd/console v1.0.4
-	github.com/containerd/containerd v1.7.15
+	github.com/containerd/containerd v1.7.17
 	github.com/containerd/continuity v0.4.3
 	github.com/containerd/log v0.1.0
 	github.com/containerd/typeurl/v2 v2.1.1
@@ -16,7 +16,7 @@ require (
 	github.com/distribution/reference v0.5.0
 	github.com/docker/cli v26.1.3+incompatible
 	github.com/docker/cli-docs-tool v0.7.0
-	github.com/docker/docker v26.0.0+incompatible
+	github.com/docker/docker v26.1.3+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.8.1
 	github.com/gogo/protobuf v1.3.2
@@ -26,12 +26,12 @@ require (
 	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
 	github.com/hashicorp/hcl/v2 v2.20.1
 	github.com/in-toto/in-toto-golang v0.5.0
-	github.com/moby/buildkit v0.13.0-rc3.0.20240417151852-71f99c52a669 // v0.14.0-dev
+	github.com/moby/buildkit v0.14.0-rc1
 	github.com/moby/sys/mountinfo v0.7.1
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
 	github.com/opencontainers/go-digest v1.0.0
-	github.com/opencontainers/image-spec v1.1.0-rc5
+	github.com/opencontainers/image-spec v1.1.0
 	github.com/pelletier/go-toml v1.9.5
 	github.com/pkg/errors v0.9.1
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
@@ -39,10 +39,11 @@ require (
 	github.com/spf13/cobra v1.8.0
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.8.4
-	github.com/tonistiigi/fsutil v0.0.0-20240301111122-7525a1af2bb5
+	github.com/tonistiigi/fsutil v0.0.0-20240424095704-91a3fc46842c
 	github.com/zclconf/go-cty v1.14.4
 	go.opentelemetry.io/otel v1.21.0
 	go.opentelemetry.io/otel/metric v1.21.0
+	go.opentelemetry.io/otel/sdk v1.21.0
 	go.opentelemetry.io/otel/trace v1.21.0
 	golang.org/x/mod v0.14.0
 	golang.org/x/sync v0.6.0
@@ -58,7 +59,7 @@ require (
 require (
 	github.com/AdaLogics/go-fuzz-headers v0.0.0-20230811130428-ced1acdcaa24 // indirect
 	github.com/Azure/go-ansiterm v0.0.0-20210617225240-d185dfc1b5a1 // indirect
-	github.com/Microsoft/hcsshim v0.11.4 // indirect
+	github.com/Microsoft/hcsshim v0.11.5 // indirect
 	github.com/Shopify/logrus-bugsnag v0.0.0-20171204204709-577dee27f20d // indirect
 	github.com/agext/levenshtein v1.2.3 // indirect
 	github.com/apparentlymart/go-cidr v1.0.1 // indirect
@@ -78,7 +79,7 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/containerd/ttrpc v1.2.3 // indirect
+	github.com/containerd/ttrpc v1.2.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.8.0 // indirect
@@ -100,7 +101,9 @@ require (
 	github.com/gorilla/mux v1.8.0 // indirect
 	github.com/gorilla/websocket v1.5.0 // indirect
 	github.com/grpc-ecosystem/grpc-gateway/v2 v2.16.0 // indirect
+	github.com/hashicorp/errwrap v1.1.0 // indirect
 	github.com/hashicorp/go-cleanhttp v0.5.2 // indirect
+	github.com/hashicorp/go-multierror v1.1.1 // indirect
 	github.com/imdario/mergo v0.3.16 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/josharian/intern v1.0.0 // indirect
@@ -136,7 +139,7 @@ require (
 	github.com/shibumi/go-pathspec v1.3.0 // indirect
 	github.com/theupdateframework/notary v0.7.0 // indirect
 	github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea // indirect
-	github.com/tonistiigi/vt100 v0.0.0-20230623042737-f9a4f7ef6531 // indirect
+	github.com/tonistiigi/vt100 v0.0.0-20240514184818-90bafcd6abab // indirect
 	github.com/xeipuuv/gojsonpointer v0.0.0-20190905194746-02993c407bfb // indirect
 	github.com/xeipuuv/gojsonreference v0.0.0-20180127040603-bd5ef7bd5415 // indirect
 	github.com/xeipuuv/gojsonschema v1.2.0 // indirect
@@ -149,8 +152,6 @@ require (
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace v1.21.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracegrpc v1.21.0 // indirect
 	go.opentelemetry.io/otel/exporters/otlp/otlptrace/otlptracehttp v1.21.0 // indirect
-	go.opentelemetry.io/otel/exporters/prometheus v0.42.0 // indirect
-	go.opentelemetry.io/otel/sdk v1.21.0 // indirect
 	go.opentelemetry.io/otel/sdk/metric v1.21.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.0.0 // indirect
 	golang.org/x/crypto v0.21.0 // indirect

@@ -285,7 +285,6 @@ type rawJSONDisplay struct {
 // output of status update events.
 func newRawJSONDisplay(w io.Writer) Display {
 	enc := json.NewEncoder(w)
-	enc.SetIndent("", "  ")
 	return Display{
 		disp: &rawJSONDisplay{
 			enc: enc,
@@ -744,6 +743,7 @@ func (t *trace) update(s *client.SolveStatus, termWidth int) {
 		v.jobCached = false
 		if v.term != nil {
 			if v.term.Width != termWidth {
+				termHeight = max(termHeightMin, min(termHeightInitial, v.term.Height-termHeightMin-1))
 				v.term.Resize(termHeight, termWidth-termPad)
 			}
 			v.termBytes += len(l.Data)
@@ -823,7 +823,7 @@ func (t *trace) displayInfo() (d displayInfo) {
 		}
 		var jobs []*job
 		j := &job{
-			name:        strings.Replace(v.Name, "\t", " ", -1),
+			name:        strings.ReplaceAll(v.Name, "\t", " "),
 			vertex:      v,
 			isCompleted: true,
 		}
@@ -913,7 +913,7 @@ func addTime(tm *time.Time, d time.Duration) *time.Time {
 	if tm == nil {
 		return nil
 	}
-	t := (*tm).Add(d)
+	t := tm.Add(d)
 	return &t
 }
 
@@ -957,6 +957,7 @@ func setupTerminals(jobs []*job, height int, all bool) []*job {
 
 	numFree := height - 2 - numInUse
 	numToHide := 0
+	termHeight = max(termHeightMin, min(termHeightInitial, height-termHeightMin-1))
 	termLimit := termHeight + 3
 
 	for i := 0; numFree > termLimit && i < len(candidates); i++ {

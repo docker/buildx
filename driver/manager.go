@@ -9,7 +9,7 @@ import (
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/tracing/detect"
+	"github.com/moby/buildkit/util/tracing/delegated"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"k8s.io/client-go/rest"
@@ -157,26 +157,15 @@ type DriverHandle struct {
 
 func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
 	d.once.Do(func() {
-		opts, err := d.getClientOptions()
-		if err != nil {
-			d.err = err
-			return
-		}
-		d.client, d.err = d.Driver.Client(ctx, opts...)
+		d.client, d.err = d.Driver.Client(ctx, d.getClientOptions()...)
 	})
 	return d.client, d.err
 }
 
-func (d *DriverHandle) getClientOptions() ([]client.ClientOpt, error) {
-	exp, _, err := detect.Exporter()
-	if err != nil {
-		return nil, err
-	} else if td, ok := exp.(client.TracerDelegate); ok {
-		return []client.ClientOpt{
-			client.WithTracerDelegate(td),
-		}, nil
+func (d *DriverHandle) getClientOptions() []client.ClientOpt {
+	return []client.ClientOpt{
+		client.WithTracerDelegate(delegated.DefaultExporter),
 	}
-	return nil, nil
 }
 
 func (d *DriverHandle) HistoryAPISupported(ctx context.Context) bool {
