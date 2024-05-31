@@ -629,6 +629,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	}
 
 	flags.StringVar(&options.printFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
+	flags.VarPF(callAlias(options, "check"), "check", "", `Shorthand for "--call=check"`)
+	flags.Lookup("check").NoOptDefVal = "true"
 
 	// hidden flags
 	var ignore string
@@ -1001,6 +1003,20 @@ func maybeJSONArray(v string) []string {
 		return list
 	}
 	return []string{v}
+}
+
+func callAlias(options *buildOptions, value string) cobrautil.BoolFuncValue {
+	return func(s string) error {
+		v, err := strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+
+		if v {
+			options.printFunc = value
+		}
+		return nil
+	}
 }
 
 // timeBuildCommand will start a timer for timing the build command. It records the time when the returned
