@@ -113,13 +113,10 @@ func testDialStdio(t *testing.T, sb integration.Sandbox) {
 		require.Equal(t, "world", string(dt))
 	}
 
-	t.Run("conn=netpipe", func(t *testing.T) {
-		t.Parallel()
-		do(t, func(t *testing.T, cmd *exec.Cmd) net.Conn {
-			c1, c2 := net.Pipe()
-			cmd.Stdin = c1
-			cmd.Stdout = c1
-			return c2
-		})
+	do(t, func(t *testing.T, cmd *exec.Cmd) net.Conn {
+		c1, c2 := net.Pipe()
+		cmd.Stdin = c1
+		cmd.Stdout = c1
+		return c2
 	})
 }
