@@ -563,10 +563,11 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 			}
 
 			if evalConfig != nil {
-				if evalConfig.Request == "" {
-					return errors.New("eval requires request flag to be set")
+				req, err := evalConfig.ParseRequest()
+				if err != nil {
+					return err
 				}
-				options.printFunc = evalConfig.Request
+				options.printFunc = req
 			}
 
 			return runBuild(cmd.Context(), dockerCli, *options)
