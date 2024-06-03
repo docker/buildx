@@ -17,6 +17,7 @@ Extended build capabilities with BuildKit
 | [`debug`](buildx_debug.md)           | Start debugger (EXPERIMENTAL)                   |
 | [`dial-stdio`](buildx_dial-stdio.md) | Proxy current stdio streams to builder instance |
 | [`du`](buildx_du.md)                 | Disk usage                                      |
+| [`eval`](buildx_eval.md)             | Evaluate frontend request                       |
 | [`imagetools`](buildx_imagetools.md) | Commands to work on images in registry          |
 | [`inspect`](buildx_inspect.md)       | Inspect current builder instance                |
 | [`ls`](buildx_ls.md)                 | List builder instances                          |

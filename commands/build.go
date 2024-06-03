@@ -22,6 +22,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/commands/debug"
+	"github.com/docker/buildx/commands/eval"
 	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
@@ -513,10 +514,23 @@ type debuggableBuild struct {
 }
 
 func (b *debuggableBuild) NewDebugger(cfg *debug.DebugConfig) *cobra.Command {
-	return buildCmd(b.dockerCli, b.rootOpts, cfg)
+	return buildCmd(b.dockerCli, b.rootOpts, cfg, nil)
 }
 
-func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.DebugConfig) *cobra.Command {
+func newEvalBuild(dockerCli command.Cli, rootOpts *rootOptions) eval.Cmd {
+	return &evalBuild{dockerCli: dockerCli, rootOpts: rootOpts}
+}
+
+type evalBuild struct {
+	dockerCli command.Cli
+	rootOpts  *rootOptions
+}
+
+func (b *evalBuild) NewEval(cfg *eval.Config) *cobra.Command {
+	return buildCmd(b.dockerCli, b.rootOpts, nil, cfg)
+}
+
+func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.DebugConfig, evalConfig *eval.Config) *cobra.Command {
 	cFlags := &commonFlags{}
 	options := &buildOptions{}
 
@@ -546,6 +560,13 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 					return err
 				}
 				options.invokeConfig = iConfig
+			}
+
+			if evalConfig != nil {
+				if evalConfig.Request == "" {
+					return errors.New("eval requires request flag to be set")
+				}
+				options.printFunc = evalConfig.Request
 			}
 
 			return runBuild(cmd.Context(), dockerCli, *options)
@@ -596,11 +617,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
-
-	if confutil.IsExperimental() {
-		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
-		cobrautil.MarkFlagsExperimental(flags, "print")
-	}
 
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 

@@ -1,11 +1,11 @@
-# docker buildx debug build
+# docker buildx eval build
 
 <!---MARKER_GEN_START-->
 Start a build
 
 ### Aliases
 
-`docker buildx debug build`, `docker buildx debug b`
+`docker buildx eval build`, `docker buildx eval b`
 
 ### Options
 
@@ -50,3 +50,7 @@ Start a build
 
 <!---MARKER_GEN_END-->
 
+## Description
+
+Same as [`build`](buildx_build.md), but evaluate the build configuration without
+building the image.
