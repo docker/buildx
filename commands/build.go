@@ -597,11 +597,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
-	if confutil.IsExperimental() {
-		flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
-		cobrautil.MarkFlagsExperimental(flags, "print")
-	}
-
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
@@ -633,11 +628,19 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 		cobrautil.MarkFlagsExperimental(flags, "root", "detach", "server-config")
 	}
 
+	flags.StringVar(&options.printFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
+	flags.VarPF(callAlias(options, "check"), "check", "", `Shorthand for "--call=check"`)
+	flags.Lookup("check").NoOptDefVal = "true"
+
 	// hidden flags
 	var ignore string
 	var ignoreSlice []string
 	var ignoreBool bool
 	var ignoreInt int64
+
+	flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
+	cobrautil.MarkFlagsExperimental(flags, "print")
+	flags.MarkHidden("print")
 
 	flags.BoolVar(&ignoreBool, "compress", false, "Compress the build context using gzip")
 	flags.MarkHidden("compress")
@@ -1000,6 +1003,20 @@ func maybeJSONArray(v string) []string {
 		return list
 	}
 	return []string{v}
+}
+
+func callAlias(options *buildOptions, value string) cobrautil.BoolFuncValue {
+	return func(s string) error {
+		v, err := strconv.ParseBool(s)
+		if err != nil {
+			return err
+		}
+
+		if v {
+			options.printFunc = value
+		}
+		return nil
+	}
 }
 
 // timeBuildCommand will start a timer for timing the build command. It records the time when the returned

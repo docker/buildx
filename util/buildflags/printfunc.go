@@ -9,10 +9,13 @@ import (
 	"github.com/pkg/errors"
 )
 
+const defaultPrintFunc = "build"
+
 func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 	if str == "" {
 		return nil, nil
 	}
+
 	csvReader := csv.NewReader(strings.NewReader(str))
 	fields, err := csvReader.Read()
 	if err != nil {
@@ -41,5 +44,17 @@ func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 			f.Name = field
 		}
 	}
+
+	// "check" has been added as an alias for "lint",
+	// in order to maintain backwards compatibility
+	// we need to convert it.
+	if f.Name == "check" {
+		f.Name = "lint"
+	}
+
+	if f.Name == defaultPrintFunc {
+		return nil, nil
+	}
+
 	return f, nil
 }
