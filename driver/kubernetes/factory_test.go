@@ -38,25 +38,25 @@ func TestFactory_processDriverOpts(t *testing.T) {
 	t.Run(
 		"ValidOptions", func(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
-				"namespace":           "test-ns",
-				"image":               "test:latest",
-				"replicas":            "2",
-				"provisioningTimeout": "300s",
-				"requests.cpu":        "100m",
-				"requests.memory":     "32Mi",
-				"limits.cpu":          "200m",
-				"limits.memory":       "64Mi",
-				"rootless":            "true",
-				"nodeselector":        "selector1=value1,selector2=value2",
-				"tolerations":         "key=tolerationKey1,value=tolerationValue1,operator=Equal,effect=NoSchedule,tolerationSeconds=60;key=tolerationKey2,operator=Exists",
-				"annotations":         "example.com/expires-after=annotation1,example.com/other=annotation2",
-				"labels":              "example.com/owner=label1,example.com/other=label2",
-				"loadbalance":         "random",
-				"qemu.install":        "true",
-				"qemu.image":          "qemu:latest",
-				"default-load":        "true",
+				"namespace":       "test-ns",
+				"image":           "test:latest",
+				"replicas":        "2",
+				"timeout":         "300s",
+				"requests.cpu":    "100m",
+				"requests.memory": "32Mi",
+				"limits.cpu":      "200m",
+				"limits.memory":   "64Mi",
+				"rootless":        "true",
+				"nodeselector":    "selector1=value1,selector2=value2",
+				"tolerations":     "key=tolerationKey1,value=tolerationValue1,operator=Equal,effect=NoSchedule,tolerationSeconds=60;key=tolerationKey2,operator=Exists",
+				"annotations":     "example.com/expires-after=annotation1,example.com/other=annotation2",
+				"labels":          "example.com/owner=label1,example.com/other=label2",
+				"loadbalance":     "random",
+				"qemu.install":    "true",
+				"qemu.image":      "qemu:latest",
+				"default-load":    "true",
 			}
-			r, loadbalance, ns, defaultLoad, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			r, loadbalance, ns, defaultLoad, timeout, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
 			nodeSelectors := map[string]string{
 				"selector1": "value1",
@@ -93,7 +93,6 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Equal(t, "test-ns", ns)
 			require.Equal(t, "test:latest", r.Image)
 			require.Equal(t, 2, r.Replicas)
-			require.Equal(t, 300*time.Second, r.ProvisioningTimeout)
 			require.Equal(t, "100m", r.RequestsCPU)
 			require.Equal(t, "32Mi", r.RequestsMemory)
 			require.Equal(t, "200m", r.LimitsCPU)
@@ -107,6 +106,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.True(t, r.Qemu.Install)
 			require.Equal(t, "qemu:latest", r.Qemu.Image)
 			require.True(t, defaultLoad)
+			require.Equal(t, 300*time.Second, timeout)
 		},
 	)
 
@@ -114,14 +114,13 @@ func TestFactory_processDriverOpts(t *testing.T) {
 		"NoOptions", func(t *testing.T) {
 			cfg.DriverOpts = map[string]string{}
 
-			r, loadbalance, ns, defaultLoad, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			r, loadbalance, ns, defaultLoad, timeout, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
 			require.NoError(t, err)
 
 			require.Equal(t, "test", ns)
 			require.Equal(t, bkimage.DefaultImage, r.Image)
 			require.Equal(t, 1, r.Replicas)
-			require.Equal(t, 120*time.Second, r.ProvisioningTimeout)
 			require.Equal(t, "", r.RequestsCPU)
 			require.Equal(t, "", r.RequestsMemory)
 			require.Equal(t, "", r.LimitsCPU)
@@ -135,6 +134,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.False(t, r.Qemu.Install)
 			require.Equal(t, bkimage.QemuImage, r.Qemu.Image)
 			require.False(t, defaultLoad)
+			require.Equal(t, 120*time.Second, timeout)
 		},
 	)
 
@@ -145,14 +145,13 @@ func TestFactory_processDriverOpts(t *testing.T) {
 				"loadbalance": "sticky",
 			}
 
-			r, loadbalance, ns, defaultLoad, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			r, loadbalance, ns, defaultLoad, timeout, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
 			require.NoError(t, err)
 
 			require.Equal(t, "test", ns)
 			require.Equal(t, bkimage.DefaultRootlessImage, r.Image)
 			require.Equal(t, 1, r.Replicas)
-			require.Equal(t, 120*time.Second, r.ProvisioningTimeout)
 			require.Equal(t, "", r.RequestsCPU)
 			require.Equal(t, "", r.RequestsMemory)
 			require.Equal(t, "", r.LimitsCPU)
@@ -166,6 +165,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.False(t, r.Qemu.Install)
 			require.Equal(t, bkimage.QemuImage, r.Qemu.Image)
 			require.False(t, defaultLoad)
+			require.Equal(t, 120*time.Second, timeout)
 		},
 	)
 
@@ -174,17 +174,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"replicas": "invalid",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-			require.Error(t, err)
-		},
-	)
-
-	t.Run(
-		"InvalidProvisioningTimeout", func(t *testing.T) {
-			cfg.DriverOpts = map[string]string{
-				"ProvisioningTimeout": "invalid",
-			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -194,7 +184,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"rootless": "invalid",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -204,7 +194,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"tolerations": "key=foo,value=bar,invalid=foo2",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -214,7 +204,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"tolerations": "key=foo,value=bar,tolerationSeconds=invalid",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -224,7 +214,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"annotations": "key,value",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -234,7 +224,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"labels": "key=value=foo",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -244,7 +234,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"loadbalance": "invalid",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -254,7 +244,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"qemu.install": "invalid",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -264,7 +254,17 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"invalid": "foo",
 			}
-			_, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.Error(t, err)
+		},
+	)
+
+	t.Run(
+		"InvalidTimeout", func(t *testing.T) {
+			cfg.DriverOpts = map[string]string{
+				"timeout": "invalid",
+			}
+			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
