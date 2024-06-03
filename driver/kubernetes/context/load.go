@@ -167,11 +167,12 @@ func NewKubernetesConfig(configPath string) clientcmd.ClientConfig {
 // ConfigFromEndpoint loads kubernetes config from endpoint
 func ConfigFromEndpoint(endpointName string, s store.Reader) (clientcmd.ClientConfig, error) {
 	if strings.HasPrefix(endpointName, "kubernetes://") {
+		rules := clientcmd.NewDefaultClientConfigLoadingRules()
 		u, _ := url.Parse(endpointName)
 		if kubeconfig := u.Query().Get("kubeconfig"); kubeconfig != "" {
-			_ = os.Setenv(clientcmd.RecommendedConfigPathEnvVar, kubeconfig)
+			rules.Precedence = append(rules.Precedence, kubeconfig)
+			rules.ExplicitPath = kubeconfig
 		}
-		rules := clientcmd.NewDefaultClientConfigLoadingRules()
 		apiConfig, err := rules.Load()
 		if err != nil {
 			return nil, err
