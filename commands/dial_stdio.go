@@ -125,7 +125,6 @@ func dialStdioCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	cmd.Flags()
 	flags.StringVar(&opts.platform, "platform", os.Getenv("DOCKER_DEFAULT_PLATFORM"), "Target platform: this is used for node selection")
 	flags.StringVar(&opts.progress, "progress", "quiet", "Set type of progress output (auto, plain, tty).")
 	return cmd
