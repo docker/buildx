@@ -14,6 +14,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
@@ -50,6 +51,7 @@ type Driver struct {
 	configMapClient  clientcorev1.ConfigMapInterface
 	podChooser       podchooser.PodChooser
 	defaultLoad      bool
+	timeout          time.Duration
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -88,7 +90,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 			}
 		}
 		return sub.Wrap(
-			fmt.Sprintf("waiting for %d pods to be ready", d.minReplicas),
+			fmt.Sprintf("waiting for %d pods to be ready, timeout: %s", d.minReplicas, units.HumanDuration(d.timeout)),
 			func() error {
 				return d.wait(ctx)
 			})
@@ -101,22 +103,27 @@ func (d *Driver) wait(ctx context.Context) error {
 		err  error
 		depl *appsv1.Deployment
 	)
-	for try := 0; try < 100; try++ {
-		depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
-		if err == nil {
-			if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
-				return nil
-			}
-			err = errors.Errorf("expected %d replicas to be ready, got %d",
-				d.minReplicas, depl.Status.ReadyReplicas)
-		}
+
+	timeoutChan := time.After(d.timeout)
+	ticker := time.NewTicker(100 * time.Millisecond)
+	defer ticker.Stop()
+
+	for {
 		select {
 		case <-ctx.Done():
 			return ctx.Err()
-		case <-time.After(time.Duration(100+try*20) * time.Millisecond):
+		case <-timeoutChan:
+			return err
+		case <-ticker.C:
+			depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
+			if err == nil {
+				if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
+					return nil
+				}
+				err = errors.Errorf("expected %d replicas to be ready, got %d", d.minReplicas, depl.Status.ReadyReplicas)
+			}
 		}
 	}
-	return err
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {

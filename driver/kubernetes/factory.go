@@ -4,6 +4,7 @@ import (
 	"context"
 	"strconv"
 	"strings"
+	"time"
 
 	corev1 "k8s.io/api/core/v1"
 
@@ -16,8 +17,11 @@ import (
 	"k8s.io/client-go/kubernetes"
 )
 
-const prioritySupported = 40
-const priorityUnsupported = 80
+const (
+	prioritySupported   = 40
+	priorityUnsupported = 80
+	defaultTimeout      = 120 * time.Second
+)
 
 func init() {
 	driver.Register(&factory{})
@@ -68,12 +72,13 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		clientset:  clientset,
 	}
 
-	deploymentOpt, loadbalance, namespace, defaultLoad, err := f.processDriverOpts(deploymentName, namespace, cfg)
+	deploymentOpt, loadbalance, namespace, defaultLoad, timeout, err := f.processDriverOpts(deploymentName, namespace, cfg)
 	if nil != err {
 		return nil, err
 	}
 
 	d.defaultLoad = defaultLoad
+	d.timeout = timeout
 
 	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
@@ -102,7 +107,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	return d, nil
 }
 
-func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg driver.InitConfig) (*manifest.DeploymentOpt, string, string, bool, error) {
+func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg driver.InitConfig) (*manifest.DeploymentOpt, string, string, bool, time.Duration, error) {
 	deploymentOpt := &manifest.DeploymentOpt{
 		Name:          deploymentName,
 		Image:         bkimage.DefaultImage,
@@ -114,6 +119,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 	}
 
 	defaultLoad := false
+	timeout := defaultTimeout
 
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
 
@@ -131,7 +137,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case "replicas":
 			deploymentOpt.Replicas, err = strconv.Atoi(v)
 			if err != nil {
-				return nil, "", "", false, err
+				return nil, "", "", false, 0, err
 			}
 		case "requests.cpu":
 			deploymentOpt.RequestsCPU = v
@@ -148,7 +154,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case "rootless":
 			deploymentOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
-				return nil, "", "", false, err
+				return nil, "", "", false, 0, err
 			}
 			if _, isImage := cfg.DriverOpts["image"]; !isImage {
 				deploymentOpt.Image = bkimage.DefaultRootlessImage
@@ -160,17 +166,17 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case "nodeselector":
 			deploymentOpt.NodeSelector, err = splitMultiValues(v, ",", "=")
 			if err != nil {
-				return nil, "", "", false, errors.Wrap(err, "cannot parse node selector")
+				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse node selector")
 			}
 		case "annotations":
 			deploymentOpt.CustomAnnotations, err = splitMultiValues(v, ",", "=")
 			if err != nil {
-				return nil, "", "", false, errors.Wrap(err, "cannot parse annotations")
+				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse annotations")
 			}
 		case "labels":
 			deploymentOpt.CustomLabels, err = splitMultiValues(v, ",", "=")
 			if err != nil {
-				return nil, "", "", false, errors.Wrap(err, "cannot parse labels")
+				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse labels")
 			}
 		case "tolerations":
 			ts := strings.Split(v, ";")
@@ -195,12 +201,12 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 						case "tolerationSeconds":
 							c, err := strconv.Atoi(kv[1])
 							if nil != err {
-								return nil, "", "", false, err
+								return nil, "", "", false, 0, err
 							}
 							c64 := int64(c)
 							t.TolerationSeconds = &c64
 						default:
-							return nil, "", "", false, errors.Errorf("invalid tolaration %q", v)
+							return nil, "", "", false, 0, errors.Errorf("invalid tolaration %q", v)
 						}
 					}
 				}
@@ -212,13 +218,13 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			case LoadbalanceSticky:
 			case LoadbalanceRandom:
 			default:
-				return nil, "", "", false, errors.Errorf("invalid loadbalance %q", v)
+				return nil, "", "", false, 0, errors.Errorf("invalid loadbalance %q", v)
 			}
 			loadbalance = v
 		case "qemu.install":
 			deploymentOpt.Qemu.Install, err = strconv.ParseBool(v)
 			if err != nil {
-				return nil, "", "", false, err
+				return nil, "", "", false, 0, err
 			}
 		case "qemu.image":
 			if v != "" {
@@ -227,14 +233,19 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case "default-load":
 			defaultLoad, err = strconv.ParseBool(v)
 			if err != nil {
-				return nil, "", "", false, err
+				return nil, "", "", false, 0, err
+			}
+		case "timeout":
+			timeout, err = time.ParseDuration(v)
+			if err != nil {
+				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse timeout")
 			}
 		default:
-			return nil, "", "", false, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
+			return nil, "", "", false, 0, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
 		}
 	}
 
-	return deploymentOpt, loadbalance, namespace, defaultLoad, nil
+	return deploymentOpt, loadbalance, namespace, defaultLoad, timeout, nil
 }
 
 func splitMultiValues(in string, itemsep string, kvsep string) (map[string]string, error) {
