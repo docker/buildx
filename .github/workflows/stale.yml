@@ -19,9 +19,9 @@ jobs:
           ## Issue configuration
           days-before-issue-stale: 20
           days-before-issue-close: 10
-          stale-issue-label: 'stale'
-          close-issue-label: 'rotten'
-          exempt-issue-labels: 'frozen'
+          stale-issue-label: 'status/stale'
+          close-issue-label: 'status/rotten'
+          exempt-issue-labels: 'status/frozen'
           stale-issue-message: 'This issue is stale because it has been open 20 days with no activity. Remove stale label or comment or this will be closed in 10 days.'
           close-issue-message: 'This issue was closed because it has been stalled for 30 days with no activity.'
           # Pull request configuration
@@ -29,9 +29,9 @@ jobs:
           days-before-pr-close: 10
           stale-pr-message: 'This PR is stale because it has been open 20 days with no activity. Remove stale label or comment or this will be closed in 10 days.'
           close-pr-message: 'This PR was closed because it has been stalled for 30 days with no activity.'
-          stale-pr-label: 'stale'
-          close-pr-label: 'rotten'
-          exempt-pr-labels: 'frozen'
+          stale-pr-label: 'status/stale'
+          close-pr-label: 'status/rotten'
+          exempt-pr-labels: 'status/frozen'
           # General configuration
           exempt-milestones: true
           start-date: '2024-05-01T00:00:00+0000'
