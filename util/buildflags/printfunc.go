@@ -9,8 +9,10 @@ import (
 	"github.com/pkg/errors"
 )
 
+const defaultPrintFunc = "build"
+
 func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
-	if str == "" {
+	if str == "" || str == defaultPrintFunc {
 		return nil, nil
 	}
 

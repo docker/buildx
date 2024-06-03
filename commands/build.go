@@ -628,7 +628,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 		cobrautil.MarkFlagsExperimental(flags, "root", "detach", "server-config")
 	}
 
-	flags.StringVar(&options.printFunc, "call", "", `Set method for evaluating build ("check", "outline", "targets")`)
+	flags.StringVar(&options.printFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 
 	// hidden flags
 	var ignore string
