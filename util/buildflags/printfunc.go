@@ -12,15 +12,8 @@ import (
 const defaultPrintFunc = "build"
 
 func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
-	if str == "" || str == defaultPrintFunc {
+	if str == "" {
 		return nil, nil
-	}
-
-	// "check" has been added as an alias for "lint",
-	// in order to maintain backwards compatibility
-	// we need to convert it.
-	if str == "check" {
-		str = "lint"
 	}
 
 	csvReader := csv.NewReader(strings.NewReader(str))
@@ -51,5 +44,17 @@ func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 			f.Name = field
 		}
 	}
+
+	// "check" has been added as an alias for "lint",
+	// in order to maintain backwards compatibility
+	// we need to convert it.
+	if f.Name == "check" {
+		f.Name = "lint"
+	}
+
+	if f.Name == defaultPrintFunc {
+		return nil, nil
+	}
+
 	return f, nil
 }
