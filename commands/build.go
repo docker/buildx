@@ -699,7 +699,7 @@ type commonFlags struct {
 
 func commonBuildFlags(options *commonFlags, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
-	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty"). Use plain to show container output`)
+	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty", "rawjson"). Use plain to show container output`)
 	options.pull = flags.Bool("pull", false, "Always attempt to pull all referenced images")
 	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to a file")
 }
