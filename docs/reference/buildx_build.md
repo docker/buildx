@@ -38,7 +38,7 @@ Start a build
 | [`--no-cache-filter`](#no-cache-filter)                                                                                                            | `stringArray` |           | Do not cache specified stages                                                                       |
 | [`-o`](#output), [`--output`](#output)                                                                                                             | `stringArray` |           | Output destination (format: `type=local,dest=path`)                                                 |
 | [`--platform`](#platform)                                                                                                                          | `stringArray` |           | Set target platform for build                                                                       |
-| [`--progress`](#progress)                                                                                                                          | `string`      | `auto`    | Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container output            |
+| [`--progress`](#progress)                                                                                                                          | `string`      | `auto`    | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output |
 | [`--provenance`](#provenance)                                                                                                                      | `string`      |           | Shorthand for `--attest=type=provenance`                                                            |
 | `--pull`                                                                                                                                           |               |           | Always attempt to pull all referenced images                                                        |
 | [`--push`](#push)                                                                                                                                  |               |           | Shorthand for `--output=type=registry`                                                              |
@@ -551,8 +551,8 @@ $ docker buildx build --platform=darwin .
 --progress=VALUE
 ```
 
-Set type of progress output (`auto`, `plain`, `tty`). Use plain to show container
-output (default "auto").
+Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use `plain` to show container
+output (default `auto`).
 
 > **Note**
 >
@@ -577,6 +577,9 @@ $ docker buildx build --load --progress=plain .
 >
 > Check also the [`BUILDKIT_COLORS`](https://docs.docker.com/build/building/variables/#buildkit_colors)
 > environment variable for modifying the colors of the terminal output.
+
+The `rawjson` output marshals the solve status events from BuildKit to JSON lines.
+This mode is designed to be read by an external program.
 
 ### <a name="provenance"></a> Create provenance attestations (--provenance)
 
