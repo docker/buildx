@@ -206,7 +206,7 @@ func envFileIndexer(y any, p tree.Path) (string, error) {
 		if pathValue, ok := value["path"]; ok {
 			return pathValue.(string), nil
 		}
-		return "", fmt.Errorf("environment path attribut %s is missing", p)
+		return "", fmt.Errorf("environment path attribute %s is missing", p)
 	}
 	return "", nil
 }

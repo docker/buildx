@@ -215,14 +215,16 @@ func WithLoadOptions(loadOptions ...func(*loader.Options)) ProjectOptionsFn {
 
 // WithDefaultProfiles uses the provided profiles (if any), and falls back to
 // profiles specified via the COMPOSE_PROFILES environment variable otherwise.
-func WithDefaultProfiles(profile ...string) ProjectOptionsFn {
-	if len(profile) == 0 {
-		for _, s := range strings.Split(os.Getenv(consts.ComposeProfiles), ",") {
-			profile = append(profile, strings.TrimSpace(s))
+func WithDefaultProfiles(profiles ...string) ProjectOptionsFn {
+	return func(o *ProjectOptions) error {
+		if len(profiles) == 0 {
+			for _, s := range strings.Split(o.Environment[consts.ComposeProfiles], ",") {
+				profiles = append(profiles, strings.TrimSpace(s))
+			}
 		}
-
+		o.loadOptions = append(o.loadOptions, loader.WithProfiles(profiles))
+		return nil
 	}
-	return WithProfiles(profile)
 }
 
 // WithProfiles sets profiles to be activated

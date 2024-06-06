@@ -21,7 +21,7 @@ import (
 
 	"github.com/compose-spec/compose-go/v2/tree"
 	"github.com/compose-spec/compose-go/v2/types"
-	"github.com/mitchellh/mapstructure"
+	"github.com/go-viper/mapstructure/v2"
 )
 
 func transformPorts(data any, p tree.Path, ignoreParseError bool) (any, error) {
