@@ -12,7 +12,7 @@ require (
 	github.com/containerd/continuity v0.4.3
 	github.com/containerd/log v0.1.0
 	github.com/containerd/typeurl/v2 v2.1.1
-	github.com/creack/pty v1.1.18
+	github.com/creack/pty v1.1.21
 	github.com/distribution/reference v0.5.0
 	github.com/docker/cli v26.1.4+incompatible
 	github.com/docker/cli-docs-tool v0.7.0
