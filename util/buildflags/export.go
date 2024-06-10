@@ -81,7 +81,8 @@ func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 
 func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 	// TODO: use buildkit's annotation parser once it supports setting custom prefix and ":" separator
-	annotationRegexp := regexp.MustCompile(`^(?:([a-z-]+)(?:\[([A-Za-z0-9_/-]+)\])?:)?(\S+)$`)
+	annotationRegexp := regexp.MustCompile(`^((?:[a-z-]+(?:\[[A-Za-z0-9_/-]+\])?)(?:,[a-z-]+(?:\[[A-Za-z0-9_/-]+\])?)*:)?(\S+)$`)
+	annotationTypeRegexp := regexp.MustCompile(`^([a-z-]+)(?:\[([A-Za-z0-9_/-]+)\])?$`)
 	annotations := make(map[exptypes.AnnotationKey]string)
 	for _, inp := range inp {
 		k, v, ok := strings.Cut(inp, "=")
@@ -94,29 +95,43 @@ func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 			return nil, errors.Errorf("invalid annotation format, expected <type>:<key>=<value>, got %q", inp)
 		}
 
-		typ, platform, key := groups[1], groups[2], groups[3]
-		switch typ {
-		case "":
-		case exptypes.AnnotationIndex, exptypes.AnnotationIndexDescriptor, exptypes.AnnotationManifest, exptypes.AnnotationManifestDescriptor:
-		default:
-			return nil, errors.Errorf("unknown annotation type %q", typ)
+		types, key := groups[1], groups[2]
+
+		if types == "" {
+			ak := exptypes.AnnotationKey{Key: key}
+			annotations[ak] = v
+			continue
 		}
 
-		var ociPlatform *ocispecs.Platform
-		if platform != "" {
-			p, err := platforms.Parse(platform)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid platform %q", platform)
+		typesSplit := strings.Split(strings.TrimSuffix(types, ":"), ",")
+		for _, typeAndPlatform := range typesSplit {
+			groups := annotationTypeRegexp.FindStringSubmatch(typeAndPlatform)
+			typ, platform := groups[1], groups[2]
+
+			switch typ {
+			case "":
+			case exptypes.AnnotationIndex, exptypes.AnnotationIndexDescriptor, exptypes.AnnotationManifest, exptypes.AnnotationManifestDescriptor:
+			default:
+				return nil, errors.Errorf("unknown annotation type %q", typ)
 			}
-			ociPlatform = &p
+
+			var ociPlatform *ocispecs.Platform
+			if platform != "" {
+				p, err := platforms.Parse(platform)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid platform %q", platform)
+				}
+				ociPlatform = &p
+			}
+
+			ak := exptypes.AnnotationKey{
+				Type:     typ,
+				Platform: ociPlatform,
+				Key:      key,
+			}
+			annotations[ak] = v
 		}
 
-		ak := exptypes.AnnotationKey{
-			Type:     typ,
-			Platform: ociPlatform,
-			Key:      key,
-		}
-		annotations[ak] = v
 	}
 	return annotations, nil
 }
