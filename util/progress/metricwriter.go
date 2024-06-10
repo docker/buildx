@@ -459,7 +459,7 @@ func kebabToCamel(s string) string {
 func (mr *lintMetricRecorder) Record(ss *client.SolveStatus) {
 	for _, warning := range ss.Warnings {
 		m := reLintMessage.FindSubmatch([]byte(warning.URL))
-		if m == nil {
+		if len(m) < 2 {
 			continue
 		}
 
