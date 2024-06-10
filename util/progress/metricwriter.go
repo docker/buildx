@@ -13,6 +13,8 @@ import (
 	"github.com/opencontainers/go-digest"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"golang.org/x/text/cases"
+	"golang.org/x/text/language"
 )
 
 type metricWriter struct {
@@ -446,14 +448,22 @@ func newLintMetricRecorder(meter metric.Meter, attrs attribute.Set) *lintMetricR
 	return mr
 }
 
+func kebabToCamel(s string) string {
+	words := strings.Split(s, "-")
+	for i, word := range words {
+		words[i] = cases.Title(language.English).String(word)
+	}
+	return strings.Join(words, "")
+}
+
 func (mr *lintMetricRecorder) Record(ss *client.SolveStatus) {
 	for _, warning := range ss.Warnings {
-		m := reLintMessage.FindSubmatch(warning.Short)
+		m := reLintMessage.FindSubmatch([]byte(warning.URL))
 		if m == nil {
 			continue
 		}
 
-		ruleName := string(m[1])
+		ruleName := kebabToCamel(string(m[1]))
 		mr.Count.Add(context.Background(), 1,
 			metric.WithAttributeSet(mr.Attributes),
 			metric.WithAttributes(
@@ -464,6 +474,6 @@ func (mr *lintMetricRecorder) Record(ss *client.SolveStatus) {
 }
 
 var (
-	reLintMessage        = regexp.MustCompile(`^Lint Rule '(\w+)':`)
+	reLintMessage        = regexp.MustCompile(`^https://docs\.docker\.com/go/dockerfile/rule/([\w|-]+)/`)
 	lintRuleNameProperty = attribute.Key("lint.rule.name")
 )
