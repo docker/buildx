@@ -126,6 +126,7 @@ jobs:
           directory: ./bin/testreports
           flags: integration
           token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true
       -
         name: Generate annotations
         if: always()
@@ -198,6 +199,7 @@ jobs:
           env_vars: RUNNER_OS
           flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true
       -
         name: Generate annotations
         if: always()
