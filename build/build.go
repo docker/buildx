@@ -53,7 +53,7 @@ var (
 
 const (
 	printFallbackImage     = "docker/dockerfile:1.5@sha256:dbbd5e059e8a07ff7ea6233b213b36aa516b4c53c645f1817a4dd18b83cbea56"
-	printLintFallbackImage = "docker.io/docker/dockerfile-upstream:1.8.0-rc2@sha256:515538ca94186029d466cf4c10c61b5147e849c592955e3a78922e24595c63a9"
+	printLintFallbackImage = "docker.io/docker/dockerfile-upstream:1.8.0@sha256:d6d396f3780b1dd56a3acbc975f57bd2fc501989b50164c41387c42d04e780d0"
 )
 
 type Options struct {
