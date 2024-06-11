@@ -31,7 +31,7 @@ env:
 
 jobs:
   test-integration:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     env:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       TEST_IMAGE_BUILD: "0"
@@ -145,7 +145,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-22.04
+          - ubuntu-24.04
           - macos-12
           - windows-2022
     env:
@@ -212,7 +212,7 @@ jobs:
           path: ${{ env.TESTREPORTS_BASEDIR }}
 
   prepare-binaries:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       matrix: ${{ steps.platforms.outputs.matrix }}
     steps:
@@ -230,7 +230,7 @@ jobs:
           echo ${{ steps.platforms.outputs.matrix }}
 
   binaries:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - prepare-binaries
     strategy:
@@ -273,7 +273,7 @@ jobs:
           if-no-files-found: error
 
   bin-image:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - test-integration
       - test-unit
@@ -326,7 +326,7 @@ jobs:
             *.cache-to=type=gha,scope=bin-image,mode=max
 
   release:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - test-integration
       - test-unit

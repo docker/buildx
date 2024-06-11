@@ -18,7 +18,7 @@ on:
 
 jobs:
   prepare:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     outputs:
       includes: ${{ steps.matrix.outputs.includes }}
     steps:
@@ -67,7 +67,7 @@ jobs:
             });
 
   validate:
-    runs-on: ubuntu-22.04
+    runs-on: ubuntu-24.04
     needs:
       - prepare
     strategy:
