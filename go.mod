@@ -10,6 +10,7 @@ require (
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.18
 	github.com/containerd/continuity v0.4.3
+	github.com/containerd/errdefs v0.1.0
 	github.com/containerd/log v0.1.0
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/creack/pty v1.1.21
@@ -80,7 +81,6 @@ require (
 	github.com/beorn7/perks v1.0.1 // indirect
 	github.com/cenkalti/backoff/v4 v4.2.1 // indirect
 	github.com/cespare/xxhash/v2 v2.2.0 // indirect
-	github.com/containerd/errdefs v0.1.0 // indirect
 	github.com/containerd/ttrpc v1.2.4 // indirect
 	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.2+incompatible // indirect
