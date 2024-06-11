@@ -32,6 +32,7 @@ func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 			if s != "-" {
 				outs = append(outs, &controllerapi.ExportEntry{
 					Type:        client.ExporterLocal,
+					Attrs:       map[string]string{"dest": s},
 					Destination: s,
 				})
 				continue
@@ -71,7 +72,8 @@ func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 
 		if dest, ok := out.Attrs["dest"]; ok {
 			out.Destination = dest
-			delete(out.Attrs, "dest")
+		} else if !ok && out.Destination != "" {
+			out.Attrs["dest"] = out.Destination
 		}
 
 		outs = append(outs, &out)
