@@ -36,6 +36,7 @@ jobs:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       TEST_IMAGE_BUILD: "0"
       TEST_IMAGE_ID: "buildx-tests"
+      TEST_COVERAGE: "1"
     strategy:
       fail-fast: false
       matrix:

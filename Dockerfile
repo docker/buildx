@@ -27,10 +27,36 @@ WORKDIR /src
 
 FROM gobase AS gotestsum
 ARG GOTESTSUM_VERSION
-ENV GOFLAGS=
-RUN --mount=target=/root/.cache,type=cache \
-  GOBIN=/out/ go install "gotest.tools/gotestsum@${GOTESTSUM_VERSION}" && \
-  /out/gotestsum --version
+ENV GOFLAGS=""
+RUN --mount=target=/root/.cache,type=cache <<EOT
+  set -ex
+  go install "gotest.tools/gotestsum@${GOTESTSUM_VERSION}"
+  go install "github.com/wadey/gocovmerge@latest"
+  mkdir /out
+  /go/bin/gotestsum --version
+  mv /go/bin/gotestsum /out
+  mv /go/bin/gocovmerge /out
+EOT
+COPY --chmod=755 <<"EOF" /out/gotestsumandcover
+#!/bin/sh
+set -x
+if [ -z "$GO_TEST_COVERPROFILE" ]; then
+  exec gotestsum "$@"
+fi
+coverdir="$(dirname "$GO_TEST_COVERPROFILE")"
+mkdir -p "$coverdir/helpers"
+gotestsum "$@" "-coverprofile=$GO_TEST_COVERPROFILE"
+ecode=$?
+go tool covdata textfmt -i=$coverdir/helpers -o=$coverdir/helpers-report.txt
+gocovmerge "$coverdir/helpers-report.txt" "$GO_TEST_COVERPROFILE" > "$coverdir/merged-report.txt"
+mv "$coverdir/merged-report.txt" "$GO_TEST_COVERPROFILE"
+rm "$coverdir/helpers-report.txt"
+for f in "$coverdir/helpers"/*; do
+  rm "$f"
+done
+rmdir "$coverdir/helpers"
+exit $ecode
+EOF
 
 FROM gobase AS buildx-version
 RUN --mount=type=bind,target=. <<EOT
@@ -42,6 +68,7 @@ EOT
 
 FROM gobase AS buildx-build
 ARG TARGETPLATFORM
+ARG GO_EXTRA_FLAGS
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
@@ -88,7 +115,7 @@ RUN apk add --no-cache \
       shadow-uidmap \
       xfsprogs \
       xz
-COPY --link --from=gotestsum /out/gotestsum /usr/bin/
+COPY --link --from=gotestsum /out /usr/bin/
 COPY --link --from=registry /bin/registry /usr/bin/
 COPY --link --from=docker-engine / /usr/bin/
 COPY --link --from=docker-cli / /usr/bin/
