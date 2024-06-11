@@ -13,7 +13,7 @@ require (
 	github.com/containerd/log v0.1.0
 	github.com/containerd/typeurl/v2 v2.1.1
 	github.com/creack/pty v1.1.21
-	github.com/distribution/reference v0.5.0
+	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v26.1.4+incompatible
 	github.com/docker/cli-docs-tool v0.7.0
 	github.com/docker/docker v26.1.4+incompatible
@@ -26,7 +26,7 @@ require (
 	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
 	github.com/hashicorp/hcl/v2 v2.20.1
 	github.com/in-toto/in-toto-golang v0.5.0
-	github.com/moby/buildkit v0.14.0-rc2
+	github.com/moby/buildkit v0.14.0
 	github.com/moby/sys/mountinfo v0.7.1
 	github.com/moby/sys/signal v0.7.0
 	github.com/morikuni/aec v1.0.0
