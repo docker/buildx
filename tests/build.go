@@ -64,7 +64,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildLoadPush,
 	testBuildSecret,
 	testBuildDefaultLoad,
-	testBuildPrint,
+	testBuildCall,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -797,12 +797,8 @@ func testBuildDefaultLoad(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, cmd.Run())
 }
 
-func testBuildPrint(t *testing.T, sb integration.Sandbox) {
-	if !isExperimental() {
-		t.Skip("experimental mode required, skipping")
-	}
-
-	t.Run("lint", func(t *testing.T) {
+func testBuildCall(t *testing.T, sb integration.Sandbox) {
+	t.Run("check", func(t *testing.T) {
 		dockerfile := []byte(`
 frOM busybox as base
 cOpy Dockerfile .
@@ -816,7 +812,7 @@ COPy --from=base \
 			fstest.CreateFile("Dockerfile", dockerfile, 0600),
 		)
 
-		cmd := buildxCmd(sb, withArgs("build", "--print=lint,format=json", dir))
+		cmd := buildxCmd(sb, withArgs("build", "--call=check,format=json", dir))
 		stdout := bytes.Buffer{}
 		stderr := bytes.Buffer{}
 		cmd.Stdout = &stdout
@@ -851,7 +847,7 @@ FROM second
 			fstest.CreateFile("Dockerfile", dockerfile, 0600),
 		)
 
-		cmd := buildxCmd(sb, withArgs("build", "--build-arg=BAR=678", "--target=target", "--print=outline,format=json", dir))
+		cmd := buildxCmd(sb, withArgs("build", "--build-arg=BAR=678", "--target=target", "--call=outline,format=json", dir))
 		stdout := bytes.Buffer{}
 		stderr := bytes.Buffer{}
 		cmd.Stdout = &stdout
@@ -901,7 +897,7 @@ FROM second AS binary
 			fstest.CreateFile("Dockerfile", dockerfile, 0600),
 		)
 
-		cmd := buildxCmd(sb, withArgs("build", "--print=targets,format=json", dir))
+		cmd := buildxCmd(sb, withArgs("build", "--call=targets,format=json", dir))
 		stdout := bytes.Buffer{}
 		stderr := bytes.Buffer{}
 		cmd.Stdout = &stdout
