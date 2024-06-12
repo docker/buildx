@@ -866,7 +866,28 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 	case "subrequests.describe":
 		return printValue(subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
 	case "lint":
-		return printValue(lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
+		err := printValue(lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
+		if err != nil {
+			return err
+		}
+
+		lintResults := lint.LintResults{}
+		if result, ok := res["result.json"]; ok {
+			if err := json.Unmarshal([]byte(result), &lintResults); err != nil {
+				return err
+			}
+		}
+		if lintResults.Error != nil {
+			fmt.Println()
+			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message + "\n"))
+			sourceInfo := lintResults.Sources[lintResults.Error.Location.SourceIndex]
+			source := errdefs.Source{
+				Info:   sourceInfo,
+				Ranges: lintResults.Error.Location.Ranges,
+			}
+			source.Print(lintBuf)
+			return errors.New(lintBuf.String())
+		}
 	default:
 		if dt, ok := res["result.json"]; ok && f.Format == "json" {
 			fmt.Println(dt)
