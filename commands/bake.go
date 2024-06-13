@@ -207,7 +207,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	for k, b := range bo {
 		b.Ref = identity.NewID()
 		b.GroupRef = groupRef
-		b.WithProvenanceResponse = len(in.metadataFile) > 0
+		b.WithDetailedResponse = len(in.metadataFile) > 0
 		refs = append(refs, b.Ref)
 		bo[k] = b
 	}

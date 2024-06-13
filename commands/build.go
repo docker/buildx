@@ -206,7 +206,7 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		return nil, err
 	}
 
-	opts.WithProvenanceResponse = opts.PrintFunc == nil && len(o.metadataFile) > 0
+	opts.WithDetailedResponse = opts.PrintFunc == nil && len(o.metadataFile) > 0
 
 	return &opts, nil
 }

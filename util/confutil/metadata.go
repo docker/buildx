@@ -5,7 +5,7 @@ import (
 	"strconv"
 )
 
-// MetadataProvenanceMode is the type for setting provenance in the metdata file
+// MetadataProvenanceMode is the type for setting provenance in the metadata file
 type MetadataProvenanceMode int
 
 const (
@@ -32,4 +32,33 @@ func MetadataProvenance() MetadataProvenanceMode {
 		return MetadataProvenanceModeDisabled
 	}
 	return MetadataProvenanceModeMin
+}
+
+// MetadataStatusMode is the type for setting status in the metadata file
+type MetadataStatusMode int
+
+const (
+	// MetadataStatusModeDisabled doesn't set status (default)
+	MetadataStatusModeDisabled MetadataStatusMode = iota
+	// MetadataStatusModeWarnings sets only status warnings
+	MetadataStatusModeWarnings
+	// MetadataStatusModeMax sets full status
+	MetadataStatusModeMax
+)
+
+// MetadataStatus returns the status mode to set in the metadata file
+func MetadataStatus() MetadataStatusMode {
+	bmp := os.Getenv("BUILDX_METADATA_STATUS")
+	switch bmp {
+	case "warnings":
+		return MetadataStatusModeWarnings
+	case "max":
+		return MetadataStatusModeMax
+	case "disabled":
+		return MetadataStatusModeDisabled
+	}
+	if ok, err := strconv.ParseBool(bmp); err == nil && !ok {
+		return MetadataStatusModeDisabled
+	}
+	return MetadataStatusModeDisabled
 }

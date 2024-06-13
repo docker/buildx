@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/creack/pty"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
@@ -59,7 +60,8 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildNetworkModeBridge,
 	testBuildShmSize,
 	testBuildUlimit,
-	testBuildMetadata,
+	testBuildMetadataProvenance,
+	testBuildMetadataStatus,
 	testBuildMultiExporters,
 	testBuildLoadPush,
 	testBuildSecret,
@@ -560,19 +562,22 @@ COPY --from=build /ulimit /
 	require.Contains(t, string(dt), `1024`)
 }
 
-func testBuildMetadata(t *testing.T, sb integration.Sandbox) {
+func testBuildMetadataProvenance(t *testing.T, sb integration.Sandbox) {
+	t.Run("default", func(t *testing.T) {
+		buildMetadataProvenance(t, sb, "")
+	})
 	t.Run("max", func(t *testing.T) {
-		buildMetadata(t, sb, "max")
+		buildMetadataProvenance(t, sb, "max")
 	})
 	t.Run("min", func(t *testing.T) {
-		buildMetadata(t, sb, "min")
+		buildMetadataProvenance(t, sb, "min")
 	})
 	t.Run("disabled", func(t *testing.T) {
-		buildMetadata(t, sb, "disabled")
+		buildMetadataProvenance(t, sb, "disabled")
 	})
 }
 
-func buildMetadata(t *testing.T, sb integration.Sandbox, metadataMode string) {
+func buildMetadataProvenance(t *testing.T, sb integration.Sandbox, metadataMode string) {
 	dir := createTestProject(t)
 	dirDest := t.TempDir()
 
@@ -614,6 +619,67 @@ func buildMetadata(t *testing.T, sb integration.Sandbox, metadataMode string) {
 	var prv provenancetypes.ProvenancePredicate
 	require.NoError(t, json.Unmarshal(dtprv, &prv))
 	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
+}
+
+func testBuildMetadataStatus(t *testing.T, sb integration.Sandbox) {
+	t.Run("default", func(t *testing.T) {
+		buildMetadataStatus(t, sb, "")
+	})
+	t.Run("max", func(t *testing.T) {
+		buildMetadataStatus(t, sb, "max")
+	})
+	t.Run("warnings", func(t *testing.T) {
+		buildMetadataStatus(t, sb, "warnings")
+	})
+	t.Run("disabled", func(t *testing.T) {
+		buildMetadataStatus(t, sb, "disabled")
+	})
+}
+
+func buildMetadataStatus(t *testing.T, sb integration.Sandbox, metadataMode string) {
+	dockerfile := []byte(`
+frOM busybox as base
+cOpy Dockerfile .
+from scratch
+COPy --from=base \
+  /Dockerfile \
+  /
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	cmd := buildxCmd(
+		sb,
+		withArgs("build", "--metadata-file", filepath.Join(dir, "md.json"), dir),
+		withEnv("BUILDX_METADATA_STATUS="+metadataMode),
+	)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildRef    string             `json:"buildx.build.ref"`
+		BuildStatus client.SolveStatus `json:"buildx.build.status"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err, string(dt))
+
+	require.NotEmpty(t, md.BuildRef)
+	if metadataMode == "" || metadataMode == "disabled" {
+		require.Empty(t, md.BuildStatus)
+		return
+	} else if metadataMode == "all" {
+		require.NotEmpty(t, md.BuildStatus.Vertexes)
+		require.NotEmpty(t, md.BuildStatus.Statuses)
+	}
+
+	skipNoCompatBuildKit(t, sb, ">= 0.14.0-0", "lint")
+	require.Len(t, md.BuildStatus.Warnings, 3)
 }
 
 func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {

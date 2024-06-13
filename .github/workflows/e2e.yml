@@ -84,6 +84,8 @@ jobs:
             endpoint: tcp://localhost:1234
           - driver: docker-container
             metadata-provenance: max
+          - driver: docker-container
+            metadata-status: max
         exclude:
           - driver: docker
             multi-node: mnode-true
@@ -133,6 +135,9 @@ jobs:
           fi
           if [ -n "${{ matrix.metadata-provenance }}" ]; then
             echo "BUILDX_METADATA_PROVENANCE=${{ matrix.metadata-provenance }}" >> $GITHUB_ENV
+          fi
+          if [ -n "${{ matrix.metadata-status }}" ]; then
+            echo "BUILDX_METADATA_STATUS=${{ matrix.metadata-status }}" >> $GITHUB_ENV
           fi
       -
         name: Install k3s

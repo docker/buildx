@@ -122,6 +122,7 @@ $ cat metadata.json
   "db": {
     "buildx.build.provenance": {},
     "buildx.build.ref": "mybuilder/mybuilder0/0fjb6ubs52xx3vygf6fgdl611",
+    "buildx.build.status": {},
     "containerimage.config.digest": "sha256:2937f66a9722f7f4a2df583de2f8cb97fc9196059a410e7f00072fc918930e66",
     "containerimage.descriptor": {
       "annotations": {
@@ -137,6 +138,7 @@ $ cat metadata.json
   "webapp-dev": {
     "buildx.build.provenance": {},
     "buildx.build.ref": "mybuilder/mybuilder0/kamngmcgyzebqxwu98b4lfv3n",
+    "buildx.build.status": {},
     "containerimage.config.digest": "sha256:9651cc2b3c508f697c9c43b67b64c8359c2865c019e680aac1c11f4b875b67e0",
     "containerimage.descriptor": {
       "annotations": {
@@ -160,6 +162,14 @@ $ cat metadata.json
 > * `min` sets minimal provenance (default).
 > * `max` sets full provenance.
 > * `disabled`, `false` or `0` does not set any provenance.
+
+> **Note**
+>
+> Build record status (`buildx.build.status`) is not included by default. Set
+> the `BUILDX_METADATA_STATUS` environment variable to customize this behavior:
+> * `warnings` sets status warnings.
+> * `max` sets full status.
+> * `disabled`, `false` or `0` does not set status (default).
 
 ### <a name="no-cache"></a> Don't use cache when building the image (--no-cache)
 

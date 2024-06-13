@@ -20,6 +20,31 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
+const (
+	refMetadataBuildxProvenance = "buildx.build.provenance"
+	refMetadataBuildxStatus     = "buildx.build.status"
+)
+
+func setRecordMetadata(ctx context.Context, c *client.Client, sr *client.SolveResponse, ref string, pw progress.Writer) error {
+	var mu sync.Mutex
+
+	cb := func(key string, value string) {
+		mu.Lock()
+		defer mu.Unlock()
+		sr.ExporterResponse[key] = value
+	}
+
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return setRecordProvenance(ctx, c, ref, cb, pw)
+	})
+	eg.Go(func() error {
+		return setRecordStatus(ctx, c, ref, cb, pw)
+	})
+
+	return eg.Wait()
+}
+
 type provenancePredicate struct {
 	Builder *provenanceBuilder `json:"builder,omitempty"`
 	provenancetypes.ProvenancePredicate
@@ -29,7 +54,7 @@ type provenanceBuilder struct {
 	ID string `json:"id,omitempty"`
 }
 
-func setRecordProvenance(ctx context.Context, c *client.Client, sr *client.SolveResponse, ref string, pw progress.Writer) error {
+func setRecordProvenance(ctx context.Context, c *client.Client, ref string, updateExporterResponse func(key string, value string), pw progress.Writer) error {
 	mode := confutil.MetadataProvenance()
 	if mode == confutil.MetadataProvenanceModeDisabled {
 		return nil
@@ -41,7 +66,7 @@ func setRecordProvenance(ctx context.Context, c *client.Client, sr *client.Solve
 			return err
 		}
 		for k, v := range res {
-			sr.ExporterResponse[k] = v
+			updateExporterResponse(k, v)
 		}
 		return nil
 	})
@@ -87,7 +112,7 @@ func fetchProvenance(ctx context.Context, c *client.Client, ref string, mode con
 				if out == nil {
 					out = make(map[string]string)
 				}
-				out["buildx.build.provenance"] = prv
+				out[refMetadataBuildxProvenance] = prv
 				mu.Unlock()
 				return nil
 			})
@@ -111,7 +136,7 @@ func fetchProvenance(ctx context.Context, c *client.Client, ref string, mode con
 					if out == nil {
 						out = make(map[string]string)
 					}
-					out["buildx.build.provenance/"+platform] = prv
+					out[refMetadataBuildxProvenance+"/"+platform] = prv
 					mu.Unlock()
 					return nil
 				})
@@ -154,4 +179,55 @@ func encodeProvenance(dt []byte, mode confutil.MetadataProvenanceMode) (string, 
 		return "", errors.Wrapf(err, "failed to marshal provenance")
 	}
 	return base64.StdEncoding.EncodeToString(dtprv), nil
+}
+
+func setRecordStatus(ctx context.Context, c *client.Client, ref string, updateExporterResponse func(key string, value string), pw progress.Writer) error {
+	mode := confutil.MetadataStatus()
+	if mode == confutil.MetadataStatusModeDisabled {
+		return nil
+	}
+	pw = progress.ResetTime(pw)
+	return progress.Wrap("resolving status for metadata file", pw.Write, func(l progress.SubLogger) error {
+		status, err := fetchStatus(ctx, c, ref)
+		if err != nil {
+			return err
+		} else if status == nil {
+			return nil
+		}
+
+		if mode == confutil.MetadataStatusModeWarnings {
+			if len(status.Warnings) == 0 {
+				return nil
+			}
+			// we just want warnings
+			status.Vertexes = nil
+			status.Statuses = nil
+			status.Logs = nil
+		}
+
+		dt, err := json.Marshal(status)
+		if err != nil {
+			return errors.Wrapf(err, "failed to marshal status")
+		}
+
+		updateExporterResponse(refMetadataBuildxStatus, base64.StdEncoding.EncodeToString(dt))
+		return nil
+	})
+}
+
+func fetchStatus(ctx context.Context, c *client.Client, ref string) (*client.SolveStatus, error) {
+	cl, err := c.ControlClient().Status(ctx, &controlapi.StatusRequest{
+		Ref: ref,
+	})
+	if err != nil {
+		return nil, err
+	}
+	resp, err := cl.Recv()
+	if err != nil {
+		if err == io.EOF {
+			return nil, nil
+		}
+		return nil, errors.Wrap(err, "failed to receive status")
+	}
+	return client.NewSolveStatus(resp), nil
 }
