@@ -4,6 +4,7 @@ set -eu -o pipefail
 
 : "${BUILDX_CMD=docker buildx}"
 
+: "${TEST_COVERAGE=}"
 : "${TEST_IMAGE_BUILD=1}"
 : "${TEST_IMAGE_ID=buildx-tests}"
 
@@ -22,7 +23,7 @@ testReportsDir="$(pwd)/bin/testreports"
 mkdir -p "$testReportsDir"
 testReportsVol="-v $testReportsDir:/testreports"
 gotestsumArgs="--format=standard-verbose --jsonfile=/testreports/go-test-report$TEST_REPORT_SUFFIX.json --junitfile=/testreports/junit-report$TEST_REPORT_SUFFIX.xml"
-gotestArgs="-mod=vendor -coverprofile=/testreports/coverage-report$TEST_REPORT_SUFFIX.txt -covermode=atomic"
+gotestArgs="-mod=vendor"
 
 cacheVolume="buildx-test-cache"
 if ! docker container inspect "$cacheVolume" >/dev/null 2>/dev/null; then
@@ -32,5 +33,23 @@ if [ "$TEST_KEEP_CACHE" != "1" ]; then
   trap 'docker rm -v $cacheVolume' EXIT
 fi
 
-cid=$(docker create --rm -v /tmp $testReportsVol --volumes-from=$cacheVolume -e GITHUB_REF -e TEST_DOCKERD -e TEST_BUILDKIT_IMAGE -e TEST_BUILDKIT_TAG -e TEST_BUILDX_EXPERIMENTAL -e SKIP_INTEGRATION_TESTS -e GOTESTSUM_FORMAT ${BUILDKIT_INTEGRATION_SNAPSHOTTER:+"-eBUILDKIT_INTEGRATION_SNAPSHOTTER"} -e BUILDKIT_REGISTRY_MIRROR_DIR=/root/.cache/registry --privileged $TEST_IMAGE_ID gotestsum $gotestsumArgs --packages="${TESTPKGS:-./...}" -- $gotestArgs ${TESTFLAGS:--v})
+if [ "$TEST_COVERAGE" = "1" ]; then
+  export GO_TEST_COVERPROFILE="/testreports/coverage-report$TEST_REPORT_SUFFIX.txt"
+fi
+
+cid=$(docker create --rm --privileged \
+  -v /tmp $testReportsVol \
+  --volumes-from=$cacheVolume \
+  -e GITHUB_REF \
+  -e TEST_DOCKERD \
+  -e TEST_BUILDKIT_IMAGE \
+  -e TEST_BUILDKIT_TAG \
+  -e TEST_BUILDX_EXPERIMENTAL \
+  -e SKIP_INTEGRATION_TESTS \
+  -e GOTESTSUM_FORMAT \
+  -e GO_TEST_COVERPROFILE \
+  ${BUILDKIT_INTEGRATION_SNAPSHOTTER:+"-eBUILDKIT_INTEGRATION_SNAPSHOTTER"} \
+  -e BUILDKIT_REGISTRY_MIRROR_DIR=/root/.cache/registry \
+  $TEST_IMAGE_ID gotestsumandcover $gotestsumArgs --packages="${TESTPKGS:-./...}" -- $gotestArgs ${TESTFLAGS:--v})
+
 docker start -a -i $cid

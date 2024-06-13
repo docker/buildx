@@ -66,6 +66,10 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	if isExperimental() {
 		cmd.Env = append(cmd.Env, "BUILDX_EXPERIMENTAL=1")
 	}
+	if v := os.Getenv("GO_TEST_COVERPROFILE"); v != "" {
+		coverDir := filepath.Join(filepath.Dir(v), "helpers")
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+	}
 
 	return cmd
 }

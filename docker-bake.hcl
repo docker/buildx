@@ -7,6 +7,9 @@ variable "DOCS_FORMATS" {
 variable "DESTDIR" {
   default = "./bin"
 }
+variable "TEST_COVERAGE" {
+  default = null
+}
 variable "GOLANGCI_LINT_MULTIPLATFORM" {
   default = ""
 }
@@ -192,6 +195,7 @@ variable "TEST_BUILDKIT_TAG" {
 target "integration-test-base" {
   inherits = ["_common"]
   args = {
+    GO_EXTRA_FLAGS = TEST_COVERAGE == "1" ? "-cover" : null
     HTTP_PROXY = HTTP_PROXY
     HTTPS_PROXY = HTTPS_PROXY
     NO_PROXY = NO_PROXY

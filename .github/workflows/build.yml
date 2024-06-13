@@ -36,6 +36,7 @@ jobs:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       TEST_IMAGE_BUILD: "0"
       TEST_IMAGE_ID: "buildx-tests"
+      TEST_COVERAGE: "1"
     strategy:
       fail-fast: false
       matrix:
@@ -125,6 +126,7 @@ jobs:
           directory: ./bin/testreports
           flags: integration
           token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true
       -
         name: Generate annotations
         if: always()
@@ -197,6 +199,7 @@ jobs:
           env_vars: RUNNER_OS
           flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true
       -
         name: Generate annotations
         if: always()
