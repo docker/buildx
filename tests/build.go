@@ -817,7 +817,7 @@ COPy --from=base \
 		stderr := bytes.Buffer{}
 		cmd.Stdout = &stdout
 		cmd.Stderr = &stderr
-		require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
 
 		var res lint.LintResults
 		require.NoError(t, json.Unmarshal(stdout.Bytes(), &res))
