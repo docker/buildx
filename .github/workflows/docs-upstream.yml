@@ -34,7 +34,7 @@ jobs:
           version: latest
       -
         name: Build reference YAML docs
-        uses: docker/bake-action@v4
+        uses: docker/bake-action@v5
         with:
           targets: update-docs
           provenance: false

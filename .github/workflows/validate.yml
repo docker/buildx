@@ -91,7 +91,7 @@ jobs:
           version: latest
       -
         name: Validate
-        uses: docker/bake-action@v4
+        uses: docker/bake-action@v5
         with:
           targets: ${{ matrix.target }}
           set: |
