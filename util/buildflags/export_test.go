@@ -5,7 +5,6 @@ import (
 	"slices"
 	"testing"
 
-	gocmp "github.com/google/go-cmp/cmp"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
@@ -86,33 +85,35 @@ func TestParseAnnotations(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
-			got, gotErr := ParseAnnotations(test.in)
+			got, err := ParseAnnotations(test.in)
 			if test.wantErr != "" {
-				require.ErrorContains(t, gotErr, test.wantErr)
+				require.ErrorContains(t, err, test.wantErr)
 			} else {
-				assert.NoError(t, gotErr)
+				require.NoError(t, err)
 			}
 
 			// Can't compare maps with pointer in their keys, need to extract and sort the map entries
-			type kv struct {
-				Key exptypes.AnnotationKey
-				Val string
-			}
-			var wantKVs, gotKVs []kv
-			for k, v := range test.want {
-				wantKVs = append(wantKVs, kv{k, v})
-			}
-			for k, v := range got {
-				gotKVs = append(gotKVs, kv{k, v})
-			}
+			wantKVs := entries(test.want)
+			gotKVs := entries(got)
 
-			sortFunc := func(a, b kv) int { return cmp.Compare(a.Key.String(), b.Key.String()) }
-			slices.SortFunc(wantKVs, sortFunc)
-			slices.SortFunc(gotKVs, sortFunc)
-
-			if diff := gocmp.Diff(wantKVs, gotKVs); diff != "" {
-				t.Error(diff)
-			}
+			assert.Equal(t, wantKVs, gotKVs)
 		})
 	}
+}
+
+type kv struct {
+	Key exptypes.AnnotationKey
+	Val string
+}
+
+func entries(in map[exptypes.AnnotationKey]string) []kv {
+	var out []kv
+	for k, v := range in {
+		out = append(out, kv{k, v})
+	}
+
+	sortFunc := func(a, b kv) int { return cmp.Compare(a.Key.String(), b.Key.String()) }
+	slices.SortFunc(out, sortFunc)
+
+	return out
 }
