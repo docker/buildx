@@ -866,7 +866,34 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 	case "subrequests.describe":
 		return printValue(subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
 	case "lint":
-		return printValue(lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
+		err := printValue(lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
+		if err != nil {
+			return err
+		}
+
+		lintResults := lint.LintResults{}
+		if result, ok := res["result.json"]; ok {
+			if err := json.Unmarshal([]byte(result), &lintResults); err != nil {
+				return err
+			}
+		}
+		if lintResults.Error != nil {
+			// Print the error message and the source
+			// Normally, we would use `errdefs.WithSource` to attach the source to the
+			// error and let the error be printed by the handling that's already in place,
+			// but here we want to print the error in a way that's consistent with how
+			// the lint warnings are printed via the `lint.PrintLintViolations` function,
+			// which differs from the default error printing.
+			fmt.Println()
+			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message + "\n"))
+			sourceInfo := lintResults.Sources[lintResults.Error.Location.SourceIndex]
+			source := errdefs.Source{
+				Info:   sourceInfo,
+				Ranges: lintResults.Error.Location.Ranges,
+			}
+			source.Print(lintBuf)
+			return errors.New(lintBuf.String())
+		}
 	default:
 		if dt, ok := res["result.json"]; ok && f.Format == "json" {
 			fmt.Println(dt)
