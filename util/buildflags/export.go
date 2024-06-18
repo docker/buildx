@@ -81,8 +81,10 @@ func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 
 func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 	// TODO: use buildkit's annotation parser once it supports setting custom prefix and ":" separator
-	annotationRegexp := regexp.MustCompile(`^((?:[a-z-]+(?:\[[A-Za-z0-9_/-]+\])?)(?:,[a-z-]+(?:\[[A-Za-z0-9_/-]+\])?)*:)?(\S+)$`)
+
+	// type followed by optional platform specifier in square brackets
 	annotationTypeRegexp := regexp.MustCompile(`^([a-z-]+)(?:\[([A-Za-z0-9_/-]+)\])?$`)
+
 	annotations := make(map[exptypes.AnnotationKey]string)
 	for _, inp := range inp {
 		k, v, ok := strings.Cut(inp, "=")
@@ -90,27 +92,33 @@ func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 			return nil, errors.Errorf("invalid annotation %q, expected key=value", inp)
 		}
 
-		groups := annotationRegexp.FindStringSubmatch(k)
-		if groups == nil {
-			return nil, errors.Errorf("invalid annotation format, expected <type>:<key>=<value>, got %q", inp)
-		}
+		types, key, ok := strings.Cut(k, ":")
+		if !ok {
+			// no types specified, swap Cut outputs
+			key = types
 
-		types, key := groups[1], groups[2]
-
-		if types == "" {
 			ak := exptypes.AnnotationKey{Key: key}
 			annotations[ak] = v
 			continue
 		}
 
-		typesSplit := strings.Split(strings.TrimSuffix(types, ":"), ",")
+		typesSplit := strings.Split(types, ",")
 		for _, typeAndPlatform := range typesSplit {
 			groups := annotationTypeRegexp.FindStringSubmatch(typeAndPlatform)
+			if groups == nil {
+				return nil, errors.Errorf(
+					"invalid annotation type %q, expected type and optional platform in square brackets",
+					typeAndPlatform)
+			}
+
 			typ, platform := groups[1], groups[2]
 
 			switch typ {
 			case "":
-			case exptypes.AnnotationIndex, exptypes.AnnotationIndexDescriptor, exptypes.AnnotationManifest, exptypes.AnnotationManifestDescriptor:
+			case exptypes.AnnotationIndex,
+				exptypes.AnnotationIndexDescriptor,
+				exptypes.AnnotationManifest,
+				exptypes.AnnotationManifestDescriptor:
 			default:
 				return nil, errors.Errorf("unknown annotation type %q", typ)
 			}
