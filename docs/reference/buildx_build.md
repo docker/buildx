@@ -451,6 +451,9 @@ Attribute key:
 
 - `dest` - destination directory where files will be written
 
+For more information, see
+[Local and tar exporters](https://docs.docker.com/build/exporters/local-tar/).
+
 #### `tar`
 
 The `tar` export type writes all result files as a single tarball on the client.
@@ -459,6 +462,9 @@ On multi-platform builds all results will be put in subdirectories by their plat
 Attribute key:
 
 - `dest` - destination path where tarball will be written. “-” writes to stdout.
+
+For more information, see
+[Local and tar exporters](https://docs.docker.com/build/exporters/local-tar/).
 
 #### `oci`
 
@@ -469,6 +475,9 @@ tarball on the client.
 Attribute key:
 
 - `dest` - destination path where tarball will be written. “-” writes to stdout.
+
+For more information, see
+[OCI and Docker exporters](https://docs.docker.com/build/exporters/oci-docker/).
 
 #### `docker`
 
@@ -486,6 +495,9 @@ Attribute keys:
   the tar will be loaded automatically to the local image store.
 - `context` - name for the Docker context where to import the result
 
+For more information, see
+[OCI and Docker exporters](https://docs.docker.com/build/exporters/oci-docker/).
+
 #### `image`
 
 The `image` exporter writes the build result as an image or a manifest list. When
@@ -497,9 +509,15 @@ Attribute keys:
 - `name` - name (references) for the new image.
 - `push` - Boolean to automatically push the image.
 
+For more information, see
+[Image and registry exporters](https://docs.docker.com/build/exporters/image-registry/).
+
 #### `registry`
 
 The `registry` exporter is a shortcut for `type=image,push=true`.
+
+For more information, see
+[Image and registry exporters](https://docs.docker.com/build/exporters/image-registry/).
 
 ### <a name="platform"></a> Set the target platforms for the build (--platform)
 
