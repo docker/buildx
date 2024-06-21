@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/aws/aws-sdk-go-v2/config v1.26.6
-	github.com/compose-spec/compose-go/v2 v2.1.2
+	github.com/compose-spec/compose-go/v2 v2.1.3
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.18
 	github.com/containerd/continuity v0.4.3
@@ -117,10 +117,8 @@ require (
 	github.com/mattn/go-shellwords v1.0.12 // indirect
 	github.com/matttproud/golang_protobuf_extensions v1.0.4 // indirect
 	github.com/miekg/pkcs11 v1.1.1 // indirect
-	github.com/mitchellh/copystructure v1.2.0 // indirect
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
 	github.com/mitchellh/mapstructure v1.5.0 // indirect
-	github.com/mitchellh/reflectwalk v1.0.2 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/locker v1.0.1 // indirect
 	github.com/moby/patternmatcher v0.6.0 // indirect
