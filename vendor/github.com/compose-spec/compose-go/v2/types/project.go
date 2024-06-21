@@ -29,7 +29,6 @@ import (
 	"github.com/compose-spec/compose-go/v2/errdefs"
 	"github.com/compose-spec/compose-go/v2/utils"
 	"github.com/distribution/reference"
-	"github.com/mitchellh/copystructure"
 	godigest "github.com/opencontainers/go-digest"
 	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
@@ -646,11 +645,13 @@ func (p Project) WithServicesEnvironmentResolved(discardEnvFiles bool) (*Project
 }
 
 func (p *Project) deepCopy() *Project {
-	instance, err := copystructure.Copy(p)
-	if err != nil {
-		panic(err)
+	if p == nil {
+		return nil
 	}
-	return instance.(*Project)
+	n := &Project{}
+	deriveDeepCopyProject(n, p)
+	return n
+
 }
 
 // WithServicesTransform applies a transformation to project services and return a new project with transformation results

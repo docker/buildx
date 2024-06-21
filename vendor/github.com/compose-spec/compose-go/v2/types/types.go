@@ -24,7 +24,6 @@ import (
 	"strings"
 
 	"github.com/docker/go-connections/nat"
-	"github.com/mitchellh/copystructure"
 )
 
 // ServiceConfig is the configuration of one service
@@ -194,11 +193,12 @@ func (s *ServiceConfig) SetScale(scale int) {
 }
 
 func (s *ServiceConfig) deepCopy() *ServiceConfig {
-	instance, err := copystructure.Copy(s)
-	if err != nil {
-		panic(err)
+	if s == nil {
+		return nil
 	}
-	return instance.(*ServiceConfig)
+	n := &ServiceConfig{}
+	deriveDeepCopyService(n, s)
+	return n
 }
 
 const (
@@ -698,7 +698,7 @@ type NetworkConfig struct {
 	Internal   bool       `yaml:"internal,omitempty" json:"internal,omitempty"`
 	Attachable bool       `yaml:"attachable,omitempty" json:"attachable,omitempty"`
 	Labels     Labels     `yaml:"labels,omitempty" json:"labels,omitempty"`
-	EnableIPv6 bool       `yaml:"enable_ipv6,omitempty" json:"enable_ipv6,omitempty"`
+	EnableIPv6 *bool      `yaml:"enable_ipv6,omitempty" json:"enable_ipv6,omitempty"`
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 
@@ -711,11 +711,11 @@ type IPAMConfig struct {
 
 // IPAMPool for a network
 type IPAMPool struct {
-	Subnet             string                 `yaml:"subnet,omitempty" json:"subnet,omitempty"`
-	Gateway            string                 `yaml:"gateway,omitempty" json:"gateway,omitempty"`
-	IPRange            string                 `yaml:"ip_range,omitempty" json:"ip_range,omitempty"`
-	AuxiliaryAddresses Mapping                `yaml:"aux_addresses,omitempty" json:"aux_addresses,omitempty"`
-	Extensions         map[string]interface{} `yaml:",inline" json:"-"`
+	Subnet             string     `yaml:"subnet,omitempty" json:"subnet,omitempty"`
+	Gateway            string     `yaml:"gateway,omitempty" json:"gateway,omitempty"`
+	IPRange            string     `yaml:"ip_range,omitempty" json:"ip_range,omitempty"`
+	AuxiliaryAddresses Mapping    `yaml:"aux_addresses,omitempty" json:"aux_addresses,omitempty"`
+	Extensions         Extensions `yaml:",inline" json:"-"`
 }
 
 // VolumeConfig for a volume

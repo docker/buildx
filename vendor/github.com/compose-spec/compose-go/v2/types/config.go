@@ -100,7 +100,13 @@ type Secrets map[string]SecretConfig
 type Configs map[string]ConfigObjConfig
 
 // Extensions is a map of custom extension
-type Extensions map[string]interface{}
+type Extensions map[string]any
+
+func (e Extensions) DeepCopy(t Extensions) {
+	for k, v := range e {
+		t[k] = v
+	}
+}
 
 // MarshalJSON makes Config implement json.Marshaler
 func (c Config) MarshalJSON() ([]byte, error) {
