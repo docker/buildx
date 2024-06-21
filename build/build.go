@@ -61,6 +61,7 @@ type Options struct {
 
 	Ref           string
 	Allow         []entitlements.Entitlement
+	Annotations   map[exptypes.AnnotationKey]string
 	Attests       map[string]*string
 	BuildArgs     map[string]string
 	CacheFrom     []client.CacheOptionsEntry
@@ -607,7 +608,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 								}
 							}
 
-							dt, desc, err := itpull.Combine(ctx, srcs, nil, false)
+							filteredAnnotations := filterIndexAnnotations(opt.Annotations)
+							dt, desc, err := itpull.Combine(ctx, srcs, filteredAnnotations, false)
 							if err != nil {
 								return err
 							}
@@ -653,6 +655,17 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	}
 
 	return resp, nil
+}
+
+func filterIndexAnnotations(annotations map[exptypes.AnnotationKey]string) map[exptypes.AnnotationKey]string {
+	filteredAnnotations := map[exptypes.AnnotationKey]string{}
+	for k, v := range annotations {
+		switch k.Type {
+		case exptypes.AnnotationIndex, exptypes.AnnotationManifestDescriptor:
+			filteredAnnotations[k] = v
+		}
+	}
+	return filteredAnnotations
 }
 
 func pushWithMoby(ctx context.Context, d *driver.DriverHandle, name string, l progress.SubLogger) error {
