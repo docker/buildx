@@ -45,6 +45,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeUlimits,
 	testBakeMetadataProvenance,
 	testBakeMetadataWarnings,
+	testBakeMetadataWarningsDedup,
 	testBakeMultiExporters,
 	testBakeLoadPush,
 }
@@ -771,6 +772,65 @@ target "default" {
 		require.Empty(t, md.BuildWarnings, string(dt))
 		return
 	}
+
+	skipNoCompatBuildKit(t, sb, ">= 0.14.0-0", "lint")
+	require.Len(t, md.BuildWarnings, 3, string(dt))
+}
+
+func testBakeMetadataWarningsDedup(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+frOM busybox as base
+cOpy Dockerfile .
+from scratch
+COPy --from=base \
+  /Dockerfile \
+  /
+	`)
+	bakefile := []byte(`
+group "default" {
+  targets = ["base", "def"]
+}
+target "base" {
+  target = "base"
+}
+target "def" {
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	dirDest := t.TempDir()
+
+	cmd := buildxCmd(
+		sb,
+		withDir(dir),
+		withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", "*.output=type=cacheonly"),
+		withEnv("BUILDX_METADATA_WARNINGS=true"),
+	)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildWarnings []client.VertexWarning `json:"buildx.build.warnings"`
+		Base          struct {
+			BuildRef string `json:"buildx.build.ref"`
+		} `json:"base"`
+		Def struct {
+			BuildRef string `json:"buildx.build.ref"`
+		} `json:"def"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err, string(dt))
+
+	require.NotEmpty(t, md.Base.BuildRef, string(dt))
+	require.NotEmpty(t, md.Def.BuildRef, string(dt))
 
 	skipNoCompatBuildKit(t, sb, ">= 0.14.0-0", "lint")
 	require.Len(t, md.BuildWarnings, 3, string(dt))
