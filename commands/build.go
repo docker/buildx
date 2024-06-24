@@ -206,7 +206,11 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		return nil, err
 	}
 
-	opts.WithProvenanceResponse = opts.PrintFunc == nil && len(o.metadataFile) > 0
+	prm := confutil.MetadataProvenance()
+	if opts.PrintFunc != nil || len(o.metadataFile) == 0 {
+		prm = confutil.MetadataProvenanceModeDisabled
+	}
+	opts.ProvenanceResponseMode = string(prm)
 
 	return &opts, nil
 }

@@ -18,6 +18,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
@@ -82,7 +83,7 @@ type Options struct {
 	Session                []session.Attachable
 	Linked                 bool // Linked marks this target as exclusively linked (not requested by the user).
 	PrintFunc              *PrintFunc
-	WithProvenanceResponse bool
+	ProvenanceResponseMode confutil.MetadataProvenanceMode
 	SourcePolicy           *spb.Policy
 	GroupRef               string
 }
@@ -473,8 +474,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						rr.ExporterResponse[k] = string(v)
 					}
 					rr.ExporterResponse["buildx.build.ref"] = buildRef
-					if opt.WithProvenanceResponse && node.Driver.HistoryAPISupported(ctx) {
-						if err := setRecordProvenance(ctx, c, rr, so.Ref, pw); err != nil {
+					if node.Driver.HistoryAPISupported(ctx) {
+						if err := setRecordProvenance(ctx, c, rr, so.Ref, opt.ProvenanceResponseMode, pw); err != nil {
 							return err
 						}
 					}

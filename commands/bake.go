@@ -202,12 +202,17 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return nil
 	}
 
+	prm := confutil.MetadataProvenance()
+	if len(in.metadataFile) == 0 {
+		prm = confutil.MetadataProvenanceModeDisabled
+	}
+
 	groupRef := identity.NewID()
 	var refs []string
 	for k, b := range bo {
 		b.Ref = identity.NewID()
 		b.GroupRef = groupRef
-		b.WithProvenanceResponse = len(in.metadataFile) > 0
+		b.ProvenanceResponseMode = prm
 		refs = append(refs, b.Ref)
 		bo[k] = b
 	}

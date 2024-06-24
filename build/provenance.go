@@ -29,8 +29,7 @@ type provenanceBuilder struct {
 	ID string `json:"id,omitempty"`
 }
 
-func setRecordProvenance(ctx context.Context, c *client.Client, sr *client.SolveResponse, ref string, pw progress.Writer) error {
-	mode := confutil.MetadataProvenance()
+func setRecordProvenance(ctx context.Context, c *client.Client, sr *client.SolveResponse, ref string, mode confutil.MetadataProvenanceMode, pw progress.Writer) error {
 	if mode == confutil.MetadataProvenanceModeDisabled {
 		return nil
 	}
