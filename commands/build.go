@@ -885,7 +885,10 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 			// the lint warnings are printed via the `lint.PrintLintViolations` function,
 			// which differs from the default error printing.
 			fmt.Println()
-			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message + "\n"))
+			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message))
+			if f.Format != "json" {
+				fmt.Fprintln(lintBuf)
+			}
 			sourceInfo := lintResults.Sources[lintResults.Error.Location.SourceIndex]
 			source := errdefs.Source{
 				Info:   sourceInfo,
@@ -893,6 +896,8 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 			}
 			source.Print(lintBuf)
 			return errors.New(lintBuf.String())
+		} else if len(lintResults.Warnings) == 0 && f.Format != "json" {
+			fmt.Println("Check complete, no warnings found.")
 		}
 	default:
 		if dt, ok := res["result.json"]; ok && f.Format == "json" {
