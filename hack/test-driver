@@ -109,21 +109,21 @@ buildxCmd inspect --bootstrap --builder="${builderName}"
 
 # create dockerfile
 cat > "${dockerfile}" <<EOL
-FROM busybox as build
+fRom busybox as build
 ARG TARGETPLATFORM
 ARG BUILDPLATFORM
 RUN echo "I am running on \$BUILDPLATFORM, building for \$TARGETPLATFORM" > /log
 
-FROM busybox AS log
+FROM busybox As log
 COPY --from=build /log /log
 RUN cat /log
 RUN uname -a
 
-FROM busybox AS hello
+FROm busybox AS hello
 RUN echo hello > /hello
 
 FROM scratch
-COPY --from=log /log /log
+CoPY --from=log /log /log
 COPY --from=hello /hello /hello
 EOL
 

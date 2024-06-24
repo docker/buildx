@@ -9,6 +9,7 @@ import (
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/util/gitutil"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/contentutil"
@@ -42,7 +43,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeEmpty,
 	testBakeShmSize,
 	testBakeUlimits,
-	testBakeMetadata,
+	testBakeMetadataProvenance,
+	testBakeMetadataWarnings,
 	testBakeMultiExporters,
 	testBakeLoadPush,
 }
@@ -633,19 +635,22 @@ target "default" {
 	require.Contains(t, string(dt), `1024`)
 }
 
-func testBakeMetadata(t *testing.T, sb integration.Sandbox) {
+func testBakeMetadataProvenance(t *testing.T, sb integration.Sandbox) {
+	t.Run("default", func(t *testing.T) {
+		bakeMetadataProvenance(t, sb, "")
+	})
 	t.Run("max", func(t *testing.T) {
-		bakeMetadata(t, sb, "max")
+		bakeMetadataProvenance(t, sb, "max")
 	})
 	t.Run("min", func(t *testing.T) {
-		bakeMetadata(t, sb, "min")
+		bakeMetadataProvenance(t, sb, "min")
 	})
 	t.Run("disabled", func(t *testing.T) {
-		bakeMetadata(t, sb, "disabled")
+		bakeMetadataProvenance(t, sb, "disabled")
 	})
 }
 
-func bakeMetadata(t *testing.T, sb integration.Sandbox, metadataMode string) {
+func bakeMetadataProvenance(t *testing.T, sb integration.Sandbox, metadataMode string) {
 	dockerfile := []byte(`
 FROM scratch
 COPY foo /foo
@@ -676,7 +681,7 @@ target "default" {
 		withEnv("BUILDX_METADATA_PROVENANCE="+metadataMode),
 	)
 	out, err := cmd.CombinedOutput()
-	require.NoError(t, err, out)
+	require.NoError(t, err, string(out))
 
 	dt, err := os.ReadFile(filepath.Join(dirDest, "md.json"))
 	require.NoError(t, err)
@@ -704,6 +709,71 @@ target "default" {
 	var prv provenancetypes.ProvenancePredicate
 	require.NoError(t, json.Unmarshal(dtprv, &prv))
 	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
+}
+
+func testBakeMetadataWarnings(t *testing.T, sb integration.Sandbox) {
+	t.Run("default", func(t *testing.T) {
+		bakeMetadataWarnings(t, sb, "")
+	})
+	t.Run("true", func(t *testing.T) {
+		bakeMetadataWarnings(t, sb, "true")
+	})
+	t.Run("false", func(t *testing.T) {
+		bakeMetadataWarnings(t, sb, "false")
+	})
+}
+
+func bakeMetadataWarnings(t *testing.T, sb integration.Sandbox, mode string) {
+	dockerfile := []byte(`
+frOM busybox as base
+cOpy Dockerfile .
+from scratch
+COPy --from=base \
+  /Dockerfile \
+  /
+	`)
+	bakefile := []byte(`
+target "default" {
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	dirDest := t.TempDir()
+
+	cmd := buildxCmd(
+		sb,
+		withDir(dir),
+		withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", "*.output=type=cacheonly"),
+		withEnv("BUILDX_METADATA_WARNINGS="+mode),
+	)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildWarnings []client.VertexWarning `json:"buildx.build.warnings"`
+		Default       struct {
+			BuildRef string `json:"buildx.build.ref"`
+		} `json:"default"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err, string(dt))
+
+	require.NotEmpty(t, md.Default.BuildRef, string(dt))
+	if mode == "" || mode == "false" {
+		require.Empty(t, md.BuildWarnings, string(dt))
+		return
+	}
+
+	skipNoCompatBuildKit(t, sb, ">= 0.14.0-0", "lint")
+	require.Len(t, md.BuildWarnings, 3, string(dt))
 }
 
 func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {
