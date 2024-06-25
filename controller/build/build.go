@@ -67,7 +67,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		Target:                 in.Target,
 		Ulimits:                controllerUlimitOpt2DockerUlimit(in.Ulimits),
 		GroupRef:               in.GroupRef,
-		WithProvenanceResponse: in.WithProvenanceResponse,
+		ProvenanceResponseMode: confutil.ParseMetadataProvenance(in.ProvenanceResponseMode),
 	}
 
 	platforms, err := platformutil.Parse(in.Platforms)
