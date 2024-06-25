@@ -758,6 +758,19 @@ services:
 	require.NoError(t, err)
 }
 
+func TestCgroup(t *testing.T) {
+	var dt = []byte(`
+services:
+  scratch:
+    build:
+     context: ./webapp
+    cgroup: private
+`)
+
+	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
