@@ -890,7 +890,7 @@ func printResult(w io.Writer, f *controllerapi.PrintFunc, res map[string]string)
 			// but here we want to print the error in a way that's consistent with how
 			// the lint warnings are printed via the `lint.PrintLintViolations` function,
 			// which differs from the default error printing.
-			if f.Format != "json" {
+			if f.Format != "json" && len(lintResults.Warnings) > 0 {
 				fmt.Fprintln(w)
 			}
 			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message + "\n"))

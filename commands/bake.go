@@ -337,11 +337,16 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			}
 		} else {
 			if sep {
-				fmt.Fprintf(dockerCli.Out(), "\n\n")
+				fmt.Fprintln(dockerCli.Out())
 			} else {
 				sep = true
 			}
 			fmt.Fprintf(dockerCli.Out(), "%s\n", name)
+			if descr := tgts[name].Description; descr != "" {
+				fmt.Fprintf(dockerCli.Out(), "%s\n", descr)
+			}
+
+			fmt.Fprintln(dockerCli.Out())
 			if code, err := printResult(dockerCli.Out(), pf, res); err != nil {
 				fmt.Fprintf(dockerCli.Out(), "error: %v\n", err)
 				exitCode = 1
