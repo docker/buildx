@@ -9,7 +9,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -369,8 +368,10 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		}
 	}
 	if opts.PrintFunc != nil {
-		if err := printResult(opts.PrintFunc, resp.ExporterResponse); err != nil {
+		if exitcode, err := printResult(dockerCli.Out(), opts.PrintFunc, resp.ExporterResponse); err != nil {
 			return err
+		} else if exitcode != 0 {
+			os.Exit(exitcode)
 		}
 	} else if options.metadataFile != "" {
 		dt := decodeExporterResponse(resp.ExporterResponse)
@@ -634,7 +635,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	}
 
 	flags.StringVar(&options.printFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
-	flags.VarPF(callAlias(options, "check"), "check", "", `Shorthand for "--call=check"`)
+	flags.VarPF(callAlias(&options.printFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
 
 	// hidden flags
@@ -862,24 +863,24 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 	}
 }
 
-func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
+func printResult(w io.Writer, f *controllerapi.PrintFunc, res map[string]string) (int, error) {
 	switch f.Name {
 	case "outline":
-		return printValue(outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
+		return 0, printValue(w, outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
 	case "targets":
-		return printValue(targets.PrintTargets, targets.SubrequestsTargetsDefinition.Version, f.Format, res)
+		return 0, printValue(w, targets.PrintTargets, targets.SubrequestsTargetsDefinition.Version, f.Format, res)
 	case "subrequests.describe":
-		return printValue(subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
+		return 0, printValue(w, subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
 	case "lint":
-		err := printValue(lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
+		err := printValue(w, lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
 		if err != nil {
-			return err
+			return 0, err
 		}
 
 		lintResults := lint.LintResults{}
 		if result, ok := res["result.json"]; ok {
 			if err := json.Unmarshal([]byte(result), &lintResults); err != nil {
-				return err
+				return 0, err
 			}
 		}
 		if lintResults.Error != nil {
@@ -889,52 +890,51 @@ func printResult(f *controllerapi.PrintFunc, res map[string]string) error {
 			// but here we want to print the error in a way that's consistent with how
 			// the lint warnings are printed via the `lint.PrintLintViolations` function,
 			// which differs from the default error printing.
-			fmt.Println()
-			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message))
 			if f.Format != "json" {
-				fmt.Fprintln(lintBuf)
+				fmt.Fprintln(w)
 			}
+			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message + "\n"))
 			sourceInfo := lintResults.Sources[lintResults.Error.Location.SourceIndex]
 			source := errdefs.Source{
 				Info:   sourceInfo,
 				Ranges: lintResults.Error.Location.Ranges,
 			}
 			source.Print(lintBuf)
-			return errors.New(lintBuf.String())
+			return 0, errors.New(lintBuf.String())
 		} else if len(lintResults.Warnings) == 0 && f.Format != "json" {
-			fmt.Println("Check complete, no warnings found.")
+			fmt.Fprintln(w, "Check complete, no warnings found.")
 		}
 	default:
 		if dt, ok := res["result.json"]; ok && f.Format == "json" {
-			fmt.Println(dt)
+			fmt.Fprintln(w, dt)
 		} else if dt, ok := res["result.txt"]; ok {
-			fmt.Print(dt)
+			fmt.Fprint(w, dt)
 		} else {
-			log.Printf("%s %+v", f, res)
+			fmt.Fprintf(w, "%s %+v\n", f, res)
 		}
 	}
 	if v, ok := res["result.statuscode"]; !f.IgnoreStatus && ok {
 		if n, err := strconv.Atoi(v); err == nil && n != 0 {
-			os.Exit(n)
+			return n, nil
 		}
 	}
-	return nil
+	return 0, nil
 }
 
 type printFunc func([]byte, io.Writer) error
 
-func printValue(printer printFunc, version string, format string, res map[string]string) error {
+func printValue(w io.Writer, printer printFunc, version string, format string, res map[string]string) error {
 	if format == "json" {
-		fmt.Fprintln(os.Stdout, res["result.json"])
+		fmt.Fprintln(w, res["result.json"])
 		return nil
 	}
 
 	if res["version"] != "" && versions.LessThan(version, res["version"]) && res["result.txt"] != "" {
 		// structure is too new and we don't know how to print it
-		fmt.Fprint(os.Stdout, res["result.txt"])
+		fmt.Fprint(w, res["result.txt"])
 		return nil
 	}
-	return printer([]byte(res["result.json"]), os.Stdout)
+	return printer([]byte(res["result.json"]), w)
 }
 
 type invokeConfig struct {
@@ -1042,7 +1042,7 @@ func maybeJSONArray(v string) []string {
 	return []string{v}
 }
 
-func callAlias(options *buildOptions, value string) cobrautil.BoolFuncValue {
+func callAlias(target *string, value string) cobrautil.BoolFuncValue {
 	return func(s string) error {
 		v, err := strconv.ParseBool(s)
 		if err != nil {
@@ -1050,7 +1050,7 @@ func callAlias(options *buildOptions, value string) cobrautil.BoolFuncValue {
 		}
 
 		if v {
-			options.printFunc = value
+			*target = value
 		}
 		return nil
 	}

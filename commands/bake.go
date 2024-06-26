@@ -1,11 +1,13 @@
 package commands
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
 
 	"github.com/containerd/console"
@@ -13,6 +15,7 @@ import (
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
@@ -40,6 +43,7 @@ type bakeOptions struct {
 	metadataFile string
 	exportPush   bool
 	exportLoad   bool
+	callFunc     string
 }
 
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
@@ -71,12 +75,20 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		targets = []string{"default"}
 	}
 
+	callFunc, err := buildflags.ParsePrintFunc(in.callFunc)
+	if err != nil {
+		return err
+	}
+
 	overrides := in.overrides
 	if in.exportPush {
 		overrides = append(overrides, "*.push=true")
 	}
 	if in.exportLoad {
 		overrides = append(overrides, "*.load=true")
+	}
+	if callFunc != nil {
+		overrides = append(overrides, fmt.Sprintf("*.call=%s", callFunc.Name))
 	}
 	if cFlags.noCache != nil {
 		overrides = append(overrides, fmt.Sprintf("*.no-cache=%t", *cFlags.noCache))
@@ -146,19 +158,19 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			if err != nil {
 				return
 			}
-			if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
-				desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
+		}
+		if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
+			desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
+		}
+		if resp != nil && len(in.metadataFile) > 0 {
+			dt := make(map[string]interface{})
+			for t, r := range resp {
+				dt[t] = decodeExporterResponse(r.ExporterResponse)
 			}
-			if resp != nil && len(in.metadataFile) > 0 {
-				dt := make(map[string]interface{})
-				for t, r := range resp {
-					dt[t] = decodeExporterResponse(r.ExporterResponse)
-				}
-				if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
-					dt["buildx.build.warnings"] = warnings
-				}
-				err = writeMetadataFile(in.metadataFile, dt)
+			if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
+				dt["buildx.build.warnings"] = warnings
 			}
+			err = writeMetadataFile(in.metadataFile, dt)
 		}
 	}()
 
@@ -222,6 +234,16 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return nil
 	}
 
+	for _, opt := range bo {
+		if opt.PrintFunc != nil {
+			cf, err := buildflags.ParsePrintFunc(opt.PrintFunc.Name)
+			if err != nil {
+				return err
+			}
+			opt.PrintFunc.Name = cf.Name
+		}
+	}
+
 	prm := confutil.MetadataProvenance()
 	if len(in.metadataFile) == 0 {
 		prm = confutil.MetadataProvenanceModeDisabled
@@ -254,7 +276,113 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return wrapBuildError(err, true)
 	}
 
-	return
+	err = printer.Wait()
+	printer = nil
+	if err != nil {
+		return err
+	}
+
+	var callFormatJSON bool
+	var jsonResults = map[string]map[string]any{}
+	if callFunc != nil {
+		callFormatJSON = callFunc.Format == "json"
+	}
+	var sep bool
+	var exitCode int
+
+	names := make([]string, 0, len(bo))
+	for name := range bo {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+	for _, name := range names {
+		req := bo[name]
+		if req.PrintFunc == nil {
+			continue
+		}
+
+		pf := &pb.PrintFunc{
+			Name:         req.PrintFunc.Name,
+			Format:       req.PrintFunc.Format,
+			IgnoreStatus: req.PrintFunc.IgnoreStatus,
+		}
+
+		if callFunc != nil {
+			pf.Format = callFunc.Format
+			pf.IgnoreStatus = callFunc.IgnoreStatus
+		}
+
+		var res map[string]string
+		if sp, ok := resp[name]; ok {
+			res = sp.ExporterResponse
+		}
+
+		if callFormatJSON {
+			jsonResults[name] = map[string]any{}
+			buf := &bytes.Buffer{}
+			if code, err := printResult(buf, pf, res); err != nil {
+				jsonResults[name]["error"] = err.Error()
+				exitCode = 1
+			} else if code != 0 && exitCode == 0 {
+				exitCode = code
+			}
+			m := map[string]*json.RawMessage{}
+			if err := json.Unmarshal(buf.Bytes(), &m); err == nil {
+				for k, v := range m {
+					jsonResults[name][k] = v
+				}
+			} else {
+				jsonResults[name][pf.Name] = json.RawMessage(buf.Bytes())
+			}
+		} else {
+			if sep {
+				fmt.Fprintf(dockerCli.Out(), "\n\n")
+			} else {
+				sep = true
+			}
+			fmt.Fprintf(dockerCli.Out(), "%s\n", name)
+			if code, err := printResult(dockerCli.Out(), pf, res); err != nil {
+				fmt.Fprintf(dockerCli.Out(), "error: %v\n", err)
+				exitCode = 1
+			} else if code != 0 && exitCode == 0 {
+				exitCode = code
+			}
+		}
+	}
+	if callFormatJSON {
+		out := struct {
+			Group  map[string]*bake.Group    `json:"group,omitempty"`
+			Target map[string]map[string]any `json:"target"`
+		}{
+			Group:  grps,
+			Target: map[string]map[string]any{},
+		}
+
+		for name, def := range tgts {
+			out.Target[name] = map[string]any{
+				"build": def,
+			}
+			if res, ok := jsonResults[name]; ok {
+				printName := bo[name].PrintFunc.Name
+				if printName == "lint" {
+					printName = "check"
+				}
+				out.Target[name][printName] = res
+			}
+		}
+		dt, err := json.MarshalIndent(out, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(dockerCli.Out(), string(dt))
+	}
+
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+
+	return nil
 }
 
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -290,6 +418,9 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
+	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
+	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
+	flags.Lookup("check").NoOptDefVal = "true"
 
 	commonBuildFlags(&cFlags, flags)
 

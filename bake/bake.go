@@ -702,7 +702,8 @@ type Target struct {
 	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
 	Ulimits          []string           `json:"ulimits,omitempty" hcl:"ulimits,optional"`
-	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/bake-reference.md.
+	Call             *string            `json:"call,omitempty" hcl:"call,optional" cty:"call"`
+	// IMPORTANT: if you add more fields here, do not forget to update newOverrides/AddOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
 	linked bool
@@ -775,6 +776,9 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.Target != nil {
 		t.Target = t2.Target
+	}
+	if t2.Call != nil {
+		t.Call = t2.Call
 	}
 	if t2.Annotations != nil { // merge
 		t.Annotations = append(t.Annotations, t2.Annotations...)
@@ -863,6 +867,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.CacheTo = o.ArrValue
 		case "target":
 			t.Target = &value
+		case "call":
+			t.Call = &value
 		case "secrets":
 			t.Secrets = o.ArrValue
 		case "ssh":
@@ -1296,6 +1302,12 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 	if t.Target != nil {
 		bo.Target = *t.Target
+	}
+
+	if t.Call != nil {
+		bo.PrintFunc = &build.PrintFunc{
+			Name: *t.Call,
+		}
 	}
 
 	cacheImports, err := buildflags.ParseCacheEntry(t.CacheFrom)
