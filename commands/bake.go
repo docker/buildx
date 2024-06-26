@@ -22,6 +22,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
@@ -130,14 +131,29 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
+	var resp map[string]*client.SolveResponse
+
 	defer func() {
 		if printer != nil {
 			err1 := printer.Wait()
 			if err == nil {
 				err = err1
 			}
-			if err == nil && progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
+			if err != nil {
+				return
+			}
+			if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
 				desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
+			}
+			if resp != nil && len(in.metadataFile) > 0 {
+				dt := make(map[string]interface{})
+				for t, r := range resp {
+					dt[t] = decodeExporterResponse(r.ExporterResponse)
+				}
+				if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
+					dt["buildx.build.warnings"] = warnings
+				}
+				err = writeMetadataFile(in.metadataFile, dt)
 			}
 		}
 	}()
@@ -229,22 +245,12 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	resp, err := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, err = build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	if err != nil {
 		return wrapBuildError(err, true)
 	}
 
-	if len(in.metadataFile) > 0 {
-		dt := make(map[string]interface{})
-		for t, r := range resp {
-			dt[t] = decodeExporterResponse(r.ExporterResponse)
-		}
-		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
-			return err
-		}
-	}
-
-	return err
+	return
 }
 
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {

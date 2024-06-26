@@ -119,6 +119,7 @@ $ cat metadata.json
 
 ```json
 {
+  "buildx.build.warnings": {},
   "db": {
     "buildx.build.provenance": {},
     "buildx.build.ref": "mybuilder/mybuilder0/0fjb6ubs52xx3vygf6fgdl611",
@@ -160,6 +161,12 @@ $ cat metadata.json
 > * `min` sets minimal provenance (default).
 > * `max` sets full provenance.
 > * `disabled`, `false` or `0` does not set any provenance.
+
+> **Note**
+> 
+> Build warnings (`buildx.build.warnings`) are not included by default. Set the
+> `BUILDX_METADATA_WARNINGS` environment variable to `1` or `true` to
+> include them.
 
 ### <a name="no-cache"></a> Don't use cache when building the image (--no-cache)
 

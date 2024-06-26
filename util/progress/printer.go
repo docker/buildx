@@ -7,6 +7,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/util/logutil"
+	"github.com/mitchellh/hashstructure/v2"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
@@ -58,7 +59,7 @@ func (p *Printer) Write(s *client.SolveStatus) {
 }
 
 func (p *Printer) Warnings() []client.VertexWarning {
-	return p.warnings
+	return dedupWarnings(p.warnings)
 }
 
 func (p *Printer) ValidateLogSource(dgst digest.Digest, v interface{}) bool {
@@ -183,4 +184,27 @@ func WithOnClose(onclose func()) PrinterOpt {
 	return func(opt *printerOpts) {
 		opt.onclose = onclose
 	}
+}
+
+func dedupWarnings(inp []client.VertexWarning) []client.VertexWarning {
+	m := make(map[uint64]client.VertexWarning)
+	for _, w := range inp {
+		wcp := w
+		wcp.Vertex = ""
+		if wcp.SourceInfo != nil {
+			wcp.SourceInfo.Definition = nil
+		}
+		h, err := hashstructure.Hash(wcp, hashstructure.FormatV2, nil)
+		if err != nil {
+			continue
+		}
+		if _, ok := m[h]; !ok {
+			m[h] = w
+		}
+	}
+	res := make([]client.VertexWarning, 0, len(m))
+	for _, w := range m {
+		res = append(res, w)
+	}
+	return res
 }

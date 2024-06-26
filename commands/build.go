@@ -374,7 +374,11 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 			return err
 		}
 	} else if options.metadataFile != "" {
-		if err := writeMetadataFile(options.metadataFile, decodeExporterResponse(resp.ExporterResponse)); err != nil {
+		dt := decodeExporterResponse(resp.ExporterResponse)
+		if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
+			dt["buildx.build.warnings"] = warnings
+		}
+		if err := writeMetadataFile(options.metadataFile, dt); err != nil {
 			return err
 		}
 	}
