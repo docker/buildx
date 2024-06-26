@@ -675,7 +675,8 @@ type Group struct {
 }
 
 type Target struct {
-	Name string `json:"-" hcl:"name,label" cty:"name"`
+	Name        string `json:"-" hcl:"name,label" cty:"name"`
+	Description string `json:"description,omitempty" hcl:"description,optional" cty:"description"`
 
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
@@ -822,6 +823,9 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.Ulimits != nil { // merge
 		t.Ulimits = append(t.Ulimits, t2.Ulimits...)
+	}
+	if t2.Description != "" {
+		t.Description = t2.Description
 	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
