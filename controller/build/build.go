@@ -147,8 +147,6 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	opts.Exports = outputs
 
-	opts.Annotations = annotations
-
 	opts.CacheFrom = controllerapi.CreateCaches(in.CacheFrom)
 	opts.CacheTo = controllerapi.CreateCaches(in.CacheTo)
 
