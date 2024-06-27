@@ -2,6 +2,7 @@ package commands
 
 import (
 	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
@@ -9,6 +10,7 @@ import (
 	"os"
 	"slices"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/containerd/console"
 	"github.com/containerd/platforms"
@@ -33,11 +35,12 @@ import (
 )
 
 type bakeOptions struct {
-	files      []string
-	overrides  []string
-	printOnly  bool
-	sbom       string
-	provenance string
+	files       []string
+	overrides   []string
+	printOnly   bool
+	listTargets bool
+	sbom        string
+	provenance  string
 
 	builder      string
 	metadataFile string
@@ -183,12 +186,28 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return errors.New("couldn't find a bake definition")
 	}
 
-	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
+	defaults := map[string]string{
 		// don't forget to update documentation if you add a new
 		// built-in variable: docs/bake-reference.md#built-in-variables
 		"BAKE_CMD_CONTEXT":    cmdContext,
 		"BAKE_LOCAL_PLATFORM": platforms.Format(platforms.DefaultSpec()),
-	})
+	}
+
+	if in.listTargets {
+		cfg, err := bake.ParseFiles(files, defaults)
+		if err != nil {
+			return err
+		}
+
+		err = printer.Wait()
+		printer = nil
+		if err != nil {
+			return err
+		}
+		return printTargetList(dockerCli.Out(), cfg)
+	}
+
+	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults)
 	if err != nil {
 		return err
 	}
@@ -419,6 +438,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
 	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
+	flags.BoolVar(&options.listTargets, "list-targets", false, "List available targets")
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
@@ -481,4 +501,55 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 	}
 
 	return
+}
+
+func printTargetList(w io.Writer, cfg *bake.Config) error {
+	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
+	defer tw.Flush()
+
+	tw.Write([]byte("TARGET\tDESCRIPTION\n"))
+
+	type targetOrGroup struct {
+		name   string
+		target *bake.Target
+		group  *bake.Group
+	}
+
+	list := make([]targetOrGroup, 0, len(cfg.Targets)+len(cfg.Groups))
+	for _, tgt := range cfg.Targets {
+		list = append(list, targetOrGroup{name: tgt.Name, target: tgt})
+	}
+	for _, grp := range cfg.Groups {
+		list = append(list, targetOrGroup{name: grp.Name, group: grp})
+	}
+
+	slices.SortFunc(list, func(a, b targetOrGroup) int {
+		return cmp.Compare(a.name, b.name)
+	})
+
+	for _, tgt := range list {
+		if strings.HasPrefix(tgt.name, "_") {
+			// convention for a private target
+			continue
+		}
+		var descr string
+		if tgt.target != nil {
+			descr = tgt.target.Description
+		} else if tgt.group != nil {
+			descr = tgt.group.Description
+
+			if len(tgt.group.Targets) > 0 {
+				slices.Sort(tgt.group.Targets)
+				names := strings.Join(tgt.group.Targets, ", ")
+				if descr != "" {
+					descr += " (" + names + ")"
+				} else {
+					descr = names
+				}
+			}
+		}
+		fmt.Fprintf(tw, "%s\t%s\n", tgt.name, descr)
+	}
+
+	return nil
 }

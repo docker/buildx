@@ -669,8 +669,9 @@ func (c Config) target(name string, visited map[string]*Target, overrides map[st
 }
 
 type Group struct {
-	Name    string   `json:"-" hcl:"name,label" cty:"name"`
-	Targets []string `json:"targets" hcl:"targets" cty:"targets"`
+	Name        string   `json:"-" hcl:"name,label" cty:"name"`
+	Description string   `json:"description,omitempty" hcl:"description,optional" cty:"description"`
+	Targets     []string `json:"targets" hcl:"targets" cty:"targets"`
 	// Target // TODO?
 }
 
