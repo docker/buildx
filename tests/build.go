@@ -16,6 +16,7 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/creack/pty"
+	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
@@ -42,6 +43,7 @@ func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuild,
 	testBuildStdin,
+	testBuildRemote,
 	testImageIDOutput,
 	testBuildLocalExport,
 	testBuildRegistryExport,
@@ -93,6 +95,31 @@ COPY --from=base /etc/bar /bar
 	cmd.Stdin = bytes.NewReader(dockerfile)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
+}
+
+func testBuildRemote(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox:latest
+COPY foo /foo
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "Dockerfile", "foo")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
 }
 
 func testBuildLocalExport(t *testing.T, sb integration.Sandbox) {
