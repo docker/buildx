@@ -16,7 +16,11 @@ Build from a file
 | Name                                | Type          | Default | Description                                                                                         |
 |:------------------------------------|:--------------|:--------|:----------------------------------------------------------------------------------------------------|
 | [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                            |
+| `--call`                            | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
+| `--check`                           |               |         | Shorthand for `--call=check`                                                                        |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                               |
+| `--list-targets`                    |               |         | List available targets                                                                              |
+| `--list-variables`                  |               |         | List defined variables                                                                              |
 | `--load`                            |               |         | Shorthand for `--set=*.output=type=docker`                                                          |
 | [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                               |
 | [`--no-cache`](#no-cache)           |               |         | Do not use cache when building the image                                                            |
