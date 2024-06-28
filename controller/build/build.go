@@ -21,7 +21,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/config"
 	dockeropts "github.com/docker/cli/opts"
-	"github.com/docker/go-units"
+	"github.com/docker/docker/api/types/container"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/grpcerrors"
@@ -270,9 +270,9 @@ func controllerUlimitOpt2DockerUlimit(u *controllerapi.UlimitOpt) *dockeropts.Ul
 	if u == nil {
 		return nil
 	}
-	values := make(map[string]*units.Ulimit)
+	values := make(map[string]*container.Ulimit)
 	for k, v := range u.Values {
-		values[k] = &units.Ulimit{
+		values[k] = &container.Ulimit{
 			Name: v.Name,
 			Hard: v.Hard,
 			Soft: v.Soft,

@@ -26,7 +26,7 @@ import (
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/buildx/util/waitmap"
 	"github.com/docker/cli/opts"
-	imagetypes "github.com/docker/docker/api/types/image"
+	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
@@ -666,7 +666,7 @@ func pushWithMoby(ctx context.Context, d *driver.DriverHandle, name string, l pr
 		return err
 	}
 
-	rc, err := api.ImagePush(ctx, name, imagetypes.PushOptions{
+	rc, err := api.ImagePush(ctx, name, image.PushOptions{
 		RegistryAuth: creds,
 	})
 	if err != nil {
@@ -745,11 +745,11 @@ func remoteDigestWithMoby(ctx context.Context, d *driver.DriverHandle, name stri
 	if err != nil {
 		return "", err
 	}
-	image, _, err := api.ImageInspectWithRaw(ctx, name)
+	img, _, err := api.ImageInspectWithRaw(ctx, name)
 	if err != nil {
 		return "", err
 	}
-	if len(image.RepoDigests) == 0 {
+	if len(img.RepoDigests) == 0 {
 		return "", nil
 	}
 	remoteImage, err := api.DistributionInspect(ctx, name, creds)
