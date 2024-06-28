@@ -5,7 +5,6 @@ import (
 	"context"
 	"crypto/sha256"
 	"encoding/base64"
-	"encoding/csv"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -59,6 +58,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/tonistiigi/go-csvvalue"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
@@ -982,9 +982,9 @@ func (cfg *invokeConfig) parseInvokeConfig(invoke, on string) error {
 		return nil
 	}
 
-	csvReader := csv.NewReader(strings.NewReader(invoke))
-	csvReader.LazyQuotes = true
-	fields, err := csvReader.Read()
+	csvParser := csvvalue.NewParser()
+	csvParser.LazyQuotes = true
+	fields, err := csvParser.Fields(invoke, nil)
 	if err != nil {
 		return err
 	}

@@ -1,7 +1,6 @@
 package buildflags
 
 import (
-	"encoding/csv"
 	"regexp"
 	"strings"
 
@@ -11,6 +10,7 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/go-csvvalue"
 )
 
 func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
@@ -19,8 +19,7 @@ func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 		return nil, nil
 	}
 	for _, s := range inp {
-		csvReader := csv.NewReader(strings.NewReader(s))
-		fields, err := csvReader.Read()
+		fields, err := csvvalue.Fields(s, nil)
 		if err != nil {
 			return nil, err
 		}

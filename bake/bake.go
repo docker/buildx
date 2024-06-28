@@ -2,7 +2,6 @@ package bake
 
 import (
 	"context"
-	"encoding/csv"
 	"io"
 	"os"
 	"path"
@@ -27,6 +26,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/go-csvvalue"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -1393,8 +1393,7 @@ func removeAttestDupes(s []string) []string {
 }
 
 func parseOutput(str string) map[string]string {
-	csvReader := csv.NewReader(strings.NewReader(str))
-	fields, err := csvReader.Read()
+	fields, err := csvvalue.Fields(str, nil)
 	if err != nil {
 		return nil
 	}

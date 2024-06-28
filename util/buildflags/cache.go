@@ -2,20 +2,19 @@ package buildflags
 
 import (
 	"context"
-	"encoding/csv"
 	"os"
 	"strings"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/go-csvvalue"
 )
 
 func ParseCacheEntry(in []string) ([]*controllerapi.CacheOptionsEntry, error) {
 	outs := make([]*controllerapi.CacheOptionsEntry, 0, len(in))
 	for _, in := range in {
-		csvReader := csv.NewReader(strings.NewReader(in))
-		fields, err := csvReader.Read()
+		fields, err := csvvalue.Fields(in, nil)
 		if err != nil {
 			return nil, err
 		}

@@ -2,7 +2,6 @@ package builder
 
 import (
 	"context"
-	"encoding/csv"
 	"encoding/json"
 	"net/url"
 	"os"
@@ -27,6 +26,7 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
+	"github.com/tonistiigi/go-csvvalue"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -601,8 +601,7 @@ func csvToMap(in []string) (map[string]string, error) {
 	}
 	m := make(map[string]string, len(in))
 	for _, s := range in {
-		csvReader := csv.NewReader(strings.NewReader(s))
-		fields, err := csvReader.Read()
+		fields, err := csvvalue.Fields(s, nil)
 		if err != nil {
 			return nil, err
 		}
