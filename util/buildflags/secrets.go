@@ -1,11 +1,11 @@
 package buildflags
 
 import (
-	"encoding/csv"
 	"strings"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/go-csvvalue"
 )
 
 func ParseSecretSpecs(sl []string) ([]*controllerapi.Secret, error) {
@@ -21,8 +21,7 @@ func ParseSecretSpecs(sl []string) ([]*controllerapi.Secret, error) {
 }
 
 func parseSecret(value string) (*controllerapi.Secret, error) {
-	csvReader := csv.NewReader(strings.NewReader(value))
-	fields, err := csvReader.Read()
+	fields, err := csvvalue.Fields(value, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to parse csv secret")
 	}

@@ -1,13 +1,13 @@
 package buildflags
 
 import (
-	"encoding/csv"
 	"fmt"
 	"strconv"
 	"strings"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/go-csvvalue"
 )
 
 func CanonicalizeAttest(attestType string, in string) string {
@@ -45,8 +45,7 @@ func ParseAttest(in string) (*controllerapi.Attest, error) {
 		return nil, nil
 	}
 
-	csvReader := csv.NewReader(strings.NewReader(in))
-	fields, err := csvReader.Read()
+	fields, err := csvvalue.Fields(in, nil)
 	if err != nil {
 		return nil, err
 	}

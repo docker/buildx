@@ -1,12 +1,12 @@
 package buildflags
 
 import (
-	"encoding/csv"
 	"strconv"
 	"strings"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/go-csvvalue"
 )
 
 const defaultPrintFunc = "build"
@@ -16,8 +16,7 @@ func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 		return nil, nil
 	}
 
-	csvReader := csv.NewReader(strings.NewReader(str))
-	fields, err := csvReader.Read()
+	fields, err := csvvalue.Fields(str, nil)
 	if err != nil {
 		return nil, err
 	}
