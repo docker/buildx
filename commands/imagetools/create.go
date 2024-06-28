@@ -9,6 +9,7 @@ import (
 
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
@@ -154,7 +155,12 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		}
 	}
 
-	dt, desc, err := r.Combine(ctx, srcs, in.annotations, in.preferIndex)
+	annotations, err := buildflags.ParseAnnotations(in.annotations)
+	if err != nil {
+		return errors.Wrapf(err, "failed to parse annotations")
+	}
+
+	dt, desc, err := r.Combine(ctx, srcs, annotations, in.preferIndex)
 	if err != nil {
 		return err
 	}

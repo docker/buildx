@@ -608,7 +608,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 								}
 							}
 
-							dt, desc, err := itpull.Combine(ctx, srcs, nil, false)
+							indexAnnotations, err := extractIndexAnnotations(opt.Exports)
+							if err != nil {
+								return err
+							}
+
+							dt, desc, err := itpull.Combine(ctx, srcs, indexAnnotations, false)
 							if err != nil {
 								return err
 							}
@@ -654,6 +659,27 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	}
 
 	return resp, nil
+}
+
+func extractIndexAnnotations(exports []client.ExportEntry) (map[exptypes.AnnotationKey]string, error) {
+	annotations := map[exptypes.AnnotationKey]string{}
+	for _, exp := range exports {
+		for k, v := range exp.Attrs {
+			ak, ok, err := exptypes.ParseAnnotationKey(k)
+			if !ok {
+				continue
+			}
+			if err != nil {
+				return nil, err
+			}
+
+			switch ak.Type {
+			case exptypes.AnnotationIndex, exptypes.AnnotationManifestDescriptor:
+				annotations[ak] = v
+			}
+		}
+	}
+	return annotations, nil
 }
 
 func pushWithMoby(ctx context.Context, d *driver.DriverHandle, name string, l progress.SubLogger) error {
