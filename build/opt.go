@@ -272,11 +272,9 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	}
 	defers = append(defers, releaseLoad)
 
-	if sharedKey := so.LocalDirs["context"]; sharedKey != "" {
-		if p, err := filepath.Abs(sharedKey); err == nil {
-			sharedKey = filepath.Base(p)
-		}
-		so.SharedKey = sharedKey + ":" + confutil.TryNodeIdentifier(configDir)
+	// add node identifier to shared key if one was specified
+	if so.SharedKey != "" {
+		so.SharedKey += ":" + confutil.TryNodeIdentifier(configDir)
 	}
 
 	if opt.Pull {
@@ -416,6 +414,11 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 		if err := setLocalMount("context", inp.ContextPath, target, addVCSLocalDir); err != nil {
 			return nil, err
 		}
+		sharedKey := inp.ContextPath
+		if p, err := filepath.Abs(sharedKey); err == nil {
+			sharedKey = filepath.Base(p)
+		}
+		target.SharedKey = sharedKey
 		switch inp.DockerfilePath {
 		case "-":
 			dockerfileReader = inp.InStream
