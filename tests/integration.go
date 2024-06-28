@@ -56,7 +56,7 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 
 	if builder := sb.Address(); builder != "" {
 		cmd.Env = append(cmd.Env,
-			"BUILDX_CONFIG=/tmp/buildx-"+builder,
+			"BUILDX_CONFIG="+buildxConfig(sb),
 			"BUILDX_BUILDER="+builder,
 		)
 	}
@@ -84,6 +84,13 @@ func dockerCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
 	}
 	return cmd
+}
+
+func buildxConfig(sb integration.Sandbox) string {
+	if builder := sb.Address(); builder != "" {
+		return "/tmp/buildx-" + builder
+	}
+	return ""
 }
 
 func isMobyWorker(sb integration.Sandbox) bool {

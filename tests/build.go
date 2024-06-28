@@ -16,6 +16,8 @@ import (
 	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/creack/pty"
+	"github.com/docker/buildx/localstate"
+	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
@@ -42,6 +44,10 @@ func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuild,
 	testBuildStdin,
+	testBuildRemote,
+	testBuildLocalState,
+	testBuildLocalStateStdin,
+	testBuildLocalStateRemote,
 	testImageIDOutput,
 	testBuildLocalExport,
 	testBuildRegistryExport,
@@ -93,6 +99,170 @@ COPY --from=base /etc/bar /bar
 	cmd.Stdin = bytes.NewReader(dockerfile)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
+}
+
+func testBuildRemote(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox:latest
+COPY foo /foo
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "Dockerfile", "foo")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBuildLocalState(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox:latest AS base
+COPY foo /etc/foo
+RUN cp /etc/foo /etc/bar
+
+FROM scratch
+COPY --from=base /etc/bar /bar
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("build.Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	out, err := buildCmd(sb, withDir(dir), withArgs(
+		"-f", "build.Dockerfile",
+		"--metadata-file", filepath.Join(dir, "md.json"),
+		".",
+	))
+	require.NoError(t, err, out)
+
+	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildRef string `json:"buildx.build.ref"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	ls, err := localstate.New(buildxConfig(sb))
+	require.NoError(t, err)
+
+	refParts := strings.Split(md.BuildRef, "/")
+	require.Len(t, refParts, 3)
+
+	ref, err := ls.ReadRef(refParts[0], refParts[1], refParts[2])
+	require.NoError(t, err)
+	require.NotNil(t, ref)
+	require.DirExists(t, ref.LocalPath)
+	require.FileExists(t, ref.DockerfilePath)
+}
+
+func testBuildLocalStateStdin(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox:latest AS base
+COPY foo /etc/foo
+RUN cp /etc/foo /etc/bar
+
+FROM scratch
+COPY --from=base /etc/bar /bar
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("build", "--progress=quiet", "--metadata-file", filepath.Join(dir, "md.json"), "-f-", dir))
+	cmd.Stdin = bytes.NewReader(dockerfile)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildRef string `json:"buildx.build.ref"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	ls, err := localstate.New(buildxConfig(sb))
+	require.NoError(t, err)
+
+	refParts := strings.Split(md.BuildRef, "/")
+	require.Len(t, refParts, 3)
+
+	ref, err := ls.ReadRef(refParts[0], refParts[1], refParts[2])
+	require.NoError(t, err)
+	require.NotNil(t, ref)
+	require.DirExists(t, ref.LocalPath)
+	require.Equal(t, "-", ref.DockerfilePath)
+}
+
+func testBuildLocalStateRemote(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox:latest
+COPY foo /foo
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("build.Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+
+	gitutil.GitInit(git, t)
+	gitutil.GitAdd(git, t, "build.Dockerfile", "foo")
+	gitutil.GitCommit(git, t, "initial commit")
+	addr := gitutil.GitServeHTTP(git, t)
+
+	out, err := buildCmd(sb, withDir(dir), withArgs(
+		"-f", "build.Dockerfile",
+		"--metadata-file", filepath.Join(dirDest, "md.json"),
+		"--output", "type=local,dest="+dirDest,
+		addr,
+	))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildRef string `json:"buildx.build.ref"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	ls, err := localstate.New(buildxConfig(sb))
+	require.NoError(t, err)
+
+	refParts := strings.Split(md.BuildRef, "/")
+	require.Len(t, refParts, 3)
+
+	ref, err := ls.ReadRef(refParts[0], refParts[1], refParts[2])
+	require.NoError(t, err)
+	require.NotNil(t, ref)
+	require.Equal(t, addr, ref.LocalPath)
+	require.Equal(t, "build.Dockerfile", ref.DockerfilePath)
 }
 
 func testBuildLocalExport(t *testing.T, sb integration.Sandbox) {
