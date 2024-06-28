@@ -15,6 +15,7 @@ import (
 	"github.com/containerd/console"
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/bake"
+	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/controller/pb"
@@ -39,6 +40,7 @@ type bakeOptions struct {
 	overrides   []string
 	printOnly   bool
 	listTargets bool
+	listVars    bool
 	sbom        string
 	provenance  string
 
@@ -161,19 +163,19 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			if err != nil {
 				return
 			}
-		}
-		if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
-			desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
-		}
-		if resp != nil && len(in.metadataFile) > 0 {
-			dt := make(map[string]interface{})
-			for t, r := range resp {
-				dt[t] = decodeExporterResponse(r.ExporterResponse)
+			if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
+				desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 			}
-			if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
-				dt["buildx.build.warnings"] = warnings
+			if resp != nil && len(in.metadataFile) > 0 {
+				dt := make(map[string]interface{})
+				for t, r := range resp {
+					dt[t] = decodeExporterResponse(r.ExporterResponse)
+				}
+				if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
+					dt["buildx.build.warnings"] = warnings
+				}
+				err = writeMetadataFile(in.metadataFile, dt)
 			}
-			err = writeMetadataFile(in.metadataFile, dt)
 		}
 	}()
 
@@ -193,8 +195,8 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		"BAKE_LOCAL_PLATFORM": platforms.Format(platforms.DefaultSpec()),
 	}
 
-	if in.listTargets {
-		cfg, err := bake.ParseFiles(files, defaults)
+	if in.listTargets || in.listVars {
+		cfg, pm, err := bake.ParseFiles(files, defaults)
 		if err != nil {
 			return err
 		}
@@ -204,7 +206,11 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		if err != nil {
 			return err
 		}
-		return printTargetList(dockerCli.Out(), cfg)
+		if in.listTargets {
+			return printTargetList(dockerCli.Out(), cfg)
+		} else if in.listVars {
+			return printVars(dockerCli.Out(), pm.AllVariables)
+		}
 	}
 
 	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults)
@@ -439,6 +445,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
 	flags.BoolVar(&options.listTargets, "list-targets", false, "List available targets")
+	flags.BoolVar(&options.listVars, "list-variables", false, "List defined variables")
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
@@ -501,6 +508,27 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 	}
 
 	return
+}
+
+func printVars(w io.Writer, vars []*hclparser.Variable) error {
+	slices.SortFunc(vars, func(a, b *hclparser.Variable) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
+	defer tw.Flush()
+
+	tw.Write([]byte("VARIABLE\tVALUE\tDESCRIPTION\n"))
+
+	for _, v := range vars {
+		var value string
+		if v.Value != nil {
+			value = *v.Value
+		} else {
+			value = "<null>"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", v.Name, value, v.Description)
+	}
+	return nil
 }
 
 func printTargetList(w io.Writer, cfg *bake.Config) error {
