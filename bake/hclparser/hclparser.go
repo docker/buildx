@@ -266,7 +266,12 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	if def == nil {
 		val, ok := p.opt.Vars[name]
 		if !ok {
-			val, _ = p.opt.LookupVar(name)
+			val, ok = p.opt.LookupVar(name)
+			if !ok {
+				vv := cty.NullVal(cty.DynamicPseudoType)
+				v = &vv
+				return
+			}
 		}
 		vv := cty.StringVal(val)
 		v = &vv
