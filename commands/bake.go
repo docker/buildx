@@ -298,7 +298,6 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	err = printer.Wait()
-	printer = nil
 	if err != nil {
 		return err
 	}
