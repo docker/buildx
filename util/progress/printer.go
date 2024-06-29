@@ -19,9 +19,10 @@ import (
 type Printer struct {
 	status chan *client.SolveStatus
 
-	ready  chan struct{}
-	done   chan struct{}
-	paused chan struct{}
+	ready     chan struct{}
+	done      chan struct{}
+	paused    chan struct{}
+	closeOnce sync.Once
 
 	err          error
 	warnings     []client.VertexWarning
@@ -36,8 +37,10 @@ type Printer struct {
 }
 
 func (p *Printer) Wait() error {
-	close(p.status)
-	<-p.done
+	p.closeOnce.Do(func() {
+		close(p.status)
+		<-p.done
+	})
 	return p.err
 }
 
