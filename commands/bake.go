@@ -124,8 +124,12 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	progressMode := progressui.DisplayMode(cFlags.progress)
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, progressMode,
+	var printer *progress.Printer
+	printer, err = progress.NewPrinter(ctx2, os.Stderr, progressMode,
 		progress.WithDesc(progressTextDesc, progressConsoleDesc),
+		progress.WithOnClose(func() {
+			printWarnings(os.Stderr, printer.Warnings(), progressMode)
+		}),
 	)
 	if err != nil {
 		return err
