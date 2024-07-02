@@ -17,14 +17,14 @@ Build from a file
 |:------------------------------------|:--------------|:--------|:----------------------------------------------------------------------------------------------------|
 | [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                            |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                               |
-| `--load`                            |               |         | Shorthand for `--set=*.output=type=docker`                                                          |
+| `--load`                            | `bool`        |         | Shorthand for `--set=*.output=type=docker`                                                          |
 | [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                               |
-| [`--no-cache`](#no-cache)           |               |         | Do not use cache when building the image                                                            |
-| [`--print`](#print)                 |               |         | Print the options without building                                                                  |
+| [`--no-cache`](#no-cache)           | `bool`        |         | Do not use cache when building the image                                                            |
+| [`--print`](#print)                 | `bool`        |         | Print the options without building                                                                  |
 | [`--progress`](#progress)           | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output |
 | [`--provenance`](#provenance)       | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                                      |
-| [`--pull`](#pull)                   |               |         | Always attempt to pull all referenced images                                                        |
-| `--push`                            |               |         | Shorthand for `--set=*.output=type=registry`                                                        |
+| [`--pull`](#pull)                   | `bool`        |         | Always attempt to pull all referenced images                                                        |
+| `--push`                            | `bool`        |         | Shorthand for `--set=*.output=type=registry`                                                        |
 | [`--sbom`](#sbom)                   | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                            |
 | [`--set`](#set)                     | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                             |
 
