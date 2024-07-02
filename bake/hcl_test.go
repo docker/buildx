@@ -273,7 +273,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 		}
 		`)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	}, nil)
@@ -285,7 +285,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 
 	t.Setenv("FOO", "def")
 
-	c, err = ParseFiles([]File{
+	c, _, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	}, nil)
@@ -322,7 +322,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 		}
 		`)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	}, nil)
@@ -334,7 +334,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 
 	t.Setenv("BASE", "new")
 
-	c, err = ParseFiles([]File{
+	c, _, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	}, nil)
@@ -612,7 +612,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 		FOO="def"
 		`)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	}, nil)
@@ -623,7 +623,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 
 	t.Setenv("FOO", "ghi")
 
-	c, err = ParseFiles([]File{
+	c, _, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	}, nil)
@@ -647,7 +647,7 @@ func TestHCLMultiFileGlobalAttrs(t *testing.T) {
 		FOO = "def"
 		`)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 	}, nil)
@@ -830,7 +830,7 @@ func TestHCLRenameMultiFile(t *testing.T) {
 		}
 		`)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 		{Data: dt3, Name: "c3.hcl"},
@@ -1050,7 +1050,7 @@ func TestHCLMatrixArgsOverride(t *testing.T) {
 	}
 	`)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "docker-bake.hcl"},
 	}, map[string]string{"ABC": "11,22,33"})
 	require.NoError(t, err)
@@ -1236,7 +1236,7 @@ services:
         v2: "bar"
 `)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.yml"},
 	}, nil)
@@ -1258,7 +1258,7 @@ func TestHCLBuiltinVars(t *testing.T) {
 		}
 		`)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 	}, map[string]string{
 		"BAKE_CMD_CONTEXT": "foo",
@@ -1272,7 +1272,7 @@ func TestHCLBuiltinVars(t *testing.T) {
 }
 
 func TestCombineHCLAndJSONTargets(t *testing.T) {
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{
 			Name: "docker-bake.hcl",
 			Data: []byte(`
@@ -1348,7 +1348,7 @@ target "b" {
 }
 
 func TestCombineHCLAndJSONVars(t *testing.T) {
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{
 			Name: "docker-bake.hcl",
 			Data: []byte(`
