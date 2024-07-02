@@ -17,10 +17,13 @@ package clidocstool
 import (
 	"errors"
 	"io"
+	"log"
 	"os"
+	"path/filepath"
 	"strings"
 
 	"github.com/spf13/cobra"
+	"github.com/spf13/cobra/doc"
 )
 
 // Options defines options for cli-docs-tool
@@ -29,6 +32,8 @@ type Options struct {
 	SourceDir string
 	TargetDir string
 	Plugin    bool
+
+	ManHeader *doc.GenManHeader
 }
 
 // Client represents an active cli-docs-tool object
@@ -37,6 +42,8 @@ type Client struct {
 	source string
 	target string
 	plugin bool
+
+	manHeader *doc.GenManHeader
 }
 
 // New initializes a new cli-docs-tool client
@@ -48,9 +55,10 @@ func New(opts Options) (*Client, error) {
 		return nil, errors.New("source dir required")
 	}
 	c := &Client{
-		root:   opts.Root,
-		source: opts.SourceDir,
-		plugin: opts.Plugin,
+		root:      opts.Root,
+		source:    opts.SourceDir,
+		plugin:    opts.Plugin,
+		manHeader: opts.ManHeader,
 	}
 	if len(opts.TargetDir) == 0 {
 		c.target = c.source
@@ -73,7 +81,67 @@ func (c *Client) GenAllTree() error {
 	if err = c.GenYamlTree(c.root); err != nil {
 		return err
 	}
+	if err = c.GenManTree(c.root); err != nil {
+		return err
+	}
 	return nil
+}
+
+// loadLongDescription gets long descriptions and examples from markdown.
+func (c *Client) loadLongDescription(cmd *cobra.Command, generator string) error {
+	if cmd.HasSubCommands() {
+		for _, sub := range cmd.Commands() {
+			if err := c.loadLongDescription(sub, generator); err != nil {
+				return err
+			}
+		}
+	}
+	name := cmd.CommandPath()
+	if i := strings.Index(name, " "); i >= 0 {
+		// remove root command / binary name
+		name = name[i+1:]
+	}
+	if name == "" {
+		return nil
+	}
+	mdFile := strings.ReplaceAll(name, " ", "_") + ".md"
+	sourcePath := filepath.Join(c.source, mdFile)
+	content, err := os.ReadFile(sourcePath)
+	if os.IsNotExist(err) {
+		log.Printf("WARN: %s does not exist, skipping Markdown examples for %s docs\n", mdFile, generator)
+		return nil
+	}
+	if err != nil {
+		return err
+	}
+	applyDescriptionAndExamples(cmd, string(content))
+	return nil
+}
+
+// applyDescriptionAndExamples fills in cmd.Long and cmd.Example with the
+// "Description" and "Examples" H2 sections in  mdString (if present).
+func applyDescriptionAndExamples(cmd *cobra.Command, mdString string) {
+	sections := getSections(mdString)
+	var (
+		anchors []string
+		md      string
+	)
+	if sections["description"] != "" {
+		md, anchors = cleanupMarkDown(sections["description"])
+		cmd.Long = md
+		anchors = append(anchors, md)
+	}
+	if sections["examples"] != "" {
+		md, anchors = cleanupMarkDown(sections["examples"])
+		cmd.Example = md
+		anchors = append(anchors, md)
+	}
+	if len(anchors) > 0 {
+		if cmd.Annotations == nil {
+			cmd.Annotations = make(map[string]string)
+		}
+		cmd.Annotations["anchors"] = strings.Join(anchors, ",")
+	}
 }
 
 func fileExists(f string) bool {
