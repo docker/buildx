@@ -11,11 +11,11 @@ Remove one or more builder instances
 
 | Name                                | Type     | Default | Description                              |
 |:------------------------------------|:---------|:--------|:-----------------------------------------|
-| [`--all-inactive`](#all-inactive)   |          |         | Remove all inactive builders             |
+| [`--all-inactive`](#all-inactive)   | `bool`   |         | Remove all inactive builders             |
 | [`--builder`](#builder)             | `string` |         | Override the configured builder instance |
-| [`-f`](#force), [`--force`](#force) |          |         | Do not prompt for confirmation           |
-| [`--keep-daemon`](#keep-daemon)     |          |         | Keep the BuildKit daemon running         |
-| [`--keep-state`](#keep-state)       |          |         | Keep BuildKit state                      |
+| [`-f`](#force), [`--force`](#force) | `bool`   |         | Do not prompt for confirmation           |
+| [`--keep-daemon`](#keep-daemon)     | `bool`   |         | Keep the BuildKit daemon running         |
+| [`--keep-state`](#keep-state)       | `bool`   |         | Keep BuildKit state                      |
 
 
 <!---MARKER_GEN_END-->
