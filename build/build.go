@@ -32,6 +32,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
@@ -215,6 +216,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		gitattrs, addVCSLocalDir, err := getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
 		if err != nil {
 			logrus.WithError(err).Warn("current commit information was not captured by the build")
+		}
+		if opt.Ref == "" {
+			opt.Ref = identity.NewID()
 		}
 		var reqn []*reqForNode
 		for _, np := range drivers[k] {
