@@ -240,10 +240,7 @@ func mdCmdOutput(cmd *cobra.Command, old string) (string, error) {
 			}
 			name += mdMakeLink("`--"+f.Name+"`", f.Name, f, isLink)
 
-			var ftype string
-			if f.Value.Type() != "bool" || (f.Value.Type() == "bool" && f.DefValue == "true") {
-				ftype = "`" + f.Value.Type() + "`"
-			}
+			ftype := "`" + f.Value.Type() + "`"
 
 			var defval string
 			if v, ok := f.Annotations[annotation.DefaultValue]; ok && len(v) > 0 {
