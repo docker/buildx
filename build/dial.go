@@ -5,7 +5,7 @@ import (
 	stderrors "errors"
 	"net"
 
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/progress"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"

@@ -4,7 +4,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
