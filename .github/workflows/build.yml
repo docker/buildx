@@ -26,7 +26,7 @@ env:
   TEST_CACHE_SCOPE: "test"
   TESTFLAGS: "-v --parallel=6 --timeout=30m"
   GOTESTSUM_FORMAT: "standard-verbose"
-  GO_VERSION: "1.21"
+  GO_VERSION: "1.22"
   GOTESTSUM_VERSION: "v1.9.0"  # same as one in Dockerfile
 
 jobs:

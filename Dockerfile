@@ -1,6 +1,6 @@
 # syntax=docker/dockerfile:1
 
-ARG GO_VERSION=1.21
+ARG GO_VERSION=1.22
 ARG XX_VERSION=1.4.0
 
 # for testing
