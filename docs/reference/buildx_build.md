@@ -24,9 +24,9 @@ Start a build
 | [`--builder`](#builder)                 | `string`      |           | Override the configured builder instance                                                            |
 | [`--cache-from`](#cache-from)           | `stringArray` |           | External cache sources (e.g., `user/app:cache`, `type=local,src=path/to/dir`)                       |
 | [`--cache-to`](#cache-to)               | `stringArray` |           | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`)                   |
-| `--call`                                | `string`      | `build`   | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
+| [`--call`](#call)                       | `string`      | `build`   | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
 | [`--cgroup-parent`](#cgroup-parent)     | `string`      |           | Set the parent cgroup for the `RUN` instructions during build                                       |
-| `--check`                               | `bool`        |           | Shorthand for `--call=check`                                                                        |
+| [`--check`](#check)                     | `bool`        |           | Shorthand for `--call=check`                                                                        |
 | `--detach`                              | `bool`        |           | Detach buildx server (supported only on linux) (EXPERIMENTAL)                                       |
 | [`-f`](#file), [`--file`](#file)        | `string`      |           | Name of the Dockerfile (default: `PATH/Dockerfile`)                                                 |
 | `--iidfile`                             | `string`      |           | Write the image ID to a file                                                                        |
@@ -324,6 +324,167 @@ $ docker buildx build --cache-from=type=s3,region=eu-west-1,bucket=mybucket .
 ```
 
 More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
+
+### <a name="call"></a> Invoke a frontend method (--call)
+
+```text
+--call=[build|check|outline|targets]
+```
+
+BuildKit frontends can support alternative modes of executions for builds,
+using frontend methods. Frontend methods are a way to change or extend the
+behavior of a build invocation, which lets you, for example, inspect, validate,
+or generate alternative outputs from a build.
+
+The `--call` flag for `docker buildx build` lets you specify the frontend
+method that you want to execute. If this flag is unspecified, it defaults to
+executing the build and evaluating [build checks](https://docs.docker.com/reference/build-checks/).
+
+For Dockerfiles, the available methods are:
+
+| Command                        | Description                                                                                                         |
+| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
+| `build` (default)              | Execute the build and evaluate build checks for the current build target.                                           |
+| `check`                        | Evaluate build checks for the either the entire Dockerfile or the selected target, without executing a build.       |
+| `outline`                      | Show the build arguments that you can set for a target, and their default values.                                   |
+| `targets`                      | List all the build targets in the Dockerfile.                                                                       |
+| `subrequests.describe`         | List all the frontend methods that the current frontend supports.                                                   |
+
+Note that other frontends may implement these or other methods.
+To see the list of available methods for the frontend you're using,
+use `--call=subrequests.describe`.
+
+```console
+$ docker buildx build -q --call=subrequests.describe .
+
+NAME                 VERSION DESCRIPTION
+outline              1.0.0   List all parameters current build target supports
+targets              1.0.0   List all targets current build supports
+subrequests.describe 1.0.0   List available subrequest types
+```
+
+#### Descriptions
+
+The [`--call=targets`](#call-targets) and [`--call=outline`](#call-outline)
+methods include descriptions for build targets and arguments, if available.
+Descriptions are generated from comments in the Dockerfile. A comment on the
+line before a `FROM` instruction becomes the description of a build target, and
+a comment before an `ARG` instruction the description of a build argument. The
+comment must lead with the name of the stage or argument, for example:
+
+```dockerfile
+# syntax=docker/dockerfile:1
+
+# GO_VERSION sets the Go version for the build
+ARG GO_VERSION=1.22
+
+# base-builder is the base stage for building the project
+FROM golang:${GO_VERSION} AS base-builder
+```
+
+When you run `docker buildx build --call=outline`, the output includes the
+descriptions, as follows:
+
+```console
+$ docker buildx build -q --call=outline .
+
+TARGET:      base-builder
+DESCRIPTION: is the base stage for building the project
+
+BUILD ARG    VALUE   DESCRIPTION
+GO_VERSION   1.22    sets the Go version for the build
+```
+
+For more examples on how to write Dockerfile docstrings,
+check out [the Dockerfile for Docker docs](https://github.com/docker/docs/blob/main/Dockerfile).
+
+#### <a name="check"></a> Call: check (--check)
+
+The `check` method evaluates build checks without executing the build. The
+`--check` flag is a convenient shorthand for `--call=check`. Use the `check`
+method to validate the build configuration before starting the build.
+
+```console
+$ docker buildx build -q --check https://github.com/docker/docs.git
+
+WARNING: InvalidBaseImagePlatform
+Base image wjdp/htmltest:v0.17.0 was pulled with platform "linux/amd64", expected "linux/arm64" for current build
+Dockerfile:43
+--------------------
+  41 |         "#content/desktop/previous-versions/*.md"
+  42 |
+  43 | >>> FROM wjdp/htmltest:v${HTMLTEST_VERSION} AS test
+  44 |     WORKDIR /test
+  45 |     COPY --from=build /out ./public
+--------------------
+```
+
+Using `--check` without specifying a target evaluates the entire Dockerfile.
+If you want to evaluate a specific target, use the `--target` flag.
+
+#### Call: outline
+
+The `outline` method prints the name of the specified target (or the default
+target, if `--target` isn't specified), and the build arguments that the target
+consumes, along with their default values, if set.
+
+The following example shows the default target `release` and its build arguments:
+
+```console
+$ docker buildx build -q --call=outline https://github.com/docker/docs.git
+
+TARGET:      release
+DESCRIPTION: is an empty scratch image with only compiled assets
+
+BUILD ARG          VALUE     DESCRIPTION
+GO_VERSION         1.22      sets the Go version for the base stage
+HUGO_VERSION       0.127.0
+HUGO_ENV                     sets the hugo.Environment (production, development, preview)
+DOCS_URL                     sets the base URL for the site
+PAGEFIND_VERSION   1.1.0
+```
+
+This means that the `release` target is configurable using these build arguments:
+
+```console
+$ docker buildx build \
+  --build-arg GO_VERSION=1.22 \
+  --build-arg HUGO_VERSION=0.127.0 \
+  --build-arg HUGO_ENV=production \
+  --build-arg DOCS_URL=https://example.com \
+  --build-arg PAGEFIND_VERSION=1.1.0 \
+  --target release https://github.com/docker/docs.git
+```
+
+#### Call: targets
+
+The `targets` method lists all the build targets in the Dockerfile. These are
+the stages that you can build using the `--target` flag. It also indicates the
+default target, which is the target that will be built when you don't specify a
+target.
+
+```console
+$ docker buildx build -q --call=targets https://github.com/docker/docs.git
+
+TARGET            DESCRIPTION
+base              is the base stage with build dependencies
+node              installs Node.js dependencies
+hugo              downloads and extracts the Hugo binary
+build-base        is the base stage for building the site
+dev               is for local development with Docker Compose
+build             creates production builds with Hugo
+lint              lints markdown files
+test              validates HTML output and checks for broken links
+update-modules    downloads and vendors Hugo modules
+vendor            is an empty stage with only vendored Hugo modules
+build-upstream    builds an upstream project with a replacement module
+validate-upstream validates HTML output for upstream builds
+unused-media      checks for unused graphics and other media
+pagefind          installs the Pagefind runtime
+index             generates a Pagefind index
+test-go-redirects checks that the /go/ redirects are valid
+release (default) is an empty scratch image with only compiled assets
+```
 
 ### <a name="cache-to"></a> Export build cache to an external cache destination (--cache-to)
 
