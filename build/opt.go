@@ -104,10 +104,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		SourcePolicy:        opt.SourcePolicy,
 	}
 
-	if so.Ref == "" {
-		so.Ref = identity.NewID()
-	}
-
 	if opt.CgroupParent != "" {
 		so.FrontendAttrs["cgroup-parent"] = opt.CgroupParent
 	}
