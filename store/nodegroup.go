@@ -4,7 +4,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"

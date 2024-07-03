@@ -6,8 +6,8 @@ import (
 	"testing"
 
 	"github.com/containerd/containerd/images"
-	"github.com/containerd/containerd/platforms"
 	"github.com/containerd/continuity/fs/fstest"
+	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/util/testutil/integration"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"

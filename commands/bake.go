@@ -9,7 +9,7 @@ import (
 	"strings"
 
 	"github.com/containerd/console"
-	"github.com/containerd/containerd/platforms"
+	"github.com/containerd/platforms"
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
@@ -175,7 +175,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		// don't forget to update documentation if you add a new
 		// built-in variable: docs/bake-reference.md#built-in-variables
 		"BAKE_CMD_CONTEXT":    cmdContext,
-		"BAKE_LOCAL_PLATFORM": platforms.DefaultString(),
+		"BAKE_LOCAL_PLATFORM": platforms.Format(platforms.DefaultSpec()),
 	})
 	if err != nil {
 		return err
