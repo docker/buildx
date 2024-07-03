@@ -11,7 +11,7 @@ Inspect current builder instance
 
 | Name                        | Type     | Default | Description                                 |
 |:----------------------------|:---------|:--------|:--------------------------------------------|
-| [`--bootstrap`](#bootstrap) |          |         | Ensure builder has booted before inspecting |
+| [`--bootstrap`](#bootstrap) | `bool`   |         | Ensure builder has booted before inspecting |
 | [`--builder`](#builder)     | `string` |         | Override the configured builder instance    |
 
 

@@ -13,7 +13,7 @@ Disk usage
 |:------------------------|:---------|:--------|:-----------------------------------------|
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance |
 | `--filter`              | `filter` |         | Provide filter values                    |
-| [`--verbose`](#verbose) |          |         | Provide a more verbose output            |
+| [`--verbose`](#verbose) | `bool`   |         | Provide a more verbose output            |
 
 
 <!---MARKER_GEN_END-->
