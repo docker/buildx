@@ -12,9 +12,9 @@ Create a new image based on source images
 | Name                             | Type          | Default | Description                                                                                                                   |
 |:---------------------------------|:--------------|:--------|:------------------------------------------------------------------------------------------------------------------------------|
 | [`--annotation`](#annotation)    | `stringArray` |         | Add annotation to the image                                                                                                   |
-| [`--append`](#append)            |               |         | Append to existing manifest                                                                                                   |
+| [`--append`](#append)            | `bool`        |         | Append to existing manifest                                                                                                   |
 | [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                                                      |
-| [`--dry-run`](#dry-run)          |               |         | Show final image instead of pushing                                                                                           |
+| [`--dry-run`](#dry-run)          | `bool`        |         | Show final image instead of pushing                                                                                           |
 | [`-f`](#file), [`--file`](#file) | `stringArray` |         | Read source descriptor from file                                                                                              |
 | `--prefer-index`                 | `bool`        | `true`  | When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy |
 | `--progress`                     | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output                           |

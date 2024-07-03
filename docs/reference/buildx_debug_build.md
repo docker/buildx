@@ -22,23 +22,23 @@ Start a build
 | `--cache-to`        | `stringArray` |           | Cache export destinations (e.g., `user/app:cache`, `type=local,dest=path/to/dir`)                   |
 | `--call`            | `string`      | `build`   | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
 | `--cgroup-parent`   | `string`      |           | Set the parent cgroup for the `RUN` instructions during build                                       |
-| `--check`           |               |           | Shorthand for `--call=check`                                                                        |
-| `--detach`          |               |           | Detach buildx server (supported only on linux) (EXPERIMENTAL)                                       |
+| `--check`           | `bool`        |           | Shorthand for `--call=check`                                                                        |
+| `--detach`          | `bool`        |           | Detach buildx server (supported only on linux) (EXPERIMENTAL)                                       |
 | `-f`, `--file`      | `string`      |           | Name of the Dockerfile (default: `PATH/Dockerfile`)                                                 |
 | `--iidfile`         | `string`      |           | Write the image ID to a file                                                                        |
 | `--label`           | `stringArray` |           | Set metadata for an image                                                                           |
-| `--load`            |               |           | Shorthand for `--output=type=docker`                                                                |
+| `--load`            | `bool`        |           | Shorthand for `--output=type=docker`                                                                |
 | `--metadata-file`   | `string`      |           | Write build result metadata to a file                                                               |
 | `--network`         | `string`      | `default` | Set the networking mode for the `RUN` instructions during build                                     |
-| `--no-cache`        |               |           | Do not use cache when building the image                                                            |
+| `--no-cache`        | `bool`        |           | Do not use cache when building the image                                                            |
 | `--no-cache-filter` | `stringArray` |           | Do not cache specified stages                                                                       |
 | `-o`, `--output`    | `stringArray` |           | Output destination (format: `type=local,dest=path`)                                                 |
 | `--platform`        | `stringArray` |           | Set target platform for build                                                                       |
 | `--progress`        | `string`      | `auto`    | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output |
 | `--provenance`      | `string`      |           | Shorthand for `--attest=type=provenance`                                                            |
-| `--pull`            |               |           | Always attempt to pull all referenced images                                                        |
-| `--push`            |               |           | Shorthand for `--output=type=registry`                                                              |
-| `-q`, `--quiet`     |               |           | Suppress the build output and print image ID on success                                             |
+| `--pull`            | `bool`        |           | Always attempt to pull all referenced images                                                        |
+| `--push`            | `bool`        |           | Shorthand for `--output=type=registry`                                                              |
+| `-q`, `--quiet`     | `bool`        |           | Suppress the build output and print image ID on success                                             |
 | `--root`            | `string`      |           | Specify root directory of server to connect (EXPERIMENTAL)                                          |
 | `--sbom`            | `string`      |           | Shorthand for `--attest=type=sbom`                                                                  |
 | `--secret`          | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                           |
