@@ -177,7 +177,7 @@ func readWithProgress(r io.Reader, setStatus func(st *client.VertexStatus)) (dt 
 }
 
 func ListTargets(files []File) ([]string, error) {
-	c, err := ParseFiles(files, nil)
+	c, _, err := ParseFiles(files, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -192,7 +192,7 @@ func ListTargets(files []File) ([]string, error) {
 }
 
 func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, map[string]*Group, error) {
-	c, err := ParseFiles(files, defaults)
+	c, _, err := ParseFiles(files, defaults)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -298,7 +298,7 @@ func sliceToMap(env []string) (res map[string]string) {
 	return
 }
 
-func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error) {
+func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
 	defer func() {
 		err = formatHCLError(err, files)
 	}()
@@ -310,7 +310,7 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 		isCompose, composeErr := validateComposeFile(f.Data, f.Name)
 		if isCompose {
 			if composeErr != nil {
-				return nil, composeErr
+				return nil, nil, composeErr
 			}
 			composeFiles = append(composeFiles, f)
 		}
@@ -318,13 +318,13 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 			hf, isHCL, err := ParseHCLFile(f.Data, f.Name)
 			if isHCL {
 				if err != nil {
-					return nil, err
+					return nil, nil, err
 				}
 				hclFiles = append(hclFiles, hf)
 			} else if composeErr != nil {
-				return nil, errors.Wrapf(err, "failed to parse %s: parsing yaml: %v, parsing hcl", f.Name, composeErr)
+				return nil, nil, errors.Wrapf(err, "failed to parse %s: parsing yaml: %v, parsing hcl", f.Name, composeErr)
 			} else {
-				return nil, err
+				return nil, nil, err
 			}
 		}
 	}
@@ -332,23 +332,24 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 	if len(composeFiles) > 0 {
 		cfg, cmperr := ParseComposeFiles(composeFiles)
 		if cmperr != nil {
-			return nil, errors.Wrap(cmperr, "failed to parse compose file")
+			return nil, nil, errors.Wrap(cmperr, "failed to parse compose file")
 		}
 		c = mergeConfig(c, *cfg)
 		c = dedupeConfig(c)
 	}
 
+	var pm hclparser.ParseMeta
 	if len(hclFiles) > 0 {
-		renamed, err := hclparser.Parse(hclparser.MergeFiles(hclFiles), hclparser.Opt{
+		res, err := hclparser.Parse(hclparser.MergeFiles(hclFiles), hclparser.Opt{
 			LookupVar:     os.LookupEnv,
 			Vars:          defaults,
 			ValidateLabel: validateTargetName,
 		}, &c)
 		if err.HasErrors() {
-			return nil, err
+			return nil, nil, err
 		}
 
-		for _, renamed := range renamed {
+		for _, renamed := range res.Renamed {
 			for oldName, newNames := range renamed {
 				newNames = dedupSlice(newNames)
 				if len(newNames) == 1 && oldName == newNames[0] {
@@ -361,9 +362,10 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, err error)
 			}
 		}
 		c = dedupeConfig(c)
+		pm = *res
 	}
 
-	return &c, nil
+	return &c, &pm, nil
 }
 
 func dedupeConfig(c Config) Config {
@@ -388,7 +390,8 @@ func dedupeConfig(c Config) Config {
 }
 
 func ParseFile(dt []byte, fn string) (*Config, error) {
-	return ParseFiles([]File{{Data: dt, Name: fn}}, nil)
+	c, _, err := ParseFiles([]File{{Data: dt, Name: fn}}, nil)
+	return c, err
 }
 
 type Config struct {
@@ -669,13 +672,15 @@ func (c Config) target(name string, visited map[string]*Target, overrides map[st
 }
 
 type Group struct {
-	Name    string   `json:"-" hcl:"name,label" cty:"name"`
-	Targets []string `json:"targets" hcl:"targets" cty:"targets"`
+	Name        string   `json:"-" hcl:"name,label" cty:"name"`
+	Description string   `json:"description,omitempty" hcl:"description,optional" cty:"description"`
+	Targets     []string `json:"targets" hcl:"targets" cty:"targets"`
 	// Target // TODO?
 }
 
 type Target struct {
-	Name string `json:"-" hcl:"name,label" cty:"name"`
+	Name        string `json:"-" hcl:"name,label" cty:"name"`
+	Description string `json:"description,omitempty" hcl:"description,optional" cty:"description"`
 
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
@@ -702,7 +707,8 @@ type Target struct {
 	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
 	Ulimits          []string           `json:"ulimits,omitempty" hcl:"ulimits,optional"`
-	// IMPORTANT: if you add more fields here, do not forget to update newOverrides and docs/bake-reference.md.
+	Call             *string            `json:"call,omitempty" hcl:"call,optional" cty:"call"`
+	// IMPORTANT: if you add more fields here, do not forget to update newOverrides/AddOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
 	linked bool
@@ -776,6 +782,9 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.Target != nil {
 		t.Target = t2.Target
 	}
+	if t2.Call != nil {
+		t.Call = t2.Call
+	}
 	if t2.Annotations != nil { // merge
 		t.Annotations = append(t.Annotations, t2.Annotations...)
 	}
@@ -818,6 +827,9 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.Ulimits != nil { // merge
 		t.Ulimits = append(t.Ulimits, t2.Ulimits...)
+	}
+	if t2.Description != "" {
+		t.Description = t2.Description
 	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
@@ -863,6 +875,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.CacheTo = o.ArrValue
 		case "target":
 			t.Target = &value
+		case "call":
+			t.Call = &value
 		case "secrets":
 			t.Secrets = o.ArrValue
 		case "ssh":
@@ -1296,6 +1310,12 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 	if t.Target != nil {
 		bo.Target = *t.Target
+	}
+
+	if t.Call != nil {
+		bo.PrintFunc = &build.PrintFunc{
+			Name: *t.Call,
+		}
 	}
 
 	cacheImports, err := buildflags.ParseCacheEntry(t.CacheFrom)

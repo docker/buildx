@@ -16,6 +16,8 @@ Build from a file
 | Name                                | Type          | Default | Description                                                                                         |
 |:------------------------------------|:--------------|:--------|:----------------------------------------------------------------------------------------------------|
 | [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                            |
+| `--call`                            | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
+| `--check`                           | `bool`        |         | Shorthand for `--call=check`                                                                        |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                               |
 | `--load`                            | `bool`        |         | Shorthand for `--set=*.output=type=docker`                                                          |
 | [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                               |

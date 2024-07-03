@@ -1,20 +1,27 @@
 package commands
 
 import (
+	"bytes"
+	"cmp"
 	"context"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
+	"slices"
 	"strings"
+	"text/tabwriter"
 
 	"github.com/containerd/console"
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/bake"
+	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -30,16 +37,19 @@ import (
 )
 
 type bakeOptions struct {
-	files      []string
-	overrides  []string
-	printOnly  bool
-	sbom       string
-	provenance string
+	files       []string
+	overrides   []string
+	printOnly   bool
+	listTargets bool
+	listVars    bool
+	sbom        string
+	provenance  string
 
 	builder      string
 	metadataFile string
 	exportPush   bool
 	exportLoad   bool
+	callFunc     string
 }
 
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
@@ -71,12 +81,20 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		targets = []string{"default"}
 	}
 
+	callFunc, err := buildflags.ParsePrintFunc(in.callFunc)
+	if err != nil {
+		return err
+	}
+
 	overrides := in.overrides
 	if in.exportPush {
 		overrides = append(overrides, "*.push=true")
 	}
 	if in.exportLoad {
 		overrides = append(overrides, "*.load=true")
+	}
+	if callFunc != nil {
+		overrides = append(overrides, fmt.Sprintf("*.call=%s", callFunc.Name))
 	}
 	if cFlags.noCache != nil {
 		overrides = append(overrides, fmt.Sprintf("*.no-cache=%t", *cFlags.noCache))
@@ -171,12 +189,32 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return errors.New("couldn't find a bake definition")
 	}
 
-	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, map[string]string{
+	defaults := map[string]string{
 		// don't forget to update documentation if you add a new
 		// built-in variable: docs/bake-reference.md#built-in-variables
 		"BAKE_CMD_CONTEXT":    cmdContext,
 		"BAKE_LOCAL_PLATFORM": platforms.Format(platforms.DefaultSpec()),
-	})
+	}
+
+	if in.listTargets || in.listVars {
+		cfg, pm, err := bake.ParseFiles(files, defaults)
+		if err != nil {
+			return err
+		}
+
+		err = printer.Wait()
+		printer = nil
+		if err != nil {
+			return err
+		}
+		if in.listTargets {
+			return printTargetList(dockerCli.Out(), cfg)
+		} else if in.listVars {
+			return printVars(dockerCli.Out(), pm.AllVariables)
+		}
+	}
+
+	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults)
 	if err != nil {
 		return err
 	}
@@ -222,6 +260,16 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return nil
 	}
 
+	for _, opt := range bo {
+		if opt.PrintFunc != nil {
+			cf, err := buildflags.ParsePrintFunc(opt.PrintFunc.Name)
+			if err != nil {
+				return err
+			}
+			opt.PrintFunc.Name = cf.Name
+		}
+	}
+
 	prm := confutil.MetadataProvenance()
 	if len(in.metadataFile) == 0 {
 		prm = confutil.MetadataProvenanceModeDisabled
@@ -254,7 +302,117 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return wrapBuildError(err, true)
 	}
 
-	return
+	err = printer.Wait()
+	if err != nil {
+		return err
+	}
+
+	var callFormatJSON bool
+	var jsonResults = map[string]map[string]any{}
+	if callFunc != nil {
+		callFormatJSON = callFunc.Format == "json"
+	}
+	var sep bool
+	var exitCode int
+
+	names := make([]string, 0, len(bo))
+	for name := range bo {
+		names = append(names, name)
+	}
+	slices.Sort(names)
+
+	for _, name := range names {
+		req := bo[name]
+		if req.PrintFunc == nil {
+			continue
+		}
+
+		pf := &pb.PrintFunc{
+			Name:         req.PrintFunc.Name,
+			Format:       req.PrintFunc.Format,
+			IgnoreStatus: req.PrintFunc.IgnoreStatus,
+		}
+
+		if callFunc != nil {
+			pf.Format = callFunc.Format
+			pf.IgnoreStatus = callFunc.IgnoreStatus
+		}
+
+		var res map[string]string
+		if sp, ok := resp[name]; ok {
+			res = sp.ExporterResponse
+		}
+
+		if callFormatJSON {
+			jsonResults[name] = map[string]any{}
+			buf := &bytes.Buffer{}
+			if code, err := printResult(buf, pf, res); err != nil {
+				jsonResults[name]["error"] = err.Error()
+				exitCode = 1
+			} else if code != 0 && exitCode == 0 {
+				exitCode = code
+			}
+			m := map[string]*json.RawMessage{}
+			if err := json.Unmarshal(buf.Bytes(), &m); err == nil {
+				for k, v := range m {
+					jsonResults[name][k] = v
+				}
+			} else {
+				jsonResults[name][pf.Name] = json.RawMessage(buf.Bytes())
+			}
+		} else {
+			if sep {
+				fmt.Fprintln(dockerCli.Out())
+			} else {
+				sep = true
+			}
+			fmt.Fprintf(dockerCli.Out(), "%s\n", name)
+			if descr := tgts[name].Description; descr != "" {
+				fmt.Fprintf(dockerCli.Out(), "%s\n", descr)
+			}
+
+			fmt.Fprintln(dockerCli.Out())
+			if code, err := printResult(dockerCli.Out(), pf, res); err != nil {
+				fmt.Fprintf(dockerCli.Out(), "error: %v\n", err)
+				exitCode = 1
+			} else if code != 0 && exitCode == 0 {
+				exitCode = code
+			}
+		}
+	}
+	if callFormatJSON {
+		out := struct {
+			Group  map[string]*bake.Group    `json:"group,omitempty"`
+			Target map[string]map[string]any `json:"target"`
+		}{
+			Group:  grps,
+			Target: map[string]map[string]any{},
+		}
+
+		for name, def := range tgts {
+			out.Target[name] = map[string]any{
+				"build": def,
+			}
+			if res, ok := jsonResults[name]; ok {
+				printName := bo[name].PrintFunc.Name
+				if printName == "lint" {
+					printName = "check"
+				}
+				out.Target[name][printName] = res
+			}
+		}
+		dt, err := json.MarshalIndent(out, "", "  ")
+		if err != nil {
+			return err
+		}
+		fmt.Fprintln(dockerCli.Out(), string(dt))
+	}
+
+	if exitCode != 0 {
+		os.Exit(exitCode)
+	}
+
+	return nil
 }
 
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -290,6 +448,18 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
+	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
+
+	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
+	flags.Lookup("check").NoOptDefVal = "true"
+
+	flags.BoolVar(&options.listTargets, "list-targets", false, "List available targets")
+	cobrautil.MarkFlagsExperimental(flags, "list-targets")
+	flags.MarkHidden("list-targets")
+
+	flags.BoolVar(&options.listVars, "list-variables", false, "List defined variables")
+	cobrautil.MarkFlagsExperimental(flags, "list-variables")
+	flags.MarkHidden("list-variables")
 
 	commonBuildFlags(&cFlags, flags)
 
@@ -345,4 +515,76 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 	}
 
 	return
+}
+
+func printVars(w io.Writer, vars []*hclparser.Variable) error {
+	slices.SortFunc(vars, func(a, b *hclparser.Variable) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
+	defer tw.Flush()
+
+	tw.Write([]byte("VARIABLE\tVALUE\tDESCRIPTION\n"))
+
+	for _, v := range vars {
+		var value string
+		if v.Value != nil {
+			value = *v.Value
+		} else {
+			value = "<null>"
+		}
+		fmt.Fprintf(tw, "%s\t%s\t%s\n", v.Name, value, v.Description)
+	}
+	return nil
+}
+
+func printTargetList(w io.Writer, cfg *bake.Config) error {
+	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
+	defer tw.Flush()
+
+	tw.Write([]byte("TARGET\tDESCRIPTION\n"))
+
+	type targetOrGroup struct {
+		name   string
+		target *bake.Target
+		group  *bake.Group
+	}
+
+	list := make([]targetOrGroup, 0, len(cfg.Targets)+len(cfg.Groups))
+	for _, tgt := range cfg.Targets {
+		list = append(list, targetOrGroup{name: tgt.Name, target: tgt})
+	}
+	for _, grp := range cfg.Groups {
+		list = append(list, targetOrGroup{name: grp.Name, group: grp})
+	}
+
+	slices.SortFunc(list, func(a, b targetOrGroup) int {
+		return cmp.Compare(a.name, b.name)
+	})
+
+	for _, tgt := range list {
+		if strings.HasPrefix(tgt.name, "_") {
+			// convention for a private target
+			continue
+		}
+		var descr string
+		if tgt.target != nil {
+			descr = tgt.target.Description
+		} else if tgt.group != nil {
+			descr = tgt.group.Description
+
+			if len(tgt.group.Targets) > 0 {
+				slices.Sort(tgt.group.Targets)
+				names := strings.Join(tgt.group.Targets, ", ")
+				if descr != "" {
+					descr += " (" + names + ")"
+				} else {
+					descr = names
+				}
+			}
+		}
+		fmt.Fprintf(tw, "%s\t%s\n", tgt.name, descr)
+	}
+
+	return nil
 }

@@ -25,9 +25,11 @@ type Opt struct {
 }
 
 type variable struct {
-	Name    string         `json:"-" hcl:"name,label"`
-	Default *hcl.Attribute `json:"default,omitempty" hcl:"default,optional"`
-	Body    hcl.Body       `json:"-" hcl:",body"`
+	Name        string         `json:"-" hcl:"name,label"`
+	Default     *hcl.Attribute `json:"default,omitempty" hcl:"default,optional"`
+	Description string         `json:"description,omitempty" hcl:"description,optional"`
+	Body        hcl.Body       `json:"-" hcl:",body"`
+	Remain      hcl.Body       `json:"-" hcl:",remain"`
 }
 
 type functionDef struct {
@@ -534,7 +536,18 @@ func (p *parser) resolveBlockNames(block *hcl.Block) ([]string, error) {
 	return names, nil
 }
 
-func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string, hcl.Diagnostics) {
+type Variable struct {
+	Name        string
+	Description string
+	Value       *string
+}
+
+type ParseMeta struct {
+	Renamed      map[string]map[string][]string
+	AllVariables []*Variable
+}
+
+func Parse(b hcl.Body, opt Opt, val interface{}) (*ParseMeta, hcl.Diagnostics) {
 	reserved := map[string]struct{}{}
 	schema, _ := gohcl.ImpliedBodySchema(val)
 
@@ -643,6 +656,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 		}
 	}
 
+	vars := make([]*Variable, 0, len(p.vars))
 	for k := range p.vars {
 		if err := p.resolveValue(p.ectx, k); err != nil {
 			if diags, ok := err.(hcl.Diagnostics); ok {
@@ -651,6 +665,21 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 			r := p.vars[k].Body.MissingItemRange()
 			return nil, wrapErrorDiagnostic("Invalid value", err, &r, &r)
 		}
+		v := &Variable{
+			Name:        p.vars[k].Name,
+			Description: p.vars[k].Description,
+		}
+		if vv := p.ectx.Variables[k]; !vv.IsNull() {
+			var s string
+			switch vv.Type() {
+			case cty.String:
+				s = vv.AsString()
+			case cty.Bool:
+				s = strconv.FormatBool(vv.True())
+			}
+			v.Value = &s
+		}
+		vars = append(vars, v)
 	}
 
 	for k := range p.funcs {
@@ -795,7 +824,10 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (map[string]map[string][]string
 		}
 	}
 
-	return renamed, nil
+	return &ParseMeta{
+		Renamed:      renamed,
+		AllVariables: vars,
+	}, nil
 }
 
 // wrapErrorDiagnostic wraps an error into a hcl.Diagnostics object.

@@ -1528,7 +1528,7 @@ services:
         v2: "bar"
 `)
 
-	c, err := ParseFiles([]File{
+	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.foo"},
 		{Data: dt2, Name: "c2.bar"},
 	}, nil)
