@@ -528,9 +528,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	options := &buildOptions{}
 
 	cmd := &cobra.Command{
-		Use:   "build [OPTIONS] PATH | URL | -",
-		Short: "Start a build",
-		Args:  cli.ExactArgs(1),
+		Use:     "build [OPTIONS] PATH | URL | -",
+		Short:   "Start a build",
+		Args:    cli.ExactArgs(1),
+		Aliases: []string{"b"},
 		Annotations: map[string]string{
 			"aliases": "docker build, docker builder build, docker image build, docker buildx b",
 		},
