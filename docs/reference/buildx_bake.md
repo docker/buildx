@@ -19,8 +19,6 @@ Build from a file
 | `--call`                            | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
 | `--check`                           | `bool`        |         | Shorthand for `--call=check`                                                                        |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                               |
-| `--list-targets`                    | `bool`        |         | List available targets                                                                              |
-| `--list-variables`                  | `bool`        |         | List defined variables                                                                              |
 | `--load`                            | `bool`        |         | Shorthand for `--set=*.output=type=docker`                                                          |
 | [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                               |
 | [`--no-cache`](#no-cache)           | `bool`        |         | Do not use cache when building the image                                                            |

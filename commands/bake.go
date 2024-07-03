@@ -21,6 +21,7 @@ import (
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -443,15 +444,22 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
 	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
 	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
-	flags.BoolVar(&options.listTargets, "list-targets", false, "List available targets")
-	flags.BoolVar(&options.listVars, "list-variables", false, "List defined variables")
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
+
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
+
+	flags.BoolVar(&options.listTargets, "list-targets", false, "List available targets")
+	cobrautil.MarkFlagsExperimental(flags, "list-targets")
+	flags.MarkHidden("list-targets")
+
+	flags.BoolVar(&options.listVars, "list-variables", false, "List defined variables")
+	cobrautil.MarkFlagsExperimental(flags, "list-variables")
+	flags.MarkHidden("list-variables")
 
 	commonBuildFlags(&cFlags, flags)
 
