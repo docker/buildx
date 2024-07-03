@@ -16,8 +16,8 @@ Build from a file
 | Name                                | Type          | Default | Description                                                                                         |
 |:------------------------------------|:--------------|:--------|:----------------------------------------------------------------------------------------------------|
 | [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                            |
-| `--call`                            | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
-| `--check`                           | `bool`        |         | Shorthand for `--call=check`                                                                        |
+| [`--call`](#call)                   | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
+| [`--check`](#check)                 | `bool`        |         | Shorthand for `--call=check`                                                                        |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                               |
 | `--load`                            | `bool`        |         | Shorthand for `--set=*.output=type=docker`                                                          |
 | [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                               |
@@ -52,6 +52,14 @@ guide for introduction to writing bake files.
 ### <a name="builder"></a> Override the configured builder instance (--builder)
 
 Same as [`buildx --builder`](buildx.md#builder).
+
+### <a name="call"></a> Invoke a frontend method (--call)
+
+Same as [`build --call`](buildx_build.md#call).
+
+#### <a name="check"></a> Call: check (--check)
+
+Same as [`build --check`](buildx_build.md#check).
 
 ### <a name="file"></a> Specify a build definition file (-f, --file)
 
