@@ -43,6 +43,7 @@ func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 
 var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuild,
+	testBuildAlias,
 	testBuildStdin,
 	testBuildRemote,
 	testBuildLocalState,
@@ -78,6 +79,13 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 func testBuild(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
 	out, err := buildCmd(sb, withArgs(dir))
+	require.NoError(t, err, string(out))
+}
+
+func testBuildAlias(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	cmd := buildxCmd(sb, withDir(dir), withArgs("b", dir))
+	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 }
 
