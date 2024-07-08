@@ -8,6 +8,7 @@ import (
 	"sort"
 	"strings"
 
+	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
@@ -40,7 +41,11 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 		ConfigFiles: cfgs,
 		Environment: envs,
 	}, func(options *loader.Options) {
-		options.SetProjectName("bake", false)
+		projectName := "bake"
+		if v, ok := envs[consts.ComposeProjectName]; ok && v != "" {
+			projectName = v
+		}
+		options.SetProjectName(projectName, false)
 		options.SkipNormalization = true
 		options.Profiles = []string{"*"}
 	})

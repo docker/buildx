@@ -771,6 +771,33 @@ services:
 	require.NoError(t, err)
 }
 
+func TestProjectName(t *testing.T) {
+	var dt = []byte(`
+services:
+  scratch:
+    build:
+     context: ./webapp
+     args:
+       PROJECT_NAME: ${COMPOSE_PROJECT_NAME}
+`)
+
+	t.Run("default", func(t *testing.T) {
+		c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+		require.NoError(t, err)
+		require.Len(t, c.Targets, 1)
+		require.Len(t, c.Targets[0].Args, 1)
+		require.Equal(t, map[string]*string{"PROJECT_NAME": ptrstr("bake")}, c.Targets[0].Args)
+	})
+
+	t.Run("env", func(t *testing.T) {
+		c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, map[string]string{"COMPOSE_PROJECT_NAME": "foo"})
+		require.NoError(t, err)
+		require.Len(t, c.Targets, 1)
+		require.Len(t, c.Targets[0].Args, 1)
+		require.Equal(t, map[string]*string{"PROJECT_NAME": ptrstr("foo")}, c.Targets[0].Args)
+	})
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
