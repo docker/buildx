@@ -494,7 +494,7 @@ func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[st
 				if err != nil {
 					return err
 				}
-				t2.Outputs = nil
+				t2.Outputs = []string{"type=cacheonly"}
 				t2.linked = true
 				m[target] = t2
 			}

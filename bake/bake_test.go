@@ -838,7 +838,8 @@ func TestReadContextFromTargetChain(t *testing.T) {
 
 	mid, ok := m["mid"]
 	require.True(t, ok)
-	require.Equal(t, 0, len(mid.Outputs))
+	require.Equal(t, 1, len(mid.Outputs))
+	require.Equal(t, "type=cacheonly", mid.Outputs[0])
 	require.Equal(t, 1, len(mid.Contexts))
 
 	base, ok := m["base"]
