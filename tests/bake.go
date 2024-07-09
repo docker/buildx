@@ -1074,15 +1074,16 @@ target "another" {
 	require.Contains(t, out, "another")
 	require.Contains(t, out, "UndefinedVar")
 
-	out, err = bakeCmd(
+	cmd := buildxCmd(
 		sb,
 		withDir(dir),
-		withArgs("build", "another", "--call", "check,format=json"),
+		withArgs("bake", "--progress=quiet", "build", "another", "--call", "check,format=json"),
 	)
-	require.Error(t, err, out)
+	outB, err := cmd.Output()
+	require.Error(t, err, string(outB))
 
 	var res map[string]any
-	err = json.Unmarshal([]byte(out), &res)
+	err = json.Unmarshal(outB, &res)
 	require.NoError(t, err, out)
 
 	targets, ok := res["target"].(map[string]any)
