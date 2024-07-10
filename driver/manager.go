@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/docker/cli/cli/context/store"
 	dockerclient "github.com/docker/docker/client"
@@ -38,6 +39,7 @@ type InitConfig struct {
 	Platforms       []specs.Platform
 	ContextPathHash string
 	DialMeta        map[string][]string
+	Timeout         time.Duration
 }
 
 var drivers map[string]Factory

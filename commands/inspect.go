@@ -24,6 +24,7 @@ import (
 type inspectOptions struct {
 	bootstrap bool
 	builder   string
+	timeout   time.Duration
 }
 
 func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) error {
@@ -36,7 +37,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 	}
 
 	timeoutCtx, cancel := context.WithCancelCause(ctx)
-	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded)) //nolint:govet,lostcancel // no need to manually cancel this context as we already rely on parent
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, in.timeout, errors.WithStack(context.DeadlineExceeded)) //nolint:govet,lostcancel // no need to manually cancel this context as we already rely on parent
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
 	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())
@@ -180,6 +181,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			if len(args) > 0 {
 				options.builder = args[0]
 			}
+			options.timeout = rootOpts.timeout
 			return runInspect(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.BuilderNames(dockerCli),

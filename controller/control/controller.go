@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"io"
+	"time"
 
 	"github.com/docker/buildx/build"
 	cbuild "github.com/docker/buildx/controller/build"
@@ -23,4 +24,8 @@ type BuildxController interface {
 	ListProcesses(ctx context.Context) (infos []*processes.ProcessInfo, retErr error)
 	DisconnectProcess(ctx context.Context, pid string) error
 	Inspect(ctx context.Context) *cbuild.Options
+}
+
+type ControlOptions struct {
+	Timeout      time.Duration
 }

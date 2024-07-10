@@ -3,6 +3,7 @@ package commands
 import (
 	"fmt"
 	"os"
+	"time"
 
 	debugcmd "github.com/docker/buildx/commands/debug"
 	historycmd "github.com/docker/buildx/commands/history"
@@ -21,6 +22,8 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
+
+const defaultTimeoutCli = 20 * time.Second
 
 func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra.Command {
 	var opt rootOptions
@@ -96,6 +99,7 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 type rootOptions struct {
 	builder string
 	debug   bool
+	timeout time.Duration
 }
 
 func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
@@ -104,10 +108,10 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 	cmd.AddCommand(
 		buildCmd(dockerCli, opts, nil),
 		bakeCmd(dockerCli, opts),
-		createCmd(dockerCli),
+		createCmd(dockerCli, opts),
 		dialStdioCmd(dockerCli, opts),
 		rmCmd(dockerCli, opts),
-		lsCmd(dockerCli),
+		lsCmd(dockerCli, opts),
 		useCmd(dockerCli, opts),
 		inspectCmd(dockerCli, opts),
 		stopCmd(dockerCli, opts),
@@ -134,4 +138,14 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 func rootFlags(options *rootOptions, flags *pflag.FlagSet) {
 	flags.StringVar(&options.builder, "builder", os.Getenv("BUILDX_BUILDER"), "Override the configured builder instance")
 	flags.BoolVarP(&options.debug, "debug", "D", debug.IsEnabled(), "Enable debug logging")
+
+	var timeoutDuration = defaultTimeoutCli
+	if value, ok := os.LookupEnv("BUILDX_TIMEOUT"); ok {
+		var err error
+		timeoutDuration, err = time.ParseDuration(value)
+		if err != nil {
+			timeoutDuration = defaultTimeoutCli
+		}
+	}
+	flags.DurationVar(&options.timeout, "timeout", timeoutDuration, "Override the default global timeout (20 seconds)")
 }

@@ -6,6 +6,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	util "github.com/docker/buildx/driver/remote/util"
@@ -87,6 +88,12 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 				return nil, err
 			}
 			d.defaultLoad = parsed
+		case "timeout":
+			parsed, err := time.ParseDuration(v)
+			if err != nil {
+				return nil, err
+			}
+			d.Timeout = parsed
 		default:
 			return nil, errors.Errorf("invalid driver option %s for remote driver", k)
 		}
