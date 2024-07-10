@@ -48,8 +48,9 @@ func (b *Builder) Nodes() []Node {
 type LoadNodesOption func(*loadNodesOptions)
 
 type loadNodesOptions struct {
-	data     bool
-	dialMeta map[string][]string
+	data      bool
+	dialMeta  map[string][]string
+	clientOpt []client.ClientOpt
 }
 
 func WithData() LoadNodesOption {
@@ -61,6 +62,12 @@ func WithData() LoadNodesOption {
 func WithDialMeta(dialMeta map[string][]string) LoadNodesOption {
 	return func(o *loadNodesOptions) {
 		o.dialMeta = dialMeta
+	}
+}
+
+func WithClientOpt(clientOpt ...client.ClientOpt) LoadNodesOption {
+	return func(o *loadNodesOptions) {
+		o.clientOpt = clientOpt
 	}
 }
 
@@ -151,7 +158,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 				node.ImageOpt = imageopt
 
 				if lno.data {
-					if err := node.loadData(ctx); err != nil {
+					if err := node.loadData(ctx, lno.clientOpt...); err != nil {
 						node.Err = err
 					}
 				}
@@ -247,7 +254,7 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 	})
 }
 
-func (n *Node) loadData(ctx context.Context) error {
+func (n *Node) loadData(ctx context.Context, clientOpt ...client.ClientOpt) error {
 	if n.Driver == nil {
 		return nil
 	}
@@ -257,7 +264,7 @@ func (n *Node) loadData(ctx context.Context) error {
 	}
 	n.DriverInfo = info
 	if n.DriverInfo.Status == driver.Running {
-		driverClient, err := n.Driver.Client(ctx)
+		driverClient, err := n.Driver.Client(ctx, clientOpt...)
 		if err != nil {
 			return err
 		}

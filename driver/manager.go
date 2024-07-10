@@ -155,9 +155,9 @@ type DriverHandle struct {
 	historyAPISupported     bool
 }
 
-func (d *DriverHandle) Client(ctx context.Context) (*client.Client, error) {
+func (d *DriverHandle) Client(ctx context.Context, opt ...client.ClientOpt) (*client.Client, error) {
 	d.once.Do(func() {
-		d.client, d.err = d.Driver.Client(ctx, d.getClientOptions()...)
+		d.client, d.err = d.Driver.Client(ctx, append(d.getClientOptions(), opt...)...)
 	})
 	return d.client, d.err
 }
