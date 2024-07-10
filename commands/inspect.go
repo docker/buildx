@@ -23,6 +23,7 @@ import (
 type inspectOptions struct {
 	bootstrap bool
 	builder   string
+	timeout   time.Duration
 }
 
 func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) error {
@@ -34,7 +35,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, in.timeout)
 	defer cancel()
 
 	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())
@@ -147,6 +148,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			if len(args) > 0 {
 				options.builder = args[0]
 			}
+			options.timeout = rootOpts.timeout
 			return runInspect(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.BuilderNames(dockerCli),

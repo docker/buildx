@@ -20,7 +20,6 @@ import (
 const (
 	prioritySupported   = 40
 	priorityUnsupported = 80
-	defaultTimeout      = 120 * time.Second
 )
 
 func init() {
@@ -78,7 +77,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	}
 
 	d.defaultLoad = defaultLoad
-	d.timeout = timeout
+	d.Timeout = timeout
 
 	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
@@ -119,7 +118,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 	}
 
 	defaultLoad := false
-	timeout := defaultTimeout
+	timeout := cfg.Timeout
 
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
 
