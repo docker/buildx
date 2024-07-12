@@ -31,7 +31,7 @@ group "default" {
 }
 
 group "validate" {
-  targets = ["lint", "lint-gopls", "validate-vendor", "validate-docs"]
+  targets = ["lint", "lint-gopls", "validate-golangci", "validate-vendor", "validate-docs"]
 }
 
 target "lint" {
@@ -49,6 +49,14 @@ target "lint" {
     "windows/amd64",
     "windows/arm64"
   ] : []
+}
+
+target "validate-golangci" {
+  description = "Validate .golangci.yml schema (does not run Go linter)"
+  inherits = ["_common"]
+  dockerfile = "./hack/dockerfiles/lint.Dockerfile"
+  target = "validate-golangci"
+  output = ["type=cacheonly"]
 }
 
 target "lint-gopls" {
