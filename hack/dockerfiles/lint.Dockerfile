@@ -75,4 +75,10 @@ RUN --mount=target=. \
   done
 EOF
 
+FROM alpine AS yamllint
+RUN apk add --no-cache yamllint
+WORKDIR /go/src/github.com/docker/buildx
+RUN --mount=type=bind \
+  yamllint -c .yamllint.yml --strict .
+
 FROM lint

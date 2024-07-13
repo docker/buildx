@@ -31,7 +31,7 @@ group "default" {
 }
 
 group "validate" {
-  targets = ["lint", "lint-gopls", "validate-golangci", "validate-vendor", "validate-docs"]
+  targets = ["lint", "lint-gopls", "lint-yaml", "validate-golangci", "validate-vendor", "validate-docs"]
 }
 
 target "lint" {
@@ -62,6 +62,14 @@ target "validate-golangci" {
 target "lint-gopls" {
   inherits = ["lint"]
   target = "gopls-analyze"
+}
+
+target "lint-yaml" {
+  description = "Lint Github Actions workflows and other YAML files"
+  inherits = ["_common"]
+  dockerfile = "./hack/dockerfiles/lint.Dockerfile"
+  target = "yamllint"
+  output = ["type=cacheonly"]
 }
 
 target "validate-vendor" {
