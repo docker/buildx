@@ -7,7 +7,6 @@ import (
 
 	"github.com/docker/buildx/util/platformutil"
 	v1 "github.com/opencontainers/image-spec/specs-go/v1"
-	"github.com/pkg/errors"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -53,10 +52,17 @@ const (
 	LabelApp           = "app"
 )
 
-var (
-	ErrReservedAnnotationPlatform = errors.Errorf("the annotation \"%s\" is reserved and cannot be customized", AnnotationPlatform)
-	ErrReservedLabelApp           = errors.Errorf("the label \"%s\" is reserved and cannot be customized", LabelApp)
-)
+type ErrReservedAnnotationPlatform struct{}
+
+func (ErrReservedAnnotationPlatform) Error() string {
+	return fmt.Sprintf("the annotation %q is reserved and cannot be customized", AnnotationPlatform)
+}
+
+type ErrReservedLabelApp struct{}
+
+func (ErrReservedLabelApp) Error() string {
+	return fmt.Sprintf("the label %q is reserved and cannot be customized", LabelApp)
+}
 
 func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.ConfigMap, err error) {
 	labels := map[string]string{
@@ -73,14 +79,14 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 
 	for k, v := range opt.CustomAnnotations {
 		if k == AnnotationPlatform {
-			return nil, nil, ErrReservedAnnotationPlatform
+			return nil, nil, ErrReservedAnnotationPlatform{}
 		}
 		annotations[k] = v
 	}
 
 	for k, v := range opt.CustomLabels {
 		if k == LabelApp {
-			return nil, nil, ErrReservedLabelApp
+			return nil, nil, ErrReservedLabelApp{}
 		}
 		labels[k] = v
 	}

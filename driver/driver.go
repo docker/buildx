@@ -14,8 +14,17 @@ import (
 	"github.com/pkg/errors"
 )
 
-var ErrNotRunning = errors.Errorf("driver not running")
-var ErrNotConnecting = errors.Errorf("driver not connecting")
+type ErrNotRunning struct{}
+
+func (ErrNotRunning) Error() string {
+	return "driver not running"
+}
+
+type ErrNotConnecting struct{}
+
+func (ErrNotConnecting) Error() string {
+	return "driver not connecting"
+}
 
 type Status int
 
@@ -105,7 +114,7 @@ func Boot(ctx, clientContext context.Context, d *DriverHandle, pw progress.Write
 
 		c, err := d.Client(clientContext)
 		if err != nil {
-			if errors.Cause(err) == ErrNotRunning && try <= 2 {
+			if errors.Is(err, ErrNotRunning{}) && try <= 2 {
 				continue
 			}
 			return nil, err
