@@ -1,11 +1,7 @@
 run:
   timeout: 30m
-  skip-files:
-    - ".*\\.pb\\.go$"
 
   modules-download-mode: vendor
-
-  build-tags:
 
 linters:
   enable:
@@ -57,6 +53,8 @@ linters-settings:
       G306: "0644"
 
 issues:
+  exclude-files:
+    - ".*\\.pb\\.go$"
   exclude-rules:
     - linters:
         - revive
@@ -77,6 +75,6 @@ issues:
         - revive
       text: "if-return"
 
-# show all
-max-issues-per-linter: 0
-max-same-issues: 0
+  # show all
+  max-issues-per-linter: 0
+  max-same-issues: 0
