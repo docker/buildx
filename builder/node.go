@@ -8,7 +8,6 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/driver"
-	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/dockerutil"
@@ -18,7 +17,6 @@ import (
 	"github.com/moby/buildkit/util/grpcerrors"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 )
@@ -119,47 +117,18 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 					return nil
 				}
 
-				contextStore := b.opts.dockerCli.ContextStore()
-
-				var kcc driver.KubeClientConfig
-				kcc, err = ctxkube.ConfigFromEndpoint(n.Endpoint, contextStore)
-				if err != nil {
-					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
-					// try again with name="default".
-					// FIXME(@AkihiroSuda): n should retain real context name.
-					kcc, err = ctxkube.ConfigFromEndpoint("default", contextStore)
-					if err != nil {
-						logrus.Error(err)
-					}
-				}
-
-				tryToUseKubeConfigInCluster := false
-				if kcc == nil {
-					tryToUseKubeConfigInCluster = true
-				} else {
-					if _, err := kcc.ClientConfig(); err != nil {
-						tryToUseKubeConfigInCluster = true
-					}
-				}
-				if tryToUseKubeConfigInCluster {
-					kccInCluster := driver.KubeClientConfigInCluster{}
-					if _, err := kccInCluster.ClientConfig(); err == nil {
-						logrus.Debug("using kube config in cluster")
-						kcc = kccInCluster
-					}
-				}
 				d, err := driver.GetDriver(ctx, factory, driver.InitConfig{
-					Name:             driver.BuilderName(n.Name),
-					EndpointAddr:     n.Endpoint,
-					DockerAPI:        dockerapi,
-					KubeClientConfig: kcc,
-					BuildkitdFlags:   n.BuildkitdFlags,
-					Files:            n.Files,
-					DriverOpts:       n.DriverOpts,
-					Auth:             imageopt.Auth,
-					Platforms:        n.Platforms,
-					ContextPathHash:  b.opts.contextPathHash,
-					DialMeta:         lno.dialMeta,
+					Name:            driver.BuilderName(n.Name),
+					EndpointAddr:    n.Endpoint,
+					DockerAPI:       dockerapi,
+					ContextStore:    b.opts.dockerCli.ContextStore(),
+					BuildkitdFlags:  n.BuildkitdFlags,
+					Files:           n.Files,
+					DriverOpts:      n.DriverOpts,
+					Auth:            imageopt.Auth,
+					Platforms:       n.Platforms,
+					ContextPathHash: b.opts.contextPathHash,
+					DialMeta:        lno.dialMeta,
 				})
 				if err != nil {
 					node.Err = err

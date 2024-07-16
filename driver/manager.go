@@ -2,17 +2,15 @@ package driver
 
 import (
 	"context"
-	"os"
 	"sort"
-	"strings"
 	"sync"
 
+	"github.com/docker/cli/cli/context/store"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/delegated"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"k8s.io/client-go/rest"
 )
 
 type Factory interface {
@@ -28,38 +26,18 @@ type BuildkitConfig struct {
 	// Rootless bool
 }
 
-type KubeClientConfig interface {
-	ClientConfig() (*rest.Config, error)
-	Namespace() (string, bool, error)
-}
-
-type KubeClientConfigInCluster struct{}
-
-func (k KubeClientConfigInCluster) ClientConfig() (*rest.Config, error) {
-	return rest.InClusterConfig()
-}
-
-func (k KubeClientConfigInCluster) Namespace() (string, bool, error) {
-	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-	if err != nil {
-		return "", false, err
-	}
-	return strings.TrimSpace(string(namespace)), true, nil
-}
-
 type InitConfig struct {
-	// TODO: This object needs updates to be generic for different drivers
-	Name             string
-	EndpointAddr     string
-	DockerAPI        dockerclient.APIClient
-	KubeClientConfig KubeClientConfig
-	BuildkitdFlags   []string
-	Files            map[string][]byte
-	DriverOpts       map[string]string
-	Auth             Auth
-	Platforms        []specs.Platform
-	ContextPathHash  string // can be used for determining pods in the driver instance
-	DialMeta         map[string][]string
+	Name            string
+	EndpointAddr    string
+	DockerAPI       dockerclient.APIClient
+	ContextStore    store.Reader
+	BuildkitdFlags  []string
+	Files           map[string][]byte
+	DriverOpts      map[string]string
+	Auth            Auth
+	Platforms       []specs.Platform
+	ContextPathHash string
+	DialMeta        map[string][]string
 }
 
 var drivers map[string]Factory

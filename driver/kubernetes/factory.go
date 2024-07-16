@@ -2,19 +2,22 @@ package kubernetes
 
 import (
 	"context"
+	"os"
 	"strconv"
 	"strings"
 	"time"
 
-	corev1 "k8s.io/api/core/v1"
-
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
+	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -23,11 +26,31 @@ const (
 	defaultTimeout      = 120 * time.Second
 )
 
+type ClientConfig interface {
+	ClientConfig() (*rest.Config, error)
+	Namespace() (string, bool, error)
+}
+
+type ClientConfigInCluster struct{}
+
+func (k ClientConfigInCluster) ClientConfig() (*rest.Config, error) {
+	return rest.InClusterConfig()
+}
+
+func (k ClientConfigInCluster) Namespace() (string, bool, error) {
+	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
+	if err != nil {
+		return "", false, err
+	}
+	return strings.TrimSpace(string(namespace)), true, nil
+}
+
 func init() {
 	driver.Register(&factory{})
 }
 
 type factory struct {
+	cc ClientConfig // used for testing
 }
 
 func (*factory) Name() string {
@@ -46,18 +69,50 @@ func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.
 }
 
 func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver, error) {
-	if cfg.KubeClientConfig == nil {
-		return nil, errors.Errorf("%s driver requires kubernetes API access", DriverName)
+	var err error
+	var cc ClientConfig
+	if f.cc != nil {
+		cc = f.cc
+	} else {
+		cc, err = ctxkube.ConfigFromEndpoint(cfg.EndpointAddr, cfg.ContextStore)
+		if err != nil {
+			// err is returned if cfg.EndpointAddr is non-context name like "unix:///var/run/docker.sock".
+			// try again with name="default".
+			// FIXME(@AkihiroSuda): cfg should retain real context name.
+			cc, err = ctxkube.ConfigFromEndpoint("default", cfg.ContextStore)
+			if err != nil {
+				logrus.Error(err)
+			}
+		}
+		tryToUseConfigInCluster := false
+		if cc == nil {
+			tryToUseConfigInCluster = true
+		} else {
+			if _, err := cc.ClientConfig(); err != nil {
+				tryToUseConfigInCluster = true
+			}
+		}
+		if tryToUseConfigInCluster {
+			ccInCluster := ClientConfigInCluster{}
+			if _, err := ccInCluster.ClientConfig(); err == nil {
+				logrus.Debug("using kube config in cluster")
+				cc = ccInCluster
+			}
+		}
+		if cc == nil {
+			return nil, errors.Errorf("%s driver requires kubernetes API access", DriverName)
+		}
 	}
+
 	deploymentName, err := buildxNameToDeploymentName(cfg.Name)
 	if err != nil {
 		return nil, err
 	}
-	namespace, _, err := cfg.KubeClientConfig.Namespace()
+	namespace, _, err := cc.Namespace()
 	if err != nil {
 		return nil, errors.Wrap(err, "cannot determine Kubernetes namespace, specify manually")
 	}
-	restClientConfig, err := cfg.KubeClientConfig.ClientConfig()
+	restClientConfig, err := cc.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
@@ -67,9 +122,10 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	}
 
 	d := &Driver{
-		factory:    f,
-		InitConfig: cfg,
-		clientset:  clientset,
+		factory:      f,
+		clientConfig: cc,
+		InitConfig:   cfg,
+		clientset:    clientset,
 	}
 
 	deploymentOpt, loadbalance, namespace, defaultLoad, timeout, err := f.processDriverOpts(deploymentName, namespace, cfg)

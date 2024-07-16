@@ -11,29 +11,28 @@ import (
 	"k8s.io/client-go/rest"
 )
 
-type mockKubeClientConfig struct {
+type mockClientConfig struct {
 	clientConfig *rest.Config
 	namespace    string
 }
 
-func (r *mockKubeClientConfig) ClientConfig() (*rest.Config, error) {
+func (r *mockClientConfig) ClientConfig() (*rest.Config, error) {
 	return r.clientConfig, nil
 }
 
-func (r *mockKubeClientConfig) Namespace() (string, bool, error) {
+func (r *mockClientConfig) Namespace() (string, bool, error) {
 	return r.namespace, true, nil
 }
 
 func TestFactory_processDriverOpts(t *testing.T) {
-	kcc := mockKubeClientConfig{
-		clientConfig: &rest.Config{},
-	}
-
 	cfg := driver.InitConfig{
-		Name:             driver.BuilderName("test"),
-		KubeClientConfig: &kcc,
+		Name: driver.BuilderName("test"),
 	}
-	f := factory{}
+	f := factory{
+		cc: &mockClientConfig{
+			clientConfig: &rest.Config{},
+		},
+	}
 
 	t.Run(
 		"ValidOptions", func(t *testing.T) {

@@ -38,7 +38,8 @@ const (
 
 type Driver struct {
 	driver.InitConfig
-	factory driver.Factory
+	factory      driver.Factory
+	clientConfig ClientConfig
 
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/kubernetes.md
@@ -198,7 +199,7 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 
 func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	restClient := d.clientset.CoreV1().RESTClient()
-	restClientConfig, err := d.KubeClientConfig.ClientConfig()
+	restClientConfig, err := d.clientConfig.ClientConfig()
 	if err != nil {
 		return nil, err
 	}
