@@ -48,7 +48,7 @@ func (k KubeClientConfigInCluster) Namespace() (string, bool, error) {
 }
 
 type InitConfig struct {
-	// This object needs updates to be generic for different drivers
+	// TODO: This object needs updates to be generic for different drivers
 	Name             string
 	EndpointAddr     string
 	DockerAPI        dockerclient.APIClient
@@ -104,28 +104,15 @@ func GetFactory(name string, instanceRequired bool) (Factory, error) {
 	return nil, errors.Errorf("failed to find driver %q", name)
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, buildkitdFlags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string, dialMeta map[string][]string) (*DriverHandle, error) {
-	ic := InitConfig{
-		EndpointAddr:     endpointAddr,
-		DockerAPI:        api,
-		KubeClientConfig: kcc,
-		Name:             name,
-		BuildkitdFlags:   buildkitdFlags,
-		DriverOpts:       do,
-		Auth:             auth,
-		Platforms:        platforms,
-		ContextPathHash:  contextPathHash,
-		DialMeta:         dialMeta,
-		Files:            files,
-	}
+func GetDriver(ctx context.Context, f Factory, cfg InitConfig) (*DriverHandle, error) {
 	if f == nil {
 		var err error
-		f, err = GetDefaultFactory(ctx, endpointAddr, api, false, dialMeta)
+		f, err = GetDefaultFactory(ctx, cfg.EndpointAddr, cfg.DockerAPI, false, cfg.DialMeta)
 		if err != nil {
 			return nil, err
 		}
 	}
-	d, err := f.New(ctx, ic)
+	d, err := f.New(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}

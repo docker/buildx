@@ -148,8 +148,19 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 						kcc = kccInCluster
 					}
 				}
-
-				d, err := driver.GetDriver(ctx, driver.BuilderName(n.Name), factory, n.Endpoint, dockerapi, imageopt.Auth, kcc, n.BuildkitdFlags, n.Files, n.DriverOpts, n.Platforms, b.opts.contextPathHash, lno.dialMeta)
+				d, err := driver.GetDriver(ctx, factory, driver.InitConfig{
+					Name:             driver.BuilderName(n.Name),
+					EndpointAddr:     n.Endpoint,
+					DockerAPI:        dockerapi,
+					KubeClientConfig: kcc,
+					BuildkitdFlags:   n.BuildkitdFlags,
+					Files:            n.Files,
+					DriverOpts:       n.DriverOpts,
+					Auth:             imageopt.Auth,
+					Platforms:        n.Platforms,
+					ContextPathHash:  b.opts.contextPathHash,
+					DialMeta:         lno.dialMeta,
+				})
 				if err != nil {
 					node.Err = err
 					return nil
