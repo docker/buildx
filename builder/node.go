@@ -121,31 +121,31 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 
 				contextStore := b.opts.dockerCli.ContextStore()
 
+				// Check if the driver is a Kubernetes driver
 				var kcc driver.KubeClientConfig
-				kcc, err = ctxkube.ConfigFromEndpoint(n.Endpoint, contextStore)
-				if err != nil {
-					// err is returned if n.Endpoint is non-context name like "unix:///var/run/docker.sock".
-					// try again with name="default".
-					// FIXME(@AkihiroSuda): n should retain real context name.
-					kcc, err = ctxkube.ConfigFromEndpoint("default", contextStore)
+				if strings.Contains(n.Endpoint, "kubernetes") {
+					kcc, err = ctxkube.ConfigFromEndpoint(n.Endpoint, contextStore)
 					if err != nil {
-						logrus.Error(err)
+						kcc, err = ctxkube.ConfigFromEndpoint("default", contextStore)
+						if err != nil {
+							logrus.Error(err)
+						}
 					}
-				}
 
-				tryToUseKubeConfigInCluster := false
-				if kcc == nil {
-					tryToUseKubeConfigInCluster = true
-				} else {
-					if _, err := kcc.ClientConfig(); err != nil {
+					tryToUseKubeConfigInCluster := false
+					if kcc == nil {
 						tryToUseKubeConfigInCluster = true
+					} else {
+						if _, err := kcc.ClientConfig(); err != nil {
+							tryToUseKubeConfigInCluster = true
+						}
 					}
-				}
-				if tryToUseKubeConfigInCluster {
-					kccInCluster := driver.KubeClientConfigInCluster{}
-					if _, err := kccInCluster.ClientConfig(); err == nil {
-						logrus.Debug("using kube config in cluster")
-						kcc = kccInCluster
+					if tryToUseKubeConfigInCluster {
+						kccInCluster := driver.KubeClientConfigInCluster{}
+						if _, err := kccInCluster.ClientConfig(); err == nil {
+							logrus.Debug("using kube config in cluster")
+							kcc = kccInCluster
+						}
 					}
 				}
 
