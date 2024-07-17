@@ -22,9 +22,14 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
-// Will update the environment variables for the format {- VAR} (without interpolation)
-// This function should resolve context environment vars for include (passed in env_file)
-func resolveServicesEnvironment(dict map[string]any, config types.ConfigDetails) {
+// ResolveEnvironment update the environment variables for the format {- VAR} (without interpolation)
+func ResolveEnvironment(dict map[string]any, environment types.Mapping) {
+	resolveServicesEnvironment(dict, environment)
+	resolveSecretsEnvironment(dict, environment)
+	resolveConfigsEnvironment(dict, environment)
+}
+
+func resolveServicesEnvironment(dict map[string]any, environment types.Mapping) {
 	services, ok := dict["services"].(map[string]any)
 	if !ok {
 		return
@@ -45,7 +50,7 @@ func resolveServicesEnvironment(dict map[string]any, config types.ConfigDetails)
 			if !ok {
 				continue
 			}
-			if found, ok := config.Environment[varEnv]; ok {
+			if found, ok := environment[varEnv]; ok {
 				envs = append(envs, fmt.Sprintf("%s=%s", varEnv, found))
 			} else {
 				// either does not exist or it was already resolved in interpolation
@@ -56,4 +61,50 @@ func resolveServicesEnvironment(dict map[string]any, config types.ConfigDetails)
 		services[service] = serviceConfig
 	}
 	dict["services"] = services
+}
+
+func resolveSecretsEnvironment(dict map[string]any, environment types.Mapping) {
+	secrets, ok := dict["secrets"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for name, cfg := range secrets {
+		secret, ok := cfg.(map[string]any)
+		if !ok {
+			continue
+		}
+		env, ok := secret["environment"].(string)
+		if !ok {
+			continue
+		}
+		if found, ok := environment[env]; ok {
+			secret["content"] = found
+		}
+		secrets[name] = secret
+	}
+	dict["secrets"] = secrets
+}
+
+func resolveConfigsEnvironment(dict map[string]any, environment types.Mapping) {
+	configs, ok := dict["configs"].(map[string]any)
+	if !ok {
+		return
+	}
+
+	for name, cfg := range configs {
+		config, ok := cfg.(map[string]any)
+		if !ok {
+			continue
+		}
+		env, ok := config["environment"].(string)
+		if !ok {
+			continue
+		}
+		if found, ok := environment[env]; ok {
+			config["content"] = found
+		}
+		configs[name] = config
+	}
+	dict["configs"] = configs
 }

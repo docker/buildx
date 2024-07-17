@@ -89,7 +89,7 @@ var versionWarning []string
 
 func (o *Options) warnObsoleteVersion(file string) {
 	if !slices.Contains(versionWarning, file) {
-		logrus.Warning(fmt.Sprintf("%s: `version` is obsolete", file))
+		logrus.Warning(fmt.Sprintf("%s: the attribute `version` is obsolete, it will be ignored, please remove it to avoid potential confusion", file))
 	}
 	versionWarning = append(versionWarning, file)
 }
@@ -358,100 +358,19 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 		dict = map[string]interface{}{}
 		err  error
 	)
+	workingDir, environment := config.WorkingDir, config.Environment
+
 	for _, file := range config.ConfigFiles {
-		fctx := context.WithValue(ctx, consts.ComposeFileKey{}, file.Filename)
-		if file.Content == nil && file.Config == nil {
-			content, err := os.ReadFile(file.Filename)
-			if err != nil {
-				return nil, err
-			}
-			file.Content = content
+		dict, _, err = loadYamlFile(ctx, file, opts, workingDir, environment, ct, dict, included)
+		if err != nil {
+			return nil, err
 		}
+	}
 
-		processRawYaml := func(raw interface{}, processors ...PostProcessor) error {
-			converted, err := convertToStringKeysRecursive(raw, "")
-			if err != nil {
-				return err
-			}
-			cfg, ok := converted.(map[string]interface{})
-			if !ok {
-				return errors.New("Top-level object must be a mapping")
-			}
-
-			if opts.Interpolate != nil && !opts.SkipInterpolation {
-				cfg, err = interp.Interpolate(cfg, *opts.Interpolate)
-				if err != nil {
-					return err
-				}
-			}
-
-			fixEmptyNotNull(cfg)
-
-			if !opts.SkipExtends {
-				err = ApplyExtends(fctx, cfg, opts, ct, processors...)
-				if err != nil {
-					return err
-				}
-			}
-
-			for _, processor := range processors {
-				if err := processor.Apply(dict); err != nil {
-					return err
-				}
-			}
-
-			if !opts.SkipInclude {
-				included = append(included, config.ConfigFiles[0].Filename)
-				err = ApplyInclude(ctx, config, cfg, opts, included)
-				if err != nil {
-					return err
-				}
-			}
-
-			dict, err = override.Merge(dict, cfg)
-			if err != nil {
-				return err
-			}
-
-			dict, err = override.EnforceUnicity(dict)
-			if err != nil {
-				return err
-			}
-
-			if !opts.SkipValidation {
-				if err := schema.Validate(dict); err != nil {
-					return fmt.Errorf("validating %s: %w", file.Filename, err)
-				}
-				if _, ok := dict["version"]; ok {
-					opts.warnObsoleteVersion(file.Filename)
-					delete(dict, "version")
-				}
-			}
-
-			return err
-		}
-
-		if file.Config == nil {
-			r := bytes.NewReader(file.Content)
-			decoder := yaml.NewDecoder(r)
-			for {
-				var raw interface{}
-				processor := &ResetProcessor{target: &raw}
-				err := decoder.Decode(processor)
-				if err != nil && errors.Is(err, io.EOF) {
-					break
-				}
-				if err != nil {
-					return nil, err
-				}
-				if err := processRawYaml(raw, processor); err != nil {
-					return nil, err
-				}
-			}
-		} else {
-			if err := processRawYaml(file.Config); err != nil {
-				return nil, err
-			}
+	if opts.Interpolate != nil && !opts.SkipInterpolation {
+		dict, err = interp.Interpolate(dict, *opts.Interpolate)
+		if err != nil {
+			return nil, err
 		}
 	}
 
@@ -460,7 +379,6 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 		return nil, err
 	}
 
-	// Canonical transformation can reveal duplicates, typically as ports can be a range and conflict with an override
 	dict, err = override.EnforceUnicity(dict)
 	if err != nil {
 		return nil, err
@@ -489,9 +407,96 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 			return nil, err
 		}
 	}
-	resolveServicesEnvironment(dict, config)
+	ResolveEnvironment(dict, config.Environment)
 
 	return dict, nil
+}
+
+func loadYamlFile(ctx context.Context, file types.ConfigFile, opts *Options, workingDir string, environment types.Mapping, ct *cycleTracker, dict map[string]interface{}, included []string) (map[string]interface{}, PostProcessor, error) {
+	ctx = context.WithValue(ctx, consts.ComposeFileKey{}, file.Filename)
+	if file.Content == nil && file.Config == nil {
+		content, err := os.ReadFile(file.Filename)
+		if err != nil {
+			return nil, nil, err
+		}
+		file.Content = content
+	}
+
+	processRawYaml := func(raw interface{}, processors ...PostProcessor) error {
+		converted, err := convertToStringKeysRecursive(raw, "")
+		if err != nil {
+			return err
+		}
+		cfg, ok := converted.(map[string]interface{})
+		if !ok {
+			return errors.New("Top-level object must be a mapping")
+		}
+
+		fixEmptyNotNull(cfg)
+
+		if !opts.SkipExtends {
+			err = ApplyExtends(ctx, cfg, opts, ct, processors...)
+			if err != nil {
+				return err
+			}
+		}
+
+		for _, processor := range processors {
+			if err := processor.Apply(dict); err != nil {
+				return err
+			}
+		}
+
+		if !opts.SkipInclude {
+			included = append(included, file.Filename)
+			err = ApplyInclude(ctx, workingDir, environment, cfg, opts, included)
+			if err != nil {
+				return err
+			}
+		}
+
+		dict, err = override.Merge(dict, cfg)
+		if err != nil {
+			return err
+		}
+
+		if !opts.SkipValidation {
+			if err := schema.Validate(dict); err != nil {
+				return fmt.Errorf("validating %s: %w", file.Filename, err)
+			}
+			if _, ok := dict["version"]; ok {
+				opts.warnObsoleteVersion(file.Filename)
+				delete(dict, "version")
+			}
+		}
+		return nil
+	}
+
+	var processor PostProcessor
+	if file.Config == nil {
+		r := bytes.NewReader(file.Content)
+		decoder := yaml.NewDecoder(r)
+		for {
+			var raw interface{}
+			reset := &ResetProcessor{target: &raw}
+			err := decoder.Decode(reset)
+			if err != nil && errors.Is(err, io.EOF) {
+				break
+			}
+			if err != nil {
+				return nil, nil, err
+			}
+			processor = reset
+			if err := processRawYaml(raw, processor); err != nil {
+				return nil, nil, err
+			}
+		}
+	} else {
+		if err := processRawYaml(file.Config); err != nil {
+			return nil, nil, err
+		}
+	}
+	return dict, processor, nil
 }
 
 func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options, loaded []string) (map[string]interface{}, error) {
