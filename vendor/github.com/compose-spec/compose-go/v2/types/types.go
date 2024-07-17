@@ -782,8 +782,40 @@ type ExtendsConfig struct {
 // SecretConfig for a secret
 type SecretConfig FileObjectConfig
 
+// MarshalYAML makes SecretConfig implement yaml.Marshaller
+func (s SecretConfig) MarshalYAML() (interface{}, error) {
+	// secret content is set while loading model. Never marshall it
+	s.Content = ""
+	return FileObjectConfig(s), nil
+}
+
+// MarshalJSON makes SecretConfig implement json.Marshaller
+func (s SecretConfig) MarshalJSON() ([]byte, error) {
+	// secret content is set while loading model. Never marshall it
+	s.Content = ""
+	return json.Marshal(FileObjectConfig(s))
+}
+
 // ConfigObjConfig is the config for the swarm "Config" object
 type ConfigObjConfig FileObjectConfig
+
+// MarshalYAML makes ConfigObjConfig implement yaml.Marshaller
+func (s ConfigObjConfig) MarshalYAML() (interface{}, error) {
+	// config content may have been set from environment while loading model. Marshall actual source
+	if s.Environment != "" {
+		s.Content = ""
+	}
+	return FileObjectConfig(s), nil
+}
+
+// MarshalJSON makes ConfigObjConfig implement json.Marshaller
+func (s ConfigObjConfig) MarshalJSON() ([]byte, error) {
+	// config content may have been set from environment while loading model. Marshall actual source
+	if s.Environment != "" {
+		s.Content = ""
+	}
+	return json.Marshal(FileObjectConfig(s))
+}
 
 type IncludeConfig struct {
 	Path             StringList `yaml:"path,omitempty" json:"path,omitempty"`

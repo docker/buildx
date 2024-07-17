@@ -1341,7 +1341,12 @@ func deriveDeepCopy_21(dst, src *NetworkConfig) {
 	} else {
 		dst.Labels = nil
 	}
-	dst.EnableIPv6 = src.EnableIPv6
+	if src.EnableIPv6 == nil {
+		dst.EnableIPv6 = nil
+	} else {
+		dst.EnableIPv6 = new(bool)
+		*dst.EnableIPv6 = *src.EnableIPv6
+	}
 	if src.Extensions != nil {
 		dst.Extensions = make(map[string]any, len(src.Extensions))
 		src.Extensions.DeepCopy(dst.Extensions)
