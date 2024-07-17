@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"encoding/json"
 	"fmt"
 	"os"
@@ -9,6 +10,7 @@ import (
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
+	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
@@ -28,6 +30,7 @@ func bakeCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 }
 
 var bakeTests = []func(t *testing.T, sb integration.Sandbox){
+	testBakePrint,
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeRemote,
@@ -53,6 +56,49 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testListVariables,
 	testBakeCallCheck,
 	testBakeCallCheckFlag,
+}
+
+func testBakePrint(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox
+ARG HELLO
+RUN echo "Hello ${HELLO}"
+	`)
+	bakefile := []byte(`
+target "build" {
+  args = {
+    HELLO = "foo"
+  }
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--print", "build"))
+	stdout := bytes.Buffer{}
+	stderr := bytes.Buffer{}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+
+	var def struct {
+		Group  map[string]*bake.Group  `json:"group,omitempty"`
+		Target map[string]*bake.Target `json:"target"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &def))
+
+	require.Len(t, def.Group, 1)
+	require.Contains(t, def.Group, "default")
+
+	require.Equal(t, []string{"build"}, def.Group["default"].Targets)
+	require.Len(t, def.Target, 1)
+	require.Contains(t, def.Target, "build")
+	require.Equal(t, ".", *def.Target["build"].Context)
+	require.Equal(t, "Dockerfile", *def.Target["build"].Dockerfile)
+	require.Equal(t, map[string]*string{"HELLO": ptrstr("foo")}, def.Target["build"].Args)
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
