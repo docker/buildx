@@ -34,7 +34,7 @@ import (
 	"github.com/tonistiigi/fsutil"
 )
 
-func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, addVCSLocalDir func(key, dir string, so *client.SolveOpt), pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
@@ -262,7 +262,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	so.Exports = opt.Exports
 	so.Session = opt.Session
 
-	releaseLoad, err := loadInputs(ctx, nodeDriver, opt.Inputs, addVCSLocalDir, pw, &so)
+	releaseLoad, err := loadInputs(ctx, nodeDriver, opt.Inputs, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -355,7 +355,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	return &so, releaseF, nil
 }
 
-func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSLocalDir func(key, dir string, so *client.SolveOpt), pw progress.Writer, target *client.SolveOpt) (func(), error) {
+func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
@@ -401,13 +401,13 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 				dockerfileReader = buf
 				inp.ContextPath, _ = os.MkdirTemp("", "empty-dir")
 				toRemove = append(toRemove, inp.ContextPath)
-				if err := setLocalMount("context", inp.ContextPath, target, addVCSLocalDir); err != nil {
+				if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 					return nil, err
 				}
 			}
 		}
 	case osutil.IsLocalDir(inp.ContextPath):
-		if err := setLocalMount("context", inp.ContextPath, target, addVCSLocalDir); err != nil {
+		if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 			return nil, err
 		}
 		sharedKey := inp.ContextPath
@@ -466,7 +466,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 	}
 
 	if dockerfileDir != "" {
-		if err := setLocalMount("dockerfile", dockerfileDir, target, addVCSLocalDir); err != nil {
+		if err := setLocalMount("dockerfile", dockerfileDir, target); err != nil {
 			return nil, err
 		}
 		dockerfileName = handleLowercaseDockerfile(dockerfileDir, dockerfileName)
@@ -528,7 +528,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, addVCSL
 		if k == "context" || k == "dockerfile" {
 			localName = "_" + k // underscore to avoid collisions
 		}
-		if err := setLocalMount(localName, v.Path, target, addVCSLocalDir); err != nil {
+		if err := setLocalMount(localName, v.Path, target); err != nil {
 			return nil, err
 		}
 		target.FrontendAttrs["context:"+k] = "local:" + localName
@@ -570,22 +570,15 @@ func resolveDigest(localPath, tag string) (dig string, _ error) {
 	return dig, nil
 }
 
-func setLocalMount(name, root string, so *client.SolveOpt, addVCSLocalDir func(key, dir string, so *client.SolveOpt)) error {
-	lm, err := fsutil.NewFS(root)
-	if err != nil {
-		return err
-	}
-	root, err = filepath.EvalSymlinks(root) // keep same behavior as fsutil.NewFS
+func setLocalMount(name, dir string, so *client.SolveOpt) error {
+	lm, err := fsutil.NewFS(dir)
 	if err != nil {
 		return err
 	}
 	if so.LocalMounts == nil {
 		so.LocalMounts = map[string]fsutil.FS{}
 	}
-	so.LocalMounts[name] = lm
-	if addVCSLocalDir != nil {
-		addVCSLocalDir(name, root, so)
-	}
+	so.LocalMounts[name] = &fs{FS: lm, dir: dir}
 	return nil
 }
 
@@ -635,3 +628,10 @@ func handleLowercaseDockerfile(dir, p string) string {
 	}
 	return p
 }
+
+type fs struct {
+	fsutil.FS
+	dir string
+}
+
+var _ fsutil.FS = &fs{}
