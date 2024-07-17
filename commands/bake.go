@@ -29,7 +29,6 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
@@ -146,41 +145,12 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	printer, err = progress.NewPrinter(ctx2, os.Stderr, progressMode,
 		progress.WithDesc(progressTextDesc, progressConsoleDesc),
 		progress.WithOnClose(func() {
-			if p := printer; p != nil {
-				printWarnings(os.Stderr, p.Warnings(), progressMode)
-			}
+			printWarnings(os.Stderr, printer.Warnings(), progressMode)
 		}),
 	)
 	if err != nil {
 		return err
 	}
-
-	var resp map[string]*client.SolveResponse
-
-	defer func() {
-		if printer != nil {
-			err1 := printer.Wait()
-			if err == nil {
-				err = err1
-			}
-			if err != nil {
-				return
-			}
-			if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
-				desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
-			}
-			if resp != nil && len(in.metadataFile) > 0 {
-				dt := make(map[string]interface{})
-				for t, r := range resp {
-					dt[t] = decodeExporterResponse(r.ExporterResponse)
-				}
-				if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
-					dt["buildx.build.warnings"] = warnings
-				}
-				err = writeMetadataFile(in.metadataFile, dt)
-			}
-		}
-	}()
 
 	files, inp, err := readBakeFiles(ctx, nodes, url, in.files, dockerCli.In(), printer)
 	if err != nil {
@@ -203,10 +173,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		if err != nil {
 			return err
 		}
-
-		err = printer.Wait()
-		printer = nil
-		if err != nil {
+		if err = printer.Wait(); err != nil {
 			return err
 		}
 		if in.listTargets {
@@ -249,17 +216,15 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	if in.printOnly {
-		dt, err := json.MarshalIndent(def, "", "  ")
+		if err = printer.Wait(); err != nil {
+			return err
+		}
+		dtdef, err := json.MarshalIndent(def, "", "  ")
 		if err != nil {
 			return err
 		}
-		err = printer.Wait()
-		printer = nil
-		if err != nil {
-			return err
-		}
-		fmt.Fprintln(dockerCli.Out(), string(dt))
-		return nil
+		_, err = fmt.Fprintln(dockerCli.Out(), string(dtdef))
+		return err
 	}
 
 	for _, opt := range bo {
@@ -272,41 +237,32 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		}
 	}
 
-	prm := confutil.MetadataProvenance()
-	if len(in.metadataFile) == 0 {
-		prm = confutil.MetadataProvenanceModeDisabled
-	}
-
-	groupRef := identity.NewID()
-	var refs []string
-	for k, b := range bo {
-		b.Ref = identity.NewID()
-		b.GroupRef = groupRef
-		b.ProvenanceResponseMode = prm
-		refs = append(refs, b.Ref)
-		bo[k] = b
-	}
-	dt, err := json.Marshal(def)
-	if err != nil {
-		return err
-	}
-	if err := saveLocalStateGroup(dockerCli, groupRef, localstate.StateGroup{
-		Definition: dt,
-		Targets:    targets,
-		Inputs:     overrides,
-		Refs:       refs,
-	}); err != nil {
+	if err := saveLocalStateGroup(dockerCli, in, targets, bo, overrides, def); err != nil {
 		return err
 	}
 
-	resp, err = build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
-	if err != nil {
-		return wrapBuildError(err, true)
+	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	if err := printer.Wait(); retErr == nil {
+		retErr = err
+	}
+	if retErr != nil {
+		return wrapBuildError(retErr, true)
 	}
 
-	err = printer.Wait()
-	if err != nil {
-		return err
+	if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
+		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
+	}
+	if callFunc == nil && len(in.metadataFile) > 0 {
+		dt := make(map[string]interface{})
+		for t, r := range resp {
+			dt[t] = decodeExporterResponse(r.ExporterResponse)
+		}
+		if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
+			dt["buildx.build.warnings"] = warnings
+		}
+		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
+			return err
+		}
 	}
 
 	var callFormatJSON bool
@@ -468,12 +424,34 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func saveLocalStateGroup(dockerCli command.Cli, ref string, lsg localstate.StateGroup) error {
+func saveLocalStateGroup(dockerCli command.Cli, in bakeOptions, targets []string, bo map[string]build.Options, overrides []string, def any) error {
+	prm := confutil.MetadataProvenance()
+	if len(in.metadataFile) == 0 {
+		prm = confutil.MetadataProvenanceModeDisabled
+	}
+	groupRef := identity.NewID()
+	refs := make([]string, 0, len(bo))
+	for k, b := range bo {
+		b.Ref = identity.NewID()
+		b.GroupRef = groupRef
+		b.ProvenanceResponseMode = prm
+		refs = append(refs, b.Ref)
+		bo[k] = b
+	}
 	l, err := localstate.New(confutil.ConfigDir(dockerCli))
 	if err != nil {
 		return err
 	}
-	return l.SaveGroup(ref, lsg)
+	dtdef, err := json.MarshalIndent(def, "", "  ")
+	if err != nil {
+		return err
+	}
+	return l.SaveGroup(groupRef, localstate.StateGroup{
+		Definition: dtdef,
+		Targets:    targets,
+		Inputs:     overrides,
+		Refs:       refs,
+	})
 }
 
 func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names []string, stdin io.Reader, pw progress.Writer) (files []bake.File, inp *bake.Input, err error) {
