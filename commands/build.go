@@ -835,7 +835,7 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 		fmt.Fprintf(sb, "%d warnings found", len(warnings))
 	}
 	if logrus.GetLevel() < logrus.DebugLevel {
-		fmt.Fprintf(sb, " (use --debug to expand)")
+		fmt.Fprintf(sb, " (use docker --debug to expand)")
 	}
 	fmt.Fprintf(sb, ":\n")
 	fmt.Fprint(w, aec.Apply(sb.String(), aec.YellowF))
