@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strconv"
 	"strings"
 	"sync"
@@ -207,4 +208,13 @@ func skipNoCompatBuildKit(t *testing.T, sb integration.Sandbox, constraint strin
 	if !matchesBuildKitVersion(t, sb, constraint) {
 		t.Skipf("buildkit version %s does not match %s constraint (%s)", buildkitVersion(t, sb), constraint, msg)
 	}
+}
+
+func ptrstr(s interface{}) *string {
+	var n *string
+	if reflect.ValueOf(s).Kind() == reflect.String {
+		ss := s.(string)
+		n = &ss
+	}
+	return n
 }
