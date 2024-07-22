@@ -4,7 +4,8 @@ ARG GO_VERSION=1.22
 ARG XX_VERSION=1.4.0
 
 # for testing
-ARG DOCKER_VERSION=27.0.3
+ARG DOCKER_VERSION=27.1.1
+ARG DOCKER_CLI_VERSION=${DOCKER_VERSION}
 ARG GOTESTSUM_VERSION=v1.9.0
 ARG REGISTRY_VERSION=2.8.0
 ARG BUILDKIT_VERSION=v0.14.1
@@ -13,7 +14,7 @@ ARG UNDOCK_VERSION=0.7.0
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golatest
 FROM moby/moby-bin:$DOCKER_VERSION AS docker-engine
-FROM dockereng/cli-bin:$DOCKER_VERSION AS docker-cli
+FROM dockereng/cli-bin:$DOCKER_CLI_VERSION AS docker-cli
 FROM registry:$REGISTRY_VERSION AS registry
 FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
 FROM crazymax/undock:$UNDOCK_VERSION AS undock
