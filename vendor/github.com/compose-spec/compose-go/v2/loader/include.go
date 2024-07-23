@@ -30,7 +30,7 @@ import (
 )
 
 // loadIncludeConfig parse the required config from raw yaml
-func loadIncludeConfig(source any, options *Options) ([]types.IncludeConfig, error) {
+func loadIncludeConfig(source any) ([]types.IncludeConfig, error) {
 	if source == nil {
 		return nil, nil
 	}
@@ -45,23 +45,13 @@ func loadIncludeConfig(source any, options *Options) ([]types.IncludeConfig, err
 			}
 		}
 	}
-	if options.Interpolate != nil {
-		for i, config := range configs {
-			interpolated, err := interp.Interpolate(config.(map[string]any), *options.Interpolate)
-			if err != nil {
-				return nil, err
-			}
-			configs[i] = interpolated
-		}
-	}
-
 	var requires []types.IncludeConfig
 	err := Transform(source, &requires)
 	return requires, err
 }
 
 func ApplyInclude(ctx context.Context, workingDir string, environment types.Mapping, model map[string]any, options *Options, included []string) error {
-	includeConfig, err := loadIncludeConfig(model["include"], options)
+	includeConfig, err := loadIncludeConfig(model["include"])
 	if err != nil {
 		return err
 	}

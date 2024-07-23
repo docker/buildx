@@ -22,11 +22,8 @@ import (
 	"path/filepath"
 
 	"github.com/compose-spec/compose-go/v2/consts"
-	"github.com/compose-spec/compose-go/v2/interpolation"
 	"github.com/compose-spec/compose-go/v2/override"
 	"github.com/compose-spec/compose-go/v2/paths"
-	"github.com/compose-spec/compose-go/v2/template"
-	"github.com/compose-spec/compose-go/v2/transform"
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
@@ -71,22 +68,10 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 	)
 	switch v := extends.(type) {
 	case map[string]any:
-		if opts.Interpolate != nil {
-			v, err = interpolation.Interpolate(v, *opts.Interpolate)
-			if err != nil {
-				return nil, err
-			}
-		}
 		ref = v["service"].(string)
 		file = v["file"]
 		opts.ProcessEvent("extends", v)
 	case string:
-		if opts.Interpolate != nil {
-			v, err = opts.Interpolate.Substitute(v, template.Mapping(opts.Interpolate.LookupValue))
-			if err != nil {
-				return nil, err
-			}
-		}
 		ref = v
 		opts.ProcessEvent("extends", map[string]any{"service": ref})
 	}
@@ -188,12 +173,6 @@ func getExtendsBaseFromFile(
 				ref,
 				refPath,
 			)
-		}
-
-		// Attempt to make a canonical model so ResolveRelativePaths can operate on source:target short syntaxes
-		source, err = transform.Canonical(source, true)
-		if err != nil {
-			return nil, nil, err
 		}
 
 		var remotes []paths.RemoteResource
