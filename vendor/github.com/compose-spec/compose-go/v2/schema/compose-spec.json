@@ -155,8 +155,8 @@
           },
           "additionalProperties": false
         },
-        "cap_add": {"type": "array", "items": {"type": "string"}},
-        "cap_drop": {"type": "array", "items": {"type": "string"}},
+        "cap_add": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
+        "cap_drop": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "cgroup": {"type": "string", "enum": ["host", "private"]},
         "cgroup_parent": {"type": "string"},
         "command": {"$ref": "#/definitions/command"},
@@ -216,9 +216,9 @@
           ]
         },
         "device_cgroup_rules": {"$ref": "#/definitions/list_of_strings"},
-        "devices": {"type": "array", "items": {"type": "string"}},
+        "devices": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "dns": {"$ref": "#/definitions/string_or_list"},
-        "dns_opt": {"type": "array","items": {"type": "string"}},
+        "dns_opt": {"type": "array","items": {"type": "string"}, "uniqueItems": true},
         "dns_search": {"$ref": "#/definitions/string_or_list"},
         "domainname": {"type": "string"},
         "entrypoint": {"$ref": "#/definitions/command"},
@@ -230,7 +230,8 @@
           "items": {
             "type": ["string", "number"],
             "format": "expose"
-          }
+          },
+          "uniqueItems": true
         },
         "extends": {
           "oneOf": [
@@ -247,13 +248,14 @@
             }
           ]
         },
-        "external_links": {"type": "array", "items": {"type": "string"}},
+        "external_links": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "extra_hosts": {"$ref": "#/definitions/list_or_dict"},
         "group_add": {
           "type": "array",
           "items": {
             "type": ["string", "number"]
-          }
+          },
+          "uniqueItems": true
         },
         "healthcheck": {"$ref": "#/definitions/healthcheck"},
         "hostname": {"type": "string"},
@@ -262,7 +264,7 @@
         "ipc": {"type": "string"},
         "isolation": {"type": "string"},
         "labels": {"$ref": "#/definitions/list_or_dict"},
-        "links": {"type": "array", "items": {"type": "string"}},
+        "links": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "logging": {
           "type": "object",
 
@@ -348,7 +350,8 @@
                 "patternProperties": {"^x-": {}}
               }
             ]
-          }
+          },
+          "uniqueItems": true
         },
         "privileged": {"type": ["boolean", "string"]},
         "profiles": {"$ref": "#/definitions/list_of_strings"},
@@ -363,7 +366,7 @@
         "scale": {
           "type": ["integer", "string"]
         },
-        "security_opt": {"type": "array", "items": {"type": "string"}},
+        "security_opt": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "shm_size": {"type": ["number", "string"]},
         "secrets": {"$ref": "#/definitions/service_config_or_secret"},
         "sysctls": {"$ref": "#/definitions/list_or_dict"},
@@ -429,11 +432,13 @@
                 "patternProperties": {"^x-": {}}
               }
             ]
-          }
+          },
+          "uniqueItems": true
         },
         "volumes_from": {
           "type": "array",
-          "items": {"type": "string"}
+          "items": {"type": "string"},
+          "uniqueItems": true
         },
         "working_dir": {"type": "string"}
       },
@@ -828,7 +833,8 @@
 
     "list_of_strings": {
       "type": "array",
-      "items": {"type": "string"}
+      "items": {"type": "string"},
+      "uniqueItems": true
     },
 
     "list_or_dict": {
@@ -842,7 +848,7 @@
           },
           "additionalProperties": false
         },
-        {"type": "array", "items": {"type": "string"}}
+        {"type": "array", "items": {"type": "string"}, "uniqueItems": true}
       ]
     },
 

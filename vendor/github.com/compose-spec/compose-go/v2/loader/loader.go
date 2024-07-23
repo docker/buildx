@@ -367,23 +367,6 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 		}
 	}
 
-	if opts.Interpolate != nil && !opts.SkipInterpolation {
-		dict, err = interp.Interpolate(dict, *opts.Interpolate)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	dict, err = transform.Canonical(dict, opts.SkipInterpolation)
-	if err != nil {
-		return nil, err
-	}
-
-	dict, err = override.EnforceUnicity(dict)
-	if err != nil {
-		return nil, err
-	}
-
 	if !opts.SkipDefaultValues {
 		dict, err = transform.SetDefaultValues(dict)
 		if err != nil {
@@ -432,6 +415,13 @@ func loadYamlFile(ctx context.Context, file types.ConfigFile, opts *Options, wor
 			return errors.New("Top-level object must be a mapping")
 		}
 
+		if opts.Interpolate != nil && !opts.SkipInterpolation {
+			cfg, err = interp.Interpolate(cfg, *opts.Interpolate)
+			if err != nil {
+				return err
+			}
+		}
+
 		fixEmptyNotNull(cfg)
 
 		if !opts.SkipExtends {
@@ -460,6 +450,11 @@ func loadYamlFile(ctx context.Context, file types.ConfigFile, opts *Options, wor
 			return err
 		}
 
+		dict, err = override.EnforceUnicity(dict)
+		if err != nil {
+			return err
+		}
+
 		if !opts.SkipValidation {
 			if err := schema.Validate(dict); err != nil {
 				return fmt.Errorf("validating %s: %w", file.Filename, err)
@@ -469,7 +464,15 @@ func loadYamlFile(ctx context.Context, file types.ConfigFile, opts *Options, wor
 				delete(dict, "version")
 			}
 		}
-		return nil
+
+		dict, err = transform.Canonical(dict, opts.SkipInterpolation)
+		if err != nil {
+			return err
+		}
+
+		// Canonical transformation can reveal duplicates, typically as ports can be a range and conflict with an override
+		dict, err = override.EnforceUnicity(dict)
+		return err
 	}
 
 	var processor PostProcessor

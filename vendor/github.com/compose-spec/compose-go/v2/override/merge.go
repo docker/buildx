@@ -237,18 +237,31 @@ func mergeIPAMConfig(c any, o any, path tree.Path) (any, error) {
 	return ipamConfigs, nil
 }
 
-func convertIntoMapping(a any, defaultValue any) map[string]any {
+func convertIntoMapping(a any, defaultValue map[string]any) map[string]any {
 	switch v := a.(type) {
 	case map[string]any:
 		return v
 	case []any:
 		converted := map[string]any{}
 		for _, s := range v {
-			converted[s.(string)] = defaultValue
+			if defaultValue == nil {
+				converted[s.(string)] = nil
+			} else {
+				// Create a new map for each key
+				converted[s.(string)] = copyMap(defaultValue)
+			}
 		}
 		return converted
 	}
 	return nil
+}
+
+func copyMap(m map[string]any) map[string]any {
+	c := make(map[string]any)
+	for k, v := range m {
+		c[k] = v
+	}
+	return c
 }
 
 func override(_ any, other any, _ tree.Path) (any, error) {
