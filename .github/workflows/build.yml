@@ -21,6 +21,7 @@ on:
 env:
   BUILDX_VERSION: "latest"
   BUILDKIT_IMAGE: "moby/buildkit:latest"
+  SCOUT_VERSION: "1.11.0"
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
   TEST_CACHE_SCOPE: "test"
@@ -327,6 +328,35 @@ jobs:
           set: |
             *.cache-from=type=gha,scope=bin-image
             *.cache-to=type=gha,scope=bin-image,mode=max
+
+  scout:
+    runs-on: ubuntu-24.04
+    if: ${{ github.ref == 'refs/heads/master' }}
+    permissions:
+      # required to wirte sarif report
+      security-events: write
+    needs:
+      - bin-image
+    steps:
+      -
+        name: Login to DockerHub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKERPUBLICBOT_USERNAME }}
+          password: ${{ secrets.DOCKERPUBLICBOT_WRITE_PAT }}
+      -
+        name: Scout
+        id: scout
+        uses: crazy-max/.github/.github/actions/docker-scout@ccae1c98f1237b5c19e4ef77ace44fa68b3bc7e4
+        with:
+          version: ${{ env.SCOUT_VERSION }}
+          format: sarif
+          image: registry://${{ env.REPO_SLUG }}:master
+      -
+        name: Upload SARIF report
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ steps.scout.outputs.result-file }}
 
   release:
     runs-on: ubuntu-24.04
