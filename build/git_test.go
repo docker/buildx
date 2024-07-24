@@ -31,7 +31,7 @@ func setupTest(tb testing.TB) {
 }
 
 func TestGetGitAttributesNotGitRepo(t *testing.T) {
-	_, _, err := getGitAttributes(context.Background(), t.TempDir(), "Dockerfile")
+	_, err := getGitAttributes(context.Background(), t.TempDir(), "Dockerfile")
 	assert.NoError(t, err)
 }
 
@@ -39,16 +39,18 @@ func TestGetGitAttributesBadGitRepo(t *testing.T) {
 	tmp := t.TempDir()
 	require.NoError(t, os.MkdirAll(path.Join(tmp, ".git"), 0755))
 
-	_, _, err := getGitAttributes(context.Background(), tmp, "Dockerfile")
+	_, err := getGitAttributes(context.Background(), tmp, "Dockerfile")
 	assert.Error(t, err)
 }
 
 func TestGetGitAttributesNoContext(t *testing.T) {
 	setupTest(t)
 
-	gitattrs, _, err := getGitAttributes(context.Background(), "", "Dockerfile")
+	addGitAttrs, err := getGitAttributes(context.Background(), "", "Dockerfile")
 	assert.NoError(t, err)
-	assert.Empty(t, gitattrs)
+	var so client.SolveOpt
+	addGitAttrs(&so)
+	assert.Empty(t, so.FrontendAttrs)
 }
 
 func TestGetGitAttributes(t *testing.T) {
@@ -115,15 +117,17 @@ func TestGetGitAttributes(t *testing.T) {
 			if tt.envGitInfo != "" {
 				t.Setenv("BUILDX_GIT_INFO", tt.envGitInfo)
 			}
-			gitattrs, _, err := getGitAttributes(context.Background(), ".", "Dockerfile")
+			addGitAttrs, err := getGitAttributes(context.Background(), ".", "Dockerfile")
 			require.NoError(t, err)
+			var so client.SolveOpt
+			addGitAttrs(&so)
 			for _, e := range tt.expected {
-				assert.Contains(t, gitattrs, e)
-				assert.NotEmpty(t, gitattrs[e])
+				assert.Contains(t, so.FrontendAttrs, e)
+				assert.NotEmpty(t, so.FrontendAttrs[e])
 				if e == "label:"+DockerfileLabel {
-					assert.Equal(t, "Dockerfile", gitattrs[e])
+					assert.Equal(t, "Dockerfile", so.FrontendAttrs[e])
 				} else if e == "label:"+specs.AnnotationSource || e == "vcs:source" {
-					assert.Equal(t, "git@github.com:docker/buildx.git", gitattrs[e])
+					assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs[e])
 				}
 			}
 		})
@@ -140,20 +144,25 @@ func TestGetGitAttributesDirty(t *testing.T) {
 	require.NoError(t, os.WriteFile(filepath.Join("dir", "Dockerfile"), df, 0644))
 
 	t.Setenv("BUILDX_GIT_LABELS", "true")
-	gitattrs, _, _ := getGitAttributes(context.Background(), ".", "Dockerfile")
-	assert.Equal(t, 5, len(gitattrs))
+	addGitAttrs, err := getGitAttributes(context.Background(), ".", "Dockerfile")
+	require.NoError(t, err)
 
-	assert.Contains(t, gitattrs, "label:"+DockerfileLabel)
-	assert.Equal(t, "Dockerfile", gitattrs["label:"+DockerfileLabel])
-	assert.Contains(t, gitattrs, "label:"+specs.AnnotationSource)
-	assert.Equal(t, "git@github.com:docker/buildx.git", gitattrs["label:"+specs.AnnotationSource])
-	assert.Contains(t, gitattrs, "label:"+specs.AnnotationRevision)
-	assert.True(t, strings.HasSuffix(gitattrs["label:"+specs.AnnotationRevision], "-dirty"))
+	var so client.SolveOpt
+	addGitAttrs(&so)
 
-	assert.Contains(t, gitattrs, "vcs:source")
-	assert.Equal(t, "git@github.com:docker/buildx.git", gitattrs["vcs:source"])
-	assert.Contains(t, gitattrs, "vcs:revision")
-	assert.True(t, strings.HasSuffix(gitattrs["vcs:revision"], "-dirty"))
+	assert.Equal(t, 5, len(so.FrontendAttrs))
+
+	assert.Contains(t, so.FrontendAttrs, "label:"+DockerfileLabel)
+	assert.Equal(t, "Dockerfile", so.FrontendAttrs["label:"+DockerfileLabel])
+	assert.Contains(t, so.FrontendAttrs, "label:"+specs.AnnotationSource)
+	assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs["label:"+specs.AnnotationSource])
+	assert.Contains(t, so.FrontendAttrs, "label:"+specs.AnnotationRevision)
+	assert.True(t, strings.HasSuffix(so.FrontendAttrs["label:"+specs.AnnotationRevision], "-dirty"))
+
+	assert.Contains(t, so.FrontendAttrs, "vcs:source")
+	assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs["vcs:source"])
+	assert.Contains(t, so.FrontendAttrs, "vcs:revision")
+	assert.True(t, strings.HasSuffix(so.FrontendAttrs["vcs:revision"], "-dirty"))
 }
 
 func TestLocalDirs(t *testing.T) {
@@ -163,15 +172,17 @@ func TestLocalDirs(t *testing.T) {
 		FrontendAttrs: map[string]string{},
 	}
 
-	_, addVCSLocalDir, err := getGitAttributes(context.Background(), ".", "Dockerfile")
+	addGitAttrs, err := getGitAttributes(context.Background(), ".", "Dockerfile")
 	require.NoError(t, err)
-	require.NotNil(t, addVCSLocalDir)
 
-	require.NoError(t, setLocalMount("context", ".", so, addVCSLocalDir))
+	require.NoError(t, setLocalMount("context", ".", so))
+	require.NoError(t, setLocalMount("dockerfile", ".", so))
+
+	addGitAttrs(so)
+
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:context")
 	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:context"])
 
-	require.NoError(t, setLocalMount("dockerfile", ".", so, addVCSLocalDir))
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:dockerfile")
 	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:dockerfile"])
 }
@@ -194,16 +205,17 @@ func TestLocalDirsSub(t *testing.T) {
 	so := &client.SolveOpt{
 		FrontendAttrs: map[string]string{},
 	}
+	require.NoError(t, setLocalMount("context", ".", so))
+	require.NoError(t, setLocalMount("dockerfile", "app", so))
 
-	_, addVCSLocalDir, err := getGitAttributes(context.Background(), ".", "app/Dockerfile")
+	addGitAttrs, err := getGitAttributes(context.Background(), ".", "app/Dockerfile")
 	require.NoError(t, err)
-	require.NotNil(t, addVCSLocalDir)
 
-	require.NoError(t, setLocalMount("context", ".", so, addVCSLocalDir))
+	addGitAttrs(so)
+
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:context")
 	assert.Equal(t, ".", so.FrontendAttrs["vcs:localdir:context"])
 
-	require.NoError(t, setLocalMount("dockerfile", "app", so, addVCSLocalDir))
 	require.Contains(t, so.FrontendAttrs, "vcs:localdir:dockerfile")
 	assert.Equal(t, "app", so.FrontendAttrs["vcs:localdir:dockerfile"])
 }
