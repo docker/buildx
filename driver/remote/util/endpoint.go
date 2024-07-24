@@ -1,18 +1,19 @@
-package remote
+package remoteutil
 
 import (
 	"net/url"
+	"slices"
 
 	"github.com/pkg/errors"
 )
 
-var schemes = map[string]struct{}{
-	"tcp":              {},
-	"unix":             {},
-	"ssh":              {},
-	"docker-container": {},
-	"kube-pod":         {},
-	"npipe":            {},
+var schemes = []string{
+	"docker-container",
+	"kube-pod",
+	"npipe",
+	"ssh",
+	"tcp",
+	"unix",
 }
 
 func IsValidEndpoint(ep string) error {
@@ -20,7 +21,7 @@ func IsValidEndpoint(ep string) error {
 	if err != nil {
 		return errors.Wrapf(err, "failed to parse endpoint %s", ep)
 	}
-	if _, ok := schemes[endpoint.Scheme]; !ok {
+	if _, ok := slices.BinarySearch(schemes, endpoint.Scheme); !ok {
 		return errors.Errorf("unrecognized url scheme %s", endpoint.Scheme)
 	}
 	return nil

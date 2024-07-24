@@ -379,7 +379,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 		target.FrontendInputs["dockerfile"] = *inp.ContextState
 	case inp.ContextPath == "-":
 		if inp.DockerfilePath == "-" {
-			return nil, errStdinConflict
+			return nil, errors.Errorf("invalid argument: can't use stdin for both build context and dockerfile")
 		}
 
 		buf := bufio.NewReader(inp.InStream)
@@ -395,7 +395,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 				target.Session = append(target.Session, up)
 			} else {
 				if inp.DockerfilePath != "" {
-					return nil, errDockerfileConflict
+					return nil, errors.Errorf("ambiguous Dockerfile source: both stdin and flag correspond to Dockerfiles")
 				}
 				// stdin is dockerfile
 				dockerfileReader = buf

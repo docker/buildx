@@ -207,6 +207,7 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 
 	if cfg.signal != nil {
 		eg.Go(func() error {
+			names := signalNames()
 			for {
 				var sig syscall.Signal
 				select {
@@ -216,7 +217,7 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 				case <-ctx.Done():
 					return nil
 				}
-				name := sigToName[sig]
+				name := names[sig]
 				if name == "" {
 					continue
 				}
@@ -380,12 +381,12 @@ func copyToStream(fd uint32, snd msgStream, r io.Reader) error {
 	})
 }
 
-var sigToName = map[syscall.Signal]string{}
-
-func init() {
+func signalNames() map[syscall.Signal]string {
+	m := make(map[syscall.Signal]string, len(signal.SignalMap))
 	for name, value := range signal.SignalMap {
-		sigToName[value] = name
+		m[value] = name
 	}
+	return m
 }
 
 type debugStream struct {

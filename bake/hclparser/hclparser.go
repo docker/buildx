@@ -75,7 +75,12 @@ type WithGetName interface {
 	GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) (string, error)
 }
 
-var errUndefined = errors.New("undefined")
+// errUndefined is returned when a variable or function is not defined.
+type errUndefined struct{}
+
+func (errUndefined) Error() string {
+	return "undefined"
+}
 
 func (p *parser) loadDeps(ectx *hcl.EvalContext, exp hcl.Expression, exclude map[string]struct{}, allowMissing bool) hcl.Diagnostics {
 	fns, hcldiags := funcCalls(exp)
@@ -85,7 +90,7 @@ func (p *parser) loadDeps(ectx *hcl.EvalContext, exp hcl.Expression, exclude map
 
 	for _, fn := range fns {
 		if err := p.resolveFunction(ectx, fn); err != nil {
-			if allowMissing && errors.Is(err, errUndefined) {
+			if allowMissing && errors.Is(err, errUndefined{}) {
 				continue
 			}
 			return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
@@ -139,7 +144,7 @@ func (p *parser) loadDeps(ectx *hcl.EvalContext, exp hcl.Expression, exclude map
 			}
 			for _, block := range blocks {
 				if err := p.resolveBlock(block, target); err != nil {
-					if allowMissing && errors.Is(err, errUndefined) {
+					if allowMissing && errors.Is(err, errUndefined{}) {
 						continue
 					}
 					return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
@@ -147,7 +152,7 @@ func (p *parser) loadDeps(ectx *hcl.EvalContext, exp hcl.Expression, exclude map
 			}
 		} else {
 			if err := p.resolveValue(ectx, v.RootName()); err != nil {
-				if allowMissing && errors.Is(err, errUndefined) {
+				if allowMissing && errors.Is(err, errUndefined{}) {
 					continue
 				}
 				return wrapErrorDiagnostic("Invalid expression", err, exp.Range().Ptr(), exp.Range().Ptr())
@@ -169,7 +174,7 @@ func (p *parser) resolveFunction(ectx *hcl.EvalContext, name string) error {
 	}
 	f, ok := p.funcs[name]
 	if !ok {
-		return errors.Wrapf(errUndefined, "function %q does not exist", name)
+		return errors.Wrapf(errUndefined{}, "function %q does not exist", name)
 	}
 	if _, ok := p.progressF[key(ectx, name)]; ok {
 		return errors.Errorf("function cycle not allowed for %s", name)
@@ -259,7 +264,7 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	if _, builtin := p.opt.Vars[name]; !ok && !builtin {
 		vr, ok := p.vars[name]
 		if !ok {
-			return errors.Wrapf(errUndefined, "variable %q does not exist", name)
+			return errors.Wrapf(errUndefined{}, "variable %q does not exist", name)
 		}
 		def = vr.Default
 		ectx = p.ectx

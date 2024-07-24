@@ -34,7 +34,7 @@ func TestIndexOf(t *testing.T) {
 	for name, test := range tests {
 		name, test := name, test
 		t.Run(name, func(t *testing.T) {
-			got, err := indexOfFunc.Call([]cty.Value{test.input, test.key})
+			got, err := indexOfFunc().Call([]cty.Value{test.input, test.key})
 			if err != nil {
 				if test.wantErr {
 					return
