@@ -217,3 +217,18 @@ target "integration-test" {
   inherits = ["integration-test-base"]
   target = "integration-test"
 }
+
+variable "GOVULNCHECK_FORMAT" {
+  default = null
+}
+
+target "govulncheck" {
+  inherits = ["_common"]
+  dockerfile = "./hack/dockerfiles/govulncheck.Dockerfile"
+  target = "output"
+  args = {
+    FORMAT = GOVULNCHECK_FORMAT
+  }
+  no-cache-filter = ["run"]
+  output = ["${DESTDIR}"]
+}

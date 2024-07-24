@@ -215,6 +215,36 @@ jobs:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ${{ env.TESTREPORTS_BASEDIR }}
 
+  govulncheck:
+    runs-on: ubuntu-24.04
+    permissions:
+      # required to write sarif report
+      security-events: write
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          version: ${{ env.BUILDX_VERSION }}
+          driver-opts: image=${{ env.BUILDKIT_IMAGE }}
+          buildkitd-flags: --debug
+      -
+        name: Run
+        uses: docker/bake-action@v5
+        with:
+          targets: govulncheck
+        env:
+          GOVULNCHECK_FORMAT: sarif
+      -
+        name: Upload SARIF report
+        if: ${{ github.ref == 'refs/heads/master' && github.repository == 'docker/buildx' }}
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: ${{ env.DESTDIR }}/govulncheck.out
+
   prepare-binaries:
     runs-on: ubuntu-24.04
     outputs:
