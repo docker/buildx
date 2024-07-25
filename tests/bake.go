@@ -56,6 +56,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testListVariables,
 	testBakeCallCheck,
 	testBakeCallCheckFlag,
+	testBakeMultiPlatform,
 }
 
 func testBakePrint(t *testing.T, sb integration.Sandbox) {
@@ -885,6 +886,56 @@ target "def" {
 
 	skipNoCompatBuildKit(t, sb, ">= 0.14.0-0", "lint")
 	require.Len(t, md.BuildWarnings, 3, string(dt))
+}
+
+func testBakeMultiPlatform(t *testing.T, sb integration.Sandbox) {
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/registry:latest"
+
+	dockerfile := []byte(`
+	FROM --platform=$BUILDPLATFORM busybox:latest AS base
+	COPY foo /etc/foo
+	RUN cp /etc/foo /etc/bar
+
+	FROM scratch
+	COPY --from=base /etc/bar /bar
+	`)
+	bakefile := []byte(`
+	target "default" {
+	platforms = ["linux/amd64", "linux/arm64"]
+	}
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake"), withArgs("--set", fmt.Sprintf("*.output=type=image,name=%s,push=true", target)))
+	out, err := cmd.CombinedOutput()
+
+	if !isMobyWorker(sb) {
+		require.NoError(t, err, string(out))
+
+		desc, provider, err := contentutil.ProviderFromRef(target)
+		require.NoError(t, err)
+		imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
+		require.NoError(t, err)
+
+		img := imgs.Find("linux/amd64")
+		require.NotNil(t, img)
+		img = imgs.Find("linux/arm64")
+		require.NotNil(t, img)
+
+	} else {
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "Multi-platform build is not supported")
+	}
 }
 
 func testBakeMultiExporters(t *testing.T, sb integration.Sandbox) {

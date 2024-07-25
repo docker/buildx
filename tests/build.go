@@ -62,7 +62,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildLabelNoKey,
 	testBuildCacheExportNotSupported,
 	testBuildOCIExportNotSupported,
-	testBuildMultiPlatformNotSupported,
+	testBuildMultiPlatform,
 	testDockerHostGateway,
 	testBuildNetworkModeBridge,
 	testBuildShmSize,
@@ -616,16 +616,47 @@ func testBuildOCIExportNotSupported(t *testing.T, sb integration.Sandbox) {
 	require.Contains(t, string(out), "OCI exporter is not supported")
 }
 
-func testBuildMultiPlatformNotSupported(t *testing.T, sb integration.Sandbox) {
-	if !isMobyWorker(sb) {
-		t.Skip("only testing with docker worker")
-	}
+func testBuildMultiPlatform(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+	FROM --platform=$BUILDPLATFORM busybox:latest AS base
+	COPY foo /etc/foo
+	RUN cp /etc/foo /etc/bar
 
-	dir := createTestProject(t)
-	cmd := buildxCmd(sb, withArgs("build", "--platform=linux/amd64,linux/arm64", dir))
+	FROM scratch
+	COPY --from=base /etc/bar /bar
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/registry:latest"
+
+	cmd := buildxCmd(sb, withArgs("build", "--platform=linux/amd64,linux/arm64", fmt.Sprintf("--output=type=image,name=%s,push=true", target), dir))
 	out, err := cmd.CombinedOutput()
-	require.Error(t, err, string(out))
-	require.Contains(t, string(out), "Multi-platform build is not supported")
+
+	if !isMobyWorker(sb) {
+		require.NoError(t, err, string(out))
+
+		desc, provider, err := contentutil.ProviderFromRef(target)
+		require.NoError(t, err)
+		imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
+		require.NoError(t, err)
+
+		img := imgs.Find("linux/amd64")
+		require.NotNil(t, img)
+		img = imgs.Find("linux/arm64")
+		require.NotNil(t, img)
+
+	} else {
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "Multi-platform build is not supported")
+	}
 }
 
 func testDockerHostGateway(t *testing.T, sb integration.Sandbox) {
