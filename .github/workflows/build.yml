@@ -331,13 +331,16 @@ jobs:
 
   scout:
     runs-on: ubuntu-24.04
-    if: ${{ github.ref == 'refs/heads/master' }}
+    if: ${{ github.ref == 'refs/heads/master' && github.repository == 'docker/buildx' }}
     permissions:
-      # required to wirte sarif report
+      # required to write sarif report
       security-events: write
     needs:
       - bin-image
     steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
       -
         name: Login to DockerHub
         uses: docker/login-action@v3
