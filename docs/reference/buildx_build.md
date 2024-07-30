@@ -591,6 +591,12 @@ $ cat metadata.json
 > - `max` sets full provenance.
 > - `disabled`, `false` or `0` doesn't set any provenance.
 
+> **Note**
+> 
+> Build warnings (`buildx.build.warnings`) are not included by default. Set the
+> `BUILDX_METADATA_WARNINGS` environment variable to `1` or `true` to
+> include them.
+
 ### <a name="network"></a> Set the networking mode for the RUN instructions during build (--network)
 
 Available options for the networking mode are:
@@ -600,12 +606,6 @@ Available options for the networking mode are:
 - `host`: Run in the host’s network environment.
 
 Find more details in the [Dockerfile reference](https://docs.docker.com/reference/dockerfile/#run---network).
-
-> **Note**
-> 
-> Build warnings (`buildx.build.warnings`) are not included by default. Set the
-> `BUILDX_METADATA_WARNINGS` environment variable to `1` or `true` to
-> include them.
 
 ### <a name="no-cache-filter"></a> Ignore build cache for specific stages (--no-cache-filter)
 
