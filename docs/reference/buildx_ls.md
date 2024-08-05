@@ -9,9 +9,10 @@ List builder instances
 
 ### Options
 
-| Name                  | Type     | Default | Description       |
-|:----------------------|:---------|:--------|:------------------|
-| [`--format`](#format) | `string` | `table` | Format the output |
+| Name                  | Type     | Default | Description           |
+|:----------------------|:---------|:--------|:----------------------|
+| [`--format`](#format) | `string` | `table` | Format the output     |
+| `--no-trunc`          |          |         | Don't truncate output |
 
 
 <!---MARKER_GEN_END-->
