@@ -252,13 +252,15 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
-	if callFunc == nil && len(in.metadataFile) > 0 {
+	if len(in.metadataFile) > 0 {
 		dt := make(map[string]interface{})
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
 		}
-		if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
-			dt["buildx.build.warnings"] = warnings
+		if callFunc == nil {
+			if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
+				dt["buildx.build.warnings"] = warnings
+			}
 		}
 		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
 			return err

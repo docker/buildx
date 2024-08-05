@@ -1193,6 +1193,44 @@ FROM second AS binary
 
 		require.Equal(t, 1, len(res.Sources))
 	})
+
+	t.Run("check metadata", func(t *testing.T) {
+		dockerfile := []byte(`
+frOM busybox as base
+cOpy Dockerfile .
+from scratch
+COPy --from=base \
+  /Dockerfile \
+  /
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		cmd := buildxCmd(sb, withArgs("build", "--call=check,format=json", "--metadata-file", filepath.Join(dir, "md.json"), dir))
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+
+		var res lint.LintResults
+		require.NoError(t, json.Unmarshal(stdout.Bytes(), &res), stdout.String())
+		require.Len(t, res.Warnings, 3)
+
+		dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+		require.NoError(t, err)
+
+		type mdT struct {
+			BuildRef   string           `json:"buildx.build.ref"`
+			ResultJSON lint.LintResults `json:"result.json"`
+		}
+		var md mdT
+		require.NoError(t, json.Unmarshal(dt, &md), dt)
+		require.NotEmpty(t, md.BuildRef)
+		require.Len(t, md.ResultJSON.Warnings, 3)
+	})
 }
 
 func createTestProject(t *testing.T) string {
