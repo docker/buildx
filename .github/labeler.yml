@@ -1,104 +1,103 @@
-
 # Add 'area/project' label to changes in basic project documentation and .github folder, excluding .github/workflows
 area/project:
-- all:
-  - changed-files:
-    - any-glob-to-any-file: 
-      - .github/**
-      - LICENSE
-      - AUTHORS
-      - MAINTAINERS
-      - PROJECT.md
-      - README.md
-      - .gitignore
-      - codecov.yml
-    - all-globs-to-all-files: '!.github/workflows/*'
+  - all:
+      - changed-files:
+          - any-glob-to-any-file:
+              - .github/**
+              - LICENSE
+              - AUTHORS
+              - MAINTAINERS
+              - PROJECT.md
+              - README.md
+              - .gitignore
+              - codecov.yml
+          - all-globs-to-all-files: '!.github/workflows/*'
 
 # Add 'area/github-actions' label to changes in the .github/workflows folder
 area/ci:
   - changed-files:
-    - any-glob-to-any-file: '.github/workflows/**'
+      - any-glob-to-any-file: '.github/workflows/**'
 
 # Add 'area/bake' label to changes in the bake
 area/bake:
   - changed-files:
-    - any-glob-to-any-file: 'bake/**'
+      - any-glob-to-any-file: 'bake/**'
 
 # Add 'area/bake/compose' label to changes in the bake+compose
 area/bake/compose:
   - changed-files:
-    - any-glob-to-any-file:
-      - bake/compose.go
-      - bake/compose_test.go
+      - any-glob-to-any-file:
+          - bake/compose.go
+          - bake/compose_test.go
 
 # Add 'area/build' label to changes in build files
 area/build:
   - changed-files:
-    - any-glob-to-any-file: 'build/**'
+      - any-glob-to-any-file: 'build/**'
 
 # Add 'area/builder' label to changes in builder files
 area/builder:
   - changed-files:
-    - any-glob-to-any-file: 'builder/**'
+      - any-glob-to-any-file: 'builder/**'
 
 # Add 'area/cli' label to changes in the CLI
 area/cli:
   - changed-files:
-    - any-glob-to-any-file: 
-      - cmd/**
-      - commands/**
+      - any-glob-to-any-file:
+          - cmd/**
+          - commands/**
 
 # Add 'area/controller' label to changes in the controller
 area/controller:
   - changed-files:
-    - any-glob-to-any-file: 'controller/**'
+      - any-glob-to-any-file: 'controller/**'
 
 # Add 'area/docs' label to markdown files in the docs folder
 area/docs:
   - changed-files:
-    - any-glob-to-any-file: 'docs/**/*.md'
+      - any-glob-to-any-file: 'docs/**/*.md'
 
 # Add 'area/dependencies' label to changes in go dependency files
 area/dependencies:
   - changed-files:
-    - any-glob-to-any-file:
-      - go.mod
-      - go.sum
-      - vendor/**
+      - any-glob-to-any-file:
+          - go.mod
+          - go.sum
+          - vendor/**
 
 # Add 'area/driver' label to changes in the driver folder
 area/driver:
   - changed-files:
-    - any-glob-to-any-file: 'driver/**'
+      - any-glob-to-any-file: 'driver/**'
 
 # Add 'area/driver/docker' label to changes in the docker driver
 area/driver/docker:
   - changed-files:
-    - any-glob-to-any-file: 'driver/docker/**'
+      - any-glob-to-any-file: 'driver/docker/**'
 
 # Add 'area/driver/docker-container' label to changes in the docker-container driver
 area/driver/docker-container:
   - changed-files:
-    - any-glob-to-any-file: 'driver/docker-container/**'
+      - any-glob-to-any-file: 'driver/docker-container/**'
 
 # Add 'area/driver/kubernetes' label to changes in the kubernetes driver
 area/driver/kubernetes:
   - changed-files:
-    - any-glob-to-any-file: 'driver/kubernetes/**'
+      - any-glob-to-any-file: 'driver/kubernetes/**'
 
 # Add 'area/driver/remote' label to changes in the remote driver
 area/driver/remote:
   - changed-files:
-    - any-glob-to-any-file: 'driver/remote/**'
+      - any-glob-to-any-file: 'driver/remote/**'
 
 # Add 'area/hack' label to changes in the hack folder
 area/hack:
   - changed-files:
-    - any-glob-to-any-file: 'hack/**'
+      - any-glob-to-any-file: 'hack/**'
 
 # Add 'area/tests' label to changes in test files
 area/tests:
   - changed-files:
-    - any-glob-to-any-file: 
-      - tests/**
-      - '**/*_test.go'
+      - any-glob-to-any-file:
+          - tests/**
+          - '**/*_test.go'
