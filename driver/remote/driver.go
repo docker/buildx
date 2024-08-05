@@ -8,7 +8,6 @@ import (
 	"os"
 	"strings"
 	"sync"
-	"time"
 
 	"github.com/docker/buildx/driver"
 	util "github.com/docker/buildx/driver/remote/util"
@@ -47,7 +46,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 		return err
 	}
 	return progress.Wrap("[internal] waiting for connection", l, func(_ progress.SubLogger) error {
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
+		ctx, cancel := context.WithTimeout(ctx, d.Timeout)
 		defer cancel()
 		return c.Wait(ctx)
 	})

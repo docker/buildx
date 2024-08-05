@@ -3,6 +3,7 @@ package control
 import (
 	"context"
 	"io"
+	"time"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/progress"
@@ -29,4 +30,5 @@ type ControlOptions struct {
 	ServerConfig string
 	Root         string
 	Detach       bool
+	Timeout      time.Duration
 }

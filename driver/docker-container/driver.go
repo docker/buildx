@@ -214,7 +214,7 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 			select {
 			case <-ctx.Done():
 				return ctx.Err()
-			case <-time.After(time.Duration(try*120) * time.Millisecond):
+			case <-time.After(d.Timeout / time.Microsecond):
 				try++
 				continue
 			}

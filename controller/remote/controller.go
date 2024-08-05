@@ -13,7 +13,6 @@ import (
 	"path/filepath"
 	"strconv"
 	"syscall"
-	"time"
 
 	"github.com/containerd/log"
 	"github.com/docker/buildx/build"
@@ -62,7 +61,7 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 	serverRoot := filepath.Join(rootDir, "shared")
 
 	// connect to buildx server if it is already running
-	ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
+	ctx2, cancel := context.WithTimeout(ctx, opts.Timeout)
 	c, err := newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
 	cancel()
 	if err != nil {
@@ -90,7 +89,7 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 		go wait()
 
 		// wait for buildx server to be ready
-		ctx2, cancel = context.WithTimeout(ctx, 10*time.Second)
+		ctx2, cancel = context.WithTimeout(ctx, opts.Timeout)
 		c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
 		cancel()
 		if err != nil {

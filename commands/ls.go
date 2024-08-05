@@ -35,7 +35,8 @@ const (
 )
 
 type lsOptions struct {
-	format string
+	format  string
+	timeout time.Duration
 }
 
 func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
@@ -55,7 +56,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, in.timeout)
 	defer cancel()
 
 	eg, _ := errgroup.WithContext(timeoutCtx)
@@ -92,7 +93,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 	return nil
 }
 
-func lsCmd(dockerCli command.Cli) *cobra.Command {
+func lsCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options lsOptions
 
 	cmd := &cobra.Command{
@@ -100,6 +101,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "List builder instances",
 		Args:  cli.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.timeout = rootOpts.timeout
 			return runLs(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.Disable,

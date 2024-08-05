@@ -21,6 +21,7 @@ type rmOptions struct {
 	keepDaemon  bool
 	allInactive bool
 	force       bool
+	timeout     time.Duration
 }
 
 const (
@@ -109,6 +110,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 				}
 				options.builders = args
 			}
+			options.timeout = rootOpts.timeout
 			return runRm(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction: completion.BuilderNames(dockerCli),
@@ -150,7 +152,7 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
+	timeoutCtx, cancel := context.WithTimeout(ctx, in.timeout)
 	defer cancel()
 
 	eg, _ := errgroup.WithContext(timeoutCtx)

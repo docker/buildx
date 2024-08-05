@@ -6,6 +6,7 @@ import (
 	"sort"
 	"strings"
 	"sync"
+	"time"
 
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
@@ -60,7 +61,10 @@ type InitConfig struct {
 	Platforms        []specs.Platform
 	ContextPathHash  string // can be used for determining pods in the driver instance
 	DialMeta         map[string][]string
+	Timeout          time.Duration
 }
+
+const defaultTimeoutDriver = 120 * time.Second
 
 var drivers map[string]Factory
 
@@ -117,6 +121,7 @@ func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string,
 		ContextPathHash:  contextPathHash,
 		DialMeta:         dialMeta,
 		Files:            files,
+		Timeout:          defaultTimeoutDriver,
 	}
 	if f == nil {
 		var err error
