@@ -17,6 +17,31 @@ import (
 	"golang.org/x/text/language"
 )
 
+type rePatterns struct {
+	LocalSourceType *regexp.Regexp
+	ImageSourceType *regexp.Regexp
+	ExecType        *regexp.Regexp
+	ExportImageType *regexp.Regexp
+	LintMessage     *regexp.Regexp
+}
+
+var re = sync.OnceValue(func() *rePatterns {
+	return &rePatterns{
+		LocalSourceType: regexp.MustCompile(
+			strings.Join([]string{
+				`(?P<context>\[internal] load build context)`,
+				`(?P<dockerfile>load build definition)`,
+				`(?P<dockerignore>load \.dockerignore)`,
+				`(?P<namedcontext>\[context .+] load from client)`,
+			}, "|"),
+		),
+		ImageSourceType: regexp.MustCompile(`^\[.*] FROM `),
+		ExecType:        regexp.MustCompile(`^\[.*] RUN `),
+		ExportImageType: regexp.MustCompile(`^exporting to (image|(?P<format>\w+) image format)$`),
+		LintMessage:     regexp.MustCompile(`^https://docs\.docker\.com/go/dockerfile/rule/([\w|-]+)/`),
+	}
+})
+
 type metricWriter struct {
 	recorders []metricRecorder
 	attrs     attribute.Set
@@ -128,22 +153,13 @@ func (mr *localSourceTransferMetricRecorder) Record(ss *client.SolveStatus) {
 	}
 }
 
-var reLocalSourceType = regexp.MustCompile(
-	strings.Join([]string{
-		`(?P<context>\[internal] load build context)`,
-		`(?P<dockerfile>load build definition)`,
-		`(?P<dockerignore>load \.dockerignore)`,
-		`(?P<namedcontext>\[context .+] load from client)`,
-	}, "|"),
-)
-
 func detectLocalSourceType(vertexName string) attribute.KeyValue {
-	match := reLocalSourceType.FindStringSubmatch(vertexName)
+	match := re().LocalSourceType.FindStringSubmatch(vertexName)
 	if match == nil {
 		return attribute.KeyValue{}
 	}
 
-	for i, source := range reLocalSourceType.SubexpNames() {
+	for i, source := range re().LocalSourceType.SubexpNames() {
 		if len(source) == 0 {
 			// Not a subexpression.
 			continue
@@ -241,10 +257,8 @@ func (mr *imageSourceMetricRecorder) Record(ss *client.SolveStatus) {
 	}
 }
 
-var reImageSourceType = regexp.MustCompile(`^\[.*] FROM `)
-
 func detectImageSourceType(vertexName string) bool {
-	return reImageSourceType.MatchString(vertexName)
+	return re().ImageSourceType.MatchString(vertexName)
 }
 
 type (
@@ -278,10 +292,8 @@ func (mr *execMetricRecorder) Record(ss *client.SolveStatus) {
 	}
 }
 
-var reExecType = regexp.MustCompile(`^\[.*] RUN `)
-
 func detectExecType(vertexName string) bool {
-	return reExecType.MatchString(vertexName)
+	return re().ExecType.MatchString(vertexName)
 }
 
 type (
@@ -325,10 +337,8 @@ func (mr *exportImageMetricRecorder) Record(ss *client.SolveStatus) {
 	}
 }
 
-var reExportImageType = regexp.MustCompile(`^exporting to (image|(?P<format>\w+) image format)$`)
-
 func detectExportImageType(vertexName string) string {
-	m := reExportImageType.FindStringSubmatch(vertexName)
+	m := re().ExportImageType.FindStringSubmatch(vertexName)
 	if m == nil {
 		return ""
 	}
@@ -456,7 +466,10 @@ func kebabToCamel(s string) string {
 	return strings.Join(words, "")
 }
 
+var lintRuleNameProperty = attribute.Key("lint.rule.name")
+
 func (mr *lintMetricRecorder) Record(ss *client.SolveStatus) {
+	reLintMessage := re().LintMessage
 	for _, warning := range ss.Warnings {
 		m := reLintMessage.FindSubmatch([]byte(warning.URL))
 		if len(m) < 2 {
@@ -472,8 +485,3 @@ func (mr *lintMetricRecorder) Record(ss *client.SolveStatus) {
 		)
 	}
 }
-
-var (
-	reLintMessage        = regexp.MustCompile(`^https://docs\.docker\.com/go/dockerfile/rule/([\w|-]+)/`)
-	lintRuleNameProperty = attribute.Key("lint.rule.name")
-)
