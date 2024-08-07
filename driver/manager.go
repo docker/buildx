@@ -2,17 +2,15 @@ package driver
 
 import (
 	"context"
-	"os"
 	"sort"
-	"strings"
 	"sync"
 
+	"github.com/docker/cli/cli/context/store"
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/delegated"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
-	"k8s.io/client-go/rest"
 )
 
 type Factory interface {
@@ -28,38 +26,18 @@ type BuildkitConfig struct {
 	// Rootless bool
 }
 
-type KubeClientConfig interface {
-	ClientConfig() (*rest.Config, error)
-	Namespace() (string, bool, error)
-}
-
-type KubeClientConfigInCluster struct{}
-
-func (k KubeClientConfigInCluster) ClientConfig() (*rest.Config, error) {
-	return rest.InClusterConfig()
-}
-
-func (k KubeClientConfigInCluster) Namespace() (string, bool, error) {
-	namespace, err := os.ReadFile("/var/run/secrets/kubernetes.io/serviceaccount/namespace")
-	if err != nil {
-		return "", false, err
-	}
-	return strings.TrimSpace(string(namespace)), true, nil
-}
-
 type InitConfig struct {
-	// This object needs updates to be generic for different drivers
-	Name             string
-	EndpointAddr     string
-	DockerAPI        dockerclient.APIClient
-	KubeClientConfig KubeClientConfig
-	BuildkitdFlags   []string
-	Files            map[string][]byte
-	DriverOpts       map[string]string
-	Auth             Auth
-	Platforms        []specs.Platform
-	ContextPathHash  string // can be used for determining pods in the driver instance
-	DialMeta         map[string][]string
+	Name            string
+	EndpointAddr    string
+	DockerAPI       dockerclient.APIClient
+	ContextStore    store.Reader
+	BuildkitdFlags  []string
+	Files           map[string][]byte
+	DriverOpts      map[string]string
+	Auth            Auth
+	Platforms       []specs.Platform
+	ContextPathHash string
+	DialMeta        map[string][]string
 }
 
 var drivers map[string]Factory
@@ -104,28 +82,15 @@ func GetFactory(name string, instanceRequired bool) (Factory, error) {
 	return nil, errors.Errorf("failed to find driver %q", name)
 }
 
-func GetDriver(ctx context.Context, name string, f Factory, endpointAddr string, api dockerclient.APIClient, auth Auth, kcc KubeClientConfig, buildkitdFlags []string, files map[string][]byte, do map[string]string, platforms []specs.Platform, contextPathHash string, dialMeta map[string][]string) (*DriverHandle, error) {
-	ic := InitConfig{
-		EndpointAddr:     endpointAddr,
-		DockerAPI:        api,
-		KubeClientConfig: kcc,
-		Name:             name,
-		BuildkitdFlags:   buildkitdFlags,
-		DriverOpts:       do,
-		Auth:             auth,
-		Platforms:        platforms,
-		ContextPathHash:  contextPathHash,
-		DialMeta:         dialMeta,
-		Files:            files,
-	}
+func GetDriver(ctx context.Context, f Factory, cfg InitConfig) (*DriverHandle, error) {
 	if f == nil {
 		var err error
-		f, err = GetDefaultFactory(ctx, endpointAddr, api, false, dialMeta)
+		f, err = GetDefaultFactory(ctx, cfg.EndpointAddr, cfg.DockerAPI, false, cfg.DialMeta)
 		if err != nil {
 			return nil, err
 		}
 	}
-	d, err := f.New(ctx, ic)
+	d, err := f.New(ctx, cfg)
 	if err != nil {
 		return nil, err
 	}
