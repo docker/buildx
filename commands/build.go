@@ -367,19 +367,22 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 			return errors.Wrap(err, "writing image ID file")
 		}
 	}
+	if options.metadataFile != "" {
+		dt := decodeExporterResponse(resp.ExporterResponse)
+		if opts.PrintFunc == nil {
+			if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
+				dt["buildx.build.warnings"] = warnings
+			}
+		}
+		if err := writeMetadataFile(options.metadataFile, dt); err != nil {
+			return err
+		}
+	}
 	if opts.PrintFunc != nil {
 		if exitcode, err := printResult(dockerCli.Out(), opts.PrintFunc, resp.ExporterResponse); err != nil {
 			return err
 		} else if exitcode != 0 {
 			os.Exit(exitcode)
-		}
-	} else if options.metadataFile != "" {
-		dt := decodeExporterResponse(resp.ExporterResponse)
-		if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
-			dt["buildx.build.warnings"] = warnings
-		}
-		if err := writeMetadataFile(options.metadataFile, dt); err != nil {
-			return err
 		}
 	}
 	return nil
@@ -731,9 +734,17 @@ func writeMetadataFile(filename string, dt interface{}) error {
 }
 
 func decodeExporterResponse(exporterResponse map[string]string) map[string]interface{} {
+	decFunc := func(k, v string) ([]byte, error) {
+		if k == "result.json" {
+			// result.json is part of metadata response for subrequests which
+			// is already a JSON object: https://github.com/moby/buildkit/blob/f6eb72f2f5db07ddab89ac5e2bd3939a6444f4be/frontend/dockerui/requests.go#L100-L102
+			return []byte(v), nil
+		}
+		return base64.StdEncoding.DecodeString(v)
+	}
 	out := make(map[string]interface{})
 	for k, v := range exporterResponse {
-		dt, err := base64.StdEncoding.DecodeString(v)
+		dt, err := decFunc(k, v)
 		if err != nil {
 			out[k] = v
 			continue

@@ -13,6 +13,7 @@ import (
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/identity"
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/contentutil"
@@ -56,6 +57,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testListVariables,
 	testBakeCallCheck,
 	testBakeCallCheckFlag,
+	testBakeCallMetadata,
 	testBakeMultiPlatform,
 }
 
@@ -1213,4 +1215,62 @@ target "another" {
 	require.True(t, ok)
 
 	require.Len(t, warnings, 1)
+}
+
+func testBakeCallMetadata(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+frOM busybox as base
+cOpy Dockerfile .
+from scratch
+COPy --from=base \
+  /Dockerfile \
+  /
+	`)
+	bakefile := []byte(`
+target "default" {}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	cmd := buildxCmd(
+		sb,
+		withDir(dir),
+		withArgs("bake", "--call", "check,format=json", "--metadata-file", filepath.Join(dir, "md.json")),
+	)
+	stdout := bytes.Buffer{}
+	stderr := bytes.Buffer{}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+
+	var res map[string]any
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &res), stdout.String())
+	targets, ok := res["target"].(map[string]any)
+	require.True(t, ok)
+	def, ok := targets["default"].(map[string]any)
+	require.True(t, ok)
+	_, ok = def["build"]
+	require.True(t, ok)
+	check, ok := def["check"].(map[string]any)
+	require.True(t, ok)
+	warnings, ok := check["warnings"].([]any)
+	require.True(t, ok)
+	require.Len(t, warnings, 3)
+
+	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		Default struct {
+			BuildRef   string           `json:"buildx.build.ref"`
+			ResultJSON lint.LintResults `json:"result.json"`
+		} `json:"default"`
+	}
+	var md mdT
+	require.NoError(t, json.Unmarshal(dt, &md), dt)
+	require.NotEmpty(t, md.Default.BuildRef)
+	require.Len(t, md.Default.ResultJSON.Warnings, 3)
 }
