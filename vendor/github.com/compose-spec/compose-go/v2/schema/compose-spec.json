@@ -480,7 +480,9 @@
               "path": {"type": "string"},
               "action": {"type": "string", "enum": ["rebuild", "sync", "sync+restart"]},
               "target": {"type": "string"}
-            }
+            },
+            "additionalProperties": false,
+            "patternProperties": {"^x-": {}}
           },
           "additionalProperties": false,
           "patternProperties": {"^x-": {}}

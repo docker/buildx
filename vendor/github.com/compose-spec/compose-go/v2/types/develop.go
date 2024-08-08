@@ -31,8 +31,9 @@ const (
 )
 
 type Trigger struct {
-	Path   string      `yaml:"path" json:"path"`
-	Action WatchAction `yaml:"action" json:"action"`
-	Target string      `yaml:"target,omitempty" json:"target,omitempty"`
-	Ignore []string    `yaml:"ignore,omitempty" json:"ignore,omitempty"`
+	Path       string      `yaml:"path" json:"path"`
+	Action     WatchAction `yaml:"action" json:"action"`
+	Target     string      `yaml:"target,omitempty" json:"target,omitempty"`
+	Ignore     []string    `yaml:"ignore,omitempty" json:"ignore,omitempty"`
+	Extensions Extensions  `yaml:"#extensions,inline,omitempty" json:"-"`
 }

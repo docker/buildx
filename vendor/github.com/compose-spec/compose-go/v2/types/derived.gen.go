@@ -1814,6 +1814,12 @@ func deriveDeepCopy_40(dst, src *Trigger) {
 		}
 		copy(dst.Ignore, src.Ignore)
 	}
+	if src.Extensions != nil {
+		dst.Extensions = make(map[string]any, len(src.Extensions))
+		src.Extensions.DeepCopy(dst.Extensions)
+	} else {
+		dst.Extensions = nil
+	}
 }
 
 // deriveDeepCopy_41 recursively copies the contents of src into dst.
