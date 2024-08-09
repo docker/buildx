@@ -224,15 +224,22 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 	return progress, nil
 }
 
-func buildMetricAttributes(dockerCli command.Cli, b *builder.Builder, options *buildOptions) attribute.Set {
+const (
+	commandNameAttribute = attribute.Key("command.name")
+	commandOptionsHash   = attribute.Key("command.options.hash")
+	driverNameAttribute  = attribute.Key("driver.name")
+	driverTypeAttribute  = attribute.Key("driver.type")
+)
+
+func buildMetricAttributes(dockerCli command.Cli, driverType string, options *buildOptions) attribute.Set {
 	return attribute.NewSet(
-		attribute.String("command.name", "build"),
-		attribute.Stringer("command.options.hash", &buildOptionsHash{
+		commandNameAttribute.String("build"),
+		attribute.Stringer(string(commandOptionsHash), &buildOptionsHash{
 			buildOptions: options,
 			configDir:    confutil.ConfigDir(dockerCli),
 		}),
-		attribute.String("driver.name", options.builder),
-		attribute.String("driver.type", b.Driver),
+		driverNameAttribute.String(options.builder),
+		driverTypeAttribute.String(driverType),
 	)
 }
 
@@ -308,12 +315,13 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	if err != nil {
 		return err
 	}
+	driverType := b.Driver
 
 	var term bool
 	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
 		term = true
 	}
-	attributes := buildMetricAttributes(dockerCli, b, &options)
+	attributes := buildMetricAttributes(dockerCli, driverType, &options)
 
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()

@@ -4,12 +4,16 @@ import (
 	"bytes"
 	"cmp"
 	"context"
+	"crypto/sha256"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
 	"os"
 	"slices"
+	"sort"
 	"strings"
+	"sync"
 	"text/tabwriter"
 
 	"github.com/containerd/console"
@@ -26,6 +30,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
@@ -33,6 +38,7 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"go.opentelemetry.io/otel/attribute"
 )
 
 type bakeOptions struct {
@@ -52,6 +58,8 @@ type bakeOptions struct {
 }
 
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
+	mp := dockerCli.MeterProvider()
+
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, "bake")
 	if err != nil {
 		return err
@@ -60,22 +68,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		end(err)
 	}()
 
-	var url string
-	cmdContext := "cwd://"
-
-	if len(targets) > 0 {
-		if build.IsRemoteURL(targets[0]) {
-			url = targets[0]
-			targets = targets[1:]
-			if len(targets) > 0 {
-				if build.IsRemoteURL(targets[0]) {
-					cmdContext = targets[0]
-					targets = targets[1:]
-				}
-			}
-		}
-	}
-
+	url, cmdContext, targets := bakeArgs(targets)
 	if len(targets) == 0 {
 		targets = []string{"default"}
 	}
@@ -116,6 +109,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	var progressConsoleDesc, progressTextDesc string
 
 	// instance only needed for reading remote bake files or building
+	var driverType string
 	if url != "" || !in.printOnly {
 		b, err := builder.New(dockerCli,
 			builder.WithName(in.builder),
@@ -133,17 +127,20 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		}
 		progressConsoleDesc = fmt.Sprintf("%s:%s", b.Driver, b.Name)
 		progressTextDesc = fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver)
+		driverType = b.Driver
 	}
 
 	var term bool
 	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
 		term = true
 	}
+	attributes := bakeMetricAttributes(dockerCli, driverType, url, cmdContext, targets, &in)
 
 	progressMode := progressui.DisplayMode(cFlags.progress)
 	var printer *progress.Printer
 	printer, err = progress.NewPrinter(ctx2, os.Stderr, progressMode,
 		progress.WithDesc(progressTextDesc, progressConsoleDesc),
+		progress.WithMetrics(mp, attributes),
 		progress.WithOnClose(func() {
 			printWarnings(os.Stderr, printer.Warnings(), progressMode)
 		}),
@@ -241,12 +238,18 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
+	done := timeBuildCommand(mp, attributes)
 	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
 	if retErr != nil {
-		return wrapBuildError(retErr, true)
+		err = wrapBuildError(retErr, true)
+	}
+	done(err)
+
+	if err != nil {
+		return err
 	}
 
 	if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
@@ -268,7 +271,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	var callFormatJSON bool
-	var jsonResults = map[string]map[string]any{}
+	jsonResults := map[string]map[string]any{}
 	if callFunc != nil {
 		callFormatJSON = callFunc.Format == "json"
 	}
@@ -456,6 +459,21 @@ func saveLocalStateGroup(dockerCli command.Cli, in bakeOptions, targets []string
 	})
 }
 
+// bakeArgs will retrieve the remote url, command context, and targets
+// from the command line arguments.
+func bakeArgs(args []string) (url, cmdContext string, targets []string) {
+	cmdContext, targets = "cwd://", args
+	if len(targets) == 0 || !build.IsRemoteURL(targets[0]) {
+		return url, cmdContext, targets
+	}
+	url, targets = targets[0], targets[1:]
+	if len(targets) == 0 || !build.IsRemoteURL(targets[0]) {
+		return url, cmdContext, targets
+	}
+	cmdContext, targets = targets[0], targets[1:]
+	return url, cmdContext, targets
+}
+
 func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names []string, stdin io.Reader, pw progress.Writer) (files []bake.File, inp *bake.Input, err error) {
 	var lnames []string // local
 	var rnames []string // remote
@@ -569,4 +587,68 @@ func printTargetList(w io.Writer, cfg *bake.Config) error {
 	}
 
 	return nil
+}
+
+func bakeMetricAttributes(dockerCli command.Cli, driverType, url, cmdContext string, targets []string, options *bakeOptions) attribute.Set {
+	return attribute.NewSet(
+		commandNameAttribute.String("bake"),
+		attribute.Stringer(string(commandOptionsHash), &bakeOptionsHash{
+			bakeOptions: options,
+			configDir:   confutil.ConfigDir(dockerCli),
+			url:         url,
+			cmdContext:  cmdContext,
+			targets:     targets,
+		}),
+		driverNameAttribute.String(options.builder),
+		driverTypeAttribute.String(driverType),
+	)
+}
+
+type bakeOptionsHash struct {
+	*bakeOptions
+	configDir  string
+	url        string
+	cmdContext string
+	targets    []string
+	result     string
+	resultOnce sync.Once
+}
+
+func (o *bakeOptionsHash) String() string {
+	o.resultOnce.Do(func() {
+		url := o.url
+		cmdContext := o.cmdContext
+		if cmdContext == "cwd://" {
+			// Resolve the directory if the cmdContext is the current working directory.
+			cmdContext = osutil.GetWd()
+		}
+
+		// Sort the inputs for files and targets since the ordering
+		// doesn't matter, but avoid modifying the original slice.
+		files := immutableSort(o.files)
+		targets := immutableSort(o.targets)
+
+		joinedFiles := strings.Join(files, ",")
+		joinedTargets := strings.Join(targets, ",")
+		salt := confutil.TryNodeIdentifier(o.configDir)
+
+		h := sha256.New()
+		for _, s := range []string{url, cmdContext, joinedFiles, joinedTargets, salt} {
+			_, _ = io.WriteString(h, s)
+			h.Write([]byte{0})
+		}
+		o.result = hex.EncodeToString(h.Sum(nil))
+	})
+	return o.result
+}
+
+// immutableSort will sort the entries in s without modifying the original slice.
+func immutableSort(s []string) []string {
+	if !sort.StringsAreSorted(s) {
+		cpy := make([]string, len(s))
+		copy(cpy, s)
+		sort.Strings(cpy)
+		return cpy
+	}
+	return s
 }
