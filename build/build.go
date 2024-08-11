@@ -893,7 +893,7 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 
 			var ss *sharedSession
 			if idx == -1 {
-				s, err := session.NewSession(ctx, "", fs.so[0].SharedKey)
+				s, err := session.NewSession(ctx, fs.so[0].SharedKey)
 				if err != nil {
 					return nil, err
 				}
