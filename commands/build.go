@@ -891,17 +891,29 @@ func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string) 
 	case "subrequests.describe":
 		return 0, printValue(w, subrequests.PrintDescribe, subrequests.SubrequestsDescribeDefinition.Version, f.Format, res)
 	case "lint":
-		err := printValue(w, lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
-		if err != nil {
-			return 0, err
-		}
-
 		lintResults := lint.LintResults{}
 		if result, ok := res["result.json"]; ok {
 			if err := json.Unmarshal([]byte(result), &lintResults); err != nil {
 				return 0, err
 			}
 		}
+
+		warningCount := len(lintResults.Warnings)
+		if f.Format != "json" && warningCount > 0 {
+			var warningCountMsg string
+			if warningCount == 1 {
+				warningCountMsg = "1 warning has been found!"
+			} else if warningCount > 1 {
+				warningCountMsg = fmt.Sprintf("%d warnings have been found!", warningCount)
+			}
+			fmt.Fprintf(w, "Check complete, %s\n", warningCountMsg)
+		}
+
+		err := printValue(w, lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
+		if err != nil {
+			return 0, err
+		}
+
 		if lintResults.Error != nil {
 			// Print the error message and the source
 			// Normally, we would use `errdefs.WithSource` to attach the source to the

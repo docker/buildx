@@ -74,6 +74,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildSecret,
 	testBuildDefaultLoad,
 	testBuildCall,
+	testCheckCallOutput,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -1230,6 +1231,65 @@ COPy --from=base \
 		require.NoError(t, json.Unmarshal(dt, &md), dt)
 		require.Empty(t, md.BuildRef)
 		require.Len(t, md.ResultJSON.Warnings, 3)
+	})
+}
+
+func testCheckCallOutput(t *testing.T, sb integration.Sandbox) {
+	t.Run("check for warning count msg in check without warnings", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox AS base
+COPY Dockerfile .
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		cmd := buildxCmd(sb, withArgs("build", "--call=check", dir))
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, no warnings found.")
+	})
+
+	t.Run("check for warning count msg in check with single warning", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox as base
+COPY Dockerfile .
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		cmd := buildxCmd(sb, withArgs("build", "--call=check", dir))
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, 1 warning has been found!")
+	})
+
+	t.Run("check for warning count msg in check with multiple warnings", func(t *testing.T) {
+		dockerfile := []byte(`
+frOM busybox as base
+cOpy Dockerfile .
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		cmd := buildxCmd(sb, withArgs("build", "--call=check", dir))
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, 2 warnings have been found!")
 	})
 }
 
