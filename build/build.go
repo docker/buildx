@@ -97,7 +97,7 @@ type CallFunc struct {
 type Inputs struct {
 	ContextPath      string
 	DockerfilePath   string
-	InStream         io.Reader
+	InStream         *SyncMultiReader
 	ContextState     *llb.State
 	DockerfileInline string
 	NamedContexts    map[string]NamedContext
