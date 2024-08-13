@@ -9,9 +9,9 @@ import (
 	"github.com/tonistiigi/go-csvvalue"
 )
 
-const defaultPrintFunc = "build"
+const defaultCallFunc = "build"
 
-func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
+func ParseCallFunc(str string) (*controllerapi.CallFunc, error) {
 	if str == "" {
 		return nil, nil
 	}
@@ -20,7 +20,7 @@ func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &controllerapi.PrintFunc{}
+	f := &controllerapi.CallFunc{}
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		if len(parts) == 2 {
@@ -51,7 +51,7 @@ func ParsePrintFunc(str string) (*controllerapi.PrintFunc, error) {
 		f.Name = "lint"
 	}
 
-	if f.Name == defaultPrintFunc {
+	if f.Name == defaultCallFunc {
 		return nil, nil
 	}
 

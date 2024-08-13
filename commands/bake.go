@@ -73,7 +73,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		targets = []string{"default"}
 	}
 
-	callFunc, err := buildflags.ParsePrintFunc(in.callFunc)
+	callFunc, err := buildflags.ParseCallFunc(in.callFunc)
 	if err != nil {
 		return err
 	}
@@ -225,12 +225,12 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	for _, opt := range bo {
-		if opt.PrintFunc != nil {
-			cf, err := buildflags.ParsePrintFunc(opt.PrintFunc.Name)
+		if opt.CallFunc != nil {
+			cf, err := buildflags.ParseCallFunc(opt.CallFunc.Name)
 			if err != nil {
 				return err
 			}
-			opt.PrintFunc.Name = cf.Name
+			opt.CallFunc.Name = cf.Name
 		}
 	}
 
@@ -286,14 +286,14 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 
 	for _, name := range names {
 		req := bo[name]
-		if req.PrintFunc == nil {
+		if req.CallFunc == nil {
 			continue
 		}
 
-		pf := &pb.PrintFunc{
-			Name:         req.PrintFunc.Name,
-			Format:       req.PrintFunc.Format,
-			IgnoreStatus: req.PrintFunc.IgnoreStatus,
+		pf := &pb.CallFunc{
+			Name:         req.CallFunc.Name,
+			Format:       req.CallFunc.Format,
+			IgnoreStatus: req.CallFunc.IgnoreStatus,
 		}
 
 		if callFunc != nil {
@@ -357,7 +357,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 				"build": def,
 			}
 			if res, ok := jsonResults[name]; ok {
-				printName := bo[name].PrintFunc.Name
+				printName := bo[name].CallFunc.Name
 				if printName == "lint" {
 					printName = "check"
 				}
