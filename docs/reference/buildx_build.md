@@ -144,7 +144,7 @@ For more information about annotations, see
 --attest=type=provenance,...
 ```
 
-Create [image attestations](https://docs.docker.com/build/attestations/).
+Create [image attestations](https://docs.docker.com/build/metadata/attestations/).
 BuildKit currently supports:
 
 - `sbom` - Software Bill of Materials.
@@ -152,7 +152,7 @@ BuildKit currently supports:
   Use `--attest=type=sbom` to generate an SBOM for an image at build-time.
   Alternatively, you can use the [`--sbom` shorthand](#sbom).
 
-  For more information, see [here](https://docs.docker.com/build/attestations/sbom/).
+  For more information, see [here](https://docs.docker.com/build/metadata/attestations/sbom/).
 
 - `provenance` - SLSA Provenance
 
@@ -162,7 +162,7 @@ BuildKit currently supports:
   By default, a minimal provenance attestation will be created for the build
   result, which will only be attached for images pushed to registries.
 
-  For more information, see [here](https://docs.docker.com/build/attestations/slsa-provenance/).
+  For more information, see [here](https://docs.docker.com/build/metadata/attestations/slsa-provenance/).
 
 ### <a name="allow"></a> Allow extra privileged entitlement (--allow)
 
@@ -583,7 +583,7 @@ $ cat metadata.json
 
 > **Note**
 >
-> Build record [provenance](https://docs.docker.com/build/attestations/slsa-provenance/#provenance-attestation-example)
+> Build record [provenance](https://docs.docker.com/build/metadata/attestations/slsa-provenance/#provenance-attestation-example)
 > (`buildx.build.provenance`) includes minimal provenance by default. Set the
 > `BUILDX_METADATA_PROVENANCE` environment variable to customize this behavior:
 >
@@ -669,7 +669,7 @@ The arguments for the `--no-cache-filter` flag must be names of stages.
 ```
 
 Sets the export action for the build result. The default output, when using the
-`docker` [build driver](https://docs.docker.com/build/drivers/), is a container
+`docker` [build driver](https://docs.docker.com/build/builders/drivers/), is a container
 image exported to the local image store. The `--output` flag makes this step
 configurable allows export of results directly to the client's filesystem, an
 OCI image tarball, a registry, and more.
@@ -877,7 +877,7 @@ to a registry if you use the default image store. Alternatively, you can switch
 to using the containerd image store.
 
 For more information about provenance attestations, see
-[here](https://docs.docker.com/build/attestations/slsa-provenance/).
+[here](https://docs.docker.com/build/metadata/attestations/slsa-provenance/).
 
 ### <a name="push"></a> Push the build result to a registry (--push)
 
@@ -899,7 +899,7 @@ attestations. Provenance attestations only persist for images pushed directly
 to a registry if you use the default image store. Alternatively, you can switch
 to using the containerd image store.
 
-For more information, see [here](https://docs.docker.com/build/attestations/sbom/).
+For more information, see [here](https://docs.docker.com/build/metadata/attestations/sbom/).
 
 ### <a name="secret"></a> Secret to expose to the build (--secret)
 

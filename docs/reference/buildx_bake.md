@@ -165,7 +165,7 @@ $ cat metadata.json
 
 > **Note**
 >
-> Build record [provenance](https://docs.docker.com/build/attestations/slsa-provenance/#provenance-attestation-example)
+> Build record [provenance](https://docs.docker.com/build/metadata/attestations/slsa-provenance/#provenance-attestation-example)
 > (`buildx.build.provenance`) includes minimal provenance by default. Set the
 > `BUILDX_METADATA_PROVENANCE` environment variable to customize this behavior:
 > * `min` sets minimal provenance (default).
