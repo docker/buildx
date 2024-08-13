@@ -1271,6 +1271,6 @@ target "default" {}
 	}
 	var md mdT
 	require.NoError(t, json.Unmarshal(dt, &md), dt)
-	require.NotEmpty(t, md.Default.BuildRef)
+	require.Empty(t, md.Default.BuildRef)
 	require.Len(t, md.Default.ResultJSON.Warnings, 3)
 }

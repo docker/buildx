@@ -510,10 +510,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					for k, v := range printRes {
 						rr.ExporterResponse[k] = string(v)
 					}
-					rr.ExporterResponse["buildx.build.ref"] = buildRef
-					if node.Driver.HistoryAPISupported(ctx) {
-						if err := setRecordProvenance(ctx, c, rr, so.Ref, opt.ProvenanceResponseMode, pw); err != nil {
-							return err
+					if opt.PrintFunc == nil {
+						rr.ExporterResponse["buildx.build.ref"] = buildRef
+						if node.Driver.HistoryAPISupported(ctx) {
+							if err := setRecordProvenance(ctx, c, rr, so.Ref, opt.ProvenanceResponseMode, pw); err != nil {
+								return err
+							}
 						}
 					}
 

@@ -1228,7 +1228,7 @@ COPy --from=base \
 		}
 		var md mdT
 		require.NoError(t, json.Unmarshal(dt, &md), dt)
-		require.NotEmpty(t, md.BuildRef)
+		require.Empty(t, md.BuildRef)
 		require.Len(t, md.ResultJSON.Warnings, 3)
 	})
 }
