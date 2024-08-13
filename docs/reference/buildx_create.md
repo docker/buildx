@@ -120,7 +120,7 @@ backend. Buildx supports the following drivers:
 * `kubernetes`
 * `remote`
 
-For more information about build drivers, see [here](https://docs.docker.com/build/drivers/).
+For more information about build drivers, see [here](https://docs.docker.com/build/builders/drivers/).
 
 #### `docker` driver
 
@@ -167,10 +167,10 @@ Passes additional driver-specific options.
 For information about available driver options, refer to the detailed
 documentation for the specific driver:
 
-* [`docker` driver](https://docs.docker.com/build/drivers/docker/)
-* [`docker-container` driver](https://docs.docker.com/build/drivers/docker-container/)
-* [`kubernetes` driver](https://docs.docker.com/build/drivers/kubernetes/)
-* [`remote` driver](https://docs.docker.com/build/drivers/remote/)
+* [`docker` driver](https://docs.docker.com/build/builders/drivers/docker/)
+* [`docker-container` driver](https://docs.docker.com/build/builders/drivers/docker-container/)
+* [`kubernetes` driver](https://docs.docker.com/build/builders/drivers/kubernetes/)
+* [`remote` driver](https://docs.docker.com/build/builders/drivers/remote/)
 
 ### <a name="leave"></a> Remove a node from a builder (--leave)
 
