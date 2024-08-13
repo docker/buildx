@@ -2,6 +2,8 @@ package hclparser
 
 import (
 	"errors"
+	"path"
+	"strings"
 	"time"
 
 	"github.com/hashicorp/go-cty-funcs/cidr"
@@ -27,6 +29,7 @@ var stdlibFunctions = []funcDef{
 	{name: "and", fn: stdlib.AndFunc},
 	{name: "base64decode", fn: encoding.Base64DecodeFunc},
 	{name: "base64encode", fn: encoding.Base64EncodeFunc},
+	{name: "basename", factory: basenameFunc},
 	{name: "bcrypt", fn: crypto.BcryptFunc},
 	{name: "byteslen", fn: stdlib.BytesLenFunc},
 	{name: "bytesslice", fn: stdlib.BytesSliceFunc},
@@ -45,6 +48,7 @@ var stdlibFunctions = []funcDef{
 	{name: "contains", fn: stdlib.ContainsFunc},
 	{name: "convert", fn: typeexpr.ConvertFunc},
 	{name: "csvdecode", fn: stdlib.CSVDecodeFunc},
+	{name: "dirname", factory: dirnameFunc},
 	{name: "distinct", fn: stdlib.DistinctFunc},
 	{name: "divide", fn: stdlib.DivideFunc},
 	{name: "element", fn: stdlib.ElementFunc},
@@ -91,6 +95,7 @@ var stdlibFunctions = []funcDef{
 	{name: "reverse", fn: stdlib.ReverseFunc},
 	{name: "reverselist", fn: stdlib.ReverseListFunc},
 	{name: "rsadecrypt", fn: crypto.RsaDecryptFunc},
+	{name: "sanitize", factory: sanitizeFunc},
 	{name: "sethaselement", fn: stdlib.SetHasElementFunc},
 	{name: "setintersection", fn: stdlib.SetIntersectionFunc},
 	{name: "setproduct", fn: stdlib.SetProductFunc},
@@ -166,6 +171,67 @@ func indexOfFunc() function.Function {
 			}
 			return cty.NilVal, errors.New("item not found")
 
+		},
+	})
+}
+
+// basenameFunc constructs a function that returns the last element of a path.
+func basenameFunc() function.Function {
+	return function.New(&function.Spec{
+		Params: []function.Parameter{
+			{
+				Name: "path",
+				Type: cty.String,
+			},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			in := args[0].AsString()
+			return cty.StringVal(path.Base(in)), nil
+		},
+	})
+}
+
+// dirnameFunc constructs a function that returns the directory of a path.
+func dirnameFunc() function.Function {
+	return function.New(&function.Spec{
+		Params: []function.Parameter{
+			{
+				Name: "path",
+				Type: cty.String,
+			},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			in := args[0].AsString()
+			return cty.StringVal(path.Dir(in)), nil
+		},
+	})
+}
+
+// sanitizyFunc constructs a function that replaces all non-alphanumeric characters with a underscore,
+// leaving only characters that are valid for a Bake target name.
+func sanitizeFunc() function.Function {
+	return function.New(&function.Spec{
+		Params: []function.Parameter{
+			{
+				Name: "name",
+				Type: cty.String,
+			},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			in := args[0].AsString()
+			// only [a-zA-Z0-9_-]+ is allowed
+			var b strings.Builder
+			for _, r := range in {
+				if r >= 'a' && r <= 'z' || r >= 'A' && r <= 'Z' || r >= '0' && r <= '9' || r == '_' || r == '-' {
+					b.WriteRune(r)
+				} else {
+					b.WriteRune('_')
+				}
+			}
+			return cty.StringVal(b.String()), nil
 		},
 	})
 }
