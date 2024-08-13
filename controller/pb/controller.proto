@@ -49,7 +49,7 @@ message BuildRequest {
 message BuildOptions {
   string ContextPath = 1;
   string DockerfileName = 2;
-  PrintFunc PrintFunc = 3;
+  CallFunc CallFunc = 3;
   map<string, string> NamedContexts = 4;
 
   repeated string Allow = 5;
@@ -111,7 +111,7 @@ message Secret {
   string Env = 3;
 }
 
-message PrintFunc {
+message CallFunc {
   string Name = 1;
   string Format = 2;
   bool IgnoreStatus = 3;

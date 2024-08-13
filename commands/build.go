@@ -79,7 +79,7 @@ type buildOptions struct {
 	noCacheFilter  []string
 	outputs        []string
 	platforms      []string
-	printFunc      string
+	callFunc       string
 	secrets        []string
 	shmSize        dockeropts.MemBytes
 	ssh            []string
@@ -199,13 +199,13 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		return nil, err
 	}
 
-	opts.PrintFunc, err = buildflags.ParsePrintFunc(o.printFunc)
+	opts.CallFunc, err = buildflags.ParseCallFunc(o.callFunc)
 	if err != nil {
 		return nil, err
 	}
 
 	prm := confutil.MetadataProvenance()
-	if opts.PrintFunc != nil || len(o.metadataFile) == 0 {
+	if opts.CallFunc != nil || len(o.metadataFile) == 0 {
 		prm = confutil.MetadataProvenanceModeDisabled
 	}
 	opts.ProvenanceResponseMode = string(prm)
@@ -377,7 +377,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	}
 	if options.metadataFile != "" {
 		dt := decodeExporterResponse(resp.ExporterResponse)
-		if opts.PrintFunc == nil {
+		if opts.CallFunc == nil {
 			if warnings := printer.Warnings(); len(warnings) > 0 && confutil.MetadataWarningsEnabled() {
 				dt["buildx.build.warnings"] = warnings
 			}
@@ -386,8 +386,8 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 			return err
 		}
 	}
-	if opts.PrintFunc != nil {
-		if exitcode, err := printResult(dockerCli.Out(), opts.PrintFunc, resp.ExporterResponse); err != nil {
+	if opts.CallFunc != nil {
+		if exitcode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse); err != nil {
 			return err
 		} else if exitcode != 0 {
 			os.Exit(exitcode)
@@ -645,8 +645,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 		cobrautil.MarkFlagsExperimental(flags, "root", "detach", "server-config")
 	}
 
-	flags.StringVar(&options.printFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
-	flags.VarPF(callAlias(&options.printFunc, "check"), "check", "", `Shorthand for "--call=check"`)
+	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
+	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
 
 	// hidden flags
@@ -655,7 +655,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	var ignoreBool bool
 	var ignoreInt int64
 
-	flags.StringVar(&options.printFunc, "print", "", "Print result of information request (e.g., outline, targets)")
+	flags.StringVar(&options.callFunc, "print", "", "Print result of information request (e.g., outline, targets)")
 	cobrautil.MarkFlagsExperimental(flags, "print")
 	flags.MarkHidden("print")
 
@@ -882,7 +882,7 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 	}
 }
 
-func printResult(w io.Writer, f *controllerapi.PrintFunc, res map[string]string) (int, error) {
+func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string) (int, error) {
 	switch f.Name {
 	case "outline":
 		return 0, printValue(w, outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
@@ -940,9 +940,9 @@ func printResult(w io.Writer, f *controllerapi.PrintFunc, res map[string]string)
 	return 0, nil
 }
 
-type printFunc func([]byte, io.Writer) error
+type callFunc func([]byte, io.Writer) error
 
-func printValue(w io.Writer, printer printFunc, version string, format string, res map[string]string) error {
+func printValue(w io.Writer, printer callFunc, version string, format string, res map[string]string) error {
 	if format == "json" {
 		fmt.Fprintln(w, res["result.json"])
 		return nil

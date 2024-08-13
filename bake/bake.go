@@ -1313,7 +1313,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 
 	if t.Call != nil {
-		bo.PrintFunc = &build.PrintFunc{
+		bo.CallFunc = &build.CallFunc{
 			Name: *t.Call,
 		}
 	}

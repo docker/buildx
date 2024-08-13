@@ -158,11 +158,11 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 	opts.Allow = allow
 
-	if in.PrintFunc != nil {
-		opts.PrintFunc = &build.PrintFunc{
-			Name:         in.PrintFunc.Name,
-			Format:       in.PrintFunc.Format,
-			IgnoreStatus: in.PrintFunc.IgnoreStatus,
+	if in.CallFunc != nil {
+		opts.CallFunc = &build.CallFunc{
+			Name:         in.CallFunc.Name,
+			Format:       in.CallFunc.Format,
+			IgnoreStatus: in.CallFunc.IgnoreStatus,
 		}
 	}
 

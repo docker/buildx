@@ -82,13 +82,13 @@ type Options struct {
 
 	Session                []session.Attachable
 	Linked                 bool // Linked marks this target as exclusively linked (not requested by the user).
-	PrintFunc              *PrintFunc
+	CallFunc               *CallFunc
 	ProvenanceResponseMode confutil.MetadataProvenanceMode
 	SourcePolicy           *spb.Policy
 	GroupRef               string
 }
 
-type PrintFunc struct {
+type CallFunc struct {
 	Name         string
 	Format       string
 	IgnoreStatus bool
@@ -169,7 +169,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		}
 	}
 
-	if noMobyDriver != nil && !noDefaultLoad() && noPrintFunc(opt) {
+	if noMobyDriver != nil && !noDefaultLoad() && noCallFunc(opt) {
 		var noOutputTargets []string
 		for name, opt := range opt {
 			if noMobyDriver.Features(ctx)[driver.DefaultLoad] {
@@ -426,15 +426,15 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					defer func() { <-done }()
 
 					cc := c
-					var printRes map[string][]byte
+					var callRes map[string][]byte
 					buildFunc := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-						if opt.PrintFunc != nil {
+						if opt.CallFunc != nil {
 							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
 								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
 							} else {
 								req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
 							}
-							req.FrontendOpt["requestid"] = "frontend." + opt.PrintFunc.Name
+							req.FrontendOpt["requestid"] = "frontend." + opt.CallFunc.Name
 						}
 
 						res, err := c.Solve(ctx, req)
@@ -450,8 +450,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 								return nil, err
 							}
 						}
-						if opt.PrintFunc != nil {
-							printRes = res.Metadata
+						if opt.CallFunc != nil {
+							callRes = res.Metadata
 						}
 
 						rKey := resultKey(dp.driverIndex, k)
@@ -507,10 +507,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					if rr.ExporterResponse == nil {
 						rr.ExporterResponse = map[string]string{}
 					}
-					for k, v := range printRes {
+					for k, v := range callRes {
 						rr.ExporterResponse[k] = string(v)
 					}
-					if opt.PrintFunc == nil {
+					if opt.CallFunc == nil {
 						rr.ExporterResponse["buildx.build.ref"] = buildRef
 						if node.Driver.HistoryAPISupported(ctx) {
 							if err := setRecordProvenance(ctx, c, rr, so.Ref, opt.ProvenanceResponseMode, pw); err != nil {
@@ -1093,9 +1093,9 @@ func fallbackPrintError(err error, req gateway.SolveRequest) (gateway.SolveReque
 	return req, false
 }
 
-func noPrintFunc(opt map[string]Options) bool {
+func noCallFunc(opt map[string]Options) bool {
 	for _, v := range opt {
-		if v.PrintFunc != nil {
+		if v.CallFunc != nil {
 			return false
 		}
 	}

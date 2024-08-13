@@ -157,7 +157,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	case 1:
 		// valid
 	case 0:
-		if !noDefaultLoad() && opt.PrintFunc == nil {
+		if !noDefaultLoad() && opt.CallFunc == nil {
 			if nodeDriver.IsMobyDriver() {
 				// backwards compat for docker driver only:
 				// this ensures the build results in a docker image.
@@ -347,8 +347,8 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 		so.FrontendAttrs["ulimit"] = ulimits
 	}
 
-	// mark info request as internal
-	if opt.PrintFunc != nil {
+	// mark call request as internal
+	if opt.CallFunc != nil {
 		so.Internal = true
 	}
 
