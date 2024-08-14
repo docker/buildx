@@ -309,7 +309,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	childTargets := calculateChildTargets(reqForNodes, opt)
 
 	for k, opt := range opt {
-		err := func(k string) error {
+		err := func(k string) (err error) {
 			opt := opt
 			dps := drivers[k]
 			multiDriver := len(drivers[k]) > 1
@@ -320,6 +320,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				span, ctx = tracing.StartSpan(ctx, k)
 			}
 			baseCtx := ctx
+
+			if multiTarget {
+				defer func() {
+					err = errors.Wrapf(err, "target %s", k)
+				}()
+			}
 
 			res := make([]*client.SolveResponse, len(dps))
 			eg2, ctx := errgroup.WithContext(ctx)
@@ -565,6 +571,13 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						tracing.FinishWithError(span, err)
 					}
 				}()
+
+				if multiTarget {
+					defer func() {
+						err = errors.Wrapf(err, "target %s", k)
+					}()
+				}
+
 				pw := progress.WithPrefix(w, "default", false)
 				if err := eg2.Wait(); err != nil {
 					return err
