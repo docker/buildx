@@ -45,6 +45,7 @@ var re = sync.OnceValue(func() *rePatterns {
 type metricWriter struct {
 	recorders []metricRecorder
 	attrs     attribute.Set
+	mu        sync.Mutex
 }
 
 func newMetrics(mp metric.MeterProvider, attrs attribute.Set) *metricWriter {
@@ -63,6 +64,9 @@ func newMetrics(mp metric.MeterProvider, attrs attribute.Set) *metricWriter {
 }
 
 func (mw *metricWriter) Write(ss *client.SolveStatus) {
+	mw.mu.Lock()
+	defer mw.mu.Unlock()
+
 	for _, recorder := range mw.recorders {
 		recorder.Record(ss)
 	}
