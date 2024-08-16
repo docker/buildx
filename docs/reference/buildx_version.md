@@ -7,6 +7,12 @@ docker buildx version
 <!---MARKER_GEN_START-->
 Show buildx version information
 
+### Options
+
+| Name            | Type   | Default | Description          |
+|:----------------|:-------|:--------|:---------------------|
+| `-D`, `--debug` | `bool` |         | Enable debug logging |
+
 
 <!---MARKER_GEN_END-->
 

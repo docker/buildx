@@ -14,6 +14,7 @@ Create a new image based on source images
 | [`--annotation`](#annotation)    | `stringArray` |         | Add annotation to the image                                                                                                   |
 | [`--append`](#append)            | `bool`        |         | Append to existing manifest                                                                                                   |
 | [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                                                      |
+| `-D`, `--debug`                  | `bool`        |         | Enable debug logging                                                                                                          |
 | [`--dry-run`](#dry-run)          | `bool`        |         | Show final image instead of pushing                                                                                           |
 | [`-f`](#file), [`--file`](#file) | `stringArray` |         | Read source descriptor from file                                                                                              |
 | `--prefer-index`                 | `bool`        | `true`  | When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy |

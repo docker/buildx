@@ -13,6 +13,7 @@ Remove build cache
 |:------------------------|:---------|:--------|:------------------------------------------|
 | `-a`, `--all`           | `bool`   |         | Include internal/frontend images          |
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance  |
+| `-D`, `--debug`         | `bool`   |         | Enable debug logging                      |
 | `--filter`              | `filter` |         | Provide filter values (e.g., `until=24h`) |
 | `-f`, `--force`         | `bool`   |         | Do not prompt for confirmation            |
 | `--keep-storage`        | `bytes`  | `0`     | Amount of disk space to keep for cache    |

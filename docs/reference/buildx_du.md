@@ -12,6 +12,7 @@ Disk usage
 | Name                    | Type     | Default | Description                              |
 |:------------------------|:---------|:--------|:-----------------------------------------|
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance |
+| `-D`, `--debug`         | `bool`   |         | Enable debug logging                     |
 | `--filter`              | `filter` |         | Provide filter values                    |
 | [`--verbose`](#verbose) | `bool`   |         | Provide a more verbose output            |
 

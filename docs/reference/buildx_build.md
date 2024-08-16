@@ -27,6 +27,7 @@ Start a build
 | [`--call`](#call)                       | `string`      | `build`   | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
 | [`--cgroup-parent`](#cgroup-parent)     | `string`      |           | Set the parent cgroup for the `RUN` instructions during build                                       |
 | [`--check`](#check)                     | `bool`        |           | Shorthand for `--call=check`                                                                        |
+| `-D`, `--debug`                         | `bool`        |           | Enable debug logging                                                                                |
 | `--detach`                              | `bool`        |           | Detach buildx server (supported only on linux) (EXPERIMENTAL)                                       |
 | [`-f`](#file), [`--file`](#file)        | `string`      |           | Name of the Dockerfile (default: `PATH/Dockerfile`)                                                 |
 | `--iidfile`                             | `string`      |           | Write the image ID to a file                                                                        |
