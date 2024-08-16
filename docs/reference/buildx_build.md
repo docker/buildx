@@ -581,8 +581,7 @@ $ cat metadata.json
 }
 ```
 
-> **Note**
->
+> [!NOTE]
 > Build record [provenance](https://docs.docker.com/build/attestations/slsa-provenance/#provenance-attestation-example)
 > (`buildx.build.provenance`) includes minimal provenance by default. Set the
 > `BUILDX_METADATA_PROVENANCE` environment variable to customize this behavior:
@@ -591,8 +590,7 @@ $ cat metadata.json
 > - `max` sets full provenance.
 > - `disabled`, `false` or `0` doesn't set any provenance.
 
-> **Note**
-> 
+> [!NOTE]
 > Build warnings (`buildx.build.warnings`) are not included by default. Set the
 > `BUILDX_METADATA_WARNINGS` environment variable to `1` or `true` to
 > include them.
@@ -832,8 +830,7 @@ $ docker buildx build --platform=darwin .
 Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use `plain` to show container
 output (default `auto`).
 
-> **Note**
->
+> [!NOTE]
 > You can also use the `BUILDKIT_PROGRESS` environment variable to set its value.
 
 The following example uses `plain` output during the build:
@@ -851,8 +848,7 @@ $ docker buildx build --load --progress=plain .
 ...
 ```
 
-> **Note**
->
+> [!NOTE]
 > Check also the [`BUILDKIT_COLORS`](https://docs.docker.com/build/building/variables/#buildkit_colors)
 > environment variable for modifying the colors of the terminal output.
 
@@ -967,8 +963,7 @@ The format is `<number><unit>`. `number` must be greater than `0`. Unit is
 optional and can be `b` (bytes), `k` (kilobytes), `m` (megabytes), or `g`
 (gigabytes). If you omit the unit, the system uses bytes.
 
-> **Note**
->
+> [!NOTE]
 > In most cases, it is recommended to let the builder automatically determine
 > the appropriate configurations. Manual adjustments should only be considered
 > when specific performance tuning is required for complex build scenarios.
@@ -1054,14 +1049,12 @@ instructions and are specified with a soft and hard limit as such:
 $ docker buildx build --ulimit nofile=1024:1024 .
 ```
 
-> **Note**
->
+> [!NOTE]
 > If you don't provide a `hard limit`, the `soft limit` is used
 > for both values. If no `ulimits` are set, they're inherited from
 > the default `ulimits` set on the daemon.
 
-> **Note**
->
+> [!NOTE]
 > In most cases, it is recommended to let the builder automatically determine
 > the appropriate configurations. Manual adjustments should only be considered
 > when specific performance tuning is required for complex build scenarios.

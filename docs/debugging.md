@@ -4,8 +4,7 @@ To assist with creating and debugging complex builds, Buildx provides a
 debugger to help you step through the build process and easily inspect the
 state of the build environment at any point.
 
-> **Note**
->
+> [!NOTE]
 > The debug monitor is a new experimental feature in recent versions of Buildx.
 > There are rough edges, known bugs, and missing features. Please try it out
 > and let us know what you think!
