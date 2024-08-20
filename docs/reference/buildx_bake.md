@@ -41,8 +41,7 @@ as part of the build.
 Read [High-level build options with Bake](https://docs.docker.com/build/bake/)
 guide for introduction to writing bake files.
 
-> **Note**
->
+> [!NOTE]
 > `buildx bake` command may receive backwards incompatible features in the future
 > if needed. We are looking for feedback on improving the command and extending
 > the functionality further.
@@ -163,8 +162,7 @@ $ cat metadata.json
 }
 ```
 
-> **Note**
->
+> [!NOTE]
 > Build record [provenance](https://docs.docker.com/build/attestations/slsa-provenance/#provenance-attestation-example)
 > (`buildx.build.provenance`) includes minimal provenance by default. Set the
 > `BUILDX_METADATA_PROVENANCE` environment variable to customize this behavior:
@@ -172,8 +170,7 @@ $ cat metadata.json
 > * `max` sets full provenance.
 > * `disabled`, `false` or `0` does not set any provenance.
 
-> **Note**
-> 
+> [!NOTE]
 > Build warnings (`buildx.build.warnings`) are not included by default. Set the
 > `BUILDX_METADATA_WARNINGS` environment variable to `1` or `true` to
 > include them.

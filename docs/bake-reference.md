@@ -443,8 +443,7 @@ COPY --from=src . .
 
 #### Use another target as base
 
-> **Note**
->
+> [!NOTE]
 > You should prefer to use regular multi-stage builds over this option. You can
 > Use this feature when you have multiple Dockerfiles that can't be easily
 > merged into one.
@@ -853,8 +852,7 @@ target "default" {
 }
 ```
 
-> **Note**
->
+> [!NOTE]
 > In most cases, it is recommended to let the builder automatically determine
 > the appropriate configurations. Manual adjustments should only be considered
 > when specific performance tuning is required for complex build scenarios.
@@ -919,14 +917,12 @@ target "app" {
 }
 ```
 
-> **Note**
->
+> [!NOTE]
 > If you do not provide a `hard limit`, the `soft limit` is used
 > for both values. If no `ulimits` are set, they are inherited from
 > the default `ulimits` set on the daemon.
 
-> **Note**
->
+> [!NOTE]
 > In most cases, it is recommended to let the builder automatically determine
 > the appropriate configurations. Manual adjustments should only be considered
 > when specific performance tuning is required for complex build scenarios.
@@ -1114,8 +1110,7 @@ target "webapp-dev" {
 }
 ```
 
-> **Note**
->
+> [!NOTE]
 > See [User defined HCL functions][hcl-funcs] page for more details.
 
 <!-- external links -->

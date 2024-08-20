@@ -56,8 +56,7 @@ For more information on how to use Buildx, see
 
 Using `buildx` with Docker requires Docker engine 19.03 or newer.
 
-> **Warning**
->
+> [!WARNING]
 > Using an incompatible version of Docker may result in unexpected behavior,
 > and will likely cause issues, especially when using Buildx builders with more
 > recent versions of BuildKit.
@@ -75,8 +74,7 @@ Docker Engine package repositories contain Docker Buildx packages when installed
 
 ## Manual download
 
-> **Important**
->
+> [!IMPORTANT]
 > This section is for unattended installation of the buildx component. These
 > instructions are mostly suitable for testing purposes. We do not recommend
 > installing buildx using manual download in production environments as they
@@ -107,8 +105,7 @@ On Windows:
 * `C:\ProgramData\Docker\cli-plugins`
 * `C:\Program Files\Docker\cli-plugins`
 
-> **Note**
->
+> [!NOTE]
 > On Unix environments, it may also be necessary to make it executable with `chmod +x`:
 > ```shell
 > $ chmod +x ~/.docker/cli-plugins/docker-buildx

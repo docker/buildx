@@ -52,8 +52,7 @@ $ docker buildx imagetools create \
   foo/bar:alpha foo/bar:beta foo/bar:gamma
 ```
 
-> **Note**
->
+> [!NOTE]
 > The `imagetools create` command supports adding annotations to the image
 > index and descriptor, using the following type prefixes:
 >

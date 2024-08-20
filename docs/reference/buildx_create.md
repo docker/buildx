@@ -101,8 +101,7 @@ value is `auto` and can be one of `bridge`, `cni`, `host`:
 --buildkitd-flags '--oci-worker-net bridge'
 ```
 
-> **Note**
->
+> [!NOTE]
 > Network mode "bridge" is supported since BuildKit v0.13 and will become the
 > default in next v0.14.
 
