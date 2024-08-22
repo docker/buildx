@@ -1,11 +1,12 @@
 package build
 
 import (
-	"bufio"
+	"bytes"
 	"context"
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"syscall"
@@ -260,7 +261,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	}
 
 	so.Exports = opt.Exports
-	so.Session = opt.Session
+	so.Session = slices.Clone(opt.Session)
 
 	releaseLoad, err := loadInputs(ctx, nodeDriver, opt.Inputs, pw, &so)
 	if err != nil {
@@ -364,7 +365,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 
 	var (
 		err              error
-		dockerfileReader io.Reader
+		dockerfileReader io.ReadCloser
 		dockerfileDir    string
 		dockerfileName   = inp.DockerfilePath
 		toRemove         []string
@@ -382,8 +383,8 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 			return nil, errors.Errorf("invalid argument: can't use stdin for both build context and dockerfile")
 		}
 
-		buf := bufio.NewReader(inp.InStream)
-		magic, err := buf.Peek(archiveHeaderSize * 2)
+		rc := inp.InStream.NewReadCloser()
+		magic, err := inp.InStream.Peek(archiveHeaderSize * 2)
 		if err != nil && err != io.EOF {
 			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
 		}
@@ -391,14 +392,14 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 			if isArchive(magic) {
 				// stdin is context
 				up := uploadprovider.New()
-				target.FrontendAttrs["context"] = up.Add(buf)
+				target.FrontendAttrs["context"] = up.Add(rc)
 				target.Session = append(target.Session, up)
 			} else {
 				if inp.DockerfilePath != "" {
 					return nil, errors.Errorf("ambiguous Dockerfile source: both stdin and flag correspond to Dockerfiles")
 				}
 				// stdin is dockerfile
-				dockerfileReader = buf
+				dockerfileReader = rc
 				inp.ContextPath, _ = os.MkdirTemp("", "empty-dir")
 				toRemove = append(toRemove, inp.ContextPath)
 				if err := setLocalMount("context", inp.ContextPath, target); err != nil {
@@ -417,7 +418,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 		target.SharedKey = sharedKey
 		switch inp.DockerfilePath {
 		case "-":
-			dockerfileReader = inp.InStream
+			dockerfileReader = inp.InStream.NewReadCloser()
 		case "":
 			dockerfileDir = inp.ContextPath
 		default:
@@ -426,7 +427,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 		}
 	case IsRemoteURL(inp.ContextPath):
 		if inp.DockerfilePath == "-" {
-			dockerfileReader = inp.InStream
+			dockerfileReader = inp.InStream.NewReadCloser()
 		} else if filepath.IsAbs(inp.DockerfilePath) {
 			dockerfileDir = filepath.Dir(inp.DockerfilePath)
 			dockerfileName = filepath.Base(inp.DockerfilePath)
@@ -438,11 +439,11 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 	}
 
 	if inp.DockerfileInline != "" {
-		dockerfileReader = strings.NewReader(inp.DockerfileInline)
+		dockerfileReader = io.NopCloser(strings.NewReader(inp.DockerfileInline))
 	}
 
 	if dockerfileReader != nil {
-		dockerfileDir, err = createTempDockerfile(dockerfileReader)
+		dockerfileDir, err = createTempDockerfile(dockerfileReader, inp.InStream)
 		if err != nil {
 			return nil, err
 		}
@@ -582,7 +583,7 @@ func setLocalMount(name, dir string, so *client.SolveOpt) error {
 	return nil
 }
 
-func createTempDockerfile(r io.Reader) (string, error) {
+func createTempDockerfile(r io.Reader, multiReader *SyncMultiReader) (string, error) {
 	dir, err := os.MkdirTemp("", "dockerfile")
 	if err != nil {
 		return "", err
@@ -592,6 +593,16 @@ func createTempDockerfile(r io.Reader) (string, error) {
 		return "", err
 	}
 	defer f.Close()
+
+	if multiReader != nil {
+		dt, err := io.ReadAll(r)
+		if err != nil {
+			return "", err
+		}
+		multiReader.Reset(dt)
+		r = bytes.NewReader(dt)
+	}
+
 	if _, err := io.Copy(f, r); err != nil {
 		return "", err
 	}

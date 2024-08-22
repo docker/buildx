@@ -48,7 +48,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		Inputs: build.Inputs{
 			ContextPath:    in.ContextPath,
 			DockerfilePath: in.DockerfileName,
-			InStream:       inStream,
+			InStream:       build.NewSyncMultiReader(inStream),
 			NamedContexts:  contexts,
 		},
 		Ref:                    in.Ref,
