@@ -13,6 +13,7 @@ Remove one or more builder instances
 |:------------------------------------|:---------|:--------|:-----------------------------------------|
 | [`--all-inactive`](#all-inactive)   | `bool`   |         | Remove all inactive builders             |
 | [`--builder`](#builder)             | `string` |         | Override the configured builder instance |
+| `-D`, `--debug`                     | `bool`   |         | Enable debug logging                     |
 | [`-f`](#force), [`--force`](#force) | `bool`   |         | Do not prompt for confirmation           |
 | [`--keep-daemon`](#keep-daemon)     | `bool`   |         | Keep the BuildKit daemon running         |
 | [`--keep-state`](#keep-state)       | `bool`   |         | Keep BuildKit state                      |

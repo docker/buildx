@@ -32,6 +32,7 @@ Extended build capabilities with BuildKit
 | Name                    | Type     | Default | Description                              |
 |:------------------------|:---------|:--------|:-----------------------------------------|
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance |
+| `-D`, `--debug`         | `bool`   |         | Enable debug logging                     |
 
 
 <!---MARKER_GEN_END-->

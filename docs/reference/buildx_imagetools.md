@@ -20,6 +20,7 @@ Commands to work on images in registry
 | Name                    | Type     | Default | Description                              |
 |:------------------------|:---------|:--------|:-----------------------------------------|
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance |
+| `-D`, `--debug`         | `bool`   |         | Enable debug logging                     |
 
 
 <!---MARKER_GEN_END-->

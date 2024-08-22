@@ -15,6 +15,7 @@ Start debugger (EXPERIMENTAL)
 | Name              | Type     | Default | Description                                                                                                         |
 |:------------------|:---------|:--------|:--------------------------------------------------------------------------------------------------------------------|
 | `--builder`       | `string` |         | Override the configured builder instance                                                                            |
+| `-D`, `--debug`   | `bool`   |         | Enable debug logging                                                                                                |
 | `--detach`        | `bool`   | `true`  | Detach buildx server for the monitor (supported only on linux) (EXPERIMENTAL)                                       |
 | `--invoke`        | `string` |         | Launch a monitor with executing specified command (EXPERIMENTAL)                                                    |
 | `--on`            | `string` | `error` | When to launch the monitor ([always, error]) (EXPERIMENTAL)                                                         |
