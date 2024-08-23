@@ -44,6 +44,15 @@ func (p *Printer) Wait() error {
 	return p.err
 }
 
+func (p *Printer) IsDone() bool {
+	select {
+	case <-p.done:
+		return true
+	default:
+		return false
+	}
+}
+
 func (p *Printer) Pause() error {
 	p.paused = make(chan struct{})
 	return p.Wait()

@@ -49,6 +49,7 @@ type bakeOptions struct {
 	listVars    bool
 	sbom        string
 	provenance  string
+	allow       []string
 
 	builder      string
 	metadataFile string
@@ -102,6 +103,11 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 	contextPathHash, _ := os.Getwd()
 
+	ent, err := bake.ParseEntitlements(in.allow)
+	if err != nil {
+		return err
+	}
+
 	ctx2, cancel := context.WithCancel(context.TODO())
 	defer cancel()
 
@@ -138,14 +144,20 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 
 	progressMode := progressui.DisplayMode(cFlags.progress)
 	var printer *progress.Printer
-	printer, err = progress.NewPrinter(ctx2, os.Stderr, progressMode,
-		progress.WithDesc(progressTextDesc, progressConsoleDesc),
-		progress.WithMetrics(mp, attributes),
-		progress.WithOnClose(func() {
-			printWarnings(os.Stderr, printer.Warnings(), progressMode)
-		}),
-	)
-	if err != nil {
+
+	makePrinter := func() error {
+		var err error
+		printer, err = progress.NewPrinter(ctx2, os.Stderr, progressMode,
+			progress.WithDesc(progressTextDesc, progressConsoleDesc),
+			progress.WithMetrics(mp, attributes),
+			progress.WithOnClose(func() {
+				printWarnings(os.Stderr, printer.Warnings(), progressMode)
+			}),
+		)
+		return err
+	}
+
+	if err := makePrinter(); err != nil {
 		return err
 	}
 
@@ -231,6 +243,20 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 				return err
 			}
 			opt.CallFunc.Name = cf.Name
+		}
+	}
+
+	exp, err := ent.Validate(bo)
+	if err != nil {
+		return err
+	}
+	if err := exp.Prompt(ctx, &syncWriter{w: dockerCli.Err(), wait: printer.Wait}); err != nil {
+		return err
+	}
+	if printer.IsDone() {
+		// init new printer as old one was stopped to show the prompt
+		if err := makePrinter(); err != nil {
+			return err
 		}
 	}
 
@@ -412,6 +438,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
+	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
 
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
@@ -651,4 +678,22 @@ func immutableSort(s []string) []string {
 		return cpy
 	}
 	return s
+}
+
+type syncWriter struct {
+	w    io.Writer
+	once sync.Once
+	wait func() error
+}
+
+func (w *syncWriter) Write(p []byte) (n int, err error) {
+	w.once.Do(func() {
+		if w.wait != nil {
+			err = w.wait()
+		}
+	})
+	if err != nil {
+		return 0, err
+	}
+	return w.w.Write(p)
 }
