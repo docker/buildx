@@ -107,6 +107,13 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	if err != nil {
 		return err
 	}
+	wd, err := os.Getwd()
+	if err != nil {
+		return errors.Wrapf(err, "failed to get current working directory")
+	}
+	// filesystem access under the current working directory is allowed by default
+	ent.FSRead = append(ent.FSRead, wd)
+	ent.FSWrite = append(ent.FSWrite, wd)
 
 	ctx2, cancel := context.WithCancelCause(context.TODO())
 	defer cancel(errors.WithStack(context.Canceled))

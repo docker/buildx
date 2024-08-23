@@ -1315,6 +1315,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if err != nil {
 		return nil, err
 	}
+	bo.SecretSpecs = secrets
+
 	secretAttachment, err := controllerapi.CreateSecrets(secrets)
 	if err != nil {
 		return nil, err
@@ -1328,6 +1330,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if len(sshSpecs) == 0 && (buildflags.IsGitSSH(bi.ContextPath) || (inp != nil && buildflags.IsGitSSH(inp.URL))) {
 		sshSpecs = append(sshSpecs, &controllerapi.SSH{ID: "default"})
 	}
+	bo.SSHSpecs = sshSpecs
+
 	sshAttachment, err := controllerapi.CreateSSH(sshSpecs)
 	if err != nil {
 		return nil, err
