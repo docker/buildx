@@ -21,9 +21,15 @@ type gitAttrsAppendFunc func(so *client.SolveOpt)
 
 func gitAppendNoneFunc(_ *client.SolveOpt) {}
 
-func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (gitAttrsAppendFunc, error) {
+func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (f gitAttrsAppendFunc, err error) {
+	defer func() {
+		if f == nil {
+			f = gitAppendNoneFunc
+		}
+	}()
+
 	if contextPath == "" {
-		return gitAppendNoneFunc, nil
+		return nil, nil
 	}
 
 	setGitLabels := false
@@ -42,7 +48,7 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 	}
 
 	if !setGitLabels && !setGitInfo {
-		return gitAppendNoneFunc, nil
+		return nil, nil
 	}
 
 	// figure out in which directory the git command needs to run in
@@ -59,14 +65,14 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 		if st, err1 := os.Stat(path.Join(wd, ".git")); err1 == nil && st.IsDir() {
 			return nil, errors.Wrap(err, "git was not found in the system")
 		}
-		return gitAppendNoneFunc, nil
+		return nil, nil
 	}
 
 	if !gitc.IsInsideWorkTree() {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
 			return nil, errors.New("failed to read current commit information with git rev-parse --is-inside-work-tree")
 		}
-		return gitAppendNoneFunc, nil
+		return nil, nil
 	}
 
 	root, err := gitc.RootDir()
