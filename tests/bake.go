@@ -59,6 +59,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeCallCheckFlag,
 	testBakeCallMetadata,
 	testBakeMultiPlatform,
+	testBakeCheckCallOutput,
 }
 
 func testBakePrint(t *testing.T, sb integration.Sandbox) {
@@ -1273,4 +1274,128 @@ target "default" {}
 	require.NoError(t, json.Unmarshal(dt, &md), dt)
 	require.Empty(t, md.Default.BuildRef)
 	require.Len(t, md.Default.ResultJSON.Warnings, 3)
+}
+
+func testBakeCheckCallOutput(t *testing.T, sb integration.Sandbox) {
+	t.Run("check for warning count msg in check without warnings", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox
+COPY Dockerfile .
+		`)
+		bakefile := []byte(`
+	target "default" {}
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		cmd := buildxCmd(
+			sb,
+			withDir(dir),
+			withArgs("bake", "--call", "check"),
+		)
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, no warnings found.")
+	})
+	t.Run("check for warning count msg in check with single warning", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox
+copy Dockerfile .
+		`)
+		bakefile := []byte(`
+	target "default" {}
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		cmd := buildxCmd(
+			sb,
+			withDir(dir),
+			withArgs("bake", "--call", "check"),
+		)
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, 1 warning has been found!")
+	})
+	t.Run("check for warning count msg in check with multiple warnings", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox
+copy Dockerfile .
+
+FROM busybox as base
+COPY Dockerfile .
+		`)
+		bakefile := []byte(`
+	target "default" {}
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		cmd := buildxCmd(
+			sb,
+			withDir(dir),
+			withArgs("bake", "--call", "check"),
+		)
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, 2 warnings have been found!")
+	})
+	t.Run("check for warnings with multiple build targets", func(t *testing.T) {
+		dockerfile1 := []byte(`
+FROM busybox
+copy Dockerfile .
+		`)
+		dockerfile2 := []byte(`
+FROM busybox
+copy Dockerfile .
+
+FROM busybox as base
+COPY Dockerfile .
+		`)
+		bakefile := []byte(`
+target "first" {
+	dockerfile = "Dockerfile.first"
+}
+target "second" {
+	dockerfile = "Dockerfile.second"
+}
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("Dockerfile.first", dockerfile1, 0600),
+			fstest.CreateFile("Dockerfile.second", dockerfile2, 0600),
+		)
+
+		cmd := buildxCmd(
+			sb,
+			withDir(dir),
+			withArgs("bake", "--call", "check", "first", "second"),
+		)
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, 1 warning has been found!")
+		require.Contains(t, stdout.String(), "Check complete, 2 warnings have been found!")
+	})
 }
