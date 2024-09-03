@@ -25,6 +25,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
+	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/go-csvvalue"
 	"github.com/zclconf/go-cty/cty"
@@ -542,7 +543,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			o := t[kk[1]]
 
 			switch keys[1] {
-			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest":
+			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements":
 				if len(parts) == 2 {
 					o.ArrValue = append(o.ArrValue, parts[1])
 				}
@@ -708,6 +709,7 @@ type Target struct {
 	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
 	Ulimits          []string           `json:"ulimits,omitempty" hcl:"ulimits,optional"`
 	Call             *string            `json:"call,omitempty" hcl:"call,optional" cty:"call"`
+	Entitlements     []string           `json:"entitlements,omitempty" hcl:"entitlements,optional" cty:"entitlements"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides/AddOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -731,6 +733,12 @@ func (t *Target) normalize() {
 	t.Outputs = removeDupes(t.Outputs)
 	t.NoCacheFilter = removeDupes(t.NoCacheFilter)
 	t.Ulimits = removeDupes(t.Ulimits)
+
+	if t.NetworkMode != nil && *t.NetworkMode == "host" {
+		t.Entitlements = append(t.Entitlements, "network.host")
+	}
+
+	t.Entitlements = removeDupes(t.Entitlements)
 
 	for k, v := range t.Contexts {
 		if v == "" {
@@ -831,6 +839,9 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.Description != "" {
 		t.Description = t2.Description
 	}
+	if t2.Entitlements != nil { // merge
+		t.Entitlements = append(t.Entitlements, t2.Entitlements...)
+	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
@@ -885,6 +896,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.Platforms = o.ArrValue
 		case "output":
 			t.Outputs = o.ArrValue
+		case "entitlements":
+			t.Entitlements = append(t.Entitlements, o.ArrValue...)
 		case "annotations":
 			t.Annotations = append(t.Annotations, o.ArrValue...)
 		case "attest":
@@ -1367,6 +1380,10 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		}
 	}
 	bo.Ulimits = ulimits
+
+	for _, ent := range t.Entitlements {
+		bo.Allow = append(bo.Allow, entitlements.Entitlement(ent))
+	}
 
 	return bo, nil
 }

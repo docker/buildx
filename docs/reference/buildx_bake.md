@@ -15,6 +15,7 @@ Build from a file
 
 | Name                                | Type          | Default | Description                                                                                         |
 |:------------------------------------|:--------------|:--------|:----------------------------------------------------------------------------------------------------|
+| `--allow`                           | `stringArray` |         | Allow build to access specified resources                                                           |
 | [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                            |
 | [`--call`](#call)                   | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                     |
 | [`--check`](#check)                 | `bool`        |         | Shorthand for `--call=check`                                                                        |

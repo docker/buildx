@@ -8,6 +8,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/moby/buildkit/util/entitlements"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -1725,4 +1726,71 @@ func TestAnnotations(t *testing.T) {
 
 	require.Len(t, bo["app"].Exports, 1)
 	require.Equal(t, "bar", bo["app"].Exports[0].Attrs["annotation-manifest[linux/amd64].foo"])
+}
+
+func TestHCLEntitlements(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				entitlements = ["security.insecure", "network.host"]
+			}`),
+	}
+	ctx := context.TODO()
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"app"}, g["default"].Targets)
+
+	require.Equal(t, 1, len(m))
+	require.Contains(t, m, "app")
+	require.Len(t, m["app"].Entitlements, 2)
+	require.Equal(t, "security.insecure", m["app"].Entitlements[0])
+	require.Equal(t, "network.host", m["app"].Entitlements[1])
+
+	require.Len(t, bo["app"].Allow, 2)
+	require.Equal(t, entitlements.EntitlementSecurityInsecure, bo["app"].Allow[0])
+	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[1])
+}
+
+func TestEntitlementsForNetHost(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				dockerfile = "app.Dockerfile"
+			}`),
+	}
+
+	fp2 := File{
+		Name: "docker-compose.yml",
+		Data: []byte(
+			`services:
+  app:
+    build:
+      network: "host"
+`),
+	}
+
+	ctx := context.TODO()
+	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"app"}, g["default"].Targets)
+
+	require.Equal(t, 1, len(m))
+	require.Contains(t, m, "app")
+	require.Len(t, m["app"].Entitlements, 1)
+	require.Equal(t, "network.host", m["app"].Entitlements[0])
+
+	require.Len(t, bo["app"].Allow, 1)
+	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[0])
 }
