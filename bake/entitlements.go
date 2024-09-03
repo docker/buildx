@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io"
 	"os"
-	"path/filepath"
 	"slices"
 	"strings"
 
@@ -143,8 +142,8 @@ func (c EntitlementConf) Prompt(ctx context.Context, out io.Writer) error {
 	}
 
 	args := append([]string(nil), os.Args...)
-	if filepath.Base(args[0]) == "docker-buildx" {
-		args[0] = "docker"
+	if v, ok := os.LookupEnv("DOCKER_CLI_PLUGIN_ORIGINAL_CLI_COMMAND"); ok && v != "" {
+		args[0] = v
 	}
 	idx := slices.Index(args, "bake")
 
