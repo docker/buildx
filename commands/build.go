@@ -909,7 +909,7 @@ func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string) 
 			fmt.Fprintf(w, "Check complete, %s\n", warningCountMsg)
 		}
 
-		err := printValue(w, lint.PrintLintViolations, lint.SubrequestLintDefinition.Version, f.Format, res)
+		err := printValue(w, printLintViolationsWrapper, lint.SubrequestLintDefinition.Version, f.Format, res)
 		if err != nil {
 			return 0, err
 		}
@@ -966,6 +966,11 @@ func printValue(w io.Writer, printer callFunc, version string, format string, re
 		return nil
 	}
 	return printer([]byte(res["result.json"]), w)
+}
+
+// FIXME: remove once https://github.com/docker/buildx/pull/2672 is sorted
+func printLintViolationsWrapper(dt []byte, w io.Writer) error {
+	return lint.PrintLintViolations(dt, w, nil)
 }
 
 type invokeConfig struct {
