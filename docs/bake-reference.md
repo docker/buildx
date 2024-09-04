@@ -505,6 +505,25 @@ $ docker buildx bake --print -f - <<< 'target "default" {}'
 }
 ```
 
+### `target.entitlements`
+
+Entitlements are permissions that the build process requires to run.
+
+Currently supported entitlements are:
+
+- `network.host`: Allows the build to use commands that access the host network. In Dockerfile, use [`RUN --network=host`](https://docs.docker.com/reference/dockerfile/#run---networkhost) to run a command with host network enabled.
+
+- `security.insecure`: Allows the build to run commands in privileged containers that are not limited by the default security sandbox. Such container may potentially access and modify system resources. In Dockerfile, use [`RUN --security=insecure`](https://docs.docker.com/reference/dockerfile/#run---security) to run a command in a privileged container.
+
+```hcl
+target "integration-tests" {
+  # this target requires privileged containers to run nested containers
+  entitlements = ["security.insecure"]
+}
+```
+
+Entitlements are enabled with a two-step process. First, a target must declare the entitlements it requires. Secondly, when invoking the `bake` command, the user must grant the entitlements by passing the `--allow` flag or confirming the entitlements when prompted in an interactive terminal. This is to ensure that the user is aware of the possibly insecure permissions they are granting to the build process.
+
 ### `target.inherits`
 
 A target can inherit attributes from other targets.
