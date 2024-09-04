@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net"
 	"sort"
+	"strings"
 
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/system"
@@ -290,7 +291,7 @@ func (e *ExecOp) Marshal(ctx context.Context, c *Constraints) (digest.Digest, []
 	if len(e.secrets) > 0 {
 		addCap(&e.constraints, pb.CapExecMountSecret)
 		for _, s := range e.secrets {
-			if s.IsEnv {
+			if s.Env != nil {
 				addCap(&e.constraints, pb.CapExecSecretEnv)
 				break
 			}
@@ -388,15 +389,17 @@ func (e *ExecOp) Marshal(ctx context.Context, c *Constraints) (digest.Digest, []
 	}
 
 	for _, s := range e.secrets {
-		if s.IsEnv {
+		if s.Env != nil {
 			peo.Secretenv = append(peo.Secretenv, &pb.SecretEnv{
 				ID:       s.ID,
-				Name:     s.Target,
+				Name:     *s.Env,
 				Optional: s.Optional,
 			})
-		} else {
+		}
+		if s.Target != nil {
 			pm := &pb.Mount{
-				Dest:      s.Target,
+				Input:     pb.Empty,
+				Dest:      *s.Target,
 				MountType: pb.MountType_SECRET,
 				SecretOpt: &pb.SecretOpt{
 					ID:       s.ID,
@@ -412,6 +415,7 @@ func (e *ExecOp) Marshal(ctx context.Context, c *Constraints) (digest.Digest, []
 
 	for _, s := range e.ssh {
 		pm := &pb.Mount{
+			Input:     pb.Empty,
 			Dest:      s.Target,
 			MountType: pb.MountType_SSH,
 			SSHOpt: &pb.SSHOpt{
@@ -678,7 +682,19 @@ type SSHInfo struct {
 // AddSecret is a RunOption that adds a secret to the exec.
 func AddSecret(dest string, opts ...SecretOption) RunOption {
 	return runOptionFunc(func(ei *ExecInfo) {
-		s := &SecretInfo{ID: dest, Target: dest, Mode: 0400}
+		s := &SecretInfo{ID: dest, Target: &dest, Mode: 0400}
+		for _, opt := range opts {
+			opt.SetSecretOption(s)
+		}
+		ei.Secrets = append(ei.Secrets, *s)
+	})
+}
+
+// AddSecretWithDest is a RunOption that adds a secret to the exec
+// with an optional destination.
+func AddSecretWithDest(src string, dest *string, opts ...SecretOption) RunOption {
+	return runOptionFunc(func(ei *ExecInfo) {
+		s := &SecretInfo{ID: src, Target: dest, Mode: 0400}
 		for _, opt := range opts {
 			opt.SetSecretOption(s)
 		}
@@ -697,13 +713,15 @@ func (fn secretOptionFunc) SetSecretOption(si *SecretInfo) {
 }
 
 type SecretInfo struct {
-	ID       string
-	Target   string
+	ID string
+	// Target optionally specifies the target for the secret mount
+	Target *string
+	// Env optionally names the environment variable for the secret
+	Env      *string
 	Mode     int
 	UID      int
 	GID      int
 	Optional bool
-	IsEnv    bool
 }
 
 var SecretOptional = secretOptionFunc(func(si *SecretInfo) {
@@ -719,7 +737,24 @@ func SecretID(id string) SecretOption {
 // SecretAsEnv defines if the secret should be added as an environment variable
 func SecretAsEnv(v bool) SecretOption {
 	return secretOptionFunc(func(si *SecretInfo) {
-		si.IsEnv = v
+		if !v {
+			si.Env = nil
+			return
+		}
+		if si.Target == nil {
+			return
+		}
+		target := strings.Clone(*si.Target)
+		si.Env = &target
+		si.Target = nil
+	})
+}
+
+// SecretAsEnvName defines if the secret should be added as an environment variable
+// with the specified name
+func SecretAsEnvName(v string) SecretOption {
+	return secretOptionFunc(func(si *SecretInfo) {
+		si.Env = &v
 	})
 }
 
