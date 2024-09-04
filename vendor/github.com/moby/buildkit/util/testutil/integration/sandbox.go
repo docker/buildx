@@ -59,6 +59,8 @@ func (sb *sandbox) NewRegistry() (string, error) {
 
 func (sb *sandbox) Cmd(args ...string) *exec.Cmd {
 	if len(args) == 1 {
+		// \\ being stripped off for Windows paths, convert to unix style
+		args[0] = strings.ReplaceAll(args[0], "\\", "/")
 		if split, err := shlex.Split(args[0]); err == nil {
 			args = split
 		}
@@ -151,7 +153,7 @@ func FormatLogs(m map[string]*bytes.Buffer) string {
 func CheckFeatureCompat(t *testing.T, sb Sandbox, features map[string]struct{}, reason ...string) {
 	t.Helper()
 	if err := HasFeatureCompat(t, sb, features, reason...); err != nil {
-		t.Skipf(err.Error())
+		t.Skip(err.Error())
 	}
 }
 
