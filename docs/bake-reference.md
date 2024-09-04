@@ -768,6 +768,27 @@ target "app" {
 }
 ```
 
+### `target.network`
+
+Specify the network mode for the whole build request. This will override the default network mode
+for all the `RUN` instructions in the Dockerfile. Accepted values are `default`, `host`, and `none`.
+
+Usually, a better approach to set the network mode for your build steps is to instead use `RUN --network=<value>`
+in your Dockerfile. This way, you can set the network mode for individual build steps and everyone building
+the Dockerfile gets consistent behavior without needing to pass additional flags to the build command.
+
+If you set network mode to `host` in your Bake file, you must also grant `network.host` entitlement when
+invoking the `bake` command. This is because `host` network mode requires elevated privileges and can be a security risk.
+You can pass `--allow=network.host` to the `docker buildx bake` command to grant the entitlement, or you can
+confirm the entitlement when prompted if you are using an interactive terminal.
+
+```hcl
+target "app" {
+  # make sure this build does not access internet
+  network = "none"
+}
+```
+
 ### `target.no-cache-filter`
 
 Don't use build cache for the specified stages.
