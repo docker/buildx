@@ -947,8 +947,8 @@ Attribute keys:
 # syntax=docker/dockerfile:1
 FROM node:alpine
 RUN --mount=type=bind,target=. \
-  --mount=type=secret,id=SECRET_TOKEN \
-  SECRET_TOKEN=$(cat /run/secrets/SECRET_TOKEN) yarn run test
+  --mount=type=secret,id=SECRET_TOKEN,env=SECRET_TOKEN \
+  yarn run test
 ```
 
 ```console
