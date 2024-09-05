@@ -871,8 +871,8 @@ This lets you [mount the secret][run_mount_secret] in your Dockerfile.
 ```dockerfile
 RUN --mount=type=secret,id=aws,target=/root/.aws/credentials \
     aws cloudfront create-invalidation ...
-RUN --mount=type=secret,id=KUBECONFIG \
-    KUBECONFIG=$(cat /run/secrets/KUBECONFIG) helm upgrade --install
+RUN --mount=type=secret,id=KUBECONFIG,env=KUBECONFIG \
+    helm upgrade --install
 ```
 
 ### `target.shm-size`
