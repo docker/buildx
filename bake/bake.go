@@ -543,7 +543,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			o := t[kk[1]]
 
 			switch keys[1] {
-			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements":
+			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "network":
 				if len(parts) == 2 {
 					o.ArrValue = append(o.ArrValue, parts[1])
 				}
@@ -704,7 +704,7 @@ type Target struct {
 	Outputs          []string           `json:"output,omitempty" hcl:"output,optional" cty:"output"`
 	Pull             *bool              `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
 	NoCache          *bool              `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
-	NetworkMode      *string            `json:"-" hcl:"-" cty:"-"`
+	NetworkMode      *string            `json:"network" hcl:"network" cty:"network"`
 	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
 	Ulimits          []string           `json:"ulimits,omitempty" hcl:"ulimits,optional"`
@@ -914,6 +914,8 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.ShmSize = &value
 		case "ulimits":
 			t.Ulimits = o.ArrValue
+		case "network":
+			t.NetworkMode = &value
 		case "pull":
 			pull, err := strconv.ParseBool(value)
 			if err != nil {

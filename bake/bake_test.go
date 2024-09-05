@@ -1757,7 +1757,7 @@ func TestHCLEntitlements(t *testing.T) {
 	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[1])
 }
 
-func TestEntitlementsForNetHost(t *testing.T) {
+func TestEntitlementsForNetHostCompose(t *testing.T) {
 	fp := File{
 		Name: "docker-bake.hcl",
 		Data: []byte(
@@ -1790,7 +1790,69 @@ func TestEntitlementsForNetHost(t *testing.T) {
 	require.Contains(t, m, "app")
 	require.Len(t, m["app"].Entitlements, 1)
 	require.Equal(t, "network.host", m["app"].Entitlements[0])
+	require.Equal(t, "host", *m["app"].NetworkMode)
 
 	require.Len(t, bo["app"].Allow, 1)
 	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[0])
+	require.Equal(t, "host", bo["app"].NetworkMode)
+}
+
+func TestEntitlementsForNetHost(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				dockerfile = "app.Dockerfile"
+				network = "host"
+			}`),
+	}
+
+	ctx := context.TODO()
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"app"}, g["default"].Targets)
+
+	require.Equal(t, 1, len(m))
+	require.Contains(t, m, "app")
+	require.Len(t, m["app"].Entitlements, 1)
+	require.Equal(t, "network.host", m["app"].Entitlements[0])
+	require.Equal(t, "host", *m["app"].NetworkMode)
+
+	require.Len(t, bo["app"].Allow, 1)
+	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[0])
+	require.Equal(t, "host", bo["app"].NetworkMode)
+}
+
+func TestNetNone(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				dockerfile = "app.Dockerfile"
+				network = "none"
+			}`),
+	}
+
+	ctx := context.TODO()
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(g))
+	require.Equal(t, []string{"app"}, g["default"].Targets)
+
+	require.Equal(t, 1, len(m))
+	require.Contains(t, m, "app")
+	require.Len(t, m["app"].Entitlements, 0)
+	require.Equal(t, "none", *m["app"].NetworkMode)
+
+	require.Len(t, bo["app"].Allow, 0)
+	require.Equal(t, "none", bo["app"].NetworkMode)
 }
