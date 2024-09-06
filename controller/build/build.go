@@ -34,9 +34,9 @@ const defaultTargetName = "default"
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultHandle,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, error) {
+func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, map[string]string, error) {
 	if in.NoCache && len(in.NoCacheFilter) > 0 {
-		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
+		return nil, nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
 
 	contexts := map[string]build.NamedContext{}
@@ -70,7 +70,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	platforms, err := platformutil.Parse(in.Platforms)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	opts.Platforms = platforms
 
@@ -79,7 +79,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	secrets, err := controllerapi.CreateSecrets(in.Secrets)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	opts.Session = append(opts.Session, secrets)
 
@@ -89,13 +89,13 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 	}
 	ssh, err := controllerapi.CreateSSH(sshSpecs)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	opts.Session = append(opts.Session, ssh)
 
 	outputs, err := controllerapi.CreateExports(in.Exports)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if in.ExportPush {
 		var pushUsed bool
@@ -134,7 +134,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	annotations, err := buildflags.ParseAnnotations(in.Annotations)
 	if err != nil {
-		return nil, nil, errors.Wrap(err, "parse annotations")
+		return nil, nil, nil, errors.Wrap(err, "parse annotations")
 	}
 
 	for _, o := range outputs {
@@ -154,7 +154,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 
 	allow, err := buildflags.ParseEntitlements(in.Allow)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	opts.Allow = allow
 
@@ -178,23 +178,23 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		builder.WithContextPathHash(contextPathHash),
 	)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to update builder last activity time")
+		return nil, nil, nil, errors.Wrapf(err, "failed to update builder last activity time")
 	}
 	nodes, err := b.LoadNodes(ctx)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, nil, err
 	}
 
-	resp, res, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, progress, generateResult)
+	resp, res, dockerfileMappings, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, progress, generateResult)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		// NOTE: buildTargets can return *build.ResultHandle even on error.
-		return nil, res, err
+		return nil, res, dockerfileMappings, err
 	}
-	return resp, res, nil
+	return resp, res, dockerfileMappings, nil
 }
 
 // buildTargets runs the specified build and returns the result.
@@ -202,14 +202,15 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultHandle,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, map[string]string, error) {
 	var res *build.ResultHandle
 	var resp map[string]*client.SolveResponse
 	var err error
+	var dfmappings map[string]string
 	if generateResult {
 		var mu sync.Mutex
 		var idx int
-		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
+		resp, dfmappings, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
 			mu.Lock()
 			defer mu.Unlock()
 			if res == nil || driverIndex < idx {
@@ -217,12 +218,12 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.No
 			}
 		})
 	} else {
-		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
+		resp, dfmappings, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
 	}
 	if err != nil {
-		return nil, res, err
+		return nil, res, nil, err
 	}
-	return resp[defaultTargetName], res, err
+	return resp[defaultTargetName], res, dfmappings, err
 }
 
 func wrapBuildError(err error, bake bool) error {

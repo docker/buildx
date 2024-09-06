@@ -10,7 +10,7 @@ import (
 )
 
 type BuildxController interface {
-	Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, err error)
+	Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, dockerfileMappings map[string]string, err error)
 	// Invoke starts an IO session into the specified process.
 	// If pid doesn't matche to any running processes, it starts a new process with the specified config.
 	// If there is no container running or InvokeConfig.Rollback is speicfied, the process will start in a newly created container.

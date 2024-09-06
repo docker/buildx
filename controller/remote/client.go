@@ -113,7 +113,7 @@ func (c *Client) Inspect(ctx context.Context, ref string) (*pb.InspectResponse, 
 	return c.client().Inspect(ctx, &pb.InspectRequest{Ref: ref})
 }
 
-func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, error) {
+func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, map[string]string, error) {
 	ref := identity.NewID()
 	statusChan := make(chan *client.SolveStatus)
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -131,7 +131,7 @@ func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadC
 		}
 		return nil
 	})
-	return ref, resp, eg.Wait()
+	return ref, resp, nil, eg.Wait()
 }
 
 func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, statusChan chan *client.SolveStatus) (*client.SolveResponse, error) {

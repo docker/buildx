@@ -265,7 +265,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	done := timeBuildCommand(mp, attributes)
-	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
+	resp, dfmap, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), printer)
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
@@ -335,7 +335,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		if callFormatJSON {
 			jsonResults[name] = map[string]any{}
 			buf := &bytes.Buffer{}
-			if code, err := printResult(buf, pf, res); err != nil {
+			if code, err := printResult(buf, pf, res, name, dfmap); err != nil {
 				jsonResults[name]["error"] = err.Error()
 				exitCode = 1
 			} else if code != 0 && exitCode == 0 {
@@ -361,7 +361,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			}
 
 			fmt.Fprintln(dockerCli.Out())
-			if code, err := printResult(dockerCli.Out(), pf, res); err != nil {
+			if code, err := printResult(dockerCli.Out(), pf, res, name, dfmap); err != nil {
 				fmt.Fprintf(dockerCli.Out(), "error: %v\n", err)
 				exitCode = 1
 			} else if code != 0 && exitCode == 0 {

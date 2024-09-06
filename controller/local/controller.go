@@ -42,13 +42,13 @@ type localController struct {
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, error) {
+func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, map[string]string, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
-		return "", nil, errors.New("build ongoing")
+		return "", nil, nil, errors.New("build ongoing")
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, true)
+	resp, res, dockerfileMappings, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, true)
 	// NOTE: RunBuild can return *build.ResultHandle even on error.
 	if res != nil {
 		b.buildConfig = buildConfig{
@@ -60,9 +60,9 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 		}
 	}
 	if buildErr != nil {
-		return "", nil, buildErr
+		return "", nil, nil, buildErr
 	}
-	return b.ref, resp, nil
+	return b.ref, resp, dockerfileMappings, nil
 }
 
 func (b *localController) ListProcesses(ctx context.Context, ref string) (infos []*controllerapi.ProcessInfo, retErr error) {

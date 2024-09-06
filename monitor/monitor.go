@@ -243,8 +243,8 @@ type monitor struct {
 	lastBuildResult *MonitorBuildResult
 }
 
-func (m *monitor) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, err error) {
-	ref, resp, err = m.BuildxController.Build(ctx, options, in, progress)
+func (m *monitor) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, dockerMappings map[string]string, err error) {
+	ref, resp, _, err = m.BuildxController.Build(ctx, options, in, progress)
 	m.lastBuildResult = &MonitorBuildResult{Resp: resp, Err: err} // Record build result
 	return
 }

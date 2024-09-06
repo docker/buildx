@@ -49,6 +49,7 @@ import (
 	"github.com/moby/buildkit/frontend/subrequests/outline"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
 	"github.com/moby/buildkit/solver/errdefs"
+	solverpb "github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/morikuni/aec"
@@ -347,10 +348,11 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	done := timeBuildCommand(mp, attributes)
 	var resp *client.SolveResponse
 	var retErr error
+	var dfmap map[string]string
 	if confutil.IsExperimental() {
-		resp, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
+		resp, dfmap, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
 	} else {
-		resp, retErr = runBasicBuild(ctx, dockerCli, opts, printer)
+		resp, dfmap, retErr = runBasicBuild(ctx, dockerCli, opts, printer)
 	}
 
 	if err := printer.Wait(); retErr == nil {
@@ -387,7 +389,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		}
 	}
 	if opts.CallFunc != nil {
-		if exitcode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse); err != nil {
+		if exitcode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse, options.target, dfmap); err != nil {
 			return err
 		} else if exitcode != 0 {
 			os.Exit(exitcode)
@@ -405,22 +407,22 @@ func getImageID(resp map[string]string) string {
 	return dgst
 }
 
-func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
-	resp, res, err := cbuild.RunBuild(ctx, dockerCli, *opts, dockerCli.In(), printer, false)
+func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, map[string]string, error) {
+	resp, res, dfmap, err := cbuild.RunBuild(ctx, dockerCli, *opts, dockerCli.In(), printer, false)
 	if res != nil {
 		res.Done()
 	}
-	return resp, err
+	return resp, dfmap, err
 }
 
-func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, error) {
+func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, map[string]string, error) {
 	if options.invokeConfig != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
-		return nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
+		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
 	}
 	c, err := controller.NewController(ctx, options.ControlOptions, dockerCli, printer)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 	defer func() {
 		if err := c.Close(); err != nil {
@@ -432,12 +434,13 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	// so we need to resolve paths to abosolute ones in the client.
 	opts, err = controllerapi.ResolveOptionPaths(opts)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	var ref string
 	var retErr error
 	var resp *client.SolveResponse
+	var dfmap map[string]string
 
 	var f *ioset.SingleForwarder
 	var pr io.ReadCloser
@@ -455,7 +458,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		})
 	}
 
-	ref, resp, err = c.Build(ctx, *opts, pr, printer)
+	ref, resp, dfmap, err = c.Build(ctx, *opts, pr, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
@@ -463,7 +466,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 			retErr = err
 			// We can proceed to monitor
 		} else {
-			return nil, errors.Wrapf(err, "failed to build")
+			return nil, nil, errors.Wrapf(err, "failed to build")
 		}
 	}
 
@@ -504,7 +507,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		}
 	}
 
-	return resp, retErr
+	return resp, dfmap, retErr
 }
 
 func printError(err error, printer *progress.Printer) error {
@@ -882,7 +885,7 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 	}
 }
 
-func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string) (int, error) {
+func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string, target string, dfmap map[string]string) (int, error) {
 	switch f.Name {
 	case "outline":
 		return 0, printValue(w, outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
@@ -908,8 +911,27 @@ func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string) 
 			}
 			fmt.Fprintf(w, "Check complete, %s\n", warningCountMsg)
 		}
+		sourceInfoMap := func(sourceInfo *solverpb.SourceInfo) *solverpb.SourceInfo {
+			if sourceInfo == nil || dfmap == nil {
+				return sourceInfo
+			}
+			if target == "" {
+				target = "default"
+			}
 
-		err := printValue(w, printLintViolationsWrapper, lint.SubrequestLintDefinition.Version, f.Format, res)
+			if dfsrcname, ok := dfmap[target+":"+sourceInfo.Filename]; ok {
+				newSourceInfo := *sourceInfo
+				newSourceInfo.Filename = dfsrcname
+				return &newSourceInfo
+			}
+			return sourceInfo
+		}
+
+		printLintWarnings := func(dt []byte, w io.Writer) error {
+			return lintResults.PrintTo(w, sourceInfoMap)
+		}
+
+		err := printValue(w, printLintWarnings, lint.SubrequestLintDefinition.Version, f.Format, res)
 		if err != nil {
 			return 0, err
 		}
@@ -924,13 +946,8 @@ func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string) 
 			if f.Format != "json" && len(lintResults.Warnings) > 0 {
 				fmt.Fprintln(w)
 			}
-			lintBuf := bytes.NewBuffer([]byte(lintResults.Error.Message + "\n"))
-			sourceInfo := lintResults.Sources[lintResults.Error.Location.SourceIndex]
-			source := errdefs.Source{
-				Info:   sourceInfo,
-				Ranges: lintResults.Error.Location.Ranges,
-			}
-			source.Print(lintBuf)
+			lintBuf := bytes.NewBuffer(nil)
+			lintResults.PrintErrorTo(lintBuf)
 			return 0, errors.New(lintBuf.String())
 		} else if len(lintResults.Warnings) == 0 && f.Format != "json" {
 			fmt.Fprintln(w, "Check complete, no warnings found.")
@@ -966,11 +983,6 @@ func printValue(w io.Writer, printer callFunc, version string, format string, re
 		return nil
 	}
 	return printer([]byte(res["result.json"]), w)
-}
-
-// FIXME: remove once https://github.com/docker/buildx/pull/2672 is sorted
-func printLintViolationsWrapper(dt []byte, w io.Writer) error {
-	return lint.PrintLintViolations(dt, w, nil)
 }
 
 type invokeConfig struct {

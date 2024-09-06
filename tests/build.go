@@ -1291,6 +1291,29 @@ cOpy Dockerfile .
 		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
 		require.Contains(t, stdout.String(), "Check complete, 2 warnings have been found!")
 	})
+
+	t.Run("check for Dockerfile path printed with context when displaying rule check warnings", func(t *testing.T) {
+		dockerfile := []byte(`
+frOM busybox as base
+cOpy Dockerfile .
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("subdir", 0700),
+			fstest.CreateFile("subdir/Dockerfile", dockerfile, 0600),
+		)
+		dockerfilePath := filepath.Join(dir, "subdir", "Dockerfile")
+
+		cmd := buildxCmd(sb, withArgs("build", "--call=check", "-f", dockerfilePath, dir))
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), "Check complete, 2 warnings have been found!")
+		require.Contains(t, stdout.String(), dockerfilePath+":2")
+		require.Contains(t, stdout.String(), dockerfilePath+":3")
+	})
 }
 
 func createTestProject(t *testing.T) string {

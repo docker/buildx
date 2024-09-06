@@ -61,7 +61,7 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 	}
 	var resultUpdated bool
 	cm.progress.Unpause()
-	ref, _, err := cm.m.Build(ctx, *bo, nil, cm.progress) // TODO: support stdin, hold build ref
+	ref, _, _, err := cm.m.Build(ctx, *bo, nil, cm.progress) // TODO: support stdin, hold build ref
 	cm.progress.Pause()
 	if err != nil {
 		var be *controllererrors.BuildError
