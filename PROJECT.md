@@ -313,9 +313,8 @@ Examples:
 ```mermaid
 flowchart LR
   create([New issue]) --> triage
-  subgraph triage[Triage]
-	  direction LR
-	  review[Review] -- Feedback --> review
+  subgraph triage[Triage Loop]
+    review[Review]
   end
   subgraph decision[Decision]
     accept[Accept]
@@ -323,7 +322,7 @@ flowchart LR
   end
   triage -- if accepted --> accept[Assign status, milestone]
   triage -- if rejected --> close[Assign status, close issue]
-  ```
+```
 
 ### Examples
 
@@ -376,14 +375,26 @@ A thorough and timely review process for pull requests (PRs) is crucial for main
 
 ```mermaid
 flowchart LR
-  triage([Triage]) --> draft[Draft PR]
-  draft --> review[PR Review]
-  draft -- Feedback --> draft
-  review --> closed{{Close PR}}
-  review -- Feedback --> review
+  triage([Triage])
+  draft[Draft PR]
+  review[PR Review]
+  closed{{Close PR}}
+  merge{{Merge PR}}
+
+  subgraph feedback1[Feedback Loop]
+    draft
+  end
+  subgraph feedback2[Feedback Loop]
+     review
+  end
+
+  triage --> draft
+  draft --> review
+  review --> closed
   review --> draft
-  review --> merge{{Merge PR}}
+  review --> merge
 ```
+
 ## Handling stalled issues and pull requests
 
 Unfortunately, some issues or pull requests can remain inactive for extended periods. To mitigate this, automation is employed to prompt both the author and maintainers, ensuring that all contributions receive appropriate attention.
