@@ -16,9 +16,9 @@ require (
 	github.com/containerd/typeurl/v2 v2.2.0
 	github.com/creack/pty v1.1.21
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v27.2.0+incompatible
+	github.com/docker/cli v27.2.1+incompatible
 	github.com/docker/cli-docs-tool v0.8.0
-	github.com/docker/docker v27.2.0+incompatible
+	github.com/docker/docker v27.2.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/gogo/protobuf v1.3.2
@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.20.1
 	github.com/in-toto/in-toto-golang v0.5.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.16.0-rc2
+	github.com/moby/buildkit v0.16.0
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/moby/sys/signal v0.7.1
 	github.com/morikuni/aec v1.0.0
