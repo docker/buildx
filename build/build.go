@@ -101,6 +101,9 @@ type Inputs struct {
 	ContextState     *llb.State
 	DockerfileInline string
 	NamedContexts    map[string]NamedContext
+	// DockerfileMappingSrc and DockerfileMappingDst are filled in by the builder.
+	DockerfileMappingSrc string
+	DockerfileMappingDst string
 }
 
 type NamedContext struct {
@@ -147,19 +150,18 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, dockerfileMappings map[string]string, err error) {
-	return BuildWithResultHandler(ctx, nodes, opt, docker, configDir, w, nil)
+func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, nodes, opts, docker, configDir, w, nil)
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, dockerfileMappings map[string]string, err error) {
-	dockerfileMappings = map[string]string{}
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
-		return nil, nil, errors.Errorf("driver required for build")
+		return nil, errors.Errorf("driver required for build")
 	}
 
 	nodes, err = filterAvailableNodes(nodes)
 	if err != nil {
-		return nil, nil, errors.Wrapf(err, "no valid drivers found")
+		return nil, errors.Wrapf(err, "no valid drivers found")
 	}
 
 	var noMobyDriver *driver.DriverHandle
@@ -170,9 +172,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		}
 	}
 
-	if noMobyDriver != nil && !noDefaultLoad() && noCallFunc(opt) {
+	if noMobyDriver != nil && !noDefaultLoad() && noCallFunc(opts) {
 		var noOutputTargets []string
-		for name, opt := range opt {
+		for name, opt := range opts {
 			if noMobyDriver.Features(ctx)[driver.DefaultLoad] {
 				continue
 			}
@@ -193,9 +195,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		}
 	}
 
-	drivers, err := resolveDrivers(ctx, nodes, opt, w)
+	drivers, err := resolveDrivers(ctx, nodes, opts, w)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
 	defers := make([]func(), 0, 2)
@@ -210,7 +212,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	reqForNodes := make(map[string][]*reqForNode)
 	eg, ctx := errgroup.WithContext(ctx)
 
-	for k, opt := range opt {
+	for k, opt := range opts {
 		multiDriver := len(drivers[k]) > 1
 		hasMobyDriver := false
 		addGitAttrs, err := getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
@@ -228,14 +230,16 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			opt.Platforms = np.platforms
 			gatewayOpts, err := np.BuildOpts(ctx)
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
-			so, release, dockerfileMapping, err := toSolveOpt(ctx, np.Node(), multiDriver, opt, gatewayOpts, configDir, w, docker)
+			localOpt := opt
+			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, &localOpt, gatewayOpts, configDir, w, docker)
+			opts[k] = localOpt
 			if err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			if err := saveLocalState(so, k, opt, np.Node(), configDir); err != nil {
-				return nil, nil, err
+				return nil, err
 			}
 			addGitAttrs(so)
 			defers = append(defers, release)
@@ -243,7 +247,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				resolvedNode: np,
 				so:           so,
 			})
-			dockerfileMappings[k+":"+dockerfileMapping.Dst] = dockerfileMapping.Src
 		}
 		reqForNodes[k] = reqn
 		for _, at := range opt.Session {
@@ -262,7 +265,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 				for _, e := range np.so.Exports {
 					if e.Type == "moby" {
 						if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-							return nil, nil, errors.Errorf("multi-node push can't currently be performed with the docker driver, please switch to a different driver")
+							return nil, errors.Errorf("multi-node push can't currently be performed with the docker driver, please switch to a different driver")
 						}
 					}
 				}
@@ -271,7 +274,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	}
 
 	// validate that all links between targets use same drivers
-	for name := range opt {
+	for name := range opts {
 		dps := reqForNodes[name]
 		for i, dp := range dps {
 			so := reqForNodes[name][i].so
@@ -280,7 +283,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 					k2 := strings.TrimPrefix(v, "target:")
 					dps2, ok := drivers[k2]
 					if !ok {
-						return nil, nil, errors.Errorf("failed to find target %s for context %s", k2, strings.TrimPrefix(k, "context:")) // should be validated before already
+						return nil, errors.Errorf("failed to find target %s for context %s", k2, strings.TrimPrefix(k, "context:")) // should be validated before already
 					}
 					var found bool
 					for _, dp2 := range dps2 {
@@ -290,7 +293,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 						}
 					}
 					if !found {
-						return nil, nil, errors.Errorf("failed to use %s as context %s for %s because targets build with different drivers", k2, strings.TrimPrefix(k, "context:"), name)
+						return nil, errors.Errorf("failed to use %s as context %s for %s because targets build with different drivers", k2, strings.TrimPrefix(k, "context:"), name)
 					}
 				}
 			}
@@ -299,7 +302,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 
 	sharedSessions, err := detectSharedMounts(ctx, reqForNodes)
 	if err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 	sharedSessionsWG := map[string]*sync.WaitGroup{}
 
@@ -307,10 +310,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	var respMu sync.Mutex
 	results := waitmap.New()
 
-	multiTarget := len(opt) > 1
-	childTargets := calculateChildTargets(reqForNodes, opt)
+	multiTarget := len(opts) > 1
+	childTargets := calculateChildTargets(reqForNodes, opts)
 
-	for k, opt := range opt {
+	for k, opt := range opts {
 		err := func(k string) (err error) {
 			opt := opt
 			dps := drivers[k]
@@ -704,15 +707,15 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			return nil
 		}(k)
 		if err != nil {
-			return nil, nil, err
+			return nil, err
 		}
 	}
 
 	if err := eg.Wait(); err != nil {
-		return nil, nil, err
+		return nil, err
 	}
 
-	return resp, dockerfileMappings, nil
+	return resp, nil
 }
 
 func extractIndexAnnotations(exports []client.ExportEntry) (map[exptypes.AnnotationKey]string, error) {

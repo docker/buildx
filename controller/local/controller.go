@@ -42,7 +42,7 @@ type localController struct {
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, map[string]string, error) {
+func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, *build.Inputs, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
 		return "", nil, nil, errors.New("build ongoing")
 	}

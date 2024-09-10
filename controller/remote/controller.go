@@ -148,7 +148,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 			}()
 
 			// prepare server
-			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, progress progress.Writer) (*client.SolveResponse, *build.ResultHandle, map[string]string, error) {
+			b := NewServer(func(ctx context.Context, options *controllerapi.BuildOptions, stdin io.Reader, progress progress.Writer) (*client.SolveResponse, *build.ResultHandle, *build.Inputs, error) {
 				return cbuild.RunBuild(ctx, dockerCli, *options, stdin, progress, true)
 			})
 			defer b.Close()

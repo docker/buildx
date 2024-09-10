@@ -10,6 +10,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/containerd/console"
+	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/commands"
@@ -243,7 +244,7 @@ type monitor struct {
 	lastBuildResult *MonitorBuildResult
 }
 
-func (m *monitor) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, dockerMappings map[string]string, err error) {
+func (m *monitor) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, input *build.Inputs, err error) {
 	ref, resp, _, err = m.BuildxController.Build(ctx, options, in, progress)
 	m.lastBuildResult = &MonitorBuildResult{Resp: resp, Err: err} // Record build result
 	return

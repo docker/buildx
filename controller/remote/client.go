@@ -8,6 +8,7 @@ import (
 
 	"github.com/containerd/containerd/defaults"
 	"github.com/containerd/containerd/pkg/dialer"
+	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
@@ -113,7 +114,7 @@ func (c *Client) Inspect(ctx context.Context, ref string) (*pb.InspectResponse, 
 	return c.client().Inspect(ctx, &pb.InspectRequest{Ref: ref})
 }
 
-func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, map[string]string, error) {
+func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, *build.Inputs, error) {
 	ref := identity.NewID()
 	statusChan := make(chan *client.SolveStatus)
 	eg, egCtx := errgroup.WithContext(ctx)

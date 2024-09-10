@@ -347,12 +347,12 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 
 	done := timeBuildCommand(mp, attributes)
 	var resp *client.SolveResponse
+	var inputs *build.Inputs
 	var retErr error
-	var dfmap map[string]string
 	if confutil.IsExperimental() {
-		resp, dfmap, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
+		resp, inputs, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
 	} else {
-		resp, dfmap, retErr = runBasicBuild(ctx, dockerCli, opts, printer)
+		resp, inputs, retErr = runBasicBuild(ctx, dockerCli, opts, printer)
 	}
 
 	if err := printer.Wait(); retErr == nil {
@@ -389,7 +389,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		}
 	}
 	if opts.CallFunc != nil {
-		if exitcode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse, options.target, dfmap); err != nil {
+		if exitcode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse, options.target, inputs); err != nil {
 			return err
 		} else if exitcode != 0 {
 			os.Exit(exitcode)
@@ -407,7 +407,7 @@ func getImageID(resp map[string]string) string {
 	return dgst
 }
 
-func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, map[string]string, error) {
+func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
 	resp, res, dfmap, err := cbuild.RunBuild(ctx, dockerCli, *opts, dockerCli.In(), printer, false)
 	if res != nil {
 		res.Done()
@@ -415,7 +415,7 @@ func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllera
 	return resp, dfmap, err
 }
 
-func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, map[string]string, error) {
+func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
 	if options.invokeConfig != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
@@ -440,7 +440,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	var ref string
 	var retErr error
 	var resp *client.SolveResponse
-	var dfmap map[string]string
+	var inputs *build.Inputs
 
 	var f *ioset.SingleForwarder
 	var pr io.ReadCloser
@@ -458,7 +458,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		})
 	}
 
-	ref, resp, dfmap, err = c.Build(ctx, *opts, pr, printer)
+	ref, resp, inputs, err = c.Build(ctx, *opts, pr, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
@@ -507,7 +507,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		}
 	}
 
-	return resp, dfmap, retErr
+	return resp, inputs, retErr
 }
 
 func printError(err error, printer *progress.Printer) error {
@@ -885,7 +885,7 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 	}
 }
 
-func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string, target string, dfmap map[string]string) (int, error) {
+func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string, target string, inp *build.Inputs) (int, error) {
 	switch f.Name {
 	case "outline":
 		return 0, printValue(w, outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
@@ -912,16 +912,16 @@ func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string, 
 			fmt.Fprintf(w, "Check complete, %s\n", warningCountMsg)
 		}
 		sourceInfoMap := func(sourceInfo *solverpb.SourceInfo) *solverpb.SourceInfo {
-			if sourceInfo == nil || dfmap == nil {
+			if sourceInfo == nil || inp == nil {
 				return sourceInfo
 			}
 			if target == "" {
 				target = "default"
 			}
 
-			if dfsrcname, ok := dfmap[target+":"+sourceInfo.Filename]; ok {
+			if inp.DockerfileMappingSrc != "" {
 				newSourceInfo := *sourceInfo
-				newSourceInfo.Filename = dfsrcname
+				newSourceInfo.Filename = inp.DockerfileMappingSrc
 				return &newSourceInfo
 			}
 			return sourceInfo
@@ -947,7 +947,7 @@ func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string, 
 				fmt.Fprintln(w)
 			}
 			lintBuf := bytes.NewBuffer(nil)
-			lintResults.PrintErrorTo(lintBuf)
+			lintResults.PrintErrorTo(lintBuf, sourceInfoMap)
 			return 0, errors.New(lintBuf.String())
 		} else if len(lintResults.Warnings) == 0 && f.Format != "json" {
 			fmt.Fprintln(w, "Check complete, no warnings found.")

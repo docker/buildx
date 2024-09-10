@@ -34,7 +34,7 @@ const defaultTargetName = "default"
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultHandle,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, map[string]string, error) {
+func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.BuildOptions, inStream io.Reader, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, *build.Inputs, error) {
 	if in.NoCache && len(in.NoCacheFilter) > 0 {
 		return nil, nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
 	}
@@ -188,13 +188,18 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 		return nil, nil, nil, err
 	}
 
-	resp, res, dockerfileMappings, err := buildTargets(ctx, dockerCli, nodes, map[string]build.Options{defaultTargetName: opts}, progress, generateResult)
+	var inputs *build.Inputs
+	buildOptions := map[string]build.Options{defaultTargetName: opts}
+	resp, res, err := buildTargets(ctx, dockerCli, nodes, buildOptions, progress, generateResult)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		// NOTE: buildTargets can return *build.ResultHandle even on error.
-		return nil, res, dockerfileMappings, err
+		return nil, res, nil, err
 	}
-	return resp, res, dockerfileMappings, nil
+	if i, ok := buildOptions[defaultTargetName]; ok {
+		inputs = &i.Inputs
+	}
+	return resp, res, inputs, nil
 }
 
 // buildTargets runs the specified build and returns the result.
@@ -202,15 +207,14 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in controllerapi.Build
 // NOTE: When an error happens during the build and this function acquires the debuggable *build.ResultHandle,
 // this function returns it in addition to the error (i.e. it does "return nil, res, err"). The caller can
 // inspect the result and debug the cause of that error.
-func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, map[string]string, error) {
+func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.Node, opts map[string]build.Options, progress progress.Writer, generateResult bool) (*client.SolveResponse, *build.ResultHandle, error) {
 	var res *build.ResultHandle
 	var resp map[string]*client.SolveResponse
 	var err error
-	var dfmappings map[string]string
 	if generateResult {
 		var mu sync.Mutex
 		var idx int
-		resp, dfmappings, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
+		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
 			mu.Lock()
 			defer mu.Unlock()
 			if res == nil || driverIndex < idx {
@@ -218,12 +222,12 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.No
 			}
 		})
 	} else {
-		resp, dfmappings, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
+		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
 	}
 	if err != nil {
-		return nil, res, nil, err
+		return nil, res, err
 	}
-	return resp[defaultTargetName], res, dfmappings, err
+	return resp[defaultTargetName], res, err
 }
 
 func wrapBuildError(err error, bake bool) error {
