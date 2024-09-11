@@ -34,8 +34,8 @@ func DefaultConfigFile(dockerCli command.Cli) (string, bool) {
 	return "", false
 }
 
-// loadConfigTree loads BuildKit config toml tree
-func loadConfigTree(fp string) (*toml.Tree, error) {
+// LoadConfigTree loads BuildKit config toml tree
+func LoadConfigTree(fp string) (*toml.Tree, error) {
 	f, err := os.Open(fp)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {

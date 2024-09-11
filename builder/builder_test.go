@@ -1,6 +1,8 @@
 package builder
 
 import (
+	"os"
+	"path"
 	"testing"
 
 	"github.com/stretchr/testify/assert"
@@ -27,19 +29,34 @@ func TestCsvToMap(t *testing.T) {
 }
 
 func TestParseBuildkitdFlags(t *testing.T) {
+	buildkitdConf := `
+# debug enables additional debug logging
+debug = true
+# insecure-entitlements allows insecure entitlements, disabled by default.
+insecure-entitlements = [ "network.host", "security.insecure" ]
+[log]
+  # log formatter: json or text
+  format = "text"
+`
+	dirConf := t.TempDir()
+	buildkitdConfPath := path.Join(dirConf, "buildkitd-conf.toml")
+	require.NoError(t, os.WriteFile(buildkitdConfPath, []byte(buildkitdConf), 0644))
+
 	testCases := []struct {
-		name       string
-		flags      string
-		driver     string
-		driverOpts map[string]string
-		expected   []string
-		wantErr    bool
+		name                string
+		flags               string
+		driver              string
+		driverOpts          map[string]string
+		buildkitdConfigFile string
+		expected            []string
+		wantErr             bool
 	}{
 		{
 			"docker-container no flags",
 			"",
 			"docker-container",
 			nil,
+			"",
 			[]string{
 				"--allow-insecure-entitlement=network.host",
 			},
@@ -50,6 +67,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			"",
 			"kubernetes",
 			nil,
+			"",
 			[]string{
 				"--allow-insecure-entitlement=network.host",
 			},
@@ -60,6 +78,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			"",
 			"remote",
 			nil,
+			"",
 			nil,
 			false,
 		},
@@ -68,6 +87,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			"--allow-insecure-entitlement=security.insecure",
 			"docker-container",
 			nil,
+			"",
 			[]string{
 				"--allow-insecure-entitlement=security.insecure",
 			},
@@ -78,6 +98,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			"--allow-insecure-entitlement=network.host --allow-insecure-entitlement=security.insecure",
 			"docker-container",
 			nil,
+			"",
 			[]string{
 				"--allow-insecure-entitlement=network.host",
 				"--allow-insecure-entitlement=security.insecure",
@@ -89,6 +110,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			"",
 			"docker-container",
 			map[string]string{"network": "host"},
+			"",
 			[]string{
 				"--allow-insecure-entitlement=network.host",
 			},
@@ -99,6 +121,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			"--allow-insecure-entitlement=network.host",
 			"docker-container",
 			map[string]string{"network": "host"},
+			"",
 			[]string{
 				"--allow-insecure-entitlement=network.host",
 			},
@@ -109,6 +132,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			"--allow-insecure-entitlement=network.host --allow-insecure-entitlement=security.insecure",
 			"docker-container",
 			map[string]string{"network": "host"},
+			"",
 			[]string{
 				"--allow-insecure-entitlement=network.host",
 				"--allow-insecure-entitlement=security.insecure",
@@ -116,10 +140,20 @@ func TestParseBuildkitdFlags(t *testing.T) {
 			false,
 		},
 		{
+			"docker-container with buildkitd conf setting network.host entitlement",
+			"",
+			"docker-container",
+			nil,
+			buildkitdConfPath,
+			nil,
+			false,
+		},
+		{
 			"error parsing flags",
 			"foo'",
 			"docker-container",
 			nil,
+			"",
 			nil,
 			true,
 		},
@@ -127,7 +161,7 @@ func TestParseBuildkitdFlags(t *testing.T) {
 	for _, tt := range testCases {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			flags, err := parseBuildkitdFlags(tt.flags, tt.driver, tt.driverOpts)
+			flags, err := parseBuildkitdFlags(tt.flags, tt.driver, tt.driverOpts, tt.buildkitdConfigFile)
 			if tt.wantErr {
 				require.Error(t, err)
 				return
