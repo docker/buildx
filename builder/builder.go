@@ -435,7 +435,16 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		return nil, err
 	}
 
-	buildkitdFlags, err := parseBuildkitdFlags(opts.BuildkitdFlags, driverName, driverOpts)
+	buildkitdConfigFile := opts.BuildkitdConfigFile
+	if buildkitdConfigFile == "" {
+		// if buildkit daemon config is not provided, check if the default one
+		// is available and use it
+		if f, ok := confutil.DefaultConfigFile(dockerCli); ok {
+			buildkitdConfigFile = f
+		}
+	}
+
+	buildkitdFlags, err := parseBuildkitdFlags(opts.BuildkitdFlags, driverName, driverOpts, buildkitdConfigFile)
 	if err != nil {
 		return nil, err
 	}
@@ -494,15 +503,6 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 			return nil, err
 		}
 		setEp = false
-	}
-
-	buildkitdConfigFile := opts.BuildkitdConfigFile
-	if buildkitdConfigFile == "" {
-		// if buildkit daemon config is not provided, check if the default one
-		// is available and use it
-		if f, ok := confutil.DefaultConfigFile(dockerCli); ok {
-			buildkitdConfigFile = f
-		}
 	}
 
 	if err := ng.Update(opts.NodeName, ep, opts.Platforms, setEp, opts.Append, buildkitdFlags, buildkitdConfigFile, driverOpts); err != nil {
@@ -641,7 +641,7 @@ func validateBuildkitEndpoint(ep string) (string, error) {
 }
 
 // parseBuildkitdFlags parses buildkit flags
-func parseBuildkitdFlags(inp string, driver string, driverOpts map[string]string) (res []string, err error) {
+func parseBuildkitdFlags(inp string, driver string, driverOpts map[string]string, buildkitdConfigFile string) (res []string, err error) {
 	if inp != "" {
 		res, err = shlex.Split(inp)
 		if err != nil {
@@ -663,10 +663,27 @@ func parseBuildkitdFlags(inp string, driver string, driverOpts map[string]string
 		}
 	}
 
+	var hasNetworkHostEntitlementInConf bool
+	if buildkitdConfigFile != "" {
+		btoml, err := confutil.LoadConfigTree(buildkitdConfigFile)
+		if err != nil {
+			return nil, err
+		} else if btoml != nil {
+			if ies := btoml.GetArray("insecure-entitlements"); ies != nil {
+				for _, e := range ies.([]string) {
+					if e == "network.host" {
+						hasNetworkHostEntitlementInConf = true
+						break
+					}
+				}
+			}
+		}
+	}
+
 	if v, ok := driverOpts["network"]; ok && v == "host" && !hasNetworkHostEntitlement && driver == "docker-container" {
 		// always set network.host entitlement if user has set network=host
 		res = append(res, "--allow-insecure-entitlement=network.host")
-	} else if len(allowInsecureEntitlements) == 0 && (driver == "kubernetes" || driver == "docker-container") {
+	} else if len(allowInsecureEntitlements) == 0 && !hasNetworkHostEntitlementInConf && (driver == "kubernetes" || driver == "docker-container") {
 		// set network.host entitlement if user does not provide any as
 		// network is isolated for container drivers.
 		res = append(res, "--allow-insecure-entitlement=network.host")
