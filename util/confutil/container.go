@@ -32,7 +32,7 @@ func LoadConfigFiles(bkconfig string) (map[string][]byte, error) {
 	}
 
 	// Load config tree
-	btoml, err := loadConfigTree(bkconfig)
+	btoml, err := LoadConfigTree(bkconfig)
 	if err != nil {
 		return nil, err
 	}
