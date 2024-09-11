@@ -126,6 +126,12 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 						fmt.Fprintf(w, "\tKeep Bytes:\t%s\n", units.BytesSize(float64(rule.KeepBytes)))
 					}
 				}
+				for f, dt := range nodes[i].Files {
+					fmt.Fprintf(w, "File#%s:\n", f)
+					for _, line := range strings.Split(string(dt), "\n") {
+						fmt.Fprintf(w, "\t> %s\n", line)
+					}
+				}
 			}
 		}
 	}
