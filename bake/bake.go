@@ -704,7 +704,7 @@ type Target struct {
 	Outputs          []string           `json:"output,omitempty" hcl:"output,optional" cty:"output"`
 	Pull             *bool              `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
 	NoCache          *bool              `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
-	NetworkMode      *string            `json:"network" hcl:"network" cty:"network"`
+	NetworkMode      *string            `json:"network,omitempty" hcl:"network,optional" cty:"network"`
 	NoCacheFilter    []string           `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
 	ShmSize          *string            `json:"shm-size,omitempty" hcl:"shm-size,optional"`
 	Ulimits          []string           `json:"ulimits,omitempty" hcl:"ulimits,optional"`

@@ -103,6 +103,26 @@ target "build" {
 	require.Equal(t, ".", *def.Target["build"].Context)
 	require.Equal(t, "Dockerfile", *def.Target["build"].Dockerfile)
 	require.Equal(t, map[string]*string{"HELLO": ptrstr("foo")}, def.Target["build"].Args)
+
+	require.Equal(t, `{
+  "group": {
+    "default": {
+      "targets": [
+        "build"
+      ]
+    }
+  },
+  "target": {
+    "build": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "HELLO": "foo"
+      }
+    }
+  }
+}
+`, stdout.String())
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
