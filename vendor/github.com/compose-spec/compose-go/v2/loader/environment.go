@@ -79,7 +79,7 @@ func resolveSecretsEnvironment(dict map[string]any, environment types.Mapping) {
 			continue
 		}
 		if found, ok := environment[env]; ok {
-			secret["content"] = found
+			secret[types.SecretConfigXValue] = found
 		}
 		secrets[name] = secret
 	}

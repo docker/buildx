@@ -271,13 +271,13 @@ func deriveDeepCopyService(dst, src *ServiceConfig) {
 				if cap(dst.Devices) >= len(src.Devices) {
 					dst.Devices = (dst.Devices)[:len(src.Devices)]
 				} else {
-					dst.Devices = make([]string, len(src.Devices))
+					dst.Devices = make([]DeviceMapping, len(src.Devices))
 				}
 			} else if len(src.Devices) < len(dst.Devices) {
 				dst.Devices = (dst.Devices)[:len(src.Devices)]
 			}
 		} else {
-			dst.Devices = make([]string, len(src.Devices))
+			dst.Devices = make([]DeviceMapping, len(src.Devices))
 		}
 		copy(dst.Devices, src.Devices)
 	}
