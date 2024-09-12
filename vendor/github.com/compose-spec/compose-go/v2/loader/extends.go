@@ -163,8 +163,15 @@ func getExtendsBaseFromFile(
 		if err != nil {
 			return nil, nil, err
 		}
-		services := source["services"].(map[string]any)
-		_, ok := services[ref]
+		m, ok := source["services"]
+		if !ok {
+			return nil, nil, fmt.Errorf("cannot extend service %q in %s: no services section", name, local)
+		}
+		services, ok := m.(map[string]any)
+		if !ok {
+			return nil, nil, fmt.Errorf("cannot extend service %q in %s: services must be a mapping", name, local)
+		}
+		_, ok = services[ref]
 		if !ok {
 			return nil, nil, fmt.Errorf(
 				"cannot extend service %q in %s: service %q not found in %s",

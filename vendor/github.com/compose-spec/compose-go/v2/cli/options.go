@@ -403,7 +403,7 @@ func (o *ProjectOptions) GetWorkingDir() (string, error) {
 	return os.Getwd()
 }
 
-func (o *ProjectOptions) GeConfigFiles() ([]types.ConfigFile, error) {
+func (o *ProjectOptions) GetConfigFiles() ([]types.ConfigFile, error) {
 	configPaths, err := o.getConfigPaths()
 	if err != nil {
 		return nil, err
@@ -466,7 +466,7 @@ func (o *ProjectOptions) LoadModel(ctx context.Context) (map[string]any, error) 
 
 // prepare converts ProjectOptions into loader's types.ConfigDetails and configures default load options
 func (o *ProjectOptions) prepare() (types.ConfigDetails, error) {
-	configs, err := o.GeConfigFiles()
+	configs, err := o.GetConfigFiles()
 	if err != nil {
 		return types.ConfigDetails{}, err
 	}

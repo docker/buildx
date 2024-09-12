@@ -119,7 +119,7 @@ loop:
 			offset = i + 1
 			inherited = rune == '\n'
 			break loop
-		case '_', '.', '-', '[', ']':
+		case '_', '.', '[', ']':
 		default:
 			// variable name should match [A-Za-z0-9_.-]
 			if unicode.IsLetter(rune) || unicode.IsNumber(rune) {

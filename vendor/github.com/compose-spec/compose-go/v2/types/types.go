@@ -62,7 +62,7 @@ type ServiceConfig struct {
 	DependsOn         DependsOnConfig          `yaml:"depends_on,omitempty" json:"depends_on,omitempty"`
 	Deploy            *DeployConfig            `yaml:"deploy,omitempty" json:"deploy,omitempty"`
 	DeviceCgroupRules []string                 `yaml:"device_cgroup_rules,omitempty" json:"device_cgroup_rules,omitempty"`
-	Devices           []string                 `yaml:"devices,omitempty" json:"devices,omitempty"`
+	Devices           []DeviceMapping          `yaml:"devices,omitempty" json:"devices,omitempty"`
 	DNS               StringList               `yaml:"dns,omitempty" json:"dns,omitempty"`
 	DNSOpts           []string                 `yaml:"dns_opt,omitempty" json:"dns_opt,omitempty"`
 	DNSSearch         StringList               `yaml:"dns_search,omitempty" json:"dns_search,omitempty"`
@@ -239,6 +239,10 @@ const (
 	NetworkModeContainerPrefix = ContainerPrefix
 )
 
+const (
+	SecretConfigXValue = "x-#value"
+)
+
 // GetDependencies retrieves all services this service depends on
 func (s ServiceConfig) GetDependencies() []string {
 	var dependencies []string
@@ -297,6 +301,14 @@ type BlkioConfig struct {
 	DeviceReadIOps  []ThrottleDevice `yaml:"device_read_iops,omitempty" json:"device_read_iops,omitempty"`
 	DeviceWriteBps  []ThrottleDevice `yaml:"device_write_bps,omitempty" json:"device_write_bps,omitempty"`
 	DeviceWriteIOps []ThrottleDevice `yaml:"device_write_iops,omitempty" json:"device_write_iops,omitempty"`
+
+	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
+}
+
+type DeviceMapping struct {
+	Source      string `yaml:"source,omitempty" json:"source,omitempty"`
+	Target      string `yaml:"target,omitempty" json:"target,omitempty"`
+	Permissions string `yaml:"permissions,omitempty" json:"permissions,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }

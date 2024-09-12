@@ -738,7 +738,9 @@ func Transform(source interface{}, target interface{}) error {
 		DecodeHook: mapstructure.ComposeDecodeHookFunc(
 			nameServices,
 			decoderHook,
-			cast),
+			cast,
+			secretConfigDecoderHook,
+		),
 		Result:   target,
 		TagName:  "yaml",
 		Metadata: &data,
@@ -762,6 +764,28 @@ func nameServices(from reflect.Value, to reflect.Value) (interface{}, error) {
 		}
 	}
 	return from.Interface(), nil
+}
+
+func secretConfigDecoderHook(from, to reflect.Type, data interface{}) (interface{}, error) {
+	// Check if the input is a map and we're decoding into a SecretConfig
+	if from.Kind() == reflect.Map && to == reflect.TypeOf(types.SecretConfig{}) {
+		if v, ok := data.(map[string]interface{}); ok {
+			if ext, ok := v["#extensions"].(map[string]interface{}); ok {
+				if val, ok := ext[types.SecretConfigXValue].(string); ok {
+					// Return a map with the Content field populated
+					v["Content"] = val
+					delete(ext, types.SecretConfigXValue)
+
+					if len(ext) == 0 {
+						delete(v, "#extensions")
+					}
+				}
+			}
+		}
+	}
+
+	// Return the original data so the rest is handled by default mapstructure logic
+	return data, nil
 }
 
 // keys need to be converted to strings for jsonschema
