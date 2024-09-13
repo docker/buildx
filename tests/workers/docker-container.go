@@ -73,6 +73,11 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 
 	cl := func() error {
 		cmd := exec.Command("buildx", "rm", "-f", name)
+		cmd.Env = append(
+			os.Environ(),
+			"BUILDX_CONFIG=/tmp/buildx-"+name,
+			"DOCKER_CONTEXT="+w.docker.DockerAddress(),
+		)
 		return cmd.Run()
 	}
 
