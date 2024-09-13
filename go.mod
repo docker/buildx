@@ -16,9 +16,9 @@ require (
 	github.com/containerd/typeurl/v2 v2.2.0
 	github.com/creack/pty v1.1.21
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v27.2.1+incompatible
+	github.com/docker/cli v27.2.2-0.20240912223434-c85c3df6b5b7+incompatible // 27.x branch / v27.3.0-dev
 	github.com/docker/cli-docs-tool v0.8.0
-	github.com/docker/docker v27.2.1+incompatible
+	github.com/docker/docker v27.2.2-0.20240912213415-bf60e5cced83+incompatible // 27.x branch / v27.3.0-dev
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/gogo/protobuf v1.3.2
