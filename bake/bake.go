@@ -480,7 +480,7 @@ func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[st
 	for _, v := range t.Contexts {
 		if strings.HasPrefix(v, "target:") {
 			target := strings.TrimPrefix(v, "target:")
-			if target == t.Name {
+			if target == name {
 				return errors.Errorf("target %s cannot link to itself", target)
 			}
 			for _, v := range visited {
