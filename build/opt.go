@@ -35,7 +35,7 @@ import (
 	"github.com/tonistiigi/fsutil"
 )
 
-func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
@@ -263,7 +263,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	so.Exports = opt.Exports
 	so.Session = slices.Clone(opt.Session)
 
-	releaseLoad, err := loadInputs(ctx, nodeDriver, opt.Inputs, pw, &so)
+	releaseLoad, err := loadInputs(ctx, nodeDriver, &opt.Inputs, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -356,7 +356,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt Op
 	return &so, releaseF, nil
 }
 
-func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
+func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
@@ -364,11 +364,12 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 	// TODO: handle stdin, symlinks, remote contexts, check files exist
 
 	var (
-		err              error
-		dockerfileReader io.ReadCloser
-		dockerfileDir    string
-		dockerfileName   = inp.DockerfilePath
-		toRemove         []string
+		err               error
+		dockerfileReader  io.ReadCloser
+		dockerfileDir     string
+		dockerfileName    = inp.DockerfilePath
+		dockerfileSrcName = inp.DockerfilePath
+		toRemove          []string
 	)
 
 	switch {
@@ -440,6 +441,11 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 
 	if inp.DockerfileInline != "" {
 		dockerfileReader = io.NopCloser(strings.NewReader(inp.DockerfileInline))
+		dockerfileSrcName = "inline"
+	} else if inp.DockerfilePath == "-" {
+		dockerfileSrcName = "stdin"
+	} else if inp.DockerfilePath == "" {
+		dockerfileSrcName = filepath.Join(inp.ContextPath, "Dockerfile")
 	}
 
 	if dockerfileReader != nil {
@@ -540,6 +546,9 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp Inputs, pw prog
 			_ = os.RemoveAll(dir)
 		}
 	}
+
+	inp.DockerfileMappingSrc = dockerfileSrcName
+	inp.DockerfileMappingDst = dockerfileName
 	return release, nil
 }
 

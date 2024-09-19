@@ -1418,4 +1418,48 @@ target "second" {
 		require.Contains(t, stdout.String(), "Check complete, 1 warning has been found!")
 		require.Contains(t, stdout.String(), "Check complete, 2 warnings have been found!")
 	})
+	t.Run("check for Dockerfile path printed with context when displaying rule check warnings with multiple build targets", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox
+copy Dockerfile .
+		`)
+		bakefile := []byte(`
+target "first" {
+	dockerfile = "Dockerfile"
+}
+target "second" {
+	dockerfile = "subdir/Dockerfile"
+}
+target "third" {
+	dockerfile = "subdir/subsubdir/Dockerfile"
+}
+	`)
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("subdir", 0700),
+			fstest.CreateDir("subdir/subsubdir", 0700),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("subdir/Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("subdir/subsubdir/Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		)
+
+		dockerfilePathFirst := filepath.Join("Dockerfile")
+		dockerfilePathSecond := filepath.Join("subdir", "Dockerfile")
+		dockerfilePathThird := filepath.Join("subdir", "subsubdir", "Dockerfile")
+
+		cmd := buildxCmd(
+			sb,
+			withDir(dir),
+			withArgs("bake", "--call", "check", "first", "second", "third"),
+		)
+		stdout := bytes.Buffer{}
+		stderr := bytes.Buffer{}
+		cmd.Stdout = &stdout
+		cmd.Stderr = &stderr
+		require.Error(t, cmd.Run(), stdout.String(), stderr.String())
+		require.Contains(t, stdout.String(), dockerfilePathFirst+":3")
+		require.Contains(t, stdout.String(), dockerfilePathSecond+":3")
+		require.Contains(t, stdout.String(), dockerfilePathThird+":3")
+	})
 }

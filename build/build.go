@@ -101,6 +101,9 @@ type Inputs struct {
 	ContextState     *llb.State
 	DockerfileInline string
 	NamedContexts    map[string]NamedContext
+	// DockerfileMappingSrc and DockerfileMappingDst are filled in by the builder.
+	DockerfileMappingSrc string
+	DockerfileMappingDst string
 }
 
 type NamedContext struct {
@@ -147,11 +150,11 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func Build(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, nodes, opt, docker, configDir, w, nil)
+func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, nodes, opts, docker, configDir, w, nil)
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -169,9 +172,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		}
 	}
 
-	if noMobyDriver != nil && !noDefaultLoad() && noCallFunc(opt) {
+	if noMobyDriver != nil && !noDefaultLoad() && noCallFunc(opts) {
 		var noOutputTargets []string
-		for name, opt := range opt {
+		for name, opt := range opts {
 			if noMobyDriver.Features(ctx)[driver.DefaultLoad] {
 				continue
 			}
@@ -192,7 +195,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 		}
 	}
 
-	drivers, err := resolveDrivers(ctx, nodes, opt, w)
+	drivers, err := resolveDrivers(ctx, nodes, opts, w)
 	if err != nil {
 		return nil, err
 	}
@@ -209,7 +212,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	reqForNodes := make(map[string][]*reqForNode)
 	eg, ctx := errgroup.WithContext(ctx)
 
-	for k, opt := range opt {
+	for k, opt := range opts {
 		multiDriver := len(drivers[k]) > 1
 		hasMobyDriver := false
 		addGitAttrs, err := getGitAttributes(ctx, opt.Inputs.ContextPath, opt.Inputs.DockerfilePath)
@@ -229,7 +232,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 			if err != nil {
 				return nil, err
 			}
-			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, opt, gatewayOpts, configDir, w, docker)
+			localOpt := opt
+			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, &localOpt, gatewayOpts, configDir, w, docker)
+			opts[k] = localOpt
 			if err != nil {
 				return nil, err
 			}
@@ -269,7 +274,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	}
 
 	// validate that all links between targets use same drivers
-	for name := range opt {
+	for name := range opts {
 		dps := reqForNodes[name]
 		for i, dp := range dps {
 			so := reqForNodes[name][i].so
@@ -305,10 +310,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opt map[s
 	var respMu sync.Mutex
 	results := waitmap.New()
 
-	multiTarget := len(opt) > 1
-	childTargets := calculateChildTargets(reqForNodes, opt)
+	multiTarget := len(opts) > 1
+	childTargets := calculateChildTargets(reqForNodes, opts)
 
-	for k, opt := range opt {
+	for k, opt := range opts {
 		err := func(k string) (err error) {
 			opt := opt
 			dps := drivers[k]
