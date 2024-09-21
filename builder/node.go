@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"sort"
 	"strings"
+	"time"
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/driver"
@@ -38,6 +39,8 @@ type Node struct {
 	Labels     map[string]string
 	CDIDevices []client.CDIDevice
 }
+
+const defaultDriverTimeout = 120 * time.Second
 
 // Nodes returns nodes for this builder.
 func (b *Builder) Nodes() []Node {
@@ -130,6 +133,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 					Platforms:       n.Platforms,
 					ContextPathHash: b.opts.contextPathHash,
 					DialMeta:        lno.dialMeta,
+					Timeout:         defaultDriverTimeout,
 				})
 				if err != nil {
 					node.Err = err
