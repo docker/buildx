@@ -7,6 +7,7 @@ import (
 	"path"
 	"path/filepath"
 	"regexp"
+	"slices"
 	"sort"
 	"strconv"
 	"strings"
@@ -502,6 +503,14 @@ func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[st
 			if err := c.loadLinks(target, t2, m, o, visited); err != nil {
 				return err
 			}
+
+			// entitlements are inherited from linked targets
+			for _, ent := range t2.Entitlements {
+				if !slices.Contains(t.Entitlements, ent) {
+					t.Entitlements = append(t.Entitlements, ent)
+				}
+			}
+
 			if len(t.Platforms) > 1 && len(t2.Platforms) > 1 {
 				if !sliceEqual(t.Platforms, t2.Platforms) {
 					return errors.Errorf("target %s can't be used by %s because it is defined for different platforms %v and %v", target, name, t2.Platforms, t.Platforms)
