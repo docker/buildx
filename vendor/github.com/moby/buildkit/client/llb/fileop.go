@@ -12,6 +12,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 // Examples:
@@ -271,9 +272,11 @@ type ChownOpt struct {
 func (co ChownOpt) SetMkdirOption(mi *MkdirInfo) {
 	mi.ChownOpt = &co
 }
+
 func (co ChownOpt) SetMkfileOption(mi *MkfileInfo) {
 	mi.ChownOpt = &co
 }
+
 func (co ChownOpt) SetCopyOption(mi *CopyInfo) {
 	mi.ChownOpt = &co
 }
@@ -299,7 +302,8 @@ func (up *UserOpt) marshal(base pb.InputIndex) *pb.UserOpt {
 	}
 	if up.Name != "" {
 		return &pb.UserOpt{User: &pb.UserOpt_ByName{ByName: &pb.NamedUserOpt{
-			Name: up.Name, Input: base}}}
+			Name: up.Name, Input: int64(base),
+		}}}
 	}
 	return &pb.UserOpt{User: &pb.UserOpt_ByID{ByID: uint32(up.UID)}}
 }
@@ -648,7 +652,7 @@ func (ms *marshalState) addInput(c *Constraints, o Output) (pb.InputIndex, error
 		return 0, err
 	}
 	for i, inp2 := range ms.inputs {
-		if *inp == *inp2 {
+		if proto.Equal(inp, inp2) {
 			return pb.InputIndex(i), nil
 		}
 	}
@@ -726,9 +730,10 @@ func (ms *marshalState) add(fa *FileAction, c *Constraints) (*fileActionState, e
 }
 
 func (f *FileOp) Marshal(ctx context.Context, c *Constraints) (digest.Digest, []byte, *pb.OpMetadata, []*SourceLocation, error) {
-	if f.Cached(c) {
-		return f.Load()
+	if dgst, dt, md, srcs, err := f.Load(c); err == nil {
+		return dgst, dt, md, srcs, nil
 	}
+
 	if err := f.Validate(ctx, c); err != nil {
 		return "", nil, nil, nil, err
 	}
@@ -786,17 +791,16 @@ func (f *FileOp) Marshal(ctx context.Context, c *Constraints) (digest.Digest, []
 		pfo.Actions = append(pfo.Actions, &pb.FileAction{
 			Input:          getIndex(st.input, len(state.inputs), st.inputRelative),
 			SecondaryInput: getIndex(st.input2, len(state.inputs), st.input2Relative),
-			Output:         output,
+			Output:         int64(output),
 			Action:         action,
 		})
 	}
 
-	dt, err := pop.Marshal()
+	dt, err := deterministicMarshal(pop)
 	if err != nil {
 		return "", nil, nil, nil, err
 	}
-	f.Store(dt, md, f.constraints.SourceLocations, c)
-	return f.Load()
+	return f.Store(dt, md, f.constraints.SourceLocations, c)
 }
 
 func normalizePath(parent, p string, keepSlash bool) string {
@@ -826,9 +830,9 @@ func (f *FileOp) Inputs() []Output {
 	return f.action.allOutputs(map[Output]struct{}{}, []Output{})
 }
 
-func getIndex(input pb.InputIndex, len int, relative *int) pb.InputIndex {
+func getIndex(input pb.InputIndex, len int, relative *int) int64 {
 	if relative != nil {
-		return pb.InputIndex(len + *relative)
+		return int64(len + *relative)
 	}
-	return input
+	return int64(input)
 }

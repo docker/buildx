@@ -13,11 +13,11 @@ import (
 type RollbackCmd struct {
 	m types.Monitor
 
-	invokeConfig controllerapi.InvokeConfig
+	invokeConfig *controllerapi.InvokeConfig
 	stdout       io.WriteCloser
 }
 
-func NewRollbackCmd(m types.Monitor, invokeConfig controllerapi.InvokeConfig, stdout io.WriteCloser) types.Command {
+func NewRollbackCmd(m types.Monitor, invokeConfig *controllerapi.InvokeConfig, stdout io.WriteCloser) types.Command {
 	return &RollbackCmd{m, invokeConfig, stdout}
 }
 

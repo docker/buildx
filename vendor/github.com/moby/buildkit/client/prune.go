@@ -18,7 +18,9 @@ func (c *Client) Prune(ctx context.Context, ch chan UsageInfo, opts ...PruneOpti
 	req := &controlapi.PruneRequest{
 		Filter:       info.Filter,
 		KeepDuration: int64(info.KeepDuration),
-		KeepBytes:    int64(info.KeepBytes),
+		MinStorage:   int64(info.MinStorage),
+		MaxStorage:   int64(info.MaxStorage),
+		Free:         int64(info.Free),
 	}
 	if info.All {
 		req.All = true
@@ -41,14 +43,20 @@ func (c *Client) Prune(ctx context.Context, ch chan UsageInfo, opts ...PruneOpti
 				ID:          d.ID,
 				Mutable:     d.Mutable,
 				InUse:       d.InUse,
-				Size:        d.Size_,
+				Size:        d.Size,
 				Parents:     d.Parents,
-				CreatedAt:   d.CreatedAt,
+				CreatedAt:   d.CreatedAt.AsTime(),
 				Description: d.Description,
 				UsageCount:  int(d.UsageCount),
-				LastUsedAt:  d.LastUsedAt,
-				RecordType:  UsageRecordType(d.RecordType),
-				Shared:      d.Shared,
+				LastUsedAt: func() *time.Time {
+					if d.LastUsedAt != nil {
+						ts := d.LastUsedAt.AsTime()
+						return &ts
+					}
+					return nil
+				}(),
+				RecordType: UsageRecordType(d.RecordType),
+				Shared:     d.Shared,
 			}
 		}
 	}
@@ -59,10 +67,13 @@ type PruneOption interface {
 }
 
 type PruneInfo struct {
-	Filter       []string      `json:"filter"`
 	All          bool          `json:"all"`
+	Filter       []string      `json:"filter"`
 	KeepDuration time.Duration `json:"keepDuration"`
-	KeepBytes    int64         `json:"keepBytes"`
+
+	MinStorage int64 `json:"minStorage"`
+	MaxStorage int64 `json:"maxStorage"`
+	Free       int64 `json:"free"`
 }
 
 type pruneOptionFunc func(*PruneInfo)
@@ -75,9 +86,11 @@ var PruneAll = pruneOptionFunc(func(pi *PruneInfo) {
 	pi.All = true
 })
 
-func WithKeepOpt(duration time.Duration, bytes int64) PruneOption {
+func WithKeepOpt(duration time.Duration, minStorage int64, maxStorage int64, free int64) PruneOption {
 	return pruneOptionFunc(func(pi *PruneInfo) {
 		pi.KeepDuration = duration
-		pi.KeepBytes = bytes
+		pi.MinStorage = minStorage
+		pi.MaxStorage = maxStorage
+		pi.Free = free
 	})
 }

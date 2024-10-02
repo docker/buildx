@@ -13,11 +13,11 @@ import (
 type ExecCmd struct {
 	m types.Monitor
 
-	invokeConfig controllerapi.InvokeConfig
+	invokeConfig *controllerapi.InvokeConfig
 	stdout       io.WriteCloser
 }
 
-func NewExecCmd(m types.Monitor, invokeConfig controllerapi.InvokeConfig, stdout io.WriteCloser) types.Command {
+func NewExecCmd(m types.Monitor, invokeConfig *controllerapi.InvokeConfig, stdout io.WriteCloser) types.Command {
 	return &ExecCmd{m, invokeConfig, stdout}
 }
 
@@ -41,7 +41,7 @@ func (cm *ExecCmd) Exec(ctx context.Context, args []string) error {
 	if len(args) < 2 {
 		return errors.Errorf("command must be passed")
 	}
-	cfg := controllerapi.InvokeConfig{
+	cfg := &controllerapi.InvokeConfig{
 		Entrypoint: []string{args[1]},
 		Cmd:        args[2:],
 		NoCmd:      false,

@@ -42,7 +42,7 @@ type localController struct {
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, *build.Inputs, error) {
+func (b *localController) Build(ctx context.Context, options *controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, *build.Inputs, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
 		return "", nil, nil, errors.New("build ongoing")
 	}
@@ -53,7 +53,7 @@ func (b *localController) Build(ctx context.Context, options controllerapi.Build
 	if res != nil {
 		b.buildConfig = buildConfig{
 			resultCtx:    res,
-			buildOptions: &options,
+			buildOptions: options,
 		}
 		if buildErr != nil {
 			buildErr = controllererrors.WrapBuild(buildErr, b.ref)
@@ -83,7 +83,7 @@ func (b *localController) cancelRunningProcesses() {
 	b.processes.CancelRunningProcesses()
 }
 
-func (b *localController) Invoke(ctx context.Context, ref string, pid string, cfg controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
+func (b *localController) Invoke(ctx context.Context, ref string, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
 	if ref != b.ref {
 		return errors.Errorf("unknown ref %q", ref)
 	}
@@ -95,7 +95,7 @@ func (b *localController) Invoke(ctx context.Context, ref string, pid string, cf
 			return errors.New("no build result is registered")
 		}
 		var err error
-		proc, err = b.processes.StartProcess(pid, b.buildConfig.resultCtx, &cfg)
+		proc, err = b.processes.StartProcess(pid, b.buildConfig.resultCtx, cfg)
 		if err != nil {
 			return err
 		}

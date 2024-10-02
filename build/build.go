@@ -50,6 +50,7 @@ import (
 	fstypes "github.com/tonistiigi/fsutil/types"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
+	"google.golang.org/protobuf/proto"
 )
 
 const (
@@ -1136,7 +1137,7 @@ func ReadSourcePolicy() (*spb.Policy, error) {
 	var pol spb.Policy
 	if err := json.Unmarshal(data, &pol); err != nil {
 		// maybe it's in protobuf format?
-		e2 := pol.Unmarshal(data)
+		e2 := proto.Unmarshal(data, &pol)
 		if e2 != nil {
 			return nil, errors.Wrap(err, "failed to parse source policy")
 		}

@@ -17,6 +17,7 @@ import (
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 type Input struct {
@@ -106,7 +107,6 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 		}
 		return nil, err
 	}, ch)
-
 	if err != nil {
 		return nil, nil, err
 	}
@@ -178,8 +178,8 @@ func filesFromURLRef(ctx context.Context, c gwclient.Client, ref gwclient.Refere
 	name := inp.URL
 	inp.URL = ""
 
-	if len(dt) > stat.Size() {
-		if stat.Size() > 1024*512 {
+	if len(dt) > proto.Size(stat) {
+		if proto.Size(stat) > 1024*512 {
 			return nil, errors.Errorf("non-archive definition URL bigger than maximum allowed size")
 		}
 

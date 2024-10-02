@@ -15,6 +15,7 @@ import (
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
+	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
@@ -124,8 +125,8 @@ func lookupProvenance(res *controlapi.BuildResultInfo) *ocispecs.Descriptor {
 	for _, a := range res.Attestations {
 		if a.MediaType == "application/vnd.in-toto+json" && strings.HasPrefix(a.Annotations["in-toto.io/predicate-type"], "https://slsa.dev/provenance/") {
 			return &ocispecs.Descriptor{
-				Digest:      a.Digest,
-				Size:        a.Size_,
+				Digest:      digest.Digest(a.Digest),
+				Size:        a.Size,
 				MediaType:   a.MediaType,
 				Annotations: a.Annotations,
 			}

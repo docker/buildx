@@ -1,8 +1,8 @@
 syntax = "proto3";
 
-package errdefs;
+package docker.buildx.errdefs;
 
-import "github.com/moby/buildkit/solver/pb/ops.proto";
+option go_package = "github.com/docker/buildx/controller/errdefs";
 
 message Build {
   string Ref = 1;

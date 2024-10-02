@@ -28,6 +28,7 @@ func NewClient(ctx context.Context, addr string) (*Client, error) {
 		Backoff: backoffConfig,
 	}
 	gopts := []grpc.DialOption{
+		//nolint:staticcheck // ignore SA1019: WithBlock is deprecated and does not work with NewClient.
 		grpc.WithBlock(),
 		grpc.WithTransportCredentials(insecure.NewCredentials()),
 		grpc.WithConnectParams(connParams),
@@ -37,6 +38,7 @@ func NewClient(ctx context.Context, addr string) (*Client, error) {
 		grpc.WithUnaryInterceptor(grpcerrors.UnaryClientInterceptor),
 		grpc.WithStreamInterceptor(grpcerrors.StreamClientInterceptor),
 	}
+	//nolint:staticcheck // ignore SA1019: Recommended NewClient has different behavior from DialContext.
 	conn, err := grpc.DialContext(ctx, dialer.DialAddress(addr), gopts...)
 	if err != nil {
 		return nil, err
@@ -94,7 +96,7 @@ func (c *Client) DisconnectProcess(ctx context.Context, ref, pid string) error {
 	return err
 }
 
-func (c *Client) Invoke(ctx context.Context, ref string, pid string, invokeConfig pb.InvokeConfig, in io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
+func (c *Client) Invoke(ctx context.Context, ref string, pid string, invokeConfig *pb.InvokeConfig, in io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
 	if ref == "" || pid == "" {
 		return errors.New("build reference must be specified")
 	}
@@ -102,7 +104,7 @@ func (c *Client) Invoke(ctx context.Context, ref string, pid string, invokeConfi
 	if err != nil {
 		return err
 	}
-	return attachIO(ctx, stream, &pb.InitMessage{Ref: ref, ProcessID: pid, InvokeConfig: &invokeConfig}, ioAttachConfig{
+	return attachIO(ctx, stream, &pb.InitMessage{Ref: ref, ProcessID: pid, InvokeConfig: invokeConfig}, ioAttachConfig{
 		stdin:  in,
 		stdout: stdout,
 		stderr: stderr,
@@ -114,7 +116,7 @@ func (c *Client) Inspect(ctx context.Context, ref string) (*pb.InspectResponse, 
 	return c.client().Inspect(ctx, &pb.InspectRequest{Ref: ref})
 }
 
-func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, *build.Inputs, error) {
+func (c *Client) Build(ctx context.Context, options *pb.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, *build.Inputs, error) {
 	ref := identity.NewID()
 	statusChan := make(chan *client.SolveStatus)
 	eg, egCtx := errgroup.WithContext(ctx)
@@ -135,7 +137,7 @@ func (c *Client) Build(ctx context.Context, options pb.BuildOptions, in io.ReadC
 	return ref, resp, nil, eg.Wait()
 }
 
-func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions, in io.ReadCloser, statusChan chan *client.SolveStatus) (*client.SolveResponse, error) {
+func (c *Client) build(ctx context.Context, ref string, options *pb.BuildOptions, in io.ReadCloser, statusChan chan *client.SolveStatus) (*client.SolveResponse, error) {
 	eg, egCtx := errgroup.WithContext(ctx)
 	done := make(chan struct{})
 
@@ -145,7 +147,7 @@ func (c *Client) build(ctx context.Context, ref string, options pb.BuildOptions,
 		defer close(done)
 		pbResp, err := c.client().Build(egCtx, &pb.BuildRequest{
 			Ref:     ref,
-			Options: &options,
+			Options: options,
 		})
 		if err != nil {
 			return err
