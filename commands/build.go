@@ -61,6 +61,7 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
+	"google.golang.org/protobuf/proto"
 )
 
 type buildOptions struct {
@@ -408,7 +409,7 @@ func getImageID(resp map[string]string) string {
 }
 
 func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
-	resp, res, dfmap, err := cbuild.RunBuild(ctx, dockerCli, *opts, dockerCli.In(), printer, false)
+	resp, res, dfmap, err := cbuild.RunBuild(ctx, dockerCli, opts, dockerCli.In(), printer, false)
 	if res != nil {
 		res.Done()
 	}
@@ -458,7 +459,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		})
 	}
 
-	ref, resp, inputs, err = c.Build(ctx, *opts, pr, printer)
+	ref, resp, inputs, err = c.Build(ctx, opts, pr, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
@@ -920,9 +921,9 @@ func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string, 
 			}
 
 			if inp.DockerfileMappingSrc != "" {
-				newSourceInfo := *sourceInfo
+				newSourceInfo := proto.Clone(sourceInfo).(*solverpb.SourceInfo)
 				newSourceInfo.Filename = inp.DockerfileMappingSrc
-				return &newSourceInfo
+				return newSourceInfo
 			}
 			return sourceInfo
 		}
@@ -1012,7 +1013,7 @@ func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *cont
 		return nil, errors.Errorf("failed to configure terminal: %v", err)
 	}
 	defer con.Reset()
-	return monitor.RunMonitor(ctx, ref, options, cfg.InvokeConfig, c, stdin, stdout, stderr, progress)
+	return monitor.RunMonitor(ctx, ref, options, &cfg.InvokeConfig, c, stdin, stdout, stderr, progress)
 }
 
 func (cfg *invokeConfig) parseInvokeConfig(invoke, on string) error {

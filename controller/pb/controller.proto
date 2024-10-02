@@ -5,7 +5,7 @@ package buildx.controller.v1;
 import "github.com/moby/buildkit/api/services/control/control.proto";
 import "github.com/moby/buildkit/sourcepolicy/pb/policy.proto";
 
-option go_package = "pb";
+option go_package = "github.com/docker/buildx/controller/pb";
 
 service Controller {
   rpc Build(BuildRequest) returns (BuildResponse);

@@ -22,12 +22,13 @@ import (
 )
 
 type pruneOptions struct {
-	builder     string
-	all         bool
-	filter      opts.FilterOpt
-	keepStorage opts.MemBytes
-	force       bool
-	verbose     bool
+	builder    string
+	all        bool
+	filter     opts.FilterOpt
+	minStorage opts.MemBytes
+	maxStorage opts.MemBytes
+	force      bool
+	verbose    bool
 }
 
 const (
@@ -106,7 +107,7 @@ func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) err
 						return err
 					}
 					popts := []client.PruneOption{
-						client.WithKeepOpt(pi.KeepDuration, opts.keepStorage.Value()),
+						client.WithKeepOpt(pi.KeepDuration, opts.minStorage.Value(), opts.maxStorage.Value(), 0),
 						client.WithFilter(pi.Filter),
 					}
 					if opts.all {
@@ -148,9 +149,13 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags := cmd.Flags()
 	flags.BoolVarP(&options.all, "all", "a", false, "Include internal/frontend images")
 	flags.Var(&options.filter, "filter", `Provide filter values (e.g., "until=24h")`)
-	flags.Var(&options.keepStorage, "keep-storage", "Amount of disk space to keep for cache")
+	flags.Var(&options.minStorage, "min-storage", "Minimum amount of disk space to keep for cache")
+	flags.Var(&options.maxStorage, "max-storage", "Maximum amount of disk space to keep for cache")
 	flags.BoolVar(&options.verbose, "verbose", false, "Provide a more verbose output")
 	flags.BoolVarP(&options.force, "force", "f", false, "Do not prompt for confirmation")
+
+	flags.Var(&options.maxStorage, "keep-storage", "Amount of disk space to keep for cache")
+	flags.MarkDeprecated("keep-storage", "keep-storage flag has been changed to max-storage")
 
 	return cmd
 }

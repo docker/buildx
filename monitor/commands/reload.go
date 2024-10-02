@@ -20,10 +20,10 @@ type ReloadCmd struct {
 	progress *progress.Printer
 
 	options      *controllerapi.BuildOptions
-	invokeConfig controllerapi.InvokeConfig
+	invokeConfig *controllerapi.InvokeConfig
 }
 
-func NewReloadCmd(m types.Monitor, stdout io.WriteCloser, progress *progress.Printer, options *controllerapi.BuildOptions, invokeConfig controllerapi.InvokeConfig) types.Command {
+func NewReloadCmd(m types.Monitor, stdout io.WriteCloser, progress *progress.Printer, options *controllerapi.BuildOptions, invokeConfig *controllerapi.InvokeConfig) types.Command {
 	return &ReloadCmd{m, stdout, progress, options, invokeConfig}
 }
 
@@ -61,7 +61,7 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 	}
 	var resultUpdated bool
 	cm.progress.Unpause()
-	ref, _, _, err := cm.m.Build(ctx, *bo, nil, cm.progress) // TODO: support stdin, hold build ref
+	ref, _, _, err := cm.m.Build(ctx, bo, nil, cm.progress) // TODO: support stdin, hold build ref
 	cm.progress.Pause()
 	if err != nil {
 		var be *controllererrors.BuildError

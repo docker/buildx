@@ -295,14 +295,14 @@ func (r *ResultHandle) build(buildFunc gateway.BuildFunc) (err error) {
 func (r *ResultHandle) getContainerConfig(cfg *controllerapi.InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
 	if r.res != nil && r.solveErr == nil {
 		logrus.Debugf("creating container from successful build")
-		ccfg, err := containerConfigFromResult(r.res, *cfg)
+		ccfg, err := containerConfigFromResult(r.res, cfg)
 		if err != nil {
 			return containerCfg, err
 		}
 		containerCfg = *ccfg
 	} else {
 		logrus.Debugf("creating container from failed build %+v", cfg)
-		ccfg, err := containerConfigFromError(r.solveErr, *cfg)
+		ccfg, err := containerConfigFromError(r.solveErr, cfg)
 		if err != nil {
 			return containerCfg, errors.Wrapf(err, "no result nor error is available")
 		}
@@ -315,19 +315,19 @@ func (r *ResultHandle) getProcessConfig(cfg *controllerapi.InvokeConfig, stdin i
 	processCfg := newStartRequest(stdin, stdout, stderr)
 	if r.res != nil && r.solveErr == nil {
 		logrus.Debugf("creating container from successful build")
-		if err := populateProcessConfigFromResult(&processCfg, r.res, *cfg); err != nil {
+		if err := populateProcessConfigFromResult(&processCfg, r.res, cfg); err != nil {
 			return processCfg, err
 		}
 	} else {
 		logrus.Debugf("creating container from failed build %+v", cfg)
-		if err := populateProcessConfigFromError(&processCfg, r.solveErr, *cfg); err != nil {
+		if err := populateProcessConfigFromError(&processCfg, r.solveErr, cfg); err != nil {
 			return processCfg, err
 		}
 	}
 	return processCfg, nil
 }
 
-func containerConfigFromResult(res *gateway.Result, cfg controllerapi.InvokeConfig) (*gateway.NewContainerRequest, error) {
+func containerConfigFromResult(res *gateway.Result, cfg *controllerapi.InvokeConfig) (*gateway.NewContainerRequest, error) {
 	if cfg.Initial {
 		return nil, errors.Errorf("starting from the container from the initial state of the step is supported only on the failed steps")
 	}
@@ -352,7 +352,7 @@ func containerConfigFromResult(res *gateway.Result, cfg controllerapi.InvokeConf
 	}, nil
 }
 
-func populateProcessConfigFromResult(req *gateway.StartRequest, res *gateway.Result, cfg controllerapi.InvokeConfig) error {
+func populateProcessConfigFromResult(req *gateway.StartRequest, res *gateway.Result, cfg *controllerapi.InvokeConfig) error {
 	imgData := res.Metadata[exptypes.ExporterImageConfigKey]
 	var img *specs.Image
 	if len(imgData) > 0 {
@@ -403,7 +403,7 @@ func populateProcessConfigFromResult(req *gateway.StartRequest, res *gateway.Res
 	return nil
 }
 
-func containerConfigFromError(solveErr *errdefs.SolveError, cfg controllerapi.InvokeConfig) (*gateway.NewContainerRequest, error) {
+func containerConfigFromError(solveErr *errdefs.SolveError, cfg *controllerapi.InvokeConfig) (*gateway.NewContainerRequest, error) {
 	exec, err := execOpFromError(solveErr)
 	if err != nil {
 		return nil, err
@@ -431,7 +431,7 @@ func containerConfigFromError(solveErr *errdefs.SolveError, cfg controllerapi.In
 	}, nil
 }
 
-func populateProcessConfigFromError(req *gateway.StartRequest, solveErr *errdefs.SolveError, cfg controllerapi.InvokeConfig) error {
+func populateProcessConfigFromError(req *gateway.StartRequest, solveErr *errdefs.SolveError, cfg *controllerapi.InvokeConfig) error {
 	exec, err := execOpFromError(solveErr)
 	if err != nil {
 		return err

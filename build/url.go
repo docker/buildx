@@ -11,6 +11,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/pkg/errors"
+	"google.golang.org/protobuf/proto"
 )
 
 func createTempDockerfileFromURL(ctx context.Context, d *driver.DriverHandle, url string, pw progress.Writer) (string, error) {
@@ -43,7 +44,7 @@ func createTempDockerfileFromURL(ctx context.Context, d *driver.DriverHandle, ur
 		if err != nil {
 			return nil, err
 		}
-		if stat.Size() > 512*1024 {
+		if proto.Size(stat) > 512*1024 {
 			return nil, errors.Errorf("Dockerfile %s bigger than allowed max size", url)
 		}
 
@@ -63,7 +64,6 @@ func createTempDockerfileFromURL(ctx context.Context, d *driver.DriverHandle, ur
 		out = dir
 		return nil, nil
 	}, ch)
-
 	if err != nil {
 		return "", err
 	}

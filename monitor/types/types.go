@@ -12,10 +12,10 @@ type Monitor interface {
 	control.BuildxController
 
 	// Rollback re-runs the interactive container with initial rootfs contents.
-	Rollback(ctx context.Context, cfg controllerapi.InvokeConfig) string
+	Rollback(ctx context.Context, cfg *controllerapi.InvokeConfig) string
 
 	// Rollback executes a process in the interactive container.
-	Exec(ctx context.Context, cfg controllerapi.InvokeConfig) string
+	Exec(ctx context.Context, cfg *controllerapi.InvokeConfig) string
 
 	// Attach attaches IO to a process in the container.
 	Attach(ctx context.Context, pid string)
@@ -50,7 +50,6 @@ type CommandInfo struct {
 
 // Command represents a command for debugging.
 type Command interface {
-
 	// Exec executes the command.
 	Exec(ctx context.Context, args []string) error
 

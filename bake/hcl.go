@@ -56,7 +56,7 @@ func formatHCLError(err error, files []File) error {
 					break
 				}
 			}
-			src := errdefs.Source{
+			src := &errdefs.Source{
 				Info: &pb.SourceInfo{
 					Filename: d.Subject.Filename,
 					Data:     dt,
@@ -72,7 +72,7 @@ func formatHCLError(err error, files []File) error {
 
 func toErrRange(in *hcl.Range) *pb.Range {
 	return &pb.Range{
-		Start: pb.Position{Line: int32(in.Start.Line), Character: int32(in.Start.Column)},
-		End:   pb.Position{Line: int32(in.End.Line), Character: int32(in.End.Column)},
+		Start: &pb.Position{Line: int32(in.Start.Line), Character: int32(in.Start.Column)},
+		End:   &pb.Position{Line: int32(in.End.Line), Character: int32(in.End.Column)},
 	}
 }
