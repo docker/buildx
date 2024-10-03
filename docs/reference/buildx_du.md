@@ -9,12 +9,13 @@ Disk usage
 
 ### Options
 
-| Name                    | Type     | Default | Description                              |
-|:------------------------|:---------|:--------|:-----------------------------------------|
-| [`--builder`](#builder) | `string` |         | Override the configured builder instance |
-| `-D`, `--debug`         | `bool`   |         | Enable debug logging                     |
-| `--filter`              | `filter` |         | Provide filter values                    |
-| [`--verbose`](#verbose) | `bool`   |         | Provide a more verbose output            |
+| Name                    | Type       | Default | Description                                                          |
+|:------------------------|:-----------|:--------|:---------------------------------------------------------------------|
+| [`--builder`](#builder) | `string`   |         | Override the configured builder instance                             |
+| `-D`, `--debug`         | `bool`     |         | Enable debug logging                                                 |
+| `--filter`              | `filter`   |         | Provide filter values                                                |
+| `--timeout`             | `duration` | `20s`   | Override the default global timeout (as duration, for example 1m20s) |
+| [`--verbose`](#verbose) | `bool`     |         | Provide a more verbose output                                        |
 
 
 <!---MARKER_GEN_END-->

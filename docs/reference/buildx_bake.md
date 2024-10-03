@@ -32,6 +32,7 @@ Build from a file
 | `--push`                            | `bool`        |         | Shorthand for `--set=*.output=type=registry`                                                                 |
 | [`--sbom`](#sbom)                   | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                                     |
 | [`--set`](#set)                     | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                                      |
+| `--timeout`                         | `duration`    | `20s`   | Override the default global timeout (as duration, for example 1m20s)                                         |
 
 
 <!---MARKER_GEN_END-->

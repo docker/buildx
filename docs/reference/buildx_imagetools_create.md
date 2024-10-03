@@ -20,6 +20,7 @@ Create a new image based on source images
 | `--prefer-index`                 | `bool`        | `true`  | When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy |
 | `--progress`                     | `string`      | `auto`  | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output                           |
 | [`-t`](#tag), [`--tag`](#tag)    | `stringArray` |         | Set reference for new image                                                                                                   |
+| `--timeout`                      | `duration`    | `20s`   | Override the default global timeout (as duration, for example 1m20s)                                                          |
 
 
 <!---MARKER_GEN_END-->

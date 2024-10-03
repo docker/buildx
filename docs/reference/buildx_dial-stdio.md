@@ -5,12 +5,13 @@ Proxy current stdio streams to builder instance
 
 ### Options
 
-| Name            | Type     | Default | Description                                                                                         |
-|:----------------|:---------|:--------|:----------------------------------------------------------------------------------------------------|
-| `--builder`     | `string` |         | Override the configured builder instance                                                            |
-| `-D`, `--debug` | `bool`   |         | Enable debug logging                                                                                |
-| `--platform`    | `string` |         | Target platform: this is used for node selection                                                    |
-| `--progress`    | `string` | `quiet` | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output |
+| Name            | Type       | Default | Description                                                                                         |
+|:----------------|:-----------|:--------|:----------------------------------------------------------------------------------------------------|
+| `--builder`     | `string`   |         | Override the configured builder instance                                                            |
+| `-D`, `--debug` | `bool`     |         | Enable debug logging                                                                                |
+| `--platform`    | `string`   |         | Target platform: this is used for node selection                                                    |
+| `--progress`    | `string`   | `quiet` | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output |
+| `--timeout`     | `duration` | `20s`   | Override the default global timeout (as duration, for example 1m20s)                                |
 
 
 <!---MARKER_GEN_END-->

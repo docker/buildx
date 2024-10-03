@@ -12,13 +12,14 @@ Start debugger (EXPERIMENTAL)
 
 ### Options
 
-| Name            | Type     | Default | Description                                                                                                         |
-|:----------------|:---------|:--------|:--------------------------------------------------------------------------------------------------------------------|
-| `--builder`     | `string` |         | Override the configured builder instance                                                                            |
-| `-D`, `--debug` | `bool`   |         | Enable debug logging                                                                                                |
-| `--invoke`      | `string` |         | Launch a monitor with executing specified command (EXPERIMENTAL)                                                    |
-| `--on`          | `string` | `error` | When to launch the monitor ([always, error]) (EXPERIMENTAL)                                                         |
-| `--progress`    | `string` | `auto`  | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`) for the monitor. Use plain to show container output |
+| Name            | Type       | Default | Description                                                                                                         |
+|:----------------|:-----------|:--------|:--------------------------------------------------------------------------------------------------------------------|
+| `--builder`     | `string`   |         | Override the configured builder instance                                                                            |
+| `-D`, `--debug` | `bool`     |         | Enable debug logging                                                                                                |
+| `--invoke`      | `string`   |         | Launch a monitor with executing specified command (EXPERIMENTAL)                                                    |
+| `--on`          | `string`   | `error` | When to launch the monitor ([always, error]) (EXPERIMENTAL)                                                         |
+| `--progress`    | `string`   | `auto`  | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`) for the monitor. Use plain to show container output |
+| `--timeout`     | `duration` | `20s`   | Override the default global timeout (as duration, for example 1m20s)                                                |
 
 
 <!---MARKER_GEN_END-->
