@@ -308,6 +308,12 @@ func (tp truncatedPlatforms) String() string {
 	var out []string
 	var count int
 
+	var keys []string
+	for k := range tp.res {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	seen := make(map[string]struct{})
 	for _, mpf := range truncMajorPlatforms {
 		if tpf, ok := tp.res[mpf]; ok {
@@ -333,19 +339,19 @@ func (tp truncatedPlatforms) String() string {
 		}
 	}
 
-	for mpf, pf := range tp.res {
+	for _, mpf := range keys {
 		if len(out) >= tp.max {
 			break
 		}
 		if _, ok := seen[mpf]; ok {
 			continue
 		}
-		if len(pf) == 1 {
-			out = append(out, fmt.Sprintf("%s", pf[0]))
+		if len(tp.res[mpf]) == 1 {
+			out = append(out, fmt.Sprintf("%s", tp.res[mpf][0]))
 			count++
 		} else {
 			hasPreferredPlatform := false
-			for _, pf := range pf {
+			for _, pf := range tp.res[mpf] {
 				if strings.HasSuffix(pf, "*") {
 					hasPreferredPlatform = true
 					break
@@ -355,8 +361,8 @@ func (tp truncatedPlatforms) String() string {
 			if hasPreferredPlatform {
 				mainpf += "*"
 			}
-			out = append(out, fmt.Sprintf("%s (+%d)", mainpf, len(pf)))
-			count += len(pf)
+			out = append(out, fmt.Sprintf("%s (+%d)", mainpf, len(tp.res[mpf])))
+			count += len(tp.res[mpf])
 		}
 	}
 
