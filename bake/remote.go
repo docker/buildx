@@ -11,14 +11,16 @@ import (
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
 	"github.com/pkg/errors"
-	"google.golang.org/protobuf/proto"
 )
+
+const maxBakeDefinitionSize = 2 * 1024 * 1024 // 2 MB
 
 type Input struct {
 	State *llb.State
@@ -178,9 +180,9 @@ func filesFromURLRef(ctx context.Context, c gwclient.Client, ref gwclient.Refere
 	name := inp.URL
 	inp.URL = ""
 
-	if len(dt) > proto.Size(stat) {
-		if proto.Size(stat) > 1024*512 {
-			return nil, errors.Errorf("non-archive definition URL bigger than maximum allowed size")
+	if int64(len(dt)) > stat.Size {
+		if stat.Size > maxBakeDefinitionSize {
+			return nil, errors.Errorf("non-archive definition URL bigger than maximum allowed size (%s)", units.HumanSize(maxBakeDefinitionSize))
 		}
 
 		dt, err = ref.ReadFile(ctx, gwclient.ReadRequest{
