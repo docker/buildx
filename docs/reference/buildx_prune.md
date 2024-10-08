@@ -9,16 +9,17 @@ Remove build cache
 
 ### Options
 
-| Name                    | Type     | Default | Description                                    |
-|:------------------------|:---------|:--------|:-----------------------------------------------|
-| `-a`, `--all`           | `bool`   |         | Include internal/frontend images               |
-| [`--builder`](#builder) | `string` |         | Override the configured builder instance       |
-| `-D`, `--debug`         | `bool`   |         | Enable debug logging                           |
-| `--filter`              | `filter` |         | Provide filter values (e.g., `until=24h`)      |
-| `-f`, `--force`         | `bool`   |         | Do not prompt for confirmation                 |
-| `--max-storage`         | `bytes`  | `0`     | Maximum amount of disk space to keep for cache |
-| `--min-storage`         | `bytes`  | `0`     | Minimum amount of disk space to keep for cache |
-| `--verbose`             | `bool`   |         | Provide a more verbose output                  |
+| Name                    | Type     | Default | Description                                            |
+|:------------------------|:---------|:--------|:-------------------------------------------------------|
+| `-a`, `--all`           | `bool`   |         | Include internal/frontend images                       |
+| [`--builder`](#builder) | `string` |         | Override the configured builder instance               |
+| `-D`, `--debug`         | `bool`   |         | Enable debug logging                                   |
+| `--filter`              | `filter` |         | Provide filter values (e.g., `until=24h`)              |
+| `-f`, `--force`         | `bool`   |         | Do not prompt for confirmation                         |
+| `--max-used-space`      | `bytes`  | `0`     | Maximum amount of disk space allowed to keep for cache |
+| `--min-free-space`      | `bytes`  | `0`     | Target amount of free disk space after pruning         |
+| `--reserved-space`      | `bytes`  | `0`     | Amount of disk space always allowed to keep for cache  |
+| `--verbose`             | `bool`   |         | Provide a more verbose output                          |
 
 
 <!---MARKER_GEN_END-->

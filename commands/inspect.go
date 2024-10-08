@@ -122,11 +122,14 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 					if rule.KeepDuration > 0 {
 						fmt.Fprintf(w, "\tKeep Duration:\t%v\n", rule.KeepDuration.String())
 					}
-					if rule.MinStorage > 0 {
-						fmt.Fprintf(w, "\tMin Storage:\t%s\n", units.BytesSize(float64(rule.MinStorage)))
+					if rule.ReservedSpace > 0 {
+						fmt.Fprintf(w, "\tReserved Space:\t%s\n", units.BytesSize(float64(rule.ReservedSpace)))
 					}
-					if rule.MaxStorage > 0 {
-						fmt.Fprintf(w, "\tMax Storage:\t%s\n", units.BytesSize(float64(rule.MaxStorage)))
+					if rule.MaxUsedSpace > 0 {
+						fmt.Fprintf(w, "\tMax Used Space:\t%s\n", units.BytesSize(float64(rule.MaxUsedSpace)))
+					}
+					if rule.MinFreeSpace > 0 {
+						fmt.Fprintf(w, "\tMin Free Space:\t%s\n", units.BytesSize(float64(rule.MinFreeSpace)))
 					}
 				}
 				for f, dt := range nodes[i].Files {
