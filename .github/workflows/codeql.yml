@@ -1,5 +1,14 @@
 name: codeql
 
+# Default to 'contents: read', which grants actions to read commits.
+#
+# If any permission is set, any permission not included in the list is
+# implicitly set to "none".
+#
+# see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
+permissions:
+  contents: read
+
 on:
   push:
     branches:
@@ -7,16 +16,16 @@ on:
       - 'v[0-9]*'
   pull_request:
 
-permissions:
-  actions: read
-  contents: read
-  security-events: write
-
 env:
   GO_VERSION: "1.22"
 
 jobs:
   codeql:
+    permissions:
+      actions: read
+      contents: read
+      security-events: write
+
     runs-on: ubuntu-24.04
     steps:
       -
