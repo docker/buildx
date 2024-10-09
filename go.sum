@@ -301,8 +301,8 @@ github.com/mitchellh/hashstructure/v2 v2.0.2/go.mod h1:MG3aRVU/N29oo/V/IhBX8GR/z
 github.com/mitchellh/mapstructure v0.0.0-20150613213606-2caf8efc9366/go.mod h1:FVVH3fgwuzCH5S8UJGiWEs2h04kUh9fWfEaFds41c1Y=
 github.com/mitchellh/mapstructure v1.5.0 h1:jeMsZIYE/09sWLaz43PL7Gy6RuMjD2eJVyuac5Z2hdY=
 github.com/mitchellh/mapstructure v1.5.0/go.mod h1:bFUtVrKA4DC2yAKiSyO/QUcy7e+RRV2QTWOzhPopBRo=
-github.com/moby/buildkit v0.16.0-rc2.0.20241002204825-8445ccf1cb0b h1:smNXGkzTkYHhDTL8U3ZJZRdUBrofNyiCea8udWy3C5A=
-github.com/moby/buildkit v0.16.0-rc2.0.20241002204825-8445ccf1cb0b/go.mod h1:MJXOsHz4qbcmjnfCRjqyZRYu5VnQ4Y6YucZz4tvcRY4=
+github.com/moby/buildkit v0.17.0-rc1 h1:LTHa+CEoGZGWWEJcOEUj/5fv+6FPvMZTOD/KVEW4syA=
+github.com/moby/buildkit v0.17.0-rc1/go.mod h1:BprE7bOBNMZPwd3YR7iUmHdqt618BDvS49hZySzr5Mg=
 github.com/moby/docker-image-spec v1.3.1 h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0=
 github.com/moby/docker-image-spec v1.3.1/go.mod h1:eKmb5VW8vQEh/BAr2yvVNvuiJuY6UIocYsFu/DxxRpo=
 github.com/moby/locker v1.0.1 h1:fOXqR41zeveg4fFODix+1Ch4mj/gT0NE1XJbp/epuBg=
@@ -365,6 +365,8 @@ github.com/pkg/errors v0.8.0/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINE
 github.com/pkg/errors v0.8.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
 github.com/pkg/errors v0.9.1 h1:FEBLx1zS214owpjy7qsBeixbURkuhQAwrK5UwLGTwt4=
 github.com/pkg/errors v0.9.1/go.mod h1:bwawxfHBFNV+L2hUp1rHADufV3IMtnDRdf1r5NINEl0=
+github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10 h1:GFCKgmp0tecUJ0sJuv4pzYCqS9+RGSn52M3FUwPs+uo=
+github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10/go.mod h1:t/avpk3KcrXxUnYOhZhMXJlSEyie6gQbtLq5NM3loB8=
 github.com/pmezard/go-difflib v1.0.0 h1:4DBwDE0NGyQoBHbLQYPwSUPoCMWR5BEzIk/f1lZbAQM=
 github.com/pmezard/go-difflib v1.0.0/go.mod h1:iKH77koFhYxTK1pcRnkKkqfTogsbg7gZNVY4sRDYZ/4=
 github.com/prometheus/client_golang v0.9.0-pre1.0.20180209125602-c332b6f63c06/go.mod h1:7SWBe2y4D6OKWSNQJUaRYU/AaXPKyh/dDVn+NZz0KFw=
@@ -437,8 +439,8 @@ github.com/stretchr/testify v1.9.0 h1:HtqpIVDClZ4nwg75+f6Lvsy/wHu+3BoSGCbBAcpTsT
 github.com/stretchr/testify v1.9.0/go.mod h1:r2ic/lqez/lEtzL7wO/rwa5dbSLXVDPFyf8C91i36aY=
 github.com/theupdateframework/notary v0.7.0 h1:QyagRZ7wlSpjT5N2qQAh/pN+DVqgekv4DzbAiAiEL3c=
 github.com/theupdateframework/notary v0.7.0/go.mod h1:c9DRxcmhHmVLDay4/2fUYdISnHqbFDGRSlXPO0AhYWw=
-github.com/tonistiigi/fsutil v0.0.0-20240926161958-8754824c3c4f h1:scejvzjNA30X9ufWPUH/a2MhWg1sQPxeC6N6wm7nWEE=
-github.com/tonistiigi/fsutil v0.0.0-20240926161958-8754824c3c4f/go.mod h1:xnG7rCC28GVN8efEm5ijNp56TnNtrYCv75EtTH42yz4=
+github.com/tonistiigi/fsutil v0.0.0-20241003195857-3f140a1299b0 h1:H9++AiQUqjwrOMA/DOpWhxWp3JLyyT+MN4sRPbMmwoY=
+github.com/tonistiigi/fsutil v0.0.0-20241003195857-3f140a1299b0/go.mod h1:Dl/9oEjK7IqnjAm21Okx/XIxUCFJzvh+XdVHUlBwXTw=
 github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4 h1:7I5c2Ig/5FgqkYOh/N87NzoyI9U15qUPXhDD8uCupv8=
 github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4/go.mod h1:278M4p8WsNh3n4a1eqiFcV2FGk7wE5fwUpUom9mK9lE=
 github.com/tonistiigi/units v0.0.0-20180711220420-6950e57a87ea h1:SXhTLE6pb6eld/v/cCndK0AMpt1wiVFb/YYmqB3/QG0=

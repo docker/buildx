@@ -30,40 +30,52 @@ RUN <<EOT
   set -e
   wget -q https://github.com/googleapis/googleapis/archive/${PROTOC_GOOGLEAPIS_VERSION}.zip -O googleapis.zip
   unzip googleapis.zip '*.proto' -d /opt
-  mv /opt/googleapis-${PROTOC_GOOGLEAPIS_VERSION} /opt/googleapis
-EOT
-
-FROM base AS protoc-buildkit
-WORKDIR /app
-RUN --mount=type=bind,target=/app \
-    --mount=type=cache,target=/root/.cache \
-    --mount=type=cache,target=/go/pkg/mod <<EOT
-  set -e
-  mkdir -p /opt/protoc
-  find vendor -name '*.proto' | tar -cf - --files-from - | tar -C /opt/protoc -xf -
+  mkdir -p /opt/googleapis
+  mv /opt/googleapis-${PROTOC_GOOGLEAPIS_VERSION} /opt/googleapis/include
 EOT
 
 FROM base AS gobuild-base
-WORKDIR /go/src
-COPY --link --from=protoc /opt/protoc /usr/local
-COPY --link --from=googleapis /opt/googleapis /usr/local/include
-COPY --link --from=protoc-buildkit /opt/protoc/vendor /usr/local/include
+WORKDIR /app
+
+FROM gobuild-base AS vtprotobuf
+RUN --mount=type=bind,source=go.mod,target=/app/go.mod \
+    --mount=type=bind,source=go.sum,target=/app/go.sum \
+    --mount=type=cache,target=/root/.cache \
+    --mount=type=cache,target=/go/pkg/mod <<EOT
+  set -e
+  mkdir -p /opt/vtprotobuf
+  go mod download github.com/planetscale/vtprotobuf
+  cp -r $(go list -m -f='{{.Dir}}' github.com/planetscale/vtprotobuf)/include /opt/vtprotobuf
+EOT
+
+FROM gobuild-base AS vendored
+RUN --mount=type=bind,source=vendor,target=/app <<EOT
+  set -e
+  mkdir -p /opt/vendored/include
+  find . -name '*.proto' | tar -cf - --files-from - | tar -C /opt/vendored/include -xf -
+EOT
 
 FROM gobuild-base AS tools
-RUN --mount=type=bind,source=go.mod,target=/go/src/go.mod,ro \
-    --mount=type=bind,source=go.sum,target=/go/src/go.sum,ro \
+RUN --mount=type=bind,source=go.mod,target=/app/go.mod,ro \
+    --mount=type=bind,source=go.sum,target=/app/go.sum,ro \
     --mount=type=cache,target=/root/.cache \
     --mount=type=cache,target=/go/pkg/mod \
-    go install \
-      google.golang.org/protobuf/cmd/protoc-gen-go \
-      google.golang.org/grpc/cmd/protoc-gen-go-grpc
+  go install \
+    github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto \
+    google.golang.org/protobuf/cmd/protoc-gen-go \
+    google.golang.org/grpc/cmd/protoc-gen-go-grpc
+COPY --link --from=protoc /opt/protoc /usr/local
+COPY --link --from=googleapis /opt/googleapis /usr/local
+COPY --link --from=vtprotobuf /opt/vtprotobuf /usr/local
+COPY --link --from=vendored /opt/vendored /usr/local
 
 FROM tools AS generated
 RUN --mount=type=bind,target=github.com/docker/buildx,ro <<EOT
   set -ex
   mkdir /out
   find github.com/docker/buildx -name '*.proto' -o -name vendor -prune -false | xargs \
-    protoc --go_out=/out --go-grpc_out=require_unimplemented_servers=false:/out
+    protoc --go_out=/out --go-grpc_out=require_unimplemented_servers=false:/out \
+           --go-vtproto_out=features=marshal+unmarshal+size+equal+pool+clone:/out
 EOT
 
 FROM scratch AS update

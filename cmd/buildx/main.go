@@ -27,6 +27,9 @@ import (
 	_ "github.com/docker/buildx/driver/docker-container"
 	_ "github.com/docker/buildx/driver/kubernetes"
 	_ "github.com/docker/buildx/driver/remote"
+
+	// Use custom grpc codec to utilize vtprotobuf
+	_ "github.com/moby/buildkit/util/grpcutil/encoding/proto"
 )
 
 func init() {

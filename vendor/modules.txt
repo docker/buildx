@@ -482,7 +482,7 @@ github.com/mitchellh/go-wordwrap
 github.com/mitchellh/hashstructure/v2
 # github.com/mitchellh/mapstructure v1.5.0
 ## explicit; go 1.14
-# github.com/moby/buildkit v0.16.0-rc2.0.20241002204825-8445ccf1cb0b
+# github.com/moby/buildkit v0.17.0-rc1
 ## explicit; go 1.22.0
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -545,6 +545,7 @@ github.com/moby/buildkit/util/flightcontrol
 github.com/moby/buildkit/util/gitutil
 github.com/moby/buildkit/util/gogo/proto
 github.com/moby/buildkit/util/grpcerrors
+github.com/moby/buildkit/util/grpcutil/encoding/proto
 github.com/moby/buildkit/util/imageutil
 github.com/moby/buildkit/util/leaseutil
 github.com/moby/buildkit/util/progress
@@ -627,6 +628,21 @@ github.com/pelletier/go-toml
 # github.com/pkg/errors v0.9.1
 ## explicit
 github.com/pkg/errors
+# github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10
+## explicit; go 1.20
+github.com/planetscale/vtprotobuf/cmd/protoc-gen-go-vtproto
+github.com/planetscale/vtprotobuf/features/clone
+github.com/planetscale/vtprotobuf/features/equal
+github.com/planetscale/vtprotobuf/features/grpc
+github.com/planetscale/vtprotobuf/features/marshal
+github.com/planetscale/vtprotobuf/features/pool
+github.com/planetscale/vtprotobuf/features/size
+github.com/planetscale/vtprotobuf/features/unmarshal
+github.com/planetscale/vtprotobuf/generator
+github.com/planetscale/vtprotobuf/generator/pattern
+github.com/planetscale/vtprotobuf/protohelpers
+github.com/planetscale/vtprotobuf/types/known/timestamppb
+github.com/planetscale/vtprotobuf/vtproto
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
@@ -694,8 +710,8 @@ github.com/theupdateframework/notary/tuf/data
 github.com/theupdateframework/notary/tuf/signed
 github.com/theupdateframework/notary/tuf/utils
 github.com/theupdateframework/notary/tuf/validation
-# github.com/tonistiigi/fsutil v0.0.0-20240926161958-8754824c3c4f
-## explicit; go 1.20
+# github.com/tonistiigi/fsutil v0.0.0-20241003195857-3f140a1299b0
+## explicit; go 1.21
 github.com/tonistiigi/fsutil
 github.com/tonistiigi/fsutil/types
 # github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
