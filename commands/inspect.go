@@ -115,6 +115,25 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 						fmt.Fprintf(w, "\t%s:\t%s\n", k, v)
 					}
 				}
+
+				if len(nodes[i].CDIDevices) > 0 {
+					fmt.Fprintf(w, "Devices:\n")
+					for _, dev := range nodes[i].CDIDevices {
+						fmt.Fprintf(w, "\tName:\t%s\n", dev.Name)
+						if dev.OnDemand {
+							fmt.Fprintf(w, "\tOn-Demand:\t%v\n", dev.OnDemand)
+						} else {
+							fmt.Fprintf(w, "\tAutomatically allowed:\t%v\n", dev.AutoAllow)
+						}
+						if len(dev.Annotations) > 0 {
+							fmt.Fprintf(w, "\tAnnotations:\n")
+							for k, v := range dev.Annotations {
+								fmt.Fprintf(w, "\t\t%s:\t%s\n", k, v)
+							}
+						}
+					}
+				}
+
 				for ri, rule := range nodes[i].GCPolicy {
 					fmt.Fprintf(w, "GC Policy rule#%d:\n", ri)
 					fmt.Fprintf(w, "\tAll:\t%v\n", rule.All)

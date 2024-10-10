@@ -32,10 +32,11 @@ type Node struct {
 	Err         error
 
 	// worker settings
-	IDs       []string
-	Platforms []ocispecs.Platform
-	GCPolicy  []client.PruneInfo
-	Labels    map[string]string
+	IDs        []string
+	Platforms  []ocispecs.Platform
+	GCPolicy   []client.PruneInfo
+	Labels     map[string]string
+	CDIDevices []client.CDIDevice
 }
 
 // Nodes returns nodes for this builder.
@@ -259,6 +260,7 @@ func (n *Node) loadData(ctx context.Context, clientOpt ...client.ClientOpt) erro
 				n.GCPolicy = w.GCPolicy
 				n.Labels = w.Labels
 			}
+			n.CDIDevices = w.CDIDevices
 		}
 		sort.Strings(n.IDs)
 		n.Platforms = platformutil.Dedupe(n.Platforms)
