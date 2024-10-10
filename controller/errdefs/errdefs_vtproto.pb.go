@@ -25,6 +25,7 @@ func (m *Build) CloneVT() *Build {
 	}
 	r := new(Build)
 	r.Ref = m.Ref
+	r.BuildRef = m.BuildRef
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -43,6 +44,9 @@ func (this *Build) EqualVT(that *Build) bool {
 		return false
 	}
 	if this.Ref != that.Ref {
+		return false
+	}
+	if this.BuildRef != that.BuildRef {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -85,6 +89,13 @@ func (m *Build) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
+	if len(m.BuildRef) > 0 {
+		i -= len(m.BuildRef)
+		copy(dAtA[i:], m.BuildRef)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.BuildRef)))
+		i--
+		dAtA[i] = 0x12
+	}
 	if len(m.Ref) > 0 {
 		i -= len(m.Ref)
 		copy(dAtA[i:], m.Ref)
@@ -102,6 +113,10 @@ func (m *Build) SizeVT() (n int) {
 	var l int
 	_ = l
 	l = len(m.Ref)
+	if l > 0 {
+		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
+	}
+	l = len(m.BuildRef)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -169,6 +184,38 @@ func (m *Build) UnmarshalVT(dAtA []byte) error {
 				return io.ErrUnexpectedEOF
 			}
 			m.Ref = string(dAtA[iNdEx:postIndex])
+			iNdEx = postIndex
+		case 2:
+			if wireType != 2 {
+				return fmt.Errorf("proto: wrong wireType = %d for field BuildRef", wireType)
+			}
+			var stringLen uint64
+			for shift := uint(0); ; shift += 7 {
+				if shift >= 64 {
+					return protohelpers.ErrIntOverflow
+				}
+				if iNdEx >= l {
+					return io.ErrUnexpectedEOF
+				}
+				b := dAtA[iNdEx]
+				iNdEx++
+				stringLen |= uint64(b&0x7F) << shift
+				if b < 0x80 {
+					break
+				}
+			}
+			intStringLen := int(stringLen)
+			if intStringLen < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			postIndex := iNdEx + intStringLen
+			if postIndex < 0 {
+				return protohelpers.ErrInvalidLength
+			}
+			if postIndex > l {
+				return io.ErrUnexpectedEOF
+			}
+			m.BuildRef = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

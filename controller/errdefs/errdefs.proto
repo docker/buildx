@@ -6,4 +6,5 @@ option go_package = "github.com/docker/buildx/controller/errdefs";
 
 message Build {
   string Ref = 1;
+  string BuildRef = 2;
 }
