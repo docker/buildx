@@ -247,11 +247,11 @@ func prepareRootDir(dockerCli command.Cli, config *serverConfig) (string, error)
 	if rootDir == "" {
 		return "", errors.New("buildx root dir must be determined")
 	}
-	if err := os.MkdirAll(rootDir, 0700); err != nil {
+	if err := os.MkdirAll(rootDir, 0755); err != nil {
 		return "", err
 	}
 	serverRoot := filepath.Join(rootDir, "shared")
-	if err := os.MkdirAll(serverRoot, 0700); err != nil {
+	if err := os.MkdirAll(serverRoot, 0755); err != nil {
 		return "", err
 	}
 	return serverRoot, nil

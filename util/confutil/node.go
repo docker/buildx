@@ -20,7 +20,7 @@ func TryNodeIdentifier(configDir string) (out string) {
 			if _, err := rand.Read(b); err != nil {
 				return out
 			}
-			if err := os.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0600); err != nil {
+			if err := os.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0644); err != nil {
 				return out
 			}
 		}
