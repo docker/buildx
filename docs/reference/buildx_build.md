@@ -626,7 +626,7 @@ For example, the following Dockerfile contains four stages:
 ```dockerfile
 # syntax=docker/dockerfile:1
 
-FROM oven/bun:1 as base
+FROM oven/bun:1 AS base
 WORKDIR /app
 
 FROM base AS install
