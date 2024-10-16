@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 
 	debugcmd "github.com/docker/buildx/commands/debug"
@@ -36,12 +37,21 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 			if opt.debug {
 				debug.Enable()
 			}
-
 			cmd.SetContext(appcontext.Context())
 			if !isPlugin {
 				return nil
 			}
 			return plugin.PersistentPreRunE(cmd, args)
+		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			_ = cmd.Help()
+			return cli.StatusError{
+				StatusCode: 1,
+				Status:     fmt.Sprintf("ERROR: unknown command: %q", args[0]),
+			}
 		},
 	}
 	if !isPlugin {
@@ -95,7 +105,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 		versionCmd(dockerCli),
 		pruneCmd(dockerCli, opts),
 		duCmd(dockerCli, opts),
-		imagetoolscmd.RootCmd(dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
+		imagetoolscmd.RootCmd(cmd, dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
 	)
 	if confutil.IsExperimental() {
 		cmd.AddCommand(debugcmd.RootCmd(dockerCli,
