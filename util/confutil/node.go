@@ -6,6 +6,8 @@ import (
 	"os"
 	"path/filepath"
 	"sync"
+
+	"github.com/docker/buildx/util/osutil"
 )
 
 var nodeIdentifierMu sync.Mutex
@@ -20,7 +22,7 @@ func TryNodeIdentifier(configDir string) (out string) {
 			if _, err := rand.Read(b); err != nil {
 				return out
 			}
-			if err := os.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0600); err != nil {
+			if err := osutil.WriteFile(sessionFile, []byte(hex.EncodeToString(b)), 0600); err != nil {
 				return out
 			}
 		}

@@ -16,6 +16,7 @@ import (
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/imagetools"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/container"
@@ -462,7 +463,7 @@ func (l *logWriter) Write(dt []byte) (int, error) {
 
 func writeConfigFiles(m map[string][]byte) (_ string, err error) {
 	// Temp dir that will be copied to the container
-	tmpDir, err := os.MkdirTemp("", "buildkitd-config")
+	tmpDir, err := osutil.MkdirTemp("", "buildkitd-config")
 	if err != nil {
 		return "", err
 	}
@@ -474,10 +475,10 @@ func writeConfigFiles(m map[string][]byte) (_ string, err error) {
 	configDir := filepath.Base(confutil.DefaultBuildKitConfigDir)
 	for f, dt := range m {
 		p := filepath.Join(tmpDir, configDir, f)
-		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
+		if err := osutil.MkdirAll(filepath.Dir(p), 0755); err != nil {
 			return "", err
 		}
-		if err := os.WriteFile(p, dt, 0644); err != nil {
+		if err := osutil.WriteFile(p, dt, 0644); err != nil {
 			return "", err
 		}
 	}

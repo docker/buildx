@@ -41,7 +41,6 @@ import (
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/subrequests"
@@ -374,7 +373,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
 	if options.imageIDFile != "" {
-		if err := os.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse)), 0644); err != nil {
+		if err := osutil.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse)), 0644); err != nil {
 			return errors.Wrap(err, "writing image ID file")
 		}
 	}
@@ -742,7 +741,7 @@ func writeMetadataFile(filename string, dt interface{}) error {
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filename, b, 0644)
+	return osutil.AtomicWriteFile(filename, b, 0644)
 }
 
 func decodeExporterResponse(exporterResponse map[string]string) map[string]interface{} {

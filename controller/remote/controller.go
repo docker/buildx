@@ -21,6 +21,7 @@ import (
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli/command"
@@ -138,7 +139,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 				return err
 			}
 			pidF := filepath.Join(root, defaultPIDFilename)
-			if err := os.WriteFile(pidF, []byte(fmt.Sprintf("%d", os.Getpid())), 0600); err != nil {
+			if err := osutil.WriteFile(pidF, []byte(fmt.Sprintf("%d", os.Getpid())), 0600); err != nil {
 				return err
 			}
 			defer func() {
@@ -247,11 +248,11 @@ func prepareRootDir(dockerCli command.Cli, config *serverConfig) (string, error)
 	if rootDir == "" {
 		return "", errors.New("buildx root dir must be determined")
 	}
-	if err := os.MkdirAll(rootDir, 0700); err != nil {
+	if err := osutil.MkdirAll(rootDir, 0700); err != nil {
 		return "", err
 	}
 	serverRoot := filepath.Join(rootDir, "shared")
-	if err := os.MkdirAll(serverRoot, 0700); err != nil {
+	if err := osutil.MkdirAll(serverRoot, 0700); err != nil {
 		return "", err
 	}
 	return serverRoot, nil
