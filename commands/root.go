@@ -1,6 +1,7 @@
 package commands
 
 import (
+	"fmt"
 	"os"
 
 	debugcmd "github.com/docker/buildx/commands/debug"
@@ -36,15 +37,37 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 			if opt.debug {
 				debug.Enable()
 			}
-
 			cmd.SetContext(appcontext.Context())
 			if !isPlugin {
 				return nil
 			}
 			return plugin.PersistentPreRunE(cmd, args)
 		},
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(args) == 0 {
+				return cmd.Help()
+			}
+			_ = cmd.Help()
+			return cli.StatusError{
+				StatusCode: 1,
+				Status:     fmt.Sprintf("ERROR: unknown command: %q", args[0]),
+			}
+		},
 	}
-	if !isPlugin {
+	if isPlugin {
+		originalPreRun := cmd.PersistentPreRunE
+		cmd.PersistentPreRunE = func(cmd *cobra.Command, args []string) error {
+			if err := plugin.PersistentPreRunE(cmd, args); err != nil {
+				return err
+			}
+			if originalPreRun != nil {
+				if err := originalPreRun(cmd, args); err != nil {
+					return err
+				}
+			}
+			return nil
+		}
+	} else {
 		// match plugin behavior for standalone mode
 		// https://github.com/docker/cli/blob/6c9eb708fa6d17765d71965f90e1c59cea686ee9/cli-plugins/plugin/plugin.go#L117-L127
 		cmd.SilenceUsage = true
@@ -95,7 +118,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 		versionCmd(dockerCli),
 		pruneCmd(dockerCli, opts),
 		duCmd(dockerCli, opts),
-		imagetoolscmd.RootCmd(dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
+		imagetoolscmd.RootCmd(cmd, dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
 	)
 	if confutil.IsExperimental() {
 		cmd.AddCommand(debugcmd.RootCmd(dockerCli,
