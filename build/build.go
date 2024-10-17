@@ -500,7 +500,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						resultHandle, rr, err = NewResultHandle(ctx, cc, *so, "buildx", buildFunc, ch)
 						resultHandleFunc(dp.driverIndex, resultHandle)
 					} else {
+						span, ctx := tracing.StartSpan(ctx, "Build")
 						rr, err = c.Build(ctx, *so, "buildx", buildFunc, ch)
+						tracing.FinishWithError(span, err)
 					}
 					if !so.Internal && desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
 						if err != nil {
