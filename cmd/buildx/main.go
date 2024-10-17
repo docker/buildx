@@ -40,6 +40,9 @@ func init() {
 }
 
 func runStandalone(cmd *command.DockerCli) error {
+	stopProfiles := setupDebugProfiles(context.TODO())
+	defer stopProfiles()
+
 	if err := cmd.Initialize(cliflags.NewClientOptions()); err != nil {
 		return err
 	}
