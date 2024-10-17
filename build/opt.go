@@ -401,7 +401,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 				}
 				// stdin is dockerfile
 				dockerfileReader = rc
-				inp.ContextPath, _ = os.MkdirTemp("", "empty-dir")
+				inp.ContextPath, _ = osutil.MkdirTemp("", "empty-dir")
 				toRemove = append(toRemove, inp.ContextPath)
 				if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 					return nil, err
@@ -593,11 +593,11 @@ func setLocalMount(name, dir string, so *client.SolveOpt) error {
 }
 
 func createTempDockerfile(r io.Reader, multiReader *SyncMultiReader) (string, error) {
-	dir, err := os.MkdirTemp("", "dockerfile")
+	dir, err := osutil.MkdirTemp("", "dockerfile")
 	if err != nil {
 		return "", err
 	}
-	f, err := os.Create(filepath.Join(dir, "Dockerfile"))
+	f, err := osutil.Create(filepath.Join(dir, "Dockerfile"))
 	if err != nil {
 		return "", err
 	}

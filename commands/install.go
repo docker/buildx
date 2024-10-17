@@ -1,10 +1,9 @@
 package commands
 
 import (
-	"os"
-
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/config"
@@ -17,7 +16,7 @@ type installOptions struct {
 
 func runInstall(_ command.Cli, _ installOptions) error {
 	dir := config.Dir()
-	if err := os.MkdirAll(dir, 0755); err != nil {
+	if err := osutil.MkdirAll(dir, 0755); err != nil {
 		return errors.Wrap(err, "could not create docker config")
 	}
 

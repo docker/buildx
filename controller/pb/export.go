@@ -6,6 +6,7 @@ import (
 	"strconv"
 
 	"github.com/containerd/console"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 )
@@ -85,7 +86,7 @@ func CreateExports(entries []*ExportEntry) ([]client.ExportEntry, error) {
 				if err == nil && fi.IsDir() {
 					return nil, errors.Errorf("destination file %s is a directory", entry.Destination)
 				}
-				f, err := os.Create(entry.Destination)
+				f, err := osutil.Create(entry.Destination)
 				if err != nil {
 					return nil, errors.Errorf("failed to open %s", err)
 				}
