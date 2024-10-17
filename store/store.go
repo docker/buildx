@@ -21,13 +21,13 @@ const (
 )
 
 func New(root string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(root, instanceDir), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, instanceDir), 0755); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(root, defaultsDir), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, defaultsDir), 0755); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(root, activityDir), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, activityDir), 0755); err != nil {
 		return nil, err
 	}
 	return &Store{root: root}, nil
@@ -110,7 +110,7 @@ func (t *Txn) Save(ng *NodeGroup) error {
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, instanceDir, name), dt, 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, instanceDir, name), dt, 0644)
 }
 
 func (t *Txn) Remove(name string) error {
@@ -141,14 +141,14 @@ func (t *Txn) SetCurrent(key, name string, global, def bool) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600); err != nil {
+	if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0644); err != nil {
 		return err
 	}
 
 	h := toHash(key)
 
 	if def {
-		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, defaultsDir, h), []byte(name), 0600); err != nil {
+		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, defaultsDir, h), []byte(name), 0644); err != nil {
 			return err
 		}
 	} else {
@@ -158,7 +158,7 @@ func (t *Txn) SetCurrent(key, name string, global, def bool) error {
 }
 
 func (t *Txn) UpdateLastActivity(ng *NodeGroup) error {
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, activityDir, ng.Name), []byte(time.Now().UTC().Format(time.RFC3339)), 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, activityDir, ng.Name), []byte(time.Now().UTC().Format(time.RFC3339)), 0644)
 }
 
 func (t *Txn) GetLastActivity(ng *NodeGroup) (la time.Time, _ error) {
@@ -185,7 +185,7 @@ func (t *Txn) reset(key string) error {
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0644)
 }
 
 func (t *Txn) Current(key string) (*NodeGroup, error) {

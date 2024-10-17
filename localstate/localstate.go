@@ -49,7 +49,7 @@ func New(root string) (*LocalState, error) {
 	if root == "" {
 		return nil, errors.Errorf("root dir empty")
 	}
-	if err := os.MkdirAll(filepath.Join(root, refsDir), 0700); err != nil {
+	if err := os.MkdirAll(filepath.Join(root, refsDir), 0755); err != nil {
 		return nil, err
 	}
 	return &LocalState{
@@ -77,14 +77,14 @@ func (ls *LocalState) SaveRef(builderName, nodeName, id string, st State) error 
 		return err
 	}
 	refDir := filepath.Join(ls.root, refsDir, builderName, nodeName)
-	if err := os.MkdirAll(refDir, 0700); err != nil {
+	if err := os.MkdirAll(refDir, 0755); err != nil {
 		return err
 	}
 	dt, err := json.Marshal(st)
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(refDir, id), dt, 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(refDir, id), dt, 0644)
 }
 
 func (ls *LocalState) ReadGroup(id string) (*StateGroup, error) {
@@ -101,14 +101,14 @@ func (ls *LocalState) ReadGroup(id string) (*StateGroup, error) {
 
 func (ls *LocalState) SaveGroup(id string, stg StateGroup) error {
 	refDir := filepath.Join(ls.root, refsDir, groupDir)
-	if err := os.MkdirAll(refDir, 0700); err != nil {
+	if err := os.MkdirAll(refDir, 0755); err != nil {
 		return err
 	}
 	dt, err := json.Marshal(stg)
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(refDir, id), dt, 0600)
+	return ioutils.AtomicWriteFile(filepath.Join(refDir, id), dt, 0644)
 }
 
 func (ls *LocalState) RemoveBuilder(builderName string) error {
