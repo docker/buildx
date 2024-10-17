@@ -11,6 +11,7 @@ import (
 	controllererrors "github.com/docker/buildx/controller/errdefs"
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
+	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/version"
@@ -210,7 +211,12 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 			s.buildOptions = req.Options
 			m.session[ref] = s
 			if buildErr != nil {
-				buildErr = controllererrors.WrapBuild(buildErr, ref)
+				var buildRef string
+				var ebr *desktop.ErrorWithBuildRef
+				if errors.As(buildErr, &ebr) {
+					buildRef = ebr.Ref
+				}
+				buildErr = controllererrors.WrapBuild(buildErr, ref, buildRef)
 			}
 		}
 	} else {
