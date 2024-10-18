@@ -65,7 +65,6 @@ func hyperlink(url string) string {
 type ErrorWithBuildRef struct {
 	Ref string
 	Err error
-	Msg string
 }
 
 func (e *ErrorWithBuildRef) Error() string {
