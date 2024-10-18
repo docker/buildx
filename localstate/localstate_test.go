@@ -4,6 +4,7 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/docker/buildx/util/confutil"
 	"github.com/stretchr/testify/require"
 )
 
@@ -39,10 +40,10 @@ func newls(t *testing.T) *LocalState {
 	t.Helper()
 	tmpdir := t.TempDir()
 
-	l, err := New(tmpdir)
+	l, err := New(confutil.NewConfig(nil, confutil.WithDir(tmpdir)))
 	require.NoError(t, err)
 	require.DirExists(t, filepath.Join(tmpdir, refsDir))
-	require.Equal(t, tmpdir, l.root)
+	require.Equal(t, tmpdir, l.cfg.Dir())
 
 	require.NoError(t, l.SaveRef(testBuilderName, testNodeName, testStateRefID, testStateRef))
 

@@ -151,11 +151,11 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
-func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, nodes, opts, docker, configDir, w, nil)
+func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, nodes, opts, docker, cfg, w, nil)
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, configDir string, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -234,12 +234,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 				return nil, err
 			}
 			localOpt := opt
-			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, &localOpt, gatewayOpts, configDir, w, docker)
+			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, &localOpt, gatewayOpts, cfg, w, docker)
 			opts[k] = localOpt
 			if err != nil {
 				return nil, err
 			}
-			if err := saveLocalState(so, k, opt, np.Node(), configDir); err != nil {
+			if err := saveLocalState(so, k, opt, np.Node(), cfg); err != nil {
 				return nil, err
 			}
 			addGitAttrs(so)

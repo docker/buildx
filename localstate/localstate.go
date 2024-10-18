@@ -8,7 +8,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/docker/docker/pkg/ioutils"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -42,18 +42,18 @@ type StateGroup struct {
 }
 
 type LocalState struct {
-	root string
+	cfg *confutil.Config
 }
 
-func New(root string) (*LocalState, error) {
-	if root == "" {
-		return nil, errors.Errorf("root dir empty")
+func New(cfg *confutil.Config) (*LocalState, error) {
+	if cfg.Dir() == "" {
+		return nil, errors.Errorf("config dir empty")
 	}
-	if err := os.MkdirAll(filepath.Join(root, refsDir), 0700); err != nil {
+	if err := cfg.MkdirAll(refsDir, 0700); err != nil {
 		return nil, err
 	}
 	return &LocalState{
-		root: root,
+		cfg: cfg,
 	}, nil
 }
 
@@ -61,7 +61,7 @@ func (ls *LocalState) ReadRef(builderName, nodeName, id string) (*State, error) 
 	if err := ls.validate(builderName, nodeName, id); err != nil {
 		return nil, err
 	}
-	dt, err := os.ReadFile(filepath.Join(ls.root, refsDir, builderName, nodeName, id))
+	dt, err := os.ReadFile(filepath.Join(ls.cfg.Dir(), refsDir, builderName, nodeName, id))
 	if err != nil {
 		return nil, err
 	}
@@ -76,19 +76,19 @@ func (ls *LocalState) SaveRef(builderName, nodeName, id string, st State) error 
 	if err := ls.validate(builderName, nodeName, id); err != nil {
 		return err
 	}
-	refDir := filepath.Join(ls.root, refsDir, builderName, nodeName)
-	if err := os.MkdirAll(refDir, 0700); err != nil {
+	refDir := filepath.Join(refsDir, builderName, nodeName)
+	if err := ls.cfg.MkdirAll(refDir, 0700); err != nil {
 		return err
 	}
 	dt, err := json.Marshal(st)
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(refDir, id), dt, 0600)
+	return ls.cfg.AtomicWriteFile(filepath.Join(refDir, id), dt, 0644)
 }
 
 func (ls *LocalState) ReadGroup(id string) (*StateGroup, error) {
-	dt, err := os.ReadFile(filepath.Join(ls.root, refsDir, groupDir, id))
+	dt, err := os.ReadFile(filepath.Join(ls.cfg.Dir(), refsDir, groupDir, id))
 	if err != nil {
 		return nil, err
 	}
@@ -100,15 +100,15 @@ func (ls *LocalState) ReadGroup(id string) (*StateGroup, error) {
 }
 
 func (ls *LocalState) SaveGroup(id string, stg StateGroup) error {
-	refDir := filepath.Join(ls.root, refsDir, groupDir)
-	if err := os.MkdirAll(refDir, 0700); err != nil {
+	refDir := filepath.Join(refsDir, groupDir)
+	if err := ls.cfg.MkdirAll(refDir, 0700); err != nil {
 		return err
 	}
 	dt, err := json.Marshal(stg)
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(refDir, id), dt, 0600)
+	return ls.cfg.AtomicWriteFile(filepath.Join(refDir, id), dt, 0600)
 }
 
 func (ls *LocalState) RemoveBuilder(builderName string) error {
@@ -116,7 +116,7 @@ func (ls *LocalState) RemoveBuilder(builderName string) error {
 		return errors.Errorf("builder name empty")
 	}
 
-	dir := filepath.Join(ls.root, refsDir, builderName)
+	dir := filepath.Join(ls.cfg.Dir(), refsDir, builderName)
 	if _, err := os.Lstat(dir); err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -147,7 +147,7 @@ func (ls *LocalState) RemoveBuilderNode(builderName string, nodeName string) err
 		return errors.Errorf("node name empty")
 	}
 
-	dir := filepath.Join(ls.root, refsDir, builderName, nodeName)
+	dir := filepath.Join(ls.cfg.Dir(), refsDir, builderName, nodeName)
 	if _, err := os.Lstat(dir); err != nil {
 		if !os.IsNotExist(err) {
 			return err
@@ -208,7 +208,7 @@ func (ls *LocalState) removeGroup(id string) error {
 	if id == "" {
 		return errors.Errorf("group ref empty")
 	}
-	f := filepath.Join(ls.root, refsDir, groupDir, id)
+	f := filepath.Join(ls.cfg.Dir(), refsDir, groupDir, id)
 	if _, err := os.Lstat(f); err != nil {
 		if !os.IsNotExist(err) {
 			return err
