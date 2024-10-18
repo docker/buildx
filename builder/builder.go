@@ -439,7 +439,7 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 	if buildkitdConfigFile == "" {
 		// if buildkit daemon config is not provided, check if the default one
 		// is available and use it
-		if f, ok := confutil.DefaultConfigFile(dockerCli); ok {
+		if f, ok := confutil.NewConfig(dockerCli).BuildKitConfigFile(); ok {
 			buildkitdConfigFile = f
 		}
 	}
@@ -584,7 +584,7 @@ func Leave(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Leav
 		return err
 	}
 
-	ls, err := localstate.New(confutil.ConfigDir(dockerCli))
+	ls, err := localstate.New(confutil.NewConfig(dockerCli))
 	if err != nil {
 		return err
 	}

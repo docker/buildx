@@ -35,7 +35,7 @@ import (
 	"github.com/tonistiigi/fsutil"
 )
 
-func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *Options, bopts gateway.BuildOpts, configDir string, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
+func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *Options, bopts gateway.BuildOpts, cfg *confutil.Config, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
 	defers := make([]func(), 0, 2)
 	releaseF := func() {
@@ -271,7 +271,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 
 	// add node identifier to shared key if one was specified
 	if so.SharedKey != "" {
-		so.SharedKey += ":" + confutil.TryNodeIdentifier(configDir)
+		so.SharedKey += ":" + cfg.TryNodeIdentifier()
 	}
 
 	if opt.Pull {

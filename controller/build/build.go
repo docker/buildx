@@ -214,7 +214,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.No
 	if generateResult {
 		var mu sync.Mutex
 		var idx int
-		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
+		resp, err = build.BuildWithResultHandler(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), progress, func(driverIndex int, gotRes *build.ResultHandle) {
 			mu.Lock()
 			defer mu.Unlock()
 			if res == nil || driverIndex < idx {
@@ -222,7 +222,7 @@ func buildTargets(ctx context.Context, dockerCli command.Cli, nodes []builder.No
 			}
 		})
 	} else {
-		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.ConfigDir(dockerCli), progress)
+		resp, err = build.Build(ctx, nodes, opts, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), progress)
 	}
 	if err != nil {
 		return nil, res, err

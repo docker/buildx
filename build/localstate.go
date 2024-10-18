@@ -5,10 +5,11 @@ import (
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/moby/buildkit/client"
 )
 
-func saveLocalState(so *client.SolveOpt, target string, opts Options, node builder.Node, configDir string) error {
+func saveLocalState(so *client.SolveOpt, target string, opts Options, node builder.Node, cfg *confutil.Config) error {
 	var err error
 	if so.Ref == "" {
 		return nil
@@ -30,7 +31,7 @@ func saveLocalState(so *client.SolveOpt, target string, opts Options, node build
 	if lp == "" && dp == "" {
 		return nil
 	}
-	l, err := localstate.New(configDir)
+	l, err := localstate.New(cfg)
 	if err != nil {
 		return err
 	}

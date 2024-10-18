@@ -258,7 +258,7 @@ func prepareRootDir(dockerCli command.Cli, config *serverConfig) (string, error)
 }
 
 func rootDataDir(dockerCli command.Cli) string {
-	return filepath.Join(confutil.ConfigDir(dockerCli), "controller")
+	return filepath.Join(confutil.NewConfig(dockerCli).Dir(), "controller")
 }
 
 func newBuildxClientAndCheck(ctx context.Context, addr string) (*Client, error) {
