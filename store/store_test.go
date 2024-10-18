@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/buildx/util/confutil"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -15,7 +16,7 @@ func TestEmptyStartup(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	s, err := New(tmpdir)
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(tmpdir)))
 	require.NoError(t, err)
 
 	txn, release, err := s.Txn()
@@ -33,7 +34,7 @@ func TestNodeLocking(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	s, err := New(tmpdir)
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(tmpdir)))
 	require.NoError(t, err)
 
 	_, release, err := s.Txn()
@@ -68,7 +69,7 @@ func TestNodeManagement(t *testing.T) {
 	require.NoError(t, err)
 	defer os.RemoveAll(tmpdir)
 
-	s, err := New(tmpdir)
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(tmpdir)))
 	require.NoError(t, err)
 
 	txn, release, err := s.Txn()
@@ -240,7 +241,7 @@ func TestNodeInvalidName(t *testing.T) {
 	t.Parallel()
 	tmpdir := t.TempDir()
 
-	s, err := New(tmpdir)
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(tmpdir)))
 	require.NoError(t, err)
 
 	txn, release, err := s.Txn()

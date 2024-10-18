@@ -17,6 +17,7 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/creack/pty"
 	"github.com/docker/buildx/localstate"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
@@ -167,7 +168,7 @@ COPY --from=base /etc/bar /bar
 	err = json.Unmarshal(dt, &md)
 	require.NoError(t, err)
 
-	ls, err := localstate.New(buildxConfig(sb))
+	ls, err := localstate.New(confutil.NewConfig(nil, confutil.WithDir(buildxConfig(sb))))
 	require.NoError(t, err)
 
 	refParts := strings.Split(md.BuildRef, "/")
@@ -209,7 +210,7 @@ COPY --from=base /etc/bar /bar
 	err = json.Unmarshal(dt, &md)
 	require.NoError(t, err)
 
-	ls, err := localstate.New(buildxConfig(sb))
+	ls, err := localstate.New(confutil.NewConfig(nil, confutil.WithDir(buildxConfig(sb))))
 	require.NoError(t, err)
 
 	refParts := strings.Split(md.BuildRef, "/")
@@ -261,7 +262,7 @@ COPY foo /foo
 	err = json.Unmarshal(dt, &md)
 	require.NoError(t, err)
 
-	ls, err := localstate.New(buildxConfig(sb))
+	ls, err := localstate.New(confutil.NewConfig(nil, confutil.WithDir(buildxConfig(sb))))
 	require.NoError(t, err)
 
 	refParts := strings.Split(md.BuildRef, "/")

@@ -238,7 +238,7 @@ func buildMetricAttributes(dockerCli command.Cli, driverType string, options *bu
 		commandNameAttribute.String("build"),
 		attribute.Stringer(string(commandOptionsHash), &buildOptionsHash{
 			buildOptions: options,
-			configDir:    confutil.ConfigDir(dockerCli),
+			cfg:          confutil.NewConfig(dockerCli),
 		}),
 		driverNameAttribute.String(options.builder),
 		driverTypeAttribute.String(driverType),
@@ -250,7 +250,7 @@ func buildMetricAttributes(dockerCli command.Cli, driverType string, options *bu
 // the fmt.Stringer interface.
 type buildOptionsHash struct {
 	*buildOptions
-	configDir  string
+	cfg        *confutil.Config
 	result     string
 	resultOnce sync.Once
 }
@@ -267,7 +267,7 @@ func (o *buildOptionsHash) String() string {
 		if contextPath != "-" && osutil.IsLocalDir(contextPath) {
 			contextPath = osutil.ToAbs(contextPath)
 		}
-		salt := confutil.TryNodeIdentifier(o.configDir)
+		salt := o.cfg.TryNodeIdentifier()
 
 		h := sha256.New()
 		for _, s := range []string{target, contextPath, dockerfile, salt} {

@@ -8,7 +8,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/localstate"
-	"github.com/docker/docker/pkg/ioutils"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/gofrs/flock"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
@@ -20,25 +20,25 @@ const (
 	activityDir = "activity"
 )
 
-func New(root string) (*Store, error) {
-	if err := os.MkdirAll(filepath.Join(root, instanceDir), 0700); err != nil {
+func New(cfg *confutil.Config) (*Store, error) {
+	if err := cfg.MkdirAll(instanceDir, 0700); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(root, defaultsDir), 0700); err != nil {
+	if err := cfg.MkdirAll(defaultsDir, 0700); err != nil {
 		return nil, err
 	}
-	if err := os.MkdirAll(filepath.Join(root, activityDir), 0700); err != nil {
+	if err := cfg.MkdirAll(activityDir, 0700); err != nil {
 		return nil, err
 	}
-	return &Store{root: root}, nil
+	return &Store{cfg: cfg}, nil
 }
 
 type Store struct {
-	root string
+	cfg *confutil.Config
 }
 
 func (s *Store) Txn() (*Txn, func(), error) {
-	l := flock.New(filepath.Join(s.root, ".lock"))
+	l := flock.New(filepath.Join(s.cfg.Dir(), ".lock"))
 	if err := l.Lock(); err != nil {
 		return nil, nil, err
 	}
@@ -54,7 +54,7 @@ type Txn struct {
 }
 
 func (t *Txn) List() ([]*NodeGroup, error) {
-	pp := filepath.Join(t.s.root, instanceDir)
+	pp := filepath.Join(t.s.cfg.Dir(), instanceDir)
 	fis, err := os.ReadDir(pp)
 	if err != nil {
 		return nil, err
@@ -84,7 +84,7 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	dt, err := os.ReadFile(filepath.Join(t.s.root, instanceDir, name))
+	dt, err := os.ReadFile(filepath.Join(t.s.cfg.Dir(), instanceDir, name))
 	if err != nil {
 		return nil, err
 	}
@@ -110,7 +110,7 @@ func (t *Txn) Save(ng *NodeGroup) error {
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, instanceDir, name), dt, 0600)
+	return t.s.cfg.AtomicWriteFile(filepath.Join(instanceDir, name), dt, 0600)
 }
 
 func (t *Txn) Remove(name string) error {
@@ -121,14 +121,14 @@ func (t *Txn) Remove(name string) error {
 	if err := t.RemoveLastActivity(name); err != nil {
 		return err
 	}
-	ls, err := localstate.New(t.s.root)
+	ls, err := localstate.New(t.s.cfg)
 	if err != nil {
 		return err
 	}
 	if err := ls.RemoveBuilder(name); err != nil {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(t.s.root, instanceDir, name))
+	return os.RemoveAll(filepath.Join(t.s.cfg.Dir(), instanceDir, name))
 }
 
 func (t *Txn) SetCurrent(key, name string, global, def bool) error {
@@ -141,28 +141,28 @@ func (t *Txn) SetCurrent(key, name string, global, def bool) error {
 	if err != nil {
 		return err
 	}
-	if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600); err != nil {
+	if err := t.s.cfg.AtomicWriteFile("current", dt, 0600); err != nil {
 		return err
 	}
 
 	h := toHash(key)
 
 	if def {
-		if err := ioutils.AtomicWriteFile(filepath.Join(t.s.root, defaultsDir, h), []byte(name), 0600); err != nil {
+		if err := t.s.cfg.AtomicWriteFile(filepath.Join(defaultsDir, h), []byte(name), 0600); err != nil {
 			return err
 		}
 	} else {
-		os.RemoveAll(filepath.Join(t.s.root, defaultsDir, h)) // ignore error
+		os.RemoveAll(filepath.Join(t.s.cfg.Dir(), defaultsDir, h)) // ignore error
 	}
 	return nil
 }
 
 func (t *Txn) UpdateLastActivity(ng *NodeGroup) error {
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, activityDir, ng.Name), []byte(time.Now().UTC().Format(time.RFC3339)), 0600)
+	return t.s.cfg.AtomicWriteFile(filepath.Join(activityDir, ng.Name), []byte(time.Now().UTC().Format(time.RFC3339)), 0600)
 }
 
 func (t *Txn) GetLastActivity(ng *NodeGroup) (la time.Time, _ error) {
-	dt, err := os.ReadFile(filepath.Join(t.s.root, activityDir, ng.Name))
+	dt, err := os.ReadFile(filepath.Join(t.s.cfg.Dir(), activityDir, ng.Name))
 	if err != nil {
 		if os.IsNotExist(errors.Cause(err)) {
 			return la, nil
@@ -177,7 +177,7 @@ func (t *Txn) RemoveLastActivity(name string) error {
 	if err != nil {
 		return err
 	}
-	return os.RemoveAll(filepath.Join(t.s.root, activityDir, name))
+	return os.RemoveAll(filepath.Join(t.s.cfg.Dir(), activityDir, name))
 }
 
 func (t *Txn) reset(key string) error {
@@ -185,11 +185,11 @@ func (t *Txn) reset(key string) error {
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filepath.Join(t.s.root, "current"), dt, 0600)
+	return t.s.cfg.AtomicWriteFile("current", dt, 0600)
 }
 
 func (t *Txn) Current(key string) (*NodeGroup, error) {
-	dt, err := os.ReadFile(filepath.Join(t.s.root, "current"))
+	dt, err := os.ReadFile(filepath.Join(t.s.cfg.Dir(), "current"))
 	if err != nil {
 		if !os.IsNotExist(err) {
 			return nil, err
@@ -220,7 +220,7 @@ func (t *Txn) Current(key string) (*NodeGroup, error) {
 
 	h := toHash(key)
 
-	dt, err = os.ReadFile(filepath.Join(t.s.root, defaultsDir, h))
+	dt, err = os.ReadFile(filepath.Join(t.s.cfg.Dir(), defaultsDir, h))
 	if err != nil {
 		if os.IsNotExist(err) {
 			t.reset(key)
