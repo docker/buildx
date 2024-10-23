@@ -17,7 +17,7 @@ import (
 
 // GetStore returns current builder instance store
 func GetStore(dockerCli command.Cli) (*store.Txn, func(), error) {
-	s, err := store.New(confutil.ConfigDir(dockerCli))
+	s, err := store.New(confutil.NewConfig(dockerCli))
 	if err != nil {
 		return nil, nil, err
 	}

@@ -710,9 +710,13 @@ github.com/theupdateframework/notary/tuf/data
 github.com/theupdateframework/notary/tuf/signed
 github.com/theupdateframework/notary/tuf/utils
 github.com/theupdateframework/notary/tuf/validation
+# github.com/tonistiigi/dchapes-mode v0.0.0-20241001053921-ca0759fec205
+## explicit; go 1.21
+github.com/tonistiigi/dchapes-mode
 # github.com/tonistiigi/fsutil v0.0.0-20241003195857-3f140a1299b0
 ## explicit; go 1.21
 github.com/tonistiigi/fsutil
+github.com/tonistiigi/fsutil/copy
 github.com/tonistiigi/fsutil/types
 # github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
 ## explicit; go 1.16
