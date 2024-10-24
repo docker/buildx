@@ -73,6 +73,16 @@ func runPlugin(cmd *command.DockerCli) error {
 	})
 }
 
+func run(cmd *command.DockerCli) error {
+	stopProfiles := setupDebugProfiles(context.TODO())
+	defer stopProfiles()
+
+	if plugin.RunningStandalone() {
+		return runStandalone(cmd)
+	}
+	return runPlugin(cmd)
+}
+
 func main() {
 	cmd, err := command.NewDockerCli()
 	if err != nil {
@@ -80,15 +90,11 @@ func main() {
 		os.Exit(1)
 	}
 
-	if plugin.RunningStandalone() {
-		err = runStandalone(cmd)
-	} else {
-		err = runPlugin(cmd)
-	}
-	if err == nil {
+	if err = run(cmd); err == nil {
 		return
 	}
 
+	// Check the error from the run function above.
 	if sterr, ok := err.(cli.StatusError); ok {
 		if sterr.Status != "" {
 			fmt.Fprintln(cmd.Err(), sterr.Status)
