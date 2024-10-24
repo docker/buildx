@@ -43,9 +43,9 @@ func serveIO(attachCtx context.Context, srv msgStream, initFn func(*pb.InitMessa
 	if init == nil {
 		return errors.Errorf("unexpected message: %T; wanted init", msg.GetInput())
 	}
-	ref := init.Ref
-	if ref == "" {
-		return errors.New("no ref is provided")
+	sessionID := init.SessionID
+	if sessionID == "" {
+		return errors.New("no session ID is provided")
 	}
 	if err := initFn(init); err != nil {
 		return errors.Wrap(err, "failed to initialize IO server")
