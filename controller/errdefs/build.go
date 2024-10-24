@@ -26,21 +26,21 @@ func (e *BuildError) ToProto() grpcerrors.TypedErrorProto {
 }
 
 func (e *BuildError) PrintBuildDetails(w io.Writer) error {
-	if e.BuildRef == "" {
+	if e.Ref == "" {
 		return nil
 	}
 	ebr := &desktop.ErrorWithBuildRef{
-		Ref: e.BuildRef,
+		Ref: e.Ref,
 		Err: e.error,
 	}
 	return ebr.Print(w)
 }
 
-func WrapBuild(err error, ref string, buildRef string) error {
+func WrapBuild(err error, sessionID string, ref string) error {
 	if err == nil {
 		return nil
 	}
-	return &BuildError{Build: &Build{Ref: ref, BuildRef: buildRef}, error: err}
+	return &BuildError{Build: &Build{SessionID: sessionID, Ref: ref}, error: err}
 }
 
 func (b *Build) WrapError(err error) error {

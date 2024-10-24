@@ -5,6 +5,6 @@ package docker.buildx.errdefs;
 option go_package = "github.com/docker/buildx/controller/errdefs";
 
 message Build {
-  string Ref = 1;
-  string BuildRef = 2;
+  string SessionID = 1;
+  string Ref = 2;
 }

@@ -21,7 +21,7 @@ service Controller {
 }
 
 message ListProcessesRequest {
-  string Ref = 1;
+  string SessionID = 1;
 }
 
 message ListProcessesResponse {
@@ -34,7 +34,7 @@ message ProcessInfo {
 }
 
 message DisconnectProcessRequest {
-  string Ref = 1;
+  string SessionID = 1;
   string ProcessID = 2;
 }
 
@@ -42,7 +42,7 @@ message DisconnectProcessResponse {
 }
 
 message BuildRequest {
-  string Ref = 1;
+  string SessionID = 1;
   BuildOptions Options = 2;
 }
 
@@ -118,7 +118,7 @@ message CallFunc {
 }
 
 message InspectRequest {
-  string Ref = 1;
+  string SessionID = 1;
 }
 
 message InspectResponse {
@@ -140,13 +140,13 @@ message BuildResponse {
 }
 
 message DisconnectRequest {
-  string Ref = 1;
+  string SessionID = 1;
 }
 
 message DisconnectResponse {}
 
 message ListRequest {
-  string Ref = 1;
+  string SessionID = 1;
 }
 
 message ListResponse {
@@ -161,7 +161,7 @@ message InputMessage {
 }
 
 message InputInitMessage {
-  string Ref = 1;
+  string SessionID = 1;
 }
 
 message DataMessage {
@@ -186,7 +186,7 @@ message Message {
 }
 
 message InitMessage {
-  string Ref = 1;
+  string SessionID = 1;
 
   // If ProcessID already exists in the server, it tries to connect to it
   // instead of invoking the new one. In this case, InvokeConfig will be ignored.
@@ -227,7 +227,7 @@ message SignalMessage {
 }
 
 message StatusRequest {
-  string Ref = 1;
+  string SessionID = 1;
 }
 
 message StatusResponse {

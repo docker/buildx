@@ -53,9 +53,9 @@ func (s *session) cancelRunningProcesses() {
 func (m *Server) ListProcesses(ctx context.Context, req *pb.ListProcessesRequest) (res *pb.ListProcessesResponse, err error) {
 	m.sessionMu.Lock()
 	defer m.sessionMu.Unlock()
-	s, ok := m.session[req.Ref]
+	s, ok := m.session[req.SessionID]
 	if !ok {
-		return nil, errors.Errorf("unknown ref %q", req.Ref)
+		return nil, errors.Errorf("unknown session ID %q", req.SessionID)
 	}
 	res = new(pb.ListProcessesResponse)
 	res.Infos = append(res.Infos, s.processes.ListProcesses()...)
@@ -65,9 +65,9 @@ func (m *Server) ListProcesses(ctx context.Context, req *pb.ListProcessesRequest
 func (m *Server) DisconnectProcess(ctx context.Context, req *pb.DisconnectProcessRequest) (res *pb.DisconnectProcessResponse, err error) {
 	m.sessionMu.Lock()
 	defer m.sessionMu.Unlock()
-	s, ok := m.session[req.Ref]
+	s, ok := m.session[req.SessionID]
 	if !ok {
-		return nil, errors.Errorf("unknown ref %q", req.Ref)
+		return nil, errors.Errorf("unknown session ID %q", req.SessionID)
 	}
 	return res, s.processes.DeleteProcess(req.ProcessID)
 }
@@ -101,13 +101,13 @@ func (m *Server) List(ctx context.Context, req *pb.ListRequest) (res *pb.ListRes
 }
 
 func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res *pb.DisconnectResponse, err error) {
-	key := req.Ref
-	if key == "" {
-		return nil, errors.New("disconnect: empty key")
+	sessionID := req.SessionID
+	if sessionID == "" {
+		return nil, errors.New("disconnect: empty session ID")
 	}
 
 	m.sessionMu.Lock()
-	if s, ok := m.session[key]; ok {
+	if s, ok := m.session[sessionID]; ok {
 		if s.cancelBuild != nil {
 			s.cancelBuild()
 		}
@@ -116,7 +116,7 @@ func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res
 			s.result.Done()
 		}
 	}
-	delete(m.session, key)
+	delete(m.session, sessionID)
 	m.sessionMu.Unlock()
 
 	return &pb.DisconnectResponse{}, nil
@@ -137,26 +137,26 @@ func (m *Server) Close() error {
 }
 
 func (m *Server) Inspect(ctx context.Context, req *pb.InspectRequest) (*pb.InspectResponse, error) {
-	ref := req.Ref
-	if ref == "" {
-		return nil, errors.New("inspect: empty key")
+	sessionID := req.SessionID
+	if sessionID == "" {
+		return nil, errors.New("inspect: empty session ID")
 	}
 	var bo *pb.BuildOptions
 	m.sessionMu.Lock()
-	if s, ok := m.session[ref]; ok {
+	if s, ok := m.session[sessionID]; ok {
 		bo = s.buildOptions
 	} else {
 		m.sessionMu.Unlock()
-		return nil, errors.Errorf("inspect: unknown key %v", ref)
+		return nil, errors.Errorf("inspect: unknown key %v", sessionID)
 	}
 	m.sessionMu.Unlock()
 	return &pb.InspectResponse{Options: bo}, nil
 }
 
 func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResponse, error) {
-	ref := req.Ref
-	if ref == "" {
-		return nil, errors.New("build: empty key")
+	sessionID := req.SessionID
+	if sessionID == "" {
+		return nil, errors.New("build: empty session ID")
 	}
 
 	// Prepare status channel and session
@@ -164,7 +164,7 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	if m.session == nil {
 		m.session = make(map[string]*session)
 	}
-	s, ok := m.session[ref]
+	s, ok := m.session[sessionID]
 	if ok {
 		if !s.buildOnGoing.CompareAndSwap(false, true) {
 			m.sessionMu.Unlock()
@@ -183,12 +183,12 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	inR, inW := io.Pipe()
 	defer inR.Close()
 	s.inputPipe = inW
-	m.session[ref] = s
+	m.session[sessionID] = s
 	m.sessionMu.Unlock()
 	defer func() {
 		close(statusChan)
 		m.sessionMu.Lock()
-		s, ok := m.session[ref]
+		s, ok := m.session[sessionID]
 		if ok {
 			s.statusChan = nil
 			s.buildOnGoing.Store(false)
@@ -203,25 +203,25 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	defer cancel()
 	resp, res, _, buildErr := m.buildFunc(ctx, req.Options, inR, pw)
 	m.sessionMu.Lock()
-	if s, ok := m.session[ref]; ok {
+	if s, ok := m.session[sessionID]; ok {
 		// NOTE: buildFunc can return *build.ResultHandle even on error (e.g. when it's implemented using (github.com/docker/buildx/controller/build).RunBuild).
 		if res != nil {
 			s.result = res
 			s.cancelBuild = cancel
 			s.buildOptions = req.Options
-			m.session[ref] = s
+			m.session[sessionID] = s
 			if buildErr != nil {
-				var buildRef string
+				var ref string
 				var ebr *desktop.ErrorWithBuildRef
 				if errors.As(buildErr, &ebr) {
-					buildRef = ebr.Ref
+					ref = ebr.Ref
 				}
-				buildErr = controllererrors.WrapBuild(buildErr, ref, buildRef)
+				buildErr = controllererrors.WrapBuild(buildErr, sessionID, ref)
 			}
 		}
 	} else {
 		m.sessionMu.Unlock()
-		return nil, errors.Errorf("build: unknown key %v", ref)
+		return nil, errors.Errorf("build: unknown session ID %v", sessionID)
 	}
 	m.sessionMu.Unlock()
 
@@ -238,9 +238,9 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 }
 
 func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer) error {
-	ref := req.Ref
-	if ref == "" {
-		return errors.New("status: empty key")
+	sessionID := req.SessionID
+	if sessionID == "" {
+		return errors.New("status: empty session ID")
 	}
 
 	// Wait and get status channel prepared by Build()
@@ -248,12 +248,12 @@ func (m *Server) Status(req *pb.StatusRequest, stream pb.Controller_StatusServer
 	for {
 		// TODO: timeout?
 		m.sessionMu.Lock()
-		if _, ok := m.session[ref]; !ok || m.session[ref].statusChan == nil {
+		if _, ok := m.session[sessionID]; !ok || m.session[sessionID].statusChan == nil {
 			m.sessionMu.Unlock()
 			time.Sleep(time.Millisecond) // TODO: wait Build without busy loop and make it cancellable
 			continue
 		}
-		statusChan = m.session[ref].statusChan
+		statusChan = m.session[sessionID].statusChan
 		m.sessionMu.Unlock()
 		break
 	}
@@ -284,9 +284,9 @@ func (m *Server) Input(stream pb.Controller_InputServer) (err error) {
 	if init == nil {
 		return errors.Errorf("unexpected message: %T; wanted init", msg.GetInit())
 	}
-	ref := init.Ref
-	if ref == "" {
-		return errors.New("input: no ref is provided")
+	sessionID := init.SessionID
+	if sessionID == "" {
+		return errors.New("input: no session ID is provided")
 	}
 
 	// Wait and get input stream pipe prepared by Build()
@@ -294,12 +294,12 @@ func (m *Server) Input(stream pb.Controller_InputServer) (err error) {
 	for {
 		// TODO: timeout?
 		m.sessionMu.Lock()
-		if _, ok := m.session[ref]; !ok || m.session[ref].inputPipe == nil {
+		if _, ok := m.session[sessionID]; !ok || m.session[sessionID].inputPipe == nil {
 			m.sessionMu.Unlock()
 			time.Sleep(time.Millisecond) // TODO: wait Build without busy loop and make it cancellable
 			continue
 		}
-		inputPipeW = m.session[ref].inputPipe
+		inputPipeW = m.session[sessionID].inputPipe
 		m.sessionMu.Unlock()
 		break
 	}
@@ -379,14 +379,14 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 					initErrCh <- retErr
 				}
 			}()
-			ref := initMessage.Ref
+			sessionID := initMessage.SessionID
 			cfg := initMessage.InvokeConfig
 
 			m.sessionMu.Lock()
-			s, ok := m.session[ref]
+			s, ok := m.session[sessionID]
 			if !ok {
 				m.sessionMu.Unlock()
-				return errors.Errorf("invoke: unknown key %v", ref)
+				return errors.Errorf("invoke: unknown session ID %v", sessionID)
 			}
 			m.sessionMu.Unlock()
 
