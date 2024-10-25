@@ -11,7 +11,7 @@ import (
 
 func saveLocalState(so *client.SolveOpt, target string, opts Options, node builder.Node, cfg *confutil.Config) error {
 	var err error
-	if so.Ref == "" {
+	if so.Ref == "" || opts.CallFunc != nil {
 		return nil
 	}
 	lp := opts.Inputs.ContextPath
