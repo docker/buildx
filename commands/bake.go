@@ -464,11 +464,17 @@ func saveLocalStateGroup(dockerCli command.Cli, in bakeOptions, targets []string
 	groupRef := identity.NewID()
 	refs := make([]string, 0, len(bo))
 	for k, b := range bo {
+		if b.CallFunc != nil {
+			continue
+		}
 		b.Ref = identity.NewID()
 		b.GroupRef = groupRef
 		b.ProvenanceResponseMode = prm
 		refs = append(refs, b.Ref)
 		bo[k] = b
+	}
+	if len(refs) == 0 {
+		return nil
 	}
 	l, err := localstate.New(confutil.NewConfig(dockerCli))
 	if err != nil {
