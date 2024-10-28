@@ -493,11 +493,6 @@ RUN echo foo > /bar`)
 	require.NoError(t, err, string(out))
 	require.True(t, buildDetailsPattern.MatchString(string(out)), fmt.Sprintf("expected build details link in output, got %q", out))
 
-	if isExperimental() {
-		// FIXME: https://github.com/docker/buildx/issues/2382
-		t.Skip("build details link not displayed in experimental mode when build fails: https://github.com/docker/buildx/issues/2382")
-	}
-
 	// build erroneous dockerfile
 	dockerfile = []byte(`FROM busybox:latest
 RUN exit 1`)

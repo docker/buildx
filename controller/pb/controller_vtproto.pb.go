@@ -26,7 +26,7 @@ func (m *ListProcessesRequest) CloneVT() *ListProcessesRequest {
 		return (*ListProcessesRequest)(nil)
 	}
 	r := new(ListProcessesRequest)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -84,7 +84,7 @@ func (m *DisconnectProcessRequest) CloneVT() *DisconnectProcessRequest {
 		return (*DisconnectProcessRequest)(nil)
 	}
 	r := new(DisconnectProcessRequest)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	r.ProcessID = m.ProcessID
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -118,7 +118,7 @@ func (m *BuildRequest) CloneVT() *BuildRequest {
 		return (*BuildRequest)(nil)
 	}
 	r := new(BuildRequest)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	r.Options = m.Options.CloneVT()
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
@@ -396,7 +396,7 @@ func (m *InspectRequest) CloneVT() *InspectRequest {
 		return (*InspectRequest)(nil)
 	}
 	r := new(InspectRequest)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -495,7 +495,7 @@ func (m *DisconnectRequest) CloneVT() *DisconnectRequest {
 		return (*DisconnectRequest)(nil)
 	}
 	r := new(DisconnectRequest)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -528,7 +528,7 @@ func (m *ListRequest) CloneVT() *ListRequest {
 		return (*ListRequest)(nil)
 	}
 	r := new(ListRequest)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -603,7 +603,7 @@ func (m *InputInitMessage) CloneVT() *InputInitMessage {
 		return (*InputInitMessage)(nil)
 	}
 	r := new(InputInitMessage)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -713,7 +713,7 @@ func (m *InitMessage) CloneVT() *InitMessage {
 		return (*InitMessage)(nil)
 	}
 	r := new(InitMessage)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	r.ProcessID = m.ProcessID
 	r.InvokeConfig = m.InvokeConfig.CloneVT()
 	if len(m.unknownFields) > 0 {
@@ -829,7 +829,7 @@ func (m *StatusRequest) CloneVT() *StatusRequest {
 		return (*StatusRequest)(nil)
 	}
 	r := new(StatusRequest)
-	r.Ref = m.Ref
+	r.SessionID = m.SessionID
 	if len(m.unknownFields) > 0 {
 		r.unknownFields = make([]byte, len(m.unknownFields))
 		copy(r.unknownFields, m.unknownFields)
@@ -959,7 +959,7 @@ func (this *ListProcessesRequest) EqualVT(that *ListProcessesRequest) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -1033,7 +1033,7 @@ func (this *DisconnectProcessRequest) EqualVT(that *DisconnectProcessRequest) bo
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	if this.ProcessID != that.ProcessID {
@@ -1071,7 +1071,7 @@ func (this *BuildRequest) EqualVT(that *BuildRequest) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	if !this.Options.EqualVT(that.Options) {
@@ -1524,7 +1524,7 @@ func (this *InspectRequest) EqualVT(that *InspectRequest) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -1651,7 +1651,7 @@ func (this *DisconnectRequest) EqualVT(that *DisconnectRequest) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -1686,7 +1686,7 @@ func (this *ListRequest) EqualVT(that *ListRequest) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -1808,7 +1808,7 @@ func (this *InputInitMessage) EqualVT(that *InputInitMessage) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -1991,7 +1991,7 @@ func (this *InitMessage) EqualVT(that *InitMessage) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	if this.ProcessID != that.ProcessID {
@@ -2149,7 +2149,7 @@ func (this *StatusRequest) EqualVT(that *StatusRequest) bool {
 	} else if this == nil || that == nil {
 		return false
 	}
-	if this.Ref != that.Ref {
+	if this.SessionID != that.SessionID {
 		return false
 	}
 	return string(this.unknownFields) == string(that.unknownFields)
@@ -2356,10 +2356,10 @@ func (m *ListProcessesRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) 
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -2498,10 +2498,10 @@ func (m *DisconnectProcessRequest) MarshalToSizedBufferVT(dAtA []byte) (int, err
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -2581,10 +2581,10 @@ func (m *BuildRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3363,10 +3363,10 @@ func (m *InspectRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3603,10 +3603,10 @@ func (m *DisconnectRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3676,10 +3676,10 @@ func (m *ListRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -3846,10 +3846,10 @@ func (m *InputInitMessage) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -4120,10 +4120,10 @@ func (m *InitMessage) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i--
 		dAtA[i] = 0x12
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -4432,10 +4432,10 @@ func (m *StatusRequest) MarshalToSizedBufferVT(dAtA []byte) (int, error) {
 		i -= len(m.unknownFields)
 		copy(dAtA[i:], m.unknownFields)
 	}
-	if len(m.Ref) > 0 {
-		i -= len(m.Ref)
-		copy(dAtA[i:], m.Ref)
-		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.Ref)))
+	if len(m.SessionID) > 0 {
+		i -= len(m.SessionID)
+		copy(dAtA[i:], m.SessionID)
+		i = protohelpers.EncodeVarint(dAtA, i, uint64(len(m.SessionID)))
 		i--
 		dAtA[i] = 0xa
 	}
@@ -4707,7 +4707,7 @@ func (m *ListProcessesRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -4755,7 +4755,7 @@ func (m *DisconnectProcessRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -4783,7 +4783,7 @@ func (m *BuildRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -5108,7 +5108,7 @@ func (m *InspectRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -5197,7 +5197,7 @@ func (m *DisconnectRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -5221,7 +5221,7 @@ func (m *ListRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -5292,7 +5292,7 @@ func (m *InputInitMessage) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -5402,7 +5402,7 @@ func (m *InitMessage) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -5528,7 +5528,7 @@ func (m *StatusRequest) SizeVT() (n int) {
 	}
 	var l int
 	_ = l
-	l = len(m.Ref)
+	l = len(m.SessionID)
 	if l > 0 {
 		n += 1 + l + protohelpers.SizeOfVarint(uint64(l))
 	}
@@ -5671,7 +5671,7 @@ func (m *ListProcessesRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -5699,7 +5699,7 @@ func (m *ListProcessesRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -5958,7 +5958,7 @@ func (m *DisconnectProcessRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -5986,7 +5986,7 @@ func (m *DisconnectProcessRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -6124,7 +6124,7 @@ func (m *BuildRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -6152,7 +6152,7 @@ func (m *BuildRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -8558,7 +8558,7 @@ func (m *InspectRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -8586,7 +8586,7 @@ func (m *InspectRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -9207,7 +9207,7 @@ func (m *DisconnectRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -9235,7 +9235,7 @@ func (m *DisconnectRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -9341,7 +9341,7 @@ func (m *ListRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -9369,7 +9369,7 @@ func (m *ListRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -9640,7 +9640,7 @@ func (m *InputInitMessage) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -9668,7 +9668,7 @@ func (m *InputInitMessage) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex
@@ -10094,7 +10094,7 @@ func (m *InitMessage) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -10122,7 +10122,7 @@ func (m *InitMessage) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		case 2:
 			if wireType != 2 {
@@ -10872,7 +10872,7 @@ func (m *StatusRequest) UnmarshalVT(dAtA []byte) error {
 		switch fieldNum {
 		case 1:
 			if wireType != 2 {
-				return fmt.Errorf("proto: wrong wireType = %d for field Ref", wireType)
+				return fmt.Errorf("proto: wrong wireType = %d for field SessionID", wireType)
 			}
 			var stringLen uint64
 			for shift := uint(0); ; shift += 7 {
@@ -10900,7 +10900,7 @@ func (m *StatusRequest) UnmarshalVT(dAtA []byte) error {
 			if postIndex > l {
 				return io.ErrUnexpectedEOF
 			}
-			m.Ref = string(dAtA[iNdEx:postIndex])
+			m.SessionID = string(dAtA[iNdEx:postIndex])
 			iNdEx = postIndex
 		default:
 			iNdEx = preIndex

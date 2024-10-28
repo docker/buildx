@@ -6,6 +6,7 @@ import (
 	"os"
 
 	"github.com/docker/buildx/commands"
+	controllererrors "github.com/docker/buildx/controller/errdefs"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
@@ -16,6 +17,7 @@ import (
 	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/stack"
+	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 
 	//nolint:staticcheck // vendored dependencies may still use this
@@ -115,8 +117,15 @@ func main() {
 	} else {
 		fmt.Fprintf(cmd.Err(), "ERROR: %v\n", err)
 	}
-	if ebr, ok := err.(*desktop.ErrorWithBuildRef); ok {
+
+	var ebr *desktop.ErrorWithBuildRef
+	if errors.As(err, &ebr) {
 		ebr.Print(cmd.Err())
+	} else {
+		var be *controllererrors.BuildError
+		if errors.As(err, &be) {
+			be.PrintBuildDetails(cmd.Err())
+		}
 	}
 
 	os.Exit(1)
