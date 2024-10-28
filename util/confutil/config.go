@@ -86,7 +86,8 @@ func (c *Config) MkdirAll(dir string, perm os.FileMode) error {
 	st, err := os.Stat(d)
 	if err != nil {
 		if os.IsNotExist(err) {
-			return fs.MkdirAll(d, perm, chown, nil)
+			_, err := fs.MkdirAll(d, perm, chown, nil)
+			return err
 		}
 		return err
 	}
