@@ -16,6 +16,9 @@ import (
 	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
+	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	pb "github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/util/apicaps"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -107,6 +110,17 @@ func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) err
 					if err != nil {
 						return err
 					}
+					// check if the client supports newer prune options
+					if opts.maxUsedSpace.Value() != 0 || opts.minFreeSpace.Value() != 0 {
+						caps, err := loadLLBCaps(ctx, c)
+						if err != nil {
+							return errors.Wrap(err, "failed to load buildkit capabilities for prune")
+						}
+						if caps.Supports(pb.CapGCFreeSpaceFilter) != nil {
+							return errors.New("buildkit v0.17.0+ is required for max-used-space and min-free-space filters")
+						}
+					}
+
 					popts := []client.PruneOption{
 						client.WithKeepOpt(pi.KeepDuration, opts.reservedSpace.Value(), opts.maxUsedSpace.Value(), opts.minFreeSpace.Value()),
 						client.WithFilter(pi.Filter),
@@ -131,6 +145,17 @@ func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) err
 	fmt.Fprintf(tw, "Total:\t%s\n", units.HumanSize(float64(total)))
 	tw.Flush()
 	return nil
+}
+
+func loadLLBCaps(ctx context.Context, c *client.Client) (apicaps.CapSet, error) {
+	var caps apicaps.CapSet
+	_, err := c.Build(ctx, client.SolveOpt{
+		Internal: true,
+	}, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+		caps = c.BuildOpts().LLBCaps
+		return nil, nil
+	}, nil)
+	return caps, err
 }
 
 func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
