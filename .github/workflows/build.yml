@@ -229,8 +229,6 @@ jobs:
     permissions:
       # required to write sarif report
       security-events: write
-      # required to check out the repository
-      contents: read
     steps:
       -
         name: Checkout
@@ -404,6 +402,9 @@ jobs:
 
   release:
     runs-on: ubuntu-24.04
+    permissions:
+      # required to create GitHub release
+      contents: write
     needs:
       - test-integration
       - test-unit
