@@ -23,6 +23,7 @@ jobs:
   codeql:
     runs-on: ubuntu-24.04
     permissions:
+      contents: read
       actions: read
       security-events: write
     steps:

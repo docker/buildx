@@ -227,6 +227,8 @@ jobs:
   govulncheck:
     runs-on: ubuntu-24.04
     permissions:
+      # same as global permission
+      contents: read
       # required to write sarif report
       security-events: write
     steps:
@@ -372,6 +374,8 @@ jobs:
     runs-on: ubuntu-24.04
     if: ${{ github.ref == 'refs/heads/master' && github.repository == 'docker/buildx' }}
     permissions:
+      # same as global permission
+      contents: read
       # required to write sarif report
       security-events: write
     needs:
