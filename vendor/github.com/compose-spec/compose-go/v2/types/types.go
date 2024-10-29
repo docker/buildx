@@ -20,7 +20,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
-	"strconv"
 	"strings"
 
 	"github.com/docker/go-connections/nat"
@@ -82,6 +81,7 @@ type ServiceConfig struct {
 	ExternalLinks   []string                         `yaml:"external_links,omitempty" json:"external_links,omitempty"`
 	ExtraHosts      HostsList                        `yaml:"extra_hosts,omitempty" json:"extra_hosts,omitempty"`
 	GroupAdd        []string                         `yaml:"group_add,omitempty" json:"group_add,omitempty"`
+	Gpus            []DeviceRequest                  `yaml:"gpus,omitempty" json:"gpus,omitempty"`
 	Hostname        string                           `yaml:"hostname,omitempty" json:"hostname,omitempty"`
 	HealthCheck     *HealthCheckConfig               `yaml:"healthcheck,omitempty" json:"healthcheck,omitempty"`
 	Image           string                           `yaml:"image,omitempty" json:"image,omitempty"`
@@ -132,6 +132,8 @@ type ServiceConfig struct {
 	Volumes         []ServiceVolumeConfig            `yaml:"volumes,omitempty" json:"volumes,omitempty"`
 	VolumesFrom     []string                         `yaml:"volumes_from,omitempty" json:"volumes_from,omitempty"`
 	WorkingDir      string                           `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+	PostStart       []ServiceHook                    `yaml:"post_start,omitempty" json:"post_start,omitempty"`
+	PreStop         []ServiceHook                    `yaml:"pre_stop,omitempty" json:"pre_stop,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
@@ -388,30 +390,6 @@ type Resource struct {
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 
-type NanoCPUs float32
-
-func (n *NanoCPUs) DecodeMapstructure(a any) error {
-	switch v := a.(type) {
-	case string:
-		f, err := strconv.ParseFloat(v, 64)
-		if err != nil {
-			return err
-		}
-		*n = NanoCPUs(f)
-	case float32:
-		*n = NanoCPUs(v)
-	case float64:
-		*n = NanoCPUs(v)
-	default:
-		return fmt.Errorf("unexpected value type %T for cpus", v)
-	}
-	return nil
-}
-
-func (n *NanoCPUs) Value() float32 {
-	return float32(*n)
-}
-
 // GenericResource represents a "user defined" resource which can
 // only be an integer (e.g: SSD=3) for a service
 type GenericResource struct {
@@ -552,9 +530,6 @@ func (s ServiceVolumeConfig) String() string {
 	if s.Volume != nil && s.Volume.NoCopy {
 		options = append(options, "nocopy")
 	}
-	if s.Volume != nil && s.Volume.Subpath != "" {
-		options = append(options, s.Volume.Subpath)
-	}
 	return fmt.Sprintf("%s:%s:%s", s.Source, s.Target, strings.Join(options, ","))
 }
 
@@ -581,6 +556,7 @@ type ServiceVolumeBind struct {
 	SELinux        string `yaml:"selinux,omitempty" json:"selinux,omitempty"`
 	Propagation    string `yaml:"propagation,omitempty" json:"propagation,omitempty"`
 	CreateHostPath bool   `yaml:"create_host_path,omitempty" json:"create_host_path,omitempty"`
+	Recursive      string `yaml:"recursive,omitempty" json:"recursive,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }

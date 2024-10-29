@@ -616,22 +616,11 @@ func (p Project) WithServicesEnvironmentResolved(discardEnvFiles bool) (*Project
 		}
 
 		for _, envFile := range service.EnvFiles {
-			if _, err := os.Stat(envFile.Path); os.IsNotExist(err) {
-				if envFile.Required {
-					return nil, fmt.Errorf("env file %s not found: %w", envFile.Path, err)
-				}
-				continue
-			}
-			b, err := os.ReadFile(envFile.Path)
+			vars, err := loadEnvFile(envFile, resolve)
 			if err != nil {
-				return nil, fmt.Errorf("failed to load %s: %w", envFile.Path, err)
+				return nil, err
 			}
-
-			fileVars, err := dotenv.ParseWithLookup(bytes.NewBuffer(b), resolve)
-			if err != nil {
-				return nil, fmt.Errorf("failed to read %s: %w", envFile.Path, err)
-			}
-			environment.OverrideBy(Mapping(fileVars).ToMappingWithEquals())
+			environment.OverrideBy(vars.ToMappingWithEquals())
 		}
 
 		service.Environment = environment.OverrideBy(service.Environment)
@@ -642,6 +631,31 @@ func (p Project) WithServicesEnvironmentResolved(discardEnvFiles bool) (*Project
 		newProject.Services[i] = service
 	}
 	return newProject, nil
+}
+
+func loadEnvFile(envFile EnvFile, resolve dotenv.LookupFn) (Mapping, error) {
+	if _, err := os.Stat(envFile.Path); os.IsNotExist(err) {
+		if envFile.Required {
+			return nil, fmt.Errorf("env file %s not found: %w", envFile.Path, err)
+		}
+		return nil, nil
+	}
+	file, err := os.Open(envFile.Path)
+	if err != nil {
+		return nil, err
+	}
+	defer file.Close() //nolint:errcheck
+
+	var fileVars map[string]string
+	if envFile.Format != "" {
+		fileVars, err = dotenv.ParseWithFormat(file, envFile.Path, resolve, envFile.Format)
+	} else {
+		fileVars, err = dotenv.ParseWithLookup(file, resolve)
+	}
+	if err != nil {
+		return nil, err
+	}
+	return fileVars, nil
 }
 
 func (p *Project) deepCopy() *Project {

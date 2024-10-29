@@ -267,6 +267,7 @@
         },
         "external_links": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "extra_hosts": {"$ref": "#/definitions/extra_hosts"},
+        "gpus": {"$ref": "#/definitions/gpus"},
         "group_add": {
           "type": "array",
           "items": {
@@ -370,6 +371,8 @@
           },
           "uniqueItems": true
         },
+        "post_start": {"type": "array", "items": {"$ref": "#/definitions/service_hook"}},
+        "pre_stop": {"type": "array", "items": {"$ref": "#/definitions/service_hook"}},
         "privileged": {"type": ["boolean", "string"]},
         "profiles": {"$ref": "#/definitions/list_of_strings"},
         "pull_policy": {"type": "string", "enum": [
@@ -416,6 +419,7 @@
                     "properties": {
                       "propagation": {"type": "string"},
                       "create_host_path": {"type": ["boolean", "string"]},
+                      "recursive": {"type": "string", "enum": ["enabled", "disabled", "writable", "readonly"]},
                       "selinux": {"type": "string", "enum": ["z", "Z"]}
                     },
                     "additionalProperties": false,
@@ -500,11 +504,11 @@
             },
             "additionalProperties": false,
             "patternProperties": {"^x-": {}}
-          },
-          "additionalProperties": false,
-          "patternProperties": {"^x-": {}}
+          }
         }
-      }
+      },
+      "additionalProperties": false,
+      "patternProperties": {"^x-": {}}
     },
     "deployment": {
       "id": "#/definitions/deployment",
@@ -631,6 +635,26 @@
 
     "devices": {
       "id": "#/definitions/devices",
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "capabilities": {"$ref": "#/definitions/list_of_strings"},
+          "count": {"type": ["string", "integer"]},
+          "device_ids": {"$ref": "#/definitions/list_of_strings"},
+          "driver":{"type": "string"},
+          "options":{"$ref": "#/definitions/list_or_dict"}
+        },
+        "additionalProperties": false,
+        "patternProperties": {"^x-": {}},
+        "required": [
+          "capabilities"
+        ]
+      }
+    },
+
+    "gpus": {
+      "id": "#/definitions/gpus",
       "type": "array",
       "items": {
         "type": "object",
@@ -813,6 +837,20 @@
       ]
     },
 
+    "service_hook": {
+      "id": "#/definitions/service_hook",
+      "type": "object",
+      "properties": {
+        "command": {"$ref": "#/definitions/command"},
+        "user": {"type": "string"},
+        "privileged": {"type": ["boolean", "string"]},
+        "working_dir": {"type": "string"},
+        "environment": {"$ref": "#/definitions/list_or_dict"}
+      },
+      "additionalProperties": false,
+      "patternProperties": {"^x-": {}}
+    },
+
     "env_file": {
       "oneOf": [
         {"type": "string"},
@@ -826,6 +864,9 @@
                 "additionalProperties": false,
                 "properties": {
                   "path": {
+                    "type": "string"
+                  },
+                  "format": {
                     "type": "string"
                   },
                   "required": {
@@ -878,7 +919,8 @@
           "patternProperties": {
             ".+": {
               "type": ["string", "array"]
-            }
+            },
+            "uniqueItems": false
           },
           "additionalProperties": false
         },
