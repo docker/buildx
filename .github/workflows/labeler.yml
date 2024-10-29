@@ -20,6 +20,9 @@ jobs:
   labeler:
     runs-on: ubuntu-latest
     permissions:
+      # same as global permission
+      contents: read
+      # required for writing labels
       pull-requests: write
     steps:
       -
