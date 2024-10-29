@@ -26,13 +26,15 @@ import (
 )
 
 type ResetProcessor struct {
-	target interface{}
-	paths  []tree.Path
+	target       interface{}
+	paths        []tree.Path
+	visitedNodes map[*yaml.Node]string
 }
 
 // UnmarshalYAML implement yaml.Unmarshaler
 func (p *ResetProcessor) UnmarshalYAML(value *yaml.Node) error {
 	resolved, err := p.resolveReset(value, tree.NewPath())
+	p.visitedNodes = nil
 	if err != nil {
 		return err
 	}
@@ -41,10 +43,28 @@ func (p *ResetProcessor) UnmarshalYAML(value *yaml.Node) error {
 
 // resolveReset detects `!reset` tag being set on yaml nodes and record position in the yaml tree
 func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.Node, error) {
+	pathStr := path.String()
 	// If the path contains "<<", removing the "<<" element and merging the path
-	if strings.Contains(path.String(), ".<<") {
-		path = tree.NewPath(strings.Replace(path.String(), ".<<", "", 1))
+	if strings.Contains(pathStr, ".<<") {
+		path = tree.NewPath(strings.Replace(pathStr, ".<<", "", 1))
 	}
+
+	// Check for cycle
+	if p.visitedNodes == nil {
+		p.visitedNodes = make(map[*yaml.Node]string)
+	}
+
+	// Check for cycle by seeing if the node has already been visited at this path
+	if previousPath, found := p.visitedNodes[node]; found {
+		// If the current node has been visited, we have a cycle if the previous path is a prefix
+		if strings.HasPrefix(pathStr, previousPath) {
+			return nil, fmt.Errorf("cycle detected at path: %s", pathStr)
+		}
+	}
+
+	// Mark the current node as visited
+	p.visitedNodes[node] = pathStr
+
 	// If the node is an alias, We need to process the alias field in order to consider the !override and !reset tags
 	if node.Kind == yaml.AliasNode {
 		return p.resolveReset(node.Alias, path)

@@ -119,7 +119,7 @@ loop:
 			offset = i + 1
 			inherited = rune == '\n'
 			break loop
-		case '_', '.', '[', ']':
+		case '_', '.', '-', '[', ']':
 		default:
 			// variable name should match [A-Za-z0-9_.-]
 			if unicode.IsLetter(rune) || unicode.IsNumber(rune) {
@@ -134,6 +134,10 @@ loop:
 
 	if src == "" {
 		return "", "", inherited, errors.New("zero length string")
+	}
+
+	if inherited && strings.IndexByte(key, ' ') == -1 {
+		p.line++
 	}
 
 	// trim whitespace

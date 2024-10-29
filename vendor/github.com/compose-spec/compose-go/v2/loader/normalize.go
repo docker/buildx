@@ -18,6 +18,7 @@ package loader
 
 import (
 	"fmt"
+	"path"
 	"strconv"
 	"strings"
 
@@ -102,6 +103,17 @@ func Normalize(dict map[string]any, env types.Mapping) (map[string]any, error) {
 				}
 			}
 
+			if v, ok := service["volumes"]; ok {
+				volumes := v.([]any)
+				for i, volume := range volumes {
+					vol := volume.(map[string]any)
+					target := vol["target"].(string)
+					vol["target"] = path.Clean(target)
+					volumes[i] = vol
+				}
+				service["volumes"] = volumes
+			}
+
 			if n, ok := service["volumes_from"]; ok {
 				volumesFrom := n.([]any)
 				for _, v := range volumesFrom {
@@ -123,9 +135,9 @@ func Normalize(dict map[string]any, env types.Mapping) (map[string]any, error) {
 			}
 			services[name] = service
 		}
+
 		dict["services"] = services
 	}
-
 	setNameFromKey(dict)
 
 	return dict, nil
