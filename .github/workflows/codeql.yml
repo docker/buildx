@@ -21,12 +21,10 @@ env:
 
 jobs:
   codeql:
+    runs-on: ubuntu-24.04
     permissions:
       actions: read
-      contents: read
       security-events: write
-
-    runs-on: ubuntu-24.04
     steps:
       -
         name: Checkout
