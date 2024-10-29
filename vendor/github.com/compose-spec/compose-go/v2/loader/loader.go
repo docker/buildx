@@ -30,6 +30,7 @@ import (
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/consts"
+	"github.com/compose-spec/compose-go/v2/errdefs"
 	interp "github.com/compose-spec/compose-go/v2/interpolation"
 	"github.com/compose-spec/compose-go/v2/override"
 	"github.com/compose-spec/compose-go/v2/paths"
@@ -139,9 +140,9 @@ func (l localResourceLoader) abs(p string) string {
 	return filepath.Join(l.WorkingDir, p)
 }
 
-func (l localResourceLoader) Accept(p string) bool {
-	_, err := os.Stat(l.abs(p))
-	return err == nil
+func (l localResourceLoader) Accept(_ string) bool {
+	// LocalResourceLoader is the last loader tested so it always should accept the config and try to get the content.
+	return true
 }
 
 func (l localResourceLoader) Load(_ context.Context, p string) (string, error) {
@@ -298,6 +299,51 @@ func parseYAML(decoder *yaml.Decoder) (map[string]interface{}, PostProcessor, er
 		return nil, nil, err
 	}
 	return converted.(map[string]interface{}), &processor, nil
+}
+
+// LoadConfigFiles ingests config files with ResourceLoader and returns config details with paths to local copies
+func LoadConfigFiles(ctx context.Context, configFiles []string, workingDir string, options ...func(*Options)) (*types.ConfigDetails, error) {
+	if len(configFiles) < 1 {
+		return &types.ConfigDetails{}, fmt.Errorf("no configuration file provided: %w", errdefs.ErrNotFound)
+	}
+
+	opts := &Options{}
+	config := &types.ConfigDetails{
+		ConfigFiles: make([]types.ConfigFile, len(configFiles)),
+	}
+
+	for _, op := range options {
+		op(opts)
+	}
+	opts.ResourceLoaders = append(opts.ResourceLoaders, localResourceLoader{})
+
+	for i, p := range configFiles {
+		for _, loader := range opts.ResourceLoaders {
+			_, isLocalResourceLoader := loader.(localResourceLoader)
+			if !loader.Accept(p) {
+				continue
+			}
+			local, err := loader.Load(ctx, p)
+			if err != nil {
+				return nil, err
+			}
+			if config.WorkingDir == "" && !isLocalResourceLoader {
+				config.WorkingDir = filepath.Dir(local)
+			}
+			abs, err := filepath.Abs(local)
+			if err != nil {
+				abs = local
+			}
+			config.ConfigFiles[i] = types.ConfigFile{
+				Filename: abs,
+			}
+			break
+		}
+	}
+	if config.WorkingDir == "" {
+		config.WorkingDir = workingDir
+	}
+	return config, nil
 }
 
 // Load reads a ConfigDetails and returns a fully loaded configuration.
@@ -469,6 +515,8 @@ func loadYamlFile(ctx context.Context, file types.ConfigFile, opts *Options, wor
 		if err != nil {
 			return err
 		}
+
+		dict = OmitEmpty(dict)
 
 		// Canonical transformation can reveal duplicates, typically as ports can be a range and conflict with an override
 		dict, err = override.EnforceUnicity(dict)
@@ -675,6 +723,7 @@ func NormalizeProjectName(s string) string {
 
 var userDefinedKeys = []tree.Path{
 	"services",
+	"services.*.depends_on",
 	"volumes",
 	"networks",
 	"secrets",
@@ -687,7 +736,7 @@ func processExtensions(dict map[string]any, p tree.Path, extensions map[string]a
 	for key, value := range dict {
 		skip := false
 		for _, uk := range userDefinedKeys {
-			if uk.Matches(p) {
+			if p.Matches(uk) {
 				skip = true
 				break
 			}
@@ -770,14 +819,14 @@ func secretConfigDecoderHook(from, to reflect.Type, data interface{}) (interface
 	// Check if the input is a map and we're decoding into a SecretConfig
 	if from.Kind() == reflect.Map && to == reflect.TypeOf(types.SecretConfig{}) {
 		if v, ok := data.(map[string]interface{}); ok {
-			if ext, ok := v["#extensions"].(map[string]interface{}); ok {
+			if ext, ok := v[consts.Extensions].(map[string]interface{}); ok {
 				if val, ok := ext[types.SecretConfigXValue].(string); ok {
 					// Return a map with the Content field populated
 					v["Content"] = val
 					delete(ext, types.SecretConfigXValue)
 
 					if len(ext) == 0 {
-						delete(v, "#extensions")
+						delete(v, consts.Extensions)
 					}
 				}
 			}

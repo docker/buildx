@@ -33,6 +33,7 @@ func init() {
 	transformers["services.*.extends"] = transformExtends
 	transformers["services.*.networks"] = transformServiceNetworks
 	transformers["services.*.volumes.*"] = transformVolumeMount
+	transformers["services.*.dns"] = transformStringOrList
 	transformers["services.*.devices.*"] = transformDeviceMapping
 	transformers["services.*.secrets.*"] = transformFileMount
 	transformers["services.*.configs.*"] = transformFileMount
@@ -46,6 +47,15 @@ func init() {
 	transformers["secrets.*"] = transformMaybeExternal
 	transformers["configs.*"] = transformMaybeExternal
 	transformers["include.*"] = transformInclude
+}
+
+func transformStringOrList(data any, _ tree.Path, _ bool) (any, error) {
+	switch t := data.(type) {
+	case string:
+		return []any{t}, nil
+	default:
+		return data, nil
+	}
 }
 
 // Canonical transforms a compose model into canonical syntax
