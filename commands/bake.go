@@ -116,7 +116,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 
 	// instance only needed for reading remote bake files or building
 	var driverType string
-	if url != "" || !in.printOnly {
+	if url != "" || !(in.printOnly || in.listTargets || in.listVars) {
 		b, err := builder.New(dockerCli,
 			builder.WithName(in.builder),
 			builder.WithContextPathHash(contextPathHash),
