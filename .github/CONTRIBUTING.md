@@ -188,6 +188,89 @@ To generate new vendored files with go modules run:
 $ make vendor
 ```
 
+### Generate profiling data
+
+You can configure Buildx to generate [`pprof`](https://github.com/google/pprof)
+memory and CPU profiles to analyze and optimize your builds. These profiles are
+useful for identifying performance bottlenecks, detecting memory
+inefficiencies, and ensuring the program (Buildx) runs efficiently.
+
+The following environment variables control whether Buildx generates profiling
+data for builds:
+
+```console
+$ export BUILDX_CPU_PROFILE=buildx_cpu.prof
+$ export BUILDX_MEM_PROFILE=buildx_mem.prof
+```
+
+When set, Buildx emits profiling samples for the builds to the location
+specified by the environment variable.
+
+To analyze and visualize profiling samples, you need `pprof` from the Go
+toolchain, and (optionally) GraphViz for visualization in a graphical format.
+
+To inspect profiling data with `pprof`:
+
+1. Build a local binary of Buildx from source.
+
+   ```console
+   $ docker buildx bake
+   ```
+
+   The binary gets exported to `./bin/build/buildx`.
+
+2. Run a build and with the environment variables set to generate profiling data.
+
+   ```console
+   $ export BUILDX_CPU_PROFILE=buildx_cpu.prof
+   $ export BUILDX_MEM_PROFILE=buildx_mem.prof
+   $ ./bin/build/buildx bake
+   ```
+
+   This creates `buildx_cpu.prof` and `buildx_mem.prof` for the build.
+
+3. Start `pprof` and specify the filename of the profile that you want to
+   analyze.
+
+   ```console
+   $ go tool pprof buildx_cpu.prof
+   ```
+
+   This opens the `pprof` interactive console. From here, you can inspect the
+   profiling sample using various commands. For example, use `top 10` command
+   to view the top 10 most time-consuming entries.
+
+   ```plaintext
+   (pprof) top 10
+   Showing nodes accounting for 3.04s, 91.02% of 3.34s total
+   Dropped 123 nodes (cum <= 0.02s)
+   Showing top 10 nodes out of 159
+         flat  flat%   sum%        cum   cum%
+        1.14s 34.13% 34.13%      1.14s 34.13%  syscall.syscall
+        0.91s 27.25% 61.38%      0.91s 27.25%  runtime.kevent
+        0.35s 10.48% 71.86%      0.35s 10.48%  runtime.pthread_cond_wait
+        0.22s  6.59% 78.44%      0.22s  6.59%  runtime.pthread_cond_signal
+        0.15s  4.49% 82.93%      0.15s  4.49%  runtime.usleep
+        0.10s  2.99% 85.93%      0.10s  2.99%  runtime.memclrNoHeapPointers
+        0.10s  2.99% 88.92%      0.10s  2.99%  runtime.memmove
+        0.03s   0.9% 89.82%      0.03s   0.9%  runtime.madvise
+        0.02s   0.6% 90.42%      0.02s   0.6%  runtime.(*mspan).typePointersOfUnchecked
+        0.02s   0.6% 91.02%      0.02s   0.6%  runtime.pcvalue
+   ```
+
+To view the call graph in a GUI, run `go tool pprof -http=:8081 <sample>`.
+
+> [!NOTE]
+> Requires [GraphViz](https://www.graphviz.org/) to be installed.
+
+```console
+$ go tool pprof -http=:8081 buildx_cpu.prof
+Serving web UI on http://127.0.0.1:8081
+http://127.0.0.1:8081
+```
+
+For more information about using `pprof` and how to interpret the call graph,
+refer to the [`pprof` README](https://github.com/google/pprof/blob/main/doc/README.md).
 
 ### Conventions
 
