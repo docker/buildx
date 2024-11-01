@@ -77,6 +77,7 @@ RUN --mount=type=bind,target=. \
   set -e
   xx-go --wrap
   DESTDIR=/usr/bin VERSION=$(cat /buildx-version/version) REVISION=$(cat /buildx-version/revision) GO_EXTRA_LDFLAGS="-s -w" ./hack/build
+  file /usr/bin/docker-buildx
   xx-verify --static /usr/bin/docker-buildx
 EOT
 
@@ -95,6 +96,7 @@ FROM scratch AS binaries-unix
 COPY --link --from=buildx-build /usr/bin/docker-buildx /buildx
 
 FROM binaries-unix AS binaries-darwin
+FROM binaries-unix AS binaries-freebsd
 FROM binaries-unix AS binaries-linux
 
 FROM scratch AS binaries-windows
