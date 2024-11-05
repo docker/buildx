@@ -41,6 +41,8 @@ target "lint" {
   platforms = GOLANGCI_LINT_MULTIPLATFORM != "" ? [
     "darwin/amd64",
     "darwin/arm64",
+    "freebsd/amd64",
+    "freebsd/arm64",
     "linux/amd64",
     "linux/arm64",
     "linux/s390x",
@@ -154,6 +156,8 @@ target "binaries-cross" {
   platforms = [
     "darwin/amd64",
     "darwin/arm64",
+    "freebsd/amd64",
+    "freebsd/arm64",
     "linux/amd64",
     "linux/arm/v6",
     "linux/arm/v7",
