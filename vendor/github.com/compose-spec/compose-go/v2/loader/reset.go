@@ -63,7 +63,7 @@ func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.No
 	}
 
 	// Mark the current node as visited
-	p.visitedNodes[node] = pathStr
+	p.visitedNodes[node] = pathStr + "."
 
 	// If the node is an alias, We need to process the alias field in order to consider the !override and !reset tags
 	if node.Kind == yaml.AliasNode {
