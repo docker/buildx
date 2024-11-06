@@ -725,10 +725,12 @@ type Target struct {
 	linked bool
 }
 
-var _ hclparser.WithEvalContexts = &Target{}
-var _ hclparser.WithGetName = &Target{}
-var _ hclparser.WithEvalContexts = &Group{}
-var _ hclparser.WithGetName = &Group{}
+var (
+	_ hclparser.WithEvalContexts = &Target{}
+	_ hclparser.WithGetName      = &Target{}
+	_ hclparser.WithEvalContexts = &Group{}
+	_ hclparser.WithGetName      = &Group{}
+)
 
 func (t *Target) normalize() {
 	t.Annotations = removeDupes(t.Annotations)
@@ -865,7 +867,7 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.Dockerfile = &value
 		case "args":
 			if len(keys) != 2 {
-				return errors.Errorf("args require name")
+				return errors.Errorf("invalid format for args, expecting args.<name>=<value>")
 			}
 			if t.Args == nil {
 				t.Args = map[string]*string{}
@@ -873,7 +875,7 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.Args[keys[1]] = &value
 		case "contexts":
 			if len(keys) != 2 {
-				return errors.Errorf("contexts require name")
+				return errors.Errorf("invalid format for contexts, expecting contexts.<name>=<value>")
 			}
 			if t.Contexts == nil {
 				t.Contexts = map[string]string{}
@@ -881,7 +883,7 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.Contexts[keys[1]] = value
 		case "labels":
 			if len(keys) != 2 {
-				return errors.Errorf("labels require name")
+				return errors.Errorf("invalid format for labels, expecting labels.<name>=<value>")
 			}
 			if t.Labels == nil {
 				t.Labels = map[string]*string{}
