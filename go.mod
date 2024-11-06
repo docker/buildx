@@ -41,7 +41,7 @@ require (
 	github.com/spf13/cobra v1.8.1
 	github.com/spf13/pflag v1.0.5
 	github.com/stretchr/testify v1.9.0
-	github.com/tonistiigi/fsutil v0.0.0-20241028165955-397af5306b5c
+	github.com/tonistiigi/fsutil v0.0.0-20241104203517-8d32dbdd27d3
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
 	github.com/zclconf/go-cty v1.14.4
 	go.opentelemetry.io/otel v1.21.0
