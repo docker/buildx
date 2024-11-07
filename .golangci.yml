@@ -76,6 +76,7 @@ linters-settings:
     excludes:
       - G204  # Audit use of command execution
       - G402  # TLS MinVersion too low
+      - G115  # integer overflow conversion (TODO: verify these)
     config:
       G306: "0644"
 
