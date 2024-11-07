@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.23
-ARG XX_VERSION=1.3.0
+ARG XX_VERSION=1.5.0
 ARG GOLANGCI_LINT_VERSION=1.62.0
 ARG GOPLS_VERSION=v0.26.0
 # disabled: deprecated unusedvariable simplifyrange
