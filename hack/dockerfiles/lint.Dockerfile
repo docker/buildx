@@ -2,11 +2,10 @@
 
 ARG GO_VERSION=1.22
 ARG XX_VERSION=1.3.0
-ARG GOLANGCI_LINT_VERSION=1.57.2
-ARG GOPLS_VERSION=v0.20.0
+ARG GOLANGCI_LINT_VERSION=1.62.0
+ARG GOPLS_VERSION=v0.26.0
 # disabled: deprecated unusedvariable simplifyrange
-ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs nonewvars noresultvalues simplifycompositelit simplifyslice stubmethods undeclaredname unusedparams useany"
-
+ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs nonewvars norangeoverfunc noresultvalues simplifycompositelit simplifyslice undeclaredname unusedparams useany"
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
