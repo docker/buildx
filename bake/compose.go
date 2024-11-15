@@ -102,6 +102,12 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				shmSize = &shmSizeStr
 			}
 
+			var networkModeP *string
+			if s.Build.Network != "" {
+				networkMode := s.Build.Network
+				networkModeP = &networkMode
+			}
+
 			var ulimits []string
 			if s.Build.Ulimits != nil {
 				for n, u := range s.Build.Ulimits {
@@ -154,7 +160,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				})),
 				CacheFrom:   s.Build.CacheFrom,
 				CacheTo:     s.Build.CacheTo,
-				NetworkMode: &s.Build.Network,
+				NetworkMode: networkModeP,
 				SSH:         ssh,
 				Secrets:     secrets,
 				ShmSize:     shmSize,

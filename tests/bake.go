@@ -63,48 +63,70 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 }
 
 func testBakePrint(t *testing.T, sb integration.Sandbox) {
-	dockerfile := []byte(`
-FROM busybox
-ARG HELLO
-RUN echo "Hello ${HELLO}"
-	`)
-	bakefile := []byte(`
+	testCases := []struct {
+		name string
+		f    string
+		dt   []byte
+	}{
+		{
+			"HCL",
+			"docker-bake.hcl",
+			[]byte(`
 target "build" {
   args = {
     HELLO = "foo"
   }
 }
-`)
-	dir := tmpdir(
-		t,
-		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-	)
-
-	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--print", "build"))
-	stdout := bytes.Buffer{}
-	stderr := bytes.Buffer{}
-	cmd.Stdout = &stdout
-	cmd.Stderr = &stderr
-	require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
-
-	var def struct {
-		Group  map[string]*bake.Group  `json:"group,omitempty"`
-		Target map[string]*bake.Target `json:"target"`
+`)},
+		{
+			"Compose",
+			"compose.yml",
+			[]byte(`
+services:
+  build:
+    build:
+      context: .
+      args:
+        HELLO: foo
+`)},
 	}
-	require.NoError(t, json.Unmarshal(stdout.Bytes(), &def))
 
-	require.Len(t, def.Group, 1)
-	require.Contains(t, def.Group, "default")
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := tmpdir(
+				t,
+				fstest.CreateFile(tc.f, tc.dt, 0600),
+				fstest.CreateFile("Dockerfile", []byte(`
+FROM busybox
+ARG HELLO
+RUN echo "Hello ${HELLO}"
+	`), 0600),
+			)
 
-	require.Equal(t, []string{"build"}, def.Group["default"].Targets)
-	require.Len(t, def.Target, 1)
-	require.Contains(t, def.Target, "build")
-	require.Equal(t, ".", *def.Target["build"].Context)
-	require.Equal(t, "Dockerfile", *def.Target["build"].Dockerfile)
-	require.Equal(t, map[string]*string{"HELLO": ptrstr("foo")}, def.Target["build"].Args)
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--print", "build"))
+			stdout := bytes.Buffer{}
+			stderr := bytes.Buffer{}
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
 
-	require.Equal(t, `{
+			var def struct {
+				Group  map[string]*bake.Group  `json:"group,omitempty"`
+				Target map[string]*bake.Target `json:"target"`
+			}
+			require.NoError(t, json.Unmarshal(stdout.Bytes(), &def))
+
+			require.Len(t, def.Group, 1)
+			require.Contains(t, def.Group, "default")
+
+			require.Equal(t, []string{"build"}, def.Group["default"].Targets)
+			require.Len(t, def.Target, 1)
+			require.Contains(t, def.Target, "build")
+			require.Equal(t, ".", *def.Target["build"].Context)
+			require.Equal(t, "Dockerfile", *def.Target["build"].Dockerfile)
+			require.Equal(t, map[string]*string{"HELLO": ptrstr("foo")}, def.Target["build"].Args)
+
+			require.Equal(t, `{
   "group": {
     "default": {
       "targets": [
@@ -123,6 +145,8 @@ target "build" {
   }
 }
 `, stdout.String())
+		})
+	}
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
