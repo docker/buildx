@@ -25,11 +25,17 @@ type Opt struct {
 }
 
 type variable struct {
-	Name        string         `json:"-" hcl:"name,label"`
-	Default     *hcl.Attribute `json:"default,omitempty" hcl:"default,optional"`
-	Description string         `json:"description,omitempty" hcl:"description,optional"`
-	Body        hcl.Body       `json:"-" hcl:",body"`
-	Remain      hcl.Body       `json:"-" hcl:",remain"`
+	Name        string                `json:"-" hcl:"name,label"`
+	Default     *hcl.Attribute        `json:"default,omitempty" hcl:"default,optional"`
+	Description string                `json:"description,omitempty" hcl:"description,optional"`
+	Validations []*variableValidation `json:"validation,omitempty" hcl:"validation,block"`
+	Body        hcl.Body              `json:"-" hcl:",body"`
+	Remain      hcl.Body              `json:"-" hcl:",remain"`
+}
+
+type variableValidation struct {
+	Condition    hcl.Expression `json:"condition" hcl:"condition"`
+	ErrorMessage hcl.Expression `json:"error_message" hcl:"error_message"`
 }
 
 type functionDef struct {
@@ -541,6 +547,33 @@ func (p *parser) resolveBlockNames(block *hcl.Block) ([]string, error) {
 	return names, nil
 }
 
+func (p *parser) validateVariables(vars map[string]*variable, ectx *hcl.EvalContext) hcl.Diagnostics {
+	var diags hcl.Diagnostics
+	for _, v := range vars {
+		for _, validation := range v.Validations {
+			condition, condDiags := validation.Condition.Value(ectx)
+			if condDiags.HasErrors() {
+				diags = append(diags, condDiags...)
+				continue
+			}
+			if !condition.True() {
+				message, msgDiags := validation.ErrorMessage.Value(ectx)
+				if msgDiags.HasErrors() {
+					diags = append(diags, msgDiags...)
+					continue
+				}
+				diags = append(diags, &hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Validation failed",
+					Detail:   message.AsString(),
+					Subject:  validation.Condition.Range().Ptr(),
+				})
+			}
+		}
+	}
+	return diags
+}
+
 type Variable struct {
 	Name        string
 	Description string
@@ -685,6 +718,9 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (*ParseMeta, hcl.Diagnostics) {
 			v.Value = &s
 		}
 		vars = append(vars, v)
+	}
+	if diags := p.validateVariables(p.vars, p.ectx); diags.HasErrors() {
+		return nil, diags
 	}
 
 	for k := range p.funcs {
