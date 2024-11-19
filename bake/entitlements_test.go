@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"testing"
 
@@ -80,9 +81,15 @@ func TestEvaluateToExistingPath(t *testing.T) {
 			expectErr: false,
 		},
 		{
-			name:      "Root path",
-			input:     "/",
-			expected:  "/",
+			name:  "Root path",
+			input: "/",
+			expected: func() string {
+				root := "/"
+				if runtime.GOOS == "windows" {
+					root = filepath.VolumeName(root)
+				}
+				return root
+			}(),
 			expectErr: false,
 		},
 	}
@@ -163,7 +170,7 @@ func TestDedupePaths(t *testing.T) {
 			arr = toRelativePaths(arr, wd)
 			m := make(map[string]struct{})
 			for _, v := range arr {
-				m[v] = struct{}{}
+				m[filepath.ToSlash(v)] = struct{}{}
 			}
 			require.Equal(t, tc.out, m)
 		})
