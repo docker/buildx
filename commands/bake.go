@@ -257,7 +257,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	if err != nil {
 		return err
 	}
-	if err := exp.Prompt(ctx, &syncWriter{w: dockerCli.Err(), wait: printer.Wait}); err != nil {
+	if err := exp.Prompt(ctx, url != "", &syncWriter{w: dockerCli.Err(), wait: printer.Wait}); err != nil {
 		return err
 	}
 	if printer.IsDone() {

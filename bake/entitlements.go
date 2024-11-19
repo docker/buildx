@@ -108,6 +108,10 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 	rwPaths := map[string]struct{}{}
 	roPaths := map[string]struct{}{}
 
+	for _, p := range collectLocalPaths(bo.Inputs) {
+		roPaths[p] = struct{}{}
+	}
+
 	for _, out := range bo.Exports {
 		if out.Type == "local" {
 			if dest, ok := out.Attrs["dest"]; ok {
@@ -167,7 +171,7 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 	return nil
 }
 
-func (c EntitlementConf) Prompt(ctx context.Context, out io.Writer) error {
+func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Writer) error {
 	var term bool
 	if _, err := console.ConsoleFromFile(os.Stdin); err == nil {
 		term = true
@@ -195,6 +199,17 @@ func (c EntitlementConf) Prompt(ctx context.Context, out io.Writer) error {
 	}
 
 	roPaths, rwPaths, commonPaths := groupSamePaths(c.FSRead, c.FSWrite)
+	wd, err := os.Getwd()
+	if err != nil {
+		return errors.Wrap(err, "failed to get current working directory")
+	}
+	wd, err = filepath.EvalSymlinks(wd)
+	if err != nil {
+		return errors.Wrap(err, "failed to evaluate working directory")
+	}
+	roPaths = toRelativePaths(roPaths, wd)
+	rwPaths = toRelativePaths(rwPaths, wd)
+	commonPaths = toRelativePaths(commonPaths, wd)
 
 	if len(commonPaths) > 0 {
 		for _, p := range commonPaths {
@@ -251,6 +266,17 @@ func (c EntitlementConf) Prompt(ctx context.Context, out io.Writer) error {
 	}
 
 	fsEntitlementsEnabled := false
+	if isRemote {
+		if v, ok := os.LookupEnv("BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
+			vv, err := strconv.ParseBool(v)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse BAKE_ALLOW_REMOTE_FS_ACCESS value %q", v)
+			}
+			fsEntitlementsEnabled = !vv
+		} else {
+			fsEntitlementsEnabled = true
+		}
+	}
 	v, fsEntitlementsSet := os.LookupEnv("BUILDX_BAKE_ENTITLEMENTS_FS")
 	if fsEntitlementsSet {
 		vv, err := strconv.ParseBool(v)
@@ -334,11 +360,6 @@ loop0:
 }
 
 func dedupPaths(in map[string]struct{}) (map[string]struct{}, error) {
-	wd, err := os.Getwd()
-	if err != nil {
-		return nil, err
-	}
-
 	arr := make([]string, 0, len(in))
 	for p := range in {
 		arr = append(arr, filepath.Clean(p))
@@ -358,18 +379,23 @@ loop0:
 		}
 		m[p] = struct{}{}
 	}
+	return m, nil
+}
 
-	for p := range m {
+func toRelativePaths(in []string, wd string) []string {
+	out := make([]string, 0, len(in))
+	for _, p := range in {
 		rel, err := filepath.Rel(wd, p)
 		if err == nil {
-			if !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				delete(m, p)
-				m[rel] = struct{}{}
+			// allow up to one level of ".." in the path
+			if !strings.HasPrefix(rel, ".."+string(filepath.Separator)+"..") {
+				out = append(out, rel)
+				continue
 			}
 		}
+		out = append(out, p)
 	}
-
-	return m, nil
+	return out
 }
 
 func groupSamePaths(in1, in2 []string) ([]string, []string, []string) {

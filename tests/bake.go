@@ -508,7 +508,8 @@ EOT
 		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
 	)
 	require.Error(t, err, out)
-	require.Contains(t, out, "outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS")
+	require.Contains(t, out, "Your build is requesting privileges for following possibly insecure capabilities")
+	require.Contains(t, out, "Read access to path ../")
 
 	out, err = bakeCmd(
 		sb,
@@ -555,7 +556,8 @@ EOT
 		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
 	)
 	require.Error(t, err, out)
-	require.Contains(t, out, "outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS")
+	require.Contains(t, out, "Your build is requesting privileges for following possibly insecure capabilities")
+	require.Contains(t, out, "Read access to path ..")
 
 	out, err = bakeCmd(
 		sb,

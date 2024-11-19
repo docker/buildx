@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller/pb"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/stretchr/testify/require"
 )
@@ -132,15 +133,17 @@ func TestDedupePaths(t *testing.T) {
 		},
 		{
 			in: map[string]struct{}{
-				filepath.Join(wd, "a/b/c"):   {},
-				filepath.Join(wd, "../aa"):   {},
-				filepath.Join(wd, "a/b"):     {},
-				filepath.Join(wd, "a/b/d"):   {},
-				filepath.Join(wd, "../aa/b"): {},
+				filepath.Join(wd, "a/b/c"):    {},
+				filepath.Join(wd, "../aa"):    {},
+				filepath.Join(wd, "a/b"):      {},
+				filepath.Join(wd, "a/b/d"):    {},
+				filepath.Join(wd, "../aa/b"):  {},
+				filepath.Join(wd, "../../bb"): {},
 			},
 			out: map[string]struct{}{
-				"a/b":                      {},
-				filepath.Join(wd, "../aa"): {},
+				"a/b":                         {},
+				"../aa":                       {},
+				filepath.Join(wd, "../../bb"): {},
 			},
 		},
 	}
@@ -151,7 +154,18 @@ func TestDedupePaths(t *testing.T) {
 			if err != nil {
 				require.NoError(t, err)
 			}
-			require.Equal(t, tc.out, out)
+			// convert to relative paths as that is shown to user
+			arr := make([]string, 0, len(out))
+			for k := range out {
+				arr = append(arr, k)
+			}
+			require.NoError(t, err)
+			arr = toRelativePaths(arr, wd)
+			m := make(map[string]struct{})
+			for _, v := range arr {
+				m[v] = struct{}{}
+			}
+			require.Equal(t, tc.out, m)
 		})
 	}
 }
@@ -164,6 +178,9 @@ func TestValidateEntitlements(t *testing.T) {
 	err := os.Symlink("../../aa", escapeLink)
 	require.NoError(t, err)
 
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+
 	tcases := []struct {
 		name     string
 		conf     EntitlementConf
@@ -172,6 +189,11 @@ func TestValidateEntitlements(t *testing.T) {
 	}{
 		{
 			name: "No entitlements",
+			opt: build.Options{
+				Inputs: build.Inputs{
+					ContextState: &llb.State{},
+				},
+			},
 		},
 		{
 			name: "NetworkHostMissing",
@@ -182,6 +204,7 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			expected: EntitlementConf{
 				NetworkHost: true,
+				FSRead:      []string{wd},
 			},
 		},
 		{
@@ -194,7 +217,9 @@ func TestValidateEntitlements(t *testing.T) {
 					entitlements.EntitlementNetworkHost,
 				},
 			},
-			expected: EntitlementConf{},
+			expected: EntitlementConf{
+				FSRead: []string{wd},
+			},
 		},
 		{
 			name: "SecurityAndNetworkHostMissing",
@@ -207,6 +232,7 @@ func TestValidateEntitlements(t *testing.T) {
 			expected: EntitlementConf{
 				NetworkHost:      true,
 				SecurityInsecure: true,
+				FSRead:           []string{wd},
 			},
 		},
 		{
@@ -222,6 +248,7 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			expected: EntitlementConf{
 				SecurityInsecure: true,
+				FSRead:           []string{wd},
 			},
 		},
 		{
@@ -234,7 +261,8 @@ func TestValidateEntitlements(t *testing.T) {
 				},
 			},
 			expected: EntitlementConf{
-				SSH: true,
+				SSH:    true,
+				FSRead: []string{wd},
 			},
 		},
 		{
@@ -267,6 +295,7 @@ func TestValidateEntitlements(t *testing.T) {
 					slices.Sort(exp)
 					return exp
 				}(),
+				FSRead: []string{wd},
 			},
 		},
 		{
@@ -279,7 +308,7 @@ func TestValidateEntitlements(t *testing.T) {
 				},
 			},
 			conf: EntitlementConf{
-				FSRead: []string{dir1},
+				FSRead: []string{wd, dir1},
 			},
 		},
 		{
@@ -292,7 +321,7 @@ func TestValidateEntitlements(t *testing.T) {
 				},
 			},
 			conf: EntitlementConf{
-				FSRead: []string{dir1},
+				FSRead: []string{wd, dir1},
 			},
 			expected: EntitlementConf{
 				FSRead: []string{filepath.Join(dir1, "../..")},

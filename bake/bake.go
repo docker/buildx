@@ -1117,62 +1117,36 @@ func updateContext(t *build.Inputs, inp *Input) {
 	t.ContextState = &st
 }
 
-// validateContextsEntitlements is a basic check to ensure contexts do not
-// escape local directories when loaded from remote sources. This is to be
-// replaced with proper entitlements support in the future.
-func validateContextsEntitlements(t build.Inputs, inp *Input) error {
-	if inp == nil || inp.State == nil {
-		return nil
-	}
-	if v, ok := os.LookupEnv("BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
-		if vv, _ := strconv.ParseBool(v); vv {
-			return nil
-		}
-	}
+func collectLocalPaths(t build.Inputs) []string {
+	var out []string
 	if t.ContextState == nil {
-		if err := checkPath(t.ContextPath); err != nil {
-			return err
+		if v, ok := isLocalPath(t.ContextPath); ok {
+			out = append(out, v)
+		}
+		if v, ok := isLocalPath(t.DockerfilePath); ok {
+			out = append(out, v)
+		}
+	} else {
+		if strings.HasPrefix(t.ContextPath, "cwd://") {
+			out = append(out, strings.TrimPrefix(t.ContextPath, "cwd://"))
 		}
 	}
 	for _, v := range t.NamedContexts {
 		if v.State != nil {
 			continue
 		}
-		if err := checkPath(v.Path); err != nil {
-			return err
+		if v, ok := isLocalPath(v.Path); ok {
+			out = append(out, v)
 		}
 	}
-	return nil
+	return out
 }
 
-func checkPath(p string) error {
+func isLocalPath(p string) (string, bool) {
 	if build.IsRemoteURL(p) || strings.HasPrefix(p, "target:") || strings.HasPrefix(p, "docker-image:") {
-		return nil
+		return "", false
 	}
-	p, err := filepath.EvalSymlinks(p)
-	if err != nil {
-		if os.IsNotExist(err) {
-			return nil
-		}
-		return err
-	}
-	p, err = filepath.Abs(p)
-	if err != nil {
-		return err
-	}
-	wd, err := os.Getwd()
-	if err != nil {
-		return err
-	}
-	rel, err := filepath.Rel(wd, p)
-	if err != nil {
-		return err
-	}
-	parts := strings.Split(rel, string(os.PathSeparator))
-	if parts[0] == ".." {
-		return errors.Errorf("path %s is outside of the working directory, please set BAKE_ALLOW_REMOTE_FS_ACCESS=1", p)
-	}
-	return nil
+	return strings.TrimPrefix(p, "cwd://"), true
 }
 
 func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
@@ -1212,9 +1186,6 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		// it's not outside the working directory and then resolve it to an
 		// absolute path.
 		bi.DockerfilePath = path.Clean(strings.TrimPrefix(bi.DockerfilePath, "cwd://"))
-		if err := checkPath(bi.DockerfilePath); err != nil {
-			return nil, err
-		}
 		var err error
 		bi.DockerfilePath, err = filepath.Abs(bi.DockerfilePath)
 		if err != nil {
@@ -1249,10 +1220,6 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		if strings.HasPrefix(v.Path, "cwd://") {
 			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
 		}
-	}
-
-	if err := validateContextsEntitlements(bi, inp); err != nil {
-		return nil, err
 	}
 
 	t.Context = &bi.ContextPath
