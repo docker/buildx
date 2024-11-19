@@ -1856,3 +1856,155 @@ func TestNetNone(t *testing.T) {
 	require.Len(t, bo["app"].Allow, 0)
 	require.Equal(t, "none", bo["app"].NetworkMode)
 }
+
+func TestVariableValidation(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "FOO" {
+  validation {
+    condition = FOO != ""
+    error_message = "FOO is required."
+  }
+}
+target "app" {
+  args = {
+    FOO = FOO
+  }
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	t.Run("Valid", func(t *testing.T) {
+		t.Setenv("FOO", "bar")
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("Invalid", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "FOO is required.")
+	})
+}
+
+func TestVariableValidationMulti(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "FOO" {
+  validation {
+    condition = FOO != ""
+    error_message = "FOO is required."
+  }
+  validation {
+    condition = strlen(FOO) > 4
+    error_message = "FOO must be longer than 4 characters."
+  }
+}
+target "app" {
+  args = {
+    FOO = FOO
+  }
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	t.Run("Valid", func(t *testing.T) {
+		t.Setenv("FOO", "barbar")
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("InvalidLength", func(t *testing.T) {
+		t.Setenv("FOO", "bar")
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "FOO must be longer than 4 characters.")
+	})
+
+	t.Run("InvalidEmpty", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "FOO is required.")
+	})
+}
+
+func TestVariableValidationWithDeps(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "FOO" {}
+variable "BAR" {
+  validation {
+    condition = FOO != ""
+    error_message = "BAR requires FOO to be set."
+  }
+}
+target "app" {
+  args = {
+    BAR = BAR
+  }
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	t.Run("Valid", func(t *testing.T) {
+		t.Setenv("FOO", "bar")
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("SetBar", func(t *testing.T) {
+		t.Setenv("FOO", "bar")
+		t.Setenv("BAR", "baz")
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("Invalid", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "BAR requires FOO to be set.")
+	})
+}
+
+func TestVariableValidationTyped(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "FOO" {
+  default = 0
+  validation {
+    condition = FOO > 5
+    error_message = "FOO must be greater than 5."
+  }
+}
+target "app" {
+  args = {
+    FOO = FOO
+  }
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	t.Run("Valid", func(t *testing.T) {
+		t.Setenv("FOO", "10")
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.NoError(t, err)
+	})
+
+	t.Run("Invalid", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		require.Error(t, err)
+		require.Contains(t, err.Error(), "FOO must be greater than 5.")
+	})
+}
