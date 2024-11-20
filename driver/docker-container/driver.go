@@ -177,7 +177,6 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 					break
 				}
 			}
-
 		}
 		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
 		if err != nil && !errdefs.IsConflict(err) {

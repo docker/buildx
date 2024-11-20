@@ -5,23 +5,35 @@ run:
 
 linters:
   enable:
+    - bodyclose
     - depguard
     - forbidigo
+    - gocritic
     - gofmt
     - goimports
     - gosec
     - gosimple
     - govet
     - ineffassign
+    - makezero
     - misspell
+    - noctx
     - nolintlint
     - revive
     - staticcheck
     - typecheck
     - unused
+    - whitespace
   disable-all: true
 
 linters-settings:
+  gocritic:
+    disabled-checks:
+      - "ifElseChain"
+      - "assignOp"
+      - "appendAssign"
+      - "singleCaseSwitch"
+      - "exitAfterDefer" # FIXME
   govet:
     enable:
       - nilness

@@ -138,7 +138,6 @@ func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 			}
 			annotations[ak] = v
 		}
-
 	}
 	return annotations, nil
 }

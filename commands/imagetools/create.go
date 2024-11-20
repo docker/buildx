@@ -42,7 +42,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		return errors.Errorf("can't push with no tags specified, please set --tag or --dry-run")
 	}
 
-	fileArgs := make([]string, len(in.files))
+	fileArgs := make([]string, len(in.files), len(in.files)+len(args))
 	for i, f := range in.files {
 		dt, err := os.ReadFile(f)
 		if err != nil {

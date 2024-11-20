@@ -176,11 +176,6 @@ func resolveBuildKitVersion(ver string) (string, error) {
 		if err != nil {
 			return "", err
 		}
-		//if _, errs := c.Validate(mobyVersion); len(errs) > 0 {
-		//	for _, err := range errs {
-		//		fmt.Printf("%s: %v\n", m.MobyVersionConstraint, err)
-		//	}
-		//}
 		if !c.Check(mobyVersion) {
 			continue
 		}

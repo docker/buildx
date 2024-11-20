@@ -179,7 +179,6 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			c.Targets = append(c.Targets, t)
 		}
 		c.Groups = append(c.Groups, g)
-
 	}
 
 	return &c, nil

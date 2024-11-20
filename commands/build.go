@@ -885,7 +885,6 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 			src.Print(w)
 		}
 		fmt.Fprintf(w, "\n")
-
 	}
 }
 
