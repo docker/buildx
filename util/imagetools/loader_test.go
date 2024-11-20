@@ -10,6 +10,7 @@ import (
 	"github.com/opencontainers/go-digest"
 
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestLoad(t *testing.T) {
@@ -19,7 +20,7 @@ func TestLoad(t *testing.T) {
 	r := getImageNoAttestation()
 	indexDigest := reflect.ValueOf(r.indexes).MapKeys()[0].String()
 	result, err := loader.Load(ctx, fmt.Sprintf("test@%s", indexDigest))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	if err == nil {
 		assert.Equal(t, 1, len(result.indexes))
 		assert.Equal(t, 2, len(result.images))
@@ -32,7 +33,7 @@ func TestLoad(t *testing.T) {
 	r = getImageWithAttestation(plainSpdx)
 	indexDigest = reflect.ValueOf(r.indexes).MapKeys()[0].String()
 	result, err = loader.Load(ctx, fmt.Sprintf("test@%s", indexDigest))
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	if err == nil {
 		assert.Equal(t, 1, len(result.indexes))
 		assert.Equal(t, 2, len(result.images))
@@ -92,7 +93,7 @@ func TestSBOM(t *testing.T) {
 			r.assets["linux/amd64"] = a
 			actual, err := r.SBOM()
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, 1, len(actual))
 		})
 	}
@@ -140,7 +141,7 @@ func TestProvenance(t *testing.T) {
 			r.assets["linux/amd64"] = a
 			actual, err := r.Provenance()
 
-			assert.NoError(t, err)
+			require.NoError(t, err)
 			assert.Equal(t, 1, len(actual))
 		})
 	}
@@ -167,7 +168,7 @@ func Test_isInTotoDSSE(t *testing.T) {
 
 	for _, test := range tests {
 		t.Run(test.mime, func(t *testing.T) {
-			assert.Equal(t, isInTotoDSSE(test.mime), test.expected)
+			assert.Equal(t, test.expected, isInTotoDSSE(test.mime))
 		})
 	}
 }
@@ -175,19 +176,19 @@ func Test_isInTotoDSSE(t *testing.T) {
 func Test_decodeDSSE(t *testing.T) {
 	// Returns input when mime isn't a DSSE type
 	actual, err := decodeDSSE([]byte("foobar"), "application/vnd.in-toto+json")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, []byte("foobar"), actual)
 
 	// Returns the base64 decoded payload if is a DSSE
 	payload := base64.StdEncoding.EncodeToString([]byte("hello world"))
 	envelope := fmt.Sprintf("{\"payload\":\"%s\"}", payload)
 	actual, err = decodeDSSE([]byte(envelope), "application/vnd.in-toto.spdx+dsse")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	assert.Equal(t, "hello world", string(actual))
 
 	_, err = decodeDSSE([]byte("not a json"), "application/vnd.in-toto.spdx+dsse")
-	assert.Error(t, err)
+	require.Error(t, err)
 
 	_, err = decodeDSSE([]byte("{\"payload\": \"not base64\"}"), "application/vnd.in-toto.spdx+dsse")
-	assert.Error(t, err)
+	require.Error(t, err)
 }

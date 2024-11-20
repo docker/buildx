@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 func generateRandomData(size int) []byte {
@@ -57,7 +56,7 @@ func TestSyncMultiReaderParallel(t *testing.T) {
 					return
 				}
 
-				require.NoError(t, err, "Reader %d error", readerId)
+				assert.NoError(t, err, "Reader %d error", readerId)
 
 				if mathrand.Intn(1000) == 0 { //nolint:gosec
 					t.Logf("Reader %d closing", readerId)

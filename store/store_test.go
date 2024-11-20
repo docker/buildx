@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/buildx/util/confutil"
 	"github.com/pkg/errors"
+	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -44,7 +45,7 @@ func TestNodeLocking(t *testing.T) {
 
 	go func() {
 		_, release, err := s.Txn()
-		require.NoError(t, err)
+		assert.NoError(t, err)
 		release()
 		close(ready)
 	}()

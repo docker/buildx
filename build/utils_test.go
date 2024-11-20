@@ -138,7 +138,7 @@ func TestToBuildkitExtraHosts(t *testing.T) {
 			actualOut, actualErr := toBuildkitExtraHosts(context.TODO(), tc.input, nil)
 			if tc.expectedErr == "" {
 				require.Equal(t, tc.expectedOut, actualOut)
-				require.Nil(t, actualErr)
+				require.NoError(t, actualErr)
 			} else {
 				require.Zero(t, actualOut)
 				require.Error(t, actualErr, tc.expectedErr)

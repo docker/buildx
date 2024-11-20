@@ -19,13 +19,13 @@ func TestCsvToMap(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Contains(t, r, "tolerations")
-	require.Equal(t, r["tolerations"], "key=foo,value=bar;key=foo2,value=bar2")
+	require.Equal(t, "key=foo,value=bar;key=foo2,value=bar2", r["tolerations"])
 
 	require.Contains(t, r, "replicas")
-	require.Equal(t, r["replicas"], "1")
+	require.Equal(t, "1", r["replicas"])
 
 	require.Contains(t, r, "namespace")
-	require.Equal(t, r["namespace"], "default")
+	require.Equal(t, "default", r["namespace"])
 }
 
 func TestParseBuildkitdFlags(t *testing.T) {

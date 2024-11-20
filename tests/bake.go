@@ -126,7 +126,7 @@ RUN echo "Hello ${HELLO}"
 			require.Equal(t, "Dockerfile", *def.Target["build"].Dockerfile)
 			require.Equal(t, map[string]*string{"HELLO": ptrstr("foo")}, def.Target["build"].Args)
 
-			require.Equal(t, `{
+			require.JSONEq(t, `{
   "group": {
     "default": {
       "targets": [
