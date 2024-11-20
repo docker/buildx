@@ -34,6 +34,16 @@ linters-settings:
       - "appendAssign"
       - "singleCaseSwitch"
       - "exitAfterDefer" # FIXME
+  importas:
+    alias:
+      # Enforce alias to prevent it accidentally being used instead of
+      # buildkit errdefs package (or vice-versa).
+      - pkg: "github.com/containerd/errdefs"
+        alias: "cerrdefs"
+      - pkg: "github.com/opencontainers/image-spec/specs-go/v1"
+        alias: "ocispecs"
+      - pkg: "github.com/opencontainers/go-digest"
+        alias: "digest"
   govet:
     enable:
       - nilness
