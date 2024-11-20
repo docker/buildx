@@ -36,7 +36,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 	}
 
 	timeoutCtx, cancel := context.WithCancelCause(ctx)
-	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded))
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded)) //nolint:govet,lostcancel // no need to manually cancel this context as we already rely on parent
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
 	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())

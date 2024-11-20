@@ -1,7 +1,9 @@
 run:
   timeout: 30m
-
   modules-download-mode: vendor
+  # default uses Go version from the go.mod file, fallback on the env var
+  # `GOVERSION`, fallback on 1.17: https://golangci-lint.run/usage/configuration/#run-configuration
+  go: "1.23"
 
 linters:
   enable:
@@ -76,6 +78,7 @@ linters-settings:
     excludes:
       - G204  # Audit use of command execution
       - G402  # TLS MinVersion too low
+      - G115  # integer overflow conversion (TODO: verify these)
     config:
       G306: "0644"
 

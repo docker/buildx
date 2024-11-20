@@ -63,7 +63,7 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 
 	// connect to buildx server if it is already running
 	ctx2, cancel := context.WithCancelCause(ctx)
-	ctx2, _ = context.WithTimeoutCause(ctx2, 1*time.Second, errors.WithStack(context.DeadlineExceeded))
+	ctx2, _ = context.WithTimeoutCause(ctx2, 1*time.Second, errors.WithStack(context.DeadlineExceeded)) //nolint:govet,lostcancel // no need to manually cancel this context as we already rely on parent
 	c, err := newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
 	cancel(errors.WithStack(context.Canceled))
 	if err != nil {
@@ -92,7 +92,7 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 
 		// wait for buildx server to be ready
 		ctx2, cancel = context.WithCancelCause(ctx)
-		ctx2, _ = context.WithTimeoutCause(ctx2, 10*time.Second, errors.WithStack(context.DeadlineExceeded))
+		ctx2, _ = context.WithTimeoutCause(ctx2, 10*time.Second, errors.WithStack(context.DeadlineExceeded)) //nolint:govet,lostcancel // no need to manually cancel this context as we already rely on parent
 		c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
 		cancel(errors.WithStack(context.Canceled))
 		if err != nil {

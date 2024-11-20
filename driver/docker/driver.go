@@ -29,7 +29,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	_, err := d.DockerAPI.ServerVersion(ctx)
 	if err != nil {
-		return nil, errors.Wrapf(driver.ErrNotConnecting{}, err.Error())
+		return nil, errors.Wrap(driver.ErrNotConnecting{}, err.Error())
 	}
 	return &driver.Info{
 		Status: driver.Running,
@@ -39,7 +39,7 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 func (d *Driver) Version(ctx context.Context) (string, error) {
 	v, err := d.DockerAPI.ServerVersion(ctx)
 	if err != nil {
-		return "", errors.Wrapf(driver.ErrNotConnecting{}, err.Error())
+		return "", errors.Wrap(driver.ErrNotConnecting{}, err.Error())
 	}
 	if bkversion, _ := resolveBuildKitVersion(v.Version); bkversion != "" {
 		return bkversion, nil
