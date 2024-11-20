@@ -158,7 +158,7 @@ jobs:
       matrix:
         os:
           - ubuntu-24.04
-          - macos-12
+          - macos-14
           - windows-2022
     env:
       SKIP_INTEGRATION_TESTS: 1
