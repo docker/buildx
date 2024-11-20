@@ -5,6 +5,7 @@ ARG XX_VERSION=1.5.0
 
 # for testing
 ARG DOCKER_VERSION=27.4.0-rc.2
+ARG DOCKER_VERSION_ALT_26=26.1.3
 ARG DOCKER_CLI_VERSION=${DOCKER_VERSION}
 ARG GOTESTSUM_VERSION=v1.12.0
 ARG REGISTRY_VERSION=2.8.3
@@ -15,6 +16,8 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golatest
 FROM moby/moby-bin:$DOCKER_VERSION AS docker-engine
 FROM dockereng/cli-bin:$DOCKER_CLI_VERSION AS docker-cli
+FROM moby/moby-bin:$DOCKER_VERSION_ALT_26 AS docker-engine-alt
+FROM dockereng/cli-bin:$DOCKER_VERSION_ALT_26 AS docker-cli-alt
 FROM registry:$REGISTRY_VERSION AS registry
 FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
 FROM crazymax/undock:$UNDOCK_VERSION AS undock
@@ -123,10 +126,13 @@ COPY --link --from=gotestsum /out /usr/bin/
 COPY --link --from=registry /bin/registry /usr/bin/
 COPY --link --from=docker-engine / /usr/bin/
 COPY --link --from=docker-cli / /usr/bin/
+COPY --link --from=docker-engine-alt / /opt/docker-alt-26/
+COPY --link --from=docker-cli-alt / /opt/docker-alt-26/
 COPY --link --from=buildkit /usr/bin/buildkitd /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildctl /usr/bin/
 COPY --link --from=undock /usr/local/bin/undock /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
+ENV TEST_DOCKER_EXTRA="docker@26.1=/opt/docker-alt-26"
 
 FROM integration-test-base AS integration-test
 COPY . .

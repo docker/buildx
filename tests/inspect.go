@@ -45,7 +45,7 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 	}
 
 	require.Equal(t, sb.Address(), name)
-	sbDriver, _ := driverName(sb.Name())
+	sbDriver, _, _ := driverName(sb.Name())
 	require.Equal(t, sbDriver, driver)
 	if isDockerWorker(sb) {
 		require.NotEmpty(t, hostGatewayIP, "host-gateway-ip worker label should be set with docker driver")

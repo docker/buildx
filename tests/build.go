@@ -505,7 +505,7 @@ RUN exit 1`)
 
 func testBuildProgress(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
-	sbDriver, _ := driverName(sb.Name())
+	sbDriver, _, _ := driverName(sb.Name())
 	name := sb.Address()
 
 	// progress=tty
