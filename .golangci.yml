@@ -5,20 +5,20 @@ run:
 
 linters:
   enable:
+    - depguard
+    - forbidigo
     - gofmt
+    - goimports
+    - gosec
     - gosimple
     - govet
-    - depguard
-    - goimports
     - ineffassign
     - misspell
-    - unused
+    - nolintlint
     - revive
     - staticcheck
     - typecheck
-    - nolintlint
-    - gosec
-    - forbidigo
+    - unused
   disable-all: true
 
 linters-settings:
