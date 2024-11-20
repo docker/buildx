@@ -6,6 +6,7 @@ run:
 linters:
   enable:
     - gofmt
+    - gosimple
     - govet
     - depguard
     - goimports

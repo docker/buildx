@@ -319,7 +319,7 @@ func (tp truncatedPlatforms) String() string {
 		if tpf, ok := tp.res[mpf]; ok {
 			seen[mpf] = struct{}{}
 			if len(tpf) == 1 {
-				out = append(out, fmt.Sprintf("%s", tpf[0]))
+				out = append(out, tpf[0])
 				count++
 			} else {
 				hasPreferredPlatform := false
@@ -347,7 +347,7 @@ func (tp truncatedPlatforms) String() string {
 			continue
 		}
 		if len(tp.res[mpf]) == 1 {
-			out = append(out, fmt.Sprintf("%s", tp.res[mpf][0]))
+			out = append(out, tp.res[mpf][0])
 			count++
 		} else {
 			hasPreferredPlatform := false
