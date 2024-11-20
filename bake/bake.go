@@ -1126,10 +1126,8 @@ func collectLocalPaths(t build.Inputs) []string {
 		if v, ok := isLocalPath(t.DockerfilePath); ok {
 			out = append(out, v)
 		}
-	} else {
-		if strings.HasPrefix(t.ContextPath, "cwd://") {
-			out = append(out, strings.TrimPrefix(t.ContextPath, "cwd://"))
-		}
+	} else if strings.HasPrefix(t.ContextPath, "cwd://") {
+		out = append(out, strings.TrimPrefix(t.ContextPath, "cwd://"))
 	}
 	for _, v := range t.NamedContexts {
 		if v.State != nil {

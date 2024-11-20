@@ -138,7 +138,6 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 			if src, ok := ci.Attrs["src"]; ok {
 				roPaths[src] = struct{}{}
 			}
-
 		}
 	}
 
