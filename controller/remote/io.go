@@ -344,7 +344,7 @@ func receive(ctx context.Context, stream msgStream) (*pb.Message, error) {
 	case err := <-errCh:
 		return nil, err
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, context.Cause(ctx)
 	}
 }
 

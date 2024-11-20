@@ -16,7 +16,7 @@ import (
 
 type Container struct {
 	cancelOnce      sync.Once
-	containerCancel func()
+	containerCancel func(error)
 	isUnavailable   atomic.Bool
 	initStarted     atomic.Bool
 	container       gateway.Container
@@ -31,18 +31,18 @@ func NewContainer(ctx context.Context, resultCtx *ResultHandle, cfg *controllera
 	errCh := make(chan error)
 	go func() {
 		err := resultCtx.build(func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-			ctx, cancel := context.WithCancel(ctx)
+			ctx, cancel := context.WithCancelCause(ctx)
 			go func() {
 				<-mainCtx.Done()
-				cancel()
+				cancel(errors.WithStack(context.Canceled))
 			}()
 
 			containerCfg, err := resultCtx.getContainerConfig(cfg)
 			if err != nil {
 				return nil, err
 			}
-			containerCtx, containerCancel := context.WithCancel(ctx)
-			defer containerCancel()
+			containerCtx, containerCancel := context.WithCancelCause(ctx)
+			defer containerCancel(errors.WithStack(context.Canceled))
 			bkContainer, err := c.NewContainer(containerCtx, containerCfg)
 			if err != nil {
 				return nil, err
@@ -83,7 +83,7 @@ func (c *Container) Cancel() {
 	c.markUnavailable()
 	c.cancelOnce.Do(func() {
 		if c.containerCancel != nil {
-			c.containerCancel()
+			c.containerCancel(errors.WithStack(context.Canceled))
 		}
 		close(c.releaseCh)
 	})

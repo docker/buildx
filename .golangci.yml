@@ -56,6 +56,10 @@ linters-settings:
             desc: The io/ioutil package has been deprecated.
   forbidigo:
     forbid:
+      - '^context\.WithCancel(# use context\.WithCancelCause instead)?$'
+      - '^context\.WithDeadline(# use context\.WithDeadline instead)?$'
+      - '^context\.WithTimeout(# use context\.WithTimeoutCause instead)?$'
+      - '^ctx\.Err(# use context\.Cause instead)?$'
       - '^fmt\.Errorf(# use errors\.Errorf instead)?$'
       - '^platforms\.DefaultString(# use platforms\.Format(platforms\.DefaultSpec()) instead\.)?$'
   gosec:

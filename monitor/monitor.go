@@ -326,7 +326,7 @@ func (m *monitor) invoke(ctx context.Context, pid string, cfg *controllerapi.Inv
 	if m.AttachedSessionID() == "" {
 		return nil
 	}
-	invokeCtx, invokeCancel := context.WithCancel(ctx)
+	invokeCtx, invokeCancel := context.WithCancelCause(ctx)
 
 	containerIn, containerOut := ioset.Pipe()
 	m.invokeIO.SetOut(&containerOut)
@@ -336,7 +336,7 @@ func (m *monitor) invoke(ctx context.Context, pid string, cfg *controllerapi.Inv
 		cancelOnce.Do(func() {
 			containerIn.Close()
 			m.invokeIO.SetOut(nil)
-			invokeCancel()
+			invokeCancel(errors.WithStack(context.Canceled))
 		})
 		<-waitInvokeDoneCh
 	}

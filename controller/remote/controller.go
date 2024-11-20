@@ -62,9 +62,10 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 	serverRoot := filepath.Join(rootDir, "shared")
 
 	// connect to buildx server if it is already running
-	ctx2, cancel := context.WithTimeout(ctx, 1*time.Second)
+	ctx2, cancel := context.WithCancelCause(ctx)
+	ctx2, _ = context.WithTimeoutCause(ctx2, 1*time.Second, errors.WithStack(context.DeadlineExceeded))
 	c, err := newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
-	cancel()
+	cancel(errors.WithStack(context.Canceled))
 	if err != nil {
 		if !errors.Is(err, context.DeadlineExceeded) {
 			return nil, errors.Wrap(err, "cannot connect to the buildx server")
@@ -90,9 +91,10 @@ func NewRemoteBuildxController(ctx context.Context, dockerCli command.Cli, opts 
 		go wait()
 
 		// wait for buildx server to be ready
-		ctx2, cancel = context.WithTimeout(ctx, 10*time.Second)
+		ctx2, cancel = context.WithCancelCause(ctx)
+		ctx2, _ = context.WithTimeoutCause(ctx2, 10*time.Second, errors.WithStack(context.DeadlineExceeded))
 		c, err = newBuildxClientAndCheck(ctx2, filepath.Join(serverRoot, defaultSocketFilename))
-		cancel()
+		cancel(errors.WithStack(context.Canceled))
 		if err != nil {
 			return errors.Wrap(err, "cannot connect to the buildx server")
 		}

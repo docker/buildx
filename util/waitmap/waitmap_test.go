@@ -34,7 +34,7 @@ func TestTimeout(t *testing.T) {
 
 	m.Set("foo", "bar")
 
-	ctx, cancel := context.WithTimeout(context.TODO(), 100*time.Millisecond)
+	ctx, cancel := context.WithTimeoutCause(context.TODO(), 100*time.Millisecond, nil)
 	defer cancel()
 
 	_, err := m.Get(ctx, "bar")

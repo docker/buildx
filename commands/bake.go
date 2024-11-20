@@ -108,8 +108,8 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	ctx2, cancel := context.WithCancel(context.TODO())
-	defer cancel()
+	ctx2, cancel := context.WithCancelCause(context.TODO())
+	defer cancel(errors.WithStack(context.Canceled))
 
 	var nodes []builder.Node
 	var progressConsoleDesc, progressTextDesc string

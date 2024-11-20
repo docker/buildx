@@ -173,8 +173,8 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	// new resolver cause need new auth
 	r = imagetools.New(imageopt)
 
-	ctx2, cancel := context.WithCancel(context.TODO())
-	defer cancel()
+	ctx2, cancel := context.WithCancelCause(context.TODO())
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 	printer, err := progress.NewPrinter(ctx2, os.Stderr, progressui.DisplayMode(in.progress))
 	if err != nil {
 		return err

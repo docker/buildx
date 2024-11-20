@@ -82,7 +82,7 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 	var respHandle *ResultHandle
 
 	go func() {
-		defer cancel(context.Canceled) // ensure no dangling processes
+		defer func() { cancel(errors.WithStack(context.Canceled)) }() // ensure no dangling processes
 
 		var res *gateway.Result
 		var err error
@@ -181,7 +181,7 @@ func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt
 			case <-respHandle.done:
 			case <-ctx.Done():
 			}
-			return nil, ctx.Err()
+			return nil, context.Cause(ctx)
 		}, nil)
 		if respHandle != nil {
 			return
