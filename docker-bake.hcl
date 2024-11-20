@@ -48,6 +48,8 @@ target "lint" {
     "linux/s390x",
     "linux/ppc64le",
     "linux/riscv64",
+    "openbsd/amd64",
+    "openbsd/arm64",
     "windows/amd64",
     "windows/arm64"
   ] : []
@@ -165,6 +167,8 @@ target "binaries-cross" {
     "linux/ppc64le",
     "linux/riscv64",
     "linux/s390x",
+    "openbsd/amd64",
+    "openbsd/arm64",
     "windows/amd64",
     "windows/arm64"
   ]
