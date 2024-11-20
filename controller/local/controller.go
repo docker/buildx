@@ -109,7 +109,7 @@ func (b *localController) Invoke(ctx context.Context, sessionID string, pid stri
 
 	// Attach containerIn to this process
 	ioCancelledCh := make(chan struct{})
-	proc.ForwardIO(&ioset.In{Stdin: ioIn, Stdout: ioOut, Stderr: ioErr}, func() { close(ioCancelledCh) })
+	proc.ForwardIO(&ioset.In{Stdin: ioIn, Stdout: ioOut, Stderr: ioErr}, func(error) { close(ioCancelledCh) })
 
 	select {
 	case <-ioCancelledCh:
@@ -117,7 +117,7 @@ func (b *localController) Invoke(ctx context.Context, sessionID string, pid stri
 	case err := <-proc.Done():
 		return err
 	case <-ctx.Done():
-		return ctx.Err()
+		return context.Cause(ctx)
 	}
 }
 

@@ -37,7 +37,7 @@ type Server struct {
 type session struct {
 	buildOnGoing atomic.Bool
 	statusChan   chan *pb.StatusResponse
-	cancelBuild  func()
+	cancelBuild  func(error)
 	buildOptions *pb.BuildOptions
 	inputPipe    *io.PipeWriter
 
@@ -109,7 +109,7 @@ func (m *Server) Disconnect(ctx context.Context, req *pb.DisconnectRequest) (res
 	m.sessionMu.Lock()
 	if s, ok := m.session[sessionID]; ok {
 		if s.cancelBuild != nil {
-			s.cancelBuild()
+			s.cancelBuild(errors.WithStack(context.Canceled))
 		}
 		s.cancelRunningProcesses()
 		if s.result != nil {
@@ -127,7 +127,7 @@ func (m *Server) Close() error {
 	for k := range m.session {
 		if s, ok := m.session[k]; ok {
 			if s.cancelBuild != nil {
-				s.cancelBuild()
+				s.cancelBuild(errors.WithStack(context.Canceled))
 			}
 			s.cancelRunningProcesses()
 		}
@@ -199,8 +199,8 @@ func (m *Server) Build(ctx context.Context, req *pb.BuildRequest) (*pb.BuildResp
 	pw := pb.NewProgressWriter(statusChan)
 
 	// Build the specified request
-	ctx, cancel := context.WithCancel(ctx)
-	defer cancel()
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 	resp, res, _, buildErr := m.buildFunc(ctx, req.Options, inR, pw)
 	m.sessionMu.Lock()
 	if s, ok := m.session[sessionID]; ok {
@@ -341,7 +341,7 @@ func (m *Server) Input(stream pb.Controller_InputServer) (err error) {
 			select {
 			case msg = <-msgCh:
 			case <-ctx.Done():
-				return errors.Wrap(ctx.Err(), "canceled")
+				return context.Cause(ctx)
 			}
 			if msg == nil {
 				return nil
@@ -370,9 +370,9 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 	initDoneCh := make(chan *processes.Process)
 	initErrCh := make(chan error)
 	eg, egCtx := errgroup.WithContext(context.TODO())
-	srvIOCtx, srvIOCancel := context.WithCancel(egCtx)
+	srvIOCtx, srvIOCancel := context.WithCancelCause(egCtx)
 	eg.Go(func() error {
-		defer srvIOCancel()
+		defer srvIOCancel(errors.WithStack(context.Canceled))
 		return serveIO(srvIOCtx, srv, func(initMessage *pb.InitMessage) (retErr error) {
 			defer func() {
 				if retErr != nil {
@@ -418,7 +418,7 @@ func (m *Server) Invoke(srv pb.Controller_InvokeServer) error {
 		})
 	})
 	eg.Go(func() (rErr error) {
-		defer srvIOCancel()
+		defer srvIOCancel(errors.WithStack(context.Canceled))
 		// Wait for init done
 		var proc *processes.Process
 		select {

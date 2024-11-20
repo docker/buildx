@@ -170,7 +170,6 @@ func indexOfFunc() function.Function {
 				}
 			}
 			return cty.NilVal, errors.New("item not found")
-
 		},
 	})
 }

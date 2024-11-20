@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -25,7 +26,7 @@ func WithAccessToken(token string) GitServeOpt {
 func GitServeHTTP(c *Git, t testing.TB, opts ...GitServeOpt) (url string) {
 	t.Helper()
 	gitUpdateServerInfo(c, t)
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancelCause(context.TODO())
 
 	gs := &gitServe{}
 	for _, opt := range opts {
@@ -38,7 +39,7 @@ func GitServeHTTP(c *Git, t testing.TB, opts ...GitServeOpt) (url string) {
 	name := "test.git"
 	dir, err := c.GitDir()
 	if err != nil {
-		cancel()
+		cancel(err)
 	}
 
 	var addr string
@@ -84,7 +85,7 @@ func GitServeHTTP(c *Git, t testing.TB, opts ...GitServeOpt) (url string) {
 	<-ready
 
 	t.Cleanup(func() {
-		cancel()
+		cancel(errors.Errorf("cleanup"))
 		<-done
 	})
 	return fmt.Sprintf("http://%s/%s", addr, name)

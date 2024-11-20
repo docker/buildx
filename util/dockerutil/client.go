@@ -41,7 +41,6 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 	pr, pw := io.Pipe()
 	done := make(chan struct{})
 
-	ctx, cancel := context.WithCancel(ctx)
 	var w *waitingWriter
 	w = &waitingWriter{
 		PipeWriter: pw,
@@ -67,8 +66,7 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 				handleErr(err)
 			}
 		},
-		done:   done,
-		cancel: cancel,
+		done: done,
 	}
 	return w, func() {
 		pr.Close()
@@ -101,12 +99,11 @@ func (c *Client) features(ctx context.Context, name string) map[Feature]bool {
 
 type waitingWriter struct {
 	*io.PipeWriter
-	f      func()
-	once   sync.Once
-	mu     sync.Mutex
-	err    error
-	done   chan struct{}
-	cancel func()
+	f    func()
+	once sync.Once
+	mu   sync.Mutex
+	err  error
+	done chan struct{}
 }
 
 func (w *waitingWriter) Write(dt []byte) (int, error) {

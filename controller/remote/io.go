@@ -302,7 +302,6 @@ func attachIO(ctx context.Context, stream msgStream, initMessage *pb.InitMessage
 					out = cfg.stderr
 				default:
 					return errors.Errorf("unsupported fd %d", file.Fd)
-
 				}
 				if out == nil {
 					logrus.Warnf("attachIO: no writer for fd %d", file.Fd)
@@ -345,7 +344,7 @@ func receive(ctx context.Context, stream msgStream) (*pb.Message, error) {
 	case err := <-errCh:
 		return nil, err
 	case <-ctx.Done():
-		return nil, ctx.Err()
+		return nil, context.Cause(ctx)
 	}
 }
 

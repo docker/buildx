@@ -288,7 +288,15 @@ func GetBuilders(dockerCli command.Cli, txn *store.Txn) ([]*Builder, error) {
 		return nil, err
 	}
 
-	builders := make([]*Builder, len(storeng))
+	contexts, err := dockerCli.ContextStore().List()
+	if err != nil {
+		return nil, err
+	}
+	sort.Slice(contexts, func(i, j int) bool {
+		return contexts[i].Name < contexts[j].Name
+	})
+
+	builders := make([]*Builder, len(storeng), len(storeng)+len(contexts))
 	seen := make(map[string]struct{})
 	for i, ng := range storeng {
 		b, err := New(dockerCli,
@@ -302,14 +310,6 @@ func GetBuilders(dockerCli command.Cli, txn *store.Txn) ([]*Builder, error) {
 		builders[i] = b
 		seen[b.NodeGroup.Name] = struct{}{}
 	}
-
-	contexts, err := dockerCli.ContextStore().List()
-	if err != nil {
-		return nil, err
-	}
-	sort.Slice(contexts, func(i, j int) bool {
-		return contexts[i].Name < contexts[j].Name
-	})
 
 	for _, c := range contexts {
 		// if a context has the same name as an instance from the store, do not
@@ -522,8 +522,9 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		return nil, err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
+	cancelCtx, cancel := context.WithCancelCause(ctx)
+	timeoutCtx, _ := context.WithTimeoutCause(cancelCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded))
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
 	nodes, err := b.LoadNodes(timeoutCtx, WithData())
 	if err != nil {

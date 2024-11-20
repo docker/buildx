@@ -18,16 +18,16 @@ type Process struct {
 	invokeConfig  *pb.InvokeConfig
 	errCh         chan error
 	processCancel func()
-	serveIOCancel func()
+	serveIOCancel func(error)
 }
 
 // ForwardIO forwards process's io to the specified reader/writer.
 // Optionally specify ioCancelCallback which will be called when
 // the process closes the specified IO. This will be useful for additional cleanup.
-func (p *Process) ForwardIO(in *ioset.In, ioCancelCallback func()) {
+func (p *Process) ForwardIO(in *ioset.In, ioCancelCallback func(error)) {
 	p.inEnd.SetIn(in)
 	if f := p.serveIOCancel; f != nil {
-		f()
+		f(errors.WithStack(context.Canceled))
 	}
 	p.serveIOCancel = ioCancelCallback
 }
@@ -124,9 +124,16 @@ func (m *Manager) StartProcess(pid string, resultCtx *build.ResultHandle, cfg *p
 	f.SetOut(&out)
 
 	// Register process
-	ctx, cancel := context.WithCancel(context.TODO())
+	ctx, cancel := context.WithCancelCause(context.TODO())
 	var cancelOnce sync.Once
-	processCancelFunc := func() { cancelOnce.Do(func() { cancel(); f.Close(); in.Close(); out.Close() }) }
+	processCancelFunc := func() {
+		cancelOnce.Do(func() {
+			cancel(errors.WithStack(context.Canceled))
+			f.Close()
+			in.Close()
+			out.Close()
+		})
+	}
 	p := &Process{
 		inEnd:         f,
 		invokeConfig:  cfg,

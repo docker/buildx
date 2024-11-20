@@ -325,8 +325,8 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	}
 	attributes := buildMetricAttributes(dockerCli, driverType, &options)
 
-	ctx2, cancel := context.WithCancel(context.TODO())
-	defer cancel()
+	ctx2, cancel := context.WithCancelCause(context.TODO())
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 	progressMode, err := options.toDisplayMode()
 	if err != nil {
 		return err
@@ -885,7 +885,6 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 			src.Print(w)
 		}
 		fmt.Fprintf(w, "\n")
-
 	}
 }
 

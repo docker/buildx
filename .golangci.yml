@@ -5,22 +5,45 @@ run:
 
 linters:
   enable:
-    - gofmt
-    - govet
+    - bodyclose
     - depguard
+    - forbidigo
+    - gocritic
+    - gofmt
     - goimports
+    - gosec
+    - gosimple
+    - govet
     - ineffassign
+    - makezero
     - misspell
-    - unused
+    - noctx
+    - nolintlint
     - revive
     - staticcheck
     - typecheck
-    - nolintlint
-    - gosec
-    - forbidigo
+    - unused
+    - whitespace
   disable-all: true
 
 linters-settings:
+  gocritic:
+    disabled-checks:
+      - "ifElseChain"
+      - "assignOp"
+      - "appendAssign"
+      - "singleCaseSwitch"
+      - "exitAfterDefer" # FIXME
+  importas:
+    alias:
+      # Enforce alias to prevent it accidentally being used instead of
+      # buildkit errdefs package (or vice-versa).
+      - pkg: "github.com/containerd/errdefs"
+        alias: "cerrdefs"
+      - pkg: "github.com/opencontainers/image-spec/specs-go/v1"
+        alias: "ocispecs"
+      - pkg: "github.com/opencontainers/go-digest"
+        alias: "digest"
   govet:
     enable:
       - nilness
@@ -43,6 +66,10 @@ linters-settings:
             desc: The io/ioutil package has been deprecated.
   forbidigo:
     forbid:
+      - '^context\.WithCancel(# use context\.WithCancelCause instead)?$'
+      - '^context\.WithDeadline(# use context\.WithDeadline instead)?$'
+      - '^context\.WithTimeout(# use context\.WithTimeoutCause instead)?$'
+      - '^ctx\.Err(# use context\.Cause instead)?$'
       - '^fmt\.Errorf(# use errors\.Errorf instead)?$'
       - '^platforms\.DefaultString(# use platforms\.Format(platforms\.DefaultSpec()) instead\.)?$'
   gosec:

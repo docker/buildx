@@ -649,7 +649,6 @@ func testBuildMultiPlatform(t *testing.T, sb integration.Sandbox) {
 		require.NotNil(t, img)
 		img = imgs.Find("linux/arm64")
 		require.NotNil(t, img)
-
 	} else {
 		require.Error(t, err, string(out))
 		require.Contains(t, string(out), "Multi-platform build is not supported")

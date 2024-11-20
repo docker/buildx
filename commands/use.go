@@ -46,7 +46,6 @@ func runUse(dockerCli command.Cli, in useOptions) error {
 					return errors.Errorf("run `docker context use %s` to switch to context %s", in.builder, in.builder)
 				}
 			}
-
 		}
 		return errors.Wrapf(err, "failed to find instance %q", in.builder)
 	}

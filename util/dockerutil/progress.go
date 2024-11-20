@@ -55,7 +55,7 @@ func fromReader(l progress.SubLogger, rc io.ReadCloser) error {
 				Started: &now,
 			}
 		}
-		timeDelta := time.Now().Sub(st.Timestamp)
+		timeDelta := time.Since(st.Timestamp)
 		if timeDelta < minTimeDelta {
 			continue
 		}

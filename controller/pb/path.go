@@ -153,7 +153,6 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 				}
 			}
 			ps = append(ps, p)
-
 		}
 		s.Paths = ps
 		ssh = append(ssh, s)

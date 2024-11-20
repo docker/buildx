@@ -18,6 +18,7 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/formatter"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
 )
@@ -57,8 +58,9 @@ func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
+	timeoutCtx, cancel := context.WithCancelCause(ctx)
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded))
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
 	eg, _ := errgroup.WithContext(timeoutCtx)
 	for _, b := range builders {
@@ -319,7 +321,7 @@ func (tp truncatedPlatforms) String() string {
 		if tpf, ok := tp.res[mpf]; ok {
 			seen[mpf] = struct{}{}
 			if len(tpf) == 1 {
-				out = append(out, fmt.Sprintf("%s", tpf[0]))
+				out = append(out, tpf[0])
 				count++
 			} else {
 				hasPreferredPlatform := false
@@ -347,7 +349,7 @@ func (tp truncatedPlatforms) String() string {
 			continue
 		}
 		if len(tp.res[mpf]) == 1 {
-			out = append(out, fmt.Sprintf("%s", tp.res[mpf][0]))
+			out = append(out, tp.res[mpf][0])
 			count++
 		} else {
 			hasPreferredPlatform := false

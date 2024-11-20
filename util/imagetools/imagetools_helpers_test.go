@@ -47,7 +47,6 @@ func (f mockFetcher) Fetch(ctx context.Context, desc ocispec.Descriptor) (io.Rea
 		reader := io.NopCloser(strings.NewReader(desc.Annotations["test_content"]))
 		return reader, nil
 	}
-
 }
 
 func (r mockResolver) Resolve(ctx context.Context, ref string) (name string, desc ocispec.Descriptor, err error) {

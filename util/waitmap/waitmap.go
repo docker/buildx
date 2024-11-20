@@ -61,7 +61,7 @@ func (m *Map) Get(ctx context.Context, keys ...string) (map[string]interface{}, 
 		m.mu.Unlock()
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, context.Cause(ctx)
 		case <-ch:
 			m.mu.Lock()
 		}

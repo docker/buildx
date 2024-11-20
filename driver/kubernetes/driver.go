@@ -112,7 +112,7 @@ func (d *Driver) wait(ctx context.Context) error {
 	for {
 		select {
 		case <-ctx.Done():
-			return ctx.Err()
+			return context.Cause(ctx)
 		case <-timeoutChan:
 			return err
 		case <-ticker.C:

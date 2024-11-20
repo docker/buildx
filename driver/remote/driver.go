@@ -47,8 +47,9 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 		return err
 	}
 	return progress.Wrap("[internal] waiting for connection", l, func(_ progress.SubLogger) error {
-		ctx, cancel := context.WithTimeout(ctx, 20*time.Second)
-		defer cancel()
+		cancelCtx, cancel := context.WithCancelCause(ctx)
+		ctx, _ := context.WithTimeoutCause(cancelCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded))
+		defer func() { cancel(errors.WithStack(context.Canceled)) }()
 		return c.Wait(ctx)
 	})
 }

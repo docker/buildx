@@ -17,6 +17,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
 	"github.com/docker/go-units"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -34,8 +35,9 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithTimeout(ctx, 20*time.Second)
-	defer cancel()
+	timeoutCtx, cancel := context.WithCancelCause(ctx)
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded))
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
 	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())
 	if in.bootstrap {

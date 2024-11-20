@@ -177,7 +177,6 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 					break
 				}
 			}
-
 		}
 		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
 		if err != nil && !errdefs.IsConflict(err) {
@@ -213,7 +212,7 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 			}
 			select {
 			case <-ctx.Done():
-				return ctx.Err()
+				return context.Cause(ctx)
 			case <-time.After(time.Duration(try*120) * time.Millisecond):
 				try++
 				continue
