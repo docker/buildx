@@ -67,6 +67,10 @@ type ConfigFile struct {
 	Config map[string]interface{}
 }
 
+func (cf ConfigFile) IsStdin() bool {
+	return cf.Filename == "-"
+}
+
 func ToConfigFiles(path []string) (f []ConfigFile) {
 	for _, p := range path {
 		f = append(f, ConfigFile{Filename: p})

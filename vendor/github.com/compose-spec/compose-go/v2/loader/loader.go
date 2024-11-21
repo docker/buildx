@@ -318,6 +318,13 @@ func LoadConfigFiles(ctx context.Context, configFiles []string, workingDir strin
 	opts.ResourceLoaders = append(opts.ResourceLoaders, localResourceLoader{})
 
 	for i, p := range configFiles {
+		if p == "-" {
+			config.ConfigFiles[i] = types.ConfigFile{
+				Filename: p,
+			}
+			continue
+		}
+
 		for _, loader := range opts.ResourceLoaders {
 			_, isLocalResourceLoader := loader.(localResourceLoader)
 			if !loader.Accept(p) {
