@@ -2,6 +2,7 @@ package bake
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -228,7 +229,7 @@ func TestPushOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
-		require.Equal(t, "type=image,push=true", m["app"].Outputs[0])
+		require.Equal(t, "type=image,push=true", m["app"].Outputs[0].String())
 	})
 
 	t.Run("type image", func(t *testing.T) {
@@ -242,7 +243,7 @@ func TestPushOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
-		require.Equal(t, "type=image,compression=zstd,push=true", m["app"].Outputs[0])
+		require.Equal(t, "type=image,compression=zstd,push=true", m["app"].Outputs[0].String())
 	})
 
 	t.Run("type image push false", func(t *testing.T) {
@@ -256,7 +257,7 @@ func TestPushOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
-		require.Equal(t, "type=image,compression=zstd,push=false", m["app"].Outputs[0])
+		require.Equal(t, "type=image,compression=zstd,push=false", m["app"].Outputs[0].String())
 	})
 
 	t.Run("type registry", func(t *testing.T) {
@@ -270,7 +271,7 @@ func TestPushOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
-		require.Equal(t, "type=registry", m["app"].Outputs[0])
+		require.Equal(t, "type=registry", m["app"].Outputs[0].String())
 	})
 
 	t.Run("type registry push false", func(t *testing.T) {
@@ -300,9 +301,9 @@ func TestPushOverride(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m))
 		require.Equal(t, 1, len(m["foo"].Outputs))
-		require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+		require.Equal(t, []string{"type=local,dest=out"}, stringify(m["foo"].Outputs))
 		require.Equal(t, 1, len(m["bar"].Outputs))
-		require.Equal(t, []string{"type=image,push=true"}, m["bar"].Outputs)
+		require.Equal(t, []string{"type=image,push=true"}, stringify(m["bar"].Outputs))
 	})
 }
 
@@ -317,7 +318,7 @@ func TestLoadOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
-		require.Equal(t, "type=docker", m["app"].Outputs[0])
+		require.Equal(t, "type=docker", m["app"].Outputs[0].String())
 	})
 
 	t.Run("type docker", func(t *testing.T) {
@@ -331,7 +332,7 @@ func TestLoadOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
-		require.Equal(t, []string{"type=docker"}, m["app"].Outputs)
+		require.Equal(t, []string{"type=docker"}, stringify(m["app"].Outputs))
 	})
 
 	t.Run("type image", func(t *testing.T) {
@@ -345,7 +346,7 @@ func TestLoadOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
-		require.Equal(t, []string{"type=image", "type=docker"}, m["app"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=image"}, stringify(m["app"].Outputs))
 	})
 
 	t.Run("type image load false", func(t *testing.T) {
@@ -359,7 +360,7 @@ func TestLoadOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=false"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
-		require.Equal(t, []string{"type=image"}, m["app"].Outputs)
+		require.Equal(t, []string{"type=image"}, stringify(m["app"].Outputs))
 	})
 
 	t.Run("type registry", func(t *testing.T) {
@@ -373,7 +374,7 @@ func TestLoadOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
-		require.Equal(t, []string{"type=registry", "type=docker"}, m["app"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=registry"}, stringify(m["app"].Outputs))
 	})
 
 	t.Run("type oci", func(t *testing.T) {
@@ -387,7 +388,7 @@ func TestLoadOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
-		require.Equal(t, []string{"type=oci,dest=out", "type=docker"}, m["app"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=oci,dest=out"}, stringify(m["app"].Outputs))
 	})
 
 	t.Run("type docker with dest", func(t *testing.T) {
@@ -401,7 +402,7 @@ func TestLoadOverride(t *testing.T) {
 		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
-		require.Equal(t, []string{"type=docker,dest=out", "type=docker"}, m["app"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=docker,dest=out"}, stringify(m["app"].Outputs))
 	})
 
 	t.Run("type local and empty target", func(t *testing.T) {
@@ -418,9 +419,9 @@ func TestLoadOverride(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m))
 		require.Equal(t, 1, len(m["foo"].Outputs))
-		require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+		require.Equal(t, []string{"type=local,dest=out"}, stringify(m["foo"].Outputs))
 		require.Equal(t, 1, len(m["bar"].Outputs))
-		require.Equal(t, []string{"type=docker"}, m["bar"].Outputs)
+		require.Equal(t, []string{"type=docker"}, stringify(m["bar"].Outputs))
 	})
 }
 
@@ -440,12 +441,10 @@ func TestLoadAndPushOverride(t *testing.T) {
 		require.Equal(t, 2, len(m))
 
 		require.Equal(t, 1, len(m["foo"].Outputs))
-		sort.Strings(m["foo"].Outputs)
-		require.Equal(t, []string{"type=local,dest=out"}, m["foo"].Outputs)
+		require.Equal(t, []string{"type=local,dest=out"}, stringify(m["foo"].Outputs))
 
 		require.Equal(t, 2, len(m["bar"].Outputs))
-		sort.Strings(m["bar"].Outputs)
-		require.Equal(t, []string{"type=docker", "type=image,push=true"}, m["bar"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=image,push=true"}, stringify(m["bar"].Outputs))
 	})
 
 	t.Run("type registry", func(t *testing.T) {
@@ -461,8 +460,7 @@ func TestLoadAndPushOverride(t *testing.T) {
 		require.Equal(t, 1, len(m))
 
 		require.Equal(t, 2, len(m["foo"].Outputs))
-		sort.Strings(m["foo"].Outputs)
-		require.Equal(t, []string{"type=docker", "type=registry"}, m["foo"].Outputs)
+		require.Equal(t, []string{"type=docker", "type=registry"}, stringify(m["foo"].Outputs))
 	})
 }
 
@@ -674,7 +672,7 @@ func TestOverrideMerge(t *testing.T) {
 
 	require.Equal(t, []string{"linux/arm", "linux/ppc64le"}, m["app"].Platforms)
 	require.Equal(t, 1, len(m["app"].Outputs))
-	require.Equal(t, "type=registry", m["app"].Outputs[0])
+	require.Equal(t, "type=registry", m["app"].Outputs[0].String())
 }
 
 func TestReadContexts(t *testing.T) {
@@ -840,7 +838,7 @@ func TestReadContextFromTargetChain(t *testing.T) {
 	mid, ok := m["mid"]
 	require.True(t, ok)
 	require.Equal(t, 1, len(mid.Outputs))
-	require.Equal(t, "type=cacheonly", mid.Outputs[0])
+	require.Equal(t, "type=cacheonly", mid.Outputs[0].String())
 	require.Equal(t, 1, len(mid.Contexts))
 
 	base, ok := m["base"]
@@ -924,7 +922,8 @@ func TestReadTargetsDefault(t *testing.T) {
 		Data: []byte(`
 target "default" {
   dockerfile = "test"
-}`)}
+}`),
+	}
 
 	m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
@@ -942,7 +941,8 @@ func TestReadTargetsSpecified(t *testing.T) {
 		Data: []byte(`
 target "image" {
   dockerfile = "test"
-}`)}
+}`),
+	}
 
 	_, _, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil)
 	require.Error(t, err)
@@ -967,7 +967,8 @@ group "foo" {
 }
 target "image" {
   dockerfile = "test"
-}`)}
+}`),
+	}
 
 	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
 	require.NoError(t, err)
@@ -993,7 +994,8 @@ target "foo" {
 }
 target "image" {
   dockerfile = "test"
-}`)}
+}`),
+	}
 
 	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
 	require.NoError(t, err)
@@ -1036,7 +1038,8 @@ target "image-release" {
   inherits = ["image"]
   output = ["type=image,push=true"]
   tags = ["user/app:latest"]
-}`)}
+}`),
+	}
 
 	fyml := File{
 		Name: "docker-compose.yml",
@@ -1060,7 +1063,8 @@ services:
       args:
         CT_ECR: foo
         CT_TAG: bar
-    image: ct-fake-aws:bar`)}
+    image: ct-fake-aws:bar`),
+	}
 
 	fjson := File{
 		Name: "docker-bake.json",
@@ -1081,7 +1085,8 @@ services:
 	     ]
 	   }
 	 }
-	}`)}
+	}`),
+	}
 
 	m, g, err := ReadTargets(ctx, []File{fhcl}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
@@ -1089,7 +1094,7 @@ services:
 	require.Equal(t, []string{"image"}, g["default"].Targets)
 	require.Equal(t, 1, len(m))
 	require.Equal(t, 1, len(m["image"].Outputs))
-	require.Equal(t, "type=docker", m["image"].Outputs[0])
+	require.Equal(t, "type=docker", m["image"].Outputs[0].String())
 
 	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image-release"}, nil, nil)
 	require.NoError(t, err)
@@ -1097,7 +1102,7 @@ services:
 	require.Equal(t, []string{"image-release"}, g["default"].Targets)
 	require.Equal(t, 1, len(m))
 	require.Equal(t, 1, len(m["image-release"].Outputs))
-	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
+	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0].String())
 
 	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image", "image-release"}, nil, nil)
 	require.NoError(t, err)
@@ -1106,7 +1111,7 @@ services:
 	require.Equal(t, 2, len(m))
 	require.Equal(t, ".", *m["image"].Context)
 	require.Equal(t, 1, len(m["image-release"].Outputs))
-	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
+	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0].String())
 
 	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"default"}, nil, nil)
 	require.NoError(t, err)
@@ -1166,7 +1171,8 @@ target "foo" {
 }
 target "image" {
   output = ["type=docker"]
-}`)}
+}`),
+	}
 
 	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
 	require.NoError(t, err)
@@ -1200,7 +1206,8 @@ target "foo" {
 }
 target "image" {
   output = ["type=docker"]
-}`)}
+}`),
+	}
 
 	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
 	require.NoError(t, err)
@@ -1209,7 +1216,7 @@ target "image" {
 	require.Equal(t, []string{"foo", "image"}, g["foo"].Targets)
 	require.Equal(t, 2, len(m))
 	require.Equal(t, "bar", *m["foo"].Dockerfile)
-	require.Equal(t, "type=docker", m["image"].Outputs[0])
+	require.Equal(t, "type=docker", m["image"].Outputs[0].String())
 
 	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "image"}, nil, nil)
 	require.NoError(t, err)
@@ -1218,7 +1225,7 @@ target "image" {
 	require.Equal(t, []string{"foo", "image"}, g["foo"].Targets)
 	require.Equal(t, 2, len(m))
 	require.Equal(t, "bar", *m["foo"].Dockerfile)
-	require.Equal(t, "type=docker", m["image"].Outputs[0])
+	require.Equal(t, "type=docker", m["image"].Outputs[0].String())
 }
 
 func TestNestedInherits(t *testing.T) {
@@ -1247,7 +1254,8 @@ target "c" {
 }
 target "d" {
   inherits = ["b", "c"]
-}`)}
+}`),
+	}
 
 	cases := []struct {
 		name      string
@@ -1315,7 +1323,8 @@ group "default" {
     "child1",
     "child2"
   ]
-}`)}
+}`),
+	}
 
 	cases := []struct {
 		name      string
@@ -1351,9 +1360,9 @@ group "default" {
 			require.Equal(t, []string{"child1", "child2"}, g["default"].Targets)
 			require.Equal(t, 2, len(m))
 			require.Equal(t, tt.wantch1, m["child1"].Args)
-			require.Equal(t, []string{"type=docker"}, m["child1"].Outputs)
+			require.Equal(t, []string{"type=docker"}, stringify(m["child1"].Outputs))
 			require.Equal(t, tt.wantch2, m["child2"].Args)
-			require.Equal(t, []string{"type=docker"}, m["child2"].Outputs)
+			require.Equal(t, []string{"type=docker"}, stringify(m["child2"].Outputs))
 		})
 	}
 }
@@ -1442,7 +1451,8 @@ group "e" {
 
 target "f" {
   context = "./foo"
-}`)}
+}`),
+	}
 
 	cases := []struct {
 		names   []string
@@ -1721,7 +1731,7 @@ func TestAnnotations(t *testing.T) {
 
 	require.Equal(t, 1, len(m))
 	require.Contains(t, m, "app")
-	require.Equal(t, "type=image,name=foo", m["app"].Outputs[0])
+	require.Equal(t, "type=image,name=foo", m["app"].Outputs[0].String())
 	require.Equal(t, "manifest[linux/amd64]:foo=bar", m["app"].Annotations[0])
 
 	require.Len(t, bo["app"].Exports, 1)
@@ -2007,4 +2017,13 @@ target "app" {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "FOO must be greater than 5.")
 	})
+}
+
+func stringify[V fmt.Stringer](values []V) []string {
+	s := make([]string, len(values))
+	for i, v := range values {
+		s[i] = v.String()
+	}
+	sort.Strings(s)
+	return s
 }

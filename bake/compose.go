@@ -5,13 +5,14 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"sort"
+	"slices"
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
+	"github.com/docker/buildx/util/buildflags"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
@@ -119,14 +120,16 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				}
 			}
 
-			var ssh []string
+			var ssh []*buildflags.SSH
 			for _, bkey := range s.Build.SSH {
 				sshkey := composeToBuildkitSSH(bkey)
 				ssh = append(ssh, sshkey)
 			}
-			sort.Strings(ssh)
+			slices.SortFunc(ssh, func(a, b *buildflags.SSH) int {
+				return a.Less(b)
+			})
 
-			var secrets []string
+			var secrets []*buildflags.Secret
 			for _, bs := range s.Build.Secrets {
 				secret, err := composeToBuildkitSecret(bs, cfg.Secrets[bs.Source])
 				if err != nil {
@@ -140,6 +143,16 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			for k, v := range s.Build.Labels {
 				v := v
 				labels[k] = &v
+			}
+
+			cacheFrom, err := parseCacheArrValues(s.Build.CacheFrom)
+			if err != nil {
+				return nil, err
+			}
+
+			cacheTo, err := parseCacheArrValues(s.Build.CacheTo)
+			if err != nil {
+				return nil, err
 			}
 
 			g.Targets = append(g.Targets, targetName)
@@ -158,8 +171,8 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 					val, ok := cfg.Environment[val]
 					return val, ok
 				})),
-				CacheFrom:   s.Build.CacheFrom,
-				CacheTo:     s.Build.CacheTo,
+				CacheFrom:   cacheFrom,
+				CacheTo:     cacheTo,
 				NetworkMode: networkModeP,
 				SSH:         ssh,
 				Secrets:     secrets,
@@ -297,8 +310,10 @@ type xbake struct {
 	// https://github.com/docker/docs/blob/main/content/build/bake/compose-file.md#extension-field-with-x-bake
 }
 
-type stringMap map[string]string
-type stringArray []string
+type (
+	stringMap   map[string]string
+	stringArray []string
+)
 
 func (sa *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 	var multi []string
@@ -334,23 +349,45 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.Tags = dedupSlice(append(t.Tags, xb.Tags...))
 	}
 	if len(xb.CacheFrom) > 0 {
-		t.CacheFrom = dedupSlice(append(t.CacheFrom, xb.CacheFrom...))
+		cacheFrom, err := parseCacheArrValues(xb.CacheFrom)
+		if err != nil {
+			return err
+		}
+		t.CacheFrom = removeDupes(append(t.CacheFrom, cacheFrom...))
 	}
 	if len(xb.CacheTo) > 0 {
-		t.CacheTo = dedupSlice(append(t.CacheTo, xb.CacheTo...))
+		cacheTo, err := parseCacheArrValues(xb.CacheTo)
+		if err != nil {
+			return err
+		}
+		t.CacheTo = removeDupes(append(t.CacheTo, cacheTo...))
 	}
 	if len(xb.Secrets) > 0 {
-		t.Secrets = dedupSlice(append(t.Secrets, xb.Secrets...))
+		secrets, err := parseArrValue[buildflags.Secret](xb.Secrets)
+		if err != nil {
+			return err
+		}
+		t.Secrets = removeDupes(append(t.Secrets, secrets...))
 	}
 	if len(xb.SSH) > 0 {
-		t.SSH = dedupSlice(append(t.SSH, xb.SSH...))
-		sort.Strings(t.SSH)
+		ssh, err := parseArrValue[buildflags.SSH](xb.SSH)
+		if err != nil {
+			return err
+		}
+		t.SSH = removeDupes(append(t.SSH, ssh...))
+		slices.SortFunc(t.SSH, func(a, b *buildflags.SSH) int {
+			return a.Less(b)
+		})
 	}
 	if len(xb.Platforms) > 0 {
 		t.Platforms = dedupSlice(append(t.Platforms, xb.Platforms...))
 	}
 	if len(xb.Outputs) > 0 {
-		t.Outputs = dedupSlice(append(t.Outputs, xb.Outputs...))
+		outputs, err := parseArrValue[buildflags.ExportEntry](xb.Outputs)
+		if err != nil {
+			return err
+		}
+		t.Outputs = removeDupes(append(t.Outputs, outputs...))
 	}
 	if xb.Pull != nil {
 		t.Pull = xb.Pull
@@ -370,35 +407,30 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 
 // composeToBuildkitSecret converts secret from compose format to buildkit's
 // csv format.
-func composeToBuildkitSecret(inp composetypes.ServiceSecretConfig, psecret composetypes.SecretConfig) (string, error) {
+func composeToBuildkitSecret(inp composetypes.ServiceSecretConfig, psecret composetypes.SecretConfig) (*buildflags.Secret, error) {
 	if psecret.External {
-		return "", errors.Errorf("unsupported external secret %s", psecret.Name)
+		return nil, errors.Errorf("unsupported external secret %s", psecret.Name)
 	}
 
-	var bkattrs []string
+	secret := &buildflags.Secret{}
 	if inp.Source != "" {
-		bkattrs = append(bkattrs, "id="+inp.Source)
+		secret.ID = inp.Source
 	}
 	if psecret.File != "" {
-		bkattrs = append(bkattrs, "src="+psecret.File)
+		secret.FilePath = psecret.File
 	}
 	if psecret.Environment != "" {
-		bkattrs = append(bkattrs, "env="+psecret.Environment)
+		secret.Env = psecret.Environment
 	}
-
-	return strings.Join(bkattrs, ","), nil
+	return secret, nil
 }
 
 // composeToBuildkitSSH converts secret from compose format to buildkit's
 // csv format.
-func composeToBuildkitSSH(sshKey composetypes.SSHKey) string {
-	var bkattrs []string
-
-	bkattrs = append(bkattrs, sshKey.ID)
-
+func composeToBuildkitSSH(sshKey composetypes.SSHKey) *buildflags.SSH {
+	bkssh := &buildflags.SSH{ID: sshKey.ID}
 	if sshKey.Path != "" {
-		bkattrs = append(bkattrs, sshKey.Path)
+		bkssh.Paths = []string{sshKey.Path}
 	}
-
-	return strings.Join(bkattrs, "=")
+	return bkssh
 }

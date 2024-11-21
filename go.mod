@@ -15,6 +15,7 @@ require (
 	github.com/containerd/platforms v0.2.1
 	github.com/containerd/typeurl/v2 v2.2.0
 	github.com/creack/pty v1.1.21
+	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v27.3.1+incompatible
 	github.com/docker/cli-docs-tool v0.8.0
@@ -87,7 +88,6 @@ require (
 	github.com/containerd/containerd/api v1.7.19 // indirect
 	github.com/containerd/ttrpc v1.2.5 // indirect
 	github.com/cpuguy83/go-md2man/v2 v2.0.5 // indirect
-	github.com/davecgh/go-spew v1.1.1 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.8.2 // indirect
 	github.com/docker/go v1.5.1-1.0.20160303222718-d30aec9fd63c // indirect

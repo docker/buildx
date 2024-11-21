@@ -12,7 +12,7 @@ import (
 )
 
 func TestParseCompose(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   db:
     build: ./db
@@ -74,14 +74,14 @@ secrets:
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[1].Dockerfile)
 	require.Equal(t, 1, len(c.Targets[1].Args))
 	require.Equal(t, ptrstr("123"), c.Targets[1].Args["buildno"])
-	require.Equal(t, []string{"type=local,src=path/to/cache"}, c.Targets[1].CacheFrom)
-	require.Equal(t, []string{"type=local,dest=path/to/cache"}, c.Targets[1].CacheTo)
+	require.Equal(t, []string{"type=local,src=path/to/cache"}, stringify(c.Targets[1].CacheFrom))
+	require.Equal(t, []string{"type=local,dest=path/to/cache"}, stringify(c.Targets[1].CacheTo))
 	require.Equal(t, "none", *c.Targets[1].NetworkMode)
-	require.Equal(t, []string{"default", "key=path/to/key"}, c.Targets[1].SSH)
+	require.Equal(t, []string{"default", "key=path/to/key"}, stringify(c.Targets[1].SSH))
 	require.Equal(t, []string{
-		"id=token,env=ENV_TOKEN",
 		"id=aws,src=/root/.aws/credentials",
-	}, c.Targets[1].Secrets)
+		"id=token,env=ENV_TOKEN",
+	}, stringify(c.Targets[1].Secrets))
 
 	require.Equal(t, "webapp2", c.Targets[2].Name)
 	require.Equal(t, "dir", *c.Targets[2].Context)
@@ -89,7 +89,7 @@ secrets:
 }
 
 func TestNoBuildOutOfTreeService(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
     external:
         image: "verycooldb:1337"
@@ -103,7 +103,7 @@ services:
 }
 
 func TestParseComposeTarget(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   db:
     build:
@@ -129,7 +129,7 @@ services:
 }
 
 func TestComposeBuildWithoutContext(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   db:
     build:
@@ -153,7 +153,7 @@ services:
 }
 
 func TestBuildArgEnvCompose(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 version: "3.8"
 services:
   example:
@@ -179,7 +179,7 @@ services:
 }
 
 func TestInconsistentComposeFile(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   webapp:
     entrypoint: echo 1
@@ -190,7 +190,7 @@ services:
 }
 
 func TestAdvancedNetwork(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   db:
     networks:
@@ -215,7 +215,7 @@ networks:
 }
 
 func TestTags(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   example:
     image: example
@@ -233,7 +233,7 @@ services:
 }
 
 func TestDependsOnList(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 version: "3.8"
 
 services:
@@ -269,7 +269,7 @@ networks:
 }
 
 func TestComposeExt(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   addon:
     image: ct-addon:bar
@@ -336,23 +336,23 @@ services:
 	require.Equal(t, map[string]*string{"CT_ECR": ptrstr("foo"), "CT_TAG": ptrstr("bar")}, c.Targets[0].Args)
 	require.Equal(t, []string{"ct-addon:baz", "ct-addon:foo", "ct-addon:alp"}, c.Targets[0].Tags)
 	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Targets[0].Platforms)
-	require.Equal(t, []string{"user/app:cache", "type=local,src=path/to/cache"}, c.Targets[0].CacheFrom)
-	require.Equal(t, []string{"user/app:cache", "type=local,dest=path/to/cache"}, c.Targets[0].CacheTo)
-	require.Equal(t, []string{"default", "key=path/to/key", "other=path/to/otherkey"}, c.Targets[0].SSH)
+	require.Equal(t, []string{"type=local,src=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheFrom))
+	require.Equal(t, []string{"type=local,dest=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheTo))
+	require.Equal(t, []string{"default", "key=path/to/key", "other=path/to/otherkey"}, stringify(c.Targets[0].SSH))
 	require.Equal(t, newBool(true), c.Targets[0].Pull)
 	require.Equal(t, map[string]string{"alpine": "docker-image://alpine:3.13"}, c.Targets[0].Contexts)
 	require.Equal(t, []string{"ct-fake-aws:bar"}, c.Targets[1].Tags)
-	require.Equal(t, []string{"id=mysecret,src=/local/secret", "id=mysecret2,src=/local/secret2"}, c.Targets[1].Secrets)
-	require.Equal(t, []string{"default"}, c.Targets[1].SSH)
+	require.Equal(t, []string{"id=mysecret,src=/local/secret", "id=mysecret2,src=/local/secret2"}, stringify(c.Targets[1].Secrets))
+	require.Equal(t, []string{"default"}, stringify(c.Targets[1].SSH))
 	require.Equal(t, []string{"linux/arm64"}, c.Targets[1].Platforms)
-	require.Equal(t, []string{"type=docker"}, c.Targets[1].Outputs)
+	require.Equal(t, []string{"type=docker"}, stringify(c.Targets[1].Outputs))
 	require.Equal(t, newBool(true), c.Targets[1].NoCache)
 	require.Equal(t, ptrstr("128MiB"), c.Targets[1].ShmSize)
 	require.Equal(t, []string{"nofile=1024:1024"}, c.Targets[1].Ulimits)
 }
 
 func TestComposeExtDedup(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   webapp:
     image: app:bar
@@ -383,9 +383,9 @@ services:
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, []string{"ct-addon:foo", "ct-addon:baz"}, c.Targets[0].Tags)
-	require.Equal(t, []string{"user/app:cache", "type=local,src=path/to/cache"}, c.Targets[0].CacheFrom)
-	require.Equal(t, []string{"user/app:cache", "type=local,dest=path/to/cache"}, c.Targets[0].CacheTo)
-	require.Equal(t, []string{"default", "key=path/to/key"}, c.Targets[0].SSH)
+	require.Equal(t, []string{"type=local,src=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheFrom))
+	require.Equal(t, []string{"type=local,dest=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheTo))
+	require.Equal(t, []string{"default", "key=path/to/key"}, stringify(c.Targets[0].SSH))
 }
 
 func TestEnv(t *testing.T) {
@@ -396,7 +396,7 @@ func TestEnv(t *testing.T) {
 	_, err = envf.WriteString("FOO=bsdf -csdf\n")
 	require.NoError(t, err)
 
-	var dt = []byte(`
+	dt := []byte(`
 services:
   scratch:
     build:
@@ -424,7 +424,7 @@ func TestDotEnv(t *testing.T) {
 	err := os.WriteFile(filepath.Join(tmpdir, ".env"), []byte("FOO=bar"), 0644)
 	require.NoError(t, err)
 
-	var dt = []byte(`
+	dt := []byte(`
 services:
   scratch:
     build:
@@ -443,7 +443,7 @@ services:
 }
 
 func TestPorts(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   foo:
     build:
@@ -664,7 +664,7 @@ target "default" {
 }
 
 func TestComposeNullArgs(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   scratch:
     build:
@@ -680,7 +680,7 @@ services:
 }
 
 func TestDependsOn(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   foo:
     build:
@@ -711,7 +711,7 @@ services:
 `), 0644)
 	require.NoError(t, err)
 
-	var dt = []byte(`
+	dt := []byte(`
 include:
   - compose-foo.yml
 
@@ -740,7 +740,7 @@ services:
 }
 
 func TestDevelop(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   scratch:
     build:
@@ -759,7 +759,7 @@ services:
 }
 
 func TestCgroup(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   scratch:
     build:
@@ -772,7 +772,7 @@ services:
 }
 
 func TestProjectName(t *testing.T) {
-	var dt = []byte(`
+	dt := []byte(`
 services:
   scratch:
     build:
