@@ -1,11 +1,59 @@
 package buildflags
 
 import (
+	"cmp"
+	"slices"
 	"strings"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/moby/buildkit/util/gitutil"
 )
+
+type SSH struct {
+	ID    string   `json:"id,omitempty" cty:"id"`
+	Paths []string `json:"paths,omitempty" cty:"paths"`
+}
+
+func (s *SSH) Equal(other *SSH) bool {
+	return s.Less(other) == 0
+}
+
+func (s *SSH) Less(other *SSH) int {
+	if s.ID != other.ID {
+		return cmp.Compare(s.ID, other.ID)
+	}
+	return slices.Compare(s.Paths, other.Paths)
+}
+
+func (s *SSH) String() string {
+	if len(s.Paths) == 0 {
+		return s.ID
+	}
+
+	var b csvBuilder
+	paths := strings.Join(s.Paths, ",")
+	b.Write(s.ID, paths)
+	return b.String()
+}
+
+func (s *SSH) ToPB() *controllerapi.SSH {
+	return &controllerapi.SSH{
+		ID:    s.ID,
+		Paths: s.Paths,
+	}
+}
+
+func (s *SSH) UnmarshalText(text []byte) error {
+	parts := strings.SplitN(string(text), "=", 2)
+
+	s.ID = parts[0]
+	if len(parts) > 1 {
+		s.Paths = strings.Split(parts[1], ",")
+	} else {
+		s.Paths = nil
+	}
+	return nil
+}
 
 func ParseSSHSpecs(sl []string) ([]*controllerapi.SSH, error) {
 	var outs []*controllerapi.SSH
@@ -14,14 +62,11 @@ func ParseSSHSpecs(sl []string) ([]*controllerapi.SSH, error) {
 	}
 
 	for _, s := range sl {
-		parts := strings.SplitN(s, "=", 2)
-		out := controllerapi.SSH{
-			ID: parts[0],
+		var out SSH
+		if err := out.UnmarshalText([]byte(s)); err != nil {
+			return nil, err
 		}
-		if len(parts) > 1 {
-			out.Paths = strings.Split(parts[1], ",")
-		}
-		outs = append(outs, &out)
+		outs = append(outs, out.ToPB())
 	}
 	return outs, nil
 }
