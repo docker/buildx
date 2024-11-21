@@ -18,6 +18,8 @@ target "_platforms" {
     "linux/arm64",
     "linux/ppc64le",
     "linux/s390x",
+    "netbsd/amd64",
+    "netbsd/arm64",
     "openbsd/amd64",
     "openbsd/arm64",
     "windows/amd64",
