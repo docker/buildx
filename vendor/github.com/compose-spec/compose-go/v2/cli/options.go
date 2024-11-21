@@ -414,7 +414,7 @@ func (o *ProjectOptions) ReadConfigFiles(ctx context.Context, workingDir string,
 	for i, c := range config.ConfigFiles {
 		var err error
 		var b []byte
-		if c.Filename == "-" {
+		if c.IsStdin() {
 			b, err = io.ReadAll(os.Stdin)
 			if err != nil {
 				return nil, err
