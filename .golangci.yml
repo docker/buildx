@@ -23,6 +23,7 @@ linters:
     - nolintlint
     - revive
     - staticcheck
+    - testifylint
     - typecheck
     - unused
     - whitespace
@@ -81,6 +82,14 @@ linters-settings:
       - G115  # integer overflow conversion (TODO: verify these)
     config:
       G306: "0644"
+  testifylint:
+    disable:
+      # disable rules that reduce the test condition
+      - "empty"
+      - "bool-compare"
+      - "len"
+      - "negative-positive"
+
 
 issues:
   exclude-files:

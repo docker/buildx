@@ -102,7 +102,7 @@ func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
 
 	for _, line := range strings.Split(out, "\n") {
 		if v, ok := strings.CutPrefix(line, "Status:"); ok {
-			require.Equal(t, strings.TrimSpace(v), "running")
+			require.Equal(t, "running", strings.TrimSpace(v))
 			return
 		}
 	}

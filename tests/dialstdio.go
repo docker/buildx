@@ -17,7 +17,6 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/pkg/errors"
-	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
 
@@ -57,7 +56,7 @@ func testDialStdio(t *testing.T, sb integration.Sandbox) {
 			case <-time.After(10 * time.Second):
 				t.Error("timeout waiting for buildx command to exit")
 			case <-chErr:
-				assert.NoError(t, err)
+				require.NoError(t, err)
 			}
 		}()
 

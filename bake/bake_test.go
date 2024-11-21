@@ -59,8 +59,8 @@ target "webapp" {
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
 		t.Parallel()
 		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"}, nil)
-		require.NotNil(t, err)
-		require.Equal(t, err.Error(), "could not find any target matching 'nosuchtarget'")
+		require.Error(t, err)
+		require.Equal(t, "could not find any target matching 'nosuchtarget'", err.Error())
 	})
 
 	t.Run("ArgsOverrides", func(t *testing.T) {
@@ -116,7 +116,7 @@ target "webapp" {
 	t.Run("ContextOverride", func(t *testing.T) {
 		t.Parallel()
 		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil)
-		require.NotNil(t, err)
+		require.Error(t, err)
 
 		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil)
 		require.NoError(t, err)
@@ -203,8 +203,8 @@ target "webapp" {
 					// NOTE: I am unsure whether failing to match should always error out
 					// instead of simply skipping that override.
 					// Let's enforce the error and we can relax it later if users complain.
-					require.NotNil(t, err)
-					require.Equal(t, err.Error(), "could not find any target matching 'nomatch*'")
+					require.Error(t, err)
+					require.Equal(t, "could not find any target matching 'nomatch*'", err.Error())
 				},
 			},
 		}

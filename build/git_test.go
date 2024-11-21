@@ -23,7 +23,7 @@ func setupTest(tb testing.TB) {
 	gitutil.GitInit(c, tb)
 
 	df := []byte("FROM alpine:latest\n")
-	assert.NoError(tb, os.WriteFile("Dockerfile", df, 0644))
+	require.NoError(tb, os.WriteFile("Dockerfile", df, 0644))
 
 	gitutil.GitAdd(c, tb, "Dockerfile")
 	gitutil.GitCommit(c, tb, "initial commit")
@@ -32,7 +32,7 @@ func setupTest(tb testing.TB) {
 
 func TestGetGitAttributesNotGitRepo(t *testing.T) {
 	_, err := getGitAttributes(context.Background(), t.TempDir(), "Dockerfile")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 }
 
 func TestGetGitAttributesBadGitRepo(t *testing.T) {
@@ -47,7 +47,7 @@ func TestGetGitAttributesNoContext(t *testing.T) {
 	setupTest(t)
 
 	addGitAttrs, err := getGitAttributes(context.Background(), "", "Dockerfile")
-	assert.NoError(t, err)
+	require.NoError(t, err)
 	var so client.SolveOpt
 	addGitAttrs(&so)
 	assert.Empty(t, so.FrontendAttrs)
@@ -195,8 +195,8 @@ func TestLocalDirsSub(t *testing.T) {
 	gitutil.GitInit(c, t)
 
 	df := []byte("FROM alpine:latest\n")
-	assert.NoError(t, os.MkdirAll("app", 0755))
-	assert.NoError(t, os.WriteFile("app/Dockerfile", df, 0644))
+	require.NoError(t, os.MkdirAll("app", 0755))
+	require.NoError(t, os.WriteFile("app/Dockerfile", df, 0644))
 
 	gitutil.GitAdd(c, t, "app/Dockerfile")
 	gitutil.GitCommit(c, t, "initial commit")

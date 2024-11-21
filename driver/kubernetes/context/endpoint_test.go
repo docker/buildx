@@ -191,7 +191,7 @@ func checkClientConfig(t *testing.T, ep Endpoint, server, namespace string, ca, 
 		require.NoError(t, err)
 		assert.Equal(t, proxyURLString, proxyURL.String())
 	} else {
-		assert.True(t, cfg.Proxy == nil, "expected proxy to be nil, but is not nil instead")
+		assert.Nil(t, cfg.Proxy, "expected proxy to be nil, but is not nil instead")
 	}
 }
 
@@ -224,7 +224,7 @@ func TestSaveLoadGKEConfig(t *testing.T) {
 	persistedMetadata, err := store.GetMetadata("gke-context")
 	require.NoError(t, err)
 	persistedEPMeta := EndpointFromContext(persistedMetadata)
-	assert.True(t, persistedEPMeta != nil)
+	assert.NotNil(t, persistedEPMeta)
 	persistedEP, err := persistedEPMeta.WithTLSData(store, "gke-context")
 	require.NoError(t, err)
 	persistedCfg := persistedEP.KubernetesConfig()
@@ -249,7 +249,7 @@ func TestSaveLoadEKSConfig(t *testing.T) {
 	persistedMetadata, err := store.GetMetadata("eks-context")
 	require.NoError(t, err)
 	persistedEPMeta := EndpointFromContext(persistedMetadata)
-	assert.True(t, persistedEPMeta != nil)
+	assert.NotNil(t, persistedEPMeta)
 	persistedEP, err := persistedEPMeta.WithTLSData(store, "eks-context")
 	require.NoError(t, err)
 	persistedCfg := persistedEP.KubernetesConfig()
@@ -274,14 +274,14 @@ func TestSaveLoadK3SConfig(t *testing.T) {
 	persistedMetadata, err := store.GetMetadata("k3s-context")
 	require.NoError(t, err)
 	persistedEPMeta := EndpointFromContext(persistedMetadata)
-	assert.True(t, persistedEPMeta != nil)
+	assert.NotNil(t, persistedEPMeta)
 	persistedEP, err := persistedEPMeta.WithTLSData(store, "k3s-context")
 	require.NoError(t, err)
 	persistedCfg := persistedEP.KubernetesConfig()
 	actualCfg, err := persistedCfg.ClientConfig()
 	require.NoError(t, err)
-	assert.True(t, len(actualCfg.Username) > 0)
-	assert.True(t, len(actualCfg.Password) > 0)
+	assert.Greater(t, len(actualCfg.Username), 0)
+	assert.Greater(t, len(actualCfg.Password), 0)
 	assert.Equal(t, expectedCfg.Username, actualCfg.Username)
 	assert.Equal(t, expectedCfg.Password, actualCfg.Password)
 }
