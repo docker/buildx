@@ -16,6 +16,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
 )
@@ -460,6 +461,10 @@ func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error
 	m := make(map[string]struct{}, len(in))
 	for p := range in {
 		v, err := evaluateToExistingPath(p)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to evaluate path %q", p)
+		}
+		v, err = osutil.GetLongPathName(v)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to evaluate path %q", p)
 		}

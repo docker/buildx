@@ -4,12 +4,12 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
-	"runtime"
 	"slices"
 	"testing"
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller/pb"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/entitlements"
@@ -17,24 +17,21 @@ import (
 )
 
 func TestEvaluateToExistingPath(t *testing.T) {
-	tempDir := t.TempDir()
+	tempDir, err := osutil.GetLongPathName(t.TempDir())
+	require.NoError(t, err)
 
 	// Setup temporary directory structure for testing
 	existingFile := filepath.Join(tempDir, "existing_file")
-	err := os.WriteFile(existingFile, []byte("test"), 0644)
-	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(existingFile, []byte("test"), 0644))
 
 	existingDir := filepath.Join(tempDir, "existing_dir")
-	err = os.Mkdir(existingDir, 0755)
-	require.NoError(t, err)
+	require.NoError(t, os.Mkdir(existingDir, 0755))
 
 	symlinkToFile := filepath.Join(tempDir, "symlink_to_file")
-	err = os.Symlink(existingFile, symlinkToFile)
-	require.NoError(t, err)
+	require.NoError(t, os.Symlink(existingFile, symlinkToFile))
 
 	symlinkToDir := filepath.Join(tempDir, "symlink_to_dir")
-	err = os.Symlink(existingDir, symlinkToDir)
-	require.NoError(t, err)
+	require.NoError(t, os.Symlink(existingDir, symlinkToDir))
 
 	nonexistentPath := filepath.Join(tempDir, "nonexistent", "path", "file.txt")
 
@@ -84,10 +81,7 @@ func TestEvaluateToExistingPath(t *testing.T) {
 			name:  "Root path",
 			input: "/",
 			expected: func() string {
-				root := "/"
-				if runtime.GOOS == "windows" {
-					root = filepath.VolumeName(root)
-				}
+				root, _ := filepath.Abs("/")
 				return root
 			}(),
 			expectErr: false,
@@ -109,8 +103,7 @@ func TestEvaluateToExistingPath(t *testing.T) {
 }
 
 func TestDedupePaths(t *testing.T) {
-	wd, err := os.Getwd()
-	require.NoError(t, err)
+	wd := osutil.GetWd()
 	tcases := []struct {
 		in  map[string]struct{}
 		out map[string]struct{}
@@ -172,21 +165,25 @@ func TestDedupePaths(t *testing.T) {
 			for _, v := range arr {
 				m[filepath.ToSlash(v)] = struct{}{}
 			}
-			require.Equal(t, tc.out, m)
+			o := make(map[string]struct{}, len(tc.out))
+			for k := range tc.out {
+				o[filepath.ToSlash(k)] = struct{}{}
+			}
+			require.Equal(t, o, m)
 		})
 	}
 }
 
 func TestValidateEntitlements(t *testing.T) {
-	dir1 := t.TempDir()
-	dir2 := t.TempDir()
+	dir1, err := osutil.GetLongPathName(t.TempDir())
+	require.NoError(t, err)
+	dir2, err := osutil.GetLongPathName(t.TempDir())
+	require.NoError(t, err)
 
 	escapeLink := filepath.Join(dir1, "escape_link")
-	err := os.Symlink("../../aa", escapeLink)
-	require.NoError(t, err)
+	require.NoError(t, os.Symlink("../../aa", escapeLink))
 
-	wd, err := os.Getwd()
-	require.NoError(t, err)
+	wd := osutil.GetWd()
 
 	tcases := []struct {
 		name     string
