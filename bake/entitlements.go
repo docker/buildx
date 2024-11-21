@@ -319,7 +319,7 @@ func isParentOrEqualPath(p, parent string) bool {
 	if p == parent || parent == "/" {
 		return true
 	}
-	if strings.HasPrefix(p, parent+string(filepath.Separator)) {
+	if strings.HasPrefix(p, filepath.Clean(parent+string(filepath.Separator))) {
 		return true
 	}
 	return false
@@ -439,22 +439,6 @@ func removeCommonPaths(in, common []string) []string {
 		filtered = append(filtered, path)
 	}
 	return filtered
-}
-
-func evaluatePaths(in []string) ([]string, error) {
-	out := make([]string, 0, len(in))
-	for _, p := range in {
-		v, err := filepath.Abs(p)
-		if err != nil {
-			return nil, err
-		}
-		v, err = filepath.EvalSymlinks(v)
-		if err != nil {
-			return nil, errors.Wrapf(err, "failed to evaluate path %q", p)
-		}
-		out = append(out, v)
-	}
-	return out, nil
 }
 
 func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error) {
