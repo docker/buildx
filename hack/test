@@ -2,6 +2,8 @@
 
 set -eu -o pipefail
 
+: "${GITHUB_ACTIONS=}"
+
 : "${BUILDX_CMD=docker buildx}"
 
 : "${TEST_COVERAGE=}"
@@ -37,7 +39,15 @@ if [ "$TEST_COVERAGE" = "1" ]; then
   export GO_TEST_COVERPROFILE="/testreports/coverage-report$TEST_REPORT_SUFFIX.txt"
 fi
 
-cid=$(docker create --rm --privileged \
+dockerConfigMount=""
+if [ "$GITHUB_ACTIONS" = "true" ]; then
+  dockerConfigPath="$HOME/.docker/config.json"
+  if [ -f "$dockerConfigPath" ]; then
+    dockerConfigMount="-v $dockerConfigPath:/root/.docker/config.json:ro"
+  fi
+fi
+
+cid=$(docker create --rm --privileged $dockerConfigMount \
   -v /tmp $testReportsVol \
   --volumes-from=$cacheVolume \
   -e GITHUB_REF \
