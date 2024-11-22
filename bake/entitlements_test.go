@@ -350,6 +350,33 @@ func TestValidateEntitlements(t *testing.T) {
 			conf: EntitlementConf{
 				FSRead: []string{"/"},
 			},
+			expected: EntitlementConf{
+				FSRead: func() []string {
+					// on windows root (/) is only allowed if it is the same volume as wd
+					if filepath.VolumeName(wd) == filepath.VolumeName(escapeLink) {
+						return nil
+					}
+					// if not, then escapeLink is not allowed
+					exp, err := evaluateToExistingPath(escapeLink)
+					require.NoError(t, err)
+					exp, err = filepath.EvalSymlinks(exp)
+					require.NoError(t, err)
+					return []string{exp}
+				}(),
+			},
+		},
+		{
+			name: "SecretFromEscapeLinkAllowAny",
+			opt: build.Options{
+				SecretSpecs: []*pb.Secret{
+					{
+						FilePath: escapeLink,
+					},
+				},
+			},
+			conf: EntitlementConf{
+				FSRead: []string{"*"},
+			},
 			expected: EntitlementConf{},
 		},
 	}
