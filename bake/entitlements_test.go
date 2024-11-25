@@ -175,15 +175,22 @@ func TestDedupePaths(t *testing.T) {
 }
 
 func TestValidateEntitlements(t *testing.T) {
-	dir1, err := osutil.GetLongPathName(t.TempDir())
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	// the paths returned by entitlements validation will have symlinks resolved
+	expDir1, err := filepath.EvalSymlinks(dir1)
 	require.NoError(t, err)
-	dir2, err := osutil.GetLongPathName(t.TempDir())
+	expDir2, err := filepath.EvalSymlinks(dir2)
 	require.NoError(t, err)
 
 	escapeLink := filepath.Join(dir1, "escape_link")
 	require.NoError(t, os.Symlink("../../aa", escapeLink))
 
-	wd := osutil.GetWd()
+	wd, err := os.Getwd()
+	require.NoError(t, err)
+	expWd, err := filepath.EvalSymlinks(wd)
+	require.NoError(t, err)
 
 	tcases := []struct {
 		name     string
@@ -208,7 +215,7 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			expected: EntitlementConf{
 				NetworkHost: true,
-				FSRead:      []string{wd},
+				FSRead:      []string{expWd},
 			},
 		},
 		{
@@ -222,7 +229,7 @@ func TestValidateEntitlements(t *testing.T) {
 				},
 			},
 			expected: EntitlementConf{
-				FSRead: []string{wd},
+				FSRead: []string{expWd},
 			},
 		},
 		{
@@ -236,7 +243,7 @@ func TestValidateEntitlements(t *testing.T) {
 			expected: EntitlementConf{
 				NetworkHost:      true,
 				SecurityInsecure: true,
-				FSRead:           []string{wd},
+				FSRead:           []string{expWd},
 			},
 		},
 		{
@@ -252,7 +259,7 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			expected: EntitlementConf{
 				SecurityInsecure: true,
-				FSRead:           []string{wd},
+				FSRead:           []string{expWd},
 			},
 		},
 		{
@@ -266,7 +273,7 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			expected: EntitlementConf{
 				SSH:    true,
-				FSRead: []string{wd},
+				FSRead: []string{expWd},
 			},
 		},
 		{
@@ -295,11 +302,11 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			expected: EntitlementConf{
 				FSWrite: func() []string {
-					exp := []string{dir1, dir2}
+					exp := []string{expDir1, expDir2}
 					slices.Sort(exp)
 					return exp
 				}(),
-				FSRead: []string{wd},
+				FSRead: []string{expWd},
 			},
 		},
 		{
@@ -328,7 +335,7 @@ func TestValidateEntitlements(t *testing.T) {
 				FSRead: []string{wd, dir1},
 			},
 			expected: EntitlementConf{
-				FSRead: []string{filepath.Join(dir1, "../..")},
+				FSRead: []string{filepath.Join(expDir1, "../..")},
 			},
 		},
 		{
