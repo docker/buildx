@@ -175,10 +175,8 @@ func TestDedupePaths(t *testing.T) {
 }
 
 func TestValidateEntitlements(t *testing.T) {
-	dir1, err := osutil.GetLongPathName(t.TempDir())
-	require.NoError(t, err)
-	dir2, err := osutil.GetLongPathName(t.TempDir())
-	require.NoError(t, err)
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
 
 	// the paths returned by entitlements validation will have symlinks resolved
 	expDir1, err := filepath.EvalSymlinks(dir1)
@@ -189,7 +187,8 @@ func TestValidateEntitlements(t *testing.T) {
 	escapeLink := filepath.Join(dir1, "escape_link")
 	require.NoError(t, os.Symlink("../../aa", escapeLink))
 
-	wd := osutil.GetWd()
+	wd, err := os.Getwd()
+	require.NoError(t, err)
 	expWd, err := filepath.EvalSymlinks(wd)
 	require.NoError(t, err)
 
