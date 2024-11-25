@@ -326,16 +326,18 @@ func isParentOrEqualPath(p, parent string) bool {
 }
 
 func findMissingPaths(set []string, paths map[string]struct{}) ([]string, error) {
-	paths, err := evaluateToExistingPaths(paths)
+	set, allowAny, err := evaluatePaths(set)
+	if err != nil {
+		return nil, err
+	} else if allowAny {
+		return nil, nil
+	}
+
+	paths, err = evaluateToExistingPaths(paths)
 	if err != nil {
 		return nil, err
 	}
 	paths, err = dedupPaths(paths)
-	if err != nil {
-		return nil, err
-	}
-
-	set, err = evaluatePaths(set)
 	if err != nil {
 		return nil, err
 	}
@@ -439,6 +441,27 @@ func removeCommonPaths(in, common []string) []string {
 		filtered = append(filtered, path)
 	}
 	return filtered
+}
+
+func evaluatePaths(in []string) ([]string, bool, error) {
+	out := make([]string, 0, len(in))
+	allowAny := false
+	for _, p := range in {
+		if p == "*" {
+			allowAny = true
+			continue
+		}
+		v, err := filepath.Abs(p)
+		if err != nil {
+			return nil, false, errors.Wrapf(err, "failed to evaluate path %q", p)
+		}
+		v, err = filepath.EvalSymlinks(v)
+		if err != nil {
+			return nil, false, errors.Wrapf(err, "failed to evaluate path %q", p)
+		}
+		out = append(out, v)
+	}
+	return out, allowAny, nil
 }
 
 func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error) {
