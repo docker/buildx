@@ -90,7 +90,7 @@ body:
         FROM alpine
         echo hello
         ```
-        
+
         ```hcl
         group "default" {
           targets = ["app"]
@@ -100,7 +100,7 @@ body:
           target = "build"
         }
         ```
-        
+
         ```console
         $ docker buildx build .
         $ docker buildx bake
