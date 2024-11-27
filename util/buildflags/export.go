@@ -1,10 +1,7 @@
 package buildflags
 
 import (
-	"encoding/json"
-	"maps"
 	"regexp"
-	"sort"
 	"strings"
 
 	"github.com/containerd/platforms"
@@ -16,131 +13,67 @@ import (
 	"github.com/tonistiigi/go-csvvalue"
 )
 
-type ExportEntry struct {
-	Type        string            `json:"type"`
-	Attrs       map[string]string `json:"attrs,omitempty"`
-	Destination string            `json:"dest,omitempty"`
-}
-
-func (e *ExportEntry) Equal(other *ExportEntry) bool {
-	if e.Type != other.Type || e.Destination != other.Destination {
-		return false
-	}
-	return maps.Equal(e.Attrs, other.Attrs)
-}
-
-func (e *ExportEntry) String() string {
-	var b csvBuilder
-	if e.Type != "" {
-		b.Write("type", e.Type)
-	}
-	if e.Destination != "" {
-		b.Write("dest", e.Destination)
-	}
-	if len(e.Attrs) > 0 {
-		b.WriteAttributes(e.Attrs)
-	}
-	return b.String()
-}
-
-func (e *ExportEntry) ToPB() *controllerapi.ExportEntry {
-	return &controllerapi.ExportEntry{
-		Type:        e.Type,
-		Attrs:       maps.Clone(e.Attrs),
-		Destination: e.Destination,
-	}
-}
-
-func (e *ExportEntry) MarshalJSON() ([]byte, error) {
-	m := maps.Clone(e.Attrs)
-	if m == nil {
-		m = map[string]string{}
-	}
-	m["type"] = e.Type
-	if e.Destination != "" {
-		m["dest"] = e.Destination
-	}
-	return json.Marshal(m)
-}
-
-func (e *ExportEntry) UnmarshalJSON(data []byte) error {
-	var m map[string]string
-	if err := json.Unmarshal(data, &m); err != nil {
-		return err
-	}
-
-	e.Type = m["type"]
-	delete(m, "type")
-
-	e.Destination = m["dest"]
-	delete(m, "dest")
-
-	e.Attrs = m
-	return e.validate()
-}
-
-func (e *ExportEntry) UnmarshalText(text []byte) error {
-	s := string(text)
-	fields, err := csvvalue.Fields(s, nil)
-	if err != nil {
-		return err
-	}
-
-	// Clear the target entry.
-	e.Type = ""
-	e.Attrs = map[string]string{}
-	e.Destination = ""
-
-	if len(fields) == 1 && fields[0] == s && !strings.HasPrefix(s, "type=") {
-		if s != "-" {
-			e.Type = client.ExporterLocal
-			e.Destination = s
-			return nil
-		}
-
-		e.Type = client.ExporterTar
-		e.Destination = s
-	}
-
-	if e.Type == "" {
-		for _, field := range fields {
-			parts := strings.SplitN(field, "=", 2)
-			if len(parts) != 2 {
-				return errors.Errorf("invalid value %s", field)
-			}
-			key := strings.TrimSpace(strings.ToLower(parts[0]))
-			value := parts[1]
-			switch key {
-			case "type":
-				e.Type = value
-			case "dest":
-				e.Destination = value
-			default:
-				e.Attrs[key] = value
-			}
-		}
-	}
-	return e.validate()
-}
-
-func (e *ExportEntry) validate() error {
-	if e.Type == "" {
-		return errors.Errorf("type is required for output")
-	}
-	return nil
-}
-
 func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 	var outs []*controllerapi.ExportEntry
 	if len(inp) == 0 {
 		return nil, nil
 	}
 	for _, s := range inp {
-		var out ExportEntry
-		if err := out.UnmarshalText([]byte(s)); err != nil {
+		fields, err := csvvalue.Fields(s, nil)
+		if err != nil {
 			return nil, err
 		}
-		outs = append(outs, out.ToPB())
+
+		out := controllerapi.ExportEntry{
+			Attrs: map[string]string{},
+		}
+		if len(fields) == 1 && fields[0] == s && !strings.HasPrefix(s, "type=") {
+			if s != "-" {
+				outs = append(outs, &controllerapi.ExportEntry{
+					Type:        client.ExporterLocal,
+					Destination: s,
+				})
+				continue
+			}
+			out = controllerapi.ExportEntry{
+				Type:        client.ExporterTar,
+				Destination: s,
+			}
+		}
+
+		if out.Type == "" {
+			for _, field := range fields {
+				parts := strings.SplitN(field, "=", 2)
+				if len(parts) != 2 {
+					return nil, errors.Errorf("invalid value %s", field)
+				}
+				key := strings.TrimSpace(strings.ToLower(parts[0]))
+				value := parts[1]
+				switch key {
+				case "type":
+					out.Type = value
+				default:
+					out.Attrs[key] = value
+				}
+			}
+		}
+		if out.Type == "" {
+			return nil, errors.Errorf("type is required for output")
+		}
+
+		if out.Type == "registry" {
+			out.Type = client.ExporterImage
+			if _, ok := out.Attrs["push"]; !ok {
+				out.Attrs["push"] = "true"
+			}
+		}
+
+		if dest, ok := out.Attrs["dest"]; ok {
+			out.Destination = dest
+			delete(out.Attrs, "dest")
+		}
+
+		outs = append(outs, &out)
 	}
 	return outs, nil
 }
@@ -207,33 +140,4 @@ func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 		}
 	}
 	return annotations, nil
-}
-
-type csvBuilder struct {
-	sb strings.Builder
-}
-
-func (w *csvBuilder) Write(key, value string) {
-	if w.sb.Len() > 0 {
-		w.sb.WriteByte(',')
-	}
-	w.sb.WriteString(key)
-	w.sb.WriteByte('=')
-	w.sb.WriteString(value)
-}
-
-func (w *csvBuilder) WriteAttributes(attrs map[string]string) {
-	keys := make([]string, 0, len(attrs))
-	for key := range attrs {
-		keys = append(keys, key)
-	}
-	sort.Strings(keys)
-
-	for _, key := range keys {
-		w.Write(key, attrs[key])
-	}
-}
-
-func (w *csvBuilder) String() string {
-	return w.sb.String()
 }

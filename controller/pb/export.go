@@ -45,7 +45,6 @@ func CreateExports(entries []*ExportEntry) ([]client.ExportEntry, error) {
 			supportDir = !tar
 		case "registry":
 			out.Type = client.ExporterImage
-			out.Attrs["push"] = "true"
 		}
 
 		if supportDir {
