@@ -2008,3 +2008,23 @@ target "app" {
 		require.Contains(t, err.Error(), "FOO must be greater than 5.")
 	})
 }
+
+// https://github.com/docker/buildx/issues/2822
+func TestVariableEmpty(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "FOO" {
+  default = ""
+}
+target "app" {
+  output = [FOO]
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+}
