@@ -10,11 +10,12 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/buildx/bake/hclparser/gohcl"
 	"github.com/docker/buildx/util/userfunc"
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/gohcl"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/gocty"
 )
 
 type Opt struct {
@@ -453,7 +454,7 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		}
 
 		// decode!
-		diag = decodeBody(body(), ectx, output.Interface())
+		diag = gohcl.DecodeBody(body(), ectx, output.Interface())
 		if diag.HasErrors() {
 			return diag
 		}
@@ -475,11 +476,11 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		}
 
 		// store the result into the evaluation context (so it can be referenced)
-		outputType, err := ImpliedType(output.Interface())
+		outputType, err := gocty.ImpliedType(output.Interface())
 		if err != nil {
 			return err
 		}
-		outputValue, err := ToCtyValue(output.Interface(), outputType)
+		outputValue, err := gocty.ToCtyValue(output.Interface(), outputType)
 		if err != nil {
 			return err
 		}
@@ -491,12 +492,7 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 			m = map[string]cty.Value{}
 		}
 		m[name] = outputValue
-
-		// The logical contents of this structure is similar to a map,
-		// but it's possible for some attributes to be different in a way that's
-		// illegal for a map so we use an object here instead which is structurally
-		// equivalent but allows disparate types for different keys.
-		p.ectx.Variables[block.Type] = cty.ObjectVal(m)
+		p.ectx.Variables[block.Type] = cty.MapVal(m)
 	}
 
 	return nil
@@ -986,9 +982,4 @@ func key(ks ...any) uint64 {
 		}
 	}
 	return hash.Sum64()
-}
-
-func decodeBody(body hcl.Body, ctx *hcl.EvalContext, val interface{}) hcl.Diagnostics {
-	dec := gohcl.DecodeOptions{ImpliedType: ImpliedType}
-	return dec.DecodeBody(body, ctx, val)
 }
