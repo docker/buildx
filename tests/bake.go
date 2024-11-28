@@ -11,6 +11,7 @@ import (
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/bake"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
@@ -32,6 +33,7 @@ func bakeCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 
 var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrint,
+	testBakePrintConsistency,
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeRemote,
@@ -63,6 +65,139 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 }
 
 func testBakePrint(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox
+ARG HELLO
+RUN echo "Hello ${HELLO}"
+	`)
+	bakefile := []byte(`
+target "build" {
+  args = {
+    HELLO = "foo"
+  }
+  cache-from = [
+    "type=gha,scope=build",
+    "type=s3,region=eu-west-1,bucket=mybucket",
+    "user/repo:cache",
+  ]
+  cache-to = [
+    "type=gha,scope=build,token=foo,mode=max",
+    "type=s3,region=eu-west-1,bucket=mybucket",
+    "type=inline"
+  ]
+  output = [
+    "./release-out",
+    "type=registry,ref=user/app"
+  ]
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--print", "build"))
+	cmd.Env = append(cmd.Env, "ACTIONS_RUNTIME_TOKEN=baz", "AWS_ACCESS_KEY_ID=foo", "AWS_SECRET_ACCESS_KEY=bar")
+	stdout := bytes.Buffer{}
+	stderr := bytes.Buffer{}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+
+	var def struct {
+		Group  map[string]*bake.Group  `json:"group,omitempty"`
+		Target map[string]*bake.Target `json:"target"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &def))
+
+	require.Len(t, def.Group, 1)
+	require.Contains(t, def.Group, "default")
+
+	require.Equal(t, []string{"build"}, def.Group["default"].Targets)
+	require.Len(t, def.Target, 1)
+	require.Contains(t, def.Target, "build")
+	require.Equal(t, ".", *def.Target["build"].Context)
+	require.Equal(t, "Dockerfile", *def.Target["build"].Dockerfile)
+	require.Equal(t, map[string]*string{"HELLO": ptrstr("foo")}, def.Target["build"].Args)
+	require.Equal(t, []*buildflags.CacheOptionsEntry{
+		{Type: "gha", Attrs: map[string]string{"scope": "build"}},
+		{Type: "s3", Attrs: map[string]string{"region": "eu-west-1", "bucket": "mybucket"}},
+		{Type: "registry", Attrs: map[string]string{"ref": "user/repo:cache"}},
+	}, def.Target["build"].CacheFrom)
+	require.Equal(t, []*buildflags.CacheOptionsEntry{
+		{Type: "gha", Attrs: map[string]string{"scope": "build", "token": "foo", "mode": "max"}},
+		{Type: "s3", Attrs: map[string]string{"region": "eu-west-1", "bucket": "mybucket"}},
+		{Type: "inline", Attrs: map[string]string{}},
+	}, def.Target["build"].CacheTo)
+	require.Equal(t, []*buildflags.ExportEntry{
+		{Type: "local", Destination: "./release-out", Attrs: map[string]string{}},
+		{Type: "registry", Attrs: map[string]string{"ref": "user/app"}},
+	}, def.Target["build"].Outputs)
+
+	require.JSONEq(t, `{
+  "group": {
+    "default": {
+      "targets": [
+        "build"
+      ]
+    }
+  },
+  "target": {
+    "build": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "HELLO": "foo"
+      },
+      "cache-from": [
+        {
+          "scope": "build",
+          "type": "gha"
+        },
+        {
+          "bucket": "mybucket",
+          "region": "eu-west-1",
+          "type": "s3"
+        },
+        {
+          "ref": "user/repo:cache",
+          "type": "registry"
+        }
+      ],
+      "cache-to": [
+        {
+          "mode": "max",
+          "scope": "build",
+          "token": "foo",
+          "type": "gha"
+        },
+        {
+          "bucket": "mybucket",
+          "region": "eu-west-1",
+          "type": "s3"
+        },
+        {
+          "type": "inline"
+        }
+      ],
+      "output": [
+        {
+          "dest": "./release-out",
+          "type": "local"
+        },
+        {
+          "ref": "user/app",
+          "type": "registry"
+        }
+      ]
+    }
+  }
+}
+`, stdout.String())
+}
+
+func testBakePrintConsistency(t *testing.T, sb integration.Sandbox) {
 	testCases := []struct {
 		name string
 		f    string

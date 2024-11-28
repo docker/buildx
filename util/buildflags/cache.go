@@ -16,8 +16,9 @@ import (
 )
 
 type CacheOptionsEntry struct {
-	Type  string            `json:"type"`
-	Attrs map[string]string `json:"attrs,omitempty"`
+	Type         string            `json:"type"`
+	Attrs        map[string]string `json:"attrs,omitempty"`
+	DerivedAttrs map[string]string `json:"-"`
 }
 
 func (e *CacheOptionsEntry) Equal(other *CacheOptionsEntry) bool {
@@ -46,9 +47,11 @@ func (e *CacheOptionsEntry) String() string {
 }
 
 func (e *CacheOptionsEntry) ToPB() *controllerapi.CacheOptionsEntry {
+	attrs := maps.Clone(e.Attrs)
+	maps.Copy(attrs, e.DerivedAttrs)
 	return &controllerapi.CacheOptionsEntry{
 		Type:  e.Type,
-		Attrs: maps.Clone(e.Attrs),
+		Attrs: attrs,
 	}
 }
 
@@ -79,7 +82,7 @@ func (e *CacheOptionsEntry) IsActive() bool {
 	if e.Type != "gha" {
 		return true
 	}
-	return e.Attrs["token"] != "" && e.Attrs["url"] != ""
+	return (e.Attrs["token"] != "" || e.DerivedAttrs["token"] != "") && (e.Attrs["url"] != "" || e.DerivedAttrs["url"] != "")
 }
 
 func (e *CacheOptionsEntry) UnmarshalText(text []byte) error {
@@ -97,6 +100,7 @@ func (e *CacheOptionsEntry) UnmarshalText(text []byte) error {
 
 	e.Type = ""
 	e.Attrs = map[string]string{}
+	e.DerivedAttrs = map[string]string{}
 
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
@@ -162,12 +166,12 @@ func addGithubToken(ci *CacheOptionsEntry) {
 	}
 	if _, ok := ci.Attrs["token"]; !ok {
 		if v, ok := os.LookupEnv("ACTIONS_RUNTIME_TOKEN"); ok {
-			ci.Attrs["token"] = v
+			ci.DerivedAttrs["token"] = v
 		}
 	}
 	if _, ok := ci.Attrs["url"]; !ok {
 		if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
-			ci.Attrs["url"] = v
+			ci.DerivedAttrs["url"] = v
 		}
 	}
 }
@@ -192,12 +196,12 @@ func addAwsCredentials(ci *CacheOptionsEntry) {
 		return
 	}
 	if !okAccessKeyID && credentials.AccessKeyID != "" {
-		ci.Attrs["access_key_id"] = credentials.AccessKeyID
+		ci.DerivedAttrs["access_key_id"] = credentials.AccessKeyID
 	}
 	if !okSecretAccessKey && credentials.SecretAccessKey != "" {
-		ci.Attrs["secret_access_key"] = credentials.SecretAccessKey
+		ci.DerivedAttrs["secret_access_key"] = credentials.SecretAccessKey
 	}
 	if _, ok := ci.Attrs["session_token"]; !ok && credentials.SessionToken != "" {
-		ci.Attrs["session_token"] = credentials.SessionToken
+		ci.DerivedAttrs["session_token"] = credentials.SessionToken
 	}
 }
