@@ -560,39 +560,69 @@ func (p *Project) WithImagesResolved(resolver func(named reference.Named) (godig
 	})
 }
 
+type marshallOptions struct {
+	secretsContent bool
+}
+
+func WithSecretContent(o *marshallOptions) {
+	o.secretsContent = true
+}
+
+func (opt *marshallOptions) apply(p *Project) *Project {
+	if opt.secretsContent {
+		p = p.deepCopy()
+		for name, config := range p.Secrets {
+			config.marshallContent = true
+			p.Secrets[name] = config
+		}
+	}
+	return p
+}
+
+func applyMarshallOptions(p *Project, options ...func(*marshallOptions)) *Project {
+	opts := &marshallOptions{}
+	for _, option := range options {
+		option(opts)
+	}
+	p = opts.apply(p)
+	return p
+}
+
 // MarshalYAML marshal Project into a yaml tree
-func (p *Project) MarshalYAML() ([]byte, error) {
+func (p *Project) MarshalYAML(options ...func(*marshallOptions)) ([]byte, error) {
 	buf := bytes.NewBuffer([]byte{})
 	encoder := yaml.NewEncoder(buf)
 	encoder.SetIndent(2)
 	// encoder.CompactSeqIndent() FIXME https://github.com/go-yaml/yaml/pull/753
-	err := encoder.Encode(p)
+	src := applyMarshallOptions(p, options...)
+	err := encoder.Encode(src)
 	if err != nil {
 		return nil, err
 	}
 	return buf.Bytes(), nil
 }
 
-// MarshalJSON makes Config implement json.Marshaler
-func (p *Project) MarshalJSON() ([]byte, error) {
+// MarshalJSON marshal Project into a json document
+func (p *Project) MarshalJSON(options ...func(*marshallOptions)) ([]byte, error) {
+	src := applyMarshallOptions(p, options...)
 	m := map[string]interface{}{
-		"name":     p.Name,
-		"services": p.Services,
+		"name":     src.Name,
+		"services": src.Services,
 	}
 
-	if len(p.Networks) > 0 {
-		m["networks"] = p.Networks
+	if len(src.Networks) > 0 {
+		m["networks"] = src.Networks
 	}
-	if len(p.Volumes) > 0 {
-		m["volumes"] = p.Volumes
+	if len(src.Volumes) > 0 {
+		m["volumes"] = src.Volumes
 	}
-	if len(p.Secrets) > 0 {
-		m["secrets"] = p.Secrets
+	if len(src.Secrets) > 0 {
+		m["secrets"] = src.Secrets
 	}
-	if len(p.Configs) > 0 {
-		m["configs"] = p.Configs
+	if len(src.Configs) > 0 {
+		m["configs"] = src.Configs
 	}
-	for k, v := range p.Extensions {
+	for k, v := range src.Extensions {
 		m[k] = v
 	}
 	return json.MarshalIndent(m, "", "  ")
