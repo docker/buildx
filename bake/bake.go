@@ -1329,7 +1329,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if err != nil {
 		return nil, err
 	}
-	bo.Exports, err = controllerapi.CreateExports(outputs)
+
+	bo.Exports, bo.ExportsLocalPathsTemporary, err = controllerapi.CreateExports(outputs)
 	if err != nil {
 		return nil, err
 	}

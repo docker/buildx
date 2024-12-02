@@ -113,17 +113,8 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 		roPaths[p] = struct{}{}
 	}
 
-	for _, out := range bo.Exports {
-		if out.Type == "local" {
-			if dest, ok := out.Attrs["dest"]; ok {
-				rwPaths[dest] = struct{}{}
-			}
-		}
-		if out.Type == "tar" {
-			if dest, ok := out.Attrs["dest"]; ok && dest != "-" {
-				rwPaths[dest] = struct{}{}
-			}
-		}
+	for _, p := range bo.ExportsLocalPathsTemporary {
+		rwPaths[p] = struct{}{}
 	}
 
 	for _, ce := range bo.CacheTo {
