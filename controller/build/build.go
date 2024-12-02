@@ -93,7 +93,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *controllerapi.Buil
 	}
 	opts.Session = append(opts.Session, ssh)
 
-	outputs, err := controllerapi.CreateExports(in.Exports)
+	outputs, _, err := controllerapi.CreateExports(in.Exports)
 	if err != nil {
 		return nil, nil, nil, err
 	}
