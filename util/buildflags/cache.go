@@ -140,8 +140,11 @@ func (e *CacheOptionsEntry) validate(gv interface{}) error {
 }
 
 func ParseCacheEntry(in []string) ([]*controllerapi.CacheOptionsEntry, error) {
-	outs := make([]*controllerapi.CacheOptionsEntry, 0, len(in))
+	var outs []*controllerapi.CacheOptionsEntry
 	for _, in := range in {
+		if in == "" {
+			continue
+		}
 		var out CacheOptionsEntry
 		if err := out.UnmarshalText([]byte(in)); err != nil {
 			return nil, err

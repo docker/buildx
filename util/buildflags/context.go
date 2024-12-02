@@ -13,6 +13,9 @@ func ParseContextNames(values []string) (map[string]string, error) {
 	}
 	result := make(map[string]string, len(values))
 	for _, value := range values {
+		if value == "" {
+			continue
+		}
 		kv := strings.SplitN(value, "=", 2)
 		if len(kv) != 2 {
 			return nil, errors.Errorf("invalid context value: %s, expected key=value", value)

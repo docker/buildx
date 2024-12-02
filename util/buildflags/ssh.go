@@ -62,6 +62,9 @@ func ParseSSHSpecs(sl []string) ([]*controllerapi.SSH, error) {
 	}
 
 	for _, s := range sl {
+		if s == "" {
+			continue
+		}
 		var out SSH
 		if err := out.UnmarshalText([]byte(s)); err != nil {
 			return nil, err

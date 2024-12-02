@@ -179,5 +179,9 @@ func unmarshalTextFallback[V encoding.TextUnmarshaler](in cty.Value, v V, inErr 
 
 	// Conversion was successful. Use UnmarshalText on the string and return any
 	// errors associated with that.
-	return v.UnmarshalText([]byte(conv.AsString()))
+	convstr := conv.AsString()
+	if convstr == "" {
+		return nil
+	}
+	return v.UnmarshalText([]byte(convstr))
 }
