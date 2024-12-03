@@ -193,7 +193,7 @@ func ListTargets(files []File) ([]string, error) {
 	return dedupSlice(targets), nil
 }
 
-func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string) (map[string]*Target, map[string]*Group, error) {
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string, ent *EntitlementConf) (map[string]*Target, map[string]*Group, error) {
 	c, _, err := ParseFiles(files, defaults)
 	if err != nil {
 		return nil, nil, err
@@ -212,7 +212,7 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 	for _, target := range targets {
 		ts, gs := c.ResolveGroup(target)
 		for _, tname := range ts {
-			t, err := c.ResolveTarget(tname, o)
+			t, err := c.ResolveTarget(tname, o, ent)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -244,7 +244,7 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 	}
 
 	for name, t := range m {
-		if err := c.loadLinks(name, t, m, o, nil); err != nil {
+		if err := c.loadLinks(name, t, m, o, nil, ent); err != nil {
 			return nil, nil, err
 		}
 	}
@@ -476,7 +476,7 @@ func (c Config) expandTargets(pattern string) ([]string, error) {
 	return names, nil
 }
 
-func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[string]map[string]Override, visited []string) error {
+func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[string]map[string]Override, visited []string, ent *EntitlementConf) error {
 	visited = append(visited, name)
 	for _, v := range t.Contexts {
 		if strings.HasPrefix(v, "target:") {
@@ -492,7 +492,7 @@ func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[st
 			t2, ok := m[target]
 			if !ok {
 				var err error
-				t2, err = c.ResolveTarget(target, o)
+				t2, err = c.ResolveTarget(target, o, ent)
 				if err != nil {
 					return err
 				}
@@ -500,7 +500,7 @@ func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[st
 				t2.linked = true
 				m[target] = t2
 			}
-			if err := c.loadLinks(target, t2, m, o, visited); err != nil {
+			if err := c.loadLinks(target, t2, m, o, visited, ent); err != nil {
 				return err
 			}
 
@@ -627,8 +627,8 @@ func (c Config) group(name string, visited map[string]visit) ([]string, []string
 	return targets, groups
 }
 
-func (c Config) ResolveTarget(name string, overrides map[string]map[string]Override) (*Target, error) {
-	t, err := c.target(name, map[string]*Target{}, overrides)
+func (c Config) ResolveTarget(name string, overrides map[string]map[string]Override, ent *EntitlementConf) (*Target, error) {
+	t, err := c.target(name, map[string]*Target{}, overrides, ent)
 	if err != nil {
 		return nil, err
 	}
@@ -644,7 +644,7 @@ func (c Config) ResolveTarget(name string, overrides map[string]map[string]Overr
 	return t, nil
 }
 
-func (c Config) target(name string, visited map[string]*Target, overrides map[string]map[string]Override) (*Target, error) {
+func (c Config) target(name string, visited map[string]*Target, overrides map[string]map[string]Override, ent *EntitlementConf) (*Target, error) {
 	if t, ok := visited[name]; ok {
 		return t, nil
 	}
@@ -661,7 +661,7 @@ func (c Config) target(name string, visited map[string]*Target, overrides map[st
 	}
 	tt := &Target{}
 	for _, name := range t.Inherits {
-		t, err := c.target(name, visited, overrides)
+		t, err := c.target(name, visited, overrides, ent)
 		if err != nil {
 			return nil, err
 		}
@@ -673,7 +673,7 @@ func (c Config) target(name string, visited map[string]*Target, overrides map[st
 	m.Merge(tt)
 	m.Merge(t)
 	tt = m
-	if err := tt.AddOverrides(overrides[name]); err != nil {
+	if err := tt.AddOverrides(overrides[name], ent); err != nil {
 		return nil, err
 	}
 	tt.normalize()
@@ -856,7 +856,7 @@ func (t *Target) Merge(t2 *Target) {
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
 
-func (t *Target) AddOverrides(overrides map[string]Override) error {
+func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementConf) error {
 	for key, o := range overrides {
 		value := o.Value
 		keys := strings.SplitN(key, ".", 2)
@@ -893,22 +893,76 @@ func (t *Target) AddOverrides(overrides map[string]Override) error {
 			t.Tags = o.ArrValue
 		case "cache-from":
 			t.CacheFrom = o.ArrValue
+			cacheFrom, err := buildflags.ParseCacheEntry(o.ArrValue)
+			if err != nil {
+				return err
+			}
+			for _, c := range cacheFrom {
+				if c.Type == "local" {
+					if v, ok := c.Attrs["src"]; ok {
+						ent.FSRead = append(ent.FSRead, v)
+					}
+				}
+			}
 		case "cache-to":
 			t.CacheTo = o.ArrValue
+			cacheTo, err := buildflags.ParseCacheEntry(o.ArrValue)
+			if err != nil {
+				return err
+			}
+			for _, c := range cacheTo {
+				if c.Type == "local" {
+					if v, ok := c.Attrs["dest"]; ok {
+						ent.FSWrite = append(ent.FSWrite, v)
+					}
+				}
+			}
 		case "target":
 			t.Target = &value
 		case "call":
 			t.Call = &value
 		case "secrets":
 			t.Secrets = o.ArrValue
+			secrets, err := buildflags.ParseSecretSpecs(o.ArrValue)
+			if err != nil {
+				return errors.Wrap(err, "invalid value for outputs")
+			}
+			for _, s := range secrets {
+				if s.FilePath != "" {
+					ent.FSRead = append(ent.FSRead, s.FilePath)
+				}
+			}
 		case "ssh":
 			t.SSH = o.ArrValue
+			ssh, err := buildflags.ParseSSHSpecs(o.ArrValue)
+			if err != nil {
+				return errors.Wrap(err, "invalid value for outputs")
+			}
+			for _, s := range ssh {
+				ent.FSRead = append(ent.FSRead, s.Paths...)
+			}
 		case "platform":
 			t.Platforms = o.ArrValue
 		case "output":
 			t.Outputs = o.ArrValue
+			outputs, err := buildflags.ParseExports(o.ArrValue)
+			if err != nil {
+				return errors.Wrap(err, "invalid value for outputs")
+			}
+			for _, o := range outputs {
+				if o.Destination != "" {
+					ent.FSWrite = append(ent.FSWrite, o.Destination)
+				}
+			}
 		case "entitlements":
 			t.Entitlements = append(t.Entitlements, o.ArrValue...)
+			for _, v := range o.ArrValue {
+				if v == string(EntitlementKeyNetworkHost) {
+					ent.NetworkHost = true
+				} else if v == string(EntitlementKeySecurityInsecure) {
+					ent.SecurityInsecure = true
+				}
+			}
 		case "annotations":
 			t.Annotations = append(t.Annotations, o.ArrValue...)
 		case "attest":
