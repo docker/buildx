@@ -199,7 +199,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		}
 	}
 
-	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults)
+	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults, &ent)
 	if err != nil {
 		return err
 	}
