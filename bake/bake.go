@@ -1582,6 +1582,9 @@ type arrValue[B any] interface {
 func parseArrValue[T any, PT arrValue[T]](s []string) ([]*T, error) {
 	outputs := make([]*T, 0, len(s))
 	for _, text := range s {
+		if text == "" {
+			continue
+		}
 		output := new(T)
 		if err := PT(output).UnmarshalText([]byte(text)); err != nil {
 			return nil, err
@@ -1594,7 +1597,9 @@ func parseArrValue[T any, PT arrValue[T]](s []string) ([]*T, error) {
 func parseCacheArrValues(s []string) ([]*buildflags.CacheOptionsEntry, error) {
 	outs := make([]*buildflags.CacheOptionsEntry, 0, len(s))
 	for _, in := range s {
-		if !strings.Contains(in, "=") {
+		if in == "" {
+			continue
+		} else if !strings.Contains(in, "=") {
 			// This is ref only format. Each field in the CSV is its own entry.
 			fields, err := csvvalue.Fields(in, nil)
 			if err != nil {
