@@ -353,28 +353,28 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		if err != nil {
 			return err
 		}
-		t.CacheFrom = removeDupes(append(t.CacheFrom, cacheFrom...))
+		t.CacheFrom = t.CacheFrom.Merge(cacheFrom)
 	}
 	if len(xb.CacheTo) > 0 {
 		cacheTo, err := parseCacheArrValues(xb.CacheTo)
 		if err != nil {
 			return err
 		}
-		t.CacheTo = removeDupes(append(t.CacheTo, cacheTo...))
+		t.CacheTo = t.CacheTo.Merge(cacheTo)
 	}
 	if len(xb.Secrets) > 0 {
 		secrets, err := parseArrValue[buildflags.Secret](xb.Secrets)
 		if err != nil {
 			return err
 		}
-		t.Secrets = removeDupes(append(t.Secrets, secrets...))
+		t.Secrets = t.Secrets.Merge(secrets)
 	}
 	if len(xb.SSH) > 0 {
 		ssh, err := parseArrValue[buildflags.SSH](xb.SSH)
 		if err != nil {
 			return err
 		}
-		t.SSH = removeDupes(append(t.SSH, ssh...))
+		t.SSH = t.SSH.Merge(ssh)
 		slices.SortFunc(t.SSH, func(a, b *buildflags.SSH) int {
 			return a.Less(b)
 		})
@@ -387,7 +387,7 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		if err != nil {
 			return err
 		}
-		t.Outputs = removeDupes(append(t.Outputs, outputs...))
+		t.Outputs = t.Outputs.Merge(outputs)
 	}
 	if xb.Pull != nil {
 		t.Pull = xb.Pull
