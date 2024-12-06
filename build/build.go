@@ -62,27 +62,28 @@ const (
 type Options struct {
 	Inputs Inputs
 
-	Ref           string
-	Allow         []entitlements.Entitlement
-	Attests       map[string]*string
-	BuildArgs     map[string]string
-	CacheFrom     []client.CacheOptionsEntry
-	CacheTo       []client.CacheOptionsEntry
-	CgroupParent  string
-	Exports       []client.ExportEntry
-	ExtraHosts    []string
-	Labels        map[string]string
-	NetworkMode   string
-	NoCache       bool
-	NoCacheFilter []string
-	Platforms     []specs.Platform
-	Pull          bool
-	SecretSpecs   []*controllerapi.Secret
-	SSHSpecs      []*controllerapi.SSH
-	ShmSize       opts.MemBytes
-	Tags          []string
-	Target        string
-	Ulimits       *opts.UlimitOpt
+	Ref                        string
+	Allow                      []entitlements.Entitlement
+	Attests                    map[string]*string
+	BuildArgs                  map[string]string
+	CacheFrom                  []client.CacheOptionsEntry
+	CacheTo                    []client.CacheOptionsEntry
+	CgroupParent               string
+	Exports                    []client.ExportEntry
+	ExportsLocalPathsTemporary []string // should be removed after client.ExportEntry update in buildkit v0.19.0
+	ExtraHosts                 []string
+	Labels                     map[string]string
+	NetworkMode                string
+	NoCache                    bool
+	NoCacheFilter              []string
+	Platforms                  []specs.Platform
+	Pull                       bool
+	SecretSpecs                []*controllerapi.Secret
+	SSHSpecs                   []*controllerapi.SSH
+	ShmSize                    opts.MemBytes
+	Tags                       []string
+	Target                     string
+	Ulimits                    *opts.UlimitOpt
 
 	Session                []session.Attachable
 	Linked                 bool // Linked marks this target as exclusively linked (not requested by the user).

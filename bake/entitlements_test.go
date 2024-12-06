@@ -10,7 +10,6 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/osutil"
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/stretchr/testify/require"
@@ -279,25 +278,10 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "ExportLocal",
 			opt: build.Options{
-				Exports: []client.ExportEntry{
-					{
-						Type: "local",
-						Attrs: map[string]string{
-							"dest": dir1,
-						},
-					},
-					{
-						Type: "local",
-						Attrs: map[string]string{
-							"dest": filepath.Join(dir1, "subdir"),
-						},
-					},
-					{
-						Type: "local",
-						Attrs: map[string]string{
-							"dest": dir2,
-						},
-					},
+				ExportsLocalPathsTemporary: []string{
+					dir1,
+					filepath.Join(dir1, "subdir"),
+					dir2,
 				},
 			},
 			expected: EntitlementConf{

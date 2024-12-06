@@ -40,7 +40,7 @@ target "webapp" {
 
 	t.Run("NoOverrides", func(t *testing.T) {
 		t.Parallel()
-		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
 
@@ -58,7 +58,7 @@ target "webapp" {
 
 	t.Run("InvalidTargetOverrides", func(t *testing.T) {
 		t.Parallel()
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"}, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"nosuchtarget.context=foo"}, nil, &EntitlementConf{})
 		require.Error(t, err)
 		require.Equal(t, "could not find any target matching 'nosuchtarget'", err.Error())
 	})
@@ -74,7 +74,7 @@ target "webapp" {
 				"webapp.args.VAR_FROMENV" + t.Name(),
 				"webapp.args.VAR_INHERITED=override",
 				// not overriding VAR_BOTH on purpose
-			}, nil)
+			}, nil, &EntitlementConf{})
 			require.NoError(t, err)
 
 			require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
@@ -103,7 +103,7 @@ target "webapp" {
 			m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 				"webDEP.args.VAR_INHERITED=override",
 				"webDEP.args.VAR_BOTH=override",
-			}, nil)
+			}, nil, &EntitlementConf{})
 
 			require.NoError(t, err)
 			require.Equal(t, ptrstr("override"), m["webapp"].Args["VAR_INHERITED"])
@@ -115,10 +115,10 @@ target "webapp" {
 
 	t.Run("ContextOverride", func(t *testing.T) {
 		t.Parallel()
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil, &EntitlementConf{})
 		require.Error(t, err)
 
-		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, "foo", *m["webapp"].Context)
 		require.Equal(t, 1, len(g))
@@ -127,7 +127,7 @@ target "webapp" {
 
 	t.Run("NoCacheOverride", func(t *testing.T) {
 		t.Parallel()
-		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].NoCache)
 		require.Equal(t, 1, len(g))
@@ -135,14 +135,14 @@ target "webapp" {
 	})
 
 	t.Run("ShmSizeOverride", func(t *testing.T) {
-		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.shm-size=256m"}, nil)
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.shm-size=256m"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, "256m", *m["webapp"].ShmSize)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
 		t.Parallel()
-		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil)
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, false, *m["webapp"].Pull)
 		require.Equal(t, 1, len(g))
@@ -210,7 +210,7 @@ target "webapp" {
 		}
 		for _, test := range cases {
 			t.Run(test.name, func(t *testing.T) {
-				m, g, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides, nil)
+				m, g, err := ReadTargets(ctx, []File{fp}, test.targets, test.overrides, nil, &EntitlementConf{})
 				test.check(t, m, g, err)
 			})
 		}
@@ -225,7 +225,7 @@ func TestPushOverride(t *testing.T) {
 				`target "app" {
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
 		require.Equal(t, "type=image,push=true", m["app"].Outputs[0])
@@ -239,7 +239,7 @@ func TestPushOverride(t *testing.T) {
 				output = ["type=image,compression=zstd"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
 		require.Equal(t, "type=image,compression=zstd,push=true", m["app"].Outputs[0])
@@ -253,7 +253,7 @@ func TestPushOverride(t *testing.T) {
 				output = ["type=image,compression=zstd"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=false"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=false"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
 		require.Equal(t, "type=image,compression=zstd,push=false", m["app"].Outputs[0])
@@ -267,7 +267,7 @@ func TestPushOverride(t *testing.T) {
 				output = ["type=registry"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
 		require.Equal(t, "type=registry", m["app"].Outputs[0])
@@ -281,7 +281,7 @@ func TestPushOverride(t *testing.T) {
 				output = ["type=registry"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=false"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.push=false"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 0, len(m["app"].Outputs))
 	})
@@ -296,7 +296,7 @@ func TestPushOverride(t *testing.T) {
 			target "bar" {
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.push=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.push=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m))
 		require.Equal(t, 1, len(m["foo"].Outputs))
@@ -314,7 +314,7 @@ func TestLoadOverride(t *testing.T) {
 				`target "app" {
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
 		require.Equal(t, "type=docker", m["app"].Outputs[0])
@@ -328,7 +328,7 @@ func TestLoadOverride(t *testing.T) {
 				output = ["type=docker"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
 		require.Equal(t, []string{"type=docker"}, m["app"].Outputs)
@@ -342,7 +342,7 @@ func TestLoadOverride(t *testing.T) {
 				output = ["type=image"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
 		require.Equal(t, []string{"type=image", "type=docker"}, m["app"].Outputs)
@@ -356,7 +356,7 @@ func TestLoadOverride(t *testing.T) {
 				output = ["type=image"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=false"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=false"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m["app"].Outputs))
 		require.Equal(t, []string{"type=image"}, m["app"].Outputs)
@@ -370,7 +370,7 @@ func TestLoadOverride(t *testing.T) {
 				output = ["type=registry"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
 		require.Equal(t, []string{"type=registry", "type=docker"}, m["app"].Outputs)
@@ -384,7 +384,7 @@ func TestLoadOverride(t *testing.T) {
 				output = ["type=oci,dest=out"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
 		require.Equal(t, []string{"type=oci,dest=out", "type=docker"}, m["app"].Outputs)
@@ -398,7 +398,7 @@ func TestLoadOverride(t *testing.T) {
 				output = ["type=docker,dest=out"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{"*.load=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m["app"].Outputs))
 		require.Equal(t, []string{"type=docker,dest=out", "type=docker"}, m["app"].Outputs)
@@ -414,7 +414,7 @@ func TestLoadOverride(t *testing.T) {
 			target "bar" {
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.load=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.load=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m))
 		require.Equal(t, 1, len(m["foo"].Outputs))
@@ -435,7 +435,7 @@ func TestLoadAndPushOverride(t *testing.T) {
 			target "bar" {
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.load=true", "*.push=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo", "bar"}, []string{"*.load=true", "*.push=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 2, len(m))
 
@@ -456,7 +456,7 @@ func TestLoadAndPushOverride(t *testing.T) {
 		  		output = [ "type=registry" ]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo"}, []string{"*.load=true", "*.push=true"}, nil)
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"foo"}, []string{"*.load=true", "*.push=true"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, 1, len(m))
 
@@ -512,7 +512,7 @@ services:
 
 	ctx := context.TODO()
 
-	m, g, err := ReadTargets(ctx, []File{fp, fp2, fp3}, []string{"default"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp, fp2, fp3}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(m))
@@ -559,7 +559,7 @@ services:
 
 	ctx := context.TODO()
 
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"web.app"}, nil, nil)
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"web.app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(m))
 	_, ok := m["web_app"]
@@ -567,7 +567,7 @@ services:
 	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
 	require.Equal(t, ptrstr("1"), m["web_app"].Args["buildno"])
 
-	m, _, err = ReadTargets(ctx, []File{fp2}, []string{"web_app"}, nil, nil)
+	m, _, err = ReadTargets(ctx, []File{fp2}, []string{"web_app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(m))
 	_, ok = m["web_app"]
@@ -575,7 +575,7 @@ services:
 	require.Equal(t, "Dockerfile", *m["web_app"].Dockerfile)
 	require.Equal(t, ptrstr("12"), m["web_app"].Args["buildno2"])
 
-	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(m))
 	_, ok = m["web_app"]
@@ -600,7 +600,7 @@ func TestHCLContextCwdPrefix(t *testing.T) {
 			}`),
 	}
 	ctx := context.TODO()
-	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	bo, err := TargetsToBuildOpt(m, &Input{})
@@ -631,7 +631,7 @@ func TestHCLDockerfileCwdPrefix(t *testing.T) {
 	cwd, err := os.Getwd()
 	require.NoError(t, err)
 
-	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	bo, err := TargetsToBuildOpt(m, &Input{})
@@ -662,7 +662,7 @@ func TestOverrideMerge(t *testing.T) {
 		"app.platform=linux/arm",
 		"app.platform=linux/ppc64le",
 		"app.output=type=registry",
-	}, nil)
+	}, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))
@@ -697,7 +697,7 @@ func TestReadContexts(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil)
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))
@@ -713,7 +713,7 @@ func TestReadContexts(t *testing.T) {
 	require.Equal(t, "baz", ctxs["foo"].Path)
 	require.Equal(t, "def", ctxs["abc"].Path)
 
-	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.contexts.foo=bay", "base.contexts.ghi=jkl"}, nil)
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.contexts.foo=bay", "base.contexts.ghi=jkl"}, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))
@@ -731,7 +731,7 @@ func TestReadContexts(t *testing.T) {
 	require.Equal(t, "jkl", ctxs["ghi"].Path)
 
 	// test resetting base values
-	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.contexts.foo="}, nil)
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.contexts.foo="}, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))
@@ -766,7 +766,7 @@ func TestReadContextFromTargetUnknown(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil)
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil, &EntitlementConf{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "failed to find target bar")
 }
@@ -790,7 +790,7 @@ services:
 
 	ctx := context.TODO()
 
-	m, _, err := ReadTargets(ctx, []File{fp, fp2}, []string{"app1", "app2"}, nil, nil)
+	m, _, err := ReadTargets(ctx, []File{fp, fp2}, []string{"app1", "app2"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(m))
@@ -828,7 +828,7 @@ func TestReadContextFromTargetChain(t *testing.T) {
 		`),
 	}
 
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil)
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(m))
@@ -867,7 +867,7 @@ func TestReadContextFromTargetInfiniteLoop(t *testing.T) {
 		}
 		`),
 	}
-	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app", "mid"}, []string{}, nil)
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app", "mid"}, []string{}, nil, &EntitlementConf{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "infinite loop from")
 }
@@ -889,7 +889,7 @@ func TestReadContextFromTargetMultiPlatform(t *testing.T) {
 		}
 		`),
 	}
-	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil)
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil, &EntitlementConf{})
 	require.NoError(t, err)
 }
 
@@ -910,7 +910,7 @@ func TestReadContextFromTargetInvalidPlatforms(t *testing.T) {
 		}
 		`),
 	}
-	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil)
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil, &EntitlementConf{})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "defined for different platforms")
 }
@@ -926,7 +926,7 @@ target "default" {
   dockerfile = "test"
 }`)}
 
-	m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 0, len(g))
 	require.Equal(t, 1, len(m))
@@ -944,10 +944,10 @@ target "image" {
   dockerfile = "test"
 }`)}
 
-	_, _, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil)
+	_, _, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.Error(t, err)
 
-	m, g, err := ReadTargets(ctx, []File{f}, []string{"image"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"image"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g["default"].Targets)
@@ -969,7 +969,7 @@ target "image" {
   dockerfile = "test"
 }`)}
 
-	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(g))
 	require.Equal(t, []string{"foo"}, g["default"].Targets)
@@ -995,7 +995,7 @@ target "image" {
   dockerfile = "test"
 }`)}
 
-	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(g))
 	require.Equal(t, []string{"foo"}, g["default"].Targets)
@@ -1003,7 +1003,7 @@ target "image" {
 	require.Equal(t, 1, len(m))
 	require.Equal(t, "test", *m["image"].Dockerfile)
 
-	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "foo"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "foo"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(g))
 	require.Equal(t, []string{"foo"}, g["default"].Targets)
@@ -1083,7 +1083,7 @@ services:
 	 }
 	}`)}
 
-	m, g, err := ReadTargets(ctx, []File{fhcl}, []string{"default"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fhcl}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g["default"].Targets)
@@ -1091,7 +1091,7 @@ services:
 	require.Equal(t, 1, len(m["image"].Outputs))
 	require.Equal(t, "type=docker", m["image"].Outputs[0])
 
-	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image-release"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image-release"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image-release"}, g["default"].Targets)
@@ -1099,7 +1099,7 @@ services:
 	require.Equal(t, 1, len(m["image-release"].Outputs))
 	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
 
-	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image", "image-release"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fhcl}, []string{"image", "image-release"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image", "image-release"}, g["default"].Targets)
@@ -1108,21 +1108,21 @@ services:
 	require.Equal(t, 1, len(m["image-release"].Outputs))
 	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0])
 
-	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"default"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g["default"].Targets)
 	require.Equal(t, 1, len(m))
 	require.Equal(t, ".", *m["image"].Context)
 
-	m, g, err = ReadTargets(ctx, []File{fjson}, []string{"default"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fjson}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g["default"].Targets)
 	require.Equal(t, 1, len(m))
 	require.Equal(t, ".", *m["image"].Context)
 
-	m, g, err = ReadTargets(ctx, []File{fyml}, []string{"default"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	sort.Strings(g["default"].Targets)
@@ -1131,7 +1131,7 @@ services:
 	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
 	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
 
-	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"addon", "aws"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"addon", "aws"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	sort.Strings(g["default"].Targets)
@@ -1140,7 +1140,7 @@ services:
 	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
 	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
 
-	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"addon", "aws", "image"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{fyml, fhcl}, []string{"addon", "aws", "image"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	sort.Strings(g["default"].Targets)
@@ -1168,7 +1168,7 @@ target "image" {
   output = ["type=docker"]
 }`)}
 
-	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(g))
 	require.Equal(t, []string{"foo"}, g["default"].Targets)
@@ -1176,7 +1176,7 @@ target "image" {
 	require.Equal(t, 1, len(m))
 	require.Equal(t, "bar", *m["foo"].Dockerfile)
 
-	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "foo"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "foo"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(g))
 	require.Equal(t, []string{"foo"}, g["default"].Targets)
@@ -1202,7 +1202,7 @@ target "image" {
   output = ["type=docker"]
 }`)}
 
-	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"foo"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(g))
 	require.Equal(t, []string{"foo"}, g["default"].Targets)
@@ -1211,7 +1211,7 @@ target "image" {
 	require.Equal(t, "bar", *m["foo"].Dockerfile)
 	require.Equal(t, "type=docker", m["image"].Outputs[0])
 
-	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "image"}, nil, nil)
+	m, g, err = ReadTargets(ctx, []File{f}, []string{"foo", "image"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 2, len(g))
 	require.Equal(t, []string{"foo", "image"}, g["default"].Targets)
@@ -1273,7 +1273,7 @@ target "d" {
 	for _, tt := range cases {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			m, g, err := ReadTargets(ctx, []File{f}, []string{"d"}, tt.overrides, nil)
+			m, g, err := ReadTargets(ctx, []File{f}, []string{"d"}, tt.overrides, nil, &EntitlementConf{})
 			require.NoError(t, err)
 			require.Equal(t, 1, len(g))
 			require.Equal(t, []string{"d"}, g["default"].Targets)
@@ -1345,7 +1345,7 @@ group "default" {
 	for _, tt := range cases {
 		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
-			m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, tt.overrides, nil)
+			m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, tt.overrides, nil, &EntitlementConf{})
 			require.NoError(t, err)
 			require.Equal(t, 1, len(g))
 			require.Equal(t, []string{"child1", "child2"}, g["default"].Targets)
@@ -1403,7 +1403,7 @@ func TestTargetName(t *testing.T) {
 			_, _, err := ReadTargets(ctx, []File{{
 				Name: "docker-bake.hcl",
 				Data: []byte(`target "` + tt.target + `" {}`),
-			}}, []string{tt.target}, nil, nil)
+			}}, []string{tt.target}, nil, nil, &EntitlementConf{})
 			if tt.wantErr {
 				require.Error(t, err)
 			} else {
@@ -1490,7 +1490,7 @@ target "f" {
 	for _, tt := range cases {
 		tt := tt
 		t.Run(strings.Join(tt.names, "+"), func(t *testing.T) {
-			m, g, err := ReadTargets(ctx, []File{f}, tt.names, nil, nil)
+			m, g, err := ReadTargets(ctx, []File{f}, tt.names, nil, nil, &EntitlementConf{})
 			require.NoError(t, err)
 
 			var gnames []string
@@ -1567,7 +1567,7 @@ func TestHCLNullVars(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))
@@ -1602,7 +1602,7 @@ func TestJSONNullVars(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(m))
@@ -1677,7 +1677,7 @@ func TestAttestDuplicates(t *testing.T) {
 	}
 	ctx := context.TODO()
 
-	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil)
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.Equal(t, []string{"type=sbom,foo=bar", "type=provenance,mode=max"}, m["default"].Attest)
 	require.NoError(t, err)
 
@@ -1688,7 +1688,7 @@ func TestAttestDuplicates(t *testing.T) {
 		"provenance": ptrstr("type=provenance,mode=max"),
 	}, opts["default"].Attests)
 
-	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil)
+	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil, &EntitlementConf{})
 	require.Equal(t, []string{"type=sbom,disabled=true", "type=provenance,mode=max"}, m["default"].Attest)
 	require.NoError(t, err)
 
@@ -1710,7 +1710,7 @@ func TestAnnotations(t *testing.T) {
 			}`),
 	}
 	ctx := context.TODO()
-	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	bo, err := TargetsToBuildOpt(m, &Input{})
@@ -1737,7 +1737,7 @@ func TestHCLEntitlements(t *testing.T) {
 			}`),
 	}
 	ctx := context.TODO()
-	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	bo, err := TargetsToBuildOpt(m, &Input{})
@@ -1777,7 +1777,7 @@ func TestEntitlementsForNetHostCompose(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp, fp2}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	bo, err := TargetsToBuildOpt(m, &Input{})
@@ -1808,7 +1808,7 @@ func TestEntitlementsForNetHost(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	bo, err := TargetsToBuildOpt(m, &Input{})
@@ -1839,7 +1839,7 @@ func TestNetNone(t *testing.T) {
 	}
 
 	ctx := context.TODO()
-	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	m, g, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 
 	bo, err := TargetsToBuildOpt(m, &Input{})
@@ -1879,12 +1879,12 @@ target "app" {
 
 	t.Run("Valid", func(t *testing.T) {
 		t.Setenv("FOO", "bar")
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 	})
 
 	t.Run("Invalid", func(t *testing.T) {
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "FOO is required.")
 	})
@@ -1916,19 +1916,19 @@ target "app" {
 
 	t.Run("Valid", func(t *testing.T) {
 		t.Setenv("FOO", "barbar")
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 	})
 
 	t.Run("InvalidLength", func(t *testing.T) {
 		t.Setenv("FOO", "bar")
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "FOO must be longer than 4 characters.")
 	})
 
 	t.Run("InvalidEmpty", func(t *testing.T) {
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "FOO is required.")
 	})
@@ -1957,19 +1957,19 @@ target "app" {
 
 	t.Run("Valid", func(t *testing.T) {
 		t.Setenv("FOO", "bar")
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 	})
 
 	t.Run("SetBar", func(t *testing.T) {
 		t.Setenv("FOO", "bar")
 		t.Setenv("BAR", "baz")
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 	})
 
 	t.Run("Invalid", func(t *testing.T) {
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "BAR requires FOO to be set.")
 	})
@@ -1998,12 +1998,12 @@ target "app" {
 
 	t.Run("Valid", func(t *testing.T) {
 		t.Setenv("FOO", "10")
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 	})
 
 	t.Run("Invalid", func(t *testing.T) {
-		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "FOO must be greater than 5.")
 	})
@@ -2025,6 +2025,6 @@ target "app" {
 
 	ctx := context.TODO()
 
-	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 }
