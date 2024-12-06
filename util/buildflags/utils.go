@@ -1,5 +1,10 @@
 package buildflags
 
+import (
+	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/gocty"
+)
+
 type comparable[E any] interface {
 	Equal(other E) bool
 }
@@ -26,4 +31,20 @@ func removeDupes[E comparable[E]](s []E) []E {
 		}
 	}
 	return s
+}
+
+func getAndDelete(m map[string]cty.Value, attr string, gv interface{}) error {
+	if v, ok := m[attr]; ok {
+		delete(m, attr)
+		return gocty.FromCtyValue(v, gv)
+	}
+	return nil
+}
+
+func asMap(m map[string]cty.Value) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		out[k] = v.AsString()
+	}
+	return out
 }

@@ -615,6 +615,7 @@ func TestHCLAttrsCapsuleType(t *testing.T) {
 
 		output = [
 			{ type = "oci", dest = "../out.tar" },
+			"type=local,dest=../out",
 		]
 
 		secret = [
@@ -633,7 +634,7 @@ func TestHCLAttrsCapsuleType(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
-	require.Equal(t, []string{"type=oci,dest=../out.tar"}, stringify(c.Targets[0].Outputs))
+	require.Equal(t, []string{"type=local,dest=../out", "type=oci,dest=../out.tar"}, stringify(c.Targets[0].Outputs))
 	require.Equal(t, []string{"type=local,src=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheFrom))
 	require.Equal(t, []string{"type=local,dest=path/to/cache"}, stringify(c.Targets[0].CacheTo))
 	require.Equal(t, []string{"id=mysecret,src=/local/secret", "id=mysecret2,env=TOKEN"}, stringify(c.Targets[0].Secrets))
@@ -656,6 +657,7 @@ func TestHCLAttrsCapsuleTypeVars(t *testing.T) {
 
 		output = [
 			{ type = "oci", dest = "../out.tar" },
+			"type=local,dest=../out",
 		]
 
 		secret = [
@@ -696,7 +698,7 @@ func TestHCLAttrsCapsuleTypeVars(t *testing.T) {
 	}
 
 	app := findTarget(t, "app")
-	require.Equal(t, []string{"type=oci,dest=../out.tar"}, stringify(app.Outputs))
+	require.Equal(t, []string{"type=local,dest=../out", "type=oci,dest=../out.tar"}, stringify(app.Outputs))
 	require.Equal(t, []string{"type=local,src=path/to/cache", "user/app:cache"}, stringify(app.CacheFrom))
 	require.Equal(t, []string{"user/app:cache"}, stringify(app.CacheTo))
 	require.Equal(t, []string{"id=mysecret,src=/local/secret"}, stringify(app.Secrets))

@@ -367,14 +367,14 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		if err != nil {
 			return err
 		}
-		t.Secrets = removeDupes(append(t.Secrets, secrets...))
+		t.Secrets = t.Secrets.Merge(secrets)
 	}
 	if len(xb.SSH) > 0 {
 		ssh, err := parseArrValue[buildflags.SSH](xb.SSH)
 		if err != nil {
 			return err
 		}
-		t.SSH = removeDupes(append(t.SSH, ssh...))
+		t.SSH = t.SSH.Merge(ssh)
 		slices.SortFunc(t.SSH, func(a, b *buildflags.SSH) int {
 			return a.Less(b)
 		})
@@ -387,7 +387,7 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		if err != nil {
 			return err
 		}
-		t.Outputs = removeDupes(append(t.Outputs, outputs...))
+		t.Outputs = t.Outputs.Merge(outputs)
 	}
 	if xb.Pull != nil {
 		t.Pull = xb.Pull
