@@ -16,6 +16,39 @@ import (
 	"github.com/tonistiigi/go-csvvalue"
 )
 
+type Exports []*ExportEntry
+
+func (e Exports) Merge(other Exports) Exports {
+	if other == nil {
+		e.Normalize()
+		return e
+	} else if e == nil {
+		other.Normalize()
+		return other
+	}
+
+	return append(e, other...).Normalize()
+}
+
+func (e Exports) Normalize() Exports {
+	if len(e) == 0 {
+		return nil
+	}
+	return removeDupes(e)
+}
+
+func (e Exports) ToPB() []*controllerapi.ExportEntry {
+	if len(e) == 0 {
+		return nil
+	}
+
+	entries := make([]*controllerapi.ExportEntry, len(e))
+	for i, entry := range e {
+		entries[i] = entry.ToPB()
+	}
+	return entries
+}
+
 type ExportEntry struct {
 	Type        string            `json:"type"`
 	Attrs       map[string]string `json:"attrs,omitempty"`
@@ -131,18 +164,23 @@ func (e *ExportEntry) validate() error {
 }
 
 func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
-	var outs []*controllerapi.ExportEntry
 	if len(inp) == 0 {
 		return nil, nil
 	}
+
+	export := make(Exports, 0, len(inp))
 	for _, s := range inp {
+		if s == "" {
+			continue
+		}
+
 		var out ExportEntry
 		if err := out.UnmarshalText([]byte(s)); err != nil {
 			return nil, err
 		}
-		outs = append(outs, out.ToPB())
+		export = append(export, &out)
 	}
-	return outs, nil
+	return export.ToPB(), nil
 }
 
 func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
@@ -153,6 +191,10 @@ func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 
 	annotations := make(map[exptypes.AnnotationKey]string)
 	for _, inp := range inp {
+		if inp == "" {
+			continue
+		}
+
 		k, v, ok := strings.Cut(inp, "=")
 		if !ok {
 			return nil, errors.Errorf("invalid annotation %q, expected key=value", inp)
