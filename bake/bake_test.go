@@ -1688,7 +1688,7 @@ func TestAttestDuplicates(t *testing.T) {
 	ctx := context.TODO()
 
 	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil, &EntitlementConf{})
-	require.Equal(t, []string{"type=sbom,foo=bar", "type=provenance,mode=max"}, m["default"].Attest)
+	require.Equal(t, []string{"type=provenance,mode=max", "type=sbom,foo=bar"}, stringify(m["default"].Attest))
 	require.NoError(t, err)
 
 	opts, err := TargetsToBuildOpt(m, &Input{})
@@ -1699,7 +1699,7 @@ func TestAttestDuplicates(t *testing.T) {
 	}, opts["default"].Attests)
 
 	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil, &EntitlementConf{})
-	require.Equal(t, []string{"type=sbom,disabled=true", "type=provenance,mode=max"}, m["default"].Attest)
+	require.Equal(t, []string{"type=provenance,mode=max", "type=sbom,disabled=true"}, stringify(m["default"].Attest))
 	require.NoError(t, err)
 
 	opts, err = TargetsToBuildOpt(m, &Input{})
