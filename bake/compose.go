@@ -353,14 +353,14 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		if err != nil {
 			return err
 		}
-		t.CacheFrom = removeDupes(append(t.CacheFrom, cacheFrom...))
+		t.CacheFrom = t.CacheFrom.Merge(cacheFrom)
 	}
 	if len(xb.CacheTo) > 0 {
 		cacheTo, err := parseCacheArrValues(xb.CacheTo)
 		if err != nil {
 			return err
 		}
-		t.CacheTo = removeDupes(append(t.CacheTo, cacheTo...))
+		t.CacheTo = t.CacheTo.Merge(cacheTo)
 	}
 	if len(xb.Secrets) > 0 {
 		secrets, err := parseArrValue[buildflags.Secret](xb.Secrets)

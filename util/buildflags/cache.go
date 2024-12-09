@@ -15,6 +15,41 @@ import (
 	jsoncty "github.com/zclconf/go-cty/cty/json"
 )
 
+type CacheOptions []*CacheOptionsEntry
+
+func (o CacheOptions) Merge(other CacheOptions) CacheOptions {
+	if other == nil {
+		return o.Normalize()
+	} else if o == nil {
+		return other.Normalize()
+	}
+
+	return append(o, other...).Normalize()
+}
+
+func (o CacheOptions) Normalize() CacheOptions {
+	if len(o) == 0 {
+		return nil
+	}
+	return removeDupes(o)
+}
+
+func (o CacheOptions) ToPB() []*controllerapi.CacheOptionsEntry {
+	if len(o) == 0 {
+		return nil
+	}
+
+	entries := make([]*controllerapi.CacheOptionsEntry, 0, len(o))
+	for _, entry := range o {
+		pb := entry.ToPB()
+		if !isActive(pb) {
+			continue
+		}
+		entries = append(entries, pb)
+	}
+	return entries
+}
+
 type CacheOptionsEntry struct {
 	Type  string            `json:"type"`
 	Attrs map[string]string `json:"attrs,omitempty"`
@@ -46,10 +81,13 @@ func (e *CacheOptionsEntry) String() string {
 }
 
 func (e *CacheOptionsEntry) ToPB() *controllerapi.CacheOptionsEntry {
-	return &controllerapi.CacheOptionsEntry{
+	ci := &controllerapi.CacheOptionsEntry{
 		Type:  e.Type,
 		Attrs: maps.Clone(e.Attrs),
 	}
+	addGithubToken(ci)
+	addAwsCredentials(ci)
+	return ci
 }
 
 func (e *CacheOptionsEntry) MarshalJSON() ([]byte, error) {
@@ -72,14 +110,6 @@ func (e *CacheOptionsEntry) UnmarshalJSON(data []byte) error {
 
 	e.Attrs = m
 	return e.validate(data)
-}
-
-func (e *CacheOptionsEntry) IsActive() bool {
-	// Always active if not gha.
-	if e.Type != "gha" {
-		return true
-	}
-	return e.Attrs["token"] != "" && e.Attrs["url"] != ""
 }
 
 func (e *CacheOptionsEntry) UnmarshalText(text []byte) error {
@@ -116,8 +146,6 @@ func (e *CacheOptionsEntry) UnmarshalText(text []byte) error {
 	if e.Type == "" {
 		return errors.Errorf("type required form> %q", in)
 	}
-	addGithubToken(e)
-	addAwsCredentials(e)
 	return e.validate(text)
 }
 
@@ -140,23 +168,22 @@ func (e *CacheOptionsEntry) validate(gv interface{}) error {
 }
 
 func ParseCacheEntry(in []string) ([]*controllerapi.CacheOptionsEntry, error) {
-	outs := make([]*controllerapi.CacheOptionsEntry, 0, len(in))
+	if len(in) == 0 {
+		return nil, nil
+	}
+
+	opts := make(CacheOptions, 0, len(in))
 	for _, in := range in {
 		var out CacheOptionsEntry
 		if err := out.UnmarshalText([]byte(in)); err != nil {
 			return nil, err
 		}
-
-		if !out.IsActive() {
-			// Skip inactive cache entries.
-			continue
-		}
-		outs = append(outs, out.ToPB())
+		opts = append(opts, &out)
 	}
-	return outs, nil
+	return opts.ToPB(), nil
 }
 
-func addGithubToken(ci *CacheOptionsEntry) {
+func addGithubToken(ci *controllerapi.CacheOptionsEntry) {
 	if ci.Type != "gha" {
 		return
 	}
@@ -172,7 +199,7 @@ func addGithubToken(ci *CacheOptionsEntry) {
 	}
 }
 
-func addAwsCredentials(ci *CacheOptionsEntry) {
+func addAwsCredentials(ci *controllerapi.CacheOptionsEntry) {
 	if ci.Type != "s3" {
 		return
 	}
@@ -200,4 +227,12 @@ func addAwsCredentials(ci *CacheOptionsEntry) {
 	if _, ok := ci.Attrs["session_token"]; !ok && credentials.SessionToken != "" {
 		ci.Attrs["session_token"] = credentials.SessionToken
 	}
+}
+
+func isActive(pb *controllerapi.CacheOptionsEntry) bool {
+	// Always active if not gha.
+	if pb.Type != "gha" {
+		return true
+	}
+	return pb.Attrs["token"] != "" && pb.Attrs["url"] != ""
 }

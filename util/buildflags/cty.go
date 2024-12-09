@@ -9,32 +9,6 @@ import (
 	"github.com/zclconf/go-cty/cty/gocty"
 )
 
-func (e *CacheOptionsEntry) FromCtyValue(in cty.Value, p cty.Path) error {
-	conv, err := convert.Convert(in, cty.Map(cty.String))
-	if err == nil {
-		m := conv.AsValueMap()
-		if err := getAndDelete(m, "type", &e.Type); err != nil {
-			return err
-		}
-		e.Attrs = asMap(m)
-		return e.validate(in)
-	}
-	return unmarshalTextFallback(in, e, err)
-}
-
-func (e *CacheOptionsEntry) ToCtyValue() cty.Value {
-	if e == nil {
-		return cty.NullVal(cty.Map(cty.String))
-	}
-
-	vals := make(map[string]cty.Value, len(e.Attrs)+1)
-	for k, v := range e.Attrs {
-		vals[k] = cty.StringVal(v)
-	}
-	vals["type"] = cty.StringVal(e.Type)
-	return cty.MapVal(vals)
-}
-
 func (e *ExportEntry) FromCtyValue(in cty.Value, p cty.Path) error {
 	conv, err := convert.Convert(in, cty.Map(cty.String))
 	if err == nil {

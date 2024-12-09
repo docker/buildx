@@ -606,7 +606,7 @@ func TestHCLAttrsCapsuleType(t *testing.T) {
 	target "app" {
 		cache-from = [
 			{ type = "registry", ref = "user/app:cache" },
-			{ type = "local", src = "path/to/cache" },
+			"type=local,src=path/to/cache",
 		]
 
 		cache-to = [
@@ -649,7 +649,7 @@ func TestHCLAttrsCapsuleTypeVars(t *testing.T) {
 	target "app" {
 		cache-from = [
 			{ type = "registry", ref = "user/app:cache" },
-			{ type = "local", src = "path/to/cache" },
+			"type=local,src=path/to/cache",
 		]
 
 		cache-to = [ target.app.cache-from[0] ]
@@ -674,7 +674,7 @@ func TestHCLAttrsCapsuleTypeVars(t *testing.T) {
 		output = [ "type=oci,dest=../${foo}.tar" ]
 
 		secret = [
-			{ id = target.app.output[0].type, src = "/local/secret" },
+			{ id = target.app.output[0].type, src = "/${target.app.cache-from[1].type}/secret" },         
 		]
 	}
 	`)
