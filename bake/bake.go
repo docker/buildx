@@ -698,30 +698,30 @@ type Target struct {
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
 
-	Annotations      []string                        `json:"annotations,omitempty" hcl:"annotations,optional" cty:"annotations"`
-	Attest           []string                        `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
-	Context          *string                         `json:"context,omitempty" hcl:"context,optional" cty:"context"`
-	Contexts         map[string]string               `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
-	Dockerfile       *string                         `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
-	DockerfileInline *string                         `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
-	Args             map[string]*string              `json:"args,omitempty" hcl:"args,optional" cty:"args"`
-	Labels           map[string]*string              `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
-	Tags             []string                        `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
-	CacheFrom        []*buildflags.CacheOptionsEntry `json:"cache-from,omitempty"  hcl:"cache-from,optional" cty:"cache-from"`
-	CacheTo          []*buildflags.CacheOptionsEntry `json:"cache-to,omitempty"  hcl:"cache-to,optional" cty:"cache-to"`
-	Target           *string                         `json:"target,omitempty" hcl:"target,optional" cty:"target"`
-	Secrets          []*buildflags.Secret            `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
-	SSH              []*buildflags.SSH               `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
-	Platforms        []string                        `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
-	Outputs          []*buildflags.ExportEntry       `json:"output,omitempty" hcl:"output,optional" cty:"output"`
-	Pull             *bool                           `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
-	NoCache          *bool                           `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
-	NetworkMode      *string                         `json:"network,omitempty" hcl:"network,optional" cty:"network"`
-	NoCacheFilter    []string                        `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
-	ShmSize          *string                         `json:"shm-size,omitempty" hcl:"shm-size,optional"`
-	Ulimits          []string                        `json:"ulimits,omitempty" hcl:"ulimits,optional"`
-	Call             *string                         `json:"call,omitempty" hcl:"call,optional" cty:"call"`
-	Entitlements     []string                        `json:"entitlements,omitempty" hcl:"entitlements,optional" cty:"entitlements"`
+	Annotations      []string                `json:"annotations,omitempty" hcl:"annotations,optional" cty:"annotations"`
+	Attest           []string                `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
+	Context          *string                 `json:"context,omitempty" hcl:"context,optional" cty:"context"`
+	Contexts         map[string]string       `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
+	Dockerfile       *string                 `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
+	DockerfileInline *string                 `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
+	Args             map[string]*string      `json:"args,omitempty" hcl:"args,optional" cty:"args"`
+	Labels           map[string]*string      `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
+	Tags             []string                `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
+	CacheFrom        buildflags.CacheOptions `json:"cache-from,omitempty"  hcl:"cache-from,optional" cty:"cache-from"`
+	CacheTo          buildflags.CacheOptions `json:"cache-to,omitempty"  hcl:"cache-to,optional" cty:"cache-to"`
+	Target           *string                 `json:"target,omitempty" hcl:"target,optional" cty:"target"`
+	Secrets          buildflags.Secrets      `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
+	SSH              buildflags.SSHKeys      `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
+	Platforms        []string                `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
+	Outputs          buildflags.Exports      `json:"output,omitempty" hcl:"output,optional" cty:"output"`
+	Pull             *bool                   `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
+	NoCache          *bool                   `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
+	NetworkMode      *string                 `json:"network,omitempty" hcl:"network,optional" cty:"network"`
+	NoCacheFilter    []string                `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
+	ShmSize          *string                 `json:"shm-size,omitempty" hcl:"shm-size,optional"`
+	Ulimits          []string                `json:"ulimits,omitempty" hcl:"ulimits,optional"`
+	Call             *string                 `json:"call,omitempty" hcl:"call,optional" cty:"call"`
+	Entitlements     []string                `json:"entitlements,omitempty" hcl:"entitlements,optional" cty:"entitlements"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides/AddOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -739,12 +739,12 @@ func (t *Target) normalize() {
 	t.Annotations = removeDupesStr(t.Annotations)
 	t.Attest = removeAttestDupes(t.Attest)
 	t.Tags = removeDupesStr(t.Tags)
-	t.Secrets = removeDupes(t.Secrets)
+	t.Secrets = t.Secrets.Normalize()
 	t.SSH = removeDupes(t.SSH)
 	t.Platforms = removeDupesStr(t.Platforms)
-	t.CacheFrom = removeDupes(t.CacheFrom)
-	t.CacheTo = removeDupes(t.CacheTo)
-	t.Outputs = removeDupes(t.Outputs)
+	t.CacheFrom = t.CacheFrom.Normalize()
+	t.CacheTo = t.CacheTo.Normalize()
+	t.Outputs = t.Outputs.Normalize()
 	t.NoCacheFilter = removeDupesStr(t.NoCacheFilter)
 	t.Ulimits = removeDupesStr(t.Ulimits)
 
@@ -815,16 +815,16 @@ func (t *Target) Merge(t2 *Target) {
 		t.Attest = removeAttestDupes(t.Attest)
 	}
 	if t2.Secrets != nil { // merge
-		t.Secrets = append(t.Secrets, t2.Secrets...)
+		t.Secrets = t.Secrets.Merge(t2.Secrets)
 	}
 	if t2.SSH != nil { // merge
-		t.SSH = append(t.SSH, t2.SSH...)
+		t.SSH = t.SSH.Merge(t2.SSH)
 	}
 	if t2.Platforms != nil { // no merge
 		t.Platforms = t2.Platforms
 	}
 	if t2.CacheFrom != nil { // merge
-		t.CacheFrom = append(t.CacheFrom, t2.CacheFrom...)
+		t.CacheFrom = t.CacheFrom.Merge(t2.CacheFrom)
 	}
 	if t2.CacheTo != nil { // no merge
 		t.CacheTo = t2.CacheTo
@@ -1333,13 +1333,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	bo.Platforms = platforms
 
-	secrets := make([]*controllerapi.Secret, len(t.Secrets))
-	for i, s := range t.Secrets {
-		secrets[i] = s.ToPB()
-	}
-	bo.SecretSpecs = secrets
-
-	secretAttachment, err := controllerapi.CreateSecrets(secrets)
+	bo.SecretSpecs = t.Secrets.ToPB()
+	secretAttachment, err := controllerapi.CreateSecrets(bo.SecretSpecs)
 	if err != nil {
 		return nil, err
 	}
@@ -1372,24 +1367,14 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		}
 	}
 
-	cacheImports := make([]*controllerapi.CacheOptionsEntry, len(t.CacheFrom))
-	for i, ci := range t.CacheFrom {
-		cacheImports[i] = ci.ToPB()
+	if t.CacheFrom != nil {
+		bo.CacheFrom = controllerapi.CreateCaches(t.CacheFrom.ToPB())
 	}
-	bo.CacheFrom = controllerapi.CreateCaches(cacheImports)
-
-	cacheExports := make([]*controllerapi.CacheOptionsEntry, len(t.CacheTo))
-	for i, ce := range t.CacheTo {
-		cacheExports[i] = ce.ToPB()
-	}
-	bo.CacheTo = controllerapi.CreateCaches(cacheExports)
-
-	outputs := make([]*controllerapi.ExportEntry, len(t.Outputs))
-	for i, output := range t.Outputs {
-		outputs[i] = output.ToPB()
+	if t.CacheTo != nil {
+		bo.CacheTo = controllerapi.CreateCaches(t.CacheTo.ToPB())
 	}
 
-	bo.Exports, bo.ExportsLocalPathsTemporary, err = controllerapi.CreateExports(outputs)
+	bo.Exports, bo.ExportsLocalPathsTemporary, err = controllerapi.CreateExports(t.Outputs.ToPB())
 	if err != nil {
 		return nil, err
 	}
@@ -1616,6 +1601,10 @@ type arrValue[B any] interface {
 func parseArrValue[T any, PT arrValue[T]](s []string) ([]*T, error) {
 	outputs := make([]*T, 0, len(s))
 	for _, text := range s {
+		if text == "" {
+			continue
+		}
+
 		output := new(T)
 		if err := PT(output).UnmarshalText([]byte(text)); err != nil {
 			return nil, err
@@ -1625,9 +1614,13 @@ func parseArrValue[T any, PT arrValue[T]](s []string) ([]*T, error) {
 	return outputs, nil
 }
 
-func parseCacheArrValues(s []string) ([]*buildflags.CacheOptionsEntry, error) {
-	outs := make([]*buildflags.CacheOptionsEntry, 0, len(s))
+func parseCacheArrValues(s []string) (buildflags.CacheOptions, error) {
+	var outs buildflags.CacheOptions
 	for _, in := range s {
+		if in == "" {
+			continue
+		}
+
 		if !strings.Contains(in, "=") {
 			// This is ref only format. Each field in the CSV is its own entry.
 			fields, err := csvvalue.Fields(in, nil)

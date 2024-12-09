@@ -8,6 +8,39 @@ import (
 	"github.com/tonistiigi/go-csvvalue"
 )
 
+type Secrets []*Secret
+
+func (s Secrets) Merge(other Secrets) Secrets {
+	if other == nil {
+		s.Normalize()
+		return s
+	} else if s == nil {
+		other.Normalize()
+		return other
+	}
+
+	return append(s, other...).Normalize()
+}
+
+func (s Secrets) Normalize() Secrets {
+	if len(s) == 0 {
+		return nil
+	}
+	return removeDupes(s)
+}
+
+func (s Secrets) ToPB() []*controllerapi.Secret {
+	if len(s) == 0 {
+		return nil
+	}
+
+	entries := make([]*controllerapi.Secret, len(s))
+	for i, entry := range s {
+		entries[i] = entry.ToPB()
+	}
+	return entries
+}
+
 type Secret struct {
 	ID       string `json:"id,omitempty"`
 	FilePath string `json:"src,omitempty"`
@@ -85,6 +118,10 @@ func (s *Secret) UnmarshalText(text []byte) error {
 func ParseSecretSpecs(sl []string) ([]*controllerapi.Secret, error) {
 	fs := make([]*controllerapi.Secret, 0, len(sl))
 	for _, v := range sl {
+		if v == "" {
+			continue
+		}
+
 		s, err := parseSecret(v)
 		if err != nil {
 			return nil, err
