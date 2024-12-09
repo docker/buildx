@@ -10,44 +10,60 @@ import (
 	"github.com/zclconf/go-cty/cty/gocty"
 )
 
-type CapsuleValue interface {
-	// FromCtyValue will initialize this value using a cty.Value.
-	FromCtyValue(in cty.Value, path cty.Path) error
-
+type ToCtyValueConverter interface {
 	// ToCtyValue will convert this capsule value into a native
 	// cty.Value. This should not return a capsule type.
 	ToCtyValue() cty.Value
 }
 
+type FromCtyValueConverter interface {
+	// FromCtyValue will initialize this value using a cty.Value.
+	FromCtyValue(in cty.Value, path cty.Path) error
+}
+
 type extensionType int
 
 const (
-	nativeTypeExtension extensionType = iota
+	unwrapCapsuleValueExtension extensionType = iota
 )
 
 func impliedTypeExt(rt reflect.Type, _ cty.Path) (cty.Type, error) {
-	if rt.AssignableTo(capsuleValueType) {
+	if rt.Kind() != reflect.Pointer {
+		rt = reflect.PointerTo(rt)
+	}
+
+	if isCapsuleType(rt) {
 		return capsuleValueCapsuleType(rt), nil
 	}
 	return cty.NilType, errdefs.ErrNotImplemented
 }
 
-var (
-	capsuleValueType  = reflect.TypeFor[CapsuleValue]()
-	capsuleValueTypes sync.Map
-)
+func isCapsuleType(rt reflect.Type) bool {
+	fromCtyValueType := reflect.TypeFor[FromCtyValueConverter]()
+	toCtyValueType := reflect.TypeFor[ToCtyValueConverter]()
+	return rt.Implements(fromCtyValueType) && rt.Implements(toCtyValueType)
+}
+
+var capsuleValueTypes sync.Map
 
 func capsuleValueCapsuleType(rt reflect.Type) cty.Type {
-	if val, loaded := capsuleValueTypes.Load(rt); loaded {
+	if rt.Kind() != reflect.Pointer {
+		panic("capsule value must be a pointer")
+	}
+
+	elem := rt.Elem()
+	if val, loaded := capsuleValueTypes.Load(elem); loaded {
 		return val.(cty.Type)
 	}
 
-	// First time used.
-	ety := cty.CapsuleWithOps(rt.Name(), rt.Elem(), &cty.CapsuleOps{
+	toCtyValueType := reflect.TypeFor[ToCtyValueConverter]()
+
+	// First time used. Initialize new capsule ops.
+	ops := &cty.CapsuleOps{
 		ConversionTo: func(_ cty.Type) func(cty.Value, cty.Path) (any, error) {
 			return func(in cty.Value, p cty.Path) (any, error) {
-				rv := reflect.New(rt.Elem()).Interface()
-				if err := rv.(CapsuleValue).FromCtyValue(in, p); err != nil {
+				rv := reflect.New(elem).Interface()
+				if err := rv.(FromCtyValueConverter).FromCtyValue(in, p); err != nil {
 					return nil, err
 				}
 				return rv, nil
@@ -55,30 +71,39 @@ func capsuleValueCapsuleType(rt reflect.Type) cty.Type {
 		},
 		ConversionFrom: func(want cty.Type) func(any, cty.Path) (cty.Value, error) {
 			return func(in any, _ cty.Path) (cty.Value, error) {
-				v := in.(CapsuleValue).ToCtyValue()
+				rv := reflect.ValueOf(in).Convert(toCtyValueType)
+				v := rv.Interface().(ToCtyValueConverter).ToCtyValue()
 				return convert.Convert(v, want)
 			}
 		},
 		ExtensionData: func(key any) any {
 			switch key {
-			case nativeTypeExtension:
-				zero := reflect.Zero(rt).Interface()
-				return zero.(CapsuleValue).ToCtyValue().Type()
-			default:
-				return nil
-			}
-		},
-	})
+			case unwrapCapsuleValueExtension:
+				zero := reflect.Zero(elem).Interface()
+				if conv, ok := zero.(ToCtyValueConverter); ok {
+					return conv.ToCtyValue().Type()
+				}
 
-	// Attempt to store the new type. Use whichever was loaded first in the case of a race condition.
-	val, _ := capsuleValueTypes.LoadOrStore(rt, ety)
+				zero = reflect.Zero(rt).Interface()
+				if conv, ok := zero.(ToCtyValueConverter); ok {
+					return conv.ToCtyValue().Type()
+				}
+			}
+			return nil
+		},
+	}
+
+	// Attempt to store the new type. Use whichever was loaded first in the case
+	// of a race condition.
+	ety := cty.CapsuleWithOps(elem.Name(), elem, ops)
+	val, _ := capsuleValueTypes.LoadOrStore(elem, ety)
 	return val.(cty.Type)
 }
 
-// ToNativeValue will convert a value to only native cty types which will
-// remove capsule types if possible.
-func ToNativeValue(in cty.Value) cty.Value {
-	want := toNativeType(in.Type())
+// UnwrapCtyValue will unwrap capsule type values into their native cty value
+// equivalents if possible.
+func UnwrapCtyValue(in cty.Value) cty.Value {
+	want := toCtyValueType(in.Type())
 	if in.Type().Equals(want) {
 		return in
 	} else if out, err := convert.Convert(in, want); err == nil {
@@ -87,17 +112,17 @@ func ToNativeValue(in cty.Value) cty.Value {
 	return cty.NullVal(want)
 }
 
-func toNativeType(in cty.Type) cty.Type {
+func toCtyValueType(in cty.Type) cty.Type {
 	if et := in.MapElementType(); et != nil {
-		return cty.Map(toNativeType(*et))
+		return cty.Map(toCtyValueType(*et))
 	}
 
 	if et := in.SetElementType(); et != nil {
-		return cty.Set(toNativeType(*et))
+		return cty.Set(toCtyValueType(*et))
 	}
 
 	if et := in.ListElementType(); et != nil {
-		return cty.List(toNativeType(*et))
+		return cty.List(toCtyValueType(*et))
 	}
 
 	if in.IsObjectType() {
@@ -105,7 +130,7 @@ func toNativeType(in cty.Type) cty.Type {
 		inAttrTypes := in.AttributeTypes()
 		outAttrTypes := make(map[string]cty.Type, len(inAttrTypes))
 		for name, typ := range inAttrTypes {
-			outAttrTypes[name] = toNativeType(typ)
+			outAttrTypes[name] = toCtyValueType(typ)
 			if in.AttributeOptional(name) {
 				optional = append(optional, name)
 			}
@@ -117,13 +142,13 @@ func toNativeType(in cty.Type) cty.Type {
 		inTypes := in.TupleElementTypes()
 		outTypes := make([]cty.Type, len(inTypes))
 		for i, typ := range inTypes {
-			outTypes[i] = toNativeType(typ)
+			outTypes[i] = toCtyValueType(typ)
 		}
 		return cty.Tuple(outTypes)
 	}
 
 	if in.IsCapsuleType() {
-		if out := in.CapsuleExtensionData(nativeTypeExtension); out != nil {
+		if out := in.CapsuleExtensionData(unwrapCapsuleValueExtension); out != nil {
 			return out.(cty.Type)
 		}
 		return cty.DynamicPseudoType
@@ -137,5 +162,5 @@ func ToCtyValue(val any, ty cty.Type) (cty.Value, error) {
 	if err != nil {
 		return out, err
 	}
-	return ToNativeValue(out), nil
+	return UnwrapCtyValue(out), nil
 }
