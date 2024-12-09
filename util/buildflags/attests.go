@@ -21,9 +21,12 @@ func CanonicalizeAttest(attestType string, in string) string {
 }
 
 func ParseAttests(in []string) ([]*controllerapi.Attest, error) {
-	out := []*controllerapi.Attest{}
+	var out []*controllerapi.Attest
 	found := map[string]struct{}{}
 	for _, in := range in {
+		if in == "" {
+			continue
+		}
 		in := in
 		attest, err := ParseAttest(in)
 		if err != nil {

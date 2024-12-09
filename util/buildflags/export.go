@@ -136,6 +136,9 @@ func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 		return nil, nil
 	}
 	for _, s := range inp {
+		if s == "" {
+			continue
+		}
 		var out ExportEntry
 		if err := out.UnmarshalText([]byte(s)); err != nil {
 			return nil, err
@@ -153,6 +156,9 @@ func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 
 	annotations := make(map[exptypes.AnnotationKey]string)
 	for _, inp := range inp {
+		if inp == "" {
+			continue
+		}
 		k, v, ok := strings.Cut(inp, "=")
 		if !ok {
 			return nil, errors.Errorf("invalid annotation %q, expected key=value", inp)
