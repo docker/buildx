@@ -1,7 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.23
-ARG XX_VERSION=1.5.0
+ARG XX_VERSION=1.6.1
 
 # for testing
 ARG DOCKER_VERSION=27.4.0-rc.2
