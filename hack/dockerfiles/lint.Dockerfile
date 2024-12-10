@@ -1,7 +1,9 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.23
-ARG XX_VERSION=1.5.0
+ARG ALPINE_VERSION=3.21
+ARG XX_VERSION=1.6.1
+
 ARG GOLANGCI_LINT_VERSION=1.62.0
 ARG GOPLS_VERSION=v0.26.0
 # disabled: deprecated unusedvariable simplifyrange
@@ -9,7 +11,7 @@ ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs nonewvars norangeo
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golang-base
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golang-base
 RUN apk add --no-cache git gcc musl-dev
 
 FROM golang-base AS lint-base

@@ -1,6 +1,7 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.23
+ARG ALPINE_VERSION=3.21
 ARG XX_VERSION=1.6.1
 
 # for testing
@@ -13,7 +14,7 @@ ARG BUILDKIT_VERSION=v0.18.1
 ARG UNDOCK_VERSION=0.8.0
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
-FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine AS golatest
+FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
 FROM moby/moby-bin:$DOCKER_VERSION AS docker-engine
 FROM dockereng/cli-bin:$DOCKER_CLI_VERSION AS docker-cli
 FROM moby/moby-bin:$DOCKER_VERSION_ALT_26 AS docker-engine-alt
@@ -138,7 +139,7 @@ FROM integration-test-base AS integration-test
 COPY . .
 
 # Release
-FROM --platform=$BUILDPLATFORM alpine AS releaser
+FROM --platform=$BUILDPLATFORM alpine:${ALPINE_VERSION} AS releaser
 WORKDIR /work
 ARG TARGETPLATFORM
 RUN --mount=from=binaries \
@@ -153,7 +154,7 @@ COPY --from=releaser /out/ /
 
 # Shell
 FROM docker:$DOCKER_VERSION AS dockerd-release
-FROM alpine AS shell
+FROM alpine:${ALPINE_VERSION} AS shell
 RUN apk add --no-cache iptables tmux git vim less openssh
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/local/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 COPY ./hack/demo-env/entrypoint.sh /usr/local/bin
