@@ -1,15 +1,17 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.23
+ARG ALPINE_VERSION=3.21
+
 ARG FORMATS=md,yaml
 
-FROM golang:${GO_VERSION}-alpine AS docsgen
+FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS docsgen
 WORKDIR /src
 RUN --mount=target=. \
   --mount=target=/root/.cache,type=cache \
   go build -mod=vendor -o /out/docsgen ./docs/generate.go
 
-FROM alpine AS gen
+FROM alpine:${ALPINE_VERSION} AS gen
 RUN apk add --no-cache rsync git
 WORKDIR /src
 COPY --from=docsgen /out/docsgen /usr/bin
