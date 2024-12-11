@@ -1688,7 +1688,7 @@ func TestAttestDuplicates(t *testing.T) {
 	ctx := context.TODO()
 
 	m, _, err := ReadTargets(ctx, []File{fp}, []string{"default"}, nil, nil, &EntitlementConf{})
-	require.Equal(t, []string{"type=sbom,foo=bar", "type=provenance,mode=max"}, m["default"].Attest)
+	require.Equal(t, []string{"type=provenance,mode=max", "type=sbom,foo=bar"}, stringify(m["default"].Attest))
 	require.NoError(t, err)
 
 	opts, err := TargetsToBuildOpt(m, &Input{})
@@ -1699,7 +1699,7 @@ func TestAttestDuplicates(t *testing.T) {
 	}, opts["default"].Attests)
 
 	m, _, err = ReadTargets(ctx, []File{fp}, []string{"default"}, []string{"*.attest=type=sbom,disabled=true"}, nil, &EntitlementConf{})
-	require.Equal(t, []string{"type=sbom,disabled=true", "type=provenance,mode=max"}, m["default"].Attest)
+	require.Equal(t, []string{"type=provenance,mode=max", "type=sbom,disabled=true"}, stringify(m["default"].Attest))
 	require.NoError(t, err)
 
 	opts, err = TargetsToBuildOpt(m, &Input{})
@@ -2017,6 +2017,26 @@ target "app" {
 		require.Error(t, err)
 		require.Contains(t, err.Error(), "FOO must be greater than 5.")
 	})
+}
+
+// https://github.com/docker/buildx/pull/428
+// https://github.com/docker/buildx/issues/2822
+func TestEmptyAttribute(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "app" {
+  output = [""]
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
+	require.Equal(t, 1, len(m))
+	require.Len(t, m["app"].Outputs, 0)
+	require.NoError(t, err)
 }
 
 func stringify[V fmt.Stringer](values []V) []string {
