@@ -2019,6 +2019,24 @@ target "app" {
 	})
 }
 
+// https://github.com/docker/buildx/pull/428
+// https://github.com/docker/buildx/issues/2822
+func TestEmptyAttribute(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "app" {
+  output = [""]
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil)
+	require.NoError(t, err)
+}
+
 func stringify[V fmt.Stringer](values []V) []string {
 	s := make([]string, len(values))
 	for i, v := range values {
