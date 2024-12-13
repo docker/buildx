@@ -210,6 +210,10 @@ services:
     #   - "com.example.number=42"
     #   - "com.example.empty-label"
 
+    label_file:
+      - ./example1.label
+      - ./example2.label
+
     links:
      - db
      - db:database

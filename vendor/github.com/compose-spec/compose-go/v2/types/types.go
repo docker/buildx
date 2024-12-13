@@ -89,6 +89,7 @@ type ServiceConfig struct {
 	Ipc             string                           `yaml:"ipc,omitempty" json:"ipc,omitempty"`
 	Isolation       string                           `yaml:"isolation,omitempty" json:"isolation,omitempty"`
 	Labels          Labels                           `yaml:"labels,omitempty" json:"labels,omitempty"`
+	LabelFiles      []string                         `yaml:"label_file,omitempty" json:"label_file,omitempty"`
 	CustomLabels    Labels                           `yaml:"-" json:"-"`
 	Links           []string                         `yaml:"links,omitempty" json:"links,omitempty"`
 	Logging         *LoggingConfig                   `yaml:"logging,omitempty" json:"logging,omitempty"`

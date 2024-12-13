@@ -240,6 +240,7 @@
         "domainname": {"type": "string"},
         "entrypoint": {"$ref": "#/definitions/command"},
         "env_file": {"$ref": "#/definitions/env_file"},
+        "label_file": {"$ref": "#/definitions/label_file"},
         "environment": {"$ref": "#/definitions/list_or_dict"},
 
         "expose": {
@@ -499,8 +500,9 @@
             "properties": {
               "ignore": {"type": "array", "items": {"type": "string"}},
               "path": {"type": "string"},
-              "action": {"type": "string", "enum": ["rebuild", "sync", "sync+restart"]},
-              "target": {"type": "string"}
+              "action": {"type": "string", "enum": ["rebuild", "sync", "restart", "sync+restart", "sync+exec"]},
+              "target": {"type": "string"},
+              "exec": {"$ref": "#/definitions/service_hook"}
             },
             "additionalProperties": false,
             "patternProperties": {"^x-": {}}
@@ -884,6 +886,16 @@
       ]
     },
 
+    "label_file": {
+      "oneOf": [
+        {"type": "string"},
+        {
+          "type": "array",
+          "items": {"type": "string"}
+        }
+      ]
+    },
+
     "string_or_list": {
       "oneOf": [
         {"type": "string"},
@@ -918,9 +930,19 @@
           "type": "object",
           "patternProperties": {
             ".+": {
-              "type": ["string", "array"]
-            },
-            "uniqueItems": false
+              "oneOf": [
+                {
+                  "type": "string"
+                },
+                {
+                  "type": "array",
+                  "items": {
+                    "type": "string"
+                  },
+                  "uniqueItems": false
+                }
+              ]
+            }
           },
           "additionalProperties": false
         },

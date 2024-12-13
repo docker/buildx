@@ -663,6 +663,44 @@ func (p Project) WithServicesEnvironmentResolved(discardEnvFiles bool) (*Project
 	return newProject, nil
 }
 
+// WithServicesLabelsResolved parses label_files set for services to resolve the actual label map for services
+// It returns a new Project instance with the changes and keep the original Project unchanged
+func (p Project) WithServicesLabelsResolved(discardLabelFiles bool) (*Project, error) {
+	newProject := p.deepCopy()
+	for i, service := range newProject.Services {
+		labels := MappingWithEquals{}
+		// resolve variables based on other files we already parsed
+		var resolve dotenv.LookupFn = func(s string) (string, bool) {
+			v, ok := labels[s]
+			if ok && v != nil {
+				return *v, ok
+			}
+			return "", false
+		}
+
+		for _, labelFile := range service.LabelFiles {
+			vars, err := loadLabelFile(labelFile, resolve)
+			if err != nil {
+				return nil, err
+			}
+			labels.OverrideBy(vars.ToMappingWithEquals())
+		}
+
+		labels = labels.OverrideBy(service.Labels.ToMappingWithEquals())
+		if len(labels) == 0 {
+			labels = nil
+		} else {
+			service.Labels = NewLabelsFromMappingWithEquals(labels)
+		}
+
+		if discardLabelFiles {
+			service.LabelFiles = nil
+		}
+		newProject.Services[i] = service
+	}
+	return newProject, nil
+}
+
 func loadEnvFile(envFile EnvFile, resolve dotenv.LookupFn) (Mapping, error) {
 	if _, err := os.Stat(envFile.Path); os.IsNotExist(err) {
 		if envFile.Required {
@@ -670,15 +708,28 @@ func loadEnvFile(envFile EnvFile, resolve dotenv.LookupFn) (Mapping, error) {
 		}
 		return nil, nil
 	}
-	file, err := os.Open(envFile.Path)
+
+	return loadMappingFile(envFile.Path, envFile.Format, resolve)
+}
+
+func loadLabelFile(labelFile string, resolve dotenv.LookupFn) (Mapping, error) {
+	if _, err := os.Stat(labelFile); os.IsNotExist(err) {
+		return nil, fmt.Errorf("label file %s not found: %w", labelFile, err)
+	}
+
+	return loadMappingFile(labelFile, "", resolve)
+}
+
+func loadMappingFile(path string, format string, resolve dotenv.LookupFn) (Mapping, error) {
+	file, err := os.Open(path)
 	if err != nil {
 		return nil, err
 	}
 	defer file.Close() //nolint:errcheck
 
 	var fileVars map[string]string
-	if envFile.Format != "" {
-		fileVars, err = dotenv.ParseWithFormat(file, envFile.Path, resolve, envFile.Format)
+	if format != "" {
+		fileVars, err = dotenv.ParseWithFormat(file, path, resolve, format)
 	} else {
 		fileVars, err = dotenv.ParseWithLookup(file, resolve)
 	}

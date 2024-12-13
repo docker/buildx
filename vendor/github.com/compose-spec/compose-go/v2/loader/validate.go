@@ -155,7 +155,7 @@ func checkConsistency(project *types.Project) error {
 
 		if s.Develop != nil && s.Develop.Watch != nil {
 			for _, watch := range s.Develop.Watch {
-				if watch.Action != types.WatchActionRebuild && watch.Target == "" {
+				if watch.Target == "" && watch.Action != types.WatchActionRebuild && watch.Action != types.WatchActionRestart {
 					return fmt.Errorf("services.%s.develop.watch: target is required for non-rebuild actions: %w", s.Name, errdefs.ErrInvalid)
 				}
 			}
