@@ -72,6 +72,16 @@ func (m MappingWithEquals) RemoveEmpty() MappingWithEquals {
 	return m
 }
 
+func (m MappingWithEquals) ToMapping() Mapping {
+	o := Mapping{}
+	for k, v := range m {
+		if v != nil {
+			o[k] = *v
+		}
+	}
+	return o
+}
+
 func (m *MappingWithEquals) DecodeMapstructure(value interface{}) error {
 	switch v := value.(type) {
 	case map[string]interface{}:

@@ -57,6 +57,7 @@ func init() {
 	mergeSpecials["services.*.dns_search"] = mergeToSequence
 	mergeSpecials["services.*.entrypoint"] = override
 	mergeSpecials["services.*.env_file"] = mergeToSequence
+	mergeSpecials["services.*.label_file"] = mergeToSequence
 	mergeSpecials["services.*.environment"] = mergeToSequence
 	mergeSpecials["services.*.extra_hosts"] = mergeExtraHosts
 	mergeSpecials["services.*.healthcheck.test"] = override

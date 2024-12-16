@@ -485,6 +485,24 @@ func deriveDeepCopyService(dst, src *ServiceConfig) {
 	} else {
 		dst.Labels = nil
 	}
+	if src.LabelFiles == nil {
+		dst.LabelFiles = nil
+	} else {
+		if dst.LabelFiles != nil {
+			if len(src.LabelFiles) > len(dst.LabelFiles) {
+				if cap(dst.LabelFiles) >= len(src.LabelFiles) {
+					dst.LabelFiles = (dst.LabelFiles)[:len(src.LabelFiles)]
+				} else {
+					dst.LabelFiles = make([]string, len(src.LabelFiles))
+				}
+			} else if len(src.LabelFiles) < len(dst.LabelFiles) {
+				dst.LabelFiles = (dst.LabelFiles)[:len(src.LabelFiles)]
+			}
+		} else {
+			dst.LabelFiles = make([]string, len(src.LabelFiles))
+		}
+		copy(dst.LabelFiles, src.LabelFiles)
+	}
 	if src.CustomLabels != nil {
 		dst.CustomLabels = make(map[string]string, len(src.CustomLabels))
 		deriveDeepCopy_4(dst.CustomLabels, src.CustomLabels)
@@ -1428,6 +1446,12 @@ func deriveDeepCopy_24(dst, src *NetworkConfig) {
 	} else {
 		dst.Labels = nil
 	}
+	if src.CustomLabels != nil {
+		dst.CustomLabels = make(map[string]string, len(src.CustomLabels))
+		deriveDeepCopy_4(dst.CustomLabels, src.CustomLabels)
+	} else {
+		dst.CustomLabels = nil
+	}
 	if src.EnableIPv6 == nil {
 		dst.EnableIPv6 = nil
 	} else {
@@ -1459,6 +1483,12 @@ func deriveDeepCopy_25(dst, src *VolumeConfig) {
 	} else {
 		dst.Labels = nil
 	}
+	if src.CustomLabels != nil {
+		dst.CustomLabels = make(map[string]string, len(src.CustomLabels))
+		deriveDeepCopy_4(dst.CustomLabels, src.CustomLabels)
+	} else {
+		dst.CustomLabels = nil
+	}
 	if src.Extensions != nil {
 		dst.Extensions = make(map[string]any, len(src.Extensions))
 		src.Extensions.DeepCopy(dst.Extensions)
@@ -1473,6 +1503,7 @@ func deriveDeepCopy_26(dst, src *SecretConfig) {
 	dst.File = src.File
 	dst.Environment = src.Environment
 	dst.Content = src.Content
+	dst.marshallContent = src.marshallContent
 	dst.External = src.External
 	if src.Labels != nil {
 		dst.Labels = make(map[string]string, len(src.Labels))
@@ -1502,6 +1533,7 @@ func deriveDeepCopy_27(dst, src *ConfigObjConfig) {
 	dst.File = src.File
 	dst.Environment = src.Environment
 	dst.Content = src.Content
+	dst.marshallContent = src.marshallContent
 	dst.External = src.External
 	if src.Labels != nil {
 		dst.Labels = make(map[string]string, len(src.Labels))
@@ -1981,6 +2013,11 @@ func deriveDeepCopy_46(dst, src *Trigger) {
 	dst.Path = src.Path
 	dst.Action = src.Action
 	dst.Target = src.Target
+	func() {
+		field := new(ServiceHook)
+		deriveDeepCopy_44(field, &src.Exec)
+		dst.Exec = *field
+	}()
 	if src.Ignore == nil {
 		dst.Ignore = nil
 	} else {

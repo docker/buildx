@@ -24,6 +24,16 @@ import (
 // Labels is a mapping type for labels
 type Labels map[string]string
 
+func NewLabelsFromMappingWithEquals(mapping MappingWithEquals) Labels {
+	labels := Labels{}
+	for k, v := range mapping {
+		if v != nil {
+			labels[k] = *v
+		}
+	}
+	return labels
+}
+
 func (l Labels) Add(key, value string) Labels {
 	if l == nil {
 		l = Labels{}
@@ -40,6 +50,15 @@ func (l Labels) AsList() []string {
 		i++
 	}
 	return s
+}
+
+func (l Labels) ToMappingWithEquals() MappingWithEquals {
+	mapping := MappingWithEquals{}
+	for k, v := range l {
+		v := v
+		mapping[k] = &v
+	}
+	return mapping
 }
 
 // label value can be a string | number | boolean | null (empty)

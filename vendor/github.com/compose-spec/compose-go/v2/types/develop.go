@@ -27,13 +27,16 @@ type WatchAction string
 const (
 	WatchActionSync        WatchAction = "sync"
 	WatchActionRebuild     WatchAction = "rebuild"
+	WatchActionRestart     WatchAction = "restart"
 	WatchActionSyncRestart WatchAction = "sync+restart"
+	WatchActionSyncExec    WatchAction = "sync+exec"
 )
 
 type Trigger struct {
 	Path       string      `yaml:"path" json:"path"`
 	Action     WatchAction `yaml:"action" json:"action"`
 	Target     string      `yaml:"target,omitempty" json:"target,omitempty"`
+	Exec       ServiceHook `yaml:"exec,omitempty" json:"exec,omitempty"`
 	Ignore     []string    `yaml:"ignore,omitempty" json:"ignore,omitempty"`
 	Extensions Extensions  `yaml:"#extensions,inline,omitempty" json:"-"`
 }
