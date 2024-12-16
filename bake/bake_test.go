@@ -2028,3 +2028,20 @@ target "app" {
 	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 }
+
+// https://github.com/docker/buildx/issues/2858
+func TestOverrideEmpty(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "app" {
+  output = ["./bin"]
+}
+`),
+	}
+
+	ctx := context.TODO()
+
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.output="}, nil, &EntitlementConf{})
+	require.NoError(t, err)
+}
