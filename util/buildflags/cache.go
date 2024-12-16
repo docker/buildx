@@ -14,6 +14,9 @@ import (
 func ParseCacheEntry(in []string) ([]*controllerapi.CacheOptionsEntry, error) {
 	outs := make([]*controllerapi.CacheOptionsEntry, 0, len(in))
 	for _, in := range in {
+		if in == "" {
+			continue
+		}
 		fields, err := csvvalue.Fields(in, nil)
 		if err != nil {
 			return nil, err

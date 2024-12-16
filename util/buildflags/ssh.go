@@ -14,6 +14,9 @@ func ParseSSHSpecs(sl []string) ([]*controllerapi.SSH, error) {
 	}
 
 	for _, s := range sl {
+		if s == "" {
+			continue
+		}
 		parts := strings.SplitN(s, "=", 2)
 		out := controllerapi.SSH{
 			ID: parts[0],
