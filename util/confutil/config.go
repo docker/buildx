@@ -9,6 +9,7 @@ import (
 
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/docker/pkg/ioutils"
+	"github.com/moby/buildkit/cmd/buildkitd/config"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	fs "github.com/tonistiigi/fsutil/copy"
@@ -151,7 +152,11 @@ func LoadConfigTree(fp string) (*toml.Tree, error) {
 	defer f.Close()
 	t, err := toml.LoadReader(f)
 	if err != nil {
-		return t, errors.Wrap(err, "failed to parse config")
+		return t, errors.Wrap(err, "failed to parse buildkit config")
+	}
+	var bkcfg config.Config
+	if err = t.Unmarshal(&bkcfg); err != nil {
+		return t, errors.Wrap(err, "failed to parse buildkit config")
 	}
 	return t, nil
 }
