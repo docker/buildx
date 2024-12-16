@@ -11,6 +11,9 @@ import (
 func ParseSecretSpecs(sl []string) ([]*controllerapi.Secret, error) {
 	fs := make([]*controllerapi.Secret, 0, len(sl))
 	for _, v := range sl {
+		if v == "" {
+			continue
+		}
 		s, err := parseSecret(v)
 		if err != nil {
 			return nil, err
