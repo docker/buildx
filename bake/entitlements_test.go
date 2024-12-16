@@ -89,7 +89,7 @@ func TestEvaluateToExistingPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := evaluateToExistingPath(tt.input)
+			result, _, err := evaluateToExistingPath(tt.input)
 
 			if tt.expectErr {
 				require.Error(t, err)
@@ -341,7 +341,7 @@ func TestValidateEntitlements(t *testing.T) {
 						return nil
 					}
 					// if not, then escapeLink is not allowed
-					exp, err := evaluateToExistingPath(escapeLink)
+					exp, _, err := evaluateToExistingPath(escapeLink)
 					require.NoError(t, err)
 					exp, err = filepath.EvalSymlinks(exp)
 					require.NoError(t, err)

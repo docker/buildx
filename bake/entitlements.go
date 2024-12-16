@@ -19,6 +19,7 @@ import (
 	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
 
 type EntitlementKey string
@@ -444,11 +445,19 @@ func evaluatePaths(in []string) ([]string, bool, error) {
 		}
 		v, err := filepath.Abs(p)
 		if err != nil {
-			return nil, false, errors.Wrapf(err, "failed to evaluate path %q", p)
+			logrus.Warnf("failed to evaluate entitlement path %q: %v", p, err)
+			continue
 		}
-		v, err = filepath.EvalSymlinks(v)
+		v, rest, err := evaluateToExistingPath(v)
 		if err != nil {
 			return nil, false, errors.Wrapf(err, "failed to evaluate path %q", p)
+		}
+		v, err = osutil.GetLongPathName(v)
+		if err != nil {
+			return nil, false, errors.Wrapf(err, "failed to evaluate path %q", p)
+		}
+		if rest != "" {
+			v = filepath.Join(v, rest)
 		}
 		out = append(out, v)
 	}
@@ -458,7 +467,7 @@ func evaluatePaths(in []string) ([]string, bool, error) {
 func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error) {
 	m := make(map[string]struct{}, len(in))
 	for p := range in {
-		v, err := evaluateToExistingPath(p)
+		v, _, err := evaluateToExistingPath(p)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to evaluate path %q", p)
 		}
@@ -471,10 +480,10 @@ func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error
 	return m, nil
 }
 
-func evaluateToExistingPath(in string) (string, error) {
+func evaluateToExistingPath(in string) (string, string, error) {
 	in, err := filepath.Abs(in)
 	if err != nil {
-		return "", err
+		return "", "", err
 	}
 
 	volLen := volumeNameLen(in)
@@ -529,29 +538,29 @@ func evaluateToExistingPath(in string) (string, error) {
 			if os.IsNotExist(err) {
 				for r := len(dest) - 1; r >= volLen; r-- {
 					if os.IsPathSeparator(dest[r]) {
-						return dest[:r], nil
+						return dest[:r], in[start:], nil
 					}
 				}
-				return vol, nil
+				return vol, in[start:], nil
 			}
-			return "", err
+			return "", "", err
 		}
 
 		if fi.Mode()&fs.ModeSymlink == 0 {
 			if !fi.Mode().IsDir() && end < len(in) {
-				return "", syscall.ENOTDIR
+				return "", "", syscall.ENOTDIR
 			}
 			continue
 		}
 
 		linksWalked++
 		if linksWalked > 255 {
-			return "", errors.New("too many symlinks")
+			return "", "", errors.New("too many symlinks")
 		}
 
 		link, err := os.Readlink(dest)
 		if err != nil {
-			return "", err
+			return "", "", err
 		}
 
 		in = link + in[end:]
@@ -584,7 +593,7 @@ func evaluateToExistingPath(in string) (string, error) {
 			end = 0
 		}
 	}
-	return filepath.Clean(dest), nil
+	return filepath.Clean(dest), "", nil
 }
 
 func volumeNameLen(s string) int {
