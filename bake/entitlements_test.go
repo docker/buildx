@@ -363,6 +363,48 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			expected: EntitlementConf{},
 		},
+		{
+			name: "NonExistingAllowedPathSubpath",
+			opt: build.Options{
+				ExportsLocalPathsTemporary: []string{
+					dir1,
+				},
+			},
+			conf: EntitlementConf{
+				FSRead:  []string{wd},
+				FSWrite: []string{filepath.Join(dir1, "not/exists")},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expDir1}, // dir1 is still needed as only subpath was allowed
+			},
+		},
+		{
+			name: "NonExistingAllowedPathMatches",
+			opt: build.Options{
+				ExportsLocalPathsTemporary: []string{
+					filepath.Join(dir1, "not/exists"),
+				},
+			},
+			conf: EntitlementConf{
+				FSRead:  []string{wd},
+				FSWrite: []string{filepath.Join(dir1, "not/exists")},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expDir1}, // dir1 is still needed as build also needs to write not/exists directory
+			},
+		},
+		{
+			name: "NonExistingBuildPath",
+			opt: build.Options{
+				ExportsLocalPathsTemporary: []string{
+					filepath.Join(dir1, "not/exists"),
+				},
+			},
+			conf: EntitlementConf{
+				FSRead:  []string{wd},
+				FSWrite: []string{dir1},
+			},
+		},
 	}
 
 	for _, tc := range tcases {
