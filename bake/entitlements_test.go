@@ -89,7 +89,7 @@ func TestEvaluateToExistingPath(t *testing.T) {
 
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
-			result, err := evaluateToExistingPath(tt.input)
+			result, _, err := evaluateToExistingPath(tt.input)
 
 			if tt.expectErr {
 				require.Error(t, err)
@@ -341,7 +341,7 @@ func TestValidateEntitlements(t *testing.T) {
 						return nil
 					}
 					// if not, then escapeLink is not allowed
-					exp, err := evaluateToExistingPath(escapeLink)
+					exp, _, err := evaluateToExistingPath(escapeLink)
 					require.NoError(t, err)
 					exp, err = filepath.EvalSymlinks(exp)
 					require.NoError(t, err)
@@ -362,6 +362,48 @@ func TestValidateEntitlements(t *testing.T) {
 				FSRead: []string{"*"},
 			},
 			expected: EntitlementConf{},
+		},
+		{
+			name: "NonExistingAllowedPathSubpath",
+			opt: build.Options{
+				ExportsLocalPathsTemporary: []string{
+					dir1,
+				},
+			},
+			conf: EntitlementConf{
+				FSRead:  []string{wd},
+				FSWrite: []string{filepath.Join(dir1, "not/exists")},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expDir1}, // dir1 is still needed as only subpath was allowed
+			},
+		},
+		{
+			name: "NonExistingAllowedPathMatches",
+			opt: build.Options{
+				ExportsLocalPathsTemporary: []string{
+					filepath.Join(dir1, "not/exists"),
+				},
+			},
+			conf: EntitlementConf{
+				FSRead:  []string{wd},
+				FSWrite: []string{filepath.Join(dir1, "not/exists")},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expDir1}, // dir1 is still needed as build also needs to write not/exists directory
+			},
+		},
+		{
+			name: "NonExistingBuildPath",
+			opt: build.Options{
+				ExportsLocalPathsTemporary: []string{
+					filepath.Join(dir1, "not/exists"),
+				},
+			},
+			conf: EntitlementConf{
+				FSRead:  []string{wd},
+				FSWrite: []string{dir1},
+			},
 		},
 	}
 

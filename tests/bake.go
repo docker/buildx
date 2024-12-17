@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -46,6 +47,14 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteDockerfileCwd,
 	testBakeRemoteLocalContextRemoteDockerfile,
 	testBakeEmpty,
+	testBakeSetNonExistingSubdirNoParallel,
+	testBakeSetNonExistingOutsideNoParallel,
+	testBakeSetExistingOutsideNoParallel,
+	testBakeDefinitionNotExistingSubdirNoParallel,
+	testBakeDefinitionNotExistingOutsideNoParallel,
+	testBakeDefinitionExistingOutsideNoParallel,
+	testBakeDefinitionSymlinkOutsideNoParallel,
+	testBakeDefinitionSymlinkOutsideGrantedNoParallel,
 	testBakeShmSize,
 	testBakeUlimits,
 	testBakeMetadataProvenance,
@@ -703,6 +712,261 @@ target "default" {
 	dt, err := os.ReadFile(filepath.Join(dirDest, "shmsize"))
 	require.NoError(t, err)
 	require.Contains(t, string(dt), `size=131072k`)
+}
+
+func testBakeSetNonExistingSubdirNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			bakefile := []byte(`
+target "default" {
+}
+`)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+			)
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--set", "*.output=type=local,dest="+filepath.Join(dir, "not/exists")))
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err, string(out))
+			require.Contains(t, string(out), `#1 [internal] load local bake definitions`)
+			require.Contains(t, string(out), `#1 reading docker-bake.hcl`)
+
+			require.FileExists(t, filepath.Join(dir, "not/exists/foo"))
+		})
+	}
+}
+func testBakeSetNonExistingOutsideNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			bakefile := []byte(`
+target "default" {
+}
+`)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+			)
+
+			destDir := t.TempDir()
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--set", "*.output=type=local,dest="+filepath.Join(destDir, "not/exists")))
+			out, err := cmd.CombinedOutput()
+			if ent {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), "ERROR: additional privileges requested")
+			} else {
+				require.NoError(t, err, string(out))
+				require.FileExists(t, filepath.Join(destDir, "not/exists/foo"))
+			}
+		})
+	}
+}
+
+func testBakeSetExistingOutsideNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			bakefile := []byte(`
+target "default" {
+}
+`)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+			)
+
+			destDir := t.TempDir()
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--set", "*.output=type=local,dest="+destDir))
+			out, err := cmd.CombinedOutput()
+			// existing directory via --set is always allowed
+			require.NoError(t, err, string(out))
+			require.FileExists(t, filepath.Join(destDir, "foo"))
+		})
+	}
+}
+
+func testBakeDefinitionNotExistingSubdirNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			bakefile := []byte(`
+target "default" {
+	output = ["type=local,dest=not/exists"]
+}
+`)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+			)
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain"))
+			out, err := cmd.CombinedOutput()
+			// subdirs of working directory are always allowed
+			require.NoError(t, err, string(out))
+			require.FileExists(t, filepath.Join(dir, "not/exists/foo"))
+		})
+	}
+}
+
+func testBakeDefinitionNotExistingOutsideNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			destDir := t.TempDir()
+			bakefile := []byte(fmt.Sprintf(`
+target "default" {
+	output = ["type=local,dest=%s/not/exists"]
+}
+`, destDir))
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+			)
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain"))
+			out, err := cmd.CombinedOutput()
+			if ent {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), "ERROR: additional privileges requested")
+			} else {
+				require.NoError(t, err, string(out))
+				require.FileExists(t, filepath.Join(destDir, "not/exists/foo"))
+			}
+		})
+	}
+}
+
+func testBakeDefinitionExistingOutsideNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			destDir := t.TempDir()
+			bakefile := []byte(fmt.Sprintf(`
+target "default" {
+	output = ["type=local,dest=%s"]
+}
+`, destDir))
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+			)
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain"))
+			out, err := cmd.CombinedOutput()
+			if ent {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), "ERROR: additional privileges requested")
+			} else {
+				require.NoError(t, err, string(out))
+				require.FileExists(t, filepath.Join(destDir, "foo"))
+			}
+		})
+	}
+}
+
+func testBakeDefinitionSymlinkOutsideNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			destDir := t.TempDir()
+			bakefile := []byte(`
+target "default" {
+	output = ["type=local,dest=out"]
+}
+`)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+				fstest.Symlink(destDir, "out"),
+			)
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain"))
+			out, err := cmd.CombinedOutput()
+			if ent {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), "ERROR: additional privileges requested")
+			} else {
+				require.NoError(t, err, string(out))
+				require.FileExists(t, filepath.Join(destDir, "foo"))
+			}
+		})
+	}
+}
+
+func testBakeDefinitionSymlinkOutsideGrantedNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+			destDir := t.TempDir()
+			bakefile := []byte(`
+target "default" {
+	output = ["type=local,dest=out"]
+}
+`)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("foo", []byte("foo"), 0600),
+				fstest.Symlink(destDir, "out"),
+			)
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--allow", "fs.write="+destDir))
+			out, err := cmd.CombinedOutput()
+			require.NoError(t, err, string(out))
+			require.FileExists(t, filepath.Join(destDir, "foo"))
+		})
+	}
 }
 
 func testBakeUlimits(t *testing.T, sb integration.Sandbox) {
