@@ -5,6 +5,8 @@ go 1.22.0
 // FIXME(thaJeztah): testing moby master
 replace github.com/docker/docker => github.com/docker/docker v27.0.2-0.20241223115700-a72026acbbdf+incompatible
 
+replace github.com/docker/cli => github.com/docker/cli v27.0.2-0.20241227143339-07aca45f5ead+incompatible
+
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/go-winio v0.6.2
