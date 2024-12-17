@@ -13,9 +13,10 @@ import (
 	configtypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/cli/cli/hints"
 	"github.com/docker/cli/cli/streams"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/cli/internal/tui"
 	registrytypes "github.com/docker/docker/api/types/registry"
 	"github.com/docker/docker/registry"
+	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 )
 
@@ -29,7 +30,7 @@ const (
 
 // RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
 // for the given command.
-func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) types.RequestPrivilegeFunc {
+func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) registrytypes.RequestAuthConfig {
 	return func(ctx context.Context) (string, error) {
 		_, _ = fmt.Fprintf(cli.Out(), "\nLogin prior to %s:\n", cmdName)
 		indexServer := registry.GetAuthConfigKey(index)
@@ -179,6 +180,9 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 			}
 		}()
 
+		out := tui.NewOutput(cli.Err())
+		out.PrintNote("A Personal Access Token (PAT) can be used instead.\n" +
+			"To create a PAT, visit " + aec.Underline.Apply("https://app.docker.com/settings") + "\n\n")
 		argPassword, err = PromptForInput(ctx, cli.In(), cli.Out(), "Password: ")
 		if err != nil {
 			return registrytypes.AuthConfig{}, err
