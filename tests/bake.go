@@ -33,6 +33,7 @@ func bakeCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 
 var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrint,
+	testBakePrintSensitive,
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeRemote,
@@ -86,7 +87,8 @@ target "build" {
     HELLO = "foo"
   }
 }
-`)},
+`),
+		},
 		{
 			"Compose",
 			"compose.yml",
@@ -97,7 +99,8 @@ services:
       context: .
       args:
         HELLO: foo
-`)},
+`),
+		},
 	}
 
 	for _, tc := range testCases {
@@ -150,6 +153,125 @@ RUN echo "Hello ${HELLO}"
       "args": {
         "HELLO": "foo"
       }
+    }
+  }
+}
+`, stdout.String())
+		})
+	}
+}
+
+func testBakePrintSensitive(t *testing.T, sb integration.Sandbox) {
+	testCases := []struct {
+		name string
+		f    string
+		dt   []byte
+	}{
+		{
+			"HCL",
+			"docker-bake.hcl",
+			[]byte(`
+target "build" {
+  args = {
+    HELLO = "foo"
+  }
+
+  cache-from = [
+    "type=gha,token=abc",
+    "type=s3,region=us-west-2,bucket=my_bucket,name=my_image",
+  ]
+}
+`),
+		},
+		{
+			"Compose",
+			"compose.yml",
+			[]byte(`
+services:
+  build:
+    build:
+      context: .
+      args:
+        HELLO: foo
+      cache_from:
+        - type=gha,token=abc
+        - type=s3,region=us-west-2,bucket=my_bucket,name=my_image
+`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := tmpdir(
+				t,
+				fstest.CreateFile(tc.f, tc.dt, 0600),
+				fstest.CreateFile("Dockerfile", []byte(`
+FROM busybox
+ARG HELLO
+RUN echo "Hello ${HELLO}"
+	`), 0600),
+			)
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--print", "build"),
+				withEnv(
+					"ACTIONS_RUNTIME_TOKEN=sensitive_token",
+					"ACTIONS_CACHE_URL=https://cache.github.com",
+					"AWS_ACCESS_KEY_ID=definitely_dont_look_here",
+					"AWS_SECRET_ACCESS_KEY=hackers_please_dont_steal",
+					"AWS_SESSION_TOKEN=not_a_mitm_attack",
+				),
+			)
+			stdout := bytes.Buffer{}
+			stderr := bytes.Buffer{}
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+
+			var def struct {
+				Group  map[string]*bake.Group  `json:"group,omitempty"`
+				Target map[string]*bake.Target `json:"target"`
+			}
+			require.NoError(t, json.Unmarshal(stdout.Bytes(), &def))
+
+			require.Len(t, def.Group, 1)
+			require.Contains(t, def.Group, "default")
+
+			require.Equal(t, []string{"build"}, def.Group["default"].Targets)
+			require.Len(t, def.Target, 1)
+			require.Contains(t, def.Target, "build")
+			require.Equal(t, ".", *def.Target["build"].Context)
+			require.Equal(t, "Dockerfile", *def.Target["build"].Dockerfile)
+			require.Equal(t, map[string]*string{"HELLO": ptrstr("foo")}, def.Target["build"].Args)
+			require.NotNil(t, def.Target["build"].CacheFrom)
+			require.Len(t, def.Target["build"].CacheFrom, 2)
+
+			require.JSONEq(t, `{
+  "group": {
+    "default": {
+      "targets": [
+        "build"
+      ]
+    }
+  },
+  "target": {
+    "build": {
+      "context": ".",
+      "dockerfile": "Dockerfile",
+      "args": {
+        "HELLO": "foo"
+      },
+      "cache-from": [
+        {
+          "type": "gha",
+          "token": "abc"
+        },
+        {
+          "type": "s3",
+          "region": "us-west-2",
+          "bucket": "my_bucket",
+          "name": "my_image"
+        }
+      ]
     }
   }
 }

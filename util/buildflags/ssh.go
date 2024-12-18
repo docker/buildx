@@ -9,6 +9,39 @@ import (
 	"github.com/moby/buildkit/util/gitutil"
 )
 
+type SSHKeys []*SSH
+
+func (s SSHKeys) Merge(other SSHKeys) SSHKeys {
+	if other == nil {
+		s.Normalize()
+		return s
+	} else if s == nil {
+		other.Normalize()
+		return other
+	}
+
+	return append(s, other...).Normalize()
+}
+
+func (s SSHKeys) Normalize() SSHKeys {
+	if len(s) == 0 {
+		return nil
+	}
+	return removeDupes(s)
+}
+
+func (s SSHKeys) ToPB() []*controllerapi.SSH {
+	if len(s) == 0 {
+		return nil
+	}
+
+	entries := make([]*controllerapi.SSH, len(s))
+	for i, entry := range s {
+		entries[i] = entry.ToPB()
+	}
+	return entries
+}
+
 type SSH struct {
 	ID    string   `json:"id,omitempty" cty:"id"`
 	Paths []string `json:"paths,omitempty" cty:"paths"`
@@ -62,6 +95,10 @@ func ParseSSHSpecs(sl []string) ([]*controllerapi.SSH, error) {
 	}
 
 	for _, s := range sl {
+		if s == "" {
+			continue
+		}
+
 		var out SSH
 		if err := out.UnmarshalText([]byte(s)); err != nil {
 			return nil, err
