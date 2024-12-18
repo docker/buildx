@@ -2019,24 +2019,43 @@ target "app" {
 	})
 }
 
-// https://github.com/docker/buildx/pull/428
 // https://github.com/docker/buildx/issues/2822
-func TestEmptyAttribute(t *testing.T) {
+func TestVariableEmpty(t *testing.T) {
 	fp := File{
 		Name: "docker-bake.hcl",
 		Data: []byte(`
+variable "FOO" {
+  default = ""
+}
 target "app" {
-  output = [""]
+  output = [FOO]
 }
 `),
 	}
 
 	ctx := context.TODO()
-
 	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
-	require.Equal(t, 1, len(m))
-	require.Len(t, m["app"].Outputs, 0)
 	require.NoError(t, err)
+	require.Contains(t, m, "app")
+	require.Len(t, m["app"].Outputs, 0)
+}
+
+// https://github.com/docker/buildx/issues/2858
+func TestOverrideEmpty(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "app" {
+  output = ["./bin"]
+}
+`),
+	}
+
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{"app.output="}, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Contains(t, m, "app")
+	require.Len(t, m["app"].Outputs, 0)
 }
 
 func stringify[V fmt.Stringer](values []V) []string {
