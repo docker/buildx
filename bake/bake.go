@@ -699,7 +699,7 @@ type Target struct {
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
 
 	Annotations      []string                `json:"annotations,omitempty" hcl:"annotations,optional" cty:"annotations"`
-	Attest           []string                `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
+	Attest           buildflags.Attests      `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
 	Context          *string                 `json:"context,omitempty" hcl:"context,optional" cty:"context"`
 	Contexts         map[string]string       `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
 	Dockerfile       *string                 `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
@@ -707,8 +707,8 @@ type Target struct {
 	Args             map[string]*string      `json:"args,omitempty" hcl:"args,optional" cty:"args"`
 	Labels           map[string]*string      `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
 	Tags             []string                `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
-	CacheFrom        buildflags.CacheOptions `json:"cache-from,omitempty"  hcl:"cache-from,optional" cty:"cache-from"`
-	CacheTo          buildflags.CacheOptions `json:"cache-to,omitempty"  hcl:"cache-to,optional" cty:"cache-to"`
+	CacheFrom        buildflags.CacheOptions `json:"cache-from,omitempty" hcl:"cache-from,optional" cty:"cache-from"`
+	CacheTo          buildflags.CacheOptions `json:"cache-to,omitempty" hcl:"cache-to,optional" cty:"cache-to"`
 	Target           *string                 `json:"target,omitempty" hcl:"target,optional" cty:"target"`
 	Secrets          buildflags.Secrets      `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
 	SSH              buildflags.SSHKeys      `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
@@ -718,8 +718,8 @@ type Target struct {
 	NoCache          *bool                   `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
 	NetworkMode      *string                 `json:"network,omitempty" hcl:"network,optional" cty:"network"`
 	NoCacheFilter    []string                `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
-	ShmSize          *string                 `json:"shm-size,omitempty" hcl:"shm-size,optional"`
-	Ulimits          []string                `json:"ulimits,omitempty" hcl:"ulimits,optional"`
+	ShmSize          *string                 `json:"shm-size,omitempty" hcl:"shm-size,optional" cty:"shm-size"`
+	Ulimits          []string                `json:"ulimits,omitempty" hcl:"ulimits,optional" cty:"ulimits"`
 	Call             *string                 `json:"call,omitempty" hcl:"call,optional" cty:"call"`
 	Entitlements     []string                `json:"entitlements,omitempty" hcl:"entitlements,optional" cty:"entitlements"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides/AddOverrides and docs/bake-reference.md.
@@ -737,7 +737,7 @@ var (
 
 func (t *Target) normalize() {
 	t.Annotations = removeDupesStr(t.Annotations)
-	t.Attest = removeAttestDupes(t.Attest)
+	t.Attest = t.Attest.Normalize()
 	t.Tags = removeDupesStr(t.Tags)
 	t.Secrets = t.Secrets.Normalize()
 	t.SSH = t.SSH.Normalize()
@@ -811,8 +811,7 @@ func (t *Target) Merge(t2 *Target) {
 		t.Annotations = append(t.Annotations, t2.Annotations...)
 	}
 	if t2.Attest != nil { // merge
-		t.Attest = append(t.Attest, t2.Attest...)
-		t.Attest = removeAttestDupes(t.Attest)
+		t.Attest = t.Attest.Merge(t2.Attest)
 	}
 	if t2.Secrets != nil { // merge
 		t.Secrets = t.Secrets.Merge(t2.Secrets)
@@ -969,7 +968,11 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 		case "annotations":
 			t.Annotations = append(t.Annotations, o.ArrValue...)
 		case "attest":
-			t.Attest = append(t.Attest, o.ArrValue...)
+			attest, err := parseArrValue[buildflags.Attest](o.ArrValue)
+			if err != nil {
+				return errors.Wrap(err, "invalid value for attest")
+			}
+			t.Attest = t.Attest.Merge(attest)
 		case "no-cache":
 			noCache, err := strconv.ParseBool(value)
 			if err != nil {
@@ -1383,11 +1386,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		}
 	}
 
-	attests, err := buildflags.ParseAttests(t.Attest)
-	if err != nil {
-		return nil, err
-	}
-	bo.Attests = controllerapi.CreateAttestations(attests)
+	bo.Attests = controllerapi.CreateAttestations(t.Attest.ToPB())
 
 	bo.SourcePolicy, err = build.ReadSourcePolicy()
 	if err != nil {
@@ -1428,26 +1427,6 @@ func removeDupesStr(s []string) []string {
 		i++
 	}
 	return s[:i]
-}
-
-func removeAttestDupes(s []string) []string {
-	res := []string{}
-	m := map[string]int{}
-	for _, v := range s {
-		att, err := buildflags.ParseAttest(v)
-		if err != nil {
-			res = append(res, v)
-			continue
-		}
-
-		if i, ok := m[att.Type]; ok {
-			res[i] = v
-		} else {
-			m[att.Type] = len(res)
-			res = append(res, v)
-		}
-	}
-	return res
 }
 
 func setPushOverride(outputs []*buildflags.ExportEntry, push bool) []*buildflags.ExportEntry {
