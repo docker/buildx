@@ -257,7 +257,7 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 		fmt.Fprintf(out, "%s %s %s\n\n", strings.Join(args[:idx+1], " "), strings.Join(slices.Concat(flags, flagsFS), " "), strings.Join(args[idx+1:], " "))
 	}
 
-	fsEntitlementsEnabled := false
+	fsEntitlementsEnabled := true
 	if isRemote {
 		if v, ok := os.LookupEnv("BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
 			vv, err := strconv.ParseBool(v)
@@ -265,8 +265,6 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 				return errors.Wrapf(err, "failed to parse BAKE_ALLOW_REMOTE_FS_ACCESS value %q", v)
 			}
 			fsEntitlementsEnabled = !vv
-		} else {
-			fsEntitlementsEnabled = true
 		}
 	}
 	v, fsEntitlementsSet := os.LookupEnv("BUILDX_BAKE_ENTITLEMENTS_FS")
@@ -279,10 +277,10 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 	}
 
 	if !fsEntitlementsEnabled && len(msgs) == 0 {
-		if !fsEntitlementsSet {
-			fmt.Fprintf(out, "This warning will become an error in a future release. To enable filesystem entitlements checks at the moment, set BUILDX_BAKE_ENTITLEMENTS_FS=1 .\n\n")
-		}
 		return nil
+	}
+	if fsEntitlementsEnabled && !fsEntitlementsSet && len(msgsFS) != 0 {
+		fmt.Fprintf(out, "To disable filesystem entitlements checks, you can set BUILDX_BAKE_ENTITLEMENTS_FS=0 .\n\n")
 	}
 
 	if term {
