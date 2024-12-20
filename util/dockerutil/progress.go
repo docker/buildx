@@ -55,19 +55,21 @@ func fromReader(l progress.SubLogger, rc io.ReadCloser) error {
 				Started: &now,
 			}
 		}
-		timeDelta := time.Since(st.Timestamp)
-		if timeDelta < minTimeDelta {
-			continue
-		}
-		st.Timestamp = time.Now()
 		if jm.Status == "Loading layer" {
 			st.Current = jm.Progress.Current
 			st.Total = jm.Progress.Total
 		}
+		now := time.Now()
 		if jm.Error != nil {
-			now := time.Now()
 			st.Completed = &now
+		} else {
+			timeDelta := time.Since(st.Timestamp)
+			if timeDelta < minTimeDelta {
+				started[id] = st
+				continue
+			}
 		}
+		st.Timestamp = now
 		started[id] = st
 		l.SetStatus(&st)
 	}
