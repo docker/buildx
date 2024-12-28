@@ -2,8 +2,8 @@ module github.com/docker/buildx
 
 go 1.22.0
 
-// FIXME(thaJeztah): testing https://github.com/moby/moby/pull/49087 (split-idtools-internal branch)
-replace github.com/docker/docker => github.com/dmcgowan/docker v1.1.3-0.20241223115939-cb7934ca2190
+// FIXME(thaJeztah): testing https://github.com/moby/moby/pull/49117 (archive-remove-pools branch)
+replace github.com/docker/docker => github.com/dmcgowan/docker v1.1.3-0.20241225060105-be4eac753f17
 
 replace github.com/docker/cli => github.com/docker/cli v27.0.2-0.20241227143339-07aca45f5ead+incompatible
 
@@ -134,6 +134,7 @@ require (
 	github.com/moby/patternmatcher v0.6.0 // indirect
 	github.com/moby/spdystream v0.2.0 // indirect
 	github.com/moby/sys/sequential v0.6.0 // indirect
+	github.com/moby/sys/user v0.3.0 // indirect
 	github.com/moby/sys/userns v0.1.0 // indirect
 	github.com/moby/term v0.5.0 // indirect
 	github.com/modern-go/concurrent v0.0.0-20180306012644-bacd9c7ef1dd // indirect
