@@ -2,6 +2,11 @@ module github.com/docker/buildx
 
 go 1.22.0
 
+// FIXME(thaJeztah): testing https://github.com/moby/moby/pull/49117 (archive-remove-pools branch)
+replace github.com/docker/docker => github.com/dmcgowan/docker v1.1.3-0.20241225060105-be4eac753f17
+
+replace github.com/docker/cli => github.com/docker/cli v27.0.2-0.20241227143339-07aca45f5ead+incompatible
+
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/go-winio v0.6.2
@@ -17,9 +22,9 @@ require (
 	github.com/creack/pty v1.1.21
 	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v27.4.0+incompatible
+	github.com/docker/cli v27.4.1+incompatible
 	github.com/docker/cli-docs-tool v0.8.0
-	github.com/docker/docker v27.4.0+incompatible
+	github.com/docker/docker v27.4.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
