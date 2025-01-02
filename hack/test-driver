@@ -167,7 +167,8 @@ buildxCmd bake ${bakePlatformFlag} \
   --file="${bakedef}" \
   --builder="${builderName}" \
   --set "*.context=${context}" \
-  --metadata-file="${context}/metadata-bake-def.json"
+  --metadata-file="${context}/metadata-bake-def.json" \
+  --allow fs="${context}"
 cat "${context}/metadata-bake-def.json"
 
 # bake all target
@@ -175,6 +176,7 @@ buildxCmd bake ${bakePlatformFlag} \
   --file="${bakedef}" \
   --builder="${builderName}" \
   --set "*.context=${context}" \
+  --allow fs="${context}" \
   --metadata-file="${context}/metadata-bake-all.json" \
   all
 cat "${context}/metadata-bake-all.json"
