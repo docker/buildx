@@ -910,7 +910,28 @@ func TestReadContextFromTargetInvalidPlatforms(t *testing.T) {
 	}
 	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil, &EntitlementConf{})
 	require.Error(t, err)
-	require.Contains(t, err.Error(), "defined for different platforms")
+	require.Contains(t, err.Error(), "are not a subset of")
+}
+
+func TestReadContextFromTargetSubsetPlatforms(t *testing.T) {
+	ctx := context.TODO()
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+		target "mid" {
+			output = ["foo"]
+			platforms = ["linux/amd64", "linux/riscv64", "linux/arm64"]
+		}
+		target "app" {
+			contexts = {
+				bar: "target:mid"
+			}
+			platforms = ["linux/amd64", "linux/arm64"]
+		}
+		`),
+	}
+	_, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, []string{}, nil, &EntitlementConf{})
+	require.NoError(t, err)
 }
 
 func TestReadTargetsDefault(t *testing.T) {
