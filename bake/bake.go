@@ -53,8 +53,8 @@ func defaultFilenames() []string {
 	names = append(names, composecli.DefaultFileNames...)
 	names = append(names, []string{
 		"docker-bake.json",
-		"docker-bake.override.json",
 		"docker-bake.hcl",
+		"docker-bake.override.json",
 		"docker-bake.override.hcl",
 	}...)
 	return names
