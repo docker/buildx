@@ -1,0 +1,21 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "pygolo/openbsd7"
+  config.vm.box_version = "7.5"
+  config.vm.boot_timeout = 900
+  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+  config.ssh.keep_alive = true
+
+  config.vm.provision "init", type: "shell", run: "once" do |sh|
+    sh.inline = <<~SHELL
+      pkg_add -x git
+
+      ftp https://go.dev/dl/go1.23.3.openbsd-amd64.tar.gz
+      tar -C /usr/local -xzf go1.23.3.openbsd-amd64.tar.gz
+      ln -s /usr/local/go/bin/go /usr/local/bin/go
+      go install gotest.tools/gotestsum@#{ENV['GOTESTSUM_VERSION']}
+    SHELL
+  end
+end
