@@ -234,6 +234,63 @@ jobs:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ${{ env.TESTREPORTS_BASEDIR }}
 
+  test-bsd-unit:
+    runs-on: ubuntu-22.04
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - freebsd
+          - openbsd
+    steps:
+      -
+        name: Prepare
+        run: |
+          echo "VAGRANT_FILE=hack/Vagrantfile.${{ matrix.os }}" >> $GITHUB_ENV
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Cache Vagrant boxes
+        uses: actions/cache@v4
+        with:
+          path: ~/.vagrant.d/boxes
+          key: ${{ runner.os }}-vagrant-${{ matrix.os }}-${{ hashFiles(env.VAGRANT_FILE) }}
+          restore-keys: |
+            ${{ runner.os }}-vagrant-${{ matrix.os }}-
+      -
+        name: Install vagrant
+        run: |
+          set -x
+          sudo apt-get update
+          sudo apt-get install -y libvirt-daemon libvirt-daemon-system vagrant vagrant-libvirt ruby-libvirt
+          sudo systemctl enable --now libvirtd
+          sudo chmod a+rw /var/run/libvirt/libvirt-sock
+          vagrant plugin install vagrant-libvirt
+          vagrant --version
+      -
+        name: Set up vagrant
+        run: |
+          ln -sf ${{ env.VAGRANT_FILE }} Vagrantfile
+          vagrant up --no-tty
+      -
+        name: Test
+        run: |
+          vagrant ssh -- "cd /vagrant; SKIP_INTEGRATION_TESTS=1 go test -mod=vendor -coverprofile=coverage.txt -covermode=atomic ${{ env.TESTFLAGS }} ./..."
+          vagrant ssh -c "sudo cat /vagrant/coverage.txt" > coverage.txt
+      -
+        name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@v5
+        with:
+          files: ./coverage.txt
+          env_vars: RUNNER_OS
+          flags: unit,${{ matrix.os }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+        env:
+          RUNNER_OS: ${{ matrix.os }}
+
   govulncheck:
     runs-on: ubuntu-24.04
     permissions:
