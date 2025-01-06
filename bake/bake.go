@@ -9,6 +9,7 @@ import (
 	"path/filepath"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -207,8 +208,9 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 	if err != nil {
 		return nil, nil, err
 	}
-	m := map[string]*Target{}
-	n := map[string]*Group{}
+
+	targetsMap := map[string]*Target{}
+	groupsMap := map[string]*Group{}
 	for _, target := range targets {
 		ts, gs := c.ResolveGroup(target)
 		for _, tname := range ts {
@@ -217,13 +219,13 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 				return nil, nil, err
 			}
 			if t != nil {
-				m[tname] = t
+				targetsMap[tname] = t
 			}
 		}
 		for _, gname := range gs {
 			for _, group := range c.Groups {
 				if group.Name == gname {
-					n[gname] = group
+					groupsMap[gname] = group
 					break
 				}
 			}
@@ -231,25 +233,26 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 	}
 
 	for _, target := range targets {
-		if target == "default" {
+		if _, ok := groupsMap["default"]; ok && target == "default" {
 			continue
 		}
-		if _, ok := n["default"]; !ok {
-			n["default"] = &Group{Name: "default"}
+		if _, ok := groupsMap["default"]; !ok {
+			groupsMap["default"] = &Group{Name: "default"}
 		}
-		n["default"].Targets = append(n["default"].Targets, target)
+		groupsMap["default"].Targets = append(groupsMap["default"].Targets, target)
 	}
-	if g, ok := n["default"]; ok {
+	if g, ok := groupsMap["default"]; ok {
 		g.Targets = dedupSlice(g.Targets)
+		sort.Strings(g.Targets)
 	}
 
-	for name, t := range m {
-		if err := c.loadLinks(name, t, m, o, nil, ent); err != nil {
+	for name, t := range targetsMap {
+		if err := c.loadLinks(name, t, targetsMap, o, nil, ent); err != nil {
 			return nil, nil, err
 		}
 	}
 
-	return m, n, nil
+	return targetsMap, groupsMap, nil
 }
 
 func dedupSlice(s []string) []string {

@@ -948,7 +948,7 @@ target "default" {
 
 	m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
-	require.Equal(t, 0, len(g))
+	require.Equal(t, 1, len(g))
 	require.Equal(t, 1, len(m))
 	require.Equal(t, "test", *m["default"].Dockerfile)
 }
@@ -2077,6 +2077,58 @@ target "app" {
 	require.NoError(t, err)
 	require.Contains(t, m, "app")
 	require.Len(t, m["app"].Outputs, 0)
+}
+
+// https://github.com/docker/buildx/issues/2859
+func TestGroupTargetsWithDefault(t *testing.T) {
+	t.Run("OnTarget", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "default" {
+					dockerfile = "Dockerfile"
+					platforms = ["linux/amd64"]
+				}
+				target "multiarch" {
+					dockerfile = "Dockerfile"
+					platforms = ["linux/amd64","linux/arm64","linux/arm/v7","linux/arm/v6"]
+				}`),
+		}
+		ctx := context.TODO()
+		_, g, err := ReadTargets(ctx, []File{fp}, []string{"default", "multiarch"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(g))
+		require.Equal(t, 2, len(g["default"].Targets))
+		require.Equal(t, []string{"default", "multiarch"}, g["default"].Targets)
+	})
+
+	t.Run("OnGroup", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`group "default" {
+					targets = ["app", "multiarch"]
+				}
+				target "app" {
+					dockerfile = "app.Dockerfile"
+				}
+				target "foo" {
+					dockerfile = "foo.Dockerfile"
+				}
+				target "multiarch" {
+					dockerfile = "Dockerfile"
+					platforms = ["linux/amd64","linux/arm64","linux/arm/v7","linux/arm/v6"]
+				}`),
+		}
+		ctx := context.TODO()
+		_, g, err := ReadTargets(ctx, []File{fp}, []string{"default", "foo"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+
+		require.Equal(t, 1, len(g))
+		require.Equal(t, 3, len(g["default"].Targets))
+		require.Equal(t, []string{"app", "foo", "multiarch"}, g["default"].Targets)
+	})
 }
 
 func stringify[V fmt.Stringer](values []V) []string {
