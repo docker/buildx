@@ -28,12 +28,13 @@ func BuildBackendEnabled() bool {
 	return bbEnabled
 }
 
+func BuildURL(ref string) string {
+	return fmt.Sprintf("docker-desktop://dashboard/build/%s", ref)
+}
+
 func BuildDetailsOutput(refs map[string]string, term bool) string {
 	if len(refs) == 0 {
 		return ""
-	}
-	refURL := func(ref string) string {
-		return fmt.Sprintf("docker-desktop://dashboard/build/%s", ref)
 	}
 	var out bytes.Buffer
 	out.WriteString("View build details: ")
@@ -43,9 +44,10 @@ func BuildDetailsOutput(refs map[string]string, term bool) string {
 			out.WriteString(fmt.Sprintf("\n  %s: ", target))
 		}
 		if term {
-			out.WriteString(hyperlink(refURL(ref)))
+			url := BuildURL(ref)
+			out.WriteString(ANSIHyperlink(url, url))
 		} else {
-			out.WriteString(refURL(ref))
+			out.WriteString(BuildURL(ref))
 		}
 	}
 	return out.String()
@@ -57,9 +59,9 @@ func PrintBuildDetails(w io.Writer, refs map[string]string, term bool) {
 	}
 }
 
-func hyperlink(url string) string {
+func ANSIHyperlink(url, text string) string {
 	// create an escape sequence using the OSC 8 format: https://gist.github.com/egmontkob/eb114294efbcd5adb1944c9f3cb5feda
-	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, url)
+	return fmt.Sprintf("\033]8;;%s\033\\%s\033]8;;\033\\", url, text)
 }
 
 type ErrorWithBuildRef struct {
