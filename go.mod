@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/aws/aws-sdk-go-v2/config v1.26.6
-	github.com/compose-spec/compose-go/v2 v2.4.6
+	github.com/compose-spec/compose-go/v2 v2.4.7
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd v1.7.24
 	github.com/containerd/continuity v0.4.5

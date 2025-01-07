@@ -24,7 +24,10 @@ import (
 )
 
 func (r *relativePathsResolver) maybeUnixPath(a any) (any, error) {
-	p := a.(string)
+	p, ok := a.(string)
+	if !ok {
+		return a, nil
+	}
 	p = ExpandUser(p)
 	// Check if source is an absolute path (either Unix or Windows), to
 	// handle a Windows client with a Unix daemon or vice-versa.
