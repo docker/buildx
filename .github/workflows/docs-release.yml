@@ -56,7 +56,7 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Generate yaml
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v6
         with:
           source: ${{ github.server_url }}/${{ github.repository }}.git#${{ env.RELEASE_NAME }}
           targets: update-docs
