@@ -29,7 +29,10 @@ func TestCsvToMap(t *testing.T) {
 }
 
 func TestParseBuildkitdFlags(t *testing.T) {
-	buildkitdConf := `
+	dirConf := t.TempDir()
+
+	buildkitdConfPath := path.Join(dirConf, "buildkitd-conf.toml")
+	require.NoError(t, os.WriteFile(buildkitdConfPath, []byte(`
 # debug enables additional debug logging
 debug = true
 # insecure-entitlements allows insecure entitlements, disabled by default.
@@ -37,10 +40,18 @@ insecure-entitlements = [ "network.host", "security.insecure" ]
 [log]
   # log formatter: json or text
   format = "text"
-`
-	dirConf := t.TempDir()
-	buildkitdConfPath := path.Join(dirConf, "buildkitd-conf.toml")
-	require.NoError(t, os.WriteFile(buildkitdConfPath, []byte(buildkitdConf), 0644))
+`), 0644))
+
+	buildkitdConfBrokenPath := path.Join(dirConf, "buildkitd-conf-broken.toml")
+	require.NoError(t, os.WriteFile(buildkitdConfBrokenPath, []byte(`
+[worker.oci]
+  gc = "maybe"
+`), 0644))
+
+	buildkitdConfUnknownFieldPath := path.Join(dirConf, "buildkitd-unknown-field.toml")
+	require.NoError(t, os.WriteFile(buildkitdConfUnknownFieldPath, []byte(`
+foo = "bar"
+`), 0644))
 
 	testCases := []struct {
 		name                string
@@ -156,6 +167,26 @@ insecure-entitlements = [ "network.host", "security.insecure" ]
 			"",
 			nil,
 			true,
+		},
+		{
+			"error parsing buildkit config",
+			"",
+			"docker-container",
+			nil,
+			buildkitdConfBrokenPath,
+			nil,
+			true,
+		},
+		{
+			"unknown field in buildkit config",
+			"",
+			"docker-container",
+			nil,
+			buildkitdConfUnknownFieldPath,
+			[]string{
+				"--allow-insecure-entitlement=network.host",
+			},
+			false,
 		},
 	}
 	for _, tt := range testCases {
