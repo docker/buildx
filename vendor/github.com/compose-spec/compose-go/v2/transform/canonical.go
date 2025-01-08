@@ -30,6 +30,7 @@ func init() {
 	transformers["services.*.build.additional_contexts"] = transformKeyValue
 	transformers["services.*.depends_on"] = transformDependsOn
 	transformers["services.*.env_file"] = transformEnvFile
+	transformers["services.*.label_file"] = transformStringOrList
 	transformers["services.*.extends"] = transformExtends
 	transformers["services.*.networks"] = transformServiceNetworks
 	transformers["services.*.volumes.*"] = transformVolumeMount
