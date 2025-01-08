@@ -126,8 +126,9 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Build test image
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v6
         with:
+          source: .
           targets: integration-test
           set: |
             *.output=type=docker,name=${{ env.TEST_IMAGE_ID }}
@@ -300,9 +301,6 @@ jobs:
       security-events: write
     steps:
       -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
         with:
@@ -311,7 +309,7 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Run
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v6
         with:
           targets: govulncheck
         env:
@@ -392,9 +390,6 @@ jobs:
     if: ${{ github.event_name != 'pull_request' && github.repository == 'docker/buildx' }}
     steps:
       -
-        name: Checkout
-        uses: actions/checkout@v4
-      -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       -
@@ -425,11 +420,11 @@ jobs:
           password: ${{ secrets.DOCKERPUBLICBOT_WRITE_PAT }}
       -
         name: Build and push image
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v6
         with:
           files: |
             ./docker-bake.hcl
-            ${{ steps.meta.outputs.bake-file }}
+            cwd://${{ steps.meta.outputs.bake-file }}
           targets: image-cross
           push: ${{ github.event_name != 'pull_request' }}
           sbom: true
@@ -448,9 +443,6 @@ jobs:
     needs:
       - bin-image
     steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v4
       -
         name: Login to DockerHub
         uses: docker/login-action@v3
