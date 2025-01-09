@@ -125,6 +125,10 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	var nodes []builder.Node
 	var progressConsoleDesc, progressTextDesc string
 
+	if in.print && in.list != "" {
+		return errors.New("--print and --list are mutually exclusive")
+	}
+
 	// instance only needed for reading remote bake files or building
 	var driverType string
 	if url != "" || !(in.print || in.list != "") {
