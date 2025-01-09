@@ -25,7 +25,6 @@ import (
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
-	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -42,20 +41,25 @@ import (
 )
 
 type bakeOptions struct {
-	files       []string
-	overrides   []string
-	printOnly   bool
-	listTargets bool
-	listVars    bool
-	sbom        string
-	provenance  string
-	allow       []string
+	files     []string
+	overrides []string
+
+	sbom       string
+	provenance string
+	allow      []string
 
 	builder      string
 	metadataFile string
 	exportPush   bool
 	exportLoad   bool
 	callFunc     string
+
+	print bool
+	list  string
+
+	// TODO: remove deprecated flags
+	listTargets bool
+	listVars    bool
 }
 
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
@@ -123,7 +127,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 
 	// instance only needed for reading remote bake files or building
 	var driverType string
-	if url != "" || !(in.printOnly || in.listTargets || in.listVars) {
+	if url != "" || !(in.print || in.list != "") {
 		b, err := builder.New(dockerCli,
 			builder.WithName(in.builder),
 			builder.WithContextPathHash(contextPathHash),
@@ -184,7 +188,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		"BAKE_LOCAL_PLATFORM": platforms.Format(platforms.DefaultSpec()),
 	}
 
-	if in.listTargets || in.listVars {
+	if in.list != "" {
 		cfg, pm, err := bake.ParseFiles(files, defaults)
 		if err != nil {
 			return err
@@ -192,10 +196,13 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		if err = printer.Wait(); err != nil {
 			return err
 		}
-		if in.listTargets {
+		switch in.list {
+		case "targets":
 			return printTargetList(dockerCli.Out(), cfg)
-		} else if in.listVars {
+		case "variables":
 			return printVars(dockerCli.Out(), pm.AllVariables)
+		default:
+			return errors.Errorf("invalid list mode %q", in.list)
 		}
 	}
 
@@ -231,7 +238,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		Target: tgts,
 	}
 
-	if in.printOnly {
+	if in.print {
 		if err = printer.Wait(); err != nil {
 			return err
 		}
@@ -427,6 +434,13 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			if !cmd.Flags().Lookup("pull").Changed {
 				cFlags.pull = nil
 			}
+			if options.list == "" {
+				if options.listTargets {
+					options.list = "targets"
+				} else if options.listVars {
+					options.list = "variables"
+				}
+			}
 			options.builder = rootOpts.builder
 			options.metadataFile = cFlags.metadataFile
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
@@ -439,7 +453,6 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
 	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
-	flags.BoolVar(&options.printOnly, "print", false, "Print the options without building")
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
@@ -450,13 +463,16 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
 
-	flags.BoolVar(&options.listTargets, "list-targets", false, "List available targets")
-	cobrautil.MarkFlagsExperimental(flags, "list-targets")
-	flags.MarkHidden("list-targets")
+	flags.BoolVar(&options.print, "print", false, "Print the options without building")
+	flags.StringVar(&options.list, "list", "", "List targets or variables")
 
+	// TODO: remove deprecated flags
+	flags.BoolVar(&options.listTargets, "list-targets", false, "List available targets")
+	flags.MarkHidden("list-targets")
+	flags.MarkDeprecated("list-targets", "list-targets is deprecated, use list=targets instead")
 	flags.BoolVar(&options.listVars, "list-variables", false, "List defined variables")
-	cobrautil.MarkFlagsExperimental(flags, "list-variables")
 	flags.MarkHidden("list-variables")
+	flags.MarkDeprecated("list-variables", "list-variables is deprecated, use list=variables instead")
 
 	commonBuildFlags(&cFlags, flags)
 

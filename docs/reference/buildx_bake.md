@@ -21,6 +21,7 @@ Build from a file
 | [`--check`](#check)                 | `bool`        |         | Shorthand for `--call=check`                                                                        |
 | `-D`, `--debug`                     | `bool`        |         | Enable debug logging                                                                                |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                               |
+| `--list`                            | `string`      |         | List targets or variables                                                                           |
 | `--load`                            | `bool`        |         | Shorthand for `--set=*.output=type=docker`                                                          |
 | [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                               |
 | [`--no-cache`](#no-cache)           | `bool`        |         | Do not use cache when building the image                                                            |
