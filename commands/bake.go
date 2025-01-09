@@ -37,6 +37,7 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"github.com/tonistiigi/go-csvvalue"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -200,13 +201,15 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		if err = printer.Wait(); err != nil {
 			return err
 		}
-		switch in.list {
+		list, err := parseList(in.list)
+		if err != nil {
+			return err
+		}
+		switch list.Type {
 		case "targets":
-			return printTargetList(dockerCli.Out(), cfg)
+			return printTargetList(dockerCli.Out(), list.Format, cfg)
 		case "variables":
-			return printVars(dockerCli.Out(), pm.AllVariables)
-		default:
-			return errors.Errorf("invalid list mode %q", in.list)
+			return printVars(dockerCli.Out(), list.Format, pm.AllVariables)
 		}
 	}
 
@@ -577,10 +580,70 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 	return
 }
 
-func printVars(w io.Writer, vars []*hclparser.Variable) error {
+type listEntry struct {
+	Type   string
+	Format string
+}
+
+func parseList(input string) (listEntry, error) {
+	res := listEntry{}
+
+	fields, err := csvvalue.Fields(input, nil)
+	if err != nil {
+		return res, err
+	}
+
+	if len(fields) == 1 && fields[0] == input && !strings.HasPrefix(input, "type=") {
+		res.Type = input
+	}
+
+	if res.Type == "" {
+		for _, field := range fields {
+			key, value, ok := strings.Cut(field, "=")
+			if !ok {
+				return res, errors.Errorf("invalid value %s", field)
+			}
+			key = strings.TrimSpace(strings.ToLower(key))
+			switch key {
+			case "type":
+				res.Type = value
+			case "format":
+				res.Format = value
+			default:
+				return res, errors.Errorf("unexpected key '%s' in '%s'", key, field)
+			}
+		}
+	}
+	if res.Format == "" {
+		res.Format = "table"
+	}
+
+	switch res.Type {
+	case "targets", "variables":
+	default:
+		return res, errors.Errorf("invalid list type %q", res.Type)
+	}
+
+	switch res.Format {
+	case "table", "json":
+	default:
+		return res, errors.Errorf("invalid list format %q", res.Format)
+	}
+
+	return res, nil
+}
+
+func printVars(w io.Writer, format string, vars []*hclparser.Variable) error {
 	slices.SortFunc(vars, func(a, b *hclparser.Variable) int {
 		return cmp.Compare(a.Name, b.Name)
 	})
+
+	if format == "json" {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(vars)
+	}
+
 	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
 	defer tw.Flush()
 
@@ -598,12 +661,7 @@ func printVars(w io.Writer, vars []*hclparser.Variable) error {
 	return nil
 }
 
-func printTargetList(w io.Writer, cfg *bake.Config) error {
-	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
-	defer tw.Flush()
-
-	tw.Write([]byte("TARGET\tDESCRIPTION\n"))
-
+func printTargetList(w io.Writer, format string, cfg *bake.Config) error {
 	type targetOrGroup struct {
 		name   string
 		target *bake.Target
@@ -622,6 +680,20 @@ func printTargetList(w io.Writer, cfg *bake.Config) error {
 		return cmp.Compare(a.name, b.name)
 	})
 
+	var tw *tabwriter.Writer
+	if format == "table" {
+		tw = tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
+		defer tw.Flush()
+		tw.Write([]byte("TARGET\tDESCRIPTION\n"))
+	}
+
+	type targetList struct {
+		Name        string `json:"name"`
+		Description string `json:"description,omitempty"`
+		Group       bool   `json:"group,omitempty"`
+	}
+	var targetsList []targetList
+
 	for _, tgt := range list {
 		if strings.HasPrefix(tgt.name, "_") {
 			// convention for a private target
@@ -630,9 +702,9 @@ func printTargetList(w io.Writer, cfg *bake.Config) error {
 		var descr string
 		if tgt.target != nil {
 			descr = tgt.target.Description
+			targetsList = append(targetsList, targetList{Name: tgt.name, Description: descr})
 		} else if tgt.group != nil {
 			descr = tgt.group.Description
-
 			if len(tgt.group.Targets) > 0 {
 				slices.Sort(tgt.group.Targets)
 				names := strings.Join(tgt.group.Targets, ", ")
@@ -642,8 +714,17 @@ func printTargetList(w io.Writer, cfg *bake.Config) error {
 					descr = names
 				}
 			}
+			targetsList = append(targetsList, targetList{Name: tgt.name, Description: descr, Group: true})
 		}
-		fmt.Fprintf(tw, "%s\t%s\n", tgt.name, descr)
+		if format == "table" {
+			fmt.Fprintf(tw, "%s\t%s\n", tgt.name, descr)
+		}
+	}
+
+	if format == "json" {
+		enc := json.NewEncoder(w)
+		enc.SetIndent("", "  ")
+		return enc.Encode(targetsList)
 	}
 
 	return nil

@@ -579,9 +579,9 @@ func (p *parser) validateVariables(vars map[string]*variable, ectx *hcl.EvalCont
 }
 
 type Variable struct {
-	Name        string
-	Description string
-	Value       *string
+	Name        string  `json:"name"`
+	Description string  `json:"description,omitempty"`
+	Value       *string `json:"value,omitempty"`
 }
 
 type ParseMeta struct {
