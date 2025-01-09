@@ -145,7 +145,9 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 			roPaths[p] = struct{}{}
 		}
 		if len(ssh.Paths) == 0 {
-			expected.SSH = true
+			if !c.SSH {
+				expected.SSH = true
+			}
 		}
 	}
 

@@ -2,7 +2,11 @@ package tests
 
 import (
 	"bytes"
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -56,6 +60,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeDefinitionExistingOutsideNoParallel,
 	testBakeDefinitionSymlinkOutsideNoParallel,
 	testBakeDefinitionSymlinkOutsideGrantedNoParallel,
+	testBakeSSHPathNoParallel,
+	testBakeSSHDefaultNoParallel,
 	testBakeShmSize,
 	testBakeUlimits,
 	testBakeMetadataProvenance,
@@ -1091,6 +1097,95 @@ target "default" {
 	}
 }
 
+func testBakeSSHPathNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY Dockerfile /foo
+	`)
+			keyDir := t.TempDir()
+			err := writeTempPrivateKey(filepath.Join(keyDir, "id_rsa"))
+			require.NoError(t, err)
+			bakefile := []byte(fmt.Sprintf(`
+target "default" {
+	ssh = ["key=%s"]
+}
+`, filepath.Join(keyDir, "id_rsa")))
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			)
+
+			// not allowed
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain"))
+			out, err := cmd.CombinedOutput()
+			if ent {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), "ERROR: additional privileges requested")
+				require.Contains(t, string(out), "Read access to path")
+				require.Contains(t, string(out), "/id_rsa")
+			} else {
+				require.NoError(t, err, string(out))
+			}
+
+			// directory allowed
+			cmd = buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--allow", "fs.read="+keyDir))
+			out, err = cmd.CombinedOutput()
+			require.NoError(t, err, string(out))
+
+			// file allowed
+			cmd = buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--allow", "fs.read="+filepath.Join(keyDir, "id_rsa")))
+			out, err = cmd.CombinedOutput()
+			require.NoError(t, err, string(out))
+		})
+	}
+}
+
+func testBakeSSHDefaultNoParallel(t *testing.T, sb integration.Sandbox) {
+	for _, ent := range []bool{true, false} {
+		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
+			t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", strconv.FormatBool(ent))
+			dockerfile := []byte(`
+FROM scratch
+COPY Dockerfile /foo
+	`)
+			keyDir := t.TempDir()
+			// not a socket but key behaves the same and doesn't create parse error
+			err := writeTempPrivateKey(filepath.Join(keyDir, "ssh-agent.sock"))
+			require.NoError(t, err)
+			t.Setenv("SSH_AUTH_SOCK", filepath.Join(keyDir, "ssh-agent.sock"))
+			bakefile := []byte(`
+target "default" {
+	ssh = ["default"]
+}
+`)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			)
+
+			// not allowed
+			cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain"))
+			out, err := cmd.CombinedOutput()
+			if ent {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), "ERROR: additional privileges requested")
+				require.Contains(t, string(out), "Forwarding default SSH agent socket")
+			} else {
+				require.NoError(t, err, string(out))
+			}
+
+			cmd = buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=plain", "--allow=ssh"))
+			out, err = cmd.CombinedOutput()
+			require.NoError(t, err, string(out))
+		})
+	}
+}
+
 func testBakeUlimits(t *testing.T, sb integration.Sandbox) {
 	dockerfile := []byte(`
 FROM busybox AS build
@@ -1873,4 +1968,16 @@ target "third" {
 		require.Contains(t, stdout.String(), dockerfilePathSecond+":3")
 		require.Contains(t, stdout.String(), dockerfilePathThird+":3")
 	})
+}
+
+func writeTempPrivateKey(fp string) error {
+	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return err
+	}
+	privateKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(privateKey),
+	})
+	return os.WriteFile(fp, privateKeyPEM, 0600)
 }
