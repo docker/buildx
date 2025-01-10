@@ -1179,6 +1179,16 @@ func updateContext(t *build.Inputs, inp *Input) {
 	t.ContextState = &st
 }
 
+func isRemoteContext(t build.Inputs, inp *Input) bool {
+	if build.IsRemoteURL(t.ContextPath) {
+		return true
+	}
+	if inp != nil && build.IsRemoteURL(inp.URL) && !strings.HasPrefix(t.ContextPath, "cwd://") {
+		return true
+	}
+	return false
+}
+
 func collectLocalPaths(t build.Inputs) []string {
 	var out []string
 	if t.ContextState == nil {
@@ -1338,7 +1348,23 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	bo.Platforms = platforms
 
-	bo.SecretSpecs = t.Secrets.ToPB()
+	secrets := t.Secrets
+	if isRemoteContext(bi, inp) {
+		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_TOKEN"); ok {
+			secrets = append(secrets, &buildflags.Secret{
+				ID:  llb.GitAuthTokenKey,
+				Env: "BUILDX_BAKE_GIT_AUTH_TOKEN",
+			})
+		}
+		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_HEADER"); ok {
+			secrets = append(secrets, &buildflags.Secret{
+				ID:  llb.GitAuthHeaderKey,
+				Env: "BUILDX_BAKE_GIT_AUTH_HEADER",
+			})
+		}
+	}
+	secrets = secrets.Normalize()
+	bo.SecretSpecs = secrets.ToPB()
 	secretAttachment, err := controllerapi.CreateSecrets(bo.SecretSpecs)
 	if err != nil {
 		return nil, err
