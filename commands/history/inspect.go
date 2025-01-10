@@ -333,6 +333,10 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 		ValidArgsFunction: completion.Disable,
 	}
 
+	cmd.AddCommand(
+		attachmentCmd(dockerCli, rootOpts),
+	)
+
 	// flags := cmd.Flags()
 
 	return cmd
