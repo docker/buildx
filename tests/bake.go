@@ -1599,7 +1599,7 @@ target "abc" {
 	out, err := bakeCmd(
 		sb,
 		withDir(dir),
-		withArgs("--list-targets"),
+		withArgs("--list=targets"),
 	)
 	require.NoError(t, err, out)
 
@@ -1628,7 +1628,7 @@ target "default" {
 	out, err := bakeCmd(
 		sb,
 		withDir(dir),
-		withArgs("--list-variables"),
+		withArgs("--list=variables"),
 	)
 	require.NoError(t, err, out)
 
