@@ -21,7 +21,7 @@ Build from a file
 | [`--check`](#check)                 | `bool`        |         | Shorthand for `--call=check`                                                                        |
 | `-D`, `--debug`                     | `bool`        |         | Enable debug logging                                                                                |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                               |
-| `--list`                            | `string`      |         | List targets or variables                                                                           |
+| [`--list`](#list)                   | `string`      |         | List targets or variables                                                                           |
 | `--load`                            | `bool`        |         | Shorthand for `--set=*.output=type=docker`                                                          |
 | [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                               |
 | [`--no-cache`](#no-cache)           | `bool`        |         | Do not use cache when building the image                                                            |
@@ -101,6 +101,42 @@ $ docker buildx bake -f docker-bake.dev.hcl db webapp-release
 
 See the [Bake file reference](https://docs.docker.com/build/bake/reference/)
 for more details.
+
+### <a name="list"></a> List targets and variables (--list)
+
+The `--list` flag displays all available targets or variables in the Bake
+configuration, along with a description (if set using the `description`
+property in the Bake file).
+
+To list all targets:
+
+```console {title="List targets"}
+$ docker buildx bake --list=targets
+TARGET              DESCRIPTION
+binaries
+default             binaries
+update-docs
+validate
+validate-golangci   Validate .golangci.yml schema (does not run Go linter)
+```
+
+To list variables:
+
+```console
+$ docker buildx bake --list=variables
+VARIABLE      VALUE                DESCRIPTION
+REGISTRY      docker.io/username   Registry and namespace
+IMAGE_NAME    my-app               Image name
+GO_VERSION    <null>
+```
+
+By default, the output of `docker buildx bake --list` is presented in a table
+format. Alternatively, you can use a long-form CSV syntax and specify a
+`format` attribute to output the list in JSON.
+
+```console
+$ docker buildx bake --list=type=targets,format=json
+```
 
 ### <a name="metadata-file"></a> Write build results metadata to a file (--metadata-file)
 
