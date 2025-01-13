@@ -1,6 +1,7 @@
 package bake
 
 import (
+	"bytes"
 	"context"
 	"encoding"
 	"io"
@@ -638,10 +639,6 @@ func (c Config) ResolveTarget(name string, overrides map[string]map[string]Overr
 		return nil, err
 	}
 	t.Inherits = nil
-	if t.Context == nil {
-		s := "."
-		t.Context = &s
-	}
 	if t.Dockerfile == nil {
 		s := "Dockerfile"
 		t.Dockerfile = &s
@@ -702,7 +699,7 @@ type Target struct {
 
 	Annotations      []string                `json:"annotations,omitempty" hcl:"annotations,optional" cty:"annotations"`
 	Attest           buildflags.Attests      `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
-	Context          *string                 `json:"context,omitempty" hcl:"context,optional" cty:"context"`
+	Context          **string                `json:"context" hcl:"context,optional" cty:"context"`
 	Contexts         map[string]string       `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
 	Dockerfile       *string                 `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
 	DockerfileInline *string                 `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
@@ -761,9 +758,21 @@ func (t *Target) normalize() {
 			delete(t.Contexts, k)
 		}
 	}
+	if t.Context == nil {
+		s := t.ContextPath()
+		t.Context = &s
+	}
 	if len(t.Contexts) == 0 {
 		t.Contexts = nil
 	}
+}
+
+func (t *Target) ContextPath() *string {
+	if t.Context == nil {
+		p := "."
+		return &p
+	}
+	return (*string)(*t.Context)
 }
 
 func (t *Target) Merge(t2 *Target) {
@@ -866,7 +875,8 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 		keys := strings.SplitN(key, ".", 2)
 		switch keys[0] {
 		case "context":
-			t.Context = &value
+			ptr := &value
+			t.Context = &ptr
 		case "dockerfile":
 			t.Dockerfile = &value
 		case "args":
@@ -1210,37 +1220,18 @@ func isLocalPath(p string) (string, bool) {
 }
 
 func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
-	if v := t.Context; v != nil && *v == "-" {
+	if v := t.ContextPath(); v != nil && *v == "-" {
 		return nil, errors.Errorf("context from stdin not allowed in bake")
 	}
 	if v := t.Dockerfile; v != nil && *v == "-" {
 		return nil, errors.Errorf("dockerfile from stdin not allowed in bake")
 	}
 
-	contextPath := "."
-	if t.Context != nil {
-		contextPath = *t.Context
-	}
-	if !strings.HasPrefix(contextPath, "cwd://") && !build.IsRemoteURL(contextPath) {
-		contextPath = path.Clean(contextPath)
-	}
-	dockerfilePath := "Dockerfile"
-	if t.Dockerfile != nil {
-		dockerfilePath = *t.Dockerfile
-	}
-	if !strings.HasPrefix(dockerfilePath, "cwd://") {
-		dockerfilePath = path.Clean(dockerfilePath)
-	}
+	bi := build.Inputs{}
 
-	bi := build.Inputs{
-		ContextPath:    contextPath,
-		DockerfilePath: dockerfilePath,
-		NamedContexts:  toNamedContexts(t.Contexts),
-	}
-	if t.DockerfileInline != nil {
-		bi.DockerfileInline = *t.DockerfileInline
-	}
+	setBuildOptContexts(&bi, t)
 	updateContext(&bi, inp)
+
 	if strings.HasPrefix(bi.DockerfilePath, "cwd://") {
 		// If Dockerfile is local for a remote invocation, we first check if
 		// it's not outside the working directory and then resolve it to an
@@ -1273,7 +1264,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if strings.HasPrefix(bi.ContextPath, "cwd://") {
 		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
 	}
-	if !build.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && !path.IsAbs(bi.DockerfilePath) {
+	if !build.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && bi.DockerfilePath != "" && !path.IsAbs(bi.DockerfilePath) {
 		bi.DockerfilePath = path.Join(bi.ContextPath, bi.DockerfilePath)
 	}
 	for k, v := range bi.NamedContexts {
@@ -1281,8 +1272,6 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
 		}
 	}
-
-	t.Context = &bi.ContextPath
 
 	args := map[string]string{}
 	for k, v := range t.Args {
@@ -1408,6 +1397,43 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 
 	return bo, nil
+}
+
+func setBuildOptContexts(bi *build.Inputs, t *Target) error {
+	dockerfilePath := "Dockerfile"
+	if t.Dockerfile != nil {
+		dockerfilePath = *t.Dockerfile
+	}
+
+	if !strings.HasPrefix(dockerfilePath, "cwd://") {
+		dockerfilePath = path.Clean(dockerfilePath)
+	}
+	bi.DockerfilePath = dockerfilePath
+
+	if contextPath := t.ContextPath(); contextPath != nil {
+		bi.ContextPath = *contextPath
+		if !strings.HasPrefix(bi.ContextPath, "cwd://") && !build.IsRemoteURL(bi.ContextPath) {
+			bi.ContextPath = path.Clean(bi.ContextPath)
+		}
+
+		if t.DockerfileInline != nil {
+			bi.DockerfileInline = *t.DockerfileInline
+		}
+	} else {
+		bi.ContextPath = "-"
+		if t.DockerfileInline != nil {
+			bi.InStream = build.NewSyncMultiReader(strings.NewReader(*t.DockerfileInline))
+		} else {
+			dockerfile, err := os.ReadFile(bi.DockerfilePath)
+			if err != nil {
+				return err
+			}
+			bi.DockerfilePath = ""
+			bi.InStream = build.NewSyncMultiReader(bytes.NewReader(dockerfile))
+		}
+	}
+	bi.NamedContexts = toNamedContexts(t.Contexts)
+	return nil
 }
 
 func defaultTarget() *Target {

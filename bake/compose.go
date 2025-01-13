@@ -72,10 +72,10 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				return nil, errors.Wrapf(err, "invalid service name %q", targetName)
 			}
 
-			var contextPathP *string
+			var contextPathP **string
 			if s.Build.Context != "" {
-				contextPath := s.Build.Context
-				contextPathP = &contextPath
+				ptr := &s.Build.Context
+				contextPathP = &ptr
 			}
 			var dockerfilePathP *string
 			if s.Build.Dockerfile != "" {
