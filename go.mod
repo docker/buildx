@@ -44,7 +44,7 @@ require (
 	github.com/stretchr/testify v1.9.0
 	github.com/tonistiigi/fsutil v0.0.0-20241121093142-31cf1f437184
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
-	github.com/zclconf/go-cty v1.14.4
+	github.com/zclconf/go-cty v1.16.0
 	go.opentelemetry.io/otel v1.28.0
 	go.opentelemetry.io/otel/metric v1.28.0
 	go.opentelemetry.io/otel/sdk v1.28.0
