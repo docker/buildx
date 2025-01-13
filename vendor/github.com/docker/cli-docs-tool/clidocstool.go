@@ -65,7 +65,7 @@ func New(opts Options) (*Client, error) {
 	} else {
 		c.target = opts.TargetDir
 	}
-	if err := os.MkdirAll(c.target, 0755); err != nil {
+	if err := os.MkdirAll(c.target, 0o755); err != nil {
 		return nil, err
 	}
 	return c, nil

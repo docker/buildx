@@ -77,7 +77,7 @@ type cmdDoc struct {
 // subcmds, `sub` and `sub-third`, and `sub` has a subcommand called `third`
 // it is undefined which help output will be in the file `cmd-sub-third.1`.
 func (c *Client) GenYamlTree(cmd *cobra.Command) error {
-	emptyStr := func(s string) string { return "" }
+	emptyStr := func(string) string { return "" }
 	if err := c.loadLongDescription(cmd, "yaml"); err != nil {
 		return err
 	}
