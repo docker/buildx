@@ -177,3 +177,75 @@ jobs:
           DRIVER_OPT: ${{ matrix.driver-opt }}
           ENDPOINT: ${{ matrix.endpoint }}
           PLATFORMS: ${{ matrix.platforms }}
+
+  bake:
+    runs-on: ubuntu-24.04
+    needs:
+      - build
+    env:
+      DOCKER_BUILD_CHECKS_ANNOTATIONS: false
+      DOCKER_BUILD_SUMMARY: false
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          -
+            # https://github.com/docker/bake-action/blob/v5.11.0/.github/workflows/ci.yml#L227-L237
+            source: "https://github.com/docker/bake-action.git#v5.11.0:test/go"
+            overrides: |
+              *.output=/tmp/bake-build
+          -
+            # https://github.com/tonistiigi/xx/blob/2fc85604e7280bfb3f626569bd4c5413c43eb4af/.github/workflows/ld.yml#L90-L98
+            source: "https://github.com/tonistiigi/xx.git#2fc85604e7280bfb3f626569bd4c5413c43eb4af"
+            targets: |
+              ld64-static-tgz
+            overrides: |
+              ld64-static-tgz.output=type=local,dest=./dist
+              ld64-static-tgz.platform=linux/amd64
+              ld64-static-tgz.cache-from=type=gha,scope=xx-ld64-static-tgz
+              ld64-static-tgz.cache-to=type=gha,scope=xx-ld64-static-tgz
+          -
+            # https://github.com/moby/buildkit-bench/blob/54c194011c4fc99a94aa75d4b3d4f3ffd4c4ce27/docker-bake.hcl#L154-L160
+            source: "https://github.com/moby/buildkit-bench.git#54c194011c4fc99a94aa75d4b3d4f3ffd4c4ce27"
+            targets: |
+              tests-buildkit
+            envs: |
+              BUILDKIT_REFS=v0.18.2
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
+        name: Environment variables
+        if: matrix.envs != ''
+        run: |
+          for l in "${{ matrix.envs }}"; do
+            echo "${l?}" >> $GITHUB_ENV
+          done
+      -
+        name: Set up QEMU
+        uses: docker/setup-qemu-action@v3
+      -
+        name: Install buildx
+        uses: actions/download-artifact@v4
+        with:
+          name: binary
+          path: /home/runner/.docker/cli-plugins
+      -
+        name: Fix perms and check
+        run: |
+          chmod +x /home/runner/.docker/cli-plugins/docker-buildx
+          docker buildx version
+      -
+        name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver-opts: image=${{ env.SETUP_BUILDKIT_IMAGE }}
+          buildkitd-flags: --debug
+      -
+        name: Build
+        uses: docker/bake-action@v5
+        with:
+          source: ${{ matrix.source }}
+          targets: ${{ matrix.targets }}
+          set: ${{ matrix.overrides }}
