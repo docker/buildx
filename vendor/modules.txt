@@ -414,7 +414,7 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-cleanhttp v0.5.2
 ## explicit; go 1.13
 github.com/hashicorp/go-cleanhttp
-# github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
+# github.com/hashicorp/go-cty-funcs v0.0.0-20241120183456-c51673e0b3dd
 ## explicit; go 1.14
 github.com/hashicorp/go-cty-funcs/cidr
 github.com/hashicorp/go-cty-funcs/crypto

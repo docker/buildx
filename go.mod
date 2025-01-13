@@ -24,7 +24,7 @@ require (
 	github.com/gofrs/flock v0.12.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
+	github.com/hashicorp/go-cty-funcs v0.0.0-20241120183456-c51673e0b3dd
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/in-toto/in-toto-golang v0.5.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
