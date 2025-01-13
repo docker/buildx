@@ -12,6 +12,12 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+target "_common" {
+  args = {
+    BUILDKIT_CONTEXT_KEEP_GIT_DIR = 1
+  }
+}
+
 group "default" {
   targets = ["test"]
 }
@@ -21,31 +27,37 @@ group "validate" {
 }
 
 target "lint" {
+  inherits = ["_common"]
   target = "lint"
   output = ["type=cacheonly"]
 }
 
 target "vendor-validate" {
+  inherits = ["_common"]
   target = "vendor-validate"
   output = ["type=cacheonly"]
 }
 
 target "vendor-update" {
+  inherits = ["_common"]
   target = "vendor-update"
   output = ["."]
 }
 
 target "test" {
+  inherits = ["_common"]
   target = "test-coverage"
   output = ["."]
 }
 
 target "license-validate" {
+  inherits = ["_common"]
   target = "license-validate"
   output = ["type=cacheonly"]
 }
 
 target "license-update" {
+  inherits = ["_common"]
   target = "license-update"
   output = ["."]
 }

@@ -94,7 +94,7 @@ func (c *Client) GenMarkdownTree(cmd *cobra.Command) error {
 		}); err != nil {
 			return err
 		}
-		if err = os.WriteFile(targetPath, icBuf.Bytes(), 0644); err != nil {
+		if err = os.WriteFile(targetPath, icBuf.Bytes(), 0o644); err != nil {
 			return err
 		}
 	} else if err := copyFile(sourcePath, targetPath); err != nil {
