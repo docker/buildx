@@ -414,7 +414,7 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-cleanhttp v0.5.2
 ## explicit; go 1.13
 github.com/hashicorp/go-cleanhttp
-# github.com/hashicorp/go-cty-funcs v0.0.0-20230405223818-a090f58aa992
+# github.com/hashicorp/go-cty-funcs v0.0.0-20241120183456-c51673e0b3dd
 ## explicit; go 1.14
 github.com/hashicorp/go-cty-funcs/cidr
 github.com/hashicorp/go-cty-funcs/crypto
@@ -423,7 +423,7 @@ github.com/hashicorp/go-cty-funcs/uuid
 # github.com/hashicorp/go-multierror v1.1.1
 ## explicit; go 1.13
 github.com/hashicorp/go-multierror
-# github.com/hashicorp/hcl/v2 v2.20.1
+# github.com/hashicorp/hcl/v2 v2.23.0
 ## explicit; go 1.18
 github.com/hashicorp/hcl/v2
 github.com/hashicorp/hcl/v2/ext/customdecode
@@ -738,7 +738,7 @@ github.com/xeipuuv/gojsonreference
 # github.com/xeipuuv/gojsonschema v1.2.0
 ## explicit
 github.com/xeipuuv/gojsonschema
-# github.com/zclconf/go-cty v1.14.4
+# github.com/zclconf/go-cty v1.16.0
 ## explicit; go 1.18
 github.com/zclconf/go-cty/cty
 github.com/zclconf/go-cty/cty/convert
