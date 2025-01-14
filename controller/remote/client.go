@@ -6,8 +6,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/containerd/containerd/defaults"
-	"github.com/containerd/containerd/pkg/dialer"
+	"github.com/containerd/containerd/v2/defaults"
+	"github.com/containerd/containerd/v2/pkg/dialer"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/progress"
