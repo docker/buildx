@@ -33,6 +33,9 @@ target "webapp" {
 	args = {
 		VAR_BOTH = "webapp"
 	}
+	secret = [
+		"id=FOO,env=FOO"
+	]
 	inherits = ["webDEP"]
 }`),
 	}
@@ -148,6 +151,15 @@ target "webapp" {
 		require.Equal(t, false, *m["webapp"].Pull)
 		require.Equal(t, 1, len(g))
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
+	})
+
+	t.Run("SecretsOverride", func(t *testing.T) {
+		t.Setenv("FOO", "foo")
+		t.Setenv("BAR", "bar")
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secrets=id=BAR,env=BAR"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].ID)
 	})
 
 	t.Run("PatternOverride", func(t *testing.T) {
