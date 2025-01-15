@@ -244,7 +244,7 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Build
-        uses: docker/bake-action@v5
+        uses: docker/bake-action@v6
         with:
           source: ${{ matrix.source }}
           targets: ${{ matrix.targets }}
