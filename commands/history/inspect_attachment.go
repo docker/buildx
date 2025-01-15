@@ -5,7 +5,7 @@ import (
 	"io"
 	"slices"
 
-	"github.com/containerd/containerd/content/proxy"
+	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
