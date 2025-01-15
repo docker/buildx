@@ -8,7 +8,7 @@ import (
 	"runtime"
 	"time"
 
-	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/containerd/v2/core/remotes/docker"
 	"github.com/moby/buildkit/util/tracing"
 	"github.com/pkg/errors"
 )

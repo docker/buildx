@@ -20,9 +20,6 @@ import (
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
 
-	//nolint:staticcheck // vendored dependencies may still use this
-	"github.com/containerd/containerd/pkg/seed"
-
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 
 	_ "github.com/docker/buildx/driver/docker"
@@ -35,9 +32,6 @@ import (
 )
 
 func init() {
-	//nolint:staticcheck
-	seed.WithTimeAndRand()
-
 	stack.SetVersionInfo(version.Version, version.Revision)
 }
 

@@ -19,6 +19,10 @@ func (s *backend) Address() string {
 	return s.builder
 }
 
+func (s *backend) DebugAddress() string {
+	return ""
+}
+
 func (s *backend) DockerAddress() string {
 	return s.context
 }

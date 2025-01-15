@@ -31,7 +31,7 @@ func runBuildkitd(
 	logs map[string]*bytes.Buffer,
 	uid, gid int,
 	extraEnv []string,
-) (address string, cl func() error, err error) {
+) (_, _ string, cl func() error, err error) {
 	deferF := &integration.MultiCloser{}
 	cl = deferF.F()
 
@@ -44,33 +44,34 @@ func runBuildkitd(
 
 	tmpdir, err := os.MkdirTemp("", "bktest_buildkitd")
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if err := chown(tmpdir, uid, gid); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if err := os.MkdirAll(filepath.Join(tmpdir, "tmp"), 0711); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	if err := chown(filepath.Join(tmpdir, "tmp"), uid, gid); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	deferF.Append(func() error { return os.RemoveAll(tmpdir) })
 
 	cfgfile, err := integration.WriteConfig(
 		append(conf.DaemonConfig, withOTELSocketPath(getTraceSocketPath(tmpdir))))
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	deferF.Append(func() error {
 		return os.RemoveAll(filepath.Dir(cfgfile))
 	})
 
 	args = append(args, "--config="+cfgfile)
-	address = getBuildkitdAddr(tmpdir)
+	address := getBuildkitdAddr(tmpdir)
+	debugAddress := getBuildkitdDebugAddr(tmpdir)
 
 	args = append(args, "--root", tmpdir, "--addr", address, "--debug")
 	cmd := exec.Command(args[0], args[1:]...) //nolint:gosec // test utility
@@ -78,6 +79,7 @@ func runBuildkitd(
 		os.Environ(),
 		"BUILDKIT_DEBUG_EXEC_OUTPUT=1",
 		"BUILDKIT_DEBUG_PANIC_ON_ERROR=1",
+		"BUILDKITD_DEBUGADDR="+debugAddress,
 		"TMPDIR="+filepath.Join(tmpdir, "tmp"))
 	if v := os.Getenv("GO_TEST_COVERPROFILE"); v != "" {
 		coverDir := filepath.Join(filepath.Dir(v), "helpers")
@@ -88,12 +90,12 @@ func runBuildkitd(
 
 	stop, err := integration.StartCmd(cmd, logs)
 	if err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 	deferF.Append(stop)
 
 	if err := integration.WaitSocket(address, 15*time.Second, cmd); err != nil {
-		return "", nil, err
+		return "", "", nil, err
 	}
 
 	// separated out since it's not required in windows
@@ -101,5 +103,5 @@ func runBuildkitd(
 		return mountInfo(tmpdir)
 	})
 
-	return address, cl, err
+	return address, debugAddress, cl, err
 }

@@ -8,8 +8,8 @@ import (
 	"io"
 	"net/http"
 
-	"github.com/containerd/containerd/remotes"
-	"github.com/containerd/containerd/remotes/docker"
+	"github.com/containerd/containerd/v2/core/remotes"
+	"github.com/containerd/containerd/v2/core/remotes/docker"
 	"github.com/containerd/log"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/util/resolver"

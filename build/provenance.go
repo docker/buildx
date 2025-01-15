@@ -8,8 +8,8 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/containerd/containerd/content"
-	"github.com/containerd/containerd/content/proxy"
+	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/progress"
 	controlapi "github.com/moby/buildkit/api/services/control"
