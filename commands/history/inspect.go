@@ -193,7 +193,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 
 	tw = tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
 
-	fmt.Fprintf(tw, "Started:\t%s\n", rec.CreatedAt.AsTime().Format("2006-01-02 15:04:05"))
+	fmt.Fprintf(tw, "Started:\t%s\n", rec.CreatedAt.AsTime().Local().Format("2006-01-02 15:04:05"))
 	var duration time.Duration
 	var statusStr string
 	if rec.CompletedAt != nil {
