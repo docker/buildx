@@ -360,7 +360,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 
 	fmt.Fprintf(dockerCli.Out(), "Print build logs: docker buildx history logs %s\n", rec.Ref)
 
-	fmt.Fprintf(dockerCli.Out(), "View build in Docker Desktop: %s\n", desktop.BuildURL(rec.Ref))
+	fmt.Fprintf(dockerCli.Out(), "View build in Docker Desktop: %s\n", desktop.BuildURL(fmt.Sprintf("%s/%s/%s", rec.node.Builder, rec.node.Name, rec.Ref)))
 
 	return nil
 }
