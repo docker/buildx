@@ -331,6 +331,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 		for _, s := range errdefs.Sources(retErr) {
 			s.Print(dockerCli.Out())
 		}
+		fmt.Fprintln(dockerCli.Out())
 
 		var ve *errdefs.VertexError
 		if errors.As(retErr, &ve) {
@@ -343,9 +344,10 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 				return errors.Wrapf(err, "failed to load vertex logs %s", dgst)
 			}
 			if len(logs) > 0 {
-				fmt.Fprintf(dockerCli.Out(), "\n => %s:\n", name)
+				fmt.Fprintln(dockerCli.Out(), "Logs:")
+				fmt.Fprintf(dockerCli.Out(), "> => %s:\n", name)
 				for _, l := range logs {
-					fmt.Fprintln(dockerCli.Out(), l)
+					fmt.Fprintln(dockerCli.Out(), "> "+l)
 				}
 				fmt.Fprintln(dockerCli.Out())
 			}
