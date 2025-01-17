@@ -556,6 +556,8 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 
 			o := t[kk[1]]
 
+			// IMPORTANT: if you add more fields here, do not forget to update
+			// docs/bake-reference.md and https://docs.docker.com/build/bake/overrides/
 			switch keys[1] {
 			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "network":
 				if len(parts) == 2 {
@@ -861,6 +863,8 @@ func (t *Target) Merge(t2 *Target) {
 }
 
 func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementConf) error {
+	// IMPORTANT: if you add more fields here, do not forget to update
+	// docs/bake-reference.md and https://docs.docker.com/build/bake/overrides/
 	for key, o := range overrides {
 		value := o.Value
 		keys := strings.SplitN(key, ".", 2)
