@@ -96,6 +96,11 @@ area/hack:
   - changed-files:
     - any-glob-to-any-file: 'hack/**'
 
+# Add 'area/history' label to changes in history command
+area/history:
+  - changed-files:
+    - any-glob-to-any-file: 'commands/history/**'
+
 # Add 'area/tests' label to changes in test files
 area/tests:
   - changed-files:
