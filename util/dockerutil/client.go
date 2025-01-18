@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/docker/api/types/image"
 	dockerclient "github.com/docker/docker/client"
 )
 
@@ -52,7 +53,7 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 				w.mu.Unlock()
 			}
 
-			resp, err := dapi.ImageLoad(ctx, pr, false)
+			resp, err := dapi.ImageLoad(ctx, pr, image.LoadOptions{})
 			defer close(done)
 			if err != nil {
 				handleErr(err)

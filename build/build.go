@@ -835,7 +835,7 @@ func remoteDigestWithMoby(ctx context.Context, d *driver.DriverHandle, name stri
 	if err != nil {
 		return "", err
 	}
-	img, _, err := api.ImageInspectWithRaw(ctx, name)
+	img, err := api.ImageInspect(ctx, name)
 	if err != nil {
 		return "", err
 	}
