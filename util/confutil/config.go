@@ -8,7 +8,7 @@ import (
 	"sync"
 
 	"github.com/docker/cli/cli/command"
-	"github.com/docker/docker/pkg/ioutils"
+	"github.com/docker/docker/pkg/atomicwriter"
 	"github.com/moby/buildkit/cmd/buildkitd/config"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
@@ -106,7 +106,7 @@ func (c *Config) MkdirAll(dir string, perm os.FileMode) error {
 // AtomicWriteFile writes data to a file within the config dir atomically
 func (c *Config) AtomicWriteFile(filename string, data []byte, perm os.FileMode) error {
 	f := filepath.Join(c.dir, filename)
-	if err := ioutils.AtomicWriteFile(f, data, perm); err != nil {
+	if err := atomicwriter.WriteFile(f, data, perm); err != nil {
 		return err
 	}
 	if c.chowner == nil {
