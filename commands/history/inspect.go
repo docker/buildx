@@ -109,6 +109,8 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 		delete(attrs, k)
 	}
 
+	fmt.Fprintf(tw, "Name:\t%s\n", buildName(rec.FrontendAttrs, st))
+
 	var context string
 	var dockerfile string
 	if st != nil {
