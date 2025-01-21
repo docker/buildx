@@ -1,6 +1,7 @@
 package buildflags
 
 import (
+	"encoding/json"
 	"strings"
 
 	controllerapi "github.com/docker/buildx/controller/pb"
@@ -71,6 +72,22 @@ func (s *Secret) ToPB() *controllerapi.Secret {
 		FilePath: s.FilePath,
 		Env:      s.Env,
 	}
+}
+
+func (s *Secret) UnmarshalJSON(data []byte) error {
+	var v struct {
+		ID       string `json:"id,omitempty"`
+		FilePath string `json:"src,omitempty"`
+		Env      string `json:"env,omitempty"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	s.ID = v.ID
+	s.FilePath = v.FilePath
+	s.Env = v.Env
+	return nil
 }
 
 func (s *Secret) UnmarshalText(text []byte) error {
