@@ -104,7 +104,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		}
 	}
 
-	deploymentName, err := buildxNameToDeploymentName(cfg.Name)
+	statefulSetName, err := buildxNameToStatefulSetName(cfg.Name)
 	if err != nil {
 		return nil, err
 	}
@@ -128,7 +128,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		clientset:    clientset,
 	}
 
-	deploymentOpt, loadbalance, namespace, defaultLoad, timeout, err := f.processDriverOpts(deploymentName, namespace, cfg)
+	statefulSetOpt, loadbalance, namespace, defaultLoad, timeout, err := f.processDriverOpts(statefulSetName, namespace, cfg)
 	if nil != err {
 		return nil, err
 	}
@@ -136,36 +136,36 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	d.defaultLoad = defaultLoad
 	d.timeout = timeout
 
-	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
+	d.statefulSet, d.configMaps, err = manifest.NewStatefulSet(statefulSetOpt)
 	if err != nil {
 		return nil, err
 	}
 
-	d.minReplicas = deploymentOpt.Replicas
+	d.minReplicas = statefulSetOpt.Replicas
 
-	d.deploymentClient = clientset.AppsV1().Deployments(namespace)
+	d.statefulSetClient = clientset.AppsV1().StatefulSets(namespace)
 	d.podClient = clientset.CoreV1().Pods(namespace)
 	d.configMapClient = clientset.CoreV1().ConfigMaps(namespace)
 
 	switch loadbalance {
 	case LoadbalanceSticky:
 		d.podChooser = &podchooser.StickyPodChooser{
-			Key:        cfg.ContextPathHash,
-			PodClient:  d.podClient,
-			Deployment: d.deployment,
+			Key:         cfg.ContextPathHash,
+			PodClient:   d.podClient,
+			StatefulSet: d.statefulSet,
 		}
 	case LoadbalanceRandom:
 		d.podChooser = &podchooser.RandomPodChooser{
-			PodClient:  d.podClient,
-			Deployment: d.deployment,
+			PodClient:   d.podClient,
+			StatefulSet: d.statefulSet,
 		}
 	}
 	return d, nil
 }
 
-func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg driver.InitConfig) (*manifest.DeploymentOpt, string, string, bool, time.Duration, error) {
-	deploymentOpt := &manifest.DeploymentOpt{
-		Name:          deploymentName,
+func (f *factory) processDriverOpts(statefulSetName string, namespace string, cfg driver.InitConfig) (*manifest.StatefulSetOpt, string, string, bool, time.Duration, error) {
+	statefulSetOpt := &manifest.StatefulSetOpt{
+		Name:          statefulSetName,
 		Image:         bkimage.DefaultImage,
 		Replicas:      1,
 		BuildkitFlags: cfg.BuildkitdFlags,
@@ -177,7 +177,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 	defaultLoad := false
 	timeout := defaultTimeout
 
-	deploymentOpt.Qemu.Image = bkimage.QemuImage
+	statefulSetOpt.Qemu.Image = bkimage.QemuImage
 
 	loadbalance := LoadbalanceSticky
 	var err error
@@ -186,57 +186,57 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		switch k {
 		case "image":
 			if v != "" {
-				deploymentOpt.Image = v
+				statefulSetOpt.Image = v
 			}
 		case "namespace":
 			namespace = v
 		case "replicas":
-			deploymentOpt.Replicas, err = strconv.Atoi(v)
+			statefulSetOpt.Replicas, err = strconv.Atoi(v)
 			if err != nil {
 				return nil, "", "", false, 0, err
 			}
 		case "requests.cpu":
-			deploymentOpt.RequestsCPU = v
+			statefulSetOpt.RequestsCPU = v
 		case "requests.memory":
-			deploymentOpt.RequestsMemory = v
+			statefulSetOpt.RequestsMemory = v
 		case "requests.ephemeral-storage":
-			deploymentOpt.RequestsEphemeralStorage = v
+			statefulSetOpt.RequestsEphemeralStorage = v
 		case "limits.cpu":
-			deploymentOpt.LimitsCPU = v
+			statefulSetOpt.LimitsCPU = v
 		case "limits.memory":
-			deploymentOpt.LimitsMemory = v
+			statefulSetOpt.LimitsMemory = v
 		case "limits.ephemeral-storage":
-			deploymentOpt.LimitsEphemeralStorage = v
+			statefulSetOpt.LimitsEphemeralStorage = v
 		case "rootless":
-			deploymentOpt.Rootless, err = strconv.ParseBool(v)
+			statefulSetOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
 				return nil, "", "", false, 0, err
 			}
 			if _, isImage := cfg.DriverOpts["image"]; !isImage {
-				deploymentOpt.Image = bkimage.DefaultRootlessImage
+				statefulSetOpt.Image = bkimage.DefaultRootlessImage
 			}
 		case "schedulername":
-			deploymentOpt.SchedulerName = v
+			statefulSetOpt.SchedulerName = v
 		case "serviceaccount":
-			deploymentOpt.ServiceAccountName = v
+			statefulSetOpt.ServiceAccountName = v
 		case "nodeselector":
-			deploymentOpt.NodeSelector, err = splitMultiValues(v, ",", "=")
+			statefulSetOpt.NodeSelector, err = splitMultiValues(v, ",", "=")
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse node selector")
 			}
 		case "annotations":
-			deploymentOpt.CustomAnnotations, err = splitMultiValues(v, ",", "=")
+			statefulSetOpt.CustomAnnotations, err = splitMultiValues(v, ",", "=")
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse annotations")
 			}
 		case "labels":
-			deploymentOpt.CustomLabels, err = splitMultiValues(v, ",", "=")
+			statefulSetOpt.CustomLabels, err = splitMultiValues(v, ",", "=")
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse labels")
 			}
 		case "tolerations":
 			ts := strings.Split(v, ";")
-			deploymentOpt.Tolerations = []corev1.Toleration{}
+			statefulSetOpt.Tolerations = []corev1.Toleration{}
 			for i := range ts {
 				kvs := strings.Split(ts[i], ",")
 
@@ -267,7 +267,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 					}
 				}
 
-				deploymentOpt.Tolerations = append(deploymentOpt.Tolerations, t)
+				statefulSetOpt.Tolerations = append(statefulSetOpt.Tolerations, t)
 			}
 		case "loadbalance":
 			switch v {
@@ -278,13 +278,13 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			}
 			loadbalance = v
 		case "qemu.install":
-			deploymentOpt.Qemu.Install, err = strconv.ParseBool(v)
+			statefulSetOpt.Qemu.Install, err = strconv.ParseBool(v)
 			if err != nil {
 				return nil, "", "", false, 0, err
 			}
 		case "qemu.image":
 			if v != "" {
-				deploymentOpt.Qemu.Image = v
+				statefulSetOpt.Qemu.Image = v
 			}
 		case "default-load":
 			defaultLoad, err = strconv.ParseBool(v)
@@ -301,7 +301,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		}
 	}
 
-	return deploymentOpt, loadbalance, namespace, defaultLoad, timeout, nil
+	return statefulSetOpt, loadbalance, namespace, defaultLoad, timeout, nil
 }
 
 func splitMultiValues(in string, itemsep string, kvsep string) (map[string]string, error) {
@@ -324,7 +324,7 @@ func (f *factory) AllowsInstances() bool {
 // buildxNameToDeploymentName converts buildx name to Kubernetes Deployment name.
 //
 // eg. "buildx_buildkit_loving_mendeleev0" -> "loving-mendeleev0"
-func buildxNameToDeploymentName(bx string) (string, error) {
+func buildxNameToStatefulSetName(bx string) (string, error) {
 	// TODO: commands.util.go should not pass "buildx_buildkit_" prefix to drivers
 	s, err := driver.ParseBuilderName(bx)
 	if err != nil {

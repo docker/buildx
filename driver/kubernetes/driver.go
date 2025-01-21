@@ -43,16 +43,16 @@ type Driver struct {
 
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/kubernetes.md
-	minReplicas      int
-	deployment       *appsv1.Deployment
-	configMaps       []*corev1.ConfigMap
-	clientset        *kubernetes.Clientset
-	deploymentClient clientappsv1.DeploymentInterface
-	podClient        clientcorev1.PodInterface
-	configMapClient  clientcorev1.ConfigMapInterface
-	podChooser       podchooser.PodChooser
-	defaultLoad      bool
-	timeout          time.Duration
+	minReplicas       int
+	statefulSet       *appsv1.StatefulSet
+	configMaps        []*corev1.ConfigMap
+	clientset         *kubernetes.Clientset
+	statefulSetClient clientappsv1.StatefulSetInterface
+	podClient         clientcorev1.PodInterface
+	configMapClient   clientcorev1.ConfigMapInterface
+	podChooser        podchooser.PodChooser
+	defaultLoad       bool
+	timeout           time.Duration
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -65,10 +65,10 @@ func (d *Driver) Config() driver.InitConfig {
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
-		_, err := d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
+		_, err := d.statefulSetClient.Get(ctx, d.statefulSet.Name, metav1.GetOptions{})
 		if err != nil {
 			if !apierrors.IsNotFound(err) {
-				return errors.Wrapf(err, "error for bootstrap %q", d.deployment.Name)
+				return errors.Wrapf(err, "error for bootstrap %q", d.statefulSet.Name)
 			}
 
 			for _, cfg := range d.configMaps {
@@ -85,9 +85,9 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 				}
 			}
 
-			_, err = d.deploymentClient.Create(ctx, d.deployment, metav1.CreateOptions{})
+			_, err = d.statefulSetClient.Create(ctx, d.statefulSet, metav1.CreateOptions{})
 			if err != nil {
-				return errors.Wrapf(err, "error while calling deploymentClient.Create for %q", d.deployment.Name)
+				return errors.Wrapf(err, "error while calling statefulSetClient.Create for %q", d.statefulSet.Name)
 			}
 		}
 		return sub.Wrap(
@@ -102,7 +102,7 @@ func (d *Driver) wait(ctx context.Context) error {
 	// TODO: use watch API
 	var (
 		err  error
-		depl *appsv1.Deployment
+		stat *appsv1.StatefulSet
 	)
 
 	timeoutChan := time.After(d.timeout)
@@ -116,31 +116,31 @@ func (d *Driver) wait(ctx context.Context) error {
 		case <-timeoutChan:
 			return err
 		case <-ticker.C:
-			depl, err = d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
+			stat, err = d.statefulSetClient.Get(ctx, d.statefulSet.Name, metav1.GetOptions{})
 			if err == nil {
-				if depl.Status.ReadyReplicas >= int32(d.minReplicas) {
+				if stat.Status.ReadyReplicas >= int32(d.minReplicas) {
 					return nil
 				}
-				err = errors.Errorf("expected %d replicas to be ready, got %d", d.minReplicas, depl.Status.ReadyReplicas)
+				err = errors.Errorf("expected %d replicas to be ready, got %d", d.minReplicas, stat.Status.ReadyReplicas)
 			}
 		}
 	}
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
-	depl, err := d.deploymentClient.Get(ctx, d.deployment.Name, metav1.GetOptions{})
+	stat, err := d.statefulSetClient.Get(ctx, d.statefulSet.Name, metav1.GetOptions{})
 	if err != nil {
 		// TODO: return err if err != ErrNotFound
 		return &driver.Info{
 			Status: driver.Inactive,
 		}, nil
 	}
-	if depl.Status.ReadyReplicas <= 0 {
+	if stat.Status.ReadyReplicas <= 0 {
 		return &driver.Info{
 			Status: driver.Stopped,
 		}, nil
 	}
-	pods, err := podchooser.ListRunningPods(ctx, d.podClient, depl)
+	pods, err := podchooser.ListRunningPods(ctx, d.podClient, stat)
 	if err != nil {
 		return nil, err
 	}
@@ -182,9 +182,9 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 		return nil
 	}
 
-	if err := d.deploymentClient.Delete(ctx, d.deployment.Name, metav1.DeleteOptions{}); err != nil {
+	if err := d.statefulSetClient.Delete(ctx, d.statefulSet.Name, metav1.DeleteOptions{}); err != nil {
 		if !apierrors.IsNotFound(err) {
-			return errors.Wrapf(err, "error while calling deploymentClient.Delete for %q", d.deployment.Name)
+			return errors.Wrapf(err, "error while calling statefulSetClient.Delete for %q", d.statefulSet.Name)
 		}
 	}
 	for _, cfg := range d.configMaps {
