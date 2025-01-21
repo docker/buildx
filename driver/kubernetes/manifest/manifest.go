@@ -32,18 +32,18 @@ type StatefulSetOpt struct {
 	// files mounted at /etc/buildkitd
 	ConfigFiles map[string][]byte
 
-	Rootless                 bool
-	NodeSelector             map[string]string
-	CustomAnnotations        map[string]string
-	CustomLabels             map[string]string
-	Tolerations              []corev1.Toleration
-	RequestsCPU              string
-	RequestsMemory           string
-	RequestsEphemeralStorage string
-	LimitsCPU                string
-	LimitsMemory             string
-	LimitsEphemeralStorage   string
-	Platforms                []v1.Platform
+	Rootless                  bool
+	NodeSelector              map[string]string
+	CustomAnnotations         map[string]string
+	CustomLabels              map[string]string
+	Tolerations               []corev1.Toleration
+	RequestsCPU               string
+	RequestsMemory            string
+	RequestsPersistentStorage resource.Quantity
+	LimitsCPU                 string
+	LimitsMemory              string
+	LimitsPersistentStorage   string
+	Platforms                 []v1.Platform
 }
 
 const (
@@ -141,6 +141,30 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 								Requests: corev1.ResourceList{},
 								Limits:   corev1.ResourceList{},
 							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      "data",
+									ReadOnly:  false,
+									MountPath: "/var/lib/buildkit",
+								},
+							},
+						},
+					},
+				},
+			},
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: "data",
+					},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes: []corev1.PersistentVolumeAccessMode{
+							corev1.ReadWriteOnce,
+						},
+						Resources: corev1.VolumeResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: opt.RequestsPersistentStorage,
+							},
 						},
 					},
 				},
@@ -222,14 +246,6 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 		s.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = reqMemory
 	}
 
-	if opt.RequestsEphemeralStorage != "" {
-		reqEphemeralStorage, err := resource.ParseQuantity(opt.RequestsEphemeralStorage)
-		if err != nil {
-			return nil, nil, err
-		}
-		s.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceEphemeralStorage] = reqEphemeralStorage
-	}
-
 	if opt.LimitsCPU != "" {
 		limCPU, err := resource.ParseQuantity(opt.LimitsCPU)
 		if err != nil {
@@ -246,12 +262,14 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 		s.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = limMemory
 	}
 
-	if opt.LimitsEphemeralStorage != "" {
-		limEphemeralStorage, err := resource.ParseQuantity(opt.LimitsEphemeralStorage)
+	if opt.LimitsPersistentStorage != "" {
+		limPersistentStorage, err := resource.ParseQuantity(opt.LimitsPersistentStorage)
 		if err != nil {
 			return nil, nil, err
 		}
-		s.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceEphemeralStorage] = limEphemeralStorage
+		s.Spec.VolumeClaimTemplates[0].Spec.Resources.Limits = corev1.ResourceList{
+			corev1.ResourceStorage: limPersistentStorage,
+		}
 	}
 
 	return

@@ -16,6 +16,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/resource"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
@@ -199,14 +200,18 @@ func (f *factory) processDriverOpts(statefulSetName string, namespace string, cf
 			statefulSetOpt.RequestsCPU = v
 		case "requests.memory":
 			statefulSetOpt.RequestsMemory = v
-		case "requests.ephemeral-storage":
-			statefulSetOpt.RequestsEphemeralStorage = v
+		case "requests.persistent-storage":
+			reqPersistentStorage, err := resource.ParseQuantity(v)
+			if err != nil {
+				return nil, "", "", false, 0, err
+			}
+			statefulSetOpt.RequestsPersistentStorage = reqPersistentStorage
 		case "limits.cpu":
 			statefulSetOpt.LimitsCPU = v
 		case "limits.memory":
 			statefulSetOpt.LimitsMemory = v
-		case "limits.ephemeral-storage":
-			statefulSetOpt.LimitsEphemeralStorage = v
+		case "limits.persistent-storage":
+			statefulSetOpt.LimitsPersistentStorage = v
 		case "rootless":
 			statefulSetOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
