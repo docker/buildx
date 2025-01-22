@@ -91,7 +91,7 @@ func (a *Attest) ToPB() *controllerapi.Attest {
 
 func (a *Attest) MarshalJSON() ([]byte, error) {
 	m := make(map[string]interface{}, len(a.Attrs)+2)
-	for k, v := range m {
+	for k, v := range a.Attrs {
 		m[k] = v
 	}
 	m["type"] = a.Type
