@@ -15,7 +15,7 @@ Build from a file
 
 | Name                                | Type          | Default | Description                                                                                                  |
 |:------------------------------------|:--------------|:--------|:-------------------------------------------------------------------------------------------------------------|
-| `--allow`                           | `stringArray` |         | Allow build to access specified resources                                                                    |
+| [`--allow`](#allow)                 | `stringArray` |         | Allow build to access specified resources                                                                    |
 | [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                                     |
 | [`--call`](#call)                   | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                              |
 | [`--check`](#check)                 | `bool`        |         | Shorthand for `--call=check`                                                                                 |
@@ -50,6 +50,80 @@ guide for introduction to writing bake files.
 > the functionality further.
 
 ## Examples
+
+### <a name="allow"></a> Allow extra privileged entitlement (--allow)
+
+```text
+--allow=ENTITLEMENT[=VALUE]
+```
+
+Entitlements are designed to provide controlled access to privileged
+operations. By default, Buildx and BuildKit operates with restricted
+permissions to protect users and their systems from unintended side effects or
+security risks. The `--allow` flag explicitly grants access to additional
+entitlements, making it clear when a build or bake operation requires elevated
+privileges.
+
+In addition to BuildKit's `network.host` and `security.insecure` entitlements
+(see [`docker buildx build --allow`](https://docs.docker.com/reference/cli/docker/buildx/build/#allow),
+Bake supports file system entitlements that grant granular control over file
+system access. These are particularly useful when working with builds that need
+access to files outside the default working directory.
+
+Bake supports the following filesystem entitlements:
+
+- `--allow fs=<path|*>` - Grant read and write access to files outside of the
+  working directory.
+- `--allow fs.read=<path|*>` - Grant read access to files outside of the
+  working directory.
+- `--allow fs.write=<path|*>` - Grant write access to files outside of the
+  working directory.
+
+The `fs` entitlements take a path value (relative or absolute) to a directory
+on the filesystem. Alternatively, you can pass a wildcard (`*`) to allow Bake
+to access the entire filesystem.
+
+### Example: fs.read
+
+Given the following Bake configuration, Bake would need to access the parent
+directory, relative to the Bake file.
+
+```hcl
+target "app" {
+  context = "../src"
+}
+```
+
+Assuming `docker buildx bake app` is executed in the same directory as the
+`docker-bake.hcl` file, you would need to explicitly allow Bake to read from
+the `../src` directory. In this case, the following invocations all work:
+
+```console
+$ docker buildx bake --allow fs.read=* app
+$ docker buildx bake --allow fs.read=../src app
+$ docker buildx bake --allow fs=* app
+```
+
+### Example: fs.write
+
+The following `docker-bake.hcl` file requires write access to the `/tmp`
+directory.
+
+```hcl
+target "app" {
+  output = "/tmp"
+}
+```
+
+Assuming `docker buildx bake app` is executed outside of the `/tmp` directory,
+you would need to allow the `fs.write` entitlement, either by specifying the
+path or using a wildcard:
+
+```console
+$ docker buildx bake --allow fs=/tmp app
+$ docker buildx bake --allow fs.write=/tmp app
+$ docker buildx bake --allow fs.write=* app
+```
 
 ### <a name="builder"></a> Override the configured builder instance (--builder)
 
