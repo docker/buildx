@@ -167,20 +167,37 @@ func (e *CacheOptionsEntry) validate(gv interface{}) error {
 	return nil
 }
 
-func ParseCacheEntry(in []string) ([]*controllerapi.CacheOptionsEntry, error) {
+func ParseCacheEntry(in []string) (CacheOptions, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
 
 	opts := make(CacheOptions, 0, len(in))
 	for _, in := range in {
+		if !strings.Contains(in, "=") {
+			// This is ref only format. Each field in the CSV is its own entry.
+			fields, err := csvvalue.Fields(in, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, field := range fields {
+				opt := CacheOptionsEntry{}
+				if err := opt.UnmarshalText([]byte(field)); err != nil {
+					return nil, err
+				}
+				opts = append(opts, &opt)
+			}
+			continue
+		}
+
 		var out CacheOptionsEntry
 		if err := out.UnmarshalText([]byte(in)); err != nil {
 			return nil, err
 		}
 		opts = append(opts, &out)
 	}
-	return opts.ToPB(), nil
+	return opts, nil
 }
 
 func addGithubToken(ci *controllerapi.CacheOptionsEntry) {

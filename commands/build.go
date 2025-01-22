@@ -183,14 +183,17 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		}
 	}
 
-	opts.CacheFrom, err = buildflags.ParseCacheEntry(o.cacheFrom)
+	cacheFrom, err := buildflags.ParseCacheEntry(o.cacheFrom)
 	if err != nil {
 		return nil, err
 	}
-	opts.CacheTo, err = buildflags.ParseCacheEntry(o.cacheTo)
+	opts.CacheFrom = cacheFrom.ToPB()
+
+	cacheTo, err := buildflags.ParseCacheEntry(o.cacheTo)
 	if err != nil {
 		return nil, err
 	}
+	opts.CacheTo = cacheTo.ToPB()
 
 	opts.Secrets, err = buildflags.ParseSecretSpecs(o.secrets)
 	if err != nil {

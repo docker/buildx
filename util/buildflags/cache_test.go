@@ -37,7 +37,7 @@ func TestCacheOptions_DerivedVars(t *testing.T) {
 				"session_token":     "not_a_mitm_attack",
 			},
 		},
-	}, cacheFrom)
+	}, cacheFrom.ToPB())
 }
 
 func TestCacheOptions(t *testing.T) {
@@ -108,4 +108,13 @@ func TestCacheOptions(t *testing.T) {
 		result := actual.Equals(expected)
 		require.True(t, result.True())
 	})
+}
+
+func TestCacheOptions_RefOnlyFormat(t *testing.T) {
+	opts, err := ParseCacheEntry([]string{"ref1", "ref2"})
+	require.NoError(t, err)
+	require.Equal(t, CacheOptions{
+		{Type: "registry", Attrs: map[string]string{"ref": "ref1"}},
+		{Type: "registry", Attrs: map[string]string{"ref": "ref2"}},
+	}, opts)
 }
