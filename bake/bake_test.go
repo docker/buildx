@@ -9,6 +9,7 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -1757,6 +1758,27 @@ func TestAnnotations(t *testing.T) {
 
 	require.Len(t, bo["app"].Exports, 1)
 	require.Equal(t, "bar", bo["app"].Exports[0].Attrs["annotation-manifest[linux/amd64].foo"])
+}
+
+func TestRefOnlyCacheOptions(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "app" {
+				output = ["type=image,name=foo"]
+        cache-from = ["ref1,ref2"]
+			}`),
+	}
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+
+	require.Len(t, m, 1)
+	require.Contains(t, m, "app")
+	require.Equal(t, buildflags.CacheOptions{
+		{Type: "registry", Attrs: map[string]string{"ref": "ref1"}},
+		{Type: "registry", Attrs: map[string]string{"ref": "ref2"}},
+	}, m["app"].CacheFrom)
 }
 
 func TestHCLEntitlements(t *testing.T) {
