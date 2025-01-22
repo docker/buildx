@@ -145,12 +145,12 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				labels[k] = &v
 			}
 
-			cacheFrom, err := parseCacheArrValues(s.Build.CacheFrom)
+			cacheFrom, err := buildflags.ParseCacheEntry(s.Build.CacheFrom)
 			if err != nil {
 				return nil, err
 			}
 
-			cacheTo, err := parseCacheArrValues(s.Build.CacheTo)
+			cacheTo, err := buildflags.ParseCacheEntry(s.Build.CacheTo)
 			if err != nil {
 				return nil, err
 			}
@@ -349,14 +349,14 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.Tags = dedupSlice(append(t.Tags, xb.Tags...))
 	}
 	if len(xb.CacheFrom) > 0 {
-		cacheFrom, err := parseCacheArrValues(xb.CacheFrom)
+		cacheFrom, err := buildflags.ParseCacheEntry(xb.CacheFrom)
 		if err != nil {
 			return err
 		}
 		t.CacheFrom = t.CacheFrom.Merge(cacheFrom)
 	}
 	if len(xb.CacheTo) > 0 {
-		cacheTo, err := parseCacheArrValues(xb.CacheTo)
+		cacheTo, err := buildflags.ParseCacheEntry(xb.CacheTo)
 		if err != nil {
 			return err
 		}
