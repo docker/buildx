@@ -2,6 +2,7 @@ package buildflags
 
 import (
 	"cmp"
+	"encoding/json"
 	"slices"
 	"strings"
 
@@ -74,6 +75,20 @@ func (s *SSH) ToPB() *controllerapi.SSH {
 		ID:    s.ID,
 		Paths: s.Paths,
 	}
+}
+
+func (s *SSH) UnmarshalJSON(data []byte) error {
+	var v struct {
+		ID    string   `json:"id,omitempty"`
+		Paths []string `json:"paths,omitempty"`
+	}
+	if err := json.Unmarshal(data, &v); err != nil {
+		return err
+	}
+
+	s.ID = v.ID
+	s.Paths = v.Paths
+	return nil
 }
 
 func (s *SSH) UnmarshalText(text []byte) error {
