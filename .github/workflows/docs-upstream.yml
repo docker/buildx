@@ -65,7 +65,7 @@ jobs:
           retention-days: 1
 
   validate:
-    uses: docker/docs/.github/workflows/validate-upstream.yml@6b73b05acb21edf7995cc5b3c6672d8e314cee7a  # pin for artifact v4 support: https://github.com/docker/docs/pull/19220
+    uses: docker/docs/.github/workflows/validate-upstream.yml@main
     needs:
       - docs-yaml
     with:
