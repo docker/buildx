@@ -47,10 +47,17 @@ type StatefulSetOpt struct {
 }
 
 const (
-	containerName      = "buildkitd"
-	AnnotationPlatform = "buildx.docker.com/platform"
-	LabelApp           = "app"
+	containerName            = "buildkitd"
+	AnnotationPlatform       = "buildx.docker.com/platform"
+	LabelApp                 = "app"
+	ProbeFailureThreshold    = 3
+	ProbeInitialDelaySeconds = 5
+	ProbePeriodSeconds       = 30
+	ProbeSuccessThreshold    = 1
+	ProbeTimeoutSeconds      = 60
 )
+
+var ProbeHandlerCommand = []string{"buildctl", "debug", "workers"}
 
 type ErrReservedAnnotationPlatform struct{}
 
@@ -91,6 +98,7 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 		labels[k] = v
 	}
 
+	const persistentVolumeClaimName = "buildkitd"
 	s = &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(),
@@ -103,7 +111,9 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 			Annotations: annotations,
 		},
 		Spec: appsv1.StatefulSetSpec{
-			Replicas: &replicas,
+			ServiceName:         "buildkitd",
+			PodManagementPolicy: appsv1.ParallelPodManagement,
+			Replicas:            &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -126,16 +136,26 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: []string{"buildctl", "debug", "workers"},
+										Command: ProbeHandlerCommand,
 									},
 								},
+								FailureThreshold:    ProbeFailureThreshold,
+								InitialDelaySeconds: ProbeInitialDelaySeconds,
+								PeriodSeconds:       ProbePeriodSeconds,
+								SuccessThreshold:    ProbeSuccessThreshold,
+								TimeoutSeconds:      ProbeTimeoutSeconds,
 							},
 							LivenessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: []string{"buildctl", "debug", "workers"},
+										Command: ProbeHandlerCommand,
 									},
 								},
+								FailureThreshold:    ProbeFailureThreshold,
+								InitialDelaySeconds: ProbeInitialDelaySeconds,
+								PeriodSeconds:       ProbePeriodSeconds,
+								SuccessThreshold:    ProbeSuccessThreshold,
+								TimeoutSeconds:      ProbeTimeoutSeconds,
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{},
@@ -143,7 +163,7 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 							},
 							VolumeMounts: []corev1.VolumeMount{
 								{
-									Name:      "data",
+									Name:      persistentVolumeClaimName,
 									ReadOnly:  false,
 									MountPath: "/var/lib/buildkit",
 								},
@@ -155,7 +175,7 @@ func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.Con
 			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
 				{
 					ObjectMeta: metav1.ObjectMeta{
-						Name: "data",
+						Name: persistentVolumeClaimName,
 					},
 					Spec: corev1.PersistentVolumeClaimSpec{
 						AccessModes: []corev1.PersistentVolumeAccessMode{
@@ -295,18 +315,7 @@ func toRootless(s *appsv1.StatefulSet) error {
 	// as it is mounted with `nosuid,nodev`.
 	// https://github.com/moby/buildkit/issues/879#issuecomment-1240347038
 	// https://github.com/moby/buildkit/pull/3097
-	const emptyDirVolName = "buildkitd"
-	s.Spec.Template.Spec.Containers[0].VolumeMounts = append(s.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      emptyDirVolName,
-		MountPath: "/home/user/.local/share/buildkit",
-	})
-	s.Spec.Template.Spec.Volumes = append(s.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: emptyDirVolName,
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	})
-
+	s.Spec.Template.Spec.Containers[0].VolumeMounts[0].MountPath = "/home/user/.local/share/buildkit"
 	return nil
 }
 
