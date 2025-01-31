@@ -66,7 +66,7 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
-			ref = be.Ref
+			ref = be.SessionID
 			resultUpdated = true
 		} else {
 			fmt.Printf("failed to reload: %v\n", err)
