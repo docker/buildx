@@ -23,7 +23,6 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/system"
-	dockerclient "github.com/docker/docker/client"
 	"github.com/docker/docker/errdefs"
 	dockerarchive "github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/idtools"
@@ -70,7 +69,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
 		_, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 		if err != nil {
-			if dockerclient.IsErrNotFound(err) {
+			if errdefs.IsNotFound(err) {
 				return d.create(ctx, sub)
 			}
 			return err
@@ -306,7 +305,7 @@ func (d *Driver) start(ctx context.Context) error {
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	ctn, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 	if err != nil {
-		if dockerclient.IsErrNotFound(err) {
+		if errdefs.IsNotFound(err) {
 			return &driver.Info{
 				Status: driver.Inactive,
 			}, nil
