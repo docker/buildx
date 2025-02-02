@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path/filepath"
 
 	"github.com/docker/buildx/commands"
 	controllererrors "github.com/docker/buildx/controller/errdefs"
@@ -41,7 +42,8 @@ func runStandalone(cmd *command.DockerCli) error {
 	}
 	defer flushMetrics(cmd)
 
-	rootCmd := commands.NewRootCmd(os.Args[0], false, cmd)
+	executable := os.Args[0]
+	rootCmd := commands.NewRootCmd(filepath.Base(executable), false, cmd)
 	return rootCmd.Execute()
 }
 
