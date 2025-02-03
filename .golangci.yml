@@ -43,6 +43,9 @@ linters-settings:
       # buildkit errdefs package (or vice-versa).
       - pkg: "github.com/containerd/errdefs"
         alias: "cerrdefs"
+      # Use a consistent alias to prevent confusion with "github.com/moby/buildkit/client"
+      - pkg: "github.com/docker/docker/client"
+        alias: "dockerclient"
       - pkg: "github.com/opencontainers/image-spec/specs-go/v1"
         alias: "ocispecs"
       - pkg: "github.com/opencontainers/go-digest"
