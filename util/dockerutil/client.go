@@ -7,7 +7,7 @@ import (
 
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	"github.com/docker/docker/client"
+	dockerclient "github.com/docker/docker/client"
 )
 
 // Client represents an active docker object.
@@ -24,7 +24,7 @@ func NewClient(cli command.Cli) *Client {
 }
 
 // API returns a new docker API client.
-func (c *Client) API(name string) (client.APIClient, error) {
+func (c *Client) API(name string) (dockerclient.APIClient, error) {
 	if name == "" {
 		name = c.cli.CurrentContext()
 	}
