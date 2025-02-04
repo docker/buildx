@@ -45,9 +45,92 @@ import (
 	proto "google.golang.org/protobuf/proto"
 )
 
+type statusT string
+
+const (
+	statusComplete statusT = "completed"
+	statusRunning  statusT = "running"
+	statusError    statusT = "failed"
+	statusCanceled statusT = "canceled"
+)
+
 type inspectOptions struct {
 	builder string
 	ref     string
+}
+
+type inspectOutput struct {
+	Context       string   `json:"context,omitempty"`
+	Dockerfile    string   `json:"dockerfile,omitempty"`
+	VCSRepository string   `json:"vcs_repository,omitempty"`
+	VCSRevision   string   `json:"vcs_revision,omitempty"`
+	Target        string   `json:"target,omitempty"`
+	Platform      []string `json:"platform,omitempty"`
+	KeepGitDir    bool     `json:"keep_git_dir,omitempty"`
+
+	NamedContexts []keyValueOutput `json:"named_contexts,omitempty"`
+
+	StartedAt   *time.Time    `json:"started_at,omitempty"`
+	CompletedAt *time.Time    `json:"complete_at,omitempty"`
+	Duration    time.Duration `json:"duration,omitempty"`
+	Status      statusT       `json:"status,omitempty"`
+	Error       *errorOutput  `json:"error,omitempty"`
+
+	NumCompletedSteps int `json:"num_completed_steps"`
+	NumTotalSteps     int `json:"num_total_steps"`
+	NumCachedSteps    int `json:"num_cached_steps"`
+
+	BuildArgs []keyValueOutput `json:"build_args,omitempty"`
+	Labels    []keyValueOutput `json:"labels,omitempty"`
+
+	Config configOutput `json:"config,omitempty"`
+
+	Errors []string `json:"errors,omitempty"`
+}
+
+type configOutput struct {
+	Network          string   `json:"network,omitempty"`
+	ExtraHosts       []string `json:"extra_hosts,omitempty"`
+	Hostname         string   `json:"hostname,omitempty"`
+	CgroupParent     string   `json:"cgroup_parent,omitempty"`
+	ImageResolveMode string   `json:"image_resolve_mode,omitempty"`
+	MultiPlatform    bool     `json:"multi_platform,omitempty"`
+	NoCache          bool     `json:"no_cache,omitempty"`
+	NoCacheFilter    []string `json:"no_cache_filter,omitempty"`
+
+	ShmSize               string `json:"shm_size,omitempty"`
+	Ulimit                string `json:"ulimit,omitempty"`
+	CacheMountNS          string `json:"cache_mount_ns,omitempty"`
+	DockerfileCheckConfig string `json:"dockerfile_check_config,omitempty"`
+	SourceDateEpoch       string `json:"source_date_epoch,omitempty"`
+	SandboxHostname       string `json:"sandbox_hostname,omitempty"`
+
+	RestRaw []keyValueOutput `json:"rest_raw,omitempty"`
+}
+
+type errorOutput struct {
+	Code    int    `json:"code,omitempty"`
+	Message string `json:"message,omitempty"`
+}
+
+type keyValueOutput struct {
+	Name  string `json:"name,omitempty"`
+	Value string `json:"value,omitempty"`
+}
+
+func readAttr[T any](attrs map[string]string, k string, dest *T, f func(v string) (T, bool)) {
+	if sv, ok := attrs[k]; ok {
+		if f != nil {
+			v, ok := f(sv)
+			if ok {
+				*dest = v
+			}
+		}
+		if d, ok := any(dest).(*string); ok {
+			*d = sv
+		}
+	}
+	delete(attrs, k)
 }
 
 func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions) error {
@@ -97,17 +180,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 	attrs := rec.FrontendAttrs
 	delete(attrs, "frontend.caps")
 
-	writeAttr := func(k, name string, f func(v string) (string, bool)) {
-		if v, ok := attrs[k]; ok {
-			if f != nil {
-				v, ok = f(v)
-			}
-			if ok {
-				fmt.Fprintf(tw, "%s:\t%s\n", name, v)
-			}
-		}
-		delete(attrs, k)
-	}
+	var out inspectOutput
 
 	var context string
 	var dockerfile string
@@ -146,124 +219,237 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 	}
 	delete(attrs, "filename")
 
-	if context != "" {
-		fmt.Fprintf(tw, "Context:\t%s\n", context)
-	}
-	if dockerfile != "" {
-		fmt.Fprintf(tw, "Dockerfile:\t%s\n", dockerfile)
-	}
+	out.Context = context
+	out.Dockerfile = dockerfile
+
 	if _, ok := attrs["context"]; !ok {
 		if src, ok := attrs["vcs:source"]; ok {
-			fmt.Fprintf(tw, "VCS Repository:\t%s\n", src)
+			out.VCSRepository = src
 		}
 		if rev, ok := attrs["vcs:revision"]; ok {
-			fmt.Fprintf(tw, "VCS Revision:\t%s\n", rev)
+			out.VCSRevision = rev
 		}
 	}
 
-	writeAttr("target", "Target", nil)
-	writeAttr("platform", "Platform", func(v string) (string, bool) {
-		return tryParseValue(v, func(v string) (string, error) {
+	readAttr(attrs, "target", &out.Target, nil)
+
+	readAttr(attrs, "platform", &out.Platform, func(v string) ([]string, bool) {
+		return tryParseValue(v, &out.Errors, func(v string) ([]string, error) {
 			var pp []string
 			for _, v := range strings.Split(v, ",") {
 				p, err := platforms.Parse(v)
 				if err != nil {
-					return "", err
+					return nil, err
 				}
 				pp = append(pp, platforms.FormatAll(platforms.Normalize(p)))
 			}
-			return strings.Join(pp, ", "), nil
-		}), true
-	})
-	writeAttr("build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR", "Keep Git Dir", func(v string) (string, bool) {
-		return tryParseValue(v, func(v string) (string, error) {
-			b, err := strconv.ParseBool(v)
-			if err != nil {
-				return "", err
-			}
-			return strconv.FormatBool(b), nil
-		}), true
+			return pp, nil
+		})
 	})
 
-	tw.Flush()
+	readAttr(attrs, "build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR", &out.KeepGitDir, func(v string) (bool, bool) {
+		return tryParseValue(v, &out.Errors, strconv.ParseBool)
+	})
 
-	fmt.Fprintln(dockerCli.Out())
+	out.NamedContexts = readKeyValues(attrs, "context:")
 
-	printTable(dockerCli.Out(), attrs, "context:", "Named Context")
-
-	tw = tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
-
-	fmt.Fprintf(tw, "Started:\t%s\n", rec.CreatedAt.AsTime().Local().Format("2006-01-02 15:04:05"))
-	var duration time.Duration
-	var statusStr string
-	if rec.CompletedAt != nil {
-		duration = rec.CompletedAt.AsTime().Sub(rec.CreatedAt.AsTime())
-	} else {
-		duration = rec.currentTimestamp.Sub(rec.CreatedAt.AsTime())
-		statusStr = " (running)"
+	if rec.CreatedAt != nil {
+		tm := rec.CreatedAt.AsTime().Local()
+		out.StartedAt = &tm
 	}
-	fmt.Fprintf(tw, "Duration:\t%s%s\n", formatDuration(duration), statusStr)
+	out.Status = statusRunning
+
+	if rec.CompletedAt != nil {
+		tm := rec.CompletedAt.AsTime().Local()
+		out.CompletedAt = &tm
+		out.Status = statusComplete
+	}
+
 	if rec.Error != nil {
 		if codes.Code(rec.Error.Code) == codes.Canceled {
-			fmt.Fprintf(tw, "Status:\tCanceled\n")
+			out.Status = statusCanceled
 		} else {
-			fmt.Fprintf(tw, "Error:\t%s %s\n", codes.Code(rec.Error.Code).String(), rec.Error.Message)
+			out.Status = statusError
+		}
+		out.Error = &errorOutput{
+			Code:    int(codes.Code(rec.Error.Code)),
+			Message: rec.Error.Message,
 		}
 	}
-	fmt.Fprintf(tw, "Build Steps:\t%d/%d (%.0f%% cached)\n", rec.NumCompletedSteps, rec.NumTotalSteps, float64(rec.NumCachedSteps)/float64(rec.NumTotalSteps)*100)
-	tw.Flush()
 
-	fmt.Fprintln(dockerCli.Out())
+	if out.StartedAt != nil {
+		if out.CompletedAt != nil {
+			out.Duration = out.CompletedAt.Sub(*out.StartedAt)
+		} else {
+			out.Duration = rec.currentTimestamp.Sub(*out.StartedAt)
+		}
+	}
 
-	tw = tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
+	out.BuildArgs = readKeyValues(attrs, "build-arg:")
+	out.Labels = readKeyValues(attrs, "label:")
 
-	writeAttr("force-network-mode", "Network", nil)
-	writeAttr("hostname", "Hostname", nil)
-	writeAttr("add-hosts", "Extra Hosts", func(v string) (string, bool) {
-		return tryParseValue(v, func(v string) (string, error) {
+	readAttr(attrs, "force-network-mode", &out.Config.Network, nil)
+	readAttr(attrs, "hostname", &out.Config.Hostname, nil)
+	readAttr(attrs, "cgroup-parent", &out.Config.CgroupParent, nil)
+	readAttr(attrs, "image-resolve-mode", &out.Config.ImageResolveMode, nil)
+	readAttr(attrs, "build-arg:BUILDKIT_MULTI_PLATFORM", &out.Config.MultiPlatform, func(v string) (bool, bool) {
+		return tryParseValue(v, &out.Errors, strconv.ParseBool)
+	})
+	readAttr(attrs, "multi-platform", &out.Config.MultiPlatform, func(v string) (bool, bool) {
+		return tryParseValue(v, &out.Errors, strconv.ParseBool)
+	})
+	readAttr(attrs, "no-cache", &out.Config.NoCache, func(v string) (bool, bool) {
+		if v == "" {
+			return true, true
+		}
+		return false, false
+	})
+	readAttr(attrs, "no-cache", &out.Config.NoCacheFilter, func(v string) ([]string, bool) {
+		if v == "" {
+			return nil, false
+		}
+		return strings.Split(v, ","), true
+	})
+
+	readAttr(attrs, "add-hosts", &out.Config.ExtraHosts, func(v string) ([]string, bool) {
+		return tryParseValue(v, &out.Errors, func(v string) ([]string, error) {
 			fields, err := csvvalue.Fields(v, nil)
 			if err != nil {
-				return "", err
+				return nil, err
 			}
-			return strings.Join(fields, ", "), nil
-		}), true
+			return fields, nil
+		})
 	})
-	writeAttr("cgroup-parent", "Cgroup Parent", nil)
-	writeAttr("image-resolve-mode", "Image Resolve Mode", nil)
-	writeAttr("multi-platform", "Force Multi-Platform", nil)
-	writeAttr("build-arg:BUILDKIT_MULTI_PLATFORM", "Force Multi-Platform", nil)
-	writeAttr("no-cache", "Disable Cache", func(v string) (string, bool) {
-		if v == "" {
-			return "true", true
-		}
-		return v, true
-	})
-	writeAttr("shm-size", "Shm Size", nil)
-	writeAttr("ulimit", "Resource Limits", nil)
-	writeAttr("build-arg:BUILDKIT_CACHE_MOUNT_NS", "Cache Mount Namespace", nil)
-	writeAttr("build-arg:BUILDKIT_DOCKERFILE_CHECK", "Dockerfile Check Config", nil)
-	writeAttr("build-arg:SOURCE_DATE_EPOCH", "Source Date Epoch", nil)
-	writeAttr("build-arg:SANDBOX_HOSTNAME", "Sandbox Hostname", nil)
 
-	var unusedAttrs []string
+	readAttr(attrs, "shm-size", &out.Config.ShmSize, nil)
+	readAttr(attrs, "ulimit", &out.Config.Ulimit, nil)
+	readAttr(attrs, "build-arg:BUILDKIT_CACHE_MOUNT_NS", &out.Config.CacheMountNS, nil)
+	readAttr(attrs, "build-arg:BUILDKIT_DOCKERFILE_CHECK", &out.Config.DockerfileCheckConfig, nil)
+	readAttr(attrs, "build-arg:SOURCE_DATE_EPOCH", &out.Config.SourceDateEpoch, nil)
+	readAttr(attrs, "build-arg:SANDBOX_HOSTNAME", &out.Config.SandboxHostname, nil)
+
+	var unusedAttrs []keyValueOutput
 	for k := range attrs {
 		if strings.HasPrefix(k, "vcs:") || strings.HasPrefix(k, "build-arg:") || strings.HasPrefix(k, "label:") || strings.HasPrefix(k, "context:") || strings.HasPrefix(k, "attest:") {
 			continue
 		}
-		unusedAttrs = append(unusedAttrs, k)
+		unusedAttrs = append(unusedAttrs, keyValueOutput{
+			Name:  k,
+			Value: attrs[k],
+		})
 	}
-	slices.Sort(unusedAttrs)
+	slices.SortFunc(unusedAttrs, func(a, b keyValueOutput) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	out.Config.RestRaw = unusedAttrs
 
-	for _, k := range unusedAttrs {
-		fmt.Fprintf(tw, "%s:\t%s\n", k, attrs[k])
+	if out.Context != "" {
+		fmt.Fprintf(tw, "Context:\t%s\n", out.Context)
+	}
+	if out.Dockerfile != "" {
+		fmt.Fprintf(tw, "Dockerfile:\t%s\n", out.Dockerfile)
+	}
+	if out.VCSRepository != "" {
+		fmt.Fprintf(tw, "VCS Repository:\t%s\n", out.VCSRepository)
+	}
+	if out.VCSRevision != "" {
+		fmt.Fprintf(tw, "VCS Revision:\t%s\n", out.VCSRevision)
+	}
+
+	if out.Target != "" {
+		fmt.Fprintf(tw, "Target:\t%s\n", out.Target)
+	}
+
+	if len(out.Platform) > 0 {
+		fmt.Fprintf(tw, "Platforms:\t%s\n", strings.Join(out.Platform, ", "))
+	}
+
+	if out.KeepGitDir {
+		fmt.Fprintf(tw, "Keep Git Dir:\t%s\n", strconv.FormatBool(out.KeepGitDir))
 	}
 
 	tw.Flush()
 
 	fmt.Fprintln(dockerCli.Out())
 
-	printTable(dockerCli.Out(), attrs, "build-arg:", "Build Arg")
-	printTable(dockerCli.Out(), attrs, "label:", "Label")
+	printTable(dockerCli.Out(), out.NamedContexts, "Named Context")
+
+	tw = tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
+
+	fmt.Fprintf(tw, "Started:\t%s\n", out.StartedAt.Format("2006-01-02 15:04:05"))
+	var statusStr string
+	if out.Status == statusRunning {
+		statusStr = " (running)"
+	}
+	fmt.Fprintf(tw, "Duration:\t%s%s\n", formatDuration(out.Duration), statusStr)
+
+	if out.Status == statusError {
+		fmt.Fprintf(tw, "Error:\t%s %s\n", codes.Code(rec.Error.Code).String(), rec.Error.Message)
+	} else if out.Status == statusCanceled {
+		fmt.Fprintf(tw, "Status:\tCanceled\n")
+	}
+
+	fmt.Fprintf(tw, "Build Steps:\t%d/%d (%.0f%% cached)\n", out.NumCompletedSteps, out.NumTotalSteps, float64(out.NumCachedSteps)/float64(out.NumTotalSteps)*100)
+	tw.Flush()
+
+	fmt.Fprintln(dockerCli.Out())
+
+	tw = tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
+
+	if out.Config.Network != "" {
+		fmt.Fprintf(tw, "Network:\t%s\n", out.Config.Network)
+	}
+	if out.Config.Hostname != "" {
+		fmt.Fprintf(tw, "Hostname:\t%s\n", out.Config.Hostname)
+	}
+	if len(out.Config.ExtraHosts) > 0 {
+		fmt.Fprintf(tw, "Extra Hosts:\t%s\n", strings.Join(out.Config.ExtraHosts, ", "))
+	}
+	if out.Config.CgroupParent != "" {
+		fmt.Fprintf(tw, "Cgroup Parent:\t%s\n", out.Config.CgroupParent)
+	}
+	if out.Config.ImageResolveMode != "" {
+		fmt.Fprintf(tw, "Image Resolve Mode:\t%s\n", out.Config.ImageResolveMode)
+	}
+	if out.Config.MultiPlatform {
+		fmt.Fprintf(tw, "Multi-Platform:\t%s\n", strconv.FormatBool(out.Config.MultiPlatform))
+	}
+	if out.Config.NoCache {
+		fmt.Fprintf(tw, "No Cache:\t%s\n", strconv.FormatBool(out.Config.NoCache))
+	}
+	if len(out.Config.NoCacheFilter) > 0 {
+		fmt.Fprintf(tw, "No Cache Filter:\t%s\n", strings.Join(out.Config.NoCacheFilter, ", "))
+	}
+
+	if out.Config.ShmSize != "" {
+		fmt.Fprintf(tw, "Shm Size:\t%s\n", out.Config.ShmSize)
+	}
+	if out.Config.Ulimit != "" {
+		fmt.Fprintf(tw, "Resource Limits:\t%s\n", out.Config.Ulimit)
+	}
+	if out.Config.CacheMountNS != "" {
+		fmt.Fprintf(tw, "Cache Mount Namespace:\t%s\n", out.Config.CacheMountNS)
+	}
+	if out.Config.DockerfileCheckConfig != "" {
+		fmt.Fprintf(tw, "Dockerfile Check Config:\t%s\n", out.Config.DockerfileCheckConfig)
+	}
+	if out.Config.SourceDateEpoch != "" {
+		fmt.Fprintf(tw, "Source Date Epoch:\t%s\n", out.Config.SourceDateEpoch)
+	}
+	if out.Config.SandboxHostname != "" {
+		fmt.Fprintf(tw, "Sandbox Hostname:\t%s\n", out.Config.SandboxHostname)
+	}
+
+	for _, kv := range out.Config.RestRaw {
+		fmt.Fprintf(tw, "%s:\t%s\n", kv.Name, kv.Value)
+	}
+
+	tw.Flush()
+
+	fmt.Fprintln(dockerCli.Out())
+
+	printTable(dockerCli.Out(), out.BuildArgs, "Build Arg")
+	printTable(dockerCli.Out(), out.Labels, "Label")
 
 	c, err := rec.node.Driver.Client(ctx)
 	if err != nil {
@@ -565,34 +751,46 @@ func descrType(desc ocispecs.Descriptor) string {
 	return desc.MediaType
 }
 
-func tryParseValue(s string, f func(string) (string, error)) string {
+func tryParseValue[T any](s string, errs *[]string, f func(string) (T, error)) (T, bool) {
 	v, err := f(s)
 	if err != nil {
-		return fmt.Sprintf("%s (%v)", s, err)
+		errStr := fmt.Sprintf("failed to parse %s: (%v)", s, err)
+		*errs = append(*errs, errStr)
 	}
-	return v
+	return v, true
 }
 
-func printTable(w io.Writer, attrs map[string]string, prefix, title string) {
-	var keys []string
-	for k := range attrs {
-		if strings.HasPrefix(k, prefix) {
-			keys = append(keys, strings.TrimPrefix(k, prefix))
-		}
-	}
-	slices.Sort(keys)
-
-	if len(keys) == 0 {
+func printTable(w io.Writer, kvs []keyValueOutput, title string) {
+	if len(kvs) == 0 {
 		return
 	}
 
 	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
 	fmt.Fprintf(tw, "%s\tVALUE\n", strings.ToUpper(title))
-	for _, k := range keys {
-		fmt.Fprintf(tw, "%s\t%s\n", k, attrs[prefix+k])
+	for _, k := range kvs {
+		fmt.Fprintf(tw, "%s\t%s\n", k.Name, k.Value)
 	}
 	tw.Flush()
 	fmt.Fprintln(w)
+}
+
+func readKeyValues(attrs map[string]string, prefix string) []keyValueOutput {
+	var out []keyValueOutput
+	for k, v := range attrs {
+		if strings.HasPrefix(k, prefix) {
+			out = append(out, keyValueOutput{
+				Name:  strings.TrimPrefix(k, prefix),
+				Value: v,
+			})
+		}
+	}
+	if len(out) == 0 {
+		return nil
+	}
+	slices.SortFunc(out, func(a, b keyValueOutput) int {
+		return cmp.Compare(a.Name, b.Name)
+	})
+	return out
 }
 
 func digestSetToDigests(ds slsa.DigestSet) []string {
