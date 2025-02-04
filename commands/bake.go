@@ -66,7 +66,11 @@ type bakeOptions struct {
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
 	mp := dockerCli.MeterProvider()
 
-	ctx, end, err := tracing.TraceCurrentCommand(ctx, "bake")
+	ctx, end, err := tracing.TraceCurrentCommand(ctx, append([]string{"bake"}, targets...),
+		attribute.String("builder", in.builder),
+		attribute.StringSlice("targets", targets),
+		attribute.StringSlice("files", in.files),
+	)
 	if err != nil {
 		return err
 	}
