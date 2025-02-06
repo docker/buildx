@@ -30,10 +30,10 @@ import (
 )
 
 type traceOptions struct {
-	builder       string
-	ref           string
-	containerName string
-	addr          string
+	builder string
+	ref     string
+	addr    string
+	compare string
 }
 
 func loadTrace(ctx context.Context, ref string, nodes []builder.Node) (string, []byte, error) {
@@ -175,9 +175,25 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		}
 	}
 
-	traceid, data, err := loadTrace(ctx, opts.ref, nodes)
+	traceID, data, err := loadTrace(ctx, opts.ref, nodes)
 	if err != nil {
 		return err
+	}
+	srv := jaegerui.NewServer(jaegerui.Config{})
+	if err := srv.AddTrace(traceID, bytes.NewReader(data)); err != nil {
+		return err
+	}
+	url := "/trace/" + traceID
+
+	if opts.compare != "" {
+		traceIDcomp, data, err := loadTrace(ctx, opts.compare, nodes)
+		if err != nil {
+			return errors.Wrapf(err, "failed to load trace for %s", opts.compare)
+		}
+		if err := srv.AddTrace(traceIDcomp, bytes.NewReader(data)); err != nil {
+			return err
+		}
+		url = "/trace/" + traceIDcomp + "..." + traceID
 	}
 
 	var term bool
@@ -185,15 +201,9 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		term = true
 	}
 
-	if !term {
+	if !term && opts.compare == "" {
 		fmt.Fprintln(dockerCli.Out(), string(data))
 		return nil
-	}
-
-	srv := jaegerui.NewServer(jaegerui.Config{})
-
-	if err := srv.AddTrace(traceid, bytes.NewReader(data)); err != nil {
-		return err
 	}
 
 	ln, err := net.Listen("tcp", opts.addr)
@@ -201,13 +211,12 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		return err
 	}
 
-	url := "http://" + ln.Addr().String() + "/trace/" + traceid
-
 	go func() {
 		time.Sleep(100 * time.Millisecond)
 		browser.OpenURL(url)
 	}()
 
+	url = "http://" + ln.Addr().String() + url
 	fmt.Fprintf(dockerCli.Err(), "Trace available at %s\n", url)
 
 	go func() {
@@ -244,8 +253,8 @@ func traceCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&options.containerName, "container", "", "Container name")
 	flags.StringVar(&options.addr, "addr", "127.0.0.1:0", "Address to bind the UI server")
+	flags.StringVar(&options.compare, "compare", "", "Compare with another build reference")
 
 	return cmd
 }
