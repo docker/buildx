@@ -2,8 +2,10 @@ package bake
 
 import (
 	"reflect"
+	"regexp"
 	"testing"
 
+	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/stretchr/testify/require"
 )
 
@@ -647,7 +649,7 @@ func TestHCLAttrsCapsuleType(t *testing.T) {
 	require.Equal(t, []string{"default", "key=path/to/key"}, stringify(c.Targets[0].SSH))
 }
 
-func TestHCLAttrsCapsuleTypeVars(t *testing.T) {
+func TestHCLAttrsCapsuleType_ObjectVars(t *testing.T) {
 	dt := []byte(`
 	variable "foo" {
 		default = "bar"
@@ -714,6 +716,52 @@ func TestHCLAttrsCapsuleTypeVars(t *testing.T) {
 	require.Equal(t, []string{"type=oci,dest=../bar.tar"}, stringify(web.Outputs))
 	require.Equal(t, []string{"type=local,src=path/to/cache", "user/app:cache"}, stringify(web.CacheFrom))
 	require.Equal(t, []string{"id=oci,src=/local/secret"}, stringify(web.Secrets))
+}
+
+func TestHCLAttrsCapsuleType_MissingVars(t *testing.T) {
+	dt := []byte(`
+	target "app" {
+		attest = [
+			"type=sbom,disabled=${SBOM}",
+		]
+
+		cache-from = [
+			{ type = "registry", ref = "user/app:${FOO1}" },
+      "type=local,src=path/to/cache:${FOO2}",
+		]
+
+		cache-to = [
+			{ type = "local", dest = "path/to/${BAR}" },
+		]
+
+		output = [
+			{ type = "oci", dest = "../${OUTPUT}.tar" },
+		]
+
+		secret = [
+			{ id = "mysecret", src = "/local/${SECRET}" },
+		]
+
+		ssh = [
+			{ id = "key", paths = ["path/to/${SSH_KEY}"] },
+		]
+	}
+	`)
+
+	var diags hcl.Diagnostics
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.ErrorAs(t, err, &diags)
+
+	re := regexp.MustCompile(`There is no variable named "([\w\d_]+)"`)
+	var actual []string
+	for _, diag := range diags {
+		if m := re.FindStringSubmatch(diag.Error()); m != nil {
+			actual = append(actual, m[1])
+		}
+	}
+	require.ElementsMatch(t,
+		[]string{"SBOM", "FOO1", "FOO2", "BAR", "OUTPUT", "SECRET", "SSH_KEY"},
+		actual)
 }
 
 func TestHCLMultiFileAttrs(t *testing.T) {

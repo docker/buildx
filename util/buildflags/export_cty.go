@@ -23,13 +23,7 @@ func (e *Exports) FromCtyValue(in cty.Value, p cty.Path) error {
 
 func (e *Exports) fromCtyValue(in cty.Value, p cty.Path) error {
 	*e = make([]*ExportEntry, 0, in.LengthInt())
-	for elem := in.ElementIterator(); elem.Next(); {
-		_, value := elem.Element()
-
-		if isEmpty(value) {
-			continue
-		}
-
+	for value := range eachElement(in) {
 		entry := &ExportEntry{}
 		if err := entry.FromCtyValue(value, p); err != nil {
 			return err

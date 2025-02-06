@@ -23,13 +23,7 @@ func (o *CacheOptions) FromCtyValue(in cty.Value, p cty.Path) error {
 
 func (o *CacheOptions) fromCtyValue(in cty.Value, p cty.Path) error {
 	*o = make([]*CacheOptionsEntry, 0, in.LengthInt())
-	for elem := in.ElementIterator(); elem.Next(); {
-		_, value := elem.Element()
-
-		if isEmpty(value) {
-			continue
-		}
-
+	for value := range eachElement(in) {
 		// Special handling for a string type to handle ref only format.
 		if value.Type() == cty.String {
 			entries, err := ParseCacheEntry([]string{value.AsString()})

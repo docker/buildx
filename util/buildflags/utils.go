@@ -1,6 +1,8 @@
 package buildflags
 
 import (
+	"iter"
+
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/gocty"
 )
@@ -34,7 +36,7 @@ func removeDupes[E comparable[E]](s []E) []E {
 }
 
 func getAndDelete(m map[string]cty.Value, attr string, gv interface{}) error {
-	if v, ok := m[attr]; ok {
+	if v, ok := m[attr]; ok && v.IsKnown() {
 		delete(m, attr)
 		return gocty.FromCtyValue(v, gv)
 	}
@@ -44,11 +46,28 @@ func getAndDelete(m map[string]cty.Value, attr string, gv interface{}) error {
 func asMap(m map[string]cty.Value) map[string]string {
 	out := make(map[string]string, len(m))
 	for k, v := range m {
-		out[k] = v.AsString()
+		if v.IsKnown() {
+			out[k] = v.AsString()
+		}
 	}
 	return out
 }
 
-func isEmpty(v cty.Value) bool {
-	return v.Type() == cty.String && v.AsString() == ""
+func isEmptyOrUnknown(v cty.Value) bool {
+	return !v.IsKnown() || (v.Type() == cty.String && v.AsString() == "")
+}
+
+func eachElement(in cty.Value) iter.Seq[cty.Value] {
+	return func(yield func(v cty.Value) bool) {
+		for elem := in.ElementIterator(); elem.Next(); {
+			_, value := elem.Element()
+			if isEmptyOrUnknown(value) {
+				continue
+			}
+
+			if !yield(value) {
+				return
+			}
+		}
+	}
 }
