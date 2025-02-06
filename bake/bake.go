@@ -1257,9 +1257,8 @@ func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(
 
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
 	// make sure local credentials are loaded multiple times for different targets
-	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
 	authProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		ConfigFile: dockerConfig,
+		ConfigFile: config.LoadDefaultConfigFile(os.Stderr),
 	})
 
 	m2 := make(map[string]build.Options, len(m))
