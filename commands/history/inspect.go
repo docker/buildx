@@ -25,6 +25,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/command/formatter"
 	"github.com/docker/cli/cli/debug"
 	slsa "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/common"
 	slsa02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
@@ -57,6 +58,7 @@ const (
 type inspectOptions struct {
 	builder string
 	ref     string
+	format  string
 }
 
 type inspectOutput struct {
@@ -399,6 +401,14 @@ workers0:
 	})
 	out.Config.RestRaw = unusedAttrs
 
+	if opts.format == formatter.JSONFormatKey {
+		enc := json.NewEncoder(dockerCli.Out())
+		enc.SetIndent("", "  ")
+		return enc.Encode(out)
+	} else if opts.format != formatter.RawFormatKey {
+		return errors.Errorf("unsupported format %q", opts.format)
+	}
+
 	tw := tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
 
 	if out.Context != "" {
@@ -603,7 +613,8 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 		attachmentCmd(dockerCli, rootOpts),
 	)
 
-	// flags := cmd.Flags()
+	flags := cmd.Flags()
+	flags.StringVar(&options.format, "format", formatter.RawFormatKey, "Format the output")
 
 	return cmd
 }
