@@ -60,6 +60,7 @@ type inspectOptions struct {
 }
 
 type inspectOutput struct {
+	Name          string   `json:"name,omitempty"`
 	Context       string   `json:"context,omitempty"`
 	Dockerfile    string   `json:"dockerfile,omitempty"`
 	VCSRepository string   `json:"vcs_repository,omitempty"`
@@ -76,9 +77,9 @@ type inspectOutput struct {
 	Status      statusT       `json:"status,omitempty"`
 	Error       *errorOutput  `json:"error,omitempty"`
 
-	NumCompletedSteps int `json:"num_completed_steps"`
-	NumTotalSteps     int `json:"num_total_steps"`
-	NumCachedSteps    int `json:"num_cached_steps"`
+	NumCompletedSteps int32 `json:"num_completed_steps"`
+	NumTotalSteps     int32 `json:"num_total_steps"`
+	NumCachedSteps    int32 `json:"num_cached_steps"`
 
 	BuildArgs []keyValueOutput `json:"build_args,omitempty"`
 	Labels    []keyValueOutput `json:"labels,omitempty"`
@@ -109,8 +110,12 @@ type configOutput struct {
 }
 
 type errorOutput struct {
-	Code    int    `json:"code,omitempty"`
-	Message string `json:"message,omitempty"`
+	Code    int      `json:"code,omitempty"`
+	Message string   `json:"message,omitempty"`
+	Name    string   `json:"name,omitempty"`
+	Logs    []string `json:"logs,omitempty"`
+
+	statusErr error
 }
 
 type keyValueOutput struct {
@@ -169,13 +174,31 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 
 	rec := &recs[0]
 
+	c, err := rec.node.Driver.Client(ctx)
+	if err != nil {
+		return err
+	}
+
+	store := proxy.NewContentStore(c.ContentClient())
+
+	var defaultPlatform string
+	workers, err := c.ListWorkers(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to list workers")
+	}
+workers0:
+	for _, w := range workers {
+		for _, p := range w.Platforms {
+			defaultPlatform = platforms.FormatAll(platforms.Normalize(p))
+			break workers0
+		}
+	}
+
 	ls, err := localstate.New(confutil.NewConfig(dockerCli))
 	if err != nil {
 		return err
 	}
 	st, _ := ls.ReadRef(rec.node.Builder, rec.node.Name, rec.Ref)
-
-	tw := tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
 
 	attrs := rec.FrontendAttrs
 	delete(attrs, "frontend.caps")
@@ -219,6 +242,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 	}
 	delete(attrs, "filename")
 
+	out.Name = buildName(rec.FrontendAttrs, st)
 	out.Context = context
 	out.Dockerfile = dockerfile
 
@@ -243,6 +267,9 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 				}
 				pp = append(pp, platforms.FormatAll(platforms.Normalize(p)))
 			}
+			if len(pp) == 0 {
+				pp = append(pp, defaultPlatform)
+			}
 			return pp, nil
 		})
 	})
@@ -265,15 +292,40 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 		out.Status = statusComplete
 	}
 
-	if rec.Error != nil {
-		if codes.Code(rec.Error.Code) == codes.Canceled {
-			out.Status = statusCanceled
-		} else {
-			out.Status = statusError
+	if rec.Error != nil || rec.ExternalError != nil {
+		out.Error = &errorOutput{}
+		if rec.Error != nil {
+			if codes.Code(rec.Error.Code) == codes.Canceled {
+				out.Status = statusCanceled
+			} else {
+				out.Status = statusError
+			}
+			out.Error.Code = int(codes.Code(rec.Error.Code))
+			out.Error.Message = rec.Error.Message
 		}
-		out.Error = &errorOutput{
-			Code:    int(codes.Code(rec.Error.Code)),
-			Message: rec.Error.Message,
+		if rec.ExternalError != nil {
+			dt, err := content.ReadBlob(ctx, store, ociDesc(rec.ExternalError))
+			if err != nil {
+				return errors.Wrapf(err, "failed to read external error %s", rec.ExternalError.Digest)
+			}
+			var st spb.Status
+			if err := proto.Unmarshal(dt, &st); err != nil {
+				return errors.Wrapf(err, "failed to unmarshal external error %s", rec.ExternalError.Digest)
+			}
+			out.Error.statusErr = grpcerrors.FromGRPC(status.ErrorProto(&st))
+			var ve *errdefs.VertexError
+			if errors.As(out.Error.statusErr, &ve) {
+				dgst, err := digest.Parse(ve.Vertex.Digest)
+				if err != nil {
+					return errors.Wrapf(err, "failed to parse vertex digest %s", ve.Vertex.Digest)
+				}
+				name, logs, err := loadVertexLogs(ctx, c, rec.Ref, dgst, 16)
+				if err != nil {
+					return errors.Wrapf(err, "failed to load vertex logs %s", dgst)
+				}
+				out.Error.Name = name
+				out.Error.Logs = logs
+			}
 		}
 	}
 
@@ -284,6 +336,10 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 			out.Duration = rec.currentTimestamp.Sub(*out.StartedAt)
 		}
 	}
+
+	out.NumCompletedSteps = rec.NumCompletedSteps
+	out.NumTotalSteps = rec.NumTotalSteps
+	out.NumCachedSteps = rec.NumCachedSteps
 
 	out.BuildArgs = readKeyValues(attrs, "build-arg:")
 	out.Labels = readKeyValues(attrs, "label:")
@@ -342,6 +398,8 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 		return cmp.Compare(a.Name, b.Name)
 	})
 	out.Config.RestRaw = unusedAttrs
+
+	tw := tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
 
 	if out.Context != "" {
 		fmt.Fprintf(tw, "Context:\t%s\n", out.Context)
@@ -451,13 +509,6 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 	printTable(dockerCli.Out(), out.BuildArgs, "Build Arg")
 	printTable(dockerCli.Out(), out.Labels, "Label")
 
-	c, err := rec.node.Driver.Client(ctx)
-	if err != nil {
-		return err
-	}
-
-	store := proxy.NewContentStore(c.ContentClient())
-
 	attachments, err := allAttachments(ctx, store, *rec)
 	if err != nil {
 		return err
@@ -504,44 +555,22 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 		fmt.Fprintln(dockerCli.Out())
 	}
 
-	if rec.ExternalError != nil {
-		dt, err := content.ReadBlob(ctx, store, ociDesc(rec.ExternalError))
-		if err != nil {
-			return errors.Wrapf(err, "failed to read external error %s", rec.ExternalError.Digest)
-		}
-		var st spb.Status
-		if err := proto.Unmarshal(dt, &st); err != nil {
-			return errors.Wrapf(err, "failed to unmarshal external error %s", rec.ExternalError.Digest)
-		}
-		retErr := grpcerrors.FromGRPC(status.ErrorProto(&st))
-		for _, s := range errdefs.Sources(retErr) {
+	if out.Error != nil {
+		for _, s := range errdefs.Sources(out.Error.statusErr) {
 			s.Print(dockerCli.Out())
 		}
 		fmt.Fprintln(dockerCli.Out())
-
-		var ve *errdefs.VertexError
-		if errors.As(retErr, &ve) {
-			dgst, err := digest.Parse(ve.Vertex.Digest)
-			if err != nil {
-				return errors.Wrapf(err, "failed to parse vertex digest %s", ve.Vertex.Digest)
+		if len(out.Error.Logs) > 0 {
+			fmt.Fprintln(dockerCli.Out(), "Logs:")
+			fmt.Fprintf(dockerCli.Out(), "> => %s:\n", out.Error.Name)
+			for _, l := range out.Error.Logs {
+				fmt.Fprintln(dockerCli.Out(), "> "+l)
 			}
-			name, logs, err := loadVertexLogs(ctx, c, rec.Ref, dgst, 16)
-			if err != nil {
-				return errors.Wrapf(err, "failed to load vertex logs %s", dgst)
-			}
-			if len(logs) > 0 {
-				fmt.Fprintln(dockerCli.Out(), "Logs:")
-				fmt.Fprintf(dockerCli.Out(), "> => %s:\n", name)
-				for _, l := range logs {
-					fmt.Fprintln(dockerCli.Out(), "> "+l)
-				}
-				fmt.Fprintln(dockerCli.Out())
-			}
+			fmt.Fprintln(dockerCli.Out())
 		}
-
 		if debug.IsEnabled() {
-			fmt.Fprintf(dockerCli.Out(), "\n%+v\n", stack.Formatter(retErr))
-		} else if len(stack.Traces(retErr)) > 0 {
+			fmt.Fprintf(dockerCli.Out(), "\n%+v\n", stack.Formatter(out.Error.statusErr))
+		} else if len(stack.Traces(out.Error.statusErr)) > 0 {
 			fmt.Fprintf(dockerCli.Out(), "Enable --debug to see stack traces for error\n")
 		}
 	}
