@@ -9,6 +9,8 @@ import (
 	"net"
 	"os"
 	"slices"
+	"strconv"
+	"strings"
 	"time"
 
 	"github.com/containerd/console"
@@ -34,6 +36,129 @@ type traceOptions struct {
 	addr          string
 }
 
+func loadTrace(ctx context.Context, ref string, nodes []builder.Node) (string, []byte, error) {
+	var offset *int
+	if strings.HasPrefix(ref, "^") {
+		off, err := strconv.Atoi(ref[1:])
+		if err != nil {
+			return "", nil, errors.Wrapf(err, "invalid offset %q", ref)
+		}
+		offset = &off
+		ref = ""
+	}
+
+	recs, err := queryRecords(ctx, ref, nodes)
+	if err != nil {
+		return "", nil, err
+	}
+
+	var rec *historyRecord
+
+	if ref == "" {
+		slices.SortFunc(recs, func(a, b historyRecord) int {
+			return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
+		})
+		for _, r := range recs {
+			if r.CompletedAt != nil {
+				if offset != nil {
+					if *offset > 0 {
+						*offset--
+						continue
+					}
+				}
+				rec = &r
+				break
+			}
+		}
+		if offset != nil && *offset > 0 {
+			return "", nil, errors.Errorf("no completed build found with offset %d", *offset)
+		}
+	} else {
+		rec = &recs[0]
+	}
+	if rec == nil {
+		if ref == "" {
+			return "", nil, errors.New("no records found")
+		}
+		return "", nil, errors.Errorf("no record found for ref %q", ref)
+	}
+
+	if rec.CompletedAt == nil {
+		return "", nil, errors.Errorf("build %q is not completed, only completed builds can be traced", rec.Ref)
+	}
+
+	if rec.Trace == nil {
+		// build is complete but no trace yet. try to finalize the trace
+		time.Sleep(1 * time.Second) // give some extra time for last parts of trace to be written
+
+		c, err := rec.node.Driver.Client(ctx)
+		if err != nil {
+			return "", nil, err
+		}
+		_, err = c.ControlClient().UpdateBuildHistory(ctx, &controlapi.UpdateBuildHistoryRequest{
+			Ref:      rec.Ref,
+			Finalize: true,
+		})
+		if err != nil {
+			return "", nil, err
+		}
+
+		recs, err := queryRecords(ctx, rec.Ref, []builder.Node{*rec.node})
+		if err != nil {
+			return "", nil, err
+		}
+
+		if len(recs) == 0 {
+			return "", nil, errors.Errorf("build record %q was deleted", rec.Ref)
+		}
+
+		rec = &recs[0]
+		if rec.Trace == nil {
+			return "", nil, errors.Errorf("build record %q is missing a trace", rec.Ref)
+		}
+	}
+
+	c, err := rec.node.Driver.Client(ctx)
+	if err != nil {
+		return "", nil, err
+	}
+
+	store := proxy.NewContentStore(c.ContentClient())
+
+	ra, err := store.ReaderAt(ctx, ocispecs.Descriptor{
+		Digest:    digest.Digest(rec.Trace.Digest),
+		MediaType: rec.Trace.MediaType,
+		Size:      rec.Trace.Size,
+	})
+	if err != nil {
+		return "", nil, err
+	}
+
+	spans, err := otelutil.ParseSpanStubs(io.NewSectionReader(ra, 0, ra.Size()))
+	if err != nil {
+		return "", nil, err
+	}
+
+	wrapper := struct {
+		Data []jaeger.Trace `json:"data"`
+	}{
+		Data: spans.JaegerData().Data,
+	}
+
+	if len(wrapper.Data) == 0 {
+		return "", nil, errors.New("no trace data")
+	}
+
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetIndent("", "  ")
+	if err := enc.Encode(wrapper); err != nil {
+		return "", nil, err
+	}
+
+	return string(wrapper.Data[0].TraceID), buf.Bytes(), nil
+}
+
 func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) error {
 	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
 	if err != nil {
@@ -50,93 +175,9 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		}
 	}
 
-	recs, err := queryRecords(ctx, opts.ref, nodes)
+	traceid, data, err := loadTrace(ctx, opts.ref, nodes)
 	if err != nil {
 		return err
-	}
-
-	var rec *historyRecord
-
-	if opts.ref == "" {
-		slices.SortFunc(recs, func(a, b historyRecord) int {
-			return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
-		})
-		for _, r := range recs {
-			if r.CompletedAt != nil {
-				rec = &r
-				break
-			}
-		}
-	} else {
-		rec = &recs[0]
-	}
-	if rec == nil {
-		if opts.ref == "" {
-			return errors.New("no records found")
-		}
-		return errors.Errorf("no record found for ref %q", opts.ref)
-	}
-
-	if rec.CompletedAt == nil {
-		return errors.Errorf("build %q is not completed, only completed builds can be traced", rec.Ref)
-	}
-
-	if rec.Trace == nil {
-		// build is complete but no trace yet. try to finalize the trace
-		time.Sleep(1 * time.Second) // give some extra time for last parts of trace to be written
-
-		c, err := rec.node.Driver.Client(ctx)
-		if err != nil {
-			return err
-		}
-		_, err = c.ControlClient().UpdateBuildHistory(ctx, &controlapi.UpdateBuildHistoryRequest{
-			Ref:      rec.Ref,
-			Finalize: true,
-		})
-		if err != nil {
-			return err
-		}
-
-		recs, err := queryRecords(ctx, rec.Ref, []builder.Node{*rec.node})
-		if err != nil {
-			return err
-		}
-
-		if len(recs) == 0 {
-			return errors.Errorf("build record %q was deleted", rec.Ref)
-		}
-
-		rec = &recs[0]
-		if rec.Trace == nil {
-			return errors.Errorf("build record %q is missing a trace", rec.Ref)
-		}
-	}
-
-	c, err := rec.node.Driver.Client(ctx)
-	if err != nil {
-		return err
-	}
-
-	store := proxy.NewContentStore(c.ContentClient())
-
-	ra, err := store.ReaderAt(ctx, ocispecs.Descriptor{
-		Digest:    digest.Digest(rec.Trace.Digest),
-		MediaType: rec.Trace.MediaType,
-		Size:      rec.Trace.Size,
-	})
-	if err != nil {
-		return err
-	}
-
-	spans, err := otelutil.ParseSpanStubs(io.NewSectionReader(ra, 0, ra.Size()))
-	if err != nil {
-		return err
-	}
-
-	wrapper := struct {
-		Data []jaeger.Trace `json:"data"`
-	}{
-		Data: spans.JaegerData().Data,
 	}
 
 	var term bool
@@ -144,26 +185,14 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		term = true
 	}
 
-	if len(wrapper.Data) == 0 {
-		return errors.New("no trace data")
-	}
-
 	if !term {
-		enc := json.NewEncoder(dockerCli.Out())
-		enc.SetIndent("", "  ")
-		return enc.Encode(wrapper)
+		fmt.Fprintln(dockerCli.Out(), string(data))
+		return nil
 	}
 
 	srv := jaegerui.NewServer(jaegerui.Config{})
 
-	buf := &bytes.Buffer{}
-	enc := json.NewEncoder(buf)
-	enc.SetIndent("", "  ")
-	if err := enc.Encode(wrapper); err != nil {
-		return err
-	}
-
-	if err := srv.AddTrace(string(wrapper.Data[0].TraceID), bytes.NewReader(buf.Bytes())); err != nil {
+	if err := srv.AddTrace(traceid, bytes.NewReader(data)); err != nil {
 		return err
 	}
 
@@ -172,7 +201,7 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		return err
 	}
 
-	url := "http://" + ln.Addr().String() + "/trace/" + string(wrapper.Data[0].TraceID)
+	url := "http://" + ln.Addr().String() + "/trace/" + traceid
 
 	go func() {
 		time.Sleep(100 * time.Millisecond)
