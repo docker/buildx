@@ -1,29 +1,37 @@
 package history
 
 import (
+	"bytes"
 	"context"
 	"encoding/json"
+	"fmt"
 	"io"
-	"log"
+	"net"
+	"os"
 	"slices"
 	"time"
 
+	"github.com/containerd/console"
 	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/otelutil"
+	"github.com/docker/buildx/util/otelutil/jaeger"
 	"github.com/docker/cli/cli/command"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/browser"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	jaegerui "github.com/tonistiigi/jaeger-ui-rest"
 )
 
 type traceOptions struct {
 	builder       string
 	ref           string
 	containerName string
+	addr          string
 }
 
 func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) error {
@@ -104,8 +112,6 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		}
 	}
 
-	log.Printf("trace %+v", rec.Trace)
-
 	c, err := rec.node.Driver.Client(ctx)
 	if err != nil {
 		return err
@@ -127,12 +133,68 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		return err
 	}
 
-	// TODO: try to upload build to Jaeger UI
-	jd := spans.JaegerData().Data
+	wrapper := struct {
+		Data []jaeger.Trace `json:"data"`
+	}{
+		Data: spans.JaegerData().Data,
+	}
 
-	enc := json.NewEncoder(dockerCli.Out())
+	var term bool
+	if _, err := console.ConsoleFromFile(os.Stdout); err == nil {
+		term = true
+	}
+
+	if len(wrapper.Data) == 0 {
+		return errors.New("no trace data")
+	}
+
+	if !term {
+		enc := json.NewEncoder(dockerCli.Out())
+		enc.SetIndent("", "  ")
+		return enc.Encode(wrapper)
+	}
+
+	srv := jaegerui.NewServer(jaegerui.Config{})
+
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
 	enc.SetIndent("", "  ")
-	return enc.Encode(jd)
+	if err := enc.Encode(wrapper); err != nil {
+		return err
+	}
+
+	if err := srv.AddTrace(string(wrapper.Data[0].TraceID), bytes.NewReader(buf.Bytes())); err != nil {
+		return err
+	}
+
+	ln, err := net.Listen("tcp", opts.addr)
+	if err != nil {
+		return err
+	}
+
+	url := "http://" + ln.Addr().String() + "/trace/" + string(wrapper.Data[0].TraceID)
+
+	go func() {
+		time.Sleep(100 * time.Millisecond)
+		browser.OpenURL(url)
+	}()
+
+	fmt.Fprintf(dockerCli.Err(), "Trace available at %s\n", url)
+
+	go func() {
+		<-ctx.Done()
+		ln.Close()
+	}()
+
+	err = srv.Serve(ln)
+	if err != nil {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+	}
+	return err
 }
 
 func traceCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
@@ -154,6 +216,7 @@ func traceCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVar(&options.containerName, "container", "", "Container name")
+	flags.StringVar(&options.addr, "addr", "127.0.0.1:0", "Address to bind the UI server")
 
 	return cmd
 }

@@ -1,0 +1,3 @@
+target "public" {
+    output = ["./public"]
+}
