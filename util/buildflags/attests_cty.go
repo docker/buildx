@@ -24,9 +24,7 @@ func (e *Attests) FromCtyValue(in cty.Value, p cty.Path) error {
 
 func (e *Attests) fromCtyValue(in cty.Value, p cty.Path) error {
 	*e = make([]*Attest, 0, in.LengthInt())
-	for elem := in.ElementIterator(); elem.Next(); {
-		_, value := elem.Element()
-
+	for value := range eachElement(in) {
 		entry := &Attest{}
 		if err := entry.FromCtyValue(value, p); err != nil {
 			return err
@@ -64,6 +62,10 @@ func (e *Attest) FromCtyValue(in cty.Value, p cty.Path) error {
 	e.Attrs = map[string]string{}
 	for it := conv.ElementIterator(); it.Next(); {
 		k, v := it.Element()
+		if !v.IsKnown() {
+			continue
+		}
+
 		switch key := k.AsString(); key {
 		case "type":
 			e.Type = v.AsString()

@@ -30,13 +30,7 @@ func (s *SSHKeys) FromCtyValue(in cty.Value, p cty.Path) error {
 
 func (s *SSHKeys) fromCtyValue(in cty.Value, p cty.Path) error {
 	*s = make([]*SSH, 0, in.LengthInt())
-	for elem := in.ElementIterator(); elem.Next(); {
-		_, value := elem.Element()
-
-		if isEmpty(value) {
-			continue
-		}
-
+	for value := range eachElement(in) {
 		entry := &SSH{}
 		if err := entry.FromCtyValue(value, p); err != nil {
 			return err
@@ -71,10 +65,10 @@ func (e *SSH) FromCtyValue(in cty.Value, p cty.Path) error {
 		return err
 	}
 
-	if id := conv.GetAttr("id"); !id.IsNull() {
+	if id := conv.GetAttr("id"); !id.IsNull() && id.IsKnown() {
 		e.ID = id.AsString()
 	}
-	if paths := conv.GetAttr("paths"); !paths.IsNull() {
+	if paths := conv.GetAttr("paths"); !paths.IsNull() && paths.IsKnown() {
 		if err := gocty.FromCtyValue(paths, &e.Paths); err != nil {
 			return err
 		}
