@@ -88,6 +88,9 @@ type inspectOutput struct {
 
 	Config configOutput `json:"config,omitempty"`
 
+	Materials   []materialOutput   `json:"materials,omitempty"`
+	Attachments []attachmentOutput `json:"attachments,omitempty"`
+
 	Errors []string `json:"errors,omitempty"`
 }
 
@@ -109,6 +112,17 @@ type configOutput struct {
 	SandboxHostname       string `json:"sandbox_hostname,omitempty"`
 
 	RestRaw []keyValueOutput `json:"rest_raw,omitempty"`
+}
+
+type materialOutput struct {
+	URI     string   `json:"uri,omitempty"`
+	Digests []string `json:"digests,omitempty"`
+}
+
+type attachmentOutput struct {
+	Digest   string `json:"digest,omitempty"`
+	Platform string `json:"platform,omitempty"`
+	Type     string `json:"type,omitempty"`
 }
 
 type errorOutput struct {
@@ -408,6 +422,46 @@ workers0:
 	})
 	out.Config.RestRaw = unusedAttrs
 
+	attachments, err := allAttachments(ctx, store, *rec)
+	if err != nil {
+		return err
+	}
+
+	provIndex := slices.IndexFunc(attachments, func(a attachment) bool {
+		return descrType(a.descr) == slsa02.PredicateSLSAProvenance
+	})
+	if provIndex != -1 {
+		prov := attachments[provIndex]
+		dt, err := content.ReadBlob(ctx, store, prov.descr)
+		if err != nil {
+			return errors.Errorf("failed to read provenance %s: %v", prov.descr.Digest, err)
+		}
+		var pred provenancetypes.ProvenancePredicate
+		if err := json.Unmarshal(dt, &pred); err != nil {
+			return errors.Errorf("failed to unmarshal provenance %s: %v", prov.descr.Digest, err)
+		}
+		for _, m := range pred.Materials {
+			out.Materials = append(out.Materials, materialOutput{
+				URI:     m.URI,
+				Digests: digestSetToDigests(m.Digest),
+			})
+		}
+	}
+
+	if len(attachments) > 0 {
+		for _, a := range attachments {
+			p := ""
+			if a.platform != nil {
+				p = platforms.FormatAll(*a.platform)
+			}
+			out.Attachments = append(out.Attachments, attachmentOutput{
+				Digest:   a.descr.Digest.String(),
+				Platform: p,
+				Type:     descrType(a.descr),
+			})
+		}
+	}
+
 	if opts.format == formatter.JSONFormatKey {
 		enc := json.NewEncoder(dockerCli.Out())
 		enc.SetIndent("", "  ")
@@ -526,47 +580,23 @@ workers0:
 	printTable(dockerCli.Out(), out.BuildArgs, "Build Arg")
 	printTable(dockerCli.Out(), out.Labels, "Label")
 
-	attachments, err := allAttachments(ctx, store, *rec)
-	if err != nil {
-		return err
-	}
-
-	provIndex := slices.IndexFunc(attachments, func(a attachment) bool {
-		return descrType(a.descr) == slsa02.PredicateSLSAProvenance
-	})
-	if provIndex != -1 {
-		prov := attachments[provIndex]
-
-		dt, err := content.ReadBlob(ctx, store, prov.descr)
-		if err != nil {
-			return errors.Errorf("failed to read provenance %s: %v", prov.descr.Digest, err)
-		}
-
-		var pred provenancetypes.ProvenancePredicate
-		if err := json.Unmarshal(dt, &pred); err != nil {
-			return errors.Errorf("failed to unmarshal provenance %s: %v", prov.descr.Digest, err)
-		}
-
+	if len(out.Materials) > 0 {
 		fmt.Fprintln(dockerCli.Out(), "Materials:")
 		tw = tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
 		fmt.Fprintf(tw, "URI\tDIGEST\n")
-		for _, m := range pred.Materials {
-			fmt.Fprintf(tw, "%s\t%s\n", m.URI, strings.Join(digestSetToDigests(m.Digest), ", "))
+		for _, m := range out.Materials {
+			fmt.Fprintf(tw, "%s\t%s\n", m.URI, strings.Join(m.Digests, ", "))
 		}
 		tw.Flush()
 		fmt.Fprintln(dockerCli.Out())
 	}
 
-	if len(attachments) > 0 {
+	if len(out.Attachments) > 0 {
 		fmt.Fprintf(tw, "Attachments:\n")
 		tw = tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
 		fmt.Fprintf(tw, "DIGEST\tPLATFORM\tTYPE\n")
-		for _, a := range attachments {
-			p := ""
-			if a.platform != nil {
-				p = platforms.FormatAll(*a.platform)
-			}
-			fmt.Fprintf(tw, "%s\t%s\t%s\n", a.descr.Digest, p, descrType(a.descr))
+		for _, a := range out.Attachments {
+			fmt.Fprintf(tw, "%s\t%s\t%s\n", a.Digest, a.Platform, a.Type)
 		}
 		tw.Flush()
 		fmt.Fprintln(dockerCli.Out())
