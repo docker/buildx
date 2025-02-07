@@ -116,8 +116,8 @@ type errorOutput struct {
 	Message string   `json:"message,omitempty"`
 	Name    string   `json:"name,omitempty"`
 	Logs    []string `json:"logs,omitempty"`
-
-	statusErr error
+	Sources []byte   `json:"sources,omitempty"`
+	Stack   []byte   `json:"stack,omitempty"`
 }
 
 type keyValueOutput struct {
@@ -314,9 +314,15 @@ workers0:
 			if err := proto.Unmarshal(dt, &st); err != nil {
 				return errors.Wrapf(err, "failed to unmarshal external error %s", rec.ExternalError.Digest)
 			}
-			out.Error.statusErr = grpcerrors.FromGRPC(status.ErrorProto(&st))
+			retErr := grpcerrors.FromGRPC(status.ErrorProto(&st))
+			var errsources bytes.Buffer
+			for _, s := range errdefs.Sources(retErr) {
+				s.Print(&errsources)
+				errsources.WriteString("\n")
+			}
+			out.Error.Sources = errsources.Bytes()
 			var ve *errdefs.VertexError
-			if errors.As(out.Error.statusErr, &ve) {
+			if errors.As(retErr, &ve) {
 				dgst, err := digest.Parse(ve.Vertex.Digest)
 				if err != nil {
 					return errors.Wrapf(err, "failed to parse vertex digest %s", ve.Vertex.Digest)
@@ -328,6 +334,7 @@ workers0:
 				out.Error.Name = name
 				out.Error.Logs = logs
 			}
+			out.Error.Stack = []byte(fmt.Sprintf("%+v", stack.Formatter(retErr)))
 		}
 	}
 
@@ -566,10 +573,9 @@ workers0:
 	}
 
 	if out.Error != nil {
-		for _, s := range errdefs.Sources(out.Error.statusErr) {
-			s.Print(dockerCli.Out())
+		if out.Error.Sources != nil {
+			fmt.Fprint(dockerCli.Out(), string(out.Error.Sources))
 		}
-		fmt.Fprintln(dockerCli.Out())
 		if len(out.Error.Logs) > 0 {
 			fmt.Fprintln(dockerCli.Out(), "Logs:")
 			fmt.Fprintf(dockerCli.Out(), "> => %s:\n", out.Error.Name)
@@ -578,10 +584,12 @@ workers0:
 			}
 			fmt.Fprintln(dockerCli.Out())
 		}
-		if debug.IsEnabled() {
-			fmt.Fprintf(dockerCli.Out(), "\n%+v\n", stack.Formatter(out.Error.statusErr))
-		} else if len(stack.Traces(out.Error.statusErr)) > 0 {
-			fmt.Fprintf(dockerCli.Out(), "Enable --debug to see stack traces for error\n")
+		if len(out.Error.Stack) > 0 {
+			if debug.IsEnabled() {
+				fmt.Fprintf(dockerCli.Out(), "\n%s\n", out.Error.Stack)
+			} else {
+				fmt.Fprintf(dockerCli.Out(), "Enable --debug to see stack traces for error\n")
+			}
 		}
 	}
 
