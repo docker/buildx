@@ -25,22 +25,25 @@ Inspect a build
 
 ### <a name="format"></a> Format the output (--format)
 
-Output format can be one of `raw`, `json`.
+The formatting options (`--format`) pretty-prints the output to `raw` (default),
+`json` or using a Go template.
 
 ```console
-$ docker buildx history inspect --format raw
+$ docker buildx history inspect
+Name:           buildx (binaries)
 Context:        .
 Dockerfile:     Dockerfile
 VCS Repository: https://github.com/crazy-max/buildx.git
-VCS Revision:   04aab6958cb5feb012a3c607569573b5cab141e1
+VCS Revision:   f15eaa1ee324ffbbab29605600d27a84cab86361
 Target:         binaries
 Platforms:      linux/amd64
 Keep Git Dir:   true
 
-Started:        2025-02-06 16:15:13
-Duration:       1m  3s
+Started:        2025-02-07 11:56:24
+Duration:       1m  1s
 Build Steps:    16/16 (25% cached)
 
+Image Resolve Mode:     local
 
 Materials:
 URI                                                             DIGEST
@@ -50,31 +53,65 @@ pkg:docker/tonistiigi/xx@1.6.1?platform=linux%2Famd64           sha256:923441d7c
 
 Attachments:
 DIGEST                                                                  PLATFORM        TYPE
-sha256:1b44912514074d3e309d80f8a5886a4d89eeeb52bef4d3e57ced17d1781bfce1                 https://slsa.dev/provenance/v0.2
+sha256:217329d2af959d4f02e3a96dcbe62bf100cab1feb8006a047ddfe51a5397f7e3                 https://slsa.dev/provenance/v0.2
 
-Print build logs: docker buildx history logs qrdbfvaoarfz42ye54lzx9aoy
+Print build logs: docker buildx history logs g9808bwrjrlkbhdamxklx660b
 ```
 
 ```console
 $ docker buildx history inspect --format json
 {
-  "name": "buildx (binaries)",
-  "context": ".",
-  "dockerfile": "Dockerfile",
-  "vcs_repository": "https://github.com/crazy-max/buildx.git",
-  "vcs_revision": "04aab6958cb5feb012a3c607569573b5cab141e1",
-  "target": "binaries",
-  "platform": [
+  "Name": "buildx (binaries)",
+  "Ref": "5w7vkqfi0rf59hw4hnmn627r9",
+  "Context": ".",
+  "Dockerfile": "Dockerfile",
+  "VCSRepository": "https://github.com/crazy-max/buildx.git",
+  "VCSRevision": "f15eaa1ee324ffbbab29605600d27a84cab86361",
+  "Target": "binaries",
+  "Platform": [
     "linux/amd64"
   ],
-  "keep_git_dir": true,
-  "started_at": "2025-02-06T16:15:13.077644732+01:00",
-  "complete_at": "2025-02-06T16:16:17.046656296+01:00",
-  "duration": 63969011564,
-  "status": "completed",
-  "num_completed_steps": 16,
-  "num_total_steps": 16,
-  "num_cached_steps": 4,
-  "config": {}
+  "KeepGitDir": true,
+  "StartedAt": "2025-02-07T12:01:05.75807272+01:00",
+  "CompletedAt": "2025-02-07T12:02:07.991778875+01:00",
+  "Duration": 62233706155,
+  "Status": "completed",
+  "NumCompletedSteps": 16,
+  "NumTotalSteps": 16,
+  "NumCachedSteps": 4,
+  "Config": {
+    "ImageResolveMode": "local"
+  },
+  "Materials": [
+    {
+      "URI": "pkg:docker/docker/dockerfile@1",
+      "Digests": [
+        "sha256:93bfd3b68c109427185cd78b4779fc82b484b0b7618e36d0f104d4d801e66d25"
+      ]
+    },
+    {
+      "URI": "pkg:docker/golang@1.23-alpine3.21?platform=linux%2Famd64",
+      "Digests": [
+        "sha256:2c49857f2295e89b23b28386e57e018a86620a8fede5003900f2d138ba9c4037"
+      ]
+    },
+    {
+      "URI": "pkg:docker/tonistiigi/xx@1.6.1?platform=linux%2Famd64",
+      "Digests": [
+        "sha256:923441d7c25f1e2eb5789f82d987693c47b8ed987c4ab3b075d6ed2b5d6779a3"
+      ]
+    }
+  ],
+  "Attachments": [
+    {
+      "Digest": "sha256:450fdd2e6b868fecd69e9891c2c404ba461aa38a47663b4805edeb8d2baf80b1",
+      "Type": "https://slsa.dev/provenance/v0.2"
+    }
+  ]
 }
+```
+
+```console
+$ docker buildx history inspect --format "{{.Name}}: {{.VCSRepository}} ({{.VCSRevision}})"
+buildx (binaries): https://github.com/crazy-max/buildx.git (f15eaa1ee324ffbbab29605600d27a84cab86361)
 ```

@@ -13,6 +13,7 @@ import (
 	"strconv"
 	"strings"
 	"text/tabwriter"
+	"text/template"
 	"time"
 
 	"github.com/containerd/containerd/v2/core/content"
@@ -62,81 +63,83 @@ type inspectOptions struct {
 }
 
 type inspectOutput struct {
-	Name          string   `json:"name,omitempty"`
-	Context       string   `json:"context,omitempty"`
-	Dockerfile    string   `json:"dockerfile,omitempty"`
-	VCSRepository string   `json:"vcs_repository,omitempty"`
-	VCSRevision   string   `json:"vcs_revision,omitempty"`
-	Target        string   `json:"target,omitempty"`
-	Platform      []string `json:"platform,omitempty"`
-	KeepGitDir    bool     `json:"keep_git_dir,omitempty"`
+	Name string `json:",omitempty"`
+	Ref  string
 
-	NamedContexts []keyValueOutput `json:"named_contexts,omitempty"`
+	Context       string   `json:",omitempty"`
+	Dockerfile    string   `json:",omitempty"`
+	VCSRepository string   `json:",omitempty"`
+	VCSRevision   string   `json:",omitempty"`
+	Target        string   `json:",omitempty"`
+	Platform      []string `json:",omitempty"`
+	KeepGitDir    bool     `json:",omitempty"`
 
-	StartedAt   *time.Time    `json:"started_at,omitempty"`
-	CompletedAt *time.Time    `json:"complete_at,omitempty"`
-	Duration    time.Duration `json:"duration,omitempty"`
-	Status      statusT       `json:"status,omitempty"`
-	Error       *errorOutput  `json:"error,omitempty"`
+	NamedContexts []keyValueOutput `json:",omitempty"`
 
-	NumCompletedSteps int32 `json:"num_completed_steps"`
-	NumTotalSteps     int32 `json:"num_total_steps"`
-	NumCachedSteps    int32 `json:"num_cached_steps"`
+	StartedAt   *time.Time    `json:",omitempty"`
+	CompletedAt *time.Time    `json:",omitempty"`
+	Duration    time.Duration `json:",omitempty"`
+	Status      statusT       `json:",omitempty"`
+	Error       *errorOutput  `json:",omitempty"`
 
-	BuildArgs []keyValueOutput `json:"build_args,omitempty"`
-	Labels    []keyValueOutput `json:"labels,omitempty"`
+	NumCompletedSteps int32
+	NumTotalSteps     int32
+	NumCachedSteps    int32
 
-	Config configOutput `json:"config,omitempty"`
+	BuildArgs []keyValueOutput `json:",omitempty"`
+	Labels    []keyValueOutput `json:",omitempty"`
 
-	Materials   []materialOutput   `json:"materials,omitempty"`
-	Attachments []attachmentOutput `json:"attachments,omitempty"`
+	Config configOutput `json:",omitempty"`
 
-	Errors []string `json:"errors,omitempty"`
+	Materials   []materialOutput   `json:",omitempty"`
+	Attachments []attachmentOutput `json:",omitempty"`
+
+	Errors []string `json:",omitempty"`
 }
 
 type configOutput struct {
-	Network          string   `json:"network,omitempty"`
-	ExtraHosts       []string `json:"extra_hosts,omitempty"`
-	Hostname         string   `json:"hostname,omitempty"`
-	CgroupParent     string   `json:"cgroup_parent,omitempty"`
-	ImageResolveMode string   `json:"image_resolve_mode,omitempty"`
-	MultiPlatform    bool     `json:"multi_platform,omitempty"`
-	NoCache          bool     `json:"no_cache,omitempty"`
-	NoCacheFilter    []string `json:"no_cache_filter,omitempty"`
+	Network          string   `json:",omitempty"`
+	ExtraHosts       []string `json:",omitempty"`
+	Hostname         string   `json:",omitempty"`
+	CgroupParent     string   `json:",omitempty"`
+	ImageResolveMode string   `json:",omitempty"`
+	MultiPlatform    bool     `json:",omitempty"`
+	NoCache          bool     `json:",omitempty"`
+	NoCacheFilter    []string `json:",omitempty"`
 
-	ShmSize               string `json:"shm_size,omitempty"`
-	Ulimit                string `json:"ulimit,omitempty"`
-	CacheMountNS          string `json:"cache_mount_ns,omitempty"`
-	DockerfileCheckConfig string `json:"dockerfile_check_config,omitempty"`
-	SourceDateEpoch       string `json:"source_date_epoch,omitempty"`
-	SandboxHostname       string `json:"sandbox_hostname,omitempty"`
+	ShmSize               string `json:",omitempty"`
+	Ulimit                string `json:",omitempty"`
+	CacheMountNS          string `json:",omitempty"`
+	DockerfileCheckConfig string `json:",omitempty"`
+	SourceDateEpoch       string `json:",omitempty"`
+	SandboxHostname       string `json:",omitempty"`
 
-	RestRaw []keyValueOutput `json:"rest_raw,omitempty"`
+	RestRaw []keyValueOutput `json:",omitempty"`
 }
 
 type materialOutput struct {
-	URI     string   `json:"uri,omitempty"`
-	Digests []string `json:"digests,omitempty"`
+	URI     string   `json:",omitempty"`
+	Digests []string `json:",omitempty"`
 }
 
 type attachmentOutput struct {
-	Digest   string `json:"digest,omitempty"`
-	Platform string `json:"platform,omitempty"`
-	Type     string `json:"type,omitempty"`
+	Digest   string `json:",omitempty"`
+	Platform string `json:",omitempty"`
+	Type     string `json:",omitempty"`
 }
 
 type errorOutput struct {
-	Code    int      `json:"code,omitempty"`
-	Message string   `json:"message,omitempty"`
-	Name    string   `json:"name,omitempty"`
-	Logs    []string `json:"logs,omitempty"`
-	Sources []byte   `json:"sources,omitempty"`
-	Stack   []byte   `json:"stack,omitempty"`
+	Code    int      `json:",omitempty"`
+	Message string   `json:",omitempty"`
+	Name    string   `json:",omitempty"`
+	Logs    []string `json:",omitempty"`
+	Sources []byte   `json:",omitempty"`
+	Stack   []byte   `json:",omitempty"`
 }
 
 type keyValueOutput struct {
-	Name  string `json:"name,omitempty"`
-	Value string `json:"value,omitempty"`
+	Name  string `json:",omitempty"`
+	Value string `json:",omitempty"`
 }
 
 func readAttr[T any](attrs map[string]string, k string, dest *T, f func(v string) (T, bool)) {
@@ -259,6 +262,8 @@ workers0:
 	delete(attrs, "filename")
 
 	out.Name = buildName(rec.FrontendAttrs, st)
+	out.Ref = rec.Ref
+
 	out.Context = context
 	out.Dockerfile = dockerfile
 
@@ -467,11 +472,26 @@ workers0:
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
 	} else if opts.format != formatter.RawFormatKey {
-		return errors.Errorf("unsupported format %q", opts.format)
+		tmpl, err := template.New("inspect").Parse(opts.format)
+		if err != nil {
+			return errors.Wrapf(err, "failed to parse format template")
+		}
+		var buf bytes.Buffer
+		if err := tmpl.Execute(&buf, out); err != nil {
+			return errors.Wrapf(err, "failed to execute format template")
+		}
+		fmt.Fprintln(dockerCli.Out(), buf.String())
+		return nil
 	}
 
 	tw := tabwriter.NewWriter(dockerCli.Out(), 1, 8, 1, '\t', 0)
 
+	if out.Name != "" {
+		fmt.Fprintf(tw, "Name:\t%s\n", out.Name)
+	}
+	if opts.ref == "" && out.Ref != "" {
+		fmt.Fprintf(tw, "Ref:\t%s\n", out.Ref)
+	}
 	if out.Context != "" {
 		fmt.Fprintf(tw, "Context:\t%s\n", out.Context)
 	}
