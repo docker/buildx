@@ -1,8 +1,6 @@
 package buildflags
 
 import (
-	"iter"
-
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/gocty"
 )
@@ -57,7 +55,12 @@ func isEmptyOrUnknown(v cty.Value) bool {
 	return !v.IsKnown() || (v.Type() == cty.String && v.AsString() == "")
 }
 
-func eachElement(in cty.Value) iter.Seq[cty.Value] {
+// Seq is a temporary definition of iter.Seq until we are able to migrate
+// to using go1.23 as our minimum version. This can be removed when go1.24
+// is released and usages can be changed to use rangefunc.
+type Seq[V any] func(yield func(V) bool)
+
+func eachElement(in cty.Value) Seq[cty.Value] {
 	return func(yield func(v cty.Value) bool) {
 		for elem := in.ElementIterator(); elem.Next(); {
 			_, value := elem.Element()

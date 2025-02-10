@@ -21,16 +21,19 @@ func (e *Exports) FromCtyValue(in cty.Value, p cty.Path) error {
 	return p.NewErrorf("%s", convert.MismatchMessage(got, want))
 }
 
-func (e *Exports) fromCtyValue(in cty.Value, p cty.Path) error {
+func (e *Exports) fromCtyValue(in cty.Value, p cty.Path) (retErr error) {
 	*e = make([]*ExportEntry, 0, in.LengthInt())
-	for value := range eachElement(in) {
+
+	yield := func(value cty.Value) bool {
 		entry := &ExportEntry{}
-		if err := entry.FromCtyValue(value, p); err != nil {
-			return err
+		if retErr = entry.FromCtyValue(value, p); retErr != nil {
+			return false
 		}
 		*e = append(*e, entry)
+		return true
 	}
-	return nil
+	eachElement(in)(yield)
+	return retErr
 }
 
 func (e Exports) ToCtyValue() cty.Value {
