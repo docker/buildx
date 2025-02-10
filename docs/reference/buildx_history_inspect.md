@@ -12,11 +12,11 @@ Inspect a build
 
 ### Options
 
-| Name                  | Type     | Default | Description                              |
-|:----------------------|:---------|:--------|:-----------------------------------------|
-| `--builder`           | `string` |         | Override the configured builder instance |
-| `-D`, `--debug`       | `bool`   |         | Enable debug logging                     |
-| [`--format`](#format) | `string` | `raw`   | Format the output                        |
+| Name                  | Type     | Default  | Description                              |
+|:----------------------|:---------|:---------|:-----------------------------------------|
+| `--builder`           | `string` |          | Override the configured builder instance |
+| `-D`, `--debug`       | `bool`   |          | Enable debug logging                     |
+| [`--format`](#format) | `string` | `pretty` | Format the output                        |
 
 
 <!---MARKER_GEN_END-->
@@ -25,7 +25,7 @@ Inspect a build
 
 ### <a name="format"></a> Format the output (--format)
 
-The formatting options (`--format`) pretty-prints the output to `raw` (default),
+The formatting options (`--format`) pretty-prints the output to `pretty` (default),
 `json` or using a Go template.
 
 ```console

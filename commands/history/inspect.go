@@ -471,7 +471,7 @@ workers0:
 		enc := json.NewEncoder(dockerCli.Out())
 		enc.SetIndent("", "  ")
 		return enc.Encode(out)
-	} else if opts.format != formatter.RawFormatKey {
+	} else if opts.format != formatter.PrettyFormatKey {
 		tmpl, err := template.New("inspect").Parse(opts.format)
 		if err != nil {
 			return errors.Wrapf(err, "failed to parse format template")
@@ -672,7 +672,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	)
 
 	flags := cmd.Flags()
-	flags.StringVar(&options.format, "format", formatter.RawFormatKey, "Format the output")
+	flags.StringVar(&options.format, "format", formatter.PrettyFormatKey, "Format the output")
 
 	return cmd
 }
