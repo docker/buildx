@@ -1,29 +1,35 @@
 package cli
 
 import (
-	"strconv"
+	"fmt"
+	"strings"
 )
+
+// Errors is a list of errors.
+// Useful in a loop if you don't want to return the error right away and you want to display after the loop,
+// all the errors that happened during the loop.
+//
+// Deprecated: use [errors.Join] instead; will be removed in the next release.
+type Errors []error
+
+func (errList Errors) Error() string {
+	if len(errList) < 1 {
+		return ""
+	}
+
+	out := make([]string, len(errList))
+	for i := range errList {
+		out[i] = errList[i].Error()
+	}
+	return strings.Join(out, ", ")
+}
 
 // StatusError reports an unsuccessful exit by a command.
 type StatusError struct {
-	Cause      error
 	Status     string
 	StatusCode int
 }
 
-// Error formats the error for printing. If a custom Status is provided,
-// it is returned as-is, otherwise it generates a generic error-message
-// based on the StatusCode.
 func (e StatusError) Error() string {
-	if e.Status != "" {
-		return e.Status
-	}
-	if e.Cause != nil {
-		return e.Cause.Error()
-	}
-	return "exit status " + strconv.Itoa(e.StatusCode)
-}
-
-func (e StatusError) Unwrap() error {
-	return e.Cause
+	return fmt.Sprintf("Status: %s, Code: %d", e.Status, e.StatusCode)
 }

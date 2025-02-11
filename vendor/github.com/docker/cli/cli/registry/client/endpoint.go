@@ -22,7 +22,12 @@ type repositoryEndpoint struct {
 
 // Name returns the repository name
 func (r repositoryEndpoint) Name() string {
-	return reference.Path(r.info.Name)
+	repoName := r.info.Name.Name()
+	// If endpoint does not support CanonicalName, use the RemoteName instead
+	if r.endpoint.TrimHostname {
+		repoName = reference.Path(r.info.Name)
+	}
+	return repoName
 }
 
 // BaseURL returns the endpoint url
