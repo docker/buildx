@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
+	"strconv"
 	"strings"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -204,14 +205,29 @@ func addGithubToken(ci *controllerapi.CacheOptionsEntry) {
 	if ci.Type != "gha" {
 		return
 	}
+	version, ok := ci.Attrs["version"]
+	if !ok {
+		if v, ok := os.LookupEnv("ACTIONS_CACHE_SERVICE_V2"); ok {
+			if b, err := strconv.ParseBool(v); err == nil && b {
+				version = "2"
+				ci.Attrs["version"] = version
+			}
+		}
+	}
 	if _, ok := ci.Attrs["token"]; !ok {
 		if v, ok := os.LookupEnv("ACTIONS_RUNTIME_TOKEN"); ok {
 			ci.Attrs["token"] = v
 		}
 	}
 	if _, ok := ci.Attrs["url"]; !ok {
-		if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
-			ci.Attrs["url"] = v
+		if version == "2" {
+			if v, ok := os.LookupEnv("ACTIONS_RESULTS_URL"); ok {
+				ci.Attrs["url"] = v
+			}
+		} else {
+			if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
+				ci.Attrs["url"] = v
+			}
 		}
 	}
 }
