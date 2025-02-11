@@ -375,6 +375,15 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					}
 				}
 
+				if opt.CallFunc != nil {
+					if _, ok := so.FrontendAttrs["frontend.caps"]; !ok {
+						so.FrontendAttrs["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
+					} else {
+						so.FrontendAttrs["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
+					}
+					so.FrontendAttrs["requestid"] = "frontend." + opt.CallFunc.Name
+				}
+
 				pw := progress.WithPrefix(w, k, multiTarget)
 
 				c, err := dp.Client(ctx)
@@ -444,15 +453,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					cc := c
 					var callRes map[string][]byte
 					buildFunc := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-						if opt.CallFunc != nil {
-							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
-								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
-							} else {
-								req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
-							}
-							req.FrontendOpt["requestid"] = "frontend." + opt.CallFunc.Name
-						}
-
 						res, err := c.Solve(ctx, req)
 						if err != nil {
 							req, ok := fallbackPrintError(err, req)
