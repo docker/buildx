@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/in-toto/in-toto-golang v0.5.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.19.0-rc3.0.20250210232655-0e3037c0182e
+	github.com/moby/buildkit v0.20.0-rc1
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/moby/sys/signal v0.7.1
 	github.com/morikuni/aec v1.0.0
@@ -175,7 +175,7 @@ require (
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/time v0.6.0 // indirect
 	golang.org/x/tools v0.27.0 // indirect
-	google.golang.org/genproto/googleapis/api v0.0.0-20241015192408-796eee8c2d53 // indirect
+	google.golang.org/genproto/googleapis/api v0.0.0-20241021214115-324edc3d5d38 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
 	gopkg.in/yaml.v2 v2.4.0 // indirect
 	k8s.io/klog/v2 v2.130.1 // indirect
