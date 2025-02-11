@@ -175,6 +175,11 @@ jobs:
       SKIP_INTEGRATION_TESTS: 1
     steps:
       -
+        name: Setup Git config
+        run: |
+          git config --global core.autocrlf false
+          git config --global core.eol lf
+      -
         name: Checkout
         uses: actions/checkout@v4
       -
