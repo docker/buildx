@@ -75,7 +75,9 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *controllerapi.Buil
 	opts.Platforms = platforms
 
 	dockerConfig := dockerCli.ConfigFile()
-	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(dockerConfig, nil))
+	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+	}))
 
 	secrets, err := controllerapi.CreateSecrets(in.Secrets)
 	if err != nil {
