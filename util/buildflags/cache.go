@@ -210,7 +210,6 @@ func addGithubToken(ci *controllerapi.CacheOptionsEntry) {
 		if v, ok := os.LookupEnv("ACTIONS_CACHE_SERVICE_V2"); ok {
 			if b, err := strconv.ParseBool(v); err == nil && b {
 				version = "2"
-				ci.Attrs["version"] = version
 			}
 		}
 	}
@@ -222,7 +221,7 @@ func addGithubToken(ci *controllerapi.CacheOptionsEntry) {
 	if _, ok := ci.Attrs["url"]; !ok {
 		if version == "2" {
 			if v, ok := os.LookupEnv("ACTIONS_RESULTS_URL"); ok {
-				ci.Attrs["url"] = v
+				ci.Attrs["url_v2"] = v
 			}
 		} else {
 			if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
