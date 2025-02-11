@@ -41,7 +41,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/docker/pkg/atomicwriter"
+	"github.com/docker/docker/pkg/ioutils"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/subrequests"
@@ -745,7 +745,7 @@ func writeMetadataFile(filename string, dt interface{}) error {
 	if err != nil {
 		return err
 	}
-	return atomicwriter.WriteFile(filename, b, 0644)
+	return ioutils.AtomicWriteFile(filename, b, 0644)
 }
 
 func decodeExporterResponse(exporterResponse map[string]string) map[string]interface{} {
