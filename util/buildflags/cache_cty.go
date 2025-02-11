@@ -21,26 +21,30 @@ func (o *CacheOptions) FromCtyValue(in cty.Value, p cty.Path) error {
 	return p.NewErrorf("%s", convert.MismatchMessage(got, want))
 }
 
-func (o *CacheOptions) fromCtyValue(in cty.Value, p cty.Path) error {
+func (o *CacheOptions) fromCtyValue(in cty.Value, p cty.Path) (retErr error) {
 	*o = make([]*CacheOptionsEntry, 0, in.LengthInt())
-	for value := range eachElement(in) {
+
+	yield := func(value cty.Value) bool {
 		// Special handling for a string type to handle ref only format.
 		if value.Type() == cty.String {
-			entries, err := ParseCacheEntry([]string{value.AsString()})
-			if err != nil {
-				return err
+			var entries CacheOptions
+			entries, retErr = ParseCacheEntry([]string{value.AsString()})
+			if retErr != nil {
+				return false
 			}
 			*o = append(*o, entries...)
-			continue
+			return true
 		}
 
 		entry := &CacheOptionsEntry{}
-		if err := entry.FromCtyValue(value, p); err != nil {
-			return err
+		if retErr = entry.FromCtyValue(value, p); retErr != nil {
+			return false
 		}
 		*o = append(*o, entry)
+		return true
 	}
-	return nil
+	eachElement(in)(yield)
+	return retErr
 }
 
 func (o CacheOptions) ToCtyValue() cty.Value {

@@ -28,16 +28,19 @@ func (s *SSHKeys) FromCtyValue(in cty.Value, p cty.Path) error {
 	return p.NewErrorf("%s", convert.MismatchMessage(got, want))
 }
 
-func (s *SSHKeys) fromCtyValue(in cty.Value, p cty.Path) error {
+func (s *SSHKeys) fromCtyValue(in cty.Value, p cty.Path) (retErr error) {
 	*s = make([]*SSH, 0, in.LengthInt())
-	for value := range eachElement(in) {
+
+	yield := func(value cty.Value) bool {
 		entry := &SSH{}
-		if err := entry.FromCtyValue(value, p); err != nil {
-			return err
+		if retErr = entry.FromCtyValue(value, p); retErr != nil {
+			return false
 		}
 		*s = append(*s, entry)
+		return true
 	}
-	return nil
+	eachElement(in)(yield)
+	return retErr
 }
 
 func (s SSHKeys) ToCtyValue() cty.Value {
