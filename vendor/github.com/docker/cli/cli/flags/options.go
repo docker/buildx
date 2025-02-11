@@ -138,7 +138,7 @@ func SetLogLevel(logLevel string) {
 	if logLevel != "" {
 		lvl, err := logrus.ParseLevel(logLevel)
 		if err != nil {
-			_, _ = fmt.Fprintln(os.Stderr, "Unable to parse logging level:", logLevel)
+			fmt.Fprintf(os.Stderr, "Unable to parse logging level: %s\n", logLevel)
 			os.Exit(1)
 		}
 		logrus.SetLevel(lvl)

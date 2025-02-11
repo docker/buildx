@@ -52,6 +52,7 @@ func AddPluginCommandStubs(dockerCli command.Cli, rootCmd *cobra.Command) (err e
 			return
 		}
 		for _, p := range plugins {
+			p := p
 			vendor := p.Vendor
 			if vendor == "" {
 				vendor = "unknown"
@@ -81,7 +82,7 @@ func AddPluginCommandStubs(dockerCli command.Cli, rootCmd *cobra.Command) (err e
 						cmd.HelpFunc()(rootCmd, args)
 						return nil
 					}
-					return fmt.Errorf("docker: unknown command: docker %s\n\nRun 'docker --help' for more information", cmd.Name())
+					return fmt.Errorf("docker: '%s' is not a docker command.\nSee 'docker --help'", cmd.Name())
 				},
 				ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 					// Delegate completion to plugin
