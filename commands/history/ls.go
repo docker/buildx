@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"slices"
 	"time"
 
 	"github.com/containerd/console"
@@ -18,7 +19,6 @@ import (
 	"github.com/docker/cli/cli/command/formatter"
 	"github.com/docker/go-units"
 	"github.com/spf13/cobra"
-	"golang.org/x/exp/slices"
 )
 
 const (
