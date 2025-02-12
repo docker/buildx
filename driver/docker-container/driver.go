@@ -26,6 +26,7 @@ import (
 	"github.com/docker/docker/errdefs"
 	dockerarchive "github.com/docker/docker/pkg/archive"
 	"github.com/docker/docker/pkg/idtools"
+	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
@@ -94,14 +95,14 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		rc, err := d.DockerAPI.ImageCreate(ctx, imageName, image.CreateOptions{
+		resp, err := d.DockerAPI.ImageCreate(ctx, imageName, image.CreateOptions{
 			RegistryAuth: ra,
 		})
 		if err != nil {
 			return err
 		}
-		_, err = io.Copy(io.Discard, rc)
-		return err
+		defer resp.Close()
+		return jsonmessage.DisplayJSONMessagesStream(resp, io.Discard, 0, false, nil)
 	}); err != nil {
 		// image pulling failed, check if it exists in local image store.
 		// if not, return pulling error. otherwise log it.
