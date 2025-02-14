@@ -27,7 +27,6 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/session/auth/authprovider"
-	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
@@ -1434,9 +1433,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 	bo.Ulimits = ulimits
 
-	for _, ent := range t.Entitlements {
-		bo.Allow = append(bo.Allow, entitlements.Entitlement(ent))
-	}
+	bo.Allow = append(bo.Allow, t.Entitlements...)
 
 	return bo, nil
 }
