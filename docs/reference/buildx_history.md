@@ -5,13 +5,14 @@ Commands to work on build records
 
 ### Subcommands
 
-| Name                                   | Description                    |
-|:---------------------------------------|:-------------------------------|
-| [`inspect`](buildx_history_inspect.md) | Inspect a build                |
-| [`logs`](buildx_history_logs.md)       | Print the logs of a build      |
-| [`ls`](buildx_history_ls.md)           | List build records             |
-| [`open`](buildx_history_open.md)       | Open a build in Docker Desktop |
-| [`rm`](buildx_history_rm.md)           | Remove build records           |
+| Name                                   | Description                                    |
+|:---------------------------------------|:-----------------------------------------------|
+| [`inspect`](buildx_history_inspect.md) | Inspect a build                                |
+| [`logs`](buildx_history_logs.md)       | Print the logs of a build                      |
+| [`ls`](buildx_history_ls.md)           | List build records                             |
+| [`open`](buildx_history_open.md)       | Open a build in Docker Desktop                 |
+| [`rm`](buildx_history_rm.md)           | Remove build records                           |
+| [`trace`](buildx_history_trace.md)     | Show the OpenTelemetry trace of a build record |
 
 
 ### Options

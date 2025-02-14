@@ -183,14 +183,17 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		}
 	}
 
-	opts.CacheFrom, err = buildflags.ParseCacheEntry(o.cacheFrom)
+	cacheFrom, err := buildflags.ParseCacheEntry(o.cacheFrom)
 	if err != nil {
 		return nil, err
 	}
-	opts.CacheTo, err = buildflags.ParseCacheEntry(o.cacheTo)
+	opts.CacheFrom = cacheFrom.ToPB()
+
+	cacheTo, err := buildflags.ParseCacheEntry(o.cacheTo)
 	if err != nil {
 		return nil, err
 	}
+	opts.CacheTo = cacheTo.ToPB()
 
 	opts.Secrets, err = buildflags.ParseSecretSpecs(o.secrets)
 	if err != nil {
@@ -463,7 +466,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
-			ref = be.Ref
+			ref = be.SessionID
 			retErr = err
 			// We can proceed to monitor
 		} else {

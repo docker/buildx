@@ -19,6 +19,7 @@ import (
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/remotes/docker"
+	"github.com/docker/cli/cli/config"
 	"github.com/gofrs/flock"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/contentutil"
@@ -59,12 +60,14 @@ type Sandbox interface {
 	NewRegistry() (string, error)
 	Value(string) interface{} // chosen matrix value
 	Name() string
+	CDISpecDir() string
 }
 
 // BackendConfig is used to configure backends created by a worker.
 type BackendConfig struct {
 	Logs         map[string]*bytes.Buffer
 	DaemonConfig []ConfigUpdater
+	CDISpecDir   string
 }
 
 type Worker interface {
@@ -257,7 +260,16 @@ func copyImagesLocal(t *testing.T, host string, images map[string]string) error 
 				defer closer()
 			}
 		} else {
-			desc, provider, err = contentutil.ProviderFromRef(from)
+			dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
+
+			desc, provider, err = contentutil.ProviderFromRef(from, contentutil.WithCredentials(
+				func(host string) (string, string, error) {
+					ac, err := dockerConfig.GetAuthConfig(host)
+					if err != nil {
+						return "", "", err
+					}
+					return ac.Username, ac.Password, nil
+				}))
 			if err != nil {
 				return err
 			}

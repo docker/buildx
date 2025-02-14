@@ -159,6 +159,9 @@ func lsPrint(dockerCli command.Cli, current *store.NodeGroup, builders []*builde
 				}
 				continue
 			}
+			if ctx.Format.IsJSON() {
+				continue
+			}
 			for _, n := range b.Nodes() {
 				if n.Err != nil {
 					if ctx.Format.IsTable() {

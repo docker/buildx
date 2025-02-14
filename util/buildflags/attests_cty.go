@@ -22,18 +22,19 @@ func (e *Attests) FromCtyValue(in cty.Value, p cty.Path) error {
 	return p.NewErrorf("%s", convert.MismatchMessage(got, want))
 }
 
-func (e *Attests) fromCtyValue(in cty.Value, p cty.Path) error {
+func (e *Attests) fromCtyValue(in cty.Value, p cty.Path) (retErr error) {
 	*e = make([]*Attest, 0, in.LengthInt())
-	for elem := in.ElementIterator(); elem.Next(); {
-		_, value := elem.Element()
 
+	yield := func(value cty.Value) bool {
 		entry := &Attest{}
-		if err := entry.FromCtyValue(value, p); err != nil {
-			return err
+		if retErr = entry.FromCtyValue(value, p); retErr != nil {
+			return false
 		}
 		*e = append(*e, entry)
+		return true
 	}
-	return nil
+	eachElement(in)(yield)
+	return retErr
 }
 
 func (e Attests) ToCtyValue() cty.Value {
@@ -64,6 +65,10 @@ func (e *Attest) FromCtyValue(in cty.Value, p cty.Path) error {
 	e.Attrs = map[string]string{}
 	for it := conv.ElementIterator(); it.Next(); {
 		k, v := it.Element()
+		if !v.IsKnown() {
+			continue
+		}
+
 		switch key := k.AsString(); key {
 		case "type":
 			e.Type = v.AsString()

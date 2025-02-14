@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"maps"
 	"os"
+	"strconv"
 	"strings"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -167,25 +168,50 @@ func (e *CacheOptionsEntry) validate(gv interface{}) error {
 	return nil
 }
 
-func ParseCacheEntry(in []string) ([]*controllerapi.CacheOptionsEntry, error) {
+func ParseCacheEntry(in []string) (CacheOptions, error) {
 	if len(in) == 0 {
 		return nil, nil
 	}
 
 	opts := make(CacheOptions, 0, len(in))
 	for _, in := range in {
+		if !strings.Contains(in, "=") {
+			// This is ref only format. Each field in the CSV is its own entry.
+			fields, err := csvvalue.Fields(in, nil)
+			if err != nil {
+				return nil, err
+			}
+
+			for _, field := range fields {
+				opt := CacheOptionsEntry{}
+				if err := opt.UnmarshalText([]byte(field)); err != nil {
+					return nil, err
+				}
+				opts = append(opts, &opt)
+			}
+			continue
+		}
+
 		var out CacheOptionsEntry
 		if err := out.UnmarshalText([]byte(in)); err != nil {
 			return nil, err
 		}
 		opts = append(opts, &out)
 	}
-	return opts.ToPB(), nil
+	return opts, nil
 }
 
 func addGithubToken(ci *controllerapi.CacheOptionsEntry) {
 	if ci.Type != "gha" {
 		return
+	}
+	version, ok := ci.Attrs["version"]
+	if !ok {
+		if v, ok := os.LookupEnv("ACTIONS_CACHE_SERVICE_V2"); ok {
+			if b, err := strconv.ParseBool(v); err == nil && b {
+				version = "2"
+			}
+		}
 	}
 	if _, ok := ci.Attrs["token"]; !ok {
 		if v, ok := os.LookupEnv("ACTIONS_RUNTIME_TOKEN"); ok {
@@ -193,8 +219,14 @@ func addGithubToken(ci *controllerapi.CacheOptionsEntry) {
 		}
 	}
 	if _, ok := ci.Attrs["url"]; !ok {
-		if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
-			ci.Attrs["url"] = v
+		if version == "2" {
+			if v, ok := os.LookupEnv("ACTIONS_RESULTS_URL"); ok {
+				ci.Attrs["url_v2"] = v
+			}
+		} else {
+			if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
+				ci.Attrs["url"] = v
+			}
 		}
 	}
 }

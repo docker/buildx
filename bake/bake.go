@@ -29,7 +29,6 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/go-csvvalue"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -900,7 +899,7 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 		case "tags":
 			t.Tags = o.ArrValue
 		case "cache-from":
-			cacheFrom, err := parseCacheArrValues(o.ArrValue)
+			cacheFrom, err := buildflags.ParseCacheEntry(o.ArrValue)
 			if err != nil {
 				return err
 			}
@@ -913,7 +912,7 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				}
 			}
 		case "cache-to":
-			cacheTo, err := parseCacheArrValues(o.ArrValue)
+			cacheTo, err := buildflags.ParseCacheEntry(o.ArrValue)
 			if err != nil {
 				return err
 			}
@@ -1131,7 +1130,9 @@ func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
 	// make sure local credentials are loaded multiple times for different targets
 	dockerConfig := config.LoadDefaultConfigFile(os.Stderr)
-	authProvider := authprovider.NewDockerAuthProvider(dockerConfig, nil)
+	authProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+	})
 
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
@@ -1584,38 +1585,4 @@ func parseArrValue[T any, PT arrValue[T]](s []string) ([]*T, error) {
 		outputs = append(outputs, output)
 	}
 	return outputs, nil
-}
-
-func parseCacheArrValues(s []string) (buildflags.CacheOptions, error) {
-	var outs buildflags.CacheOptions
-	for _, in := range s {
-		if in == "" {
-			continue
-		}
-
-		if !strings.Contains(in, "=") {
-			// This is ref only format. Each field in the CSV is its own entry.
-			fields, err := csvvalue.Fields(in, nil)
-			if err != nil {
-				return nil, err
-			}
-
-			for _, field := range fields {
-				out := buildflags.CacheOptionsEntry{}
-				if err := out.UnmarshalText([]byte(field)); err != nil {
-					return nil, err
-				}
-				outs = append(outs, &out)
-			}
-			continue
-		}
-
-		// Normal entry.
-		out := buildflags.CacheOptionsEntry{}
-		if err := out.UnmarshalText([]byte(in)); err != nil {
-			return nil, err
-		}
-		outs = append(outs, &out)
-	}
-	return outs, nil
 }

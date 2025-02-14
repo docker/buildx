@@ -3,12 +3,12 @@ package dockerutil
 import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
-	"github.com/docker/docker/client"
+	dockerclient "github.com/docker/docker/client"
 )
 
 // ClientAPI represents an active docker API object.
 type ClientAPI struct {
-	client.APIClient
+	dockerclient.APIClient
 }
 
 func NewClientAPI(cli command.Cli, ep string) (*ClientAPI, error) {
@@ -36,7 +36,7 @@ func NewClientAPI(cli command.Cli, ep string) (*ClientAPI, error) {
 		return nil, err
 	}
 
-	ca.APIClient, err = client.NewClientWithOpts(clientOpts...)
+	ca.APIClient, err = dockerclient.NewClientWithOpts(clientOpts...)
 	if err != nil {
 		return nil, err
 	}

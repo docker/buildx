@@ -28,22 +28,19 @@ func (s *Secrets) FromCtyValue(in cty.Value, p cty.Path) error {
 	return p.NewErrorf("%s", convert.MismatchMessage(got, want))
 }
 
-func (s *Secrets) fromCtyValue(in cty.Value, p cty.Path) error {
+func (s *Secrets) fromCtyValue(in cty.Value, p cty.Path) (retErr error) {
 	*s = make([]*Secret, 0, in.LengthInt())
-	for elem := in.ElementIterator(); elem.Next(); {
-		_, value := elem.Element()
 
-		if isEmpty(value) {
-			continue
-		}
-
+	yield := func(value cty.Value) bool {
 		entry := &Secret{}
-		if err := entry.FromCtyValue(value, p); err != nil {
-			return err
+		if retErr = entry.FromCtyValue(value, p); retErr != nil {
+			return false
 		}
 		*s = append(*s, entry)
+		return true
 	}
-	return nil
+	eachElement(in)(yield)
+	return retErr
 }
 
 func (s Secrets) ToCtyValue() cty.Value {
@@ -71,13 +68,13 @@ func (e *Secret) FromCtyValue(in cty.Value, p cty.Path) error {
 		return err
 	}
 
-	if id := conv.GetAttr("id"); !id.IsNull() {
+	if id := conv.GetAttr("id"); !id.IsNull() && id.IsKnown() {
 		e.ID = id.AsString()
 	}
-	if src := conv.GetAttr("src"); !src.IsNull() {
+	if src := conv.GetAttr("src"); !src.IsNull() && src.IsKnown() {
 		e.FilePath = src.AsString()
 	}
-	if env := conv.GetAttr("env"); !env.IsNull() {
+	if env := conv.GetAttr("env"); !env.IsNull() && env.IsKnown() {
 		e.Env = env.AsString()
 	}
 	return nil

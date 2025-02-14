@@ -221,8 +221,10 @@ The following table shows the complete list of attributes that you can assign to
 | [`attest`](#targetattest)                       | List    | Build attestations                                                   |
 | [`cache-from`](#targetcache-from)               | List    | External cache sources                                               |
 | [`cache-to`](#targetcache-to)                   | List    | External cache destinations                                          |
+| [`call`](#targetcall)                           | String  | Specify the frontend method to call for the target.                  |
 | [`context`](#targetcontext)                     | String  | Set of files located in the specified path or URL                    |
 | [`contexts`](#targetcontexts)                   | Map     | Additional build contexts                                            |
+| [`description`](#targetdescription)             | String  | Description of a target                                              |
 | [`dockerfile-inline`](#targetdockerfile-inline) | String  | Inline Dockerfile string                                             |
 | [`dockerfile`](#targetdockerfile)               | String  | Dockerfile location                                                  |
 | [`inherits`](#targetinherits)                   | List    | Inherit attributes from other targets                                |
@@ -283,16 +285,8 @@ The key takes a list of annotations, in the format of `KEY=VALUE`.
 
 ```hcl
 target "default" {
-  output = ["type=image,name=foo"]
+  output = [{ type = "image", name = "foo" }]
   annotations = ["org.opencontainers.image.authors=dvdksn"]
-}
-```
-
-is the same as
-
-```hcl
-target "default" {
-  output = ["type=image,name=foo,annotation.org.opencontainers.image.authors=dvdksn"]
 }
 ```
 
@@ -303,7 +297,7 @@ example adds annotations to both the image index and manifests.
 
 ```hcl
 target "default" {
-  output = ["type=image,name=foo"]
+  output = [{ type = "image", name = "foo" }]
   annotations = ["index,manifest:org.opencontainers.image.authors=dvdksn"]
 }
 ```
@@ -319,8 +313,13 @@ This attribute accepts the long-form CSV version of attestation parameters.
 ```hcl
 target "default" {
   attest = [
-    "type=provenance,mode=min",
-    "type=sbom"
+    {
+      type = "provenance",
+      mode = "max",
+    },
+    {
+      type = "sbom",
+    }
   ]
 }
 ```
@@ -336,8 +335,15 @@ This takes a list value, so you can specify multiple cache sources.
 ```hcl
 target "app" {
   cache-from = [
-    "type=s3,region=eu-west-1,bucket=mybucket",
-    "user/repo:cache",
+    {
+      type = "s3",
+      region = "eu-west-1",
+      bucket = "mybucket"
+    },
+    {
+      type = "registry",
+      ref = "user/repo:cache"
+    }
   ]
 }
 ```
@@ -353,8 +359,14 @@ This takes a list value, so you can specify multiple cache export targets.
 ```hcl
 target "app" {
   cache-to = [
-    "type=s3,region=eu-west-1,bucket=mybucket",
-    "type=inline"
+    {
+      type = "s3",
+      region = "eu-west-1",
+      bucket = "mybucket"
+    },
+    {
+      type = "inline",
+    }
   ]
 }
 ```
@@ -370,6 +382,13 @@ target "app" {
   call = "check"
 }
 ```
+
+Supported values are:
+
+- `build` builds the target (default)
+- `check`: evaluates [build checks](https://docs.docker.com/build/checks/) for the target
+- `outline`: displays the target's build arguments and their default values if available
+- `targets`: lists all Bake targets in the loaded definition, along with its [description](#targetdescription).
 
 For more information about frontend methods, refer to the CLI reference for
 [`docker buildx build --call`](https://docs.docker.com/reference/cli/docker/buildx/build/#call).
@@ -480,6 +499,25 @@ target "app" {
 FROM baseapp
 RUN echo "Hello world"
 ```
+
+### `target.description`
+
+Defines a human-readable description for the target, clarifying its purpose or
+functionality.
+
+```hcl
+target "lint" {
+    description = "Runs golangci-lint to detect style errors"
+    args = {
+        GOLANGCI_LINT_VERSION = null
+    }
+    dockerfile = "lint.Dockerfile"
+}
+```
+
+This attribute is useful when combined with the `docker buildx bake --list=targets`
+option, providing a more informative output when listing the available build
+targets in a Bake file.
 
 ### `target.dockerfile-inline`
 
@@ -835,7 +873,7 @@ The following example configures the target to use a cache-only output,
 
 ```hcl
 target "default" {
-  output = ["type=cacheonly"]
+  output = [{ type = "cacheonly" }]
 }
 ```
 
@@ -875,8 +913,8 @@ variable "HOME" {
 
 target "default" {
   secret = [
-    "type=env,id=KUBECONFIG",
-    "type=file,id=aws,src=${HOME}/.aws/credentials"
+    { type = "env", id = "KUBECONFIG" },
+    { type = "file", id = "aws", src = "${HOME}/.aws/credentials" },
   ]
 }
 ```
@@ -920,7 +958,7 @@ This can be useful if you need to access private repositories during a build.
 
 ```hcl
 target "default" {
-  ssh = ["default"]
+  ssh = [{ id = "default" }]
 }
 ```
 
