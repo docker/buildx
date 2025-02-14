@@ -34,6 +34,9 @@ target "webapp" {
 	args = {
 		VAR_BOTH = "webapp"
 	}
+	annotations = [
+		"index,manifest:org.opencontainers.image.authors=dvdksn"
+	]
 	inherits = ["webDEP"]
 }`),
 	}
@@ -113,6 +116,15 @@ target "webapp" {
 			require.Equal(t, 1, len(g))
 			require.Equal(t, []string{"webapp"}, g["default"].Targets)
 		})
+	})
+
+	t.Run("AnnotationsOverrides", func(t *testing.T) {
+		t.Parallel()
+		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.annotations=index,manifest:org.opencontainers.image.vendor=docker"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"index,manifest:org.opencontainers.image.authors=dvdksn", "index,manifest:org.opencontainers.image.vendor=docker"}, m["webapp"].Annotations)
+		require.Equal(t, 1, len(g))
+		require.Equal(t, []string{"webapp"}, g["default"].Targets)
 	})
 
 	t.Run("ContextOverride", func(t *testing.T) {
