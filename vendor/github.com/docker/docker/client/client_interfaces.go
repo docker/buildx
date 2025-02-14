@@ -69,11 +69,11 @@ type HijackDialer interface {
 // ContainerAPIClient defines API client methods for the containers
 type ContainerAPIClient interface {
 	ContainerAttach(ctx context.Context, container string, options container.AttachOptions) (types.HijackedResponse, error)
-	ContainerCommit(ctx context.Context, container string, options container.CommitOptions) (types.IDResponse, error)
+	ContainerCommit(ctx context.Context, container string, options container.CommitOptions) (container.CommitResponse, error)
 	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
 	ContainerDiff(ctx context.Context, container string) ([]container.FilesystemChange, error)
 	ContainerExecAttach(ctx context.Context, execID string, options container.ExecAttachOptions) (types.HijackedResponse, error)
-	ContainerExecCreate(ctx context.Context, container string, options container.ExecOptions) (types.IDResponse, error)
+	ContainerExecCreate(ctx context.Context, container string, options container.ExecOptions) (container.ExecCreateResponse, error)
 	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
 	ContainerExecResize(ctx context.Context, execID string, options container.ResizeOptions) error
 	ContainerExecStart(ctx context.Context, execID string, options container.ExecStartOptions) error
@@ -93,9 +93,9 @@ type ContainerAPIClient interface {
 	ContainerStatsOneShot(ctx context.Context, container string) (container.StatsResponseReader, error)
 	ContainerStart(ctx context.Context, container string, options container.StartOptions) error
 	ContainerStop(ctx context.Context, container string, options container.StopOptions) error
-	ContainerTop(ctx context.Context, container string, arguments []string) (container.ContainerTopOKBody, error)
+	ContainerTop(ctx context.Context, container string, arguments []string) (container.TopResponse, error)
 	ContainerUnpause(ctx context.Context, container string) error
-	ContainerUpdate(ctx context.Context, container string, updateConfig container.UpdateConfig) (container.ContainerUpdateOKBody, error)
+	ContainerUpdate(ctx context.Context, container string, updateConfig container.UpdateConfig) (container.UpdateResponse, error)
 	ContainerWait(ctx context.Context, container string, condition container.WaitCondition) (<-chan container.WaitResponse, <-chan error)
 	CopyFromContainer(ctx context.Context, container, srcPath string) (io.ReadCloser, container.PathStat, error)
 	CopyToContainer(ctx context.Context, container, path string, content io.Reader, options container.CopyToContainerOptions) error
@@ -113,21 +113,30 @@ type ImageAPIClient interface {
 	BuildCachePrune(ctx context.Context, opts types.BuildCachePruneOptions) (*types.BuildCachePruneReport, error)
 	BuildCancel(ctx context.Context, id string) error
 	ImageCreate(ctx context.Context, parentReference string, options image.CreateOptions) (io.ReadCloser, error)
-	ImageHistory(ctx context.Context, image string, opts image.HistoryOptions) ([]image.HistoryResponseItem, error)
 	ImageImport(ctx context.Context, source image.ImportSource, ref string, options image.ImportOptions) (io.ReadCloser, error)
-	// Deprecated: Use [Client.ImageInspect] instead.
-	// Raw response can be obtained by [ImageInspectWithRawResponse] option.
-	ImageInspectWithRaw(ctx context.Context, image string) (image.InspectResponse, []byte, error)
-	ImageInspect(ctx context.Context, image string, _ ...ImageInspectOption) (image.InspectResponse, error)
+
 	ImageList(ctx context.Context, options image.ListOptions) ([]image.Summary, error)
-	ImageLoad(ctx context.Context, input io.Reader, opts image.LoadOptions) (image.LoadResponse, error)
 	ImagePull(ctx context.Context, ref string, options image.PullOptions) (io.ReadCloser, error)
 	ImagePush(ctx context.Context, ref string, options image.PushOptions) (io.ReadCloser, error)
 	ImageRemove(ctx context.Context, image string, options image.RemoveOptions) ([]image.DeleteResponse, error)
-	ImageSave(ctx context.Context, images []string, opts image.SaveOptions) (io.ReadCloser, error)
 	ImageSearch(ctx context.Context, term string, options registry.SearchOptions) ([]registry.SearchResult, error)
 	ImageTag(ctx context.Context, image, ref string) error
 	ImagesPrune(ctx context.Context, pruneFilter filters.Args) (image.PruneReport, error)
+
+	ImageInspect(ctx context.Context, image string, _ ...ImageInspectOption) (image.InspectResponse, error)
+	ImageHistory(ctx context.Context, image string, _ ...ImageHistoryOption) ([]image.HistoryResponseItem, error)
+	ImageLoad(ctx context.Context, input io.Reader, _ ...ImageLoadOption) (image.LoadResponse, error)
+	ImageSave(ctx context.Context, images []string, _ ...ImageSaveOption) (io.ReadCloser, error)
+
+	ImageAPIClientDeprecated
+}
+
+// ImageAPIClientDeprecated defines deprecated methods of the ImageAPIClient.
+type ImageAPIClientDeprecated interface {
+	// ImageInspectWithRaw returns the image information and its raw representation.
+	//
+	// Deprecated: Use [Client.ImageInspect] instead. Raw response can be obtained using the [ImageInspectWithRawResponse] option.
+	ImageInspectWithRaw(ctx context.Context, image string) (image.InspectResponse, []byte, error)
 }
 
 // NetworkAPIClient defines API client methods for the networks
