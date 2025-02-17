@@ -52,7 +52,7 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 				w.mu.Unlock()
 			}
 
-			resp, err := dapi.ImageLoad(ctx, pr, false)
+			resp, err := dapi.ImageLoad(ctx, pr)
 			defer close(done)
 			if err != nil {
 				handleErr(err)
