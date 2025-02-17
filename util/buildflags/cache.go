@@ -266,5 +266,5 @@ func isActive(pb *controllerapi.CacheOptionsEntry) bool {
 	if pb.Type != "gha" {
 		return true
 	}
-	return pb.Attrs["token"] != "" && pb.Attrs["url"] != ""
+	return pb.Attrs["token"] != "" && (pb.Attrs["url"] != "" || pb.Attrs["url_v2"] != "")
 }
