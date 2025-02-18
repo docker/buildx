@@ -20,6 +20,7 @@ import (
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/tonistiigi/go-csvvalue"
 )
 
 type EntitlementKey string
@@ -27,6 +28,7 @@ type EntitlementKey string
 const (
 	EntitlementKeyNetworkHost      EntitlementKey = "network.host"
 	EntitlementKeySecurityInsecure EntitlementKey = "security.insecure"
+	EntitlementKeyDevice           EntitlementKey = "device"
 	EntitlementKeyFSRead           EntitlementKey = "fs.read"
 	EntitlementKeyFSWrite          EntitlementKey = "fs.write"
 	EntitlementKeyFS               EntitlementKey = "fs"
@@ -39,11 +41,17 @@ const (
 type EntitlementConf struct {
 	NetworkHost      bool
 	SecurityInsecure bool
+	Devices          *EntitlementsDevicesConf
 	FSRead           []string
 	FSWrite          []string
 	ImagePush        []string
 	ImageLoad        []string
 	SSH              bool
+}
+
+type EntitlementsDevicesConf struct {
+	All     bool
+	Devices map[string]struct{}
 }
 
 func ParseEntitlements(in []string) (EntitlementConf, error) {
@@ -59,6 +67,22 @@ func ParseEntitlements(in []string) (EntitlementConf, error) {
 		default:
 			k, v, _ := strings.Cut(e, "=")
 			switch k {
+			case string(EntitlementKeyDevice):
+				if v == "" {
+					conf.Devices = &EntitlementsDevicesConf{All: true}
+					continue
+				}
+				fields, err := csvvalue.Fields(v, nil)
+				if err != nil {
+					return EntitlementConf{}, errors.Wrapf(err, "failed to parse device entitlement %q", v)
+				}
+				if conf.Devices == nil {
+					conf.Devices = &EntitlementsDevicesConf{}
+				}
+				if conf.Devices.Devices == nil {
+					conf.Devices.Devices = make(map[string]struct{}, 0)
+				}
+				conf.Devices.Devices[fields[0]] = struct{}{}
 			case string(EntitlementKeyFSRead):
 				conf.FSRead = append(conf.FSRead, v)
 			case string(EntitlementKeyFSWrite):
@@ -95,12 +119,34 @@ func (c EntitlementConf) Validate(m map[string]build.Options) (EntitlementConf, 
 
 func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) error {
 	for _, e := range bo.Allow {
+		k, rest, _ := strings.Cut(e, "=")
+		switch k {
+		case entitlements.EntitlementDevice.String():
+			if rest == "" {
+				if c.Devices == nil || !c.Devices.All {
+					expected.Devices = &EntitlementsDevicesConf{All: true}
+				}
+				continue
+			}
+			fields, err := csvvalue.Fields(rest, nil)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse device entitlement %q", rest)
+			}
+			if expected.Devices == nil {
+				expected.Devices = &EntitlementsDevicesConf{}
+			}
+			if expected.Devices.Devices == nil {
+				expected.Devices.Devices = make(map[string]struct{}, 0)
+			}
+			expected.Devices.Devices[fields[0]] = struct{}{}
+		}
+
 		switch e {
-		case entitlements.EntitlementNetworkHost:
+		case entitlements.EntitlementNetworkHost.String():
 			if !c.NetworkHost {
 				expected.NetworkHost = true
 			}
-		case entitlements.EntitlementSecurityInsecure:
+		case entitlements.EntitlementSecurityInsecure.String():
 			if !c.SecurityInsecure {
 				expected.SecurityInsecure = true
 			}
@@ -185,6 +231,18 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 	if c.SecurityInsecure {
 		msgs = append(msgs, " - Running privileged containers that can make system changes")
 		flags = append(flags, string(EntitlementKeySecurityInsecure))
+	}
+
+	if c.Devices != nil {
+		if c.Devices.All {
+			msgs = append(msgs, " - Access to CDI devices")
+			flags = append(flags, string(EntitlementKeyDevice))
+		} else {
+			for d := range c.Devices.Devices {
+				msgs = append(msgs, fmt.Sprintf(" - Access to device %s", d))
+				flags = append(flags, string(EntitlementKeyDevice)+"="+d)
+			}
+		}
 	}
 
 	if c.SSH {

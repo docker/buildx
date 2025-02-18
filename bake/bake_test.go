@@ -1806,8 +1806,8 @@ func TestHCLEntitlements(t *testing.T) {
 	require.Equal(t, "network.host", m["app"].Entitlements[1])
 
 	require.Len(t, bo["app"].Allow, 2)
-	require.Equal(t, entitlements.EntitlementSecurityInsecure, bo["app"].Allow[0])
-	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[1])
+	require.Equal(t, entitlements.EntitlementSecurityInsecure.String(), bo["app"].Allow[0])
+	require.Equal(t, entitlements.EntitlementNetworkHost.String(), bo["app"].Allow[1])
 }
 
 func TestEntitlementsForNetHostCompose(t *testing.T) {
@@ -1846,7 +1846,7 @@ func TestEntitlementsForNetHostCompose(t *testing.T) {
 	require.Equal(t, "host", *m["app"].NetworkMode)
 
 	require.Len(t, bo["app"].Allow, 1)
-	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[0])
+	require.Equal(t, entitlements.EntitlementNetworkHost.String(), bo["app"].Allow[0])
 	require.Equal(t, "host", bo["app"].NetworkMode)
 }
 
@@ -1877,7 +1877,7 @@ func TestEntitlementsForNetHost(t *testing.T) {
 	require.Equal(t, "host", *m["app"].NetworkMode)
 
 	require.Len(t, bo["app"].Allow, 1)
-	require.Equal(t, entitlements.EntitlementNetworkHost, bo["app"].Allow[0])
+	require.Equal(t, entitlements.EntitlementNetworkHost.String(), bo["app"].Allow[0])
 	require.Equal(t, "host", bo["app"].NetworkMode)
 }
 
