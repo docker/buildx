@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/in-toto/in-toto-golang v0.5.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.20.0-rc2
+	github.com/moby/buildkit v0.20.0-rc3
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/moby/sys/signal v0.7.1
 	github.com/morikuni/aec v1.0.0
@@ -194,5 +194,3 @@ exclude (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 )
-
-replace github.com/moby/buildkit => github.com/tonistiigi/buildkit v0.10.0-rc2.0.20250214043642-c9e788c50beb
