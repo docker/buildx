@@ -122,6 +122,7 @@ func NewPrinter(ctx context.Context, out console.File, mode progressui.DisplayMo
 		for {
 			pw.status = make(chan *client.SolveStatus)
 			pw.done = make(chan struct{})
+			pw.closeOnce = sync.Once{}
 
 			pw.logMu.Lock()
 			pw.logSourceMap = map[digest.Digest]interface{}{}
