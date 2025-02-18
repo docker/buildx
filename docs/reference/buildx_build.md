@@ -16,7 +16,7 @@ Start a build
 | Name                                    | Type          | Default   | Description                                                                                                  |
 |:----------------------------------------|:--------------|:----------|:-------------------------------------------------------------------------------------------------------------|
 | [`--add-host`](#add-host)               | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                          |
-| [`--allow`](#allow)                     | `stringSlice` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)                               |
+| [`--allow`](#allow)                     | `stringArray` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)                               |
 | [`--annotation`](#annotation)           | `stringArray` |           | Add annotation to the image                                                                                  |
 | [`--attest`](#attest)                   | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                                 |
 | [`--build-arg`](#build-arg)             | `stringArray` |           | Set build-time variables                                                                                     |
