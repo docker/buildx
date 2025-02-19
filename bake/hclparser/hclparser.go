@@ -10,7 +10,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/buildx/bake/hclparser/gohcl"
+	"github.com/docker/buildx/bake/hclparser/hcl/gohcl"
 	"github.com/docker/buildx/util/userfunc"
 	"github.com/hashicorp/hcl/v2"
 	"github.com/pkg/errors"
