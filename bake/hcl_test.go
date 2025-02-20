@@ -56,7 +56,7 @@ func TestHCLBasic(t *testing.T) {
 
 	require.Equal(t, 4, len(c.Targets))
 	require.Equal(t, "db", c.Targets[0].Name)
-	require.Equal(t, "./db", *c.Targets[0].Context)
+	require.Equal(t, "./db", *c.Targets[0].ContextPath())
 
 	require.Equal(t, "webapp", c.Targets[1].Name)
 	require.Equal(t, 1, len(c.Targets[1].Args))
@@ -116,7 +116,7 @@ func TestHCLBasicInJSON(t *testing.T) {
 
 	require.Equal(t, 4, len(c.Targets))
 	require.Equal(t, "db", c.Targets[0].Name)
-	require.Equal(t, "./db", *c.Targets[0].Context)
+	require.Equal(t, "./db", *c.Targets[0].ContextPath())
 
 	require.Equal(t, "webapp", c.Targets[1].Name)
 	require.Equal(t, 1, len(c.Targets[1].Args))
@@ -518,11 +518,11 @@ func TestHCLTargetAttrs(t *testing.T) {
 	require.Equal(t, "bar", c.Targets[1].Name)
 
 	require.Equal(t, "xxx", *c.Targets[0].Dockerfile)
-	require.Equal(t, "yyy", *c.Targets[0].Context)
+	require.Equal(t, "yyy", *c.Targets[0].ContextPath())
 	require.Equal(t, "xxx", *c.Targets[0].Target)
 
 	require.Equal(t, "xxx", *c.Targets[1].Dockerfile)
-	require.Equal(t, "yyy", *c.Targets[1].Context)
+	require.Equal(t, "yyy", *c.Targets[1].ContextPath())
 	require.Equal(t, "yyy", *c.Targets[1].Target)
 }
 
@@ -578,8 +578,7 @@ func TestHCLTargetAttrEmptyChain(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "foo", c.Targets[0].Name)
-	require.Nil(t, c.Targets[0].Dockerfile)
-	require.Nil(t, c.Targets[0].Context)
+	require.Nil(t, c.Targets[0].ContextPath())
 	require.Nil(t, c.Targets[0].Target)
 }
 
@@ -1011,7 +1010,7 @@ func TestHCLRenameMultiFile(t *testing.T) {
 	require.Equal(t, "z", *c.Targets[0].Target)
 
 	require.Equal(t, "foo", c.Targets[1].Name)
-	require.Equal(t, "y", *c.Targets[1].Context)
+	require.Equal(t, "y", *c.Targets[1].ContextPath())
 }
 
 func TestHCLMatrixBasic(t *testing.T) {
@@ -1413,7 +1412,7 @@ services:
 	require.Equal(t, "app", c.Targets[0].Name)
 	require.Equal(t, ptrstr("foo"), c.Targets[0].Args["v1"])
 	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["v2"])
-	require.Equal(t, "dir", *c.Targets[0].Context)
+	require.Equal(t, "dir", *c.Targets[0].ContextPath())
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[0].Dockerfile)
 }
 
@@ -1434,7 +1433,7 @@ func TestHCLBuiltinVars(t *testing.T) {
 
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "app", c.Targets[0].Name)
-	require.Equal(t, "foo", *c.Targets[0].Context)
+	require.Equal(t, "foo", *c.Targets[0].ContextPath())
 	require.Equal(t, "test", *c.Targets[0].Dockerfile)
 }
 
@@ -1506,11 +1505,11 @@ target "b" {
 	require.Equal(t, []string{"app/b:1.0.0", "app/b:latest"}, c.Targets[1].Tags)
 
 	require.Equal(t, "a", c.Targets[2].Name)
-	require.Equal(t, ".", *c.Targets[2].Context)
+	require.Equal(t, ".", *c.Targets[2].ContextPath())
 	require.Equal(t, "a", *c.Targets[2].Target)
 
 	require.Equal(t, "b", c.Targets[3].Name)
-	require.Equal(t, ".", *c.Targets[3].Context)
+	require.Equal(t, ".", *c.Targets[3].ContextPath())
 	require.Equal(t, "b", *c.Targets[3].Target)
 }
 

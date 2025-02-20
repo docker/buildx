@@ -47,7 +47,7 @@ target "webapp" {
 		require.Equal(t, 1, len(m))
 
 		require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
-		require.Equal(t, ".", *m["webapp"].Context)
+		require.Equal(t, ".", *m["webapp"].ContextPath())
 		require.Equal(t, ptrstr("webDEP"), m["webapp"].Args["VAR_INHERITED"])
 		require.Equal(t, true, *m["webapp"].NoCache)
 		require.Equal(t, "128m", *m["webapp"].ShmSize)
@@ -80,7 +80,7 @@ target "webapp" {
 			require.NoError(t, err)
 
 			require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
-			require.Equal(t, ".", *m["webapp"].Context)
+			require.Equal(t, ".", *m["webapp"].ContextPath())
 
 			_, isSet := m["webapp"].Args["VAR_UNSET"]
 			require.False(t, isSet, m["webapp"].Args["VAR_UNSET"])
@@ -122,7 +122,7 @@ target "webapp" {
 
 		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context=foo"}, nil, &EntitlementConf{})
 		require.NoError(t, err)
-		require.Equal(t, "foo", *m["webapp"].Context)
+		require.Equal(t, "foo", *m["webapp"].ContextPath())
 		require.Equal(t, 1, len(g))
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
 	})
@@ -519,7 +519,7 @@ services:
 
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["webapp"].Dockerfile)
-	require.Equal(t, ".", *m["webapp"].Context)
+	require.Equal(t, ".", *m["webapp"].ContextPath())
 	require.Equal(t, ptrstr("1"), m["webapp"].Args["buildno"])
 	require.Equal(t, ptrstr("12"), m["webapp"].Args["buildno2"])
 
@@ -580,7 +580,7 @@ services:
 	_, ok = m["web_app"]
 	require.True(t, ok)
 	require.Equal(t, "Dockerfile.webapp", *m["web_app"].Dockerfile)
-	require.Equal(t, ".", *m["web_app"].Context)
+	require.Equal(t, ".", *m["web_app"].ContextPath())
 	require.Equal(t, ptrstr("1"), m["web_app"].Args["buildno"])
 	require.Equal(t, ptrstr("12"), m["web_app"].Args["buildno2"])
 
@@ -611,7 +611,7 @@ func TestHCLContextCwdPrefix(t *testing.T) {
 	require.Equal(t, 1, len(m))
 	require.Contains(t, m, "app")
 	assert.Equal(t, "test", *m["app"].Dockerfile)
-	assert.Equal(t, "foo", *m["app"].Context)
+	assert.Equal(t, "cwd://foo", *m["app"].ContextPath())
 	assert.Equal(t, "foo/test", bo["app"].Inputs.DockerfilePath)
 	assert.Equal(t, "foo", bo["app"].Inputs.ContextPath)
 }
@@ -642,7 +642,7 @@ func TestHCLDockerfileCwdPrefix(t *testing.T) {
 	require.Equal(t, 1, len(m))
 	require.Contains(t, m, "app")
 	assert.Equal(t, "cwd://Dockerfile.app", *m["app"].Dockerfile)
-	assert.Equal(t, ".", *m["app"].Context)
+	assert.Equal(t, ".", *m["app"].ContextPath())
 	assert.Equal(t, filepath.Join(cwd, "Dockerfile.app"), bo["app"].Inputs.DockerfilePath)
 	assert.Equal(t, ".", bo["app"].Inputs.ContextPath)
 }
@@ -799,9 +799,9 @@ services:
 	require.True(t, ok)
 
 	require.Equal(t, "Dockerfile", *m["app1"].Dockerfile)
-	require.Equal(t, ".", *m["app1"].Context)
+	require.Equal(t, ".", *m["app1"].ContextPath())
 	require.Equal(t, "Dockerfile", *m["app2"].Dockerfile)
-	require.Equal(t, ".", *m["app2"].Context)
+	require.Equal(t, ".", *m["app2"].ContextPath())
 }
 
 func TestReadContextFromTargetChain(t *testing.T) {
@@ -1131,7 +1131,7 @@ services:
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image", "image-release"}, g["default"].Targets)
 	require.Equal(t, 2, len(m))
-	require.Equal(t, ".", *m["image"].Context)
+	require.Equal(t, ".", *m["image"].ContextPath())
 	require.Equal(t, 1, len(m["image-release"].Outputs))
 	require.Equal(t, "type=image,push=true", m["image-release"].Outputs[0].String())
 
@@ -1140,14 +1140,14 @@ services:
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g["default"].Targets)
 	require.Equal(t, 1, len(m))
-	require.Equal(t, ".", *m["image"].Context)
+	require.Equal(t, ".", *m["image"].ContextPath())
 
 	m, g, err = ReadTargets(ctx, []File{fjson}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
 	require.Equal(t, 1, len(g))
 	require.Equal(t, []string{"image"}, g["default"].Targets)
 	require.Equal(t, 1, len(m))
-	require.Equal(t, ".", *m["image"].Context)
+	require.Equal(t, ".", *m["image"].ContextPath())
 
 	m, g, err = ReadTargets(ctx, []File{fyml}, []string{"default"}, nil, nil, &EntitlementConf{})
 	require.NoError(t, err)
@@ -1173,7 +1173,7 @@ services:
 	sort.Strings(g["default"].Targets)
 	require.Equal(t, []string{"addon", "aws", "image"}, g["default"].Targets)
 	require.Equal(t, 3, len(m))
-	require.Equal(t, ".", *m["image"].Context)
+	require.Equal(t, ".", *m["image"].ContextPath())
 	require.Equal(t, "./Dockerfile", *m["addon"].Dockerfile)
 	require.Equal(t, "./aws.Dockerfile", *m["aws"].Dockerfile)
 }
@@ -1538,7 +1538,7 @@ target "f" {
 			require.Equal(t, tt.targets, g["default"].Targets)
 
 			require.Equal(t, tt.count, len(m))
-			require.Equal(t, ".", *m["d"].Context)
+			require.Equal(t, ".", *m["d"].ContextPath())
 			require.Equal(t, "./testdockerfile", *m["d"].Dockerfile)
 		})
 	}
@@ -1572,7 +1572,7 @@ services:
 	require.Equal(t, "app", c.Targets[0].Name)
 	require.Equal(t, ptrstr("foo"), c.Targets[0].Args["v1"])
 	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["v2"])
-	require.Equal(t, "dir", *c.Targets[0].Context)
+	require.Equal(t, "dir", *c.Targets[0].ContextPath())
 	require.Equal(t, "Dockerfile-alternate", *c.Targets[0].Dockerfile)
 }
 
