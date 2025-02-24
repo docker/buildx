@@ -175,6 +175,10 @@ func ParseCacheEntry(in []string) (CacheOptions, error) {
 
 	opts := make(CacheOptions, 0, len(in))
 	for _, in := range in {
+		if in == "" {
+			continue
+		}
+
 		if !strings.Contains(in, "=") {
 			// This is ref only format. Each field in the CSV is its own entry.
 			fields, err := csvvalue.Fields(in, nil)

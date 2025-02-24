@@ -38,6 +38,7 @@ func bakeCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrint,
 	testBakePrintSensitive,
+	testBakePrintOverrideEmpty,
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeRemote,
@@ -284,6 +285,47 @@ RUN echo "Hello ${HELLO}"
 `, stdout.String())
 		})
 	}
+}
+
+func testBakePrintOverrideEmpty(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+	bakefile := []byte(`
+target "default" {
+	cache-to = ["type=gha,mode=min,scope=integration-tests"]
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--print", "--set", "*.cache-to="))
+	stdout := bytes.Buffer{}
+	stderr := bytes.Buffer{}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+
+	require.JSONEq(t, `{
+	"group": {
+		"default": {
+			"targets": [
+				"default"
+			]
+		}
+	},
+	"target": {
+		"default": {
+			"context": ".",
+			"dockerfile": "Dockerfile"
+		}
+	}
+}`, stdout.String())
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
@@ -871,6 +913,7 @@ target "default" {
 		})
 	}
 }
+
 func testBakeSetNonExistingOutsideNoParallel(t *testing.T, sb integration.Sandbox) {
 	for _, ent := range []bool{true, false} {
 		t.Run(fmt.Sprintf("ent=%v", ent), func(t *testing.T) {
