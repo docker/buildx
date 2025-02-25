@@ -1,0 +1,32 @@
+# -*- mode: ruby -*-
+# vi: set ft=ruby :
+
+Vagrant.configure("2") do |config|
+  config.vm.box = "generic/netbsd9"
+  config.vm.boot_timeout = 900
+  config.vm.synced_folder ".", "/vagrant", type: "rsync"
+  config.ssh.keep_alive = true
+
+  config.vm.provision "init", type: "shell", run: "once" do |sh|
+    sh.inline = <<~SHELL
+      set -x
+      mkdir -p /var/tmp
+      chmod 1777 /var/tmp
+
+      pkgin -y install git mozilla-rootcerts
+      mozilla-rootcerts install
+
+      ftp https://go.dev/dl/go#{ENV['GO_VERSION']}.netbsd-amd64.tar.gz
+      tar -C /var/tmp -xzf go#{ENV['GO_VERSION']}.netbsd-amd64.tar.gz
+
+      cat << 'EOF' > /usr/bin/go-wrapper
+      #!/bin/sh
+      export TMPDIR="/var/tmp"
+      exec /var/tmp/go/bin/go "$@"
+      EOF
+      chmod +x /usr/bin/go-wrapper
+
+      ln -s /usr/bin/go-wrapper /usr/bin/go
+    SHELL
+  end
+end

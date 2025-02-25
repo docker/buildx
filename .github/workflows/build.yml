@@ -258,6 +258,7 @@ jobs:
       matrix:
         os:
           - freebsd
+          - netbsd
           - openbsd
     steps:
       -

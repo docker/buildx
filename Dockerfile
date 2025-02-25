@@ -105,6 +105,7 @@ COPY --link --from=buildx-build /usr/bin/docker-buildx /buildx
 FROM binaries-unix AS binaries-darwin
 FROM binaries-unix AS binaries-freebsd
 FROM binaries-unix AS binaries-linux
+FROM binaries-unix AS binaries-netbsd
 FROM binaries-unix AS binaries-openbsd
 
 FROM scratch AS binaries-windows
