@@ -16,6 +16,7 @@ import (
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"gopkg.in/yaml.v3"
 )
 
@@ -55,6 +56,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 	}
 
 	var c Config
+	var xbakeSet bool
 	if len(cfg.Services) > 0 {
 		c.Groups = []*Group{}
 		c.Targets = []*Target{}
@@ -179,8 +181,10 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				ShmSize:     shmSize,
 				Ulimits:     ulimits,
 			}
-			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
+			if set, err := t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err
+			} else if set {
+				xbakeSet = true
 			}
 			if s.Build.Target != "" {
 				target := s.Build.Target
@@ -192,6 +196,10 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			c.Targets = append(c.Targets, t)
 		}
 		c.Groups = append(c.Groups, g)
+	}
+
+	if xbakeSet {
+		logrus.Warn("x-bake extension is deprecated and will be removed in a future release, use the official specification instead: https://docs.docker.com/reference/compose-file/build/")
 	}
 
 	return &c, nil
@@ -332,17 +340,17 @@ func (sa *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // composeExtTarget converts Compose build extension x-bake to bake Target
 // https://github.com/compose-spec/compose-spec/blob/master/spec.md#extension
-func (t *Target) composeExtTarget(exts map[string]interface{}) error {
+func (t *Target) composeExtTarget(exts map[string]interface{}) (bool, error) {
 	var xb xbake
 
 	ext, ok := exts["x-bake"]
 	if !ok || ext == nil {
-		return nil
+		return false, nil
 	}
 
 	yb, _ := yaml.Marshal(ext)
 	if err := yaml.Unmarshal(yb, &xb); err != nil {
-		return err
+		return false, err
 	}
 
 	if len(xb.Tags) > 0 {
@@ -351,28 +359,28 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 	if len(xb.CacheFrom) > 0 {
 		cacheFrom, err := buildflags.ParseCacheEntry(xb.CacheFrom)
 		if err != nil {
-			return err
+			return false, err
 		}
 		t.CacheFrom = t.CacheFrom.Merge(cacheFrom)
 	}
 	if len(xb.CacheTo) > 0 {
 		cacheTo, err := buildflags.ParseCacheEntry(xb.CacheTo)
 		if err != nil {
-			return err
+			return false, err
 		}
 		t.CacheTo = t.CacheTo.Merge(cacheTo)
 	}
 	if len(xb.Secrets) > 0 {
 		secrets, err := parseArrValue[buildflags.Secret](xb.Secrets)
 		if err != nil {
-			return err
+			return false, err
 		}
 		t.Secrets = t.Secrets.Merge(secrets)
 	}
 	if len(xb.SSH) > 0 {
 		ssh, err := parseArrValue[buildflags.SSH](xb.SSH)
 		if err != nil {
-			return err
+			return false, err
 		}
 		t.SSH = t.SSH.Merge(ssh)
 		slices.SortFunc(t.SSH, func(a, b *buildflags.SSH) int {
@@ -385,7 +393,7 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 	if len(xb.Outputs) > 0 {
 		outputs, err := parseArrValue[buildflags.ExportEntry](xb.Outputs)
 		if err != nil {
-			return err
+			return false, err
 		}
 		t.Outputs = t.Outputs.Merge(outputs)
 	}
@@ -402,7 +410,7 @@ func (t *Target) composeExtTarget(exts map[string]interface{}) error {
 		t.Contexts = dedupMap(t.Contexts, xb.Contexts)
 	}
 
-	return nil
+	return true, nil
 }
 
 // composeToBuildkitSecret converts secret from compose format to buildkit's
