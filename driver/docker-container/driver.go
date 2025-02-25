@@ -420,6 +420,7 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 		driver.DockerExporter: true,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true,
+		driver.DirectPush:     true,
 		driver.DefaultLoad:    d.defaultLoad,
 	}
 }
