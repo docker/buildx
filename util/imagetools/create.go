@@ -194,8 +194,11 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.Descriptor, dt []byte) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 
-	ref = reference.TagNameOnly(ref)
-	p, err := r.resolver().Pusher(ctx, ref.String())
+	fullRef, err := reference.WithDigest(reference.TagNameOnly(ref), desc.Digest)
+	if err != nil {
+		return errors.Wrapf(err, "failed to combine ref %s with digest %s", ref, desc.Digest)
+	}
+	p, err := r.resolver().Pusher(ctx, fullRef.String())
 	if err != nil {
 		return err
 	}
@@ -217,8 +220,8 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.D
 func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 
-	dest = reference.TagNameOnly(dest)
-	p, err := r.resolver().Pusher(ctx, dest.String())
+	// push by digest
+	p, err := r.resolver().Pusher(ctx, dest.Name())
 	if err != nil {
 		return err
 	}
