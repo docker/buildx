@@ -93,6 +93,7 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 			driver.DockerExporter: useContainerdSnapshotter,
 			driver.CacheExport:    useContainerdSnapshotter,
 			driver.MultiPlatform:  useContainerdSnapshotter,
+			driver.DirectPush:     useContainerdSnapshotter,
 			driver.DefaultLoad:    true,
 		}
 	})
