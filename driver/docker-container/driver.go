@@ -56,6 +56,7 @@ type Driver struct {
 	restartPolicy container.RestartPolicy
 	env           []string
 	defaultLoad   bool
+	gpus          []container.DeviceRequest
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -157,6 +158,9 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		}
 		if d.cpusetMems != "" {
 			hc.Resources.CpusetMems = d.cpusetMems
+		}
+		if len(d.gpus) > 0 && d.hasGPUCapability(ctx, cfg.Image, d.gpus) {
+			hc.Resources.DeviceRequests = d.gpus
 		}
 		if info, err := d.DockerAPI.Info(ctx); err == nil {
 			if info.CgroupDriver == "cgroupfs" {
@@ -427,6 +431,31 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 
 func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
 	return nil, errors.New("host-gateway is not supported by the docker-container driver")
+}
+
+// hasGPUCapability checks if docker daemon has GPU capability. We need to run
+// a dummy container with GPU device to check if the daemon has this capability
+// because there is no API to check it yet.
+func (d *Driver) hasGPUCapability(ctx context.Context, image string, gpus []container.DeviceRequest) bool {
+	cfg := &container.Config{
+		Image:      image,
+		Entrypoint: []string{"/bin/true"},
+	}
+	hc := &container.HostConfig{
+		NetworkMode: container.NetworkMode(container.IPCModeNone),
+		AutoRemove:  true,
+		Resources: container.Resources{
+			DeviceRequests: gpus,
+		},
+	}
+	resp, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, "")
+	if err != nil {
+		return false
+	}
+	if err := d.DockerAPI.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+		return false
+	}
+	return true
 }
 
 func demuxConn(c net.Conn) net.Conn {
