@@ -608,7 +608,7 @@ func TestHCLAttrsCapsuleType(t *testing.T) {
 	target "app" {
 		attest = [
 			{ type = "provenance", mode = "max" },
-			"type=sbom,disabled=true",
+			"type=sbom,disabled=true,generator=foo,\"ENV1=bar,baz\",ENV2=hello",
 		]
 
 		cache-from = [
@@ -641,7 +641,7 @@ func TestHCLAttrsCapsuleType(t *testing.T) {
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
-	require.Equal(t, []string{"type=provenance,mode=max", "type=sbom,disabled=true"}, stringify(c.Targets[0].Attest))
+	require.Equal(t, []string{"type=provenance,mode=max", "type=sbom,disabled=true,\"ENV1=bar,baz\",ENV2=hello,generator=foo"}, stringify(c.Targets[0].Attest))
 	require.Equal(t, []string{"type=local,dest=../out", "type=oci,dest=../out.tar"}, stringify(c.Targets[0].Outputs))
 	require.Equal(t, []string{"type=local,src=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheFrom))
 	require.Equal(t, []string{"type=local,dest=path/to/cache"}, stringify(c.Targets[0].CacheTo))
