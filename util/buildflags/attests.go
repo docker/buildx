@@ -148,9 +148,8 @@ func (a *Attest) UnmarshalText(text []byte) error {
 		if !ok {
 			return errors.Errorf("invalid value %s", field)
 		}
-		key = strings.TrimSpace(strings.ToLower(key))
 
-		switch key {
+		switch k := strings.TrimSpace(strings.ToLower(key)); k {
 		case "type":
 			a.Type = value
 		case "disabled":

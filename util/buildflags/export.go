@@ -259,9 +259,17 @@ func (w *csvBuilder) Write(key, value string) {
 	if w.sb.Len() > 0 {
 		w.sb.WriteByte(',')
 	}
+
+	needsQuotes := strings.ContainsRune(value, ',') || strings.ContainsRune(key, ',')
+	if needsQuotes {
+		w.sb.WriteByte('"')
+	}
 	w.sb.WriteString(key)
 	w.sb.WriteByte('=')
 	w.sb.WriteString(value)
+	if needsQuotes {
+		w.sb.WriteByte('"')
+	}
 }
 
 func (w *csvBuilder) WriteAttributes(attrs map[string]string) {
