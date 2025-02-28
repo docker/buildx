@@ -81,4 +81,17 @@ func TestSecrets(t *testing.T) {
 		result := actual.Equals(expected)
 		require.True(t, result.True())
 	})
+
+	t.Run("RemoveDupes", func(t *testing.T) {
+		secrets := Secrets{
+			{ID: "mysecret", Env: "FOO"},
+			{ID: "mysecret", Env: "BAR"},
+			{ID: "mysecret2", Env: "BAZ"},
+		}.Normalize()
+
+		expected := `[{"id":"mysecret","env":"BAR"},{"id":"mysecret2","env":"BAZ"}]`
+		actual, err := json.Marshal(secrets)
+		require.NoError(t, err)
+		require.JSONEq(t, expected, string(actual))
+	})
 }

@@ -27,7 +27,7 @@ func (s Secrets) Normalize() Secrets {
 	if len(s) == 0 {
 		return nil
 	}
-	return removeDupes(s)
+	return removeSecretDupes(s)
 }
 
 func (s Secrets) ToPB() []*controllerapi.Secret {
@@ -154,4 +154,18 @@ func parseSecret(value string) (*controllerapi.Secret, error) {
 		return nil, err
 	}
 	return s.ToPB(), nil
+}
+
+func removeSecretDupes(s []*Secret) []*Secret {
+	var res []*Secret
+	m := map[string]int{}
+	for _, sec := range s {
+		if i, ok := m[sec.ID]; ok {
+			res[i] = sec
+		} else {
+			m[sec.ID] = len(res)
+			res = append(res, sec)
+		}
+	}
+	return res
 }
