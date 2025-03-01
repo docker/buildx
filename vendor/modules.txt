@@ -254,8 +254,6 @@ github.com/docker/cli/templates
 ## explicit; go 1.18
 github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
-# github.com/docker/distribution v2.8.3+incompatible
-## explicit
 # github.com/docker/docker v28.0.1+incompatible
 ## explicit
 github.com/docker/docker/api
