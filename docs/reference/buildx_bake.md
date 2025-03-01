@@ -354,6 +354,7 @@ $ docker buildx bake --set foo*.no-cache              # bypass caching only for 
 
 You can override the following fields:
 
+* `annotations`
 * `args`
 * `cache-from`
 * `cache-to`

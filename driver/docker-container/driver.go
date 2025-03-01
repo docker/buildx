@@ -106,8 +106,9 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 	}); err != nil {
 		// image pulling failed, check if it exists in local image store.
 		// if not, return pulling error. otherwise log it.
-		_, _, errInspect := d.DockerAPI.ImageInspectWithRaw(ctx, imageName)
-		if errInspect != nil {
+		_, errInspect := d.DockerAPI.ImageInspect(ctx, imageName)
+		found := errInspect == nil
+		if !found {
 			return err
 		}
 		l.Wrap("pulling failed, using local image "+imageName, func() error { return nil })
@@ -419,6 +420,7 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 		driver.DockerExporter: true,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true,
+		driver.DirectPush:     true,
 		driver.DefaultLoad:    d.defaultLoad,
 	}
 }

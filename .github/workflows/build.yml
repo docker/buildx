@@ -54,9 +54,9 @@ jobs:
           - master
           - latest
           - buildx-stable-1
+          - v0.20.0
           - v0.19.0
           - v0.18.2
-          - v0.17.2
         worker:
           - docker-container
           - remote
@@ -74,6 +74,16 @@ jobs:
             pkg: ./tests
             mode: experimental
           - worker: docker+containerd  # same as docker, but with containerd snapshotter
+            pkg: ./tests
+            mode: experimental
+          - worker: "docker@27.5"
+            pkg: ./tests
+          - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
+            pkg: ./tests
+          - worker: "docker@27.5"
+            pkg: ./tests
+            mode: experimental
+          - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
             pkg: ./tests
             mode: experimental
           - worker: "docker@26.1"
@@ -254,6 +264,10 @@ jobs:
         name: Prepare
         run: |
           echo "VAGRANT_FILE=hack/Vagrantfile.${{ matrix.os }}" >> $GITHUB_ENV
+          
+          # Sets semver Go version to be able to download tarball during vagrant setup
+          goVersion=$(curl --silent "https://go.dev/dl/?mode=json&include=all" | jq -r '.[].files[].version' | uniq | sed -e 's/go//' | sort -V | grep $GO_VERSION | tail -1)
+          echo "GO_VERSION=$goVersion" >> $GITHUB_ENV
       -
         name: Checkout
         uses: actions/checkout@v4

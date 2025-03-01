@@ -40,7 +40,6 @@ import (
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
-	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/progress/progresswriter"
 	"github.com/moby/buildkit/util/tracing"
 	"github.com/opencontainers/go-digest"
@@ -63,7 +62,7 @@ type Options struct {
 	Inputs Inputs
 
 	Ref                        string
-	Allow                      []entitlements.Entitlement
+	Allow                      []string
 	Attests                    map[string]*string
 	BuildArgs                  map[string]string
 	CacheFrom                  []client.CacheOptionsEntry
@@ -540,7 +539,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					node := dp.Node().Driver
 					if node.IsMobyDriver() {
 						for _, e := range so.Exports {
-							if e.Type == "moby" && e.Attrs["push"] != "" {
+							if e.Type == "moby" && e.Attrs["push"] != "" && !node.Features(ctx)[driver.DirectPush] {
 								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
 									pushNames = e.Attrs["name"]
 									if pushNames == "" {
@@ -835,7 +834,7 @@ func remoteDigestWithMoby(ctx context.Context, d *driver.DriverHandle, name stri
 	if err != nil {
 		return "", err
 	}
-	img, _, err := api.ImageInspectWithRaw(ctx, name)
+	img, err := api.ImageInspect(ctx, name)
 	if err != nil {
 		return "", err
 	}

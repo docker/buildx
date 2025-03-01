@@ -92,12 +92,8 @@ func FlagErrorFunc(cmd *cobra.Command, err error) error {
 		return nil
 	}
 
-	usage := ""
-	if cmd.HasSubCommands() {
-		usage = "\n\n" + cmd.UsageString()
-	}
 	return StatusError{
-		Status:     fmt.Sprintf("%s\nSee '%s --help'.%s", err, cmd.CommandPath(), usage),
+		Status:     fmt.Sprintf("%s\n\nUsage:  %s\n\nRun '%s --help' for more information", err, cmd.UseLine(), cmd.CommandPath()),
 		StatusCode: 125,
 	}
 }
@@ -341,8 +337,10 @@ func operationSubCommands(cmd *cobra.Command) []*cobra.Command {
 	return cmds
 }
 
+const defaultTermWidth = 80
+
 func wrappedFlagUsages(cmd *cobra.Command) string {
-	width := 80
+	width := defaultTermWidth
 	if ws, err := term.GetWinsize(0); err == nil {
 		width = int(ws.Width)
 	}
@@ -522,4 +520,4 @@ Run '{{.CommandPath}} COMMAND --help' for more information on a command.
 `
 
 const helpTemplate = `
-{{if or .Runnable .HasSubCommands}}{{.UsageString}}{{end}}`
+{{- if or .Runnable .HasSubCommands}}{{.UsageString}}{{end}}`

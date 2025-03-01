@@ -238,6 +238,7 @@ func (d *Driver) Features(_ context.Context) map[driver.Feature]bool {
 		driver.DockerExporter: d.DockerAPI != nil,
 		driver.CacheExport:    true,
 		driver.MultiPlatform:  true, // Untested (needs multiple Driver instances)
+		driver.DirectPush:     true,
 		driver.DefaultLoad:    d.defaultLoad,
 	}
 }

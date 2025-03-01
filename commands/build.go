@@ -41,7 +41,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/versions"
-	"github.com/docker/docker/pkg/ioutils"
+	"github.com/docker/docker/pkg/atomicwriter"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/subrequests"
@@ -593,7 +593,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
 
-	flags.StringSliceVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
+	flags.StringArrayVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
 
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 
@@ -745,7 +745,7 @@ func writeMetadataFile(filename string, dt interface{}) error {
 	if err != nil {
 		return err
 	}
-	return ioutils.AtomicWriteFile(filename, b, 0644)
+	return atomicwriter.WriteFile(filename, b, 0644)
 }
 
 func decodeExporterResponse(exporterResponse map[string]string) map[string]interface{} {

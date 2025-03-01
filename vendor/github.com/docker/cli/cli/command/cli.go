@@ -97,7 +97,7 @@ type DockerCli struct {
 }
 
 // DefaultVersion returns api.defaultVersion.
-func (cli *DockerCli) DefaultVersion() string {
+func (*DockerCli) DefaultVersion() string {
 	return api.DefaultVersion
 }
 
@@ -114,7 +114,7 @@ func (cli *DockerCli) CurrentVersion() string {
 // Client returns the APIClient
 func (cli *DockerCli) Client() client.APIClient {
 	if err := cli.initialize(); err != nil {
-		_, _ = fmt.Fprintf(cli.Err(), "Failed to initialize: %s\n", err)
+		_, _ = fmt.Fprintln(cli.Err(), "Failed to initialize:", err)
 		os.Exit(1)
 	}
 	return cli.client
@@ -231,7 +231,7 @@ func (cli *DockerCli) HooksEnabled() bool {
 }
 
 // ManifestStore returns a store for local manifests
-func (cli *DockerCli) ManifestStore() manifeststore.Store {
+func (*DockerCli) ManifestStore() manifeststore.Store {
 	// TODO: support override default location from config file
 	return manifeststore.NewStore(filepath.Join(config.Dir(), "manifests"))
 }
@@ -272,7 +272,7 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...CLIOption)
 		debug.Enable()
 	}
 	if opts.Context != "" && len(opts.Hosts) > 0 {
-		return errors.New("conflicting options: either specify --host or --context, not both")
+		return errors.New("conflicting options: cannot specify both --host and --context")
 	}
 
 	cli.options = opts
@@ -299,7 +299,7 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...CLIOption)
 // NewAPIClientFromFlags creates a new APIClient from command line flags
 func NewAPIClientFromFlags(opts *cliflags.ClientOptions, configFile *configfile.ConfigFile) (client.APIClient, error) {
 	if opts.Context != "" && len(opts.Hosts) > 0 {
-		return nil, errors.New("conflicting options: either specify --host or --context, not both")
+		return nil, errors.New("conflicting options: cannot specify both --host and --context")
 	}
 
 	storeConfig := DefaultContextStoreConfig()
@@ -475,7 +475,7 @@ func (cli *DockerCli) DockerEndpoint() docker.Endpoint {
 	if err := cli.initialize(); err != nil {
 		// Note that we're not terminating here, as this function may be used
 		// in cases where we're able to continue.
-		_, _ = fmt.Fprintf(cli.Err(), "%v\n", cli.initErr)
+		_, _ = fmt.Fprintln(cli.Err(), cli.initErr)
 	}
 	return cli.dockerEndpoint
 }

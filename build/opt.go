@@ -318,7 +318,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	switch opt.NetworkMode {
 	case "host":
 		so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
-		so.AllowedEntitlements = append(so.AllowedEntitlements, entitlements.EntitlementNetworkHost)
+		so.AllowedEntitlements = append(so.AllowedEntitlements, entitlements.EntitlementNetworkHost.String())
 	case "none":
 		so.FrontendAttrs["force-network-mode"] = opt.NetworkMode
 	case "", "default":

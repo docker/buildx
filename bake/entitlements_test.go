@@ -208,8 +208,8 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "NetworkHostMissing",
 			opt: build.Options{
-				Allow: []entitlements.Entitlement{
-					entitlements.EntitlementNetworkHost,
+				Allow: []string{
+					entitlements.EntitlementNetworkHost.String(),
 				},
 			},
 			expected: EntitlementConf{
@@ -223,8 +223,8 @@ func TestValidateEntitlements(t *testing.T) {
 				NetworkHost: true,
 			},
 			opt: build.Options{
-				Allow: []entitlements.Entitlement{
-					entitlements.EntitlementNetworkHost,
+				Allow: []string{
+					entitlements.EntitlementNetworkHost.String(),
 				},
 			},
 			expected: EntitlementConf{
@@ -234,9 +234,9 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "SecurityAndNetworkHostMissing",
 			opt: build.Options{
-				Allow: []entitlements.Entitlement{
-					entitlements.EntitlementNetworkHost,
-					entitlements.EntitlementSecurityInsecure,
+				Allow: []string{
+					entitlements.EntitlementNetworkHost.String(),
+					entitlements.EntitlementSecurityInsecure.String(),
 				},
 			},
 			expected: EntitlementConf{
@@ -251,9 +251,9 @@ func TestValidateEntitlements(t *testing.T) {
 				NetworkHost: true,
 			},
 			opt: build.Options{
-				Allow: []entitlements.Entitlement{
-					entitlements.EntitlementNetworkHost,
-					entitlements.EntitlementSecurityInsecure,
+				Allow: []string{
+					entitlements.EntitlementNetworkHost.String(),
+					entitlements.EntitlementSecurityInsecure.String(),
 				},
 			},
 			expected: EntitlementConf{
