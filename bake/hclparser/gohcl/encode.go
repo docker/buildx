@@ -34,7 +34,7 @@ import (
 // The layout of the resulting HCL source is derived from the ordering of
 // the struct fields, with blank lines around nested blocks of different types.
 // Fields representing attributes should usually precede those representing
-// blocks so that the attributes can group togather in the result. For more
+// blocks so that the attributes can group together in the result. For more
 // control, use the hclwrite API directly.
 func EncodeIntoBody(val interface{}, dst *hclwrite.Body) {
 	rv := reflect.ValueOf(val)
