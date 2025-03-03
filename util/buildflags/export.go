@@ -1,6 +1,7 @@
 package buildflags
 
 import (
+	"encoding/csv"
 	"encoding/json"
 	"maps"
 	"regexp"
@@ -259,9 +260,18 @@ func (w *csvBuilder) Write(key, value string) {
 	if w.sb.Len() > 0 {
 		w.sb.WriteByte(',')
 	}
-	w.sb.WriteString(key)
-	w.sb.WriteByte('=')
-	w.sb.WriteString(value)
+
+	pair := key + "=" + value
+	if strings.ContainsRune(pair, ',') || strings.ContainsRune(pair, '"') {
+		var attr strings.Builder
+		writer := csv.NewWriter(&attr)
+		writer.Write([]string{pair})
+		writer.Flush()
+		// Strips the extra newline added by the csv writer
+		pair = strings.TrimSpace(attr.String())
+	}
+
+	w.sb.WriteString(pair)
 }
 
 func (w *csvBuilder) WriteAttributes(attrs map[string]string) {
