@@ -90,7 +90,7 @@ func ListRunningPods(ctx context.Context, client clientcorev1.PodInterface, depl
 	for i := range podList.Items {
 		pod := &podList.Items[i]
 		if pod.Status.Phase == corev1.PodRunning {
-			logrus.Debugf("pod runnning: %q", pod.Name)
+			logrus.Debugf("pod running: %q", pod.Name)
 			runningPods = append(runningPods, pod)
 		}
 	}

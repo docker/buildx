@@ -39,7 +39,7 @@ func (p *Process) Done() <-chan error {
 	return p.errCh
 }
 
-// Manager manages a set of proceses.
+// Manager manages a set of processes.
 type Manager struct {
 	container atomic.Value
 	processes sync.Map

@@ -622,7 +622,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							// This is fallback for some very old buildkit versions.
 							// Note that the mediatype isn't really correct as most of the time it is image manifest and
 							// not manifest list but actually both are handled because for Docker mediatypes the
-							// mediatype value in the Accpet header does not seem to matter.
+							// mediatype value in the Accept header does not seem to matter.
 							s, ok = r.ExporterResponse[exptypes.ExporterImageDigestKey]
 							if ok {
 								descs = append(descs, specs.Descriptor{
