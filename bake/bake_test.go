@@ -37,6 +37,15 @@ target "webapp" {
 	annotations = [
 		"index,manifest:org.opencontainers.image.authors=dvdksn"
 	]
+	attest = [
+		"type=provenance,mode=max"
+	]
+	platforms = [
+		"linux/amd64"
+	]
+	secret = [
+		"id=FOO,env=FOO"
+	]
 	inherits = ["webDEP"]
 }`),
 	}
@@ -127,6 +136,22 @@ target "webapp" {
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
 	})
 
+	t.Run("AttestOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.attest=type=sbom"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Attest, 2)
+		require.Equal(t, "provenance", m["webapp"].Attest[0].Type)
+		require.Equal(t, "sbom", m["webapp"].Attest[1].Type)
+	})
+
+	t.Run("AttestAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.attest+=type=sbom"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Attest, 2)
+		require.Equal(t, "provenance", m["webapp"].Attest[0].Type)
+		require.Equal(t, "sbom", m["webapp"].Attest[1].Type)
+	})
+
 	t.Run("ContextOverride", func(t *testing.T) {
 		t.Parallel()
 		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context"}, nil, &EntitlementConf{})
@@ -146,6 +171,49 @@ target "webapp" {
 		require.Equal(t, false, *m["webapp"].NoCache)
 		require.Equal(t, 1, len(g))
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
+	})
+
+	t.Run("PlatformOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform=linux/arm64"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/arm64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("PlatformAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform+=linux/arm64"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/amd64", "linux/arm64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("PlatformAppendMulti", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform+=linux/arm64", "webapp.platform+=linux/riscv64"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/amd64", "linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("PlatformAppendMultiLastOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform+=linux/arm64", "webapp.platform=linux/riscv64"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("SecretsOverride", func(t *testing.T) {
+		t.Setenv("FOO", "foo")
+		t.Setenv("BAR", "bar")
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secrets=id=BAR,env=BAR"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].ID)
+	})
+
+	t.Run("SecretsAppend", func(t *testing.T) {
+		t.Setenv("FOO", "foo")
+		t.Setenv("BAR", "bar")
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secrets+=id=BAR,env=BAR"}, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 2)
+		require.Equal(t, "FOO", m["webapp"].Secrets[0].ID)
+		require.Equal(t, "BAR", m["webapp"].Secrets[1].ID)
 	})
 
 	t.Run("ShmSizeOverride", func(t *testing.T) {

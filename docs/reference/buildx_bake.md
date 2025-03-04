@@ -347,19 +347,22 @@ is defined in https://golang.org/pkg/path/#Match.
 ```console
 $ docker buildx bake --set target.args.mybuildarg=value
 $ docker buildx bake --set target.platform=linux/arm64
-$ docker buildx bake --set foo*.args.mybuildarg=value # overrides build arg for all targets starting with 'foo'
-$ docker buildx bake --set *.platform=linux/arm64     # overrides platform for all targets
-$ docker buildx bake --set foo*.no-cache              # bypass caching only for targets starting with 'foo'
+$ docker buildx bake --set foo*.args.mybuildarg=value   # overrides build arg for all targets starting with 'foo'
+$ docker buildx bake --set *.platform=linux/arm64       # overrides platform for all targets
+$ docker buildx bake --set foo*.no-cache                # bypass caching only for targets starting with 'foo'
+$ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' to the platform list
 ```
 
 You can override the following fields:
 
 * `annotations`
+* `attest`
 * `args`
 * `cache-from`
 * `cache-to`
 * `context`
 * `dockerfile`
+* `entitlements`
 * `labels`
 * `load`
 * `no-cache`
@@ -372,3 +375,20 @@ You can override the following fields:
 * `ssh`
 * `tags`
 * `target`
+
+You can append using `+=` operator for the following fields:
+
+* `annotations`¹
+* `attest`¹
+* `cache-from`
+* `cache-to`
+* `entitlements`¹
+* `no-cache-filter`
+* `output`
+* `platform`
+* `secrets`
+* `ssh`
+* `tags`
+
+> [!NOTE]
+> ¹ These fields already append by default.
