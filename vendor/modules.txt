@@ -224,8 +224,6 @@ github.com/distribution/reference
 # github.com/docker/cli v28.0.1+incompatible => github.com/thaJeztah/cli v0.0.0-20250308173928-9c3daecbd2fe
 ## explicit
 github.com/docker/cli/cli
-github.com/docker/cli/cli-plugins/hooks
-github.com/docker/cli/cli-plugins/manager
 github.com/docker/cli/cli-plugins/metadata
 github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli-plugins/socket
