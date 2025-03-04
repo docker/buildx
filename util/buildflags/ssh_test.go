@@ -82,4 +82,17 @@ func TestSSHKeys(t *testing.T) {
 		result := actual.Equals(expected)
 		require.True(t, result.True())
 	})
+
+	t.Run("RemoveDupes", func(t *testing.T) {
+		sshkeys := SSHKeys{
+			{ID: "default"},
+			{ID: "key", Paths: []string{"path/to/foo"}},
+			{ID: "key", Paths: []string{"path/to/bar"}},
+		}.Normalize()
+
+		expected := `[{"id":"default"},{"id":"key","paths":["path/to/bar"]}]`
+		actual, err := json.Marshal(sshkeys)
+		require.NoError(t, err)
+		require.JSONEq(t, expected, string(actual))
+	})
 }

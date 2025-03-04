@@ -28,7 +28,7 @@ func (s SSHKeys) Normalize() SSHKeys {
 	if len(s) == 0 {
 		return nil
 	}
-	return removeDupes(s)
+	return removeSSHDupes(s)
 }
 
 func (s SSHKeys) ToPB() []*controllerapi.SSH {
@@ -130,4 +130,18 @@ func IsGitSSH(repo string) bool {
 		return false
 	}
 	return url.Scheme == gitutil.SSHProtocol
+}
+
+func removeSSHDupes(s []*SSH) []*SSH {
+	var res []*SSH
+	m := map[string]int{}
+	for _, ssh := range s {
+		if i, ok := m[ssh.ID]; ok {
+			res[i] = ssh
+		} else {
+			m[ssh.ID] = len(res)
+			res = append(res, ssh)
+		}
+	}
+	return res
 }
