@@ -23,7 +23,7 @@ type importOptions struct {
 	file string
 }
 
-func runImport(ctx context.Context, _ command.Cli, opts importOptions) error {
+func runImport(ctx context.Context, dockerCli command.Cli, opts importOptions) error {
 	sock, err := desktop.BuildServerAddr()
 	if err != nil {
 		return err
@@ -78,8 +78,15 @@ func runImport(ctx context.Context, _ command.Cli, opts importOptions) error {
 		return errors.New("no build records found in the bundle")
 	}
 
-	url := desktop.BuildURL(fmt.Sprintf(".imported/_/%s", refs[0]))
-	return browser.OpenURL(url)
+	for i, ref := range refs {
+		url := desktop.BuildURL(fmt.Sprintf(".imported/_/%s", ref))
+		fmt.Fprintln(dockerCli.Err(), url)
+		if i == 0 {
+			err = browser.OpenURL(url)
+		}
+	}
+
+	return err
 }
 
 func importCmd(dockerCli command.Cli, _ RootOptions) *cobra.Command {
