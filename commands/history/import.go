@@ -20,7 +20,7 @@ import (
 )
 
 type importOptions struct {
-	file string
+	file []string
 }
 
 func runImport(ctx context.Context, dockerCli command.Cli, opts importOptions) error {
@@ -42,51 +42,77 @@ func runImport(ctx context.Context, dockerCli command.Cli, opts importOptions) e
 		Transport: tr,
 	}
 
-	var rdr io.Reader = os.Stdin
-	if opts.file != "" {
-		f, err := os.Open(opts.file)
+	var urls []string
+
+	if len(opts.file) == 0 {
+		u, err := importFrom(ctx, client, os.Stdin)
 		if err != nil {
-			return errors.Wrap(err, "failed to open file")
+			return err
 		}
-		defer f.Close()
-		rdr = f
+		urls = append(urls, u...)
+	} else {
+		for _, fn := range opts.file {
+			var f *os.File
+			var rdr io.Reader = os.Stdin
+			if fn != "-" {
+				f, err = os.Open(fn)
+				if err != nil {
+					return errors.Wrapf(err, "failed to open file %s", fn)
+				}
+				rdr = f
+			}
+			u, err := importFrom(ctx, client, rdr)
+			if err != nil {
+				return err
+			}
+			urls = append(urls, u...)
+			if f != nil {
+				f.Close()
+			}
+		}
 	}
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://docker-desktop/upload", rdr)
-	if err != nil {
-		return errors.Wrap(err, "failed to create request")
-	}
-
-	resp, err := client.Do(req)
-	if err != nil {
-		return errors.Wrap(err, "failed to send request, check if Docker Desktop is running")
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		body, _ := io.ReadAll(resp.Body)
-		return errors.Errorf("failed to import build: %s", string(body))
-	}
-
-	var refs []string
-	dec := json.NewDecoder(resp.Body)
-	if err := dec.Decode(&refs); err != nil {
-		return errors.Wrap(err, "failed to decode response")
-	}
-
-	if len(refs) == 0 {
+	if len(urls) == 0 {
 		return errors.New("no build records found in the bundle")
 	}
 
-	for i, ref := range refs {
-		url := desktop.BuildURL(fmt.Sprintf(".imported/_/%s", ref))
+	for i, url := range urls {
 		fmt.Fprintln(dockerCli.Err(), url)
 		if i == 0 {
 			err = browser.OpenURL(url)
 		}
 	}
-
 	return err
+}
+
+func importFrom(ctx context.Context, c *http.Client, rdr io.Reader) ([]string, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "http://docker-desktop/upload", rdr)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to create request")
+	}
+
+	resp, err := c.Do(req)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to send request, check if Docker Desktop is running")
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, errors.Errorf("failed to import build: %s", string(body))
+	}
+
+	var refs []string
+	dec := json.NewDecoder(resp.Body)
+	if err := dec.Decode(&refs); err != nil {
+		return nil, errors.Wrap(err, "failed to decode response")
+	}
+
+	var urls []string
+	for _, ref := range refs {
+		urls = append(urls, desktop.BuildURL(fmt.Sprintf(".imported/_/%s", ref)))
+	}
+	return urls, err
 }
 
 func importCmd(dockerCli command.Cli, _ RootOptions) *cobra.Command {
@@ -103,7 +129,7 @@ func importCmd(dockerCli command.Cli, _ RootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVarP(&options.file, "file", "f", "", "Import from a file path")
+	flags.StringArrayVarP(&options.file, "file", "f", nil, "Import from a file path")
 
 	return cmd
 }
