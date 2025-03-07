@@ -8,11 +8,15 @@ import (
 )
 
 const (
-	socketName = "docker-desktop-build.sock"
-	socketPath = ".docker/desktop"
+	socketName    = "docker-desktop-build.sock"
+	socketPath    = ".docker/desktop"
+	wslSocketPath = "/mnt/wsl/docker-desktop/shared-sockets/host-services"
 )
 
 func BuildServerAddr() (string, error) {
+	if os.Getenv("WSL_DISTRO_NAME") != "" {
+		return "unix://" + filepath.Join(wslSocketPath, socketName), nil
+	}
 	dir, err := os.UserHomeDir()
 	if err != nil {
 		return "", errors.Wrap(err, "failed to get user home directory")
