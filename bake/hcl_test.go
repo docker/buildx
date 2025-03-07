@@ -1645,7 +1645,7 @@ func TestHCLIndexOfFunc(t *testing.T) {
 	require.Empty(t, c.Targets[1].Tags[1])
 }
 
-func ptrstr(s interface{}) *string {
+func ptrstr(s any) *string {
 	var n *string
 	if reflect.ValueOf(s).Kind() == reflect.String {
 		ss := s.(string)

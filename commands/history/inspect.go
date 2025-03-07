@@ -375,7 +375,7 @@ workers0:
 				out.Error.Name = name
 				out.Error.Logs = logs
 			}
-			out.Error.Stack = []byte(fmt.Sprintf("%+v", stack.Formatter(retErr)))
+			out.Error.Stack = fmt.Appendf(nil, "%+v", stack.Formatter(retErr))
 		}
 	}
 

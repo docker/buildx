@@ -27,7 +27,7 @@ type Printer struct {
 	err          error
 	warnings     []client.VertexWarning
 	logMu        sync.Mutex
-	logSourceMap map[digest.Digest]interface{}
+	logSourceMap map[digest.Digest]any
 	metrics      *metricWriter
 
 	// TODO: remove once we can use result context to pass build ref
@@ -74,7 +74,7 @@ func (p *Printer) Warnings() []client.VertexWarning {
 	return dedupWarnings(p.warnings)
 }
 
-func (p *Printer) ValidateLogSource(dgst digest.Digest, v interface{}) bool {
+func (p *Printer) ValidateLogSource(dgst digest.Digest, v any) bool {
 	p.logMu.Lock()
 	defer p.logMu.Unlock()
 	src, ok := p.logSourceMap[dgst]
@@ -89,7 +89,7 @@ func (p *Printer) ValidateLogSource(dgst digest.Digest, v interface{}) bool {
 	return false
 }
 
-func (p *Printer) ClearLogSource(v interface{}) {
+func (p *Printer) ClearLogSource(v any) {
 	p.logMu.Lock()
 	defer p.logMu.Unlock()
 	for d := range p.logSourceMap {
@@ -125,7 +125,7 @@ func NewPrinter(ctx context.Context, out console.File, mode progressui.DisplayMo
 			pw.closeOnce = sync.Once{}
 
 			pw.logMu.Lock()
-			pw.logSourceMap = map[digest.Digest]interface{}{}
+			pw.logSourceMap = map[digest.Digest]any{}
 			pw.logMu.Unlock()
 
 			resumeLogs := logutil.Pause(logrus.StandardLogger())

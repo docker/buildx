@@ -150,7 +150,7 @@ func (e *CacheOptionsEntry) UnmarshalText(text []byte) error {
 	return e.validate(text)
 }
 
-func (e *CacheOptionsEntry) validate(gv interface{}) error {
+func (e *CacheOptionsEntry) validate(gv any) error {
 	if e.Type == "" {
 		var text []byte
 		switch gv := gv.(type) {

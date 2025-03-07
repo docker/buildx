@@ -24,11 +24,11 @@ func (w *writer) Write(status *client.SolveStatus) {
 
 func (w *writer) WriteBuildRef(target string, ref string) {}
 
-func (w *writer) ValidateLogSource(digest.Digest, interface{}) bool {
+func (w *writer) ValidateLogSource(digest.Digest, any) bool {
 	return true
 }
 
-func (w *writer) ClearLogSource(interface{}) {}
+func (w *writer) ClearLogSource(any) {}
 
 func ToControlStatus(s *client.SolveStatus) *StatusResponse {
 	resp := StatusResponse{}

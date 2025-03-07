@@ -39,7 +39,7 @@ func ValidateName(s string) (string, error) {
 
 func GenerateName(txn *Txn) (string, error) {
 	var name string
-	for i := 0; i < 6; i++ {
+	for i := range 6 {
 		name = namesgenerator.GetRandomName(i)
 		if _, err := txn.NodeGroupByName(name); err != nil {
 			if !os.IsNotExist(errors.Cause(err)) {

@@ -7,18 +7,18 @@ import (
 
 type Map struct {
 	mu sync.RWMutex
-	m  map[string]interface{}
+	m  map[string]any
 	ch map[string]chan struct{}
 }
 
 func New() *Map {
 	return &Map{
-		m:  make(map[string]interface{}),
+		m:  make(map[string]any),
 		ch: make(map[string]chan struct{}),
 	}
 }
 
-func (m *Map) Set(key string, value interface{}) {
+func (m *Map) Set(key string, value any) {
 	m.mu.Lock()
 	defer m.mu.Unlock()
 
@@ -32,13 +32,13 @@ func (m *Map) Set(key string, value interface{}) {
 	m.ch[key] = nil
 }
 
-func (m *Map) Get(ctx context.Context, keys ...string) (map[string]interface{}, error) {
+func (m *Map) Get(ctx context.Context, keys ...string) (map[string]any, error) {
 	if len(keys) == 0 {
-		return map[string]interface{}{}, nil
+		return map[string]any{}, nil
 	}
 
 	if len(keys) > 1 {
-		out := make(map[string]interface{})
+		out := make(map[string]any)
 		for _, key := range keys {
 			mm, err := m.Get(ctx, key)
 			if err != nil {
@@ -70,5 +70,5 @@ func (m *Map) Get(ctx context.Context, keys ...string) (map[string]interface{}, 
 	res := m.m[key]
 	m.mu.Unlock()
 
-	return map[string]interface{}{key: res}, nil
+	return map[string]any{key: res}, nil
 }

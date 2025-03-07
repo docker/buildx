@@ -35,10 +35,10 @@ func testEndpoint(server, defaultNamespace string, ca, cert, key []byte, skipTLS
 }
 
 var testStoreCfg = store.NewConfig(
-	func() interface{} {
-		return &map[string]interface{}{}
+	func() any {
+		return &map[string]any{}
 	},
-	store.EndpointTypeGetter(KubernetesEndpoint, func() interface{} { return &EndpointMeta{} }),
+	store.EndpointTypeGetter(KubernetesEndpoint, func() any { return &EndpointMeta{} }),
 )
 
 func TestSaveLoadContexts(t *testing.T) {
@@ -197,7 +197,7 @@ func checkClientConfig(t *testing.T, ep Endpoint, server, namespace string, ca, 
 
 func save(s store.Writer, ep Endpoint, name string) error {
 	meta := store.Metadata{
-		Endpoints: map[string]interface{}{
+		Endpoints: map[string]any{
 			KubernetesEndpoint: ep.EndpointMeta,
 		},
 		Name: name,

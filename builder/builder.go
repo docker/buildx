@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"net/url"
 	"os"
+	"slices"
 	"sort"
 	"strings"
 	"sync"
@@ -656,13 +657,7 @@ func parseBuildkitdFlags(inp string, driver string, driverOpts map[string]string
 	flags.StringArrayVar(&allowInsecureEntitlements, "allow-insecure-entitlement", nil, "")
 	_ = flags.Parse(res)
 
-	var hasNetworkHostEntitlement bool
-	for _, e := range allowInsecureEntitlements {
-		if e == "network.host" {
-			hasNetworkHostEntitlement = true
-			break
-		}
-	}
+	hasNetworkHostEntitlement := slices.Contains(allowInsecureEntitlements, "network.host")
 
 	var hasNetworkHostEntitlementInConf bool
 	if buildkitdConfigFile != "" {
@@ -671,11 +666,8 @@ func parseBuildkitdFlags(inp string, driver string, driverOpts map[string]string
 			return nil, err
 		} else if btoml != nil {
 			if ies := btoml.GetArray("insecure-entitlements"); ies != nil {
-				for _, e := range ies.([]string) {
-					if e == "network.host" {
-						hasNetworkHostEntitlementInConf = true
-						break
-					}
+				if slices.Contains(ies.([]string), "network.host") {
+					hasNetworkHostEntitlementInConf = true
 				}
 			}
 		}

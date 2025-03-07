@@ -126,7 +126,7 @@ func TestMuxIO(t *testing.T) {
 			if tt.outputsNum != len(tt.wants) {
 				t.Fatalf("wants != outputsNum")
 			}
-			for i := 0; i < tt.outputsNum; i++ {
+			for i := range tt.outputsNum {
 				outBuf, out := newTestOut(i)
 				outBufs = append(outBufs, outBuf)
 				outs = append(outs, MuxOut{out, nil, nil})
@@ -304,7 +304,7 @@ func writeMasked(w io.Writer, s string) io.Writer {
 				return
 			}
 			var masked string
-			for i := 0; i < n; i++ {
+			for range n {
 				masked += s
 			}
 			if _, err := w.Write([]byte(masked)); err != nil {
