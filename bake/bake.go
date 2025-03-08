@@ -486,10 +486,8 @@ func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[st
 			if target == name {
 				return errors.Errorf("target %s cannot link to itself", target)
 			}
-			for _, v := range visited {
-				if v == target {
-					return errors.Errorf("infinite loop from %s to %s", name, target)
-				}
+			if slices.Contains(visited, target) {
+				return errors.Errorf("infinite loop from %s to %s", name, target)
 			}
 			t2, ok := m[target]
 			if !ok {

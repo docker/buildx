@@ -305,7 +305,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
 	if len(in.metadataFile) > 0 {
-		dt := make(map[string]interface{})
+		dt := make(map[string]any)
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
 		}

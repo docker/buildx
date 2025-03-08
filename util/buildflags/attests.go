@@ -90,7 +90,7 @@ func (a *Attest) ToPB() *controllerapi.Attest {
 }
 
 func (a *Attest) MarshalJSON() ([]byte, error) {
-	m := make(map[string]interface{}, len(a.Attrs)+2)
+	m := make(map[string]any, len(a.Attrs)+2)
 	for k, v := range a.Attrs {
 		m[k] = v
 	}
@@ -102,7 +102,7 @@ func (a *Attest) MarshalJSON() ([]byte, error) {
 }
 
 func (a *Attest) UnmarshalJSON(data []byte) error {
-	var m map[string]interface{}
+	var m map[string]any
 	if err := json.Unmarshal(data, &m); err != nil {
 		return err
 	}

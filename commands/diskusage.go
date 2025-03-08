@@ -124,7 +124,7 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	return cmd
 }
 
-func printKV(w io.Writer, k string, v interface{}) {
+func printKV(w io.Writer, k string, v any) {
 	fmt.Fprintf(w, "%s:\t%v\n", k, v)
 }
 

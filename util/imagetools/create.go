@@ -156,7 +156,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 			case exptypes.AnnotationIndex:
 				indexAnnotation[k.Key] = v
 			case exptypes.AnnotationManifestDescriptor:
-				for i := 0; i < len(newDescs); i++ {
+				for i := range newDescs {
 					if newDescs[i].Annotations == nil {
 						newDescs[i].Annotations = map[string]string{}
 					}

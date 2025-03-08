@@ -1,6 +1,8 @@
 package pb
 
 import (
+	"slices"
+
 	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 )
@@ -10,7 +12,7 @@ func CreateSSH(ssh []*SSH) (session.Attachable, error) {
 	for _, ssh := range ssh {
 		cfg := sshprovider.AgentConfig{
 			ID:    ssh.ID,
-			Paths: append([]string{}, ssh.Paths...),
+			Paths: slices.Clone(ssh.Paths),
 		}
 		configs = append(configs, cfg)
 	}

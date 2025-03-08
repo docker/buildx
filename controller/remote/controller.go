@@ -140,7 +140,7 @@ func serveCmd(dockerCli command.Cli) *cobra.Command {
 				return err
 			}
 			pidF := filepath.Join(root, defaultPIDFilename)
-			if err := os.WriteFile(pidF, []byte(fmt.Sprintf("%d", os.Getpid())), 0600); err != nil {
+			if err := os.WriteFile(pidF, fmt.Appendf(nil, "%d", os.Getpid()), 0600); err != nil {
 				return err
 			}
 			defer func() {

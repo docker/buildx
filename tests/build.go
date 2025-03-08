@@ -804,8 +804,8 @@ func buildMetadataProvenance(t *testing.T, sb integration.Sandbox, metadataMode 
 	require.NoError(t, err)
 
 	type mdT struct {
-		BuildRef        string                 `json:"buildx.build.ref"`
-		BuildProvenance map[string]interface{} `json:"buildx.build.provenance"`
+		BuildRef        string         `json:"buildx.build.ref"`
+		BuildProvenance map[string]any `json:"buildx.build.provenance"`
 	}
 	var md mdT
 	err = json.Unmarshal(dt, &md)

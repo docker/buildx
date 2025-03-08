@@ -131,7 +131,7 @@ func TestAsAttributeKeyValue(t *testing.T) {
 			name: "stringslice (interface of string)",
 			args: args{
 				Type:  attribute.STRINGSLICE.String(),
-				value: []interface{}{"value1", "value2"},
+				value: []any{"value1", "value2"},
 			},
 			want: attribute.StringSlice("key", []string{"value1", "value2"}),
 		},
@@ -139,7 +139,7 @@ func TestAsAttributeKeyValue(t *testing.T) {
 			name: "stringslice (interface mixed)",
 			args: args{
 				Type:  attribute.STRINGSLICE.String(),
-				value: []interface{}{"value1", 2},
+				value: []any{"value1", 2},
 			},
 			want: attribute.StringSlice("key", []string{"value1", "2"}),
 		},

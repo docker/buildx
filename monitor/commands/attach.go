@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"slices"
 
 	"github.com/docker/buildx/monitor/types"
 	"github.com/pkg/errors"
@@ -50,14 +51,7 @@ func (cm *AttachCmd) Exec(ctx context.Context, args []string) error {
 		if err != nil {
 			return errors.Errorf("failed to get the list of sessions: %v", err)
 		}
-		found := false
-		for _, s := range refs {
-			if s == ref {
-				found = true
-				break
-			}
-		}
-		if !found {
+		if !slices.Contains(refs, ref) {
 			return errors.Errorf("unknown ID: %q", ref)
 		}
 		cm.m.Detach() // Finish existing attach

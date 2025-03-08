@@ -43,7 +43,7 @@ type Endpoint struct {
 
 func init() {
 	command.RegisterDefaultStoreEndpoints(
-		store.EndpointTypeGetter(KubernetesEndpoint, func() interface{} { return &EndpointMeta{} }),
+		store.EndpointTypeGetter(KubernetesEndpoint, func() any { return &EndpointMeta{} }),
 	)
 }
 
@@ -96,7 +96,7 @@ func (c *Endpoint) KubernetesConfig() clientcmd.ClientConfig {
 
 // ResolveDefault returns endpoint metadata for the default Kubernetes
 // endpoint, which is derived from the env-based kubeconfig.
-func (c *EndpointMeta) ResolveDefault() (interface{}, *store.EndpointTLSData, error) {
+func (c *EndpointMeta) ResolveDefault() (any, *store.EndpointTLSData, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
 		kubeconfig = filepath.Join(homedir.Get(), ".kube/config")

@@ -14,7 +14,7 @@ import (
 
 func TestImpliedBodySchema(t *testing.T) {
 	tests := []struct {
-		val         interface{}
+		val         any
 		wantSchema  *hcl.BodySchema
 		wantPartial bool
 	}{

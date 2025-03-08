@@ -278,8 +278,8 @@ func (l *loader) scanConfig(ctx context.Context, fetcher remotes.Fetcher, desc o
 }
 
 type sbomStub struct {
-	SPDX            interface{}   `json:",omitempty"`
-	AdditionalSPDXs []interface{} `json:",omitempty"`
+	SPDX            any   `json:",omitempty"`
+	AdditionalSPDXs []any `json:",omitempty"`
 }
 
 func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
@@ -309,7 +309,7 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 					}
 
 					var spdx struct {
-						Predicate interface{} `json:"predicate"`
+						Predicate any `json:"predicate"`
 					}
 					if err := json.Unmarshal(dt, &spdx); err != nil {
 						return nil, err
@@ -330,7 +330,7 @@ func (l *loader) scanSBOM(ctx context.Context, fetcher remotes.Fetcher, r *resul
 }
 
 type provenanceStub struct {
-	SLSA interface{} `json:",omitempty"`
+	SLSA any `json:",omitempty"`
 }
 
 func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r *result, refs []digest.Digest, as *asset) error {
@@ -360,7 +360,7 @@ func (l *loader) scanProvenance(ctx context.Context, fetcher remotes.Fetcher, r 
 					}
 
 					var slsa struct {
-						Predicate interface{} `json:"predicate"`
+						Predicate any `json:"predicate"`
 					}
 					if err := json.Unmarshal(dt, &slsa); err != nil {
 						return nil, err

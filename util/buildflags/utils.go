@@ -33,7 +33,7 @@ func removeDupes[E comparable[E]](s []E) []E {
 	return s
 }
 
-func getAndDelete(m map[string]cty.Value, attr string, gv interface{}) error {
+func getAndDelete(m map[string]cty.Value, attr string, gv any) error {
 	if v, ok := m[attr]; ok && v.IsKnown() {
 		delete(m, attr)
 		return gocty.FromCtyValue(v, gv)

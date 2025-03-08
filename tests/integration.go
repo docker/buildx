@@ -50,7 +50,7 @@ func withDir(dir string) cmdOpt {
 
 func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	cmd := exec.Command("buildx")
-	cmd.Env = append([]string{}, os.Environ()...)
+	cmd.Env = os.Environ()
 	for _, opt := range opts {
 		opt(cmd)
 	}
@@ -77,7 +77,7 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 
 func dockerCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	cmd := exec.Command("docker")
-	cmd.Env = append([]string{}, os.Environ()...)
+	cmd.Env = os.Environ()
 	for _, opt := range opts {
 		opt(cmd)
 	}
@@ -214,7 +214,7 @@ func skipNoCompatBuildKit(t *testing.T, sb integration.Sandbox, constraint strin
 	}
 }
 
-func ptrstr(s interface{}) *string {
+func ptrstr(s any) *string {
 	var n *string
 	if reflect.ValueOf(s).Kind() == reflect.String {
 		ss := s.(string)

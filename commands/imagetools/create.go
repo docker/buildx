@@ -194,7 +194,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 					}
 					s := s
 					eg2.Go(func() error {
-						sub.Log(1, []byte(fmt.Sprintf("copying %s from %s to %s\n", s.Desc.Digest.String(), s.Ref.String(), t.String())))
+						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", s.Desc.Digest.String(), s.Ref.String(), t.String()))
 						return r.Copy(ctx, s, t)
 					})
 				}
@@ -202,7 +202,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 				if err := eg2.Wait(); err != nil {
 					return err
 				}
-				sub.Log(1, []byte(fmt.Sprintf("pushing %s to %s\n", desc.Digest.String(), t.String())))
+				sub.Log(1, fmt.Appendf(nil, "pushing %s to %s\n", desc.Digest.String(), t.String()))
 				return r.Push(ctx, t, desc, dt)
 			})
 		})

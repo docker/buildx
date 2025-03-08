@@ -11,8 +11,8 @@ import (
 type Writer interface {
 	Write(*client.SolveStatus)
 	WriteBuildRef(string, string)
-	ValidateLogSource(digest.Digest, interface{}) bool
-	ClearLogSource(interface{})
+	ValidateLogSource(digest.Digest, any) bool
+	ClearLogSource(any)
 }
 
 func Write(w Writer, name string, f func() error) error {

@@ -1016,11 +1016,11 @@ FROM scratch
 COPY foo /foo
 	`)
 			destDir := t.TempDir()
-			bakefile := []byte(fmt.Sprintf(`
+			bakefile := fmt.Appendf(nil, `
 target "default" {
 	output = ["type=local,dest=%s/not/exists"]
 }
-`, destDir))
+`, destDir)
 			dir := tmpdir(
 				t,
 				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
@@ -1050,11 +1050,11 @@ FROM scratch
 COPY foo /foo
 	`)
 			destDir := t.TempDir()
-			bakefile := []byte(fmt.Sprintf(`
+			bakefile := fmt.Appendf(nil, `
 target "default" {
 	output = ["type=local,dest=%s"]
 }
-`, destDir))
+`, destDir)
 			dir := tmpdir(
 				t,
 				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
@@ -1151,11 +1151,11 @@ COPY Dockerfile /foo
 			keyDir := t.TempDir()
 			err := writeTempPrivateKey(filepath.Join(keyDir, "id_rsa"))
 			require.NoError(t, err)
-			bakefile := []byte(fmt.Sprintf(`
+			bakefile := fmt.Appendf(nil, `
 target "default" {
 	ssh = ["key=%s"]
 }
-`, filepath.Join(keyDir, "id_rsa")))
+`, filepath.Join(keyDir, "id_rsa"))
 			dir := tmpdir(
 				t,
 				fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
@@ -1314,8 +1314,8 @@ target "default" {
 
 	type mdT struct {
 		Default struct {
-			BuildRef        string                 `json:"buildx.build.ref"`
-			BuildProvenance map[string]interface{} `json:"buildx.build.provenance"`
+			BuildRef        string         `json:"buildx.build.ref"`
+			BuildProvenance map[string]any `json:"buildx.build.provenance"`
 		} `json:"default"`
 	}
 	var md mdT

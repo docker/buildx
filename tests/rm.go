@@ -45,7 +45,7 @@ func testRmMulti(t *testing.T, sb integration.Sandbox) {
 	}
 
 	var builderNames []string
-	for i := 0; i < 3; i++ {
+	for range 3 {
 		out, err := createCmd(sb, withArgs("--driver", "docker-container"))
 		require.NoError(t, err, out)
 		builderName := strings.TrimSpace(out)

@@ -11,6 +11,7 @@ import (
 	"io"
 	"os"
 	"path/filepath"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -156,7 +157,7 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		return nil, err
 	}
 
-	inAttests := append([]string{}, o.attests...)
+	inAttests := slices.Clone(o.attests)
 	if o.provenance != "" {
 		inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", o.provenance))
 	}
@@ -740,7 +741,7 @@ func checkWarnedFlags(f *pflag.Flag) {
 	}
 }
 
-func writeMetadataFile(filename string, dt interface{}) error {
+func writeMetadataFile(filename string, dt any) error {
 	b, err := json.MarshalIndent(dt, "", "  ")
 	if err != nil {
 		return err
@@ -748,7 +749,7 @@ func writeMetadataFile(filename string, dt interface{}) error {
 	return atomicwriter.WriteFile(filename, b, 0644)
 }
 
-func decodeExporterResponse(exporterResponse map[string]string) map[string]interface{} {
+func decodeExporterResponse(exporterResponse map[string]string) map[string]any {
 	decFunc := func(k, v string) ([]byte, error) {
 		if k == "result.json" {
 			// result.json is part of metadata response for subrequests which
@@ -757,16 +758,16 @@ func decodeExporterResponse(exporterResponse map[string]string) map[string]inter
 		}
 		return base64.StdEncoding.DecodeString(v)
 	}
-	out := make(map[string]interface{})
+	out := make(map[string]any)
 	for k, v := range exporterResponse {
 		dt, err := decFunc(k, v)
 		if err != nil {
 			out[k] = v
 			continue
 		}
-		var raw map[string]interface{}
+		var raw map[string]any
 		if err = json.Unmarshal(dt, &raw); err != nil || len(raw) == 0 {
-			var rawList []map[string]interface{}
+			var rawList []map[string]any
 			if err = json.Unmarshal(dt, &rawList); err != nil || len(rawList) == 0 {
 				out[k] = v
 				continue

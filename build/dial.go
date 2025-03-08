@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"net"
+	"slices"
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
@@ -37,15 +38,7 @@ func Dial(ctx context.Context, nodes []builder.Node, pw progress.Writer, platfor
 	for _, ls := range resolved {
 		for _, rn := range ls {
 			if platform != nil {
-				p := *platform
-				var found bool
-				for _, pp := range rn.platforms {
-					if platforms.Only(p).Match(pp) {
-						found = true
-						break
-					}
-				}
-				if !found {
+				if !slices.ContainsFunc(rn.platforms, platforms.Only(*platform).Match) {
 					continue
 				}
 			}

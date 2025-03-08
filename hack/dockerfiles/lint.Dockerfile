@@ -5,9 +5,10 @@ ARG ALPINE_VERSION=3.21
 ARG XX_VERSION=1.6.1
 
 ARG GOLANGCI_LINT_VERSION=1.62.0
-ARG GOPLS_VERSION=v0.26.0
+# v0.31 requires go1.24
+ARG GOPLS_VERSION=v0.30.0
 # disabled: deprecated unusedvariable simplifyrange
-ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs nonewvars noresultvalues simplifycompositelit simplifyslice undeclaredname unusedparams useany"
+ARG GOPLS_ANALYZERS="embeddirective fillreturns hostport infertypeargs modernize nonewvars noresultvalues simplifycompositelit simplifyslice unusedparams yield"
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 

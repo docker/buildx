@@ -315,7 +315,7 @@ type (
 	stringArray []string
 )
 
-func (sa *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
+func (sa *stringArray) UnmarshalYAML(unmarshal func(any) error) error {
 	var multi []string
 	err := unmarshal(&multi)
 	if err != nil {
@@ -332,7 +332,7 @@ func (sa *stringArray) UnmarshalYAML(unmarshal func(interface{}) error) error {
 
 // composeExtTarget converts Compose build extension x-bake to bake Target
 // https://github.com/compose-spec/compose-spec/blob/master/spec.md#extension
-func (t *Target) composeExtTarget(exts map[string]interface{}) error {
+func (t *Target) composeExtTarget(exts map[string]any) error {
 	var xb xbake
 
 	ext, ok := exts["x-bake"]

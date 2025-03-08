@@ -3,6 +3,7 @@ package build
 import (
 	"context"
 	"fmt"
+	"slices"
 	"sync"
 
 	"github.com/containerd/platforms"
@@ -221,7 +222,7 @@ func (r *nodeResolver) get(p specs.Platform, matcher matchMaker, additionalPlatf
 	for i, node := range r.nodes {
 		platforms := node.Platforms
 		if additionalPlatforms != nil {
-			platforms = append([]specs.Platform{}, platforms...)
+			platforms = slices.Clone(platforms)
 			platforms = append(platforms, additionalPlatforms(i, node)...)
 		}
 		for _, p2 := range platforms {

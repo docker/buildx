@@ -306,7 +306,7 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 		fmt.Fprintf(out, "\nPass %q to grant requested privileges.\n", strings.Join(slices.Concat(flags, flagsFS), " "))
 	}
 
-	args := append([]string(nil), os.Args...)
+	args := slices.Clone(os.Args)
 	if v, ok := os.LookupEnv("DOCKER_CLI_PLUGIN_ORIGINAL_CLI_COMMAND"); ok && v != "" {
 		args[0] = v
 	}

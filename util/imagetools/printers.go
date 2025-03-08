@@ -89,7 +89,7 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	}
 
 	tpl, err := template.New("").Funcs(template.FuncMap{
-		"json": func(v interface{}) string {
+		"json": func(v any) string {
 			b, _ := json.MarshalIndent(v, "", "  ")
 			return string(b)
 		},
@@ -101,7 +101,7 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	imageconfigs := res.Configs()
 	format := tpl.Root.String()
 
-	var mfst interface{}
+	var mfst any
 	switch p.manifest.MediaType {
 	case images.MediaTypeDockerSchema2Manifest, ocispecs.MediaTypeImageManifest:
 		mfst = p.manifest
@@ -206,7 +206,7 @@ func (p *Printer) printManifestList(out io.Writer) error {
 
 type tplInput struct {
 	Name     string          `json:"name,omitempty"`
-	Manifest interface{}     `json:"manifest,omitempty"`
+	Manifest any             `json:"manifest,omitempty"`
 	Image    *ocispecs.Image `json:"image,omitempty"`
 
 	result *result
@@ -236,7 +236,7 @@ func (inp tplInput) Provenance() (provenanceStub, error) {
 
 type tplInputs struct {
 	Name     string                     `json:"name,omitempty"`
-	Manifest interface{}                `json:"manifest,omitempty"`
+	Manifest any                        `json:"manifest,omitempty"`
 	Image    map[string]*ocispecs.Image `json:"image,omitempty"`
 
 	result *result

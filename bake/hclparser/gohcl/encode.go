@@ -36,7 +36,7 @@ import (
 // Fields representing attributes should usually precede those representing
 // blocks so that the attributes can group together in the result. For more
 // control, use the hclwrite API directly.
-func EncodeIntoBody(val interface{}, dst *hclwrite.Body) {
+func EncodeIntoBody(val any, dst *hclwrite.Body) {
 	rv := reflect.ValueOf(val)
 	ty := rv.Type()
 	if ty.Kind() == reflect.Ptr {
@@ -60,7 +60,7 @@ func EncodeIntoBody(val interface{}, dst *hclwrite.Body) {
 //
 // This function has the same constraints as EncodeIntoBody and will panic
 // if they are violated.
-func EncodeAsBlock(val interface{}, blockType string) *hclwrite.Block {
+func EncodeAsBlock(val any, blockType string) *hclwrite.Block {
 	rv := reflect.ValueOf(val)
 	ty := rv.Type()
 	if ty.Kind() == reflect.Ptr {
@@ -158,7 +158,7 @@ func populateBody(rv reflect.Value, ty reflect.Type, tags *fieldTags, dst *hclwr
 
 			if isSeq {
 				l := fieldVal.Len()
-				for i := 0; i < l; i++ {
+				for i := range l {
 					elemVal := fieldVal.Index(i)
 					if !elemVal.IsValid() {
 						continue // ignore (elem value is nil pointer)
