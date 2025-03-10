@@ -400,6 +400,44 @@ func TestHCLTypedVariables(t *testing.T) {
 	require.Contains(t, err.Error(), "failed to parse IS_FOO as bool")
 }
 
+func TestHCLNullVariableDefault(t *testing.T) {
+	dt := []byte(`
+		variable "FOO" {}
+		target "default" {
+			args = {
+				isNull = equal(FOO, null)
+				isEmptyString = equal(FOO, "")
+			}
+		}`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Len(t, c.Targets, 1)
+	require.Len(t, c.Targets[0].Args, 2)
+	require.Equal(t, "true", *c.Targets[0].Args["isNull"])
+	require.Equal(t, "false", *c.Targets[0].Args["isEmptyString"])
+}
+
+func TestHCLEmptyVariable(t *testing.T) {
+	dt := []byte(`
+		variable "FOO" {
+			default = ""
+		}
+		target "default" {
+			args = {
+				isNull = equal(FOO, null)
+				isEmptyString = equal(FOO, "")
+			}
+		}`)
+
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Len(t, c.Targets, 1)
+	require.Len(t, c.Targets[0].Args, 2)
+	require.Equal(t, "false", *c.Targets[0].Args["isNull"])
+	require.Equal(t, "true", *c.Targets[0].Args["isEmptyString"])
+}
+
 func TestHCLNullVariables(t *testing.T) {
 	dt := []byte(`
 		variable "FOO" {
