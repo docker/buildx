@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"io"
 	"path/filepath"
+	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -106,9 +108,23 @@ type historyRecord struct {
 	name             string
 }
 
-func queryRecords(ctx context.Context, ref string, nodes []builder.Node) ([]historyRecord, error) {
+type queryOptions struct {
+	CompletedOnly bool
+}
+
+func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *queryOptions) ([]historyRecord, error) {
 	var mu sync.Mutex
 	var out []historyRecord
+
+	var offset *int
+	if strings.HasPrefix(ref, "^") {
+		off, err := strconv.Atoi(ref[1:])
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid offset %q", ref)
+		}
+		offset = &off
+		ref = ""
+	}
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
@@ -153,6 +169,10 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node) ([]hist
 				if he.Type == controlapi.BuildHistoryEventType_DELETED || he.Record == nil {
 					continue
 				}
+				if opts != nil && opts.CompletedOnly && he.Type != controlapi.BuildHistoryEventType_COMPLETE {
+					continue
+				}
+
 				records = append(records, historyRecord{
 					BuildHistoryRecord: he.Record,
 					currentTimestamp:   ts,
@@ -169,6 +189,27 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node) ([]hist
 	if err := eg.Wait(); err != nil {
 		return nil, err
 	}
+
+	slices.SortFunc(out, func(a, b historyRecord) int {
+		return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
+	})
+
+	if offset != nil {
+		var filtered []historyRecord
+		for _, r := range out {
+			if *offset > 0 {
+				*offset--
+				continue
+			}
+			filtered = append(filtered, r)
+			break
+		}
+		if *offset > 0 {
+			return nil, errors.Errorf("no completed build found with offset %d", *offset)
+		}
+		out = filtered
+	}
+
 	return out, nil
 }
 

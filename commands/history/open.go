@@ -3,7 +3,6 @@ package history
 import (
 	"context"
 	"fmt"
-	"slices"
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
@@ -35,7 +34,7 @@ func runOpen(ctx context.Context, dockerCli command.Cli, opts openOptions) error
 		}
 	}
 
-	recs, err := queryRecords(ctx, opts.ref, nodes)
+	recs, err := queryRecords(ctx, opts.ref, nodes, nil)
 	if err != nil {
 		return err
 	}
@@ -45,12 +44,6 @@ func runOpen(ctx context.Context, dockerCli command.Cli, opts openOptions) error
 			return errors.New("no records found")
 		}
 		return errors.Errorf("no record found for ref %q", opts.ref)
-	}
-
-	if opts.ref == "" {
-		slices.SortFunc(recs, func(a, b historyRecord) int {
-			return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
-		})
 	}
 
 	rec := &recs[0]

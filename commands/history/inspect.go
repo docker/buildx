@@ -173,17 +173,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 		}
 	}
 
-	var offset *int
-	if strings.HasPrefix(opts.ref, "^") {
-		off, err := strconv.Atoi(opts.ref[1:])
-		if err != nil {
-			return errors.Wrapf(err, "invalid offset %q", opts.ref)
-		}
-		offset = &off
-		opts.ref = ""
-	}
-
-	recs, err := queryRecords(ctx, opts.ref, nodes)
+	recs, err := queryRecords(ctx, opts.ref, nodes, nil)
 	if err != nil {
 		return err
 	}
@@ -195,26 +185,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions)
 		return errors.Errorf("no record found for ref %q", opts.ref)
 	}
 
-	var rec *historyRecord
-	if opts.ref == "" {
-		slices.SortFunc(recs, func(a, b historyRecord) int {
-			return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
-		})
-		for _, r := range recs {
-			if offset != nil {
-				if *offset > 0 {
-					*offset--
-					continue
-				}
-			}
-			rec = &r
-			break
-		}
-		if offset != nil && *offset > 0 {
-			return errors.Errorf("no completed build found with offset %d", *offset)
-		}
-	}
-
+	rec := &recs[0]
 	c, err := rec.node.Driver.Client(ctx)
 	if err != nil {
 		return err
