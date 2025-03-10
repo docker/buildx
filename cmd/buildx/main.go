@@ -11,7 +11,7 @@ import (
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
-	"github.com/docker/cli/cli-plugins/manager"
+	"github.com/docker/cli/cli-plugins/metadata"
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
@@ -64,7 +64,7 @@ func flushMetrics(cmd *command.DockerCli) {
 
 func runPlugin(cmd *command.DockerCli) error {
 	rootCmd := commands.NewRootCmd("buildx", true, cmd)
-	return plugin.RunPlugin(cmd, rootCmd, manager.Metadata{
+	return plugin.RunPlugin(cmd, rootCmd, metadata.Metadata{
 		SchemaVersion: "0.1.0",
 		Vendor:        "Docker Inc.",
 		Version:       version.Version,
