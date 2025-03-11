@@ -16,11 +16,18 @@
 
 package paths
 
-import "strings"
+import (
+	"strings"
+
+	"github.com/compose-spec/compose-go/v2/types"
+)
 
 func (r *relativePathsResolver) absContextPath(value any) (any, error) {
 	v := value.(string)
 	if strings.Contains(v, "://") { // `docker-image://` or any builder specific context type
+		return v, nil
+	}
+	if strings.HasPrefix(v, types.ServicePrefix) { // `docker-image://` or any builder specific context type
 		return v, nil
 	}
 	if isRemoteContext(v) {
