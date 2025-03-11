@@ -32,6 +32,7 @@ func init() {
 	transformers["services.*.env_file"] = transformEnvFile
 	transformers["services.*.label_file"] = transformStringOrList
 	transformers["services.*.extends"] = transformExtends
+	transformers["services.*.gpus"] = transformGpus
 	transformers["services.*.networks"] = transformServiceNetworks
 	transformers["services.*.volumes.*"] = transformVolumeMount
 	transformers["services.*.dns"] = transformStringOrList

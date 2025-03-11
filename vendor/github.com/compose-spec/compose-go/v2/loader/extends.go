@@ -27,10 +27,6 @@ import (
 	"github.com/compose-spec/compose-go/v2/types"
 )
 
-// as we use another service definition by `extends`, we must exclude attributes which creates dependency to another service
-// see https://github.com/compose-spec/compose-spec/blob/main/05-services.md#restrictions
-var exclusions = []string{"depends_on", "volumes_from"}
-
 func ApplyExtends(ctx context.Context, dict map[string]any, opts *Options, tracker *cycleTracker, post ...PostProcessor) error {
 	a, ok := dict["services"]
 	if !ok {
@@ -122,9 +118,6 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 				name: source,
 			},
 		})
-	}
-	for _, exclusion := range exclusions {
-		delete(source, exclusion)
 	}
 	merged, err := override.ExtendService(source, service)
 	if err != nil {

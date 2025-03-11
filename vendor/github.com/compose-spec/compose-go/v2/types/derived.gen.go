@@ -1452,6 +1452,12 @@ func deriveDeepCopy_24(dst, src *NetworkConfig) {
 	} else {
 		dst.CustomLabels = nil
 	}
+	if src.EnableIPv4 == nil {
+		dst.EnableIPv4 = nil
+	} else {
+		dst.EnableIPv4 = new(bool)
+		*dst.EnableIPv4 = *src.EnableIPv4
+	}
 	if src.EnableIPv6 == nil {
 		dst.EnableIPv6 = nil
 	} else {

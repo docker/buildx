@@ -438,13 +438,14 @@ type PlacementPreferences struct {
 
 // ServiceNetworkConfig is the network configuration for a service
 type ServiceNetworkConfig struct {
-	Priority     int      `yaml:"priority,omitempty" json:"priority,omitempty"`
-	Aliases      []string `yaml:"aliases,omitempty" json:"aliases,omitempty"`
-	Ipv4Address  string   `yaml:"ipv4_address,omitempty" json:"ipv4_address,omitempty"`
-	Ipv6Address  string   `yaml:"ipv6_address,omitempty" json:"ipv6_address,omitempty"`
-	LinkLocalIPs []string `yaml:"link_local_ips,omitempty" json:"link_local_ips,omitempty"`
-	MacAddress   string   `yaml:"mac_address,omitempty" json:"mac_address,omitempty"`
-	DriverOpts   Options  `yaml:"driver_opts,omitempty" json:"driver_opts,omitempty"`
+	Priority        int      `yaml:"priority,omitempty" json:"priority,omitempty"`
+	GatewayPriority int      `yaml:"gw_priority,omitempty" json:"gw_priority,omitempty"`
+	Aliases         []string `yaml:"aliases,omitempty" json:"aliases,omitempty"`
+	Ipv4Address     string   `yaml:"ipv4_address,omitempty" json:"ipv4_address,omitempty"`
+	Ipv6Address     string   `yaml:"ipv6_address,omitempty" json:"ipv6_address,omitempty"`
+	LinkLocalIPs    []string `yaml:"link_local_ips,omitempty" json:"link_local_ips,omitempty"`
+	MacAddress      string   `yaml:"mac_address,omitempty" json:"mac_address,omitempty"`
+	DriverOpts      Options  `yaml:"driver_opts,omitempty" json:"driver_opts,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
@@ -688,6 +689,7 @@ type NetworkConfig struct {
 	Attachable   bool       `yaml:"attachable,omitempty" json:"attachable,omitempty"`
 	Labels       Labels     `yaml:"labels,omitempty" json:"labels,omitempty"`
 	CustomLabels Labels     `yaml:"-" json:"-"`
+	EnableIPv4   *bool      `yaml:"enable_ipv4,omitempty" json:"enable_ipv4,omitempty"`
 	EnableIPv6   *bool      `yaml:"enable_ipv6,omitempty" json:"enable_ipv6,omitempty"`
 	Extensions   Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }

@@ -26,6 +26,7 @@ import (
 	"strings"
 
 	"github.com/sirupsen/logrus"
+	"gopkg.in/yaml.v3"
 
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/dotenv"
@@ -482,8 +483,27 @@ func (o *ProjectOptions) prepare(ctx context.Context) (*types.ConfigDetails, err
 		return configDetails, err
 	}
 
+	isNamed := false
+	if o.Name == "" {
+		type named struct {
+			Name string `yaml:"name,omitempty"`
+		}
+		// if any of the compose file is named, this is equivalent to user passing --project-name
+		for _, cfg := range configDetails.ConfigFiles {
+			var n named
+			err = yaml.Unmarshal(cfg.Content, &n)
+			if err != nil {
+				return nil, err
+			}
+			if n.Name != "" {
+				isNamed = true
+				break
+			}
+		}
+	}
+
 	o.loadOptions = append(o.loadOptions,
-		withNamePrecedenceLoad(defaultDir, o),
+		withNamePrecedenceLoad(defaultDir, isNamed, o),
 		withConvertWindowsPaths(o),
 		withListeners(o))
 
@@ -496,13 +516,13 @@ func ProjectFromOptions(ctx context.Context, options *ProjectOptions) (*types.Pr
 	return options.LoadProject(ctx)
 }
 
-func withNamePrecedenceLoad(absWorkingDir string, options *ProjectOptions) func(*loader.Options) {
+func withNamePrecedenceLoad(absWorkingDir string, namedInYaml bool, options *ProjectOptions) func(*loader.Options) {
 	return func(opts *loader.Options) {
 		if options.Name != "" {
 			opts.SetProjectName(options.Name, true)
 		} else if nameFromEnv, ok := options.Environment[consts.ComposeProjectName]; ok && nameFromEnv != "" {
 			opts.SetProjectName(nameFromEnv, true)
-		} else {
+		} else if !namedInYaml {
 			dirname := filepath.Base(absWorkingDir)
 			symlink, err := filepath.EvalSymlinks(absWorkingDir)
 			if err == nil && filepath.Base(symlink) != dirname {
