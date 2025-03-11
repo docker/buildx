@@ -8,9 +8,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"slices"
-	"strconv"
-	"strings"
 	"time"
 
 	"github.com/containerd/console"
@@ -37,51 +34,20 @@ type traceOptions struct {
 }
 
 func loadTrace(ctx context.Context, ref string, nodes []builder.Node) (string, []byte, error) {
-	var offset *int
-	if strings.HasPrefix(ref, "^") {
-		off, err := strconv.Atoi(ref[1:])
-		if err != nil {
-			return "", nil, errors.Wrapf(err, "invalid offset %q", ref)
-		}
-		offset = &off
-		ref = ""
-	}
-
-	recs, err := queryRecords(ctx, ref, nodes)
+	recs, err := queryRecords(ctx, ref, nodes, &queryOptions{
+		CompletedOnly: true,
+	})
 	if err != nil {
 		return "", nil, err
 	}
 
-	var rec *historyRecord
-
-	if ref == "" {
-		slices.SortFunc(recs, func(a, b historyRecord) int {
-			return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
-		})
-		for _, r := range recs {
-			if r.CompletedAt != nil {
-				if offset != nil {
-					if *offset > 0 {
-						*offset--
-						continue
-					}
-				}
-				rec = &r
-				break
-			}
-		}
-		if offset != nil && *offset > 0 {
-			return "", nil, errors.Errorf("no completed build found with offset %d", *offset)
-		}
-	} else {
-		rec = &recs[0]
-	}
-	if rec == nil {
+	if len(recs) == 0 {
 		if ref == "" {
 			return "", nil, errors.New("no records found")
 		}
 		return "", nil, errors.Errorf("no record found for ref %q", ref)
 	}
+	rec := &recs[0]
 
 	if rec.CompletedAt == nil {
 		return "", nil, errors.Errorf("build %q is not completed, only completed builds can be traced", rec.Ref)
@@ -103,7 +69,9 @@ func loadTrace(ctx context.Context, ref string, nodes []builder.Node) (string, [
 			return "", nil, err
 		}
 
-		recs, err := queryRecords(ctx, rec.Ref, []builder.Node{*rec.node})
+		recs, err := queryRecords(ctx, rec.Ref, []builder.Node{*rec.node}, &queryOptions{
+			CompletedOnly: true,
+		})
 		if err != nil {
 			return "", nil, err
 		}

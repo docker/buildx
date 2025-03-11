@@ -56,7 +56,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 		}
 	}
 
-	out, err := queryRecords(ctx, "", nodes)
+	out, err := queryRecords(ctx, "", nodes, nil)
 	if err != nil {
 		return err
 	}

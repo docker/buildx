@@ -3,7 +3,6 @@ package history
 import (
 	"context"
 	"io"
-	"slices"
 
 	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/containerd/platforms"
@@ -42,7 +41,7 @@ func runAttachment(ctx context.Context, dockerCli command.Cli, opts attachmentOp
 		}
 	}
 
-	recs, err := queryRecords(ctx, opts.ref, nodes)
+	recs, err := queryRecords(ctx, opts.ref, nodes, nil)
 	if err != nil {
 		return err
 	}
@@ -52,12 +51,6 @@ func runAttachment(ctx context.Context, dockerCli command.Cli, opts attachmentOp
 			return errors.New("no records found")
 		}
 		return errors.Errorf("no record found for ref %q", opts.ref)
-	}
-
-	if opts.ref == "" {
-		slices.SortFunc(recs, func(a, b historyRecord) int {
-			return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
-		})
 	}
 
 	rec := &recs[0]
