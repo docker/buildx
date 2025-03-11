@@ -15,11 +15,11 @@ import (
 
 // DecodeOptions allows customizing sections of the decoding process.
 type DecodeOptions struct {
-	ImpliedType func(gv interface{}) (cty.Type, error)
+	ImpliedType func(gv any) (cty.Type, error)
 	Convert     func(in cty.Value, want cty.Type) (cty.Value, error)
 }
 
-func (o DecodeOptions) DecodeBody(body hcl.Body, ctx *hcl.EvalContext, val interface{}) hcl.Diagnostics {
+func (o DecodeOptions) DecodeBody(body hcl.Body, ctx *hcl.EvalContext, val any) hcl.Diagnostics {
 	o = o.withDefaults()
 
 	rv := reflect.ValueOf(val)
@@ -46,7 +46,7 @@ func (o DecodeOptions) DecodeBody(body hcl.Body, ctx *hcl.EvalContext, val inter
 // are returned then the given value may have been partially-populated but
 // may still be accessed by a careful caller for static analysis and editor
 // integration use-cases.
-func DecodeBody(body hcl.Body, ctx *hcl.EvalContext, val interface{}) hcl.Diagnostics {
+func DecodeBody(body hcl.Body, ctx *hcl.EvalContext, val any) hcl.Diagnostics {
 	return DecodeOptions{}.DecodeBody(body, ctx, val)
 }
 
@@ -282,7 +282,7 @@ func (o DecodeOptions) decodeBlockToValue(block *hcl.Block, ctx *hcl.EvalContext
 	return diags
 }
 
-func (o DecodeOptions) DecodeExpression(expr hcl.Expression, ctx *hcl.EvalContext, val interface{}) hcl.Diagnostics {
+func (o DecodeOptions) DecodeExpression(expr hcl.Expression, ctx *hcl.EvalContext, val any) hcl.Diagnostics {
 	o = o.withDefaults()
 
 	srcVal, diags := expr.Value(ctx)
@@ -332,7 +332,7 @@ func (o DecodeOptions) DecodeExpression(expr hcl.Expression, ctx *hcl.EvalContex
 // are returned then the given value may have been partially-populated but
 // may still be accessed by a careful caller for static analysis and editor
 // integration use-cases.
-func DecodeExpression(expr hcl.Expression, ctx *hcl.EvalContext, val interface{}) hcl.Diagnostics {
+func DecodeExpression(expr hcl.Expression, ctx *hcl.EvalContext, val any) hcl.Diagnostics {
 	return DecodeOptions{}.DecodeExpression(expr, ctx, val)
 }
 

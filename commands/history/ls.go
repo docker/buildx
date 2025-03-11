@@ -161,7 +161,7 @@ type lsContext struct {
 }
 
 func (c *lsContext) MarshalJSON() ([]byte, error) {
-	m := map[string]interface{}{
+	m := map[string]any{
 		"ref":             c.FullRef(),
 		"name":            c.Name(),
 		"status":          c.Status(),

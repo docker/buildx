@@ -7,6 +7,7 @@ import (
 	"math"
 	"math/big"
 	"reflect"
+	"slices"
 	"strconv"
 	"strings"
 
@@ -589,7 +590,7 @@ type ParseMeta struct {
 	AllVariables []*Variable
 }
 
-func Parse(b hcl.Body, opt Opt, val interface{}) (*ParseMeta, hcl.Diagnostics) {
+func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 	reserved := map[string]struct{}{}
 	schema, _ := gohcl.ImpliedBodySchema(val)
 
@@ -763,7 +764,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (*ParseMeta, hcl.Diagnostics) {
 	types := map[string]field{}
 	renamed := map[string]map[string][]string{}
 	vt := reflect.ValueOf(val).Elem().Type()
-	for i := 0; i < vt.NumField(); i++ {
+	for i := range vt.NumField() {
 		tags := strings.Split(vt.Field(i).Tag.Get("hcl"), ",")
 
 		p.blockTypes[tags[0]] = vt.Field(i).Type.Elem().Elem()
@@ -831,7 +832,7 @@ func Parse(b hcl.Body, opt Opt, val interface{}) (*ParseMeta, hcl.Diagnostics) {
 			oldValue, exists := t.values[lblName]
 			if !exists && lblExists {
 				if v.Elem().Field(t.idx).Type().Kind() == reflect.Slice {
-					for i := 0; i < v.Elem().Field(t.idx).Len(); i++ {
+					for i := range v.Elem().Field(t.idx).Len() {
 						if lblName == v.Elem().Field(t.idx).Index(i).Elem().Field(lblIndex).String() {
 							exists = true
 							oldValue = value{Value: v.Elem().Field(t.idx).Index(i), idx: i}
@@ -898,7 +899,7 @@ func wrapErrorDiagnostic(message string, err error, subject *hcl.Range, context 
 
 func setName(v reflect.Value, name string) {
 	numFields := v.Elem().Type().NumField()
-	for i := 0; i < numFields; i++ {
+	for i := range numFields {
 		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
 		for _, t := range parts[1:] {
 			if t == "label" {
@@ -910,12 +911,10 @@ func setName(v reflect.Value, name string) {
 
 func getName(v reflect.Value) (string, bool) {
 	numFields := v.Elem().Type().NumField()
-	for i := 0; i < numFields; i++ {
+	for i := range numFields {
 		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
-		for _, t := range parts[1:] {
-			if t == "label" {
-				return v.Elem().Field(i).String(), true
-			}
+		if slices.Contains(parts[1:], "label") {
+			return v.Elem().Field(i).String(), true
 		}
 	}
 	return "", false
@@ -923,12 +922,10 @@ func getName(v reflect.Value) (string, bool) {
 
 func getNameIndex(v reflect.Value) (int, bool) {
 	numFields := v.Elem().Type().NumField()
-	for i := 0; i < numFields; i++ {
+	for i := range numFields {
 		parts := strings.Split(v.Elem().Type().Field(i).Tag.Get("hcl"), ",")
-		for _, t := range parts[1:] {
-			if t == "label" {
-				return i, true
-			}
+		if slices.Contains(parts[1:], "label") {
+			return i, true
 		}
 	}
 	return 0, false
@@ -988,7 +985,7 @@ func key(ks ...any) uint64 {
 	return hash.Sum64()
 }
 
-func decodeBody(body hcl.Body, ctx *hcl.EvalContext, val interface{}) hcl.Diagnostics {
+func decodeBody(body hcl.Body, ctx *hcl.EvalContext, val any) hcl.Diagnostics {
 	dec := gohcl.DecodeOptions{ImpliedType: ImpliedType}
 	return dec.DecodeBody(body, ctx, val)
 }

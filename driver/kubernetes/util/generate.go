@@ -25,7 +25,7 @@ func GenerateNodeName(builderName string, txn *store.Txn) (string, error) {
 	}
 
 	var name string
-	for i := 0; i < 6; i++ {
+	for range 6 {
 		name, err = randomName()
 		if err != nil {
 			return "", err

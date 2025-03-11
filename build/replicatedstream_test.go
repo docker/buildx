@@ -28,11 +28,11 @@ func TestSyncMultiReaderParallel(t *testing.T) {
 
 	readers := make([]io.ReadCloser, numReaders)
 
-	for i := 0; i < numReaders; i++ {
+	for i := range numReaders {
 		readers[i] = mr.NewReadCloser()
 	}
 
-	for i := 0; i < numReaders; i++ {
+	for i := range numReaders {
 		wg.Add(1)
 		go func(readerId int) {
 			defer wg.Done()
