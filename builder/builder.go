@@ -200,7 +200,7 @@ func (b *Builder) Boot(ctx context.Context) (bool, error) {
 		err = err1
 	}
 
-	if err == nil && len(errCh) == len(toBoot) {
+	if err == nil && len(errCh) > 0 {
 		return false, <-errCh
 	}
 	return true, err
