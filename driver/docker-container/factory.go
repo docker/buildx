@@ -51,6 +51,12 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		InitConfig:    cfg,
 		restartPolicy: rp,
 	}
+	var gpus dockeropts.GpuOpts
+	if err := gpus.Set("all"); err == nil {
+		if v := gpus.Value(); len(v) > 0 {
+			d.gpus = v
+		}
+	}
 	for k, v := range cfg.DriverOpts {
 		switch {
 		case k == "network":
