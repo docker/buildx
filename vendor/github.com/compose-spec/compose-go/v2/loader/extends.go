@@ -113,11 +113,14 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 	source := deepClone(base).(map[string]any)
 
 	for _, processor := range post {
-		processor.Apply(map[string]any{
+		err = processor.Apply(map[string]any{
 			"services": map[string]any{
 				name: source,
 			},
 		})
+		if err != nil {
+			return nil, err
+		}
 	}
 	merged, err := override.ExtendService(source, service)
 	if err != nil {

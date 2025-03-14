@@ -380,12 +380,7 @@ func (p *Project) WithServicesEnabled(names ...string) (*Project, error) {
 		service := p.DisabledServices[name]
 		profiles = append(profiles, service.Profiles...)
 	}
-	newProject, err := newProject.WithProfiles(profiles)
-	if err != nil {
-		return newProject, err
-	}
-
-	return newProject.WithServicesEnvironmentResolved(true)
+	return newProject.WithProfiles(profiles)
 }
 
 // WithoutUnnecessaryResources drops networks/volumes/secrets/configs that are not referenced by active services
@@ -477,7 +472,7 @@ func (p *Project) WithSelectedServices(names []string, options ...DependencyOpti
 	}
 
 	set := utils.NewSet[string]()
-	err := p.ForEachService(names, func(name string, service *ServiceConfig) error {
+	err := p.ForEachService(names, func(name string, _ *ServiceConfig) error {
 		set.Add(name)
 		return nil
 	}, options...)
@@ -535,7 +530,7 @@ func (p *Project) WithServicesDisabled(names ...string) *Project {
 // WithImagesResolved updates services images to include digest computed by a resolver function
 // It returns a new Project instance with the changes and keep the original Project unchanged
 func (p *Project) WithImagesResolved(resolver func(named reference.Named) (godigest.Digest, error)) (*Project, error) {
-	return p.WithServicesTransform(func(name string, service ServiceConfig) (ServiceConfig, error) {
+	return p.WithServicesTransform(func(_ string, service ServiceConfig) (ServiceConfig, error) {
 		if service.Image == "" {
 			return service, nil
 		}
@@ -725,14 +720,9 @@ func loadMappingFile(path string, format string, resolve dotenv.LookupFn) (Mappi
 	if err != nil {
 		return nil, err
 	}
-	defer file.Close() //nolint:errcheck
+	defer file.Close()
 
-	var fileVars map[string]string
-	if format != "" {
-		fileVars, err = dotenv.ParseWithFormat(file, path, resolve, format)
-	} else {
-		fileVars, err = dotenv.ParseWithLookup(file, resolve)
-	}
+	fileVars, err := dotenv.ParseWithFormat(file, path, resolve, format)
 	if err != nil {
 		return nil, err
 	}
@@ -746,7 +736,6 @@ func (p *Project) deepCopy() *Project {
 	n := &Project{}
 	deriveDeepCopyProject(n, p)
 	return n
-
 }
 
 // WithServicesTransform applies a transformation to project services and return a new project with transformation results

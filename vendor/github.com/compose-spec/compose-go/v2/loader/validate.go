@@ -27,7 +27,7 @@ import (
 )
 
 // checkConsistency validate a compose model is consistent
-func checkConsistency(project *types.Project) error {
+func checkConsistency(project *types.Project) error { //nolint:gocyclo
 	for name, s := range project.Services {
 		if s.Build == nil && s.Image == "" {
 			return fmt.Errorf("service %q has neither an image nor a build context specified: %w", s.Name, errdefs.ErrInvalid)
@@ -171,7 +171,6 @@ func checkConsistency(project *types.Project) error {
 					return fmt.Errorf("services.%s.develop.watch: target is required for non-rebuild actions: %w", s.Name, errdefs.ErrInvalid)
 				}
 			}
-
 		}
 	}
 

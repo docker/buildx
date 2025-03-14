@@ -20,9 +20,12 @@ import (
 	"encoding/json"
 	"fmt"
 	"sort"
+	"strconv"
 	"strings"
+	"time"
 
 	"github.com/docker/go-connections/nat"
+	"github.com/xhit/go-str2duration/v2"
 )
 
 // ServiceConfig is the configuration of one service
@@ -215,6 +218,8 @@ const (
 	PullPolicyMissing = "missing"
 	// PullPolicyBuild force building images
 	PullPolicyBuild = "build"
+	// PullPolicyRefresh checks if image needs to be updated
+	PullPolicyRefresh = "refresh"
 )
 
 const (
@@ -266,6 +271,27 @@ func (s ServiceConfig) GetDependents(p *Project) []string {
 		}
 	}
 	return dependent
+}
+
+func (s ServiceConfig) GetPullPolicy() (string, time.Duration, error) {
+	switch s.PullPolicy {
+	case PullPolicyAlways, PullPolicyNever, PullPolicyIfNotPresent, PullPolicyMissing, PullPolicyBuild:
+		return s.PullPolicy, 0, nil
+	case "daily":
+		return PullPolicyRefresh, 24 * time.Hour, nil
+	case "weekly":
+		return PullPolicyRefresh, 7 * 24 * time.Hour, nil
+	default:
+		if strings.HasPrefix(s.PullPolicy, "every_") {
+			delay := s.PullPolicy[6:]
+			duration, err := str2duration.ParseDuration(delay)
+			if err != nil {
+				return "", 0, err
+			}
+			return PullPolicyRefresh, duration, nil
+		}
+		return PullPolicyMissing, 0, nil
+	}
 }
 
 // BuildConfig is a type for build
@@ -479,16 +505,13 @@ func ParsePortConfig(value string) ([]ServicePortConfig, error) {
 
 	for _, key := range keys {
 		port := nat.Port(key)
-		converted, err := convertPortToPortConfig(port, portBindings)
-		if err != nil {
-			return nil, err
-		}
+		converted := convertPortToPortConfig(port, portBindings)
 		portConfigs = append(portConfigs, converted...)
 	}
 	return portConfigs, nil
 }
 
-func convertPortToPortConfig(port nat.Port, portBindings map[nat.Port][]nat.PortBinding) ([]ServicePortConfig, error) {
+func convertPortToPortConfig(port nat.Port, portBindings map[nat.Port][]nat.PortBinding) []ServicePortConfig {
 	var portConfigs []ServicePortConfig
 	for _, binding := range portBindings[port] {
 		portConfigs = append(portConfigs, ServicePortConfig{
@@ -499,7 +522,7 @@ func convertPortToPortConfig(port nat.Port, portBindings map[nat.Port][]nat.Port
 			Mode:      "ingress",
 		})
 	}
-	return portConfigs, nil
+	return portConfigs
 }
 
 // ServiceVolumeConfig are references to a volume used by a service
@@ -604,15 +627,49 @@ type ServiceVolumeTmpfs struct {
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 
+type FileMode int64
+
 // FileReferenceConfig for a reference to a swarm file object
 type FileReferenceConfig struct {
-	Source string  `yaml:"source,omitempty" json:"source,omitempty"`
-	Target string  `yaml:"target,omitempty" json:"target,omitempty"`
-	UID    string  `yaml:"uid,omitempty" json:"uid,omitempty"`
-	GID    string  `yaml:"gid,omitempty" json:"gid,omitempty"`
-	Mode   *uint32 `yaml:"mode,omitempty" json:"mode,omitempty"`
+	Source string    `yaml:"source,omitempty" json:"source,omitempty"`
+	Target string    `yaml:"target,omitempty" json:"target,omitempty"`
+	UID    string    `yaml:"uid,omitempty" json:"uid,omitempty"`
+	GID    string    `yaml:"gid,omitempty" json:"gid,omitempty"`
+	Mode   *FileMode `yaml:"mode,omitempty" json:"mode,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
+}
+
+func (f *FileMode) DecodeMapstructure(value interface{}) error {
+	switch v := value.(type) {
+	case *FileMode:
+		return nil
+	case string:
+		i, err := strconv.ParseInt(v, 8, 64)
+		if err != nil {
+			return err
+		}
+		*f = FileMode(i)
+	case int:
+		*f = FileMode(v)
+	default:
+		return fmt.Errorf("unexpected value type %T for mode", value)
+	}
+	return nil
+}
+
+// MarshalYAML makes FileMode implement yaml.Marshaller
+func (f *FileMode) MarshalYAML() (interface{}, error) {
+	return f.String(), nil
+}
+
+// MarshalJSON makes FileMode implement json.Marshaller
+func (f *FileMode) MarshalJSON() ([]byte, error) {
+	return []byte("\"" + f.String() + "\""), nil
+}
+
+func (f *FileMode) String() string {
+	return fmt.Sprintf("0%o", int64(*f))
 }
 
 // ServiceConfigObjConfig is the config obj configuration for a service

@@ -24,10 +24,8 @@ import (
 	"github.com/go-viper/mapstructure/v2"
 )
 
-var (
-	// isCaseInsensitiveEnvVars is true on platforms where environment variable names are treated case-insensitively.
-	isCaseInsensitiveEnvVars = (runtime.GOOS == "windows")
-)
+// isCaseInsensitiveEnvVars is true on platforms where environment variable names are treated case-insensitively.
+var isCaseInsensitiveEnvVars = (runtime.GOOS == "windows")
 
 // ConfigDetails are the details about a group of ConfigFiles
 type ConfigDetails struct {

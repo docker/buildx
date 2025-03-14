@@ -65,7 +65,6 @@ func check(value any, p tree.Path) error {
 
 func checkFileObject(keys ...string) checkerFunc {
 	return func(value any, p tree.Path) error {
-
 		v := value.(map[string]any)
 		count := 0
 		for _, s := range keys {
@@ -100,8 +99,8 @@ func checkPath(value any, p tree.Path) error {
 func checkDeviceRequest(value any, p tree.Path) error {
 	v := value.(map[string]any)
 	_, hasCount := v["count"]
-	_, hasIds := v["device_ids"]
-	if hasCount && hasIds {
+	_, hasIDs := v["device_ids"]
+	if hasCount && hasIDs {
 		return fmt.Errorf(`%s: "count" and "device_ids" attributes are exclusive`, p)
 	}
 	return nil

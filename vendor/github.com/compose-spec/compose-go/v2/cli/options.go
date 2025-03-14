@@ -18,7 +18,6 @@ package cli
 
 import (
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -30,7 +29,6 @@ import (
 
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/dotenv"
-	"github.com/compose-spec/compose-go/v2/errdefs"
 	"github.com/compose-spec/compose-go/v2/loader"
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/compose-spec/compose-go/v2/utils"
@@ -549,14 +547,6 @@ func withListeners(options *ProjectOptions) func(*loader.Options) {
 	return func(opts *loader.Options) {
 		opts.Listeners = append(opts.Listeners, options.Listeners...)
 	}
-}
-
-// getConfigPaths retrieves the config files for project based on project options
-func (o *ProjectOptions) getConfigPaths() ([]string, error) {
-	if len(o.ConfigPaths) != 0 {
-		return absolutePaths(o.ConfigPaths)
-	}
-	return nil, fmt.Errorf("no configuration file provided: %w", errdefs.ErrNotFound)
 }
 
 func findFiles(names []string, pwd string) []string {
