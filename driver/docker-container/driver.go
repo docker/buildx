@@ -1,6 +1,7 @@
 package docker
 
 import (
+	"archive/tar"
 	"bytes"
 	"context"
 	"io"
@@ -29,6 +30,7 @@ import (
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
+	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 )
 
@@ -191,6 +193,9 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			if err := d.copyToContainer(ctx, d.InitConfig.Files); err != nil {
 				return err
 			}
+			if err := d.createCDISpecDirs(ctx, d.InitConfig.Files); err != nil {
+				return err
+			}
 			if err := d.start(ctx); err != nil {
 				return err
 			}
@@ -260,6 +265,47 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 
 	baseDir := path.Dir(confutil.DefaultBuildKitConfigDir)
 	return d.DockerAPI.CopyToContainer(ctx, d.Name, baseDir, srcArchive, container.CopyToContainerOptions{})
+}
+
+// createCDISpecDirs creates CDI spec directories so BuildKit CDI manager can
+// monitor them for new device specs created.
+func (d *Driver) createCDISpecDirs(ctx context.Context, files map[string][]byte) error {
+	// https://github.com/moby/buildkit/blob/36b0458ff396aef565849e8ec112e7b12088d83d/util/appdefaults/appdefaults_unix.go#L20
+	cdiSpecDirs := []string{"/etc/cdi", "/var/run/cdi", "/etc/buildkit/cdi"}
+
+	if dt, ok := files[buildkitdConfigFile]; ok {
+		btoml, err := toml.LoadBytes(dt)
+		if err == nil && btoml != nil {
+			if btoml.Has("cdi") {
+				cdiConf := btoml.Get("cdi").(*toml.Tree)
+				if cdiConf.Has("disabled") && cdiConf.Get("disabled").(bool) {
+					// CDI is disabled, no need to create spec dirs
+					return nil
+				}
+				if cdiConf.Has("specDirs") {
+					cdiSpecDirs = cdiConf.GetArray("specDirs").([]string)
+				}
+			}
+		}
+	}
+	if len(cdiSpecDirs) == 0 {
+		return nil
+	}
+
+	var buf bytes.Buffer
+	tw := tar.NewWriter(&buf)
+	for _, dir := range cdiSpecDirs {
+		if err := tw.WriteHeader(&tar.Header{
+			Name:     dir,
+			Typeflag: tar.TypeDir,
+			Mode:     0755,
+		}); err != nil {
+			return err
+		}
+	}
+	defer tw.Close()
+
+	return d.DockerAPI.CopyToContainer(ctx, d.Name, "/", bytes.NewReader(buf.Bytes()), container.CopyToContainerOptions{})
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
