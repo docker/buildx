@@ -20,6 +20,7 @@ import (
 	"fmt"
 	"sort"
 	"strings"
+	"unicode"
 )
 
 // MappingWithEquals is a mapping type that can be converted from a list of
@@ -94,6 +95,9 @@ func (m *MappingWithEquals) DecodeMapstructure(value interface{}) error {
 		mapping := make(MappingWithEquals, len(v))
 		for _, s := range v {
 			k, e, ok := strings.Cut(fmt.Sprint(s), "=")
+			if unicode.IsSpace(rune(k[len(k)-1])) {
+				return fmt.Errorf("environment variable %s is declared with a trailing space", k)
+			}
 			if !ok {
 				mapping[k] = nil
 			} else {
@@ -157,7 +161,6 @@ func (m Mapping) Values() []string {
 func (m Mapping) ToMappingWithEquals() MappingWithEquals {
 	mapping := MappingWithEquals{}
 	for k, v := range m {
-		v := v
 		mapping[k] = &v
 	}
 	return mapping

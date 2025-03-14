@@ -19,7 +19,8 @@ package loader
 import "github.com/compose-spec/compose-go/v2/tree"
 
 var omitempty = []tree.Path{
-	"services.*.dns"}
+	"services.*.dns",
+}
 
 // OmitEmpty removes empty attributes which are irrelevant when unset
 func OmitEmpty(yaml map[string]any) map[string]any {

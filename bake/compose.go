@@ -214,7 +214,7 @@ func validateComposeFile(dt []byte, fn string) (bool, error) {
 }
 
 func validateCompose(dt []byte, envs map[string]string) error {
-	_, err := loader.Load(composetypes.ConfigDetails{
+	_, err := loader.LoadWithContext(context.Background(), composetypes.ConfigDetails{
 		ConfigFiles: []composetypes.ConfigFile{
 			{
 				Content: dt,

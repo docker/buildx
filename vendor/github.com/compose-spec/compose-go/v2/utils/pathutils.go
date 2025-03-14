@@ -41,7 +41,6 @@ func ResolveSymbolicLink(path string) (string, error) {
 		return path, nil
 	}
 	return strings.Replace(path, part, sym, 1), nil
-
 }
 
 // getSymbolinkLink parses all parts of the path and returns the

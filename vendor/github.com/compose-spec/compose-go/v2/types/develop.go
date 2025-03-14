@@ -37,6 +37,7 @@ type Trigger struct {
 	Action     WatchAction `yaml:"action" json:"action"`
 	Target     string      `yaml:"target,omitempty" json:"target,omitempty"`
 	Exec       ServiceHook `yaml:"exec,omitempty" json:"exec,omitempty"`
+	Include    []string    `yaml:"include,omitempty" json:"include,omitempty"`
 	Ignore     []string    `yaml:"ignore,omitempty" json:"ignore,omitempty"`
 	Extensions Extensions  `yaml:"#extensions,inline,omitempty" json:"-"`
 }

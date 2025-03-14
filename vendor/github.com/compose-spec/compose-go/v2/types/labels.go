@@ -55,7 +55,6 @@ func (l Labels) AsList() []string {
 func (l Labels) ToMappingWithEquals() MappingWithEquals {
 	mapping := MappingWithEquals{}
 	for k, v := range l {
-		v := v
 		mapping[k] = &v
 	}
 	return mapping

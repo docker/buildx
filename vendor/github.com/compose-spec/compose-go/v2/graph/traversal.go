@@ -63,9 +63,9 @@ func newTraversal[S, T any](fn CollectorFn[S, T]) *traversal[S, T] {
 }
 
 // WithMaxConcurrency configure traversal to limit concurrency walking graph nodes
-func WithMaxConcurrency(max int) func(*Options) {
+func WithMaxConcurrency(concurrency int) func(*Options) {
 	return func(o *Options) {
-		o.maxConcurrency = max
+		o.maxConcurrency = concurrency
 	}
 }
 

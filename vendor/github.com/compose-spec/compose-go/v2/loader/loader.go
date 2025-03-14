@@ -257,15 +257,6 @@ func WithProfiles(profiles []string) func(*Options) {
 	}
 }
 
-// ParseYAML reads the bytes from a file, parses the bytes into a mapping
-// structure, and returns it.
-func ParseYAML(source []byte) (map[string]interface{}, error) {
-	r := bytes.NewReader(source)
-	decoder := yaml.NewDecoder(r)
-	m, _, err := parseYAML(decoder)
-	return m, err
-}
-
 // PostProcessor is used to tweak compose model based on metadata extracted during yaml Unmarshal phase
 // that hardly can be implemented using go-yaml and mapstructure
 type PostProcessor interface {
@@ -273,32 +264,6 @@ type PostProcessor interface {
 
 	// Apply changes to compose model based on recorder metadata
 	Apply(interface{}) error
-}
-
-func parseYAML(decoder *yaml.Decoder) (map[string]interface{}, PostProcessor, error) {
-	var cfg interface{}
-	processor := ResetProcessor{target: &cfg}
-
-	if err := decoder.Decode(&processor); err != nil {
-		return nil, nil, err
-	}
-	stringMap, ok := cfg.(map[string]interface{})
-	if ok {
-		converted, err := convertToStringKeysRecursive(stringMap, "")
-		if err != nil {
-			return nil, nil, err
-		}
-		return converted.(map[string]interface{}), &processor, nil
-	}
-	cfgMap, ok := cfg.(map[interface{}]interface{})
-	if !ok {
-		return nil, nil, errors.New("Top-level object must be a mapping")
-	}
-	converted, err := convertToStringKeysRecursive(cfgMap, "")
-	if err != nil {
-		return nil, nil, err
-	}
-	return converted.(map[string]interface{}), &processor, nil
 }
 
 // LoadConfigFiles ingests config files with ResourceLoader and returns config details with paths to local copies
@@ -351,12 +316,6 @@ func LoadConfigFiles(ctx context.Context, configFiles []string, workingDir strin
 		config.WorkingDir = workingDir
 	}
 	return config, nil
-}
-
-// Load reads a ConfigDetails and returns a fully loaded configuration.
-// Deprecated: use LoadWithContext.
-func Load(configDetails types.ConfigDetails, options ...func(*Options)) (*types.Project, error) {
-	return LoadWithContext(context.Background(), configDetails, options...)
 }
 
 // LoadWithContext reads a ConfigDetails and returns a fully loaded configuration as a compose-go Project
@@ -448,7 +407,15 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 	return dict, nil
 }
 
-func loadYamlFile(ctx context.Context, file types.ConfigFile, opts *Options, workingDir string, environment types.Mapping, ct *cycleTracker, dict map[string]interface{}, included []string) (map[string]interface{}, PostProcessor, error) {
+func loadYamlFile(ctx context.Context,
+	file types.ConfigFile,
+	opts *Options,
+	workingDir string,
+	environment types.Mapping,
+	ct *cycleTracker,
+	dict map[string]interface{},
+	included []string,
+) (map[string]interface{}, PostProcessor, error) {
 	ctx = context.WithValue(ctx, consts.ComposeFileKey{}, file.Filename)
 	if file.Content == nil && file.Config == nil {
 		content, err := os.ReadFile(file.Filename)
@@ -565,7 +532,6 @@ func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options,
 			return nil, fmt.Errorf("include cycle detected:\n%s\n include %s", loaded[0], strings.Join(loaded[1:], "\n include "))
 		}
 	}
-	loaded = append(loaded, mainFile)
 
 	dict, err := loadYamlModel(ctx, configDetails, opts, &cycleTracker{}, nil)
 	if err != nil {
@@ -576,7 +542,7 @@ func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options,
 		return nil, errors.New("empty compose file")
 	}
 
-	if opts.projectName == "" {
+	if !opts.SkipValidation && opts.projectName == "" {
 		return nil, errors.New("project name must not be empty")
 	}
 
