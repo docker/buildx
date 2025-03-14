@@ -1605,7 +1605,7 @@ func deriveDeepCopy_31(dst, src *ServiceConfigObjConfig) {
 	if src.Mode == nil {
 		dst.Mode = nil
 	} else {
-		dst.Mode = new(uint32)
+		dst.Mode = new(FileMode)
 		*dst.Mode = *src.Mode
 	}
 	if src.Extensions != nil {
@@ -1812,6 +1812,7 @@ func deriveDeepCopy_38(dst, src *DeviceRequest) {
 // deriveDeepCopy_39 recursively copies the contents of src into dst.
 func deriveDeepCopy_39(dst, src *ServiceNetworkConfig) {
 	dst.Priority = src.Priority
+	dst.GatewayPriority = src.GatewayPriority
 	if src.Aliases == nil {
 		dst.Aliases = nil
 	} else {
@@ -1891,7 +1892,7 @@ func deriveDeepCopy_41(dst, src *ServiceSecretConfig) {
 	if src.Mode == nil {
 		dst.Mode = nil
 	} else {
-		dst.Mode = new(uint32)
+		dst.Mode = new(FileMode)
 		*dst.Mode = *src.Mode
 	}
 	if src.Extensions != nil {
@@ -2024,6 +2025,24 @@ func deriveDeepCopy_46(dst, src *Trigger) {
 		deriveDeepCopy_44(field, &src.Exec)
 		dst.Exec = *field
 	}()
+	if src.Include == nil {
+		dst.Include = nil
+	} else {
+		if dst.Include != nil {
+			if len(src.Include) > len(dst.Include) {
+				if cap(dst.Include) >= len(src.Include) {
+					dst.Include = (dst.Include)[:len(src.Include)]
+				} else {
+					dst.Include = make([]string, len(src.Include))
+				}
+			} else if len(src.Include) < len(dst.Include) {
+				dst.Include = (dst.Include)[:len(src.Include)]
+			}
+		} else {
+			dst.Include = make([]string, len(src.Include))
+		}
+		copy(dst.Include, src.Include)
+	}
 	if src.Ignore == nil {
 		dst.Ignore = nil
 	} else {

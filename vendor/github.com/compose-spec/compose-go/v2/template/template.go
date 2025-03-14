@@ -26,25 +26,28 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var delimiter = "\\$"
-var substitutionNamed = "[_a-z][_a-z0-9]*"
-var substitutionBraced = "[_a-z][_a-z0-9]*(?::?[-+?](.*))?"
-
-var groupEscaped = "escaped"
-var groupNamed = "named"
-var groupBraced = "braced"
-var groupInvalid = "invalid"
-
-var patternString = fmt.Sprintf(
-	"%s(?i:(?P<%s>%s)|(?P<%s>%s)|{(?:(?P<%s>%s)}|(?P<%s>)))",
-	delimiter,
-	groupEscaped, delimiter,
-	groupNamed, substitutionNamed,
-	groupBraced, substitutionBraced,
-	groupInvalid,
+const (
+	delimiter          = "\\$"
+	substitutionNamed  = "[_a-z][_a-z0-9]*"
+	substitutionBraced = "[_a-z][_a-z0-9]*(?::?[-+?](.*))?"
+	groupEscaped       = "escaped"
+	groupNamed         = "named"
+	groupBraced        = "braced"
+	groupInvalid       = "invalid"
 )
 
-var DefaultPattern = regexp.MustCompile(patternString)
+var (
+	patternString = fmt.Sprintf(
+		"%s(?i:(?P<%s>%s)|(?P<%s>%s)|{(?:(?P<%s>%s)}|(?P<%s>)))",
+		delimiter,
+		groupEscaped, delimiter,
+		groupNamed, substitutionNamed,
+		groupBraced, substitutionBraced,
+		groupInvalid,
+	)
+
+	DefaultPattern = regexp.MustCompile(patternString)
+)
 
 // InvalidTemplateError is returned when a variable template is not in a valid
 // format

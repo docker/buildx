@@ -21,6 +21,8 @@ import (
 	"fmt"
 	"strings"
 	"time"
+
+	"github.com/xhit/go-str2duration/v2"
 )
 
 // Duration is a thin wrapper around time.Duration with improved JSON marshalling
@@ -31,7 +33,7 @@ func (d Duration) String() string {
 }
 
 func (d *Duration) DecodeMapstructure(value interface{}) error {
-	v, err := time.ParseDuration(fmt.Sprint(value))
+	v, err := str2duration.ParseDuration(fmt.Sprint(value))
 	if err != nil {
 		return err
 	}

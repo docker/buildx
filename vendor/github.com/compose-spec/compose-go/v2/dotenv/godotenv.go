@@ -30,7 +30,7 @@ var startsWithDigitRegex = regexp.MustCompile(`^\s*\d.*`) // Keys starting with 
 // LookupFn represents a lookup function to resolve variables from
 type LookupFn func(string) (string, bool)
 
-var noLookupFn = func(s string) (string, bool) {
+var noLookupFn = func(_ string) (string, bool) {
 	return "", false
 }
 
