@@ -286,7 +286,11 @@ func (o *buildOptionsHash) String() string {
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
 	mp := dockerCli.MeterProvider()
 
-	ctx, end, err := tracing.TraceCurrentCommand(ctx, "build")
+	ctx, end, err := tracing.TraceCurrentCommand(ctx, []string{"build", options.contextPath},
+		attribute.String("builder", options.builder),
+		attribute.String("context", options.contextPath),
+		attribute.String("dockerfile", options.dockerfileName),
+	)
 	if err != nil {
 		return err
 	}

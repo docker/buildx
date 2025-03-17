@@ -2,7 +2,6 @@ package tracing
 
 import (
 	"context"
-	"os"
 	"strings"
 
 	"github.com/moby/buildkit/util/tracing/delegated"
@@ -13,7 +12,7 @@ import (
 	"go.opentelemetry.io/otel/trace"
 )
 
-func TraceCurrentCommand(ctx context.Context, name string) (context.Context, func(error), error) {
+func TraceCurrentCommand(ctx context.Context, args []string, attrs ...attribute.KeyValue) (context.Context, func(error), error) {
 	opts := []sdktrace.TracerProviderOption{
 		sdktrace.WithResource(detect.Resource()),
 		sdktrace.WithBatcher(delegated.DefaultExporter),
@@ -25,8 +24,8 @@ func TraceCurrentCommand(ctx context.Context, name string) (context.Context, fun
 	}
 
 	tp := sdktrace.NewTracerProvider(opts...)
-	ctx, span := tp.Tracer("").Start(ctx, name, trace.WithAttributes(
-		attribute.String("command", strings.Join(os.Args, " ")),
+	ctx, span := tp.Tracer("").Start(ctx, strings.Join(args, " "), trace.WithAttributes(
+		attrs...,
 	))
 
 	return ctx, func(err error) {
