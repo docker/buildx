@@ -68,10 +68,8 @@ var (
 
 	testStateGroupID = "kvqs0sgly2rmitz84r25u9qd0"
 	testStateGroup   = StateGroup{
-		Definition: []byte(`{"group":{"default":{"targets":["pre-checkin"]},"pre-checkin":{"targets":["vendor-update","format","build"]}},"target":{"build":{"context":".","dockerfile":"dev.Dockerfile","target":"build-update","platforms":["linux/amd64"],"output":["."]},"format":{"context":".","dockerfile":"dev.Dockerfile","target":"format-update","platforms":["linux/amd64"],"output":["."]},"vendor-update":{"context":".","dockerfile":"dev.Dockerfile","target":"vendor-update","platforms":["linux/amd64"],"output":["."]}}}`),
-		Targets:    []string{"pre-checkin"},
-		Inputs:     []string{"*.platform=linux/amd64"},
-		Refs:       []string{"builder/builder0/hx2qf1w11qvz1x3k471c5i8xw", "builder/builder0/968zj0g03jmlx0s8qslnvh6rl", "builder/builder0/naf44f9i1710lf7y12lv5hb1z"},
+		Targets: []string{"pre-checkin"},
+		Refs:    []string{"builder/builder0/hx2qf1w11qvz1x3k471c5i8xw", "builder/builder0/968zj0g03jmlx0s8qslnvh6rl", "builder/builder0/naf44f9i1710lf7y12lv5hb1z"},
 	}
 
 	testStateGroupRef1ID = "hx2qf1w11qvz1x3k471c5i8xw"
