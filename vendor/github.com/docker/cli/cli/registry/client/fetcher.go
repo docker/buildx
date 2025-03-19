@@ -220,10 +220,7 @@ func (c *client) iterateEndpoints(ctx context.Context, namedRef reference.Named,
 		return err
 	}
 
-	repoInfo, err := registry.ParseRepositoryInfo(namedRef)
-	if err != nil {
-		return err
-	}
+	repoInfo, _ := registry.ParseRepositoryInfo(namedRef)
 
 	confirmedTLSRegistries := make(map[string]bool)
 	for _, endpoint := range endpoints {
@@ -241,7 +238,8 @@ func (c *client) iterateEndpoints(ctx context.Context, namedRef reference.Named,
 		repo, err := c.getRepositoryForReference(ctx, namedRef, repoEndpoint)
 		if err != nil {
 			logrus.Debugf("error %s with repo endpoint %+v", err, repoEndpoint)
-			if _, ok := err.(ErrHTTPProto); ok {
+			var protoErr httpProtoError
+			if errors.As(err, &protoErr) {
 				continue
 			}
 			return err
@@ -272,11 +270,6 @@ func (c *client) iterateEndpoints(ctx context.Context, namedRef reference.Named,
 
 // allEndpoints returns a list of endpoints ordered by priority (v2, http).
 func allEndpoints(namedRef reference.Named, insecure bool) ([]registry.APIEndpoint, error) {
-	repoInfo, err := registry.ParseRepositoryInfo(namedRef)
-	if err != nil {
-		return nil, err
-	}
-
 	var serviceOpts registry.ServiceOptions
 	if insecure {
 		logrus.Debugf("allowing insecure registry for: %s", reference.Domain(namedRef))
@@ -286,6 +279,7 @@ func allEndpoints(namedRef reference.Named, insecure bool) ([]registry.APIEndpoi
 	if err != nil {
 		return []registry.APIEndpoint{}, err
 	}
+	repoInfo, _ := registry.ParseRepositoryInfo(namedRef)
 	endpoints, err := registryService.LookupPullEndpoints(reference.Domain(repoInfo.Name))
 	logrus.Debugf("endpoints for %s: %v", namedRef, endpoints)
 	return endpoints, err
