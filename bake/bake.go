@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding"
 	"io"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -1104,9 +1105,7 @@ func (t *Target) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDe
 				e2 := ectx.NewChild()
 				e2.Variables = make(map[string]cty.Value)
 				if e != ectx {
-					for k, v := range e.Variables {
-						e2.Variables[k] = v
-					}
+					maps.Copy(e2.Variables, e.Variables)
 				}
 				e2.Variables[k] = v
 				ectxs2 = append(ectxs2, e2)

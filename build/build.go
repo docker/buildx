@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"slices"
 	"strconv"
@@ -431,9 +432,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						FrontendInputs: frontendInputs,
 						FrontendOpt:    make(map[string]string),
 					}
-					for k, v := range so.FrontendAttrs {
-						req.FrontendOpt[k] = v
-					}
+					maps.Copy(req.FrontendOpt, so.FrontendAttrs)
 					so.Frontend = ""
 					so.FrontendInputs = nil
 

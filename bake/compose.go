@@ -3,6 +3,7 @@ package bake
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -91,9 +92,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			var additionalContexts map[string]string
 			if s.Build.AdditionalContexts != nil {
 				additionalContexts = map[string]string{}
-				for k, v := range s.Build.AdditionalContexts {
-					additionalContexts[k] = v
-				}
+				maps.Copy(additionalContexts, s.Build.AdditionalContexts)
 			}
 
 			var shmSize *string

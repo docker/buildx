@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"maps"
 	"os"
 	"path"
 	"path/filepath"
@@ -127,9 +128,7 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 		if so.FrontendAttrs == nil {
 			so.FrontendAttrs = make(map[string]string)
 		}
-		for k, v := range res {
-			so.FrontendAttrs[k] = v
-		}
+		maps.Copy(so.FrontendAttrs, res)
 
 		if !setGitInfo || root == "" {
 			return

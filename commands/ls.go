@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"sort"
 	"strings"
 	"time"
@@ -409,9 +410,7 @@ func truncPlatforms(pfs []string, max int) truncatedPlatforms {
 			left[ppf] = append(left[ppf], pf)
 		}
 	}
-	for k, v := range left {
-		res[k] = v
-	}
+	maps.Copy(res, left)
 	return truncatedPlatforms{
 		res:   res,
 		input: pfs,

@@ -1,8 +1,6 @@
 module github.com/docker/buildx
 
-go 1.23
-
-toolchain go1.23.7
+go 1.23.0
 
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
