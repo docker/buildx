@@ -155,7 +155,7 @@ github.com/containerd/console
 # github.com/containerd/containerd/api v1.8.0
 ## explicit; go 1.21
 github.com/containerd/containerd/api/services/content/v1
-# github.com/containerd/containerd/v2 v2.0.3
+# github.com/containerd/containerd/v2 v2.0.4
 ## explicit; go 1.22.0
 github.com/containerd/containerd/v2/core/content
 github.com/containerd/containerd/v2/core/content/proxy
@@ -229,11 +229,10 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v28.0.1+incompatible
+# github.com/docker/cli v28.0.2+incompatible
 ## explicit
 github.com/docker/cli/cli
-github.com/docker/cli/cli-plugins/hooks
-github.com/docker/cli/cli-plugins/manager
+github.com/docker/cli/cli-plugins/metadata
 github.com/docker/cli/cli-plugins/plugin
 github.com/docker/cli/cli-plugins/socket
 github.com/docker/cli/cli/command
@@ -252,6 +251,7 @@ github.com/docker/cli/cli/context/store
 github.com/docker/cli/cli/debug
 github.com/docker/cli/cli/flags
 github.com/docker/cli/cli/hints
+github.com/docker/cli/cli/internal/jsonstream
 github.com/docker/cli/cli/manifest/store
 github.com/docker/cli/cli/manifest/types
 github.com/docker/cli/cli/registry/client
@@ -260,6 +260,7 @@ github.com/docker/cli/cli/trust
 github.com/docker/cli/cli/version
 github.com/docker/cli/internal/tui
 github.com/docker/cli/opts
+github.com/docker/cli/opts/swarmopts
 github.com/docker/cli/pkg/kvfile
 github.com/docker/cli/templates
 # github.com/docker/cli-docs-tool v0.9.0
@@ -283,7 +284,7 @@ github.com/docker/distribution/registry/client/transport
 github.com/docker/distribution/registry/storage/cache
 github.com/docker/distribution/registry/storage/cache/memory
 github.com/docker/distribution/uuid
-# github.com/docker/docker v28.0.1+incompatible
+# github.com/docker/docker v28.0.2+incompatible
 ## explicit
 github.com/docker/docker/api
 github.com/docker/docker/api/types

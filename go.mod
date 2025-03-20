@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
 	github.com/compose-spec/compose-go/v2 v2.4.8
 	github.com/containerd/console v1.0.4
-	github.com/containerd/containerd/v2 v2.0.3
+	github.com/containerd/containerd/v2 v2.0.4
 	github.com/containerd/continuity v0.4.5
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/log v0.1.0
@@ -17,9 +17,9 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v28.0.1+incompatible
+	github.com/docker/cli v28.0.2+incompatible
 	github.com/docker/cli-docs-tool v0.9.0
-	github.com/docker/docker v28.0.1+incompatible
+	github.com/docker/docker v28.0.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510

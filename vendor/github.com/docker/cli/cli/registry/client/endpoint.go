@@ -6,7 +6,6 @@ import (
 	"time"
 
 	"github.com/distribution/reference"
-	"github.com/docker/cli/cli/trust"
 	"github.com/docker/distribution/registry/client/auth"
 	"github.com/docker/distribution/registry/client/transport"
 	registrytypes "github.com/docker/docker/api/types/registry"
@@ -31,10 +30,7 @@ func (r repositoryEndpoint) BaseURL() string {
 }
 
 func newDefaultRepositoryEndpoint(ref reference.Named, insecure bool) (repositoryEndpoint, error) {
-	repoInfo, err := registry.ParseRepositoryInfo(ref)
-	if err != nil {
-		return repositoryEndpoint{}, err
-	}
+	repoInfo, _ := registry.ParseRepositoryInfo(ref)
 	endpoint, err := getDefaultEndpointFromRepoInfo(repoInfo)
 	if err != nil {
 		return repositoryEndpoint{}, err
@@ -94,7 +90,7 @@ func getHTTPTransport(authConfig registrytypes.AuthConfig, endpoint registry.API
 		modifiers = append(modifiers, auth.NewAuthorizer(challengeManager, passThruTokenHandler))
 	} else {
 		if len(actions) == 0 {
-			actions = trust.ActionsPullOnly
+			actions = []string{"pull"}
 		}
 		creds := registry.NewStaticCredentialStore(&authConfig)
 		tokenHandler := auth.NewTokenHandler(authTransport, creds, repoName, actions...)
@@ -104,14 +100,11 @@ func getHTTPTransport(authConfig registrytypes.AuthConfig, endpoint registry.API
 	return transport.NewTransport(base, modifiers...), nil
 }
 
-// RepoNameForReference returns the repository name from a reference
+// RepoNameForReference returns the repository name from a reference.
+//
+// Deprecated: this function is no longer used and will be removed in the next release.
 func RepoNameForReference(ref reference.Named) (string, error) {
-	// insecure is fine since this only returns the name
-	repo, err := newDefaultRepositoryEndpoint(ref, false)
-	if err != nil {
-		return "", err
-	}
-	return repo.Name(), nil
+	return reference.Path(reference.TrimNamed(ref)), nil
 }
 
 type existingTokenHandler struct {

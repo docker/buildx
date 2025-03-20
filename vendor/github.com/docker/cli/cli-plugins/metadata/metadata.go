@@ -1,4 +1,4 @@
-package manager
+package metadata
 
 const (
 	// NamePrefix is the prefix required on all plugin binary names
@@ -13,6 +13,12 @@ const (
 	// which must be implemented by plugins declaring support
 	// for hooks in their metadata.
 	HookSubcommandName = "docker-cli-plugin-hooks"
+
+	// ReexecEnvvar is the name of an ennvar which is set to the command
+	// used to originally invoke the docker CLI when executing a
+	// plugin. Assuming $PATH and $CWD remain unchanged this should allow
+	// the plugin to re-execute the original CLI.
+	ReexecEnvvar = "DOCKER_CLI_PLUGIN_ORIGINAL_CLI_COMMAND"
 )
 
 // Metadata provided by the plugin.

@@ -3,15 +3,12 @@ package cli
 import (
 	"fmt"
 	"os"
-	"path/filepath"
 	"sort"
 	"strings"
 
-	pluginmanager "github.com/docker/cli/cli-plugins/manager"
+	"github.com/docker/cli/cli-plugins/metadata"
 	"github.com/docker/cli/cli/command"
 	cliflags "github.com/docker/cli/cli/flags"
-	"github.com/docker/docker/pkg/homedir"
-	"github.com/docker/docker/registry"
 	"github.com/fvbommel/sortorder"
 	"github.com/moby/term"
 	"github.com/morikuni/aec"
@@ -60,13 +57,6 @@ func setupCommonRootCommand(rootCmd *cobra.Command) (*cliflags.ClientOptions, *c
 	rootCmd.Annotations = map[string]string{
 		"additionalHelp":      "For more help on how to use Docker, head to https://docs.docker.com/go/guides/",
 		"docs.code-delimiter": `"`, // https://github.com/docker/cli-docs-tool/blob/77abede22166eaea4af7335096bdcedd043f5b19/annotation/annotation.go#L20-L22
-	}
-
-	// Configure registry.CertsDir() when running in rootless-mode
-	if os.Getenv("ROOTLESSKIT_STATE_DIR") != "" {
-		if configHome, err := homedir.GetConfigHome(); err == nil {
-			registry.SetCertsDir(filepath.Join(configHome, "docker/certs.d"))
-		}
 	}
 
 	return opts, helpCommand
@@ -252,7 +242,7 @@ func hasAdditionalHelp(cmd *cobra.Command) bool {
 }
 
 func isPlugin(cmd *cobra.Command) bool {
-	return pluginmanager.IsPluginCommand(cmd)
+	return cmd.Annotations[metadata.CommandAnnotationPlugin] == "true"
 }
 
 func hasAliases(cmd *cobra.Command) bool {
@@ -356,9 +346,9 @@ func decoratedName(cmd *cobra.Command) string {
 }
 
 func vendorAndVersion(cmd *cobra.Command) string {
-	if vendor, ok := cmd.Annotations[pluginmanager.CommandAnnotationPluginVendor]; ok && isPlugin(cmd) {
+	if vendor, ok := cmd.Annotations[metadata.CommandAnnotationPluginVendor]; ok && isPlugin(cmd) {
 		version := ""
-		if v, ok := cmd.Annotations[pluginmanager.CommandAnnotationPluginVersion]; ok && v != "" {
+		if v, ok := cmd.Annotations[metadata.CommandAnnotationPluginVersion]; ok && v != "" {
 			version = ", " + v
 		}
 		return fmt.Sprintf("(%s%s)", vendor, version)
@@ -417,7 +407,7 @@ func invalidPlugins(cmd *cobra.Command) []*cobra.Command {
 }
 
 func invalidPluginReason(cmd *cobra.Command) string {
-	return cmd.Annotations[pluginmanager.CommandAnnotationPluginInvalid]
+	return cmd.Annotations[metadata.CommandAnnotationPluginInvalid]
 }
 
 const usageTemplate = `Usage:

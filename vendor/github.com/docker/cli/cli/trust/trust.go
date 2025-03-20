@@ -40,9 +40,10 @@ var (
 	ActionsPullOnly = []string{"pull"}
 	// ActionsPushAndPull defines the actions for read-write interactions with a Notary Repository
 	ActionsPushAndPull = []string{"pull", "push"}
-	// NotaryServer is the endpoint serving the Notary trust server
-	NotaryServer = "https://notary.docker.io"
 )
+
+// NotaryServer is the endpoint serving the Notary trust server
+const NotaryServer = "https://notary.docker.io"
 
 // GetTrustDirectory returns the base trust directory name
 func GetTrustDirectory() string {
@@ -238,6 +239,20 @@ func NotaryError(repoName string, err error) error {
 	return err
 }
 
+// AddToAllSignableRoles attempts to add the image target to all the top level
+// delegation roles we can (based on whether we have the signing key and whether
+// the role's path allows us to).
+//
+// If there are no delegation roles, we add to the targets role.
+func AddToAllSignableRoles(repo client.Repository, target *client.Target) error {
+	signableRoles, err := GetSignableRoles(repo, target)
+	if err != nil {
+		return err
+	}
+
+	return repo.AddTarget(target, signableRoles...)
+}
+
 // GetSignableRoles returns a list of roles for which we have valid signing
 // keys, given a notary repository and a target
 func GetSignableRoles(repo client.Repository, target *client.Target) ([]data.RoleName, error) {
@@ -307,11 +322,7 @@ func GetImageReferencesAndAuth(ctx context.Context,
 	}
 
 	// Resolve the Repository name from fqn to RepositoryInfo
-	repoInfo, err := registry.ParseRepositoryInfo(ref)
-	if err != nil {
-		return ImageRefAndAuth{}, err
-	}
-
+	repoInfo, _ := registry.ParseRepositoryInfo(ref)
 	authConfig := authResolver(ctx, repoInfo.Index)
 	return ImageRefAndAuth{
 		original:   imgName,
