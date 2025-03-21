@@ -2,6 +2,7 @@ package store
 
 import (
 	"fmt"
+	"maps"
 	"slices"
 	"time"
 
@@ -93,9 +94,7 @@ func (ng *NodeGroup) Update(name, endpoint string, platforms []string, endpoints
 			needsRestart = true
 		}
 		if buildkitdConfigFile != "" {
-			for k, v := range files {
-				n.Files[k] = v
-			}
+			maps.Copy(n.Files, files)
 			needsRestart = true
 		}
 		if needsRestart {
@@ -147,9 +146,7 @@ func (n *Node) Copy() *Node {
 	buildkitdFlags := []string{}
 	copy(buildkitdFlags, n.BuildkitdFlags)
 	driverOpts := map[string]string{}
-	for k, v := range n.DriverOpts {
-		driverOpts[k] = v
-	}
+	maps.Copy(driverOpts, n.DriverOpts)
 	files := map[string][]byte{}
 	for k, v := range n.Files {
 		vv := []byte{}

@@ -107,9 +107,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 			if old.Annotations == nil {
 				old.Annotations = map[string]string{}
 			}
-			for k, v := range d.Annotations {
-				old.Annotations[k] = v
-			}
+			maps.Copy(old.Annotations, d.Annotations)
 			newDescs[idx] = old
 		} else {
 			m[d.Digest] = len(newDescs)

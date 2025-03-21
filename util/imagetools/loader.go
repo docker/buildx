@@ -6,6 +6,7 @@ import (
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"maps"
 	"regexp"
 	"sort"
 	"strings"
@@ -126,13 +127,9 @@ func (l *loader) Load(ctx context.Context, ref string) (*result, error) {
 		}
 
 		var a asset
-		annotations := make(map[string]string, len(mfst.manifest.Annotations)+len(mfst.desc.Annotations))
-		for k, v := range mfst.desc.Annotations {
-			annotations[k] = v
-		}
-		for k, v := range mfst.manifest.Annotations {
-			annotations[k] = v
-		}
+		annotations := map[string]string{}
+		maps.Copy(annotations, mfst.desc.Annotations)
+		maps.Copy(annotations, mfst.manifest.Annotations)
 
 		if err := l.scanConfig(ctx, fetcher, mfst.manifest.Config, &a); err != nil {
 			return nil, err

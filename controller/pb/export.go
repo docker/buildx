@@ -2,6 +2,7 @@ package pb
 
 import (
 	"io"
+	"maps"
 	"os"
 	"strconv"
 
@@ -26,9 +27,7 @@ func CreateExports(entries []*ExportEntry) ([]client.ExportEntry, []string, erro
 			Type:  entry.Type,
 			Attrs: map[string]string{},
 		}
-		for k, v := range entry.Attrs {
-			out.Attrs[k] = v
-		}
+		maps.Copy(out.Attrs, entry.Attrs)
 
 		supportFile := false
 		supportDir := false

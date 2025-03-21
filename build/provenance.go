@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"io"
+	"maps"
 	"strings"
 	"sync"
 
@@ -40,9 +41,7 @@ func setRecordProvenance(ctx context.Context, c *client.Client, sr *client.Solve
 		if err != nil {
 			return err
 		}
-		for k, v := range res {
-			sr.ExporterResponse[k] = v
-		}
+		maps.Copy(sr.ExporterResponse, res)
 		return nil
 	})
 }

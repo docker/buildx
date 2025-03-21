@@ -28,8 +28,8 @@ func deviceRequestDefaults(data any, p tree.Path, _ bool) (any, error) {
 		return data, fmt.Errorf("%s: invalid type %T for device request", p, v)
 	}
 	_, hasCount := v["count"]
-	_, hasIds := v["device_ids"]
-	if !hasCount && !hasIds {
+	_, hasIDs := v["device_ids"]
+	if !hasCount && !hasIDs {
 		v["count"] = "all"
 	}
 	return v, nil

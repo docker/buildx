@@ -17,9 +17,7 @@
 package loader
 
 import (
-	"os"
 	"path/filepath"
-	"strings"
 
 	"github.com/compose-spec/compose-go/v2/types"
 )
@@ -40,17 +38,6 @@ func ResolveRelativePaths(project *types.Project) error {
 	return nil
 }
 
-func absPath(workingDir string, filePath string) string {
-	if strings.HasPrefix(filePath, "~") {
-		home, _ := os.UserHomeDir()
-		return filepath.Join(home, filePath[1:])
-	}
-	if filepath.IsAbs(filePath) {
-		return filePath
-	}
-	return filepath.Join(workingDir, filePath)
-}
-
 func absComposeFiles(composeFiles []string) ([]string, error) {
 	for i, composeFile := range composeFiles {
 		absComposefile, err := filepath.Abs(composeFile)
@@ -60,15 +47,4 @@ func absComposeFiles(composeFiles []string) ([]string, error) {
 		composeFiles[i] = absComposefile
 	}
 	return composeFiles, nil
-}
-
-func resolvePaths(basePath string, in types.StringList) types.StringList {
-	if in == nil {
-		return nil
-	}
-	ret := make(types.StringList, len(in))
-	for i := range in {
-		ret[i] = absPath(basePath, in[i])
-	}
-	return ret
 }
