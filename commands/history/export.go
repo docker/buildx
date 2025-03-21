@@ -14,14 +14,16 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop/bundle"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
 type exportOptions struct {
 	builder string
-	ref     string
+	refs    []string
 	output  string
+	all     bool
 }
 
 func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) error {
@@ -40,40 +42,60 @@ func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) e
 		}
 	}
 
-	recs, err := queryRecords(ctx, opts.ref, nodes, &queryOptions{
-		CompletedOnly: true,
-	})
-	if err != nil {
-		return err
+	if len(opts.refs) == 0 {
+		opts.refs = []string{""}
 	}
 
-	if len(recs) == 0 {
-		if opts.ref == "" {
-			return errors.New("no records found")
-		}
-		return errors.Errorf("no record found for ref %q", opts.ref)
-	}
-
-	if opts.ref == "" {
-		slices.SortFunc(recs, func(a, b historyRecord) int {
-			return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
+	var res []historyRecord
+	for _, ref := range opts.refs {
+		recs, err := queryRecords(ctx, ref, nodes, &queryOptions{
+			CompletedOnly: true,
 		})
-	}
+		if err != nil {
+			return err
+		}
 
-	recs = recs[:1]
+		if len(recs) == 0 {
+			if ref == "" {
+				return errors.New("no records found")
+			}
+			return errors.Errorf("no record found for ref %q", ref)
+		}
+
+		if ref == "" {
+			slices.SortFunc(recs, func(a, b historyRecord) int {
+				return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
+			})
+		}
+
+		if opts.all {
+			res = append(res, recs...)
+			break
+		} else {
+			res = append(res, recs[0])
+		}
+	}
 
 	ls, err := localstate.New(confutil.NewConfig(dockerCli))
 	if err != nil {
 		return err
 	}
 
-	c, err := recs[0].node.Driver.Client(ctx)
-	if err != nil {
-		return err
+	visited := map[*builder.Node]struct{}{}
+	var clients []*client.Client
+	for _, rec := range res {
+		if _, ok := visited[rec.node]; ok {
+			continue
+		}
+		c, err := rec.node.Driver.Client(ctx)
+		if err != nil {
+			return err
+		}
+		clients = append(clients, c)
 	}
 
-	toExport := make([]*bundle.Record, 0, len(recs))
-	for _, rec := range recs {
+	toExport := make([]*bundle.Record, 0, len(res))
+	for _, rec := range res {
 		var defaultPlatform string
 		if p := rec.node.Platforms; len(p) > 0 {
 			defaultPlatform = platforms.FormatAll(platforms.Normalize(p[0]))
@@ -110,7 +132,7 @@ func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) e
 		}
 	}
 
-	return bundle.Export(ctx, c, w, toExport)
+	return bundle.Export(ctx, clients, w, toExport)
 }
 
 func exportCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
@@ -119,11 +141,11 @@ func exportCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "export [OPTIONS] [REF]",
 		Short: "Export a build into Docker Desktop bundle",
-		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if len(args) > 0 {
-				options.ref = args[0]
+			if options.all && len(args) > 0 {
+				return errors.New("cannot specify refs when using --all")
 			}
+			options.refs = args
 			options.builder = *rootOpts.Builder
 			return runExport(cmd.Context(), dockerCli, options)
 		},
@@ -132,6 +154,7 @@ func exportCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVarP(&options.output, "output", "o", "", "Output file path")
+	flags.BoolVar(&options.all, "all", false, "Export all records for the builder")
 
 	return cmd
 }

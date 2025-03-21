@@ -7,6 +7,7 @@ Export a build into Docker Desktop bundle
 
 | Name             | Type     | Default | Description                              |
 |:-----------------|:---------|:--------|:-----------------------------------------|
+| `--all`          | `bool`   |         | Export all records for the builder       |
 | `--builder`      | `string` |         | Override the configured builder instance |
 | `-D`, `--debug`  | `bool`   |         | Enable debug logging                     |
 | `-o`, `--output` | `string` |         | Output file path                         |

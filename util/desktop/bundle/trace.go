@@ -7,6 +7,7 @@ import (
 	"io"
 	"regexp"
 	"strings"
+	"sync"
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/docker/buildx/util/otelutil"
@@ -17,15 +18,22 @@ import (
 )
 
 var (
-	sensitiveKeys = []string{"ghtoken", "token", "access_key_id", "secret_access_key", "session_token"}
-	reAttrs       = regexp.MustCompile(`(?i)(` + strings.Join(sensitiveKeys, "|") + `)=[^ ,]+`)
-	reGhs         = regexp.MustCompile(`ghs_[A-Za-z0-9]{36}`)
+	reOnce                  sync.Once
+	reAttrs, reGhs, reGhpat *regexp.Regexp
 )
 
 func sanitizeCommand(value string) string {
+	reOnce.Do(func() {
+		sensitiveKeys := []string{"ghtoken", "token", "access_key_id", "secret_access_key", "session_token"}
+		reAttrs = regexp.MustCompile(`(?i)(` + strings.Join(sensitiveKeys, "|") + `)=[^ ,]+`)
+		reGhs = regexp.MustCompile(`(?:ghu|ghs)_[A-Za-z0-9]{36}`)
+		reGhpat = regexp.MustCompile(`github_pat_\w{82}`)
+	})
+
 	value = reAttrs.ReplaceAllString(value, "${1}=xxxxx")
-	// reGhs is just double proofing. Not really needed.
+	// reGhs/reGhpat is just double proofing. Not really needed.
 	value = reGhs.ReplaceAllString(value, "xxxxx")
+	value = reGhpat.ReplaceAllString(value, "xxxxx")
 	return value
 }
 

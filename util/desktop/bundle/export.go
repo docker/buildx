@@ -32,8 +32,23 @@ type Record struct {
 	StateGroup      *localstate.StateGroup `json:"stateGroup,omitempty"`
 }
 
-func Export(ctx context.Context, c *client.Client, w io.Writer, records []*Record) error {
-	store := proxy.NewContentStore(c.ContentClient())
+func Export(ctx context.Context, c []*client.Client, w io.Writer, records []*Record) error {
+	var store content.Store
+	for _, c := range c {
+		s := proxy.NewContentStore(c.ContentClient())
+		if store == nil {
+			store = s
+			break
+		}
+		store = &nsFallbackStore{
+			main: store,
+			fb:   s,
+		}
+	}
+	if store == nil {
+		return errors.New("no buildkit client found")
+	}
+
 	mp := contentutil.NewMultiProvider(store)
 
 	desc, err := export(ctx, mp, records)
