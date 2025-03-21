@@ -2,6 +2,9 @@ module github.com/docker/buildx
 
 go 1.23.0
 
+// FIXME(thaJeztah): testing simplify_auth branch from https://github.com/docker/cli/pull/5925
+replace github.com/docker/cli => github.com/thaJeztah/cli v0.0.0-20250321151021-64e04a345e1c
+
 require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/go-winio v0.6.2
