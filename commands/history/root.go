@@ -26,6 +26,7 @@ func RootCmd(rootcmd *cobra.Command, dockerCli command.Cli, opts RootOptions) *c
 		openCmd(dockerCli, opts),
 		traceCmd(dockerCli, opts),
 		importCmd(dockerCli, opts),
+		exportCmd(dockerCli, opts),
 	)
 
 	return cmd
