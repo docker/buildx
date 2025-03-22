@@ -221,7 +221,7 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v28.0.3-0.20250321083123-255a5f630ea7+incompatible => github.com/thaJeztah/cli v0.0.0-20250321151021-64e04a345e1c
+# github.com/docker/cli v28.0.3-0.20250321083123-255a5f630ea7+incompatible => github.com/thaJeztah/cli v0.0.0-20250322150532-7278e1563fbe
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/metadata
@@ -245,6 +245,7 @@ github.com/docker/cli/cli/flags
 github.com/docker/cli/cli/hints
 github.com/docker/cli/cli/streams
 github.com/docker/cli/cli/version
+github.com/docker/cli/internal/prompt
 github.com/docker/cli/internal/tui
 github.com/docker/cli/opts
 github.com/docker/cli/pkg/kvfile
@@ -1310,4 +1311,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
-# github.com/docker/cli => github.com/thaJeztah/cli v0.0.0-20250321151021-64e04a345e1c
+# github.com/docker/cli => github.com/thaJeztah/cli v0.0.0-20250322150532-7278e1563fbe
