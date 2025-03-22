@@ -9,7 +9,6 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context"
 	"github.com/docker/cli/cli/context/store"
-	"github.com/docker/docker/pkg/homedir"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
@@ -99,7 +98,8 @@ func (c *Endpoint) KubernetesConfig() clientcmd.ClientConfig {
 func (c *EndpointMeta) ResolveDefault() (any, *store.EndpointTLSData, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
-		kubeconfig = filepath.Join(homedir.Get(), ".kube/config")
+		home, _ := os.UserHomeDir()
+		kubeconfig = filepath.Join(home, ".kube/config")
 	}
 	kubeEP, err := FromKubeConfig(kubeconfig, "", "")
 	if err != nil {
@@ -156,7 +156,8 @@ func NewKubernetesConfig(configPath string) clientcmd.ClientConfig {
 		if config := os.Getenv("KUBECONFIG"); config != "" {
 			kubeConfig = config
 		} else {
-			kubeConfig = filepath.Join(homedir.Get(), ".kube/config")
+			home, _ := os.UserHomeDir()
+			kubeConfig = filepath.Join(home, ".kube/config")
 		}
 	}
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
