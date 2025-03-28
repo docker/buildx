@@ -7,6 +7,7 @@ Commands to work on build records
 
 | Name                                   | Description                                    |
 |:---------------------------------------|:-----------------------------------------------|
+| [`export`](buildx_history_export.md)   | Export a build into Docker Desktop bundle      |
 | [`import`](buildx_history_import.md)   | Import a build into Docker Desktop             |
 | [`inspect`](buildx_history_inspect.md) | Inspect a build                                |
 | [`logs`](buildx_history_logs.md)       | Print the logs of a build                      |
