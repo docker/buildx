@@ -798,6 +798,37 @@ services:
 	})
 }
 
+func TestServiceContext(t *testing.T) {
+	dt := []byte(`
+services:
+  base:
+    build:
+      dockerfile: baseapp.Dockerfile
+    command: ./entrypoint.sh
+  webapp:
+    build:
+      context: ./dir
+      additional_contexts:
+        base: service:base
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	sort.Strings(c.Groups[0].Targets)
+	require.Equal(t, []string{"base", "webapp"}, c.Groups[0].Targets)
+
+	require.Equal(t, 2, len(c.Targets))
+	sort.Slice(c.Targets, func(i, j int) bool {
+		return c.Targets[i].Name < c.Targets[j].Name
+	})
+
+	require.Equal(t, "webapp", c.Targets[1].Name)
+	require.Equal(t, map[string]string{"base": "target:base"}, c.Targets[1].Contexts)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
