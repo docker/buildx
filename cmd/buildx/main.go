@@ -15,7 +15,6 @@ import (
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
-	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/util/stack"
 	"github.com/pkg/errors"
@@ -37,11 +36,7 @@ func init() {
 }
 
 func runStandalone(cmd *command.DockerCli) error {
-	if err := cmd.Initialize(cliflags.NewClientOptions()); err != nil {
-		return err
-	}
 	defer flushMetrics(cmd)
-
 	executable := os.Args[0]
 	rootCmd := commands.NewRootCmd(filepath.Base(executable), false, cmd)
 	return rootCmd.Execute()

@@ -16,13 +16,14 @@ import (
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
+	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
 
-func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Command {
+func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra.Command {
 	var opt rootOptions
 	cmd := &cobra.Command{
 		Short: "Docker Buildx",
@@ -40,7 +41,17 @@ func NewRootCmd(name string, isPlugin bool, dockerCli command.Cli) *cobra.Comman
 			}
 			cmd.SetContext(appcontext.Context())
 			if !isPlugin {
-				return nil
+				// InstallFlags and SetDefaultOptions are necessary to match
+				// the plugin mode behavior to handle env vars such as
+				// DOCKER_TLS, DOCKER_TLS_VERIFY, ... and we also need to use a
+				// new flagset to avoid conflict with the global debug flag
+				// that we already handle in the root command otherwise it
+				// would panic.
+				nflags := pflag.NewFlagSet(cmd.DisplayName(), pflag.ContinueOnError)
+				options := cliflags.NewClientOptions()
+				options.InstallFlags(nflags)
+				options.SetDefaultOptions(nflags)
+				return dockerCli.Initialize(options)
 			}
 			return plugin.PersistentPreRunE(cmd, args)
 		},
