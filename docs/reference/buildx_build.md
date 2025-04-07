@@ -944,7 +944,7 @@ $ docker buildx build --secret [type=file,]id=<ID>[,src=<FILEPATH>] .
 ###### `type=file` usage
 
 In the following example, `type=file` is automatically detected because no
-environment variable mathing `aws` (the ID) is set.
+environment variable matching `aws` (the ID) is set.
 
 ```console
 $ docker buildx build --secret id=aws,src=$HOME/.aws/credentials .

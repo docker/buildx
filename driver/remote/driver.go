@@ -28,7 +28,7 @@ type Driver struct {
 	*tlsOpts
 	defaultLoad bool
 
-	// remote driver caches the client because its Bootstap/Info methods reuse it internally
+	// remote driver caches the client because its Bootstrap/Info methods reuse it internally
 	clientOnce sync.Once
 	client     *client.Client
 	err        error

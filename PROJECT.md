@@ -21,7 +21,7 @@
   - [Verify essential information](#verify-essential-information)
   - [Classify the issue](#classify-the-issue)
 - [Prioritization guidelines for `kind/bug`](#prioritization-guidelines-for-kindbug)
-- [Issue lifecyle](#issue-lifecyle)
+- [Issue lifecycle](#issue-lifecycle)
   - [Examples](#examples)
     - [Submitting a bug](#submitting-a-bug)
 - [Pull request review process](#pull-request-review-process)
@@ -308,7 +308,7 @@ Examples:
 - Bugs in non-default configurations
 - Most enhancements
 
-## Issue lifecyle
+## Issue lifecycle
 
 ```mermaid
 flowchart LR
