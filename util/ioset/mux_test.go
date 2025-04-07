@@ -189,7 +189,7 @@ func TestMuxIO(t *testing.T) {
 	}
 }
 
-type instruction func(m *MuxIO) (intput string, writeBackView string)
+type instruction func(m *MuxIO) (input string, writeBackView string)
 
 func input(s string) instruction {
 	return func(m *MuxIO) (string, string) {

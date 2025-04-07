@@ -202,7 +202,7 @@ func ParseAttests(in []string) ([]*controllerapi.Attest, error) {
 func ConvertAttests(in []*Attest) ([]*controllerapi.Attest, error) {
 	out := make([]*controllerapi.Attest, 0, len(in))
 
-	// Check for dupplicate attestations while we convert them
+	// Check for duplicate attestations while we convert them
 	// to the controller API.
 	found := map[string]struct{}{}
 	for _, attest := range in {
