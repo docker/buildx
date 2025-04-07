@@ -463,6 +463,21 @@ services:
 	require.NoError(t, err)
 }
 
+func TestPlatforms(t *testing.T) {
+	dt := []byte(`
+services:
+  foo:
+    build:
+      context: .
+      platforms:
+        - linux/amd64
+        - linux/arm64
+`)
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, []string{"linux/amd64", "linux/arm64"}, c.Targets[0].Platforms)
+}
+
 func newBool(val bool) *bool {
 	b := val
 	return &b
