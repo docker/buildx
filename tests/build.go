@@ -19,6 +19,7 @@ import (
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
@@ -126,10 +127,10 @@ COPY foo /foo
 	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "Dockerfile", "foo")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
 	require.NoError(t, err, out)
@@ -238,10 +239,10 @@ COPY foo /foo
 	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "build.Dockerfile", "foo")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "build.Dockerfile", "foo")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := buildCmd(sb, withDir(dir), withArgs(
 		"-f", "build.Dockerfile",

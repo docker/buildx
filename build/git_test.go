@@ -9,6 +9,7 @@ import (
 	"testing"
 
 	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
@@ -16,18 +17,18 @@ import (
 )
 
 func setupTest(tb testing.TB) {
-	gitutil.Mktmp(tb)
+	gittestutil.Mktmp(tb)
 
 	c, err := gitutil.New()
 	require.NoError(tb, err)
-	gitutil.GitInit(c, tb)
+	gittestutil.GitInit(c, tb)
 
 	df := []byte("FROM alpine:latest\n")
 	require.NoError(tb, os.WriteFile("Dockerfile", df, 0644))
 
-	gitutil.GitAdd(c, tb, "Dockerfile")
-	gitutil.GitCommit(c, tb, "initial commit")
-	gitutil.GitSetRemote(c, tb, "origin", "git@github.com:docker/buildx.git")
+	gittestutil.GitAdd(c, tb, "Dockerfile")
+	gittestutil.GitCommit(c, tb, "initial commit")
+	gittestutil.GitSetRemote(c, tb, "origin", "git@github.com:docker/buildx.git")
 }
 
 func TestGetGitAttributesNotGitRepo(t *testing.T) {
@@ -188,19 +189,19 @@ func TestLocalDirs(t *testing.T) {
 }
 
 func TestLocalDirsSub(t *testing.T) {
-	gitutil.Mktmp(t)
+	gittestutil.Mktmp(t)
 
 	c, err := gitutil.New()
 	require.NoError(t, err)
-	gitutil.GitInit(c, t)
+	gittestutil.GitInit(c, t)
 
 	df := []byte("FROM alpine:latest\n")
 	require.NoError(t, os.MkdirAll("app", 0755))
 	require.NoError(t, os.WriteFile("app/Dockerfile", df, 0644))
 
-	gitutil.GitAdd(c, t, "app/Dockerfile")
-	gitutil.GitCommit(c, t, "initial commit")
-	gitutil.GitSetRemote(c, t, "origin", "git@github.com:docker/buildx.git")
+	gittestutil.GitAdd(c, t, "app/Dockerfile")
+	gittestutil.GitCommit(c, t, "initial commit")
+	gittestutil.GitSetRemote(c, t, "origin", "git@github.com:docker/buildx.git")
 
 	so := &client.SolveOpt{
 		FrontendAttrs: map[string]string{},

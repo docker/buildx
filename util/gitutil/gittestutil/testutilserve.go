@@ -1,4 +1,4 @@
-package gitutil
+package gittestutil
 
 import (
 	"context"
@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"testing"
 
+	"github.com/docker/buildx/util/gitutil"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -23,7 +24,7 @@ func WithAccessToken(token string) GitServeOpt {
 	}
 }
 
-func GitServeHTTP(c *Git, t testing.TB, opts ...GitServeOpt) (url string) {
+func GitServeHTTP(c *gitutil.Git, t testing.TB, opts ...GitServeOpt) (url string) {
 	t.Helper()
 	gitUpdateServerInfo(c, t)
 	ctx, cancel := context.WithCancelCause(context.TODO())
@@ -91,7 +92,7 @@ func GitServeHTTP(c *Git, t testing.TB, opts ...GitServeOpt) (url string) {
 	return fmt.Sprintf("http://%s/%s", addr, name)
 }
 
-func gitUpdateServerInfo(c *Git, tb testing.TB) {
+func gitUpdateServerInfo(c *gitutil.Git, tb testing.TB) {
 	tb.Helper()
 	_, err := fakeGit(c, "update-server-info")
 	require.NoError(tb, err)
