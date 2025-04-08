@@ -40,6 +40,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrint,
 	testBakePrintSensitive,
 	testBakePrintOverrideEmpty,
+	testBakePrintKeepEscaped,
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeRemote,
@@ -327,6 +328,66 @@ target "default" {
 		}
 	}
 }`, stdout.String())
+}
+
+func testBakePrintKeepEscaped(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+ARG VERSION=latest
+FROM alpine:$${VERSION}
+EOT
+	args = {
+		VERSION = "3.21"
+	}
+	annotations = [
+		"org.opencontainers.image.authors=$${user}"
+	]
+	labels = {
+		foo = "hello %%{bar}"
+	}
+}
+`)
+
+	dir := tmpdir(t, fstest.CreateFile("docker-bake.hcl", bakefile, 0600))
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--print"))
+	stdout := bytes.Buffer{}
+	stderr := bytes.Buffer{}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+
+	require.JSONEq(t, `{
+	"group": {
+		"default": {
+			"targets": [
+				"default"
+			]
+		}
+	},
+	"target": {
+		"default": {
+			"annotations": [
+				"org.opencontainers.image.authors=$${user}"
+			],
+			"context": ".",
+			"dockerfile": "Dockerfile",
+			"dockerfile-inline": "ARG VERSION=latest\nFROM alpine:$${VERSION}\n",
+			"args": {
+				"VERSION": "3.21"
+			},
+			"labels": {
+				"foo": "hello %%{bar}"
+			}
+		}
+	}
+}`, stdout.String())
+
+	// test build with definition from print output
+	dir = tmpdir(t, fstest.CreateFile("docker-bake.json", stdout.Bytes(), 0600))
+	cmd = buildxCmd(sb, withDir(dir), withArgs("bake"))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {

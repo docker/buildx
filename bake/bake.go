@@ -3,6 +3,7 @@ package bake
 import (
 	"context"
 	"encoding"
+	"encoding/json"
 	"io"
 	"maps"
 	"os"
@@ -731,6 +732,41 @@ type Target struct {
 
 	// linked is a private field to mark a target used as a linked one
 	linked bool
+}
+
+func (t *Target) MarshalJSON() ([]byte, error) {
+	tgt := *t
+	esc := func(s string) string {
+		return strings.ReplaceAll(strings.ReplaceAll(s, "${", "$${"), "%{", "%%{")
+	}
+
+	tgt.Annotations = slices.Clone(t.Annotations)
+	for i, v := range tgt.Annotations {
+		tgt.Annotations[i] = esc(v)
+	}
+
+	if tgt.DockerfileInline != nil {
+		escaped := esc(*tgt.DockerfileInline)
+		tgt.DockerfileInline = &escaped
+	}
+
+	tgt.Labels = maps.Clone(t.Labels)
+	for k, v := range t.Labels {
+		if v != nil {
+			escaped := esc(*v)
+			tgt.Labels[k] = &escaped
+		}
+	}
+
+	tgt.Args = maps.Clone(t.Args)
+	for k, v := range t.Args {
+		if v != nil {
+			escaped := esc(*v)
+			tgt.Args[k] = &escaped
+		}
+	}
+
+	return json.Marshal(tgt)
 }
 
 var (
