@@ -46,7 +46,7 @@ require (
 	github.com/stretchr/testify v1.10.0
 	github.com/tonistiigi/fsutil v0.0.0-20250113203817-b14e27f4135a
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
-	github.com/tonistiigi/jaeger-ui-rest v0.0.0-20250211190051-7d4944a45bb6
+	github.com/tonistiigi/jaeger-ui-rest v0.0.0-20250408171107-3dd17559e117
 	github.com/zclconf/go-cty v1.16.0
 	go.opentelemetry.io/otel v1.31.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.31.0
