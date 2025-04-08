@@ -24,11 +24,10 @@ import (
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/errdefs"
-	dockerarchive "github.com/docker/docker/pkg/archive"
-	"github.com/docker/docker/pkg/idtools"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
+	mobyarchive "github.com/moby/go-archive"
 	"github.com/pkg/errors"
 )
 
@@ -250,8 +249,8 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 	if srcPath != "" {
 		defer os.RemoveAll(srcPath)
 	}
-	srcArchive, err := dockerarchive.TarWithOptions(srcPath, &dockerarchive.TarOptions{
-		ChownOpts: &idtools.Identity{UID: 0, GID: 0},
+	srcArchive, err := mobyarchive.TarWithOptions(srcPath, &mobyarchive.TarOptions{
+		ChownOpts: &mobyarchive.ChownOpts{UID: 0, GID: 0},
 	})
 	if err != nil {
 		return err
