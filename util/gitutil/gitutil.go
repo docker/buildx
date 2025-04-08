@@ -57,17 +57,17 @@ func New(opts ...Option) (*Git, error) {
 }
 
 func (c *Git) IsInsideWorkTree() bool {
-	out, err := c.clean(c.run("rev-parse", "--is-inside-work-tree"))
+	out, err := c.Run("rev-parse", "--is-inside-work-tree")
 	return out == "true" && err == nil
 }
 
 func (c *Git) IsDirty() bool {
-	out, err := c.run("status", "--porcelain", "--ignored")
+	out, err := c.Run("status", "--porcelain", "--ignored")
 	return strings.TrimSpace(out) != "" || err != nil
 }
 
 func (c *Git) RootDir() (string, error) {
-	root, err := c.clean(c.run("rev-parse", "--show-toplevel"))
+	root, err := c.Run("rev-parse", "--show-toplevel")
 	if err != nil {
 		return "", err
 	}
@@ -127,6 +127,10 @@ func (c *Git) Tag() (string, error) {
 	return tag, err
 }
 
+func (c *Git) Run(args ...string) (string, error) {
+	return c.clean(c.run(args...))
+}
+
 func (c *Git) run(args ...string) (string, error) {
 	var extraArgs = []string{
 		"-c", "log.showSignature=false",
@@ -161,7 +165,7 @@ func (c *Git) clean(out string, err error) (string, error) {
 }
 
 func (c *Git) currentRemote() (string, error) {
-	symref, err := c.clean(c.run("symbolic-ref", "-q", "HEAD"))
+	symref, err := c.Run("symbolic-ref", "-q", "HEAD")
 	if err != nil {
 		return "", err
 	}
@@ -169,7 +173,7 @@ func (c *Git) currentRemote() (string, error) {
 		return "", nil
 	}
 	// git for-each-ref --format='%(upstream:remotename)'
-	remote, err := c.clean(c.run("for-each-ref", "--format=%(upstream:remotename)", symref))
+	remote, err := c.Run("for-each-ref", "--format=%(upstream:remotename)", symref)
 	if err != nil {
 		return "", err
 	}

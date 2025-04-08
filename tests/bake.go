@@ -17,6 +17,7 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/identity"
@@ -415,10 +416,10 @@ EOT
 	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl", "foo")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "foo")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(sb, withDir(dir), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
@@ -445,12 +446,12 @@ EOT
 	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl", "foo")
-	gitutil.GitCommit(git, t, "initial commit")
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "foo")
+	gittestutil.GitCommit(git, t, "initial commit")
 
 	token := identity.NewID()
-	addr := gitutil.GitServeHTTP(git, t, gitutil.WithAccessToken(token))
+	addr := gittestutil.GitServeHTTP(git, t, gittestutil.WithAccessToken(token))
 
 	out, err := bakeCmd(sb, withDir(dir),
 		withEnv("BUILDX_BAKE_GIT_AUTH_TOKEN="+token),
@@ -492,10 +493,10 @@ EOT
 	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl", "bar")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "bar")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(sb, withDir(dirSrc), withArgs(addr, "--file", "cwd://local-docker-bake.hcl", "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
@@ -561,10 +562,10 @@ EOT
 	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(sb, withDir(dirSrc), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
@@ -594,17 +595,17 @@ EOT
 
 	gitSpec, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
 	require.NoError(t, err)
-	gitutil.GitInit(gitSpec, t)
-	gitutil.GitAdd(gitSpec, t, "docker-bake.hcl")
-	gitutil.GitCommit(gitSpec, t, "initial commit")
-	addrSpec := gitutil.GitServeHTTP(gitSpec, t)
+	gittestutil.GitInit(gitSpec, t)
+	gittestutil.GitAdd(gitSpec, t, "docker-bake.hcl")
+	gittestutil.GitCommit(gitSpec, t, "initial commit")
+	addrSpec := gittestutil.GitServeHTTP(gitSpec, t)
 
 	gitSrc, err := gitutil.New(gitutil.WithWorkingDir(dirSrc))
 	require.NoError(t, err)
-	gitutil.GitInit(gitSrc, t)
-	gitutil.GitAdd(gitSrc, t, "foo")
-	gitutil.GitCommit(gitSrc, t, "initial commit")
-	addrSrc := gitutil.GitServeHTTP(gitSrc, t)
+	gittestutil.GitInit(gitSrc, t)
+	gittestutil.GitAdd(gitSrc, t, "foo")
+	gittestutil.GitCommit(gitSrc, t, "initial commit")
+	addrSrc := gittestutil.GitServeHTTP(gitSrc, t)
 
 	out, err := bakeCmd(sb, withDir("/tmp"), withArgs(addrSpec, addrSrc, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
@@ -635,10 +636,10 @@ COPY super-cool.txt /
 
 	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
 	require.NoError(t, err)
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl", "bar")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "bar")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(sb, withDir("/tmp"), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
 	require.NoError(t, err, out)
@@ -676,10 +677,10 @@ EOT
 	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(
 		sb,
@@ -724,10 +725,10 @@ EOT
 	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(
 		sb,
@@ -780,13 +781,13 @@ COPY foo /foo
 	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl")
-	gitutil.GitAdd(git, t, "Dockerfile")
-	gitutil.GitAdd(git, t, "foo")
-	gitutil.GitAdd(git, t, "bar")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl")
+	gittestutil.GitAdd(git, t, "Dockerfile")
+	gittestutil.GitAdd(git, t, "foo")
+	gittestutil.GitAdd(git, t, "bar")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(
 		sb,
@@ -832,10 +833,10 @@ COPY foo /foo
 	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
 	require.NoError(t, err)
 
-	gitutil.GitInit(git, t)
-	gitutil.GitAdd(git, t, "docker-bake.hcl")
-	gitutil.GitCommit(git, t, "initial commit")
-	addr := gitutil.GitServeHTTP(git, t)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
 
 	out, err := bakeCmd(
 		sb,
