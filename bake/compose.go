@@ -177,6 +177,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				CacheFrom:   cacheFrom,
 				CacheTo:     cacheTo,
 				NetworkMode: networkModeP,
+				Platforms:   s.Build.Platforms,
 				SSH:         ssh,
 				Secrets:     secrets,
 				ShmSize:     shmSize,
