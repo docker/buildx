@@ -38,6 +38,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-csvvalue"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 )
 
@@ -64,7 +65,7 @@ type bakeOptions struct {
 }
 
 func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
-	mp := dockerCli.MeterProvider()
+	mp := otel.GetMeterProvider()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, append([]string{"bake"}, targets...),
 		attribute.String("builder", in.builder),

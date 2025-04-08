@@ -59,6 +59,7 @@ import (
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 	"github.com/tonistiigi/go-csvvalue"
+	"go.opentelemetry.io/otel"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
@@ -284,7 +285,7 @@ func (o *buildOptionsHash) String() string {
 }
 
 func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
-	mp := dockerCli.MeterProvider()
+	mp := otel.GetMeterProvider()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, []string{"build", options.contextPath},
 		attribute.String("builder", options.builder),
