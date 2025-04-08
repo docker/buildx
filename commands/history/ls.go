@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"path"
 	"slices"
 	"time"
 
@@ -14,10 +15,12 @@ import (
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
+	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/formatter"
 	"github.com/docker/go-units"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
@@ -38,6 +41,9 @@ type lsOptions struct {
 	builder string
 	format  string
 	noTrunc bool
+
+	filters []string
+	local   bool
 }
 
 func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
@@ -56,7 +62,29 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 		}
 	}
 
-	out, err := queryRecords(ctx, "", nodes, nil)
+	queryOptions := &queryOptions{}
+
+	if opts.local {
+		wd, err := os.Getwd()
+		if err != nil {
+			return err
+		}
+		gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
+		if err != nil {
+			if st, err1 := os.Stat(path.Join(wd, ".git")); err1 == nil && st.IsDir() {
+				return errors.Wrap(err, "git was not found in the system")
+			}
+			return errors.Wrapf(err, "could not find git repository for local filter")
+		}
+		remote, err := gitc.RemoteURL()
+		if err != nil {
+			return errors.Wrapf(err, "could not get remote URL for local filter")
+		}
+		queryOptions.Filters = append(queryOptions.Filters, fmt.Sprintf("repository=%s", remote))
+	}
+	queryOptions.Filters = append(queryOptions.Filters, opts.filters...)
+
+	out, err := queryRecords(ctx, "", nodes, queryOptions)
 	if err != nil {
 		return err
 	}
@@ -92,6 +120,8 @@ func lsCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&options.format, "format", formatter.TableFormatKey, "Format the output")
 	flags.BoolVar(&options.noTrunc, "no-trunc", false, "Don't truncate output")
+	flags.StringArrayVar(&options.filters, "filter", nil, `Provide filter values (e.g., "status=error")`)
+	flags.BoolVar(&options.local, "local", false, "List records for current repository only")
 
 	return cmd
 }

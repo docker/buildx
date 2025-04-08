@@ -1,7 +1,9 @@
 package history
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -15,9 +17,12 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
 	controlapi "github.com/moby/buildkit/api/services/control"
+	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
+
+const recordsLimit = 50
 
 func buildName(fattrs map[string]string, ls *localstate.State) string {
 	var res string
@@ -110,6 +115,7 @@ type historyRecord struct {
 
 type queryOptions struct {
 	CompletedOnly bool
+	Filters       []string
 }
 
 func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *queryOptions) ([]historyRecord, error) {
@@ -126,6 +132,11 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 		ref = ""
 	}
 
+	var filters []string
+	if opts != nil {
+		filters = opts.Filters
+	}
+
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
 		node := node
@@ -138,9 +149,25 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 			if err != nil {
 				return err
 			}
+
+			var matchers []matchFunc
+			if len(filters) > 0 {
+				filters, matchers, err = dockerFiltersToBuildkit(filters)
+				if err != nil {
+					return err
+				}
+				sb := bytes.NewBuffer(nil)
+				w := csv.NewWriter(sb)
+				w.Write(filters)
+				w.Flush()
+				filters = []string{strings.TrimSuffix(sb.String(), "\n")}
+			}
+
 			serv, err := c.ControlClient().ListenBuildHistory(ctx, &controlapi.BuildHistoryRequest{
 				EarlyExit: true,
 				Ref:       ref,
+				Limit:     recordsLimit,
+				Filter:    filters,
 			})
 			if err != nil {
 				return err
@@ -158,6 +185,7 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 				ts = &t
 			}
 			defer serv.CloseSend()
+		loop0:
 			for {
 				he, err := serv.Recv()
 				if err != nil {
@@ -171,6 +199,13 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 				}
 				if opts != nil && opts.CompletedOnly && he.Type != controlapi.BuildHistoryEventType_COMPLETE {
 					continue
+				}
+
+				// for older buildkit that don't support filters apply local filters
+				for _, matcher := range matchers {
+					if !matcher(he.Record) {
+						continue loop0
+					}
 				}
 
 				records = append(records, historyRecord{
@@ -218,4 +253,151 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
 	return fmt.Sprintf("%dm %2ds", int(d.Minutes()), int(d.Seconds())%60)
+}
+
+type matchFunc func(*controlapi.BuildHistoryRecord) bool
+
+func dockerFiltersToBuildkit(in []string) ([]string, []matchFunc, error) {
+	out := []string{}
+	matchers := []matchFunc{}
+	for _, f := range in {
+		key, value, sep, found := cutAny(f, "!=", "=", "<=", "<", ">=", ">")
+		if !found {
+			return nil, nil, errors.Errorf("invalid filter %q", f)
+		}
+		switch key {
+		case "ref", "repository", "status":
+			if sep != "=" && sep != "!=" {
+				return nil, nil, errors.Errorf("invalid separator for %q, expected = or !=", f)
+			}
+			matchers = append(matchers, valueFiler(key, value, sep))
+			if sep == "=" {
+				if key == "status" {
+					sep = "=="
+				} else {
+					sep = "~="
+				}
+			}
+		case "startedAt", "completedAt", "duration":
+			if sep == "=" || sep == "!=" {
+				return nil, nil, errors.Errorf("invalid separator for %q, expected <=, <, >= or >", f)
+			}
+			matcher, err := timeBasedFilter(key, value, sep)
+			if err != nil {
+				return nil, nil, err
+			}
+			matchers = append(matchers, matcher)
+		default:
+			return nil, nil, errors.Errorf("unsupported filter %q", f)
+		}
+		out = append(out, key+sep+value)
+	}
+	return out, matchers, nil
+}
+
+func valueFiler(key, value, sep string) matchFunc {
+	return func(rec *controlapi.BuildHistoryRecord) bool {
+		var recValue string
+		switch key {
+		case "ref":
+			recValue = rec.Ref
+		case "repository":
+			v, ok := rec.FrontendAttrs["vcs:source"]
+			if ok {
+				recValue = v
+			} else {
+				if context, ok := rec.FrontendAttrs["context"]; ok {
+					if ref, err := gitutil.ParseGitRef(context); err == nil {
+						recValue = ref.Remote
+					}
+				}
+			}
+		case "status":
+			if rec.CompletedAt != nil {
+				if rec.Error != nil {
+					if strings.Contains(rec.Error.Message, "context canceled") {
+						recValue = "canceled"
+					} else {
+						recValue = "error"
+					}
+				} else {
+					recValue = "completed"
+				}
+			} else {
+				recValue = "running"
+			}
+		}
+		switch sep {
+		case "=":
+			if key == "status" {
+				return recValue == value
+			}
+			return strings.Contains(recValue, value)
+		case "!=":
+			return recValue != value
+		default:
+			return false
+		}
+	}
+}
+
+func timeBasedFilter(key, value, sep string) (matchFunc, error) {
+	var cmp int64
+	switch key {
+	case "startedAt", "completedAt":
+		v, err := time.ParseDuration(value)
+		if err == nil {
+			tm := time.Now().Add(-v)
+			cmp = tm.Unix()
+		} else {
+			tm, err := time.Parse(time.RFC3339, value)
+			if err != nil {
+				return nil, errors.Errorf("invalid time %s", value)
+			}
+			cmp = tm.Unix()
+		}
+	case "duration":
+		v, err := time.ParseDuration(value)
+		if err != nil {
+			return nil, errors.Errorf("invalid duration %s", value)
+		}
+		cmp = int64(v)
+	default:
+		return nil, nil
+	}
+
+	return func(rec *controlapi.BuildHistoryRecord) bool {
+		var val int64
+		switch key {
+		case "startedAt":
+			val = rec.CreatedAt.AsTime().Unix()
+		case "completedAt":
+			if rec.CompletedAt != nil {
+				val = rec.CompletedAt.AsTime().Unix()
+			}
+		case "duration":
+			if rec.CompletedAt != nil {
+				val = int64(rec.CompletedAt.AsTime().Sub(rec.CreatedAt.AsTime()))
+			}
+		}
+		switch sep {
+		case ">=":
+			return val >= cmp
+		case "<=":
+			return val <= cmp
+		case ">":
+			return val > cmp
+		default:
+			return val < cmp
+		}
+	}, nil
+}
+
+func cutAny(s string, seps ...string) (before, after, sep string, found bool) {
+	for _, sep := range seps {
+		if idx := strings.Index(s, sep); idx != -1 {
+			return s[:idx], s[idx+len(sep):], sep, true
+		}
+	}
+	return s, "", "", false
 }
