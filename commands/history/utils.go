@@ -1,7 +1,9 @@
 package history
 
 import (
+	"bytes"
 	"context"
+	"encoding/csv"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -18,6 +20,8 @@ import (
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
+
+const recordsLimit = 50
 
 func buildName(fattrs map[string]string, ls *localstate.State) string {
 	var res string
@@ -110,6 +114,7 @@ type historyRecord struct {
 
 type queryOptions struct {
 	CompletedOnly bool
+	Filters       []string
 }
 
 func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *queryOptions) ([]historyRecord, error) {
@@ -126,6 +131,11 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 		ref = ""
 	}
 
+	var filters []string
+	if opts != nil {
+		filters = opts.Filters
+	}
+
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
 		node := node
@@ -138,9 +148,24 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 			if err != nil {
 				return err
 			}
+
+			if len(filters) > 0 {
+				filters, err = dockerFiltersToBuildkit(filters)
+				if err != nil {
+					return err
+				}
+				sb := bytes.NewBuffer(nil)
+				w := csv.NewWriter(sb)
+				w.Write(filters)
+				w.Flush()
+				filters = []string{strings.TrimSuffix(sb.String(), "\n")}
+			}
+
 			serv, err := c.ControlClient().ListenBuildHistory(ctx, &controlapi.BuildHistoryRequest{
 				EarlyExit: true,
 				Ref:       ref,
+				Limit:     recordsLimit,
+				Filter:    filters,
 			})
 			if err != nil {
 				return err
@@ -218,4 +243,42 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
 	return fmt.Sprintf("%dm %2ds", int(d.Minutes()), int(d.Seconds())%60)
+}
+
+func dockerFiltersToBuildkit(in []string) ([]string, error) {
+	out := []string{}
+	for _, f := range in {
+		key, value, sep, found := multiCut(f, "=", "!=", "<=", "<", ">=", ">")
+		if !found {
+			return nil, errors.Errorf("invalid filter %q", f)
+		}
+		switch key {
+		case "ref", "repository", "status":
+			if sep != "=" && sep != "!=" {
+				return nil, errors.Errorf("invalid separator for %q, expected = or !=", f)
+			}
+			if sep == "=" {
+				if key == "status" {
+					sep = "=="
+				} else {
+					sep = "~="
+				}
+			}
+		case "createdAt", "completedAt", "duration":
+			if sep == "=" || sep == "!=" {
+				return nil, errors.Errorf("invalid separator for %q, expected <=, <, >= or >", f)
+			}
+		}
+		out = append(out, key+sep+value)
+	}
+	return out, nil
+}
+
+func multiCut(s string, seps ...string) (before, after, sep string, found bool) {
+	for _, sep := range seps {
+		if idx := strings.Index(s, sep); idx != -1 {
+			return s[:idx], s[idx+len(sep):], sep, true
+		}
+	}
+	return s, "", "", false
 }
