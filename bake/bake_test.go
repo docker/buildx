@@ -2142,6 +2142,73 @@ target "app" {
 	})
 }
 
+func TestVariableValidationConditionNull(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "PORT" {
+  default = 3000
+  validation {}
+}
+target "app" {
+  args = {
+    PORT = PORT
+  }
+}
+`),
+	}
+
+	_, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Condition expression must return either true or false, not null")
+}
+
+func TestVariableValidationConditionUnknownValue(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "PORT" {
+  default = 3000
+  validation {
+    condition = "foo"
+  }
+}
+target "app" {
+  args = {
+    PORT = PORT
+  }
+}
+`),
+	}
+
+	_, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "Invalid condition result value: a bool is required")
+}
+
+func TestVariableValidationInvalidErrorMessage(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+variable "FOO" {
+  default = 0
+  validation {
+    condition = FOO > 5
+  }
+}
+target "app" {
+  args = {
+    FOO = FOO
+  }
+}
+`),
+	}
+
+	_, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
+	require.Error(t, err)
+	require.Contains(t, err.Error(), "This check failed, but has an invalid error message")
+}
+
 // https://github.com/docker/buildx/issues/2822
 func TestVariableEmpty(t *testing.T) {
 	fp := File{
