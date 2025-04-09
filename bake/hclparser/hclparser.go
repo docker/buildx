@@ -16,6 +16,7 @@ import (
 	"github.com/hashicorp/hcl/v2"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
+	"github.com/zclconf/go-cty/cty/convert"
 )
 
 type Opt struct {
@@ -555,27 +556,57 @@ func (p *parser) resolveBlockNames(block *hcl.Block) ([]string, error) {
 func (p *parser) validateVariables(vars map[string]*variable, ectx *hcl.EvalContext) hcl.Diagnostics {
 	var diags hcl.Diagnostics
 	for _, v := range vars {
-		for _, validation := range v.Validations {
-			condition, condDiags := validation.Condition.Value(ectx)
+		for _, rule := range v.Validations {
+			resultVal, condDiags := rule.Condition.Value(ectx)
 			if condDiags.HasErrors() {
 				diags = append(diags, condDiags...)
 				continue
 			}
-			if !condition.True() {
-				message, msgDiags := validation.ErrorMessage.Value(ectx)
+
+			if resultVal.IsNull() {
+				diags = append(diags, &hcl.Diagnostic{
+					Severity:   hcl.DiagError,
+					Summary:    "Invalid condition result",
+					Detail:     "Condition expression must return either true or false, not null.",
+					Subject:    rule.Condition.Range().Ptr(),
+					Expression: rule.Condition,
+				})
+				continue
+			}
+
+			var err error
+			resultVal, err = convert.Convert(resultVal, cty.Bool)
+			if err != nil {
+				diags = append(diags, &hcl.Diagnostic{
+					Severity:   hcl.DiagError,
+					Summary:    "Invalid condition result",
+					Detail:     fmt.Sprintf("Invalid condition result value: %s", err),
+					Subject:    rule.Condition.Range().Ptr(),
+					Expression: rule.Condition,
+				})
+				continue
+			}
+
+			if !resultVal.True() {
+				message, msgDiags := rule.ErrorMessage.Value(ectx)
 				if msgDiags.HasErrors() {
 					diags = append(diags, msgDiags...)
 					continue
 				}
+				errorMessage := "This check failed, but has an invalid error message."
+				if !message.IsNull() {
+					errorMessage = message.AsString()
+				}
 				diags = append(diags, &hcl.Diagnostic{
 					Severity: hcl.DiagError,
 					Summary:  "Validation failed",
-					Detail:   message.AsString(),
-					Subject:  validation.Condition.Range().Ptr(),
+					Detail:   errorMessage,
+					Subject:  rule.Condition.Range().Ptr(),
 				})
 			}
 		}
 	}
+
 	return diags
 }
 
