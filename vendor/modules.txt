@@ -708,7 +708,7 @@ github.com/tonistiigi/fsutil/types
 # github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
 ## explicit; go 1.16
 github.com/tonistiigi/go-csvvalue
-# github.com/tonistiigi/jaeger-ui-rest v0.0.0-20250211190051-7d4944a45bb6
+# github.com/tonistiigi/jaeger-ui-rest v0.0.0-20250408171107-3dd17559e117
 ## explicit; go 1.22.0
 github.com/tonistiigi/jaeger-ui-rest
 github.com/tonistiigi/jaeger-ui-rest/decompress
