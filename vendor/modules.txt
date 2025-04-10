@@ -580,6 +580,9 @@ github.com/moby/patternmatcher/ignorefile
 ## explicit; go 1.13
 github.com/moby/spdystream
 github.com/moby/spdystream/spdy
+# github.com/moby/sys/atomicwriter v0.1.0
+## explicit; go 1.18
+github.com/moby/sys/atomicwriter
 # github.com/moby/sys/mountinfo v0.7.2
 ## explicit; go 1.17
 github.com/moby/sys/mountinfo
