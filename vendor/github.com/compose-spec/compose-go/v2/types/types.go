@@ -75,8 +75,8 @@ type ServiceConfig struct {
 	// If set, overrides ENTRYPOINT from the image.
 	//
 	// Set to `[]` or an empty string to clear the entrypoint from the image.
-	Entrypoint ShellCommand `yaml:"entrypoint,omitempty" json:"entrypoint"` // NOTE: we can NOT omitempty for JSON! see ShellCommand type for details.
-
+	Entrypoint      ShellCommand                     `yaml:"entrypoint,omitempty" json:"entrypoint"` // NOTE: we can NOT omitempty for JSON! see ShellCommand type for details.
+	Provider        *ServiceProviderConfig           `yaml:"provider,omitempty" json:"provider,omitempty"`
 	Environment     MappingWithEquals                `yaml:"environment,omitempty" json:"environment,omitempty"`
 	EnvFiles        []EnvFile                        `yaml:"env_file,omitempty" json:"env_file,omitempty"`
 	Expose          StringOrNumberList               `yaml:"expose,omitempty" json:"expose,omitempty"`
@@ -139,6 +139,12 @@ type ServiceConfig struct {
 	PostStart       []ServiceHook                    `yaml:"post_start,omitempty" json:"post_start,omitempty"`
 	PreStop         []ServiceHook                    `yaml:"pre_stop,omitempty" json:"pre_stop,omitempty"`
 
+	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
+}
+
+type ServiceProviderConfig struct {
+	Type       string     `yaml:"type,omitempty" json:"driver,omitempty"`
+	Options    Options    `yaml:"options,omitempty" json:"options,omitempty"`
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 
@@ -535,6 +541,7 @@ type ServiceVolumeConfig struct {
 	Bind        *ServiceVolumeBind   `yaml:"bind,omitempty" json:"bind,omitempty"`
 	Volume      *ServiceVolumeVolume `yaml:"volume,omitempty" json:"volume,omitempty"`
 	Tmpfs       *ServiceVolumeTmpfs  `yaml:"tmpfs,omitempty" json:"tmpfs,omitempty"`
+	Image       *ServiceVolumeImage  `yaml:"image,omitempty" json:"image,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
@@ -569,6 +576,8 @@ const (
 	VolumeTypeNamedPipe = "npipe"
 	// VolumeTypeCluster is the type for mounting container storage interface (CSI) volumes
 	VolumeTypeCluster = "cluster"
+	// VolumeTypeImage is the tpe for mounting an image
+	VolumeTypeImage = "image"
 
 	// SElinuxShared share the volume content
 	SElinuxShared = "z"
@@ -612,8 +621,9 @@ const (
 
 // ServiceVolumeVolume are options for a service volume of type volume
 type ServiceVolumeVolume struct {
-	NoCopy  bool   `yaml:"nocopy,omitempty" json:"nocopy,omitempty"`
-	Subpath string `yaml:"subpath,omitempty" json:"subpath,omitempty"`
+	Labels  Mapping `yaml:"labels,omitempty" json:"labels,omitempty"`
+	NoCopy  bool    `yaml:"nocopy,omitempty" json:"nocopy,omitempty"`
+	Subpath string  `yaml:"subpath,omitempty" json:"subpath,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
@@ -624,6 +634,11 @@ type ServiceVolumeTmpfs struct {
 
 	Mode uint32 `yaml:"mode,omitempty" json:"mode,omitempty"`
 
+	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
+}
+
+type ServiceVolumeImage struct {
+	SubPath    string     `yaml:"subpath,omitempty" json:"subpath,omitempty"`
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 

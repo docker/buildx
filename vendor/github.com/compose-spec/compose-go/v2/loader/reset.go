@@ -67,6 +67,8 @@ func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.No
 		p.paths = append(p.paths, path)
 		return node, nil
 	}
+
+	keys := map[string]int{}
 	switch node.Kind {
 	case yaml.SequenceNode:
 		var nodes []*yaml.Node
@@ -87,6 +89,10 @@ func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.No
 		for idx, v := range node.Content {
 			if idx%2 == 0 {
 				key = v.Value
+				if line, seen := keys[key]; seen {
+					return nil, fmt.Errorf("line %d: mapping key %#v already defined at line %d", v.Line, key, line)
+				}
+				keys[key] = v.Line
 			} else {
 				resolved, err := p.resolveReset(v, path.Next(key))
 				if err != nil {
