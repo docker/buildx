@@ -1,0 +1,25 @@
+name: octoguard
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - 'master'
+      - 'v[0-9]*'
+  pull_request:
+
+permissions:
+  contents: read
+  actions: read
+
+jobs:
+  octoguard:
+    uses: docker/octoguard/.github/workflows/octoguard.yml@v1
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
