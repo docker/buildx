@@ -259,6 +259,20 @@
             }
           ]
         },
+        "provider": {
+          "type": "object",
+          "properties": {
+            "type": {"type": "string"},
+            "options": {
+              "type": "object",
+              "patternProperties": {
+                "^.+$": {"type": ["string", "number", "null"]}
+              }
+            }
+          },
+          "additionalProperties": false,
+          "patternProperties": {"^x-": {}}
+        },
         "external_links": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "extra_hosts": {"$ref": "#/definitions/extra_hosts"},
         "gpus": {"$ref": "#/definitions/gpus"},
@@ -279,7 +293,6 @@
         "links": {"type": "array", "items": {"type": "string"}, "uniqueItems": true},
         "logging": {
           "type": "object",
-
           "properties": {
             "driver": {"type": "string"},
             "options": {
@@ -405,7 +418,9 @@
                 "type": "object",
                 "required": ["type"],
                 "properties": {
-                  "type": {"type": "string"},
+                  "type": {"type": "string",
+                    "enum": ["bind", "volume", "tmpfs", "cluster", "image"]
+                  },
                   "source": {"type": "string"},
                   "target": {"type": "string"},
                   "read_only": {"type": ["boolean", "string"]},
@@ -424,6 +439,7 @@
                   "volume": {
                     "type": "object",
                     "properties": {
+                      "labels": {"$ref": "#/definitions/list_or_dict"},
                       "nocopy": {"type": ["boolean", "string"]},
                       "subpath": {"type": "string"}
                     },
@@ -440,6 +456,14 @@
                         ]
                       },
                       "mode": {"type": ["number", "string"]}
+                    },
+                    "additionalProperties": false,
+                    "patternProperties": {"^x-": {}}
+                  },
+                  "image": {
+                    "type": "object",
+                    "properties": {
+                      "subpath": {"type": "string"}
                     },
                     "additionalProperties": false,
                     "patternProperties": {"^x-": {}}

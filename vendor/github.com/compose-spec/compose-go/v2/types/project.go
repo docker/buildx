@@ -21,8 +21,10 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"sort"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
@@ -30,7 +32,6 @@ import (
 	"github.com/compose-spec/compose-go/v2/utils"
 	"github.com/distribution/reference"
 	godigest "github.com/opencontainers/go-digest"
-	"golang.org/x/exp/maps"
 	"golang.org/x/sync/errgroup"
 	"gopkg.in/yaml.v3"
 )
@@ -120,21 +121,21 @@ func (p *Project) ServicesWithBuild() []string {
 	servicesBuild := p.Services.Filter(func(s ServiceConfig) bool {
 		return s.Build != nil && s.Build.Context != ""
 	})
-	return maps.Keys(servicesBuild)
+	return slices.Collect(maps.Keys(servicesBuild))
 }
 
 func (p *Project) ServicesWithExtends() []string {
 	servicesExtends := p.Services.Filter(func(s ServiceConfig) bool {
 		return s.Extends != nil && *s.Extends != (ExtendsConfig{})
 	})
-	return maps.Keys(servicesExtends)
+	return slices.Collect(maps.Keys(servicesExtends))
 }
 
 func (p *Project) ServicesWithDependsOn() []string {
 	servicesDependsOn := p.Services.Filter(func(s ServiceConfig) bool {
 		return len(s.DependsOn) > 0
 	})
-	return maps.Keys(servicesDependsOn)
+	return slices.Collect(maps.Keys(servicesDependsOn))
 }
 
 func (p *Project) ServicesWithCapabilities() ([]string, []string, []string) {
@@ -156,9 +157,10 @@ func (p *Project) ServicesWithCapabilities() ([]string, []string, []string) {
 				capabilities = append(capabilities, service.Name)
 			}
 			for _, c := range d.Capabilities {
-				if c == "gpu" {
+				switch c {
+				case "gpu":
 					gpu = append(gpu, service.Name)
-				} else if c == "tpu" {
+				case "tpu":
 					tpu = append(tpu, service.Name)
 				}
 			}
@@ -188,16 +190,25 @@ func (p *Project) getServicesByNames(names ...string) (Services, []string) {
 	if len(names) == 0 {
 		return p.Services, nil
 	}
+
 	services := Services{}
 	var servicesNotFound []string
 	for _, name := range names {
-		service, ok := p.Services[name]
-		if !ok {
-			servicesNotFound = append(servicesNotFound, name)
-			continue
+		matched := false
+
+		for serviceName, service := range p.Services {
+			match, _ := filepath.Match(name, serviceName)
+			if match {
+				services[serviceName] = service
+				matched = true
+			}
 		}
-		services[name] = service
+
+		if !matched {
+			servicesNotFound = append(servicesNotFound, name)
+		}
 	}
+
 	return services, servicesNotFound
 }
 
@@ -298,16 +309,25 @@ func (p *Project) withServices(names []string, fn ServiceFunc, seen map[string]b
 	return nil
 }
 
-func (p *Project) GetDependentsForService(s ServiceConfig) []string {
-	return utils.MapKeys(p.dependentsForService(s))
+func (p *Project) GetDependentsForService(s ServiceConfig, filter ...func(ServiceDependency) bool) []string {
+	return utils.MapKeys(p.dependentsForService(s, filter...))
 }
 
-func (p *Project) dependentsForService(s ServiceConfig) map[string]ServiceDependency {
+func (p *Project) dependentsForService(s ServiceConfig, filter ...func(ServiceDependency) bool) map[string]ServiceDependency {
 	dependent := make(map[string]ServiceDependency)
 	for _, service := range p.Services {
 		for name, dependency := range service.DependsOn {
 			if name == s.Name {
-				dependent[service.Name] = dependency
+				depends := true
+				for _, f := range filter {
+					if !f(dependency) {
+						depends = false
+						break
+					}
+				}
+				if depends {
+					dependent[service.Name] = dependency
+				}
 			}
 		}
 	}
@@ -630,25 +650,25 @@ func (p Project) WithServicesEnvironmentResolved(discardEnvFiles bool) (*Project
 	for i, service := range newProject.Services {
 		service.Environment = service.Environment.Resolve(newProject.Environment.Resolve)
 
-		environment := MappingWithEquals{}
-		// resolve variables based on other files we already parsed, + project's environment
-		var resolve dotenv.LookupFn = func(s string) (string, bool) {
-			v, ok := environment[s]
-			if ok && v != nil {
-				return *v, ok
-			}
-			return newProject.Environment.Resolve(s)
-		}
-
+		environment := service.Environment.ToMapping()
 		for _, envFile := range service.EnvFiles {
-			vars, err := loadEnvFile(envFile, resolve)
+			err := loadEnvFile(envFile, environment, func(k string) (string, bool) {
+				// project.env has precedence doing interpolation
+				if resolve, ok := p.Environment.Resolve(k); ok {
+					return resolve, true
+				}
+				// then service.environment
+				if s, ok := service.Environment[k]; ok {
+					return *s, true
+				}
+				return "", false
+			})
 			if err != nil {
 				return nil, err
 			}
-			environment.OverrideBy(vars.ToMappingWithEquals())
 		}
 
-		service.Environment = environment.OverrideBy(service.Environment)
+		service.Environment = environment.ToMappingWithEquals().OverrideBy(service.Environment)
 
 		if discardEnvFiles {
 			service.EnvFiles = nil
@@ -696,15 +716,16 @@ func (p Project) WithServicesLabelsResolved(discardLabelFiles bool) (*Project, e
 	return newProject, nil
 }
 
-func loadEnvFile(envFile EnvFile, resolve dotenv.LookupFn) (Mapping, error) {
+func loadEnvFile(envFile EnvFile, environment Mapping, resolve dotenv.LookupFn) error {
 	if _, err := os.Stat(envFile.Path); os.IsNotExist(err) {
 		if envFile.Required {
-			return nil, fmt.Errorf("env file %s not found: %w", envFile.Path, err)
+			return fmt.Errorf("env file %s not found: %w", envFile.Path, err)
 		}
-		return nil, nil
+		return nil
 	}
 
-	return loadMappingFile(envFile.Path, envFile.Format, resolve)
+	err := loadMappingFile(envFile.Path, envFile.Format, environment, resolve)
+	return err
 }
 
 func loadLabelFile(labelFile string, resolve dotenv.LookupFn) (Mapping, error) {
@@ -712,21 +733,19 @@ func loadLabelFile(labelFile string, resolve dotenv.LookupFn) (Mapping, error) {
 		return nil, fmt.Errorf("label file %s not found: %w", labelFile, err)
 	}
 
-	return loadMappingFile(labelFile, "", resolve)
+	labels := Mapping{}
+	err := loadMappingFile(labelFile, "", labels, resolve)
+	return labels, err
 }
 
-func loadMappingFile(path string, format string, resolve dotenv.LookupFn) (Mapping, error) {
+func loadMappingFile(path string, format string, vars Mapping, resolve dotenv.LookupFn) error {
 	file, err := os.Open(path)
 	if err != nil {
-		return nil, err
+		return err
 	}
 	defer file.Close()
 
-	fileVars, err := dotenv.ParseWithFormat(file, path, resolve, format)
-	if err != nil {
-		return nil, err
-	}
-	return fileVars, nil
+	return dotenv.ParseWithFormat(file, path, vars, resolve, format)
 }
 
 func (p *Project) deepCopy() *Project {

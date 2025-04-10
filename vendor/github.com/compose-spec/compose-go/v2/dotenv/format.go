@@ -24,28 +24,28 @@ import (
 const DotEnv = ".env"
 
 var formats = map[string]Parser{
-	DotEnv: func(r io.Reader, filename string, lookup func(key string) (string, bool)) (map[string]string, error) {
-		m, err := ParseWithLookup(r, lookup)
+	DotEnv: func(r io.Reader, filename string, vars map[string]string, lookup func(key string) (string, bool)) error {
+		err := parseWithLookup(r, vars, lookup)
 		if err != nil {
-			return nil, fmt.Errorf("failed to read %s: %w", filename, err)
+			return fmt.Errorf("failed to read %s: %w", filename, err)
 		}
-		return m, nil
+		return nil
 	},
 }
 
-type Parser func(r io.Reader, filename string, lookup func(key string) (string, bool)) (map[string]string, error)
+type Parser func(r io.Reader, filename string, vars map[string]string, lookup func(key string) (string, bool)) error
 
 func RegisterFormat(format string, p Parser) {
 	formats[format] = p
 }
 
-func ParseWithFormat(r io.Reader, filename string, resolve LookupFn, format string) (map[string]string, error) {
+func ParseWithFormat(r io.Reader, filename string, vars map[string]string, resolve LookupFn, format string) error {
 	if format == "" {
 		format = DotEnv
 	}
 	fn, ok := formats[format]
 	if !ok {
-		return nil, fmt.Errorf("unsupported env_file format %q", format)
+		return fmt.Errorf("unsupported env_file format %q", format)
 	}
-	return fn(r, filename, resolve)
+	return fn(r, filename, vars, resolve)
 }

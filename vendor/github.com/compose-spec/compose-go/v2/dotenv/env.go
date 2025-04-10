@@ -35,7 +35,7 @@ func GetEnvFromFile(currentEnv map[string]string, filenames []string) (map[strin
 
 		s, err := os.Stat(dotEnvFile)
 		if os.IsNotExist(err) {
-			return envMap, fmt.Errorf("Couldn't find env file: %s", dotEnvFile)
+			return envMap, fmt.Errorf("couldn't find env file: %s", dotEnvFile)
 		}
 		if err != nil {
 			return envMap, err
@@ -50,7 +50,7 @@ func GetEnvFromFile(currentEnv map[string]string, filenames []string) (map[strin
 
 		b, err := os.ReadFile(dotEnvFile)
 		if os.IsNotExist(err) {
-			return nil, fmt.Errorf("Couldn't read env file: %s", dotEnvFile)
+			return nil, fmt.Errorf("couldn't read env file: %s", dotEnvFile)
 		}
 		if err != nil {
 			return envMap, err
