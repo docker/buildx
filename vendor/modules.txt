@@ -119,15 +119,9 @@ github.com/aws/smithy-go/rand
 github.com/aws/smithy-go/time
 github.com/aws/smithy-go/transport/http
 github.com/aws/smithy-go/transport/http/internal/io
-# github.com/beorn7/perks v1.0.1
-## explicit; go 1.11
-github.com/beorn7/perks/quantile
 # github.com/cenkalti/backoff/v4 v4.3.0
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
-# github.com/cespare/xxhash/v2 v2.3.0
-## explicit; go 1.11
-github.com/cespare/xxhash/v2
 # github.com/compose-spec/compose-go/v2 v2.6.0
 ## explicit; go 1.23
 github.com/compose-spec/compose-go/v2/cli
@@ -227,7 +221,7 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v28.0.4+incompatible
+# github.com/docker/cli v28.1.0+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/metadata
@@ -251,9 +245,10 @@ github.com/docker/cli/cli/flags
 github.com/docker/cli/cli/hints
 github.com/docker/cli/cli/streams
 github.com/docker/cli/cli/version
+github.com/docker/cli/internal/lazyregexp
+github.com/docker/cli/internal/prompt
 github.com/docker/cli/internal/tui
 github.com/docker/cli/opts
-github.com/docker/cli/opts/swarmopts
 github.com/docker/cli/pkg/kvfile
 github.com/docker/cli/templates
 # github.com/docker/cli-docs-tool v0.9.0
@@ -262,16 +257,6 @@ github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
 # github.com/docker/distribution v2.8.3+incompatible
 ## explicit
-github.com/docker/distribution
-github.com/docker/distribution/metrics
-github.com/docker/distribution/registry/api/errcode
-github.com/docker/distribution/registry/api/v2
-github.com/docker/distribution/registry/client
-github.com/docker/distribution/registry/client/auth
-github.com/docker/distribution/registry/client/auth/challenge
-github.com/docker/distribution/registry/client/transport
-github.com/docker/distribution/registry/storage/cache
-github.com/docker/distribution/registry/storage/cache/memory
 # github.com/docker/docker v28.1.0+incompatible
 ## explicit
 github.com/docker/docker/api
@@ -298,13 +283,11 @@ github.com/docker/docker/client
 github.com/docker/docker/errdefs
 github.com/docker/docker/internal/lazyregexp
 github.com/docker/docker/internal/multierror
-github.com/docker/docker/pkg/atomicwriter
 github.com/docker/docker/pkg/homedir
 github.com/docker/docker/pkg/jsonmessage
 github.com/docker/docker/pkg/namesgenerator
 github.com/docker/docker/pkg/stdcopy
 github.com/docker/docker/pkg/stringid
-github.com/docker/docker/registry
 # github.com/docker/docker-credential-helpers v0.9.3
 ## explicit; go 1.21
 github.com/docker/docker-credential-helpers/client
@@ -314,14 +297,9 @@ github.com/docker/docker-credential-helpers/credentials
 github.com/docker/go-connections/nat
 github.com/docker/go-connections/sockets
 github.com/docker/go-connections/tlsconfig
-# github.com/docker/go-metrics v0.0.1
-## explicit; go 1.11
-github.com/docker/go-metrics
 # github.com/docker/go-units v0.5.0
 ## explicit
 github.com/docker/go-units
-# github.com/docker/libtrust v0.0.0-20160708172513-aabc10ec26b7
-## explicit
 # github.com/emicklei/go-restful/v3 v3.11.0
 ## explicit; go 1.13
 github.com/emicklei/go-restful/v3
@@ -395,9 +373,6 @@ github.com/google/shlex
 # github.com/google/uuid v1.6.0
 ## explicit
 github.com/google/uuid
-# github.com/gorilla/mux v1.8.1
-## explicit; go 1.20
-github.com/gorilla/mux
 # github.com/gorilla/websocket v1.5.0
 ## explicit; go 1.12
 github.com/gorilla/websocket
@@ -653,25 +628,6 @@ github.com/planetscale/vtprotobuf/vtproto
 # github.com/pmezard/go-difflib v1.0.0
 ## explicit
 github.com/pmezard/go-difflib/difflib
-# github.com/prometheus/client_golang v1.20.5
-## explicit; go 1.20
-github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil
-github.com/prometheus/client_golang/internal/github.com/golang/gddo/httputil/header
-github.com/prometheus/client_golang/prometheus
-github.com/prometheus/client_golang/prometheus/internal
-github.com/prometheus/client_golang/prometheus/promhttp
-# github.com/prometheus/client_model v0.6.1
-## explicit; go 1.19
-github.com/prometheus/client_model/go
-# github.com/prometheus/common v0.55.0
-## explicit; go 1.20
-github.com/prometheus/common/expfmt
-github.com/prometheus/common/model
-# github.com/prometheus/procfs v0.15.1
-## explicit; go 1.20
-github.com/prometheus/procfs
-github.com/prometheus/procfs/internal/fs
-github.com/prometheus/procfs/internal/util
 # github.com/rivo/uniseg v0.2.0
 ## explicit; go 1.12
 github.com/rivo/uniseg
@@ -1014,7 +970,6 @@ google.golang.org/grpc/cmd/protoc-gen-go-grpc
 google.golang.org/protobuf/cmd/protoc-gen-go
 google.golang.org/protobuf/cmd/protoc-gen-go/internal_gengo
 google.golang.org/protobuf/compiler/protogen
-google.golang.org/protobuf/encoding/protodelim
 google.golang.org/protobuf/encoding/protojson
 google.golang.org/protobuf/encoding/prototext
 google.golang.org/protobuf/encoding/protowire

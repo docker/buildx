@@ -13,9 +13,9 @@ import (
 	configtypes "github.com/docker/cli/cli/config/types"
 	"github.com/docker/cli/cli/hints"
 	"github.com/docker/cli/cli/streams"
+	"github.com/docker/cli/internal/prompt"
 	"github.com/docker/cli/internal/tui"
 	registrytypes "github.com/docker/docker/api/types/registry"
-	"github.com/docker/docker/registry"
 	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 )
@@ -28,16 +28,22 @@ const (
 		"for organizations using SSO. Learn more at https://docs.docker.com/go/access-tokens/"
 )
 
+// authConfigKey is the key used to store credentials for Docker Hub. It is
+// a copy of [registry.IndexServer].
+//
+// [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker/registry#IndexServer
+const authConfigKey = "https://index.docker.io/v1/"
+
 // RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
 // for the given command.
 func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) registrytypes.RequestAuthConfig {
+	configKey := getAuthConfigKey(index.Name)
+	isDefaultRegistry := configKey == authConfigKey || index.Official
 	return func(ctx context.Context) (string, error) {
 		_, _ = fmt.Fprintf(cli.Out(), "\nLogin prior to %s:\n", cmdName)
-		indexServer := registry.GetAuthConfigKey(index)
-		isDefaultRegistry := indexServer == registry.IndexServer
-		authConfig, err := GetDefaultAuthConfig(cli.ConfigFile(), true, indexServer, isDefaultRegistry)
+		authConfig, err := GetDefaultAuthConfig(cli.ConfigFile(), true, configKey, isDefaultRegistry)
 		if err != nil {
-			_, _ = fmt.Fprintf(cli.Err(), "Unable to retrieve stored credentials for %s, error: %s.\n", indexServer, err)
+			_, _ = fmt.Fprintf(cli.Err(), "Unable to retrieve stored credentials for %s, error: %s.\n", authConfigKey, err)
 		}
 
 		select {
@@ -46,7 +52,7 @@ func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInf
 		default:
 		}
 
-		authConfig, err = PromptUserForCredentials(ctx, cli, "", "", authConfig.Username, indexServer)
+		authConfig, err = PromptUserForCredentials(ctx, cli, "", "", authConfig.Username, authConfigKey)
 		if err != nil {
 			return "", err
 		}
@@ -63,7 +69,7 @@ func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInf
 func ResolveAuthConfig(cfg *configfile.ConfigFile, index *registrytypes.IndexInfo) registrytypes.AuthConfig {
 	configKey := index.Name
 	if index.Official {
-		configKey = registry.IndexServer
+		configKey = authConfigKey
 	}
 
 	a, _ := cfg.GetAuthConfig(configKey)
@@ -132,7 +138,7 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 
 	argUser = strings.TrimSpace(argUser)
 	if argUser == "" {
-		if serverAddress == registry.IndexServer {
+		if serverAddress == authConfigKey {
 			// When signing in to the default (Docker Hub) registry, we display
 			// hints for creating an account, and (if hints are enabled), using
 			// a token instead of a password.
@@ -143,16 +149,16 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 			}
 		}
 
-		var prompt string
+		var msg string
 		defaultUsername = strings.TrimSpace(defaultUsername)
 		if defaultUsername == "" {
-			prompt = "Username: "
+			msg = "Username: "
 		} else {
-			prompt = fmt.Sprintf("Username (%s): ", defaultUsername)
+			msg = fmt.Sprintf("Username (%s): ", defaultUsername)
 		}
 
 		var err error
-		argUser, err = PromptForInput(ctx, cli.In(), cli.Out(), prompt)
+		argUser, err = prompt.ReadInput(ctx, cli.In(), cli.Out(), msg)
 		if err != nil {
 			return registrytypes.AuthConfig{}, err
 		}
@@ -166,7 +172,7 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 
 	argPassword = strings.TrimSpace(argPassword)
 	if argPassword == "" {
-		restoreInput, err := DisableInputEcho(cli.In())
+		restoreInput, err := prompt.DisableInputEcho(cli.In())
 		if err != nil {
 			return registrytypes.AuthConfig{}, err
 		}
@@ -180,10 +186,13 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 			}
 		}()
 
-		out := tui.NewOutput(cli.Err())
-		out.PrintNote("A Personal Access Token (PAT) can be used instead.\n" +
-			"To create a PAT, visit " + aec.Underline.Apply("https://app.docker.com/settings") + "\n\n")
-		argPassword, err = PromptForInput(ctx, cli.In(), cli.Out(), "Password: ")
+		if serverAddress == authConfigKey {
+			out := tui.NewOutput(cli.Err())
+			out.PrintNote("A Personal Access Token (PAT) can be used instead.\n" +
+				"To create a PAT, visit " + aec.Underline.Apply("https://app.docker.com/settings") + "\n\n")
+		}
+
+		argPassword, err = prompt.ReadInput(ctx, cli.In(), cli.Out(), "Password: ")
 		if err != nil {
 			return registrytypes.AuthConfig{}, err
 		}
@@ -225,9 +234,25 @@ func resolveAuthConfigFromImage(cfg *configfile.ConfigFile, image string) (regis
 	if err != nil {
 		return registrytypes.AuthConfig{}, err
 	}
-	repoInfo, err := registry.ParseRepositoryInfo(registryRef)
+	configKey := getAuthConfigKey(reference.Domain(registryRef))
+	a, err := cfg.GetAuthConfig(configKey)
 	if err != nil {
 		return registrytypes.AuthConfig{}, err
 	}
-	return ResolveAuthConfig(cfg, repoInfo.Index), nil
+	return registrytypes.AuthConfig(a), nil
+}
+
+// getAuthConfigKey special-cases using the full index address of the official
+// index as the AuthConfig key, and uses the (host)name[:port] for private indexes.
+//
+// It is similar to [registry.GetAuthConfigKey], but does not require on
+// [registrytypes.IndexInfo] as intermediate.
+//
+// [registry.GetAuthConfigKey]: https://pkg.go.dev/github.com/docker/docker/registry#GetAuthConfigKey
+// [registrytypes.IndexInfo]:https://pkg.go.dev/github.com/docker/docker/api/types/registry#IndexInfo
+func getAuthConfigKey(domainName string) string {
+	if domainName == "docker.io" || domainName == "index.docker.io" {
+		return authConfigKey
+	}
+	return domainName
 }

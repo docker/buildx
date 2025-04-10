@@ -1,70 +1,45 @@
 // FIXME(thaJeztah): remove once we are a module; the go:build directive prevents go from downgrading language version to go1.16:
-//go:build go1.22
+//go:build go1.23
 
 package command
 
 import (
-	"bufio"
 	"context"
-	"fmt"
 	"io"
 	"os"
 	"path/filepath"
-	"runtime"
 	"strings"
 
 	"github.com/docker/cli/cli/config"
 	"github.com/docker/cli/cli/streams"
+	"github.com/docker/cli/internal/prompt"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/errdefs"
-	"github.com/moby/sys/sequential"
-	"github.com/moby/term"
+	"github.com/moby/sys/atomicwriter"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 )
 
 // CopyToFile writes the content of the reader to the specified file
+//
+// Deprecated: use [atomicwriter.New].
 func CopyToFile(outfile string, r io.Reader) error {
-	// We use sequential file access here to avoid depleting the standby list
-	// on Windows. On Linux, this is a call directly to os.CreateTemp
-	tmpFile, err := sequential.CreateTemp(filepath.Dir(outfile), ".docker_temp_")
+	writer, err := atomicwriter.New(outfile, 0o600)
 	if err != nil {
 		return err
 	}
-
-	tmpPath := tmpFile.Name()
-
-	_, err = io.Copy(tmpFile, r)
-	tmpFile.Close()
-
-	if err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-
-	if err = os.Rename(tmpPath, outfile); err != nil {
-		os.Remove(tmpPath)
-		return err
-	}
-
-	return nil
+	defer writer.Close()
+	_, err = io.Copy(writer, r)
+	return err
 }
 
-var ErrPromptTerminated = errdefs.Cancelled(errors.New("prompt terminated"))
+const ErrPromptTerminated = prompt.ErrTerminated
 
 // DisableInputEcho disables input echo on the provided streams.In.
 // This is useful when the user provides sensitive information like passwords.
 // The function returns a restore function that should be called to restore the
 // terminal state.
 func DisableInputEcho(ins *streams.In) (restore func() error, err error) {
-	oldState, err := term.SaveState(ins.FD())
-	if err != nil {
-		return nil, err
-	}
-	restore = func() error {
-		return term.RestoreTerminal(ins.FD(), oldState)
-	}
-	return restore, term.DisableEcho(ins.FD(), oldState)
+	return prompt.DisableInputEcho(ins)
 }
 
 // PromptForInput requests input from the user.
@@ -75,23 +50,7 @@ func DisableInputEcho(ins *streams.In) (restore func() error, err error) {
 // the stack and close the io.Reader used for the prompt which will prevent the
 // background goroutine from blocking indefinitely.
 func PromptForInput(ctx context.Context, in io.Reader, out io.Writer, message string) (string, error) {
-	_, _ = fmt.Fprint(out, message)
-
-	result := make(chan string)
-	go func() {
-		scanner := bufio.NewScanner(in)
-		if scanner.Scan() {
-			result <- strings.TrimSpace(scanner.Text())
-		}
-	}()
-
-	select {
-	case <-ctx.Done():
-		_, _ = fmt.Fprintln(out, "")
-		return "", ErrPromptTerminated
-	case r := <-result:
-		return r, nil
-	}
+	return prompt.ReadInput(ctx, in, out, message)
 }
 
 // PromptForConfirmation requests and checks confirmation from the user.
@@ -105,68 +64,45 @@ func PromptForInput(ctx context.Context, in io.Reader, out io.Writer, message st
 // the stack and close the io.Reader used for the prompt which will prevent the
 // background goroutine from blocking indefinitely.
 func PromptForConfirmation(ctx context.Context, ins io.Reader, outs io.Writer, message string) (bool, error) {
-	if message == "" {
-		message = "Are you sure you want to proceed?"
-	}
-	message += " [y/N] "
-
-	_, _ = fmt.Fprint(outs, message)
-
-	// On Windows, force the use of the regular OS stdin stream.
-	if runtime.GOOS == "windows" {
-		ins = streams.NewIn(os.Stdin)
-	}
-
-	result := make(chan bool)
-
-	go func() {
-		var res bool
-		scanner := bufio.NewScanner(ins)
-		if scanner.Scan() {
-			answer := strings.TrimSpace(scanner.Text())
-			if strings.EqualFold(answer, "y") {
-				res = true
-			}
-		}
-		result <- res
-	}()
-
-	select {
-	case <-ctx.Done():
-		_, _ = fmt.Fprintln(outs, "")
-		return false, ErrPromptTerminated
-	case r := <-result:
-		return r, nil
-	}
+	return prompt.Confirm(ctx, ins, outs, message)
 }
 
-// PruneFilters returns consolidated prune filters obtained from config.json and cli
+// PruneFilters merges prune filters specified in config.json with those specified
+// as command-line flags.
+//
+// CLI label filters have precedence over those specified in config.json. If a
+// label filter specified as flag conflicts with a label defined in config.json
+// (i.e., "label=some-value" conflicts with "label!=some-value", and vice versa),
+// then the filter defined in config.json is omitted.
 func PruneFilters(dockerCLI config.Provider, pruneFilters filters.Args) filters.Args {
 	cfg := dockerCLI.ConfigFile()
 	if cfg == nil {
 		return pruneFilters
 	}
+
+	// Merge filters provided through the CLI with default filters defined
+	// in the CLI-configfile.
 	for _, f := range cfg.PruneFilters {
 		k, v, ok := strings.Cut(f, "=")
 		if !ok {
 			continue
 		}
-		if k == "label" {
-			// CLI label filter supersede config.json.
-			// If CLI label filter conflict with config.json,
-			// skip adding label! filter in config.json.
-			if pruneFilters.Contains("label!") && pruneFilters.ExactMatch("label!", v) {
+		switch k {
+		case "label":
+			// "label != some-value" conflicts with "label = some-value"
+			if pruneFilters.ExactMatch("label!", v) {
 				continue
 			}
-		} else if k == "label!" {
-			// CLI label! filter supersede config.json.
-			// If CLI label! filter conflict with config.json,
-			// skip adding label filter in config.json.
-			if pruneFilters.Contains("label") && pruneFilters.ExactMatch("label", v) {
+			pruneFilters.Add(k, v)
+		case "label!":
+			// "label != some-value" conflicts with "label = some-value"
+			if pruneFilters.ExactMatch("label", v) {
 				continue
 			}
+			pruneFilters.Add(k, v)
+		default:
+			pruneFilters.Add(k, v)
 		}
-		pruneFilters.Add(k, v)
 	}
 
 	return pruneFilters
@@ -178,7 +114,7 @@ func AddPlatformFlag(flags *pflag.FlagSet, target *string) {
 	_ = flags.SetAnnotation("platform", "version", []string{"1.32"})
 }
 
-// ValidateOutputPath validates the output paths of the `export` and `save` commands.
+// ValidateOutputPath validates the output paths of the "docker cp" command.
 func ValidateOutputPath(path string) error {
 	dir := filepath.Dir(filepath.Clean(path))
 	if dir != "" && dir != "." {
@@ -204,8 +140,8 @@ func ValidateOutputPath(path string) error {
 	return nil
 }
 
-// ValidateOutputPathFileMode validates the output paths of the `cp` command and serves as a
-// helper to `ValidateOutputPath`
+// ValidateOutputPathFileMode validates the output paths of the "docker cp" command
+// and serves as a helper to [ValidateOutputPath]
 func ValidateOutputPathFileMode(fileMode os.FileMode) error {
 	switch {
 	case fileMode&os.ModeDevice != 0:

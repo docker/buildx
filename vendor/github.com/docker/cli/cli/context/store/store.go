@@ -1,5 +1,5 @@
 // FIXME(thaJeztah): remove once we are a module; the go:build directive prevents go from downgrading language version to go1.16:
-//go:build go1.22
+//go:build go1.23
 
 package store
 
@@ -14,9 +14,9 @@ import (
 	"net/http"
 	"path"
 	"path/filepath"
-	"regexp"
 	"strings"
 
+	"github.com/docker/cli/internal/lazyregexp"
 	"github.com/docker/docker/errdefs"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
@@ -24,7 +24,7 @@ import (
 
 const restrictedNamePattern = "^[a-zA-Z0-9][a-zA-Z0-9_.+-]+$"
 
-var restrictedNameRegEx = regexp.MustCompile(restrictedNamePattern)
+var restrictedNameRegEx = lazyregexp.New(restrictedNamePattern)
 
 // Store provides a context store for easily remembering endpoints configuration
 type Store interface {
@@ -356,7 +356,7 @@ func isValidFilePath(p string) error {
 }
 
 func importTar(name string, s Writer, reader io.Reader) error {
-	tr := tar.NewReader(&LimitedReader{R: reader, N: maxAllowedFileSizeToImport})
+	tr := tar.NewReader(&limitedReader{R: reader, N: maxAllowedFileSizeToImport})
 	tlsData := ContextTLSData{
 		Endpoints: map[string]EndpointTLSData{},
 	}
@@ -406,7 +406,7 @@ func importTar(name string, s Writer, reader io.Reader) error {
 }
 
 func importZip(name string, s Writer, reader io.Reader) error {
-	body, err := io.ReadAll(&LimitedReader{R: reader, N: maxAllowedFileSizeToImport})
+	body, err := io.ReadAll(&limitedReader{R: reader, N: maxAllowedFileSizeToImport})
 	if err != nil {
 		return err
 	}
@@ -434,7 +434,7 @@ func importZip(name string, s Writer, reader io.Reader) error {
 				return err
 			}
 
-			data, err := io.ReadAll(&LimitedReader{R: f, N: maxAllowedFileSizeToImport})
+			data, err := io.ReadAll(&limitedReader{R: f, N: maxAllowedFileSizeToImport})
 			defer f.Close()
 			if err != nil {
 				return err
