@@ -404,6 +404,10 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 			os.Exit(exitcode)
 		}
 	}
+	if v, ok := resp.ExporterResponse["frontend.result.inlinemessage"]; ok {
+		fmt.Fprintf(dockerCli.Out(), "\n%s\n", v)
+		return nil
+	}
 	return nil
 }
 
