@@ -8,8 +8,8 @@ import (
 	"sync"
 
 	"github.com/docker/cli/cli/command"
-	"github.com/docker/docker/pkg/atomicwriter"
 	"github.com/moby/buildkit/cmd/buildkitd/config"
+	"github.com/moby/sys/atomicwriter"
 	"github.com/pelletier/go-toml"
 	"github.com/pkg/errors"
 	fs "github.com/tonistiigi/fsutil/copy"
