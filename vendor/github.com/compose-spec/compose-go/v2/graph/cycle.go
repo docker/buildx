@@ -18,11 +18,11 @@ package graph
 
 import (
 	"fmt"
+	"slices"
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/types"
 	"github.com/compose-spec/compose-go/v2/utils"
-	"golang.org/x/exp/slices"
 )
 
 // CheckCycle analyze project's depends_on relation and report an error on cycle detection

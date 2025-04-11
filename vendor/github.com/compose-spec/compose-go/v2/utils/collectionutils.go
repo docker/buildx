@@ -17,15 +17,13 @@
 package utils
 
 import (
-	"golang.org/x/exp/constraints"
-	"golang.org/x/exp/maps"
-	"golang.org/x/exp/slices"
+	"cmp"
+	"maps"
+	"slices"
 )
 
-func MapKeys[T constraints.Ordered, U any](theMap map[T]U) []T {
-	result := maps.Keys(theMap)
-	slices.Sort(result)
-	return result
+func MapKeys[T cmp.Ordered, U any](theMap map[T]U) []T {
+	return slices.Sorted(maps.Keys(theMap))
 }
 
 func MapsAppend[T comparable, U any](target map[T]U, source map[T]U) map[T]U {
