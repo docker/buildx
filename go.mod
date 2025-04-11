@@ -6,7 +6,7 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
-	github.com/compose-spec/compose-go/v2 v2.4.9
+	github.com/compose-spec/compose-go/v2 v2.6.0
 	github.com/containerd/console v1.0.4
 	github.com/containerd/containerd/v2 v2.0.4
 	github.com/containerd/continuity v0.4.5
@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/in-toto/in-toto-golang v0.5.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.21.0-rc1
+	github.com/moby/buildkit v0.21.0-rc2
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/moby/sys/signal v0.7.1
 	github.com/morikuni/aec v1.0.0
@@ -44,7 +44,7 @@ require (
 	github.com/spf13/cobra v1.9.1
 	github.com/spf13/pflag v1.0.6
 	github.com/stretchr/testify v1.10.0
-	github.com/tonistiigi/fsutil v0.0.0-20250318190121-d73a4b3b8a7e
+	github.com/tonistiigi/fsutil v0.0.0-20250410151801-5b74a7ad7583
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
 	github.com/tonistiigi/jaeger-ui-rest v0.0.0-20250408171107-3dd17559e117
 	github.com/zclconf/go-cty v1.16.0
@@ -168,7 +168,6 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.31.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
-	golang.org/x/exp v0.0.0-20250408133849-7e4ce0ab07d0 // indirect
 	golang.org/x/net v0.39.0 // indirect
 	golang.org/x/oauth2 v0.23.0 // indirect
 	golang.org/x/time v0.11.0 // indirect

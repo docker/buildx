@@ -424,6 +424,14 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		fmt.Fprintln(dockerCli.Out(), string(dt))
 	}
 
+	for _, name := range names {
+		if sp, ok := resp[name]; ok {
+			if v, ok := sp.ExporterResponse["frontend.result.inlinemessage"]; ok {
+				fmt.Fprintf(dockerCli.Out(), "\n# %s\n%s\n", name, v)
+			}
+		}
+	}
+
 	if exitCode != 0 {
 		os.Exit(exitCode)
 	}

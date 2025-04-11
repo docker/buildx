@@ -18,9 +18,9 @@ package graph
 
 import (
 	"context"
+	"slices"
 	"sync"
 
-	"golang.org/x/exp/slices"
 	"golang.org/x/sync/errgroup"
 )
 
