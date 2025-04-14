@@ -13,7 +13,7 @@ function "add" {
 
 function "list" {
   params         = []
-  variadic_param = items
+  variadic_params = items
   result         = items
 }
 ```
