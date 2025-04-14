@@ -1,9 +1,7 @@
 // Copyright (c) HashiCorp, Inc.
 // SPDX-License-Identifier: MPL-2.0
 
-// Forked from https://github.com/hashicorp/hcl/blob/4679383728fe331fc8a6b46036a27b8f818d9bc0/merged.go
-
-package hclparser
+package hcl
 
 import (
 	"fmt"
