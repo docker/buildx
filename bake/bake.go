@@ -18,6 +18,7 @@ import (
 
 	composecli "github.com/compose-spec/compose-go/v2/cli"
 	"github.com/docker/buildx/bake/hclparser"
+	hclalt "github.com/docker/buildx/bake/hclparser/hcl"
 	"github.com/docker/buildx/build"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
@@ -346,7 +347,7 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 
 	var pm hclparser.ParseMeta
 	if len(hclFiles) > 0 {
-		res, err := hclparser.Parse(hclparser.MergeFiles(hclFiles), hclparser.Opt{
+		res, err := hclparser.Parse(hclalt.MergeFiles(hclFiles), hclparser.Opt{
 			LookupVar:     os.LookupEnv,
 			Vars:          defaults,
 			ValidateLabel: validateTargetName,
