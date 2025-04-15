@@ -1226,4 +1226,4 @@ target "webapp-dev" {
 [ssh]: https://docs.docker.com/reference/cli/docker/buildx/build/#ssh
 [tag]: https://docs.docker.com/reference/cli/docker/image/build/#tag
 [target]: https://docs.docker.com/reference/cli/docker/image/build/#target
-[userfunc]: https://github.com/hashicorp/hcl/tree/main/ext/userfunc
+[userfunc]: https://github.com/docker/buildx/tree/master/bake/hclparser/hcl/ext/userfunc
