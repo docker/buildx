@@ -42,7 +42,7 @@ type variableValidation struct {
 type functionDef struct {
 	Name     string         `json:"-" hcl:"name,label"`
 	Params   *hcl.Attribute `json:"params,omitempty" hcl:"params"`
-	Variadic *hcl.Attribute `json:"variadic_param,omitempty" hcl:"variadic_params"`
+	Variadic *hcl.Attribute `json:"variadic_params,omitempty" hcl:"variadic_params"`
 	Result   *hcl.Attribute `json:"result,omitempty" hcl:"result"`
 }
 
