@@ -78,16 +78,7 @@ type features struct {
 
 func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	d.features.once.Do(func() {
-		var useContainerdSnapshotter bool
-		if c, err := d.Client(ctx); err == nil {
-			workers, _ := c.ListWorkers(ctx)
-			for _, w := range workers {
-				if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
-					useContainerdSnapshotter = true
-				}
-			}
-			c.Close()
-		}
+		useContainerdSnapshotter := d.UsesContainerdSnapshotter(ctx)
 		d.features.list = map[driver.Feature]bool{
 			driver.OCIExporter:    useContainerdSnapshotter,
 			driver.DockerExporter: useContainerdSnapshotter,
@@ -142,6 +133,20 @@ func (d *Driver) Factory() driver.Factory {
 
 func (d *Driver) IsMobyDriver() bool {
 	return true
+}
+
+func (d *Driver) UsesContainerdSnapshotter(ctx context.Context) bool {
+	var containerdSnapshotter bool
+	if c, err := d.Client(ctx); err == nil {
+		workers, _ := c.ListWorkers(ctx)
+		for _, w := range workers {
+			if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
+				containerdSnapshotter = true
+			}
+		}
+		c.Close()
+	}
+	return containerdSnapshotter
 }
 
 func (d *Driver) Config() driver.InitConfig {

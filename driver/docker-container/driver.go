@@ -63,6 +63,20 @@ func (d *Driver) IsMobyDriver() bool {
 	return false
 }
 
+func (d *Driver) UsesContainerdSnapshotter(ctx context.Context) bool {
+	var containerdSnapshotter bool
+	if c, err := d.Client(ctx); err == nil {
+		workers, _ := c.ListWorkers(ctx)
+		for _, w := range workers {
+			if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
+				containerdSnapshotter = true
+			}
+		}
+		c.Close()
+	}
+	return containerdSnapshotter
+}
+
 func (d *Driver) Config() driver.InitConfig {
 	return d.InitConfig
 }

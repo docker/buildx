@@ -74,6 +74,7 @@ type Driver interface {
 	Features(ctx context.Context) map[Feature]bool
 	HostGatewayIP(ctx context.Context) (net.IP, error)
 	IsMobyDriver() bool
+	UsesContainerdSnapshotter(ctx context.Context) bool
 	Config() InitConfig
 }
 

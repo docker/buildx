@@ -399,18 +399,9 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 	require.Equal(t, dgst.String(), strings.TrimSpace(stdout.String()))
 
-	dt, err = os.ReadFile(filepath.Join(targetDir, "md.json"))
-	require.NoError(t, err)
-
-	type mdT struct {
-		ConfigDigest string `json:"containerimage.config.digest"`
-	}
-	var md mdT
-	err = json.Unmarshal(dt, &md)
-	require.NoError(t, err)
-
-	require.NotEmpty(t, md.ConfigDigest)
-	require.Equal(t, dgst, digest.Digest(md.ConfigDigest))
+	// verify the image ID is the correct one
+	cmd = dockerCmd(sb, withArgs("run", imageID))
+	require.NoError(t, cmd.Run())
 }
 
 func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {

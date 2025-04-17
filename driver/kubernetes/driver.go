@@ -59,6 +59,10 @@ func (d *Driver) IsMobyDriver() bool {
 	return false
 }
 
+func (d *Driver) UsesContainerdSnapshotter(ctx context.Context) bool {
+	return false
+}
+
 func (d *Driver) Config() driver.InitConfig {
 	return d.InitConfig
 }

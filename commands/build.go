@@ -33,6 +33,7 @@ import (
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
+	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metricutil"
 	"github.com/docker/buildx/util/osutil"
@@ -321,11 +322,17 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	if err != nil {
 		return err
 	}
+
 	_, err = b.LoadNodes(ctx)
 	if err != nil {
 		return err
 	}
 	driverType := b.Driver
+
+	dockerUsingContainerdSnapshotter := false
+	if driverType == "docker" || driverType == "docker-container" {
+		dockerUsingContainerdSnapshotter = isDockerUsingContainerdSnapshotter(ctx, dockerCli)
+	}
 
 	var term bool
 	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
@@ -377,12 +384,12 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	case progressui.RawJSONMode:
 		// no additional display
 	case progressui.QuietMode:
-		fmt.Println(getImageID(resp.ExporterResponse))
+		fmt.Println(getImageID(resp.ExporterResponse, dockerUsingContainerdSnapshotter))
 	default:
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
 	if options.imageIDFile != "" {
-		if err := os.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse)), 0644); err != nil {
+		if err := os.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse, dockerUsingContainerdSnapshotter)), 0644); err != nil {
 			return errors.Wrap(err, "writing image ID file")
 		}
 	}
@@ -408,12 +415,26 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 }
 
 // getImageID returns the image ID - the digest of the image config
-func getImageID(resp map[string]string) string {
-	dgst := resp[exptypes.ExporterImageDigestKey]
-	if v, ok := resp[exptypes.ExporterImageConfigDigestKey]; ok {
-		dgst = v
+func getImageID(resp map[string]string, dockerUsingContainerdSnapshotter bool) string {
+	if dockerUsingContainerdSnapshotter {
+		// If Docker is using the containerd snapshotter, use the image digest, not
+		// the image config digest. See https://github.com/moby/moby/issues/45458.
+		return resp[exptypes.ExporterImageDigestKey]
+	} else {
+		return resp[exptypes.ExporterImageConfigDigestKey]
 	}
-	return dgst
+}
+
+func isDockerUsingContainerdSnapshotter(ctx context.Context, dockerCli command.Cli) bool {
+	usingContainerdSnapshotter := false
+
+	docker := dockerutil.NewClient(dockerCli)
+	features := docker.Features(ctx, "")
+	if features[dockerutil.OCIImporter] {
+		usingContainerdSnapshotter = true
+	}
+
+	return usingContainerdSnapshotter
 }
 
 func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
