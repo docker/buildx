@@ -14,3 +14,34 @@ Print the logs of a build
 
 <!---MARKER_GEN_END-->
 
+## Description
+
+Print the logs for a completed build. The output appears in the same format as `--progress=plain`, showing the full logs for each step without multiplexing.
+
+By default, this shows logs for the most recent build on the current builder.
+
+## Examples
+
+### Print logs for the most recent build
+
+```console
+docker buildx history logs
+```
+
+### Print logs for a specific build
+
+```console
+docker buildx history logs mybuild
+```
+
+### Print logs in JSON format
+
+```console
+docker buildx history logs mybuild --progress rawjson
+```
+
+### Print logs in TTY format
+
+```console
+docker buildx history logs mybuild --progress tty
+```

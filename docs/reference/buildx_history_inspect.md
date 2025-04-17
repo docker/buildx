@@ -21,7 +21,19 @@ Inspect a build
 
 <!---MARKER_GEN_END-->
 
+## Description
+
+Inspect a build record to view metadata such as duration, status, build inputs,
+platforms, outputs, and attached artifacts. You can also use flags to extract
+provenance, SBOMs, or other detailed information.
+
 ## Examples
+
+### Inspect a build and print metadata
+
+```console
+docker buildx history inspect mybuild
+```
 
 ### <a name="format"></a> Format the output (--format)
 
