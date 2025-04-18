@@ -1,0 +1,18 @@
+version: "3.7"
+x-project-base:
+  &project-base
+  restart: always
+  networks:
+    - remixide
+
+networks:
+  remixide:
+
+services:
+  remixide:
+    <<: *project-base
+    image: remixproject/remix-ide:$TAG
+    container_name: remixide-${TAG}
+    ports: 
+      - 8080:80
+      - 65520:65520

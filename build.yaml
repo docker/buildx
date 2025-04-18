@@ -1,0 +1,15 @@
+version: "3.7"
+x-project-base:
+  &project-base
+  restart: always
+  networks:
+    - remixide
+
+networks:
+  remixide:
+
+services:
+  remixide:
+    build: 
+      context: .
+      dockerfile: Dockerfile

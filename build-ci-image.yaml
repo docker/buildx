@@ -1,0 +1,14 @@
+# Usage: gcloud builds submit --config build/build-ci-image.yaml .
+steps:
+- name: 'gcr.io/cloud-builders/docker'
+  entrypoint: 'bash'
+  args: ['-c', 'docker pull us-docker.pkg.dev/$PROJECT_ID/vscode-go-docker-repo/ci-image:latest || exit 0']
+- name: 'gcr.io/cloud-builders/docker'
+  # https://cloud.google.com/build/docs/optimize-builds/speeding-up-builds
+  args: [
+        'build',
+        '-t', 'us-docker.pkg.dev/$PROJECT_ID/vscode-go-docker-repo/ci-image:latest',
+        '--cache-from', 'us-docker.pkg.dev/$PROJECT_ID/vscode-go-docker-repo/ci-image:latest',
+        '-f', 'build/Dockerfile',
+        '.']
+images: ['us-docker.pkg.dev/$PROJECT_ID/vscode-go-docker-repo/ci-image']

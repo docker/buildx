@@ -1,0 +1,79 @@
+# Note to maintainers: after you make changes to this file, please run `make snap_image`.
+#  The script will gives instructions to complete the update once it finishes. Be patient, it
+#  takes a long time to run.
+#
+# For help with the technical aspects of this Dockerfile, see
+#   https://snapcraft.io/docs/t/creating-docker-images-for-snapcraft/11739
+#   https://raw.githubusercontent.com/snapcore/snapcraft/master/docker/stable.Dockerfile
+# and https://forum.snapcraft.io/. Note that the snapcraft forum does not appear to be indexed
+# effectively (at all?) by google.
+#
+# See https://docs.docker.com/develop/develop-images/dockerfile_best-practices/
+#  for guidance on the style of this Dockerfile
+FROM ubuntu:focal as builder
+
+RUN apt-get update && apt-get install --yes \
+        curl \
+        jq \
+        squashfs-tools
+
+# Grab the core snap (for backwards compatibility) from the stable channel and unpack it in the proper place
+RUN curl -L $(curl -H 'X-Ubuntu-Series: 16' 'https://api.snapcraft.io/api/v1/snaps/details/core' | jq '.download_url' -r) --output core.snap && \
+        mkdir -p /snap/core && \
+        unsquashfs -d /snap/core/current core.snap
+
+# Grab the core18 snap (which snapcraft uses as a base) from the stable channel and unpack it in the proper place.
+RUN curl -L $(curl -H 'X-Ubuntu-Series: 16' 'https://api.snapcraft.io/api/v1/snaps/details/core18' | jq '.download_url' -r) --output core18.snap && \
+        mkdir -p /snap/core18 && \
+        unsquashfs -d /snap/core18/current core18.snap
+
+# Grab the core20 snap from the stable channel and unpack it in the proper place.
+RUN curl -L $(curl -H 'X-Ubuntu-Series: 16' 'https://api.snapcraft.io/api/v1/snaps/details/core20' | jq '.download_url' -r) --output core20.snap && \
+        mkdir -p /snap/core20 && \
+        unsquashfs -d /snap/core20/current core20.snap
+
+# Grab the snapcraft snap from the stable channel and unpack it in the proper place
+RUN curl -L $(curl -H 'X-Ubuntu-Series: 16' 'https://api.snapcraft.io/api/v1/snaps/details/snapcraft?channel=stable' | jq '.download_url' -r) --output snapcraft.snap && \
+        mkdir -p /snap/snapcraft && \
+        unsquashfs -d /snap/snapcraft/current snapcraft.snap
+
+# Create a snapcraft runner (TODO: move version detection to the core of snapcraft)
+RUN mkdir -p /snap/bin && \
+        echo "#!/bin/sh" > /snap/bin/snapcraft && \
+        snap_version="$(awk '/^version:/{print $2}' /snap/snapcraft/current/meta/snap.yaml)" && \
+        echo "export SNAP_VERSION=\"$snap_version\"" >> /snap/bin/snapcraft && \
+        echo 'exec "$SNAP/usr/bin/python3" "$SNAP/bin/snapcraft" "$@"' >> /snap/bin/snapcraft && \
+        chmod +x /snap/bin/snapcraft
+
+# Grab the golang snap from the stable channel, unpack it in the proper place, and create a runner for it
+RUN curl -L $(curl -H 'X-Ubuntu-Series: 16' 'https://api.snapcraft.io/api/v1/snaps/details/go?channel=1.16/stable' | jq '.download_url' -r) --output go.snap && \
+        mkdir -p /snap/go && \
+        unsquashfs -d /snap/go/current go.snap && \
+        cd /snap/bin && \
+        ln -s /snap/go/current/bin/go
+
+FROM ubuntu:focal
+COPY --from=builder /snap /snap
+
+# Install Snap build-time dependencies & generate locale
+ARG DEBIAN_FRONTEND=noninteractive
+RUN apt-get clean && apt-get update && apt-get install --yes \
+	build-essential \
+	golang-go \
+	git \
+	locales \
+	snapd && \
+	locale-gen en_US.UTF-8 && \
+	rm -rf /var/lib/apt/lists/*
+
+# Set the proper environment
+ENV LANG en_US.UTF-8
+ENV LANGUAGE en_US:en
+ENV LC_ALL en_US.UTF-8
+ENV PATH "/snap/bin:$PATH"
+ENV SNAP /snap/snapcraft/current
+ENV SNAP_NAME snapcraft
+ENV SNAP_ARCH amd64
+
+SHELL ["/bin/bash", "-c"]
+ENTRYPOINT "snapcraft"

@@ -1,0 +1,327 @@
+#!/usr/bin/env bash
+# Usage: bin/compile <build-dir> <cache-dir> <env-dir>
+# See: https://devcenter.heroku.com/articles/buildpack-api
+# shellcheck disable=SC2250 # TODO: Use braces around variable references even when not strictly required.
+
+set -euo pipefail
+shopt -s inherit_errexit
+
+# Note: This can't be enabled via app config vars, since at this point they haven't been loaded from ENV_DIR.
+if [[ "${BUILDPACK_XTRACE:-0}" == "1" ]]; then
+	set -o xtrace
+fi
+
+BUILD_DIR="${1}"
+CACHE_DIR="${2}"
+ENV_DIR="${3}"
+
+# The absolute path to the root of the buildpack.
+BUILDPACK_DIR=$(cd "$(dirname "$(dirname "${BASH_SOURCE[0]}")")" && pwd)
+
+source "${BUILDPACK_DIR}/bin/utils"
+source "${BUILDPACK_DIR}/lib/utils.sh"
+source "${BUILDPACK_DIR}/lib/cache.sh"
+source "${BUILDPACK_DIR}/lib/checks.sh"
+source "${BUILDPACK_DIR}/lib/hooks.sh"
+source "${BUILDPACK_DIR}/lib/metadata.sh"
+source "${BUILDPACK_DIR}/lib/output.sh"
+source "${BUILDPACK_DIR}/lib/package_manager.sh"
+source "${BUILDPACK_DIR}/lib/pip.sh"
+source "${BUILDPACK_DIR}/lib/pipenv.sh"
+source "${BUILDPACK_DIR}/lib/poetry.sh"
+source "${BUILDPACK_DIR}/lib/python_version.sh"
+source "${BUILDPACK_DIR}/lib/python.sh"
+
+compile_start_time=$(nowms)
+
+# Initialise the buildpack metadata store.
+# This is used to track state across builds (for cache invalidation and messaging when build
+# configuration changes) and also so that `bin/report` can generate the build report.
+meta_init "${CACHE_DIR}" "python"
+meta_setup
+
+checks::ensure_supported_stack "${STACK:?Required env var STACK is not set}"
+checks::warn_if_duplicate_python_buildpack "${BUILD_DIR}"
+
+# Prepend proper path for old-school virtualenv hackery.
+# This may not be necessary.
+export PATH=:/usr/local/bin:$PATH
+
+# Exported for use in subshells, such as the steps run via sub_env.
+export BUILD_DIR CACHE_DIR ENV_DIR
+
+# Common Problem Warnings:
+# This section creates a temporary file in which to stick the output of `pip install`.
+# The `warnings` subscript then greps through this for common problems and guides
+# the user towards resolution of known issues.
+WARNINGS_LOG=$(mktemp)
+
+# Sanitize externally-provided environment variables:
+# The following environment variables are either problematic or simply unnecessary
+# for the buildpack to have knowledge of, so we unset them, to keep the environment
+# as clean and pristine as possible.
+unset PYTHONHOME PYTHONPATH
+
+# Import the warnings script, which contains the `pip install` user warning mechanisms
+# (mentioned and explained above)
+source "${BUILDPACK_DIR}/bin/warnings"
+
+# Make the directory in which we will create symlinks from the temporary build directory
+# to `/app`.
+# Symlinks are required, since Python is not a portable installation.
+# More on this topic later.
+mkdir -p /app/.heroku
+
+PROFILE_PATH="$BUILD_DIR/.profile.d/python.sh"
+EXPORT_PATH="${BUILDPACK_DIR}/export"
+GUNICORN_PROFILE_PATH="$BUILD_DIR/.profile.d/python.gunicorn.sh"
+WEB_CONCURRENCY_PROFILE_PATH="$BUILD_DIR/.profile.d/WEB_CONCURRENCY.sh"
+python_home='/app/.heroku/python'
+
+# NB: Python must be added to PATH using the symlinked `/app` location and not its actual location
+# in BUILD_DIR, so that Python reports its location (via `sys.prefix`, `sys.executable` and others)
+# using `/app` paths which will still work at run-time after relocation. Amongst other things, this
+# ensures that the shebang lines in the entrypoint scripts of installed packages are correct.
+export PATH="/app/.heroku/python/bin:${PATH}"
+# Tell Python to not buffer it's stdin/stdout.
+export PYTHONUNBUFFERED=1
+# Ensure Python uses a Unicode locale, to prevent the issues described in:
+# https://github.com/docker-library/python/pull/570
+export LANG="en_US.UTF-8"
+export C_INCLUDE_PATH="/app/.heroku/python/include${C_INCLUDE_PATH:+:${C_INCLUDE_PATH}}"
+export CPLUS_INCLUDE_PATH="/app/.heroku/python/include${CPLUS_INCLUDE_PATH:+:${CPLUS_INCLUDE_PATH}}"
+export LIBRARY_PATH="/app/.heroku/python/lib${LIBRARY_PATH:+:${LIBRARY_PATH}}"
+export LD_LIBRARY_PATH="/app/.heroku/python/lib${LD_LIBRARY_PATH:+:${LD_LIBRARY_PATH}}"
+export PKG_CONFIG_PATH="/app/.heroku/python/lib/pkg-config${PKG_CONFIG_PATH:+:${PKG_CONFIG_PATH}}"
+
+cd "$BUILD_DIR"
+
+# Runs a `bin/pre_compile` script if found in the app source, allowing build customisation.
+hooks::run_hook "pre_compile"
+
+# This check must be after the pre_compile hook, so that we can check not only the original
+# app source, but also that the hook hasn't written to '.heroku/python/' either.
+checks::warn_if_existing_python_dir_present "${BUILD_DIR}"
+
+package_manager="$(package_manager::determine_package_manager "${BUILD_DIR}")"
+meta_set "package_manager" "${package_manager}"
+
+cached_python_full_version="$(cache::cached_python_full_version "${CACHE_DIR}")"
+
+# We use the Bash 4.3+ `nameref` feature to pass back multiple values from this function
+# without having to hardcode globals. See: https://stackoverflow.com/a/38997681
+python_version::read_requested_python_version "${BUILD_DIR}" "${package_manager}" "${cached_python_full_version}" requested_python_version python_version_origin
+meta_set "python_version_requested" "${requested_python_version}"
+meta_set "python_version_reason" "${python_version_origin}"
+
+# TODO: More strongly recommend specifying a Python version (eg switch the messaging to
+# be a warning instead, after version resolution, and mention .python-version inline)
+case "${python_version_origin}" in
+	default)
+		output::step "No Python version was specified. Using the buildpack default: Python ${requested_python_version}"
+		echo "       To use a different version, see: https://devcenter.heroku.com/articles/python-runtimes"
+		;;
+	cached)
+		output::step "No Python version was specified. Using the same major version as the last build: Python ${requested_python_version}"
+		echo "       To use a different version, see: https://devcenter.heroku.com/articles/python-runtimes"
+		;;
+	*)
+		output::step "Using Python ${requested_python_version} specified in ${python_version_origin}"
+		;;
+esac
+
+python_full_version="$(python_version::resolve_python_version "${requested_python_version}" "${python_version_origin}")"
+python_major_version="${python_full_version%.*}"
+meta_set "python_version" "${python_full_version}"
+meta_set "python_version_major" "${python_major_version}"
+
+if [[ "${requested_python_version}" == "${python_full_version}" ]]; then
+	meta_set "python_version_pinned" "true"
+else
+	meta_set "python_version_pinned" "false"
+fi
+
+if [[ "${python_version_origin}" == "runtime.txt" ]]; then
+	output::warning <<-EOF
+		Warning: The runtime.txt file is deprecated.
+
+		The runtime.txt file is deprecated since it has been replaced
+		by the more widely supported .python-version file:
+		https://devcenter.heroku.com/changelog-items/3141
+
+		Please delete your runtime.txt file and create a new file named:
+		.python-version
+
+		Make sure to include the '.' at the start of the filename.
+
+		In the new file, specify your app's Python version without
+		quotes or a 'python-' prefix. For example:
+		${python_major_version}
+
+		We strongly recommend that you use the major version form
+		instead of pinning to an exact version, since it will allow
+		your app to receive Python security updates.
+
+		In the future support for runtime.txt will be removed and
+		this warning will be made an error.
+	EOF
+fi
+
+python_version::warn_if_deprecated_major_version "${python_major_version}" "${python_version_origin}"
+python_version::warn_if_patch_update_available "${python_full_version}" "${python_major_version}" "${python_version_origin}"
+
+cache::restore "${BUILD_DIR}" "${CACHE_DIR}" "${STACK}" "${cached_python_full_version}" "${python_full_version}" "${package_manager}"
+
+# The directory for the .profile.d scripts.
+mkdir -p "$(dirname "$PROFILE_PATH")"
+
+# On Heroku CI, builds happen in `/app`. Otherwise, on the Heroku platform,
+# they occur in a temp directory. Because Python is not portable, we must create
+# symlinks to emulate that we are operating in `/app` during the build process.
+# This is (hopefully obviously) because apps end up running from `/app` in production.
+# Realpath is used to support use-cases where one of the locations is a symlink to the other.
+# shellcheck disable=SC2312 # TODO: Invoke this command separately to avoid masking its return value.
+if [[ "$(realpath "${BUILD_DIR}")" != "$(realpath /app)" ]]; then
+	# python expects to reside in /app, so set up symlinks
+	# we will not remove these later so subsequent buildpacks can still invoke it
+	ln -nsf "$BUILD_DIR/.heroku/python" /app/.heroku/python
+fi
+
+python::install "${BUILD_DIR}" "${STACK}" "${python_full_version}" "${python_major_version}" "${python_version_origin}"
+
+# Install the package manager and related tools.
+package_manager_install_start_time=$(nowms)
+case "${package_manager}" in
+	pip)
+		pip::install_pip_setuptools_wheel "${python_home}" "${python_major_version}"
+		;;
+	pipenv)
+		# TODO: Stop installing pip when using Pipenv.
+		pip::install_pip_setuptools_wheel "${python_home}" "${python_major_version}"
+		pipenv::install_pipenv
+		;;
+	poetry)
+		poetry::install_poetry "${python_home}" "${python_major_version}" "${CACHE_DIR}" "${EXPORT_PATH}"
+		;;
+	*)
+		utils::abort_internal_error "Unhandled package manager: ${package_manager}"
+		;;
+esac
+meta_time "package_manager_install_duration" "${package_manager_install_start_time}"
+
+# SQLite3 support.
+# Installs the sqlite3 dev headers and sqlite3 binary but not the
+# libsqlite3-0 library since that exists in the base image.
+# We skip this step on Python 3.13 or when using Poetry, as a first step towards removing this feature.
+if [[ "${python_major_version}" == +(3.9|3.10|3.11|3.12) && "${package_manager}" != "poetry" ]]; then
+	install_sqlite_start_time=$(nowms)
+	source "${BUILDPACK_DIR}/bin/steps/sqlite3"
+	buildpack_sqlite3_install
+	meta_time "sqlite_install_duration" "${install_sqlite_start_time}"
+fi
+
+# Install app dependencies.
+dependencies_install_start_time=$(nowms)
+case "${package_manager}" in
+	pip)
+		pip::install_dependencies
+		;;
+	pipenv)
+		pipenv::install_dependencies
+		;;
+	poetry)
+		poetry::install_dependencies
+		;;
+	*)
+		utils::abort_internal_error "Unhandled package manager: ${package_manager}"
+		;;
+esac
+meta_time "dependencies_install_duration" "${dependencies_install_start_time}"
+
+# Support for NLTK corpora.
+nltk_downloader_start_time=$(nowms)
+sub_env "${BUILDPACK_DIR}/bin/steps/nltk"
+meta_time "nltk_downloader_duration" "${nltk_downloader_start_time}"
+
+# Django collectstatic support.
+# The buildpack automatically runs collectstatic for Django applications.
+collectstatic_start_time=$(nowms)
+sub_env "${BUILDPACK_DIR}/bin/steps/collectstatic"
+meta_time "django_collectstatic_duration" "${collectstatic_start_time}"
+
+# Programmatically create .profile.d script for application runtime environment variables.
+
+# Set the PATH to include Python / pip / pipenv / etc.
+set_env PATH "\${HOME}/.heroku/python/bin:\${PATH}"
+# Tell Python to run in unbuffered mode.
+set_env PYTHONUNBUFFERED true
+# Tell Python where it lives.
+set_env PYTHONHOME "\${HOME}/.heroku/python"
+# Set variables for C libraries.
+set_env LIBRARY_PATH "\${HOME}/.heroku/python/lib\${LIBRARY_PATH:+:\${LIBRARY_PATH}}"
+set_env LD_LIBRARY_PATH "\${HOME}/.heroku/python/lib\${LD_LIBRARY_PATH:+:\${LD_LIBRARY_PATH}}"
+# Locale.
+set_default_env LANG en_US.UTF-8
+# The Python hash seed is set to random.
+set_default_env PYTHONHASHSEED random
+# Tell Python to look for Python modules in the /app dir. Don't change this.
+set_default_env PYTHONPATH "\${HOME}"
+
+# Python expects to be in /app, if at runtime, it is not, set
+# up symlinks… this can occur when the subdir buildpack is used.
+cat <<EOT >>"$PROFILE_PATH"
+if [[ \$HOME != "/app" ]]; then
+    mkdir -p /app/.heroku
+    ln -nsf "\$HOME/.heroku/python" /app/.heroku/python
+fi
+EOT
+
+# When dependencies are installed in editable mode, the package manager/build backend creates `.pth`
+# (and related) files in site-packages, which contain absolute path references to the actual location
+# of the packages. By default the Heroku build runs from a directory like `/tmp/build_<hash>`, which
+# changes every build and also differs from the app location at runtime (`/app`). This means any build
+# directory paths referenced in .pth and related files will no longer exist at runtime or during cached
+# rebuilds, unless we rewrite the paths.
+#
+# Ideally, we would be able to rewrite all paths to use the `/app/.heroku/python/` symlink trick we use
+# when invoking Python, since then the same path would work across the current build, runtime and cached
+# rebuilds. However, this trick only works for paths under that directory (since it's not possible to
+# symlink `/app` or other directories we don't own), and when apps use path-based editable dependencies
+# the paths will be outside of that (such as a subdirectory of the app source, or even the root of the
+# build directory). We also can't just rewrite all paths now ready for runtime, since other buildpacks
+# might run after this one that make use of the editable dependencies. As such, we have to perform path
+# rewriting for path-based editable dependencies at app boot instead.
+#
+# For VCS editable dependencies, we can use the symlink trick and so configure the repo checkout location
+# as `/app/.heroku/python/src/`, which in theory should mean the `.pth` files use that path. However,
+# some build backends (such as setuptools' PEP660 implementation) call realpath on it causing the
+# `/tmp/build_*` location to be written instead, meaning VCS src paths need to be rewritten regardless.
+#
+# In addition to ensuring dependencies work for subsequent buildpacks and at runtime, they must also
+# work for cached rebuilds. Most package managers will reinstall editable dependencies regardless on
+# next install, which means we can avoid having to rewrite paths on cache restore from the old build
+# directory to the new location (`/tmp/build_<different-hash>`). However, Pipenv has a bug when using
+# PEP660 style editable VCS dependencies where it won't reinstall if it's missing (or in our case, the
+# path has changed), which means we must make sure that VCS src paths stored in the cache do use the
+# symlink path. See: https://github.com/pypa/pipenv/issues/6348
+#
+# As such, we have to perform two rewrites:
+# 1. At build time, of just the VCS editable paths (which we can safely change to /app paths early).
+# 2. At runtime, to rewrite the remaining path-based editable dependency paths.
+if [[ "${BUILD_DIR}" != "/app" ]]; then
+	find .heroku/python/lib/python*/site-packages/ -type f -and \( -name '*.egg-link' -or -name '*.pth' -or -name '__editable___*_finder.py' \) -exec sed -i -e "s#${BUILD_DIR}/.heroku/python#/app/.heroku/python#" {} \+
+	cat <<-EOT >>"${PROFILE_PATH}"
+		find .heroku/python/lib/python*/site-packages/ -type f -and \( -name '*.egg-link' -or -name '*.pth' -or -name '__editable___*_finder.py' \) -exec sed -i -e 's#${BUILD_DIR}#/app#' {} \+
+	EOT
+fi
+
+# Install sane-default script for $WEB_CONCURRENCY and $FORWARDED_ALLOW_IPS.
+cp "${BUILDPACK_DIR}/vendor/WEB_CONCURRENCY.sh" "$WEB_CONCURRENCY_PROFILE_PATH"
+cp "${BUILDPACK_DIR}/vendor/python.gunicorn.sh" "$GUNICORN_PROFILE_PATH"
+
+# Runs a `bin/post_compile` script if found in the app source, allowing build customisation.
+hooks::run_hook "post_compile"
+
+cache::save "${BUILD_DIR}" "${CACHE_DIR}" "${STACK}" "${python_full_version}" "${package_manager}"
+
+meta_time "total_duration" "${compile_start_time}"
