@@ -205,15 +205,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 		return nil, err
 	}
 
-	defers := make([]func(), 0, 2)
-	defer func() {
-		if err != nil {
-			for _, f := range defers {
-				f()
-			}
-		}
-	}()
-
 	reqForNodes := make(map[string][]*reqForNode)
 	eg, ctx := errgroup.WithContext(ctx)
 
@@ -243,12 +234,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 			if err != nil {
 				return nil, err
 			}
+			defer release()
 			if err := saveLocalState(so, k, opt, np.Node(), cfg); err != nil {
 				return nil, err
 			}
 
 			addGitAttrs(so)
-			defers = append(defers, release)
 			reqn = append(reqn, &reqForNode{
 				resolvedNode: np,
 				so:           so,
