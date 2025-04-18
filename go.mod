@@ -24,7 +24,7 @@ require (
 	github.com/gofrs/flock v0.12.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
 	github.com/google/uuid v1.6.0
-	github.com/hashicorp/go-cty-funcs v0.0.0-20241120183456-c51673e0b3dd
+	github.com/hashicorp/go-cty-funcs v0.0.0-20250210171435-dda779884a9f
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/in-toto/in-toto-golang v0.5.0
@@ -49,7 +49,7 @@ require (
 	github.com/tonistiigi/fsutil v0.0.0-20250410151801-5b74a7ad7583
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240710180619-ddb21b71c0b4
 	github.com/tonistiigi/jaeger-ui-rest v0.0.0-20250408171107-3dd17559e117
-	github.com/zclconf/go-cty v1.16.0
+	github.com/zclconf/go-cty v1.16.2
 	go.opentelemetry.io/otel v1.31.0
 	go.opentelemetry.io/otel/exporters/stdout/stdouttrace v1.31.0
 	go.opentelemetry.io/otel/metric v1.31.0
