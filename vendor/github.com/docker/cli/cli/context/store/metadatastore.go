@@ -1,5 +1,5 @@
 // FIXME(thaJeztah): remove once we are a module; the go:build directive prevents go from downgrading language version to go1.16:
-//go:build go1.22
+//go:build go1.23
 
 package store
 
@@ -12,8 +12,8 @@ import (
 	"sort"
 
 	"github.com/docker/docker/errdefs"
-	"github.com/docker/docker/pkg/atomicwriter"
 	"github.com/fvbommel/sortorder"
+	"github.com/moby/sys/atomicwriter"
 	"github.com/pkg/errors"
 )
 
