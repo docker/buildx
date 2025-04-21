@@ -525,7 +525,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							}
 						}
 					}
-
 					node := dp.Node().Driver
 					if node.IsMobyDriver() {
 						for _, e := range so.Exports {
@@ -559,6 +558,14 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 									}
 								}
 							}
+						}
+					}
+					// if prefer-image-digest is set in the solver options, remove the image
+					// config digest from the exporter's response
+					for _, e := range so.Exports {
+						if e.Attrs["prefer-image-digest"] == "true" {
+							delete(rr.ExporterResponse, exptypes.ExporterImageConfigDigestKey)
+							break
 						}
 					}
 					return nil
