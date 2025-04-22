@@ -692,7 +692,7 @@ func TestHCLContextCwdPrefix(t *testing.T) {
 	require.Contains(t, m, "app")
 	assert.Equal(t, "test", *m["app"].Dockerfile)
 	assert.Equal(t, "foo", *m["app"].Context)
-	assert.Equal(t, "foo/test", bo["app"].Inputs.DockerfilePath)
+	assert.Equal(t, filepath.Clean("foo/test"), bo["app"].Inputs.DockerfilePath)
 	assert.Equal(t, "foo", bo["app"].Inputs.ContextPath)
 }
 
