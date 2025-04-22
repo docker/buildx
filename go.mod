@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
 	github.com/compose-spec/compose-go/v2 v2.6.0
 	github.com/containerd/console v1.0.4
-	github.com/containerd/containerd/v2 v2.0.4
+	github.com/containerd/containerd/v2 v2.0.5
 	github.com/containerd/continuity v0.4.5
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/log v0.1.0
@@ -17,9 +17,9 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v28.1.0+incompatible
+	github.com/docker/cli v28.1.1+incompatible
 	github.com/docker/cli-docs-tool v0.9.0
-	github.com/docker/docker v28.1.0+incompatible
+	github.com/docker/docker v28.1.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
@@ -162,7 +162,7 @@ require (
 	go.opentelemetry.io/proto/otlp v1.3.1 // indirect
 	golang.org/x/crypto v0.37.0 // indirect
 	golang.org/x/net v0.39.0 // indirect
-	golang.org/x/oauth2 v0.23.0 // indirect
+	golang.org/x/oauth2 v0.29.0 // indirect
 	golang.org/x/time v0.11.0 // indirect
 	golang.org/x/tools v0.32.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20241021214115-324edc3d5d38 // indirect

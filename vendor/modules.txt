@@ -147,8 +147,8 @@ github.com/containerd/console
 # github.com/containerd/containerd/api v1.8.0
 ## explicit; go 1.21
 github.com/containerd/containerd/api/services/content/v1
-# github.com/containerd/containerd/v2 v2.0.4
-## explicit; go 1.22.0
+# github.com/containerd/containerd/v2 v2.0.5
+## explicit; go 1.23.0
 github.com/containerd/containerd/v2/core/content
 github.com/containerd/containerd/v2/core/content/proxy
 github.com/containerd/containerd/v2/core/images
@@ -221,7 +221,7 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v28.1.0+incompatible
+# github.com/docker/cli v28.1.1+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/metadata
@@ -257,7 +257,7 @@ github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
 # github.com/docker/distribution v2.8.3+incompatible
 ## explicit
-# github.com/docker/docker v28.1.0+incompatible
+# github.com/docker/docker v28.1.1+incompatible
 ## explicit
 github.com/docker/docker/api
 github.com/docker/docker/api/types
@@ -839,8 +839,8 @@ golang.org/x/net/internal/timeseries
 golang.org/x/net/proxy
 golang.org/x/net/trace
 golang.org/x/net/websocket
-# golang.org/x/oauth2 v0.23.0
-## explicit; go 1.18
+# golang.org/x/oauth2 v0.29.0
+## explicit; go 1.23.0
 golang.org/x/oauth2
 golang.org/x/oauth2/internal
 # golang.org/x/sync v0.13.0
