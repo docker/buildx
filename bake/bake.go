@@ -1360,8 +1360,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if strings.HasPrefix(bi.ContextPath, "cwd://") {
 		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
 	}
-	if !build.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && !path.IsAbs(bi.DockerfilePath) {
-		bi.DockerfilePath = path.Join(bi.ContextPath, bi.DockerfilePath)
+	if !build.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && !filepath.IsAbs(bi.DockerfilePath) {
+		bi.DockerfilePath = filepath.Join(bi.ContextPath, bi.DockerfilePath)
 	}
 	for k, v := range bi.NamedContexts {
 		if strings.HasPrefix(v.Path, "cwd://") {
