@@ -23,23 +23,49 @@ Desktop or shared across environments.
 
 ## Examples
 
-### Export a single build to a custom file
+### <a name="export-single-build"></a> Export a single build to a custom file
 
 ```console
-docker buildx history export mybuild --output mybuild.dockerbuild
+docker buildx history export qu2gsuo8ejqrwdfii23xkkckt --output mybuild.dockerbuild
 ```
 
-### Export multiple builds to individual `.dockerbuild` files
-
-This example writes `mybuild.dockerbuild` and `backend-build.dockerbuild` to
-the current directory:
+You can find build IDs by running:
 
 ```console
-docker buildx history export mybuild backend-build
+docker buildx history ls
 ```
 
-### Export all build records
+### <a name="export-multiple-builds"></a> Export multiple builds to individual `.dockerbuild` files
+
+To export two builds to separate files:
 
 ```console
-docker buildx history export --all
+# Using build IDs
+docker buildx history export qu2gsuo8ejqrwdfii23xkkckt -o mybuild.dockerbuild
+docker buildx history export qsiifiuf1ad9pa9qvppc0z1l3 -o backend-build.dockerbuild
+
+# Or using relative offsets
+docker buildx history export ^1 -o mybuild.dockerbuild
+docker buildx history export ^2 -o backend-build.dockerbuild
+```
+
+Or use shell redirection:
+
+```console
+docker buildx history export ^1 > mybuild.dockerbuild
+docker buildx history export ^2 > backend-build.dockerbuild
+```
+
+### <a name="export-all-builds"></a> Export all build records to a file
+
+Use the `--all` flag and redirect the output:
+
+```console
+docker buildx history export --all > all-builds.dockerbuild
+```
+
+Or use the `--output` flag:
+
+```console
+docker buildx history export --all -o all-builds.dockerbuild
 ```

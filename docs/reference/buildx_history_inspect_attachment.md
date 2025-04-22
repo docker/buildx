@@ -23,16 +23,60 @@ platform-specific.
 
 ## Examples
 
-### Inspect a provenance attachment from a build
+### <a name="inspect-provenance-attachment"></a> Inspect a provenance attachment from a build
+
+Supported types include `provenance` and `sbom`.
 
 ```console
-docker buildx history inspect attachment mybuild --type https://slsa.dev/provenance/v0.2
+$ docker buildx history inspect attachment qu2gsuo8ejqrwdfii23xkkckt --type provenance
+{
+  "_type": "https://slsa.dev/provenance/v0.2",
+  "buildDefinition": {
+    "buildType": "https://build.docker.com/BuildKit@v1",
+    "externalParameters": {
+      "target": "app",
+      "platforms": ["linux/amd64"]
+    }
+  },
+  "runDetails": {
+    "builder": "docker",
+    "by": "ci@docker.com"
+  }
+}
 ```
 
-### Inspect a SBOM for linux/amd64
+### <a name="insepct-SBOM"></a> Inspect a SBOM for linux/amd64
 
 ```console
-docker buildx history inspect attachment mybuild \
-  --type application/vnd.cyclonedx+json \
+$ docker buildx history inspect attachment ^0 \
+  --type sbom \
   --platform linux/amd64
+{
+  "bomFormat": "CycloneDX",
+  "specVersion": "1.5",
+  "version": 1,
+  "components": [
+    {
+      "type": "library",
+      "name": "alpine",
+      "version": "3.18.2"
+    }
+  ]
+}
 ```
+
+### <a name="inspect-attachment-digest"></a> Inspect an attachment by digest
+
+You can inspect an attachment directly using its digset, which you can get from
+the `inspect` output:
+
+```console
+# Using a build ID
+docker buildx history inspect attachment qu2gsuo8ejqrwdfii23xkkckt sha256:abcdef123456...
+
+# Or using a relative offset
+docker buildx history inspect attachment ^0 sha256:abcdef123456...
+```
+
+Use `--type sbom` or `--type provenance` to filter attachments by type. To
+inspect a specific attachment by digest, omit the `--type` flag.

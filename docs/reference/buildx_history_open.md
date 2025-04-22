@@ -15,18 +15,25 @@ Open a build in Docker Desktop
 
 ## Description
 
-Open a build record in Docker Desktop for visual inspection. This requires Docker Desktop to be installed and running on the host machine.
+Open a build record in Docker Desktop for visual inspection. This requires
+Docker Desktop to be installed and running on the host machine.
 
 ## Examples
 
-### Open the most recent build in Docker Desktop
+### <a name="open-most-recent-build"></a> Open the most recent build in Docker Desktop
 
 ```console
 docker buildx history open
 ```
 
-### Open a specific build by name
+By default, this opens the most recent build on the current builder.
+
+### <a name="open-specific-build"></a> Open a specific build
 
 ```console
-docker buildx history open mybuild
+# Using a build ID
+docker buildx history open qu2gsuo8ejqrwdfii23xkkckt
+
+# Or using a relative offset
+docker buildx history open ^1
 ```

@@ -17,24 +17,32 @@ Remove build records
 ## Description
 
 Remove one or more build records from the current builder’s history. You can
-remove specific builds by name or ID, or delete all records at once using
+remove specific builds by ID or offset, or delete all records at once using
 the `--all` flag.
 
 ## Examples
 
-### Remove a specific build
+### <a name="remove-specific-build"></a> Remove a specific build
 
 ```console
-docker buildx history rm mybuild
+# Using a build ID
+docker buildx history rm qu2gsuo8ejqrwdfii23xkkckt
+
+# Or using a relative offset
+docker buildx history rm ^1
 ```
 
-### Remove multiple builds
+### <a name="remove-multiple-builds"></a> Remove multiple builds
 
 ```console
-docker buildx history rm mybuild frontend-build backend-build
+# Using build IDs
+docker buildx history rm qu2gsuo8ejqrwdfii23xkkckt qsiifiuf1ad9pa9qvppc0z1l3
+
+# Or using relative offsets
+docker buildx history rm ^1 ^2
 ```
 
-### Remove all build records from the current builder
+### <a name="remove-all-build-records"></a> Remove all build records from the current builder
 
 ```console
 docker buildx history rm --all

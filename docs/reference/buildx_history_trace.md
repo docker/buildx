@@ -18,33 +18,52 @@ Show the OpenTelemetry trace of a build record
 ## Description
 
 View the OpenTelemetry trace for a completed build. This command loads the
-trace into a Jaeger UI running in a local container
-(or a custom instance if configured) and opens it in your browser.
+trace into a Jaeger UI viewer and opens it in your browser.
 
 This helps analyze build performance, step timing, and internal execution flows.
 
 ## Examples
 
-### Open the OpenTelemetry trace for the most recent build
+### <a name="open-opentelemetry-trace"></a> Open the OpenTelemetry trace for the most recent build
+
+This command starts a temporary Jaeger UI server and opens your default browser
+to view the trace.
 
 ```console
 docker buildx history trace
 ```
 
-### Open the trace for a specific build
+### <a name="open-trace-specific-build"></a> Open the trace for a specific build
 
 ```console
-docker buildx history trace mybuild
+# Using a build ID
+docker buildx history trace qu2gsuo8ejqrwdfii23xkkckt
+
+# Or using a relative offset
+docker buildx history trace ^1
 ```
 
-### Run the Jaeger UI on a specific port
+### <a name="run-Jaegar-UI-port"></a> Run the Jaeger UI on a specific port
 
 ```console
-docker buildx history trace mybuild --addr 127.0.0.1:16686
+# Using a build ID
+docker buildx history trace qu2gsuo8ejqrwdfii23xkkckt --addr 127.0.0.1:16686
+
+# Or using a relative offset
+docker buildx history trace ^1 --addr 127.0.0.1:16686
 ```
 
-### Compare two build traces
+### <a name="compare-traces"></a> Compare two build traces
+
+Compare two specific builds by name:
 
 ```console
-docker buildx history trace --compare mybuild:main mybuild:feature
+# Using build IDs
+docker buildx history trace --compare qu2gsuo8ejqrwdfii23xkkckt qsiifiuf1ad9pa9qvppc0z1l3
+
+# Or using a single relative offset
+docker buildx history trace --compare ^1
 ```
+
+When you use a single reference with `--compare`, it compares that build
+against the most recent one.
