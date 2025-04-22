@@ -99,7 +99,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options rmOptions
 
 	cmd := &cobra.Command{
-		Use:   "rm [OPTIONS] [NAME] [NAME...]",
+		Use:   "rm [OPTIONS] [NAME...]",
 		Short: "Remove one or more builder instances",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builders = []string{rootOpts.builder}

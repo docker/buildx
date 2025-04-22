@@ -1,7 +1,7 @@
 # buildx ls
 
 ```text
-docker buildx ls
+docker buildx ls [OPTIONS]
 ```
 
 <!---MARKER_GEN_START-->

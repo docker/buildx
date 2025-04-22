@@ -1,7 +1,7 @@
 # buildx rm
 
 ```text
-docker buildx rm [OPTIONS] [NAME] [NAME...]
+docker buildx rm [OPTIONS] [NAME...]
 ```
 
 <!---MARKER_GEN_START-->

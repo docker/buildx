@@ -222,7 +222,7 @@ func traceCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVar(&options.addr, "addr", "127.0.0.1:0", "Address to bind the UI server")
-	flags.StringVar(&options.compare, "compare", "", "Compare with another build reference")
+	flags.StringVar(&options.compare, "compare", "", "Compare with another build record")
 
 	return cmd
 }

@@ -107,7 +107,7 @@ func lsCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	var options lsOptions
 
 	cmd := &cobra.Command{
-		Use:   "ls",
+		Use:   "ls [OPTIONS]",
 		Short: "List build records",
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {

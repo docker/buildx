@@ -1,5 +1,9 @@
 # docker buildx history ls
 
+```text
+docker buildx history ls [OPTIONS]
+```
+
 <!---MARKER_GEN_START-->
 List build records
 
@@ -45,10 +49,10 @@ docker buildx history ls --filter status=error
 
 You can filter the list using the `--filter` flag. Supported filters include:
 
-| Filter | Supported comparisons | Example |
-|:-------|:----------------------|:--------|
-| `ref`, `repository`, `status` | Support `=` and `!=` comparisons | `--filter status!=success` |
-| `startedAt`, `completedAt`, `duration` | Support `<` and `>` comparisons with time values | `--filter duration>30s` |
+| Filter                                 | Supported comparisons                            | Example                    |
+|:---------------------------------------|:-------------------------------------------------|:---------------------------|
+| `ref`, `repository`, `status`          | Support `=` and `!=` comparisons                 | `--filter status!=success` |
+| `startedAt`, `completedAt`, `duration` | Support `<` and `>` comparisons with time values | `--filter duration>30s`    |
 
 You can combine multiple filters by repeating the `--filter` flag:
 
@@ -70,7 +74,7 @@ docker buildx history ls --no-trunc
 
 ### <a name="format"></a> Format output (--format)
 
-**JSON output**
+#### JSON output
 
 ```console
 $ docker buildx history ls --format json
@@ -92,7 +96,7 @@ $ docker buildx history ls --format json
 ]
 ```
 
-**Go template output**
+#### Go template output
 
 ```console
 $ docker buildx history ls --format '{{.Name}} - {{.Duration}}'

@@ -1,5 +1,9 @@
 # docker buildx history rm
 
+```text
+docker buildx history rm [OPTIONS] [REF...]
+```
+
 <!---MARKER_GEN_START-->
 Remove build records
 
@@ -7,7 +11,7 @@ Remove build records
 
 | Name            | Type     | Default | Description                              |
 |:----------------|:---------|:--------|:-----------------------------------------|
-| `--all`         | `bool`   |         | Remove all build records                 |
+| [`--all`](#all) | `bool`   |         | Remove all build records                 |
 | `--builder`     | `string` |         | Override the configured builder instance |
 | `-D`, `--debug` | `bool`   |         | Enable debug logging                     |
 
@@ -42,7 +46,7 @@ docker buildx history rm qu2gsuo8ejqrwdfii23xkkckt qsiifiuf1ad9pa9qvppc0z1l3
 docker buildx history rm ^1 ^2
 ```
 
-### Remove all build records from the current builder
+### <a name="all"></a> Remove all build records from the current builder (--all)
 
 ```console
 docker buildx history rm --all

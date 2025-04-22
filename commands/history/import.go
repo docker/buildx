@@ -119,8 +119,8 @@ func importCmd(dockerCli command.Cli, _ RootOptions) *cobra.Command {
 	var options importOptions
 
 	cmd := &cobra.Command{
-		Use:   "import [OPTIONS] < bundle.dockerbuild",
-		Short: "Import a build into Docker Desktop",
+		Use:   "import [OPTIONS] -",
+		Short: "Import build records into Docker Desktop",
 		Args:  cobra.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runImport(cmd.Context(), dockerCli, options)
