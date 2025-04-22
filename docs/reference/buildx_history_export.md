@@ -1,7 +1,11 @@
 # docker buildx history export
 
+```text
+docker buildx history export [OPTIONS] [REF...]
+```
+
 <!---MARKER_GEN_START-->
-Export a build into Docker Desktop bundle
+Export build records into Docker Desktop bundle
 
 ### Options
 

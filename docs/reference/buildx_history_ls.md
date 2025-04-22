@@ -1,5 +1,9 @@
 # docker buildx history ls
 
+```text
+docker buildx history ls [OPTIONS]
+```
+
 <!---MARKER_GEN_START-->
 List build records
 

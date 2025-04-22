@@ -1,5 +1,9 @@
 # docker buildx history rm
 
+```text
+docker buildx history rm [OPTIONS] [REF...]
+```
+
 <!---MARKER_GEN_START-->
 Remove build records
 

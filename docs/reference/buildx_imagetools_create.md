@@ -1,7 +1,7 @@
 # buildx imagetools create
 
 ```text
-docker buildx imagetools create [OPTIONS] [SOURCE] [SOURCE...]
+docker buildx imagetools create [OPTIONS] [SOURCE...]
 ```
 
 <!---MARKER_GEN_START-->
