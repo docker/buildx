@@ -246,6 +246,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 			if err := saveLocalState(so, k, opt, np.Node(), cfg); err != nil {
 				return nil, err
 			}
+
 			addGitAttrs(so)
 			defers = append(defers, release)
 			reqn = append(reqn, &reqForNode{
