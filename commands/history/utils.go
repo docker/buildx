@@ -116,6 +116,7 @@ type historyRecord struct {
 type queryOptions struct {
 	CompletedOnly bool
 	Filters       []string
+	Finalize      bool
 }
 
 func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *queryOptions) ([]historyRecord, error) {
@@ -161,6 +162,15 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 				w.Write(filters)
 				w.Flush()
 				filters = []string{strings.TrimSuffix(sb.String(), "\n")}
+			}
+
+			if opts.Finalize {
+				if _, err := c.ControlClient().UpdateBuildHistory(ctx, &controlapi.UpdateBuildHistoryRequest{
+					Ref:      ref,
+					Finalize: true,
+				}); err != nil {
+					return err
+				}
 			}
 
 			serv, err := c.ControlClient().ListenBuildHistory(ctx, &controlapi.BuildHistoryRequest{

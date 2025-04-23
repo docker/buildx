@@ -50,6 +50,7 @@ func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) e
 	for _, ref := range opts.refs {
 		recs, err := queryRecords(ctx, ref, nodes, &queryOptions{
 			CompletedOnly: true,
+			Finalize:      true,
 		})
 		if err != nil {
 			return err
