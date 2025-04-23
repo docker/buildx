@@ -4,6 +4,8 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
 	dockerclient "github.com/docker/docker/client"
+	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
+	"go.opentelemetry.io/otel/propagation"
 )
 
 // ClientAPI represents an active docker API object.
@@ -35,6 +37,10 @@ func NewClientAPI(cli command.Cli, ep string) (*ClientAPI, error) {
 	if err != nil {
 		return nil, err
 	}
+
+	clientOpts = append(clientOpts, dockerclient.WithTraceOptions(otelhttp.WithPropagators(
+		propagation.NewCompositeTextMapPropagator(propagation.TraceContext{}, propagation.Baggage{}),
+	)))
 
 	ca.APIClient, err = dockerclient.NewClientWithOpts(clientOpts...)
 	if err != nil {
