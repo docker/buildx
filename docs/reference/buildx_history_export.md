@@ -5,12 +5,13 @@ Export build records into Docker Desktop bundle
 
 ### Options
 
-| Name                                   | Type     | Default | Description                              |
-|:---------------------------------------|:---------|:--------|:-----------------------------------------|
-| [`--all`](#all)                        | `bool`   |         | Export all records for the builder       |
-| [`--builder`](#builder)                | `string` |         | Override the configured builder instance |
-| [`-D`](#debug), [`--debug`](#debug)    | `bool`   |         | Enable debug logging                     |
-| [`-o`](#output), [`--output`](#output) | `string` |         | Output file path                         |
+| Name                                   | Type     | Default | Description                                         |
+|:---------------------------------------|:---------|:--------|:----------------------------------------------------|
+| [`--all`](#all)                        | `bool`   |         | Export all build records for the builder            |
+| [`--builder`](#builder)                | `string` |         | Override the configured builder instance            |
+| [`-D`](#debug), [`--debug`](#debug)    | `bool`   |         | Enable debug logging                                |
+| [`--finalize`](#finalize)              | `bool`   |         | Ensure build records are finalized before exporting |
+| [`-o`](#output), [`--output`](#output) | `string` |         | Output file path                                    |
 
 
 <!---MARKER_GEN_END-->
@@ -47,6 +48,16 @@ docker buildx history export --builder builder0 ^1 -o builder0-build.dockerbuild
 
 ```console
 docker buildx history export --debug qu2gsuo8ejqrwdfii23xkkckt -o debug-build.dockerbuild
+```
+
+### <a name="finalize"></a> Ensure build records are finalized before exporting (--finalize)
+
+Clients can report their own traces concurrently, and not all traces may be
+saved yet by the time of the export. Use the `--finalize` flag to ensure all
+traces are finalized before exporting.
+
+```console
+docker buildx history export --finalize qu2gsuo8ejqrwdfii23xkkckt -o finalized-build.dockerbuild
 ```
 
 ### <a name="output"></a> Export a single build to a custom file (--output)

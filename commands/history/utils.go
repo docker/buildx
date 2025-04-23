@@ -248,6 +248,28 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 	return out, nil
 }
 
+func finalizeRecord(ctx context.Context, ref string, nodes []builder.Node) error {
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, node := range nodes {
+		node := node
+		eg.Go(func() error {
+			if node.Driver == nil {
+				return nil
+			}
+			c, err := node.Driver.Client(ctx)
+			if err != nil {
+				return err
+			}
+			_, err = c.ControlClient().UpdateBuildHistory(ctx, &controlapi.UpdateBuildHistoryRequest{
+				Ref:      ref,
+				Finalize: true,
+			})
+			return err
+		})
+	}
+	return eg.Wait()
+}
+
 func formatDuration(d time.Duration) string {
 	if d < time.Minute {
 		return fmt.Sprintf("%.1fs", d.Seconds())

@@ -17,7 +17,6 @@ import (
 	"github.com/docker/buildx/util/otelutil"
 	"github.com/docker/buildx/util/otelutil/jaeger"
 	"github.com/docker/cli/cli/command"
-	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/browser"
@@ -57,14 +56,7 @@ func loadTrace(ctx context.Context, ref string, nodes []builder.Node) (string, [
 		// build is complete but no trace yet. try to finalize the trace
 		time.Sleep(1 * time.Second) // give some extra time for last parts of trace to be written
 
-		c, err := rec.node.Driver.Client(ctx)
-		if err != nil {
-			return "", nil, err
-		}
-		_, err = c.ControlClient().UpdateBuildHistory(ctx, &controlapi.UpdateBuildHistoryRequest{
-			Ref:      rec.Ref,
-			Finalize: true,
-		})
+		err := finalizeRecord(ctx, rec.Ref, []builder.Node{*rec.node})
 		if err != nil {
 			return "", nil, err
 		}
