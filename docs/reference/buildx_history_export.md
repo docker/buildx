@@ -41,12 +41,10 @@ To export two builds to separate files:
 
 ```console
 # Using build IDs
-docker buildx history export qu2gsuo8ejqrwdfii23xkkckt -o mybuild.dockerbuild
-docker buildx history export qsiifiuf1ad9pa9qvppc0z1l3 -o backend-build.dockerbuild
+docker buildx history export qu2gsuo8ejqrwdfii23xkkckt qsiifiuf1ad9pa9qvppc0z1l3 -o multi.dockerbuild
 
 # Or using relative offsets
-docker buildx history export ^1 -o mybuild.dockerbuild
-docker buildx history export ^2 -o backend-build.dockerbuild
+docker buildx history export ^1 ^2 -o multi.dockerbuild
 ```
 
 Or use shell redirection:

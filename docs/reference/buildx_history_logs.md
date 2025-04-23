@@ -63,13 +63,3 @@ $ docker buildx history logs ^1 --progress rawjson
 {"id":"buildx_step_1","status":"COMPLETE","timestamp":"2024-05-01T12:34:57.001Z","duration":212000000}
 ...
 ```
-
-### <a name="print-logs-tty"></a> Print logs in TTY format
-
-```console
-# Using a build ID
-docker buildx history logs qu2gsuo8ejqrwdfii23xkkckt --progress tty
-
-# Or using a relative offset
-docker buildx history logs ^1 --progress tty
-```

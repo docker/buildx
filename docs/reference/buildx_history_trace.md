@@ -59,10 +59,10 @@ Compare two specific builds by name:
 
 ```console
 # Using build IDs
-docker buildx history trace --compare qu2gsuo8ejqrwdfii23xkkckt qsiifiuf1ad9pa9qvppc0z1l3
+docker buildx history trace --compare=qu2gsuo8ejqrwdfii23xkkckt qsiifiuf1ad9pa9qvppc0z1l3
 
 # Or using a single relative offset
-docker buildx history trace --compare ^1
+docker buildx history trace --compare=^1
 ```
 
 When you use a single reference with `--compare`, it compares that build
