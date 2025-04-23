@@ -105,6 +105,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 		SourcePolicy:        opt.SourcePolicy,
 	}
 
+	if v, ok := opt.BuildArgs["BUILDKIT_SYNTAX"]; ok {
+		so.Frontend = "gateway.v0"
+		so.FrontendAttrs["source"] = v
+	}
+
 	if opt.CgroupParent != "" {
 		so.FrontendAttrs["cgroup-parent"] = opt.CgroupParent
 	}
