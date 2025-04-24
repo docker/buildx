@@ -424,6 +424,9 @@ jobs:
           large-packages: true
           swap-storage: true
       -
+        name: Checkout
+        uses: actions/checkout@v4
+      -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
       -
@@ -456,9 +459,10 @@ jobs:
         name: Build and push image
         uses: docker/bake-action@v6
         with:
+          source: .
           files: |
             ./docker-bake.hcl
-            cwd://${{ steps.meta.outputs.bake-file }}
+            ${{ steps.meta.outputs.bake-file }}
           targets: image-cross
           push: ${{ github.event_name != 'pull_request' }}
           sbom: true
