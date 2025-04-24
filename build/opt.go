@@ -116,6 +116,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 		so.FrontendAttrs["cgroup-parent"] = opt.CgroupParent
 	}
 
+	if v, ok := opt.BuildArgs["BUILDKIT_SYNTAX"]; ok {
+		so.Frontend = "gateway.v0"
+		so.FrontendAttrs["source"] = v
+	}
+
 	if v, ok := opt.BuildArgs["BUILDKIT_MULTI_PLATFORM"]; ok {
 		if v, _ := strconv.ParseBool(v); v {
 			so.FrontendAttrs["multi-platform"] = "true"
