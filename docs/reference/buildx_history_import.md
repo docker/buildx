@@ -9,7 +9,7 @@ Import a build into Docker Desktop
 |:----------------|:--------------|:--------|:-----------------------------------------|
 | `--builder`     | `string`      |         | Override the configured builder instance |
 | `-D`, `--debug` | `bool`        |         | Enable debug logging                     |
-| `-f`, `--file`  | `stringArray` |         | Import from a file path                  |
+| [`-f`](#file), [`--file`](#file)  | `stringArray` |         | Import from a file path                  |
 
 
 <!---MARKER_GEN_END-->
@@ -22,19 +22,19 @@ pipelines.
 
 ## Examples
 
-### <a name="import-dockerbuild"></a> Import a `.dockerbuild` archive from standard input
+### Import a `.dockerbuild` archive from standard input
 
 ```console
 docker buildx history import < mybuild.dockerbuild
 ```
 
-### <a name="import-build-archive"></a> Import a build archive from a file
+### <a name="file"></a> Import a build archive from a file (--file)
 
 ```console
 docker buildx history import --file ./artifacts/backend-build.dockerbuild
 ```
 
-### <a name="open-build-manually"></a> Open a build manually
+### Open a build manually
 
 By default, the `import` command automatically opens the imported build in Docker
 Desktop. You don't need to run `open` unless you're opening a specific build

@@ -9,10 +9,10 @@ List build records
 |:----------------|:--------------|:--------|:---------------------------------------------|
 | `--builder`     | `string`      |         | Override the configured builder instance     |
 | `-D`, `--debug` | `bool`        |         | Enable debug logging                         |
-| `--filter`      | `stringArray` |         | Provide filter values (e.g., `status=error`) |
-| `--format`      | `string`      | `table` | Format the output                            |
-| `--local`       | `bool`        |         | List records for current repository only     |
-| `--no-trunc`    | `bool`        |         | Don't truncate output                        |
+| [`--filter`](#filter)      | `stringArray` |         | Provide filter values (e.g., `status=error`) |
+| [`--format`](#format)      | `string`      | `table` | Format the output                            |
+| [`--local`](#local)       | `bool`        |         | List records for current repository only     |
+| [`--no-trunc`](#no-trunc)    | `bool`        |         | Don't truncate output                        |
 
 
 <!---MARKER_GEN_END-->
@@ -27,7 +27,7 @@ results using flags.
 
 ## Examples
 
-### <a name="list-build-records-current"></a> List all build records for the current builder
+### List all build records for the current builder
 
 ```console
 $ docker buildx history ls
@@ -37,7 +37,7 @@ qsiifiuf1ad9pa9qvppc0z1l3   .dev/2850      Completed  3 days ago        1.3s
 g9808bwrjrlkbhdamxklx660b   .dev/3120      Completed  5 days ago        2.1s
 ```
 
-### <a name="list-failed-builds"></a> List only failed builds
+### <a name="filter"></a> List failed builds (--filter)
 
 ```console
 docker buildx history ls --filter status=error
@@ -56,19 +56,21 @@ You can combine multiple filters by repeating the `--filter` flag:
 docker buildx history ls --filter status=error --filter duration>30s
 ```
 
-### <a name="list-builds-current-project"></a> List builds from the current project
+### <a name="local"></a> List builds from the current project (--local)
 
 ```console
 docker buildx history ls --local
 ```
 
-### <a name="display-full-output"></a> Display full output without truncation
+### <a name="no-trunc"></a> Display full output without truncation (--no-trunc)
 
 ```console
 docker buildx history ls --no-trunc
 ```
 
-### <a name="list-as-json"></a> Format output as JSON
+### <a name="format"></a> Format output (--format)
+
+**JSON output**
 
 ```console
 $ docker buildx history ls --format json
@@ -90,7 +92,7 @@ $ docker buildx history ls --format json
 ]
 ```
 
-### <a name="list-go-template"></a> Use a Go template to print name and durations
+**Go template output**
 
 ```console
 $ docker buildx history ls --format '{{.Name}} - {{.Duration}}'

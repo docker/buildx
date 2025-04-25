@@ -22,7 +22,7 @@ the `--all` flag.
 
 ## Examples
 
-### <a name="remove-specific-build"></a> Remove a specific build
+### Remove a specific build
 
 ```console
 # Using a build ID
@@ -32,7 +32,7 @@ docker buildx history rm qu2gsuo8ejqrwdfii23xkkckt
 docker buildx history rm ^1
 ```
 
-### <a name="remove-multiple-builds"></a> Remove multiple builds
+### Remove multiple builds
 
 ```console
 # Using build IDs
@@ -42,7 +42,7 @@ docker buildx history rm qu2gsuo8ejqrwdfii23xkkckt qsiifiuf1ad9pa9qvppc0z1l3
 docker buildx history rm ^1 ^2
 ```
 
-### <a name="remove-all-build-records"></a> Remove all build records from the current builder
+### Remove all build records from the current builder
 
 ```console
 docker buildx history rm --all

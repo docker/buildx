@@ -29,7 +29,7 @@ provenance, SBOMs, or other detailed information.
 
 ## Examples
 
-### <a name="inspect-most-recent-build"></a> Inspect the most recent build
+### Inspect the most recent build
 
 ```console
 $ docker buildx history inspect
@@ -59,7 +59,7 @@ DIGEST                                                                  PLATFORM
 sha256:217329d2af959d4f02e3a96dcbe62bf100cab1feb8006a047ddfe51a5397f7e3                 https://slsa.dev/provenance/v0.2
 ```
 
-### <a name="inspect-specific-build"></a> Inspect a specific build
+### Inspect a specific build
 
 ```console
 # Using a build ID

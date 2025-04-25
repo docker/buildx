@@ -20,7 +20,7 @@ Docker Desktop to be installed and running on the host machine.
 
 ## Examples
 
-### <a name="open-most-recent-build"></a> Open the most recent build in Docker Desktop
+### Open the most recent build in Docker Desktop
 
 ```console
 docker buildx history open
@@ -28,7 +28,7 @@ docker buildx history open
 
 By default, this opens the most recent build on the current builder.
 
-### <a name="open-specific-build"></a> Open a specific build
+### Open a specific build
 
 ```console
 # Using a build ID

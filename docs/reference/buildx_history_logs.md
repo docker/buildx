@@ -9,7 +9,7 @@ Print the logs of a build
 |:----------------|:---------|:--------|:--------------------------------------------------|
 | `--builder`     | `string` |         | Override the configured builder instance          |
 | `-D`, `--debug` | `bool`   |         | Enable debug logging                              |
-| `--progress`    | `string` | `plain` | Set type of progress output (plain, rawjson, tty) |
+| [`--progress`](#progress) | `string` | `plain` | Set type of progress output (plain, rawjson, tty) |
 
 
 <!---MARKER_GEN_END-->
@@ -28,7 +28,7 @@ You can also specify an earlier build using an offset. For example:
 
 ## Examples
 
-### <a name="print-logs-recent-build"></a> Print logs for the most recent build
+### Print logs for the most recent build
 
 ```console
 $ docker buildx history logs
@@ -43,7 +43,7 @@ $ docker buildx history logs
 
 By default, this shows logs for the most recent build on the current builder.
 
-### <a name="print-logs-specific-build"></a> Print logs for a specific build
+### Print logs for a specific build
 
 To print logs for a specific build, use a build ID or offset:
 
@@ -55,7 +55,7 @@ docker buildx history logs qu2gsuo8ejqrwdfii23xkkckt
 docker buildx history logs ^1
 ```
 
-### <a name="print-logs-json"></a> Print logs in JSON format
+### <a name="progress"></a> Set type of progress output (--progress)
 
 ```console
 $ docker buildx history logs ^1 --progress rawjson

@@ -7,9 +7,9 @@ Show the OpenTelemetry trace of a build record
 
 | Name            | Type     | Default       | Description                              |
 |:----------------|:---------|:--------------|:-----------------------------------------|
-| `--addr`        | `string` | `127.0.0.1:0` | Address to bind the UI server            |
+| [`--addr`](#addr)        | `string` | `127.0.0.1:0` | Address to bind the UI server            |
 | `--builder`     | `string` |               | Override the configured builder instance |
-| `--compare`     | `string` |               | Compare with another build reference     |
+| [`--compare`](#compare)     | `string` |               | Compare with another build reference     |
 | `-D`, `--debug` | `bool`   |               | Enable debug logging                     |
 
 
@@ -24,7 +24,7 @@ This helps analyze build performance, step timing, and internal execution flows.
 
 ## Examples
 
-### <a name="open-opentelemetry-trace"></a> Open the OpenTelemetry trace for the most recent build
+### Open the OpenTelemetry trace for the most recent build
 
 This command starts a temporary Jaeger UI server and opens your default browser
 to view the trace.
@@ -33,7 +33,7 @@ to view the trace.
 docker buildx history trace
 ```
 
-### <a name="open-trace-specific-build"></a> Open the trace for a specific build
+### Open the trace for a specific build
 
 ```console
 # Using a build ID
@@ -43,7 +43,7 @@ docker buildx history trace qu2gsuo8ejqrwdfii23xkkckt
 docker buildx history trace ^1
 ```
 
-### <a name="run-Jaegar-UI-port"></a> Run the Jaeger UI on a specific port
+### <a name="addr"></a> Run the Jaeger UI on a specific port (--addr)
 
 ```console
 # Using a build ID
@@ -53,7 +53,7 @@ docker buildx history trace qu2gsuo8ejqrwdfii23xkkckt --addr 127.0.0.1:16686
 docker buildx history trace ^1 --addr 127.0.0.1:16686
 ```
 
-### <a name="compare-traces"></a> Compare two build traces
+### <a name="compare"></a> Compare two build traces (--compare)
 
 Compare two specific builds by name:
 

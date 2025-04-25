@@ -10,7 +10,7 @@ Inspect a build attachment
 | `--builder`     | `string` |         | Override the configured builder instance |
 | `-D`, `--debug` | `bool`   |         | Enable debug logging                     |
 | `--platform`    | `string` |         | Platform of attachment                   |
-| `--type`        | `string` |         | Type of attachment                       |
+| [`--type`](#type)        | `string` |         | Type of attachment                       |
 
 
 <!---MARKER_GEN_END-->
@@ -23,7 +23,7 @@ platform-specific.
 
 ## Examples
 
-### <a name="inspect-provenance-attachment"></a> Inspect a provenance attachment from a build
+### <a name="type"></a> Inspect a provenance attachment from a build (--type)
 
 Supported types include `provenance` and `sbom`.
 
@@ -45,7 +45,7 @@ $ docker buildx history inspect attachment qu2gsuo8ejqrwdfii23xkkckt --type prov
 }
 ```
 
-### <a name="insepct-SBOM"></a> Inspect a SBOM for linux/amd64
+### Inspect a SBOM for linux/amd64
 
 ```console
 $ docker buildx history inspect attachment ^0 \
@@ -65,7 +65,7 @@ $ docker buildx history inspect attachment ^0 \
 }
 ```
 
-### <a name="inspect-attachment-digest"></a> Inspect an attachment by digest
+### Inspect an attachment by digest
 
 You can inspect an attachment directly using its digset, which you can get from
 the `inspect` output:
