@@ -1603,13 +1603,99 @@ func TestFunctionNoResult(t *testing.T) {
 func TestVarUnsupportedType(t *testing.T) {
 	dt := []byte(`
 		variable "FOO" {
-			default = []
+			default = {}
 		}
 		target "default" {}`)
 
 	t.Setenv("FOO", "bar")
 	_, err := ParseFile(dt, "docker-bake.hcl")
 	require.Error(t, err)
+}
+
+func TestListVarOverride(t *testing.T) {
+	// no empty lists; don't know what to convert overrides to
+	dt := []byte(`
+		variable "FOO" {
+			default = []
+		}
+		target "default" {}`)
+
+	t.Setenv("FOO", "bar")
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "empty")
+
+	// mixed types are not allowed
+	dt = []byte(`
+		variable "FOO" {
+			default = ["weird", true]
+		}
+		target "default" {}`)
+
+	t.Setenv("FOO", "bar")
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "mixed")
+
+	// complex types, e.g., list of lists, no good either
+	dt = []byte(`
+		variable "FOO" {
+			default = [["do", "not"], ["do", "this"]]
+		}
+		target "default" {}`)
+
+	t.Setenv("FOO", "bar")
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "unsupported")
+
+	// list elements type-checked
+	dt = []byte(`
+		variable "FOO" {
+			default = [99, 100]
+		}
+		target "default" {}`)
+
+	t.Setenv("FOO", "oops")
+	_, err = ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "failed to parse FOO as number")
+
+	// list of numbers
+	dt = []byte(`
+		variable "FOO" {
+			default = [100, 1]
+		}
+		target "default" {
+            args = {
+                foo = add(FOO[0], FOO[1]) > 100 ? "high" : "low" 
+            }
+        }`)
+
+	t.Setenv("FOO", "4,5")
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, ptrstr("low"), c.Targets[0].Args["foo"])
+
+	// lists of strings
+	dt = []byte(`
+		variable "FOO" {
+			default = ["please"]
+		}
+		variable "BAR" {
+			default = split("*", "hi*there")
+		}
+		target "default" {
+            args = {
+                foo = join("-", FOO)
+                bar = join("-", BAR)
+            }
+        }`)
+
+	t.Setenv("FOO", "thank,you")
+	t.Setenv("BAR", "you,too")
+	c, err = ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, ptrstr("thank-you"), c.Targets[0].Args["foo"])
+	require.Equal(t, ptrstr("you-too"), c.Targets[0].Args["bar"])
 }
 
 func TestHCLIndexOfFunc(t *testing.T) {

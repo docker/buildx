@@ -298,31 +298,80 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	_, isVar := p.vars[name]
 
 	if envv, ok := p.opt.LookupVar(name); ok && isVar {
-		switch {
-		case vv.Type().Equals(cty.Bool):
-			b, err := strconv.ParseBool(envv)
-			if err != nil {
-				return errors.Wrapf(err, "failed to parse %s as bool", name)
-			}
-			vv = cty.BoolVal(b)
-		case vv.Type().Equals(cty.String), vv.Type().Equals(cty.DynamicPseudoType):
-			vv = cty.StringVal(envv)
-		case vv.Type().Equals(cty.Number):
-			n, err := strconv.ParseFloat(envv, 64)
-			if err == nil && (math.IsNaN(n) || math.IsInf(n, 0)) {
-				err = errors.Errorf("invalid number value")
-			}
-			if err != nil {
-				return errors.Wrapf(err, "failed to parse %s as number", name)
-			}
-			vv = cty.NumberVal(big.NewFloat(n))
-		default:
-			// TODO: support lists with csv values
-			return errors.Errorf("unsupported type %s for variable %s", vv.Type().FriendlyName(), name)
+		vv, err = convertValue(vv.Type(), name, envv)
+		if err != nil {
+			return err
 		}
 	}
 	v = &vv
 	return nil
+}
+
+// convertValue converts the given string value to a cty.Value of the specified cty.Type.
+//
+// This is called recursively in respect to lists/tuples, but effectively limited to one level
+// due to allowing only primitive elements.
+// Tuples are required to have elements of the same type.
+// Tuples/lists must have length (to determine type for coercion).
+func convertValue(t cty.Type, name, value string) (cty.Value, error) {
+	switch {
+	case t.Equals(cty.Bool):
+		b, err := strconv.ParseBool(value)
+		if err != nil {
+			return cty.NilVal, errors.Wrapf(err, "failed to parse %s as bool", name)
+		}
+		return cty.BoolVal(b), nil
+	case t.Equals(cty.String), t.Equals(cty.DynamicPseudoType):
+		return cty.StringVal(value), nil
+	case t.Equals(cty.Number):
+		n, err := strconv.ParseFloat(value, 64)
+		if err == nil && (math.IsNaN(n) || math.IsInf(n, 0)) {
+			err = errors.Errorf("invalid number value")
+		}
+		if err != nil {
+			return cty.NilVal, errors.Wrapf(err, "failed to parse %s as number", name)
+		}
+		return cty.NumberVal(big.NewFloat(n)), nil
+	case t.IsTupleType():
+		if t.Length() == 0 {
+			return cty.NilVal, errors.Errorf("unsupported (empty) type %s for variable %s", t.FriendlyName(), name)
+		}
+		// the size of the original may not be the same as the override, so simpler to pre-check them
+		ft := t.TupleElementType(0)
+		for _, t := range t.TupleElementTypes() {
+			if !t.Equals(ft) {
+				return cty.NilVal, errors.Errorf("unsupported (mixed) type %s for variable %s", t.FriendlyName(), name)
+			}
+			if !t.IsPrimitiveType() {
+				return cty.NilVal, errors.Errorf("unsupported entry type %s in %s for variable %s", ft.FriendlyName(), t.FriendlyName(), name)
+			}
+		}
+		var ps []cty.Value
+		for i, p := range strings.Split(value, ",") {
+			v, err := convertValue(ft, name, p)
+			if err != nil {
+				return cty.NilVal, errors.Wrapf(err, "failed to parse entry %d of type %s in type %s for variable %s", i, ft.FriendlyName(), t.FriendlyName(), name)
+			}
+			ps = append(ps, v)
+		}
+		// it seems better to honor the original type, even though we enforce members all be of the same type
+		return cty.TupleVal(ps), nil
+	case t.IsListType():
+		if !t.ListElementType().IsPrimitiveType() {
+			return cty.NilVal, errors.Errorf("unsupported entry type %s in %s for variable %s", t.ListElementType().FriendlyName(), t.FriendlyName(), name)
+		}
+		var ps []cty.Value
+		for i, p := range strings.Split(value, ",") {
+			v, err := convertValue(*t.ListElementType(), name, p)
+			if err != nil {
+				return cty.NilVal, errors.Wrapf(err, "failed to parse entry %d of type %s in type %s for variable %s", i, t.ListElementType().FriendlyName(), t.FriendlyName(), name)
+			}
+			ps = append(ps, v)
+		}
+		return cty.ListVal(ps), nil
+	default:
+		return cty.NilVal, errors.Errorf("unsupported type %s for variable %s", t.FriendlyName(), name)
+	}
 }
 
 // resolveBlock force evaluates a block, storing the result in the parser. If a
