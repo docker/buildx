@@ -19,10 +19,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli, logger progress.SubLogger) control.BuildxController {
+func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli) control.BuildxController {
 	return &localController{
 		dockerCli: dockerCli,
-		sessionID: "local",
 		processes: processes.NewManager(),
 	}
 }
@@ -31,21 +30,20 @@ type buildConfig struct {
 	// TODO: these two structs should be merged
 	// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113279719
 	resultCtx    *build.ResultHandle
-	buildOptions *controllerapi.BuildOptions
+	buildOptions *cbuild.Options
 }
 
 type localController struct {
 	dockerCli   command.Cli
-	sessionID   string
 	buildConfig buildConfig
 	processes   *processes.Manager
 
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options *controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (string, *client.SolveResponse, *build.Inputs, error) {
+func (b *localController) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (*client.SolveResponse, *build.Inputs, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
-		return "", nil, nil, errors.New("build ongoing")
+		return nil, nil, errors.New("build ongoing")
 	}
 	defer b.buildOnGoing.Store(false)
 
@@ -62,26 +60,20 @@ func (b *localController) Build(ctx context.Context, options *controllerapi.Buil
 			if errors.As(buildErr, &ebr) {
 				ref = ebr.Ref
 			}
-			buildErr = controllererrors.WrapBuild(buildErr, b.sessionID, ref)
+			buildErr = controllererrors.WrapBuild(buildErr, "", ref)
 		}
 	}
 	if buildErr != nil {
-		return "", nil, nil, buildErr
+		return nil, nil, buildErr
 	}
-	return b.sessionID, resp, dockerfileMappings, nil
+	return resp, dockerfileMappings, nil
 }
 
-func (b *localController) ListProcesses(ctx context.Context, sessionID string) (infos []*controllerapi.ProcessInfo, retErr error) {
-	if sessionID != b.sessionID {
-		return nil, errors.Errorf("unknown session ID %q", sessionID)
-	}
+func (b *localController) ListProcesses(ctx context.Context) (infos []*processes.ProcessInfo, retErr error) {
 	return b.processes.ListProcesses(), nil
 }
 
-func (b *localController) DisconnectProcess(ctx context.Context, sessionID, pid string) error {
-	if sessionID != b.sessionID {
-		return errors.Errorf("unknown session ID %q", sessionID)
-	}
+func (b *localController) DisconnectProcess(ctx context.Context, pid string) error {
 	return b.processes.DeleteProcess(pid)
 }
 
@@ -89,11 +81,7 @@ func (b *localController) cancelRunningProcesses() {
 	b.processes.CancelRunningProcesses()
 }
 
-func (b *localController) Invoke(ctx context.Context, sessionID string, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
-	if sessionID != b.sessionID {
-		return errors.Errorf("unknown session ID %q", sessionID)
-	}
-
+func (b *localController) Invoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
 	proc, ok := b.processes.Get(pid)
 	if !ok {
 		// Start a new process.
@@ -121,11 +109,6 @@ func (b *localController) Invoke(ctx context.Context, sessionID string, pid stri
 	}
 }
 
-func (b *localController) Kill(context.Context) error {
-	b.Close()
-	return nil
-}
-
 func (b *localController) Close() error {
 	b.cancelRunningProcesses()
 	if b.buildConfig.resultCtx != nil {
@@ -135,18 +118,6 @@ func (b *localController) Close() error {
 	return nil
 }
 
-func (b *localController) List(ctx context.Context) (res []string, _ error) {
-	return []string{b.sessionID}, nil
-}
-
-func (b *localController) Disconnect(ctx context.Context, key string) error {
-	b.Close()
-	return nil
-}
-
-func (b *localController) Inspect(ctx context.Context, sessionID string) (*controllerapi.InspectResponse, error) {
-	if sessionID != b.sessionID {
-		return nil, errors.Errorf("unknown session ID %q", sessionID)
-	}
-	return &controllerapi.InspectResponse{Options: b.buildConfig.buildOptions}, nil
+func (b *localController) Inspect(ctx context.Context) *cbuild.Options {
+	return b.buildConfig.buildOptions
 }

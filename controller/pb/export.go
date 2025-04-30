@@ -11,6 +11,12 @@ import (
 	"github.com/pkg/errors"
 )
 
+type ExportEntry struct {
+	Type        string
+	Attrs       map[string]string
+	Destination string
+}
+
 func CreateExports(entries []*ExportEntry) ([]client.ExportEntry, []string, error) {
 	var outs []client.ExportEntry
 	var localPaths []string

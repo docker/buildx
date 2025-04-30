@@ -28,7 +28,6 @@ Start a build
 | [`--cgroup-parent`](#cgroup-parent)     | `string`      |           | Set the parent cgroup for the `RUN` instructions during build                                                |
 | [`--check`](#check)                     | `bool`        |           | Shorthand for `--call=check`                                                                                 |
 | `-D`, `--debug`                         | `bool`        |           | Enable debug logging                                                                                         |
-| `--detach`                              | `bool`        |           | Detach buildx server (supported only on linux) (EXPERIMENTAL)                                                |
 | [`-f`](#file), [`--file`](#file)        | `string`      |           | Name of the Dockerfile (default: `PATH/Dockerfile`)                                                          |
 | `--iidfile`                             | `string`      |           | Write the image ID to a file                                                                                 |
 | `--label`                               | `stringArray` |           | Set metadata for an image                                                                                    |
@@ -44,10 +43,8 @@ Start a build
 | `--pull`                                | `bool`        |           | Always attempt to pull all referenced images                                                                 |
 | [`--push`](#push)                       | `bool`        |           | Shorthand for `--output=type=registry`                                                                       |
 | `-q`, `--quiet`                         | `bool`        |           | Suppress the build output and print image ID on success                                                      |
-| `--root`                                | `string`      |           | Specify root directory of server to connect (EXPERIMENTAL)                                                   |
 | [`--sbom`](#sbom)                       | `string`      |           | Shorthand for `--attest=type=sbom`                                                                           |
 | [`--secret`](#secret)                   | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                                    |
-| `--server-config`                       | `string`      |           | Specify buildx server config file (used only when launching new server) (EXPERIMENTAL)                       |
 | [`--shm-size`](#shm-size)               | `bytes`       | `0`       | Shared memory size for build containers                                                                      |
 | [`--ssh`](#ssh)                         | `stringArray` |           | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`)          |
 | [`-t`](#tag), [`--tag`](#tag)           | `stringArray` |           | Name and optionally a tag (format: `name:tag`)                                                               |

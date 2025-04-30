@@ -3,11 +3,9 @@ package debug
 import (
 	"context"
 	"os"
-	"runtime"
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/controller"
-	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/util/cobrautil"
@@ -35,7 +33,6 @@ type DebuggableCmd interface {
 }
 
 func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
-	var controlOptions control.ControlOptions
 	var progressMode string
 	var options DebugConfig
 
@@ -50,10 +47,7 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 			}
 
 			ctx := context.TODO()
-			c, err := controller.NewController(ctx, controlOptions, dockerCli, printer)
-			if err != nil {
-				return err
-			}
+			c := controller.NewController(ctx, dockerCli)
 			defer func() {
 				if err := c.Close(); err != nil {
 					logrus.Warnf("failed to close server connection %v", err)
@@ -76,13 +70,9 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 	flags := cmd.Flags()
 	flags.StringVar(&options.InvokeFlag, "invoke", "", "Launch a monitor with executing specified command")
 	flags.StringVar(&options.OnFlag, "on", "error", "When to launch the monitor ([always, error])")
-
-	flags.StringVar(&controlOptions.Root, "root", "", "Specify root directory of server to connect for the monitor")
-	flags.BoolVar(&controlOptions.Detach, "detach", runtime.GOOS == "linux", "Detach buildx server for the monitor (supported only on linux)")
-	flags.StringVar(&controlOptions.ServerConfig, "server-config", "", "Specify buildx server config file for the monitor (used only when launching new server)")
 	flags.StringVar(&progressMode, "progress", "auto", `Set type of progress output ("auto", "plain", "tty", "rawjson") for the monitor. Use plain to show container output`)
 
-	cobrautil.MarkFlagsExperimental(flags, "invoke", "on", "root", "detach", "server-config")
+	cobrautil.MarkFlagsExperimental(flags, "invoke", "on")
 
 	for _, c := range children {
 		cmd.AddCommand(c.NewDebugger(&options))

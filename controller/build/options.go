@@ -1,15 +1,52 @@
-package pb
+package build
 
 import (
 	"path/filepath"
 	"strings"
 
+	"github.com/docker/buildx/controller/pb"
+	sourcepolicy "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/util/gitutil"
 )
 
+type Options struct {
+	ContextPath            string
+	DockerfileName         string
+	CallFunc               *pb.CallFunc
+	NamedContexts          map[string]string
+	Allow                  []string
+	Attests                []*pb.Attest
+	BuildArgs              map[string]string
+	CacheFrom              []*pb.CacheOptionsEntry
+	CacheTo                []*pb.CacheOptionsEntry
+	CgroupParent           string
+	Exports                []*pb.ExportEntry
+	ExtraHosts             []string
+	Labels                 map[string]string
+	NetworkMode            string
+	NoCacheFilter          []string
+	Platforms              []string
+	Secrets                []*pb.Secret
+	ShmSize                int64
+	SSH                    []*pb.SSH
+	Tags                   []string
+	Target                 string
+	Ulimits                *pb.UlimitOpt
+	Builder                string
+	NoCache                bool
+	Pull                   bool
+	ExportPush             bool
+	ExportLoad             bool
+	SourcePolicy           *sourcepolicy.Policy
+	Ref                    string
+	GroupRef               string
+	Annotations            []string
+	ProvenanceResponseMode string
+}
+
 // ResolveOptionPaths resolves all paths contained in BuildOptions
 // and replaces them to absolute paths.
-func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
+func ResolveOptionPaths(options *Options) (_ *Options, err error) {
 	localContext := false
 	if options.ContextPath != "" && options.ContextPath != "-" {
 		if !isRemoteURL(options.ContextPath) {
@@ -56,7 +93,7 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 	}
 	options.NamedContexts = contexts
 
-	var cacheFrom []*CacheOptionsEntry
+	var cacheFrom []*pb.CacheOptionsEntry
 	for _, co := range options.CacheFrom {
 		switch co.Type {
 		case "local":
@@ -87,7 +124,7 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 	}
 	options.CacheFrom = cacheFrom
 
-	var cacheTo []*CacheOptionsEntry
+	var cacheTo []*pb.CacheOptionsEntry
 	for _, co := range options.CacheTo {
 		switch co.Type {
 		case "local":
@@ -117,7 +154,7 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 		}
 	}
 	options.CacheTo = cacheTo
-	var exports []*ExportEntry
+	var exports []*pb.ExportEntry
 	for _, e := range options.Exports {
 		if e.Destination != "" && e.Destination != "-" {
 			e.Destination, err = filepath.Abs(e.Destination)
@@ -129,7 +166,7 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 	}
 	options.Exports = exports
 
-	var secrets []*Secret
+	var secrets []*pb.Secret
 	for _, s := range options.Secrets {
 		if s.FilePath != "" {
 			s.FilePath, err = filepath.Abs(s.FilePath)
@@ -141,7 +178,7 @@ func ResolveOptionPaths(options *BuildOptions) (_ *BuildOptions, err error) {
 	}
 	options.Secrets = secrets
 
-	var ssh []*SSH
+	var ssh []*pb.SSH
 	for _, s := range options.SSH {
 		var ps []string
 		for _, pt := range s.Paths {

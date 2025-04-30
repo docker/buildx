@@ -11,6 +11,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/commands"
@@ -31,10 +32,10 @@ type MonitorBuildResult struct {
 }
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options *controllerapi.BuildOptions, invokeConfig *controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
+func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, invokeConfig *controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
 	defer func() {
-		if err := c.Disconnect(ctx, curRef); err != nil {
-			logrus.Warnf("disconnect error: %v", err)
+		if err := c.Close(); err != nil {
+			logrus.Warnf("close error: %v", err)
 		}
 	}()
 
@@ -95,9 +96,6 @@ func RunMonitor(ctx context.Context, curRef string, options *controllerapi.Build
 	availableCommands := []types.Command{
 		commands.NewReloadCmd(m, stdout, progress, options, invokeConfig),
 		commands.NewRollbackCmd(m, invokeConfig, stdout),
-		commands.NewListCmd(m, stdout),
-		commands.NewDisconnectCmd(m),
-		commands.NewKillCmd(m),
 		commands.NewAttachCmd(m, stdout),
 		commands.NewExecCmd(m, invokeConfig, stdout),
 		commands.NewPsCmd(m, stdout),
@@ -244,22 +242,10 @@ type monitor struct {
 	lastBuildResult *MonitorBuildResult
 }
 
-func (m *monitor) Build(ctx context.Context, options *controllerapi.BuildOptions, in io.ReadCloser, progress progress.Writer) (ref string, resp *client.SolveResponse, input *build.Inputs, err error) {
-	ref, resp, _, err = m.BuildxController.Build(ctx, options, in, progress)
+func (m *monitor) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, input *build.Inputs, err error) {
+	resp, _, err = m.BuildxController.Build(ctx, options, in, progress)
 	m.lastBuildResult = &MonitorBuildResult{Resp: resp, Err: err} // Record build result
 	return
-}
-
-func (m *monitor) DisconnectSession(ctx context.Context, targetID string) error {
-	return m.Disconnect(ctx, targetID)
-}
-
-func (m *monitor) AttachSession(ref string) {
-	m.ref.Store(ref)
-}
-
-func (m *monitor) AttachedSessionID() string {
-	return m.ref.Load().(string)
 }
 
 func (m *monitor) Rollback(ctx context.Context, cfg *controllerapi.InvokeConfig) string {
@@ -323,9 +309,6 @@ func (m *monitor) invoke(ctx context.Context, pid string, cfg *controllerapi.Inv
 	if err := m.muxIO.SwitchTo(1); err != nil {
 		return errors.Errorf("failed to switch to process IO: %v", err)
 	}
-	if m.AttachedSessionID() == "" {
-		return nil
-	}
 	invokeCtx, invokeCancel := context.WithCancelCause(ctx)
 
 	containerIn, containerOut := ioset.Pipe()
@@ -343,7 +326,7 @@ func (m *monitor) invoke(ctx context.Context, pid string, cfg *controllerapi.Inv
 	defer invokeCancelAndDetachFn()
 	m.invokeCancel = invokeCancelAndDetachFn
 
-	err := m.Invoke(invokeCtx, m.AttachedSessionID(), pid, cfg, containerIn.Stdin, containerIn.Stdout, containerIn.Stderr)
+	err := m.Invoke(invokeCtx, pid, cfg, containerIn.Stdin, containerIn.Stdout, containerIn.Stderr)
 	close(waitInvokeDoneCh)
 
 	return err

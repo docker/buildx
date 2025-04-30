@@ -1,12 +1,12 @@
-package pb
+package build
 
 import (
 	"os"
 	"path/filepath"
 	"testing"
 
+	"github.com/docker/buildx/controller/pb"
 	"github.com/stretchr/testify/require"
-	"google.golang.org/protobuf/proto"
 )
 
 func TestResolvePaths(t *testing.T) {
@@ -16,59 +16,59 @@ func TestResolvePaths(t *testing.T) {
 	require.NoError(t, os.Chdir(tmpwd))
 	tests := []struct {
 		name    string
-		options *BuildOptions
-		want    *BuildOptions
+		options *Options
+		want    *Options
 	}{
 		{
 			name:    "contextpath",
-			options: &BuildOptions{ContextPath: "test"},
-			want:    &BuildOptions{ContextPath: filepath.Join(tmpwd, "test")},
+			options: &Options{ContextPath: "test"},
+			want:    &Options{ContextPath: filepath.Join(tmpwd, "test")},
 		},
 		{
 			name:    "contextpath-cwd",
-			options: &BuildOptions{ContextPath: "."},
-			want:    &BuildOptions{ContextPath: tmpwd},
+			options: &Options{ContextPath: "."},
+			want:    &Options{ContextPath: tmpwd},
 		},
 		{
 			name:    "contextpath-dash",
-			options: &BuildOptions{ContextPath: "-"},
-			want:    &BuildOptions{ContextPath: "-"},
+			options: &Options{ContextPath: "-"},
+			want:    &Options{ContextPath: "-"},
 		},
 		{
 			name:    "contextpath-ssh",
-			options: &BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
-			want:    &BuildOptions{ContextPath: "git@github.com:docker/buildx.git"},
+			options: &Options{ContextPath: "git@github.com:docker/buildx.git"},
+			want:    &Options{ContextPath: "git@github.com:docker/buildx.git"},
 		},
 		{
 			name:    "dockerfilename",
-			options: &BuildOptions{DockerfileName: "test", ContextPath: "."},
-			want:    &BuildOptions{DockerfileName: filepath.Join(tmpwd, "test"), ContextPath: tmpwd},
+			options: &Options{DockerfileName: "test", ContextPath: "."},
+			want:    &Options{DockerfileName: filepath.Join(tmpwd, "test"), ContextPath: tmpwd},
 		},
 		{
 			name:    "dockerfilename-dash",
-			options: &BuildOptions{DockerfileName: "-", ContextPath: "."},
-			want:    &BuildOptions{DockerfileName: "-", ContextPath: tmpwd},
+			options: &Options{DockerfileName: "-", ContextPath: "."},
+			want:    &Options{DockerfileName: "-", ContextPath: tmpwd},
 		},
 		{
 			name:    "dockerfilename-remote",
-			options: &BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
-			want:    &BuildOptions{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			options: &Options{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
+			want:    &Options{DockerfileName: "test", ContextPath: "git@github.com:docker/buildx.git"},
 		},
 		{
 			name: "contexts",
-			options: &BuildOptions{NamedContexts: map[string]string{
+			options: &Options{NamedContexts: map[string]string{
 				"a": "test1", "b": "test2",
 				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git",
 			}},
-			want: &BuildOptions{NamedContexts: map[string]string{
+			want: &Options{NamedContexts: map[string]string{
 				"a": filepath.Join(tmpwd, "test1"), "b": filepath.Join(tmpwd, "test2"),
 				"alpine": "docker-image://alpine@sha256:0123456789", "project": "https://github.com/myuser/project.git",
 			}},
 		},
 		{
 			name: "cache-from",
-			options: &BuildOptions{
-				CacheFrom: []*CacheOptionsEntry{
+			options: &Options{
+				CacheFrom: []*pb.CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"src": "test"},
@@ -79,8 +79,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: &BuildOptions{
-				CacheFrom: []*CacheOptionsEntry{
+			want: &Options{
+				CacheFrom: []*pb.CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"src": filepath.Join(tmpwd, "test")},
@@ -94,8 +94,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "cache-to",
-			options: &BuildOptions{
-				CacheTo: []*CacheOptionsEntry{
+			options: &Options{
+				CacheTo: []*pb.CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"dest": "test"},
@@ -106,8 +106,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: &BuildOptions{
-				CacheTo: []*CacheOptionsEntry{
+			want: &Options{
+				CacheTo: []*pb.CacheOptionsEntry{
 					{
 						Type:  "local",
 						Attrs: map[string]string{"dest": filepath.Join(tmpwd, "test")},
@@ -121,8 +121,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "exports",
-			options: &BuildOptions{
-				Exports: []*ExportEntry{
+			options: &Options{
+				Exports: []*pb.ExportEntry{
 					{
 						Type:        "local",
 						Destination: "-",
@@ -149,8 +149,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: &BuildOptions{
-				Exports: []*ExportEntry{
+			want: &Options{
+				Exports: []*pb.ExportEntry{
 					{
 						Type:        "local",
 						Destination: "-",
@@ -180,8 +180,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "secrets",
-			options: &BuildOptions{
-				Secrets: []*Secret{
+			options: &Options{
+				Secrets: []*pb.Secret{
 					{
 						FilePath: "test1",
 					},
@@ -195,8 +195,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: &BuildOptions{
-				Secrets: []*Secret{
+			want: &Options{
+				Secrets: []*pb.Secret{
 					{
 						FilePath: filepath.Join(tmpwd, "test1"),
 					},
@@ -213,8 +213,8 @@ func TestResolvePaths(t *testing.T) {
 		},
 		{
 			name: "ssh",
-			options: &BuildOptions{
-				SSH: []*SSH{
+			options: &Options{
+				SSH: []*pb.SSH{
 					{
 						ID:    "default",
 						Paths: []string{"test1", "test2"},
@@ -225,8 +225,8 @@ func TestResolvePaths(t *testing.T) {
 					},
 				},
 			},
-			want: &BuildOptions{
-				SSH: []*SSH{
+			want: &Options{
+				SSH: []*pb.SSH{
 					{
 						ID:    "default",
 						Paths: []string{filepath.Join(tmpwd, "test1"), filepath.Join(tmpwd, "test2")},
@@ -244,9 +244,7 @@ func TestResolvePaths(t *testing.T) {
 		t.Run(tt.name, func(t *testing.T) {
 			got, err := ResolveOptionPaths(tt.options)
 			require.NoError(t, err)
-			if !proto.Equal(tt.want, got) {
-				t.Fatalf("expected %#v, got %#v", tt.want, got)
-			}
+			require.Equal(t, tt.want, got)
 		})
 	}
 }

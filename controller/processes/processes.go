@@ -73,9 +73,9 @@ func (m *Manager) CancelRunningProcesses() {
 }
 
 // ListProcesses lists all running processes.
-func (m *Manager) ListProcesses() (res []*pb.ProcessInfo) {
+func (m *Manager) ListProcesses() (res []*ProcessInfo) {
 	m.processes.Range(func(key, value any) bool {
-		res = append(res, &pb.ProcessInfo{
+		res = append(res, &ProcessInfo{
 			ProcessID:    key.(string),
 			InvokeConfig: value.(*Process).invokeConfig,
 		})
@@ -153,4 +153,9 @@ func (m *Manager) StartProcess(pid string, resultCtx *build.ResultHandle, cfg *p
 	}()
 
 	return p, nil
+}
+
+type ProcessInfo struct {
+	ProcessID    string
+	InvokeConfig *pb.InvokeConfig
 }
