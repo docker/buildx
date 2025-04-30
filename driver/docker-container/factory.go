@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	dockeropts "github.com/docker/cli/opts"
@@ -105,6 +106,12 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if err != nil {
 				return nil, err
 			}
+		case k == "timeout":
+			parsed, err := time.ParseDuration(v)
+			if err != nil {
+				return nil, err
+			}
+			d.Timeout = parsed
 		case strings.HasPrefix(k, "env."):
 			envName := strings.TrimPrefix(k, "env.")
 			if envName == "" {
