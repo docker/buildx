@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"math"
 	"net"
 	"os"
 	"path"
@@ -199,12 +200,15 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 }
 
 func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
-	try := 1
+	var try uint64 = 1
+	var total float64 = float64(d.Timeout.Abs().Milliseconds())
+	var step uint64 = 120
+	var maxTries uint64 = uint64(math.Ceil((math.Sqrt(1.0 + (8.0 * total / float64(step))) - 1.0) / 2.0))
 	for {
 		bufStdout := &bytes.Buffer{}
 		bufStderr := &bytes.Buffer{}
 		if err := d.run(ctx, []string{"buildctl", "debug", "workers"}, bufStdout, bufStderr); err != nil {
-			if try > 15 {
+			if try > maxTries {
 				d.copyLogs(context.TODO(), l)
 				if bufStdout.Len() != 0 {
 					l.Log(1, bufStdout.Bytes())
@@ -217,7 +221,7 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 			select {
 			case <-ctx.Done():
 				return context.Cause(ctx)
-			case <-time.After(d.Timeout / time.Microsecond):
+			case <-time.After(time.Duration(try * step) * time.Millisecond):
 				try++
 				continue
 			}
