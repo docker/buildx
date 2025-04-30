@@ -92,6 +92,9 @@ func GetDriver(ctx context.Context, f Factory, cfg InitConfig) (*DriverHandle, e
 			return nil, err
 		}
 	}
+	if cfg.Timeout.Nanoseconds() < 1 {
+		return nil, errors.Errorf("InitConfig.Timeout not set, or negative")
+	}
 	d, err := f.New(ctx, cfg)
 	if err != nil {
 		return nil, err
