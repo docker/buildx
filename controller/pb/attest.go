@@ -1,5 +1,11 @@
 package pb
 
+type Attest struct {
+	Type     string
+	Disabled bool
+	Attrs    string
+}
+
 func CreateAttestations(attests []*Attest) map[string]*string {
 	result := map[string]*string{}
 	for _, attest := range attests {

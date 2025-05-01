@@ -7,6 +7,11 @@ import (
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 )
 
+type SSH struct {
+	ID    string
+	Paths []string
+}
+
 func CreateSSH(ssh []*SSH) (session.Attachable, error) {
 	configs := make([]sshprovider.AgentConfig, 0, len(ssh))
 	for _, ssh := range ssh {

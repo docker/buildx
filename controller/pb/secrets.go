@@ -5,6 +5,12 @@ import (
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 )
 
+type Secret struct {
+	ID       string
+	FilePath string
+	Env      string
+}
+
 func CreateSecrets(secrets []*Secret) (session.Attachable, error) {
 	fs := make([]secretsprovider.Source, 0, len(secrets))
 	for _, secret := range secrets {

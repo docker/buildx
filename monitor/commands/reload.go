@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 
+	cbuild "github.com/docker/buildx/controller/build"
 	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/types"
@@ -19,11 +20,11 @@ type ReloadCmd struct {
 	stdout   io.WriteCloser
 	progress *progress.Printer
 
-	options      *controllerapi.BuildOptions
+	options      *cbuild.Options
 	invokeConfig *controllerapi.InvokeConfig
 }
 
-func NewReloadCmd(m types.Monitor, stdout io.WriteCloser, progress *progress.Printer, options *controllerapi.BuildOptions, invokeConfig *controllerapi.InvokeConfig) types.Command {
+func NewReloadCmd(m types.Monitor, stdout io.WriteCloser, progress *progress.Printer, options *cbuild.Options, invokeConfig *controllerapi.InvokeConfig) types.Command {
 	return &ReloadCmd{m, stdout, progress, options, invokeConfig}
 }
 
@@ -39,34 +40,15 @@ Usage:
 }
 
 func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
-	var bo *controllerapi.BuildOptions
-	if ref := cm.m.AttachedSessionID(); ref != "" {
-		// Rebuilding an existing session; Restore the build option used for building this session.
-		res, err := cm.m.Inspect(ctx, ref)
-		if err != nil {
-			fmt.Printf("failed to inspect the current build session: %v\n", err)
-		} else {
-			bo = res.Options
-		}
-	} else {
-		bo = cm.options
-	}
-	if bo == nil {
-		return errors.Errorf("no build option is provided")
-	}
-	if ref := cm.m.AttachedSessionID(); ref != "" {
-		if err := cm.m.Disconnect(ctx, ref); err != nil {
-			fmt.Println("disconnect error", err)
-		}
-	}
+	bo := cm.m.Inspect(ctx)
+
 	var resultUpdated bool
 	cm.progress.Unpause()
-	ref, _, _, err := cm.m.Build(ctx, bo, nil, cm.progress) // TODO: support stdin, hold build ref
+	_, _, err := cm.m.Build(ctx, bo, nil, cm.progress) // TODO: support stdin, hold build ref
 	cm.progress.Pause()
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
-			ref = be.SessionID
 			resultUpdated = true
 		} else {
 			fmt.Printf("failed to reload: %v\n", err)
@@ -79,7 +61,6 @@ func (cm *ReloadCmd) Exec(ctx context.Context, args []string) error {
 	} else {
 		resultUpdated = true
 	}
-	cm.m.AttachSession(ref)
 	if resultUpdated {
 		// rollback the running container with the new result
 		id := cm.m.Rollback(ctx, cm.invokeConfig)

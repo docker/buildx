@@ -104,12 +104,10 @@ type buildOptions struct {
 	exportPush   bool
 	exportLoad   bool
 
-	control.ControlOptions
-
 	invokeConfig *invokeConfig
 }
 
-func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error) {
+func (o *buildOptions) toControllerOptions() (*cbuild.Options, error) {
 	var err error
 
 	buildArgs, err := listToMap(o.buildArgs, true)
@@ -122,7 +120,7 @@ func (o *buildOptions) toControllerOptions() (*controllerapi.BuildOptions, error
 		return nil, err
 	}
 
-	opts := controllerapi.BuildOptions{
+	opts := cbuild.Options{
 		Allow:          o.allow,
 		Annotations:    o.annotations,
 		BuildArgs:      buildArgs,
@@ -420,7 +418,7 @@ func getImageID(resp map[string]string) string {
 	return dgst
 }
 
-func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
+func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
 	resp, res, dfmap, err := cbuild.RunBuild(ctx, dockerCli, opts, dockerCli.In(), printer, false)
 	if res != nil {
 		res.Done()
@@ -428,15 +426,12 @@ func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *controllera
 	return resp, dfmap, err
 }
 
-func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *controllerapi.BuildOptions, options buildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
+func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, options buildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
 	if options.invokeConfig != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
 	}
-	c, err := controller.NewController(ctx, options.ControlOptions, dockerCli, printer)
-	if err != nil {
-		return nil, nil, err
-	}
+	c := controller.NewController(ctx, dockerCli)
 	defer func() {
 		if err := c.Close(); err != nil {
 			logrus.Warnf("failed to close server connection %v", err)
@@ -445,7 +440,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 
 	// NOTE: buildx server has the current working directory different from the client
 	// so we need to resolve paths to abosolute ones in the client.
-	opts, err = controllerapi.ResolveOptionPaths(opts)
+	opts, err := cbuild.ResolveOptionPaths(opts)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -471,7 +466,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 		})
 	}
 
-	ref, resp, inputs, err = c.Build(ctx, opts, pr, printer)
+	resp, inputs, err = c.Build(ctx, opts, pr, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
@@ -515,8 +510,8 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *contro
 			resp, retErr = monitorBuildResult.Resp, monitorBuildResult.Err
 		}
 	} else {
-		if err := c.Disconnect(ctx, ref); err != nil {
-			logrus.Warnf("disconnect error: %v", err)
+		if err := c.Close(); err != nil {
+			logrus.Warnf("close error: %v", err)
 		}
 	}
 
@@ -652,14 +647,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.D
 	flags.StringArrayVar(&options.attests, "attest", []string{}, `Attestation parameters (format: "type=sbom,generator=image")`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--attest=type=provenance"`)
-
-	if confutil.IsExperimental() {
-		// TODO: move this to debug command if needed
-		flags.StringVar(&options.Root, "root", "", "Specify root directory of server to connect")
-		flags.BoolVar(&options.Detach, "detach", false, "Detach buildx server (supported only on linux)")
-		flags.StringVar(&options.ServerConfig, "server-config", "", "Specify buildx server config file (used only when launching new server)")
-		cobrautil.MarkFlagsExperimental(flags, "root", "detach", "server-config")
-	}
 
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
@@ -1017,12 +1004,12 @@ func (cfg *invokeConfig) needsDebug(retErr error) bool {
 	}
 }
 
-func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *controllerapi.BuildOptions, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
+func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *cbuild.Options, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
 	con := console.Current()
 	if err := con.SetRaw(); err != nil {
 		// TODO: run disconnect in build command (on error case)
-		if err := c.Disconnect(ctx, ref); err != nil {
-			logrus.Warnf("disconnect error: %v", err)
+		if err := c.Close(); err != nil {
+			logrus.Warnf("close error: %v", err)
 		}
 		return nil, errors.Errorf("failed to configure terminal: %v", err)
 	}

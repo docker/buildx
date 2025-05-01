@@ -7,7 +7,6 @@ import (
 	debugcmd "github.com/docker/buildx/commands/debug"
 	historycmd "github.com/docker/buildx/commands/history"
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
-	"github.com/docker/buildx/controller/remote"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/logutil"
@@ -124,7 +123,6 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 		cmd.AddCommand(debugcmd.RootCmd(dockerCli,
 			newDebuggableBuild(dockerCli, opts),
 		))
-		remote.AddControllerCommands(cmd, dockerCli)
 	}
 
 	cmd.RegisterFlagCompletionFunc( //nolint:errcheck

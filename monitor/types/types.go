@@ -25,15 +25,6 @@ type Monitor interface {
 
 	// Detach detaches IO from the container.
 	Detach()
-
-	// DisconnectSession finishes the specified session.
-	DisconnectSession(ctx context.Context, targetID string) error
-
-	// AttachSession attaches the monitor to the specified session.
-	AttachSession(ref string)
-
-	// AttachedSessionID returns the ID of the attached session.
-	AttachedSessionID() string
 }
 
 // CommandInfo is information about a command.

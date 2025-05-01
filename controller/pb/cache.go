@@ -6,6 +6,11 @@ import (
 	"github.com/moby/buildkit/client"
 )
 
+type CacheOptionsEntry struct {
+	Type  string
+	Attrs map[string]string
+}
+
 func CreateCaches(entries []*CacheOptionsEntry) []client.CacheOptionsEntry {
 	var outs []client.CacheOptionsEntry
 	if len(entries) == 0 {
