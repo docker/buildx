@@ -399,18 +399,25 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 
 	require.Equal(t, dgst.String(), strings.TrimSpace(stdout.String()))
 
+	// read the md.json file
 	dt, err = os.ReadFile(filepath.Join(targetDir, "md.json"))
 	require.NoError(t, err)
 
 	type mdT struct {
+		Digest       string `json:"containerimage.digest"`
 		ConfigDigest string `json:"containerimage.config.digest"`
 	}
+
 	var md mdT
 	err = json.Unmarshal(dt, &md)
 	require.NoError(t, err)
 
 	require.NotEmpty(t, md.ConfigDigest)
-	require.Equal(t, dgst, digest.Digest(md.ConfigDigest))
+	require.NotEmpty(t, md.Digest)
+
+	// verify the image ID output is correct
+	// XXX: improve this by checking that it's one of the two expected digests depending on the scenario.
+	require.Contains(t, []digest.Digest{digest.Digest(md.ConfigDigest), digest.Digest(md.Digest)}, dgst)
 }
 
 func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {

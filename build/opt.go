@@ -237,6 +237,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 					opt.Exports[i].Output = func(_ map[string]string) (io.WriteCloser, error) {
 						return w, nil
 					}
+					// if docker is using the containerd snapshotter, prefer to export the image digest
+					// (rather than the image config digest). See https://github.com/moby/moby/issues/45458.
+					if features[dockerutil.OCIImporter] {
+						opt.Exports[i].Attrs["prefer-image-digest"] = "true"
+					}
 				}
 			} else if !nodeDriver.Features(ctx)[driver.DockerExporter] {
 				return nil, nil, notSupported(driver.DockerExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
