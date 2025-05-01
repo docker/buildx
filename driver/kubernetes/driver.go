@@ -105,7 +105,7 @@ func (d *Driver) wait(ctx context.Context) error {
 	)
 
 	timeoutChan := time.After(d.Timeout)
-	ticker := time.NewTicker(d.Timeout / time.Microsecond)
+	ticker := time.NewTicker(d.Timeout / 1000)
 	defer ticker.Stop()
 
 	for {
