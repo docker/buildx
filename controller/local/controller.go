@@ -30,7 +30,7 @@ type buildConfig struct {
 	// TODO: these two structs should be merged
 	// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113279719
 	resultCtx    *build.ResultHandle
-	buildOptions *cbuild.Options
+	buildOptions *control.ControlOptions
 }
 
 type localController struct {
@@ -41,13 +41,13 @@ type localController struct {
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (*client.SolveResponse, *build.Inputs, error) {
+func (b *localController) Build(ctx context.Context, options *control.ControlOptions, in io.ReadCloser, progress progress.Writer) (*client.SolveResponse, *build.Inputs, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
 		return nil, nil, errors.New("build ongoing")
 	}
 	defer b.buildOnGoing.Store(false)
 
-	resp, res, dockerfileMappings, buildErr := cbuild.RunBuild(ctx, b.dockerCli, options, in, progress, true)
+	resp, res, dockerfileMappings, buildErr := cbuild.RunBuild(ctx, b.dockerCli, &options.Options, in, progress, true)
 	// NOTE: RunBuild can return *build.ResultHandle even on error.
 	if res != nil {
 		b.buildConfig = buildConfig{
@@ -118,6 +118,6 @@ func (b *localController) Close() error {
 	return nil
 }
 
-func (b *localController) Inspect(ctx context.Context) *cbuild.Options {
+func (b *localController) Inspect(ctx context.Context) *control.ControlOptions {
 	return b.buildConfig.buildOptions
 }

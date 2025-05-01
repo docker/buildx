@@ -14,7 +14,7 @@ import (
 )
 
 type BuildxController interface {
-	Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, inputs *build.Inputs, err error)
+	Build(ctx context.Context, options *ControlOptions, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, inputs *build.Inputs, err error)
 	// Invoke starts an IO session into the specified process.
 	// If pid doesn't match to any running processes, it starts a new process with the specified config.
 	// If there is no container running or InvokeConfig.Rollback is specified, the process will start in a newly created container.
@@ -23,9 +23,10 @@ type BuildxController interface {
 	Close() error
 	ListProcesses(ctx context.Context) (infos []*processes.ProcessInfo, retErr error)
 	DisconnectProcess(ctx context.Context, pid string) error
-	Inspect(ctx context.Context) *cbuild.Options
+	Inspect(ctx context.Context) *ControlOptions
 }
 
 type ControlOptions struct {
+	cbuild.Options
 	Timeout      time.Duration
 }

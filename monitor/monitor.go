@@ -11,7 +11,6 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
-	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/control"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor/commands"
@@ -32,7 +31,7 @@ type MonitorBuildResult struct {
 }
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, invokeConfig *controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
+func RunMonitor(ctx context.Context, curRef string, options *control.ControlOptions, invokeConfig *controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
 	defer func() {
 		if err := c.Close(); err != nil {
 			logrus.Warnf("close error: %v", err)
@@ -94,7 +93,7 @@ func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, inv
 	fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 
 	availableCommands := []types.Command{
-		commands.NewReloadCmd(m, stdout, progress, options, invokeConfig),
+		commands.NewReloadCmd(m, stdout, progress, &options.Options, invokeConfig),
 		commands.NewRollbackCmd(m, invokeConfig, stdout),
 		commands.NewAttachCmd(m, stdout),
 		commands.NewExecCmd(m, invokeConfig, stdout),
@@ -242,7 +241,7 @@ type monitor struct {
 	lastBuildResult *MonitorBuildResult
 }
 
-func (m *monitor) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, input *build.Inputs, err error) {
+func (m *monitor) Build(ctx context.Context, options *control.ControlOptions, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, input *build.Inputs, err error) {
 	resp, _, err = m.BuildxController.Build(ctx, options, in, progress)
 	m.lastBuildResult = &MonitorBuildResult{Resp: resp, Err: err} // Record build result
 	return
