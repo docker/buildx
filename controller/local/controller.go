@@ -11,7 +11,6 @@ import (
 	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
-	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
@@ -55,12 +54,7 @@ func (b *localController) Build(ctx context.Context, options *cbuild.Options, in
 			buildOptions: options,
 		}
 		if buildErr != nil {
-			var ref string
-			var ebr *desktop.ErrorWithBuildRef
-			if errors.As(buildErr, &ebr) {
-				ref = ebr.Ref
-			}
-			buildErr = controllererrors.WrapBuild(buildErr, "", ref)
+			buildErr = controllererrors.WrapBuild(buildErr)
 		}
 	}
 	if buildErr != nil {

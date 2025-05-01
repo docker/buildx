@@ -470,7 +470,6 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
-			ref = be.SessionID
 			retErr = err
 			// We can proceed to monitor
 		} else {

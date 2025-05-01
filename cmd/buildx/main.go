@@ -7,7 +7,6 @@ import (
 	"path/filepath"
 
 	"github.com/docker/buildx/commands"
-	controllererrors "github.com/docker/buildx/controller/errdefs"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
@@ -112,11 +111,6 @@ func main() {
 	var ebr *desktop.ErrorWithBuildRef
 	if errors.As(err, &ebr) {
 		ebr.Print(cmd.Err())
-	} else {
-		var be *controllererrors.BuildError
-		if errors.As(err, &be) {
-			be.PrintBuildDetails(cmd.Err())
-		}
 	}
 
 	os.Exit(1)
