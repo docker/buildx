@@ -10,7 +10,8 @@ Vagrant.configure("2") do |config|
 
   config.vm.provision "init", type: "shell", run: "once" do |sh|
     sh.inline = <<~SHELL
-      set -x
+      set -ex
+      export PKG_PATH=https://mirrors.ocf.berkeley.edu/pub/OpenBSD/7.5/packages/amd64/
       pkg_add -x git
 
       ftp https://go.dev/dl/go#{ENV['GO_VERSION']}.openbsd-amd64.tar.gz
