@@ -113,7 +113,7 @@ func attachmentCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "attachment [OPTIONS] REF [DIGEST]",
-		Short: "Inspect a build attachment",
+		Short: "Inspect a build record attachment",
 		Args:  cobra.RangeArgs(1, 2),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {

@@ -1,7 +1,7 @@
 # buildx prune
 
 ```text
-docker buildx prune
+docker buildx prune [OPTIONS]
 ```
 
 <!---MARKER_GEN_START-->

@@ -57,7 +57,7 @@ func openCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 
 	cmd := &cobra.Command{
 		Use:   "open [OPTIONS] [REF]",
-		Short: "Open a build in Docker Desktop",
+		Short: "Open a build record in Docker Desktop",
 		Args:  cobra.MaximumNArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if len(args) > 0 {

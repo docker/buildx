@@ -1,6 +1,6 @@
 # buildx stop
 
-```
+```text
 docker buildx stop [NAME]
 ```
 

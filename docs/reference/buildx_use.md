@@ -1,6 +1,6 @@
 # buildx use
 
-```
+```text
 docker buildx use [OPTIONS] NAME
 ```
 

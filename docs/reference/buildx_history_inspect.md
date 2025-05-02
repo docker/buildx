@@ -1,13 +1,17 @@
 # docker buildx history inspect
 
+```text
+docker buildx history inspect [OPTIONS] [REF|COMMAND]
+```
+
 <!---MARKER_GEN_START-->
-Inspect a build
+Inspect a build record
 
 ### Subcommands
 
-| Name                                                 | Description                |
-|:-----------------------------------------------------|:---------------------------|
-| [`attachment`](buildx_history_inspect_attachment.md) | Inspect a build attachment |
+| Name                                                 | Description                       |
+|:-----------------------------------------------------|:----------------------------------|
+| [`attachment`](buildx_history_inspect_attachment.md) | Inspect a build record attachment |
 
 
 ### Options

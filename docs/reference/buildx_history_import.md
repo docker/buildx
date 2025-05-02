@@ -1,7 +1,11 @@
 # docker buildx history import
 
+```text
+docker buildx history import [OPTIONS] -
+```
+
 <!---MARKER_GEN_START-->
-Import a build into Docker Desktop
+Import build records into Docker Desktop
 
 ### Options
 
