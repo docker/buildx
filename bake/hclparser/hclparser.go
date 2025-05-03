@@ -14,9 +14,11 @@ import (
 	"github.com/docker/buildx/bake/hclparser/gohcl"
 	"github.com/docker/buildx/util/userfunc"
 	"github.com/hashicorp/hcl/v2"
+	"github.com/hashicorp/hcl/v2/ext/typeexpr"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
+	ctyjson "github.com/zclconf/go-cty/cty/json"
 )
 
 type Opt struct {
@@ -27,6 +29,7 @@ type Opt struct {
 
 type variable struct {
 	Name        string                `json:"-" hcl:"name,label"`
+	Type        hcl.Expression        `json:"type,omitempty" hcl:"type,optional"`
 	Default     *hcl.Attribute        `json:"default,omitempty" hcl:"default,optional"`
 	Description string                `json:"description,omitempty" hcl:"description,optional"`
 	Validations []*variableValidation `json:"validation,omitempty" hcl:"validation,block"`
@@ -267,38 +270,68 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 		}
 	}()
 
+	// built-in vars aren't intended to be overridden and are statically typed as strings;
+	// no sense sending them through type checks or waiting to return them
+	if val, ok := p.opt.Vars[name]; ok {
+		vv := cty.StringVal(val)
+		v = &vv
+		return
+	}
+
+	var diags hcl.Diagnostics
+	varType := cty.DynamicPseudoType
 	def, ok := p.attrs[name]
-	if _, builtin := p.opt.Vars[name]; !ok && !builtin {
+	if !ok {
 		vr, ok := p.vars[name]
 		if !ok {
 			return errors.Wrapf(errUndefined{}, "variable %q does not exist", name)
 		}
 		def = vr.Default
 		ectx = p.ectx
+		varType, diags = typeConstraint(vr.Type)
+		if diags.HasErrors() {
+			return diags
+		}
 	}
 
 	if def == nil {
-		val, ok := p.opt.Vars[name]
-		if !ok {
-			val, _ = p.opt.LookupVar(name)
+		// lack of specified value is considered to have an empty string value,
+		// but any overrides get type checked
+		if _, ok := p.opt.LookupVar(name); !ok {
+			vv := cty.StringVal("")
+			v = &vv
+			return
 		}
-		vv := cty.StringVal(val)
-		v = &vv
-		return
 	}
 
-	if diags := p.loadDeps(ectx, def.Expr, nil, true); diags.HasErrors() {
-		return diags
-	}
-	vv, diags := def.Expr.Value(ectx)
-	if diags.HasErrors() {
-		return diags
+	var vv cty.Value
+	if def != nil {
+		if diags := p.loadDeps(ectx, def.Expr, nil, true); diags.HasErrors() {
+			return diags
+		}
+		vv, diags = def.Expr.Value(ectx)
+		if diags.HasErrors() {
+			return diags
+		}
+		vv, err = convert.Convert(vv, varType)
+		if err != nil {
+			return errors.Wrapf(err, "invalid type %s for variable %s default value", varType.FriendlyName(), name)
+		}
 	}
 
 	_, isVar := p.vars[name]
 
 	if envv, ok := p.opt.LookupVar(name); ok && isVar {
 		switch {
+		case varType.Equals(cty.String): // don't parse as JSON; users don't expect to have to quote strings
+			vv = cty.StringVal(envv)
+		case !varType.Equals(cty.DynamicPseudoType): // typing was explicitly specified
+			vv, err = ctyjson.Unmarshal([]byte(envv), varType)
+			if err != nil {
+				return errors.Wrapf(err, "failed to convert %s as required %s", name, varType.FriendlyName())
+			}
+		case def == nil: // no default from which to infer typing
+			vv = cty.StringVal(envv)
 		case vv.Type().Equals(cty.Bool):
 			b, err := strconv.ParseBool(envv)
 			if err != nil {
@@ -317,7 +350,6 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 			}
 			vv = cty.NumberVal(big.NewFloat(n))
 		default:
-			// TODO: support lists with csv values
 			return errors.Errorf("unsupported type %s for variable %s", vv.Type().FriendlyName(), name)
 		}
 	}
@@ -905,6 +937,23 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 		Renamed:      renamed,
 		AllVariables: vars,
 	}, nil
+}
+
+// typeConstraint wraps typeexpr.TypeConstraint to differentiate between errors in the
+// specification and errors due to being cty.NullVal (not provided).
+func typeConstraint(expr hcl.Expression) (cty.Type, hcl.Diagnostics) {
+	t, diag := typeexpr.TypeConstraint(expr)
+	if !diag.HasErrors() {
+		return t, diag
+	}
+	// if had errors, it could be because the expression is 'nil', i.e., unspecified
+	if v, err := expr.Value(nil); err == nil {
+		if v.IsNull() {
+			return cty.DynamicPseudoType, nil
+		}
+	}
+	// even if the evaluation resulted in error, the original (error) diagnostics are likely more useful
+	return t, diag
 }
 
 // wrapErrorDiagnostic wraps an error into a hcl.Diagnostics object.

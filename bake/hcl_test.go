@@ -1,6 +1,7 @@
 package bake
 
 import (
+	"fmt"
 	"reflect"
 	"regexp"
 	"testing"
@@ -1643,6 +1644,328 @@ func TestHCLIndexOfFunc(t *testing.T) {
 	require.Equal(t, "app:latest", c.Targets[0].Tags[1])
 	require.Equal(t, "app-1-42-3", c.Targets[1].Name)
 	require.Empty(t, c.Targets[1].Tags[1])
+}
+
+func TestVarTypingSpec(t *testing.T) {
+	templ := `
+        variable "FOO" {
+          type = %s
+        }
+        target "default" {
+        }`
+
+	// not exhaustive, but the common ones
+	for _, s := range []string{
+		"bool", "number", "string", "any",
+		"list(string)", "set(string)", "tuple([string, number])",
+	} {
+		dt := fmt.Sprintf(templ, s)
+		_, err := ParseFile([]byte(dt), "docker-bake.hcl")
+		require.NoError(t, err)
+	}
+
+	for _, s := range []string{
+		"boolean",       // no synonyms/aliases
+		"BOOL",          // case matters
+		`lower("bool")`, // must be literals
+	} {
+		dt := fmt.Sprintf(templ, s)
+		_, err := ParseFile([]byte(dt), "docker-bake.hcl")
+		require.ErrorContains(t, err, "not a valid type")
+	}
+}
+
+func TestDefaultVarTypeEnforcement(t *testing.T) {
+	// To help prove a given default doesn't just pass the type check, but *is* that type,
+	// we use argValue to provide an expression that would work only on that type.
+	tests := []struct {
+		name       string
+		varType    string
+		varDefault any
+		argValue   string
+		wantValue  string
+		wantError  bool
+	}{
+		{
+			name:       "number (happy)",
+			varType:    "number",
+			varDefault: 99,
+			argValue:   "FOO + 1",
+			wantValue:  "100",
+		},
+		{
+			name:       "numeric string compatible with number",
+			varType:    "number",
+			varDefault: `"99"`,
+			argValue:   "FOO + 1",
+			wantValue:  "100",
+		},
+		{
+			name:       "boolean (happy)",
+			varType:    "bool",
+			varDefault: true,
+			argValue:   "and(FOO, true)",
+			wantValue:  "true",
+		},
+		{
+			name:       "numeric boolean compatible with boolean",
+			varType:    "bool",
+			varDefault: `"true"`,
+			argValue:   "and(FOO, true)",
+			wantValue:  "true",
+		},
+		// should be representative of flagrant primitive type mismatches; not worth listing all possibilities?
+		{
+			name:       "non-numeric string default incompatible with number",
+			varType:    "number",
+			varDefault: `"oops"`,
+			wantError:  true,
+		},
+		{
+			name:       "list of numbers (happy)",
+			varType:    "list(number)",
+			varDefault: "[2,3]",
+			argValue:   `join("", [for v in FOO: v + 1])`,
+			wantValue:  "34",
+		},
+		{
+			name:       "list of numbers with numeric strings okay",
+			varType:    "list(number)",
+			varDefault: `["2","3"]`,
+			argValue:   `join("", [for v in FOO: v + 1])`,
+			wantValue:  "34",
+		},
+		// represent flagrant mismatches for list types
+		{
+			name:       "non-numeric strings in numeric list rejected",
+			varType:    "list(number)",
+			varDefault: `["oops"]`,
+			wantError:  true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argValue := tt.argValue
+			if argValue == "" {
+				argValue = "FOO"
+			}
+			dt := fmt.Sprintf(`
+                variable "FOO" {
+                    type = %s
+                    default = %v
+                }
+
+                target "default" {
+                    args = {
+                        foo = %s
+                    }
+                }`, tt.varType, tt.varDefault, argValue)
+			c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+			if tt.wantError {
+				require.ErrorContains(t, err, "invalid type")
+			} else {
+				require.NoError(t, err)
+				if tt.wantValue != "" {
+					require.Equal(t, 1, len(c.Targets))
+					require.Equal(t, ptrstr(tt.wantValue), c.Targets[0].Args["foo"])
+				}
+			}
+		})
+	}
+}
+
+func TestDefaultVarTypeWithAttrValuesEnforcement(t *testing.T) {
+	tests := []struct {
+		name      string
+		attrValue any
+		varType   string
+		wantError bool
+	}{
+		{
+			name:      "attribute literal which matches var type",
+			attrValue: `"hello"`,
+			varType:   "string",
+		},
+		{
+			name:      "attribute literal which coerces to var type",
+			attrValue: `"99"`,
+			varType:   "number",
+		},
+		{
+			name:      "mismatch",
+			attrValue: 99,
+			varType:   "bool",
+			wantError: true,
+		},
+		{
+			name:      "attribute correctly typed via function",
+			attrValue: `split(",", "1,2,3")`,
+			varType:   "list(number)",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			dt := fmt.Sprintf(`
+                BAR = %v
+                variable "FOO" {
+                    type = %s
+                    default = BAR
+                }
+
+                target "default" {
+                }`, tt.attrValue, tt.varType)
+			_, err := ParseFile([]byte(dt), "docker-bake.hcl")
+			if tt.wantError {
+				require.ErrorContains(t, err, "invalid type")
+				require.ErrorContains(t, err, "FOO default value")
+			} else {
+				require.NoError(t, err)
+			}
+		})
+	}
+}
+
+func TestTypedVarOverrides(t *testing.T) {
+	const convertFailure = "failed to convert FOO"
+	tests := []struct {
+		name         string
+		varType      string
+		override     string
+		argValue     string
+		wantValue    string
+		wantErrorMsg string
+	}{
+		{
+			name:      "boolean",
+			varType:   "bool",
+			override:  "true",
+			wantValue: "true",
+		},
+		{
+			name:      "number",
+			varType:   "number",
+			override:  "99",
+			wantValue: "99",
+		},
+		// this breaks the rule about needing proper JSON as it would violate
+		// the principle of least surprise and hinder usability
+		{
+			name:      "enquoted string accepted",
+			varType:   "string",
+			override:  "hello",
+			wantValue: "hello",
+		},
+		// similar to above, an environment variable with a quoted string would
+		// most likely be intended to be a string whose first and last characters
+		// are quotes
+		{
+			name:      "quoted string keeps quotes in value",
+			varType:   "string",
+			override:  `"hello"`,
+			wantValue: `"hello"`,
+		},
+		{
+			name:      "any",
+			varType:   "any",
+			override:  "[1,2]",
+			wantValue: "[1,2]",
+		},
+		{
+			name:         "any never convert to complex types",
+			varType:      "any",
+			override:     "[1,2]",
+			argValue:     "length(FOO)",
+			wantErrorMsg: "collection must be a list",
+		},
+		{
+			name:      "proper JSON list of strings",
+			varType:   "list(string)",
+			override:  `["hi","there"]`,
+			argValue:  `join("-", FOO)`,
+			wantValue: "hi-there",
+		},
+		// not that this *should* be an error, but pseudo-documentation that this is
+		// a scenario that might be expected to work, but doesn't (yet) for simplicity
+		{
+			name:         "JSON list of unquoted strings not okay",
+			varType:      "list(string)",
+			override:     `[hi,there]`,
+			wantErrorMsg: convertFailure,
+		},
+		// ditto above
+		{
+			name:         "CSV of quoted strings not okay",
+			varType:      "list(string)",
+			override:     `"hi","there"`,
+			wantErrorMsg: convertFailure,
+		},
+		// ditto above
+		{
+			name:         "CSV of unquoted strings not okay",
+			varType:      "list(string)",
+			override:     `hi,there`,
+			wantErrorMsg: convertFailure,
+		},
+		{
+			name:      "JSON list of numbers",
+			varType:   "list(number)",
+			override:  "[3, 1, 4]",
+			argValue:  `join("-", [for v in FOO: v + 1])`,
+			wantValue: "4-2-5",
+		},
+		{
+			name:      "JSON map of numbers",
+			varType:   "map(number)",
+			override:  `{"foo": 1, "bar": 2}`,
+			argValue:  `join("-", sort(values(FOO)))`,
+			wantValue: "1-2",
+		},
+		{
+			name:         "invalid JSON map of numbers",
+			varType:      "map(number)",
+			override:     `{"foo": "oops", "bar": 2}`,
+			wantErrorMsg: convertFailure,
+		},
+		{
+			name:      "JSON object",
+			varType:   `object({messages: list(string)})`,
+			override:  `{"messages": ["hi", "there"]}`,
+			argValue:  `join("-", FOO["messages"])`,
+			wantValue: "hi-there",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argValue := tt.argValue
+			if argValue == "" {
+				argValue = "FOO"
+			}
+			dt := fmt.Sprintf(`
+                variable "FOO" {
+                    type = %s
+                }
+
+                target "default" {
+                    args = {
+                        foo = %s
+                    }
+                }`, tt.varType, argValue)
+			t.Setenv("FOO", tt.override)
+			c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+			if tt.wantErrorMsg != "" {
+				require.ErrorContains(t, err, tt.wantErrorMsg)
+			} else {
+				require.NoError(t, err)
+				if tt.wantValue != "" {
+					require.Equal(t, 1, len(c.Targets))
+					require.Equal(t, ptrstr(tt.wantValue), c.Targets[0].Args["foo"])
+				}
+			}
+		})
+	}
 }
 
 func ptrstr(s any) *string {
