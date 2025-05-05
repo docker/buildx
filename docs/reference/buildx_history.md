@@ -27,3 +27,32 @@ Commands to work on build records
 
 <!---MARKER_GEN_END-->
 
+### Build references
+
+Most `buildx history` subcommands accept a build reference to identify which
+build to act on. You can specify the build in two ways:
+
+- By build ID, fetched by `docker buildx history ls`:
+
+    ```console
+    docker buildx history export qu2gsuo8ejqrwdfii23xkkckt --output build.dockerbuild
+    ```
+
+- By relative offset, to refer to recent builds:
+
+    ```console
+    docker buildx history export ^1 --output build.dockerbuild
+    ```
+
+    - `^0` or no reference targets the most recent build
+    - `^1` refers to the build before the most recent
+    - `^2` refers to two builds back, and so on
+
+Offset references are supported in the following `buildx history` commands:
+
+- `logs`
+- `inspect`
+- `open`
+- `trace`
+- `export`
+- `rm`
