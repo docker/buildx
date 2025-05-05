@@ -5,12 +5,12 @@ Export a build into Docker Desktop bundle
 
 ### Options
 
-| Name             | Type     | Default | Description                              |
-|:-----------------|:---------|:--------|:-----------------------------------------|
-| [`--all`](#all)          | `bool`   |         | Export all records for the builder       |
-| [`--builder`](#builder)      | `string` |         | Override the configured builder instance |
-| `-D`, `--debug`  | `bool`   |         | Enable debug logging                     |
-| [`-o`](#o), [`--output`](#output) | `string` |         | Output file path                         |
+| Name                                   | Type     | Default | Description                              |
+|:---------------------------------------|:---------|:--------|:-----------------------------------------|
+| [`--all`](#all)                        | `bool`   |         | Export all records for the builder       |
+| [`--builder`](#builder)                | `string` |         | Override the configured builder instance |
+| [`-D`](#debug), [`--debug`](#debug)    | `bool`   |         | Enable debug logging                     |
+| [`-o`](#output), [`--output`](#output) | `string` |         | Output file path                         |
 
 
 <!---MARKER_GEN_END-->
