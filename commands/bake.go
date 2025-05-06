@@ -261,13 +261,18 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	for _, opt := range bo {
+	for k, opt := range bo {
 		if opt.CallFunc != nil {
 			cf, err := buildflags.ParseCallFunc(opt.CallFunc.Name)
 			if err != nil {
 				return err
 			}
-			opt.CallFunc.Name = cf.Name
+			if cf == nil {
+				opt.CallFunc = nil
+				bo[k] = opt
+			} else {
+				opt.CallFunc.Name = cf.Name
+			}
 		}
 	}
 
