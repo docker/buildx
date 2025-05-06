@@ -1793,6 +1793,17 @@ func TestDefaultVarTypeWithAttrValuesEnforcement(t *testing.T) {
 			varType:   "number",
 		},
 		{
+			name:      "attribute from function which coerces to var type",
+			attrValue: `substr("99 bottles", 0, 2)`,
+			varType:   "number",
+		},
+		{
+			name:      "attribute from function returning non-coercible value",
+			attrValue: `split(",", "1,2,3foo")`,
+			varType:   "list(number)",
+			wantError: true,
+		},
+		{
 			name:      "mismatch",
 			attrValue: 99,
 			varType:   "bool",
@@ -1828,7 +1839,7 @@ func TestDefaultVarTypeWithAttrValuesEnforcement(t *testing.T) {
 }
 
 func TestTypedVarOverrides(t *testing.T) {
-	const convertFailure = "failed to convert FOO"
+	const unsuitableValueType = "Unsuitable value type"
 	tests := []struct {
 		name         string
 		varType      string
@@ -1886,32 +1897,40 @@ func TestTypedVarOverrides(t *testing.T) {
 			argValue:  `join("-", FOO)`,
 			wantValue: "hi-there",
 		},
-		// not that this *should* be an error, but pseudo-documentation that this is
-		// a scenario that might be expected to work, but doesn't (yet) for simplicity
 		{
-			name:         "JSON list of unquoted strings not okay",
-			varType:      "list(string)",
-			override:     `[hi,there]`,
-			wantErrorMsg: convertFailure,
+			name:      "proper CSV list of strings",
+			varType:   "list(string)",
+			override:  "hi,there",
+			argValue:  `join("-", FOO)`,
+			wantValue: "hi-there",
 		},
-		// ditto above
+		// pseudo-documentation that this is a scenario that might be expected to work,
+		// but will parse as a valid CSV in (usually) an undesirable way
 		{
-			name:         "CSV of quoted strings not okay",
-			varType:      "list(string)",
-			override:     `"hi","there"`,
-			wantErrorMsg: convertFailure,
+			name:      "pseudo-JSON list of unquoted strings",
+			varType:   "list(string)",
+			override:  `[hi,there]`,
+			argValue:  `join("-", FOO)`,
+			wantValue: "[hi-there]",
 		},
-		// ditto above
 		{
-			name:         "CSV of unquoted strings not okay",
-			varType:      "list(string)",
-			override:     `hi,there`,
-			wantErrorMsg: convertFailure,
+			name:      "CSV of unquoted strings okay",
+			varType:   "list(string)",
+			override:  `hi,there`,
+			argValue:  `join("-", FOO)`,
+			wantValue: "hi-there",
 		},
 		{
 			name:      "JSON list of numbers",
 			varType:   "list(number)",
 			override:  "[3, 1, 4]",
+			argValue:  `join("-", [for v in FOO: v + 1])`,
+			wantValue: "4-2-5",
+		},
+		{
+			name:      "CSV list of numbers",
+			varType:   "list(number)",
+			override:  "3,1,4",
 			argValue:  `join("-", [for v in FOO: v + 1])`,
 			wantValue: "4-2-5",
 		},
@@ -1923,10 +1942,46 @@ func TestTypedVarOverrides(t *testing.T) {
 			wantValue: "1-2",
 		},
 		{
-			name:         "invalid JSON map of numbers",
-			varType:      "map(number)",
-			override:     `{"foo": "oops", "bar": 2}`,
-			wantErrorMsg: convertFailure,
+			name:      "CSV map of numbers",
+			varType:   "map(number)",
+			override:  "foo:1,bar:2",
+			argValue:  `join("-", sort(values(FOO)))`,
+			wantValue: "1-2",
+		},
+		// though a JSON payload, any failure (types in this case) defers to
+		// CSV parsing and its error; not ideal and could be improved
+		{
+			name:     "invalid JSON map of numbers",
+			varType:  "map(number)",
+			override: `{"foo": "oops", "bar": 2}`,
+			// in lieu of something like ErrorMatches, this is the best single phrase
+			wantErrorMsg: "as CSV",
+		},
+		{
+			name:      "JSON tuple",
+			varType:   "tuple([number,string])",
+			override:  `[99, "bottles"]`,
+			argValue:  `format("%d %s", FOO[0], FOO[1])`,
+			wantValue: "99 bottles",
+		},
+		{
+			name:      "CSV tuple",
+			varType:   "tuple([number,string])",
+			override:  `99,bottles`,
+			argValue:  `format("%d %s", FOO[0], FOO[1])`,
+			wantValue: "99 bottles",
+		},
+		{
+			name:         "JSON tuple elements with wrong type",
+			varType:      "tuple([number,string])",
+			override:     `[99, 100]`,
+			wantErrorMsg: unsuitableValueType,
+		},
+		{
+			name:         "CSV tuple elements with wrong type",
+			varType:      "tuple([number,string])",
+			override:     `99,100`,
+			wantErrorMsg: unsuitableValueType,
 		},
 		{
 			name:      "JSON object",
