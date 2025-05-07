@@ -658,7 +658,7 @@ func (p Project) WithServicesEnvironmentResolved(discardEnvFiles bool) (*Project
 					return resolve, true
 				}
 				// then service.environment
-				if s, ok := service.Environment[k]; ok {
+				if s, ok := service.Environment[k]; ok && s != nil {
 					return *s, true
 				}
 				return "", false

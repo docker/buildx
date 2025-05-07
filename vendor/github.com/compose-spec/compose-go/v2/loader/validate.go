@@ -131,6 +131,13 @@ func checkConsistency(project *types.Project) error { //nolint:gocyclo
 			s.Deploy.Replicas = s.Scale
 		}
 
+		if s.Scale != nil && *s.Scale < 0 {
+			return fmt.Errorf("services.%s.scale: must be greater than or equal to 0", s.Name)
+		}
+		if s.Deploy != nil && s.Deploy.Replicas != nil && *s.Deploy.Replicas < 0 {
+			return fmt.Errorf("services.%s.deploy.replicas: must be greater than or equal to 0", s.Name)
+		}
+
 		if s.CPUS != 0 && s.Deploy != nil {
 			if s.Deploy.Resources.Limits != nil && s.Deploy.Resources.Limits.NanoCPUs.Value() != s.CPUS {
 				return fmt.Errorf("services.%s: can't set distinct values on 'cpus' and 'deploy.resources.limits.cpus': %w",
@@ -172,6 +179,24 @@ func checkConsistency(project *types.Project) error { //nolint:gocyclo
 				}
 			}
 		}
+
+		mounts := map[string]string{}
+		for i, tmpfs := range s.Tmpfs {
+			loc := fmt.Sprintf("services.%s.tmpfs[%d]", s.Name, i)
+			path, _, _ := strings.Cut(tmpfs, ":")
+			if p, ok := mounts[path]; ok {
+				return fmt.Errorf("%s: target %s already mounted as %s", loc, path, p)
+			}
+			mounts[path] = loc
+		}
+		for i, volume := range s.Volumes {
+			loc := fmt.Sprintf("services.%s.volumes[%d]", s.Name, i)
+			if p, ok := mounts[volume.Target]; ok {
+				return fmt.Errorf("%s: target %s already mounted as %s", loc, volume.Target, p)
+			}
+			mounts[volume.Target] = loc
+		}
+
 	}
 
 	for name, secret := range project.Secrets {

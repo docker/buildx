@@ -68,7 +68,10 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 	)
 	switch v := extends.(type) {
 	case map[string]any:
-		ref = v["service"].(string)
+		ref, ok = v["service"].(string)
+		if !ok {
+			return nil, fmt.Errorf("extends.%s.service is required", name)
+		}
 		file = v["file"]
 		opts.ProcessEvent("extends", v)
 	case string:

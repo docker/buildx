@@ -686,7 +686,10 @@ func projectName(details *types.ConfigDetails, opts *Options) error {
 		}
 		pjNameFromConfigFile = interpolated["name"].(string)
 	}
-	pjNameFromConfigFile = NormalizeProjectName(pjNameFromConfigFile)
+
+	if !opts.SkipNormalization {
+		pjNameFromConfigFile = NormalizeProjectName(pjNameFromConfigFile)
+	}
 	if pjNameFromConfigFile != "" {
 		opts.projectName = pjNameFromConfigFile
 	}
