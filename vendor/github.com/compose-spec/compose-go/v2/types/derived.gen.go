@@ -1834,8 +1834,6 @@ func deriveDeepCopy_39(dst, src *DeviceRequest) {
 
 // deriveDeepCopy_40 recursively copies the contents of src into dst.
 func deriveDeepCopy_40(dst, src *ServiceNetworkConfig) {
-	dst.Priority = src.Priority
-	dst.GatewayPriority = src.GatewayPriority
 	if src.Aliases == nil {
 		dst.Aliases = nil
 	} else {
@@ -1854,6 +1852,14 @@ func deriveDeepCopy_40(dst, src *ServiceNetworkConfig) {
 		}
 		copy(dst.Aliases, src.Aliases)
 	}
+	if src.DriverOpts != nil {
+		dst.DriverOpts = make(map[string]string, len(src.DriverOpts))
+		deriveDeepCopy_4(dst.DriverOpts, src.DriverOpts)
+	} else {
+		dst.DriverOpts = nil
+	}
+	dst.GatewayPriority = src.GatewayPriority
+	dst.InterfaceName = src.InterfaceName
 	dst.Ipv4Address = src.Ipv4Address
 	dst.Ipv6Address = src.Ipv6Address
 	if src.LinkLocalIPs == nil {
@@ -1875,12 +1881,7 @@ func deriveDeepCopy_40(dst, src *ServiceNetworkConfig) {
 		copy(dst.LinkLocalIPs, src.LinkLocalIPs)
 	}
 	dst.MacAddress = src.MacAddress
-	if src.DriverOpts != nil {
-		dst.DriverOpts = make(map[string]string, len(src.DriverOpts))
-		deriveDeepCopy_4(dst.DriverOpts, src.DriverOpts)
-	} else {
-		dst.DriverOpts = nil
-	}
+	dst.Priority = src.Priority
 	if src.Extensions != nil {
 		dst.Extensions = make(map[string]any, len(src.Extensions))
 		src.Extensions.DeepCopy(dst.Extensions)
