@@ -22,6 +22,8 @@ import (
 	ctyjson "github.com/zclconf/go-cty/cty/json"
 )
 
+const jsonEnvOverrideSuffix = "_JSON"
+
 type Opt struct {
 	LookupVar     func(string) (string, bool)
 	Vars          map[string]string
@@ -298,7 +300,7 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	if def == nil {
 		// lack of specified value is considered to have an empty string value,
 		// but any overrides get type checked
-		if _, ok := p.opt.LookupVar(name); !ok {
+		if _, ok, _ := p.valueHasOverride(name, false); !ok {
 			vv := cty.StringVal("")
 			v = &vv
 			return
@@ -320,32 +322,37 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 		}
 	}
 
+	// Not entirely true... this doesn't differentiate between a user that specified 'any'
+	// and a user that specified nothing.  But the result is the same; both are treated as strings.
+	typeSpecified := !varType.Equals(cty.DynamicPseudoType)
+	envv, hasEnv, jsonEnv := p.valueHasOverride(name, typeSpecified)
 	_, isVar := p.vars[name]
 
-	if envv, ok := p.opt.LookupVar(name); ok && isVar {
+	if hasEnv && isVar {
 		switch {
-		case varType.Equals(cty.String): // don't parse as JSON; users don't expect to have to quote strings
-			vv = cty.StringVal(envv)
-		case varType.IsListType(), varType.IsSetType(), varType.IsTupleType(), varType.IsMapType(): // typing explicitly specified
-			// since CSV is being treated as the officially supported way, throw away (for now) any JSON errors
-			// in favor of CSV behavior and leave it the user to figure it out if they intended JSON
+		case typeSpecified && jsonEnv:
 			vv, err = ctyjson.Unmarshal([]byte(envv), varType)
 			if err != nil {
-				vv, err = valueFromCSV(name, envv, varType)
-				if err != nil {
-					return errors.Wrapf(err, "failed to convert variable %s", name)
-				}
+				return errors.Wrapf(err, "failed to convert variable %s from JSON", name)
 			}
-		case !varType.Equals(cty.DynamicPseudoType): // typing was explicitly specified
-			vv, err = ctyjson.Unmarshal([]byte(envv), varType)
+		case supportedCSVType(varType): // typing explicitly specified for selected complex types
+			vv, err = valueFromCSV(name, envv, varType)
 			if err != nil {
-				return errors.Wrapf(err, "failed to convert %s as required %s", name, varType.FriendlyName())
+				return errors.Wrapf(err, "failed to convert variable %s from CSV", name)
 			}
+		case typeSpecified && varType.IsPrimitiveType():
+			vv, err = convertPrimitive(name, envv, varType)
+			if err != nil {
+				return err
+			}
+		case typeSpecified:
+			// e.g., an 'object' not provided as JSON (which can't be expressed in the default CSV format)
+			return errors.Errorf("unsupported type %s for variable %s", varType.FriendlyName(), name)
 		case def == nil: // no default from which to infer typing
 			vv = cty.StringVal(envv)
 		case vv.Type().Equals(cty.DynamicPseudoType):
 			vv = cty.StringVal(envv)
-		case vv.Type().Equals(cty.Bool), vv.Type().Equals(cty.String), vv.Type().Equals(cty.Number):
+		case vv.Type().IsPrimitiveType():
 			vv, err = convertPrimitive(name, envv, vv.Type())
 			if err != nil {
 				return err
@@ -356,6 +363,27 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	}
 	v = &vv
 	return nil
+}
+
+// valueHasOverride returns a possible override value if one was specified, and whether it should
+// be treated as a JSON value.
+//
+// A plain/CSV override is the default; this consolidates the logic around how a JSON-specific override
+// is specified and when it will be honored when there are naming conflicts or ambiguity.
+func (p *parser) valueHasOverride(name string, favorJSON bool) (string, bool, bool) {
+	jsonEnv := false
+	envv, hasEnv := p.opt.LookupVar(name)
+	if !hasEnv || favorJSON {
+		jsonVarName := name + jsonEnvOverrideSuffix
+		_, builtin := p.opt.Vars[jsonVarName]
+		if _, ok := p.vars[jsonVarName]; !ok && !builtin {
+			if j, ok := p.opt.LookupVar(jsonVarName); ok {
+				envv = j
+				hasEnv, jsonEnv = true, true
+			}
+		}
+	}
+	return envv, hasEnv, jsonEnv
 }
 
 // resolveBlock force evaluates a block, storing the result in the parser. If a
@@ -982,6 +1010,11 @@ func convertPrimitive(name, value string, target cty.Type) (cty.Value, error) {
 	}
 }
 
+// supportedCSVType reports whether the given cty.Type might be convertible from a CSV string via valueFromCSV.
+func supportedCSVType(t cty.Type) bool {
+	return t.IsListType() || t.IsSetType() || t.IsTupleType() || t.IsMapType()
+}
+
 // valueFromCSV takes CSV value and converts it to cty.Type.
 //
 // This currently supports conversion to cty.List and cty.Set.
@@ -1060,7 +1093,7 @@ func valueFromCSV(name, value string, target cty.Type) (cty.Value, error) {
 			}
 			v, err := convertPrimitive(name, kvSlice[1], target.ElementType())
 			if err != nil {
-				return cty.NilVal, errors.Wrapf(err, "failed to parse value from type %s", target.FriendlyName())
+				return cty.NilVal, errors.Wrapf(err, "failed to parse element from type %s", target.FriendlyName())
 			}
 			m[kvSlice[0]] = v
 		}

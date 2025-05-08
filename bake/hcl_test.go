@@ -1840,6 +1840,8 @@ func TestDefaultVarTypeWithAttrValuesEnforcement(t *testing.T) {
 
 func TestTypedVarOverrides(t *testing.T) {
 	const unsuitableValueType = "Unsuitable value type"
+	const unsupportedType = "unsupported type"
+	const failedToParseElement = "failed to parse element"
 	tests := []struct {
 		name         string
 		varType      string
@@ -1860,17 +1862,14 @@ func TestTypedVarOverrides(t *testing.T) {
 			override:  "99",
 			wantValue: "99",
 		},
-		// this breaks the rule about needing proper JSON as it would violate
-		// the principle of least surprise and hinder usability
 		{
-			name:      "enquoted string accepted",
+			name:      "unquoted string accepted",
 			varType:   "string",
 			override:  "hello",
 			wantValue: "hello",
 		},
-		// similar to above, an environment variable with a quoted string would
-		// most likely be intended to be a string whose first and last characters
-		// are quotes
+		// an environment variable with a quoted string would most likely be intended
+		// to be a string whose first and last characters are quotes
 		{
 			name:      "quoted string keeps quotes in value",
 			varType:   "string",
@@ -1891,27 +1890,11 @@ func TestTypedVarOverrides(t *testing.T) {
 			wantErrorMsg: "collection must be a list",
 		},
 		{
-			name:      "proper JSON list of strings",
-			varType:   "list(string)",
-			override:  `["hi","there"]`,
-			argValue:  `join("-", FOO)`,
-			wantValue: "hi-there",
-		},
-		{
 			name:      "proper CSV list of strings",
 			varType:   "list(string)",
 			override:  "hi,there",
 			argValue:  `join("-", FOO)`,
 			wantValue: "hi-there",
-		},
-		// pseudo-documentation that this is a scenario that might be expected to work,
-		// but will parse as a valid CSV in (usually) an undesirable way
-		{
-			name:      "pseudo-JSON list of unquoted strings",
-			varType:   "list(string)",
-			override:  `[hi,there]`,
-			argValue:  `join("-", FOO)`,
-			wantValue: "[hi-there]",
 		},
 		{
 			name:      "CSV of unquoted strings okay",
@@ -1921,13 +1904,6 @@ func TestTypedVarOverrides(t *testing.T) {
 			wantValue: "hi-there",
 		},
 		{
-			name:      "JSON list of numbers",
-			varType:   "list(number)",
-			override:  "[3, 1, 4]",
-			argValue:  `join("-", [for v in FOO: v + 1])`,
-			wantValue: "4-2-5",
-		},
-		{
 			name:      "CSV list of numbers",
 			varType:   "list(number)",
 			override:  "3,1,4",
@@ -1935,11 +1911,12 @@ func TestTypedVarOverrides(t *testing.T) {
 			wantValue: "4-2-5",
 		},
 		{
-			name:      "JSON map of numbers",
-			varType:   "map(number)",
-			override:  `{"foo": 1, "bar": 2}`,
-			argValue:  `join("-", sort(values(FOO)))`,
-			wantValue: "1-2",
+			name:     "CSV set of numbers",
+			varType:  "set(number)",
+			override: "3,1,4",
+			// anecdotally sets are sorted but may not be guaranteed
+			argValue:  `join("-", [for v in sort(FOO): v + 1])`,
+			wantValue: "2-4-5",
 		},
 		{
 			name:      "CSV map of numbers",
@@ -1947,22 +1924,6 @@ func TestTypedVarOverrides(t *testing.T) {
 			override:  "foo:1,bar:2",
 			argValue:  `join("-", sort(values(FOO)))`,
 			wantValue: "1-2",
-		},
-		// though a JSON payload, any failure (types in this case) defers to
-		// CSV parsing and its error; not ideal and could be improved
-		{
-			name:     "invalid JSON map of numbers",
-			varType:  "map(number)",
-			override: `{"foo": "oops", "bar": 2}`,
-			// in lieu of something like ErrorMatches, this is the best single phrase
-			wantErrorMsg: "as CSV",
-		},
-		{
-			name:      "JSON tuple",
-			varType:   "tuple([number,string])",
-			override:  `[99, "bottles"]`,
-			argValue:  `format("%d %s", FOO[0], FOO[1])`,
-			wantValue: "99 bottles",
 		},
 		{
 			name:      "CSV tuple",
@@ -1972,23 +1933,93 @@ func TestTypedVarOverrides(t *testing.T) {
 			wantValue: "99 bottles",
 		},
 		{
-			name:         "JSON tuple elements with wrong type",
-			varType:      "tuple([number,string])",
-			override:     `[99, 100]`,
-			wantErrorMsg: unsuitableValueType,
-		},
-		{
 			name:         "CSV tuple elements with wrong type",
 			varType:      "tuple([number,string])",
 			override:     `99,100`,
 			wantErrorMsg: unsuitableValueType,
 		},
 		{
-			name:      "JSON object",
-			varType:   `object({messages: list(string)})`,
-			override:  `{"messages": ["hi", "there"]}`,
-			argValue:  `join("-", FOO["messages"])`,
-			wantValue: "hi-there",
+			name:         "invalid CSV value",
+			varType:      "list(string)",
+			override:     `"hello,world`,
+			wantErrorMsg: "from CSV",
+		},
+		{
+			name:         "object not supported",
+			varType:      "object({message: string})",
+			override:     "does not matter",
+			wantErrorMsg: unsupportedType,
+		},
+		{
+			name:         "list of non-primitives not supported",
+			varType:      "list(list(number))",
+			override:     "1,2",
+			wantErrorMsg: unsupportedType,
+		},
+		{
+			name:         "set of non-primitives not supported",
+			varType:      "set(set(number))",
+			override:     "1,2",
+			wantErrorMsg: unsupportedType,
+		},
+		{
+			name:    "tuple of non-primitives not supported",
+			varType: "tuple([list(number)])",
+			// Intentionally a different override than other similar tests; tuple is unique in that
+			// multiple types are involved and length matters.  In the real world, it's probably more
+			// likely a user would accidentally omit or add an item than trying to use non-primitives,
+			// so the length check comes first.
+			override:     "1",
+			wantErrorMsg: unsupportedType,
+		},
+		{
+			name:         "map of non-primitives not supported",
+			varType:      "map(list(number))",
+			override:     "foo:1,2",
+			wantErrorMsg: unsupportedType,
+		},
+		{
+			name:    "invalid map k/v parsing",
+			varType: "map(string)",
+			// TODO fragile; will fail in a different manner without first k/v pair
+			override:     `a:b,foo:"bar`,
+			wantErrorMsg: "as CSV",
+		},
+		{
+			name:         "list with invalidly parsed elements",
+			varType:      "list(number)",
+			override:     "1,1z",
+			wantErrorMsg: failedToParseElement,
+		},
+		{
+			name:         "set with invalidly parsed elements",
+			varType:      "set(number)",
+			override:     "1,1z",
+			wantErrorMsg: failedToParseElement,
+		},
+		{
+			name:         "tuple with invalidly parsed elements",
+			varType:      "tuple([number])",
+			override:     "1z",
+			wantErrorMsg: failedToParseElement,
+		},
+		{
+			name:         "map with invalidly parsed elements",
+			varType:      "map(number)",
+			override:     "foo:1z",
+			wantErrorMsg: failedToParseElement,
+		},
+		{
+			name:         "map with bad value format",
+			varType:      "map(number)",
+			override:     "foo:1:1",
+			wantErrorMsg: "expected one k/v pair",
+		},
+		{
+			name:         "primitive with bad value format",
+			varType:      "number",
+			override:     "1z",
+			wantErrorMsg: "failed to parse",
 		},
 	}
 
@@ -2016,11 +2047,289 @@ func TestTypedVarOverrides(t *testing.T) {
 				require.NoError(t, err)
 				if tt.wantValue != "" {
 					require.Equal(t, 1, len(c.Targets))
-					require.Equal(t, ptrstr(tt.wantValue), c.Targets[0].Args["foo"])
+					require.Equal(t, tt.wantValue, *c.Targets[0].Args["foo"])
 				}
 			}
 		})
 	}
+}
+
+func TestTypedVarOverrides_JSON(t *testing.T) {
+	const unsuitableValueType = "Unsuitable value type"
+	tests := []struct {
+		name         string
+		varType      string
+		override     string
+		argValue     string
+		wantValue    string
+		wantErrorMsg string
+	}{
+		{
+			name:      "boolean",
+			varType:   "bool",
+			override:  "true",
+			wantValue: "true",
+		},
+		{
+			name:      "number",
+			varType:   "number",
+			override:  "99",
+			wantValue: "99",
+		},
+		// no shortcuts in JSON mode
+		{
+			name:         "unquoted string is error",
+			varType:      "string",
+			override:     "hello",
+			wantErrorMsg: "from JSON",
+		},
+		{
+			name:      "string",
+			varType:   "string",
+			override:  `"hello"`,
+			wantValue: "hello",
+		},
+		{
+			name:      "any",
+			varType:   "any",
+			override:  "[1,2]",
+			wantValue: "[1,2]",
+		},
+		{
+			name:         "any never convert to complex types",
+			varType:      "any",
+			override:     "[1,2]",
+			argValue:     "length(FOO)",
+			wantErrorMsg: "collection must be a list",
+		},
+		{
+			name:      "list of strings",
+			varType:   "list(string)",
+			override:  `["hi","there"]`,
+			argValue:  `join("-", FOO)`,
+			wantValue: "hi-there",
+		},
+		{
+			name:      "list of numbers",
+			varType:   "list(number)",
+			override:  "[3, 1, 4]",
+			argValue:  `join("-", [for v in FOO: v + 1])`,
+			wantValue: "4-2-5",
+		},
+		{
+			name:      "map of numbers",
+			varType:   "map(number)",
+			override:  `{"foo": 1, "bar": 2}`,
+			argValue:  `join("-", sort(values(FOO)))`,
+			wantValue: "1-2",
+		},
+		{
+			name:     "invalid JSON map of numbers",
+			varType:  "map(number)",
+			override: `{"foo": "oops", "bar": 2}`,
+			// in lieu of something like ErrorMatches, this is the best single phrase
+			wantErrorMsg: "from JSON",
+		},
+		{
+			name:      "tuple",
+			varType:   "tuple([number,string])",
+			override:  `[99, "bottles"]`,
+			argValue:  `format("%d %s", FOO[0], FOO[1])`,
+			wantValue: "99 bottles",
+		},
+		{
+			name:         "tuple elements with wrong type",
+			varType:      "tuple([number,string])",
+			override:     `[99, 100]`,
+			wantErrorMsg: unsuitableValueType,
+		},
+		{
+			name:      "JSON object",
+			varType:   `object({messages: list(string)})`,
+			override:  `{"messages": ["hi", "there"]}`,
+			argValue:  `join("-", FOO["messages"])`,
+			wantValue: "hi-there",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			argValue := tt.argValue
+			if argValue == "" {
+				argValue = "FOO"
+			}
+			dt := fmt.Sprintf(`
+                variable "FOO" {
+                    type = %s
+                }
+
+                target "default" {
+                    args = {
+                        foo = %s
+                    }
+                }`, tt.varType, argValue)
+			t.Setenv("FOO_JSON", tt.override)
+			c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+			if tt.wantErrorMsg != "" {
+				require.ErrorContains(t, err, tt.wantErrorMsg)
+			} else {
+				require.NoError(t, err)
+				if tt.wantValue != "" {
+					require.Equal(t, 1, len(c.Targets))
+					require.Equal(t, tt.wantValue, *c.Targets[0].Args["foo"])
+				}
+			}
+		})
+	}
+}
+
+func TestJSONOverridePriority(t *testing.T) {
+	t.Run("JSON override ignored when same user var exists", func(t *testing.T) {
+		dt := []byte(`
+            variable "FOO" {
+                type = list(number)
+            }
+            variable "FOO_JSON" {
+                type = list(number)
+            }
+
+            target "default" {
+                args = {
+                    foo = FOO
+                }
+            }`)
+		// env FOO_JSON is the CSV override of var FOO_JSON, not a JSON override of FOO
+		t.Setenv("FOO", "[1,2]")
+		t.Setenv("FOO_JSON", "[3,4]")
+		_, err := ParseFile(dt, "docker-bake.hcl")
+		require.ErrorContains(t, err, "failed to convert")
+		require.ErrorContains(t, err, "from CSV")
+	})
+
+	t.Run("JSON override ignored when same builtin var exists", func(t *testing.T) {
+		dt := []byte(`
+            variable "FOO" {
+                type = list(number)
+            }
+            
+            target "default" {
+                args = {
+                    foo = length(FOO)
+                }
+            }`)
+		t.Setenv("FOO", "1,2")
+		t.Setenv("FOO_JSON", "[3,4,5]")
+		c, _, err := ParseFiles(
+			[]File{{Name: "docker-bake.hcl", Data: dt}},
+			map[string]string{"FOO_JSON": "whatever"},
+		)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, "2", *c.Targets[0].Args["foo"])
+	})
+
+	// this is implied/exercised in other tests, but repeated for completeness
+	t.Run("JSON override ignored if var is untyped", func(t *testing.T) {
+		dt := []byte(`
+            variable "FOO" {
+                default = [1, 2]
+            }
+            
+            target "default" {
+                args = {
+                    foo = length(FOO)
+                }
+            }`)
+		t.Setenv("FOO_JSON", "[3,4]")
+		_, err := ParseFile(dt, "docker-bake.hcl")
+		require.ErrorContains(t, err, "unsupported type")
+	})
+
+	t.Run("override-ish variable has regular CSV override", func(t *testing.T) {
+		dt := []byte(`
+            variable "FOO_JSON" {
+                type = list(number)
+            }
+
+            target "default" {
+                args = {
+                    foo = length(FOO_JSON)
+                }
+            }`)
+		// despite the name, it's still CSV
+		t.Setenv("FOO_JSON", "10,11,12")
+		c, err := ParseFile(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, "3", *c.Targets[0].Args["foo"])
+
+		t.Setenv("FOO_JSON", "[10,11,12]")
+		_, err = ParseFile(dt, "docker-bake.hcl")
+		require.ErrorContains(t, err, "from CSV")
+	})
+
+	t.Run("override-ish variable has own JSON override", func(t *testing.T) {
+		dt := []byte(`
+            variable "FOO_JSON" {
+                type = list(number)
+            }
+
+            target "default" {
+                args = {
+                    foo = length(FOO_JSON)
+                }
+            }`)
+		t.Setenv("FOO_JSON_JSON", "[4,5,6]")
+		c, err := ParseFile(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, "3", *c.Targets[0].Args["foo"])
+	})
+
+	t.Run("JSON override trumps CSV when no var name conflict", func(t *testing.T) {
+		dt := []byte(`
+            variable "FOO" {
+                type = list(number)
+            }
+            
+            target "default" {
+                args = {
+                    foo = length(FOO)
+                }
+            }`)
+		t.Setenv("FOO", "1,2")
+		t.Setenv("FOO_JSON", "[3,4,5]")
+		c, err := ParseFile(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, "3", *c.Targets[0].Args["foo"])
+	})
+
+	t.Run("JSON override works with lowercase vars", func(t *testing.T) {
+		dt := []byte(`
+            variable "foo" {
+                type = number
+            }
+            
+            target "default" {
+                args = {
+                    bar = foo
+                }
+            }`)
+		// may seem reasonable, but not supported
+		t.Setenv("foo_json", "9000")
+		c, err := ParseFile(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Targets))
+		// a variable with no value has always resulted in an empty string
+		require.Equal(t, "", *c.Targets[0].Args["bar"])
+
+		t.Setenv("foo_JSON", "42")
+		c, err = ParseFile(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Targets))
+		require.Equal(t, "42", *c.Targets[0].Args["bar"])
+	})
 }
 
 func ptrstr(s any) *string {
