@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"reflect"
 	"regexp"
+	"runtime"
 	"testing"
 
 	hcl "github.com/hashicorp/hcl/v2"
@@ -2306,6 +2307,9 @@ func TestJSONOverridePriority(t *testing.T) {
 	})
 
 	t.Run("JSON override works with lowercase vars", func(t *testing.T) {
+		if runtime.GOOS == "windows" {
+			t.Skip("Windows case-insensitivity")
+		}
 		dt := []byte(`
             variable "foo" {
                 type = number
@@ -2316,7 +2320,7 @@ func TestJSONOverridePriority(t *testing.T) {
                     bar = foo
                 }
             }`)
-		// may seem reasonable, but not supported
+		// may seem reasonable, but not supported (on case-sensitive systems)
 		t.Setenv("foo_json", "9000")
 		c, err := ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
