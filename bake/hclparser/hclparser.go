@@ -373,6 +373,8 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 func (p *parser) valueHasOverride(name string, favorJSON bool) (string, bool, bool) {
 	jsonEnv := false
 	envv, hasEnv := p.opt.LookupVar(name)
+	// If no plain override exists (!hasEnv) or JSON overrides are explicitly favored (favorJSON),
+	// check for a JSON-specific override with the "_JSON" suffix.
 	if !hasEnv || favorJSON {
 		jsonVarName := name + jsonEnvOverrideSuffix
 		_, builtin := p.opt.Vars[jsonVarName]
@@ -1086,7 +1088,7 @@ func valueFromCSV(name, value string, target cty.Type) (cty.Value, error) {
 		for _, f := range fields {
 			kvSlice, err = p.Fields(f, kvSlice)
 			if err != nil {
-				return cty.NilVal, errors.Wrapf(err, "failed to parse %s as k/v", f)
+				return cty.NilVal, errors.Wrapf(err, "failed to parse %s as k/v for variable %s", f, name)
 			}
 			if len(kvSlice) != 2 {
 				return cty.NilVal, errors.Errorf("expected one k/v pair but got %d pieces from %s", len(kvSlice), f)
