@@ -297,7 +297,12 @@ example adds annotations to both the image index and manifests.
 
 ```hcl
 target "default" {
-  output = [{ type = "image", name = "foo" }]
+  output = [
+    {
+      type = "image"
+      name = "foo"
+    }
+  ]
   annotations = ["index,manifest:org.opencontainers.image.authors=dvdksn"]
 }
 ```
@@ -314,11 +319,11 @@ This attribute accepts the long-form CSV version of attestation parameters.
 target "default" {
   attest = [
     {
-      type = "provenance",
-      mode = "max",
+      type = "provenance"
+      mode = "max"
     },
     {
-      type = "sbom",
+      type = "sbom"
     }
   ]
 }
@@ -336,12 +341,12 @@ This takes a list value, so you can specify multiple cache sources.
 target "app" {
   cache-from = [
     {
-      type = "s3",
-      region = "eu-west-1",
+      type = "s3"
+      region = "eu-west-1"
       bucket = "mybucket"
     },
     {
-      type = "registry",
+      type = "registry"
       ref = "user/repo:cache"
     }
   ]
@@ -360,12 +365,12 @@ This takes a list value, so you can specify multiple cache export targets.
 target "app" {
   cache-to = [
     {
-      type = "s3",
-      region = "eu-west-1",
+      type = "s3"
+      region = "eu-west-1"
       bucket = "mybucket"
     },
     {
-      type = "inline",
+      type = "inline"
     }
   ]
 }
@@ -445,9 +450,9 @@ a context based on the pattern of the context value.
 ```hcl
 # docker-bake.hcl
 target "app" {
-    contexts = {
-        alpine = "docker-image://alpine:3.13"
-    }
+  contexts = {
+    alpine = "docker-image://alpine:3.13"
+  }
 }
 ```
 
@@ -462,9 +467,9 @@ RUN echo "Hello world"
 ```hcl
 # docker-bake.hcl
 target "app" {
-    contexts = {
-        src = "../path/to/source"
-    }
+  contexts = {
+    src = "../path/to/source"
+  }
 }
 ```
 
@@ -485,12 +490,13 @@ COPY --from=src . .
 ```hcl
 # docker-bake.hcl
 target "base" {
-    dockerfile = "baseapp.Dockerfile"
+  dockerfile = "baseapp.Dockerfile"
 }
+
 target "app" {
-    contexts = {
-        baseapp = "target:base"
-    }
+  contexts = {
+    baseapp = "target:base"
+  }
 }
 ```
 
@@ -507,11 +513,11 @@ functionality.
 
 ```hcl
 target "lint" {
-    description = "Runs golangci-lint to detect style errors"
-    args = {
-        GOLANGCI_LINT_VERSION = null
-    }
-    dockerfile = "lint.Dockerfile"
+  description = "Runs golangci-lint to detect style errors"
+  args = {
+    GOLANGCI_LINT_VERSION = null
+  }
+  dockerfile = "lint.Dockerfile"
 }
 ```
 
@@ -913,8 +919,15 @@ variable "HOME" {
 
 target "default" {
   secret = [
-    { type = "env", id = "KUBECONFIG" },
-    { type = "file", id = "aws", src = "${HOME}/.aws/credentials" },
+    {
+      type = "env"
+      id = "KUBECONFIG"
+    },
+    {
+      type = "file"
+      id = "aws"
+      src = "${HOME}/.aws/credentials"
+    }
   ]
 }
 ```
