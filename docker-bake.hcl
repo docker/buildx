@@ -15,9 +15,7 @@ variable "GOLANGCI_LINT_MULTIPLATFORM" {
 }
 
 # Special target: https://github.com/docker/metadata-action#bake-definition
-target "meta-helper" {
-  tags = ["docker/buildx-bin:local"]
-}
+target "meta-helper" {}
 
 target "_common" {
   args = {
@@ -192,11 +190,6 @@ target "image" {
 target "image-cross" {
   inherits = ["meta-helper", "binaries-cross"]
   output = ["type=image"]
-}
-
-target "image-local" {
-  inherits = ["image"]
-  output = ["type=docker"]
 }
 
 variable "HTTP_PROXY" {
