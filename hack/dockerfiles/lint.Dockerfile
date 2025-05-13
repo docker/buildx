@@ -92,4 +92,25 @@ RUN --mount=target=. \
   done
 EOF
 
+FROM base AS modernize-fix-run
+COPY --link --from=xx / /
+ARG TARGETNAME
+ARG TARGETPLATFORM
+WORKDIR /go/src/github.com/docker/buildx
+RUN --mount=target=.,rw \
+  --mount=target=/root/.cache,type=cache,id=lint-cache-${TARGETNAME}-${TARGETPLATFORM} \
+  --mount=target=/gopls-analyzers,from=gopls,source=/out <<EOF
+  set -ex
+  xx-go --wrap
+  mkdir /out
+  /gopls-analyzers/modernize -fix ./...
+  for file in $(git status --porcelain | awk '/^ M/ {print $2}'); do
+    mkdir -p /out/$(dirname $file)
+    cp $file /out/$file
+  done
+EOF
+
+FROM scratch AS modernize-fix
+COPY --link --from=modernize-fix-run /out /
+
 FROM lint
