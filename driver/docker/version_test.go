@@ -9,7 +9,6 @@ import (
 
 func TestConstraint(t *testing.T) {
 	for _, tt := range mobyBuildkitVersions {
-		tt := tt
 		t.Run(tt.MobyVersionConstraint, func(t *testing.T) {
 			_, err := semver.NewConstraint(tt.MobyVersionConstraint)
 			require.NoError(t, err)
@@ -121,7 +120,6 @@ func TestResolveBuildKitVersion(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.mobyVersion, func(t *testing.T) {
 			bkVersion, err := resolveBuildKitVersion(tt.mobyVersion)
 			if tt.err {

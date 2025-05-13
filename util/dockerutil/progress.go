@@ -17,7 +17,6 @@ func fromReader(l progress.SubLogger, rc io.ReadCloser) error {
 
 	defer func() {
 		for _, st := range started {
-			st := st
 			if st.Completed == nil {
 				now := time.Now()
 				st.Completed = &now

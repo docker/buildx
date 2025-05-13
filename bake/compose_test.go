@@ -518,7 +518,6 @@ func TestServiceName(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.svc, func(t *testing.T) {
 			_, err := ParseCompose([]composetypes.ConfigFile{{Content: []byte(`
 services:
@@ -589,7 +588,6 @@ services:
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			_, err := ParseCompose([]composetypes.ConfigFile{{Content: tt.dt}}, nil)
 			if tt.wantErr {
@@ -665,7 +663,6 @@ target "default" {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			isCompose, err := validateComposeFile(tt.dt, tt.fn)
 			assert.Equal(t, tt.isCompose, isCompose)

@@ -35,7 +35,6 @@ func TestStripCredentials(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			if g, w := stripCredentials(tt.url), tt.want; g != w {
 				t.Fatalf("got: %q\nwant: %q", g, w)

@@ -92,7 +92,6 @@ func fetchProvenance(ctx context.Context, c *client.Client, ref string, mode con
 			})
 		} else if ev.Record.Results != nil {
 			for platform, res := range ev.Record.Results {
-				platform := platform
 				desc := lookupProvenance(res)
 				if desc == nil {
 					continue

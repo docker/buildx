@@ -869,9 +869,9 @@ func printTable(w io.Writer, kvs []keyValueOutput, title string) {
 func readKeyValues(attrs map[string]string, prefix string) []keyValueOutput {
 	var out []keyValueOutput
 	for k, v := range attrs {
-		if strings.HasPrefix(k, prefix) {
+		if name, ok := strings.CutPrefix(k, prefix); ok {
 			out = append(out, keyValueOutput{
-				Name:  strings.TrimPrefix(k, prefix),
+				Name:  name,
 				Value: v,
 			})
 		}

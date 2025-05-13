@@ -43,7 +43,6 @@ func runRm(ctx context.Context, dockerCli command.Cli, opts rmOptions) error {
 
 	eg, ctx := errgroup.WithContext(ctx)
 	for i, node := range nodes {
-		node := node
 		eg.Go(func() error {
 			if node.Driver == nil {
 				return nil

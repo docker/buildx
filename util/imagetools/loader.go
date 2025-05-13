@@ -225,7 +225,6 @@ func (l *loader) fetch(ctx context.Context, fetcher remotes.Fetcher, desc ocispe
 
 		eg, ctx := errgroup.WithContext(ctx)
 		for _, d := range idx.Manifests {
-			d := d
 			eg.Go(func() error {
 				return l.fetch(ctx, fetcher, d, r)
 			})

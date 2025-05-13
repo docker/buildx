@@ -62,7 +62,6 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 		g := &Group{Name: "default"}
 
 		for _, s := range cfg.Services {
-			s := s
 			if s.Build == nil {
 				continue
 			}
@@ -144,7 +143,6 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			// compose does not support nil values for labels
 			labels := map[string]*string{}
 			for k, v := range s.Build.Labels {
-				v := v
 				labels[k] = &v
 			}
 

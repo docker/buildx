@@ -184,7 +184,6 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	pw := progress.WithPrefix(printer, "internal", true)
 
 	for _, t := range tags {
-		t := t
 		eg.Go(func() error {
 			return progress.Wrap(fmt.Sprintf("pushing %s", t.String()), pw.Write, func(sub progress.SubLogger) error {
 				eg2, _ := errgroup.WithContext(ctx)
