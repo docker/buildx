@@ -1,7 +1,11 @@
 # docker buildx history logs
 
+```text
+docker buildx history logs [OPTIONS] [REF]
+```
+
 <!---MARKER_GEN_START-->
-Print the logs of a build
+Print the logs of a build record
 
 ### Options
 

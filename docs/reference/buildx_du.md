@@ -1,7 +1,7 @@
 # buildx du
 
 ```text
-docker buildx du
+docker buildx du [OPTIONS]
 ```
 
 <!---MARKER_GEN_START-->

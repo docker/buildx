@@ -139,8 +139,8 @@ func exportCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	var options exportOptions
 
 	cmd := &cobra.Command{
-		Use:   "export [OPTIONS] [REF]",
-		Short: "Export a build into Docker Desktop bundle",
+		Use:   "export [OPTIONS] [REF...]",
+		Short: "Export build records into Docker Desktop bundle",
 		RunE: func(cmd *cobra.Command, args []string) error {
 			if options.all && len(args) > 0 {
 				return errors.New("cannot specify refs when using --all")

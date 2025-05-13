@@ -1,13 +1,17 @@
 # docker buildx history inspect
 
+```text
+docker buildx history inspect [OPTIONS] [REF|COMMAND]
+```
+
 <!---MARKER_GEN_START-->
-Inspect a build
+Inspect a build record
 
 ### Subcommands
 
-| Name                                                 | Description                |
-|:-----------------------------------------------------|:---------------------------|
-| [`attachment`](buildx_history_inspect_attachment.md) | Inspect a build attachment |
+| Name                                                 | Description                       |
+|:-----------------------------------------------------|:----------------------------------|
+| [`attachment`](buildx_history_inspect_attachment.md) | Inspect a build record attachment |
 
 
 ### Options
@@ -74,7 +78,7 @@ docker buildx history inspect ^1
 The formatting options (`--format`) pretty-prints the output to `pretty` (default),
 `json` or using a Go template.
 
-**Pretty output**
+#### Pretty output
 
 ```console
 $ docker buildx history inspect
@@ -105,7 +109,8 @@ sha256:217329d2af959d4f02e3a96dcbe62bf100cab1feb8006a047ddfe51a5397f7e3         
 
 Print build logs: docker buildx history logs g9808bwrjrlkbhdamxklx660b
 ```
-**JSON output**
+
+#### JSON output
 
 ```console
 $ docker buildx history inspect --format json
@@ -160,7 +165,7 @@ $ docker buildx history inspect --format json
 }
 ```
 
-**Go template output**
+#### Go template output
 
 ```console
 $ docker buildx history inspect --format "{{.Name}}: {{.VCSRepository}} ({{.VCSRevision}})"

@@ -1,7 +1,11 @@
 # docker buildx history open
 
+```text
+docker buildx history open [OPTIONS] [REF]
+```
+
 <!---MARKER_GEN_START-->
-Open a build in Docker Desktop
+Open a build record in Docker Desktop
 
 ### Options
 
