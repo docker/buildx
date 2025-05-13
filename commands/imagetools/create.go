@@ -16,7 +16,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -246,7 +246,7 @@ func parseSource(in string) (*imagetools.Source, error) {
 	dgst, err := digest.Parse(in)
 	if err == nil {
 		return &imagetools.Source{
-			Desc: ocispec.Descriptor{
+			Desc: ocispecs.Descriptor{
 				Digest: dgst,
 			},
 		}, nil
@@ -295,9 +295,9 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	return cmd
 }
 
-func mergeDesc(d1, d2 ocispec.Descriptor) (ocispec.Descriptor, error) {
+func mergeDesc(d1, d2 ocispecs.Descriptor) (ocispecs.Descriptor, error) {
 	if d2.Size != 0 && d1.Size != d2.Size {
-		return ocispec.Descriptor{}, errors.Errorf("invalid size mismatch for %s, %d != %d", d1.Digest, d2.Size, d1.Size)
+		return ocispecs.Descriptor{}, errors.Errorf("invalid size mismatch for %s, %d != %d", d1.Digest, d2.Size, d1.Size)
 	}
 	if d2.MediaType != "" {
 		d1.MediaType = d2.MediaType

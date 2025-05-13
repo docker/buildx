@@ -144,7 +144,7 @@ func indexOfFunc() function.Function {
 		},
 		Type: function.StaticReturnType(cty.Number),
 		Impl: func(args []cty.Value, retType cty.Type) (ret cty.Value, err error) {
-			if !(args[0].Type().IsListType() || args[0].Type().IsTupleType()) {
+			if !args[0].Type().IsListType() && !args[0].Type().IsTupleType() {
 				return cty.NilVal, errors.New("argument must be a list or tuple")
 			}
 

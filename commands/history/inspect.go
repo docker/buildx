@@ -335,9 +335,9 @@ workers0:
 			out.Error.Sources = errsources.Bytes()
 			var ve *errdefs.VertexError
 			if errors.As(retErr, &ve) {
-				dgst, err := digest.Parse(ve.Vertex.Digest)
+				dgst, err := digest.Parse(ve.Digest)
 				if err != nil {
-					return errors.Wrapf(err, "failed to parse vertex digest %s", ve.Vertex.Digest)
+					return errors.Wrapf(err, "failed to parse vertex digest %s", ve.Digest)
 				}
 				name, logs, err := loadVertexLogs(ctx, c, rec.Ref, dgst, 16)
 				if err != nil {
@@ -525,9 +525,10 @@ workers0:
 	}
 	fmt.Fprintf(tw, "Duration:\t%s%s\n", formatDuration(out.Duration), statusStr)
 
-	if out.Status == statusError {
+	switch out.Status {
+	case statusError:
 		fmt.Fprintf(tw, "Error:\t%s %s\n", codes.Code(rec.Error.Code).String(), rec.Error.Message)
-	} else if out.Status == statusCanceled {
+	case statusCanceled:
 		fmt.Fprintf(tw, "Status:\tCanceled\n")
 	}
 

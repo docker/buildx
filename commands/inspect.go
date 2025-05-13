@@ -36,7 +36,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 	}
 
 	timeoutCtx, cancel := context.WithCancelCause(ctx)
-	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded)) //nolint:govet,lostcancel // no need to manually cancel this context as we already rely on parent
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
 	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())
@@ -54,8 +54,8 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
 	fmt.Fprintf(w, "Name:\t%s\n", b.Name)
 	fmt.Fprintf(w, "Driver:\t%s\n", b.Driver)
-	if !b.NodeGroup.LastActivity.IsZero() {
-		fmt.Fprintf(w, "Last Activity:\t%v\n", b.NodeGroup.LastActivity)
+	if !b.LastActivity.IsZero() {
+		fmt.Fprintf(w, "Last Activity:\t%v\n", b.LastActivity)
 	}
 
 	if err != nil {

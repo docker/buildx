@@ -394,7 +394,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		if err != nil && err != io.EOF {
 			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
 		}
-		if !(err == io.EOF && len(magic) == 0) {
+		if err != io.EOF || len(magic) != 0 {
 			if isArchive(magic) {
 				// stdin is context
 				up := uploadprovider.New()

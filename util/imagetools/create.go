@@ -18,17 +18,17 @@ import (
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/opencontainers/image-spec/specs-go"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
 type Source struct {
-	Desc ocispec.Descriptor
+	Desc ocispecs.Descriptor
 	Ref  reference.Named
 }
 
-func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes.AnnotationKey]string, preferIndex bool) ([]byte, ocispec.Descriptor, error) {
+func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes.AnnotationKey]string, preferIndex bool) ([]byte, ocispecs.Descriptor, error) {
 	eg, ctx := errgroup.WithContext(ctx)
 
 	dts := make([][]byte, len(srcs))
@@ -52,10 +52,10 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 				mt := srcs[i].Desc.MediaType
 
 				switch mt {
-				case images.MediaTypeDockerSchema2Manifest, ocispec.MediaTypeImageManifest:
+				case images.MediaTypeDockerSchema2Manifest, ocispecs.MediaTypeImageManifest:
 					p := srcs[i].Desc.Platform
 					if srcs[i].Desc.Platform == nil {
-						p = &ocispec.Platform{}
+						p = &ocispecs.Platform{}
 					}
 					if p.OS == "" || p.Architecture == "" {
 						if err := r.loadPlatform(ctx, p, srcs[i].Ref.String(), dt); err != nil {
@@ -73,7 +73,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 	}
 
 	if err := eg.Wait(); err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return nil, ocispecs.Descriptor{}, err
 	}
 
 	// on single source, return original bytes
@@ -82,7 +82,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		// if the source is already an image index or manifest list, there is no need to consider the value
 		// of preferIndex since if set to true then the source is already in the preferred format, and if false
 		// it doesn't matter since we're not going to split it into separate manifests
-		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
+		case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
 			return dts[0], srcs[0].Desc, nil
 		default:
 			if !preferIndex {
@@ -92,9 +92,9 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 	}
 
 	m := map[digest.Digest]int{}
-	newDescs := make([]ocispec.Descriptor, 0, len(srcs))
+	newDescs := make([]ocispecs.Descriptor, 0, len(srcs))
 
-	addDesc := func(d ocispec.Descriptor) {
+	addDesc := func(d ocispecs.Descriptor) {
 		idx, ok := m[d.Digest]
 		if ok {
 			old := newDescs[idx]
@@ -117,10 +117,10 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 
 	for i, src := range srcs {
 		switch src.Desc.MediaType {
-		case images.MediaTypeDockerSchema2ManifestList, ocispec.MediaTypeImageIndex:
-			var mfst ocispec.Index
+		case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
+			var mfst ocispecs.Index
 			if err := json.Unmarshal(dts[i], &mfst); err != nil {
-				return nil, ocispec.Descriptor{}, errors.WithStack(err)
+				return nil, ocispecs.Descriptor{}, errors.WithStack(err)
 			}
 			for _, d := range mfst.Manifests {
 				addDesc(d)
@@ -143,12 +143,12 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		mt = images.MediaTypeDockerSchema2ManifestList
 	} else {
 		// otherwise, use OCI index
-		mt = ocispec.MediaTypeImageIndex
+		mt = ocispecs.MediaTypeImageIndex
 	}
 
 	// annotations are only allowed on OCI indexes
 	indexAnnotation := make(map[string]string)
-	if mt == ocispec.MediaTypeImageIndex {
+	if mt == ocispecs.MediaTypeImageIndex {
 		for k, v := range ann {
 			switch k.Type {
 			case exptypes.AnnotationIndex:
@@ -163,14 +163,14 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 					}
 				}
 			case exptypes.AnnotationManifest, "":
-				return nil, ocispec.Descriptor{}, errors.Errorf("%q annotations are not supported yet", k.Type)
+				return nil, ocispecs.Descriptor{}, errors.Errorf("%q annotations are not supported yet", k.Type)
 			case exptypes.AnnotationIndexDescriptor:
-				return nil, ocispec.Descriptor{}, errors.Errorf("%q annotations are invalid while creating an image", k.Type)
+				return nil, ocispecs.Descriptor{}, errors.Errorf("%q annotations are invalid while creating an image", k.Type)
 			}
 		}
 	}
 
-	idxBytes, err := json.MarshalIndent(ocispec.Index{
+	idxBytes, err := json.MarshalIndent(ocispecs.Index{
 		MediaType: mt,
 		Versioned: specs.Versioned{
 			SchemaVersion: 2,
@@ -179,17 +179,17 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		Annotations: indexAnnotation,
 	}, "", "  ")
 	if err != nil {
-		return nil, ocispec.Descriptor{}, errors.Wrap(err, "failed to marshal index")
+		return nil, ocispecs.Descriptor{}, errors.Wrap(err, "failed to marshal index")
 	}
 
-	return idxBytes, ocispec.Descriptor{
+	return idxBytes, ocispecs.Descriptor{
 		MediaType: mt,
 		Size:      int64(len(idxBytes)),
 		Digest:    digest.FromBytes(idxBytes),
 	}, nil
 }
 
-func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispec.Descriptor, dt []byte) error {
+func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispecs.Descriptor, dt []byte) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 
 	fullRef, err := reference.WithDigest(reference.TagNameOnly(ref), desc.Digest)
@@ -252,8 +252,8 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) 
 	return nil
 }
 
-func (r *Resolver) loadPlatform(ctx context.Context, p2 *ocispec.Platform, in string, dt []byte) error {
-	var manifest ocispec.Manifest
+func (r *Resolver) loadPlatform(ctx context.Context, p2 *ocispecs.Platform, in string, dt []byte) error {
+	var manifest ocispecs.Manifest
 	if err := json.Unmarshal(dt, &manifest); err != nil {
 		return errors.WithStack(err)
 	}
@@ -263,7 +263,7 @@ func (r *Resolver) loadPlatform(ctx context.Context, p2 *ocispec.Platform, in st
 		return err
 	}
 
-	var p ocispec.Platform
+	var p ocispecs.Platform
 	if err := json.Unmarshal(dt, &p); err != nil {
 		return errors.WithStack(err)
 	}

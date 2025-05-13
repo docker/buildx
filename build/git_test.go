@@ -11,7 +11,7 @@ import (
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/client"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -91,8 +91,8 @@ func TestGetGitAttributes(t *testing.T) {
 			envGitInfo:   "false",
 			expected: []string{
 				"label:" + DockerfileLabel,
-				"label:" + specs.AnnotationRevision,
-				"label:" + specs.AnnotationSource,
+				"label:" + ocispecs.AnnotationRevision,
+				"label:" + ocispecs.AnnotationSource,
 			},
 		},
 		{
@@ -101,8 +101,8 @@ func TestGetGitAttributes(t *testing.T) {
 			envGitInfo:   "",
 			expected: []string{
 				"label:" + DockerfileLabel,
-				"label:" + specs.AnnotationRevision,
-				"label:" + specs.AnnotationSource,
+				"label:" + ocispecs.AnnotationRevision,
+				"label:" + ocispecs.AnnotationSource,
 				"vcs:revision",
 				"vcs:source",
 			},
@@ -125,9 +125,10 @@ func TestGetGitAttributes(t *testing.T) {
 			for _, e := range tt.expected {
 				assert.Contains(t, so.FrontendAttrs, e)
 				assert.NotEmpty(t, so.FrontendAttrs[e])
-				if e == "label:"+DockerfileLabel {
+				switch e {
+				case "label:" + DockerfileLabel:
 					assert.Equal(t, "Dockerfile", so.FrontendAttrs[e])
-				} else if e == "label:"+specs.AnnotationSource || e == "vcs:source" {
+				case "label:" + ocispecs.AnnotationSource, "vcs:source":
 					assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs[e])
 				}
 			}
@@ -155,10 +156,10 @@ func TestGetGitAttributesDirty(t *testing.T) {
 
 	assert.Contains(t, so.FrontendAttrs, "label:"+DockerfileLabel)
 	assert.Equal(t, "Dockerfile", so.FrontendAttrs["label:"+DockerfileLabel])
-	assert.Contains(t, so.FrontendAttrs, "label:"+specs.AnnotationSource)
-	assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs["label:"+specs.AnnotationSource])
-	assert.Contains(t, so.FrontendAttrs, "label:"+specs.AnnotationRevision)
-	assert.True(t, strings.HasSuffix(so.FrontendAttrs["label:"+specs.AnnotationRevision], "-dirty"))
+	assert.Contains(t, so.FrontendAttrs, "label:"+ocispecs.AnnotationSource)
+	assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs["label:"+ocispecs.AnnotationSource])
+	assert.Contains(t, so.FrontendAttrs, "label:"+ocispecs.AnnotationRevision)
+	assert.True(t, strings.HasSuffix(so.FrontendAttrs["label:"+ocispecs.AnnotationRevision], "-dirty"))
 
 	assert.Contains(t, so.FrontendAttrs, "vcs:source")
 	assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs["vcs:source"])

@@ -12,7 +12,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/progress/progressui"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
@@ -49,7 +49,7 @@ func runDialStdio(dockerCli command.Cli, opts stdioOptions) error {
 		return err
 	}
 
-	var p *v1.Platform
+	var p *ocispecs.Platform
 	if opts.platform != "" {
 		pp, err := platforms.Parse(opts.platform)
 		if err != nil {

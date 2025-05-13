@@ -44,7 +44,7 @@ import (
 	"github.com/moby/buildkit/util/progress/progresswriter"
 	"github.com/moby/buildkit/util/tracing"
 	"github.com/opencontainers/go-digest"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/tonistiigi/fsutil"
@@ -76,7 +76,7 @@ type Options struct {
 	NetworkMode                string
 	NoCache                    bool
 	NoCacheFilter              []string
-	Platforms                  []specs.Platform
+	Platforms                  []ocispecs.Platform
 	Pull                       bool
 	SecretSpecs                []*controllerapi.Secret
 	SSHSpecs                   []*controllerapi.SSH
@@ -600,7 +600,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 				if pushNames != "" {
 					err := progress.Write(pw, fmt.Sprintf("merging manifest list %s", pushNames), func() error {
-						descs := make([]specs.Descriptor, 0, len(res))
+						descs := make([]ocispecs.Descriptor, 0, len(res))
 
 						for _, r := range res {
 							s, ok := r.ExporterResponse[exptypes.ExporterImageDescriptorKey]
@@ -609,7 +609,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 								if err != nil {
 									return err
 								}
-								var desc specs.Descriptor
+								var desc ocispecs.Descriptor
 								if err := json.Unmarshal(dt, &desc); err != nil {
 									return errors.Wrapf(err, "failed to unmarshal descriptor %s", s)
 								}
@@ -622,7 +622,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							// mediatype value in the Accept header does not seem to matter.
 							s, ok = r.ExporterResponse[exptypes.ExporterImageDigestKey]
 							if ok {
-								descs = append(descs, specs.Descriptor{
+								descs = append(descs, ocispecs.Descriptor{
 									Digest:    digest.Digest(s),
 									MediaType: images.MediaTypeDockerSchema2ManifestList,
 									Size:      -1,

@@ -12,8 +12,7 @@ import (
 	intoto "github.com/in-toto/in-toto-golang/in_toto"
 	slsa02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
 	"github.com/opencontainers/go-digest"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
-	v1 "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 type attestationType int
@@ -35,12 +34,12 @@ type mockResolver struct {
 var manifests = make(map[digest.Digest]manifest)
 var indexes = make(map[digest.Digest]index)
 
-func (f mockFetcher) Fetch(ctx context.Context, desc ocispec.Descriptor) (io.ReadCloser, error) {
+func (f mockFetcher) Fetch(ctx context.Context, desc ocispecs.Descriptor) (io.ReadCloser, error) {
 	switch desc.MediaType {
-	case ocispec.MediaTypeImageIndex:
+	case ocispecs.MediaTypeImageIndex:
 		reader := io.NopCloser(strings.NewReader(indexes[desc.Digest].desc.Annotations["test_content"]))
 		return reader, nil
-	case ocispec.MediaTypeImageManifest:
+	case ocispecs.MediaTypeImageManifest:
 		reader := io.NopCloser(strings.NewReader(manifests[desc.Digest].desc.Annotations["test_content"]))
 		return reader, nil
 	default:
@@ -49,7 +48,7 @@ func (f mockFetcher) Fetch(ctx context.Context, desc ocispec.Descriptor) (io.Rea
 	}
 }
 
-func (r mockResolver) Resolve(ctx context.Context, ref string) (name string, desc ocispec.Descriptor, err error) {
+func (r mockResolver) Resolve(ctx context.Context, ref string) (name string, desc ocispecs.Descriptor, err error) {
 	d := digest.Digest(strings.ReplaceAll(ref, "docker.io/library/test@", ""))
 	return string(d), indexes[d].desc, nil
 }
@@ -77,8 +76,8 @@ func getImageNoAttestation() *result {
 func getImageWithAttestation(t attestationType) *result {
 	manifestList := getBaseManifests()
 
-	objManifest := ocispec.Manifest{
-		MediaType: v1.MediaTypeImageManifest,
+	objManifest := ocispecs.Manifest{
+		MediaType: ocispecs.MediaTypeImageManifest,
 		Layers:    getAttestationLayers(t),
 		Annotations: map[string]string{
 			"platform": "linux/amd64",
@@ -89,8 +88,8 @@ func getImageWithAttestation(t attestationType) *result {
 	d := digest.FromString(jsonString)
 
 	manifestList[d] = manifest{
-		desc: ocispec.Descriptor{
-			MediaType: v1.MediaTypeImageManifest,
+		desc: ocispecs.Descriptor{
+			MediaType: ocispecs.MediaTypeImageManifest,
 			Digest:    d,
 			Size:      int64(len(jsonString)),
 			Annotations: map[string]string{
@@ -98,7 +97,7 @@ func getImageWithAttestation(t attestationType) *result {
 				"vnd.docker.reference.type":   "attestation-manifest",
 				"test_content":                jsonString,
 			},
-			Platform: &v1.Platform{
+			Platform: &ocispecs.Platform{
 				Architecture: "unknown",
 				OS:           "unknown",
 			},
@@ -106,8 +105,8 @@ func getImageWithAttestation(t attestationType) *result {
 		manifest: objManifest,
 	}
 
-	objManifest = ocispec.Manifest{
-		MediaType: v1.MediaTypeImageManifest,
+	objManifest = ocispecs.Manifest{
+		MediaType: ocispecs.MediaTypeImageManifest,
 		Layers:    getAttestationLayers(t),
 		Annotations: map[string]string{
 			"platform": "linux/arm64",
@@ -117,8 +116,8 @@ func getImageWithAttestation(t attestationType) *result {
 	jsonString = string(jsonContent)
 	d = digest.FromString(jsonString)
 	manifestList[d] = manifest{
-		desc: ocispec.Descriptor{
-			MediaType: v1.MediaTypeImageManifest,
+		desc: ocispecs.Descriptor{
+			MediaType: ocispecs.MediaTypeImageManifest,
 			Digest:    d,
 			Size:      int64(len(jsonString)),
 			Annotations: map[string]string{
@@ -126,7 +125,7 @@ func getImageWithAttestation(t attestationType) *result {
 				"vnd.docker.reference.type":   "attestation-manifest",
 				"test_content":                jsonString,
 			},
-			Platform: &v1.Platform{
+			Platform: &ocispecs.Platform{
 				Architecture: "unknown",
 				OS:           "unknown",
 			},
@@ -148,13 +147,13 @@ func getImageFromManifests(manifests map[digest.Digest]manifest) *result {
 	r.images["linux/amd64"] = getManifestDigestForArch(manifests, "linux", "amd64")
 	r.images["linux/arm64"] = getManifestDigestForArch(manifests, "linux", "arm64")
 
-	manifestsDesc := []v1.Descriptor{}
+	manifestsDesc := []ocispecs.Descriptor{}
 	for _, val := range manifests {
 		manifestsDesc = append(manifestsDesc, val.desc)
 	}
 
-	objIndex := v1.Index{
-		MediaType: v1.MediaTypeImageIndex,
+	objIndex := ocispecs.Index{
+		MediaType: ocispecs.MediaTypeImageIndex,
 		Manifests: manifestsDesc,
 	}
 	jsonContent, _ := json.Marshal(objIndex)
@@ -163,8 +162,8 @@ func getImageFromManifests(manifests map[digest.Digest]manifest) *result {
 
 	if _, ok := indexes[d]; !ok {
 		indexes[d] = index{
-			desc: ocispec.Descriptor{
-				MediaType: v1.MediaTypeImageIndex,
+			desc: ocispecs.Descriptor{
+				MediaType: ocispecs.MediaTypeImageIndex,
 				Digest:    d,
 				Size:      int64(len(jsonString)),
 				Annotations: map[string]string{
@@ -193,12 +192,12 @@ func getBaseManifests() map[digest.Digest]manifest {
 	if len(manifests) == 0 {
 		config := getConfig()
 		content := "amd64-content"
-		objManifest := ocispec.Manifest{
-			MediaType: v1.MediaTypeImageManifest,
+		objManifest := ocispecs.Manifest{
+			MediaType: ocispecs.MediaTypeImageManifest,
 			Config:    config,
-			Layers: []v1.Descriptor{
+			Layers: []ocispecs.Descriptor{
 				{
-					MediaType: v1.MediaTypeImageLayerGzip,
+					MediaType: ocispecs.MediaTypeImageLayerGzip,
 					Digest:    digest.FromString(content),
 					Size:      int64(len(content)),
 				},
@@ -209,11 +208,11 @@ func getBaseManifests() map[digest.Digest]manifest {
 		d := digest.FromString(jsonString)
 
 		manifests[d] = manifest{
-			desc: ocispec.Descriptor{
-				MediaType: v1.MediaTypeImageManifest,
+			desc: ocispecs.Descriptor{
+				MediaType: ocispecs.MediaTypeImageManifest,
 				Digest:    d,
 				Size:      int64(len(jsonString)),
-				Platform: &v1.Platform{
+				Platform: &ocispecs.Platform{
 					Architecture: "amd64",
 					OS:           "linux",
 				},
@@ -225,12 +224,12 @@ func getBaseManifests() map[digest.Digest]manifest {
 		}
 
 		content = "arm64-content"
-		objManifest = ocispec.Manifest{
-			MediaType: v1.MediaTypeImageManifest,
+		objManifest = ocispecs.Manifest{
+			MediaType: ocispecs.MediaTypeImageManifest,
 			Config:    config,
-			Layers: []v1.Descriptor{
+			Layers: []ocispecs.Descriptor{
 				{
-					MediaType: v1.MediaTypeImageLayerGzip,
+					MediaType: ocispecs.MediaTypeImageLayerGzip,
 					Digest:    digest.FromString(content),
 					Size:      int64(len(content)),
 				},
@@ -241,11 +240,11 @@ func getBaseManifests() map[digest.Digest]manifest {
 		d = digest.FromString(jsonString)
 
 		manifests[d] = manifest{
-			desc: ocispec.Descriptor{
-				MediaType: v1.MediaTypeImageManifest,
+			desc: ocispecs.Descriptor{
+				MediaType: ocispecs.MediaTypeImageManifest,
 				Digest:    d,
 				Size:      int64(len(jsonString)),
-				Platform: &v1.Platform{
+				Platform: &ocispecs.Platform{
 					Architecture: "arm64",
 					OS:           "linux",
 				},
@@ -260,8 +259,8 @@ func getBaseManifests() map[digest.Digest]manifest {
 	return manifests
 }
 
-func getConfig() v1.Descriptor {
-	config := v1.ImageConfig{
+func getConfig() ocispecs.Descriptor {
+	config := ocispecs.ImageConfig{
 		Env: []string{
 			"config",
 		},
@@ -270,8 +269,8 @@ func getConfig() v1.Descriptor {
 	jsonString := string(jsonContent)
 	d := digest.FromString(jsonString)
 
-	return v1.Descriptor{
-		MediaType: ocispec.MediaTypeImageConfig,
+	return ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageConfig,
 		Digest:    d,
 		Size:      int64(len(jsonString)),
 		Annotations: map[string]string{
@@ -280,11 +279,11 @@ func getConfig() v1.Descriptor {
 	}
 }
 
-func getAttestationLayers(t attestationType) []v1.Descriptor {
-	layers := []v1.Descriptor{}
+func getAttestationLayers(t attestationType) []ocispecs.Descriptor {
+	layers := []ocispecs.Descriptor{}
 
 	if t == plainSpdx || t == plainSpdxAndDSSEEmbed {
-		layers = append(layers, v1.Descriptor{
+		layers = append(layers, ocispecs.Descriptor{
 			MediaType: inTotoGenericMime,
 			Digest:    digest.FromString(attestationContent),
 			Size:      int64(len(attestationContent)),
@@ -293,7 +292,7 @@ func getAttestationLayers(t attestationType) []v1.Descriptor {
 				"test_content":              attestationContent,
 			},
 		})
-		layers = append(layers, v1.Descriptor{
+		layers = append(layers, ocispecs.Descriptor{
 			MediaType: inTotoGenericMime,
 			Digest:    digest.FromString(provenanceContent),
 			Size:      int64(len(provenanceContent)),
@@ -307,7 +306,7 @@ func getAttestationLayers(t attestationType) []v1.Descriptor {
 	if t == dsseEmbeded || t == plainSpdxAndDSSEEmbed {
 		dsseAttestation := fmt.Sprintf("{\"payload\":\"%s\"}", base64.StdEncoding.EncodeToString([]byte(attestationContent)))
 		dsseProvenance := fmt.Sprintf("{\"payload\":\"%s\"}", base64.StdEncoding.EncodeToString([]byte(provenanceContent)))
-		layers = append(layers, v1.Descriptor{
+		layers = append(layers, ocispecs.Descriptor{
 			MediaType: inTotoSPDXDSSEMime,
 			Digest:    digest.FromString(dsseAttestation),
 			Size:      int64(len(dsseAttestation)),
@@ -316,7 +315,7 @@ func getAttestationLayers(t attestationType) []v1.Descriptor {
 				"test_content":              dsseAttestation,
 			},
 		})
-		layers = append(layers, v1.Descriptor{
+		layers = append(layers, ocispecs.Descriptor{
 			MediaType: inTotoProvenanceDSSEMime,
 			Digest:    digest.FromString(dsseProvenance),
 			Size:      int64(len(dsseProvenance)),

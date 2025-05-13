@@ -1,17 +1,16 @@
+version: "2"
+
 run:
-  timeout: 30m
   modules-download-mode: vendor
 
 linters:
+  default: none
   enable:
     - bodyclose
     - depguard
     - forbidigo
     - gocritic
-    - gofmt
-    - goimports
     - gosec
-    - gosimple
     - govet
     - ineffassign
     - makezero
@@ -21,99 +20,101 @@ linters:
     - revive
     - staticcheck
     - testifylint
-    - typecheck
     - unused
     - whitespace
-  disable-all: true
-
-linters-settings:
-  gocritic:
-    disabled-checks:
-      - "ifElseChain"
-      - "assignOp"
-      - "appendAssign"
-      - "singleCaseSwitch"
-      - "exitAfterDefer" # FIXME
-  importas:
-    alias:
-      # Enforce alias to prevent it accidentally being used instead of
-      # buildkit errdefs package (or vice-versa).
-      - pkg: "github.com/containerd/errdefs"
-        alias: "cerrdefs"
-      # Use a consistent alias to prevent confusion with "github.com/moby/buildkit/client"
-      - pkg: "github.com/docker/docker/client"
-        alias: "dockerclient"
-      - pkg: "github.com/opencontainers/image-spec/specs-go/v1"
-        alias: "ocispecs"
-      - pkg: "github.com/opencontainers/go-digest"
-        alias: "digest"
-  govet:
-    enable:
-      - nilness
-      - unusedwrite
-  # enable-all: true
-  # disable:
-  #   - fieldalignment
-  #   - shadow
-  depguard:
+  settings:
+    depguard:
+      rules:
+        main:
+          deny:
+            - pkg: "github.com/containerd/containerd/errdefs"
+              desc: The containerd errdefs package was migrated to a separate module. Use github.com/containerd/errdefs instead.
+            - pkg: "github.com/containerd/containerd/log"
+              desc: The containerd log package was migrated to a separate module. Use github.com/containerd/log instead.
+            - pkg: "github.com/containerd/containerd/platforms"
+              desc: The containerd platforms package was migrated to a separate module. Use github.com/containerd/platforms instead.
+            - pkg: "io/ioutil"
+              desc: The io/ioutil package has been deprecated.
+    forbidigo:
+      forbid:
+        - pattern: ^context\.WithCancel(# use context\.WithCancelCause instead)?$
+        - pattern: ^context\.WithDeadline(# use context\.WithDeadline instead)?$
+        - pattern: ^context\.WithTimeout(# use context\.WithTimeoutCause instead)?$
+        - pattern: ^ctx\.Err(# use context\.Cause instead)?$
+        - pattern: ^fmt\.Errorf(# use errors\.Errorf instead)?$
+        - pattern: ^platforms\.DefaultString(# use platforms\.Format(platforms\.DefaultSpec()) instead\.)?$
+    gocritic:
+      disabled-checks:
+        - "ifElseChain"
+        - "assignOp"
+        - "appendAssign"
+        - "singleCaseSwitch"
+        - "exitAfterDefer" # FIXME
+    gosec:
+      excludes:
+        - G204
+        - G402
+        - G115
+      config:
+        G306: "0644"
+    govet:
+      enable:
+        - nilness
+        - unusedwrite
+    importas:
+      alias:
+        - pkg: "github.com/containerd/errdefs"
+          alias: "cerrdefs"
+        - pkg: "github.com/docker/docker/client"
+          alias: "dockerclient"
+        - pkg: "github.com/opencontainers/image-spec/specs-go/v1"
+          alias: "ocispecs"
+        - pkg: "github.com/opencontainers/go-digest"
+          alias: "digest"
+    testifylint:
+      disable:
+        - empty
+        - bool-compare
+        - len
+        - negative-positive
+  exclusions:
+    generated: lax
+    presets:
+      - comments
+      - common-false-positives
+      - legacy
+      - std-error-handling
     rules:
-      main:
-        deny:
-          - pkg: "github.com/containerd/containerd/errdefs"
-            desc: The containerd errdefs package was migrated to a separate module. Use github.com/containerd/errdefs instead.
-          - pkg: "github.com/containerd/containerd/log"
-            desc: The containerd log package was migrated to a separate module. Use github.com/containerd/log instead.
-          - pkg: "github.com/containerd/containerd/platforms"
-            desc: The containerd platforms package was migrated to a separate module. Use github.com/containerd/platforms instead.
-          - pkg: "io/ioutil"
-            desc: The io/ioutil package has been deprecated.
-  forbidigo:
-    forbid:
-      - '^context\.WithCancel(# use context\.WithCancelCause instead)?$'
-      - '^context\.WithDeadline(# use context\.WithDeadline instead)?$'
-      - '^context\.WithTimeout(# use context\.WithTimeoutCause instead)?$'
-      - '^ctx\.Err(# use context\.Cause instead)?$'
-      - '^fmt\.Errorf(# use errors\.Errorf instead)?$'
-      - '^platforms\.DefaultString(# use platforms\.Format(platforms\.DefaultSpec()) instead\.)?$'
-  gosec:
-    excludes:
-      - G204  # Audit use of command execution
-      - G402  # TLS MinVersion too low
-      - G115  # integer overflow conversion (TODO: verify these)
-    config:
-      G306: "0644"
-  testifylint:
-    disable:
-      # disable rules that reduce the test condition
-      - "empty"
-      - "bool-compare"
-      - "len"
-      - "negative-positive"
+      - linters:
+          - revive
+        text: stutters
+      - linters:
+          - revive
+        text: empty-block
+      - linters:
+          - revive
+        text: superfluous-else
+      - linters:
+          - revive
+        text: unused-parameter
+      - linters:
+          - revive
+        text: redefines-builtin-id
+      - linters:
+          - revive
+        text: if-return
+    paths:
+      - .*\.pb\.go$
 
+formatters:
+  enable:
+    - gofmt
+    - goimports
+  exclusions:
+    generated: lax
+    paths:
+      - .*\.pb\.go$
 
 issues:
-  exclude-files:
-    - ".*\\.pb\\.go$"
-  exclude-rules:
-    - linters:
-        - revive
-      text: "stutters"
-    - linters:
-        - revive
-      text: "empty-block"
-    - linters:
-        - revive
-      text: "superfluous-else"
-    - linters:
-        - revive
-      text: "unused-parameter"
-    - linters:
-        - revive
-      text: "redefines-builtin-id"
-    - linters:
-        - revive
-      text: "if-return"
-
-  # show all
   max-issues-per-linter: 0
   max-same-issues: 0

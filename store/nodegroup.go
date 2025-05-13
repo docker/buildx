@@ -9,7 +9,7 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -28,7 +28,7 @@ type NodeGroup struct {
 type Node struct {
 	Name           string
 	Endpoint       string
-	Platforms      []specs.Platform
+	Platforms      []ocispecs.Platform
 	DriverOpts     map[string]string
 	BuildkitdFlags []string `json:"Flags"` // keep the field name for backward compatibility
 
@@ -141,7 +141,7 @@ func (ng *NodeGroup) Copy() *NodeGroup {
 }
 
 func (n *Node) Copy() *Node {
-	platforms := []specs.Platform{}
+	platforms := []ocispecs.Platform{}
 	copy(platforms, n.Platforms)
 	buildkitdFlags := []string{}
 	copy(buildkitdFlags, n.BuildkitdFlags)
@@ -210,8 +210,8 @@ func (ng *NodeGroup) nextNodeName() string {
 	}
 }
 
-func filterPlatforms(in []specs.Platform, m map[string]struct{}) []specs.Platform {
-	out := make([]specs.Platform, 0, len(in))
+func filterPlatforms(in []ocispecs.Platform, m map[string]struct{}) []ocispecs.Platform {
+	out := make([]ocispecs.Platform, 0, len(in))
 	for _, p := range in {
 		if _, ok := m[platforms.Format(p)]; !ok {
 			out = append(out, p)

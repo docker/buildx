@@ -14,7 +14,7 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/util/flightcontrol"
 	"github.com/moby/buildkit/util/tracing"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel/trace"
 	"golang.org/x/sync/errgroup"
@@ -23,7 +23,7 @@ import (
 type resolvedNode struct {
 	resolver    *nodeResolver
 	driverIndex int
-	platforms   []specs.Platform
+	platforms   []ocispecs.Platform
 }
 
 func (dp resolvedNode) Node() builder.Node {
@@ -46,7 +46,7 @@ func (dp resolvedNode) BuildOpts(ctx context.Context) (gateway.BuildOpts, error)
 	return opts[0], nil
 }
 
-type matchMaker func(specs.Platform) platforms.MatchComparer
+type matchMaker func(ocispecs.Platform) platforms.MatchComparer
 
 type cachedGroup[T any] struct {
 	g       flightcontrol.Group[T]
@@ -112,7 +112,7 @@ func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw p
 			return nil, err
 		}
 		eg, egCtx := errgroup.WithContext(ctx)
-		workers := make([][]specs.Platform, len(clients))
+		workers := make([][]ocispecs.Platform, len(clients))
 		for i, c := range clients {
 			i, c := i, c
 			if c == nil {
@@ -124,7 +124,7 @@ func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw p
 					return errors.Wrap(err, "listing workers")
 				}
 
-				ps := make(map[string]specs.Platform, len(ww))
+				ps := make(map[string]ocispecs.Platform, len(ww))
 				for _, w := range ww {
 					for _, p := range w.Platforms {
 						pk := platforms.Format(platforms.Normalize(p))
@@ -145,7 +145,7 @@ func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw p
 		// (this time we don't care about imperfect matches)
 		nodes = map[string][]*resolvedNode{}
 		for k, opt := range opt {
-			node, _, err := r.resolve(ctx, opt.Platforms, pw, platforms.Only, func(idx int, n builder.Node) []specs.Platform {
+			node, _, err := r.resolve(ctx, opt.Platforms, pw, platforms.Only, func(idx int, n builder.Node) []ocispecs.Platform {
 				return workers[idx]
 			})
 			if err != nil {
@@ -173,7 +173,7 @@ func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw p
 	return nodes, nil
 }
 
-func (r *nodeResolver) resolve(ctx context.Context, ps []specs.Platform, pw progress.Writer, matcher matchMaker, additional func(idx int, n builder.Node) []specs.Platform) ([]*resolvedNode, bool, error) {
+func (r *nodeResolver) resolve(ctx context.Context, ps []ocispecs.Platform, pw progress.Writer, matcher matchMaker, additional func(idx int, n builder.Node) []ocispecs.Platform) ([]*resolvedNode, bool, error) {
 	if len(r.nodes) == 0 {
 		return nil, true, nil
 	}
@@ -203,7 +203,7 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []specs.Platform, pw prog
 				driverIndex: idx,
 			}
 			if len(ps) > 0 {
-				node.platforms = []specs.Platform{ps[i]}
+				node.platforms = []ocispecs.Platform{ps[i]}
 			}
 			nodes = append(nodes, node)
 		}
@@ -216,9 +216,9 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []specs.Platform, pw prog
 	return nodes, perfect, nil
 }
 
-func (r *nodeResolver) get(p specs.Platform, matcher matchMaker, additionalPlatforms func(int, builder.Node) []specs.Platform) int {
+func (r *nodeResolver) get(p ocispecs.Platform, matcher matchMaker, additionalPlatforms func(int, builder.Node) []ocispecs.Platform) int {
 	best := -1
-	bestPlatform := specs.Platform{}
+	bestPlatform := ocispecs.Platform{}
 	for i, node := range r.nodes {
 		platforms := node.Platforms
 		if additionalPlatforms != nil {

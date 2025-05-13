@@ -9,7 +9,7 @@ import (
 	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/delegated"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -35,7 +35,7 @@ type InitConfig struct {
 	Files           map[string][]byte
 	DriverOpts      map[string]string
 	Auth            Auth
-	Platforms       []specs.Platform
+	Platforms       []ocispecs.Platform
 	ContextPathHash string
 	DialMeta        map[string][]string
 }
