@@ -213,7 +213,17 @@ type lsContext struct {
 }
 
 func (c *lsContext) MarshalJSON() ([]byte, error) {
-	return json.Marshal(c.Builder)
+	// can't marshal c.Builder directly because Builder type has custom MarshalJSON
+	dt, err := json.Marshal(c.Builder.Builder)
+	if err != nil {
+		return nil, err
+	}
+	var m map[string]any
+	if err := json.Unmarshal(dt, &m); err != nil {
+		return nil, err
+	}
+	m["Current"] = c.Builder.Current
+	return json.Marshal(m)
 }
 
 func (c *lsContext) Name() string {
