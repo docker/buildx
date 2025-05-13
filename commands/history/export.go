@@ -20,10 +20,11 @@ import (
 )
 
 type exportOptions struct {
-	builder string
-	refs    []string
-	output  string
-	all     bool
+	builder  string
+	refs     []string
+	output   string
+	all      bool
+	finalize bool
 }
 
 func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) error {
@@ -60,6 +61,26 @@ func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) e
 				return errors.New("no records found")
 			}
 			return errors.Errorf("no record found for ref %q", ref)
+		}
+
+		if opts.finalize {
+			var finalized bool
+			for _, rec := range recs {
+				if rec.Trace == nil {
+					finalized = true
+					if err := finalizeRecord(ctx, rec.Ref, nodes); err != nil {
+						return err
+					}
+				}
+			}
+			if finalized {
+				recs, err = queryRecords(ctx, ref, nodes, &queryOptions{
+					CompletedOnly: true,
+				})
+				if err != nil {
+					return err
+				}
+			}
 		}
 
 		if ref == "" {
@@ -154,7 +175,8 @@ func exportCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVarP(&options.output, "output", "o", "", "Output file path")
-	flags.BoolVar(&options.all, "all", false, "Export all records for the builder")
+	flags.BoolVar(&options.all, "all", false, "Export all build records for the builder")
+	flags.BoolVar(&options.finalize, "finalize", false, "Ensure build records are finalized before exporting")
 
 	return cmd
 }
