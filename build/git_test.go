@@ -109,7 +109,6 @@ func TestGetGitAttributes(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			setupTest(t)
 			if tt.envGitLabels != "" {

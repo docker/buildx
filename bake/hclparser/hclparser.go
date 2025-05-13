@@ -781,7 +781,6 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 	}
 
 	for _, a := range content.Attributes {
-		a := a
 		return nil, hcl.Diagnostics{
 			&hcl.Diagnostic{
 				Severity: hcl.DiagError,
@@ -834,7 +833,6 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 				context = subject
 			} else {
 				for _, block := range blocks.Blocks {
-					block := block
 					if block.Type == "function" && len(block.Labels) == 1 && block.Labels[0] == k {
 						subject = block.LabelRanges[0].Ptr()
 						context = block.DefRange.Ptr()
@@ -903,7 +901,6 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 
 	diags = hcl.Diagnostics{}
 	for _, b := range content.Blocks {
-		b := b
 		v := reflect.ValueOf(val)
 
 		err := p.resolveBlock(b, nil)

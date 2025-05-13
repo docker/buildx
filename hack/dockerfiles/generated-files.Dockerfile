@@ -5,7 +5,7 @@
 # Copyright The Buildx Authors.
 # Licensed under the Apache License, Version 2.0
 
-ARG GO_VERSION=1.23
+ARG GO_VERSION=1.24
 ARG PROTOC_VERSION=3.11.4
 ARG PROTOC_GOOGLEAPIS_VERSION=2af421884dd468d565137215c946ebe4e245ae26
 

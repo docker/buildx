@@ -70,9 +70,8 @@ func ResolveOptionPaths(options *Options) (_ *Options, err error) {
 	for k, v := range options.NamedContexts {
 		if isRemoteURL(v) || strings.HasPrefix(v, "docker-image://") {
 			// url prefix, this is a remote path
-		} else if strings.HasPrefix(v, "oci-layout://") {
+		} else if p, ok := strings.CutPrefix(v, "oci-layout://"); ok {
 			// oci layout prefix, this is a local path
-			p := strings.TrimPrefix(v, "oci-layout://")
 			p, err = filepath.Abs(p)
 			if err != nil {
 				return nil, err

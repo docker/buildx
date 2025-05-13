@@ -483,8 +483,7 @@ func (c Config) expandTargets(pattern string) ([]string, error) {
 func (c Config) loadLinks(name string, t *Target, m map[string]*Target, o map[string]map[string]Override, visited []string, ent *EntitlementConf) error {
 	visited = append(visited, name)
 	for _, v := range t.Contexts {
-		if strings.HasPrefix(v, "target:") {
-			target := strings.TrimPrefix(v, "target:")
+		if target, ok := strings.CutPrefix(v, "target:"); ok {
 			if target == name {
 				return errors.Errorf("target %s cannot link to itself", target)
 			}
@@ -1275,8 +1274,8 @@ func collectLocalPaths(t build.Inputs) []string {
 		if v, ok := isLocalPath(t.DockerfilePath); ok {
 			out = append(out, v)
 		}
-	} else if strings.HasPrefix(t.ContextPath, "cwd://") {
-		out = append(out, strings.TrimPrefix(t.ContextPath, "cwd://"))
+	} else if v, ok := strings.CutPrefix(t.ContextPath, "cwd://"); ok {
+		out = append(out, v)
 	}
 	for _, v := range t.NamedContexts {
 		if v.State != nil {
@@ -1328,11 +1327,11 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		bi.DockerfileInline = *t.DockerfileInline
 	}
 	updateContext(&bi, inp)
-	if strings.HasPrefix(bi.DockerfilePath, "cwd://") {
+	if v, ok := strings.CutPrefix(bi.DockerfilePath, "cwd://"); ok {
 		// If Dockerfile is local for a remote invocation, we first check if
 		// it's not outside the working directory and then resolve it to an
 		// absolute path.
-		bi.DockerfilePath = path.Clean(strings.TrimPrefix(bi.DockerfilePath, "cwd://"))
+		bi.DockerfilePath = path.Clean(v)
 		var err error
 		bi.DockerfilePath, err = filepath.Abs(bi.DockerfilePath)
 		if err != nil {
@@ -1357,15 +1356,15 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 			return nil, errors.Errorf("reading a dockerfile for a remote build invocation is currently not supported")
 		}
 	}
-	if strings.HasPrefix(bi.ContextPath, "cwd://") {
-		bi.ContextPath = path.Clean(strings.TrimPrefix(bi.ContextPath, "cwd://"))
+	if v, ok := strings.CutPrefix(bi.ContextPath, "cwd://"); ok {
+		bi.ContextPath = path.Clean(v)
 	}
 	if !build.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && !filepath.IsAbs(bi.DockerfilePath) {
 		bi.DockerfilePath = filepath.Join(bi.ContextPath, bi.DockerfilePath)
 	}
 	for k, v := range bi.NamedContexts {
-		if strings.HasPrefix(v.Path, "cwd://") {
-			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(strings.TrimPrefix(v.Path, "cwd://"))}
+		if v, ok := strings.CutPrefix(v.Path, "cwd://"); ok {
+			bi.NamedContexts[k] = build.NamedContext{Path: path.Clean(v)}
 		}
 	}
 

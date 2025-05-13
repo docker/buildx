@@ -559,8 +559,7 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 	var rnames []string // remote
 	var anames []string // both
 	for _, v := range names {
-		if strings.HasPrefix(v, "cwd://") {
-			tname := strings.TrimPrefix(v, "cwd://")
+		if tname, ok := strings.CutPrefix(v, "cwd://"); ok {
 			lnames = append(lnames, tname)
 			anames = append(anames, tname)
 		} else {

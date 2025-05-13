@@ -164,7 +164,6 @@ func TestTruncPlatforms(t *testing.T) {
 		},
 	}
 	for _, tt := range tests {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			tpfs := truncPlatforms(tt.platforms, tt.max)
 			assert.Equal(t, tt.expectedList, tpfs.List())

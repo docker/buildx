@@ -503,8 +503,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		}
 
 		// handle OCI layout
-		if strings.HasPrefix(v.Path, "oci-layout://") {
-			localPath := strings.TrimPrefix(v.Path, "oci-layout://")
+		if localPath, ok := strings.CutPrefix(v.Path, "oci-layout://"); ok {
 			localPath, dig, hasDigest := strings.Cut(localPath, "@")
 			localPath, tag, hasTag := strings.Cut(localPath, ":")
 			if !hasTag {

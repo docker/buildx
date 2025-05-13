@@ -130,7 +130,6 @@ func TestToBuildkitExtraHosts(t *testing.T) {
 	}
 
 	for _, tc := range tests {
-		tc := tc
 		if tc.expectedOut == "" {
 			tc.expectedOut = strings.Join(tc.input, ",")
 		}

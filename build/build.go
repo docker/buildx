@@ -383,7 +383,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						wg.Add(1)
 						sharedSessionsWG[node.Name] = wg
 						for _, s := range sessions {
-							s := s
 							eg.Go(func() error {
 								return s.Run(baseCtx, c.Dialer())
 							})

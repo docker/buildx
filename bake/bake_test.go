@@ -1381,7 +1381,6 @@ target "d" {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			m, g, err := ReadTargets(ctx, []File{f}, []string{"d"}, tt.overrides, nil, &EntitlementConf{})
 			require.NoError(t, err)
@@ -1454,7 +1453,6 @@ group "default" {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.name, func(t *testing.T) {
 			m, g, err := ReadTargets(ctx, []File{f}, []string{"default"}, tt.overrides, nil, &EntitlementConf{})
 			require.NoError(t, err)
@@ -1509,7 +1507,6 @@ func TestTargetName(t *testing.T) {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(tt.target, func(t *testing.T) {
 			_, _, err := ReadTargets(ctx, []File{{
 				Name: "docker-bake.hcl",
@@ -1600,7 +1597,6 @@ target "f" {
 		},
 	}
 	for _, tt := range cases {
-		tt := tt
 		t.Run(strings.Join(tt.names, "+"), func(t *testing.T) {
 			m, g, err := ReadTargets(ctx, []File{f}, tt.names, nil, nil, &EntitlementConf{})
 			require.NoError(t, err)
