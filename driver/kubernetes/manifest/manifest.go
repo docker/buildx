@@ -13,7 +13,7 @@ import (
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 )
 
-type DeploymentOpt struct {
+type StatefulSetOpt struct {
 	Namespace          string
 	Name               string
 	Image              string
@@ -32,25 +32,32 @@ type DeploymentOpt struct {
 	// files mounted at /etc/buildkitd
 	ConfigFiles map[string][]byte
 
-	Rootless                 bool
-	NodeSelector             map[string]string
-	CustomAnnotations        map[string]string
-	CustomLabels             map[string]string
-	Tolerations              []corev1.Toleration
-	RequestsCPU              string
-	RequestsMemory           string
-	RequestsEphemeralStorage string
-	LimitsCPU                string
-	LimitsMemory             string
-	LimitsEphemeralStorage   string
-	Platforms                []v1.Platform
+	Rootless                  bool
+	NodeSelector              map[string]string
+	CustomAnnotations         map[string]string
+	CustomLabels              map[string]string
+	Tolerations               []corev1.Toleration
+	RequestsCPU               string
+	RequestsMemory            string
+	RequestsPersistentStorage resource.Quantity
+	LimitsCPU                 string
+	LimitsMemory              string
+	LimitsPersistentStorage   string
+	Platforms                 []v1.Platform
 }
 
 const (
-	containerName      = "buildkitd"
-	AnnotationPlatform = "buildx.docker.com/platform"
-	LabelApp           = "app"
+	containerName            = "buildkitd"
+	AnnotationPlatform       = "buildx.docker.com/platform"
+	LabelApp                 = "app"
+	ProbeFailureThreshold    = 3
+	ProbeInitialDelaySeconds = 5
+	ProbePeriodSeconds       = 30
+	ProbeSuccessThreshold    = 1
+	ProbeTimeoutSeconds      = 60
 )
+
+var ProbeHandlerCommand = []string{"buildctl", "debug", "workers"}
 
 type ErrReservedAnnotationPlatform struct{}
 
@@ -64,7 +71,7 @@ func (ErrReservedLabelApp) Error() string {
 	return fmt.Sprintf("the label %q is reserved and cannot be customized", LabelApp)
 }
 
-func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.ConfigMap, err error) {
+func NewStatefulSet(opt *StatefulSetOpt) (s *appsv1.StatefulSet, c []*corev1.ConfigMap, err error) {
 	labels := map[string]string{
 		LabelApp: opt.Name,
 	}
@@ -91,10 +98,11 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 		labels[k] = v
 	}
 
-	d = &appsv1.Deployment{
+	const persistentVolumeClaimName = "buildkitd"
+	s = &appsv1.StatefulSet{
 		TypeMeta: metav1.TypeMeta{
 			APIVersion: appsv1.SchemeGroupVersion.String(),
-			Kind:       "Deployment",
+			Kind:       "StatefulSet",
 		},
 		ObjectMeta: metav1.ObjectMeta{
 			Namespace:   opt.Namespace,
@@ -102,8 +110,10 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
+		Spec: appsv1.StatefulSetSpec{
+			ServiceName:         "buildkitd",
+			PodManagementPolicy: appsv1.ParallelPodManagement,
+			Replicas:            &replicas,
 			Selector: &metav1.LabelSelector{
 				MatchLabels: labels,
 			},
@@ -126,13 +136,54 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 							ReadinessProbe: &corev1.Probe{
 								ProbeHandler: corev1.ProbeHandler{
 									Exec: &corev1.ExecAction{
-										Command: []string{"buildctl", "debug", "workers"},
+										Command: ProbeHandlerCommand,
 									},
 								},
+								FailureThreshold:    ProbeFailureThreshold,
+								InitialDelaySeconds: ProbeInitialDelaySeconds,
+								PeriodSeconds:       ProbePeriodSeconds,
+								SuccessThreshold:    ProbeSuccessThreshold,
+								TimeoutSeconds:      ProbeTimeoutSeconds,
+							},
+							LivenessProbe: &corev1.Probe{
+								ProbeHandler: corev1.ProbeHandler{
+									Exec: &corev1.ExecAction{
+										Command: ProbeHandlerCommand,
+									},
+								},
+								FailureThreshold:    ProbeFailureThreshold,
+								InitialDelaySeconds: ProbeInitialDelaySeconds,
+								PeriodSeconds:       ProbePeriodSeconds,
+								SuccessThreshold:    ProbeSuccessThreshold,
+								TimeoutSeconds:      ProbeTimeoutSeconds,
 							},
 							Resources: corev1.ResourceRequirements{
 								Requests: corev1.ResourceList{},
 								Limits:   corev1.ResourceList{},
+							},
+							VolumeMounts: []corev1.VolumeMount{
+								{
+									Name:      persistentVolumeClaimName,
+									ReadOnly:  false,
+									MountPath: "/var/lib/buildkit",
+								},
+							},
+						},
+					},
+				},
+			},
+			VolumeClaimTemplates: []corev1.PersistentVolumeClaim{
+				{
+					ObjectMeta: metav1.ObjectMeta{
+						Name: persistentVolumeClaimName,
+					},
+					Spec: corev1.PersistentVolumeClaimSpec{
+						AccessModes: []corev1.PersistentVolumeAccessMode{
+							corev1.ReadWriteOnce,
+						},
+						Resources: corev1.VolumeResourceRequirements{
+							Requests: corev1.ResourceList{
+								corev1.ResourceStorage: opt.RequestsPersistentStorage,
 							},
 						},
 					},
@@ -154,12 +205,12 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 			Data: cfg.files,
 		}
 
-		d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+		s.Spec.Template.Spec.Containers[0].VolumeMounts = append(s.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 			Name:      cfg.name,
 			MountPath: path.Join("/etc/buildkit", cfg.path),
 		})
 
-		d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, corev1.Volume{
+		s.Spec.Template.Spec.Volumes = append(s.Spec.Template.Spec.Volumes, corev1.Volume{
 			Name: cfg.name,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -173,7 +224,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 	}
 
 	if opt.Qemu.Install {
-		d.Spec.Template.Spec.InitContainers = []corev1.Container{
+		s.Spec.Template.Spec.InitContainers = []corev1.Container{
 			{
 				Name:  "qemu",
 				Image: opt.Qemu.Image,
@@ -186,17 +237,17 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 	}
 
 	if opt.Rootless {
-		if err := toRootless(d); err != nil {
+		if err := toRootless(s); err != nil {
 			return nil, nil, err
 		}
 	}
 
 	if len(opt.NodeSelector) > 0 {
-		d.Spec.Template.Spec.NodeSelector = opt.NodeSelector
+		s.Spec.Template.Spec.NodeSelector = opt.NodeSelector
 	}
 
 	if len(opt.Tolerations) > 0 {
-		d.Spec.Template.Spec.Tolerations = opt.Tolerations
+		s.Spec.Template.Spec.Tolerations = opt.Tolerations
 	}
 
 	if opt.RequestsCPU != "" {
@@ -204,7 +255,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 		if err != nil {
 			return nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = reqCPU
+		s.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = reqCPU
 	}
 
 	if opt.RequestsMemory != "" {
@@ -212,15 +263,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 		if err != nil {
 			return nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = reqMemory
-	}
-
-	if opt.RequestsEphemeralStorage != "" {
-		reqEphemeralStorage, err := resource.ParseQuantity(opt.RequestsEphemeralStorage)
-		if err != nil {
-			return nil, nil, err
-		}
-		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceEphemeralStorage] = reqEphemeralStorage
+		s.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = reqMemory
 	}
 
 	if opt.LimitsCPU != "" {
@@ -228,7 +271,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 		if err != nil {
 			return nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = limCPU
+		s.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = limCPU
 	}
 
 	if opt.LimitsMemory != "" {
@@ -236,52 +279,43 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 		if err != nil {
 			return nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = limMemory
+		s.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = limMemory
 	}
 
-	if opt.LimitsEphemeralStorage != "" {
-		limEphemeralStorage, err := resource.ParseQuantity(opt.LimitsEphemeralStorage)
+	if opt.LimitsPersistentStorage != "" {
+		limPersistentStorage, err := resource.ParseQuantity(opt.LimitsPersistentStorage)
 		if err != nil {
 			return nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceEphemeralStorage] = limEphemeralStorage
+		s.Spec.VolumeClaimTemplates[0].Spec.Resources.Limits = corev1.ResourceList{
+			corev1.ResourceStorage: limPersistentStorage,
+		}
 	}
 
 	return
 }
 
-func toRootless(d *appsv1.Deployment) error {
-	d.Spec.Template.Spec.Containers[0].Args = append(
-		d.Spec.Template.Spec.Containers[0].Args,
+func toRootless(s *appsv1.StatefulSet) error {
+	s.Spec.Template.Spec.Containers[0].Args = append(
+		s.Spec.Template.Spec.Containers[0].Args,
 		"--oci-worker-no-process-sandbox",
 	)
-	d.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+	s.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
 		SeccompProfile: &corev1.SeccompProfile{
 			Type: corev1.SeccompProfileTypeUnconfined,
 		},
 	}
-	if d.Spec.Template.ObjectMeta.Annotations == nil {
-		d.Spec.Template.ObjectMeta.Annotations = make(map[string]string, 1)
+	if s.Spec.Template.ObjectMeta.Annotations == nil {
+		s.Spec.Template.ObjectMeta.Annotations = make(map[string]string, 1)
 	}
-	d.Spec.Template.ObjectMeta.Annotations["container.apparmor.security.beta.kubernetes.io/"+containerName] = "unconfined"
+	s.Spec.Template.ObjectMeta.Annotations["container.apparmor.security.beta.kubernetes.io/"+containerName] = "unconfined"
 
 	// Dockerfile has `VOLUME /home/user/.local/share/buildkit` by default too,
 	// but the default VOLUME does not work with rootless on Google's Container-Optimized OS
 	// as it is mounted with `nosuid,nodev`.
 	// https://github.com/moby/buildkit/issues/879#issuecomment-1240347038
 	// https://github.com/moby/buildkit/pull/3097
-	const emptyDirVolName = "buildkitd"
-	d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
-		Name:      emptyDirVolName,
-		MountPath: "/home/user/.local/share/buildkit",
-	})
-	d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, corev1.Volume{
-		Name: emptyDirVolName,
-		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
-		},
-	})
-
+	s.Spec.Template.Spec.Containers[0].VolumeMounts[0].MountPath = "/home/user/.local/share/buildkit"
 	return nil
 }
 
