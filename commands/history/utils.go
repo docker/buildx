@@ -250,7 +250,6 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 func finalizeRecord(ctx context.Context, ref string, nodes []builder.Node) error {
 	eg, ctx := errgroup.WithContext(ctx)
 	for _, node := range nodes {
-		node := node
 		eg.Go(func() error {
 			if node.Driver == nil {
 				return nil
