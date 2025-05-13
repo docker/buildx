@@ -114,7 +114,7 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 			Manifests     []ocispecs.Descriptor `json:"manifests"`
 			Annotations   map[string]string     `json:"annotations,omitempty"`
 		}{
-			SchemaVersion: p.index.Versioned.SchemaVersion,
+			SchemaVersion: p.index.SchemaVersion,
 			MediaType:     p.index.MediaType,
 			Digest:        p.manifest.Digest,
 			Size:          p.manifest.Size,

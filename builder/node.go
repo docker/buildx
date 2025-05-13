@@ -183,7 +183,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 			// not append (remove the static nodes in the store)
 			b.NodeGroup.Nodes = dynamicNodes
 			b.nodes = nodes
-			b.NodeGroup.Dynamic = true
+			b.Dynamic = true
 		}
 	}
 

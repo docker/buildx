@@ -936,7 +936,7 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 				}
 			}
 			if exists {
-				if m := oldValue.Value.MethodByName("Merge"); m.IsValid() {
+				if m := oldValue.MethodByName("Merge"); m.IsValid() {
 					m.Call([]reflect.Value{vv})
 				} else {
 					v.Elem().Field(t.idx).Index(oldValue.idx).Set(vv)

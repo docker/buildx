@@ -63,7 +63,7 @@ func runLogs(ctx context.Context, dockerCli command.Cli, opts logsOptions) error
 		return err
 	}
 
-	var mode progressui.DisplayMode = progressui.DisplayMode(opts.progress)
+	mode := progressui.DisplayMode(opts.progress)
 	if mode == progressui.AutoMode {
 		mode = progressui.PlainMode
 	}

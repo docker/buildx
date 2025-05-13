@@ -38,6 +38,9 @@ target "lint" {
   inherits = ["_common"]
   dockerfile = "./hack/dockerfiles/lint.Dockerfile"
   output = ["type=cacheonly"]
+  args = {
+    GOLANGCI_FROM_SOURCE = "true"
+  }
   platforms = GOLANGCI_LINT_MULTIPLATFORM != "" ? [
     "darwin/amd64",
     "darwin/arm64",

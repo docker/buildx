@@ -16,7 +16,7 @@ import (
 	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/tracing"
-	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 )
 
@@ -59,7 +59,7 @@ func (r *Resolver) resolver() remotes.Resolver {
 	})
 }
 
-func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispec.Descriptor, error) {
+func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispecs.Descriptor, error) {
 	// discard containerd logger to avoid printing unnecessary info during image reference resolution.
 	// https://github.com/containerd/containerd/blob/1a88cf5242445657258e0c744def5017d7cfb492/remotes/docker/resolver.go#L288
 	logger := logrus.New()
@@ -68,31 +68,31 @@ func (r *Resolver) Resolve(ctx context.Context, in string) (string, ocispec.Desc
 
 	ref, err := parseRef(in)
 	if err != nil {
-		return "", ocispec.Descriptor{}, err
+		return "", ocispecs.Descriptor{}, err
 	}
 
 	in, desc, err := r.resolver().Resolve(ctx, ref.String())
 	if err != nil {
-		return "", ocispec.Descriptor{}, err
+		return "", ocispecs.Descriptor{}, err
 	}
 
 	return in, desc, nil
 }
 
-func (r *Resolver) Get(ctx context.Context, in string) ([]byte, ocispec.Descriptor, error) {
+func (r *Resolver) Get(ctx context.Context, in string) ([]byte, ocispecs.Descriptor, error) {
 	in, desc, err := r.Resolve(ctx, in)
 	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return nil, ocispecs.Descriptor{}, err
 	}
 
 	dt, err := r.GetDescriptor(ctx, in, desc)
 	if err != nil {
-		return nil, ocispec.Descriptor{}, err
+		return nil, ocispecs.Descriptor{}, err
 	}
 	return dt, desc, nil
 }
 
-func (r *Resolver) GetDescriptor(ctx context.Context, in string, desc ocispec.Descriptor) ([]byte, error) {
+func (r *Resolver) GetDescriptor(ctx context.Context, in string, desc ocispecs.Descriptor) ([]byte, error) {
 	fetcher, err := r.resolver().Fetcher(ctx, in)
 	if err != nil {
 		return nil, err

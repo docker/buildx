@@ -14,7 +14,7 @@ import (
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/solver/result"
-	specs "github.com/opencontainers/image-spec/specs-go/v1"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
@@ -354,9 +354,9 @@ func containerConfigFromResult(res *gateway.Result, cfg *controllerapi.InvokeCon
 
 func populateProcessConfigFromResult(req *gateway.StartRequest, res *gateway.Result, cfg *controllerapi.InvokeConfig) error {
 	imgData := res.Metadata[exptypes.ExporterImageConfigKey]
-	var img *specs.Image
+	var img *ocispecs.Image
 	if len(imgData) > 0 {
-		img = &specs.Image{}
+		img = &ocispecs.Image{}
 		if err := json.Unmarshal(imgData, img); err != nil {
 			return err
 		}
@@ -410,9 +410,9 @@ func containerConfigFromError(solveErr *errdefs.SolveError, cfg *controllerapi.I
 	}
 	var mounts []gateway.Mount
 	for i, mnt := range exec.Mounts {
-		rid := solveErr.Solve.MountIDs[i]
+		rid := solveErr.MountIDs[i]
 		if cfg.Initial {
-			rid = solveErr.Solve.InputIDs[i]
+			rid = solveErr.InputIDs[i]
 		}
 		mounts = append(mounts, gateway.Mount{
 			Selector:  mnt.Selector,
@@ -477,7 +477,7 @@ func execOpFromError(solveErr *errdefs.SolveError) (*pb.ExecOp, error) {
 	if solveErr == nil {
 		return nil, errors.Errorf("no error is available")
 	}
-	switch op := solveErr.Solve.Op.GetOp().(type) {
+	switch op := solveErr.Op.GetOp().(type) {
 	case *pb.Op_Exec:
 		return op.Exec, nil
 	default:

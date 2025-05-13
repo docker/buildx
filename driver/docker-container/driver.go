@@ -138,28 +138,28 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
 		}
 		if d.memory != 0 {
-			hc.Resources.Memory = int64(d.memory)
+			hc.Memory = int64(d.memory)
 		}
 		if d.memorySwap != 0 {
-			hc.Resources.MemorySwap = int64(d.memorySwap)
+			hc.MemorySwap = int64(d.memorySwap)
 		}
 		if d.cpuQuota != 0 {
-			hc.Resources.CPUQuota = d.cpuQuota
+			hc.CPUQuota = d.cpuQuota
 		}
 		if d.cpuPeriod != 0 {
-			hc.Resources.CPUPeriod = d.cpuPeriod
+			hc.CPUPeriod = d.cpuPeriod
 		}
 		if d.cpuShares != 0 {
-			hc.Resources.CPUShares = d.cpuShares
+			hc.CPUShares = d.cpuShares
 		}
 		if d.cpusetCpus != "" {
-			hc.Resources.CpusetCpus = d.cpusetCpus
+			hc.CpusetCpus = d.cpusetCpus
 		}
 		if d.cpusetMems != "" {
-			hc.Resources.CpusetMems = d.cpusetMems
+			hc.CpusetMems = d.cpusetMems
 		}
 		if len(d.gpus) > 0 && d.hasGPUCapability(ctx, cfg.Image, d.gpus) {
-			hc.Resources.DeviceRequests = d.gpus
+			hc.DeviceRequests = d.gpus
 		}
 		if info, err := d.DockerAPI.Info(ctx); err == nil {
 			if info.CgroupDriver == "cgroupfs" {
@@ -187,7 +187,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			return err
 		}
 		if err == nil {
-			if err := d.copyToContainer(ctx, d.InitConfig.Files); err != nil {
+			if err := d.copyToContainer(ctx, d.Files); err != nil {
 				return err
 			}
 			if err := d.start(ctx); err != nil {
