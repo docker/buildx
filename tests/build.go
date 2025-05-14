@@ -518,7 +518,10 @@ func testBuildProgress(t *testing.T, sb integration.Sandbox) {
 
 	// progress=tty
 	cmd := buildxCmd(sb, withArgs("build", "--progress=tty", "--output=type=cacheonly", dir))
-	f, err := pty.Start(cmd)
+	f, err := pty.StartWithSize(cmd, &pty.Winsize{
+		Cols: 120,
+		Rows: 24,
+	})
 	require.NoError(t, err)
 	buf := bytes.NewBuffer(nil)
 	io.Copy(buf, f)
