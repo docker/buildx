@@ -143,9 +143,9 @@ type ServiceConfig struct {
 }
 
 type ServiceProviderConfig struct {
-	Type       string     `yaml:"type,omitempty" json:"driver,omitempty"`
-	Options    Options    `yaml:"options,omitempty" json:"options,omitempty"`
-	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
+	Type       string       `yaml:"type,omitempty" json:"driver,omitempty"`
+	Options    MultiOptions `yaml:"options,omitempty" json:"options,omitempty"`
+	Extensions Extensions   `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 
 // MarshalYAML makes ServiceConfig implement yaml.Marshaller
