@@ -12,6 +12,7 @@ import (
 	"sync/atomic"
 	"time"
 
+	cerrdefs "github.com/containerd/errdefs"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/util/confutil"
@@ -23,7 +24,6 @@ import (
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/docker/api/types/system"
-	"github.com/docker/docker/errdefs"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
@@ -70,7 +70,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
 		_, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 		if err != nil {
-			if errdefs.IsNotFound(err) {
+			if cerrdefs.IsNotFound(err) {
 				return d.create(ctx, sub)
 			}
 			return err
@@ -183,7 +183,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			}
 		}
 		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
-		if err != nil && !errdefs.IsConflict(err) {
+		if err != nil && !cerrdefs.IsConflict(err) {
 			return err
 		}
 		if err == nil {
@@ -310,7 +310,7 @@ func (d *Driver) start(ctx context.Context) error {
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	ctn, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
 	if err != nil {
-		if errdefs.IsNotFound(err) {
+		if cerrdefs.IsNotFound(err) {
 			return &driver.Info{
 				Status: driver.Inactive,
 			}, nil
