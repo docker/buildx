@@ -1229,8 +1229,8 @@ func deriveDeepCopy_12(dst, src []DeviceMapping) {
 func deriveDeepCopy_13(dst, src *ServiceProviderConfig) {
 	dst.Type = src.Type
 	if src.Options != nil {
-		dst.Options = make(map[string]string, len(src.Options))
-		deriveDeepCopy_4(dst.Options, src.Options)
+		dst.Options = make(map[string][]string, len(src.Options))
+		deriveDeepCopy_15(dst.Options, src.Options)
 	} else {
 		dst.Options = nil
 	}
