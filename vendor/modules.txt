@@ -122,7 +122,7 @@ github.com/aws/smithy-go/transport/http/internal/io
 # github.com/cenkalti/backoff/v4 v4.3.0
 ## explicit; go 1.18
 github.com/cenkalti/backoff/v4
-# github.com/compose-spec/compose-go/v2 v2.6.2
+# github.com/compose-spec/compose-go/v2 v2.6.3
 ## explicit; go 1.23
 github.com/compose-spec/compose-go/v2/cli
 github.com/compose-spec/compose-go/v2/consts
