@@ -250,8 +250,8 @@ github.com/docker/cli/internal/tui
 github.com/docker/cli/opts
 github.com/docker/cli/pkg/kvfile
 github.com/docker/cli/templates
-# github.com/docker/cli-docs-tool v0.9.0
-## explicit; go 1.18
+# github.com/docker/cli-docs-tool v0.10.0
+## explicit; go 1.23.0
 github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
 # github.com/docker/distribution v2.8.3+incompatible
