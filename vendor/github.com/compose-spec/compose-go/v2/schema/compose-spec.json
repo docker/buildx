@@ -401,7 +401,17 @@
               "type": "object",
               "description": "Provider-specific options.",
               "patternProperties": {
-                "^.+$": {"type": ["string", "number", "null"]}
+                "^.+$": {"oneOf": [
+                  { "type": ["string", "number", "boolean"] },
+                  { "type": "array", "items": {"type": ["string", "number", "boolean"]}}
+                ]}
+              }
+            },
+            "configs": {
+              "type": "object",
+              "description": "Config files to pass to the provider.",
+              "patternProperties": {
+                "^.+$": {"type": ["string"]}
               }
             }
           },
