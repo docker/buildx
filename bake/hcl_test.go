@@ -423,6 +423,63 @@ func TestHCLNullVariables(t *testing.T) {
 	require.Equal(t, ptrstr("bar"), c.Targets[0].Args["foo"])
 }
 
+func TestHCLTypedNullVariables(t *testing.T) {
+	types := []string{
+		"any",
+		"string", "number", "bool",
+		"list(string)", "set(string)", "map(string)",
+		"tuple([string])", "object({val: string})",
+	}
+	for _, varType := range types {
+		tName := fmt.Sprintf("variable typed %q with null default remains null", varType)
+		t.Run(tName, func(t *testing.T) {
+			dt := fmt.Sprintf(`
+	            variable "FOO" {
+	                type = %s
+	                default = null
+	            }
+	
+	            target "default" {
+	                args = {
+	                    foo = equal(FOO, null)
+	                }
+	            }`, varType)
+			c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+			require.NoError(t, err)
+			require.Equal(t, 1, len(c.Targets))
+			require.Equal(t, "true", *c.Targets[0].Args["foo"])
+		})
+	}
+}
+
+func TestHCLTypedValuelessVariables(t *testing.T) {
+	types := []string{
+		"any",
+		"string", "number", "bool",
+		"list(string)", "set(string)", "map(string)",
+		"tuple([string])", "object({val: string})",
+	}
+	for _, varType := range types {
+		tName := fmt.Sprintf("variable typed %q with no default is null", varType)
+		t.Run(tName, func(t *testing.T) {
+			dt := fmt.Sprintf(`
+                variable "FOO" {
+                    type = %s
+                }
+
+                target "default" {
+                    args = {
+                        foo = equal(FOO, null)
+                    }
+                }`, varType)
+			c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+			require.NoError(t, err)
+			require.Equal(t, 1, len(c.Targets))
+			require.Equal(t, "true", *c.Targets[0].Args["foo"])
+		})
+	}
+}
+
 func TestJSONNullVariables(t *testing.T) {
 	dt := []byte(`{
 		"variable": {
@@ -1878,19 +1935,6 @@ func TestTypedVarOverrides(t *testing.T) {
 			wantValue: `"hello"`,
 		},
 		{
-			name:      "any",
-			varType:   "any",
-			override:  "[1,2]",
-			wantValue: "[1,2]",
-		},
-		{
-			name:         "any never convert to complex types",
-			varType:      "any",
-			override:     "[1,2]",
-			argValue:     "length(FOO)",
-			wantErrorMsg: "collection must be a list",
-		},
-		{
 			name:      "proper CSV list of strings",
 			varType:   "list(string)",
 			override:  "hi,there",
@@ -2089,19 +2133,6 @@ func TestTypedVarOverrides_JSON(t *testing.T) {
 			varType:   "string",
 			override:  `"hello"`,
 			wantValue: "hello",
-		},
-		{
-			name:      "any",
-			varType:   "any",
-			override:  "[1,2]",
-			wantValue: "[1,2]",
-		},
-		{
-			name:         "any never convert to complex types",
-			varType:      "any",
-			override:     "[1,2]",
-			argValue:     "length(FOO)",
-			wantErrorMsg: "collection must be a list",
 		},
 		{
 			name:      "list of strings",
@@ -2313,6 +2344,7 @@ func TestJSONOverridePriority(t *testing.T) {
 		dt := []byte(`
             variable "foo" {
                 type = number
+                default = 101
             }
             
             target "default" {
@@ -2325,8 +2357,7 @@ func TestJSONOverridePriority(t *testing.T) {
 		c, err := ParseFile(dt, "docker-bake.hcl")
 		require.NoError(t, err)
 		require.Equal(t, 1, len(c.Targets))
-		// a variable with no value has always resulted in an empty string
-		require.Equal(t, "", *c.Targets[0].Args["bar"])
+		require.Equal(t, "101", *c.Targets[0].Args["bar"])
 
 		t.Setenv("foo_JSON", "42")
 		c, err = ParseFile(dt, "docker-bake.hcl")
