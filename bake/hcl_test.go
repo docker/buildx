@@ -1622,6 +1622,20 @@ target "two" {
 	require.Equal(t, map[string]*string{"b": ptrstr("pre-jkl")}, c.Targets[1].Args)
 }
 
+func TestEmptyVariable(t *testing.T) {
+	dt := []byte(`
+	variable "FOO" {}
+	target "default" {
+	  args = {
+	    foo = equal(FOO, "")
+	  }
+	}`)
+	c, err := ParseFile(dt, "docker-bake.hcl")
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+	require.Equal(t, "true", *c.Targets[0].Args["foo"])
+}
+
 func TestEmptyVariableJSON(t *testing.T) {
 	dt := []byte(`{
 	  "variable": {
