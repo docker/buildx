@@ -282,7 +282,7 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	}
 
 	var diags hcl.Diagnostics
-	varType := cty.DynamicPseudoType
+	varType, typeSpecified := cty.DynamicPseudoType, false
 	def, ok := p.attrs[name]
 	if !ok {
 		vr, ok := p.vars[name]
@@ -295,12 +295,13 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 		if diags.HasErrors() {
 			return diags
 		}
+		typeSpecified = !varType.Equals(cty.DynamicPseudoType) || hcl.ExprAsKeyword(vr.Type) == "any"
 	}
 
 	if def == nil {
-		// lack of specified value is considered to have an empty string value,
-		// but any overrides get type checked
-		if _, ok, _ := p.valueHasOverride(name, false); !ok {
+		// Lack of specified value, when untyped is considered to have an empty string value.
+		// A typed variable with no value will result in (typed) nil.
+		if _, ok, _ := p.valueHasOverride(name, false); !ok && !typeSpecified {
 			vv := cty.StringVal("")
 			v = &vv
 			return
@@ -322,9 +323,6 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 		}
 	}
 
-	// Not entirely true... this doesn't differentiate between a user that specified 'any'
-	// and a user that specified nothing.  But the result is the same; both are treated as strings.
-	typeSpecified := !varType.Equals(cty.DynamicPseudoType)
 	envv, hasEnv, jsonEnv := p.valueHasOverride(name, typeSpecified)
 	_, isVar := p.vars[name]
 
