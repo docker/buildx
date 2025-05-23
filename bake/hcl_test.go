@@ -284,7 +284,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "app", c.Targets[0].Name)
@@ -296,7 +296,7 @@ func TestHCLMultiFileSharedVariables(t *testing.T) {
 	c, _, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -333,7 +333,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "app", c.Targets[0].Name)
@@ -345,7 +345,7 @@ func TestHCLVarsWithVars(t *testing.T) {
 	c, _, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -841,7 +841,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "app", c.Targets[0].Name)
@@ -852,7 +852,7 @@ func TestHCLMultiFileAttrs(t *testing.T) {
 	c, _, err = ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -876,7 +876,7 @@ func TestHCLMultiFileGlobalAttrs(t *testing.T) {
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "app", c.Targets[0].Name)
@@ -1060,7 +1060,7 @@ func TestHCLRenameMultiFile(t *testing.T) {
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.hcl"},
 		{Data: dt3, Name: "c3.hcl"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(c.Targets))
@@ -1278,7 +1278,7 @@ func TestHCLMatrixArgsOverride(t *testing.T) {
 
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "docker-bake.hcl"},
-	}, map[string]string{"ABC": "11,22,33"})
+	}, nil, map[string]string{"ABC": "11,22,33"})
 	require.NoError(t, err)
 
 	require.Equal(t, 3, len(c.Targets))
@@ -1465,7 +1465,7 @@ services:
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
 		{Data: dt2, Name: "c2.yml"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))
@@ -1486,7 +1486,7 @@ func TestHCLBuiltinVars(t *testing.T) {
 
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.hcl"},
-	}, map[string]string{
+	}, nil, map[string]string{
 		"BAKE_CMD_CONTEXT": "foo",
 	})
 	require.NoError(t, err)
@@ -1549,7 +1549,7 @@ target "b" {
   }]
 }`),
 		},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Groups))
@@ -1606,7 +1606,7 @@ target "two" {
 			Name: "bar.json",
 			Data: []byte(`{"ABC": "ghi", "DEF": "jkl"}`),
 		},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Groups))
@@ -2267,6 +2267,7 @@ func TestJSONOverridePriority(t *testing.T) {
 		t.Setenv("FOO_JSON", "[3,4,5]")
 		c, _, err := ParseFiles(
 			[]File{{Name: "docker-bake.hcl", Data: dt}},
+			nil,
 			map[string]string{"FOO_JSON": "whatever"},
 		)
 		require.NoError(t, err)

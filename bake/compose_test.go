@@ -437,7 +437,33 @@ services:
 	c, err := ParseComposeFiles([]File{{
 		Name: "docker-compose.yml",
 		Data: dt,
-	}})
+	}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"FOO": ptrstr("bar")}, c.Targets[0].Args)
+}
+
+func TestEnvOverrides(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	overrides := []string{"env.FOO=bar"}
+
+	envOverrides, err := parseEnvOverrides(overrides)
+	require.NoError(t, err)
+
+	dt := []byte(`
+services:
+  scratch:
+    build:
+     context: .
+     args:
+        FOO:
+`)
+
+	chdir(t, tmpdir)
+	c, err := ParseComposeFiles([]File{{
+		Name: "docker-compose.yml",
+		Data: dt,
+	}}, envOverrides)
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"FOO": ptrstr("bar")}, c.Targets[0].Args)
 }
@@ -664,7 +690,7 @@ target "default" {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			isCompose, err := validateComposeFile(tt.dt, tt.fn)
+			isCompose, err := validateComposeFile(tt.dt, tt.fn, nil)
 			assert.Equal(t, tt.isCompose, isCompose)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -738,7 +764,7 @@ services:
 	c, err := ParseComposeFiles([]File{{
 		Name: "composetypes.yml",
 		Data: dt,
-	}})
+	}}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(c.Targets))

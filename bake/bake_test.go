@@ -1641,7 +1641,7 @@ services:
 	c, _, err := ParseFiles([]File{
 		{Data: dt, Name: "c1.foo"},
 		{Data: dt2, Name: "c2.bar"},
-	}, nil)
+	}, nil, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 1, len(c.Targets))

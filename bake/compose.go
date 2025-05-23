@@ -19,8 +19,8 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-func ParseComposeFiles(fs []File) (*Config, error) {
-	envs, err := composeEnv()
+func ParseComposeFiles(fs []File, envOverrides map[string]string) (*Config, error) {
+	envs, err := composeEnv(envOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -199,8 +199,8 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 	return &c, nil
 }
 
-func validateComposeFile(dt []byte, fn string) (bool, error) {
-	envs, err := composeEnv()
+func validateComposeFile(dt []byte, fn string, envOverrides map[string]string) (bool, error) {
+	envs, err := composeEnv(envOverrides)
 	if err != nil {
 		return true, err
 	}
@@ -233,12 +233,18 @@ func validateCompose(dt []byte, envs map[string]string) error {
 	return err
 }
 
-func composeEnv() (map[string]string, error) {
+func composeEnv(envOverrides map[string]string) (map[string]string, error) {
 	envs := sliceToMap(os.Environ())
 	if wd, err := os.Getwd(); err == nil {
 		envs, err = loadDotEnv(envs, wd)
 		if err != nil {
 			return nil, err
+		}
+	}
+	if envOverrides != nil {
+		// Apply envOverrides on envs
+		for key, value := range envOverrides {
+			envs[key] = value
 		}
 	}
 	return envs, nil

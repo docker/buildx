@@ -198,7 +198,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	if in.list != "" {
-		cfg, pm, err := bake.ParseFiles(files, defaults)
+		cfg, pm, err := bake.ParseFiles(files, overrides, defaults)
 		if err != nil {
 			return err
 		}
