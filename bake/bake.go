@@ -181,7 +181,7 @@ func readWithProgress(r io.Reader, setStatus func(st *client.VertexStatus)) (dt 
 }
 
 func ListTargets(files []File) ([]string, error) {
-	c, _, err := ParseFiles(files, nil)
+	c, _, err := ParseFiles(files, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -196,7 +196,7 @@ func ListTargets(files []File) ([]string, error) {
 }
 
 func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string, ent *EntitlementConf) (map[string]*Target, map[string]*Group, error) {
-	c, _, err := ParseFiles(files, defaults)
+	c, _, err := ParseFiles(files, overrides, defaults)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -304,7 +304,7 @@ func sliceToMap(env []string) (res map[string]string) {
 	return
 }
 
-func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
+func ParseFiles(files []File, overrides []string, defaults map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
 	defer func() {
 		err = formatHCLError(err, files)
 	}()
@@ -312,8 +312,12 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 	var c Config
 	var composeFiles []File
 	var hclFiles []*hcl.File
+	envOverrides, err := parseEnvOverrides(overrides)
+	if err != nil {
+		return nil, nil, err
+	}
 	for _, f := range files {
-		isCompose, composeErr := validateComposeFile(f.Data, f.Name)
+		isCompose, composeErr := validateComposeFile(f.Data, f.Name, envOverrides)
 		if isCompose {
 			if composeErr != nil {
 				return nil, nil, composeErr
@@ -336,7 +340,7 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 	}
 
 	if len(composeFiles) > 0 {
-		cfg, cmperr := ParseComposeFiles(composeFiles)
+		cfg, cmperr := ParseComposeFiles(composeFiles, envOverrides)
 		if cmperr != nil {
 			return nil, nil, errors.Wrap(cmperr, "failed to parse compose file")
 		}
@@ -374,6 +378,28 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 	return &c, &pm, nil
 }
 
+// Considering overrides are "targetpattern.key=value"
+// Parse env overrides like example "env.key=value"
+func parseEnvOverrides(overrides []string) (map[string]string, error) {
+	envs := make(map[string]string)
+	for _, o := range overrides {
+		parts := strings.SplitN(o, "=", 2)
+		if len(parts) != 2 {
+			return nil, errors.Errorf("invalid env override %q", o)
+		}
+		key := strings.TrimSpace(parts[0])
+		value := strings.TrimSpace(parts[1])
+		if strings.HasPrefix(key, "env.") {
+			strippedKey := strings.TrimPrefix(key, "env.")
+			if strippedKey == "" || value == "" {
+				return nil, errors.Errorf("invalid env override %q", o)
+			}
+			envs[strippedKey] = value
+		}
+	}
+	return envs, nil
+}
+
 func dedupeConfig(c Config) Config {
 	c2 := c
 	c2.Groups = make([]*Group, 0, len(c2.Groups))
@@ -396,7 +422,7 @@ func dedupeConfig(c Config) Config {
 }
 
 func ParseFile(dt []byte, fn string) (*Config, error) {
-	c, _, err := ParseFiles([]File{{Data: dt, Name: fn}}, nil)
+	c, _, err := ParseFiles([]File{{Data: dt, Name: fn}}, nil, nil)
 	return c, err
 }
 
