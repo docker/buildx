@@ -73,6 +73,13 @@ target "lint-gopls" {
   target = "gopls-analyze"
 }
 
+target "modernize-fix" {
+  inherits = ["_common"]
+  dockerfile = "./hack/dockerfiles/lint.Dockerfile"
+  target = "modernize-fix"
+  output = ["."]
+}
+
 target "validate-vendor" {
   inherits = ["_common"]
   dockerfile = "./hack/dockerfiles/vendor.Dockerfile"
