@@ -8,7 +8,7 @@ endif
 
 export BUILDX_CMD ?= docker buildx
 
-BAKE_TARGETS := binaries binaries-cross lint lint-gopls validate-vendor validate-docs validate-authors validate-generated-files
+BAKE_TARGETS := binaries binaries-cross lint lint-gopls validate-vendor validate-docs validate-authors
 
 .PHONY: all
 all: binaries
@@ -35,7 +35,7 @@ release:
 	./hack/release
 
 .PHONY: validate-all
-validate-all: lint test validate-vendor validate-docs validate-generated-files
+validate-all: lint test validate-vendor validate-docs
 
 .PHONY: test
 test:
@@ -68,7 +68,3 @@ authors:
 .PHONY: mod-outdated
 mod-outdated:
 	$(BUILDX_CMD) bake mod-outdated
-
-.PHONY: generated-files
-generated-files:
-	$(BUILDX_CMD) bake update-generated-files
