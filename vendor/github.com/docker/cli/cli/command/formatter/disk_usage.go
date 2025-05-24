@@ -4,11 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"strconv"
-	"strings"
 	"text/template"
 
 	"github.com/distribution/reference"
-	"github.com/docker/docker/api/types"
+	"github.com/docker/docker/api/types/build"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/volume"
@@ -39,12 +38,12 @@ type DiskUsageContext struct {
 	Images      []*image.Summary
 	Containers  []*container.Summary
 	Volumes     []*volume.Volume
-	BuildCache  []*types.BuildCache
+	BuildCache  []*build.CacheRecord
 	BuilderSize int64
 }
 
 func (ctx *DiskUsageContext) startSubsection(format string) (*template.Template, error) {
-	ctx.buffer = bytes.NewBufferString("")
+	ctx.buffer = &bytes.Buffer{}
 	ctx.header = ""
 	ctx.Format = Format(format)
 	ctx.preFormat()
@@ -88,7 +87,7 @@ func (ctx *DiskUsageContext) Write() (err error) {
 	if ctx.Verbose {
 		return ctx.verboseWrite()
 	}
-	ctx.buffer = bytes.NewBufferString("")
+	ctx.buffer = &bytes.Buffer{}
 	ctx.preFormat()
 
 	tmpl, err := ctx.parseFormat()
@@ -330,9 +329,15 @@ func (c *diskUsageContainersContext) TotalCount() string {
 }
 
 func (*diskUsageContainersContext) isActive(ctr container.Summary) bool {
-	return strings.Contains(ctr.State, "running") ||
-		strings.Contains(ctr.State, "paused") ||
-		strings.Contains(ctr.State, "restarting")
+	switch ctr.State {
+	case container.StateRunning, container.StatePaused, container.StateRestarting:
+		return true
+	case container.StateCreated, container.StateRemoving, container.StateExited, container.StateDead:
+		return false
+	default:
+		// Unknown state (should never happen).
+		return false
+	}
 }
 
 func (c *diskUsageContainersContext) Active() string {
@@ -436,7 +441,7 @@ func (c *diskUsageVolumesContext) Reclaimable() string {
 type diskUsageBuilderContext struct {
 	HeaderContext
 	builderSize int64
-	buildCache  []*types.BuildCache
+	buildCache  []*build.CacheRecord
 }
 
 func (c *diskUsageBuilderContext) MarshalJSON() ([]byte, error) {
