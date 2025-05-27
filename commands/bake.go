@@ -663,7 +663,7 @@ func printVars(w io.Writer, format string, vars []*hclparser.Variable) error {
 	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
 	defer tw.Flush()
 
-	tw.Write([]byte("VARIABLE\tVALUE\tDESCRIPTION\n"))
+	tw.Write([]byte("VARIABLE\tTYPE\tVALUE\tDESCRIPTION\n"))
 
 	for _, v := range vars {
 		var value string
@@ -672,7 +672,7 @@ func printVars(w io.Writer, format string, vars []*hclparser.Variable) error {
 		} else {
 			value = "<null>"
 		}
-		fmt.Fprintf(tw, "%s\t%s\t%s\n", v.Name, value, v.Description)
+		fmt.Fprintf(tw, "%s\t%s\t%s\t%s\n", v.Name, v.Type, value, v.Description)
 	}
 	return nil
 }
