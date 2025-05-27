@@ -38,6 +38,9 @@ type variable struct {
 	Validations []*variableValidation `json:"validation,omitempty" hcl:"validation,block"`
 	Body        hcl.Body              `json:"-" hcl:",body"`
 	Remain      hcl.Body              `json:"-" hcl:",remain"`
+
+	// the type described by Type if it was specified
+	constraint *cty.Type
 }
 
 type variableValidation struct {
@@ -296,6 +299,9 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 			return diags
 		}
 		typeSpecified = !varType.Equals(cty.DynamicPseudoType) || hcl.ExprAsKeyword(vr.Type) == "any"
+		if typeSpecified {
+			vr.constraint = &varType
+		}
 	}
 
 	if def == nil {
@@ -674,6 +680,7 @@ func (p *parser) validateVariables(vars map[string]*variable, ectx *hcl.EvalCont
 type Variable struct {
 	Name        string  `json:"name"`
 	Description string  `json:"description,omitempty"`
+	Type        string  `json:"type,omitempty"`
 	Value       *string `json:"value,omitempty"`
 }
 
@@ -803,13 +810,31 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 			Name:        p.vars[k].Name,
 			Description: p.vars[k].Description,
 		}
+		tc := p.vars[k].constraint
+		if tc != nil {
+			v.Type = tc.FriendlyNameForConstraint()
+		}
 		if vv := p.ectx.Variables[k]; !vv.IsNull() {
 			var s string
-			switch vv.Type() {
-			case cty.String:
-				s = vv.AsString()
-			case cty.Bool:
-				s = strconv.FormatBool(vv.True())
+			switch {
+			case tc != nil:
+				if bs, err := ctyjson.Marshal(vv, *tc); err == nil {
+					s = string(bs)
+					// untyped strings were always unquoted, so be consistent with typed strings as well
+					if tc.Equals(cty.String) {
+						s = strings.Trim(s, "\"")
+					}
+				}
+			case vv.Type().IsPrimitiveType():
+				// all primitive's can convert to string, so error should ever occur anyway
+				if val, err := convert.Convert(vv, cty.String); err == nil {
+					s = val.AsString()
+				}
+			default:
+				// must be an (inferred) tuple or object
+				if bs, err := ctyjson.Marshal(vv, vv.Type()); err == nil {
+					s = string(bs)
+				}
 			}
 			v.Value = &s
 		}
