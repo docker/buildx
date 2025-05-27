@@ -134,6 +134,9 @@ func toCredentialsFunc(a Auth) func(string) (string, string, error) {
 		if ac.IdentityToken != "" {
 			return "", ac.IdentityToken, nil
 		}
+		if ac.RegistryToken != "" {
+			return "", ac.RegistryToken, nil
+		}
 		return ac.Username, ac.Password, nil
 	}
 }
