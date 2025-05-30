@@ -7,7 +7,6 @@ import (
 
 	"github.com/docker/buildx/build"
 	cbuild "github.com/docker/buildx/controller/build"
-	"github.com/docker/buildx/controller/control"
 	controllererrors "github.com/docker/buildx/controller/errdefs"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
@@ -18,10 +17,9 @@ import (
 	"github.com/pkg/errors"
 )
 
-func NewLocalBuildxController(ctx context.Context, dockerCli command.Cli) control.BuildxController {
-	return &localController{
+func NewController(ctx context.Context, dockerCli command.Cli) *Controller {
+	return &Controller{
 		dockerCli: dockerCli,
-		processes: processes.NewManager(),
 	}
 }
 
@@ -32,15 +30,14 @@ type buildConfig struct {
 	buildOptions *cbuild.Options
 }
 
-type localController struct {
+type Controller struct {
 	dockerCli   command.Cli
 	buildConfig buildConfig
-	processes   *processes.Manager
 
 	buildOnGoing atomic.Bool
 }
 
-func (b *localController) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (*client.SolveResponse, *build.Inputs, error) {
+func (b *Controller) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (*client.SolveResponse, *build.Inputs, error) {
 	if !b.buildOnGoing.CompareAndSwap(false, true) {
 		return nil, nil, errors.New("build ongoing")
 	}
@@ -63,27 +60,15 @@ func (b *localController) Build(ctx context.Context, options *cbuild.Options, in
 	return resp, dockerfileMappings, nil
 }
 
-func (b *localController) ListProcesses(ctx context.Context) (infos []*processes.ProcessInfo, retErr error) {
-	return b.processes.ListProcesses(), nil
-}
-
-func (b *localController) DisconnectProcess(ctx context.Context, pid string) error {
-	return b.processes.DeleteProcess(pid)
-}
-
-func (b *localController) cancelRunningProcesses() {
-	b.processes.CancelRunningProcesses()
-}
-
-func (b *localController) Invoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
-	proc, ok := b.processes.Get(pid)
+func (b *Controller) Invoke(ctx context.Context, processes *processes.Manager, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
+	proc, ok := processes.Get(pid)
 	if !ok {
 		// Start a new process.
 		if b.buildConfig.resultCtx == nil {
 			return errors.New("no build result is registered")
 		}
 		var err error
-		proc, err = b.processes.StartProcess(pid, b.buildConfig.resultCtx, cfg)
+		proc, err = processes.StartProcess(pid, b.buildConfig.resultCtx, cfg)
 		if err != nil {
 			return err
 		}
@@ -103,15 +88,13 @@ func (b *localController) Invoke(ctx context.Context, pid string, cfg *controlle
 	}
 }
 
-func (b *localController) Close() error {
-	b.cancelRunningProcesses()
+func (b *Controller) Inspect(ctx context.Context) *cbuild.Options {
+	return b.buildConfig.buildOptions
+}
+
+func (b *Controller) Close() error {
 	if b.buildConfig.resultCtx != nil {
 		b.buildConfig.resultCtx.Done()
 	}
-	// TODO: cancel ongoing builds?
 	return nil
-}
-
-func (b *localController) Inspect(ctx context.Context) *cbuild.Options {
-	return b.buildConfig.buildOptions
 }

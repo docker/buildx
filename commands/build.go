@@ -21,10 +21,9 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/commands/debug"
-	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
-	"github.com/docker/buildx/controller/control"
 	controllererrors "github.com/docker/buildx/controller/errdefs"
+	"github.com/docker/buildx/controller/local"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
@@ -431,28 +430,19 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 		// stdin must be usable for monitor
 		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
 	}
-	c := controller.NewController(ctx, dockerCli)
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Warnf("failed to close server connection %v", err)
-		}
-	}()
 
-	// NOTE: buildx server has the current working directory different from the client
-	// so we need to resolve paths to abosolute ones in the client.
-	opts, err := cbuild.ResolveOptionPaths(opts)
-	if err != nil {
-		return nil, nil, err
-	}
+	c := local.NewController(ctx, dockerCli)
+	defer c.Close()
 
-	var ref string
-	var retErr error
-	var resp *client.SolveResponse
-	var inputs *build.Inputs
+	var (
+		ref    string
+		retErr error
 
-	var f *ioset.SingleForwarder
-	var pr io.ReadCloser
-	var pw io.WriteCloser
+		f  *ioset.SingleForwarder
+		pr io.ReadCloser
+		pw io.WriteCloser
+	)
+
 	if options.invokeConfig == nil {
 		pr = dockerCli.In()
 	} else {
@@ -466,7 +456,7 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 		})
 	}
 
-	resp, inputs, err = c.Build(ctx, opts, pr, printer)
+	resp, inputs, err := c.Build(ctx, opts, pr, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
@@ -507,10 +497,6 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 		if monitorBuildResult != nil {
 			// Update return values with the last build result from monitor
 			resp, retErr = monitorBuildResult.Resp, monitorBuildResult.Err
-		}
-	} else {
-		if err := c.Close(); err != nil {
-			logrus.Warnf("close error: %v", err)
 		}
 	}
 
@@ -1003,13 +989,9 @@ func (cfg *invokeConfig) needsDebug(retErr error) bool {
 	}
 }
 
-func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *cbuild.Options, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
+func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *cbuild.Options, c *local.Controller, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
 	con := console.Current()
 	if err := con.SetRaw(); err != nil {
-		// TODO: run disconnect in build command (on error case)
-		if err := c.Close(); err != nil {
-			logrus.Warnf("close error: %v", err)
-		}
 		return nil, errors.Errorf("failed to configure terminal: %v", err)
 	}
 	defer con.Reset()

@@ -12,8 +12,9 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	cbuild "github.com/docker/buildx/controller/build"
-	"github.com/docker/buildx/controller/control"
+	"github.com/docker/buildx/controller/local"
 	controllerapi "github.com/docker/buildx/controller/pb"
+	"github.com/docker/buildx/controller/processes"
 	"github.com/docker/buildx/monitor/commands"
 	"github.com/docker/buildx/monitor/types"
 	"github.com/docker/buildx/util/ioset"
@@ -32,13 +33,7 @@ type MonitorBuildResult struct {
 }
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, invokeConfig *controllerapi.InvokeConfig, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Warnf("close error: %v", err)
-		}
-	}()
-
+func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, invokeConfig *controllerapi.InvokeConfig, c *local.Controller, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
 	if err := progress.Pause(); err != nil {
 		return nil, err
 	}
@@ -70,8 +65,9 @@ func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, inv
 	invokeForwarder := ioset.NewForwarder()
 	invokeForwarder.SetIn(&containerIn)
 	m := &monitor{
-		BuildxController: c,
-		invokeIO:         invokeForwarder,
+		c:         c,
+		processes: processes.NewManager(),
+		invokeIO:  invokeForwarder,
 		muxIO: ioset.NewMuxIO(ioset.In{
 			Stdin:  io.NopCloser(stdin),
 			Stdout: nopCloser{stdout},
@@ -84,6 +80,12 @@ func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, inv
 			return "Switched IO\n"
 		}),
 	}
+
+	defer func() {
+		if err := m.Close(); err != nil {
+			logrus.Warnf("close error: %v", err)
+		}
+	}()
 	m.ref.Store(curRef)
 
 	// Start container automatically
@@ -231,7 +233,7 @@ type readWriter struct {
 }
 
 type monitor struct {
-	control.BuildxController
+	c   *local.Controller
 	ref atomic.Value
 
 	muxIO        *ioset.MuxIO
@@ -240,12 +242,22 @@ type monitor struct {
 	attachedPid  atomic.Value
 
 	lastBuildResult *MonitorBuildResult
+
+	processes *processes.Manager
 }
 
 func (m *monitor) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, input *build.Inputs, err error) {
-	resp, _, err = m.BuildxController.Build(ctx, options, in, progress)
+	resp, _, err = m.c.Build(ctx, options, in, progress)
 	m.lastBuildResult = &MonitorBuildResult{Resp: resp, Err: err} // Record build result
 	return
+}
+
+func (m *monitor) Invoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
+	return m.c.Invoke(ctx, m.processes, pid, cfg, ioIn, ioOut, ioErr)
+}
+
+func (m *monitor) Inspect(ctx context.Context) *cbuild.Options {
+	return m.c.Inspect(ctx)
 }
 
 func (m *monitor) Rollback(ctx context.Context, cfg *controllerapi.InvokeConfig) string {
@@ -330,6 +342,27 @@ func (m *monitor) invoke(ctx context.Context, pid string, cfg *controllerapi.Inv
 	close(waitInvokeDoneCh)
 
 	return err
+}
+
+func (m *monitor) Close() error {
+	m.cancelRunningProcesses()
+	// if m.buildConfig.resultCtx != nil {
+	// 	b.buildConfig.resultCtx.Done()
+	// }
+	// TODO: cancel ongoing builds?
+	return nil
+}
+
+func (m *monitor) ListProcesses(ctx context.Context) (infos []*processes.ProcessInfo, retErr error) {
+	return m.processes.ListProcesses(), nil
+}
+
+func (m *monitor) DisconnectProcess(ctx context.Context, pid string) error {
+	return m.processes.DeleteProcess(pid)
+}
+
+func (m *monitor) cancelRunningProcesses() {
+	m.processes.CancelRunningProcesses()
 }
 
 type nopCloser struct {

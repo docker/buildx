@@ -5,7 +5,7 @@ import (
 	"os"
 
 	"github.com/containerd/console"
-	"github.com/docker/buildx/controller"
+	"github.com/docker/buildx/controller/local"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/util/cobrautil"
@@ -13,7 +13,6 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
-	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 )
 
@@ -47,12 +46,8 @@ func RootCmd(dockerCli command.Cli, children ...DebuggableCmd) *cobra.Command {
 			}
 
 			ctx := context.TODO()
-			c := controller.NewController(ctx, dockerCli)
-			defer func() {
-				if err := c.Close(); err != nil {
-					logrus.Warnf("failed to close server connection %v", err)
-				}
-			}()
+			c := local.NewController(ctx, dockerCli)
+
 			con := console.Current()
 			if err := con.SetRaw(); err != nil {
 				return errors.Errorf("failed to configure terminal: %v", err)
