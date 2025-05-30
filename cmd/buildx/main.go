@@ -14,10 +14,12 @@ import (
 	"github.com/docker/cli/cli-plugins/plugin"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
-	"github.com/moby/buildkit/solver/errdefs"
+	solvererrdefs "github.com/moby/buildkit/solver/errdefs"
+	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/moby/buildkit/util/stack"
 	"github.com/pkg/errors"
 	"go.opentelemetry.io/otel"
+	"google.golang.org/grpc/codes"
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 
@@ -99,7 +101,7 @@ func main() {
 		os.Exit(sterr.StatusCode)
 	}
 
-	for _, s := range errdefs.Sources(err) {
+	for _, s := range solvererrdefs.Sources(err) {
 		s.Print(cmd.Err())
 	}
 	if debug.IsEnabled() {
@@ -113,5 +115,19 @@ func main() {
 		ebr.Print(cmd.Err())
 	}
 
-	os.Exit(1)
+	exitCode := 1
+	switch grpcerrors.Code(err) {
+	case codes.Internal:
+		exitCode = 100 // https://github.com/square/exit/blob/v1.3.0/exit.go#L70
+	case codes.ResourceExhausted:
+		exitCode = 102
+	case codes.Canceled:
+		exitCode = 130
+	default:
+		if errors.Is(err, context.Canceled) {
+			exitCode = 130
+		}
+	}
+
+	os.Exit(exitCode)
 }
