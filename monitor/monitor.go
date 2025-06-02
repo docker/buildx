@@ -346,10 +346,6 @@ func (m *monitor) invoke(ctx context.Context, pid string, cfg *controllerapi.Inv
 
 func (m *monitor) Close() error {
 	m.cancelRunningProcesses()
-	// if m.buildConfig.resultCtx != nil {
-	// 	b.buildConfig.resultCtx.Done()
-	// }
-	// TODO: cancel ongoing builds?
 	return nil
 }
 
