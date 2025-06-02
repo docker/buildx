@@ -74,6 +74,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeLoadPush,
 	testListTargets,
 	testListVariables,
+	testListTypedVariables,
 	testBakeCallCheck,
 	testBakeCallCheckFlag,
 	testBakeCallMetadata,
@@ -1737,7 +1738,93 @@ target "default" {
 	)
 	require.NoError(t, err, out)
 
-	require.Equal(t, "VARIABLE\tVALUE\tDESCRIPTION\nabc\t\t<null>\t\ndef\t\t\t\nfoo\t\tbar\tThis is foo", strings.TrimSpace(out))
+	require.Equal(t, "VARIABLE\tTYPE\tVALUE\tDESCRIPTION\nabc\t\t\t<null>\t\ndef\t\t\t\t\nfoo\t\t\tbar\tThis is foo", strings.TrimSpace(out))
+}
+
+func testListTypedVariables(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+variable "abc" {
+    type = string
+	default = "bar"
+	description = "This is abc"
+}
+variable "def" {
+    type = string
+    description = "simple type, no default"
+}
+variable "ghi" {
+    type = number
+    default = 99
+    description = "simple type w/ default"
+}
+variable "jkl" {
+    type = list(string)
+    default = ["hello"]
+    description = "collection with quoted strings"
+}
+variable "mno" {
+    type = list(number)
+    description = "collection, no default"
+}
+variable "pqr" {
+    type = tuple([number, string, bool])
+    default = [99, "99", true]
+}
+variable "stu" {
+    type = map(string)
+    default = {"foo": "bar"}
+}
+variable "vwx" {
+    type = set(bool)
+    default = null
+    description = "collection, null default"
+}
+
+// untyped, but previously didn't have its value output
+variable "wxy" {
+    default = ["foo"]
+    description = "inferred tuple"
+}
+// untyped, but previously didn't have its value output
+variable "xyz" {
+    default = {"foo": "bar"}
+    description = "inferred object"
+}
+// untyped, but previously didn't have its value output
+variable "yza" {
+    default = true
+    description = "inferred bool"
+}
+target "default" {
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+	)
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dir),
+		withArgs("--list=variables"),
+	)
+	require.NoError(t, err, out)
+	require.Equal(t,
+		"VARIABLE\tTYPE\t\tVALUE\t\tDESCRIPTION\n"+
+			"abc\t\tstring\t\tbar\t\tThis is abc\n"+
+			"def\t\tstring\t\t<null>\t\tsimple type, no default\n"+
+			"ghi\t\tnumber\t\t99\t\tsimple type w/ default\n"+
+			"jkl\t\tlist of string\t[\"hello\"]\tcollection with quoted strings\n"+
+			"mno\t\tlist of number\t<null>\t\tcollection, no default\n"+
+			// the implementation for tuple's 'friendly name' is very basic
+			// and marked as TODO, so this may change/break at some point
+			"pqr\t\ttuple\t\t[99,\"99\",true]\t\n"+
+			"stu\t\tmap of string\t{\"foo\":\"bar\"}\t\n"+
+			"vwx\t\tset of bool\t<null>\t\tcollection, null default\n"+
+			"wxy\t\t\t\t[\"foo\"]\t\tinferred tuple\n"+
+			"xyz\t\t\t\t{\"foo\":\"bar\"}\tinferred object\n"+
+			"yza\t\t\t\ttrue\t\tinferred bool",
+		strings.TrimSpace(out))
 }
 
 func testBakeCallCheck(t *testing.T, sb integration.Sandbox) {
