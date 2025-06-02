@@ -182,7 +182,7 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.BoolVarP(&options.force, "force", "f", false, "Do not prompt for confirmation")
 
 	flags.Var(&options.reservedSpace, "keep-storage", "Amount of disk space to keep for cache")
-	flags.MarkDeprecated("keep-storage", "keep-storage flag has been changed to max-storage")
+	flags.MarkDeprecated("keep-storage", "keep-storage flag has been changed to reserved-space")
 
 	return cmd
 }
