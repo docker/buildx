@@ -138,75 +138,68 @@ func filterAvailableNodes(nodes []builder.Node) ([]builder.Node, error) {
 	return nil, err
 }
 
-func toRepoOnly(in string) (string, error) {
-	m := map[string]struct{}{}
-	p := strings.Split(in, ",")
-	for _, pp := range p {
-		n, err := reference.ParseNormalizedNamed(pp)
-		if err != nil {
-			return "", err
-		}
-		m[n.Name()] = struct{}{}
-	}
-	out := make([]string, 0, len(m))
-	for k := range m {
-		out = append(out, k)
-	}
-	return strings.Join(out, ","), nil
-}
-
-func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, nodes, opts, docker, cfg, w, nil)
-}
-
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, resultHandleFunc func(driverIndex int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
-	if len(nodes) == 0 {
-		return nil, errors.Errorf("driver required for build")
-	}
-
-	nodes, err = filterAvailableNodes(nodes)
-	if err != nil {
-		return nil, errors.Wrapf(err, "no valid drivers found")
-	}
-
-	var noMobyDriver *driver.DriverHandle
+// findNonMobyDriver returns the first non-moby based driver.
+func findNonMobyDriver(nodes []builder.Node) *driver.DriverHandle {
 	for _, n := range nodes {
 		if !n.Driver.IsMobyDriver() {
-			noMobyDriver = n.Driver
-			break
+			return n.Driver
+		}
+	}
+	return nil
+}
+
+// warnOnNoOutput will check if the given nodes and options would result in an output
+// and prints a warning if it would not.
+func warnOnNoOutput(ctx context.Context, nodes []builder.Node, opts map[string]Options) {
+	// Return immediately if default load is explicitly disabled or a call
+	// function is used.
+	if noDefaultLoad() || !noCallFunc(opts) {
+		return
+	}
+
+	// Find the first non-moby driver and return if it either doesn't exist
+	// or if the driver has default load enabled.
+	noMobyDriver := findNonMobyDriver(nodes)
+	if noMobyDriver == nil || noMobyDriver.Features(ctx)[driver.DefaultLoad] {
+		return
+	}
+
+	// Produce a warning describing the targets affected.
+	var noOutputTargets []string
+	for name, opt := range opts {
+		if !opt.Linked && len(opt.Exports) == 0 {
+			noOutputTargets = append(noOutputTargets, name)
 		}
 	}
 
-	if noMobyDriver != nil && !noDefaultLoad() && noCallFunc(opts) {
-		var noOutputTargets []string
-		for name, opt := range opts {
-			if noMobyDriver.Features(ctx)[driver.DefaultLoad] {
-				continue
-			}
-
-			if !opt.Linked && len(opt.Exports) == 0 {
-				noOutputTargets = append(noOutputTargets, name)
-			}
-		}
-		if len(noOutputTargets) > 0 {
-			var warnNoOutputBuf bytes.Buffer
-			warnNoOutputBuf.WriteString("No output specified ")
-			if len(noOutputTargets) == 1 && noOutputTargets[0] == "default" {
-				warnNoOutputBuf.WriteString(fmt.Sprintf("with %s driver", noMobyDriver.Factory().Name()))
-			} else {
-				warnNoOutputBuf.WriteString(fmt.Sprintf("for %s target(s) with %s driver", strings.Join(noOutputTargets, ", "), noMobyDriver.Factory().Name()))
-			}
-			logrus.Warnf("%s. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", warnNoOutputBuf.String())
-		}
+	if len(noOutputTargets) == 0 {
+		return
 	}
 
-	drivers, err := resolveDrivers(ctx, nodes, opts, w)
-	if err != nil {
-		return nil, err
+	var warnNoOutputBuf bytes.Buffer
+	warnNoOutputBuf.WriteString("No output specified ")
+	if len(noOutputTargets) == 1 && noOutputTargets[0] == "default" {
+		warnNoOutputBuf.WriteString(fmt.Sprintf("with %s driver", noMobyDriver.Factory().Name()))
+	} else {
+		warnNoOutputBuf.WriteString(fmt.Sprintf("for %s target(s) with %s driver", strings.Join(noOutputTargets, ", "), noMobyDriver.Factory().Name()))
 	}
+	logrus.Warnf("%s. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", warnNoOutputBuf.String())
+}
 
+func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confutil.Config, drivers map[string][]*resolvedNode, w progress.Writer, opts map[string]Options) (_ map[string][]*reqForNode, _ func(), retErr error) {
 	reqForNodes := make(map[string][]*reqForNode)
-	eg, ctx := errgroup.WithContext(ctx)
+
+	var releasers []func()
+	releaseAll := func() {
+		for _, fn := range releasers {
+			fn()
+		}
+	}
+	defer func() {
+		if retErr != nil {
+			releaseAll()
+		}
+	}()
 
 	for k, opt := range opts {
 		multiDriver := len(drivers[k]) > 1
@@ -226,17 +219,17 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 			opt.Platforms = np.platforms
 			gatewayOpts, err := np.BuildOpts(ctx)
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			localOpt := opt
 			so, release, err := toSolveOpt(ctx, np.Node(), multiDriver, &localOpt, gatewayOpts, cfg, w, docker)
 			opts[k] = localOpt
 			if err != nil {
-				return nil, err
+				return nil, nil, err
 			}
-			defer release()
+			releasers = append(releasers, release)
 			if err := saveLocalState(so, k, opt, np.Node(), cfg); err != nil {
-				return nil, err
+				return nil, nil, err
 			}
 			addGitAttrs(so)
 			reqn = append(reqn, &reqForNode{
@@ -261,15 +254,17 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 				for _, e := range np.so.Exports {
 					if e.Type == "moby" {
 						if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-							return nil, errors.Errorf("multi-node push can't currently be performed with the docker driver, please switch to a different driver")
+							return nil, nil, errors.Errorf("multi-node push can't currently be performed with the docker driver, please switch to a different driver")
 						}
 					}
 				}
 			}
 		}
 	}
+	return reqForNodes, releaseAll, nil
+}
 
-	// validate that all links between targets use same drivers
+func validateTargetLinks(reqForNodes map[string][]*reqForNode, drivers map[string][]*resolvedNode, opts map[string]Options) error {
 	for name := range opts {
 		dps := reqForNodes[name]
 		for i, dp := range dps {
@@ -279,8 +274,9 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					k2 := strings.TrimPrefix(v, "target:")
 					dps2, ok := drivers[k2]
 					if !ok {
-						return nil, errors.Errorf("failed to find target %s for context %s", k2, strings.TrimPrefix(k, "context:")) // should be validated before already
+						return errors.Errorf("failed to find target %s for context %s", k2, strings.TrimPrefix(k, "context:")) // should be validated before already
 					}
+
 					var found bool
 					for _, dp2 := range dps2 {
 						if dp2.driverIndex == dp.driverIndex {
@@ -289,11 +285,62 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						}
 					}
 					if !found {
-						return nil, errors.Errorf("failed to use %s as context %s for %s because targets build with different drivers", k2, strings.TrimPrefix(k, "context:"), name)
+						return errors.Errorf("failed to use %s as context %s for %s because targets build with different drivers", k2, strings.TrimPrefix(k, "context:"), name)
 					}
 				}
 			}
 		}
+	}
+	return nil
+}
+
+func toRepoOnly(in string) (string, error) {
+	m := map[string]struct{}{}
+	p := strings.Split(in, ",")
+	for _, pp := range p {
+		n, err := reference.ParseNormalizedNamed(pp)
+		if err != nil {
+			return "", err
+		}
+		m[n.Name()] = struct{}{}
+	}
+	out := make([]string, 0, len(m))
+	for k := range m {
+		out = append(out, k)
+	}
+	return strings.Join(out, ","), nil
+}
+
+func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
+	return BuildWithResultHandler(ctx, nodes, opts, docker, cfg, w, nil)
+}
+
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, resultHandleFunc func(driverIdx int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
+	if len(nodes) == 0 {
+		return nil, errors.Errorf("driver required for build")
+	}
+
+	nodes, err = filterAvailableNodes(nodes)
+	if err != nil {
+		return nil, errors.Wrapf(err, "no valid drivers found")
+	}
+	warnOnNoOutput(ctx, nodes, opts)
+
+	drivers, err := resolveDrivers(ctx, nodes, opts, w)
+	if err != nil {
+		return nil, err
+	}
+
+	eg, ctx := errgroup.WithContext(ctx)
+	reqForNodes, release, err := newBuildRequests(ctx, docker, cfg, drivers, w, opts)
+	if err != nil {
+		return nil, err
+	}
+	defer release()
+
+	// validate that all links between targets use same drivers
+	if err := validateTargetLinks(reqForNodes, drivers, opts); err != nil {
+		return nil, err
 	}
 
 	sharedSessions, err := detectSharedMounts(ctx, reqForNodes)
@@ -311,7 +358,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 	for k, opt := range opts {
 		err := func(k string) (err error) {
-			opt := opt
 			dps := drivers[k]
 			multiDriver := len(drivers[k]) > 1
 
@@ -441,19 +487,11 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							req.FrontendOpt["requestid"] = "frontend." + opt.CallFunc.Name
 						}
 
-						res, err := c.Solve(ctx, req)
+						res, err := solve(ctx, c, req)
 						if err != nil {
-							req, ok := fallbackPrintError(err, req)
-							if ok {
-								res2, err2 := c.Solve(ctx, req)
-								if err2 != nil {
-									return nil, err
-								}
-								res = res2
-							} else {
-								return nil, err
-							}
+							return nil, err
 						}
+
 						if opt.CallFunc != nil {
 							callRes = res.Metadata
 						}
@@ -461,31 +499,15 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						rKey := resultKey(dp.driverIndex, k)
 						results.Set(rKey, res)
 
-						if children, ok := childTargets[rKey]; ok && len(children) > 0 {
-							// wait for the child targets to register their LLB before evaluating
-							_, err := results.Get(ctx, children...)
-							if err != nil {
-								return nil, err
-							}
-							// we need to wait until the child targets have completed before we can release
-							eg, ctx := errgroup.WithContext(ctx)
-							eg.Go(func() error {
-								return res.EachRef(func(ref gateway.Reference) error {
-									return ref.Evaluate(ctx)
-								})
-							})
-							eg.Go(func() error {
-								_, err := results.Get(ctx, children...)
-								return err
-							})
-							if err := eg.Wait(); err != nil {
+						if children := childTargets[rKey]; len(children) > 0 {
+							if err := waitForChildren(ctx, res, results, children); err != nil {
 								return nil, err
 							}
 						}
-
 						return res, nil
 					}
 					buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
+
 					var rr *client.SolveResponse
 					if resultHandleFunc != nil {
 						var resultHandle *ResultHandle
@@ -496,6 +518,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						rr, err = c.Build(ctx, *so, "buildx", buildFunc, ch)
 						tracing.FinishWithError(span, err)
 					}
+
 					if !so.Internal && desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
 						if err != nil {
 							return &desktop.ErrorWithBuildRef{
@@ -1145,4 +1168,41 @@ func ReadSourcePolicy() (*spb.Policy, error) {
 	}
 
 	return &pol, nil
+}
+
+func solve(ctx context.Context, c gateway.Client, req gateway.SolveRequest) (*gateway.Result, error) {
+	res, err := c.Solve(ctx, req)
+	if err != nil {
+		req, ok := fallbackPrintError(err, req)
+		if ok {
+			res2, err2 := c.Solve(ctx, req)
+			if err2 != nil {
+				return nil, err
+			}
+			res = res2
+		} else {
+			return nil, err
+		}
+	}
+	return res, nil
+}
+
+func waitForChildren(ctx context.Context, res *gateway.Result, results *waitmap.Map, children []string) error {
+	// wait for the child targets to register their LLB before evaluating
+	_, err := results.Get(ctx, children...)
+	if err != nil {
+		return err
+	}
+	// we need to wait until the child targets have completed before we can release
+	eg, ctx := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		return res.EachRef(func(ref gateway.Reference) error {
+			return ref.Evaluate(ctx)
+		})
+	})
+	eg.Go(func() error {
+		_, err := results.Get(ctx, children...)
+		return err
+	})
+	return eg.Wait()
 }

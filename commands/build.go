@@ -21,10 +21,9 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/commands/debug"
-	"github.com/docker/buildx/controller"
 	cbuild "github.com/docker/buildx/controller/build"
-	"github.com/docker/buildx/controller/control"
 	controllererrors "github.com/docker/buildx/controller/errdefs"
+	"github.com/docker/buildx/controller/local"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
@@ -426,47 +425,21 @@ func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Opti
 	return resp, dfmap, err
 }
 
-func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, options buildOptions, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
+func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, options buildOptions, printer *progress.Printer) (_ *client.SolveResponse, _ *build.Inputs, retErr error) {
 	if options.invokeConfig != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
 	}
-	c := controller.NewController(ctx, dockerCli)
-	defer func() {
-		if err := c.Close(); err != nil {
-			logrus.Warnf("failed to close server connection %v", err)
-		}
-	}()
 
-	// NOTE: buildx server has the current working directory different from the client
-	// so we need to resolve paths to abosolute ones in the client.
-	opts, err := cbuild.ResolveOptionPaths(opts)
-	if err != nil {
-		return nil, nil, err
-	}
+	c := local.NewController(ctx, dockerCli)
+	defer c.Close()
 
-	var ref string
-	var retErr error
-	var resp *client.SolveResponse
-	var inputs *build.Inputs
-
-	var f *ioset.SingleForwarder
-	var pr io.ReadCloser
-	var pw io.WriteCloser
+	var in io.ReadCloser
 	if options.invokeConfig == nil {
-		pr = dockerCli.In()
-	} else {
-		f = ioset.NewSingleForwarder()
-		f.SetReader(dockerCli.In())
-		pr, pw = io.Pipe()
-		f.SetWriter(pw, func() io.WriteCloser {
-			pw.Close() // propagate EOF
-			logrus.Debug("propagating stdin close")
-			return nil
-		})
+		in = dockerCli.In()
 	}
 
-	resp, inputs, err = c.Build(ctx, opts, pr, printer)
+	resp, inputs, err := c.Build(ctx, opts, in, printer)
 	if err != nil {
 		var be *controllererrors.BuildError
 		if errors.As(err, &be) {
@@ -477,28 +450,26 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 		}
 	}
 
-	if options.invokeConfig != nil {
-		if err := pw.Close(); err != nil {
-			logrus.Debug("failed to close stdin pipe writer")
-		}
-		if err := pr.Close(); err != nil {
-			logrus.Debug("failed to close stdin pipe reader")
-		}
-	}
-
 	if options.invokeConfig != nil && options.invokeConfig.needsDebug(retErr) {
 		// Print errors before launching monitor
 		if err := printError(retErr, printer); err != nil {
 			logrus.Warnf("failed to print error information: %v", err)
 		}
 
-		pr2, pw2 := io.Pipe()
-		f.SetWriter(pw2, func() io.WriteCloser {
-			pw2.Close() // propagate EOF
+		pr, pw := io.Pipe()
+
+		f := ioset.NewSingleForwarder()
+		f.SetReader(dockerCli.In())
+		f.SetWriter(pw, func() io.WriteCloser {
+			pw.Close() // propagate EOF
 			return nil
 		})
-		monitorBuildResult, err := options.invokeConfig.runDebug(ctx, ref, opts, c, pr2, os.Stdout, os.Stderr, printer)
-		if err := pw2.Close(); err != nil {
+
+		// TODO: ref was never set to a value in the original code. Removed the variable to
+		// reduce confusion but it also probably means this call is wrong in some way.
+		// This area should be removed during the refactor anyway so it doesn't matter that much.
+		monitorBuildResult, err := options.invokeConfig.runDebug(ctx, "", opts, c, pr, os.Stdout, os.Stderr, printer)
+		if err := pw.Close(); err != nil {
 			logrus.Debug("failed to close monitor stdin pipe reader")
 		}
 		if err != nil {
@@ -507,10 +478,6 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 		if monitorBuildResult != nil {
 			// Update return values with the last build result from monitor
 			resp, retErr = monitorBuildResult.Resp, monitorBuildResult.Err
-		}
-	} else {
-		if err := c.Close(); err != nil {
-			logrus.Warnf("close error: %v", err)
 		}
 	}
 
@@ -1003,13 +970,9 @@ func (cfg *invokeConfig) needsDebug(retErr error) bool {
 	}
 }
 
-func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *cbuild.Options, c control.BuildxController, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
+func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *cbuild.Options, c *local.Controller, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
 	con := console.Current()
 	if err := con.SetRaw(); err != nil {
-		// TODO: run disconnect in build command (on error case)
-		if err := c.Close(); err != nil {
-			logrus.Warnf("close error: %v", err)
-		}
 		return nil, errors.Errorf("failed to configure terminal: %v", err)
 	}
 	defer con.Reset()
