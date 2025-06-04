@@ -4,13 +4,14 @@ import (
 	"context"
 	"fmt"
 	"io"
+	"os"
 	"sort"
 	"sync"
 	"sync/atomic"
 	"text/tabwriter"
 
 	"github.com/containerd/console"
-	"github.com/docker/buildx/controller/local"
+	"github.com/docker/buildx/build"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
 	"github.com/docker/buildx/monitor/commands"
@@ -19,6 +20,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
@@ -26,8 +28,92 @@ import (
 
 var ErrReload = errors.New("monitor: reload")
 
+type Monitor struct {
+	invokeConfig *controllerapi.InvokeConfig
+	printer      *progress.Printer
+
+	stdin  *ioset.SingleForwarder
+	stdout io.WriteCloser
+	stderr io.WriteCloser
+
+	res *build.ResultHandle
+	idx int
+	mu  sync.Mutex
+}
+
+func New(cfg *controllerapi.InvokeConfig, stdin io.ReadCloser, stdout, stderr io.WriteCloser, printer *progress.Printer) *Monitor {
+	m := &Monitor{
+		invokeConfig: cfg,
+		printer:      printer,
+		stdin:        ioset.NewSingleForwarder(),
+		stdout:       stdout,
+		stderr:       stderr,
+	}
+	m.stdin.SetReader(stdin)
+	return m
+}
+
+func (m *Monitor) Handler() build.Handler {
+	return build.Handler{
+		OnResult: func(driverIndex int, gotRes *build.ResultHandle) {
+			m.mu.Lock()
+			defer m.mu.Unlock()
+
+			if m.res == nil || driverIndex < m.idx {
+				m.idx, m.res = driverIndex, gotRes
+			}
+		},
+	}
+}
+
+func (m *Monitor) Run(ctx context.Context, buildErr error) error {
+	defer m.reset()
+
+	if !m.invokeConfig.NeedsDebug(buildErr) {
+		return nil
+	}
+
+	// Print errors before launching monitor
+	if err := printError(buildErr, m.printer); err != nil {
+		logrus.Warnf("failed to print error information: %v", err)
+	}
+
+	pr, pw := io.Pipe()
+	m.stdin.SetWriter(pw, func() io.WriteCloser {
+		pw.Close() // propagate EOF
+		return nil
+	})
+
+	con := console.Current()
+	if err := con.SetRaw(); err != nil {
+		return errors.Errorf("failed to configure terminal: %v", err)
+	}
+	defer con.Reset()
+
+	monitorErr := RunMonitor(ctx, m.invokeConfig, m.res, pr, m.stdout, m.stderr, m.printer)
+	if err := pw.Close(); err != nil {
+		logrus.Debug("failed to close monitor stdin pipe reader")
+	}
+	return monitorErr
+}
+
+func (m *Monitor) reset() {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+
+	m.idx = 0
+	if m.res != nil {
+		m.res.Done()
+		m.res = nil
+	}
+}
+
+func (m *Monitor) Close() error {
+	return m.stdin.Close()
+}
+
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, invokeConfig *controllerapi.InvokeConfig, c *local.Controller, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) error {
+func RunMonitor(ctx context.Context, invokeConfig *controllerapi.InvokeConfig, rCtx *build.ResultHandle, stdin io.ReadCloser, stdout, stderr io.WriteCloser, progress *progress.Printer) error {
 	if err := progress.Pause(); err != nil {
 		return err
 	}
@@ -61,7 +147,7 @@ func RunMonitor(ctx context.Context, invokeConfig *controllerapi.InvokeConfig, c
 	invokeForwarder := ioset.NewForwarder()
 	invokeForwarder.SetIn(&containerIn)
 	m := &monitor{
-		c:         c,
+		rCtx:      rCtx,
 		processes: processes.NewManager(),
 		invokeIO:  invokeForwarder,
 		muxIO: ioset.NewMuxIO(ioset.In{
@@ -237,7 +323,7 @@ type monitor struct {
 	ctx    context.Context
 	cancel context.CancelCauseFunc
 
-	c *local.Controller
+	rCtx *build.ResultHandle
 
 	muxIO        *ioset.MuxIO
 	invokeIO     *ioset.Forwarder
@@ -248,7 +334,31 @@ type monitor struct {
 }
 
 func (m *monitor) Invoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
-	return m.c.Invoke(ctx, m.processes, pid, cfg, ioIn, ioOut, ioErr)
+	proc, ok := m.processes.Get(pid)
+	if !ok {
+		// Start a new process.
+		if m.rCtx == nil {
+			return errors.New("no build result is registered")
+		}
+		var err error
+		proc, err = m.processes.StartProcess(pid, m.rCtx, cfg)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Attach containerIn to this process
+	ioCancelledCh := make(chan struct{})
+	proc.ForwardIO(&ioset.In{Stdin: ioIn, Stdout: ioOut, Stderr: ioErr}, func(error) { close(ioCancelledCh) })
+
+	select {
+	case <-ioCancelledCh:
+		return errors.Errorf("io cancelled")
+	case err := <-proc.Done():
+		return err
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	}
 }
 
 func (m *monitor) Rollback(ctx context.Context, cfg *controllerapi.InvokeConfig) string {
@@ -361,3 +471,18 @@ type nopCloser struct {
 }
 
 func (c nopCloser) Close() error { return nil }
+
+func printError(err error, printer *progress.Printer) error {
+	if err == nil {
+		return nil
+	}
+	if err := printer.Pause(); err != nil {
+		return err
+	}
+	defer printer.Unpause()
+	for _, s := range errdefs.Sources(err) {
+		s.Print(os.Stderr)
+	}
+	fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
+	return nil
+}

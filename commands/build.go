@@ -23,7 +23,6 @@ import (
 	"github.com/docker/buildx/commands/debug"
 	cbuild "github.com/docker/buildx/controller/build"
 	controllererrors "github.com/docker/buildx/controller/errdefs"
-	"github.com/docker/buildx/controller/local"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
@@ -32,7 +31,6 @@ import (
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
-	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metricutil"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
@@ -418,11 +416,7 @@ func getImageID(resp map[string]string) string {
 }
 
 func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
-	resp, res, dfmap, err := cbuild.RunBuild(ctx, dockerCli, opts, dockerCli.In(), printer, false)
-	if res != nil {
-		res.Done()
-	}
-	return resp, dfmap, err
+	return cbuild.RunBuild(ctx, dockerCli, opts, dockerCli.In(), printer, nil)
 }
 
 func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, options buildOptions, printer *progress.Printer) (_ *client.SolveResponse, _ *build.Inputs, retErr error) {
@@ -433,33 +427,32 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 
 	var (
 		in io.ReadCloser
-		f  *ioset.SingleForwarder
+		m  *monitor.Monitor
+		bh build.Handler
 	)
 	if options.invokeConfig == nil {
 		in = dockerCli.In()
 	} else {
-		f = ioset.NewSingleForwarder()
-		f.SetReader(dockerCli.In())
+		m = monitor.New(&options.invokeConfig.InvokeConfig, dockerCli.In(), os.Stdout, os.Stderr, printer)
+		defer m.Close()
+
+		bh = m.Handler()
 	}
 
 	for {
-		c := local.NewController(ctx, dockerCli)
-
-		resp, inputs, err := c.Build(ctx, opts, in, printer)
+		resp, inputs, err := cbuild.RunBuild(ctx, dockerCli, opts, in, printer, &bh)
 		if err != nil {
 			var be *controllererrors.BuildError
 			if errors.As(err, &be) {
 				retErr = err
 				// We can proceed to monitor
 			} else {
-				c.Close()
 				return nil, nil, errors.Wrapf(err, "failed to build")
 			}
 		}
 
-		if options.invokeConfig != nil {
-			if err := runMonitorIfNeeded(ctx, options.invokeConfig, retErr, c, f, os.Stdout, os.Stderr, printer); err != nil {
-				c.Close()
+		if m != nil {
+			if err := m.Run(ctx, err); err != nil {
 				if errors.Is(err, monitor.ErrReload) {
 					retErr = nil
 					continue
@@ -468,53 +461,8 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 			}
 		}
 
-		c.Close()
 		return resp, inputs, err
 	}
-}
-
-func runMonitorIfNeeded(ctx context.Context, cfg *invokeConfig, retErr error, c *local.Controller, stdin *ioset.SingleForwarder, stdout io.WriteCloser, stderr console.File, printer *progress.Printer) error {
-	if !cfg.needsDebug(retErr) {
-		return nil
-	}
-
-	// Print errors before launching monitor
-	if err := printError(retErr, printer); err != nil {
-		logrus.Warnf("failed to print error information: %v", err)
-	}
-
-	pr, pw := io.Pipe()
-	stdin.SetWriter(pw, func() io.WriteCloser {
-		pw.Close() // propagate EOF
-		return nil
-	})
-
-	con := console.Current()
-	if err := con.SetRaw(); err != nil {
-		return errors.Errorf("failed to configure terminal: %v", err)
-	}
-	defer con.Reset()
-
-	monitorErr := monitor.RunMonitor(ctx, &cfg.InvokeConfig, c, pr, stdout, stderr, printer)
-	if err := pw.Close(); err != nil {
-		logrus.Debug("failed to close monitor stdin pipe reader")
-	}
-	return monitorErr
-}
-
-func printError(err error, printer *progress.Printer) error {
-	if err == nil {
-		return nil
-	}
-	if err := printer.Pause(); err != nil {
-		return err
-	}
-	defer printer.Unpause()
-	for _, s := range errdefs.Sources(err) {
-		s.Print(os.Stderr)
-	}
-	fmt.Fprintf(os.Stderr, "ERROR: %v\n", err)
-	return nil
 }
 
 func newDebuggableBuild(dockerCli command.Cli, rootOpts *rootOptions) debug.DebuggableCmd {
@@ -973,23 +921,21 @@ func printValue(w io.Writer, printer callFunc, version string, format string, re
 
 type invokeConfig struct {
 	controllerapi.InvokeConfig
-	onFlag     string
 	invokeFlag string
 }
 
-func (cfg *invokeConfig) needsDebug(retErr error) bool {
-	switch cfg.onFlag {
-	case "always":
-		return true
-	case "error":
-		return retErr != nil
-	default:
-		return cfg.invokeFlag != ""
-	}
-}
-
 func (cfg *invokeConfig) parseInvokeConfig(invoke, on string) error {
-	cfg.onFlag = on
+	switch on {
+	case "always":
+		cfg.SuspendOn = controllerapi.SuspendAlways
+	case "error":
+		cfg.SuspendOn = controllerapi.SuspendError
+	default:
+		if invoke != "" {
+			cfg.SuspendOn = controllerapi.SuspendAlways
+		}
+	}
+
 	cfg.invokeFlag = invoke
 	cfg.Tty = true
 	cfg.NoCmd = true
