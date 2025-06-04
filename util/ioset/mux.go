@@ -229,20 +229,24 @@ func copyToFunc(r io.Reader, wFunc func() (io.Writer, error)) error {
 	buf := make([]byte, 4096)
 	for {
 		n, readErr := r.Read(buf)
-		if readErr != nil && readErr != io.EOF {
-			return readErr
-		}
-		w, err := wFunc()
-		if err != nil {
-			return err
-		}
-		if w != nil {
-			if _, err := w.Write(buf[:n]); err != nil {
-				logrus.WithError(err).Debugf("failed to copy")
+
+		if n > 0 {
+			w, err := wFunc()
+			if err != nil {
+				return err
+			}
+			if w != nil {
+				if _, err := w.Write(buf[:n]); err != nil {
+					logrus.WithError(err).Debugf("failed to copy")
+				}
 			}
 		}
-		if readErr == io.EOF {
-			return nil
+
+		if readErr != nil {
+			if isReaderClosed(readErr) {
+				return nil
+			}
+			return readErr
 		}
 	}
 }
@@ -254,4 +258,8 @@ type readerWithClose struct {
 
 func (r *readerWithClose) Close() error {
 	return r.closeFunc()
+}
+
+func isReaderClosed(err error) bool {
+	return errors.Is(err, io.EOF) || errors.Is(err, io.ErrClosedPipe)
 }

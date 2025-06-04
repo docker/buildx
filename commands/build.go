@@ -431,57 +431,75 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
 	}
 
-	c := local.NewController(ctx, dockerCli)
-	defer c.Close()
-
-	var in io.ReadCloser
+	var (
+		in io.ReadCloser
+		f  *ioset.SingleForwarder
+	)
 	if options.invokeConfig == nil {
 		in = dockerCli.In()
-	}
-
-	resp, inputs, err := c.Build(ctx, opts, in, printer)
-	if err != nil {
-		var be *controllererrors.BuildError
-		if errors.As(err, &be) {
-			retErr = err
-			// We can proceed to monitor
-		} else {
-			return nil, nil, errors.Wrapf(err, "failed to build")
-		}
-	}
-
-	if options.invokeConfig != nil && options.invokeConfig.needsDebug(retErr) {
-		// Print errors before launching monitor
-		if err := printError(retErr, printer); err != nil {
-			logrus.Warnf("failed to print error information: %v", err)
-		}
-
-		pr, pw := io.Pipe()
-
-		f := ioset.NewSingleForwarder()
+	} else {
+		f = ioset.NewSingleForwarder()
 		f.SetReader(dockerCli.In())
-		f.SetWriter(pw, func() io.WriteCloser {
-			pw.Close() // propagate EOF
-			return nil
-		})
-
-		// TODO: ref was never set to a value in the original code. Removed the variable to
-		// reduce confusion but it also probably means this call is wrong in some way.
-		// This area should be removed during the refactor anyway so it doesn't matter that much.
-		monitorBuildResult, err := options.invokeConfig.runDebug(ctx, "", opts, c, pr, os.Stdout, os.Stderr, printer)
-		if err := pw.Close(); err != nil {
-			logrus.Debug("failed to close monitor stdin pipe reader")
-		}
-		if err != nil {
-			logrus.Warnf("failed to run monitor: %v", err)
-		}
-		if monitorBuildResult != nil {
-			// Update return values with the last build result from monitor
-			resp, retErr = monitorBuildResult.Resp, monitorBuildResult.Err
-		}
 	}
 
-	return resp, inputs, retErr
+	for {
+		c := local.NewController(ctx, dockerCli)
+
+		resp, inputs, err := c.Build(ctx, opts, in, printer)
+		if err != nil {
+			var be *controllererrors.BuildError
+			if errors.As(err, &be) {
+				retErr = err
+				// We can proceed to monitor
+			} else {
+				c.Close()
+				return nil, nil, errors.Wrapf(err, "failed to build")
+			}
+		}
+
+		if options.invokeConfig != nil {
+			if err := runMonitorIfNeeded(ctx, options.invokeConfig, retErr, c, f, os.Stdout, os.Stderr, printer); err != nil {
+				c.Close()
+				if errors.Is(err, monitor.ErrReload) {
+					retErr = nil
+					continue
+				}
+				logrus.Warnf("failed to run monitor: %v", err)
+			}
+		}
+
+		c.Close()
+		return resp, inputs, err
+	}
+}
+
+func runMonitorIfNeeded(ctx context.Context, cfg *invokeConfig, retErr error, c *local.Controller, stdin *ioset.SingleForwarder, stdout io.WriteCloser, stderr console.File, printer *progress.Printer) error {
+	if !cfg.needsDebug(retErr) {
+		return nil
+	}
+
+	// Print errors before launching monitor
+	if err := printError(retErr, printer); err != nil {
+		logrus.Warnf("failed to print error information: %v", err)
+	}
+
+	pr, pw := io.Pipe()
+	stdin.SetWriter(pw, func() io.WriteCloser {
+		pw.Close() // propagate EOF
+		return nil
+	})
+
+	con := console.Current()
+	if err := con.SetRaw(); err != nil {
+		return errors.Errorf("failed to configure terminal: %v", err)
+	}
+	defer con.Reset()
+
+	monitorErr := monitor.RunMonitor(ctx, &cfg.InvokeConfig, c, pr, stdout, stderr, printer)
+	if err := pw.Close(); err != nil {
+		logrus.Debug("failed to close monitor stdin pipe reader")
+	}
+	return monitorErr
 }
 
 func printError(err error, printer *progress.Printer) error {
@@ -968,15 +986,6 @@ func (cfg *invokeConfig) needsDebug(retErr error) bool {
 	default:
 		return cfg.invokeFlag != ""
 	}
-}
-
-func (cfg *invokeConfig) runDebug(ctx context.Context, ref string, options *cbuild.Options, c *local.Controller, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*monitor.MonitorBuildResult, error) {
-	con := console.Current()
-	if err := con.SetRaw(); err != nil {
-		return nil, errors.Errorf("failed to configure terminal: %v", err)
-	}
-	defer con.Reset()
-	return monitor.RunMonitor(ctx, ref, options, &cfg.InvokeConfig, c, stdin, stdout, stderr, progress)
 }
 
 func (cfg *invokeConfig) parseInvokeConfig(invoke, on string) error {

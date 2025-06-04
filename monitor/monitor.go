@@ -10,8 +10,6 @@ import (
 	"text/tabwriter"
 
 	"github.com/containerd/console"
-	"github.com/docker/buildx/build"
-	cbuild "github.com/docker/buildx/controller/build"
 	"github.com/docker/buildx/controller/local"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
@@ -20,24 +18,22 @@ import (
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/google/shlex"
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"golang.org/x/term"
 )
 
-type MonitorBuildResult struct {
-	Resp *client.SolveResponse
-	Err  error
-}
+var ErrReload = errors.New("monitor: reload")
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, invokeConfig *controllerapi.InvokeConfig, c *local.Controller, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) (*MonitorBuildResult, error) {
+func RunMonitor(ctx context.Context, invokeConfig *controllerapi.InvokeConfig, c *local.Controller, stdin io.ReadCloser, stdout io.WriteCloser, stderr console.File, progress *progress.Printer) error {
 	if err := progress.Pause(); err != nil {
-		return nil, err
+		return err
 	}
 	defer progress.Unpause()
+
+	defer stdin.Close()
 
 	monitorIn, monitorOut := ioset.Pipe()
 	defer func() {
@@ -80,13 +76,13 @@ func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, inv
 			return "Switched IO\n"
 		}),
 	}
+	m.ctx, m.cancel = context.WithCancelCause(context.Background())
 
 	defer func() {
 		if err := m.Close(); err != nil {
 			logrus.Warnf("close error: %v", err)
 		}
 	}()
-	m.ref.Store(curRef)
 
 	// Start container automatically
 	fmt.Fprintf(stdout, "Launching interactive container. Press Ctrl-a-c to switch to monitor console\n")
@@ -96,7 +92,7 @@ func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, inv
 	fmt.Fprintf(stdout, "Interactive container was restarted with process %q. Press Ctrl-a-c to switch to the new container\n", id)
 
 	availableCommands := []types.Command{
-		commands.NewReloadCmd(m, stdout, progress, options, invokeConfig),
+		commands.NewReloadCmd(m),
 		commands.NewRollbackCmd(m, invokeConfig, stdout),
 		commands.NewAttachCmd(m, stdout),
 		commands.NewExecCmd(m, invokeConfig, stdout),
@@ -128,6 +124,11 @@ func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, inv
 			}()
 			t := term.NewTerminal(readWriter{in.Stdin, in.Stdout}, "(buildx) ")
 			for {
+				if err := m.ctx.Err(); err != nil {
+					errCh <- context.Cause(m.ctx)
+					return
+				}
+
 				l, err := t.ReadLine()
 				if err != nil {
 					if err != io.EOF {
@@ -176,10 +177,10 @@ func RunMonitor(ctx context.Context, curRef string, options *cbuild.Options, inv
 		select {
 		case <-doneCh:
 			m.close()
-			return m.lastBuildResult, nil
+			return nil
 		case err := <-errCh:
 			m.close()
-			return m.lastBuildResult, err
+			return err
 		case <-monitorDisableCh:
 		}
 		monitorForwarder.SetOut(nil)
@@ -233,31 +234,21 @@ type readWriter struct {
 }
 
 type monitor struct {
-	c   *local.Controller
-	ref atomic.Value
+	ctx    context.Context
+	cancel context.CancelCauseFunc
+
+	c *local.Controller
 
 	muxIO        *ioset.MuxIO
 	invokeIO     *ioset.Forwarder
 	invokeCancel func()
 	attachedPid  atomic.Value
 
-	lastBuildResult *MonitorBuildResult
-
 	processes *processes.Manager
-}
-
-func (m *monitor) Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, input *build.Inputs, err error) {
-	resp, _, err = m.c.Build(ctx, options, in, progress)
-	m.lastBuildResult = &MonitorBuildResult{Resp: resp, Err: err} // Record build result
-	return
 }
 
 func (m *monitor) Invoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
 	return m.c.Invoke(ctx, m.processes, pid, cfg, ioIn, ioOut, ioErr)
-}
-
-func (m *monitor) Inspect(ctx context.Context) *cbuild.Options {
-	return m.c.Inspect(ctx)
 }
 
 func (m *monitor) Rollback(ctx context.Context, cfg *controllerapi.InvokeConfig) string {
@@ -279,6 +270,10 @@ func (m *monitor) Detach() {
 	if m.invokeCancel != nil {
 		m.invokeCancel() // Finish existing attach
 	}
+}
+
+func (m *monitor) Reload() {
+	m.cancel(ErrReload)
 }
 
 func (m *monitor) AttachedPID() string {

@@ -4,20 +4,12 @@ import (
 	"context"
 	"io"
 
-	"github.com/docker/buildx/build"
-	cbuild "github.com/docker/buildx/controller/build"
 	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/controller/processes"
-	"github.com/docker/buildx/util/progress"
-	"github.com/moby/buildkit/client"
 )
 
 // Monitor provides APIs for attaching and controlling the buildx server.
 type Monitor interface {
-	Build(ctx context.Context, options *cbuild.Options, in io.ReadCloser, progress progress.Writer) (resp *client.SolveResponse, inputs *build.Inputs, err error)
-
-	Inspect(ctx context.Context) *cbuild.Options
-
 	// Invoke starts an IO session into the specified process.
 	// If pid doesn't match to any running processes, it starts a new process with the specified config.
 	// If there is no container running or InvokeConfig.Rollback is specified, the process will start in a newly created container.
@@ -42,6 +34,9 @@ type Monitor interface {
 
 	// Detach detaches IO from the container.
 	Detach()
+
+	// Reload will signal the monitor to be reloaded.
+	Reload()
 
 	io.Closer
 }
