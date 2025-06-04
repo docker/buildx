@@ -37,4 +37,20 @@ type InvokeConfig struct {
 	Tty        bool
 	Rollback   bool
 	Initial    bool
+	SuspendOn  SuspendOn
+}
+
+func (cfg *InvokeConfig) NeedsDebug(err error) bool {
+	return cfg.SuspendOn.DebugEnabled(err)
+}
+
+type SuspendOn int
+
+const (
+	SuspendError SuspendOn = iota
+	SuspendAlways
+)
+
+func (s SuspendOn) DebugEnabled(err error) bool {
+	return err != nil || s == SuspendAlways
 }

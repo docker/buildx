@@ -311,11 +311,15 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
+type Handler struct {
+	OnResult func(driverIdx int, rCtx *ResultHandle)
+}
+
 func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	return BuildWithResultHandler(ctx, nodes, opts, docker, cfg, w, nil)
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, resultHandleFunc func(driverIdx int, rCtx *ResultHandle)) (resp map[string]*client.SolveResponse, err error) {
+func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, bh *Handler) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
@@ -509,10 +513,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
 
 					var rr *client.SolveResponse
-					if resultHandleFunc != nil {
+					if bh != nil && bh.OnResult != nil {
 						var resultHandle *ResultHandle
 						resultHandle, rr, err = NewResultHandle(ctx, cc, *so, "buildx", buildFunc, ch)
-						resultHandleFunc(dp.driverIndex, resultHandle)
+						bh.OnResult(dp.driverIndex, resultHandle)
 					} else {
 						span, ctx := tracing.StartSpan(ctx, "build")
 						rr, err = c.Build(ctx, *so, "buildx", buildFunc, ch)
