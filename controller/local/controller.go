@@ -88,10 +88,6 @@ func (b *Controller) Invoke(ctx context.Context, processes *processes.Manager, p
 	}
 }
 
-func (b *Controller) Inspect(ctx context.Context) *cbuild.Options {
-	return b.buildConfig.buildOptions
-}
-
 func (b *Controller) Close() error {
 	if b.buildConfig.resultCtx != nil {
 		b.buildConfig.resultCtx.Done()
