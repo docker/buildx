@@ -9,7 +9,6 @@ import (
 	"strings"
 
 	"github.com/containerd/platforms"
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -38,18 +37,6 @@ func (e Exports) Normalize() Exports {
 	return removeDupes(e)
 }
 
-func (e Exports) ToPB() []*controllerapi.ExportEntry {
-	if len(e) == 0 {
-		return nil
-	}
-
-	entries := make([]*controllerapi.ExportEntry, len(e))
-	for i, entry := range e {
-		entries[i] = entry.ToPB()
-	}
-	return entries
-}
-
 type ExportEntry struct {
 	Type        string            `json:"type"`
 	Attrs       map[string]string `json:"attrs,omitempty"`
@@ -75,14 +62,6 @@ func (e *ExportEntry) String() string {
 		b.WriteAttributes(e.Attrs)
 	}
 	return b.String()
-}
-
-func (e *ExportEntry) ToPB() *controllerapi.ExportEntry {
-	return &controllerapi.ExportEntry{
-		Type:        e.Type,
-		Attrs:       maps.Clone(e.Attrs),
-		Destination: e.Destination,
-	}
 }
 
 func (e *ExportEntry) MarshalJSON() ([]byte, error) {
@@ -164,12 +143,12 @@ func (e *ExportEntry) validate() error {
 	return nil
 }
 
-func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
+func ParseExports(inp []string) ([]*ExportEntry, error) {
 	if len(inp) == 0 {
 		return nil, nil
 	}
 
-	export := make(Exports, 0, len(inp))
+	exports := make(Exports, 0, len(inp))
 	for _, s := range inp {
 		if s == "" {
 			continue
@@ -179,9 +158,9 @@ func ParseExports(inp []string) ([]*controllerapi.ExportEntry, error) {
 		if err := out.UnmarshalText([]byte(s)); err != nil {
 			return nil, err
 		}
-		export = append(export, &out)
+		exports = append(exports, &out)
 	}
-	return export.ToPB(), nil
+	return exports, nil
 }
 
 func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {

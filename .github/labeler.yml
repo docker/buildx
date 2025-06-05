@@ -48,11 +48,6 @@ area/cli:
       - cmd/**
       - commands/**
 
-# Add 'area/controller' label to changes in the controller
-area/controller:
-  - changed-files:
-    - any-glob-to-any-file: 'controller/**'
-
 # Add 'area/docs' label to markdown files in the docs folder
 area/docs:
   - changed-files:

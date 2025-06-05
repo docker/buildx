@@ -19,8 +19,8 @@ import (
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
@@ -78,8 +78,8 @@ type Options struct {
 	NoCacheFilter              []string
 	Platforms                  []ocispecs.Platform
 	Pull                       bool
-	SecretSpecs                []*controllerapi.Secret
-	SSHSpecs                   []*controllerapi.SSH
+	SecretSpecs                buildflags.Secrets
+	SSHSpecs                   []*buildflags.SSH
 	ShmSize                    opts.MemBytes
 	Tags                       []string
 	Target                     string

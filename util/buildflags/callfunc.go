@@ -1,17 +1,37 @@
 package buildflags
 
 import (
+	"fmt"
 	"strconv"
 	"strings"
 
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/go-csvvalue"
 )
 
 const defaultCallFunc = "build"
 
-func ParseCallFunc(str string) (*controllerapi.CallFunc, error) {
+type CallFunc struct {
+	Name         string
+	Format       string
+	IgnoreStatus bool
+}
+
+func (x *CallFunc) String() string {
+	var elems []string
+	if x.Name != "" {
+		elems = append(elems, fmt.Sprintf("Name:%q", x.Name))
+	}
+	if x.Format != "" {
+		elems = append(elems, fmt.Sprintf("Format:%q", x.Format))
+	}
+	if x.IgnoreStatus {
+		elems = append(elems, fmt.Sprintf("IgnoreStatus:%v", x.IgnoreStatus))
+	}
+	return strings.Join(elems, " ")
+}
+
+func ParseCallFunc(str string) (*CallFunc, error) {
 	if str == "" {
 		return nil, nil
 	}
@@ -20,7 +40,7 @@ func ParseCallFunc(str string) (*controllerapi.CallFunc, error) {
 	if err != nil {
 		return nil, err
 	}
-	f := &controllerapi.CallFunc{}
+	f := &CallFunc{}
 	for _, field := range fields {
 		parts := strings.SplitN(field, "=", 2)
 		if len(parts) == 2 {

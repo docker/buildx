@@ -79,7 +79,6 @@ Area or component of the project affected. Please note that the table below may 
 | `area/checks`                  | Any        | `checks`                   |
 | `area/ci`                      | Any        | Project CI                 |
 | `area/cli`                     | Any        | `cli`                      |
-| `area/controller`              | Any        | `controller`               |
 | `area/debug`                   | Any        | `debug`                    |
 | `area/dependencies`            | Any        | Project dependencies       |
 | `area/dockerfile`              | Any        | `dockerfile`               |

@@ -5,18 +5,18 @@ import (
 	"fmt"
 	"io"
 
-	controllerapi "github.com/docker/buildx/controller/pb"
+	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/monitor/types"
 )
 
 type RollbackCmd struct {
 	m types.Monitor
 
-	invokeConfig *controllerapi.InvokeConfig
+	invokeConfig *build.InvokeConfig
 	stdout       io.WriteCloser
 }
 
-func NewRollbackCmd(m types.Monitor, invokeConfig *controllerapi.InvokeConfig, stdout io.WriteCloser) types.Command {
+func NewRollbackCmd(m types.Monitor, invokeConfig *build.InvokeConfig, stdout io.WriteCloser) types.Command {
 	return &RollbackCmd{m, invokeConfig, stdout}
 }
 

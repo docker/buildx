@@ -19,7 +19,6 @@ import (
 	composecli "github.com/compose-spec/compose-go/v2/cli"
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
@@ -1439,20 +1438,19 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 			})
 		}
 	}
-	secrets = secrets.Normalize()
-	bo.SecretSpecs = secrets.ToPB()
-	secretAttachment, err := controllerapi.CreateSecrets(bo.SecretSpecs)
+	bo.SecretSpecs = secrets.Normalize()
+	secretAttachment, err := build.CreateSecrets(bo.SecretSpecs)
 	if err != nil {
 		return nil, err
 	}
 	bo.Session = append(bo.Session, secretAttachment)
 
-	bo.SSHSpecs = t.SSH.ToPB()
+	bo.SSHSpecs = t.SSH
 	if len(bo.SSHSpecs) == 0 && buildflags.IsGitSSH(bi.ContextPath) || (inp != nil && buildflags.IsGitSSH(inp.URL)) {
-		bo.SSHSpecs = []*controllerapi.SSH{{ID: "default"}}
+		bo.SSHSpecs = []*buildflags.SSH{{ID: "default"}}
 	}
 
-	sshAttachment, err := controllerapi.CreateSSH(bo.SSHSpecs)
+	sshAttachment, err := build.CreateSSH(bo.SSHSpecs)
 	if err != nil {
 		return nil, err
 	}
@@ -1469,13 +1467,13 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 
 	if t.CacheFrom != nil {
-		bo.CacheFrom = controllerapi.CreateCaches(t.CacheFrom.ToPB())
+		bo.CacheFrom = build.CreateCaches(t.CacheFrom)
 	}
 	if t.CacheTo != nil {
-		bo.CacheTo = controllerapi.CreateCaches(t.CacheTo.ToPB())
+		bo.CacheTo = build.CreateCaches(t.CacheTo)
 	}
 
-	bo.Exports, bo.ExportsLocalPathsTemporary, err = controllerapi.CreateExports(t.Outputs.ToPB())
+	bo.Exports, bo.ExportsLocalPathsTemporary, err = build.CreateExports(t.Outputs)
 	if err != nil {
 		return nil, err
 	}
@@ -1490,7 +1488,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		}
 	}
 
-	bo.Attests = controllerapi.CreateAttestations(t.Attest.ToPB())
+	bo.Attests = t.Attest.ToMap()
 
 	bo.SourcePolicy, err = build.ReadSourcePolicy()
 	if err != nil {

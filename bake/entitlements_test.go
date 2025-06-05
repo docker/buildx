@@ -8,7 +8,7 @@ import (
 	"testing"
 
 	"github.com/docker/buildx/build"
-	"github.com/docker/buildx/controller/pb"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/entitlements"
@@ -264,7 +264,7 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "SSHMissing",
 			opt: build.Options{
-				SSHSpecs: []*pb.SSH{
+				SSHSpecs: []*buildflags.SSH{
 					{
 						ID: "test",
 					},
@@ -296,7 +296,7 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "SecretFromSubFile",
 			opt: build.Options{
-				SecretSpecs: []*pb.Secret{
+				SecretSpecs: []*buildflags.Secret{
 					{
 						FilePath: filepath.Join(dir1, "subfile"),
 					},
@@ -309,7 +309,7 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "SecretFromEscapeLink",
 			opt: build.Options{
-				SecretSpecs: []*pb.Secret{
+				SecretSpecs: []*buildflags.Secret{
 					{
 						FilePath: escapeLink,
 					},
@@ -325,7 +325,7 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "SecretFromEscapeLinkAllowRoot",
 			opt: build.Options{
-				SecretSpecs: []*pb.Secret{
+				SecretSpecs: []*buildflags.Secret{
 					{
 						FilePath: escapeLink,
 					},
@@ -352,7 +352,7 @@ func TestValidateEntitlements(t *testing.T) {
 		{
 			name: "SecretFromEscapeLinkAllowAny",
 			opt: build.Options{
-				SecretSpecs: []*pb.Secret{
+				SecretSpecs: []*buildflags.Secret{
 					{
 						FilePath: escapeLink,
 					},

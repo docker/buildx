@@ -7,7 +7,6 @@ import (
 	"strconv"
 	"strings"
 
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/go-csvvalue"
 )
@@ -33,16 +32,32 @@ func (a Attests) Normalize() Attests {
 	return removeAttestDupes(a)
 }
 
-func (a Attests) ToPB() []*controllerapi.Attest {
-	if len(a) == 0 {
-		return nil
-	}
+func (a Attests) ToMap() map[string]*string {
+	result := map[string]*string{}
+	for _, attest := range a {
+		// ignore duplicates
+		if _, ok := result[attest.Type]; ok {
+			continue
+		}
 
-	entries := make([]*controllerapi.Attest, len(a))
-	for i, entry := range a {
-		entries[i] = entry.ToPB()
+		if attest.Disabled {
+			result[attest.Type] = nil
+			continue
+		}
+
+		var b csvBuilder
+		if attest.Type != "" {
+			b.Write("type", attest.Type)
+		}
+		if attest.Disabled {
+			b.Write("disabled", "true")
+		}
+		b.WriteAttributes(attest.Attrs)
+
+		s := b.String()
+		result[attest.Type] = &s
 	}
-	return entries
+	return result
 }
 
 type Attest struct {
@@ -70,23 +85,6 @@ func (a *Attest) String() string {
 		b.WriteAttributes(a.Attrs)
 	}
 	return b.String()
-}
-
-func (a *Attest) ToPB() *controllerapi.Attest {
-	var b csvBuilder
-	if a.Type != "" {
-		b.Write("type", a.Type)
-	}
-	if a.Disabled {
-		b.Write("disabled", "true")
-	}
-	b.WriteAttributes(a.Attrs)
-
-	return &controllerapi.Attest{
-		Type:     a.Type,
-		Disabled: a.Disabled,
-		Attrs:    b.String(),
-	}
 }
 
 func (a *Attest) MarshalJSON() ([]byte, error) {
@@ -182,7 +180,7 @@ func CanonicalizeAttest(attestType string, in string) string {
 	return fmt.Sprintf("type=%s,%s", attestType, in)
 }
 
-func ParseAttests(in []string) ([]*controllerapi.Attest, error) {
+func ParseAttests(in []string) (Attests, error) {
 	var outs []*Attest
 	for _, s := range in {
 		var out Attest
@@ -191,66 +189,7 @@ func ParseAttests(in []string) ([]*controllerapi.Attest, error) {
 		}
 		outs = append(outs, &out)
 	}
-	return ConvertAttests(outs)
-}
-
-// ConvertAttests converts Attestations for the controller API from
-// the ones in this package.
-//
-// Attestations of the same type will cause an error. Some tools,
-// like bake, remove the duplicates before calling this function.
-func ConvertAttests(in []*Attest) ([]*controllerapi.Attest, error) {
-	out := make([]*controllerapi.Attest, 0, len(in))
-
-	// Check for duplicate attestations while we convert them
-	// to the controller API.
-	found := map[string]struct{}{}
-	for _, attest := range in {
-		if _, ok := found[attest.Type]; ok {
-			return nil, errors.Errorf("duplicate attestation field %s", attest.Type)
-		}
-		found[attest.Type] = struct{}{}
-		out = append(out, attest.ToPB())
-	}
-	return out, nil
-}
-
-func ParseAttest(in string) (*controllerapi.Attest, error) {
-	if in == "" {
-		return nil, nil
-	}
-
-	fields, err := csvvalue.Fields(in, nil)
-	if err != nil {
-		return nil, err
-	}
-
-	attest := controllerapi.Attest{
-		Attrs: in,
-	}
-	for _, field := range fields {
-		key, value, ok := strings.Cut(field, "=")
-		if !ok {
-			return nil, errors.Errorf("invalid value %s", field)
-		}
-		key = strings.TrimSpace(strings.ToLower(key))
-
-		switch key {
-		case "type":
-			attest.Type = value
-		case "disabled":
-			disabled, err := strconv.ParseBool(value)
-			if err != nil {
-				return nil, errors.Wrapf(err, "invalid value %s", field)
-			}
-			attest.Disabled = disabled
-		}
-	}
-	if attest.Type == "" {
-		return nil, errors.Errorf("attestation type not specified")
-	}
-
-	return &attest, nil
+	return outs, nil
 }
 
 func removeAttestDupes(s []*Attest) []*Attest {

@@ -22,7 +22,6 @@ import (
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
@@ -348,7 +347,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			continue
 		}
 
-		pf := &pb.CallFunc{
+		pf := &buildflags.CallFunc{
 			Name:         req.CallFunc.Name,
 			Format:       req.CallFunc.Format,
 			IgnoreStatus: req.CallFunc.IgnoreStatus,
