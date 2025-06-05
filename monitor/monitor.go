@@ -12,9 +12,8 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
-	controllerapi "github.com/docker/buildx/controller/pb"
-	"github.com/docker/buildx/controller/processes"
 	"github.com/docker/buildx/monitor/commands"
+	"github.com/docker/buildx/monitor/processes"
 	"github.com/docker/buildx/monitor/types"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
@@ -29,7 +28,7 @@ import (
 var ErrReload = errors.New("monitor: reload")
 
 type Monitor struct {
-	invokeConfig *controllerapi.InvokeConfig
+	invokeConfig *build.InvokeConfig
 	printer      *progress.Printer
 
 	stdin  *ioset.SingleForwarder
@@ -41,7 +40,7 @@ type Monitor struct {
 	mu  sync.Mutex
 }
 
-func New(cfg *controllerapi.InvokeConfig, stdin io.ReadCloser, stdout, stderr io.WriteCloser, printer *progress.Printer) *Monitor {
+func New(cfg *build.InvokeConfig, stdin io.ReadCloser, stdout, stderr io.WriteCloser, printer *progress.Printer) *Monitor {
 	m := &Monitor{
 		invokeConfig: cfg,
 		printer:      printer,
@@ -113,7 +112,7 @@ func (m *Monitor) Close() error {
 }
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
-func RunMonitor(ctx context.Context, invokeConfig *controllerapi.InvokeConfig, rCtx *build.ResultHandle, stdin io.ReadCloser, stdout, stderr io.WriteCloser, progress *progress.Printer) error {
+func RunMonitor(ctx context.Context, invokeConfig *build.InvokeConfig, rCtx *build.ResultHandle, stdin io.ReadCloser, stdout, stderr io.WriteCloser, progress *progress.Printer) error {
 	if err := progress.Pause(); err != nil {
 		return err
 	}
@@ -333,7 +332,7 @@ type monitor struct {
 	processes *processes.Manager
 }
 
-func (m *monitor) Invoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
+func (m *monitor) Invoke(ctx context.Context, pid string, cfg *build.InvokeConfig, ioIn io.ReadCloser, ioOut io.WriteCloser, ioErr io.WriteCloser) error {
 	proc, ok := m.processes.Get(pid)
 	if !ok {
 		// Start a new process.
@@ -361,19 +360,19 @@ func (m *monitor) Invoke(ctx context.Context, pid string, cfg *controllerapi.Inv
 	}
 }
 
-func (m *monitor) Rollback(ctx context.Context, cfg *controllerapi.InvokeConfig) string {
+func (m *monitor) Rollback(ctx context.Context, cfg *build.InvokeConfig) string {
 	pid := identity.NewID()
 	cfg1 := cfg
 	cfg1.Rollback = true
 	return m.startInvoke(ctx, pid, cfg1)
 }
 
-func (m *monitor) Exec(ctx context.Context, cfg *controllerapi.InvokeConfig) string {
+func (m *monitor) Exec(ctx context.Context, cfg *build.InvokeConfig) string {
 	return m.startInvoke(ctx, identity.NewID(), cfg)
 }
 
 func (m *monitor) Attach(ctx context.Context, pid string) {
-	m.startInvoke(ctx, pid, &controllerapi.InvokeConfig{})
+	m.startInvoke(ctx, pid, &build.InvokeConfig{})
 }
 
 func (m *monitor) Detach() {
@@ -394,7 +393,7 @@ func (m *monitor) close() {
 	m.Detach()
 }
 
-func (m *monitor) startInvoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig) string {
+func (m *monitor) startInvoke(ctx context.Context, pid string, cfg *build.InvokeConfig) string {
 	if m.invokeCancel != nil {
 		m.invokeCancel() // Finish existing attach
 	}
@@ -420,7 +419,7 @@ func (m *monitor) startInvoke(ctx context.Context, pid string, cfg *controllerap
 	return pid
 }
 
-func (m *monitor) invoke(ctx context.Context, pid string, cfg *controllerapi.InvokeConfig) error {
+func (m *monitor) invoke(ctx context.Context, pid string, cfg *build.InvokeConfig) error {
 	m.muxIO.Enable(1)
 	defer m.muxIO.Disable(1)
 	if err := m.muxIO.SwitchTo(1); err != nil {

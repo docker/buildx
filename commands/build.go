@@ -21,9 +21,6 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/commands/debug"
-	cbuild "github.com/docker/buildx/controller/build"
-	controllererrors "github.com/docker/buildx/controller/errdefs"
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
@@ -31,8 +28,10 @@ import (
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
+	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/metricutil"
 	"github.com/docker/buildx/util/osutil"
+	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli"
@@ -45,8 +44,10 @@ import (
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/solver/errdefs"
 	solverpb "github.com/moby/buildkit/solver/pb"
+	sourcepolicy "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/moby/sys/atomicwriter"
@@ -104,7 +105,7 @@ type buildOptions struct {
 	invokeConfig *invokeConfig
 }
 
-func (o *buildOptions) toControllerOptions() (*cbuild.Options, error) {
+func (o *buildOptions) toOptions() (*BuildOptions, error) {
 	var err error
 
 	buildArgs, err := listToMap(o.buildArgs, true)
@@ -117,7 +118,7 @@ func (o *buildOptions) toControllerOptions() (*cbuild.Options, error) {
 		return nil, err
 	}
 
-	opts := cbuild.Options{
+	opts := BuildOptions{
 		Allow:          o.allow,
 		Annotations:    o.annotations,
 		BuildArgs:      buildArgs,
@@ -132,7 +133,7 @@ func (o *buildOptions) toControllerOptions() (*cbuild.Options, error) {
 		ShmSize:        int64(o.shmSize),
 		Tags:           o.tags,
 		Target:         o.target,
-		Ulimits:        dockerUlimitToControllerUlimit(o.ulimits),
+		Ulimits:        o.ulimits,
 		Builder:        o.builder,
 		NoCache:        o.noCache,
 		Pull:           o.pull,
@@ -179,17 +180,15 @@ func (o *buildOptions) toControllerOptions() (*cbuild.Options, error) {
 		}
 	}
 
-	cacheFrom, err := buildflags.ParseCacheEntry(o.cacheFrom)
+	opts.CacheFrom, err = buildflags.ParseCacheEntry(o.cacheFrom)
 	if err != nil {
 		return nil, err
 	}
-	opts.CacheFrom = cacheFrom.ToPB()
 
-	cacheTo, err := buildflags.ParseCacheEntry(o.cacheTo)
+	opts.CacheTo, err = buildflags.ParseCacheEntry(o.cacheTo)
 	if err != nil {
 		return nil, err
 	}
-	opts.CacheTo = cacheTo.ToPB()
 
 	opts.Secrets, err = buildflags.ParseSecretSpecs(o.secrets)
 	if err != nil {
@@ -293,7 +292,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		end(err)
 	}()
 
-	opts, err := options.toControllerOptions()
+	opts, err := options.toOptions()
 	if err != nil {
 		return err
 	}
@@ -350,14 +349,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	}
 
 	done := timeBuildCommand(mp, attributes)
-	var resp *client.SolveResponse
-	var inputs *build.Inputs
-	var retErr error
-	if confutil.IsExperimental() {
-		resp, inputs, retErr = runControllerBuild(ctx, dockerCli, opts, options, printer)
-	} else {
-		resp, inputs, retErr = runBasicBuild(ctx, dockerCli, opts, printer)
-	}
+	resp, inputs, retErr := runBuildWithOptions(ctx, dockerCli, opts, options, printer)
 
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
@@ -415,11 +407,7 @@ func getImageID(resp map[string]string) string {
 	return dgst
 }
 
-func runBasicBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, printer *progress.Printer) (*client.SolveResponse, *build.Inputs, error) {
-	return cbuild.RunBuild(ctx, dockerCli, opts, dockerCli.In(), printer, nil)
-}
-
-func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild.Options, options buildOptions, printer *progress.Printer) (_ *client.SolveResponse, _ *build.Inputs, retErr error) {
+func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *BuildOptions, options buildOptions, printer *progress.Printer) (_ *client.SolveResponse, _ *build.Inputs, retErr error) {
 	if options.invokeConfig != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
 		// stdin must be usable for monitor
 		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
@@ -440,9 +428,9 @@ func runControllerBuild(ctx context.Context, dockerCli command.Cli, opts *cbuild
 	}
 
 	for {
-		resp, inputs, err := cbuild.RunBuild(ctx, dockerCli, opts, in, printer, &bh)
+		resp, inputs, err := RunBuild(ctx, dockerCli, opts, in, printer, &bh)
 		if err != nil {
-			var be *controllererrors.BuildError
+			var be *BuildError
 			if errors.As(err, &be) {
 				retErr = err
 				// We can proceed to monitor
@@ -765,21 +753,6 @@ func listToMap(values []string, defaultEnv bool) (map[string]string, error) {
 	return result, nil
 }
 
-func dockerUlimitToControllerUlimit(u *dockeropts.UlimitOpt) *controllerapi.UlimitOpt {
-	if u == nil {
-		return nil
-	}
-	values := make(map[string]*controllerapi.Ulimit)
-	for _, u := range u.GetList() {
-		values[u.Name] = &controllerapi.Ulimit{
-			Name: u.Name,
-			Hard: u.Hard,
-			Soft: u.Soft,
-		}
-	}
-	return &controllerapi.UlimitOpt{Values: values}
-}
-
 func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui.DisplayMode) {
 	if len(warnings) == 0 || mode == progressui.QuietMode || mode == progressui.RawJSONMode {
 		return
@@ -819,7 +792,7 @@ func printWarnings(w io.Writer, warnings []client.VertexWarning, mode progressui
 	}
 }
 
-func printResult(w io.Writer, f *controllerapi.CallFunc, res map[string]string, target string, inp *build.Inputs) (int, error) {
+func printResult(w io.Writer, f *buildflags.CallFunc, res map[string]string, target string, inp *build.Inputs) (int, error) {
 	switch f.Name {
 	case "outline":
 		return 0, printValue(w, outline.PrintOutline, outline.SubrequestsOutlineDefinition.Version, f.Format, res)
@@ -920,19 +893,19 @@ func printValue(w io.Writer, printer callFunc, version string, format string, re
 }
 
 type invokeConfig struct {
-	controllerapi.InvokeConfig
+	build.InvokeConfig
 	invokeFlag string
 }
 
 func (cfg *invokeConfig) parseInvokeConfig(invoke, on string) error {
 	switch on {
 	case "always":
-		cfg.SuspendOn = controllerapi.SuspendAlways
+		cfg.SuspendOn = build.SuspendAlways
 	case "error":
-		cfg.SuspendOn = controllerapi.SuspendError
+		cfg.SuspendOn = build.SuspendError
 	default:
 		if invoke != "" {
-			cfg.SuspendOn = controllerapi.SuspendAlways
+			cfg.SuspendOn = build.SuspendAlways
 		}
 	}
 
@@ -1056,4 +1029,229 @@ func otelErrorType(err error) string {
 		name = "canceled"
 	}
 	return name
+}
+
+const defaultTargetName = "default"
+
+type BuildOptions struct {
+	ContextPath            string
+	DockerfileName         string
+	CallFunc               *buildflags.CallFunc
+	NamedContexts          map[string]string
+	Allow                  []string
+	Attests                buildflags.Attests
+	BuildArgs              map[string]string
+	CacheFrom              []*buildflags.CacheOptionsEntry
+	CacheTo                []*buildflags.CacheOptionsEntry
+	CgroupParent           string
+	Exports                []*buildflags.ExportEntry
+	ExtraHosts             []string
+	Labels                 map[string]string
+	NetworkMode            string
+	NoCacheFilter          []string
+	Platforms              []string
+	Secrets                buildflags.Secrets
+	ShmSize                int64
+	SSH                    []*buildflags.SSH
+	Tags                   []string
+	Target                 string
+	Ulimits                *dockeropts.UlimitOpt
+	Builder                string
+	NoCache                bool
+	Pull                   bool
+	ExportPush             bool
+	ExportLoad             bool
+	SourcePolicy           *sourcepolicy.Policy
+	Ref                    string
+	GroupRef               string
+	Annotations            []string
+	ProvenanceResponseMode string
+}
+
+// RunBuild runs the specified build and returns the result.
+func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inStream io.Reader, progress progress.Writer, bh *build.Handler) (*client.SolveResponse, *build.Inputs, error) {
+	if in.NoCache && len(in.NoCacheFilter) > 0 {
+		return nil, nil, errors.Errorf("--no-cache and --no-cache-filter cannot currently be used together")
+	}
+
+	contexts := map[string]build.NamedContext{}
+	for name, path := range in.NamedContexts {
+		contexts[name] = build.NamedContext{Path: path}
+	}
+
+	opts := build.Options{
+		Inputs: build.Inputs{
+			ContextPath:    in.ContextPath,
+			DockerfilePath: in.DockerfileName,
+			InStream:       build.NewSyncMultiReader(inStream),
+			NamedContexts:  contexts,
+		},
+		Ref:                    in.Ref,
+		BuildArgs:              in.BuildArgs,
+		CgroupParent:           in.CgroupParent,
+		ExtraHosts:             in.ExtraHosts,
+		Labels:                 in.Labels,
+		NetworkMode:            in.NetworkMode,
+		NoCache:                in.NoCache,
+		NoCacheFilter:          in.NoCacheFilter,
+		Pull:                   in.Pull,
+		ShmSize:                dockeropts.MemBytes(in.ShmSize),
+		Tags:                   in.Tags,
+		Target:                 in.Target,
+		Ulimits:                in.Ulimits,
+		GroupRef:               in.GroupRef,
+		ProvenanceResponseMode: confutil.ParseMetadataProvenance(in.ProvenanceResponseMode),
+	}
+
+	platforms, err := platformutil.Parse(in.Platforms)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts.Platforms = platforms
+
+	dockerConfig := dockerCli.ConfigFile()
+	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		ConfigFile: dockerConfig,
+	}))
+
+	secrets, err := build.CreateSecrets(in.Secrets)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts.Session = append(opts.Session, secrets)
+
+	sshSpecs := in.SSH
+	if len(sshSpecs) == 0 && buildflags.IsGitSSH(in.ContextPath) {
+		sshSpecs = append(sshSpecs, &buildflags.SSH{ID: "default"})
+	}
+	ssh, err := build.CreateSSH(sshSpecs)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts.Session = append(opts.Session, ssh)
+
+	outputs, _, err := build.CreateExports(in.Exports)
+	if err != nil {
+		return nil, nil, err
+	}
+	if in.ExportPush {
+		var pushUsed bool
+		for i := range outputs {
+			if outputs[i].Type == client.ExporterImage {
+				outputs[i].Attrs["push"] = "true"
+				pushUsed = true
+			}
+		}
+		if !pushUsed {
+			outputs = append(outputs, client.ExportEntry{
+				Type: client.ExporterImage,
+				Attrs: map[string]string{
+					"push": "true",
+				},
+			})
+		}
+	}
+	if in.ExportLoad {
+		var loadUsed bool
+		for i := range outputs {
+			if outputs[i].Type == client.ExporterDocker {
+				if _, ok := outputs[i].Attrs["dest"]; !ok {
+					loadUsed = true
+					break
+				}
+			}
+		}
+		if !loadUsed {
+			outputs = append(outputs, client.ExportEntry{
+				Type:  client.ExporterDocker,
+				Attrs: map[string]string{},
+			})
+		}
+	}
+
+	annotations, err := buildflags.ParseAnnotations(in.Annotations)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "parse annotations")
+	}
+
+	for _, o := range outputs {
+		for k, v := range annotations {
+			o.Attrs[k.String()] = v
+		}
+	}
+
+	opts.Exports = outputs
+
+	opts.CacheFrom = build.CreateCaches(in.CacheFrom)
+	opts.CacheTo = build.CreateCaches(in.CacheTo)
+
+	opts.Attests = in.Attests.ToMap()
+
+	opts.SourcePolicy = in.SourcePolicy
+
+	allow, err := buildflags.ParseEntitlements(in.Allow)
+	if err != nil {
+		return nil, nil, err
+	}
+	opts.Allow = allow
+
+	if in.CallFunc != nil {
+		opts.CallFunc = &build.CallFunc{
+			Name:         in.CallFunc.Name,
+			Format:       in.CallFunc.Format,
+			IgnoreStatus: in.CallFunc.IgnoreStatus,
+		}
+	}
+
+	// key string used for kubernetes "sticky" mode
+	contextPathHash, err := filepath.Abs(in.ContextPath)
+	if err != nil {
+		contextPathHash = in.ContextPath
+	}
+
+	b, err := builder.New(dockerCli,
+		builder.WithName(in.Builder),
+		builder.WithContextPathHash(contextPathHash),
+	)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to update builder last activity time")
+	}
+	nodes, err := b.LoadNodes(ctx)
+	if err != nil {
+		return nil, nil, err
+	}
+
+	var inputs *build.Inputs
+	buildOptions := map[string]build.Options{defaultTargetName: opts}
+	resp, err := build.BuildWithResultHandler(ctx, nodes, buildOptions, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), progress, bh)
+	err = wrapBuildError(err, false)
+	if err != nil {
+		return nil, nil, WrapBuild(err)
+	}
+	if i, ok := buildOptions[defaultTargetName]; ok {
+		inputs = &i.Inputs
+	}
+	return resp[defaultTargetName], inputs, nil
+}
+
+type BuildError struct {
+	err error
+}
+
+func (e *BuildError) Unwrap() error {
+	return e.err
+}
+
+func (e *BuildError) Error() string {
+	return e.err.Error()
+}
+
+func WrapBuild(err error) error {
+	if err == nil {
+		return nil
+	}
+	return &BuildError{err: err}
 }

@@ -26,7 +26,6 @@ Arguments available after `buildx debug build` are the same as the normal `build
 ```console
 $ docker buildx debug --invoke /bin/sh build .
 [+] Building 4.2s (19/19) FINISHED
- => [internal] connecting to local controller                                                                                   0.0s
  => [internal] load build definition from Dockerfile                                                                            0.0s
  => => transferring dockerfile: 32B                                                                                             0.0s
  => [internal] load .dockerignore                                                                                               0.0s
@@ -68,7 +67,6 @@ If you want to start a debug session when a build fails, you can use
 ```console
 $ docker buildx debug --on=error build .
 [+] Building 4.2s (19/19) FINISHED
- => [internal] connecting to local controller                                                                                   0.0s
  => [internal] load build definition from Dockerfile                                                                            0.0s
  => => transferring dockerfile: 32B                                                                                             0.0s
  => [internal] load .dockerignore                                                                                               0.0s
@@ -94,7 +92,6 @@ can use `buildx debug` command to start a debug session.
 ```
 $ docker buildx debug
 [+] Building 4.2s (19/19) FINISHED
- => [internal] connecting to local controller                                                                                   0.0s
 (buildx)
 ```
 
@@ -125,41 +122,3 @@ Available commands are:
   rollback	re-runs the interactive container with the step's rootfs contents
 ```
 
-## Build controllers
-
-Debugging is performed using a buildx "controller", which provides a high-level
-abstraction to perform builds. By default, the local controller is used for a
-more stable experience which runs all builds in-process. However, you can also
-use the remote controller to detach the build process from the CLI.
-
-To detach the build process from the CLI, you can use the `--detach=true` flag with
-the build command.
-
-```console
-$ docker buildx debug --invoke /bin/sh build --detach=true .
-```
-
-If you start a debugging session using the `--invoke` flag with a detached
-build, then you can attach to it using the `buildx debug` command to
-immediately enter the monitor mode.
-
-```console
-$ docker buildx debug
-[+] Building 0.0s (1/1) FINISHED                                                                                                                                                                                
- => [internal] connecting to remote controller
-(buildx) list
-ID                              CURRENT_SESSION
-xfe1162ovd9def8yapb4ys66t       false
-(buildx) attach xfe1162ovd9def8yapb4ys66t
-Attached to process "". Press Ctrl-a-c to switch to the new container
-(buildx) ps
-PID                             CURRENT_SESSION COMMAND
-3ug8iqaufiwwnukimhqqt06jz       false           [sh]
-(buildx) attach 3ug8iqaufiwwnukimhqqt06jz
-Attached to process "3ug8iqaufiwwnukimhqqt06jz". Press Ctrl-a-c to switch to the new container
-(buildx) Switched IO
-/ # ls
-bin    etc    lib    mnt    proc   run    srv    tmp    var
-dev    home   media  opt    root   sbin   sys    usr    work
-/ # 
-```

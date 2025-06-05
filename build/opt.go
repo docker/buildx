@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -11,12 +12,15 @@ import (
 	"strings"
 	"syscall"
 
+	awsconfig "github.com/aws/aws-sdk-go-v2/config"
+	"github.com/containerd/console"
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/plugins/content/local"
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/osutil"
@@ -26,6 +30,9 @@ import (
 	"github.com/moby/buildkit/client/ociindex"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/secrets/secretsprovider"
+	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/apicaps"
@@ -659,3 +666,221 @@ type fs struct {
 }
 
 var _ fsutil.FS = &fs{}
+
+func CreateSSH(ssh []*buildflags.SSH) (session.Attachable, error) {
+	configs := make([]sshprovider.AgentConfig, 0, len(ssh))
+	for _, ssh := range ssh {
+		cfg := sshprovider.AgentConfig{
+			ID:    ssh.ID,
+			Paths: slices.Clone(ssh.Paths),
+		}
+		configs = append(configs, cfg)
+	}
+	return sshprovider.NewSSHAgentProvider(configs)
+}
+
+func CreateSecrets(secrets []*buildflags.Secret) (session.Attachable, error) {
+	fs := make([]secretsprovider.Source, 0, len(secrets))
+	for _, secret := range secrets {
+		fs = append(fs, secretsprovider.Source{
+			ID:       secret.ID,
+			FilePath: secret.FilePath,
+			Env:      secret.Env,
+		})
+	}
+	store, err := secretsprovider.NewStore(fs)
+	if err != nil {
+		return nil, err
+	}
+	return secretsprovider.NewSecretProvider(store), nil
+}
+
+func CreateExports(entries []*buildflags.ExportEntry) ([]client.ExportEntry, []string, error) {
+	var outs []client.ExportEntry
+	var localPaths []string
+	if len(entries) == 0 {
+		return nil, nil, nil
+	}
+	var stdoutUsed bool
+	for _, entry := range entries {
+		if entry.Type == "" {
+			return nil, nil, errors.Errorf("type is required for output")
+		}
+
+		out := client.ExportEntry{
+			Type:  entry.Type,
+			Attrs: map[string]string{},
+		}
+		maps.Copy(out.Attrs, entry.Attrs)
+
+		supportFile := false
+		supportDir := false
+		switch out.Type {
+		case client.ExporterLocal:
+			supportDir = true
+		case client.ExporterTar:
+			supportFile = true
+		case client.ExporterOCI, client.ExporterDocker:
+			tar, err := strconv.ParseBool(out.Attrs["tar"])
+			if err != nil {
+				tar = true
+			}
+			supportFile = tar
+			supportDir = !tar
+		case "registry":
+			out.Type = client.ExporterImage
+			out.Attrs["push"] = "true"
+		}
+
+		if supportDir {
+			if entry.Destination == "" {
+				return nil, nil, errors.Errorf("dest is required for %s exporter", out.Type)
+			}
+			if entry.Destination == "-" {
+				return nil, nil, errors.Errorf("dest cannot be stdout for %s exporter", out.Type)
+			}
+
+			fi, err := os.Stat(entry.Destination)
+			if err != nil && !os.IsNotExist(err) {
+				return nil, nil, errors.Wrapf(err, "invalid destination directory: %s", entry.Destination)
+			}
+			if err == nil && !fi.IsDir() {
+				return nil, nil, errors.Errorf("destination directory %s is a file", entry.Destination)
+			}
+			out.OutputDir = entry.Destination
+			localPaths = append(localPaths, entry.Destination)
+		}
+		if supportFile {
+			if entry.Destination == "" && out.Type != client.ExporterDocker {
+				entry.Destination = "-"
+			}
+			if entry.Destination == "-" {
+				if stdoutUsed {
+					return nil, nil, errors.Errorf("multiple outputs configured to write to stdout")
+				}
+				if _, err := console.ConsoleFromFile(os.Stdout); err == nil {
+					return nil, nil, errors.Errorf("dest file is required for %s exporter. refusing to write to console", out.Type)
+				}
+				out.Output = wrapWriteCloser(os.Stdout)
+				stdoutUsed = true
+			} else if entry.Destination != "" {
+				fi, err := os.Stat(entry.Destination)
+				if err != nil && !os.IsNotExist(err) {
+					return nil, nil, errors.Wrapf(err, "invalid destination file: %s", entry.Destination)
+				}
+				if err == nil && fi.IsDir() {
+					return nil, nil, errors.Errorf("destination file %s is a directory", entry.Destination)
+				}
+				f, err := os.Create(entry.Destination)
+				if err != nil {
+					return nil, nil, errors.Errorf("failed to open %s", err)
+				}
+				out.Output = wrapWriteCloser(f)
+				localPaths = append(localPaths, entry.Destination)
+			}
+		}
+
+		outs = append(outs, out)
+	}
+	return outs, localPaths, nil
+}
+
+func wrapWriteCloser(wc io.WriteCloser) func(map[string]string) (io.WriteCloser, error) {
+	return func(map[string]string) (io.WriteCloser, error) {
+		return wc, nil
+	}
+}
+
+func CreateCaches(entries []*buildflags.CacheOptionsEntry) []client.CacheOptionsEntry {
+	var outs []client.CacheOptionsEntry
+	if len(entries) == 0 {
+		return nil
+	}
+
+	for _, entry := range entries {
+		out := client.CacheOptionsEntry{
+			Type:  entry.Type,
+			Attrs: map[string]string{},
+		}
+		maps.Copy(out.Attrs, entry.Attrs)
+		addGithubToken(&out)
+		addAwsCredentials(&out)
+		if !isActive(&out) {
+			continue
+		}
+		outs = append(outs, out)
+	}
+	return outs
+}
+
+func addGithubToken(ci *client.CacheOptionsEntry) {
+	if ci.Type != "gha" {
+		return
+	}
+	version, ok := ci.Attrs["version"]
+	if !ok {
+		// https://github.com/actions/toolkit/blob/2b08dc18f261b9fdd978b70279b85cbef81af8bc/packages/cache/src/internal/config.ts#L19
+		if v, ok := os.LookupEnv("ACTIONS_CACHE_SERVICE_V2"); ok {
+			if b, err := strconv.ParseBool(v); err == nil && b {
+				version = "2"
+			}
+		}
+	}
+	if _, ok := ci.Attrs["token"]; !ok {
+		if v, ok := os.LookupEnv("ACTIONS_RUNTIME_TOKEN"); ok {
+			ci.Attrs["token"] = v
+		}
+	}
+	if _, ok := ci.Attrs["url_v2"]; !ok && version == "2" {
+		// https://github.com/actions/toolkit/blob/2b08dc18f261b9fdd978b70279b85cbef81af8bc/packages/cache/src/internal/config.ts#L34-L35
+		if v, ok := os.LookupEnv("ACTIONS_RESULTS_URL"); ok {
+			ci.Attrs["url_v2"] = v
+		}
+	}
+	if _, ok := ci.Attrs["url"]; !ok {
+		// https://github.com/actions/toolkit/blob/2b08dc18f261b9fdd978b70279b85cbef81af8bc/packages/cache/src/internal/config.ts#L28-L33
+		if v, ok := os.LookupEnv("ACTIONS_CACHE_URL"); ok {
+			ci.Attrs["url"] = v
+		} else if v, ok := os.LookupEnv("ACTIONS_RESULTS_URL"); ok {
+			ci.Attrs["url"] = v
+		}
+	}
+}
+
+func addAwsCredentials(ci *client.CacheOptionsEntry) {
+	if ci.Type != "s3" {
+		return
+	}
+	_, okAccessKeyID := ci.Attrs["access_key_id"]
+	_, okSecretAccessKey := ci.Attrs["secret_access_key"]
+	// If the user provides access_key_id, secret_access_key, do not override the session token.
+	if okAccessKeyID && okSecretAccessKey {
+		return
+	}
+	ctx := context.TODO()
+	awsConfig, err := awsconfig.LoadDefaultConfig(ctx)
+	if err != nil {
+		return
+	}
+	credentials, err := awsConfig.Credentials.Retrieve(ctx)
+	if err != nil {
+		return
+	}
+	if !okAccessKeyID && credentials.AccessKeyID != "" {
+		ci.Attrs["access_key_id"] = credentials.AccessKeyID
+	}
+	if !okSecretAccessKey && credentials.SecretAccessKey != "" {
+		ci.Attrs["secret_access_key"] = credentials.SecretAccessKey
+	}
+	if _, ok := ci.Attrs["session_token"]; !ok && credentials.SessionToken != "" {
+		ci.Attrs["session_token"] = credentials.SessionToken
+	}
+}
+
+func isActive(ce *client.CacheOptionsEntry) bool {
+	// Always active if not gha.
+	if ce.Type != "gha" {
+		return true
+	}
+	return ce.Attrs["token"] != "" && (ce.Attrs["url"] != "" || ce.Attrs["url_v2"] != "")
+}

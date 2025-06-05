@@ -8,11 +8,40 @@ import (
 	"sync/atomic"
 	"syscall"
 
-	controllerapi "github.com/docker/buildx/controller/pb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
+
+type InvokeConfig struct {
+	Entrypoint []string
+	Cmd        []string
+	NoCmd      bool
+	Env        []string
+	User       string
+	NoUser     bool
+	Cwd        string
+	NoCwd      bool
+	Tty        bool
+	Rollback   bool
+	Initial    bool
+	SuspendOn  SuspendOn
+}
+
+func (cfg *InvokeConfig) NeedsDebug(err error) bool {
+	return cfg.SuspendOn.DebugEnabled(err)
+}
+
+type SuspendOn int
+
+const (
+	SuspendError SuspendOn = iota
+	SuspendAlways
+)
+
+func (s SuspendOn) DebugEnabled(err error) bool {
+	return err != nil || s == SuspendAlways
+}
 
 type Container struct {
 	cancelOnce      sync.Once
@@ -24,7 +53,7 @@ type Container struct {
 	resultCtx       *ResultHandle
 }
 
-func NewContainer(ctx context.Context, resultCtx *ResultHandle, cfg *controllerapi.InvokeConfig) (*Container, error) {
+func NewContainer(ctx context.Context, resultCtx *ResultHandle, cfg *InvokeConfig) (*Container, error) {
 	mainCtx := ctx
 
 	ctrCh := make(chan *Container)
@@ -97,7 +126,7 @@ func (c *Container) markUnavailable() {
 	c.isUnavailable.Store(true)
 }
 
-func (c *Container) Exec(ctx context.Context, cfg *controllerapi.InvokeConfig, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
+func (c *Container) Exec(ctx context.Context, cfg *InvokeConfig, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
 	if isInit := c.initStarted.CompareAndSwap(false, true); isInit {
 		defer func() {
 			// container can't be used after init exits
@@ -112,7 +141,7 @@ func (c *Container) Exec(ctx context.Context, cfg *controllerapi.InvokeConfig, s
 	return err
 }
 
-func exec(ctx context.Context, resultCtx *ResultHandle, cfg *controllerapi.InvokeConfig, ctr gateway.Container, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
+func exec(ctx context.Context, resultCtx *ResultHandle, cfg *InvokeConfig, ctr gateway.Container, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {
 	processCfg, err := resultCtx.getProcessConfig(cfg, stdin, stdout, stderr)
 	if err != nil {
 		return err

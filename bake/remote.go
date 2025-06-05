@@ -7,9 +7,10 @@ import (
 	"os"
 	"strings"
 
+	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
-	controllerapi "github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
@@ -33,27 +34,27 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 
 	st, ok := dockerui.DetectGitContext(url, false)
 	if ok {
-		if ssh, err := controllerapi.CreateSSH([]*controllerapi.SSH{{
+		if ssh, err := build.CreateSSH([]*buildflags.SSH{{
 			ID:    "default",
 			Paths: strings.Split(os.Getenv("BUILDX_BAKE_GIT_SSH"), ","),
 		}}); err == nil {
 			sessions = append(sessions, ssh)
 		}
-		var gitAuthSecrets []*controllerapi.Secret
+		var gitAuthSecrets []*buildflags.Secret
 		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_TOKEN"); ok {
-			gitAuthSecrets = append(gitAuthSecrets, &controllerapi.Secret{
+			gitAuthSecrets = append(gitAuthSecrets, &buildflags.Secret{
 				ID:  llb.GitAuthTokenKey,
 				Env: "BUILDX_BAKE_GIT_AUTH_TOKEN",
 			})
 		}
 		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_HEADER"); ok {
-			gitAuthSecrets = append(gitAuthSecrets, &controllerapi.Secret{
+			gitAuthSecrets = append(gitAuthSecrets, &buildflags.Secret{
 				ID:  llb.GitAuthHeaderKey,
 				Env: "BUILDX_BAKE_GIT_AUTH_HEADER",
 			})
 		}
 		if len(gitAuthSecrets) > 0 {
-			if secrets, err := controllerapi.CreateSecrets(gitAuthSecrets); err == nil {
+			if secrets, err := build.CreateSecrets(gitAuthSecrets); err == nil {
 				sessions = append(sessions, secrets)
 			}
 		}

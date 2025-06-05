@@ -6,7 +6,6 @@ import (
 	"sync/atomic"
 
 	"github.com/docker/buildx/build"
-	"github.com/docker/buildx/controller/pb"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -15,7 +14,7 @@ import (
 // Process provides methods to control a process.
 type Process struct {
 	inEnd         *ioset.Forwarder
-	invokeConfig  *pb.InvokeConfig
+	invokeConfig  *build.InvokeConfig
 	errCh         chan error
 	processCancel func()
 	serveIOCancel func(error)
@@ -98,7 +97,7 @@ func (m *Manager) DeleteProcess(id string) error {
 // When a container isn't available (i.e. first time invoking or the container has exited) or cfg.Rollback is set,
 // this method will start a new container and run the process in it. Otherwise, this method starts a new process in the
 // existing container.
-func (m *Manager) StartProcess(pid string, resultCtx *build.ResultHandle, cfg *pb.InvokeConfig) (*Process, error) {
+func (m *Manager) StartProcess(pid string, resultCtx *build.ResultHandle, cfg *build.InvokeConfig) (*Process, error) {
 	// Get the target result to invoke a container from
 	var ctr *build.Container
 	if a := m.container.Load(); a != nil {
@@ -157,5 +156,5 @@ func (m *Manager) StartProcess(pid string, resultCtx *build.ResultHandle, cfg *p
 
 type ProcessInfo struct {
 	ProcessID    string
-	InvokeConfig *pb.InvokeConfig
+	InvokeConfig *build.InvokeConfig
 }
