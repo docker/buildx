@@ -56,26 +56,18 @@ type Container struct {
 func NewContainer(ctx context.Context, resultCtx *ResultHandle, cfg *InvokeConfig) (*Container, error) {
 	mainCtx := ctx
 
-	ctrCh := make(chan *Container)
-	errCh := make(chan error)
+	ctrCh := make(chan *Container, 1)
+	errCh := make(chan error, 1)
 	go func() {
-		err := resultCtx.build(func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-			ctx, cancel := context.WithCancelCause(ctx)
-			go func() {
-				<-mainCtx.Done()
-				cancel(errors.WithStack(context.Canceled))
-			}()
-
-			containerCfg, err := resultCtx.getContainerConfig(cfg)
-			if err != nil {
-				return nil, err
-			}
+		err := func() error {
 			containerCtx, containerCancel := context.WithCancelCause(ctx)
 			defer containerCancel(errors.WithStack(context.Canceled))
-			bkContainer, err := c.NewContainer(containerCtx, containerCfg)
+
+			bkContainer, err := resultCtx.NewContainer(containerCtx, cfg)
 			if err != nil {
-				return nil, err
+				return err
 			}
+
 			releaseCh := make(chan struct{})
 			container := &Container{
 				containerCancel: containerCancel,
@@ -92,8 +84,8 @@ func NewContainer(ctx context.Context, resultCtx *ResultHandle, cfg *InvokeConfi
 			ctrCh <- container
 			<-container.releaseCh
 
-			return nil, bkContainer.Release(ctx)
-		})
+			return bkContainer.Release(ctx)
+		}()
 		if err != nil {
 			errCh <- err
 		}

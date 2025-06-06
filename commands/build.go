@@ -430,23 +430,11 @@ func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *Build
 	for {
 		resp, inputs, err := RunBuild(ctx, dockerCli, opts, in, printer, &bh)
 		if err != nil {
-			var be *BuildError
-			if errors.As(err, &be) {
-				retErr = err
-				// We can proceed to monitor
-			} else {
-				return nil, nil, errors.Wrapf(err, "failed to build")
+			if errors.Is(err, build.ErrRestart) {
+				retErr = nil
+				continue
 			}
-		}
-
-		if m != nil {
-			if err := m.Run(ctx, err); err != nil {
-				if errors.Is(err, monitor.ErrReload) {
-					retErr = nil
-					continue
-				}
-				logrus.Warnf("failed to run monitor: %v", err)
-			}
+			return nil, nil, errors.Wrapf(err, "failed to build")
 		}
 
 		return resp, inputs, err
@@ -1229,29 +1217,10 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 	resp, err := build.BuildWithResultHandler(ctx, nodes, buildOptions, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), progress, bh)
 	err = wrapBuildError(err, false)
 	if err != nil {
-		return nil, nil, WrapBuild(err)
+		return nil, nil, err
 	}
 	if i, ok := buildOptions[defaultTargetName]; ok {
 		inputs = &i.Inputs
 	}
 	return resp[defaultTargetName], inputs, nil
-}
-
-type BuildError struct {
-	err error
-}
-
-func (e *BuildError) Unwrap() error {
-	return e.err
-}
-
-func (e *BuildError) Error() string {
-	return e.err.Error()
-}
-
-func WrapBuild(err error) error {
-	if err == nil {
-		return nil
-	}
-	return &BuildError{err: err}
 }
