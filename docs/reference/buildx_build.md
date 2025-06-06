@@ -240,19 +240,31 @@ Learn more about the built-in build arguments in the [Dockerfile reference docs]
 Define additional build context with specified contents. In Dockerfile the context can be accessed when `FROM name` or `--from=name` is used.
 When Dockerfile defines a stage with the same name it is overwritten.
 
-The value can be a local source directory, [local OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md), container image (with docker-image:// prefix), Git or HTTP URL.
+The value can be a:
 
-Replace `alpine:latest` with a pinned one:
+- local source directory
+- [local OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md)
+- container image
+- Git URL
+- HTTP URL
 
-```console
-$ docker buildx build --build-context alpine=docker-image://alpine@sha256:0123456789 .
-```
+#### <a name="local-path"></a> Use a local path
 
 Expose a secondary local source directory:
 
 ```console
 $ docker buildx build --build-context project=path/to/project/source .
 # docker buildx build --build-context project=https://github.com/myuser/project.git .
+```
+
+#### <a name="docker-image"></a> Use a container image
+
+Use the `docker-image://` scheme.
+
+Replace `alpine:latest` with a pinned one:
+
+```console
+$ docker buildx build --build-context alpine=docker-image://alpine@sha256:0123456789 .
 ```
 
 ```dockerfile
@@ -263,7 +275,10 @@ COPY --from=project myfile /
 
 #### <a name="source-oci-layout"></a> Use an OCI layout directory as build context
 
-Source an image from a local [OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md),
+Use the `oci-layout:///` scheme.
+
+Source an image from a local
+[OCI layout compliant directory](https://github.com/opencontainers/image-spec/blob/main/image-layout.md),
 either by tag, or by digest:
 
 ```console
@@ -281,7 +296,6 @@ FROM foo
 ```
 
 The OCI layout directory must be compliant with the [OCI layout specification](https://github.com/opencontainers/image-spec/blob/main/image-layout.md).
-You can reference an image in the layout using either tags, or the exact digest.
 
 ### <a name="builder"></a> Override the configured builder instance (--builder)
 
