@@ -18,6 +18,7 @@ import (
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/google/shlex"
+	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
@@ -34,10 +35,6 @@ type Monitor struct {
 	stdin  *ioset.SingleForwarder
 	stdout io.WriteCloser
 	stderr io.WriteCloser
-
-	res *build.ResultHandle
-	idx int
-	mu  sync.Mutex
 }
 
 func New(cfg *build.InvokeConfig, stdin io.ReadCloser, stdout, stderr io.WriteCloser, printer *progress.Printer) *Monitor {
@@ -54,28 +51,32 @@ func New(cfg *build.InvokeConfig, stdin io.ReadCloser, stdout, stderr io.WriteCl
 
 func (m *Monitor) Handler() build.Handler {
 	return build.Handler{
-		OnResult: func(driverIndex int, gotRes *build.ResultHandle) {
-			m.mu.Lock()
-			defer m.mu.Unlock()
+		Evaluate: func(ctx context.Context, c gateway.Client, res *gateway.Result) error {
+			buildErr := res.EachRef(func(ref gateway.Reference) error {
+				return ref.Evaluate(ctx)
+			})
 
-			if m.res == nil || driverIndex < m.idx {
-				m.idx, m.res = driverIndex, gotRes
+			if m.invokeConfig.NeedsDebug(buildErr) {
+				// Print errors before launching monitor
+				if err := printError(buildErr, m.printer); err != nil {
+					logrus.Warnf("failed to print error information: %v", err)
+				}
+
+				rCtx := build.NewResultHandle(ctx, c, res, buildErr)
+				if monitorErr := m.Run(ctx, rCtx); monitorErr != nil {
+					if errors.Is(monitorErr, build.ErrRestart) {
+						return build.ErrRestart
+					}
+					logrus.Warnf("failed to run monitor: %v", monitorErr)
+				}
 			}
+			return buildErr
 		},
 	}
 }
 
-func (m *Monitor) Run(ctx context.Context, buildErr error) error {
-	defer m.reset()
-
-	if !m.invokeConfig.NeedsDebug(buildErr) {
-		return nil
-	}
-
-	// Print errors before launching monitor
-	if err := printError(buildErr, m.printer); err != nil {
-		logrus.Warnf("failed to print error information: %v", err)
-	}
+func (m *Monitor) Run(ctx context.Context, rCtx *build.ResultHandle) error {
+	defer rCtx.Done()
 
 	pr, pw := io.Pipe()
 	m.stdin.SetWriter(pw, func() io.WriteCloser {
@@ -89,22 +90,11 @@ func (m *Monitor) Run(ctx context.Context, buildErr error) error {
 	}
 	defer con.Reset()
 
-	monitorErr := RunMonitor(ctx, m.invokeConfig, m.res, pr, m.stdout, m.stderr, m.printer)
+	monitorErr := RunMonitor(ctx, m.invokeConfig, rCtx, pr, m.stdout, m.stderr, m.printer)
 	if err := pw.Close(); err != nil {
 		logrus.Debug("failed to close monitor stdin pipe reader")
 	}
 	return monitorErr
-}
-
-func (m *Monitor) reset() {
-	m.mu.Lock()
-	defer m.mu.Unlock()
-
-	m.idx = 0
-	if m.res != nil {
-		m.res.Done()
-		m.res = nil
-	}
 }
 
 func (m *Monitor) Close() error {
@@ -382,7 +372,7 @@ func (m *monitor) Detach() {
 }
 
 func (m *monitor) Reload() {
-	m.cancel(ErrReload)
+	m.cancel(build.ErrRestart)
 }
 
 func (m *monitor) AttachedPID() string {
