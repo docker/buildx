@@ -13,7 +13,7 @@ ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs maprange modernize
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS base
-RUN apk add --no-cache git gcc musl-dev
+RUN apk add --no-cache git gcc musl-dev binutils-gold
 
 FROM base AS golangci-build
 WORKDIR /src
