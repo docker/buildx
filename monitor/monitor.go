@@ -113,10 +113,8 @@ func (m *Monitor) Close() error {
 
 // RunMonitor provides an interactive session for running and managing containers via specified IO.
 func RunMonitor(ctx context.Context, invokeConfig *build.InvokeConfig, rCtx *build.ResultHandle, stdin io.ReadCloser, stdout, stderr io.WriteCloser, progress *progress.Printer) error {
-	if err := progress.Pause(); err != nil {
-		return err
-	}
-	defer progress.Unpause()
+	progress.Pause()
+	defer progress.Resume()
 
 	defer stdin.Close()
 
@@ -475,10 +473,10 @@ func printError(err error, printer *progress.Printer) error {
 	if err == nil {
 		return nil
 	}
-	if err := printer.Pause(); err != nil {
-		return err
-	}
-	defer printer.Unpause()
+
+	printer.Pause()
+	defer printer.Resume()
+
 	for _, s := range errdefs.Sources(err) {
 		s.Print(os.Stderr)
 	}

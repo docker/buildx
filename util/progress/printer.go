@@ -16,12 +16,24 @@ import (
 	"go.opentelemetry.io/otel/metric"
 )
 
-type Printer struct {
-	status chan *client.SolveStatus
+type printerState int
 
-	ready     chan struct{}
+const (
+	printerStateDone printerState = iota
+	printerStateRunning
+	printerStatePaused
+)
+
+type Printer struct {
+	out  console.File
+	mode progressui.DisplayMode
+	opt  *printerOpts
+
+	status    chan *client.SolveStatus
+	interrupt chan interruptRequest
+	state     printerState
+
 	done      chan struct{}
-	paused    chan struct{}
 	closeOnce sync.Once
 
 	err          error
@@ -54,13 +66,23 @@ func (p *Printer) IsDone() bool {
 }
 
 func (p *Printer) Pause() error {
-	p.paused = make(chan struct{})
-	return p.Wait()
+	done := make(chan struct{})
+	p.interrupt <- interruptRequest{
+		desiredState: printerStatePaused,
+		done:         done,
+	}
+
+	// Need to wait for a response to confirm we have control
+	// of the console output.
+	<-done
+	return nil
 }
 
-func (p *Printer) Unpause() {
-	close(p.paused)
-	<-p.ready
+func (p *Printer) Resume() {
+	p.interrupt <- interruptRequest{
+		desiredState: printerStateRunning,
+	}
+	// Do not care about waiting for a response.
 }
 
 func (p *Printer) Write(s *client.SolveStatus) {
@@ -115,42 +137,114 @@ func NewPrinter(ctx context.Context, out console.File, mode progressui.DisplayMo
 	}
 
 	pw := &Printer{
-		ready:   make(chan struct{}),
-		metrics: opt.mw,
+		out:       out,
+		mode:      mode,
+		opt:       opt,
+		status:    make(chan *client.SolveStatus),
+		interrupt: make(chan interruptRequest),
+		state:     printerStateRunning,
+		done:      make(chan struct{}),
 	}
+	go pw.run(ctx, d)
+
+	return pw, nil
+}
+
+func (p *Printer) run(ctx context.Context, d progressui.Display) {
+	defer close(p.done)
+	defer close(p.interrupt)
+
+	var ss []*client.SolveStatus
+	for p.state != printerStateDone {
+		switch p.state {
+		case printerStatePaused:
+			ss, p.err = p.bufferDisplay(ctx, ss)
+		case printerStateRunning:
+			var warnings []client.VertexWarning
+			warnings, ss, p.err = p.updateDisplay(ctx, d, ss)
+			p.warnings = append(p.warnings, warnings...)
+
+			d, _ = p.newDisplay()
+		}
+	}
+
+	if p.opt.onclose != nil {
+		p.opt.onclose()
+	}
+}
+
+func (p *Printer) newDisplay() (progressui.Display, error) {
+	return progressui.NewDisplay(p.out, p.mode, p.opt.displayOpts...)
+}
+
+func (p *Printer) updateDisplay(ctx context.Context, d progressui.Display, ss []*client.SolveStatus) ([]client.VertexWarning, []*client.SolveStatus, error) {
+	p.logMu.Lock()
+	p.logSourceMap = map[digest.Digest]any{}
+	p.logMu.Unlock()
+
+	resumeLogs := logutil.Pause(logrus.StandardLogger())
+	defer resumeLogs()
+
+	interruptCh := make(chan interruptRequest, 1)
+	ingress := make(chan *client.SolveStatus)
+
 	go func() {
+		defer close(ingress)
+		defer close(interruptCh)
+
+		for _, s := range ss {
+			ingress <- s
+		}
+
 		for {
-			pw.status = make(chan *client.SolveStatus)
-			pw.done = make(chan struct{})
-			pw.closeOnce = sync.Once{}
-
-			pw.logMu.Lock()
-			pw.logSourceMap = map[digest.Digest]any{}
-			pw.logMu.Unlock()
-
-			resumeLogs := logutil.Pause(logrus.StandardLogger())
-			close(pw.ready)
-			// not using shared context to not disrupt display but let is finish reporting errors
-			pw.warnings, pw.err = d.UpdateFrom(ctx, pw.status)
-			resumeLogs()
-			close(pw.done)
-
-			if opt.onclose != nil {
-				opt.onclose()
+			select {
+			case s, ok := <-p.status:
+				if !ok {
+					return
+				}
+				ingress <- s
+			case req := <-p.interrupt:
+				interruptCh <- req
+				return
+			case <-ctx.Done():
+				return
 			}
-			if pw.paused == nil {
-				break
-			}
-
-			pw.ready = make(chan struct{})
-			<-pw.paused
-			pw.paused = nil
-
-			d, _ = progressui.NewDisplay(out, mode, opt.displayOpts...)
 		}
 	}()
-	<-pw.ready
-	return pw, nil
+
+	warnings, err := d.UpdateFrom(context.Background(), ingress)
+	if err == nil {
+		err = context.Cause(ctx)
+	}
+
+	interrupt := <-interruptCh
+	p.state = interrupt.desiredState
+	interrupt.close()
+	return warnings, nil, err
+}
+
+// bufferDisplay will buffer display updates from the status channel into a
+// slice.
+//
+// This method returns if either status gets closed or if an interrupt is received.
+func (p *Printer) bufferDisplay(ctx context.Context, ss []*client.SolveStatus) ([]*client.SolveStatus, error) {
+	for {
+		select {
+		case s, ok := <-p.status:
+			if !ok {
+				p.state = printerStateDone
+				return ss, nil
+			}
+			ss = append(ss, s)
+		case req := <-p.interrupt:
+			p.state = req.desiredState
+			req.close()
+			return ss, nil
+		case <-ctx.Done():
+			p.state = printerStateDone
+			return nil, context.Cause(ctx)
+		}
+	}
 }
 
 func (p *Printer) WriteBuildRef(target string, ref string) {
@@ -220,4 +314,15 @@ func dedupWarnings(inp []client.VertexWarning) []client.VertexWarning {
 		res = append(res, w)
 	}
 	return res
+}
+
+type interruptRequest struct {
+	desiredState printerState
+	done         chan<- struct{}
+}
+
+func (req *interruptRequest) close() {
+	if req.done != nil {
+		close(req.done)
+	}
 }
