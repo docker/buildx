@@ -59,6 +59,8 @@ const (
 	printLintFallbackImage = "docker/dockerfile:1.8.1@sha256:e87caa74dcb7d46cd820352bfea12591f3dba3ddc4285e19c7dcd13359f7cefd"
 )
 
+var ErrRestart = errors.New("build: restart")
+
 type Options struct {
 	Inputs Inputs
 
@@ -312,7 +314,7 @@ func toRepoOnly(in string) (string, error) {
 }
 
 type Handler struct {
-	OnResult func(driverIdx int, rCtx *ResultHandle)
+	Evaluate func(ctx context.Context, c gateway.Client, res *gateway.Result) error
 }
 
 func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
@@ -479,9 +481,14 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					ch, done := progress.NewChannel(pw)
 					defer func() { <-done }()
 
-					cc := c
-					var callRes map[string][]byte
-					buildFunc := func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
+					var (
+						callRes     map[string][]byte
+						frontendErr error
+					)
+					buildFunc := func(ctx context.Context, c gateway.Client) (_ *gateway.Result, retErr error) {
+						// Capture the error from this build function.
+						defer catchFrontendError(&retErr, &frontendErr)
+
 						if opt.CallFunc != nil {
 							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
 								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
@@ -504,24 +511,25 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						results.Set(rKey, res)
 
 						if children := childTargets[rKey]; len(children) > 0 {
-							if err := waitForChildren(ctx, res, results, children); err != nil {
+							if err := waitForChildren(ctx, bh, c, res, results, children); err != nil {
+								return nil, err
+							}
+						} else if bh != nil && bh.Evaluate != nil {
+							if err := bh.Evaluate(ctx, c, res); err != nil {
 								return nil, err
 							}
 						}
 						return res, nil
 					}
+
 					buildRef := fmt.Sprintf("%s/%s/%s", node.Builder, node.Name, so.Ref)
 
-					var rr *client.SolveResponse
-					if bh != nil && bh.OnResult != nil {
-						var resultHandle *ResultHandle
-						resultHandle, rr, err = NewResultHandle(ctx, cc, *so, "buildx", buildFunc, ch)
-						bh.OnResult(dp.driverIndex, resultHandle)
-					} else {
-						span, ctx := tracing.StartSpan(ctx, "build")
-						rr, err = c.Build(ctx, *so, "buildx", buildFunc, ch)
-						tracing.FinishWithError(span, err)
+					span, ctx := tracing.StartSpan(ctx, "build")
+					rr, err := c.Build(ctx, *so, "buildx", buildFunc, ch)
+					if errors.Is(frontendErr, ErrRestart) {
+						err = ErrRestart
 					}
+					tracing.FinishWithError(span, err)
 
 					if !so.Internal && desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
 						if err != nil {
@@ -1191,7 +1199,7 @@ func solve(ctx context.Context, c gateway.Client, req gateway.SolveRequest) (*ga
 	return res, nil
 }
 
-func waitForChildren(ctx context.Context, res *gateway.Result, results *waitmap.Map, children []string) error {
+func waitForChildren(ctx context.Context, bh *Handler, c gateway.Client, res *gateway.Result, results *waitmap.Map, children []string) error {
 	// wait for the child targets to register their LLB before evaluating
 	_, err := results.Get(ctx, children...)
 	if err != nil {
@@ -1200,6 +1208,9 @@ func waitForChildren(ctx context.Context, res *gateway.Result, results *waitmap.
 	// we need to wait until the child targets have completed before we can release
 	eg, ctx := errgroup.WithContext(ctx)
 	eg.Go(func() error {
+		if bh != nil && bh.Evaluate != nil {
+			return bh.Evaluate(ctx, c, res)
+		}
 		return res.EachRef(func(ref gateway.Reference) error {
 			return ref.Evaluate(ctx)
 		})
@@ -1209,4 +1220,13 @@ func waitForChildren(ctx context.Context, res *gateway.Result, results *waitmap.
 		return err
 	})
 	return eg.Wait()
+}
+
+func catchFrontendError(retErr, frontendErr *error) {
+	*frontendErr = *retErr
+	if errors.Is(*retErr, ErrRestart) {
+		// Overwrite the sentinel error with a more user friendly message.
+		// This gets stored only in the return error.
+		*retErr = errors.New("build restarted by client")
+	}
 }

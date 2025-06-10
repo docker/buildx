@@ -7,259 +7,41 @@ import (
 	"io"
 	"sync"
 
-	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
-	"github.com/moby/buildkit/solver/result"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"golang.org/x/sync/errgroup"
 )
 
-// NewResultHandle makes a call to client.Build, additionally returning a
-// opaque ResultHandle alongside the standard response and error.
+// NewResultHandle stores a gateway client, gateway result, and the error from
+// an evaluate call if it is present.
 //
 // This ResultHandle can be used to execute additional build steps in the same
 // context as the build occurred, which can allow easy debugging of build
 // failures and successes.
 //
 // If the returned ResultHandle is not nil, the caller must call Done() on it.
-func NewResultHandle(ctx context.Context, cc *client.Client, opt client.SolveOpt, product string, buildFunc gateway.BuildFunc, ch chan *client.SolveStatus) (*ResultHandle, *client.SolveResponse, error) {
-	// Create a new context to wrap the original, and cancel it when the
-	// caller-provided context is cancelled.
-	//
-	// We derive the context from the background context so that we can forbid
-	// cancellation of the build request after <-done is closed (which we do
-	// before returning the ResultHandle).
-	baseCtx := ctx
-	ctx, cancel := context.WithCancelCause(context.Background())
-	done := make(chan struct{})
-	go func() {
-		select {
-		case <-baseCtx.Done():
-			cancel(baseCtx.Err())
-		case <-done:
-			// Once done is closed, we've recorded a ResultHandle, so we
-			// shouldn't allow cancelling the underlying build request anymore.
-		}
-	}()
-
-	// Create a new channel to forward status messages to the original.
-	//
-	// We do this so that we can discard status messages after the main portion
-	// of the build is complete. This is necessary for the solve error case,
-	// where the original gateway is kept open until the ResultHandle is
-	// closed - we don't want progress messages from operations in that
-	// ResultHandle to display after this function exits.
-	//
-	// Additionally, callers should wait for the progress channel to be closed.
-	// If we keep the session open and never close the progress channel, the
-	// caller will likely hang.
-	baseCh := ch
-	ch = make(chan *client.SolveStatus)
-	go func() {
-		for {
-			s, ok := <-ch
-			if !ok {
-				return
-			}
-			select {
-			case <-baseCh:
-				// base channel is closed, discard status messages
-			default:
-				baseCh <- s
-			}
-		}
-	}()
-	defer close(baseCh)
-
-	var resp *client.SolveResponse
-	var respErr error
-	var respHandle *ResultHandle
-
-	go func() {
-		defer func() { cancel(errors.WithStack(context.Canceled)) }() // ensure no dangling processes
-
-		var res *gateway.Result
-		var err error
-		resp, err = cc.Build(ctx, opt, product, func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-			var err error
-			res, err = buildFunc(ctx, c)
-
-			if res != nil && err == nil {
-				// Force evaluation of the build result (otherwise, we likely
-				// won't get a solve error)
-				def, err2 := getDefinition(ctx, res)
-				if err2 != nil {
-					return nil, err2
-				}
-				res, err = evalDefinition(ctx, c, def)
-			}
-
-			if err != nil {
-				// Scenario 1: we failed to evaluate a node somewhere in the
-				// build graph.
-				//
-				// In this case, we construct a ResultHandle from this
-				// original Build session, and return it alongside the original
-				// build error. We then need to keep the gateway session open
-				// until the caller explicitly closes the ResultHandle.
-
-				var se *errdefs.SolveError
-				if errors.As(err, &se) {
-					respHandle = &ResultHandle{
-						done:     make(chan struct{}),
-						solveErr: se,
-						gwClient: c,
-						gwCtx:    ctx,
-					}
-					respErr = err // return original error to preserve stacktrace
-					close(done)
-
-					// Block until the caller closes the ResultHandle.
-					select {
-					case <-respHandle.done:
-					case <-ctx.Done():
-					}
-				}
-			}
-			return res, err
-		}, ch)
-		if respHandle != nil {
-			return
-		}
-		if err != nil {
-			// Something unexpected failed during the build, we didn't succeed,
-			// but we also didn't make it far enough to create a ResultHandle.
-			respErr = err
-			close(done)
-			return
-		}
-
-		// Scenario 2: we successfully built the image with no errors.
-		//
-		// In this case, the original gateway session has now been closed
-		// since the Build has been completed. So, we need to create a new
-		// gateway session to populate the ResultHandle. To do this, we
-		// need to re-evaluate the target result, in this new session. This
-		// should be instantaneous since the result should be cached.
-
-		def, err := getDefinition(ctx, res)
-		if err != nil {
-			respErr = err
-			close(done)
-			return
-		}
-
-		// NOTE: ideally this second connection should be lazily opened
-		opt := opt
-		opt.Ref = ""
-		opt.Exports = nil
-		opt.CacheExports = nil
-		opt.Internal = true
-		_, respErr = cc.Build(ctx, opt, "buildx", func(ctx context.Context, c gateway.Client) (*gateway.Result, error) {
-			res, err := evalDefinition(ctx, c, def)
-			if err != nil {
-				// This should probably not happen, since we've previously
-				// successfully evaluated the same result with no issues.
-				return nil, errors.Wrap(err, "inconsistent solve result")
-			}
-			respHandle = &ResultHandle{
-				done:     make(chan struct{}),
-				res:      res,
-				gwClient: c,
-				gwCtx:    ctx,
-			}
-			close(done)
-
-			// Block until the caller closes the ResultHandle.
-			select {
-			case <-respHandle.done:
-			case <-ctx.Done():
-			}
-			return nil, context.Cause(ctx)
-		}, nil)
-		if respHandle != nil {
-			return
-		}
-		close(done)
-	}()
-
-	// Block until the other thread signals that it's completed the build.
-	select {
-	case <-done:
-	case <-baseCtx.Done():
-		if respErr == nil {
-			respErr = baseCtx.Err()
-		}
+func NewResultHandle(ctx context.Context, c gateway.Client, res *gateway.Result, err error) *ResultHandle {
+	rCtx := &ResultHandle{
+		res:      res,
+		gwClient: c,
 	}
-	return respHandle, resp, respErr
-}
-
-// getDefinition converts a gateway result into a collection of definitions for
-// each ref in the result.
-func getDefinition(ctx context.Context, res *gateway.Result) (*result.Result[*pb.Definition], error) {
-	return result.ConvertResult(res, func(ref gateway.Reference) (*pb.Definition, error) {
-		st, err := ref.ToState()
-		if err != nil {
-			return nil, err
-		}
-		def, err := st.Marshal(ctx)
-		if err != nil {
-			return nil, err
-		}
-		return def.ToPB(), nil
-	})
-}
-
-// evalDefinition performs the reverse of getDefinition, converting a
-// collection of definitions into a gateway result.
-func evalDefinition(ctx context.Context, c gateway.Client, defs *result.Result[*pb.Definition]) (*gateway.Result, error) {
-	// force evaluation of all targets in parallel
-	results := make(map[*pb.Definition]*gateway.Result)
-	resultsMu := sync.Mutex{}
-	eg, egCtx := errgroup.WithContext(ctx)
-	defs.EachRef(func(def *pb.Definition) error {
-		eg.Go(func() error {
-			res, err := c.Solve(egCtx, gateway.SolveRequest{
-				Evaluate:   true,
-				Definition: def,
-			})
-			if err != nil {
-				return err
-			}
-			resultsMu.Lock()
-			results[def] = res
-			resultsMu.Unlock()
-			return nil
-		})
+	if err != nil && !errors.As(err, &rCtx.solveErr) {
 		return nil
-	})
-	if err := eg.Wait(); err != nil {
-		return nil, err
 	}
-	res, _ := result.ConvertResult(defs, func(def *pb.Definition) (gateway.Reference, error) {
-		if res, ok := results[def]; ok {
-			return res.Ref, nil
-		}
-		return nil, nil
-	})
-	return res, nil
+	return rCtx
 }
 
 // ResultHandle is a build result with the client that built it.
 type ResultHandle struct {
 	res      *gateway.Result
 	solveErr *errdefs.SolveError
-
-	done     chan struct{}
-	doneOnce sync.Once
-
 	gwClient gateway.Client
-	gwCtx    context.Context
+
+	doneOnce sync.Once
 
 	cleanups   []func()
 	cleanupsMu sync.Mutex
@@ -274,9 +56,6 @@ func (r *ResultHandle) Done() {
 		for _, f := range cleanups {
 			f()
 		}
-
-		close(r.done)
-		<-r.gwCtx.Done()
 	})
 }
 
@@ -286,9 +65,12 @@ func (r *ResultHandle) registerCleanup(f func()) {
 	r.cleanupsMu.Unlock()
 }
 
-func (r *ResultHandle) build(buildFunc gateway.BuildFunc) (err error) {
-	_, err = buildFunc(r.gwCtx, r.gwClient)
-	return err
+func (r *ResultHandle) NewContainer(ctx context.Context, cfg *InvokeConfig) (gateway.Container, error) {
+	req, err := r.getContainerConfig(cfg)
+	if err != nil {
+		return nil, err
+	}
+	return r.gwClient.NewContainer(ctx, req)
 }
 
 func (r *ResultHandle) getContainerConfig(cfg *InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
