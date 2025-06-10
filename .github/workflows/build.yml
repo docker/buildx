@@ -535,7 +535,7 @@ jobs:
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@da05d552573ad5aba039eaac05058a918a7bf631  # v2.2.2
+        uses: softprops/action-gh-release@d5382d3e6f2fa7bd53cb749d33091853d4985daf  # v2.3.0
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:
