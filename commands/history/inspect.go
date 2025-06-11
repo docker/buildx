@@ -434,7 +434,7 @@ workers0:
 		if err != nil {
 			return errors.Errorf("failed to read provenance %s: %v", prov.descr.Digest, err)
 		}
-		var pred provenancetypes.ProvenancePredicate
+		var pred provenancetypes.ProvenancePredicateSLSA02
 		if err := json.Unmarshal(dt, &pred); err != nil {
 			return errors.Errorf("failed to unmarshal provenance %s: %v", prov.descr.Digest, err)
 		}
@@ -836,6 +836,7 @@ func ociDesc(in *controlapi.Descriptor) ocispecs.Descriptor {
 		Annotations: in.Annotations,
 	}
 }
+
 func descrType(desc ocispecs.Descriptor) string {
 	if typ, ok := desc.Annotations["in-toto.io/predicate-type"]; ok {
 		return typ

@@ -24,7 +24,7 @@ import (
 
 type provenancePredicate struct {
 	Builder *provenanceBuilder `json:"builder,omitempty"`
-	provenancetypes.ProvenancePredicate
+	provenancetypes.ProvenancePredicateSLSA02
 }
 
 type provenanceBuilder struct {
