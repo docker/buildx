@@ -34,8 +34,14 @@ type Resolver struct {
 }
 
 func New(opt Opt) *Resolver {
+	ac := newAuthConfig(opt.Auth)
+	dockerAuth := docker.NewDockerAuthorizer(docker.WithAuthCreds(ac.credentials), docker.WithAuthClient(http.DefaultClient))
+	auth := &withBearerAuthorizer{
+		Authorizer: dockerAuth,
+		AuthConfig: ac,
+	}
 	return &Resolver{
-		auth:   docker.NewDockerAuthorizer(docker.WithAuthCreds(toCredentialsFunc(opt.Auth)), docker.WithAuthClient(http.DefaultClient)),
+		auth:   auth,
 		hosts:  resolver.NewRegistryConfig(opt.RegistryConfig),
 		buffer: contentutil.NewBuffer(),
 	}
