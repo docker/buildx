@@ -122,6 +122,16 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				}
 			}
 
+			extraHosts := map[string]*string{}
+			if s.Build.ExtraHosts != nil {
+				for k, v := range s.Build.ExtraHosts {
+					for _, ip := range v {
+						vv := ip
+						extraHosts[k] = &vv
+					}
+				}
+			}
+
 			var ssh []*buildflags.SSH
 			for _, bkey := range s.Build.SSH {
 				sshkey := composeToBuildkitSSH(bkey)
@@ -180,6 +190,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				Secrets:     secrets,
 				ShmSize:     shmSize,
 				Ulimits:     ulimits,
+				ExtraHosts:  extraHosts,
 			}
 			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err

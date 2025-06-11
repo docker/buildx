@@ -366,6 +366,7 @@ You can override the following fields:
 * `context`
 * `dockerfile`
 * `entitlements`
+* `extra-hosts`
 * `labels`
 * `load`
 * `no-cache`
