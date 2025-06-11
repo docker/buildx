@@ -1395,7 +1395,7 @@ target "default" {
 	dtprv, err := json.Marshal(md.Default.BuildProvenance)
 	require.NoError(t, err)
 
-	var prv provenancetypes.ProvenancePredicate
+	var prv provenancetypes.ProvenancePredicateSLSA02
 	require.NoError(t, json.Unmarshal(dtprv, &prv))
 	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
 }

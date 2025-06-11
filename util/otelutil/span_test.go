@@ -30,7 +30,7 @@ func TestParseSpanStubs(t *testing.T) {
 	require.NoError(t, err)
 	dtotel, err := os.ReadFile(otlpFixture)
 	require.NoError(t, err)
-	require.Equal(t, string(dtotel), string(dtSpanStubs))
+	require.Equal(t, string(bytes.TrimSpace(dtotel)), string(dtSpanStubs))
 
 	exp, err := stdouttrace.New(stdouttrace.WithPrettyPrint())
 	require.NoError(t, err)
