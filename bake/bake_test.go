@@ -27,6 +27,9 @@ target "webDEP" {
 	no-cache = true
 	shm-size = "128m"
 	ulimits = ["nofile=1024:1024"]
+	extra-hosts = {
+		my_hostname = "8.8.8.8"
+	}
 }
 
 target "webapp" {
@@ -64,6 +67,7 @@ target "webapp" {
 		require.Equal(t, true, *m["webapp"].NoCache)
 		require.Equal(t, "128m", *m["webapp"].ShmSize)
 		require.Equal(t, []string{"nofile=1024:1024"}, m["webapp"].Ulimits)
+		require.Equal(t, map[string]*string{"my_hostname": ptrstr("8.8.8.8")}, m["webapp"].ExtraHosts)
 		require.Nil(t, m["webapp"].Pull)
 
 		require.Equal(t, 1, len(g))

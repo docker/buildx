@@ -80,6 +80,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeCallMetadata,
 	testBakeMultiPlatform,
 	testBakeCheckCallOutput,
+	testBakeExtraHosts,
 }
 
 func testBakePrint(t *testing.T, sb integration.Sandbox) {
@@ -2160,6 +2161,31 @@ target "third" {
 		require.Contains(t, stdout.String(), dockerfilePathSecond+":3")
 		require.Contains(t, stdout.String(), dockerfilePathThird+":3")
 	})
+}
+
+func testBakeExtraHosts(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox
+RUN cat /etc/hosts | grep myhost | grep 1.2.3.4
+	`)
+	bakefile := []byte(`
+target "default" {
+  extra-hosts = {
+    myhost = "1.2.3.4"
+  }
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+	)
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dir),
+	)
+	require.NoError(t, err, out)
 }
 
 func writeTempPrivateKey(fp string) error {

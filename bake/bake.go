@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding"
 	"encoding/json"
+	"fmt"
 	"io"
 	"maps"
 	"os"
@@ -726,6 +727,7 @@ type Target struct {
 	Ulimits          []string                `json:"ulimits,omitempty" hcl:"ulimits,optional" cty:"ulimits"`
 	Call             *string                 `json:"call,omitempty" hcl:"call,optional" cty:"call"`
 	Entitlements     []string                `json:"entitlements,omitempty" hcl:"entitlements,optional" cty:"entitlements"`
+	ExtraHosts       map[string]*string      `json:"extra-hosts,omitempty" hcl:"extra-hosts,optional" cty:"extra-hosts"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides/AddOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -761,6 +763,14 @@ func (t *Target) MarshalJSON() ([]byte, error) {
 		if v != nil {
 			escaped := esc(*v)
 			tgt.Args[k] = &escaped
+		}
+	}
+
+	tgt.ExtraHosts = maps.Clone(t.ExtraHosts)
+	for k, v := range t.ExtraHosts {
+		if v != nil {
+			escaped := esc(*v)
+			tgt.ExtraHosts[k] = &escaped
 		}
 	}
 
@@ -893,6 +903,15 @@ func (t *Target) Merge(t2 *Target) {
 	}
 	if t2.Entitlements != nil { // merge
 		t.Entitlements = append(t.Entitlements, t2.Entitlements...)
+	}
+	for k, v := range t2.ExtraHosts {
+		if v == nil {
+			continue
+		}
+		if t.ExtraHosts == nil {
+			t.ExtraHosts = map[string]*string{}
+		}
+		t.ExtraHosts[k] = v
 	}
 	t.Inherits = append(t.Inherits, t2.Inherits...)
 }
@@ -1082,6 +1101,14 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				return errors.Errorf("invalid value %s for boolean key load", value)
 			}
 			t.Outputs = setLoadOverride(t.Outputs, load)
+		case "extra-hosts":
+			if len(keys) != 2 {
+				return errors.Errorf("invalid format for extra-hosts, expecting extra-hosts.<hostname>=<ip>")
+			}
+			if t.ExtraHosts == nil {
+				t.ExtraHosts = map[string]*string{}
+			}
+			t.ExtraHosts[keys[1]] = &value
 		default:
 			return errors.Errorf("unknown key: %s", keys[0])
 		}
@@ -1404,6 +1431,14 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		}
 	}
 
+	var extraHosts []string
+	for k, v := range t.ExtraHosts {
+		if v == nil {
+			continue
+		}
+		extraHosts = append(extraHosts, fmt.Sprintf("%s=%s", k, *v))
+	}
+
 	bo := &build.Options{
 		Inputs:        bi,
 		Tags:          t.Tags,
@@ -1415,6 +1450,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		NetworkMode:   networkMode,
 		Linked:        t.linked,
 		ShmSize:       *shmSize,
+		ExtraHosts:    extraHosts,
 	}
 
 	platforms, err := platformutil.Parse(t.Platforms)

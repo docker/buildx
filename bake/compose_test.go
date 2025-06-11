@@ -32,6 +32,9 @@ services:
         - type=local,src=path/to/cache
       cache_to:
         - type=local,dest=path/to/cache
+      extra_hosts:
+        - "somehost:162.242.195.82"
+        - "myhostv6:::1"
       ssh:
         - key=/path/to/key
         - default
@@ -76,6 +79,7 @@ secrets:
 	require.Equal(t, ptrstr("123"), c.Targets[1].Args["buildno"])
 	require.Equal(t, []string{"type=local,src=path/to/cache"}, stringify(c.Targets[1].CacheFrom))
 	require.Equal(t, []string{"type=local,dest=path/to/cache"}, stringify(c.Targets[1].CacheTo))
+	require.Equal(t, map[string]*string{"myhostv6": ptrstr("::1"), "somehost": ptrstr("162.242.195.82")}, c.Targets[1].ExtraHosts)
 	require.Equal(t, "none", *c.Targets[1].NetworkMode)
 	require.Equal(t, []string{"default", "key=/path/to/key"}, stringify(c.Targets[1].SSH))
 	require.Equal(t, []string{
