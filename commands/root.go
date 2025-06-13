@@ -4,7 +4,6 @@ import (
 	"fmt"
 	"os"
 
-	debugcmd "github.com/docker/buildx/commands/debug"
 	historycmd "github.com/docker/buildx/commands/history"
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	"github.com/docker/buildx/util/cobrautil/completion"
@@ -120,9 +119,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 		historycmd.RootCmd(cmd, dockerCli, historycmd.RootOptions{Builder: &opts.builder}),
 	)
 	if confutil.IsExperimental() {
-		cmd.AddCommand(debugcmd.RootCmd(dockerCli,
-			newDebuggableBuild(dockerCli, opts),
-		))
+		cmd.AddCommand(debugCmd(dockerCli, opts))
 	}
 
 	cmd.RegisterFlagCompletionFunc( //nolint:errcheck
