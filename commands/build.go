@@ -20,7 +20,6 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/commands/debug"
 	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
@@ -441,20 +440,7 @@ func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *Build
 	}
 }
 
-func newDebuggableBuild(dockerCli command.Cli, rootOpts *rootOptions) debug.DebuggableCmd {
-	return &debuggableBuild{dockerCli: dockerCli, rootOpts: rootOpts}
-}
-
-type debuggableBuild struct {
-	dockerCli command.Cli
-	rootOpts  *rootOptions
-}
-
-func (b *debuggableBuild) NewDebugger(cfg *debug.DebugConfig) *cobra.Command {
-	return buildCmd(b.dockerCli, b.rootOpts, cfg)
-}
-
-func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debug.DebugConfig) *cobra.Command {
+func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debugOptions) *cobra.Command {
 	cFlags := &commonFlags{}
 	options := &buildOptions{}
 
