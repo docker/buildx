@@ -16,7 +16,7 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-// NewResultHandle stores a gateway client, gateway result, and the error from
+// NewResultHandle stores a gateway client, gateway reference, and the error from
 // an evaluate call if it is present.
 //
 // This ResultHandle can be used to execute additional build steps in the same
@@ -24,9 +24,10 @@ import (
 // failures and successes.
 //
 // If the returned ResultHandle is not nil, the caller must call Done() on it.
-func NewResultHandle(ctx context.Context, c gateway.Client, res *gateway.Result, err error) *ResultHandle {
+func NewResultHandle(ctx context.Context, c gateway.Client, ref gateway.Reference, meta map[string][]byte, err error) *ResultHandle {
 	rCtx := &ResultHandle{
-		res:      res,
+		ref:      ref,
+		meta:     meta,
 		gwClient: c,
 	}
 	if err != nil && !errors.As(err, &rCtx.solveErr) {
@@ -37,8 +38,9 @@ func NewResultHandle(ctx context.Context, c gateway.Client, res *gateway.Result,
 
 // ResultHandle is a build result with the client that built it.
 type ResultHandle struct {
-	res      *gateway.Result
+	ref      gateway.Reference
 	solveErr *errdefs.SolveError
+	meta     map[string][]byte
 	gwClient gateway.Client
 
 	doneOnce sync.Once
@@ -74,9 +76,9 @@ func (r *ResultHandle) NewContainer(ctx context.Context, cfg *InvokeConfig) (gat
 }
 
 func (r *ResultHandle) getContainerConfig(cfg *InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
-	if r.res != nil && r.solveErr == nil {
+	if r.ref != nil && r.solveErr == nil {
 		logrus.Debugf("creating container from successful build")
-		ccfg, err := containerConfigFromResult(r.res, cfg)
+		ccfg, err := containerConfigFromResult(r.ref, cfg)
 		if err != nil {
 			return containerCfg, err
 		}
@@ -94,9 +96,9 @@ func (r *ResultHandle) getContainerConfig(cfg *InvokeConfig) (containerCfg gatew
 
 func (r *ResultHandle) getProcessConfig(cfg *InvokeConfig, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) (_ gateway.StartRequest, err error) {
 	processCfg := newStartRequest(stdin, stdout, stderr)
-	if r.res != nil && r.solveErr == nil {
+	if r.ref != nil && r.solveErr == nil {
 		logrus.Debugf("creating container from successful build")
-		if err := populateProcessConfigFromResult(&processCfg, r.res, cfg); err != nil {
+		if err := populateProcessConfigFromResult(&processCfg, r.meta, cfg); err != nil {
 			return processCfg, err
 		}
 	} else {
@@ -108,18 +110,9 @@ func (r *ResultHandle) getProcessConfig(cfg *InvokeConfig, stdin io.ReadCloser, 
 	return processCfg, nil
 }
 
-func containerConfigFromResult(res *gateway.Result, cfg *InvokeConfig) (*gateway.NewContainerRequest, error) {
+func containerConfigFromResult(ref gateway.Reference, cfg *InvokeConfig) (*gateway.NewContainerRequest, error) {
 	if cfg.Initial {
 		return nil, errors.Errorf("starting from the container from the initial state of the step is supported only on the failed steps")
-	}
-
-	ps, err := exptypes.ParsePlatforms(res.Metadata)
-	if err != nil {
-		return nil, err
-	}
-	ref, ok := res.FindRef(ps.Platforms[0].ID)
-	if !ok {
-		return nil, errors.Errorf("no reference found")
 	}
 
 	return &gateway.NewContainerRequest{
@@ -133,8 +126,8 @@ func containerConfigFromResult(res *gateway.Result, cfg *InvokeConfig) (*gateway
 	}, nil
 }
 
-func populateProcessConfigFromResult(req *gateway.StartRequest, res *gateway.Result, cfg *InvokeConfig) error {
-	imgData := res.Metadata[exptypes.ExporterImageConfigKey]
+func populateProcessConfigFromResult(req *gateway.StartRequest, meta map[string][]byte, cfg *InvokeConfig) error {
+	imgData := meta[exptypes.ExporterImageConfigKey]
 	var img *ocispecs.Image
 	if len(imgData) > 0 {
 		img = &ocispecs.Image{}

@@ -14,6 +14,7 @@ Extended build capabilities with BuildKit
 | [`bake`](buildx_bake.md)             | Build from a file                               |
 | [`build`](buildx_build.md)           | Start a build                                   |
 | [`create`](buildx_create.md)         | Create a new builder instance                   |
+| [`dap`](buildx_dap.md)               | Start debug adapter (EXPERIMENTAL)              |
 | [`debug`](buildx_debug.md)           | Start debugger (EXPERIMENTAL)                   |
 | [`dial-stdio`](buildx_dial-stdio.md) | Proxy current stdio streams to builder instance |
 | [`du`](buildx_du.md)                 | Disk usage                                      |
