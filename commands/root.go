@@ -84,10 +84,6 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 		"using default config store",
 	))
 
-	if !confutil.IsExperimental() {
-		cmd.SetHelpTemplate(cmd.HelpTemplate() + "\nExperimental commands and flags are hidden. Set BUILDX_EXPERIMENTAL=1 to show them.\n")
-	}
-
 	addCommands(cmd, &opt, dockerCli)
 	return cmd
 }
