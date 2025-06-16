@@ -426,23 +426,32 @@ workers0:
 	}
 
 	provIndex := slices.IndexFunc(attachments, func(a attachment) bool {
-		return descrType(a.descr) == slsa02.PredicateSLSAProvenance
+		return strings.HasPrefix(descrType(a.descr), "https://slsa.dev/provenance/")
 	})
 	if provIndex != -1 {
 		prov := attachments[provIndex]
+		predType := descrType(prov.descr)
 		dt, err := content.ReadBlob(ctx, store, prov.descr)
 		if err != nil {
 			return errors.Errorf("failed to read provenance %s: %v", prov.descr.Digest, err)
 		}
-		var pred provenancetypes.ProvenancePredicateSLSA02
-		if err := json.Unmarshal(dt, &pred); err != nil {
+		var pred *provenancetypes.ProvenancePredicateSLSA1
+		if predType == slsa02.PredicateSLSAProvenance {
+			var pred02 *provenancetypes.ProvenancePredicateSLSA02
+			if err := json.Unmarshal(dt, &pred02); err != nil {
+				return errors.Errorf("failed to unmarshal provenance %s: %v", prov.descr.Digest, err)
+			}
+			pred = provenancetypes.ConvertSLSA02ToSLSA1(pred02)
+		} else if err := json.Unmarshal(dt, &pred); err != nil {
 			return errors.Errorf("failed to unmarshal provenance %s: %v", prov.descr.Digest, err)
 		}
-		for _, m := range pred.Materials {
-			out.Materials = append(out.Materials, materialOutput{
-				URI:     m.URI,
-				Digests: digestSetToDigests(m.Digest),
-			})
+		if pred != nil {
+			for _, m := range pred.BuildDefinition.ResolvedDependencies {
+				out.Materials = append(out.Materials, materialOutput{
+					URI:     m.URI,
+					Digests: digestSetToDigests(m.Digest),
+				})
+			}
 		}
 	}
 
