@@ -2167,11 +2167,14 @@ func testBakeExtraHosts(t *testing.T, sb integration.Sandbox) {
 	dockerfile := []byte(`
 FROM busybox
 RUN cat /etc/hosts | grep myhost | grep 1.2.3.4
+RUN cat /etc/hosts | grep myhostmulti | grep 162.242.195.81
+RUN cat /etc/hosts | grep myhostmulti | grep 162.242.195.82
 	`)
 	bakefile := []byte(`
 target "default" {
   extra-hosts = {
     myhost = "1.2.3.4"
+    myhostmulti = "162.242.195.81,162.242.195.82"
   }
 }
 `)

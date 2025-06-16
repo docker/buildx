@@ -77,6 +77,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildDefaultLoad,
 	testBuildCall,
 	testCheckCallOutput,
+	testBuildExtraHosts,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -1320,6 +1321,24 @@ cOpy Dockerfile .
 		require.Contains(t, stdout.String(), dockerfilePath+":2")
 		require.Contains(t, stdout.String(), dockerfilePath+":3")
 	})
+}
+
+func testBuildExtraHosts(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox
+RUN cat /etc/hosts | grep myhost | grep 1.2.3.4
+RUN cat /etc/hosts | grep myhostmulti | grep 162.242.195.81
+RUN cat /etc/hosts | grep myhostmulti | grep 162.242.195.82
+`)
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	cmd := buildxCmd(sb, withArgs("build",
+		"--add-host=myhost=1.2.3.4",
+		"--add-host=myhostmulti=162.242.195.81",
+		"--add-host=myhostmulti=162.242.195.82",
+		"--output=type=cacheonly", dir),
+	)
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
 }
 
 func createTestProject(t *testing.T) string {
