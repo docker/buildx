@@ -144,6 +144,7 @@ func NewPrinter(ctx context.Context, out console.File, mode progressui.DisplayMo
 		interrupt: make(chan interruptRequest),
 		state:     printerStateRunning,
 		done:      make(chan struct{}),
+		metrics:   opt.mw,
 	}
 	go pw.run(ctx, d)
 
@@ -160,16 +161,13 @@ func (p *Printer) run(ctx context.Context, d progressui.Display) {
 		case printerStatePaused:
 			ss, p.err = p.bufferDisplay(ctx, ss)
 		case printerStateRunning:
-			var warnings []client.VertexWarning
-			warnings, ss, p.err = p.updateDisplay(ctx, d, ss)
-			p.warnings = append(p.warnings, warnings...)
+			p.warnings, ss, p.err = p.updateDisplay(ctx, d, ss)
+			if p.opt.onclose != nil {
+				p.opt.onclose()
+			}
 
 			d, _ = p.newDisplay()
 		}
-	}
-
-	if p.opt.onclose != nil {
-		p.opt.onclose()
 	}
 }
 
