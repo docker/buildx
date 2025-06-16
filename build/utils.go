@@ -77,24 +77,30 @@ func toBuildkitExtraHosts(ctx context.Context, inp []string, nodeDriver *driver.
 		}
 		// If the IP Address is a "host-gateway", replace this value with the
 		// IP address provided by the worker's label.
+		var ips []string
 		if ip == mobyHostGatewayName {
 			hgip, err := nodeDriver.HostGatewayIP(ctx)
 			if err != nil {
 				return "", errors.Wrap(err, "unable to derive the IP value for host-gateway")
 			}
-			ip = hgip.String()
+			ips = append(ips, hgip.String())
 		} else {
-			// If the address is enclosed in square brackets, extract it (for IPv6, but
-			// permit it for IPv4 as well; we don't know the address family here, but it's
-			// unambiguous).
-			if len(ip) > 2 && ip[0] == '[' && ip[len(ip)-1] == ']' {
-				ip = ip[1 : len(ip)-1]
-			}
-			if net.ParseIP(ip) == nil {
-				return "", errors.Errorf("invalid host %s", h)
+			for _, v := range strings.Split(ip, ",") {
+				// If the address is enclosed in square brackets, extract it
+				// (for IPv6, but permit it for IPv4 as well; we don't know the
+				// address family here, but it's unambiguous).
+				if len(v) > 2 && v[0] == '[' && v[len(v)-1] == ']' {
+					v = v[1 : len(v)-1]
+				}
+				if net.ParseIP(v) == nil {
+					return "", errors.Errorf("invalid host %s", h)
+				}
+				ips = append(ips, v)
 			}
 		}
-		hosts = append(hosts, host+"="+ip)
+		for _, v := range ips {
+			hosts = append(hosts, host+"="+v)
+		}
 	}
 	return strings.Join(hosts, ","), nil
 }
