@@ -162,7 +162,13 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	attributes := bakeMetricAttributes(dockerCli, driverType, url, cmdContext, targets, &in)
 
 	progressMode := progressui.DisplayMode(cFlags.progress)
+
 	var printer *progress.Printer
+	defer func() {
+		if printer != nil {
+			printer.Wait()
+		}
+	}()
 
 	makePrinter := func() error {
 		var err error
