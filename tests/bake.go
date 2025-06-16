@@ -758,7 +758,7 @@ EOT
 		sb,
 		withDir(dirCurrent),
 		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
-		withEnv("BAKE_ALLOW_REMOTE_FS_ACCESS=1"),
+		withEnv("BUILDX_BAKE_ALLOW_REMOTE_FS_ACCESS=1"),
 	)
 	require.NoError(t, err, out)
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
@@ -806,7 +806,7 @@ EOT
 		sb,
 		withDir(filepath.Join(dirSrc, "subdir")),
 		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
-		withEnv("BAKE_ALLOW_REMOTE_FS_ACCESS=1"),
+		withEnv("BUILDX_BAKE_ALLOW_REMOTE_FS_ACCESS=1"),
 	)
 	require.NoError(t, err, out)
 	require.FileExists(t, filepath.Join(dirDest, "foo"))

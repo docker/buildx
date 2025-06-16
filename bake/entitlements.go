@@ -319,7 +319,14 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 
 	fsEntitlementsEnabled := true
 	if isRemote {
-		if v, ok := os.LookupEnv("BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
+		if v, ok := os.LookupEnv("BUILDX_BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
+			vv, err := strconv.ParseBool(v)
+			if err != nil {
+				return errors.Wrapf(err, "failed to parse BUILDX_BAKE_ALLOW_REMOTE_FS_ACCESS value %q", v)
+			}
+			fsEntitlementsEnabled = !vv
+		} else if v, ok := os.LookupEnv("BAKE_ALLOW_REMOTE_FS_ACCESS"); ok {
+			logrus.Warn("BAKE_ALLOW_REMOTE_FS_ACCESS is deprecated, use BUILDX_BAKE_ALLOW_REMOTE_FS_ACCESS instead")
 			vv, err := strconv.ParseBool(v)
 			if err != nil {
 				return errors.Wrapf(err, "failed to parse BAKE_ALLOW_REMOTE_FS_ACCESS value %q", v)
