@@ -81,6 +81,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeMultiPlatform,
 	testBakeCheckCallOutput,
 	testBakeExtraHosts,
+	testBakeFileFromEnvironment,
 }
 
 func testBakePrint(t *testing.T, sb integration.Sandbox) {
@@ -2186,6 +2187,165 @@ target "default" {
 		withDir(dir),
 	)
 	require.NoError(t, err, out)
+}
+
+func testBakeFileFromEnvironment(t *testing.T, sb integration.Sandbox) {
+	bakeFileFirst := []byte(`
+target "first" {
+  dockerfile-inline = "FROM scratch\nCOPY first /"
+}
+`)
+	bakeFileSecond := []byte(`
+target "second" {
+  dockerfile-inline = "FROM scratch\nCOPY second /"
+}
+`)
+
+	t.Run("single file", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+		)
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "first"),
+			withEnv("BUILDX_BAKE_FILE=first.hcl"))
+
+		dt, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 reading first.hcl`)
+	})
+
+	t.Run("single file, default ignored if present", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+			fstest.CreateFile("docker-bake.hcl", []byte("invalid bake file"), 0600),
+		)
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "first"),
+			withEnv("BUILDX_BAKE_FILE=first.hcl"))
+
+		dt, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 reading first.hcl`)
+		require.NotContains(t, string(dt), "docker-bake.hcl")
+	})
+
+	t.Run("multiple files", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+			fstest.CreateFile("second.hcl", bakeFileSecond, 0600),
+			fstest.CreateFile("second", []byte("second"), 0600),
+		)
+
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "second", "first"),
+			withEnv("BUILDX_BAKE_FILE=first.hcl"+string(os.PathListSeparator)+"second.hcl"))
+		dt, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 reading first.hcl`)
+		require.Contains(t, string(dt), `#1 reading second.hcl`)
+	})
+
+	t.Run("multiple files, custom separator", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+			fstest.CreateFile("second.hcl", bakeFileSecond, 0600),
+			fstest.CreateFile("second", []byte("second"), 0600),
+		)
+
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "second", "first"),
+			withEnv("BUILDX_BAKE_PATH_SEPARATOR=@", "BUILDX_BAKE_FILE=first.hcl@second.hcl"))
+
+		dt, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 reading first.hcl`)
+		require.Contains(t, string(dt), `#1 reading second.hcl`)
+	})
+
+	t.Run("multiple files, one STDIN", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+			fstest.CreateFile("second", []byte("second"), 0600),
+		)
+
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "second", "first"),
+			withEnv("BUILDX_BAKE_FILE=first.hcl"+string(os.PathListSeparator)+"-"))
+		w, err := cmd.StdinPipe()
+		require.NoError(t, err)
+		go func() {
+			defer w.Close()
+			w.Write(bakeFileSecond)
+		}()
+
+		dt, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 reading first.hcl`)
+		require.Contains(t, string(dt), `#1 reading from stdin`)
+	})
+
+	t.Run("env ignored if file arg passed", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+			fstest.CreateFile("second.hcl", bakeFileSecond, 0600),
+		)
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "-f", "first.hcl", "first", "second"),
+			withEnv("BUILDX_BAKE_FILE=second.hcl"))
+
+		dt, err := cmd.CombinedOutput()
+		require.Error(t, err, string(dt))
+		require.Contains(t, string(dt), "failed to find target second")
+	})
+
+	t.Run("file does not exist", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+		)
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "first"),
+			withEnv("BUILDX_BAKE_FILE=wrong.hcl"))
+
+		dt, err := cmd.CombinedOutput()
+		require.Error(t, err, string(dt))
+		require.Contains(t, string(dt), "wrong.hcl: no such file or directory")
+	})
+
+	for kind, val := range map[string]string{"missing": "", "whitespace": "  "} {
+		t.Run(kind+" value ignored", func(t *testing.T) {
+			dir := tmpdir(t,
+				fstest.CreateFile("first.hcl", bakeFileFirst, 0600),
+				fstest.CreateFile("first", []byte("first"), 0600),
+			)
+			cmd := buildxCmd(sb,
+				withDir(dir),
+				withArgs("bake", "--progress=plain", "first"),
+				withEnv(fmt.Sprintf("BUILDX_BAKE_FILE=%s", val)))
+
+			dt, err := cmd.CombinedOutput()
+			require.Error(t, err, string(dt))
+			require.Contains(t, string(dt), "couldn't find a bake definition")
+		})
+	}
 }
 
 func writeTempPrivateKey(fp string) error {

@@ -40,6 +40,11 @@ import (
 	"go.opentelemetry.io/otel/attribute"
 )
 
+const (
+	bakeEnvFileSeparator = "BUILDX_BAKE_PATH_SEPARATOR"
+	bakeEnvFilePath      = "BUILDX_BAKE_FILE"
+)
+
 type bakeOptions struct {
 	files     []string
 	overrides []string
@@ -452,6 +457,13 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Aliases: []string{"f"},
 		Short:   "Build from a file",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if len(options.files) == 0 {
+				envFiles, err := bakeEnvFiles(os.LookupEnv)
+				if err != nil {
+					return err
+				}
+				options.files = envFiles
+			}
 			// reset to nil to avoid override is unset
 			if !cmd.Flags().Lookup("no-cache").Changed {
 				cFlags.noCache = nil
@@ -502,6 +514,37 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	commonBuildFlags(&cFlags, flags)
 
 	return cmd
+}
+
+func bakeEnvFiles(lookup func(string string) (string, bool)) ([]string, error) {
+	sep, _ := lookup(bakeEnvFileSeparator)
+	if sep == "" {
+		sep = string(os.PathListSeparator)
+	}
+	f, ok := lookup(bakeEnvFilePath)
+	if ok {
+		return cleanPaths(strings.Split(f, sep))
+	}
+	return []string{}, nil
+}
+
+func cleanPaths(p []string) ([]string, error) {
+	var paths []string
+	for _, f := range p {
+		f = strings.TrimSpace(f)
+		if f == "" {
+			continue
+		}
+		if f == "-" {
+			paths = append(paths, f)
+			continue
+		}
+		if _, err := os.Stat(f); err != nil {
+			return nil, err
+		}
+		paths = append(paths, f)
+	}
+	return paths, nil
 }
 
 func saveLocalStateGroup(dockerCli command.Cli, in bakeOptions, targets []string, bo map[string]build.Options) error {
