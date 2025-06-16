@@ -125,10 +125,8 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			extraHosts := map[string]*string{}
 			if s.Build.ExtraHosts != nil {
 				for k, v := range s.Build.ExtraHosts {
-					for _, ip := range v {
-						vv := ip
-						extraHosts[k] = &vv
-					}
+					vv := strings.Join(v, ",")
+					extraHosts[k] = &vv
 				}
 			}
 
