@@ -11,6 +11,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	intoto "github.com/in-toto/in-toto-golang/in_toto"
 	slsa02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
+	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -76,25 +77,30 @@ func runAttachment(ctx context.Context, dockerCli command.Cli, opts attachmentOp
 		return err
 	}
 
-	typ := opts.typ
-	switch typ {
+	types := make(map[string]struct{})
+	switch opts.typ {
 	case "index":
-		typ = ocispecs.MediaTypeImageIndex
+		types[ocispecs.MediaTypeImageIndex] = struct{}{}
 	case "manifest":
-		typ = ocispecs.MediaTypeImageManifest
+		types[ocispecs.MediaTypeImageManifest] = struct{}{}
 	case "image":
-		typ = ocispecs.MediaTypeImageConfig
+		types[ocispecs.MediaTypeImageConfig] = struct{}{}
 	case "provenance":
-		typ = slsa02.PredicateSLSAProvenance
+		types[slsa1.PredicateSLSAProvenance] = struct{}{}
+		types[slsa02.PredicateSLSAProvenance] = struct{}{}
 	case "sbom":
-		typ = intoto.PredicateSPDX
+		types[intoto.PredicateSPDX] = struct{}{}
+	default:
+		if opts.typ != "" {
+			types[opts.typ] = struct{}{}
+		}
 	}
 
 	for _, a := range attachments {
 		if opts.platform != "" && (a.platform == nil || platforms.FormatAll(*a.platform) != opts.platform) {
 			continue
 		}
-		if typ != "" && descrType(a.descr) != typ {
+		if _, ok := types[descrType(a.descr)]; opts.typ != "" && !ok {
 			continue
 		}
 		ra, err := store.ReaderAt(ctx, a.descr)
