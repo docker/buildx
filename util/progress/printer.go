@@ -51,8 +51,8 @@ type Printer struct {
 func (p *Printer) Wait() error {
 	p.closeOnce.Do(func() {
 		close(p.status)
-		<-p.done
 	})
+	<-p.done
 	return p.err
 }
 
@@ -144,6 +144,7 @@ func NewPrinter(ctx context.Context, out console.File, mode progressui.DisplayMo
 		interrupt: make(chan interruptRequest),
 		state:     printerStateRunning,
 		done:      make(chan struct{}),
+		metrics:   opt.mw,
 	}
 	go pw.run(ctx, d)
 
@@ -155,21 +156,21 @@ func (p *Printer) run(ctx context.Context, d progressui.Display) {
 	defer close(p.interrupt)
 
 	var ss []*client.SolveStatus
-	for p.state != printerStateDone {
+	for {
 		switch p.state {
 		case printerStatePaused:
 			ss, p.err = p.bufferDisplay(ctx, ss)
 		case printerStateRunning:
-			var warnings []client.VertexWarning
-			warnings, ss, p.err = p.updateDisplay(ctx, d, ss)
-			p.warnings = append(p.warnings, warnings...)
-
-			d, _ = p.newDisplay()
+			p.warnings, ss, p.err = p.updateDisplay(ctx, d, ss)
+			if p.opt.onclose != nil {
+				p.opt.onclose()
+			}
 		}
-	}
 
-	if p.opt.onclose != nil {
-		p.opt.onclose()
+		if p.state == printerStateDone {
+			break
+		}
+		d, _ = p.newDisplay()
 	}
 }
 
