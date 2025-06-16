@@ -73,6 +73,11 @@ func TestToBuildkitExtraHosts(t *testing.T) {
 			input: []string{`ipv6local=0:0:0:0:0:0:0:1`},
 		},
 		{
+			doc:         "Multi IPs",
+			input:       []string{`myhost=162.242.195.82,162.242.195.83`},
+			expectedOut: `myhost=162.242.195.82,myhost=162.242.195.83`,
+		},
+		{
 			doc:         "IPv6 localhost, non-canonical, eq sep, brackets",
 			input:       []string{`ipv6local=[0:0:0:0:0:0:0:1]`},
 			expectedOut: `ipv6local=0:0:0:0:0:0:0:1`,
