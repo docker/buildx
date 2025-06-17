@@ -20,6 +20,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/buildx/util/gitutil/gittestutil"
+	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
@@ -833,9 +834,14 @@ func buildMetadataProvenance(t *testing.T, sb integration.Sandbox, metadataMode 
 	dtprv, err := json.Marshal(md.BuildProvenance)
 	require.NoError(t, err)
 
-	var prv provenancetypes.ProvenancePredicateSLSA02
+	type provenancePredicate struct {
+		PredicateType string `json:"predicateType"`
+		provenancetypes.ProvenancePredicateSLSA1
+	}
+	var prv provenancePredicate
 	require.NoError(t, json.Unmarshal(dtprv, &prv))
-	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
+	require.Equal(t, slsa1.PredicateSLSAProvenance, prv.PredicateType)
+	require.Equal(t, "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md", prv.BuildDefinition.BuildType)
 }
 
 func testBuildMetadataWarnings(t *testing.T, sb integration.Sandbox) {
