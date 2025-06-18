@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/docker/buildx/build"
 	"github.com/google/go-dap"
@@ -27,6 +28,8 @@ type Adapter struct {
 	threads      map[int]*thread
 	threadsMu    sync.RWMutex
 	nextThreadID int
+
+	idPool *idPool
 }
 
 func New(cfg *build.InvokeConfig) *Adapter {
@@ -37,6 +40,7 @@ func New(cfg *build.InvokeConfig) *Adapter {
 		evaluateReqCh: make(chan *evaluateRequest),
 		threads:       make(map[int]*thread),
 		nextThreadID:  1,
+		idPool:        new(idPool),
 	}
 	if cfg != nil {
 		d.cfg = *cfg
@@ -287,7 +291,7 @@ func (d *Adapter) StackTrace(c Context, req *dap.StackTraceRequest, resp *dap.St
 		return errors.Errorf("no such thread: %d", req.Arguments.ThreadId)
 	}
 
-	resp.Body.StackFrames = t.StackFrames()
+	resp.Body.StackFrames = t.StackTrace()
 	return nil
 }
 
@@ -336,6 +340,8 @@ type thread struct {
 	paused chan struct{}
 	rCtx   *build.ResultHandle
 	mu     sync.Mutex
+
+	stackTrace []dap.StackFrame
 }
 
 func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, meta map[string][]byte) error {
@@ -392,14 +398,32 @@ func (t *thread) Resume(c Context) {
 		t.rCtx = nil
 	}
 
+	if t.stackTrace != nil {
+		for _, frame := range t.stackTrace {
+			t.d.idPool.Put(int64(frame.Id))
+		}
+		t.stackTrace = nil
+	}
+
 	close(t.paused)
 	t.paused = nil
 }
 
-// TODO: return a suitable stack frame for the thread.
-// For now, just returns nothing.
-func (t *thread) StackFrames() []dap.StackFrame {
-	return []dap.StackFrame{}
+func (t *thread) StackTrace() []dap.StackFrame {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	if t.paused == nil {
+		// Cannot compute stack trace when not paused.
+		// This should never happen, but protect ourself in
+		// case it does.
+		return []dap.StackFrame{}
+	}
+
+	if t.stackTrace == nil {
+		t.stackTrace = t.makeStackTrace()
+	}
+	return t.stackTrace
 }
 
 func (d *Adapter) Out() io.Writer {
@@ -425,4 +449,16 @@ func (d *adapterWriter) Write(p []byte) (n int, err error) {
 		return 0, io.ErrClosedPipe
 	}
 	return n, nil
+}
+
+type idPool struct {
+	next atomic.Int64
+}
+
+func (p *idPool) Get() int64 {
+	return p.next.Add(1)
+}
+
+func (p *idPool) Put(x int64) {
+	// noop
 }

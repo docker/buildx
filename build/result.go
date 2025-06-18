@@ -7,10 +7,12 @@ import (
 	"io"
 	"sync"
 
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -59,6 +61,34 @@ func (r *ResultHandle) Done() {
 			f()
 		}
 	})
+}
+
+func (r *ResultHandle) ToDef(ctx context.Context) (*llb.Definition, digest.Digest, error) {
+	// TODO: handle error case by pruning unused portions of the definition.
+	// or at least providing a reference to where the error occurred.
+	st, err := r.ref.ToState()
+	if err != nil {
+		return nil, "", err
+	}
+
+	def, err := st.Marshal(ctx)
+	if err != nil {
+		return nil, "", err
+	}
+
+	var dgst digest.Digest
+	if r.solveErr != nil {
+		dt, err := r.solveErr.Op.MarshalVT()
+		if err != nil {
+			return nil, "", err
+		}
+		dgst = digest.FromBytes(dt)
+	} else {
+		if dgst, err = def.Head(); err != nil {
+			return nil, "", err
+		}
+	}
+	return def, dgst, nil
 }
 
 func (r *ResultHandle) registerCleanup(f func()) {
