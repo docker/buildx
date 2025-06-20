@@ -354,13 +354,13 @@ executing the build and evaluating [build checks](https://docs.docker.com/refere
 
 For Dockerfiles, the available methods are:
 
-| Command                        | Description                                                                                                         |
-| ------------------------------ | ------------------------------------------------------------------------------------------------------------------- |
-| `build` (default)              | Execute the build and evaluate build checks for the current build target.                                           |
-| `check`                        | Evaluate build checks for the either the entire Dockerfile or the selected target, without executing a build.       |
-| `outline`                      | Show the build arguments that you can set for a target, and their default values.                                   |
-| `targets`                      | List all the build targets in the Dockerfile.                                                                       |
-| `subrequests.describe`         | List all the frontend methods that the current frontend supports.                                                   |
+| Command                | Description                                                                                                   |
+|------------------------|---------------------------------------------------------------------------------------------------------------|
+| `build` (default)      | Execute the build and evaluate build checks for the current build target.                                     |
+| `check`                | Evaluate build checks for the either the entire Dockerfile or the selected target, without executing a build. |
+| `outline`              | Show the build arguments that you can set for a target, and their default values.                             |
+| `targets`              | List all the build targets in the Dockerfile.                                                                 |
+| `subrequests.describe` | List all the frontend methods that the current frontend supports.                                             |
 
 Note that other frontends may implement these or other methods.
 To see the list of available methods for the frontend you're using,
@@ -948,7 +948,7 @@ $ docker buildx build --secret [type=file,]id=<ID>[,src=<FILEPATH>] .
 ##### `type=file` attributes
 
 | Key             | Description                                                                                           | Default                    |
-| --------------- | ----------------------------------------------------------------------------------------------------- | -------------------------- |
+|-----------------|-------------------------------------------------------------------------------------------------------|----------------------------|
 | `id`            | ID of the secret.                                                                                     | N/A (this key is required) |
 | `src`, `source` | Filepath of the file containing the secret value (absolute or relative to current working directory). | `id` if unset.             |
 
@@ -982,7 +982,7 @@ $ docker buildx build --secret [type=env,]id=<ID>[,env=<VARIABLE>] .
 ##### `type=env` attributes
 
 | Key                    | Description                                     | Default                    |
-| ---------------------- | ----------------------------------------------- | -------------------------- |
+|------------------------|-------------------------------------------------|----------------------------|
 | `id`                   | ID of the secret.                               | N/A (this key is required) |
 | `env`, `src`, `source` | Environment variable to source the secret from. | `id` if unset.             |
 
