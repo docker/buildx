@@ -67,7 +67,7 @@ type bakeOptions struct {
 	listVars    bool
 }
 
-func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags) (err error) {
+func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in bakeOptions, cFlags commonFlags, filesFromEnv bool) (err error) {
 	mp := dockerCli.MeterProvider()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, append([]string{"bake"}, targets...),
@@ -185,7 +185,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	files, inp, err := readBakeFiles(ctx, nodes, url, in.files, dockerCli.In(), printer)
+	files, inp, err := readBakeFiles(ctx, nodes, url, in.files, dockerCli.In(), printer, filesFromEnv)
 	if err != nil {
 		return err
 	}
@@ -457,12 +457,14 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Aliases: []string{"f"},
 		Short:   "Build from a file",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			filesFromEnv := false
 			if len(options.files) == 0 {
 				envFiles, err := bakeEnvFiles(os.LookupEnv)
 				if err != nil {
 					return err
 				}
 				options.files = envFiles
+				filesFromEnv = true
 			}
 			// reset to nil to avoid override is unset
 			if !cmd.Flags().Lookup("no-cache").Changed {
@@ -481,7 +483,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.builder = rootOpts.builder
 			options.metadataFile = cFlags.metadataFile
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
-			return runBake(cmd.Context(), dockerCli, args, options, cFlags)
+			return runBake(cmd.Context(), dockerCli, args, options, cFlags, filesFromEnv)
 		},
 		ValidArgsFunction: completion.BakeTargets(options.files),
 	}
@@ -596,7 +598,7 @@ func bakeArgs(args []string) (url, cmdContext string, targets []string) {
 	return url, cmdContext, targets
 }
 
-func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names []string, stdin io.Reader, pw progress.Writer) (files []bake.File, inp *bake.Input, err error) {
+func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names []string, stdin io.Reader, pw progress.Writer, filesFromEnv bool) (files []bake.File, inp *bake.Input, err error) {
 	var lnames []string // local
 	var rnames []string // remote
 	var anames []string // both
@@ -621,7 +623,11 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 
 	if len(lnames) > 0 || url == "" {
 		var lfiles []bake.File
-		progress.Wrap("[internal] load local bake definitions", pw.Write, func(sub progress.SubLogger) error {
+		where := ""
+		if filesFromEnv {
+			where = " from " + bakeEnvFilePath + " env"
+		}
+		progress.Wrap("[internal] load local bake definitions"+where, pw.Write, func(sub progress.SubLogger) error {
 			if url != "" {
 				lfiles, err = bake.ReadLocalFiles(lnames, stdin, sub)
 			} else {
