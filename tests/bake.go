@@ -2213,7 +2213,7 @@ target "second" {
 
 		dt, err := cmd.CombinedOutput()
 		require.NoError(t, err, string(dt))
-		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions from BUILDX_BAKE_FILE env`)
 		require.Contains(t, string(dt), `#1 reading first.hcl`)
 	})
 
@@ -2230,7 +2230,7 @@ target "second" {
 
 		dt, err := cmd.CombinedOutput()
 		require.NoError(t, err, string(dt))
-		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions from BUILDX_BAKE_FILE env`)
 		require.Contains(t, string(dt), `#1 reading first.hcl`)
 		require.NotContains(t, string(dt), "docker-bake.hcl")
 	})
@@ -2249,7 +2249,7 @@ target "second" {
 			withEnv("BUILDX_BAKE_FILE=first.hcl"+string(os.PathListSeparator)+"second.hcl"))
 		dt, err := cmd.CombinedOutput()
 		require.NoError(t, err, string(dt))
-		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions from BUILDX_BAKE_FILE env`)
 		require.Contains(t, string(dt), `#1 reading first.hcl`)
 		require.Contains(t, string(dt), `#1 reading second.hcl`)
 	})
@@ -2269,7 +2269,7 @@ target "second" {
 
 		dt, err := cmd.CombinedOutput()
 		require.NoError(t, err, string(dt))
-		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions from BUILDX_BAKE_FILE env`)
 		require.Contains(t, string(dt), `#1 reading first.hcl`)
 		require.Contains(t, string(dt), `#1 reading second.hcl`)
 	})
@@ -2294,7 +2294,7 @@ target "second" {
 
 		dt, err := cmd.CombinedOutput()
 		require.NoError(t, err, string(dt))
-		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions from BUILDX_BAKE_FILE env`)
 		require.Contains(t, string(dt), `#1 reading first.hcl`)
 		require.Contains(t, string(dt), `#1 reading from stdin`)
 	})
