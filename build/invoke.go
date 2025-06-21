@@ -14,18 +14,18 @@ import (
 )
 
 type InvokeConfig struct {
-	Entrypoint []string
-	Cmd        []string
-	NoCmd      bool
-	Env        []string
-	User       string
-	NoUser     bool
-	Cwd        string
-	NoCwd      bool
-	Tty        bool
-	Rollback   bool
-	Initial    bool
-	SuspendOn  SuspendOn
+	Entrypoint []string  `json:"entrypoint,omitempty"`
+	Cmd        []string  `json:"cmd,omitempty"`
+	NoCmd      bool      `json:"noCmd,omitempty"`
+	Env        []string  `json:"env,omitempty"`
+	User       string    `json:"user,omitempty"`
+	NoUser     bool      `json:"noUser,omitempty"`
+	Cwd        string    `json:"cwd,omitempty"`
+	NoCwd      bool      `json:"noCwd,omitempty"`
+	Tty        bool      `json:"tty,omitempty"`
+	Rollback   bool      `json:"rollback,omitempty"`
+	Initial    bool      `json:"initial,omitempty"`
+	SuspendOn  SuspendOn `json:"suspendOn,omitempty"`
 }
 
 func (cfg *InvokeConfig) NeedsDebug(err error) bool {
@@ -41,6 +41,18 @@ const (
 
 func (s SuspendOn) DebugEnabled(err error) bool {
 	return err != nil || s == SuspendAlways
+}
+
+func (s *SuspendOn) UnmarshalText(text []byte) error {
+	switch string(text) {
+	case "error":
+		*s = SuspendError
+	case "always":
+		*s = SuspendAlways
+	default:
+		return errors.Errorf("unknown suspend name: %s", string(text))
+	}
+	return nil
 }
 
 type Container struct {
