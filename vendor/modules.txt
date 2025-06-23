@@ -447,7 +447,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
 github.com/mitchellh/hashstructure/v2
-# github.com/moby/buildkit v0.23.0
+# github.com/moby/buildkit v0.23.0-rc1.0.20250618182037-9b91d20367db
 ## explicit; go 1.23.0
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types

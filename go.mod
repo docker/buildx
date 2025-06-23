@@ -28,7 +28,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.23.0
 	github.com/in-toto/in-toto-golang v0.9.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.23.0
+	github.com/moby/buildkit v0.23.0-rc1.0.20250618182037-9b91d20367db // master
 	github.com/moby/go-archive v0.1.0
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2

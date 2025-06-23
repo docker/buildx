@@ -441,7 +441,7 @@ workers0:
 			if err := json.Unmarshal(dt, &pred02); err != nil {
 				return errors.Errorf("failed to unmarshal provenance %s: %v", prov.descr.Digest, err)
 			}
-			pred = provenancetypes.ConvertSLSA02ToSLSA1(pred02)
+			pred = pred02.ConvertToSLSA1()
 		} else if err := json.Unmarshal(dt, &pred); err != nil {
 			return errors.Errorf("failed to unmarshal provenance %s: %v", prov.descr.Digest, err)
 		}

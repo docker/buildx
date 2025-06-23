@@ -835,7 +835,7 @@ func buildMetadataProvenance(t *testing.T, sb integration.Sandbox, metadataMode 
 
 	var prv provenancetypes.ProvenancePredicateSLSA02
 	require.NoError(t, json.Unmarshal(dtprv, &prv))
-	require.Equal(t, provenancetypes.BuildKitBuildType, prv.BuildType)
+	require.Equal(t, provenancetypes.BuildKitBuildType02, prv.BuildType)
 }
 
 func testBuildMetadataWarnings(t *testing.T, sb integration.Sandbox) {
