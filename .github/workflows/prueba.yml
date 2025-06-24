@@ -1,0 +1,13 @@
+# .github/workflows/prueba.yml
+name: Test Workflow
+
+on: [push]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout código
+        uses: actions/checkout@v3
+      - name: Decir hola
+        run: echo "Hola Jocelyn, esto es una prueba de GitHub Actions"
