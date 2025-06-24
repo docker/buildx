@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"sync"
+	"sync/atomic"
 
 	"github.com/docker/buildx/build"
 	"github.com/google/go-dap"
@@ -28,6 +29,8 @@ type Adapter[T any] struct {
 	threads      map[int]*thread
 	threadsMu    sync.RWMutex
 	nextThreadID int
+
+	idPool *idPool
 }
 
 func New[T any](cfg *build.InvokeConfig) *Adapter[T] {
@@ -38,6 +41,7 @@ func New[T any](cfg *build.InvokeConfig) *Adapter[T] {
 		evaluateReqCh: make(chan *evaluateRequest),
 		threads:       make(map[int]*thread),
 		nextThreadID:  1,
+		idPool:        new(idPool),
 	}
 	if cfg != nil {
 		d.cfg = *cfg
@@ -197,8 +201,9 @@ func (d *Adapter[T]) newThread(ctx Context, name string) (t *thread) {
 	d.threadsMu.Lock()
 	id := d.nextThreadID
 	t = &thread{
-		id:   id,
-		name: name,
+		id:     id,
+		name:   name,
+		idPool: d.idPool,
 	}
 	d.threads[t.id] = t
 	d.nextThreadID++
@@ -307,7 +312,7 @@ func (d *Adapter[T]) StackTrace(c Context, req *dap.StackTraceRequest, resp *dap
 		return errors.Errorf("no such thread: %d", req.Arguments.ThreadId)
 	}
 
-	resp.Body.StackFrames = t.StackFrames()
+	resp.Body.StackFrames = t.StackTrace()
 	return nil
 }
 
@@ -349,85 +354,6 @@ func (d *Adapter[T]) dapHandler() Handler {
 	}
 }
 
-type thread struct {
-	id   int
-	name string
-
-	paused chan struct{}
-	rCtx   *build.ResultHandle
-	mu     sync.Mutex
-}
-
-func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, meta map[string][]byte, cfg build.InvokeConfig) error {
-	err := ref.Evaluate(ctx)
-	if reason, desc := t.needsDebug(cfg, err); reason != "" {
-		rCtx := build.NewResultHandle(ctx, c, ref, meta, err)
-
-		select {
-		case <-t.pause(ctx, rCtx, reason, desc):
-		case <-ctx.Done():
-			t.Resume(ctx)
-			return context.Cause(ctx)
-		}
-	}
-	return err
-}
-
-func (t *thread) needsDebug(cfg build.InvokeConfig, err error) (reason, desc string) {
-	if !cfg.NeedsDebug(err) {
-		return
-	}
-
-	if err != nil {
-		reason = "exception"
-		desc = "Encountered an error during result evaluation"
-	} else {
-		reason = "pause"
-		desc = "Result evaluation completed"
-	}
-	return
-}
-
-func (t *thread) pause(c Context, rCtx *build.ResultHandle, reason, desc string) <-chan struct{} {
-	if t.paused == nil {
-		t.paused = make(chan struct{})
-	}
-	t.rCtx = rCtx
-
-	c.C() <- &dap.StoppedEvent{
-		Event: dap.Event{Event: "stopped"},
-		Body: dap.StoppedEventBody{
-			Reason:      reason,
-			Description: desc,
-			ThreadId:    t.id,
-		},
-	}
-	return t.paused
-}
-
-func (t *thread) Resume(c Context) {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	if t.paused == nil {
-		return
-	}
-
-	if t.rCtx != nil {
-		t.rCtx.Done()
-		t.rCtx = nil
-	}
-
-	close(t.paused)
-	t.paused = nil
-}
-
-// TODO: return a suitable stack frame for the thread.
-// For now, just returns nothing.
-func (t *thread) StackFrames() []dap.StackFrame {
-	return []dap.StackFrame{}
-}
-
 func (d *Adapter[T]) Out() io.Writer {
 	return &adapterWriter[T]{d}
 }
@@ -453,4 +379,16 @@ func (d *adapterWriter[T]) Write(p []byte) (n int, err error) {
 		return 0, io.ErrClosedPipe
 	}
 	return n, nil
+}
+
+type idPool struct {
+	next atomic.Int64
+}
+
+func (p *idPool) Get() int64 {
+	return p.next.Add(1)
+}
+
+func (p *idPool) Put(x int64) {
+	// noop
 }
