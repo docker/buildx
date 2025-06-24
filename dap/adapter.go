@@ -28,6 +28,8 @@ type Adapter[T any] struct {
 	threads      map[int]*thread
 	threadsMu    sync.RWMutex
 	nextThreadID int
+
+	supportsExec bool
 }
 
 func New[T any](cfg *build.InvokeConfig) *Adapter[T] {
@@ -91,6 +93,9 @@ func (d *Adapter[T]) Stop() error {
 
 func (d *Adapter[T]) Initialize(c Context, req *dap.InitializeRequest, resp *dap.InitializeResponse) error {
 	close(d.initialized)
+
+	// Set parameters based on passed client capabilities.
+	d.supportsExec = req.Arguments.SupportsRunInTerminalRequest
 
 	// Set capabilities.
 	resp.Body.SupportsConfigurationDoneRequest = true
@@ -221,6 +226,20 @@ func (d *Adapter[T]) getThread(id int) (t *thread) {
 	return t
 }
 
+func (d *Adapter[T]) getCurrentThread() (t *thread) {
+	d.threadsMu.Lock()
+	defer d.threadsMu.Unlock()
+
+	for _, thread := range d.threads {
+		if thread.isPaused() {
+			if t == nil || thread.id < t.id {
+				t = thread
+			}
+		}
+	}
+	return t
+}
+
 func (d *Adapter[T]) deleteThread(ctx Context, t *thread) {
 	d.threadsMu.Lock()
 	delete(d.threads, t.id)
@@ -346,6 +365,7 @@ func (d *Adapter[T]) dapHandler() Handler {
 		Disconnect:        d.Disconnect,
 		Threads:           d.Threads,
 		StackTrace:        d.StackTrace,
+		Evaluate:          d.Evaluate,
 	}
 }
 
@@ -420,6 +440,13 @@ func (t *thread) Resume(c Context) {
 
 	close(t.paused)
 	t.paused = nil
+}
+
+func (t *thread[T]) isPaused() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return t.paused != nil
 }
 
 // TODO: return a suitable stack frame for the thread.
