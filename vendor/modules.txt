@@ -254,7 +254,7 @@ github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
 # github.com/docker/distribution v2.8.3+incompatible
 ## explicit
-# github.com/docker/docker v28.2.2+incompatible
+# github.com/docker/docker v28.3.0+incompatible
 ## explicit
 github.com/docker/docker/api
 github.com/docker/docker/api/types
