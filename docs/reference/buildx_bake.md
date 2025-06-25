@@ -143,6 +143,11 @@ Use the `-f` / `--file` option to specify the build definition file to use.
 The file can be an HCL, JSON or Compose file. If multiple files are specified,
 all are read and the build configurations are combined.
 
+Alternatively, the environment variable `BUILDX_BAKE_FILE` can be used to specify the build definition to use.
+This is mutually exclusive with `-f` / `--file`; if both are specified, the environment variable is ignored.
+Multiple definitions can be specified by separating them with the system's path separator
+(typically `;` on Windows and `:` elsewhere), but can be changed with `BUILDX_BAKE_PATH_SEPARATOR`.
+
 You can pass the names of the targets to build, to build only specific target(s).
 The following example builds the `db` and `webapp-release` targets that are
 defined in the `docker-bake.dev.hcl` file:
