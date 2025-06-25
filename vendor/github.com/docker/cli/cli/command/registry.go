@@ -35,7 +35,7 @@ const (
 const authConfigKey = "https://index.docker.io/v1/"
 
 // RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
-// for the given command.
+// for the given command to prompt the user for username and password.
 func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) registrytypes.RequestAuthConfig {
 	configKey := getAuthConfigKey(index.Name)
 	isDefaultRegistry := configKey == authConfigKey || index.Official
@@ -43,7 +43,7 @@ func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInf
 		_, _ = fmt.Fprintf(cli.Out(), "\nLogin prior to %s:\n", cmdName)
 		authConfig, err := GetDefaultAuthConfig(cli.ConfigFile(), true, configKey, isDefaultRegistry)
 		if err != nil {
-			_, _ = fmt.Fprintf(cli.Err(), "Unable to retrieve stored credentials for %s, error: %s.\n", authConfigKey, err)
+			_, _ = fmt.Fprintf(cli.Err(), "Unable to retrieve stored credentials for %s, error: %s.\n", configKey, err)
 		}
 
 		select {
@@ -52,7 +52,7 @@ func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInf
 		default:
 		}
 
-		authConfig, err = PromptUserForCredentials(ctx, cli, "", "", authConfig.Username, authConfigKey)
+		authConfig, err = PromptUserForCredentials(ctx, cli, "", "", authConfig.Username, configKey)
 		if err != nil {
 			return "", err
 		}
