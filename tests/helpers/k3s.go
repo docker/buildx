@@ -2,10 +2,13 @@ package helpers
 
 import (
 	"bytes"
+	"fmt"
 	"net"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
@@ -76,7 +79,11 @@ func NewK3sServer(cfg *integration.BackendConfig) (kubeConfig string, cl func() 
 
 	if err = waitK3s(cfg, kubeConfig, nodeName); err != nil {
 		stop()
-		return "", nil, errors.Wrapf(err, "k3s did not start up: %s", integration.FormatLogs(cfg.Logs))
+		containerdLogs, _ := os.ReadFile(filepath.Join(k3sDataDir, "agent", "containerd", "containerd.log"))
+		if len(containerdLogs) > 0 {
+			return "", nil, errors.Wrapf(err, "k3s did not start up: %s\ncontainerd.log: %s", formatLogs(cfg.Logs), containerdLogs)
+		}
+		return "", nil, errors.Wrapf(err, "k3s did not start up: %s", formatLogs(cfg.Logs))
 	}
 
 	deferF.Append(stop)
@@ -92,9 +99,9 @@ func waitK3s(cfg *integration.BackendConfig, kubeConfig string, nodeName string)
 	}()
 
 	boff := backoff.NewExponentialBackOff()
-	boff.InitialInterval = 3 * time.Second
-	boff.MaxInterval = 5 * time.Second
-	boff.MaxElapsedTime = 2 * time.Minute
+	boff.InitialInterval = 5 * time.Second
+	boff.MaxInterval = 10 * time.Second
+	boff.MaxElapsedTime = 3 * time.Minute
 
 	if err := backoff.Retry(func() error {
 		cmd := exec.Command(kubeCtlBin, "--kubeconfig", kubeConfig, "wait", "--for=condition=Ready", "node/"+nodeName)
@@ -109,4 +116,14 @@ func waitK3s(cfg *integration.BackendConfig, kubeConfig string, nodeName string)
 	}
 
 	return nil
+}
+
+func formatLogs(m map[string]*bytes.Buffer) string {
+	var ss []string
+	for k, b := range m {
+		if b != nil {
+			ss = append(ss, fmt.Sprintf("%q:%s", k, b.String()))
+		}
+	}
+	return strings.Join(ss, ",")
 }
