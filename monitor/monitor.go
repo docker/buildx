@@ -19,6 +19,7 @@ import (
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/google/shlex"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/solver/errdefs"
@@ -56,7 +57,7 @@ func (m *Monitor) Handler() build.Handler {
 	}
 }
 
-func (m *Monitor) Evaluate(ctx context.Context, c gateway.Client, res *gateway.Result) error {
+func (m *Monitor) Evaluate(ctx context.Context, _ string, c gateway.Client, res *gateway.Result) error {
 	buildErr := res.EachRef(func(ref gateway.Reference) error {
 		return ref.Evaluate(ctx)
 	})
@@ -70,7 +71,17 @@ func (m *Monitor) Evaluate(ctx context.Context, c gateway.Client, res *gateway.R
 			logrus.Warnf("failed to print error information: %v", err)
 		}
 
-		rCtx := build.NewResultHandle(ctx, c, res, buildErr)
+		ps, err := exptypes.ParsePlatforms(res.Metadata)
+		if err != nil {
+			return err
+		}
+
+		ref, ok := res.FindRef(ps.Platforms[0].ID)
+		if !ok {
+			return errors.Errorf("no reference found for %s", ps.Platforms[0].ID)
+		}
+
+		rCtx := build.NewResultHandle(ctx, c, ref, res.Metadata, buildErr)
 		if monitorErr := m.Run(ctx, rCtx); monitorErr != nil {
 			if errors.Is(monitorErr, build.ErrRestart) {
 				return build.ErrRestart
