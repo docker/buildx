@@ -60,6 +60,7 @@ jobs:
         worker:
           - docker-container
           - remote
+          - kubernetes
         pkg:
           - ./tests
         mode:

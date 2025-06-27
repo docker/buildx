@@ -13,6 +13,7 @@ ARG GOTESTSUM_VERSION=v1.12.0
 ARG REGISTRY_VERSION=3.0.0
 ARG BUILDKIT_VERSION=v0.23.2
 ARG UNDOCK_VERSION=0.9.0
+ARG K3S_VERSION=v1.32.2-k3s1
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
@@ -25,6 +26,7 @@ FROM dockereng/cli-bin:$DOCKER_VERSION_ALT_26 AS docker-cli-alt26
 FROM registry:$REGISTRY_VERSION AS registry
 FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
 FROM crazymax/undock:$UNDOCK_VERSION AS undock
+FROM rancher/k3s:${K3S_VERSION} AS k3s
 
 FROM golatest AS gobase
 COPY --from=xx / /
@@ -127,6 +129,17 @@ RUN apk add --no-cache \
       shadow-uidmap \
       xfsprogs \
       xz
+# k3s deps
+RUN apk add --no-cache \
+      busybox-binsh \
+      cni-plugins \
+      cni-plugin-flannel \
+      conntrack-tools \
+      coreutils \
+      dbus \
+      findutils \
+      ipset
+ENV PATH="/usr/libexec/cni:${PATH}"
 COPY --link --from=gotestsum /out /usr/bin/
 COPY --link --from=registry /bin/registry /usr/bin/
 COPY --link --from=docker-engine / /usr/bin/
@@ -135,11 +148,30 @@ COPY --link --from=docker-engine-alt27 / /opt/docker-alt-27/
 COPY --link --from=docker-engine-alt26 / /opt/docker-alt-26/
 COPY --link --from=docker-cli-alt27 / /opt/docker-alt-27/
 COPY --link --from=docker-cli-alt26 / /opt/docker-alt-26/
+COPY --link --from=k3s /bin/k3s /usr/bin/
+COPY --link --from=k3s /bin/kubectl /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildkitd /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildctl /usr/bin/
 COPY --link --from=undock /usr/local/bin/undock /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
+COPY --chmod=755 <<-"EOF" /entrypoint.sh
+#!/bin/sh
+set -e
+# cgroup v2: enable nesting
+# https://github.com/moby/moby/blob/v25.0.0/hack/dind#L59-L69
+if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  # move the processes from the root group to the /init group,
+  # otherwise writing subtree_control fails with EBUSY.
+  # An error during moving non-existent process (i.e., "cat") is ignored.
+  mkdir -p /sys/fs/cgroup/init
+  xargs -rn1 < /sys/fs/cgroup/cgroup.procs > /sys/fs/cgroup/init/cgroup.procs || :
+  # enable controllers
+  sed -e 's/ / +/g' -e 's/^/+/' < /sys/fs/cgroup/cgroup.controllers > /sys/fs/cgroup/cgroup.subtree_control
+fi
+exec "$@"
+EOF
 ENV TEST_DOCKER_EXTRA="docker@27.5=/opt/docker-alt-27,docker@26.1=/opt/docker-alt-26"
+ENTRYPOINT ["/entrypoint.sh"]
 
 FROM integration-test-base AS integration-test
 COPY . .
