@@ -81,7 +81,8 @@ func NewK3sServer(cfg *integration.BackendConfig) (kubeConfig string, cl func() 
 		stop()
 		containerdLogs, _ := os.ReadFile(filepath.Join(k3sDataDir, "agent", "containerd", "containerd.log"))
 		if len(containerdLogs) > 0 {
-			return "", nil, errors.Wrapf(err, "k3s did not start up: %s\ncontainerd.log: %s", formatLogs(cfg.Logs), containerdLogs)
+			containerdConfig, _ := os.ReadFile(filepath.Join(k3sDataDir, "agent", "etc", "containerd", "config.toml"))
+			return "", nil, errors.Wrapf(err, "k3s did not start up: %s\ncontainerd.log: %s\ncontainerd.config.toml: %s", formatLogs(cfg.Logs), containerdLogs, containerdConfig)
 		}
 		return "", nil, errors.Wrapf(err, "k3s did not start up: %s", formatLogs(cfg.Logs))
 	}
