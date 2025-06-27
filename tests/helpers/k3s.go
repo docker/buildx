@@ -65,6 +65,23 @@ func NewK3sServer(cfg *integration.BackendConfig) (kubeConfig string, cl func() 
 	lport := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
 	nodeName := "integrationk3s"
 
+	k3sGlobalDir := "/etc/rancher/k3s"
+	if err := os.MkdirAll(k3sGlobalDir, 0755); err != nil {
+		return "", nil, err
+	}
+	if err := os.WriteFile(filepath.Join(k3sGlobalDir, "registries.yaml"), []byte(fmt.Sprintf(`
+mirrors:
+  "docker.io":
+    endpoint:
+      - "%s"
+
+configs:
+  "%s":
+    insecure_skip_verify: true
+`, cfg.Mirror, cfg.Mirror)), 0644); err != nil {
+		return "", nil, err
+	}
+
 	stop, err := integration.StartCmd(exec.Command(k3sBin, "server",
 		"--bind-address", "127.0.0.1",
 		"--https-listen-port", lport,
@@ -82,7 +99,8 @@ func NewK3sServer(cfg *integration.BackendConfig) (kubeConfig string, cl func() 
 		containerdLogs, _ := os.ReadFile(filepath.Join(k3sDataDir, "agent", "containerd", "containerd.log"))
 		if len(containerdLogs) > 0 {
 			containerdConfig, _ := os.ReadFile(filepath.Join(k3sDataDir, "agent", "etc", "containerd", "config.toml"))
-			return "", nil, errors.Wrapf(err, "k3s did not start up: %s\ncontainerd.log: %s\ncontainerd.config.toml: %s", formatLogs(cfg.Logs), containerdLogs, containerdConfig)
+			registries, _ := os.ReadFile(filepath.Join(k3sGlobalDir, "registries.yaml"))
+			return "", nil, errors.Wrapf(err, "k3s did not start up: %s\ncontainerd.log: %s\ncontainerd.config.toml: %s\nregistries.yaml: %s", formatLogs(cfg.Logs), containerdLogs, containerdConfig, registries)
 		}
 		return "", nil, errors.Wrapf(err, "k3s did not start up: %s", formatLogs(cfg.Logs))
 	}
