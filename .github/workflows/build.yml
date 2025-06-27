@@ -107,7 +107,7 @@ jobs:
           fi
           testFlags="--run=//worker=$(echo "${{ matrix.worker }}" | sed 's/\+/\\+/g')$"
           case "${{ matrix.worker }}" in
-            docker | docker+containerd | docker@* | docker+containerd@*)
+            docker | docker+containerd | docker@* | docker+containerd@* | kubernetes)
               echo "TESTFLAGS=${{ env.TESTFLAGS_DOCKER }} $testFlags" >> $GITHUB_ENV
               ;;
             *)
