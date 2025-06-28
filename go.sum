@@ -97,8 +97,8 @@ github.com/containerd/typeurl/v2 v2.2.3 h1:yNA/94zxWdvYACdYO8zofhrTVuQY73fFU1y++
 github.com/containerd/typeurl/v2 v2.2.3/go.mod h1:95ljDnPfD3bAbDJRugOiShd/DlAAsxGtUBhJxIn7SCk=
 github.com/cpuguy83/go-md2man/v2 v2.0.6 h1:XJtiaUW6dEEqVuZiMTn1ldk455QWwEIsMIJlo5vtkx0=
 github.com/cpuguy83/go-md2man/v2 v2.0.6/go.mod h1:oOW0eioCTA6cOiMLiUPZOpcVxMig6NIQQ7OS05n1F4g=
-github.com/crazy-max/buildkit v0.7.1-0.20250627234256-1efcf3bd4873 h1:itiUBP/l3u2fyXa9+wgyipgOIdkYVWfoCvFQ2/p0urA=
-github.com/crazy-max/buildkit v0.7.1-0.20250627234256-1efcf3bd4873/go.mod h1:crDmHkHBiiinzUxrpifvvjhkaf+kqa17XqT/B/UgIak=
+github.com/crazy-max/buildkit v0.7.1-0.20250628122957-0cbe82310f5c h1:BTTtSoqI/XI6M+HE6H3N8T06j4vbDQmXBjsiDZT4f5A=
+github.com/crazy-max/buildkit v0.7.1-0.20250628122957-0cbe82310f5c/go.mod h1:crDmHkHBiiinzUxrpifvvjhkaf+kqa17XqT/B/UgIak=
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/creack/pty v1.1.24 h1:bJrF4RRfyJnbTJqzRLHzcGaZK1NeM5kTC9jGgovnR1s=
 github.com/creack/pty v1.1.24/go.mod h1:08sCNb52WyoAwi2QDyzUCTgcvVFhUzewun7wtTfvcwE=

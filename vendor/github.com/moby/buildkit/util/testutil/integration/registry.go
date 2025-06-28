@@ -48,7 +48,7 @@ storage:
     filesystem:
         rootdirectory: %s
 http:
-    addr: 127.0.0.1:0
+    addr: 0.0.0.0:0
 `, filepath.Join(dir, "data"))
 
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(template), 0600); err != nil {
@@ -79,7 +79,7 @@ http:
 }
 
 func detectPort(ctx context.Context, rc io.ReadCloser) (string, error) {
-	r := regexp.MustCompile(`listening on 127\.0\.0\.1:(\d+)`)
+	r := regexp.MustCompile(`listening on (?:\[::\]|0\.0\.0\.0):(\d+)`)
 	s := bufio.NewScanner(rc)
 	found := make(chan struct{})
 	defer func() {

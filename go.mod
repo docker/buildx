@@ -183,4 +183,4 @@ exclude (
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 )
 
-replace github.com/moby/buildkit => github.com/crazy-max/buildkit v0.7.1-0.20250627234256-1efcf3bd4873 // testutil-expose-mirror
+replace github.com/moby/buildkit => github.com/crazy-max/buildkit v0.7.1-0.20250628122957-0cbe82310f5c // testutil-expose-mirror
