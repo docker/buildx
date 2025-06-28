@@ -65,6 +65,11 @@ func NewK3sServer(cfg *integration.BackendConfig) (kubeConfig string, cl func() 
 	lport := strconv.Itoa(l.Addr().(*net.TCPAddr).Port)
 	nodeName := "integrationk3s"
 
+	mirror := cfg.Mirror
+	if rport, ok := strings.CutPrefix(cfg.Mirror, "localhost:"); ok {
+		mirror = fmt.Sprintf("host.k3s.internal:%s", rport)
+	}
+
 	k3sGlobalDir := "/etc/rancher/k3s"
 	if err := os.MkdirAll(k3sGlobalDir, 0755); err != nil {
 		return "", nil, err
@@ -78,7 +83,7 @@ mirrors:
 configs:
   "%s":
     insecure_skip_verify: true
-`, cfg.Mirror, cfg.Mirror)), 0644); err != nil {
+`, mirror, mirror)), 0644); err != nil {
 		return "", nil, err
 	}
 
