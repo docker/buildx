@@ -862,6 +862,32 @@ services:
 	require.NoError(t, err)
 }
 
+func TestDotEnvEvaluate(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	err := os.WriteFile(filepath.Join(tmpdir, ".env"), []byte(`
+TEST_VALUE=${SYSTEM_VALUE:?system_value_not_set}
+FOO_VALUE=${TEST_VALUE:?test_value_not_set}
+`), 0644)
+	require.NoError(t, err)
+
+	dt := []byte(`
+services:
+  test:
+    build:
+      args:
+        TEST_VALUE:
+        FOO_VALUE:
+`)
+
+	t.Setenv("SYSTEM_VALUE", "abc")
+
+	chdir(t, tmpdir)
+	c, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	require.NoError(t, err)
+	require.Equal(t, map[string]*string{"TEST_VALUE": ptrstr("abc"), "FOO_VALUE": ptrstr("abc")}, c.Targets[0].Args)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
