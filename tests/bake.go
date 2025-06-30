@@ -2204,6 +2204,22 @@ target "second" {
 }
 `)
 
+	t.Run("no env", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("docker-bake.hcl", bakeFileFirst, 0600),
+			fstest.CreateFile("first", []byte("first"), 0600),
+		)
+		cmd := buildxCmd(sb,
+			withDir(dir),
+			withArgs("bake", "--progress=plain", "first"))
+
+		dt, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+		require.Contains(t, string(dt), `#1 [internal] load local bake definitions`)
+		require.NotContains(t, string(dt), `from BUILDX_BAKE_FILE env`)
+		require.Contains(t, string(dt), `#1 reading docker-bake.hcl`)
+	})
+
 	t.Run("single file", func(t *testing.T) {
 		dir := tmpdir(t,
 			fstest.CreateFile("first.hcl", bakeFileFirst, 0600),

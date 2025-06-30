@@ -465,12 +465,12 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			filesFromEnv := false
 			if len(options.files) == 0 {
-				envFiles, err := bakeEnvFiles(os.LookupEnv)
-				if err != nil {
+				if envFiles, err := bakeEnvFiles(os.LookupEnv); err != nil {
 					return err
+				} else if len(envFiles) > 0 {
+					options.files = envFiles
+					filesFromEnv = true
 				}
-				options.files = envFiles
-				filesFromEnv = true
 			}
 			// reset to nil to avoid override is unset
 			if !cmd.Flags().Lookup("no-cache").Changed {
