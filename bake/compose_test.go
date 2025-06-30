@@ -846,6 +846,22 @@ services:
 	require.Equal(t, map[string]string{"base": "target:base"}, c.Targets[1].Contexts)
 }
 
+func TestDotEnvDir(t *testing.T) {
+	tmpdir := t.TempDir()
+	require.NoError(t, os.Mkdir(filepath.Join(tmpdir, ".env"), 0755))
+
+	dt := []byte(`
+services:
+  foo:
+    build:
+     context: .
+`)
+
+	chdir(t, tmpdir)
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	require.NoError(t, err)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
