@@ -24,6 +24,7 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -448,7 +449,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	if exitCode != 0 {
-		os.Exit(exitCode)
+		return cobrautil.ExitCodeError(exitCode)
 	}
 
 	return nil

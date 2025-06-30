@@ -49,7 +49,6 @@ linters:
         - "assignOp"
         - "appendAssign"
         - "singleCaseSwitch"
-        - "exitAfterDefer" # FIXME
     gosec:
       excludes:
         - G204

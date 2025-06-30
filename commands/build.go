@@ -384,10 +384,10 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 		}
 	}
 	if opts.CallFunc != nil {
-		if exitcode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse, options.target, inputs); err != nil {
+		if exitCode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse, options.target, inputs); err != nil {
 			return err
-		} else if exitcode != 0 {
-			os.Exit(exitcode)
+		} else if exitCode != 0 {
+			return cobrautil.ExitCodeError(exitCode)
 		}
 	}
 	if v, ok := resp.ExporterResponse["frontend.result.inlinemessage"]; ok {
