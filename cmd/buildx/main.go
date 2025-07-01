@@ -7,6 +7,7 @@ import (
 	"path/filepath"
 
 	"github.com/docker/buildx/commands"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/version"
 	"github.com/docker/cli/cli"
@@ -99,6 +100,13 @@ func main() {
 			os.Exit(1)
 		}
 		os.Exit(sterr.StatusCode)
+	}
+
+	// Check for ExitCodeError, which is used to exit with a specific code
+	// without printing an error message.
+	var exitCodeErr cobrautil.ExitCodeError
+	if errors.As(err, &exitCodeErr) {
+		os.Exit(int(exitCodeErr))
 	}
 
 	for _, s := range solvererrdefs.Sources(err) {
