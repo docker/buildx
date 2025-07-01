@@ -2300,6 +2300,104 @@ func TestGroupTargetsWithDefault(t *testing.T) {
 	})
 }
 
+func TestMatchNames(t *testing.T) {
+	ctx := context.TODO()
+
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+group "default" {
+  targets = ["foo", "foo-bar"]
+}
+group "baz" {
+  targets = ["baz-foo", "baz-bar", "baz-fuu"]
+}
+target "foo" {}
+target "foo-bar" {}
+target "foo-baz" {}
+target "foo-fuu" {}
+target "bar-foo" {}
+target "bar-baz" {}
+target "bar-fuu" {}
+target "baz-foo" {}
+target "baz-bar" {}
+target "baz-fuu" {}
+target "mtx" {
+  name = "mtx-${foo}-${bar}-${baz}"
+  matrix = {
+    foo = ["a"]
+    bar = ["b", "c"]
+    baz = ["d", "e", "f"]
+  }
+}
+`),
+	}
+
+	cases := []struct {
+		name     string
+		pattern  []string
+		expected []string
+		wantErr  bool
+	}{
+		{
+			name:     "single",
+			pattern:  []string{"foo"},
+			expected: []string{"foo"},
+		},
+		{
+			name:     "starts with",
+			pattern:  []string{"foo-*"},
+			expected: []string{"foo-bar", "foo-baz", "foo-fuu"},
+		},
+		{
+			name:     "starts with group",
+			pattern:  []string{"baz*"},
+			expected: []string{"baz-bar", "baz-foo", "baz-fuu"},
+		},
+		{
+			name:     "matrix",
+			pattern:  []string{"mtx"},
+			expected: []string{"mtx-a-b-d", "mtx-a-b-e", "mtx-a-b-f", "mtx-a-c-d", "mtx-a-c-e", "mtx-a-c-f"},
+		},
+		{
+			name:     "matrix starts with",
+			pattern:  []string{"mtx-a-b-*"},
+			expected: []string{"mtx-a-b-d", "mtx-a-b-e", "mtx-a-b-f"},
+		},
+		{
+			name:     "any",
+			pattern:  []string{"*"},
+			expected: []string{"bar-baz", "bar-foo", "bar-fuu", "baz-bar", "baz-foo", "baz-fuu", "foo", "foo-bar", "foo-baz", "foo-fuu", "mtx-a-b-d", "mtx-a-b-e", "mtx-a-b-f", "mtx-a-c-d", "mtx-a-c-e", "mtx-a-c-f"},
+		},
+		{
+			name:     "any with group",
+			pattern:  []string{"*", "default"},
+			expected: []string{"bar-baz", "bar-foo", "bar-fuu", "baz-bar", "baz-foo", "baz-fuu", "foo", "foo-bar", "foo-baz", "foo-fuu", "mtx-a-b-d", "mtx-a-b-e", "mtx-a-b-f", "mtx-a-c-d", "mtx-a-c-e", "mtx-a-c-f"},
+		},
+		{
+			name:    "not found",
+			pattern: []string{"aaa-*"},
+			wantErr: true,
+		},
+	}
+	for _, tt := range cases {
+		t.Run(tt.name, func(t *testing.T) {
+			m, _, err := ReadTargets(ctx, []File{f}, tt.pattern, nil, nil, &EntitlementConf{})
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				keys := make([]string, 0, len(m))
+				for k := range m {
+					keys = append(keys, k)
+				}
+				sort.Strings(keys)
+				require.Equal(t, tt.expected, keys)
+			}
+		})
+	}
+}
+
 func stringify[V fmt.Stringer](values []V) []string {
 	s := make([]string, len(values))
 	for i, v := range values {

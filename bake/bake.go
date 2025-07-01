@@ -205,6 +205,16 @@ func ReadTargets(ctx context.Context, files []File, targets, overrides []string,
 		targets[i] = sanitizeTargetName(t)
 	}
 
+	var tms []string
+	for _, t := range targets {
+		names, err := c.matchNames(t)
+		if err != nil {
+			return nil, nil, err
+		}
+		tms = append(tms, names...)
+	}
+	targets = dedupSlice(tms)
+
 	o, err := c.newOverrides(overrides)
 	if err != nil {
 		return nil, nil, err
@@ -302,6 +312,27 @@ func sliceToMap(env []string) (res map[string]string) {
 		}
 	}
 	return
+}
+
+func (c Config) matchNames(pattern string) ([]string, error) {
+	if !strings.ContainsAny(pattern, "*?[]") {
+		return []string{pattern}, nil
+	}
+	var names []string
+	for _, group := range c.Groups {
+		if ok, err := path.Match(pattern, group.Name); ok && err == nil {
+			names = append(names, group.Name)
+		}
+	}
+	for _, target := range c.Targets {
+		if ok, err := path.Match(pattern, target.Name); ok && err == nil {
+			names = append(names, target.Name)
+		}
+	}
+	if len(names) == 0 {
+		return nil, errors.Errorf("could not find any target matching %q", pattern)
+	}
+	return names, nil
 }
 
 func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
