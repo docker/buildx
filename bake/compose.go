@@ -263,10 +263,13 @@ func loadDotEnv(curenv map[string]string, workingDir string) (map[string]string,
 		return nil, err
 	}
 
-	if _, err = os.Stat(ef); os.IsNotExist(err) {
-		return curenv, nil
-	} else if err != nil {
+	if st, err := os.Stat(ef); err != nil {
+		if os.IsNotExist(err) {
+			return curenv, nil
+		}
 		return nil, err
+	} else if st.IsDir() {
+		return curenv, nil
 	}
 
 	dt, err := os.ReadFile(ef)
