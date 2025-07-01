@@ -277,7 +277,10 @@ func loadDotEnv(curenv map[string]string, workingDir string) (map[string]string,
 		return nil, err
 	}
 
-	envs, err := dotenv.UnmarshalBytesWithLookup(dt, nil)
+	envs, err := dotenv.UnmarshalBytesWithLookup(dt, func(k string) (string, bool) {
+		v, ok := curenv[k]
+		return v, ok
+	})
 	if err != nil {
 		return nil, err
 	}
