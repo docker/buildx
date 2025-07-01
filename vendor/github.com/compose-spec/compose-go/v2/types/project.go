@@ -47,6 +47,7 @@ type Project struct {
 	Volumes    Volumes    `yaml:"volumes,omitempty" json:"volumes,omitempty"`
 	Secrets    Secrets    `yaml:"secrets,omitempty" json:"secrets,omitempty"`
 	Configs    Configs    `yaml:"configs,omitempty" json:"configs,omitempty"`
+	Models     Models     `yaml:"models,omitempty" json:"models,omitempty"`
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"` // https://github.com/golang/go/issues/6213
 
 	ComposeFiles []string `yaml:"-" json:"-"`
@@ -411,6 +412,7 @@ func (p *Project) WithoutUnnecessaryResources() *Project {
 	requiredVolumes := map[string]struct{}{}
 	requiredSecrets := map[string]struct{}{}
 	requiredConfigs := map[string]struct{}{}
+	requiredModels := map[string]struct{}{}
 	for _, s := range newProject.Services {
 		for k := range s.Networks {
 			requiredNetworks[k] = struct{}{}
@@ -431,6 +433,9 @@ func (p *Project) WithoutUnnecessaryResources() *Project {
 		}
 		for _, v := range s.Configs {
 			requiredConfigs[v.Source] = struct{}{}
+		}
+		for m := range s.Models {
+			requiredModels[m] = struct{}{}
 		}
 	}
 
@@ -465,6 +470,14 @@ func (p *Project) WithoutUnnecessaryResources() *Project {
 		}
 	}
 	newProject.Configs = configs
+
+	models := Models{}
+	for k := range requiredModels {
+		if value, ok := p.Models[k]; ok {
+			models[k] = value
+		}
+	}
+	newProject.Models = models
 	return newProject
 }
 

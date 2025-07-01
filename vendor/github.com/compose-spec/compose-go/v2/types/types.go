@@ -103,6 +103,7 @@ type ServiceConfig struct {
 	MemSwapLimit    UnitBytes                        `yaml:"memswap_limit,omitempty" json:"memswap_limit,omitempty"`
 	MemSwappiness   UnitBytes                        `yaml:"mem_swappiness,omitempty" json:"mem_swappiness,omitempty"`
 	MacAddress      string                           `yaml:"mac_address,omitempty" json:"mac_address,omitempty"`
+	Models          map[string]*ServiceModelConfig   `yaml:"models,omitempty" json:"models,omitempty"`
 	Net             string                           `yaml:"net,omitempty" json:"net,omitempty"`
 	NetworkMode     string                           `yaml:"network_mode,omitempty" json:"network_mode,omitempty"`
 	Networks        map[string]*ServiceNetworkConfig `yaml:"networks,omitempty" json:"networks,omitempty"`
@@ -129,6 +130,7 @@ type ServiceConfig struct {
 	Tmpfs           StringList                       `yaml:"tmpfs,omitempty" json:"tmpfs,omitempty"`
 	Tty             bool                             `yaml:"tty,omitempty" json:"tty,omitempty"`
 	Ulimits         map[string]*UlimitsConfig        `yaml:"ulimits,omitempty" json:"ulimits,omitempty"`
+	UseAPISocket    bool                             `yaml:"use_api_socket,omitempty" json:"use_api_socket,omitempty"`
 	User            string                           `yaml:"user,omitempty" json:"user,omitempty"`
 	UserNSMode      string                           `yaml:"userns_mode,omitempty" json:"userns_mode,omitempty"`
 	Uts             string                           `yaml:"uts,omitempty" json:"uts,omitempty"`
