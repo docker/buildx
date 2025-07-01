@@ -63,6 +63,7 @@ func init() {
 	mergeSpecials["services.*.labels"] = mergeToSequence
 	mergeSpecials["services.*.volumes.*.volume.labels"] = mergeToSequence
 	mergeSpecials["services.*.logging"] = mergeLogging
+	mergeSpecials["services.*.models"] = mergeModels
 	mergeSpecials["services.*.networks"] = mergeNetworks
 	mergeSpecials["services.*.sysctls"] = mergeToSequence
 	mergeSpecials["services.*.tmpfs"] = mergeToSequence
@@ -155,6 +156,12 @@ func mergeDependsOn(c any, o any, path tree.Path) (any, error) {
 		"condition": "service_started",
 		"required":  true,
 	})
+	return mergeMappings(right, left, path)
+}
+
+func mergeModels(c any, o any, path tree.Path) (any, error) {
+	right := convertIntoMapping(c, nil)
+	left := convertIntoMapping(o, nil)
 	return mergeMappings(right, left, path)
 }
 

@@ -33,7 +33,8 @@ func init() {
 	transformers["services.*.label_file"] = transformStringOrList
 	transformers["services.*.extends"] = transformExtends
 	transformers["services.*.gpus"] = transformGpus
-	transformers["services.*.networks"] = transformServiceNetworks
+	transformers["services.*.networks"] = transformStringSliceToMap
+	transformers["services.*.models"] = transformStringSliceToMap
 	transformers["services.*.volumes.*"] = transformVolumeMount
 	transformers["services.*.dns"] = transformStringOrList
 	transformers["services.*.devices.*"] = transformDeviceMapping
