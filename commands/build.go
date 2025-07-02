@@ -20,7 +20,6 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/monitor"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
@@ -28,6 +27,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
+	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metricutil"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/platformutil"
@@ -55,7 +55,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/tonistiigi/go-csvvalue"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
@@ -100,8 +99,6 @@ type buildOptions struct {
 	pull         bool
 	exportPush   bool
 	exportLoad   bool
-
-	invokeConfig *invokeConfig
 }
 
 func (o *buildOptions) toOptions() (*BuildOptions, error) {
@@ -276,7 +273,7 @@ func (o *buildOptionsHash) String() string {
 	return o.result
 }
 
-func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) (err error) {
+func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOptions, options buildOptions) (err error) {
 	mp := dockerCli.MeterProvider()
 
 	ctx, end, err := tracing.TraceCurrentCommand(ctx, []string{"build", options.contextPath},
@@ -320,10 +317,6 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	}
 	driverType := b.Driver
 
-	var term bool
-	if _, err := console.ConsoleFromFile(os.Stderr); err == nil {
-		term = true
-	}
 	attributes := buildMetricAttributes(dockerCli, driverType, &options)
 
 	ctx2, cancel := context.WithCancelCause(context.TODO())
@@ -332,8 +325,38 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	if err != nil {
 		return err
 	}
+
+	var (
+		out io.Writer = os.Stderr
+		dbg debuggerInstance
+	)
+
+	if debugOpts != nil {
+		if options.dockerfileName == "-" || options.contextPath == "-" {
+			// stdin must be usable for debugger
+			return errors.Errorf("Dockerfile or context from stdin is not supported with debugger")
+		}
+
+		dbg, err = debugOpts.New(ioset.In{
+			Stdin:  io.NopCloser(dockerCli.In()),
+			Stdout: nopCloser{dockerCli.Out()},
+			Stderr: nopCloser{dockerCli.Err()},
+		})
+		if err != nil {
+			return err
+		}
+		out = dbg.Out()
+	}
+
+	var term bool
+	if c, ok := out.(console.File); ok {
+		if _, err := console.ConsoleFromFile(c); err == nil {
+			term = true
+		}
+	}
+
 	var printer *progress.Printer
-	printer, err = progress.NewPrinter(ctx2, os.Stderr, progressMode,
+	printer, err = progress.NewPrinter(ctx2, out, progressMode,
 		progress.WithDesc(
 			fmt.Sprintf("building with %q instance using %s driver", b.Name, b.Driver),
 			fmt.Sprintf("%s:%s", b.Driver, b.Name),
@@ -348,7 +371,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, options buildOptions) 
 	}
 
 	done := timeBuildCommand(mp, attributes)
-	resp, inputs, retErr := runBuildWithOptions(ctx, dockerCli, opts, options, printer)
+	resp, inputs, retErr := runBuildWithOptions(ctx, dockerCli, opts, dbg, printer)
 
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
@@ -406,26 +429,19 @@ func getImageID(resp map[string]string) string {
 	return dgst
 }
 
-func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *BuildOptions, options buildOptions, printer *progress.Printer) (_ *client.SolveResponse, _ *build.Inputs, retErr error) {
-	if options.invokeConfig != nil && (options.dockerfileName == "-" || options.contextPath == "-") {
-		// stdin must be usable for monitor
-		return nil, nil, errors.Errorf("Dockerfile or context from stdin is not supported with invoke")
+func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *BuildOptions, dbg debuggerInstance, printer *progress.Printer) (_ *client.SolveResponse, _ *build.Inputs, retErr error) {
+	var bh build.Handler
+	if dbg != nil {
+		if err := dbg.Start(printer, opts); err != nil {
+			return nil, nil, err
+		}
+		defer dbg.Stop()
+
+		bh = dbg.Handler()
+		dockerCli.SetIn(nil)
 	}
 
-	var (
-		in io.ReadCloser
-		m  *monitor.Monitor
-		bh build.Handler
-	)
-	if options.invokeConfig == nil {
-		in = dockerCli.In()
-	} else {
-		m = monitor.New(&options.invokeConfig.InvokeConfig, dockerCli.In(), os.Stdout, os.Stderr, printer)
-		defer m.Close()
-
-		bh = m.Handler()
-	}
-
+	in := dockerCli.In()
 	for {
 		resp, inputs, err := RunBuild(ctx, dockerCli, opts, in, printer, &bh)
 		if err != nil {
@@ -440,7 +456,7 @@ func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *Build
 	}
 }
 
-func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debugOptions) *cobra.Command {
+func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOptions) *cobra.Command {
 	cFlags := &commonFlags{}
 	options := &buildOptions{}
 
@@ -453,7 +469,9 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debugOp
 			"aliases": "docker build, docker builder build, docker image build, docker buildx b",
 		},
 		RunE: func(cmd *cobra.Command, args []string) error {
-			options.contextPath = args[0]
+			if len(args) > 0 {
+				options.contextPath = args[0]
+			}
 			options.builder = rootOpts.builder
 			options.metadataFile = cFlags.metadataFile
 			options.noCache = false
@@ -467,15 +485,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugConfig *debugOp
 			options.progress = cFlags.progress
 			cmd.Flags().VisitAll(checkWarnedFlags)
 
-			if debugConfig != nil && (debugConfig.InvokeFlag != "" || debugConfig.OnFlag != "") {
-				iConfig := new(invokeConfig)
-				if err := iConfig.parseInvokeConfig(debugConfig.InvokeFlag, debugConfig.OnFlag); err != nil {
-					return err
-				}
-				options.invokeConfig = iConfig
-			}
-
-			return runBuild(cmd.Context(), dockerCli, *options)
+			return runBuild(cmd.Context(), dockerCli, debugger, *options)
 		},
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return nil, cobra.ShellCompDirectiveFilterDirs
@@ -866,96 +876,6 @@ func printValue(w io.Writer, printer callFunc, version string, format string, re
 	return printer([]byte(res["result.json"]), w)
 }
 
-type invokeConfig struct {
-	build.InvokeConfig
-	invokeFlag string
-}
-
-func (cfg *invokeConfig) parseInvokeConfig(invoke, on string) error {
-	switch on {
-	case "always":
-		cfg.SuspendOn = build.SuspendAlways
-	case "error":
-		cfg.SuspendOn = build.SuspendError
-	default:
-		if invoke != "" {
-			cfg.SuspendOn = build.SuspendAlways
-		}
-	}
-
-	cfg.invokeFlag = invoke
-	cfg.Tty = true
-	cfg.NoCmd = true
-	switch invoke {
-	case "default", "":
-		return nil
-	case "on-error":
-		// NOTE: we overwrite the command to run because the original one should fail on the failed step.
-		// TODO: make this configurable via flags or restorable from LLB.
-		// Discussion: https://github.com/docker/buildx/pull/1640#discussion_r1113295900
-		cfg.Cmd = []string{"/bin/sh"}
-		cfg.NoCmd = false
-		return nil
-	}
-
-	csvParser := csvvalue.NewParser()
-	csvParser.LazyQuotes = true
-	fields, err := csvParser.Fields(invoke, nil)
-	if err != nil {
-		return err
-	}
-	if len(fields) == 1 && !strings.Contains(fields[0], "=") {
-		cfg.Cmd = []string{fields[0]}
-		cfg.NoCmd = false
-		return nil
-	}
-	cfg.NoUser = true
-	cfg.NoCwd = true
-	for _, field := range fields {
-		parts := strings.SplitN(field, "=", 2)
-		if len(parts) != 2 {
-			return errors.Errorf("invalid value %s", field)
-		}
-		key := strings.ToLower(parts[0])
-		value := parts[1]
-		switch key {
-		case "args":
-			cfg.Cmd = append(cfg.Cmd, maybeJSONArray(value)...)
-			cfg.NoCmd = false
-		case "entrypoint":
-			cfg.Entrypoint = append(cfg.Entrypoint, maybeJSONArray(value)...)
-			if cfg.Cmd == nil {
-				cfg.Cmd = []string{}
-				cfg.NoCmd = false
-			}
-		case "env":
-			cfg.Env = append(cfg.Env, maybeJSONArray(value)...)
-		case "user":
-			cfg.User = value
-			cfg.NoUser = false
-		case "cwd":
-			cfg.Cwd = value
-			cfg.NoCwd = false
-		case "tty":
-			cfg.Tty, err = strconv.ParseBool(value)
-			if err != nil {
-				return errors.Errorf("failed to parse tty: %v", err)
-			}
-		default:
-			return errors.Errorf("unknown key %q", key)
-		}
-	}
-	return nil
-}
-
-func maybeJSONArray(v string) []string {
-	var list []string
-	if err := json.Unmarshal([]byte(v), &list); err == nil {
-		return list
-	}
-	return []string{v}
-}
-
 func callAlias(target *string, value string) cobrautil.BoolFuncValue {
 	return func(s string) error {
 		v, err := strconv.ParseBool(s)
@@ -1209,4 +1129,12 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 		inputs = &i.Inputs
 	}
 	return resp[defaultTargetName], inputs, nil
+}
+
+type nopCloser struct {
+	io.Writer
+}
+
+func (nopCloser) Close() error {
+	return nil
 }

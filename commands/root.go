@@ -120,6 +120,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 	)
 	if confutil.IsExperimental() {
 		cmd.AddCommand(debugCmd(dockerCli, opts))
+		cmd.AddCommand(dapCmd(dockerCli, opts))
 	}
 
 	cmd.RegisterFlagCompletionFunc( //nolint:errcheck
