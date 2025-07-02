@@ -1,10 +1,15 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"os"
+	"regexp"
+	"sort"
 	"strings"
+	"text/tabwriter"
 
+	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/commands"
 	clidocstool "github.com/docker/cli-docs-tool"
 	"github.com/docker/cli/cli/command"
@@ -21,10 +26,14 @@ import (
 )
 
 const defaultSourcePath = "docs/reference/"
+const defaultBakeStdlibSourcePath = "docs/bake-stdlib.md"
+
+var adjustSep = regexp.MustCompile(`\|:---(\s+)`)
 
 type options struct {
-	source  string
-	formats []string
+	source     string
+	bakeSource string
+	formats    []string
 }
 
 // fixUpExperimentalCLI trims the " (EXPERIMENTAL)" suffix from the CLI output,
@@ -79,6 +88,9 @@ func gen(opts *options) error {
 			if err = c.GenMarkdownTree(cmd); err != nil {
 				return err
 			}
+			if err = generateBakeStdlibDocs(opts.bakeSource); err != nil {
+				return errors.Wrap(err, "generating bake stdlib docs")
+			}
 		case "yaml":
 			// fix up is needed only for yaml (used for generating docs.docker.com contents)
 			fixUpExperimentalCLI(cmd)
@@ -97,6 +109,7 @@ func run() error {
 	opts := &options{}
 	flags := pflag.NewFlagSet(os.Args[0], pflag.ContinueOnError)
 	flags.StringVar(&opts.source, "source", defaultSourcePath, "Docs source folder")
+	flags.StringVar(&opts.bakeSource, "bake-stdlib-source", defaultBakeStdlibSourcePath, "Bake stdlib source file")
 	flags.StringSliceVar(&opts.formats, "formats", []string{}, "Format (md, yaml)")
 	if err := flags.Parse(os.Args[1:]); err != nil {
 		return err
@@ -112,4 +125,78 @@ func main() {
 		log.Printf("ERROR: %+v", err)
 		os.Exit(1)
 	}
+}
+
+func generateBakeStdlibDocs(filename string) error {
+	log.Printf("INFO: Generating Markdown for %q", filename)
+	dt, err := os.ReadFile(filename)
+	if err != nil {
+		return err
+	}
+	currentContent := string(dt)
+
+	start := strings.Index(currentContent, "<!---MARKER_STDLIB_START-->")
+	end := strings.Index(currentContent, "<!---MARKER_STDLIB_END-->")
+	if start == -1 {
+		return errors.Errorf("no start marker in %s", filename)
+	}
+	if end == -1 {
+		return errors.Errorf("no end marker in %s", filename)
+	}
+
+	table := newMdTable("Name", "Description")
+	names := make([]string, 0, len(hclparser.Stdlib()))
+	for name := range hclparser.Stdlib() {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	for _, name := range names {
+		fn := hclparser.Stdlib()[name]
+		fname := fmt.Sprintf("`%s`", name)
+		if strings.Contains(currentContent, "<a name=\""+name+"\"></a>") {
+			fname = fmt.Sprintf("[`%s`](#%s)", name, name)
+		}
+		table.AddRow(fname, fn.Description())
+	}
+
+	newContent := currentContent[:start] + "<!---MARKER_STDLIB_START-->\n\n" + table.String() + "\n" + currentContent[end:]
+	return os.WriteFile(filename, []byte(newContent), 0644)
+}
+
+type mdTable struct {
+	out       *strings.Builder
+	tabWriter *tabwriter.Writer
+}
+
+func newMdTable(headers ...string) *mdTable {
+	w := &strings.Builder{}
+	t := &mdTable{
+		out:       w,
+		tabWriter: tabwriter.NewWriter(w, 5, 5, 1, ' ', tabwriter.Debug),
+	}
+	t.addHeader(headers...)
+	return t
+}
+
+func (t *mdTable) addHeader(cols ...string) {
+	t.AddRow(cols...)
+	_, _ = t.tabWriter.Write([]byte("|" + strings.Repeat(":---\t", len(cols)) + "\n"))
+}
+
+func (t *mdTable) AddRow(cols ...string) {
+	for i := range cols {
+		cols[i] = mdEscapePipe(cols[i])
+	}
+	_, _ = t.tabWriter.Write([]byte("| " + strings.Join(cols, "\t ") + "\t\n"))
+}
+
+func (t *mdTable) String() string {
+	_ = t.tabWriter.Flush()
+	return adjustSep.ReplaceAllStringFunc(t.out.String()+"\n", func(in string) string {
+		return strings.ReplaceAll(in, " ", "-")
+	})
+}
+
+func mdEscapePipe(s string) string {
+	return strings.ReplaceAll(s, `|`, `\|`)
 }

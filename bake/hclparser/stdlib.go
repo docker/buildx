@@ -132,6 +132,7 @@ var stdlibFunctions = []funcDef{
 // value in a list.
 func indexOfFunc() function.Function {
 	return function.New(&function.Spec{
+		Description: `Finds the element index for a given value in a list.`,
 		Params: []function.Parameter{
 			{
 				Name: "list",
@@ -177,6 +178,7 @@ func indexOfFunc() function.Function {
 // basenameFunc constructs a function that returns the last element of a path.
 func basenameFunc() function.Function {
 	return function.New(&function.Spec{
+		Description: `Returns the last element of a path.`,
 		Params: []function.Parameter{
 			{
 				Name: "path",
@@ -194,6 +196,7 @@ func basenameFunc() function.Function {
 // dirnameFunc constructs a function that returns the directory of a path.
 func dirnameFunc() function.Function {
 	return function.New(&function.Spec{
+		Description: `Returns the directory of a path.`,
 		Params: []function.Parameter{
 			{
 				Name: "path",
@@ -212,6 +215,7 @@ func dirnameFunc() function.Function {
 // leaving only characters that are valid for a Bake target name.
 func sanitizeFunc() function.Function {
 	return function.New(&function.Spec{
+		Description: `Replaces all non-alphanumeric characters with a underscore, leaving only characters that are valid for a Bake target name.`,
 		Params: []function.Parameter{
 			{
 				Name: "name",
@@ -240,8 +244,9 @@ func sanitizeFunc() function.Function {
 // This function was imported from terraform's datetime utilities.
 func timestampFunc() function.Function {
 	return function.New(&function.Spec{
-		Params: []function.Parameter{},
-		Type:   function.StaticReturnType(cty.String),
+		Description: `Returns a string representation of the current date and time.`,
+		Params:      []function.Parameter{},
+		Type:        function.StaticReturnType(cty.String),
 		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
 			return cty.StringVal(time.Now().UTC().Format(time.RFC3339)), nil
 		},

@@ -21,9 +21,9 @@ RUN --mount=target=/context \
   --mount=target=.,type=tmpfs <<EOT
 set -e
 rsync -a /context/. .
-docsgen --formats "$FORMATS" --source "docs/reference"
+docsgen --formats "$FORMATS" --source "docs/reference" --bake-stdlib-source "docs/bake-stdlib.md"
 mkdir /out
-cp -r docs/reference /out
+cp -r docs/reference docs/bake-stdlib.md /out
 rm -f /out/reference/*__INTERNAL_SERVE.yaml /out/reference/*__INTERNAL_SERVE.md
 EOT
 
@@ -36,11 +36,11 @@ RUN --mount=target=/context \
 set -e
 rsync -a /context/. .
 git add -A
-rm -rf docs/reference/*
+rm -rf docs/reference/* docs/bake-stdlib.md
 cp -rf /out/* ./docs/
-if [ -n "$(git status --porcelain -- docs/reference)" ]; then
+if [ -n "$(git status --porcelain -- docs/reference docs/bake-stdlib.md)" ]; then
   echo >&2 'ERROR: Docs result differs. Please update with "make docs"'
-  git status --porcelain -- docs/reference
+  git status --porcelain -- docs/reference docs/bake-stdlib.md
   exit 1
 fi
 EOT
