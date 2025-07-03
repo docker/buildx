@@ -11,19 +11,20 @@ import (
 	"sync/atomic"
 
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/dap/common"
 	"github.com/google/go-dap"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
-type Adapter[T any] struct {
+type Adapter[C LaunchConfig] struct {
 	srv *Server
 	eg  *errgroup.Group
-	cfg build.InvokeConfig
+	cfg common.Config
 
 	initialized   chan struct{}
-	started       chan launchResponse[T]
+	started       chan launchResponse[C]
 	configuration chan struct{}
 
 	evaluateReqCh chan *evaluateRequest
@@ -36,24 +37,21 @@ type Adapter[T any] struct {
 	idPool    *idPool
 }
 
-func New[T any](cfg *build.InvokeConfig) *Adapter[T] {
-	d := &Adapter[T]{
+func New[C LaunchConfig]() *Adapter[C] {
+	d := &Adapter[C]{
 		initialized:   make(chan struct{}),
-		started:       make(chan launchResponse[T], 1),
+		started:       make(chan launchResponse[C], 1),
 		configuration: make(chan struct{}),
 		evaluateReqCh: make(chan *evaluateRequest),
 		threads:       make(map[int]*thread),
 		nextThreadID:  1,
 		idPool:        new(idPool),
 	}
-	if cfg != nil {
-		d.cfg = *cfg
-	}
 	d.srv = NewServer(d.dapHandler())
 	return d
 }
 
-func (d *Adapter[T]) Start(ctx context.Context, conn Conn) (T, error) {
+func (d *Adapter[C]) Start(ctx context.Context, conn Conn) (C, error) {
 	d.eg, _ = errgroup.WithContext(ctx)
 	d.eg.Go(func() error {
 		return d.srv.Serve(ctx, conn)
@@ -65,10 +63,11 @@ func (d *Adapter[T]) Start(ctx context.Context, conn Conn) (T, error) {
 	if !ok {
 		resp.Error = context.Canceled
 	}
+	d.cfg = resp.Config.GetConfig()
 	return resp.Config, resp.Error
 }
 
-func (d *Adapter[T]) Stop() error {
+func (d *Adapter[C]) Stop() error {
 	if d.eg == nil {
 		return nil
 	}
@@ -96,7 +95,7 @@ func (d *Adapter[T]) Stop() error {
 	return err
 }
 
-func (d *Adapter[T]) Initialize(c Context, req *dap.InitializeRequest, resp *dap.InitializeResponse) error {
+func (d *Adapter[C]) Initialize(c Context, req *dap.InitializeRequest, resp *dap.InitializeResponse) error {
 	close(d.initialized)
 
 	// Set capabilities.
@@ -104,36 +103,36 @@ func (d *Adapter[T]) Initialize(c Context, req *dap.InitializeRequest, resp *dap
 	return nil
 }
 
-type launchResponse[T any] struct {
-	Config T
+type launchResponse[C any] struct {
+	Config C
 	Error  error
 }
 
-func (d *Adapter[T]) Launch(c Context, req *dap.LaunchRequest, resp *dap.LaunchResponse) error {
+func (d *Adapter[C]) Launch(c Context, req *dap.LaunchRequest, resp *dap.LaunchResponse) error {
 	defer close(d.started)
 
-	var cfg T
+	var cfg C
 	if err := json.Unmarshal(req.Arguments, &cfg); err != nil {
-		d.started <- launchResponse[T]{Error: err}
+		d.started <- launchResponse[C]{Error: err}
 		return err
 	}
 
 	d.start(c)
 
-	d.started <- launchResponse[T]{Config: cfg}
+	d.started <- launchResponse[C]{Config: cfg}
 	return nil
 }
 
-func (d *Adapter[T]) Disconnect(c Context, req *dap.DisconnectRequest, resp *dap.DisconnectResponse) error {
+func (d *Adapter[C]) Disconnect(c Context, req *dap.DisconnectRequest, resp *dap.DisconnectResponse) error {
 	close(d.evaluateReqCh)
 	return nil
 }
 
-func (d *Adapter[T]) start(c Context) {
+func (d *Adapter[C]) start(c Context) {
 	c.Go(d.launch)
 }
 
-func (d *Adapter[T]) Continue(c Context, req *dap.ContinueRequest, resp *dap.ContinueResponse) error {
+func (d *Adapter[C]) Continue(c Context, req *dap.ContinueRequest, resp *dap.ContinueResponse) error {
 	d.threadsMu.RLock()
 	t := d.threads[req.Arguments.ThreadId]
 	d.threadsMu.RUnlock()
@@ -142,7 +141,7 @@ func (d *Adapter[T]) Continue(c Context, req *dap.ContinueRequest, resp *dap.Con
 	return nil
 }
 
-func (d *Adapter[T]) Next(c Context, req *dap.NextRequest, resp *dap.NextResponse) error {
+func (d *Adapter[C]) Next(c Context, req *dap.NextRequest, resp *dap.NextResponse) error {
 	d.threadsMu.RLock()
 	t := d.threads[req.Arguments.ThreadId]
 	d.threadsMu.RUnlock()
@@ -151,7 +150,7 @@ func (d *Adapter[T]) Next(c Context, req *dap.NextRequest, resp *dap.NextRespons
 	return nil
 }
 
-func (d *Adapter[T]) SetBreakpoints(c Context, req *dap.SetBreakpointsRequest, resp *dap.SetBreakpointsResponse) error {
+func (d *Adapter[C]) SetBreakpoints(c Context, req *dap.SetBreakpointsRequest, resp *dap.SetBreakpointsResponse) error {
 	// TODO: implement breakpoints
 	for range req.Arguments.Breakpoints {
 		// Fail to create all breakpoints that were requested.
@@ -163,13 +162,13 @@ func (d *Adapter[T]) SetBreakpoints(c Context, req *dap.SetBreakpointsRequest, r
 	return nil
 }
 
-func (d *Adapter[T]) ConfigurationDone(c Context, req *dap.ConfigurationDoneRequest, resp *dap.ConfigurationDoneResponse) error {
+func (d *Adapter[C]) ConfigurationDone(c Context, req *dap.ConfigurationDoneRequest, resp *dap.ConfigurationDoneResponse) error {
 	d.configuration <- struct{}{}
 	close(d.configuration)
 	return nil
 }
 
-func (d *Adapter[T]) launch(c Context) {
+func (d *Adapter[C]) launch(c Context) {
 	// Send initialized event.
 	c.C() <- &dap.InitializedEvent{
 		Event: dap.Event{
@@ -198,7 +197,7 @@ func (d *Adapter[T]) launch(c Context) {
 			started := c.Go(func(c Context) {
 				defer d.deleteThread(c, t)
 				defer close(req.errCh)
-				req.errCh <- t.Evaluate(c, req.c, req.ref, req.meta, req.inputs)
+				req.errCh <- t.Evaluate(c, req.c, req.ref, req.meta, req.inputs, d.cfg)
 			})
 
 			if !started {
@@ -209,7 +208,7 @@ func (d *Adapter[T]) launch(c Context) {
 	}
 }
 
-func (d *Adapter[T]) newThread(ctx Context, name string) (t *thread) {
+func (d *Adapter[C]) newThread(ctx Context, name string) (t *thread) {
 	d.threadsMu.Lock()
 	id := d.nextThreadID
 	t = &thread{
@@ -232,14 +231,14 @@ func (d *Adapter[T]) newThread(ctx Context, name string) (t *thread) {
 	return t
 }
 
-func (d *Adapter[T]) getThread(id int) (t *thread) {
+func (d *Adapter[C]) getThread(id int) (t *thread) {
 	d.threadsMu.Lock()
 	t = d.threads[id]
 	d.threadsMu.Unlock()
 	return t
 }
 
-func (d *Adapter[T]) deleteThread(ctx Context, t *thread) {
+func (d *Adapter[C]) deleteThread(ctx Context, t *thread) {
 	d.threadsMu.Lock()
 	delete(d.threads, t.id)
 	d.threadsMu.Unlock()
@@ -262,7 +261,7 @@ type evaluateRequest struct {
 	errCh  chan<- error
 }
 
-func (d *Adapter[T]) EvaluateResult(ctx context.Context, name string, c gateway.Client, res *gateway.Result, inputs build.Inputs) error {
+func (d *Adapter[C]) EvaluateResult(ctx context.Context, name string, c gateway.Client, res *gateway.Result, inputs build.Inputs) error {
 	eg, _ := errgroup.WithContext(ctx)
 	if res.Ref != nil {
 		eg.Go(func() error {
@@ -279,7 +278,7 @@ func (d *Adapter[T]) EvaluateResult(ctx context.Context, name string, c gateway.
 	return eg.Wait()
 }
 
-func (d *Adapter[T]) evaluateRef(ctx context.Context, name string, c gateway.Client, ref gateway.Reference, meta map[string][]byte, inputs build.Inputs) error {
+func (d *Adapter[C]) evaluateRef(ctx context.Context, name string, c gateway.Client, ref gateway.Reference, meta map[string][]byte, inputs build.Inputs) error {
 	errCh := make(chan error, 1)
 
 	// Send a solve request to the launch routine
@@ -307,7 +306,7 @@ func (d *Adapter[T]) evaluateRef(ctx context.Context, name string, c gateway.Cli
 	}
 }
 
-func (d *Adapter[T]) Threads(c Context, req *dap.ThreadsRequest, resp *dap.ThreadsResponse) error {
+func (d *Adapter[C]) Threads(c Context, req *dap.ThreadsRequest, resp *dap.ThreadsResponse) error {
 	d.threadsMu.RLock()
 	defer d.threadsMu.RUnlock()
 
@@ -321,7 +320,7 @@ func (d *Adapter[T]) Threads(c Context, req *dap.ThreadsRequest, resp *dap.Threa
 	return nil
 }
 
-func (d *Adapter[T]) StackTrace(c Context, req *dap.StackTraceRequest, resp *dap.StackTraceResponse) error {
+func (d *Adapter[C]) StackTrace(c Context, req *dap.StackTraceRequest, resp *dap.StackTraceResponse) error {
 	t := d.getThread(req.Arguments.ThreadId)
 	if t == nil {
 		return errors.Errorf("no such thread: %d", req.Arguments.ThreadId)
@@ -331,7 +330,7 @@ func (d *Adapter[T]) StackTrace(c Context, req *dap.StackTraceRequest, resp *dap
 	return nil
 }
 
-func (d *Adapter[T]) Source(c Context, req *dap.SourceRequest, resp *dap.SourceResponse) error {
+func (d *Adapter[C]) Source(c Context, req *dap.SourceRequest, resp *dap.SourceResponse) error {
 	fname := req.Arguments.Source.Path
 
 	dt, ok := d.sourceMap.Get(fname)
@@ -343,7 +342,7 @@ func (d *Adapter[T]) Source(c Context, req *dap.SourceRequest, resp *dap.SourceR
 	return nil
 }
 
-func (d *Adapter[T]) evaluate(ctx context.Context, name string, c gateway.Client, res *gateway.Result, opt build.Options) error {
+func (d *Adapter[C]) evaluate(ctx context.Context, name string, c gateway.Client, res *gateway.Result, opt build.Options) error {
 	errCh := make(chan error, 1)
 
 	started := d.srv.Go(func(ctx Context) {
@@ -362,13 +361,13 @@ func (d *Adapter[T]) evaluate(ctx context.Context, name string, c gateway.Client
 	}
 }
 
-func (d *Adapter[T]) Handler() build.Handler {
+func (d *Adapter[C]) Handler() build.Handler {
 	return build.Handler{
 		Evaluate: d.evaluate,
 	}
 }
 
-func (d *Adapter[T]) dapHandler() Handler {
+func (d *Adapter[C]) dapHandler() Handler {
 	return Handler{
 		Initialize:        d.Initialize,
 		Launch:            d.Launch,
@@ -383,15 +382,15 @@ func (d *Adapter[T]) dapHandler() Handler {
 	}
 }
 
-func (d *Adapter[T]) Out() io.Writer {
-	return &adapterWriter[T]{d}
+func (d *Adapter[C]) Out() io.Writer {
+	return &adapterWriter[C]{d}
 }
 
-type adapterWriter[T any] struct {
-	*Adapter[T]
+type adapterWriter[C LaunchConfig] struct {
+	*Adapter[C]
 }
 
-func (d *adapterWriter[T]) Write(p []byte) (n int, err error) {
+func (d *adapterWriter[C]) Write(p []byte) (n int, err error) {
 	started := d.srv.Go(func(c Context) {
 		<-d.initialized
 

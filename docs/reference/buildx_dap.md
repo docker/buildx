@@ -12,11 +12,10 @@ Start debug adapter protocol compatible debugger (EXPERIMENTAL)
 
 ### Options
 
-| Name            | Type     | Default | Description                                                |
-|:----------------|:---------|:--------|:-----------------------------------------------------------|
-| `--builder`     | `string` |         | Override the configured builder instance                   |
-| `-D`, `--debug` | `bool`   |         | Enable debug logging                                       |
-| `--on`          | `string` | `error` | When to pause the adapter ([always, error]) (EXPERIMENTAL) |
+| Name            | Type     | Default | Description                              |
+|:----------------|:---------|:--------|:-----------------------------------------|
+| `--builder`     | `string` |         | Override the configured builder instance |
+| `-D`, `--debug` | `bool`   |         | Enable debug logging                     |
 
 
 <!---MARKER_GEN_END-->
