@@ -632,7 +632,7 @@ from both the `app-dev` and `_release` targets.
 target "app-dev" {
   args = {
     GO_VERSION = "1.20"
-    BUILDX_EXPERIMENTAL = 1
+    ENABLE_DEBUG = 1
   }
   tags = ["docker.io/username/myapp"]
   dockerfile = "app.Dockerfile"
@@ -644,7 +644,7 @@ target "app-dev" {
 target "_release" {
   args = {
     BUILDKIT_CONTEXT_KEEP_GIT_DIR = 1
-    BUILDX_EXPERIMENTAL = 0
+    ENABLE_DEBUG = 0
   }
 }
 
@@ -656,7 +656,7 @@ target "app-release" {
 
 When inheriting attributes from multiple targets and there's a conflict,
 the target that appears last in the `inherits` list takes precedence.
-The previous example defines the `BUILDX_EXPERIMENTAL` argument twice for the `app-release` target.
+The previous example defines the `ENABLE_DEBUG` argument twice for the `app-release` target.
 It resolves to `0` because the `_release` target appears last in the inheritance chain:
 
 ```console
@@ -676,7 +676,7 @@ $ docker buildx bake --print app-release
       "dockerfile": "app.Dockerfile",
       "args": {
         "BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1",
-        "BUILDX_EXPERIMENTAL": "0",
+        "ENABLE_DEBUG": "0",
         "GO_VERSION": "1.20"
       },
       "labels": {
