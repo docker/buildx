@@ -314,7 +314,7 @@ func toRepoOnly(in string) (string, error) {
 }
 
 type (
-	EvaluateFunc func(ctx context.Context, name string, c gateway.Client, res *gateway.Result) error
+	EvaluateFunc func(ctx context.Context, name string, c gateway.Client, res *gateway.Result, opt Options) error
 	Handler      struct {
 		Evaluate EvaluateFunc
 	}
@@ -525,7 +525,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 						// invoke custom evaluate handler if it is present
 						if bh != nil && bh.Evaluate != nil {
-							if err := bh.Evaluate(ctx, k, c, res); err != nil {
+							if err := bh.Evaluate(ctx, k, c, res, opt); err != nil {
 								return nil, err
 							}
 						} else if forceEval {
