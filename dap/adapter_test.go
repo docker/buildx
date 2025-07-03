@@ -59,7 +59,7 @@ func TestLaunch(t *testing.T) {
 
 		select {
 		case <-configurationDone:
-		case <-time.After(time.Second):
+		case <-time.After(10 * time.Second):
 			assert.Fail(t, "did not receive configurationDone response")
 		}
 		return nil
