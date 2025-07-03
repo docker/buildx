@@ -18,35 +18,36 @@ import (
 )
 
 type funcDef struct {
-	name    string
-	fn      function.Function
-	factory func() function.Function
+	name           string
+	descriptionAlt string
+	fn             function.Function
+	factory        func() function.Function
 }
 
 var stdlibFunctions = []funcDef{
 	{name: "absolute", fn: stdlib.AbsoluteFunc},
 	{name: "add", fn: stdlib.AddFunc},
 	{name: "and", fn: stdlib.AndFunc},
-	{name: "base64decode", fn: encoding.Base64DecodeFunc},
-	{name: "base64encode", fn: encoding.Base64EncodeFunc},
+	{name: "base64decode", fn: encoding.Base64DecodeFunc, descriptionAlt: `Decodes a string containing a base64 sequence.`},
+	{name: "base64encode", fn: encoding.Base64EncodeFunc, descriptionAlt: `Encodes a string to a base64 sequence.`},
 	{name: "basename", factory: basenameFunc},
-	{name: "bcrypt", fn: crypto.BcryptFunc},
+	{name: "bcrypt", fn: crypto.BcryptFunc, descriptionAlt: `Computes a hash of the given string using the Blowfish cipher.`},
 	{name: "byteslen", fn: stdlib.BytesLenFunc},
 	{name: "bytesslice", fn: stdlib.BytesSliceFunc},
-	{name: "can", fn: tryfunc.CanFunc},
+	{name: "can", fn: tryfunc.CanFunc, descriptionAlt: `Tries to evaluate the expression given in its first argument.`},
 	{name: "ceil", fn: stdlib.CeilFunc},
 	{name: "chomp", fn: stdlib.ChompFunc},
 	{name: "chunklist", fn: stdlib.ChunklistFunc},
-	{name: "cidrhost", fn: cidr.HostFunc},
-	{name: "cidrnetmask", fn: cidr.NetmaskFunc},
-	{name: "cidrsubnet", fn: cidr.SubnetFunc},
-	{name: "cidrsubnets", fn: cidr.SubnetsFunc},
+	{name: "cidrhost", fn: cidr.HostFunc, descriptionAlt: `Calculates a full host IP address within a given IP network address prefix.`},
+	{name: "cidrnetmask", fn: cidr.NetmaskFunc, descriptionAlt: `Converts an IPv4 address prefix given in CIDR notation into a subnet mask address.`},
+	{name: "cidrsubnet", fn: cidr.SubnetFunc, descriptionAlt: `Calculates a subnet address within a given IP network address prefix.`},
+	{name: "cidrsubnets", fn: cidr.SubnetsFunc, descriptionAlt: `Calculates many consecutive subnet addresses at once, rather than just a single subnet extension.`},
 	{name: "coalesce", fn: stdlib.CoalesceFunc},
 	{name: "coalescelist", fn: stdlib.CoalesceListFunc},
 	{name: "compact", fn: stdlib.CompactFunc},
 	{name: "concat", fn: stdlib.ConcatFunc},
 	{name: "contains", fn: stdlib.ContainsFunc},
-	{name: "convert", fn: typeexpr.ConvertFunc},
+	{name: "convert", fn: typeexpr.ConvertFunc, descriptionAlt: `Converts a value to a specified type constraint, using HCL's customdecode extension for type expression support.`},
 	{name: "csvdecode", fn: stdlib.CSVDecodeFunc},
 	{name: "dirname", factory: dirnameFunc},
 	{name: "distinct", fn: stdlib.DistinctFunc},
@@ -76,7 +77,7 @@ var stdlibFunctions = []funcDef{
 	{name: "lookup", fn: stdlib.LookupFunc},
 	{name: "lower", fn: stdlib.LowerFunc},
 	{name: "max", fn: stdlib.MaxFunc},
-	{name: "md5", fn: crypto.Md5Func},
+	{name: "md5", fn: crypto.Md5Func, descriptionAlt: `Computes the MD5 hash of a given string and encodes it with hexadecimal digits.`},
 	{name: "merge", fn: stdlib.MergeFunc},
 	{name: "min", fn: stdlib.MinFunc},
 	{name: "modulo", fn: stdlib.ModuloFunc},
@@ -94,7 +95,7 @@ var stdlibFunctions = []funcDef{
 	{name: "replace", fn: stdlib.ReplaceFunc},
 	{name: "reverse", fn: stdlib.ReverseFunc},
 	{name: "reverselist", fn: stdlib.ReverseListFunc},
-	{name: "rsadecrypt", fn: crypto.RsaDecryptFunc},
+	{name: "rsadecrypt", fn: crypto.RsaDecryptFunc, descriptionAlt: `Decrypts an RSA-encrypted ciphertext.`},
 	{name: "sanitize", factory: sanitizeFunc},
 	{name: "sethaselement", fn: stdlib.SetHasElementFunc},
 	{name: "setintersection", fn: stdlib.SetIntersectionFunc},
@@ -102,9 +103,9 @@ var stdlibFunctions = []funcDef{
 	{name: "setsubtract", fn: stdlib.SetSubtractFunc},
 	{name: "setsymmetricdifference", fn: stdlib.SetSymmetricDifferenceFunc},
 	{name: "setunion", fn: stdlib.SetUnionFunc},
-	{name: "sha1", fn: crypto.Sha1Func},
-	{name: "sha256", fn: crypto.Sha256Func},
-	{name: "sha512", fn: crypto.Sha512Func},
+	{name: "sha1", fn: crypto.Sha1Func, descriptionAlt: `Computes the SHA1 hash of a given string and encodes it with hexadecimal digits.`},
+	{name: "sha256", fn: crypto.Sha256Func, descriptionAlt: `Computes the SHA256 hash of a given string and encodes it with hexadecimal digits.`},
+	{name: "sha512", fn: crypto.Sha512Func, descriptionAlt: `Computes the SHA512 hash of a given string and encodes it with hexadecimal digits.`},
 	{name: "signum", fn: stdlib.SignumFunc},
 	{name: "slice", fn: stdlib.SliceFunc},
 	{name: "sort", fn: stdlib.SortFunc},
@@ -119,11 +120,11 @@ var stdlibFunctions = []funcDef{
 	{name: "trimprefix", fn: stdlib.TrimPrefixFunc},
 	{name: "trimspace", fn: stdlib.TrimSpaceFunc},
 	{name: "trimsuffix", fn: stdlib.TrimSuffixFunc},
-	{name: "try", fn: tryfunc.TryFunc},
+	{name: "try", fn: tryfunc.TryFunc, descriptionAlt: `Variadic function that tries to evaluate all of is arguments in sequence until one succeeds, in which case it returns that result, or returns an error if none of them succeed.`},
 	{name: "upper", fn: stdlib.UpperFunc},
-	{name: "urlencode", fn: encoding.URLEncodeFunc},
-	{name: "uuidv4", fn: uuid.V4Func},
-	{name: "uuidv5", fn: uuid.V5Func},
+	{name: "urlencode", fn: encoding.URLEncodeFunc, descriptionAlt: `Applies URL encoding to a given string.`},
+	{name: "uuidv4", fn: uuid.V4Func, descriptionAlt: `Generates and returns a Type-4 UUID in the standard hexadecimal string format.`},
+	{name: "uuidv5", fn: uuid.V5Func, descriptionAlt: `Generates and returns a Type-5 UUID in the standard hexadecimal string format.`},
 	{name: "values", fn: stdlib.ValuesFunc},
 	{name: "zipmap", fn: stdlib.ZipmapFunc},
 }
@@ -263,4 +264,20 @@ func Stdlib() map[string]function.Function {
 		}
 	}
 	return funcs
+}
+
+func StdlibFuncDescription(name string) string {
+	for _, v := range stdlibFunctions {
+		if v.name != name {
+			continue
+		}
+		if v.descriptionAlt != "" {
+			return v.descriptionAlt
+		}
+		if v.factory != nil {
+			return v.factory().Description()
+		}
+		return v.fn.Description()
+	}
+	return ""
 }

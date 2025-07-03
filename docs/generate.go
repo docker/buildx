@@ -151,12 +151,15 @@ func generateBakeStdlibDocs(filename string) error {
 	}
 	sort.Strings(names)
 	for _, name := range names {
-		fn := hclparser.Stdlib()[name]
 		fname := fmt.Sprintf("`%s`", name)
 		if strings.Contains(currentContent, "<a name=\""+name+"\"></a>") {
 			fname = fmt.Sprintf("[`%s`](#%s)", name, name)
 		}
-		table.AddRow(fname, fn.Description())
+		fdesc := hclparser.StdlibFuncDescription(name)
+		if fdesc == "" {
+			return errors.Errorf("function %q has no description", name)
+		}
+		table.AddRow(fname, fdesc)
 	}
 
 	newContent := currentContent[:start] + "<!---MARKER_STDLIB_START-->\n\n" + table.String() + "\n" + currentContent[end:]
