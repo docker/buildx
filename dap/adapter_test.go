@@ -7,13 +7,14 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/buildx/dap/common"
 	"github.com/google/go-dap"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 )
 
 func TestLaunch(t *testing.T) {
-	adapter, conn, client := NewTestAdapter[any](t)
+	adapter, conn, client := NewTestAdapter[common.Config](t)
 
 	ctx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, context.DeadlineExceeded)
 	defer cancel()
@@ -68,7 +69,7 @@ func TestLaunch(t *testing.T) {
 	eg.Wait()
 }
 
-func NewTestAdapter[T any](t *testing.T) (*Adapter[T], Conn, *Client) {
+func NewTestAdapter[C LaunchConfig](t *testing.T) (*Adapter[C], Conn, *Client) {
 	t.Helper()
 
 	rd1, wr1 := io.Pipe()
@@ -84,7 +85,7 @@ func NewTestAdapter[T any](t *testing.T) (*Adapter[T], Conn, *Client) {
 		clientConn.Close()
 	})
 
-	adapter := New[T](nil)
+	adapter := New[C]()
 	t.Cleanup(func() { adapter.Stop() })
 
 	client := NewClient(clientConn)

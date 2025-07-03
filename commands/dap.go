@@ -4,6 +4,7 @@ import (
 	"context"
 
 	"github.com/docker/buildx/dap"
+	"github.com/docker/buildx/dap/common"
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
@@ -20,31 +21,18 @@ func dapCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	}
 	cobrautil.MarkCommandExperimental(cmd)
 
-	flags := cmd.Flags()
-	flags.StringVar(&options.OnFlag, "on", "error", "When to pause the adapter ([always, error])")
-
-	cobrautil.MarkFlagsExperimental(flags, "on")
-
 	dapBuildCmd := buildCmd(dockerCli, rootOpts, &options)
 	dapBuildCmd.Args = cobra.RangeArgs(0, 1)
 	cmd.AddCommand(dapBuildCmd)
 	return cmd
 }
 
-type dapOptions struct {
-	// OnFlag is a flag to configure the timing of launching the debugger.
-	OnFlag string
-}
+type dapOptions struct{}
 
 func (d *dapOptions) New(in ioset.In) (debuggerInstance, error) {
-	invokeConfig, err := parseInvokeConfig("", d.OnFlag)
-	if err != nil {
-		return nil, err
-	}
-
 	conn := dap.NewConn(in.Stdin, in.Stdout)
 	return &adapterProtocolDebugger{
-		Adapter: dap.New[LaunchConfig](invokeConfig),
+		Adapter: dap.New[LaunchConfig](),
 		conn:    conn,
 	}, nil
 }
@@ -53,6 +41,7 @@ type LaunchConfig struct {
 	Dockerfile  string `json:"dockerfile,omitempty"`
 	ContextPath string `json:"contextPath,omitempty"`
 	Target      string `json:"target,omitempty"`
+	common.Config
 }
 
 type adapterProtocolDebugger struct {
