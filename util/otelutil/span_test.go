@@ -13,10 +13,10 @@ import (
 	"go.opentelemetry.io/otel/exporters/stdout/stdouttrace"
 )
 
-// curl -s --unix-socket /tmp/docker-desktop-build-dev.sock http://localhost/blobs/default/default?digest=sha256:3103104e9fa908087bd47572da6ad9a5a7bf973608f736536d18d635a7da0140 -X GET > ./fixtures/bktraces.json
-const bktracesFixture = "./fixtures/bktraces.json"
-
-const otlpFixture = "./fixtures/otlp.json"
+const (
+	bktracesFixture = "./fixtures/bktraces.json"
+	otlpFixture     = "./fixtures/otlp.json"
+)
 
 func TestParseSpanStubs(t *testing.T) {
 	dt, err := os.ReadFile(bktracesFixture)
