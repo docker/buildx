@@ -172,9 +172,6 @@ func buildkitVersion(t *testing.T, sb integration.Sandbox) string {
 			require.NoError(t, err, "undock not found")
 
 			destDir := t.TempDir()
-			t.Cleanup(func() {
-				os.RemoveAll(destDir)
-			})
 
 			cmd := exec.Command(undockBin, "--cachedir", "/root/.cache/undock", "--include", "/usr/bin/buildkitd", "--rm-dist", buildkitImage, destDir)
 			require.NoErrorf(t, cmd.Run(), "failed to extract buildkitd binary from %q", buildkitImage)
