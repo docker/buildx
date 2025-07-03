@@ -15,7 +15,6 @@ set -eu -o pipefail
 : "${TEST_DOCKERD=}"
 : "${TEST_BUILDKIT_TAG=}"
 : "${TEST_BUILDKIT_IMAGE=}"
-: "${TEST_BUILDX_EXPERIMENTAL=}"
 
 if [ "$TEST_IMAGE_BUILD" = "1" ]; then
   ${BUILDX_CMD} bake integration-test --set "*.output=type=docker,name=$TEST_IMAGE_ID"
@@ -54,7 +53,6 @@ cid=$(docker create --rm --privileged $dockerConfigMount \
   -e TEST_DOCKERD \
   -e TEST_BUILDKIT_IMAGE \
   -e TEST_BUILDKIT_TAG \
-  -e TEST_BUILDX_EXPERIMENTAL \
   -e SKIP_INTEGRATION_TESTS \
   -e GOTESTSUM_FORMAT \
   -e GO_TEST_COVERPROFILE \
