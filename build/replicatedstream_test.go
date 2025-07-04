@@ -43,7 +43,7 @@ func TestSyncMultiReaderParallel(t *testing.T) {
 			buf := make([]byte, bufferSize)
 			for totalRead < len(data) {
 				// Simulate random read sizes
-				readSize := mathrand.Intn(bufferSize) //nolint:gosec
+				readSize := mathrand.Intn(bufferSize) // #nosec G404 -- ignore "Use of weak random number generator (math/rand instead of crypto/rand)"
 				n, err := reader.Read(buf[:readSize])
 
 				if n > 0 {
@@ -58,14 +58,15 @@ func TestSyncMultiReaderParallel(t *testing.T) {
 
 				assert.NoError(t, err, "Reader %d error", readerId)
 
-				if mathrand.Intn(1000) == 0 { //nolint:gosec
+				// #nosec G404 -- ignore "Use of weak random number generator (math/rand instead of crypto/rand)"
+				if mathrand.Intn(1000) == 0 {
 					t.Logf("Reader %d closing", readerId)
 					// Simulate random close
 					return
 				}
 
 				// Simulate random timing between reads
-				time.Sleep(time.Millisecond * time.Duration(mathrand.Intn(5))) //nolint:gosec
+				time.Sleep(time.Millisecond * time.Duration(mathrand.Intn(5))) // #nosec G404 -- ignore "Use of weak random number generator (math/rand instead of crypto/rand)"
 			}
 
 			assert.Equal(t, len(data), totalRead, "Reader %d total read mismatch", readerId)

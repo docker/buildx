@@ -59,8 +59,7 @@ type Span struct {
 	Resource []attribute.KeyValue
 	// InstrumentationLibrary is information about the library that produced
 	// the span
-	//nolint:staticcheck
-	InstrumentationLibrary instrumentation.Library
+	InstrumentationLibrary instrumentation.Scope
 }
 
 type Spans []Span
@@ -112,8 +111,8 @@ type spanData struct {
 	DroppedLinks      int
 	ChildSpanCount    int
 	Resource          []keyValue // change this type from the otel type to make this struct marshallable
-	//nolint:staticcheck
-	InstrumentationLibrary instrumentation.Library
+
+	InstrumentationLibrary instrumentation.Scope
 }
 
 // spanContext is a custom type used to unmarshal otel SpanContext correctly.
@@ -484,8 +483,6 @@ func (s spanSnapshot) InstrumentationScope() instrumentation.Scope {
 }
 
 // InstrumentationLibrary returns the InstrumentationLibrary of the snapshot
-//
-//nolint:staticcheck
-func (s spanSnapshot) InstrumentationLibrary() instrumentation.Library {
+func (s spanSnapshot) InstrumentationLibrary() instrumentation.Scope {
 	return s.instrumentationScope
 }

@@ -52,8 +52,7 @@ func ImpliedBodySchema(val any) (schema *hcl.BodySchema, partial bool) {
 
 		switch {
 		case field.Type.AssignableTo(exprType):
-			//nolint:misspell
-			// If we're decoding to hcl.Expression then absense can be
+			// If we're decoding to hcl.Expression then absence can be
 			// indicated via a null value, so we don't specify that
 			// the field is required during decoding.
 			required = false
