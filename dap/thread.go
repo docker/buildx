@@ -7,6 +7,7 @@ import (
 	"sync"
 
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/dap/common"
 	"github.com/google/go-dap"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
@@ -67,13 +68,17 @@ const (
 	stepNext
 )
 
-func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, meta map[string][]byte, inputs build.Inputs) error {
+func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, meta map[string][]byte, inputs build.Inputs, cfg common.Config) error {
 	if err := t.init(ctx, c, ref, meta, inputs); err != nil {
 		return err
 	}
 	defer t.reset()
 
-	step := stepNext
+	step := stepContinue
+	if cfg.StopOnEntry {
+		step = stepNext
+	}
+
 	for {
 		pos, err := t.seekNext(ctx, step)
 
