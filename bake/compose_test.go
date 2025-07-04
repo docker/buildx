@@ -192,6 +192,7 @@ services:
 
 	_, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.Error(t, err)
+	require.ErrorContains(t, err, `has neither an image nor a build context specified`)
 }
 
 func TestAdvancedNetwork(t *testing.T) {
@@ -610,7 +611,6 @@ func TestValidateComposeFile(t *testing.T) {
 		fn        string
 		dt        []byte
 		isCompose bool
-		wantErr   bool
 	}{
 		{
 			name: "empty service",
@@ -620,7 +620,6 @@ services:
   foo:
 `),
 			isCompose: true,
-			wantErr:   true,
 		},
 		{
 			name: "build",
@@ -631,7 +630,6 @@ services:
     build: .
 `),
 			isCompose: true,
-			wantErr:   false,
 		},
 		{
 			name: "image",
@@ -642,7 +640,6 @@ services:
     image: nginx
 `),
 			isCompose: true,
-			wantErr:   false,
 		},
 		{
 			name: "unknown ext",
@@ -653,7 +650,6 @@ services:
     image: nginx
 `),
 			isCompose: true,
-			wantErr:   false,
 		},
 		{
 			name: "hcl",
@@ -664,18 +660,13 @@ target "default" {
 }
 `),
 			isCompose: false,
-			wantErr:   false,
 		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			isCompose, err := validateComposeFile(tt.dt, tt.fn)
 			assert.Equal(t, tt.isCompose, isCompose)
-			if tt.wantErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 		})
 	}
 }
@@ -886,6 +877,40 @@ services:
 	c, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"TEST_VALUE": ptrstr("abc"), "FOO_VALUE": ptrstr("abc")}, c.Targets[0].Args)
+}
+
+func TestUnknownField(t *testing.T) {
+	tmpdir := t.TempDir()
+	dt := []byte(`
+services:
+  webapp:
+    bar: baz
+    build:
+     context: .
+
+foo:
+  - bar.baz
+`)
+
+	chdir(t, tmpdir)
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	require.NoError(t, err)
+}
+
+func TestUnknownBuildField(t *testing.T) {
+	tmpdir := t.TempDir()
+	dt := []byte(`
+services:
+  webapp:
+    build:
+     context: .
+     foo: bar
+`)
+
+	chdir(t, tmpdir)
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	require.Error(t, err)
+	require.ErrorContains(t, err, `additional properties 'foo' not allowed`)
 }
 
 // chdir changes the current working directory to the named directory,
