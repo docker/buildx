@@ -1,4 +1,4 @@
-# buildx
+# Buildx
 
 [![GitHub release](https://img.shields.io/github/release/docker/buildx.svg?style=flat-square)](https://github.com/docker/buildx/releases/latest)
 [![PkgGoDev](https://img.shields.io/badge/go.dev-docs-007d9c?style=flat-square&logo=go&logoColor=white)](https://pkg.go.dev/github.com/docker/buildx)
@@ -9,17 +9,17 @@
 Buildx is a Docker CLI plugin for extended build capabilities with
 [BuildKit](https://github.com/moby/buildkit).
 
-Key features:
+> [!TIP]
+> **Key features**
+> - Familiar UI from `docker build`
+> - Full BuildKit capabilities with container driver
+> - Multiple builder instance support
+> - Multi-node builds for cross-platform images
+> - Compose build support
+> - High-level builds with [Bake](https://docs.docker.com/build/bake/)
+> - In-container driver support (both Docker and Kubernetes)
 
-- Familiar UI from `docker build`
-- Full BuildKit capabilities with container driver
-- Multiple builder instance support
-- Multi-node builds for cross-platform images
-- Compose build support
-- High-level build options (`bake`)
-- In-container driver support (both Docker and Kubernetes)
-
-# Table of Contents
+___
 
 - [Installing](#installing)
   - [Windows and macOS](#windows-and-macos)
@@ -32,23 +32,9 @@ Key features:
   - [Working with builder instances](#working-with-builder-instances)
   - [Building multi-platform images](#building-multi-platform-images)
 - [Reference](docs/reference/buildx.md)
-  - [`buildx bake`](docs/reference/buildx_bake.md)
-  - [`buildx build`](docs/reference/buildx_build.md)
-  - [`buildx create`](docs/reference/buildx_create.md)
-  - [`buildx du`](docs/reference/buildx_du.md)
-  - [`buildx imagetools`](docs/reference/buildx_imagetools.md)
-    - [`buildx imagetools create`](docs/reference/buildx_imagetools_create.md)
-    - [`buildx imagetools inspect`](docs/reference/buildx_imagetools_inspect.md)
-  - [`buildx inspect`](docs/reference/buildx_inspect.md)
-  - [`buildx ls`](docs/reference/buildx_ls.md)
-  - [`buildx prune`](docs/reference/buildx_prune.md)
-  - [`buildx rm`](docs/reference/buildx_rm.md)
-  - [`buildx stop`](docs/reference/buildx_stop.md)
-  - [`buildx use`](docs/reference/buildx_use.md)
-  - [`buildx version`](docs/reference/buildx_version.md)
 - [Contributing](#contributing)
 
-# Installing
+## Installing
 
 Using Buildx with Docker requires Docker engine 19.03 or newer.
 
@@ -57,18 +43,18 @@ Using Buildx with Docker requires Docker engine 19.03 or newer.
 > and will likely cause issues, especially when using Buildx builders with more
 > recent versions of BuildKit.
 
-## Windows and macOS
+### Windows and macOS
 
 Docker Buildx is included in [Docker Desktop](https://docs.docker.com/desktop/)
 for Windows and macOS.
 
-## Linux packages
+### Linux packages
 
 Docker Engine package repositories contain Docker Buildx packages when installed according to the
 [Docker Engine install documentation](https://docs.docker.com/engine/install/). Install the
 `docker-buildx-plugin` package to install the Buildx plugin.
 
-## Manual download
+### Manual download
 
 > [!IMPORTANT]
 > This section is for unattended installation of the Buildx component. These
@@ -107,7 +93,7 @@ On Windows:
 > $ chmod +x ~/.docker/cli-plugins/docker-buildx
 > ```
 
-## Dockerfile
+### Dockerfile
 
 Here is how to install and use Buildx inside a Dockerfile through the
 [`docker/buildx-bin`](https://hub.docker.com/r/docker/buildx-bin) image:
@@ -119,7 +105,7 @@ COPY --from=docker/buildx-bin /buildx /usr/libexec/docker/cli-plugins/docker-bui
 RUN docker buildx version
 ```
 
-# Building
+## Building
 
 ```console
 # Buildx 0.6+
@@ -137,9 +123,9 @@ $ git clone https://github.com/docker/buildx.git && cd buildx
 $ make install
 ```
 
-# Getting started
+## Getting started
 
-## Building with Buildx
+### Building with Buildx
 
 Buildx is a Docker CLI plugin that extends the `docker build` command with the
 full support of the features provided by [Moby BuildKit](https://docs.docker.com/build/buildkit/)
@@ -184,7 +170,7 @@ and [drivers](https://docs.docker.com/build/builders/drivers/) guide.
 > [!NOTE]
 > For more information, see [Docker Build docs](https://docs.docker.com/build/concepts/overview/).
 
-## Working with builder instances
+### Working with builder instances
 
 By default, Buildx will initially use the `docker` driver if it is supported,
 providing a very similar user experience to the native `docker build`. Note that
@@ -222,7 +208,7 @@ target.
 > [!NOTE]
 > For more information, see [Builders docs](https://docs.docker.com/build/builders/).
 
-## Building multi-platform images
+### Building multi-platform images
 
 BuildKit is designed to work well for building for multiple platforms and not
 only for the architecture and operating system that the user invoking the build
@@ -303,11 +289,7 @@ cross-compilation helpers for more advanced use-cases.
 > [!NOTE]
 > For more information, see [Multi-platform builds docs](https://docs.docker.com/build/building/multi-platform/).
 
-## High-level build options
-
-See [High-level builds with Bake](https://docs.docker.com/build/bake/) for more details.
-
-# Contributing
+## Contributing
 
 Want to contribute to Buildx? Awesome! You can find information about
 contributing to this project in the [CONTRIBUTING.md](/.github/CONTRIBUTING.md)
