@@ -20,7 +20,6 @@ import (
 	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/platforms"
-	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
@@ -158,19 +157,9 @@ func readAttr[T any](attrs map[string]string, k string, dest *T, f func(v string
 }
 
 func runInspect(ctx context.Context, dockerCli command.Cli, opts inspectOptions) error {
-	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
+	nodes, err := loadNodes(ctx, dockerCli, opts.builder)
 	if err != nil {
 		return err
-	}
-
-	nodes, err := b.LoadNodes(ctx)
-	if err != nil {
-		return err
-	}
-	for _, node := range nodes {
-		if node.Err != nil {
-			return node.Err
-		}
 	}
 
 	recs, err := queryRecords(ctx, opts.ref, nodes, nil)

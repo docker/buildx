@@ -16,6 +16,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
+	"github.com/docker/cli/cli/command"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
@@ -420,4 +421,29 @@ func cutAny(s string, seps ...string) (before, after, sep string, found bool) {
 		}
 	}
 	return s, "", "", false
+}
+
+func loadNodes(ctx context.Context, dockerCli command.Cli, builderName string) ([]builder.Node, error) {
+	b, err := builder.New(dockerCli, builder.WithName(builderName))
+	if err != nil {
+		return nil, err
+	}
+	nodes, err := b.LoadNodes(ctx, builder.WithData())
+	if err != nil {
+		return nil, err
+	}
+	if ok, err := b.Boot(ctx); err != nil {
+		return nil, err
+	} else if ok {
+		nodes, err = b.LoadNodes(ctx, builder.WithData())
+		if err != nil {
+			return nil, err
+		}
+	}
+	for _, node := range nodes {
+		if node.Err != nil {
+			return nil, node.Err
+		}
+	}
+	return nodes, nil
 }
