@@ -19,6 +19,7 @@ var historyTests = []func(t *testing.T, sb integration.Sandbox){
 	testHistoryInspect,
 	testHistoryLs,
 	testHistoryRm,
+	testHistoryLsStoppedBuilder,
 }
 
 func testHistoryExport(t *testing.T, sb integration.Sandbox) {
@@ -103,6 +104,36 @@ func testHistoryRm(t *testing.T, sb integration.Sandbox) {
 	cmd := buildxCmd(sb, withArgs("history", "rm", ref.Ref))
 	out, err := cmd.Output()
 	require.NoError(t, err, string(out))
+}
+
+func testHistoryLsStoppedBuilder(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
+	}
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	out, err := createCmd(sb, withArgs("--driver", "docker-container"))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	ref := buildTestProject(t, sb)
+	require.NotEmpty(t, ref.Ref)
+
+	cmd := buildxCmd(sb, withArgs("stop", builderName))
+	bout, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(bout))
+
+	cmd = buildxCmd(sb, withArgs("history", "ls", "--builder="+builderName, "--filter=ref="+ref.Ref, "--format=json"))
+	bout, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(bout))
 }
 
 type buildRef struct {

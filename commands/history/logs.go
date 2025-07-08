@@ -5,7 +5,6 @@ import (
 	"io"
 	"os"
 
-	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
@@ -23,19 +22,9 @@ type logsOptions struct {
 }
 
 func runLogs(ctx context.Context, dockerCli command.Cli, opts logsOptions) error {
-	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
+	nodes, err := loadNodes(ctx, dockerCli, opts.builder)
 	if err != nil {
 		return err
-	}
-
-	nodes, err := b.LoadNodes(ctx)
-	if err != nil {
-		return err
-	}
-	for _, node := range nodes {
-		if node.Err != nil {
-			return node.Err
-		}
 	}
 
 	recs, err := queryRecords(ctx, opts.ref, nodes, nil)

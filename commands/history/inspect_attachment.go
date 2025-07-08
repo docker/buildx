@@ -6,7 +6,6 @@ import (
 
 	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/containerd/platforms"
-	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli/command"
 	intoto "github.com/in-toto/in-toto-golang/in_toto"
@@ -27,19 +26,9 @@ type attachmentOptions struct {
 }
 
 func runAttachment(ctx context.Context, dockerCli command.Cli, opts attachmentOptions) error {
-	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
+	nodes, err := loadNodes(ctx, dockerCli, opts.builder)
 	if err != nil {
 		return err
-	}
-
-	nodes, err := b.LoadNodes(ctx)
-	if err != nil {
-		return err
-	}
-	for _, node := range nodes {
-		if node.Err != nil {
-			return node.Err
-		}
 	}
 
 	recs, err := queryRecords(ctx, opts.ref, nodes, nil)

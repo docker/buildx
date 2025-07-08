@@ -120,19 +120,9 @@ func loadTrace(ctx context.Context, ref string, nodes []builder.Node) (string, [
 }
 
 func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) error {
-	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
+	nodes, err := loadNodes(ctx, dockerCli, opts.builder)
 	if err != nil {
 		return err
-	}
-
-	nodes, err := b.LoadNodes(ctx)
-	if err != nil {
-		return err
-	}
-	for _, node := range nodes {
-		if node.Err != nil {
-			return node.Err
-		}
 	}
 
 	traceID, data, err := loadTrace(ctx, opts.ref, nodes)

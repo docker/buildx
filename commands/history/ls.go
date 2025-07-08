@@ -10,7 +10,6 @@ import (
 	"time"
 
 	"github.com/containerd/console"
-	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
@@ -47,19 +46,9 @@ type lsOptions struct {
 }
 
 func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
-	b, err := builder.New(dockerCli, builder.WithName(opts.builder))
+	nodes, err := loadNodes(ctx, dockerCli, opts.builder)
 	if err != nil {
 		return err
-	}
-
-	nodes, err := b.LoadNodes(ctx)
-	if err != nil {
-		return err
-	}
-	for _, node := range nodes {
-		if node.Err != nil {
-			return node.Err
-		}
 	}
 
 	queryOptions := &queryOptions{}
