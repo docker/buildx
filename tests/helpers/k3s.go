@@ -88,7 +88,7 @@ configs:
 	}
 
 	stop, err := integration.StartCmd(exec.Command(k3sBin, "server",
-		"--bind-address", "127.0.0.1",
+		"--bind-address", "0.0.0.0",
 		"--https-listen-port", lport,
 		"--data-dir", k3sDataDir, // write to /tmp for overlayfs support
 		"--write-kubeconfig", cfgfile.Name(),
