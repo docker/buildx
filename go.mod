@@ -6,9 +6,10 @@ require (
 	github.com/Masterminds/semver/v3 v3.2.1
 	github.com/Microsoft/go-winio v0.6.2
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
+	github.com/cenkalti/backoff/v4 v4.3.0
 	github.com/compose-spec/compose-go/v2 v2.7.1
 	github.com/containerd/console v1.0.5
-	github.com/containerd/containerd/v2 v2.1.1
+	github.com/containerd/containerd/v2 v2.1.3
 	github.com/containerd/continuity v0.4.5
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/log v0.1.0
@@ -87,7 +88,6 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ssooidc v1.26.4 // indirect
 	github.com/aws/aws-sdk-go-v2/service/sts v1.30.3 // indirect
 	github.com/aws/smithy-go v1.20.3 // indirect
-	github.com/cenkalti/backoff/v4 v4.3.0 // indirect
 	github.com/containerd/containerd/api v1.9.0 // indirect
 	github.com/containerd/errdefs/pkg v0.3.0 // indirect
 	github.com/containerd/ttrpc v1.2.7 // indirect
@@ -182,3 +182,5 @@ exclude (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 )
+
+replace github.com/moby/buildkit => github.com/crazy-max/buildkit v0.7.1-0.20250628122957-0cbe82310f5c // testutil-expose-mirror
