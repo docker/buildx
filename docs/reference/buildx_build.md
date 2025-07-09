@@ -307,24 +307,24 @@ Same as [`buildx --builder`](buildx.md#builder).
 --cache-from=[NAME|type=TYPE[,KEY=VALUE]]
 ```
 
-Use an external cache source for a build. Supported types are `registry`,
-`local`, `gha` and `s3`.
+Use an external cache source for a build. Supported types are:
 
-- [`registry` source](https://github.com/moby/buildkit#registry-push-image-and-cache-separately)
+- [`registry`](https://docs.docker.com/build/cache/backends/registry/)
   can import cache from a cache manifest or (special) image configuration on the
   registry.
-- [`local` source](https://github.com/moby/buildkit#local-directory-1) can
+- [`local`](https://docs.docker.com/build/cache/backends/local/) can
   import cache from local files previously exported with `--cache-to`.
-- [`gha` source](https://github.com/moby/buildkit#github-actions-cache-experimental)
+- [`gha`](https://docs.docker.com/build/cache/backends/gha/)
   can import cache from a previously exported cache with `--cache-to` in your
-  GitHub repository
-- [`s3` source](https://github.com/moby/buildkit#s3-cache-experimental)
+  GitHub repository.
+- [`s3`](https://docs.docker.com/build/cache/backends/s3/)
   can import cache from a previously exported cache with `--cache-to` in your
-  S3 bucket
+  S3 bucket.
+- [`azblob`](https://docs.docker.com/build/cache/backends/azblob/)
+  can import cache from a previously exported cache with `--cache-to` in your
+  Azure bucket.
 
 If no type is specified, `registry` exporter is used with a specified reference.
-
-`docker` driver currently only supports importing build cache from the registry.
 
 ```console
 $ docker buildx build --cache-from=user/app:cache .
@@ -335,7 +335,43 @@ $ docker buildx build --cache-from=type=gha .
 $ docker buildx build --cache-from=type=s3,region=eu-west-1,bucket=mybucket .
 ```
 
-More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
+> [!NOTE]
+> More info about cache exporters and available attributes can be found in the
+> [Cache storage backends documentation](https://docs.docker.com/build/cache/backends/)
+
+### <a name="cache-to"></a> Export build cache to an external cache destination (--cache-to)
+
+```text
+--cache-to=[NAME|type=TYPE[,KEY=VALUE]]
+```
+
+Export build cache to an external cache destination. Supported types are:
+
+- [`registry`](https://docs.docker.com/build/cache/backends/registry/) exports
+  build cache to a cache manifest in the registry.
+- [`local`](https://docs.docker.com/build/cache/backends/local/) exports
+  cache to a local directory on the client.
+- [`inline`](https://docs.docker.com/build/cache/backends/inline/) writes the
+  cache metadata into the image configuration.
+- [`gha`](https://docs.docker.com/build/cache/backends/gha/) exports cache
+  through the GitHub Actions Cache service API.
+- [`s3`](https://docs.docker.com/build/cache/backends/s3/) exports cache to a
+  S3 bucket.
+- [`azblob`](https://docs.docker.com/build/cache/backends/azblob/) exports
+  cache to an Azure bucket.
+
+```console
+$ docker buildx build --cache-to=user/app:cache .
+$ docker buildx build --cache-to=type=inline .
+$ docker buildx build --cache-to=type=registry,ref=user/app .
+$ docker buildx build --cache-to=type=local,dest=path/to/cache .
+$ docker buildx build --cache-to=type=gha .
+$ docker buildx build --cache-to=type=s3,region=eu-west-1,bucket=mybucket .
+```
+
+> [!NOTE]
+> More info about cache exporters and available attributes can be found in the
+> [Cache storage backends documentation](https://docs.docker.com/build/cache/backends/)
 
 ### <a name="call"></a> Invoke a frontend method (--call)
 
@@ -497,45 +533,6 @@ index             generates a Pagefind index
 test-go-redirects checks that the /go/ redirects are valid
 release (default) is an empty scratch image with only compiled assets
 ```
-
-### <a name="cache-to"></a> Export build cache to an external cache destination (--cache-to)
-
-```text
---cache-to=[NAME|type=TYPE[,KEY=VALUE]]
-```
-
-Export build cache to an external cache destination. Supported types are
-`registry`, `local`, `inline`, `gha` and `s3`.
-
-- [`registry` type](https://github.com/moby/buildkit#registry-push-image-and-cache-separately) exports build cache to a cache manifest in the registry.
-- [`local` type](https://github.com/moby/buildkit#local-directory-1) exports
-  cache to a local directory on the client.
-- [`inline` type](https://github.com/moby/buildkit#inline-push-image-and-cache-together)
-  writes the cache metadata into the image configuration.
-- [`gha` type](https://github.com/moby/buildkit#github-actions-cache-experimental)
-  exports cache through the [GitHub Actions Cache service API](https://github.com/tonistiigi/go-actions-cache/blob/master/api.md#authentication).
-- [`s3` type](https://github.com/moby/buildkit#s3-cache-experimental) exports
-  cache to a S3 bucket.
-
-The `docker` driver only supports cache exports using the `inline` and `local`
-cache backends.
-
-Attribute key:
-
-- `mode` - Specifies how many layers are exported with the cache. `min` on only
-  exports layers already in the final build stage, `max` exports layers for
-  all stages. Metadata is always exported for the whole build.
-
-```console
-$ docker buildx build --cache-to=user/app:cache .
-$ docker buildx build --cache-to=type=inline .
-$ docker buildx build --cache-to=type=registry,ref=user/app .
-$ docker buildx build --cache-to=type=local,dest=path/to/cache .
-$ docker buildx build --cache-to=type=gha .
-$ docker buildx build --cache-to=type=s3,region=eu-west-1,bucket=mybucket .
-```
-
-More info about cache exporters and available attributes: https://github.com/moby/buildkit#export-cache
 
 ### <a name="cgroup-parent"></a> Use a custom parent cgroup (--cgroup-parent)
 
