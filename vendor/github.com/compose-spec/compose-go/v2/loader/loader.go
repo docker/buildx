@@ -320,17 +320,17 @@ func LoadConfigFiles(ctx context.Context, configFiles []string, workingDir strin
 
 // LoadWithContext reads a ConfigDetails and returns a fully loaded configuration as a compose-go Project
 func LoadWithContext(ctx context.Context, configDetails types.ConfigDetails, options ...func(*Options)) (*types.Project, error) {
-	opts := toOptions(&configDetails, options)
+	opts := ToOptions(&configDetails, options)
 	dict, err := loadModelWithContext(ctx, &configDetails, opts)
 	if err != nil {
 		return nil, err
 	}
-	return modelToProject(dict, opts, configDetails)
+	return ModelToProject(dict, opts, configDetails)
 }
 
 // LoadModelWithContext reads a ConfigDetails and returns a fully loaded configuration as a yaml dictionary
 func LoadModelWithContext(ctx context.Context, configDetails types.ConfigDetails, options ...func(*Options)) (map[string]any, error) {
-	opts := toOptions(&configDetails, options)
+	opts := ToOptions(&configDetails, options)
 	return loadModelWithContext(ctx, &configDetails, opts)
 }
 
@@ -348,7 +348,7 @@ func loadModelWithContext(ctx context.Context, configDetails *types.ConfigDetail
 	return load(ctx, *configDetails, opts, nil)
 }
 
-func toOptions(configDetails *types.ConfigDetails, options []func(*Options)) *Options {
+func ToOptions(configDetails *types.ConfigDetails, options []func(*Options)) *Options {
 	opts := &Options{
 		Interpolate: &interp.Options{
 			Substitute:      template.Substitute,
@@ -557,8 +557,8 @@ func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options,
 	return dict, nil
 }
 
-// modelToProject binds a canonical yaml dict into compose-go structs
-func modelToProject(dict map[string]interface{}, opts *Options, configDetails types.ConfigDetails) (*types.Project, error) {
+// ModelToProject binds a canonical yaml dict into compose-go structs
+func ModelToProject(dict map[string]interface{}, opts *Options, configDetails types.ConfigDetails) (*types.Project, error) {
 	project := &types.Project{
 		Name:        opts.projectName,
 		WorkingDir:  configDetails.WorkingDir,
