@@ -21,6 +21,8 @@ import (
 	"github.com/spf13/pflag"
 )
 
+const experimentalCommandHint = `Experimental commands and flags are hidden. Set BUILDX_EXPERIMENTAL=1 to show them.`
+
 func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra.Command {
 	var opt rootOptions
 	cmd := &cobra.Command{
@@ -29,6 +31,12 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 		Use:   name,
 		Annotations: map[string]string{
 			annotation.CodeDelimiter: `"`,
+			"additionalHelp": func() string {
+				if !confutil.IsExperimental() {
+					return experimentalCommandHint
+				}
+				return ""
+			}(),
 		},
 		CompletionOptions: cobra.CompletionOptions{
 			HiddenDefaultCmd: true,
@@ -72,6 +80,9 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 		cmd.TraverseChildren = true
 		cmd.DisableFlagsInUseLine = true
 		cli.DisableFlagsInUseLine(cmd)
+		if !confutil.IsExperimental() {
+			cmd.SetHelpTemplate(cmd.HelpTemplate() + "\n" + experimentalCommandHint + "\n")
+		}
 	}
 
 	logrus.SetFormatter(&logutil.Formatter{})
@@ -83,10 +94,6 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 		"stopping session",
 		"using default config store",
 	))
-
-	if !confutil.IsExperimental() {
-		cmd.SetHelpTemplate(cmd.HelpTemplate() + "\nExperimental commands and flags are hidden. Set BUILDX_EXPERIMENTAL=1 to show them.\n")
-	}
 
 	addCommands(cmd, &opt, dockerCli)
 	return cmd
