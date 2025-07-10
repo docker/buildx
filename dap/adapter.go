@@ -216,6 +216,7 @@ func (d *Adapter[C]) newThread(ctx Context, name string) (t *thread) {
 		sourceMap:     &d.sourceMap,
 		breakpointMap: d.breakpointMap,
 		idPool:        d.idPool,
+		variables:     newVariableReferences(),
 	}
 	d.threads[t.id] = t
 	d.nextThreadID++
@@ -240,6 +241,11 @@ func (d *Adapter[C]) getThread(id int) (t *thread) {
 
 func (d *Adapter[C]) deleteThread(ctx Context, t *thread) {
 	d.threadsMu.Lock()
+	if t := d.threads[t.id]; t != nil {
+		if t.variables != nil {
+			t.variables.Reset()
+		}
+	}
 	delete(d.threads, t.id)
 	d.threadsMu.Unlock()
 
@@ -250,6 +256,18 @@ func (d *Adapter[C]) deleteThread(ctx Context, t *thread) {
 			ThreadId: t.id,
 		},
 	}
+}
+
+func (d *Adapter[T]) getThreadByFrameID(id int) (t *thread) {
+	d.threadsMu.RLock()
+	defer d.threadsMu.RUnlock()
+
+	for _, t := range d.threads {
+		if t.hasFrame(id) {
+			return t
+		}
+	}
+	return nil
 }
 
 type evaluateRequest struct {
@@ -330,6 +348,35 @@ func (d *Adapter[C]) StackTrace(c Context, req *dap.StackTraceRequest, resp *dap
 	return nil
 }
 
+func (d *Adapter[C]) Scopes(c Context, req *dap.ScopesRequest, resp *dap.ScopesResponse) error {
+	t := d.getThreadByFrameID(req.Arguments.FrameId)
+	if t == nil {
+		return errors.Errorf("no such frame id: %d", req.Arguments.FrameId)
+	}
+
+	resp.Body.Scopes = t.Scopes(req.Arguments.FrameId)
+	for i, s := range resp.Body.Scopes {
+		resp.Body.Scopes[i].VariablesReference = (t.id << 24) | s.VariablesReference
+	}
+	return nil
+}
+
+func (d *Adapter[C]) Variables(c Context, req *dap.VariablesRequest, resp *dap.VariablesResponse) error {
+	tid := req.Arguments.VariablesReference >> 24
+
+	t := d.getThread(tid)
+	if t == nil {
+		return errors.Errorf("no such thread: %d", tid)
+	}
+
+	varRef := req.Arguments.VariablesReference & ((1 << 24) - 1)
+	resp.Body.Variables = t.Variables(varRef)
+	for i, ref := range resp.Body.Variables {
+		resp.Body.Variables[i].VariablesReference = (tid << 24) | ref.VariablesReference
+	}
+	return nil
+}
+
 func (d *Adapter[C]) Source(c Context, req *dap.SourceRequest, resp *dap.SourceResponse) error {
 	fname := req.Arguments.Source.Path
 
@@ -378,6 +425,8 @@ func (d *Adapter[C]) dapHandler() Handler {
 		Disconnect:        d.Disconnect,
 		Threads:           d.Threads,
 		StackTrace:        d.StackTrace,
+		Scopes:            d.Scopes,
+		Variables:         d.Variables,
 		Source:            d.Source,
 	}
 }

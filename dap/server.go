@@ -125,6 +125,10 @@ func (s *Server) handleMessage(c Context, m dap.Message) (dap.ResponseMessage, e
 		return s.h.Threads.Do(c, req)
 	case *dap.StackTraceRequest:
 		return s.h.StackTrace.Do(c, req)
+	case *dap.ScopesRequest:
+		return s.h.Scopes.Do(c, req)
+	case *dap.VariablesRequest:
+		return s.h.Variables.Do(c, req)
 	case *dap.EvaluateRequest:
 		return s.h.Evaluate.Do(c, req)
 	case *dap.SourceRequest:
