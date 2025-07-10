@@ -94,6 +94,7 @@ var stdlibFunctions = []funcDef{
 	{name: "replace", fn: stdlib.ReplaceFunc},
 	{name: "reverse", fn: stdlib.ReverseFunc},
 	{name: "reverselist", fn: stdlib.ReverseListFunc},
+	{name: "rfc3339parse", factory: rfc3339ParseFunc},
 	{name: "rsadecrypt", fn: crypto.RsaDecryptFunc},
 	{name: "sanitize", factory: sanitizeFunc},
 	{name: "sethaselement", fn: stdlib.SetHasElementFunc},
@@ -241,7 +242,7 @@ func sanitizeFunc() function.Function {
 
 // timestampFunc constructs a function that returns a string representation of the current date and time.
 //
-// This function was imported from terraform's datetime utilities.
+// This function was imported from Terraform's datetime utilities.
 func timestampFunc() function.Function {
 	return function.New(&function.Spec{
 		Description: `Returns a string representation of the current date and time.`,
@@ -249,6 +250,62 @@ func timestampFunc() function.Function {
 		Type:        function.StaticReturnType(cty.String),
 		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
 			return cty.StringVal(time.Now().UTC().Format(time.RFC3339)), nil
+		},
+	})
+}
+
+// rfc3339ParseFunc, given an RFC3339 timestamp string, will parse and return an
+// object representation of that date and time.
+//
+// This function is similar to the `rfc3339_parse` function in Terraform:
+// https://registry.terraform.io/providers/hashicorp/time/latest/docs/functions/rfc3339_parse
+func rfc3339ParseFunc() function.Function {
+	return function.New(&function.Spec{
+		Description: `Given an RFC3339 timestamp string, will parse and return an object representation of that date and time.`,
+		Params: []function.Parameter{
+			{
+				Name:        "timestamp",
+				Description: "RFC3339 timestamp string to parse",
+				Type:        cty.String,
+			},
+		},
+		Type: function.StaticReturnType(cty.Object(map[string]cty.Type{
+			"year":         cty.Number,
+			"year_day":     cty.Number,
+			"day":          cty.Number,
+			"month":        cty.Number,
+			"month_name":   cty.String,
+			"weekday":      cty.Number,
+			"weekday_name": cty.String,
+			"hour":         cty.Number,
+			"minute":       cty.Number,
+			"second":       cty.Number,
+			"unix":         cty.Number,
+			"iso_year":     cty.Number,
+			"iso_week":     cty.Number,
+		})),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			ts := args[0].AsString()
+			rfc3339, err := time.Parse(time.RFC3339, ts)
+			if err != nil {
+				return cty.NilVal, err
+			}
+			isoYear, isoWeek := rfc3339.ISOWeek()
+			return cty.ObjectVal(map[string]cty.Value{
+				"year":         cty.NumberIntVal(int64(rfc3339.Year())),
+				"year_day":     cty.NumberIntVal(int64(rfc3339.YearDay())),
+				"day":          cty.NumberIntVal(int64(rfc3339.Day())),
+				"month":        cty.NumberIntVal(int64(rfc3339.Month())),
+				"month_name":   cty.StringVal(rfc3339.Month().String()),
+				"weekday":      cty.NumberIntVal(int64(rfc3339.Weekday())),
+				"weekday_name": cty.StringVal(rfc3339.Weekday().String()),
+				"hour":         cty.NumberIntVal(int64(rfc3339.Hour())),
+				"minute":       cty.NumberIntVal(int64(rfc3339.Minute())),
+				"second":       cty.NumberIntVal(int64(rfc3339.Second())),
+				"unix":         cty.NumberIntVal(int64(rfc3339.Unix())),
+				"iso_year":     cty.NumberIntVal(int64(isoYear)),
+				"iso_week":     cty.NumberIntVal(int64(isoWeek)),
+			}), nil
 		},
 	})
 }
