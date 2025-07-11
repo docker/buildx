@@ -119,6 +119,10 @@ func (s *Server) handleMessage(c Context, m dap.Message) (dap.ResponseMessage, e
 		return s.h.Continue.Do(c, req)
 	case *dap.NextRequest:
 		return s.h.Next.Do(c, req)
+	case *dap.StepInRequest:
+		return s.h.StepIn.Do(c, req)
+	case *dap.StepOutRequest:
+		return s.h.StepOut.Do(c, req)
 	case *dap.RestartRequest:
 		return s.h.Restart.Do(c, req)
 	case *dap.ThreadsRequest:
