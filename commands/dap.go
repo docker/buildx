@@ -23,6 +23,10 @@ func dapCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	dapBuildCmd := buildCmd(dockerCli, rootOpts, &options)
 	dapBuildCmd.Args = cobra.RangeArgs(0, 1)
+
+	// Remove aliases and annotations for documentation.
+	dapBuildCmd.Aliases = nil
+	dapBuildCmd.Annotations = nil
 	cmd.AddCommand(dapBuildCmd)
 	return cmd
 }
