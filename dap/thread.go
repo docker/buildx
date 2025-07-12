@@ -23,8 +23,10 @@ type thread struct {
 	name string
 
 	// Persistent state from the adapter.
-	idPool    *idPool
-	sourceMap *sourceMap
+	idPool        *idPool
+	sourceMap     *sourceMap
+	breakpointMap *breakpointMap
+	variables     *variableReferences
 
 	// Inputs to the evaluate call.
 	c          gateway.Client
@@ -36,6 +38,7 @@ type thread struct {
 	def  *llb.Definition
 	ops  map[digest.Digest]*pb.Op
 	head digest.Digest
+	bps  map[digest.Digest]int
 
 	// Runtime state for the evaluate call.
 	regions         []*region
@@ -46,11 +49,10 @@ type thread struct {
 	mu     sync.Mutex
 
 	// Attributes set when a thread is paused.
-	rCtx   *build.ResultHandle
-	curPos digest.Digest
-
-	// Lazy attributes that are set when a thread is paused.
-	stackTrace []dap.StackFrame
+	rCtx       *build.ResultHandle
+	curPos     digest.Digest
+	stackTrace []int32
+	frames     map[int32]*frame
 }
 
 type region struct {
@@ -80,15 +82,18 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, 
 	}
 
 	for {
+		if step == stepContinue {
+			t.setBreakpoints(ctx)
+		}
 		pos, err := t.seekNext(ctx, step)
 
-		reason, desc := t.needsDebug(pos, step, err)
-		if reason == "" {
+		event := t.needsDebug(pos, step, err)
+		if event.Reason == "" {
 			return err
 		}
 
 		select {
-		case step = <-t.pause(ctx, err, reason, desc):
+		case step = <-t.pause(ctx, err, event):
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		}
@@ -100,7 +105,11 @@ func (t *thread) init(ctx Context, c gateway.Client, ref gateway.Reference, meta
 	t.ref = ref
 	t.meta = meta
 	t.sourcePath = inputs.ContextPath
-	return t.createRegions(ctx)
+
+	if err := t.getLLBState(ctx); err != nil {
+		return err
+	}
+	return t.createRegions()
 }
 
 func (t *thread) reset() {
@@ -111,17 +120,23 @@ func (t *thread) reset() {
 	t.ops = nil
 }
 
-func (t *thread) needsDebug(target digest.Digest, step stepType, err error) (reason, desc string) {
+func (t *thread) needsDebug(target digest.Digest, step stepType, err error) (e dap.StoppedEventBody) {
 	if err != nil {
-		reason = "exception"
-		desc = "Encountered an error during result evaluation"
-	} else if target != "" && step == stepNext {
-		reason = "step"
+		e.Reason = "exception"
+		e.Description = "Encountered an error during result evaluation"
+	} else if step == stepNext && target != "" {
+		e.Reason = "step"
+	} else if step == stepContinue {
+		if id, ok := t.bps[target]; ok {
+			e.Reason = "breakpoint"
+			e.Description = "Paused on breakpoint"
+			e.HitBreakpointIds = []int{id}
+		}
 	}
 	return
 }
 
-func (t *thread) pause(c Context, err error, reason, desc string) <-chan stepType {
+func (t *thread) pause(c Context, err error, event dap.StoppedEventBody) <-chan stepType {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -139,14 +154,12 @@ func (t *thread) pause(c Context, err error, reason, desc string) <-chan stepTyp
 			}
 		}
 	}
+	t.collectStackTrace()
 
+	event.ThreadId = t.id
 	c.C() <- &dap.StoppedEvent{
 		Event: dap.Event{Event: "stopped"},
-		Body: dap.StoppedEventBody{
-			Reason:      reason,
-			Description: desc,
-			ThreadId:    t.id,
-		},
+		Body:  event,
 	}
 	return t.paused
 }
@@ -166,18 +179,7 @@ func (t *thread) resume(step stepType) {
 	if t.paused == nil {
 		return
 	}
-
-	if t.rCtx != nil {
-		t.rCtx.Done()
-		t.rCtx = nil
-	}
-
-	if t.stackTrace != nil {
-		for _, frame := range t.stackTrace {
-			t.idPool.Put(int64(frame.Id))
-		}
-		t.stackTrace = nil
-	}
+	t.releaseState()
 
 	t.paused <- step
 	close(t.paused)
@@ -195,10 +197,23 @@ func (t *thread) StackTrace() []dap.StackFrame {
 		return []dap.StackFrame{}
 	}
 
-	if t.stackTrace == nil {
-		t.stackTrace = t.makeStackTrace()
+	frames := make([]dap.StackFrame, len(t.stackTrace))
+	for i, id := range t.stackTrace {
+		frames[i] = t.frames[id].StackFrame
 	}
-	return t.stackTrace
+	return frames
+}
+
+func (t *thread) Scopes(frameID int) []dap.Scope {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	frame := t.frames[int32(frameID)]
+	return frame.Scopes()
+}
+
+func (t *thread) Variables(id int) []dap.Variable {
+	return t.variables.Get(id)
 }
 
 func (t *thread) getLLBState(ctx Context) error {
@@ -232,6 +247,10 @@ func (t *thread) getLLBState(ctx Context) error {
 	return err
 }
 
+func (t *thread) setBreakpoints(ctx Context) {
+	t.bps = t.breakpointMap.Intersect(ctx, t.def.Source, t.sourcePath)
+}
+
 func (t *thread) findBacklinks() map[digest.Digest]map[digest.Digest]struct{} {
 	backlinks := make(map[digest.Digest]map[digest.Digest]struct{})
 	for dgst := range t.ops {
@@ -249,11 +268,7 @@ func (t *thread) findBacklinks() map[digest.Digest]map[digest.Digest]struct{} {
 	return backlinks
 }
 
-func (t *thread) createRegions(ctx Context) error {
-	if err := t.getLLBState(ctx); err != nil {
-		return err
-	}
-
+func (t *thread) createRegions() error {
 	// Find the links going from inputs to their outputs.
 	// This isn't represented in the LLB graph but we need it to ensure
 	// an op only has one child and whether we are allowed to visit a node.
@@ -363,8 +378,11 @@ func (t *thread) seekNext(ctx Context, step stepType) (digest.Digest, error) {
 	}
 
 	target := t.head
-	if step == stepNext {
-		target = t.nextDigest()
+	switch step {
+	case stepNext:
+		target = t.nextDigest(nil)
+	case stepContinue:
+		target = t.continueDigest()
 	}
 
 	if target == "" {
@@ -394,11 +412,27 @@ func (t *thread) seek(ctx Context, target digest.Digest) (digest.Digest, error) 
 	return t.curPos, err
 }
 
-func (t *thread) nextDigest() digest.Digest {
+func (t *thread) nextDigest(fn func(digest.Digest) bool) digest.Digest {
+	isValid := func(dgst digest.Digest) bool {
+		// Skip this digest because it has no locations in the source file.
+		if loc, ok := t.def.Source.Locations[string(dgst)]; !ok || len(loc.Locations) == 0 {
+			return false
+		}
+
+		// If a custom function has been set for validation, use it.
+		return fn == nil || fn(dgst)
+	}
+
 	// If we have no position, automatically select the first step.
 	if t.curPos == "" {
 		r := t.regions[len(t.regions)-1]
-		return r.digests[0]
+		if isValid(r.digests[0]) {
+			return r.digests[0]
+		}
+
+		// We cannot use the first position. Treat the first position as our
+		// current position so we can iterate.
+		t.curPos = r.digests[0]
 	}
 
 	// Look up the region associated with our current position.
@@ -426,13 +460,24 @@ func (t *thread) nextDigest() digest.Digest {
 		}
 
 		next := r.digests[i]
-		if loc, ok := t.def.Source.Locations[string(next)]; !ok || len(loc.Locations) == 0 {
-			// Skip this digest because it has no locations in the source file.
+		if !isValid(next) {
 			i++
 			continue
 		}
 		return next
 	}
+}
+
+func (t *thread) continueDigest() digest.Digest {
+	if len(t.bps) == 0 {
+		return t.head
+	}
+
+	fn := func(dgst digest.Digest) bool {
+		_, ok := t.bps[dgst]
+		return ok
+	}
+	return t.nextDigest(fn)
 }
 
 func (t *thread) solve(ctx context.Context, target digest.Digest) (gateway.Reference, error) {
@@ -460,15 +505,16 @@ func (t *thread) solve(ctx context.Context, target digest.Digest) (gateway.Refer
 	return res.SingleRef()
 }
 
-func (t *thread) newStackFrame() dap.StackFrame {
-	return dap.StackFrame{
-		Id: int(t.idPool.Get()),
+func (t *thread) releaseState() {
+	if t.rCtx != nil {
+		t.rCtx.Done()
+		t.rCtx = nil
 	}
+	t.stackTrace = nil
+	t.frames = nil
 }
 
-func (t *thread) makeStackTrace() []dap.StackFrame {
-	var frames []dap.StackFrame
-
+func (t *thread) collectStackTrace() {
 	region := t.regionsByDigest[t.curPos]
 	r := t.regions[region]
 
@@ -477,45 +523,38 @@ func (t *thread) makeStackTrace() []dap.StackFrame {
 		digests = digests[:index+1]
 	}
 
+	t.frames = make(map[int32]*frame)
 	for i := len(digests) - 1; i >= 0; i-- {
 		dgst := digests[i]
 
-		frame := t.newStackFrame()
+		frame := &frame{}
+		frame.Id = int(t.idPool.Get())
+
 		if meta, ok := t.def.Metadata[dgst]; ok {
-			fillStackFrameMetadata(&frame, meta)
+			frame.setNameFromMeta(meta)
 		}
 		if loc, ok := t.def.Source.Locations[string(dgst)]; ok {
-			t.fillStackFrameLocation(&frame, loc)
+			frame.fillLocation(t.def, loc, t.sourcePath)
 		}
-		frames = append(frames, frame)
+
+		if op := t.ops[dgst]; op != nil {
+			frame.fillVarsFromOp(op, t.variables)
+		}
+		t.stackTrace = append(t.stackTrace, int32(frame.Id))
+		t.frames[int32(frame.Id)] = frame
 	}
-	return frames
 }
 
-func fillStackFrameMetadata(frame *dap.StackFrame, meta llb.OpMetadata) {
-	if name, ok := meta.Description["llb.customname"]; ok {
-		frame.Name = name
-	} else if cmd, ok := meta.Description["com.docker.dockerfile.v1.command"]; ok {
-		frame.Name = cmd
-	}
-	// TODO: should we infer the name from somewhere else?
-}
+func (t *thread) hasFrame(id int) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
-func (t *thread) fillStackFrameLocation(frame *dap.StackFrame, loc *pb.Locations) {
-	for _, l := range loc.Locations {
-		for _, r := range l.Ranges {
-			frame.Line = int(r.Start.Line)
-			frame.Column = int(r.Start.Character)
-			frame.EndLine = int(r.End.Line)
-			frame.EndColumn = int(r.End.Character)
-
-			info := t.def.Source.Infos[l.SourceIndex]
-			frame.Source = &dap.Source{
-				Path: filepath.Join(t.sourcePath, info.Filename),
-			}
-			return
-		}
+	if t.paused == nil {
+		return false
 	}
+
+	_, ok := t.frames[int32(id)]
+	return ok
 }
 
 func pop[S ~[]E, E any](s *S) E {

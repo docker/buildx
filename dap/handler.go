@@ -55,6 +55,8 @@ type Handler struct {
 	Restart           HandlerFunc[*dap.RestartRequest, *dap.RestartResponse]
 	Threads           HandlerFunc[*dap.ThreadsRequest, *dap.ThreadsResponse]
 	StackTrace        HandlerFunc[*dap.StackTraceRequest, *dap.StackTraceResponse]
+	Scopes            HandlerFunc[*dap.ScopesRequest, *dap.ScopesResponse]
+	Variables         HandlerFunc[*dap.VariablesRequest, *dap.VariablesResponse]
 	Evaluate          HandlerFunc[*dap.EvaluateRequest, *dap.EvaluateResponse]
 	Source            HandlerFunc[*dap.SourceRequest, *dap.SourceResponse]
 }
