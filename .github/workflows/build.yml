@@ -59,7 +59,8 @@ jobs:
           - v0.21.1
         worker:
           - docker-container
-          - remote
+          - remote+docker-container
+          - remote+tcp
         pkg:
           - ./tests
         mode:
@@ -106,7 +107,7 @@ jobs:
           fi
           testFlags="--run=//worker=$(echo "${{ matrix.worker }}" | sed 's/\+/\\+/g')$"
           case "${{ matrix.worker }}" in
-            docker | docker+containerd | docker@* | docker+containerd@*)
+            docker | docker+containerd | docker@* | docker+containerd@* | remote*)
               echo "TESTFLAGS=${{ env.TESTFLAGS_DOCKER }} $testFlags" >> $GITHUB_ENV
               ;;
             *)
