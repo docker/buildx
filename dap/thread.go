@@ -94,6 +94,9 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, 
 
 		select {
 		case step = <-t.pause(ctx, err, event):
+			if err != nil {
+				return err
+			}
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		}
