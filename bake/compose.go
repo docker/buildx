@@ -11,6 +11,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
+	composeschema "github.com/compose-spec/compose-go/v2/schema"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/buildx/util/buildflags"
 	dockeropts "github.com/docker/cli/opts"
@@ -35,21 +36,7 @@ func ParseComposeFiles(fs []File) (*Config, error) {
 }
 
 func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Config, error) {
-	if envs == nil {
-		envs = make(map[string]string)
-	}
-	cfg, err := loader.LoadWithContext(context.Background(), composetypes.ConfigDetails{
-		ConfigFiles: cfgs,
-		Environment: envs,
-	}, func(options *loader.Options) {
-		projectName := "bake"
-		if v, ok := envs[consts.ComposeProjectName]; ok && v != "" {
-			projectName = v
-		}
-		options.SetProjectName(projectName, false)
-		options.SkipNormalization = true
-		options.Profiles = []string{"*"}
-	})
+	cfg, err := loadComposeFiles(cfgs, envs)
 	if err != nil {
 		return nil, err
 	}
@@ -208,6 +195,67 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 	return &c, nil
 }
 
+func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, options ...func(*loader.Options)) (*composetypes.Project, error) {
+	if envs == nil {
+		envs = make(map[string]string)
+	}
+
+	cfgDetails := composetypes.ConfigDetails{
+		ConfigFiles: cfgs,
+		Environment: envs,
+	}
+
+	raw, err := loader.LoadModelWithContext(context.Background(), cfgDetails, append([]func(*loader.Options){func(opts *loader.Options) {
+		projectName := "bake"
+		if v, ok := envs[consts.ComposeProjectName]; ok && v != "" {
+			projectName = v
+		}
+		opts.SetProjectName(projectName, false)
+		opts.SkipNormalization = true
+		opts.SkipValidation = true
+	}}, options...)...)
+	if err != nil {
+		return nil, err
+	}
+
+	filtered := make(map[string]any)
+	for _, key := range []string{"services", "secrets"} {
+		if key == "services" {
+			if services, ok := raw["services"].(map[string]any); ok {
+				filteredServices := make(map[string]any)
+				for svcName, svc := range services {
+					if svc == nil {
+						filteredServices[svcName] = map[string]any{}
+					} else if svcMap, ok := svc.(map[string]any); ok {
+						filteredService := make(map[string]any)
+						for _, svcField := range []string{"image", "build", "environment", "env_file"} {
+							if val, ok := svcMap[svcField]; ok {
+								filteredService[svcField] = val
+							}
+						}
+						filteredServices[svcName] = filteredService
+					}
+				}
+				filtered["services"] = filteredServices
+			}
+		} else if v, ok := raw[key]; ok {
+			filtered[key] = v
+		}
+	}
+
+	if err := composeschema.Validate(filtered); err != nil {
+		return nil, err
+	}
+
+	return loader.ModelToProject(filtered, loader.ToOptions(&cfgDetails, append([]func(*loader.Options){func(options *loader.Options) {
+		options.SkipNormalization = true
+		options.Profiles = []string{"*"}
+	}}, options...)), composetypes.ConfigDetails{
+		ConfigFiles: cfgs,
+		Environment: envs,
+	})
+}
+
 func validateComposeFile(dt []byte, fn string) (bool, error) {
 	envs, err := composeEnv()
 	if err != nil {
@@ -225,16 +273,7 @@ func validateComposeFile(dt []byte, fn string) (bool, error) {
 }
 
 func validateCompose(dt []byte, envs map[string]string) error {
-	_, err := loader.LoadWithContext(context.Background(), composetypes.ConfigDetails{
-		ConfigFiles: []composetypes.ConfigFile{
-			{
-				Content: dt,
-			},
-		},
-		Environment: envs,
-	}, func(options *loader.Options) {
-		options.SetProjectName("bake", false)
-		options.SkipNormalization = true
+	_, err := loadComposeFiles([]composetypes.ConfigFile{{Content: dt}}, envs, func(options *loader.Options) {
 		// consistency is checked later in ParseCompose to ensure multiple
 		// compose files can be merged together
 		options.SkipConsistencyCheck = true

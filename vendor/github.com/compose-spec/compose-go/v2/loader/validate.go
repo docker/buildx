@@ -117,6 +117,12 @@ func checkConsistency(project *types.Project) error { //nolint:gocyclo
 			}
 		}
 
+		for model := range s.Models {
+			if _, ok := project.Models[model]; !ok {
+				return fmt.Errorf("service %q refers to undefined model %s: %w", s.Name, model, errdefs.ErrInvalid)
+			}
+		}
+
 		for _, secret := range s.Secrets {
 			if _, ok := project.Secrets[secret.Source]; !ok {
 				return fmt.Errorf("service %q refers to undefined secret %s: %w", s.Name, secret.Source, errdefs.ErrInvalid)
