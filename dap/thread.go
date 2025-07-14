@@ -23,8 +23,9 @@ type thread struct {
 	name string
 
 	// Persistent state from the adapter.
-	idPool    *idPool
-	sourceMap *sourceMap
+	idPool        *idPool
+	sourceMap     *sourceMap
+	breakpointMap *breakpointMap
 
 	// Inputs to the evaluate call.
 	c          gateway.Client
@@ -36,6 +37,7 @@ type thread struct {
 	def  *llb.Definition
 	ops  map[digest.Digest]*pb.Op
 	head digest.Digest
+	bps  map[digest.Digest]int
 
 	// Runtime state for the evaluate call.
 	regions         []*region
@@ -80,15 +82,18 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, 
 	}
 
 	for {
+		if step == stepContinue {
+			t.setBreakpoints(ctx)
+		}
 		pos, err := t.seekNext(ctx, step)
 
-		reason, desc := t.needsDebug(pos, step, err)
-		if reason == "" {
+		event := t.needsDebug(pos, step, err)
+		if event.Reason == "" {
 			return err
 		}
 
 		select {
-		case step = <-t.pause(ctx, err, reason, desc):
+		case step = <-t.pause(ctx, err, event):
 		case <-ctx.Done():
 			return context.Cause(ctx)
 		}
@@ -100,7 +105,11 @@ func (t *thread) init(ctx Context, c gateway.Client, ref gateway.Reference, meta
 	t.ref = ref
 	t.meta = meta
 	t.sourcePath = inputs.ContextPath
-	return t.createRegions(ctx)
+
+	if err := t.getLLBState(ctx); err != nil {
+		return err
+	}
+	return t.createRegions()
 }
 
 func (t *thread) reset() {
@@ -111,17 +120,23 @@ func (t *thread) reset() {
 	t.ops = nil
 }
 
-func (t *thread) needsDebug(target digest.Digest, step stepType, err error) (reason, desc string) {
+func (t *thread) needsDebug(target digest.Digest, step stepType, err error) (e dap.StoppedEventBody) {
 	if err != nil {
-		reason = "exception"
-		desc = "Encountered an error during result evaluation"
-	} else if target != "" && step == stepNext {
-		reason = "step"
+		e.Reason = "exception"
+		e.Description = "Encountered an error during result evaluation"
+	} else if step == stepNext && target != "" {
+		e.Reason = "step"
+	} else if step == stepContinue {
+		if id, ok := t.bps[target]; ok {
+			e.Reason = "breakpoint"
+			e.Description = "Paused on breakpoint"
+			e.HitBreakpointIds = []int{id}
+		}
 	}
 	return
 }
 
-func (t *thread) pause(c Context, err error, reason, desc string) <-chan stepType {
+func (t *thread) pause(c Context, err error, event dap.StoppedEventBody) <-chan stepType {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -140,13 +155,10 @@ func (t *thread) pause(c Context, err error, reason, desc string) <-chan stepTyp
 		}
 	}
 
+	event.ThreadId = t.id
 	c.C() <- &dap.StoppedEvent{
 		Event: dap.Event{Event: "stopped"},
-		Body: dap.StoppedEventBody{
-			Reason:      reason,
-			Description: desc,
-			ThreadId:    t.id,
-		},
+		Body:  event,
 	}
 	return t.paused
 }
@@ -232,6 +244,10 @@ func (t *thread) getLLBState(ctx Context) error {
 	return err
 }
 
+func (t *thread) setBreakpoints(ctx Context) {
+	t.bps = t.breakpointMap.Intersect(ctx, t.def.Source, t.sourcePath)
+}
+
 func (t *thread) findBacklinks() map[digest.Digest]map[digest.Digest]struct{} {
 	backlinks := make(map[digest.Digest]map[digest.Digest]struct{})
 	for dgst := range t.ops {
@@ -249,11 +265,7 @@ func (t *thread) findBacklinks() map[digest.Digest]map[digest.Digest]struct{} {
 	return backlinks
 }
 
-func (t *thread) createRegions(ctx Context) error {
-	if err := t.getLLBState(ctx); err != nil {
-		return err
-	}
-
+func (t *thread) createRegions() error {
 	// Find the links going from inputs to their outputs.
 	// This isn't represented in the LLB graph but we need it to ensure
 	// an op only has one child and whether we are allowed to visit a node.
@@ -363,8 +375,11 @@ func (t *thread) seekNext(ctx Context, step stepType) (digest.Digest, error) {
 	}
 
 	target := t.head
-	if step == stepNext {
-		target = t.nextDigest()
+	switch step {
+	case stepNext:
+		target = t.nextDigest(nil)
+	case stepContinue:
+		target = t.continueDigest()
 	}
 
 	if target == "" {
@@ -394,11 +409,27 @@ func (t *thread) seek(ctx Context, target digest.Digest) (digest.Digest, error) 
 	return t.curPos, err
 }
 
-func (t *thread) nextDigest() digest.Digest {
+func (t *thread) nextDigest(fn func(digest.Digest) bool) digest.Digest {
+	isValid := func(dgst digest.Digest) bool {
+		// Skip this digest because it has no locations in the source file.
+		if loc, ok := t.def.Source.Locations[string(dgst)]; !ok || len(loc.Locations) == 0 {
+			return false
+		}
+
+		// If a custom function has been set for validation, use it.
+		return fn == nil || fn(dgst)
+	}
+
 	// If we have no position, automatically select the first step.
 	if t.curPos == "" {
 		r := t.regions[len(t.regions)-1]
-		return r.digests[0]
+		if isValid(r.digests[0]) {
+			return r.digests[0]
+		}
+
+		// We cannot use the first position. Treat the first position as our
+		// current position so we can iterate.
+		t.curPos = r.digests[0]
 	}
 
 	// Look up the region associated with our current position.
@@ -426,13 +457,24 @@ func (t *thread) nextDigest() digest.Digest {
 		}
 
 		next := r.digests[i]
-		if loc, ok := t.def.Source.Locations[string(next)]; !ok || len(loc.Locations) == 0 {
-			// Skip this digest because it has no locations in the source file.
+		if !isValid(next) {
 			i++
 			continue
 		}
 		return next
 	}
+}
+
+func (t *thread) continueDigest() digest.Digest {
+	if len(t.bps) == 0 {
+		return t.head
+	}
+
+	isValid := func(dgst digest.Digest) bool {
+		_, ok := t.bps[dgst]
+		return ok
+	}
+	return t.nextDigest(isValid)
 }
 
 func (t *thread) solve(ctx context.Context, target digest.Digest) (gateway.Reference, error) {

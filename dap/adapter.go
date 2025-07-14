@@ -7,6 +7,8 @@ import (
 	"fmt"
 	"io"
 	"path"
+	"path/filepath"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -14,6 +16,8 @@ import (
 	"github.com/docker/buildx/dap/common"
 	"github.com/google/go-dap"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/solver/pb"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -33,8 +37,9 @@ type Adapter[C LaunchConfig] struct {
 	threadsMu    sync.RWMutex
 	nextThreadID int
 
-	sourceMap sourceMap
-	idPool    *idPool
+	breakpointMap *breakpointMap
+	sourceMap     sourceMap
+	idPool        *idPool
 }
 
 func New[C LaunchConfig]() *Adapter[C] {
@@ -45,6 +50,7 @@ func New[C LaunchConfig]() *Adapter[C] {
 		evaluateReqCh: make(chan *evaluateRequest),
 		threads:       make(map[int]*thread),
 		nextThreadID:  1,
+		breakpointMap: newBreakpointMap(),
 		idPool:        new(idPool),
 	}
 	d.srv = NewServer(d.dapHandler())
@@ -151,14 +157,7 @@ func (d *Adapter[C]) Next(c Context, req *dap.NextRequest, resp *dap.NextRespons
 }
 
 func (d *Adapter[C]) SetBreakpoints(c Context, req *dap.SetBreakpointsRequest, resp *dap.SetBreakpointsResponse) error {
-	// TODO: implement breakpoints
-	for range req.Arguments.Breakpoints {
-		// Fail to create all breakpoints that were requested.
-		resp.Body.Breakpoints = append(resp.Body.Breakpoints, dap.Breakpoint{
-			Verified: false,
-			Message:  "breakpoints unsupported",
-		})
-	}
+	resp.Body.Breakpoints = d.breakpointMap.Set(req.Arguments.Source.Path, req.Arguments.Breakpoints)
 	return nil
 }
 
@@ -212,10 +211,11 @@ func (d *Adapter[C]) newThread(ctx Context, name string) (t *thread) {
 	d.threadsMu.Lock()
 	id := d.nextThreadID
 	t = &thread{
-		id:        id,
-		name:      name,
-		sourceMap: &d.sourceMap,
-		idPool:    d.idPool,
+		id:            id,
+		name:          name,
+		sourceMap:     &d.sourceMap,
+		breakpointMap: d.breakpointMap,
+		idPool:        d.idPool,
 	}
 	d.threads[t.id] = t
 	d.nextThreadID++
@@ -467,4 +467,106 @@ func (s *sourceMap) Get(fname string) ([]byte, bool) {
 		return nil, false
 	}
 	return v.([]byte), true
+}
+
+type breakpointMap struct {
+	byPath map[string][]dap.Breakpoint
+	mu     sync.RWMutex
+
+	nextID atomic.Int64
+}
+
+func newBreakpointMap() *breakpointMap {
+	return &breakpointMap{
+		byPath: make(map[string][]dap.Breakpoint),
+	}
+}
+
+func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoints []dap.Breakpoint) {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	prev := b.byPath[fname]
+	for _, sbp := range sbps {
+		index := slices.IndexFunc(prev, func(e dap.Breakpoint) bool {
+			return sbp.Line >= e.Line && sbp.Line <= e.EndLine && sbp.Column >= e.Column && sbp.Column <= e.EndColumn
+		})
+
+		var bp dap.Breakpoint
+		if index >= 0 {
+			bp = prev[index]
+		} else {
+			bp = dap.Breakpoint{
+				Id:        int(b.nextID.Add(1)),
+				Line:      sbp.Line,
+				EndLine:   sbp.Line,
+				Column:    sbp.Column,
+				EndColumn: sbp.Column,
+			}
+		}
+		breakpoints = append(breakpoints, bp)
+	}
+	b.byPath[fname] = breakpoints
+	return breakpoints
+}
+
+func (b *breakpointMap) Intersect(ctx Context, src *pb.Source, ws string) map[digest.Digest]int {
+	b.mu.Lock()
+	defer b.mu.Unlock()
+
+	digests := make(map[digest.Digest]int)
+
+	for dgst, locs := range src.Locations {
+		if id := b.intersect(ctx, src, locs, ws); id > 0 {
+			digests[digest.Digest(dgst)] = id
+		}
+	}
+	return digests
+}
+
+func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Locations, ws string) int {
+	overlaps := func(r *pb.Range, bp *dap.Breakpoint) bool {
+		return r.Start.Line <= int32(bp.Line) && r.Start.Character <= int32(bp.Column) && r.End.Line >= int32(bp.EndLine) && r.End.Character >= int32(bp.EndColumn)
+	}
+
+	for _, loc := range locs.Locations {
+		if len(loc.Ranges) == 0 {
+			continue
+		}
+		r := loc.Ranges[0]
+
+		info := src.Infos[loc.SourceIndex]
+		fname := filepath.Join(ws, info.Filename)
+
+		bps := b.byPath[fname]
+		if len(bps) == 0 {
+			// No breakpoints for this file.
+			continue
+		}
+
+		for i, bp := range bps {
+			if !overlaps(r, &bp) {
+				continue
+			}
+
+			if !bp.Verified {
+				bp.Line = int(r.Start.Line)
+				bp.EndLine = int(r.End.Line)
+				bp.Column = int(r.Start.Character)
+				bp.EndColumn = int(r.End.Character)
+				bp.Verified = true
+
+				ctx.C() <- &dap.BreakpointEvent{
+					Event: dap.Event{Event: "breakpoint"},
+					Body: dap.BreakpointEventBody{
+						Reason:     "changed",
+						Breakpoint: bp,
+					},
+				}
+				bps[i] = bp
+			}
+			return bp.Id
+		}
+	}
+	return 0
 }
