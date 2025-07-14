@@ -26,6 +26,7 @@ type thread struct {
 	idPool        *idPool
 	sourceMap     *sourceMap
 	breakpointMap *breakpointMap
+	variables     *variableReferences
 
 	// Inputs to the evaluate call.
 	c          gateway.Client
@@ -48,11 +49,10 @@ type thread struct {
 	mu     sync.Mutex
 
 	// Attributes set when a thread is paused.
-	rCtx   *build.ResultHandle
-	curPos digest.Digest
-
-	// Lazy attributes that are set when a thread is paused.
-	stackTrace []dap.StackFrame
+	rCtx       *build.ResultHandle
+	curPos     digest.Digest
+	stackTrace []int32
+	frames     map[int32]*frame
 }
 
 type region struct {
@@ -154,6 +154,7 @@ func (t *thread) pause(c Context, err error, event dap.StoppedEventBody) <-chan 
 			}
 		}
 	}
+	t.collectStackTrace()
 
 	event.ThreadId = t.id
 	c.C() <- &dap.StoppedEvent{
@@ -178,18 +179,7 @@ func (t *thread) resume(step stepType) {
 	if t.paused == nil {
 		return
 	}
-
-	if t.rCtx != nil {
-		t.rCtx.Done()
-		t.rCtx = nil
-	}
-
-	if t.stackTrace != nil {
-		for _, frame := range t.stackTrace {
-			t.idPool.Put(int64(frame.Id))
-		}
-		t.stackTrace = nil
-	}
+	t.releaseState()
 
 	t.paused <- step
 	close(t.paused)
@@ -207,10 +197,23 @@ func (t *thread) StackTrace() []dap.StackFrame {
 		return []dap.StackFrame{}
 	}
 
-	if t.stackTrace == nil {
-		t.stackTrace = t.makeStackTrace()
+	frames := make([]dap.StackFrame, len(t.stackTrace))
+	for i, id := range t.stackTrace {
+		frames[i] = t.frames[id].StackFrame
 	}
-	return t.stackTrace
+	return frames
+}
+
+func (t *thread) Scopes(frameID int) []dap.Scope {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	frame := t.frames[int32(frameID)]
+	return frame.Scopes()
+}
+
+func (t *thread) Variables(id int) []dap.Variable {
+	return t.variables.Get(id)
 }
 
 func (t *thread) getLLBState(ctx Context) error {
@@ -502,15 +505,16 @@ func (t *thread) solve(ctx context.Context, target digest.Digest) (gateway.Refer
 	return res.SingleRef()
 }
 
-func (t *thread) newStackFrame() dap.StackFrame {
-	return dap.StackFrame{
-		Id: int(t.idPool.Get()),
+func (t *thread) releaseState() {
+	if t.rCtx != nil {
+		t.rCtx.Done()
+		t.rCtx = nil
 	}
+	t.stackTrace = nil
+	t.frames = nil
 }
 
-func (t *thread) makeStackTrace() []dap.StackFrame {
-	var frames []dap.StackFrame
-
+func (t *thread) collectStackTrace() {
 	region := t.regionsByDigest[t.curPos]
 	r := t.regions[region]
 
@@ -519,45 +523,38 @@ func (t *thread) makeStackTrace() []dap.StackFrame {
 		digests = digests[:index+1]
 	}
 
+	t.frames = make(map[int32]*frame)
 	for i := len(digests) - 1; i >= 0; i-- {
 		dgst := digests[i]
 
-		frame := t.newStackFrame()
+		frame := &frame{}
+		frame.Id = int(t.idPool.Get())
+
 		if meta, ok := t.def.Metadata[dgst]; ok {
-			fillStackFrameMetadata(&frame, meta)
+			frame.setNameFromMeta(meta)
 		}
 		if loc, ok := t.def.Source.Locations[string(dgst)]; ok {
-			t.fillStackFrameLocation(&frame, loc)
+			frame.fillLocation(t.def, loc, t.sourcePath)
 		}
-		frames = append(frames, frame)
+
+		if op := t.ops[dgst]; op != nil {
+			frame.fillVarsFromOp(op, t.variables)
+		}
+		t.stackTrace = append(t.stackTrace, int32(frame.Id))
+		t.frames[int32(frame.Id)] = frame
 	}
-	return frames
 }
 
-func fillStackFrameMetadata(frame *dap.StackFrame, meta llb.OpMetadata) {
-	if name, ok := meta.Description["llb.customname"]; ok {
-		frame.Name = name
-	} else if cmd, ok := meta.Description["com.docker.dockerfile.v1.command"]; ok {
-		frame.Name = cmd
-	}
-	// TODO: should we infer the name from somewhere else?
-}
+func (t *thread) hasFrame(id int) bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
 
-func (t *thread) fillStackFrameLocation(frame *dap.StackFrame, loc *pb.Locations) {
-	for _, l := range loc.Locations {
-		for _, r := range l.Ranges {
-			frame.Line = int(r.Start.Line)
-			frame.Column = int(r.Start.Character)
-			frame.EndLine = int(r.End.Line)
-			frame.EndColumn = int(r.End.Character)
-
-			info := t.def.Source.Infos[l.SourceIndex]
-			frame.Source = &dap.Source{
-				Path: filepath.Join(t.sourcePath, info.Filename),
-			}
-			return
-		}
+	if t.paused == nil {
+		return false
 	}
+
+	_, ok := t.frames[int32(id)]
+	return ok
 }
 
 func pop[S ~[]E, E any](s *S) E {
