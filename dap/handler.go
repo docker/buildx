@@ -52,6 +52,8 @@ type Handler struct {
 	Terminate         HandlerFunc[*dap.TerminateRequest, *dap.TerminateResponse]
 	Continue          HandlerFunc[*dap.ContinueRequest, *dap.ContinueResponse]
 	Next              HandlerFunc[*dap.NextRequest, *dap.NextResponse]
+	StepIn            HandlerFunc[*dap.StepInRequest, *dap.StepInResponse]
+	StepOut           HandlerFunc[*dap.StepOutRequest, *dap.StepOutResponse]
 	Restart           HandlerFunc[*dap.RestartRequest, *dap.RestartResponse]
 	Threads           HandlerFunc[*dap.ThreadsRequest, *dap.ThreadsResponse]
 	StackTrace        HandlerFunc[*dap.StackTraceRequest, *dap.StackTraceResponse]

@@ -156,6 +156,29 @@ func (d *Adapter[C]) Next(c Context, req *dap.NextRequest, resp *dap.NextRespons
 	return nil
 }
 
+func (d *Adapter[C]) StepIn(c Context, req *dap.StepInRequest, resp *dap.StepInResponse) error {
+	var (
+		subReq  dap.NextRequest
+		subResp dap.NextResponse
+	)
+
+	subReq.Arguments.ThreadId = req.Arguments.ThreadId
+	subReq.Arguments.SingleThread = req.Arguments.SingleThread
+	subReq.Arguments.Granularity = req.Arguments.Granularity
+	return d.Next(c, &subReq, &subResp)
+}
+
+func (d *Adapter[C]) StepOut(c Context, req *dap.StepOutRequest, resp *dap.StepOutResponse) error {
+	var (
+		subReq  dap.ContinueRequest
+		subResp dap.ContinueResponse
+	)
+
+	subReq.Arguments.ThreadId = req.Arguments.ThreadId
+	subReq.Arguments.SingleThread = req.Arguments.SingleThread
+	return d.Continue(c, &subReq, &subResp)
+}
+
 func (d *Adapter[C]) SetBreakpoints(c Context, req *dap.SetBreakpointsRequest, resp *dap.SetBreakpointsResponse) error {
 	resp.Body.Breakpoints = d.breakpointMap.Set(req.Arguments.Source.Path, req.Arguments.Breakpoints)
 	return nil
@@ -420,6 +443,8 @@ func (d *Adapter[C]) dapHandler() Handler {
 		Launch:            d.Launch,
 		Continue:          d.Continue,
 		Next:              d.Next,
+		StepIn:            d.StepIn,
+		StepOut:           d.StepOut,
 		SetBreakpoints:    d.SetBreakpoints,
 		ConfigurationDone: d.ConfigurationDone,
 		Disconnect:        d.Disconnect,
