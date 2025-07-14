@@ -395,7 +395,9 @@ func (d *Adapter[C]) Variables(c Context, req *dap.VariablesRequest, resp *dap.V
 	varRef := req.Arguments.VariablesReference & ((1 << 24) - 1)
 	resp.Body.Variables = t.Variables(varRef)
 	for i, ref := range resp.Body.Variables {
-		resp.Body.Variables[i].VariablesReference = (tid << 24) | ref.VariablesReference
+		if ref.VariablesReference > 0 {
+			resp.Body.Variables[i].VariablesReference = (tid << 24) | ref.VariablesReference
+		}
 	}
 	return nil
 }
