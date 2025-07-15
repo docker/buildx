@@ -61,6 +61,9 @@ func (d *adapterProtocolDebugger) Start(printer *progress.Printer, opts *BuildOp
 	if cfg.ContextPath != "" {
 		opts.ContextPath = cfg.ContextPath
 	}
+	if cfg.Target != "" {
+		opts.Target = cfg.Target
+	}
 	return nil
 }
 
