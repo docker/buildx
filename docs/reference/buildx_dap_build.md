@@ -3,10 +3,6 @@
 <!---MARKER_GEN_START-->
 Start a build
 
-### Aliases
-
-`docker build`, `docker builder build`, `docker image build`, `docker buildx b`
-
 ### Options
 
 | Name                | Type          | Default   | Description                                                                                                  |
@@ -50,3 +46,42 @@ Start a build
 
 <!---MARKER_GEN_END-->
 
+## Description
+
+Start a debug session using the [debug adapter protocol](https://microsoft.github.io/debug-adapter-protocol/overview) to communicate with the debugger UI.
+
+Arguments are the same as the `build`
+
+> [!NOTE]
+> `buildx dap build` command may receive backwards incompatible features in the future
+> if needed. We are looking for feedback on improving the command and extending
+> the functionality further.
+
+## Examples
+
+### <a name="launch-config"></a> Launch request arguments
+
+The following [launch request arguments](https://microsoft.github.io/debug-adapter-protocol/specification#Requests_Launch) are supported. These are sent as a JSON body as part of the launch request.
+
+| Name                | Type          | Default      | Description                                                                  |
+|:--------------------|:--------------|:-------------|:-----------------------------------------------------------------------------|
+| `dockerfile`        | `string`      | `Dockerfile` | Name of the Dockerfile                                                       |
+| `contextPath`       | `string`      | `.`          | Set the context path for the build (normally the first positional argument)  |
+| `target`            | `string`      |              | Set the target build stage to build                                          |
+| `stopOnEntry`       | `boolean`     | `false`      | Stop on the first instruction                                                |
+
+### <a name="additional-args"></a> Additional Arguments
+
+Command line arguments may be passed to the debug adapter the same way they would be passed to the normal build command and they will set the value.
+Launch request arguments that are set will override command line arguments if they are present.
+
+A debug extension should include an `args` entry in the launch configuration and should append these arguments to the end of the tool invocation.
+For example, a launch configuration in Visual Studio Code with the following:
+
+```json
+{
+    "args": ["--build-arg", "FOO=AAA"]
+}
+```
+
+This should cause the debug adapter to be invoked as `docker buildx dap build --build-arg FOO=AAA`.
