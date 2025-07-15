@@ -5,7 +5,7 @@ package json
 
 import (
 	"fmt"
-	"io/ioutil"
+	"io"
 	"os"
 
 	"github.com/hashicorp/hcl/v2"
@@ -92,20 +92,28 @@ func ParseExpressionWithStartPos(src []byte, filename string, start hcl.Pos) (hc
 // data from the given filename, passing the result to Parse if successful.
 //
 // If the file cannot be read, an error diagnostic with nil context is returned.
-func ParseFile(filename string) (*hcl.File, hcl.Diagnostics) {
+func ParseFile(filename string) (rf *hcl.File, diags hcl.Diagnostics) {
 	f, err := os.Open(filename)
 	if err != nil {
-		return nil, hcl.Diagnostics{
-			{
-				Severity: hcl.DiagError,
-				Summary:  "Failed to open file",
-				Detail:   fmt.Sprintf("The file %q could not be opened.", filename),
-			},
-		}
+		diags = append(diags, &hcl.Diagnostic{
+			Severity: hcl.DiagError,
+			Summary:  "Failed to open file",
+			Detail:   fmt.Sprintf("The file %q could not be opened.", filename),
+		})
+		return
 	}
-	defer f.Close()
+	defer func() {
+		err := f.Close()
+		if err != nil {
+			diags = append(diags, &hcl.Diagnostic{
+				Severity: hcl.DiagWarning,
+				Summary:  "Failed to close file",
+				Detail:   fmt.Sprintf("The file %q was opened, but an error occured while closing it.", filename),
+			})
+		}
+	}()
 
-	src, err := ioutil.ReadAll(f)
+	src, err := io.ReadAll(f)
 	if err != nil {
 		return nil, hcl.Diagnostics{
 			{
