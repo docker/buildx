@@ -8,7 +8,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.27.27
 	github.com/compose-spec/compose-go/v2 v2.7.2-0.20250703132301-891fce532a51 // main
 	github.com/containerd/console v1.0.5
-	github.com/containerd/containerd/v2 v2.1.1
+	github.com/containerd/containerd/v2 v2.1.3
 	github.com/containerd/continuity v0.4.5
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/log v0.1.0
