@@ -3,6 +3,7 @@ package dap
 import (
 	"context"
 	"sync"
+	"sync/atomic"
 
 	"github.com/google/go-dap"
 	"github.com/pkg/errors"
@@ -10,6 +11,8 @@ import (
 )
 
 var ErrServerStopped = errors.New("dap: server stopped")
+
+type RequestCallback func(c Context, resp dap.ResponseMessage)
 
 type Server struct {
 	h Handler
@@ -21,6 +24,8 @@ type Server struct {
 	ctx    context.Context
 	cancel context.CancelCauseFunc
 
+	seq         atomic.Int64
+	requests    sync.Map
 	initialized bool
 }
 
@@ -73,14 +78,18 @@ func (s *Server) readLoop(conn Conn) error {
 
 		switch m := m.(type) {
 		case dap.RequestMessage:
-			if ok := s.dispatch(m); !ok {
+			if ok := s.dispatchRequest(m); !ok {
+				return nil
+			}
+		case dap.ResponseMessage:
+			if ok := s.dispatchResponse(m); !ok {
 				return nil
 			}
 		}
 	}
 }
 
-func (s *Server) dispatch(m dap.RequestMessage) bool {
+func (s *Server) dispatchRequest(m dap.RequestMessage) bool {
 	fn := func(c Context) {
 		rmsg, err := s.handleMessage(c, m)
 		if err != nil {
@@ -91,6 +100,19 @@ func (s *Server) dispatch(m dap.RequestMessage) bool {
 		rmsg.GetResponse().Command = m.GetRequest().Command
 		rmsg.GetResponse().Success = err == nil
 		c.C() <- rmsg
+	}
+	return s.Go(fn)
+}
+
+func (s *Server) dispatchResponse(m dap.ResponseMessage) bool {
+	fn := func(c Context) {
+		reqID := m.GetResponse().RequestSeq
+		if v, loaded := s.requests.LoadAndDelete(reqID); loaded {
+			callback := v.(RequestCallback)
+			s.Go(func(c Context) {
+				callback(c, m)
+			})
+		}
 	}
 	return s.Go(fn)
 }
@@ -156,20 +178,24 @@ func (s *Server) handleInitialize(c Context, req *dap.InitializeRequest) (*dap.I
 }
 
 func (s *Server) writeLoop(conn Conn, respCh <-chan dap.Message) error {
-	var seq int
 	for m := range respCh {
 		switch m := m.(type) {
 		case dap.RequestMessage:
-			m.GetRequest().Seq = seq
+			if req := m.GetRequest(); req.Seq == 0 {
+				req.Seq = int(s.seq.Add(1))
+			}
 			m.GetRequest().Type = "request"
 		case dap.EventMessage:
-			m.GetEvent().Seq = seq
+			if event := m.GetEvent(); event.Seq == 0 {
+				event.Seq = int(s.seq.Add(1))
+			}
 			m.GetEvent().Type = "event"
 		case dap.ResponseMessage:
-			m.GetResponse().Seq = seq
+			if resp := m.GetResponse(); resp.Seq == 0 {
+				resp.Seq = int(s.seq.Add(1))
+			}
 			m.GetResponse().Type = "response"
 		}
-		seq++
 
 		if err := conn.SendMsg(m); err != nil {
 			return err
@@ -207,6 +233,12 @@ func (s *Server) Go(fn func(c Context)) bool {
 		return nil
 	})
 	return <-started
+}
+
+func (s *Server) doRequest(c Context, req dap.RequestMessage, callback RequestCallback) {
+	req.GetRequest().Seq = int(s.seq.Add(1))
+	s.requests.Store(req.GetRequest().Seq, callback)
+	c.C() <- req
 }
 
 func (s *Server) Stop() {

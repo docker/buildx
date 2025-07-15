@@ -2,12 +2,17 @@ package commands
 
 import (
 	"context"
+	"io"
+	"net"
+	"os"
 
+	"github.com/containerd/console"
 	"github.com/docker/buildx/dap"
 	"github.com/docker/buildx/dap/common"
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -24,6 +29,8 @@ func dapCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	dapBuildCmd := buildCmd(dockerCli, rootOpts, &options)
 	dapBuildCmd.Args = cobra.RangeArgs(0, 1)
 	cmd.AddCommand(dapBuildCmd)
+
+	cmd.AddCommand(dapAttachCmd())
 	return cmd
 }
 
@@ -70,4 +77,40 @@ func (d *adapterProtocolDebugger) Start(printer *progress.Printer, opts *BuildOp
 func (d *adapterProtocolDebugger) Stop() error {
 	defer d.conn.Close()
 	return d.Adapter.Stop()
+}
+
+func dapAttachCmd() *cobra.Command {
+	cmd := &cobra.Command{
+		Use:    "attach PATH",
+		Short:  "Attach to a container created by the dap evaluate request",
+		Args:   cli.ExactArgs(1),
+		Hidden: true,
+		RunE: func(cmd *cobra.Command, args []string) error {
+			c, err := console.ConsoleFromFile(os.Stdout)
+			if err != nil {
+				return err
+			}
+
+			if err := c.SetRaw(); err != nil {
+				return err
+			}
+
+			conn, err := net.Dial("unix", args[0])
+			if err != nil {
+				return err
+			}
+
+			fwd := ioset.NewSingleForwarder()
+			fwd.SetReader(os.Stdin)
+			fwd.SetWriter(conn, func() io.WriteCloser {
+				return conn
+			})
+
+			if _, err := io.Copy(os.Stdout, conn); err != nil && !errors.Is(err, io.EOF) {
+				return err
+			}
+			return nil
+		},
+	}
+	return cmd
 }

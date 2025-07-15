@@ -12,6 +12,7 @@ type Context interface {
 	context.Context
 	C() chan<- dap.Message
 	Go(f func(c Context)) bool
+	Request(req dap.RequestMessage) dap.ResponseMessage
 }
 
 type dispatchContext struct {
@@ -26,6 +27,14 @@ func (c *dispatchContext) C() chan<- dap.Message {
 
 func (c *dispatchContext) Go(f func(c Context)) bool {
 	return c.srv.Go(f)
+}
+
+func (c *dispatchContext) Request(req dap.RequestMessage) dap.ResponseMessage {
+	respCh := make(chan dap.ResponseMessage, 1)
+	c.srv.doRequest(c, req, func(c Context, resp dap.ResponseMessage) {
+		respCh <- resp
+	})
+	return <-respCh
 }
 
 type HandlerFunc[Req dap.RequestMessage, Resp dap.ResponseMessage] func(c Context, req Req, resp Resp) error

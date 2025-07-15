@@ -85,7 +85,7 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, 
 		if step == stepContinue {
 			t.setBreakpoints(ctx)
 		}
-		pos, err := t.seekNext(ctx, step)
+		ref, pos, err := t.seekNext(ctx, step)
 
 		event := t.needsDebug(pos, step, err)
 		if event.Reason == "" {
@@ -93,7 +93,7 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, ref gateway.Reference, 
 		}
 
 		select {
-		case step = <-t.pause(ctx, err, event):
+		case step = <-t.pause(ctx, ref, err, event):
 			if err != nil {
 				return err
 			}
@@ -139,7 +139,7 @@ func (t *thread) needsDebug(target digest.Digest, step stepType, err error) (e d
 	return
 }
 
-func (t *thread) pause(c Context, err error, event dap.StoppedEventBody) <-chan stepType {
+func (t *thread) pause(c Context, ref gateway.Reference, err error, event dap.StoppedEventBody) <-chan stepType {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -148,7 +148,7 @@ func (t *thread) pause(c Context, err error, event dap.StoppedEventBody) <-chan 
 	}
 
 	t.paused = make(chan stepType, 1)
-	t.rCtx = build.NewResultHandle(c, t.c, t.ref, t.meta, err)
+	t.rCtx = build.NewResultHandle(c, t.c, ref, t.meta, err)
 	if err != nil {
 		var solveErr *errdefs.SolveError
 		if errors.As(err, &solveErr) {
@@ -187,6 +187,13 @@ func (t *thread) resume(step stepType) {
 	t.paused <- step
 	close(t.paused)
 	t.paused = nil
+}
+
+func (t *thread) isPaused() bool {
+	t.mu.Lock()
+	defer t.mu.Unlock()
+
+	return t.paused != nil
 }
 
 func (t *thread) StackTrace() []dap.StackFrame {
@@ -373,11 +380,11 @@ func (t *thread) propagateRegionDependencies() {
 	}
 }
 
-func (t *thread) seekNext(ctx Context, step stepType) (digest.Digest, error) {
+func (t *thread) seekNext(ctx Context, step stepType) (gateway.Reference, digest.Digest, error) {
 	// If we're at the end, return no digest to signal that
 	// we should conclude debugging.
 	if t.curPos == t.head {
-		return "", nil
+		return nil, "", nil
 	}
 
 	target := t.head
@@ -389,15 +396,15 @@ func (t *thread) seekNext(ctx Context, step stepType) (digest.Digest, error) {
 	}
 
 	if target == "" {
-		return "", nil
+		return nil, "", nil
 	}
 	return t.seek(ctx, target)
 }
 
-func (t *thread) seek(ctx Context, target digest.Digest) (digest.Digest, error) {
+func (t *thread) seek(ctx Context, target digest.Digest) (gateway.Reference, digest.Digest, error) {
 	ref, err := t.solve(ctx, target)
 	if err != nil {
-		return "", err
+		return ref, "", err
 	}
 
 	if err = ref.Evaluate(ctx); err != nil {
@@ -412,7 +419,7 @@ func (t *thread) seek(ctx Context, target digest.Digest) (digest.Digest, error) 
 	} else {
 		t.curPos = target
 	}
-	return t.curPos, err
+	return ref, t.curPos, err
 }
 
 func (t *thread) nextDigest(fn func(digest.Digest) bool) digest.Digest {
