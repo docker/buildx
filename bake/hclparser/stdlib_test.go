@@ -197,3 +197,58 @@ func TestSanitize(t *testing.T) {
 		})
 	}
 }
+
+func TestRfc3339ParseFunc(t *testing.T) {
+	fn := rfc3339ParseFunc()
+	input := cty.StringVal("2024-06-01T15:04:05Z")
+	got, err := fn.Call([]cty.Value{input})
+	require.NoError(t, err)
+
+	expected := map[string]cty.Value{
+		"year":         cty.NumberIntVal(2024),
+		"year_day":     cty.NumberIntVal(153),
+		"day":          cty.NumberIntVal(1),
+		"month":        cty.NumberIntVal(6),
+		"month_name":   cty.StringVal("June"),
+		"weekday":      cty.NumberIntVal(6),
+		"weekday_name": cty.StringVal("Saturday"),
+		"hour":         cty.NumberIntVal(15),
+		"minute":       cty.NumberIntVal(4),
+		"second":       cty.NumberIntVal(5),
+		"unix":         cty.NumberIntVal(1717254245),
+		"iso_year":     cty.NumberIntVal(2024),
+		"iso_week":     cty.NumberIntVal(22),
+	}
+	for k, v := range expected {
+		require.True(t, got.GetAttr(k).RawEquals(v), "field %s: got %v, want %v", k, got.GetAttr(k), v)
+	}
+
+	_, err = fn.Call([]cty.Value{cty.StringVal("not-a-date")})
+	require.Error(t, err)
+}
+
+func TestUnixTimestampParseFunc(t *testing.T) {
+	fn := unixtimestampParseFunc()
+	input := cty.NumberIntVal(1690328596)
+	got, err := fn.Call([]cty.Value{input})
+	require.NoError(t, err)
+
+	expected := map[string]cty.Value{
+		"year":         cty.NumberIntVal(2023),
+		"year_day":     cty.NumberIntVal(206),
+		"day":          cty.NumberIntVal(25),
+		"month":        cty.NumberIntVal(7),
+		"month_name":   cty.StringVal("July"),
+		"weekday":      cty.NumberIntVal(2),
+		"weekday_name": cty.StringVal("Tuesday"),
+		"hour":         cty.NumberIntVal(23),
+		"minute":       cty.NumberIntVal(43),
+		"second":       cty.NumberIntVal(16),
+		"rfc3339":      cty.StringVal("2023-07-25T23:43:16Z"),
+		"iso_year":     cty.NumberIntVal(2023),
+		"iso_week":     cty.NumberIntVal(30),
+	}
+	for k, v := range expected {
+		require.True(t, got.GetAttr(k).RawEquals(v), "field %s: got %v, want %v", k, got.GetAttr(k), v)
+	}
+}
