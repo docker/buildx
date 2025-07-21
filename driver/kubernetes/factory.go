@@ -12,7 +12,7 @@ import (
 	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
-	dockerclient "github.com/docker/docker/client"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
