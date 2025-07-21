@@ -14,7 +14,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/connhelper"
 	"github.com/docker/cli/cli/debug"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 )
@@ -139,7 +139,7 @@ func withPluginClientConn(name string) command.CLIOption {
 		if err != nil {
 			return err
 		}
-		apiClient, err := client.NewClientWithOpts(client.WithDialContext(helper.Dialer))
+		apiClient, err := client.New(client.WithDialContext(helper.Dialer))
 		if err != nil {
 			return err
 		}
@@ -168,6 +168,11 @@ func newPluginCommand(dockerCli *command.DockerCli, plugin *cobra.Command, meta 
 			DisableDescriptions: os.Getenv("DOCKER_CLI_DISABLE_COMPLETION_DESCRIPTION") != "",
 		},
 	}
+
+	// Disable file-completion by default. Most commands and flags should not
+	// complete with filenames.
+	cmd.CompletionOptions.SetDefaultShellCompDirective(cobra.ShellCompDirectiveNoFileComp)
+
 	opts, _ := cli.SetupPluginRootCommand(cmd)
 
 	cmd.SetIn(dockerCli.In())

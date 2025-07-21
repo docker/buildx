@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/build"
 	"github.com/docker/go-units"
+	"github.com/moby/moby/api/types/build"
 )
 
 const (
@@ -51,7 +51,7 @@ shared: {{.Shared}}
 	return Format(source)
 }
 
-func buildCacheSort(buildCache []*build.CacheRecord) {
+func buildCacheSort(buildCache []build.CacheRecord) {
 	sort.Slice(buildCache, func(i, j int) bool {
 		lui, luj := buildCache[i].LastUsedAt, buildCache[j].LastUsedAt
 		switch {
@@ -70,7 +70,7 @@ func buildCacheSort(buildCache []*build.CacheRecord) {
 }
 
 // BuildCacheWrite renders the context for a list of containers
-func BuildCacheWrite(ctx Context, buildCaches []*build.CacheRecord) error {
+func BuildCacheWrite(ctx Context, buildCaches []build.CacheRecord) error {
 	render := func(format func(subContext SubContext) error) error {
 		buildCacheSort(buildCaches)
 		for _, bc := range buildCaches {
@@ -87,7 +87,7 @@ func BuildCacheWrite(ctx Context, buildCaches []*build.CacheRecord) error {
 type buildCacheContext struct {
 	HeaderContext
 	trunc bool
-	v     *build.CacheRecord
+	v     build.CacheRecord
 }
 
 func newBuildCacheContext() *buildCacheContext {
@@ -126,8 +126,6 @@ func (c *buildCacheContext) Parent() string {
 	var parent string
 	if len(c.v.Parents) > 0 {
 		parent = strings.Join(c.v.Parents, ", ")
-	} else {
-		parent = c.v.Parent //nolint:staticcheck // Ignore SA1019: Field was deprecated in API v1.42, but kept for backward compatibility
 	}
 	if c.trunc {
 		return TruncateID(parent)

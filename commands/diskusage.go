@@ -169,7 +169,7 @@ func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) er
 	}
 
 	defer func() {
-		if (fctx.Format != duDefaultTableFormat && fctx.Format != duDefaultPrettyTemplate) || fctx.Format.IsJSON() || opts.filter.Value().Len() > 0 {
+		if (fctx.Format != duDefaultTableFormat && fctx.Format != duDefaultPrettyTemplate) || fctx.Format.IsJSON() || len(opts.filter.Value()) > 0 {
 			return
 		}
 		printSummary(dockerCli.Out(), out)
