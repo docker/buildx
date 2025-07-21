@@ -14,7 +14,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/connhelper"
 	"github.com/docker/cli/cli/debug"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 )
@@ -175,22 +175,9 @@ func newPluginCommand(dockerCli *command.DockerCli, plugin *cobra.Command, meta 
 		newMetadataSubcommand(plugin, meta),
 	)
 
-	visitAll(cmd,
-		// prevent adding "[flags]" to the end of the usage line.
-		func(c *cobra.Command) { c.DisableFlagsInUseLine = true },
-	)
+	cli.DisableFlagsInUseLine(cmd)
 
 	return cli.NewTopLevelCommand(cmd, dockerCli, opts, cmd.Flags())
-}
-
-// visitAll traverses all commands from the root.
-func visitAll(root *cobra.Command, fns ...func(*cobra.Command)) {
-	for _, cmd := range root.Commands() {
-		visitAll(cmd, fns...)
-	}
-	for _, fn := range fns {
-		fn(root)
-	}
 }
 
 func newMetadataSubcommand(plugin *cobra.Command, meta metadata.Metadata) *cobra.Command {
