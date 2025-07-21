@@ -8,7 +8,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	dockeropts "github.com/docker/cli/opts"
-	dockerclient "github.com/docker/docker/client"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 )
 
