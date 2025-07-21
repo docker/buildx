@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/docker/docker/api/types/volume"
-	units "github.com/docker/go-units"
+	"github.com/docker/go-units"
+	"github.com/moby/moby/api/types/volume"
 )
 
 const (
