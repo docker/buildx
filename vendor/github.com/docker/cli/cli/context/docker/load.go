@@ -12,8 +12,8 @@ import (
 	"github.com/docker/cli/cli/connhelper"
 	"github.com/docker/cli/cli/context"
 	"github.com/docker/cli/cli/context/store"
-	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/tlsconfig"
+	"github.com/moby/moby/client"
 	"github.com/pkg/errors"
 )
 
@@ -101,22 +101,7 @@ func (ep *Endpoint) ClientOpts() ([]client.Opt, error) {
 				if err != nil {
 					return nil, err
 				}
-
-				// If there's no tlsConfig available, we use the default HTTPClient.
-				if tlsConfig != nil {
-					result = append(result,
-						client.WithHTTPClient(&http.Client{
-							Transport: &http.Transport{
-								TLSClientConfig: tlsConfig,
-								DialContext: (&net.Dialer{
-									KeepAlive: 30 * time.Second,
-									Timeout:   30 * time.Second,
-								}).DialContext,
-							},
-							CheckRedirect: client.CheckRedirect,
-						}),
-					)
-				}
+				result = append(result, withHTTPClient(tlsConfig))
 			}
 			result = append(result, client.WithHost(ep.Host))
 		} else {
@@ -145,6 +130,25 @@ func isSocket(addr string) bool {
 		return true
 	default:
 		return false
+	}
+}
+
+func withHTTPClient(tlsConfig *tls.Config) func(*client.Client) error {
+	return func(c *client.Client) error {
+		if tlsConfig == nil {
+			// Use the default HTTPClient
+			return nil
+		}
+		return client.WithHTTPClient(&http.Client{
+			Transport: &http.Transport{
+				TLSClientConfig: tlsConfig,
+				DialContext: (&net.Dialer{
+					KeepAlive: 30 * time.Second,
+					Timeout:   30 * time.Second,
+				}).DialContext,
+			},
+			CheckRedirect: client.CheckRedirect,
+		})(c)
 	}
 }
 

@@ -14,7 +14,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/connhelper"
 	"github.com/docker/cli/cli/debug"
-	"github.com/docker/docker/client"
+	"github.com/moby/moby/client"
 	"github.com/spf13/cobra"
 	"go.opentelemetry.io/otel"
 )
@@ -80,23 +80,19 @@ func RunPlugin(dockerCli *command.DockerCli, plugin *cobra.Command, meta metadat
 	return cmd.Execute()
 }
 
-// Run is the top-level entry point to the CLI plugin framework. It should
-// be called from the plugin's "main()" function. It initializes a new
-// [command.DockerCli] instance with the given options before calling
-// makeCmd to construct the plugin command, then invokes the plugin command
-// using [RunPlugin].
-func Run(makeCmd func(command.Cli) *cobra.Command, meta metadata.Metadata, ops ...command.CLIOption) {
+// Run is the top-level entry point to the CLI plugin framework. It should be called from your plugin's `main()` function.
+func Run(makeCmd func(command.Cli) *cobra.Command, meta metadata.Metadata) {
 	otel.SetErrorHandler(debug.OTELErrorHandler)
 
-	dockerCLI, err := command.NewDockerCli(ops...)
+	dockerCli, err := command.NewDockerCli()
 	if err != nil {
-		_, _ = fmt.Fprintln(os.Stderr, err)
+		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 
-	plugin := makeCmd(dockerCLI)
+	plugin := makeCmd(dockerCli)
 
-	if err := RunPlugin(dockerCLI, plugin, meta); err != nil {
+	if err := RunPlugin(dockerCli, plugin, meta); err != nil {
 		var stErr cli.StatusError
 		if errors.As(err, &stErr) {
 			// StatusError should only be used for errors, and all errors should
@@ -104,10 +100,10 @@ func Run(makeCmd func(command.Cli) *cobra.Command, meta metadata.Metadata, ops .
 			if stErr.StatusCode == 0 { // FIXME(thaJeztah): this should never be used with a zero status-code. Check if we do this anywhere.
 				stErr.StatusCode = 1
 			}
-			_, _ = fmt.Fprintln(dockerCLI.Err(), stErr)
+			_, _ = fmt.Fprintln(dockerCli.Err(), stErr)
 			os.Exit(stErr.StatusCode)
 		}
-		_, _ = fmt.Fprintln(dockerCLI.Err(), err)
+		_, _ = fmt.Fprintln(dockerCli.Err(), err)
 		os.Exit(1)
 	}
 }
@@ -179,22 +175,9 @@ func newPluginCommand(dockerCli *command.DockerCli, plugin *cobra.Command, meta 
 		newMetadataSubcommand(plugin, meta),
 	)
 
-	visitAll(cmd,
-		// prevent adding "[flags]" to the end of the usage line.
-		func(c *cobra.Command) { c.DisableFlagsInUseLine = true },
-	)
+	cli.DisableFlagsInUseLine(cmd)
 
 	return cli.NewTopLevelCommand(cmd, dockerCli, opts, cmd.Flags())
-}
-
-// visitAll traverses all commands from the root.
-func visitAll(root *cobra.Command, fns ...func(*cobra.Command)) {
-	for _, cmd := range root.Commands() {
-		visitAll(cmd, fns...)
-	}
-	for _, fn := range fns {
-		fn(root)
-	}
 }
 
 func newMetadataSubcommand(plugin *cobra.Command, meta metadata.Metadata) *cobra.Command {
