@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/moby/client/pkg/jsonmessage"
 )
 
 const minTimeDelta = 2 * time.Second
