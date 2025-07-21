@@ -15,7 +15,7 @@ import (
 	"github.com/docker/cli/cli/streams"
 	"github.com/docker/cli/internal/prompt"
 	"github.com/docker/cli/internal/tui"
-	registrytypes "github.com/docker/docker/api/types/registry"
+	registrytypes "github.com/moby/moby/api/types/registry"
 	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
 )
@@ -31,7 +31,7 @@ const (
 // authConfigKey is the key used to store credentials for Docker Hub. It is
 // a copy of [registry.IndexServer].
 //
-// [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#IndexServer
+// [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker/registry#IndexServer
 const authConfigKey = "https://index.docker.io/v1/"
 
 // RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
@@ -68,8 +68,6 @@ func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInf
 //
 // It is similar to [registry.ResolveAuthConfig], but uses the credentials-
 // store, instead of looking up credentials from a map.
-//
-// [registry.ResolveAuthConfig]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#ResolveAuthConfig
 func ResolveAuthConfig(cfg *configfile.ConfigFile, index *registrytypes.IndexInfo) registrytypes.AuthConfig {
 	configKey := index.Name
 	if index.Official {
@@ -77,16 +75,7 @@ func ResolveAuthConfig(cfg *configfile.ConfigFile, index *registrytypes.IndexInf
 	}
 
 	a, _ := cfg.GetAuthConfig(configKey)
-	return registrytypes.AuthConfig{
-		Username:      a.Username,
-		Password:      a.Password,
-		ServerAddress: a.ServerAddress,
-
-		// TODO(thaJeztah): Are these expected to be included?
-		Auth:          a.Auth,
-		IdentityToken: a.IdentityToken,
-		RegistryToken: a.RegistryToken,
-	}
+	return registrytypes.AuthConfig(a)
 }
 
 // GetDefaultAuthConfig gets the default auth config given a serverAddress
@@ -95,27 +84,19 @@ func GetDefaultAuthConfig(cfg *configfile.ConfigFile, checkCredStore bool, serve
 	if !isDefaultRegistry {
 		serverAddress = credentials.ConvertToHostname(serverAddress)
 	}
-	authCfg := configtypes.AuthConfig{}
+	authconfig := configtypes.AuthConfig{}
 	var err error
 	if checkCredStore {
-		authCfg, err = cfg.GetAuthConfig(serverAddress)
+		authconfig, err = cfg.GetAuthConfig(serverAddress)
 		if err != nil {
 			return registrytypes.AuthConfig{
 				ServerAddress: serverAddress,
 			}, err
 		}
 	}
-
-	return registrytypes.AuthConfig{
-		Username:      authCfg.Username,
-		Password:      authCfg.Password,
-		ServerAddress: serverAddress,
-
-		// TODO(thaJeztah): Are these expected to be included?
-		Auth:          authCfg.Auth,
-		IdentityToken: "",
-		RegistryToken: authCfg.RegistryToken,
-	}, nil
+	authconfig.ServerAddress = serverAddress
+	authconfig.IdentityToken = ""
+	return registrytypes.AuthConfig(authconfig), nil
 }
 
 // PromptUserForCredentials handles the CLI prompt for the user to input
@@ -213,37 +194,37 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 	}, nil
 }
 
-// RetrieveAuthTokenFromImage retrieves an encoded auth token given a
-// complete image reference. The auth configuration is serialized as a
-// base64url encoded ([RFC 4648, Section 5]) JSON string for sending through
-// the "X-Registry-Auth" header.
+// RetrieveAuthTokenFromImage retrieves an encoded auth token given a complete
+// image. The auth configuration is serialized as a base64url encoded RFC4648,
+// section 5) JSON string for sending through the X-Registry-Auth header.
 //
-// [RFC 4648, Section 5]: https://tools.ietf.org/html/rfc4648#section-5
+// For details on base64url encoding, see:
+// - RFC4648, section 5:   https://tools.ietf.org/html/rfc4648#section-5
 func RetrieveAuthTokenFromImage(cfg *configfile.ConfigFile, image string) (string, error) {
-	registryRef, err := reference.ParseNormalizedNamed(image)
+	// Retrieve encoded auth token from the image reference
+	authConfig, err := resolveAuthConfigFromImage(cfg, image)
 	if err != nil {
 		return "", err
 	}
-	configKey := getAuthConfigKey(reference.Domain(registryRef))
-	authConfig, err := cfg.GetAuthConfig(configKey)
-	if err != nil {
-		return "", err
-	}
-
-	encodedAuth, err := registrytypes.EncodeAuthConfig(registrytypes.AuthConfig{
-		Username:      authConfig.Username,
-		Password:      authConfig.Password,
-		ServerAddress: authConfig.ServerAddress,
-
-		// TODO(thaJeztah): Are these expected to be included?
-		Auth:          authConfig.Auth,
-		IdentityToken: authConfig.IdentityToken,
-		RegistryToken: authConfig.RegistryToken,
-	})
+	encodedAuth, err := registrytypes.EncodeAuthConfig(authConfig)
 	if err != nil {
 		return "", err
 	}
 	return encodedAuth, nil
+}
+
+// resolveAuthConfigFromImage retrieves that AuthConfig using the image string
+func resolveAuthConfigFromImage(cfg *configfile.ConfigFile, image string) (registrytypes.AuthConfig, error) {
+	registryRef, err := reference.ParseNormalizedNamed(image)
+	if err != nil {
+		return registrytypes.AuthConfig{}, err
+	}
+	configKey := getAuthConfigKey(reference.Domain(registryRef))
+	a, err := cfg.GetAuthConfig(configKey)
+	if err != nil {
+		return registrytypes.AuthConfig{}, err
+	}
+	return registrytypes.AuthConfig(a), nil
 }
 
 // getAuthConfigKey special-cases using the full index address of the official
@@ -252,8 +233,8 @@ func RetrieveAuthTokenFromImage(cfg *configfile.ConfigFile, image string) (strin
 // It is similar to [registry.GetAuthConfigKey], but does not require on
 // [registrytypes.IndexInfo] as intermediate.
 //
-// [registry.GetAuthConfigKey]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#GetAuthConfigKey
-// [registrytypes.IndexInfo]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/api/types/registry#IndexInfo
+// [registry.GetAuthConfigKey]: https://pkg.go.dev/github.com/docker/docker/registry#GetAuthConfigKey
+// [registrytypes.IndexInfo]:https://pkg.go.dev/github.com/docker/docker/api/types/registry#IndexInfo
 func getAuthConfigKey(domainName string) string {
 	if domainName == "docker.io" || domainName == "index.docker.io" {
 		return authConfigKey

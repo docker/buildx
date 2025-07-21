@@ -2,6 +2,8 @@ module github.com/docker/buildx
 
 go 1.24.0
 
+replace github.com/docker/cli => github.com/docker/cli v28.3.4-0.20250806173736-4beddd3e257b+incompatible
+
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/Microsoft/go-winio v0.6.2
@@ -18,7 +20,6 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v28.5.1+incompatible
 	github.com/docker/cli-docs-tool v0.10.0
-	github.com/docker/docker v28.5.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/go-dap v0.12.0
@@ -31,6 +32,8 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.25.1
 	github.com/moby/go-archive v0.1.0
+	github.com/moby/moby/api v1.52.0-alpha.1
+	github.com/moby/moby/client v0.1.0-alpha.0
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/morikuni/aec v1.0.0
