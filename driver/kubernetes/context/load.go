@@ -3,13 +3,14 @@ package context
 import (
 	"net/url"
 	"os"
+	"os/user"
 	"path/filepath"
+	"runtime"
 	"strings"
 
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context"
 	"github.com/docker/cli/cli/context/store"
-	"github.com/docker/docker/pkg/homedir"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )
@@ -99,7 +100,7 @@ func (c *Endpoint) KubernetesConfig() clientcmd.ClientConfig {
 func (c *EndpointMeta) ResolveDefault() (any, *store.EndpointTLSData, error) {
 	kubeconfig := os.Getenv("KUBECONFIG")
 	if kubeconfig == "" {
-		kubeconfig = filepath.Join(homedir.Get(), ".kube/config")
+		kubeconfig = filepath.Join(getHomeDir(), ".kube/config")
 	}
 	kubeEP, err := FromKubeConfig(kubeconfig, "", "")
 	if err != nil {
@@ -156,7 +157,7 @@ func NewKubernetesConfig(configPath string) clientcmd.ClientConfig {
 		if config := os.Getenv("KUBECONFIG"); config != "" {
 			kubeConfig = config
 		} else {
-			kubeConfig = filepath.Join(homedir.Get(), ".kube/config")
+			kubeConfig = filepath.Join(getHomeDir(), ".kube/config")
 		}
 	}
 	return clientcmd.NewNonInteractiveDeferredLoadingClientConfig(
@@ -180,4 +181,29 @@ func ConfigFromEndpoint(endpointName string, s store.Reader) (clientcmd.ClientCo
 		return clientcmd.NewDefaultClientConfig(*apiConfig, &clientcmd.ConfigOverrides{}), nil
 	}
 	return ConfigFromContext(endpointName, s)
+}
+
+// getHomeDir returns the home directory of the current user with the help of
+// environment variables depending on the target operating system.
+// Returned path should be used with "path/filepath" to form new paths.
+//
+// On non-Windows platforms, it falls back to nss lookups, if the home
+// directory cannot be obtained from environment-variables.
+//
+// If linking statically with cgo enabled against glibc, ensure the
+// osusergo build tag is used.
+//
+// If needing to do nss lookups, do not disable cgo or set osusergo.
+//
+// It's a local fork of [pkg/homedir].
+//
+// [pkg/homedir]: https://github.com/moby/moby/blob/v28.3.2/pkg/homedir/homedir.go#L9-L28
+func getHomeDir() string {
+	home, _ := os.UserHomeDir()
+	if home == "" && runtime.GOOS != "windows" {
+		if u, err := user.Current(); err == nil {
+			return u.HomeDir
+		}
+	}
+	return home
 }
