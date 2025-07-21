@@ -259,7 +259,7 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 func validateComposeFile(dt []byte, fn string) (bool, error) {
 	envs, err := composeEnv()
 	if err != nil {
-		return true, err
+		return false, err
 	}
 	fnl := strings.ToLower(fn)
 	if strings.HasSuffix(fnl, ".yml") || strings.HasSuffix(fnl, ".yaml") {
