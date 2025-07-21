@@ -168,28 +168,32 @@ func (tcmd *TopLevelCommand) Initialize(ops ...command.CLIOption) error {
 }
 
 // VisitAll will traverse all commands from the root.
-//
-// Deprecated: this utility was only used internally and will be removed in the next release.
+// This is different from the VisitAll of cobra.Command where only parents
+// are checked.
 func VisitAll(root *cobra.Command, fn func(*cobra.Command)) {
-	visitAll(root, fn)
-}
-
-func visitAll(root *cobra.Command, fn func(*cobra.Command)) {
 	for _, cmd := range root.Commands() {
-		visitAll(cmd, fn)
+		VisitAll(cmd, fn)
 	}
 	fn(root)
 }
 
 // DisableFlagsInUseLine sets the DisableFlagsInUseLine flag on all
 // commands within the tree rooted at cmd.
-//
-// Deprecated: this utility was only used internally and will be removed in the next release.
 func DisableFlagsInUseLine(cmd *cobra.Command) {
-	visitAll(cmd, func(ccmd *cobra.Command) {
+	VisitAll(cmd, func(ccmd *cobra.Command) {
 		// do not add a `[flags]` to the end of the usage line.
 		ccmd.DisableFlagsInUseLine = true
 	})
+}
+
+// HasCompletionArg returns true if a cobra completion arg request is found.
+func HasCompletionArg(args []string) bool {
+	for _, arg := range args {
+		if arg == cobra.ShellCompRequestCmd || arg == cobra.ShellCompNoDescRequestCmd {
+			return true
+		}
+	}
+	return false
 }
 
 var helpCommand = &cobra.Command{
