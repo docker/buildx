@@ -611,6 +611,7 @@ func TestValidateComposeFile(t *testing.T) {
 		fn        string
 		dt        []byte
 		isCompose bool
+		wantErr   bool
 	}{
 		{
 			name: "empty service",
@@ -620,6 +621,7 @@ services:
   foo:
 `),
 			isCompose: true,
+			wantErr:   false,
 		},
 		{
 			name: "build",
@@ -630,6 +632,7 @@ services:
     build: .
 `),
 			isCompose: true,
+			wantErr:   false,
 		},
 		{
 			name: "image",
@@ -640,6 +643,7 @@ services:
     image: nginx
 `),
 			isCompose: true,
+			wantErr:   false,
 		},
 		{
 			name: "unknown ext",
@@ -650,6 +654,7 @@ services:
     image: nginx
 `),
 			isCompose: true,
+			wantErr:   false,
 		},
 		{
 			name: "hcl",
@@ -660,13 +665,64 @@ target "default" {
 }
 `),
 			isCompose: false,
+			wantErr:   false,
+		},
+		{
+			name: "json",
+			fn:   "docker-bake.json",
+			dt: []byte(`
+{
+  "group": [
+    {
+      "targets": [
+        "my-service"
+      ]
+    }
+  ],
+  "target": [
+    {
+      "context": ".",
+      "dockerfile": "Dockerfile"
+    }
+  ]
+}
+`),
+			isCompose: false,
+			wantErr:   false,
+		},
+		{
+			name: "json unknown ext",
+			fn:   "docker-bake.foo",
+			dt: []byte(`
+{
+  "group": [
+    {
+      "targets": [
+        "my-service"
+      ]
+    }
+  ],
+  "target": [
+    {
+      "context": ".",
+      "dockerfile": "Dockerfile"
+    }
+  ]
+}
+`),
+			isCompose: false,
+			wantErr:   true,
 		},
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
 			isCompose, err := validateComposeFile(tt.dt, tt.fn)
 			assert.Equal(t, tt.isCompose, isCompose)
-			require.NoError(t, err)
+			if tt.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+			}
 		})
 	}
 }
@@ -911,6 +967,14 @@ services:
 	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
 	require.Error(t, err)
 	require.ErrorContains(t, err, `additional properties 'foo' not allowed`)
+}
+
+func TestEmptyComposeFile(t *testing.T) {
+	tmpdir := t.TempDir()
+	chdir(t, tmpdir)
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: []byte(``)}})
+	require.Error(t, err)
+	require.ErrorContains(t, err, `empty compose file`) // https://github.com/compose-spec/compose-go/blob/a42e7579d813e64c0c1f598a666358bc0c0a0eb4/loader/loader.go#L542
 }
 
 // chdir changes the current working directory to the named directory,
