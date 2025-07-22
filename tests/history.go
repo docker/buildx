@@ -20,6 +20,7 @@ var historyTests = []func(t *testing.T, sb integration.Sandbox){
 	testHistoryLs,
 	testHistoryRm,
 	testHistoryLsStoppedBuilder,
+	testHistoryBuildNameOverride,
 }
 
 func testHistoryExport(t *testing.T, sb integration.Sandbox) {
@@ -134,6 +135,45 @@ func testHistoryLsStoppedBuilder(t *testing.T, sb integration.Sandbox) {
 	cmd = buildxCmd(sb, withArgs("history", "ls", "--builder="+builderName, "--filter=ref="+ref.Ref, "--format=json"))
 	bout, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(bout))
+}
+
+func testHistoryBuildNameOverride(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	out, err := buildCmd(sb, withArgs("--build-arg=BUILDKIT_BUILD_NAME=foobar", "--metadata-file", filepath.Join(dir, "md.json"), dir))
+	require.NoError(t, err, string(out))
+
+	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildRef string `json:"buildx.build.ref"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	refParts := strings.Split(md.BuildRef, "/")
+	require.Len(t, refParts, 3)
+
+	cmd := buildxCmd(sb, withArgs("history", "ls", "--filter=ref="+refParts[2], "--format=json"))
+	bout, err := cmd.Output()
+	require.NoError(t, err, string(bout))
+
+	type recT struct {
+		Ref            string     `json:"ref"`
+		Name           string     `json:"name"`
+		Status         string     `json:"status"`
+		CreatedAt      *time.Time `json:"created_at"`
+		CompletedAt    *time.Time `json:"completed_at"`
+		TotalSteps     int32      `json:"total_steps"`
+		CompletedSteps int32      `json:"completed_steps"`
+		CachedSteps    int32      `json:"cached_steps"`
+	}
+	var rec recT
+	err = json.Unmarshal(bout, &rec)
+	require.NoError(t, err)
+	require.Equal(t, md.BuildRef, rec.Ref)
+	require.Equal(t, "foobar", rec.Name)
 }
 
 type buildRef struct {
