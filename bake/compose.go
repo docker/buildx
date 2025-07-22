@@ -242,6 +242,9 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 			filtered[key] = v
 		}
 	}
+	if len(filtered) == 0 {
+		return nil, errors.New("empty compose file")
+	}
 
 	if err := composeschema.Validate(filtered); err != nil {
 		return nil, err
