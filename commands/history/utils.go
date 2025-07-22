@@ -26,6 +26,10 @@ import (
 const recordsLimit = 50
 
 func buildName(fattrs map[string]string, ls *localstate.State) string {
+	if v, ok := fattrs["build-arg:BUILDKIT_BUILD_NAME"]; ok && v != "" {
+		return v
+	}
+
 	var res string
 
 	var target, contextPath, dockerfilePath, vcsSource string
