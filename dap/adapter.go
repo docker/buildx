@@ -161,26 +161,21 @@ func (d *Adapter[C]) Next(c Context, req *dap.NextRequest, resp *dap.NextRespons
 }
 
 func (d *Adapter[C]) StepIn(c Context, req *dap.StepInRequest, resp *dap.StepInResponse) error {
-	var (
-		subReq  dap.NextRequest
-		subResp dap.NextResponse
-	)
+	d.threadsMu.RLock()
+	t := d.threads[req.Arguments.ThreadId]
+	d.threadsMu.RUnlock()
 
-	subReq.Arguments.ThreadId = req.Arguments.ThreadId
-	subReq.Arguments.SingleThread = req.Arguments.SingleThread
-	subReq.Arguments.Granularity = req.Arguments.Granularity
-	return d.Next(c, &subReq, &subResp)
+	t.StepIn()
+	return nil
 }
 
 func (d *Adapter[C]) StepOut(c Context, req *dap.StepOutRequest, resp *dap.StepOutResponse) error {
-	var (
-		subReq  dap.ContinueRequest
-		subResp dap.ContinueResponse
-	)
+	d.threadsMu.RLock()
+	t := d.threads[req.Arguments.ThreadId]
+	d.threadsMu.RUnlock()
 
-	subReq.Arguments.ThreadId = req.Arguments.ThreadId
-	subReq.Arguments.SingleThread = req.Arguments.SingleThread
-	return d.Continue(c, &subReq, &subResp)
+	t.StepOut()
+	return nil
 }
 
 func (d *Adapter[C]) SetBreakpoints(c Context, req *dap.SetBreakpointsRequest, resp *dap.SetBreakpointsResponse) error {

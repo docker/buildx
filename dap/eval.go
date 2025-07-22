@@ -93,6 +93,10 @@ func replCmd[Flags any, RetVal any](ctx Context, name string, resp *dap.Evaluate
 }
 
 func (t *thread) Exec(ctx Context, args []string) (message string, retErr error) {
+	if t.rCtx == nil {
+		return "", errors.New("no container context for exec")
+	}
+
 	cfg := &build.InvokeConfig{Tty: true}
 	if len(cfg.Entrypoint) == 0 && len(cfg.Cmd) == 0 {
 		cfg.Entrypoint = []string{"/bin/sh"} // launch shell by default
