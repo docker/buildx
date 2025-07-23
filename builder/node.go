@@ -122,6 +122,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 					Name:            driver.BuilderName(n.Name),
 					EndpointAddr:    n.Endpoint,
 					DockerAPI:       dockerapi,
+					DockerContext:   b.opts.dockerCli.CurrentContext(),
 					ContextStore:    b.opts.dockerCli.ContextStore(),
 					BuildkitdFlags:  n.BuildkitdFlags,
 					Files:           n.Files,
