@@ -29,43 +29,70 @@ func (d *Adapter[C]) Evaluate(ctx Context, req *dap.EvaluateRequest, resp *dap.E
 		return nil
 	}
 
-	var t *thread
-	if req.Arguments.FrameId > 0 {
-		if t = d.getThreadByFrameID(req.Arguments.FrameId); t == nil {
-			return errors.Errorf("no thread with frame id %d", req.Arguments.FrameId)
-		}
-	} else {
-		if t = d.getFirstThread(); t == nil {
-			return errors.New("no paused thread")
-		}
-	}
-
-	cmd := d.replCommands(ctx, t, resp)
+	var retErr error
+	cmd := d.replCommands(ctx, req, resp, &retErr)
 	cmd.SetArgs(args)
 	cmd.SetErr(d.Out())
 	if err := cmd.Execute(); err != nil {
-		fmt.Fprintf(d.Out(), "ERROR: %+v\n", err)
+		// This error should only happen if there was something command
+		// related that malfunctioned as it will also print usage.
+		// Normal errors should set retErr from replCommands.
+		return err
 	}
-	return nil
+	return retErr
 }
 
-func (d *Adapter[C]) replCommands(ctx Context, t *thread, resp *dap.EvaluateResponse) *cobra.Command {
-	rootCmd := &cobra.Command{}
+func (d *Adapter[C]) replCommands(ctx Context, req *dap.EvaluateRequest, resp *dap.EvaluateResponse, retErr *error) *cobra.Command {
+	rootCmd := &cobra.Command{
+		SilenceErrors: true,
+	}
 
-	execCmd := &cobra.Command{
-		Use: "exec",
-		RunE: func(cmd *cobra.Command, args []string) error {
-			if !d.supportsExec {
-				return errors.New("cannot exec without runInTerminal client capability")
-			}
-			return t.Exec(ctx, args, resp)
-		},
+	execCmd, execOpts := replCmd(ctx, "exec", resp, retErr, d.execCmd)
+	execCmd.PreRun = func(cmd *cobra.Command, args []string) {
+		execOpts.FrameID = req.Arguments.FrameId
 	}
 	rootCmd.AddCommand(execCmd)
 	return rootCmd
 }
 
-func (t *thread) Exec(ctx Context, args []string, eresp *dap.EvaluateResponse) (retErr error) {
+type execOptions struct {
+	FrameID int
+}
+
+func (d *Adapter[C]) execCmd(ctx Context, args []string, flags execOptions) (string, error) {
+	if !d.supportsExec {
+		return "", errors.New("cannot exec without runInTerminal client capability")
+	}
+
+	var t *thread
+	if flags.FrameID > 0 {
+		if t = d.getThreadByFrameID(flags.FrameID); t == nil {
+			return "", errors.Errorf("no thread with frame id %d", flags.FrameID)
+		}
+	} else {
+		if t = d.getFirstThread(); t == nil {
+			return "", errors.New("no paused thread")
+		}
+	}
+	return t.Exec(ctx, args)
+}
+
+func replCmd[Flags any, RetVal any](ctx Context, name string, resp *dap.EvaluateResponse, retErr *error, fn func(ctx Context, args []string, flags Flags) (RetVal, error)) (*cobra.Command, *Flags) {
+	flags := new(Flags)
+	return &cobra.Command{
+		Use: name,
+		Run: func(cmd *cobra.Command, args []string) {
+			v, err := fn(ctx, args, *flags)
+			if err != nil {
+				*retErr = err
+				return
+			}
+			resp.Body.Result = fmt.Sprint(v)
+		},
+	}, flags
+}
+
+func (t *thread) Exec(ctx Context, args []string) (message string, retErr error) {
 	cfg := &build.InvokeConfig{Tty: true}
 	if len(cfg.Entrypoint) == 0 && len(cfg.Cmd) == 0 {
 		cfg.Entrypoint = []string{"/bin/sh"} // launch shell by default
@@ -75,7 +102,7 @@ func (t *thread) Exec(ctx Context, args []string, eresp *dap.EvaluateResponse) (
 
 	ctr, err := build.NewContainer(ctx, t.rCtx, cfg)
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() {
 		if retErr != nil {
@@ -85,7 +112,7 @@ func (t *thread) Exec(ctx Context, args []string, eresp *dap.EvaluateResponse) (
 
 	dir, err := os.MkdirTemp("", "buildx-dap-exec")
 	if err != nil {
-		return err
+		return "", err
 	}
 	defer func() {
 		if retErr != nil {
@@ -96,7 +123,7 @@ func (t *thread) Exec(ctx Context, args []string, eresp *dap.EvaluateResponse) (
 	socketPath := filepath.Join(dir, "s.sock")
 	l, err := net.Listen("unix", socketPath)
 	if err != nil {
-		return err
+		return "", err
 	}
 
 	go func() {
@@ -121,11 +148,11 @@ func (t *thread) Exec(ctx Context, args []string, eresp *dap.EvaluateResponse) (
 
 	resp := ctx.Request(req)
 	if !resp.GetResponse().Success {
-		return errors.New(resp.GetResponse().Message)
+		return "", errors.New(resp.GetResponse().Message)
 	}
 
-	eresp.Body.Result = fmt.Sprintf("Started process attached to %s.", socketPath)
-	return nil
+	message = fmt.Sprintf("Started process attached to %s.", socketPath)
+	return message, nil
 }
 
 func (t *thread) runExec(l net.Listener, ctr *build.Container, cfg *build.InvokeConfig) {
