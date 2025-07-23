@@ -977,6 +977,64 @@ func TestEmptyComposeFile(t *testing.T) {
 	require.ErrorContains(t, err, `empty compose file`) // https://github.com/compose-spec/compose-go/blob/a42e7579d813e64c0c1f598a666358bc0c0a0eb4/loader/loader.go#L542
 }
 
+func TestParseComposeAttests(t *testing.T) {
+	dt := []byte(`
+services:
+  app:
+    build:
+      context: .
+      sbom: true
+      provenance: mode=max
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+
+	target := c.Targets[0]
+	require.Equal(t, "app", target.Name)
+
+	require.NotNil(t, target.Attest)
+	require.Len(t, target.Attest, 2)
+
+	attestMap := target.Attest.ToMap()
+	require.Contains(t, attestMap, "sbom")
+	require.Contains(t, attestMap, "provenance")
+
+	// Check the actual content - sbom=true should result in disabled=false (not disabled)
+	require.Equal(t, "type=sbom", *attestMap["sbom"])
+	require.Equal(t, "type=provenance,mode=max", *attestMap["provenance"])
+}
+
+func TestParseComposeAttestsDisabled(t *testing.T) {
+	dt := []byte(`
+services:
+  app:
+    build:
+      context: .
+      sbom: false
+      provenance: false
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+
+	target := c.Targets[0]
+	require.Equal(t, "app", target.Name)
+
+	require.NotNil(t, target.Attest)
+	require.Len(t, target.Attest, 2)
+
+	attestMap := target.Attest.ToMap()
+	require.Contains(t, attestMap, "sbom")
+	require.Contains(t, attestMap, "provenance")
+
+	// When disabled=true, the value should be nil
+	require.Nil(t, attestMap["sbom"])
+	require.Nil(t, attestMap["provenance"])
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {

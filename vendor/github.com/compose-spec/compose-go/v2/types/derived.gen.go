@@ -875,6 +875,8 @@ func deriveDeepCopy_6(dst, src *BuildConfig) {
 	} else {
 		dst.Args = nil
 	}
+	dst.Provenance = src.Provenance
+	dst.SBOM = src.SBOM
 	if src.SSH == nil {
 		dst.SSH = nil
 	} else {
