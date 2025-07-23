@@ -72,9 +72,9 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeMetadataWarningsDedup,
 	testBakeMultiExporters,
 	testBakeLoadPush,
-	testListTargets,
-	testListVariables,
-	testListTypedVariables,
+	testBakeListTargets,
+	testBakeListVariables,
+	testBakeListTypedVariables,
 	testBakeCallCheck,
 	testBakeCallCheckFlag,
 	testBakeCallMetadata,
@@ -1691,7 +1691,7 @@ target "default" {
 	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
 }
 
-func testListTargets(t *testing.T, sb integration.Sandbox) {
+func testBakeListTargets(t *testing.T, sb integration.Sandbox) {
 	bakefile := []byte(`
 target "foo" {
 	description = "This builds foo"
@@ -1714,7 +1714,7 @@ target "abc" {
 	require.Equal(t, "TARGET\tDESCRIPTION\nabc\t\nfoo\tThis builds foo", strings.TrimSpace(out))
 }
 
-func testListVariables(t *testing.T, sb integration.Sandbox) {
+func testBakeListVariables(t *testing.T, sb integration.Sandbox) {
 	bakefile := []byte(`
 variable "foo" {
 	default = "bar"
@@ -1743,7 +1743,7 @@ target "default" {
 	require.Equal(t, "VARIABLE\tTYPE\tVALUE\tDESCRIPTION\nabc\t\t\t<null>\t\ndef\t\t\t\t\nfoo\t\t\tbar\tThis is foo", strings.TrimSpace(out))
 }
 
-func testListTypedVariables(t *testing.T, sb integration.Sandbox) {
+func testBakeListTypedVariables(t *testing.T, sb integration.Sandbox) {
 	bakefile := []byte(`
 variable "abc" {
     type = string

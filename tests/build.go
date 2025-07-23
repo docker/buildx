@@ -76,7 +76,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildSecret,
 	testBuildDefaultLoad,
 	testBuildCall,
-	testCheckCallOutput,
+	testBuildCheckCallOutput,
 	testBuildExtraHosts,
 }
 
@@ -1241,7 +1241,7 @@ COPy --from=base \
 	})
 }
 
-func testCheckCallOutput(t *testing.T, sb integration.Sandbox) {
+func testBuildCheckCallOutput(t *testing.T, sb integration.Sandbox) {
 	t.Run("check for warning count msg in check without warnings", func(t *testing.T) {
 		dockerfile := []byte(`
 FROM busybox AS base

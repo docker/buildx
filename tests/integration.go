@@ -75,6 +75,30 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	return cmd
 }
 
+func composeCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
+	cmd := exec.Command("compose")
+	cmd.Env = os.Environ()
+	for _, opt := range opts {
+		opt(cmd)
+	}
+
+	if builder := sb.Address(); builder != "" {
+		cmd.Env = append(cmd.Env,
+			"BUILDX_CONFIG="+buildxConfig(sb),
+			"BUILDX_BUILDER="+builder,
+		)
+	}
+	if context := sb.DockerAddress(); context != "" {
+		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
+	}
+	if v := os.Getenv("GO_TEST_COVERPROFILE"); v != "" {
+		coverDir := filepath.Join(filepath.Dir(v), "helpers")
+		cmd.Env = append(cmd.Env, "GOCOVERDIR="+coverDir)
+	}
+	cmd.Env = append(cmd.Env, "COMPOSE_BAKE=true")
+	return cmd
+}
+
 func dockerCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	cmd := exec.Command("docker")
 	cmd.Env = os.Environ()

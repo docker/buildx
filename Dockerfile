@@ -12,6 +12,7 @@ ARG DOCKER_CLI_VERSION=${DOCKER_VERSION}
 ARG GOTESTSUM_VERSION=v1.12.0
 ARG REGISTRY_VERSION=3.0.0
 ARG BUILDKIT_VERSION=v0.23.2
+ARG COMPOSE_VERSION=v2.39.0
 ARG UNDOCK_VERSION=0.9.0
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
@@ -24,6 +25,7 @@ FROM dockereng/cli-bin:$DOCKER_VERSION_ALT_27 AS docker-cli-alt27
 FROM dockereng/cli-bin:$DOCKER_VERSION_ALT_26 AS docker-cli-alt26
 FROM registry:$REGISTRY_VERSION AS registry
 FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
+FROM docker/compose-bin:$COMPOSE_VERSION AS compose
 FROM crazymax/undock:$UNDOCK_VERSION AS undock
 
 FROM golatest AS gobase
@@ -137,8 +139,10 @@ COPY --link --from=docker-cli-alt27 / /opt/docker-alt-27/
 COPY --link --from=docker-cli-alt26 / /opt/docker-alt-26/
 COPY --link --from=buildkit /usr/bin/buildkitd /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildctl /usr/bin/
+COPY --link --from=compose /docker-compose /usr/bin/compose
 COPY --link --from=undock /usr/local/bin/undock /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
+RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 ENV TEST_DOCKER_EXTRA="docker@27.5=/opt/docker-alt-27,docker@26.1=/opt/docker-alt-26"
 
 FROM integration-test-base AS integration-test
