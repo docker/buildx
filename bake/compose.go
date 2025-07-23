@@ -17,7 +17,7 @@ import (
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 )
 
 func ParseComposeFiles(fs []File) (*Config, error) {
@@ -151,6 +151,18 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				return nil, err
 			}
 
+			var inAttests []string
+			if s.Build.SBOM != "" {
+				inAttests = append(inAttests, buildflags.CanonicalizeAttest("sbom", s.Build.SBOM))
+			}
+			if s.Build.Provenance != "" {
+				inAttests = append(inAttests, buildflags.CanonicalizeAttest("provenance", s.Build.Provenance))
+			}
+			attests, err := buildflags.ParseAttests(inAttests)
+			if err != nil {
+				return nil, err
+			}
+
 			g.Targets = append(g.Targets, targetName)
 			t := &Target{
 				Name:             targetName,
@@ -176,6 +188,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				ShmSize:     shmSize,
 				Ulimits:     ulimits,
 				ExtraHosts:  extraHosts,
+				Attest:      attests,
 			}
 			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err

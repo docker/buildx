@@ -123,6 +123,8 @@
                 "no_cache": {"type": ["boolean", "string"], "description": "Do not use cache when building the image."},
                 "additional_contexts": {"$ref": "#/definitions/list_or_dict", "description": "Additional build contexts to use, specified as a map of name to context path or URL."},
                 "network": {"type": "string", "description": "Network mode to use for the build. Options include 'default', 'none', 'host', or a network name."},
+                "provenance": {"type": ["string","boolean"], "description": "Add a provenance attestation"},
+                "sbom": {"type": ["string","boolean"], "description": "Add a SBOM attestation"},
                 "pull": {"type": ["boolean", "string"], "description": "Always attempt to pull a newer version of the image."},
                 "target": {"type": "string", "description": "Build stage to target in a multi-stage Dockerfile."},
                 "shm_size": {"type": ["integer", "string"], "description": "Size of /dev/shm for the build container. A string value can use suffix like '2g' for 2 gigabytes."},
@@ -206,7 +208,8 @@
         },
         "container_name": {
           "type": "string",
-          "description": "Specify a custom container name, rather than a generated default name."
+          "description": "Specify a custom container name, rather than a generated default name.",
+          "pattern": "[a-zA-Z0-9][a-zA-Z0-9_.-]+"
         },
         "cpu_count": {
           "oneOf": [
