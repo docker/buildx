@@ -1274,7 +1274,7 @@ func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Optio
 	return m2, nil
 }
 
-func updateContext(t *build.Inputs, inp *Input) {
+func updateContext(t *build.Inputs, inp *Input, target *Target) {
 	if inp == nil || inp.State == nil {
 		return
 	}
@@ -1282,6 +1282,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 	for k, v := range t.NamedContexts {
 		if v.Path == "." {
 			t.NamedContexts[k] = build.NamedContext{Path: inp.URL}
+			continue
 		}
 		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
 			continue
@@ -1303,6 +1304,16 @@ func updateContext(t *build.Inputs, inp *Input) {
 	if build.IsRemoteURL(t.ContextPath) {
 		return
 	}
+
+	// If the target includes a BUILDKIT_CONTEXT_KEEP_GIT_DIR=1 build argument,
+	// do not reuse the bake context state as it never keeps the .git directory
+	// (see ReadRemoteFiles).
+	if v, ok := target.Args["BUILDKIT_CONTEXT_KEEP_GIT_DIR"]; ok && v != nil {
+		if keepGitDir, err := strconv.ParseBool(*v); err == nil && keepGitDir {
+			return
+		}
+	}
+
 	st := llb.Scratch().File(
 		llb.Copy(*inp.State, t.ContextPath, "/", &llb.CopyInfo{
 			CopyDirContentsOnly: true,
@@ -1383,7 +1394,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.DockerfileInline != nil {
 		bi.DockerfileInline = *t.DockerfileInline
 	}
-	updateContext(&bi, inp)
+	updateContext(&bi, inp, t)
 	if v, ok := strings.CutPrefix(bi.DockerfilePath, "cwd://"); ok {
 		// If Dockerfile is local for a remote invocation, we first check if
 		// it's not outside the working directory and then resolve it to an

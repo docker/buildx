@@ -46,6 +46,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemote,
 	testBakeRemoteAuth,
 	testBakeRemoteCmdContext,
+	testBakeRemoteKeepGitDir,
 	testBakeRemoteLocalOverride,
 	testBakeLocalCwdOverride,
 	testBakeRemoteCmdContextOverride,
@@ -489,6 +490,42 @@ EOT
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+	require.NoDirExists(t, filepath.Join(dirDest, ".git"))
+}
+
+func testBakeRemoteKeepGitDir(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	args = {
+		BUILDKIT_CONTEXT_KEEP_GIT_DIR = "1"
+	}
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY . .
+EOT
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl")
+	gittestutil.GitCommit(git, t, "initial commit")
+	require.DirExists(t, filepath.Join(dir, ".git"))
+	addr := gittestutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(sb, withDir(dir),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+	)
+	require.NoError(t, err, out)
+
+	require.DirExists(t, filepath.Join(dirDest, ".git"))
 }
 
 func testBakeRemoteAuth(t *testing.T, sb integration.Sandbox) {
