@@ -118,6 +118,16 @@ func (p *Project) ConfigNames() []string {
 	return names
 }
 
+// ModelNames return names for all models in this Compose config
+func (p *Project) ModelNames() []string {
+	var names []string
+	for k := range p.Models {
+		names = append(names, k)
+	}
+	sort.Strings(names)
+	return names
+}
+
 func (p *Project) ServicesWithBuild() []string {
 	servicesBuild := p.Services.Filter(func(s ServiceConfig) bool {
 		return s.Build != nil && s.Build.Context != ""
@@ -137,6 +147,11 @@ func (p *Project) ServicesWithDependsOn() []string {
 		return len(s.DependsOn) > 0
 	})
 	return slices.Collect(maps.Keys(servicesDependsOn))
+}
+
+func (p *Project) ServicesWithModels() []string {
+	servicesModels := p.Services.Filter(func(s ServiceConfig) bool { return len(s.Models) > 0 })
+	return slices.Collect(maps.Keys(servicesModels))
 }
 
 func (p *Project) ServicesWithCapabilities() ([]string, []string, []string) {
