@@ -32,6 +32,7 @@ func TestIntegration(t *testing.T) {
 	tests = append(tests, createTests...)
 	tests = append(tests, rmTests...)
 	tests = append(tests, dialstdioTests...)
+	tests = append(tests, composeTests...)
 	testIntegration(t, tests...)
 }
 
