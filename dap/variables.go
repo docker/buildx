@@ -15,6 +15,7 @@ import (
 
 type frame struct {
 	dap.StackFrame
+	op     *pb.Op
 	scopes []dap.Scope
 }
 
@@ -42,6 +43,10 @@ func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string) 
 			return
 		}
 	}
+}
+
+func (f *frame) ExportVars(refs *variableReferences) {
+	f.fillVarsFromOp(f.op, refs)
 }
 
 func (f *frame) fillVarsFromOp(op *pb.Op, refs *variableReferences) {
@@ -155,6 +160,9 @@ func execOpVars(exec *pb.ExecOp, refs *variableReferences) dap.Variable {
 }
 
 func (f *frame) Scopes() []dap.Scope {
+	if f.scopes == nil {
+		return []dap.Scope{}
+	}
 	return f.scopes
 }
 
