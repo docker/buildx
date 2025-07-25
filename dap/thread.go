@@ -50,6 +50,7 @@ type thread struct {
 	mu     sync.Mutex
 
 	// Attributes set when a thread is paused.
+	cancel     context.CancelCauseFunc
 	rCtx       *build.ResultHandle
 	curPos     digest.Digest
 	stackTrace []int32
@@ -264,7 +265,10 @@ func (t *thread) pause(c Context, ref gateway.Reference, err error, pos *step, e
 			}
 		}
 	}
-	t.collectStackTrace(pos)
+
+	ctx, cancel := context.WithCancelCause(c)
+	t.collectStackTrace(ctx, pos, ref)
+	t.cancel = cancel
 
 	event.ThreadId = t.id
 	c.C() <- &dap.StoppedEvent{
@@ -490,20 +494,27 @@ func (t *thread) solve(ctx context.Context, target digest.Digest) (gateway.Refer
 }
 
 func (t *thread) releaseState() {
+	if t.cancel != nil {
+		t.cancel(context.Canceled)
+		t.cancel = nil
+	}
 	if t.rCtx != nil {
 		t.rCtx.Done()
 		t.rCtx = nil
+	}
+	for _, f := range t.frames {
+		f.ResetVars()
 	}
 	t.stackTrace = t.stackTrace[:0]
 	t.variables.Reset()
 }
 
-func (t *thread) collectStackTrace(pos *step) {
+func (t *thread) collectStackTrace(ctx context.Context, pos *step, ref gateway.Reference) {
 	for pos != nil {
 		frame := pos.frame
-		frame.ExportVars(t.variables)
+		frame.ExportVars(ctx, ref, t.variables)
 		t.stackTrace = append(t.stackTrace, int32(frame.Id))
-		pos = pos.out
+		pos, ref = pos.out, nil
 	}
 }
 
