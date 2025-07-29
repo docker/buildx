@@ -6,9 +6,9 @@ import (
 	"sync"
 
 	"github.com/docker/cli/cli/context/store"
-	dockerclient "github.com/docker/docker/client"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/tracing/delegated"
+	dockerclient "github.com/moby/moby/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
