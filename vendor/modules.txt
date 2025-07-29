@@ -218,7 +218,7 @@ github.com/davecgh/go-spew/spew
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v28.3.3+incompatible
+# github.com/docker/cli v28.3.3+incompatible => github.com/thaJeztah/cli v0.0.0-20250731092128-6005a5a18a20
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/metadata
@@ -256,14 +256,13 @@ github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
 # github.com/docker/distribution v2.8.3+incompatible
 ## explicit
-# github.com/docker/docker v28.3.3+incompatible
+# github.com/docker/docker v28.3.3+incompatible => github.com/thaJeztah/docker v24.0.0-rc.1.0.20250731091601-51c7aa9fcfa0+incompatible
 ## explicit
 github.com/docker/docker/api
 github.com/docker/docker/api/types
 github.com/docker/docker/api/types/blkiodev
 github.com/docker/docker/api/types/build
 github.com/docker/docker/api/types/checkpoint
-github.com/docker/docker/api/types/common
 github.com/docker/docker/api/types/container
 github.com/docker/docker/api/types/events
 github.com/docker/docker/api/types/filters
@@ -271,20 +270,17 @@ github.com/docker/docker/api/types/image
 github.com/docker/docker/api/types/mount
 github.com/docker/docker/api/types/network
 github.com/docker/docker/api/types/registry
-github.com/docker/docker/api/types/storage
-github.com/docker/docker/api/types/strslice
 github.com/docker/docker/api/types/swarm
-github.com/docker/docker/api/types/swarm/runtime
 github.com/docker/docker/api/types/system
 github.com/docker/docker/api/types/time
 github.com/docker/docker/api/types/versions
 github.com/docker/docker/api/types/volume
 github.com/docker/docker/client
 github.com/docker/docker/internal/lazyregexp
-github.com/docker/docker/internal/multierror
 github.com/docker/docker/pkg/jsonmessage
 github.com/docker/docker/pkg/namesgenerator
 github.com/docker/docker/pkg/stdcopy
+github.com/docker/docker/pkg/stringid
 # github.com/docker/docker-credential-helpers v0.9.3
 ## explicit; go 1.21
 github.com/docker/docker-credential-helpers/client
@@ -549,6 +545,33 @@ github.com/moby/go-archive/tarheader
 # github.com/moby/locker v1.0.1
 ## explicit; go 1.13
 github.com/moby/locker
+# github.com/moby/moby/api v0.0.0 => github.com/moby/moby/api v0.0.0-20250731053223-39030fdf942e
+## explicit; go 1.23.0
+github.com/moby/moby/api/pkg/stdcopy
+github.com/moby/moby/api/types
+github.com/moby/moby/api/types/blkiodev
+github.com/moby/moby/api/types/build
+github.com/moby/moby/api/types/checkpoint
+github.com/moby/moby/api/types/common
+github.com/moby/moby/api/types/container
+github.com/moby/moby/api/types/events
+github.com/moby/moby/api/types/filters
+github.com/moby/moby/api/types/image
+github.com/moby/moby/api/types/jsonstream
+github.com/moby/moby/api/types/mount
+github.com/moby/moby/api/types/network
+github.com/moby/moby/api/types/registry
+github.com/moby/moby/api/types/storage
+github.com/moby/moby/api/types/strslice
+github.com/moby/moby/api/types/swarm
+github.com/moby/moby/api/types/system
+github.com/moby/moby/api/types/time
+github.com/moby/moby/api/types/versions
+github.com/moby/moby/api/types/volume
+# github.com/moby/moby/client v0.0.0-00010101000000-000000000000 => github.com/moby/moby/client v0.0.0-20250731053223-39030fdf942e
+## explicit; go 1.23.0
+github.com/moby/moby/client
+github.com/moby/moby/client/pkg/stringid
 # github.com/moby/patternmatcher v0.6.0
 ## explicit; go 1.19
 github.com/moby/patternmatcher
@@ -1343,3 +1366,7 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
+# github.com/docker/cli => github.com/thaJeztah/cli v0.0.0-20250731092128-6005a5a18a20
+# github.com/docker/docker => github.com/thaJeztah/docker v24.0.0-rc.1.0.20250731091601-51c7aa9fcfa0+incompatible
+# github.com/moby/moby/api => github.com/moby/moby/api v0.0.0-20250731053223-39030fdf942e
+# github.com/moby/moby/client => github.com/moby/moby/client v0.0.0-20250731053223-39030fdf942e

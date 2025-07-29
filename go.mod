@@ -2,6 +2,18 @@ module github.com/docker/buildx
 
 go 1.23.0
 
+replace (
+	// FIXME(thaJeztah): trying https://github.com/docker/cli/pull/6199
+	github.com/docker/cli => github.com/thaJeztah/cli v0.0.0-20250731092128-6005a5a18a20
+
+	// FIXME(thaJeztah): trying https://github.com/moby/moby/pull/50475
+	github.com/docker/docker => github.com/thaJeztah/docker v24.0.0-rc.1.0.20250731091601-51c7aa9fcfa0+incompatible
+
+	// FIXME(thaJeztah): temporarily need to pin on commits, otherwise go modules won't resolve until these are tagged.
+	github.com/moby/moby/api => github.com/moby/moby/api v0.0.0-20250731053223-39030fdf942e
+	github.com/moby/moby/client => github.com/moby/moby/client v0.0.0-20250731053223-39030fdf942e
+)
+
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/Microsoft/go-winio v0.6.2
@@ -125,6 +137,8 @@ require (
 	github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7 // indirect
 	github.com/moby/docker-image-spec v1.3.1 // indirect
 	github.com/moby/locker v1.0.1 // indirect
+	github.com/moby/moby/api v0.0.0 // indirect
+	github.com/moby/moby/client v0.0.0-00010101000000-000000000000 // indirect
 	github.com/moby/patternmatcher v0.6.0 // indirect
 	github.com/moby/spdystream v0.5.0 // indirect
 	github.com/moby/sys/sequential v0.6.0 // indirect
