@@ -3,10 +3,10 @@ module github.com/docker/buildx
 go 1.23.0
 
 replace (
-	github.com/docker/cli => github.com/docker/cli v28.3.3-0.20250723114013-df9950aa0673+incompatible
-	github.com/docker/docker => github.com/docker/docker v28.2.3-0.20250723180050-3c8ba1529412+incompatible
-	github.com/moby/moby/api => github.com/moby/moby/api v0.0.0-20250723180050-3c8ba1529412
-	github.com/moby/moby/client => github.com/moby/moby/client v0.0.0-20250723180050-3c8ba1529412
+	github.com/docker/cli => github.com/docker/cli v28.3.4-0.20250729175152-14203bbc77b7+incompatible
+	github.com/docker/docker => github.com/docker/docker v28.2.3-0.20250729125042-2574c2b2e917+incompatible
+	github.com/moby/moby/api => github.com/moby/moby/api v0.0.0-20250729125042-2574c2b2e917
+	github.com/moby/moby/client => github.com/moby/moby/client v0.0.0-20250729125042-2574c2b2e917
 )
 
 require (
@@ -25,7 +25,7 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v28.3.3-0.20250723114013-df9950aa0673+incompatible
 	github.com/docker/cli-docs-tool v0.10.0
-	github.com/docker/docker v28.2.3-0.20250723180050-3c8ba1529412+incompatible
+	github.com/docker/docker v28.2.3-0.20250729125042-2574c2b2e917+incompatible // master (v29.0-dev)
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/go-dap v0.12.0
