@@ -1,16 +1,22 @@
 package dap
 
 import (
+	"context"
 	"fmt"
+	"io/fs"
 	"path/filepath"
 	"strconv"
 	"strings"
 	"sync"
 	"sync/atomic"
+	"time"
+	"unicode/utf8"
 
 	"github.com/google/go-dap"
 	"github.com/moby/buildkit/client/llb"
+	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/tonistiigi/fsutil/types"
 )
 
 type frame struct {
@@ -45,29 +51,34 @@ func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string) 
 	}
 }
 
-func (f *frame) ExportVars(refs *variableReferences) {
+func (f *frame) ExportVars(ctx context.Context, ref gateway.Reference, refs *variableReferences) {
 	f.fillVarsFromOp(f.op, refs)
+	if ref != nil {
+		f.fillVarsFromResult(ctx, ref, refs)
+	}
+}
+
+func (f *frame) ResetVars() {
+	f.scopes = nil
 }
 
 func (f *frame) fillVarsFromOp(op *pb.Op, refs *variableReferences) {
-	f.scopes = []dap.Scope{
-		{
-			Name:             "Arguments",
-			PresentationHint: "arguments",
-			VariablesReference: refs.New(func() []dap.Variable {
-				var vars []dap.Variable
-				if op.Platform != nil {
-					vars = append(vars, platformVars(op.Platform, refs))
-				}
+	f.scopes = append(f.scopes, dap.Scope{
+		Name:             "Arguments",
+		PresentationHint: "arguments",
+		VariablesReference: refs.New(func() []dap.Variable {
+			var vars []dap.Variable
+			if op.Platform != nil {
+				vars = append(vars, platformVars(op.Platform, refs))
+			}
 
-				switch op := op.Op.(type) {
-				case *pb.Op_Exec:
-					vars = append(vars, execOpVars(op.Exec, refs))
-				}
-				return vars
-			}),
-		},
-	}
+			switch op := op.Op.(type) {
+			case *pb.Op_Exec:
+				vars = append(vars, execOpVars(op.Exec, refs))
+			}
+			return vars
+		}),
+	})
 }
 
 func platformVars(platform *pb.Platform, refs *variableReferences) dap.Variable {
@@ -159,6 +170,148 @@ func execOpVars(exec *pb.ExecOp, refs *variableReferences) dap.Variable {
 	}
 }
 
+func (f *frame) fillVarsFromResult(ctx context.Context, ref gateway.Reference, refs *variableReferences) {
+	f.scopes = append(f.scopes, dap.Scope{
+		Name:             "File Explorer",
+		PresentationHint: "locals",
+		VariablesReference: refs.New(func() []dap.Variable {
+			return fsVars(ctx, ref, "/", refs)
+		}),
+		Expensive: true,
+	})
+}
+
+func fsVars(ctx context.Context, ref gateway.Reference, path string, vars *variableReferences) []dap.Variable {
+	files, err := ref.ReadDir(ctx, gateway.ReadDirRequest{
+		Path: path,
+	})
+	if err != nil {
+		return []dap.Variable{
+			{
+				Name:  "error",
+				Value: err.Error(),
+			},
+		}
+	}
+
+	paths := make([]dap.Variable, len(files))
+	for i, file := range files {
+		stat := statf(file)
+		fv := dap.Variable{
+			Name: file.Path,
+		}
+
+		fullpath := filepath.Join(path, file.Path)
+		if file.IsDir() {
+			fv.Name += "/"
+			fv.VariablesReference = vars.New(func() []dap.Variable {
+				dvar := dap.Variable{
+					Name:  ".",
+					Value: statf(file),
+					VariablesReference: vars.New(func() []dap.Variable {
+						return statVars(file)
+					}),
+				}
+				return append([]dap.Variable{dvar}, fsVars(ctx, ref, fullpath, vars)...)
+			})
+			fv.Value = ""
+		} else {
+			fv.Value = stat
+			fv.VariablesReference = vars.New(func() (dvars []dap.Variable) {
+				if fs.FileMode(file.Mode).IsRegular() {
+					// Regular file so display a small blurb of the file.
+					dvars = append(dvars, fileVars(ctx, ref, fullpath)...)
+				}
+				return append(dvars, statVars(file)...)
+			})
+		}
+		paths[i] = fv
+	}
+	return paths
+}
+
+func statf(st *types.Stat) string {
+	mode := fs.FileMode(st.Mode)
+	modTime := time.Unix(0, st.ModTime).UTC()
+	return fmt.Sprintf("%s %d:%d %s", mode, st.Uid, st.Gid, modTime.Format("Jan 2 15:04:05 2006"))
+}
+
+func fileVars(ctx context.Context, ref gateway.Reference, fullpath string) []dap.Variable {
+	b, err := ref.ReadFile(ctx, gateway.ReadRequest{
+		Filename: fullpath,
+		Range:    &gateway.FileRange{Length: 512},
+	})
+
+	var (
+		data    string
+		dataErr error
+	)
+	if err != nil {
+		data = err.Error()
+	} else if isBinaryData(b) {
+		data = "binary data"
+	} else {
+		if len(b) == 512 {
+			// Get the remainder of the file.
+			remaining, err := ref.ReadFile(ctx, gateway.ReadRequest{
+				Filename: fullpath,
+				Range:    &gateway.FileRange{Offset: 512},
+			})
+			if err != nil {
+				dataErr = err
+			} else {
+				b = append(b, remaining...)
+			}
+		}
+		data = string(b)
+	}
+
+	dvars := []dap.Variable{
+		{
+			Name:  "data",
+			Value: data,
+		},
+	}
+	if dataErr != nil {
+		dvars = append(dvars, dap.Variable{
+			Name:  "dataError",
+			Value: dataErr.Error(),
+		})
+	}
+	return dvars
+}
+
+func statVars(st *types.Stat) (vars []dap.Variable) {
+	if st.Linkname != "" {
+		vars = append(vars, dap.Variable{
+			Name:  "linkname",
+			Value: st.Linkname,
+		})
+	}
+
+	mode := fs.FileMode(st.Mode)
+	modTime := time.Unix(0, st.ModTime).UTC()
+	vars = append(vars, []dap.Variable{
+		{
+			Name:  "mode",
+			Value: mode.String(),
+		},
+		{
+			Name:  "uid",
+			Value: strconv.FormatUint(uint64(st.Uid), 10),
+		},
+		{
+			Name:  "gid",
+			Value: strconv.FormatUint(uint64(st.Gid), 10),
+		},
+		{
+			Name:  "mtime",
+			Value: modTime.Format("Jan 2 15:04:05 2006"),
+		},
+	}...)
+	return vars
+}
+
 func (f *frame) Scopes() []dap.Scope {
 	if f.scopes == nil {
 		return []dap.Scope{}
@@ -211,6 +364,34 @@ func (v *variableReferences) Reset() {
 
 	v.refs = make(map[int32]func() []dap.Variable)
 	v.nextID.Store(0)
+}
+
+// isBinaryData uses heuristics to determine if the file
+// is binary. Algorithm taken from this blog post:
+// https://eli.thegreenplace.net/2011/10/19/perls-guess-if-file-is-text-or-binary-implemented-in-python/
+func isBinaryData(b []byte) bool {
+	odd := 0
+	for i := 0; i < len(b); i++ {
+		c := b[i]
+		if c == 0 {
+			return true
+		}
+
+		isHighBit := c&128 > 0
+		if !isHighBit {
+			if c < 32 && c != '\n' && c != '\t' {
+				odd++
+			}
+		} else {
+			r, sz := utf8.DecodeRune(b)
+			if r != utf8.RuneError && sz > 1 {
+				i += sz - 1
+				continue
+			}
+			odd++
+		}
+	}
+	return float64(odd)/float64(len(b)) > .3
 }
 
 func brief(s string) string {
