@@ -56,7 +56,7 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 	}
 
 	w.k3dOnce.Do(func() {
-		w.k3dConfig, w.k3dClose, w.k3dErr = helpers.NewK3dServer(cfg)
+		w.k3dConfig, w.k3dClose, w.k3dErr = helpers.NewK3dServer(cfg, w.docker.DockerAddress())
 	})
 	if w.k3dErr != nil {
 		return nil, w.k3dClose, w.k3dErr
