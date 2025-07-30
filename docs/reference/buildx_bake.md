@@ -368,6 +368,7 @@ You can override the following fields:
 * `args`
 * `cache-from`
 * `cache-to`
+* `call`
 * `context`
 * `dockerfile`
 * `entitlements`
