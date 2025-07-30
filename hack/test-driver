@@ -143,6 +143,14 @@ if [ "$DRIVER" != "docker" ]; then
     "${context}"
 fi
 
+# list build records
+buildxCmd --builder="${builderName}" history ls
+
+# export build records
+sleep 10
+buildxCmd --builder="${builderName}" history export --finalize --all --output "${context}/records.dockerbuild"
+file "${context}/records.dockerbuild"
+
 # create bake def
 cat > "${bakedef}" <<EOL
 group "default" {
