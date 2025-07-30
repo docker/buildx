@@ -60,6 +60,7 @@ jobs:
         worker:
           - docker-container
           - remote
+          - kubernetes
         pkg:
           - ./tests
         mode:
@@ -106,14 +107,14 @@ jobs:
           fi
           testFlags="--run=//worker=$(echo "${{ matrix.worker }}" | sed 's/\+/\\+/g')$"
           case "${{ matrix.worker }}" in
-            docker | docker+containerd | docker@* | docker+containerd@*)
+            docker | docker+containerd | docker@* | docker+containerd@* | kubernetes)
               echo "TESTFLAGS=${{ env.TESTFLAGS_DOCKER }} $testFlags" >> $GITHUB_ENV
               ;;
             *)
               echo "TESTFLAGS=${{ env.TESTFLAGS }} $testFlags" >> $GITHUB_ENV
               ;;
           esac
-          if [[ "${{ matrix.worker }}" == "docker"* ]]; then
+          if [[ "${{ matrix.worker }}" == "docker"* ]] || [[ "${{ matrix.worker }}" == "kubernetes" ]]; then
             echo "TEST_DOCKERD=1" >> $GITHUB_ENV
           fi
           if [ "${{ matrix.mode }}" = "experimental" ]; then
