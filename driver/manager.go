@@ -30,6 +30,7 @@ type InitConfig struct {
 	Name            string
 	EndpointAddr    string
 	DockerAPI       dockerclient.APIClient
+	DockerContext   string
 	ContextStore    store.Reader
 	BuildkitdFlags  []string
 	Files           map[string][]byte
