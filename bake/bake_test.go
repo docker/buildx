@@ -2248,6 +2248,23 @@ target "app" {
 	require.Len(t, m["app"].Outputs, 0)
 }
 
+func TestEmptyDockerfile(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "app" {
+  dockerfile = ""
+}
+`),
+	}
+
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Contains(t, m, "app")
+	require.Equal(t, "Dockerfile", *m["app"].Dockerfile)
+}
+
 // https://github.com/docker/buildx/issues/2859
 func TestGroupTargetsWithDefault(t *testing.T) {
 	t.Run("OnTarget", func(t *testing.T) {

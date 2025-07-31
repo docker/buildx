@@ -676,7 +676,7 @@ func (c Config) ResolveTarget(name string, overrides map[string]map[string]Overr
 		s := "."
 		t.Context = &s
 	}
-	if t.Dockerfile == nil {
+	if t.Dockerfile == nil || (t.Dockerfile != nil && *t.Dockerfile == "") {
 		s := "Dockerfile"
 		t.Dockerfile = &s
 	}
