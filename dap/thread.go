@@ -3,6 +3,7 @@ package dap
 import (
 	"context"
 	"path/filepath"
+	"strconv"
 	"sync"
 
 	"github.com/docker/buildx/build"
@@ -163,8 +164,22 @@ func (t *thread) createBranch(last *step) (first *step) {
 		}
 
 		op := t.ops[first.dgst]
+
+		hasParent := len(op.Inputs) > 0
+		if m, ok := t.def.Metadata[first.dgst]; ok {
+			if s, ok := m.Description["com.docker.dap.v1.hint.noparent"]; ok {
+				if v, _ := strconv.ParseBool(s); v {
+					hasParent = false
+				}
+			}
+		}
+
 		if len(op.Inputs) > 0 {
-			for i := len(op.Inputs) - 1; i > 0; i-- {
+			for i := len(op.Inputs) - 1; i >= 0; i-- {
+				if hasParent && i == 0 {
+					continue
+				}
+
 				inp := op.Inputs[i]
 
 				// Create a pseudo-step that acts as an exit point for this
@@ -188,9 +203,11 @@ func (t *thread) createBranch(last *step) (first *step) {
 				prev.in = t.createBranch(head)
 			}
 
-			// Set the digest of the parent input on the first step associated
-			// with this step.
-			prev.dgst = digest.Digest(op.Inputs[0].Digest)
+			if hasParent {
+				// Set the digest of the parent input on the first step associated
+				// with this step.
+				prev.dgst = digest.Digest(op.Inputs[0].Digest)
+			}
 		}
 
 		// New first is the step we just created.
