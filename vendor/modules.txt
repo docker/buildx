@@ -282,7 +282,6 @@ github.com/docker/docker/api/types/versions
 github.com/docker/docker/api/types/volume
 github.com/docker/docker/client
 github.com/docker/docker/pkg/jsonmessage
-github.com/docker/docker/pkg/namesgenerator
 github.com/docker/docker/pkg/stdcopy
 # github.com/docker/docker-credential-helpers v0.9.3
 ## explicit; go 1.21
