@@ -2,10 +2,15 @@ package hclparser
 
 import (
 	"errors"
+	"os"
+	"os/user"
 	"path"
+	"path/filepath"
+	"runtime"
 	"strings"
 	"time"
 
+	"github.com/docker/cli/cli/config"
 	"github.com/hashicorp/go-cty-funcs/cidr"
 	"github.com/hashicorp/go-cty-funcs/crypto"
 	"github.com/hashicorp/go-cty-funcs/encoding"
@@ -62,6 +67,7 @@ var stdlibFunctions = []funcDef{
 	{name: "greaterthan", fn: stdlib.GreaterThanFunc},
 	{name: "greaterthanorequalto", fn: stdlib.GreaterThanOrEqualToFunc},
 	{name: "hasindex", fn: stdlib.HasIndexFunc},
+	{name: "homedir", factory: homedirFunc},
 	{name: "indent", fn: stdlib.IndentFunc},
 	{name: "index", fn: stdlib.IndexFunc},
 	{name: "indexof", factory: indexOfFunc},
@@ -250,6 +256,27 @@ func timestampFunc() function.Function {
 		Type:        function.StaticReturnType(cty.String),
 		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
 			return cty.StringVal(time.Now().UTC().Format(time.RFC3339)), nil
+		},
+	})
+}
+
+// homedirFunc constructs a function that returns the current user's home directory.
+func homedirFunc() function.Function {
+	return function.New(&function.Spec{
+		Description: `Returns the current user's home directory.`,
+		Params:      []function.Parameter{},
+		Type:        function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			home, err := os.UserHomeDir()
+			if err != nil {
+				if home == "" && runtime.GOOS != "windows" {
+					if u, err := user.Current(); err == nil {
+						return cty.StringVal(u.HomeDir), nil
+					}
+				}
+				return cty.StringVal(filepath.Dir(config.Dir())), nil
+			}
+			return cty.StringVal(home), nil
 		},
 	})
 }
