@@ -327,9 +327,6 @@ github.com/docker/cli/templates
 ## explicit; go 1.23.0
 github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
-# github.com/docker/docker v28.5.2+incompatible
-## explicit
-github.com/docker/docker/pkg/namesgenerator
 # github.com/docker/docker-credential-helpers v0.9.5
 ## explicit; go 1.21
 github.com/docker/docker-credential-helpers/client
