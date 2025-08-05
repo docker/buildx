@@ -1,6 +1,7 @@
 package hclparser
 
 import (
+	"path/filepath"
 	"testing"
 
 	"github.com/stretchr/testify/require"
@@ -196,4 +197,11 @@ func TestSanitize(t *testing.T) {
 			require.Equal(t, test.want, got)
 		})
 	}
+}
+
+func TestHomedir(t *testing.T) {
+	home, err := homedirFunc().Call(nil)
+	require.NoError(t, err)
+	require.NotEmpty(t, home.AsString())
+	require.True(t, filepath.IsAbs(home.AsString()))
 }
