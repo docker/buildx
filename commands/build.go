@@ -1003,9 +1003,8 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 	}
 	opts.Platforms = platforms
 
-	dockerConfig := dockerCli.ConfigFile()
 	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		ConfigFile: dockerConfig,
+		ConfigFile: dockerCli.ConfigFile(),
 	}))
 
 	secrets, err := build.CreateSecrets(in.Secrets)
