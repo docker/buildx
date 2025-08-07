@@ -256,3 +256,21 @@ var nouns = []string{
 	"yard",
 	"zone",
 }
+
+var themes = []string{
+	"breeze",
+	"drift",
+	"gleam",
+	"glimmer",
+	"glow",
+	"harmony",
+	"hum",
+	"journey",
+	"melody",
+	"mirth",
+	"rhythm",
+	"ripple",
+	"shine",
+	"sparkle",
+	"vibe",
+}
