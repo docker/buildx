@@ -76,13 +76,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 
 			var additionalContexts map[string]string
 			if s.Build.AdditionalContexts != nil {
-				additionalContexts = map[string]string{}
-				for k, v := range s.Build.AdditionalContexts {
-					if strings.HasPrefix(v, "service:") {
-						v = strings.Replace(v, "service:", "target:", 1)
-					}
-					additionalContexts[k] = v
-				}
+				additionalContexts = composeToBuildkitNamedContexts(s.Build.AdditionalContexts)
 			}
 
 			var shmSize *string
@@ -471,7 +465,7 @@ func (t *Target) composeExtTarget(exts map[string]any) error {
 		t.NoCacheFilter = dedupSlice(append(t.NoCacheFilter, xb.NoCacheFilter...))
 	}
 	if len(xb.Contexts) > 0 {
-		t.Contexts = dedupMap(t.Contexts, xb.Contexts)
+		t.Contexts = dedupMap(t.Contexts, composeToBuildkitNamedContexts(xb.Contexts))
 	}
 
 	return nil
@@ -505,4 +499,17 @@ func composeToBuildkitSSH(sshKey composetypes.SSHKey) *buildflags.SSH {
 		bkssh.Paths = []string{sshKey.Path}
 	}
 	return bkssh
+}
+
+func composeToBuildkitNamedContexts(m map[string]string) map[string]string {
+	out := make(map[string]string, len(m))
+	for k, v := range m {
+		if strings.HasPrefix(v, "service:") || strings.HasPrefix(v, "target:") {
+			if parts := strings.SplitN(v, ":", 2); len(parts) == 2 {
+				v = "target:" + sanitizeTargetName(parts[1])
+			}
+		}
+		out[k] = v
+	}
+	return out
 }
