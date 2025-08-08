@@ -163,6 +163,16 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				return nil, err
 			}
 
+			var noCache *bool
+			if s.Build.NoCache {
+				noCache = &s.Build.NoCache
+			}
+
+			var pull *bool
+			if s.Build.Pull {
+				pull = &s.Build.Pull
+			}
+
 			g.Targets = append(g.Targets, targetName)
 			t := &Target{
 				Name:             targetName,
@@ -189,6 +199,8 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				Ulimits:     ulimits,
 				ExtraHosts:  extraHosts,
 				Attest:      attests,
+				NoCache:     noCache,
+				Pull:        pull,
 			}
 			if err = t.composeExtTarget(s.Build.Extensions); err != nil {
 				return nil, err
