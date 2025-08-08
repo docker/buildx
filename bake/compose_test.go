@@ -893,6 +893,44 @@ services:
 	require.Equal(t, map[string]string{"base": "target:base"}, c.Targets[1].Contexts)
 }
 
+func TestServiceContextDot(t *testing.T) {
+	dt := []byte(`
+services:
+  base.1:
+    build:
+      dockerfile: baseapp.Dockerfile
+    command: ./entrypoint.sh
+  foo.1:
+    build:
+      dockerfile: fooapp.Dockerfile
+    command: ./entrypoint.sh
+  webapp:
+    build:
+      context: ./dir
+      additional_contexts:
+        base: service:base.1
+      x-bake:
+        contexts:
+          foo: target:foo.1
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+
+	require.Equal(t, 1, len(c.Groups))
+	require.Equal(t, "default", c.Groups[0].Name)
+	sort.Strings(c.Groups[0].Targets)
+	require.Equal(t, []string{"base_1", "foo_1", "webapp"}, c.Groups[0].Targets)
+
+	require.Equal(t, 3, len(c.Targets))
+	sort.Slice(c.Targets, func(i, j int) bool {
+		return c.Targets[i].Name < c.Targets[j].Name
+	})
+
+	require.Equal(t, "webapp", c.Targets[2].Name)
+	require.Equal(t, map[string]string{"base": "target:base_1", "foo": "target:foo_1"}, c.Targets[2].Contexts)
+}
+
 func TestDotEnvDir(t *testing.T) {
 	tmpdir := t.TempDir()
 	require.NoError(t, os.Mkdir(filepath.Join(tmpdir, ".env"), 0755))
