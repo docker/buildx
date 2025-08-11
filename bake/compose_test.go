@@ -1073,6 +1073,42 @@ services:
 	require.Nil(t, attestMap["provenance"])
 }
 
+func TestParseComposePull(t *testing.T) {
+	dt := []byte(`
+services:
+  app:
+    build:
+      context: .
+      pull: true
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+
+	target := c.Targets[0]
+	require.Equal(t, "app", target.Name)
+	require.Equal(t, true, *target.Pull)
+}
+
+func TestParseComposeNoCache(t *testing.T) {
+	dt := []byte(`
+services:
+  app:
+    build:
+      context: .
+      no_cache: true
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Equal(t, 1, len(c.Targets))
+
+	target := c.Targets[0]
+	require.Equal(t, "app", target.Name)
+	require.Equal(t, true, *target.NoCache)
+}
+
 // chdir changes the current working directory to the named directory,
 // and then restore the original working directory at the end of the test.
 func chdir(t *testing.T, dir string) {
