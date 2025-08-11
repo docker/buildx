@@ -22,10 +22,8 @@ type thread struct {
 	name string
 
 	// Persistent state from the adapter.
-	idPool        *idPool
-	sourceMap     *sourceMap
-	breakpointMap *breakpointMap
-	variables     *variableReferences
+	sharedState
+	variables *variableReferences
 
 	// Inputs to the evaluate call.
 	c          gateway.Client
@@ -50,7 +48,7 @@ type thread struct {
 	mu     sync.Mutex
 
 	// Attributes set when a thread is paused.
-	cancel     context.CancelCauseFunc
+	cancel     context.CancelCauseFunc // invoked when the thread is resumed
 	rCtx       *build.ResultHandle
 	curPos     digest.Digest
 	stackTrace []int32
@@ -254,9 +252,6 @@ func (t *thread) pause(c Context, ref gateway.Reference, err error, pos *step, e
 	}
 
 	t.paused = make(chan stepType, 1)
-	if ref != nil || err != nil {
-		t.rCtx = build.NewResultHandle(c, t.c, ref, t.meta, err)
-	}
 	if err != nil {
 		var solveErr *errdefs.SolveError
 		if errors.As(err, &solveErr) {
@@ -270,12 +265,37 @@ func (t *thread) pause(c Context, ref gateway.Reference, err error, pos *step, e
 	t.collectStackTrace(ctx, pos, ref)
 	t.cancel = cancel
 
+	if ref != nil || err != nil {
+		t.prepareResultHandle(c, ref, err)
+	}
+
 	event.ThreadId = t.id
 	c.C() <- &dap.StoppedEvent{
 		Event: dap.Event{Event: "stopped"},
 		Body:  event,
 	}
 	return t.paused
+}
+
+func (t *thread) prepareResultHandle(c Context, ref gateway.Reference, err error) {
+	// Create a context for cancellations and make the cancel function
+	// block on the wait group.
+	var wg sync.WaitGroup
+	ctx, cancel := context.WithCancelCause(c)
+	t.cancel = func(cause error) {
+		defer wg.Wait()
+		cancel(cause)
+	}
+
+	t.rCtx = build.NewResultHandle(ctx, t.c, ref, t.meta, err)
+
+	// Start the attach. Use the context we created and perform it in
+	// a goroutine. We aren't necessarily assuming this will actually work.
+	wg.Add(1)
+	go func() {
+		defer wg.Done()
+		t.sh.Attach(ctx, t)
+	}()
 }
 
 func (t *thread) Continue() {
@@ -306,13 +326,6 @@ func (t *thread) resume(step stepType) {
 	t.paused <- step
 	close(t.paused)
 	t.paused = nil
-}
-
-func (t *thread) isPaused() bool {
-	t.mu.Lock()
-	defer t.mu.Unlock()
-
-	return t.paused != nil
 }
 
 func (t *thread) StackTrace() []dap.StackFrame {
@@ -494,17 +507,20 @@ func (t *thread) solve(ctx context.Context, target digest.Digest) (gateway.Refer
 }
 
 func (t *thread) releaseState() {
-	if t.cancel != nil {
-		t.cancel(context.Canceled)
-		t.cancel = nil
-	}
 	if t.rCtx != nil {
 		t.rCtx.Done()
 		t.rCtx = nil
 	}
+
 	for _, f := range t.frames {
 		f.ResetVars()
 	}
+
+	if t.cancel != nil {
+		t.cancel(context.Canceled)
+		t.cancel = nil
+	}
+
 	t.stackTrace = t.stackTrace[:0]
 	t.variables.Reset()
 }

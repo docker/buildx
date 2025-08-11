@@ -38,9 +38,14 @@ type Adapter[C LaunchConfig] struct {
 	threadsMu    sync.RWMutex
 	nextThreadID int
 
+	sharedState
+}
+
+type sharedState struct {
 	breakpointMap *breakpointMap
-	sourceMap     sourceMap
+	sourceMap     *sourceMap
 	idPool        *idPool
+	sh            *shell
 }
 
 func New[C LaunchConfig]() *Adapter[C] {
@@ -51,8 +56,12 @@ func New[C LaunchConfig]() *Adapter[C] {
 		evaluateReqCh: make(chan *evaluateRequest),
 		threads:       make(map[int]*thread),
 		nextThreadID:  1,
-		breakpointMap: newBreakpointMap(),
-		idPool:        new(idPool),
+		sharedState: sharedState{
+			breakpointMap: newBreakpointMap(),
+			sourceMap:     new(sourceMap),
+			idPool:        new(idPool),
+			sh:            newShell(),
+		},
 	}
 	d.srv = NewServer(d.dapHandler())
 	return d
@@ -233,12 +242,10 @@ func (d *Adapter[C]) newThread(ctx Context, name string) (t *thread) {
 	d.threadsMu.Lock()
 	id := d.nextThreadID
 	t = &thread{
-		id:            id,
-		name:          name,
-		sourceMap:     &d.sourceMap,
-		breakpointMap: d.breakpointMap,
-		idPool:        d.idPool,
-		variables:     newVariableReferences(),
+		id:          id,
+		name:        name,
+		sharedState: d.sharedState,
+		variables:   newVariableReferences(),
 	}
 	d.threads[t.id] = t
 	d.nextThreadID++
@@ -258,20 +265,6 @@ func (d *Adapter[C]) getThread(id int) (t *thread) {
 	d.threadsMu.Lock()
 	t = d.threads[id]
 	d.threadsMu.Unlock()
-	return t
-}
-
-func (d *Adapter[C]) getFirstThread() (t *thread) {
-	d.threadsMu.Lock()
-	defer d.threadsMu.Unlock()
-
-	for _, thread := range d.threads {
-		if thread.isPaused() {
-			if t == nil || thread.id < t.id {
-				t = thread
-			}
-		}
-	}
 	return t
 }
 
