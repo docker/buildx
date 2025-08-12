@@ -121,7 +121,7 @@ jobs:
           fi
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 0
       -
@@ -191,7 +191,7 @@ jobs:
           git config --global core.eol lf
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Set up Go
         uses: actions/setup-go@v5
@@ -274,7 +274,7 @@ jobs:
           echo "GO_VERSION=$goVersion" >> $GITHUB_ENV
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Cache Vagrant boxes
         uses: actions/cache@v4
@@ -353,7 +353,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Create matrix
         id: platforms
@@ -380,7 +380,7 @@ jobs:
           echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -425,7 +425,7 @@ jobs:
           swap-storage: true
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -513,7 +513,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Download binaries
         uses: actions/download-artifact@v5
