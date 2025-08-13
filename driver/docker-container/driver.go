@@ -18,6 +18,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/cli/cli/context/docker"
 	"github.com/docker/cli/opts"
 	"github.com/docker/docker/api/types/container"
 	"github.com/docker/docker/api/types/image"
@@ -125,15 +126,38 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		hc := &container.HostConfig{
 			Privileged:    true,
 			RestartPolicy: d.restartPolicy,
-			Mounts: []mount.Mount{
-				{
-					Type:   mount.TypeVolume,
-					Source: d.Name + volumeStateSuffix,
-					Target: confutil.DefaultBuildKitStateDir,
-				},
-			},
-			Init: &useInit,
+			Init:          &useInit,
 		}
+
+		mounts := []mount.Mount{
+			{
+				Type:   mount.TypeVolume,
+				Source: d.Name + volumeStateSuffix,
+				Target: confutil.DefaultBuildKitStateDir,
+			},
+		}
+
+		// Mount WSL libaries if running in WSL environment and Docker context
+		// is a local socket as requesting GPU on container builder creation
+		// is not enough when generating the CDI specification for GPU devices.
+		// https://github.com/docker/buildx/pull/3320
+		if os.Getenv("WSL_DISTRO_NAME") != "" {
+			if cm, err := d.ContextStore.GetMetadata(d.DockerContext); err == nil {
+				if epm, err := docker.EndpointFromContext(cm); err == nil && isSocket(epm.Host) {
+					wslLibPath := "/usr/lib/wsl"
+					if st, err := os.Stat(wslLibPath); err == nil && st.IsDir() {
+						mounts = append(mounts, mount.Mount{
+							Type:     mount.TypeBind,
+							Source:   wslLibPath,
+							Target:   wslLibPath,
+							ReadOnly: true,
+						})
+					}
+				}
+			}
+		}
+		hc.Mounts = mounts
+
 		if d.netMode != "" {
 			hc.NetworkMode = container.NetworkMode(d.netMode)
 		}
@@ -530,4 +554,13 @@ func getBuildkitFlags(initConfig driver.InitConfig) []string {
 		flags = append(newFlags, flags...)
 	}
 	return flags
+}
+
+func isSocket(addr string) bool {
+	switch proto, _, _ := strings.Cut(addr, "://"); proto {
+	case "unix", "npipe", "fd":
+		return true
+	default:
+		return false
+	}
 }
