@@ -111,7 +111,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Set up QEMU
         uses: docker/setup-qemu-action@v3
@@ -214,7 +214,7 @@ jobs:
     steps:
       -
         name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
       -
         name: Expose GitHub Runtime
         uses: crazy-max/ghaction-github-runtime@v3
