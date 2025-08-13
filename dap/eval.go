@@ -30,7 +30,7 @@ func (d *Adapter[C]) Evaluate(ctx Context, req *dap.EvaluateRequest, resp *dap.E
 	}
 
 	var retErr error
-	cmd := d.replCommands(ctx, req, resp, &retErr)
+	cmd := d.replCommands(ctx, resp, &retErr)
 	cmd.SetArgs(args)
 	cmd.SetErr(d.Out())
 	if err := cmd.Execute(); err != nil {
@@ -42,39 +42,34 @@ func (d *Adapter[C]) Evaluate(ctx Context, req *dap.EvaluateRequest, resp *dap.E
 	return retErr
 }
 
-func (d *Adapter[C]) replCommands(ctx Context, req *dap.EvaluateRequest, resp *dap.EvaluateResponse, retErr *error) *cobra.Command {
+func (d *Adapter[C]) replCommands(ctx Context, resp *dap.EvaluateResponse, retErr *error) *cobra.Command {
 	rootCmd := &cobra.Command{
 		SilenceErrors: true,
 	}
 
-	execCmd, execOpts := replCmd(ctx, "exec", resp, retErr, d.execCmd)
-	execCmd.PreRun = func(cmd *cobra.Command, args []string) {
-		execOpts.FrameID = req.Arguments.FrameId
-	}
+	execCmd, _ := replCmd(ctx, "exec", resp, retErr, d.execCmd)
 	rootCmd.AddCommand(execCmd)
 	return rootCmd
 }
 
-type execOptions struct {
-	FrameID int
-}
+type execOptions struct{}
 
-func (d *Adapter[C]) execCmd(ctx Context, args []string, flags execOptions) (string, error) {
+func (d *Adapter[C]) execCmd(ctx Context, _ []string, _ execOptions) (string, error) {
 	if !d.supportsExec {
 		return "", errors.New("cannot exec without runInTerminal client capability")
 	}
 
-	var t *thread
-	if flags.FrameID > 0 {
-		if t = d.getThreadByFrameID(flags.FrameID); t == nil {
-			return "", errors.Errorf("no thread with frame id %d", flags.FrameID)
-		}
-	} else {
-		if t = d.getFirstThread(); t == nil {
-			return "", errors.New("no paused thread")
-		}
+	// Initialize the shell if it hasn't been done before. This will allow any
+	// containers that are attempting to attach to actually attach.
+	if err := d.sh.Init(); err != nil {
+		return "", err
 	}
-	return t.Exec(ctx, args)
+
+	// Send the request to attach to the terminal.
+	if err := d.sh.SendRunInTerminalRequest(ctx); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("Started process attached to %s.", d.sh.SocketPath), nil
 }
 
 func replCmd[Flags any, RetVal any](ctx Context, name string, resp *dap.EvaluateResponse, retErr *error, fn func(ctx Context, args []string, flags Flags) (RetVal, error)) (*cobra.Command, *Flags) {
