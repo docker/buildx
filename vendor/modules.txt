@@ -450,7 +450,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
 github.com/mitchellh/hashstructure/v2
-# github.com/moby/buildkit v0.23.0-rc1.0.20250806140246-955c2b2f7d01
+# github.com/moby/buildkit v0.23.2
 ## explicit; go 1.23.0
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -509,7 +509,6 @@ github.com/moby/buildkit/util/bklog
 github.com/moby/buildkit/util/contentutil
 github.com/moby/buildkit/util/disk
 github.com/moby/buildkit/util/entitlements
-github.com/moby/buildkit/util/errutil
 github.com/moby/buildkit/util/flightcontrol
 github.com/moby/buildkit/util/gitutil
 github.com/moby/buildkit/util/gogo/proto

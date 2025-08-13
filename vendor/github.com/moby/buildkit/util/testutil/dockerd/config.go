@@ -9,7 +9,6 @@ type Config struct {
 type BuilderEntitlements struct {
 	NetworkHost      bool `json:"network-host,omitempty"`
 	SecurityInsecure bool `json:"security-insecure,omitempty"`
-	Device           bool `json:"device,omitempty"`
 }
 
 type BuilderConfig struct {

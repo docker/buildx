@@ -55,11 +55,10 @@ type SolveOpt struct {
 }
 
 type ExportEntry struct {
-	Type        string
-	Attrs       map[string]string
-	Output      filesync.FileOutputFunc // for ExporterOCI and ExporterDocker
-	OutputDir   string                  // for ExporterLocal
-	OutputStore content.Store
+	Type      string
+	Attrs     map[string]string
+	Output    filesync.FileOutputFunc // for ExporterOCI and ExporterDocker
+	OutputDir string                  // for ExporterLocal
 }
 
 type CacheOptionsEntry struct {
@@ -155,27 +154,25 @@ func (c *Client) solve(ctx context.Context, def *llb.Definition, runGateway runG
 
 		var syncTargets []filesync.FSSyncTarget
 		for exID, ex := range opt.Exports {
-			var supportFile, supportDir, supportStore bool
+			var supportFile bool
+			var supportDir bool
 			switch ex.Type {
 			case ExporterLocal:
 				supportDir = true
 			case ExporterTar:
 				supportFile = true
 			case ExporterOCI, ExporterDocker:
+				supportDir = ex.OutputDir != ""
 				supportFile = ex.Output != nil
-				supportStore = ex.OutputStore != nil || ex.OutputDir != ""
-				if supportFile && supportStore {
-					return nil, errors.Errorf("both file and store output is not supported by %s exporter", ex.Type)
-				}
+			}
+			if supportFile && supportDir {
+				return nil, errors.Errorf("both file and directory output is not supported by %s exporter", ex.Type)
 			}
 			if !supportFile && ex.Output != nil {
 				return nil, errors.Errorf("output file writer is not supported by %s exporter", ex.Type)
 			}
-			if !supportDir && !supportStore && ex.OutputDir != "" {
+			if !supportDir && ex.OutputDir != "" {
 				return nil, errors.Errorf("output directory is not supported by %s exporter", ex.Type)
-			}
-			if !supportStore && ex.OutputStore != nil {
-				return nil, errors.Errorf("output store is not supported by %s exporter", ex.Type)
 			}
 			if supportFile {
 				if ex.Output == nil {
@@ -187,27 +184,20 @@ func (c *Client) solve(ctx context.Context, def *llb.Definition, runGateway runG
 				if ex.OutputDir == "" {
 					return nil, errors.Errorf("output directory is required for %s exporter", ex.Type)
 				}
-				syncTargets = append(syncTargets, filesync.WithFSSyncDir(exID, ex.OutputDir))
-			}
-			if supportStore {
-				store := ex.OutputStore
-				if store == nil {
+				switch ex.Type {
+				case ExporterOCI, ExporterDocker:
 					if err := os.MkdirAll(ex.OutputDir, 0755); err != nil {
 						return nil, err
 					}
-					store, err = contentlocal.NewStore(ex.OutputDir)
+					cs, err := contentlocal.NewStore(ex.OutputDir)
 					if err != nil {
 						return nil, err
 					}
+					contentStores["export"] = cs
 					storesToUpdate = append(storesToUpdate, ex.OutputDir)
+				default:
+					syncTargets = append(syncTargets, filesync.WithFSSyncDir(exID, ex.OutputDir))
 				}
-
-				// TODO: this should be dependent on the exporter id (to allow multiple oci exporters)
-				storeName := "export"
-				if _, ok := contentStores[storeName]; ok {
-					return nil, errors.Errorf("oci store key %q already exists", storeName)
-				}
-				contentStores[storeName] = store
 			}
 		}
 
