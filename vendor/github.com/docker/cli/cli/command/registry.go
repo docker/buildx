@@ -36,6 +36,8 @@ const authConfigKey = "https://index.docker.io/v1/"
 
 // RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
 // for the given command to prompt the user for username and password.
+//
+// Deprecated: this function is no longer used and will be removed in the next release.
 func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) registrytypes.RequestAuthConfig {
 	configKey := getAuthConfigKey(index.Name)
 	isDefaultRegistry := configKey == authConfigKey || index.Official
@@ -95,23 +97,6 @@ func GetDefaultAuthConfig(cfg *configfile.ConfigFile, checkCredStore bool, serve
 	authconfig.ServerAddress = serverAddress
 	authconfig.IdentityToken = ""
 	return registrytypes.AuthConfig(authconfig), nil
-}
-
-// ConfigureAuth handles prompting of user's username and password if needed.
-//
-// Deprecated: use [PromptUserForCredentials] instead.
-func ConfigureAuth(ctx context.Context, cli Cli, flUser, flPassword string, authConfig *registrytypes.AuthConfig, _ bool) error {
-	defaultUsername := authConfig.Username
-	serverAddress := authConfig.ServerAddress
-
-	newAuthConfig, err := PromptUserForCredentials(ctx, cli, flUser, flPassword, defaultUsername, serverAddress)
-	if err != nil {
-		return err
-	}
-
-	authConfig.Username = newAuthConfig.Username
-	authConfig.Password = newAuthConfig.Password
-	return nil
 }
 
 // PromptUserForCredentials handles the CLI prompt for the user to input
