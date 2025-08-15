@@ -31,11 +31,13 @@ const (
 // authConfigKey is the key used to store credentials for Docker Hub. It is
 // a copy of [registry.IndexServer].
 //
-// [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker/registry#IndexServer
+// [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#IndexServer
 const authConfigKey = "https://index.docker.io/v1/"
 
 // RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
 // for the given command to prompt the user for username and password.
+//
+// Deprecated: this function is no longer used and will be removed in the next release.
 func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) registrytypes.RequestAuthConfig {
 	configKey := getAuthConfigKey(index.Name)
 	isDefaultRegistry := configKey == authConfigKey || index.Official
@@ -66,6 +68,8 @@ func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInf
 //
 // It is similar to [registry.ResolveAuthConfig], but uses the credentials-
 // store, instead of looking up credentials from a map.
+//
+// [registry.ResolveAuthConfig]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#ResolveAuthConfig
 func ResolveAuthConfig(cfg *configfile.ConfigFile, index *registrytypes.IndexInfo) registrytypes.AuthConfig {
 	configKey := index.Name
 	if index.Official {
@@ -95,23 +99,6 @@ func GetDefaultAuthConfig(cfg *configfile.ConfigFile, checkCredStore bool, serve
 	authconfig.ServerAddress = serverAddress
 	authconfig.IdentityToken = ""
 	return registrytypes.AuthConfig(authconfig), nil
-}
-
-// ConfigureAuth handles prompting of user's username and password if needed.
-//
-// Deprecated: use [PromptUserForCredentials] instead.
-func ConfigureAuth(ctx context.Context, cli Cli, flUser, flPassword string, authConfig *registrytypes.AuthConfig, _ bool) error {
-	defaultUsername := authConfig.Username
-	serverAddress := authConfig.ServerAddress
-
-	newAuthConfig, err := PromptUserForCredentials(ctx, cli, flUser, flPassword, defaultUsername, serverAddress)
-	if err != nil {
-		return err
-	}
-
-	authConfig.Username = newAuthConfig.Username
-	authConfig.Password = newAuthConfig.Password
-	return nil
 }
 
 // PromptUserForCredentials handles the CLI prompt for the user to input
@@ -209,37 +196,28 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 	}, nil
 }
 
-// RetrieveAuthTokenFromImage retrieves an encoded auth token given a complete
-// image. The auth configuration is serialized as a base64url encoded RFC4648,
-// section 5) JSON string for sending through the X-Registry-Auth header.
+// RetrieveAuthTokenFromImage retrieves an encoded auth token given a
+// complete image reference. The auth configuration is serialized as a
+// base64url encoded ([RFC 4648, Section 5]) JSON string for sending through
+// the "X-Registry-Auth" header.
 //
-// For details on base64url encoding, see:
-// - RFC4648, section 5:   https://tools.ietf.org/html/rfc4648#section-5
+// [RFC 4648, Section 5]: https://tools.ietf.org/html/rfc4648#section-5
 func RetrieveAuthTokenFromImage(cfg *configfile.ConfigFile, image string) (string, error) {
-	// Retrieve encoded auth token from the image reference
-	authConfig, err := resolveAuthConfigFromImage(cfg, image)
+	registryRef, err := reference.ParseNormalizedNamed(image)
 	if err != nil {
 		return "", err
 	}
-	encodedAuth, err := registrytypes.EncodeAuthConfig(authConfig)
+	configKey := getAuthConfigKey(reference.Domain(registryRef))
+	authConfig, err := cfg.GetAuthConfig(configKey)
+	if err != nil {
+		return "", err
+	}
+
+	encodedAuth, err := registrytypes.EncodeAuthConfig(registrytypes.AuthConfig(authConfig))
 	if err != nil {
 		return "", err
 	}
 	return encodedAuth, nil
-}
-
-// resolveAuthConfigFromImage retrieves that AuthConfig using the image string
-func resolveAuthConfigFromImage(cfg *configfile.ConfigFile, image string) (registrytypes.AuthConfig, error) {
-	registryRef, err := reference.ParseNormalizedNamed(image)
-	if err != nil {
-		return registrytypes.AuthConfig{}, err
-	}
-	configKey := getAuthConfigKey(reference.Domain(registryRef))
-	a, err := cfg.GetAuthConfig(configKey)
-	if err != nil {
-		return registrytypes.AuthConfig{}, err
-	}
-	return registrytypes.AuthConfig(a), nil
 }
 
 // getAuthConfigKey special-cases using the full index address of the official
@@ -248,8 +226,8 @@ func resolveAuthConfigFromImage(cfg *configfile.ConfigFile, image string) (regis
 // It is similar to [registry.GetAuthConfigKey], but does not require on
 // [registrytypes.IndexInfo] as intermediate.
 //
-// [registry.GetAuthConfigKey]: https://pkg.go.dev/github.com/docker/docker/registry#GetAuthConfigKey
-// [registrytypes.IndexInfo]:https://pkg.go.dev/github.com/docker/docker/api/types/registry#IndexInfo
+// [registry.GetAuthConfigKey]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#GetAuthConfigKey
+// [registrytypes.IndexInfo]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/api/types/registry#IndexInfo
 func getAuthConfigKey(domainName string) string {
 	if domainName == "docker.io" || domainName == "index.docker.io" {
 		return authConfigKey
