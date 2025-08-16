@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"io/fs"
+	"path"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -44,6 +45,7 @@ func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string) 
 
 			info := def.Source.Infos[l.SourceIndex]
 			f.Source = &dap.Source{
+				Name: path.Base(info.Filename),
 				Path: filepath.Join(ws, info.Filename),
 			}
 			return

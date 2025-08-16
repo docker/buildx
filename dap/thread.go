@@ -2,6 +2,7 @@ package dap
 
 import (
 	"context"
+	"path"
 	"path/filepath"
 	"sync"
 
@@ -106,7 +107,14 @@ func (t *thread) init(ctx Context, c gateway.Client, ref gateway.Reference, meta
 	t.c = c
 	t.ref = ref
 	t.meta = meta
-	t.sourcePath = inputs.ContextPath
+
+	// Combine the dockerfile directory with the context path to find the
+	// real base path. The frontend will report the base path as the filename.
+	dir := path.Dir(inputs.DockerfilePath)
+	if !path.IsAbs(dir) {
+		dir = path.Join(inputs.ContextPath, dir)
+	}
+	t.sourcePath = dir
 
 	if err := t.getLLBState(ctx); err != nil {
 		return err
