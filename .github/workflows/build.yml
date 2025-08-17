@@ -1,65 +1,35 @@
-name: build
-
-# Default to 'contents: read', which grants actions to read commits.
-#
-# If any permission is set, any permission not included in the list is
-# implicitly set to "none".
-#
-# see https://docs.github.com/en/actions/using-workflows/workflow-syntax-for-github-actions#permissions
-permissions:
-  contents: read
-
-concurrency:
-  group: ${{ github.workflow }}-${{ github.ref }}
-  cancel-in-progress: true
+name: ci
 
 on:
-  workflow_dispatch:
   push:
     branches:
-      - 'master'
-      - 'v[0-9]*'
-    tags:
-      - 'v*'
-  pull_request:
-    paths-ignore:
-      - '.github/releases.json'
-      - 'README.md'
-      - 'docs/**'
-
-env:
-  SETUP_BUILDX_VERSION: "edge"
-  SETUP_BUILDKIT_IMAGE: "moby/buildkit:latest"
-  SCOUT_VERSION: "1.11.0"
-  REPO_SLUG: "docker/buildx-bin"
-  DESTDIR: "./bin"
-  TEST_CACHE_SCOPE: "test"
-  TESTFLAGS: "-v --parallel=6 --timeout=30m"
-  GOTESTSUM_FORMAT: "standard-verbose"
-  GO_VERSION: "1.24"
-  GOTESTSUM_VERSION: "v1.12.0"  # same as one in Dockerfile
+      - "main"
 
 jobs:
-  test-integration:
-    runs-on: ubuntu-24.04
-    env:
-      TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
-      TEST_IMAGE_BUILD: "0"
-      TEST_IMAGE_ID: "buildx-tests"
-      TEST_COVERAGE: "1"
-    strategy:
-      fail-fast: false
-      matrix:
-        buildkit:
-          - master
-          - latest
-          - buildx-stable-1
-          - v0.23.2
-          - v0.22.0
-          - v0.21.1
-        worker:
-          - docker-container
-          - remote
+  docker:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - name: Log in to Docker Hub
+        uses: docker/login-action@v3
+        with:
+          username: ${{ vars.DOCKER_USER }}
+          password: ${{ secrets.DOCKER_PAT }}
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+        with:
+          driver: cloud
+          endpoint: "jumardi2547/ardink573"
+          install: true
+      - name: Build and push
+        uses: docker/build-push-action@v6
+        with:
+          tags: "${{ vars.DOCKER_USER }}/docker-build-cloud-demo:latest"
+          # For pull requests, export results to the build cache.
+          # Otherwise, push to a registry.
+          outputs: ${{ github.event_name == 'pull_request' && 'type=cacheonly' || 'type=registry' }}
+            - remote
         pkg:
           - ./tests
         mode:
