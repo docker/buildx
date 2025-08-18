@@ -171,7 +171,12 @@ func (t *thread) createBranch(last *step) (first *step) {
 
 		op := t.ops[first.dgst]
 		if len(op.Inputs) > 0 {
-			for i := len(op.Inputs) - 1; i > 0; i-- {
+			parent := t.determineParent(op)
+			for i := len(op.Inputs) - 1; i >= 0; i-- {
+				if i == parent {
+					// Skip the direct parent.
+					continue
+				}
 				inp := op.Inputs[i]
 
 				// Create a pseudo-step that acts as an exit point for this
@@ -196,8 +201,10 @@ func (t *thread) createBranch(last *step) (first *step) {
 			}
 
 			// Set the digest of the parent input on the first step associated
-			// with this step.
-			prev.dgst = digest.Digest(op.Inputs[0].Digest)
+			// with this step if it exists.
+			if parent >= 0 {
+				prev.dgst = digest.Digest(op.Inputs[parent].Digest)
+			}
 		}
 
 		// New first is the step we just created.
@@ -223,6 +230,40 @@ func (t *thread) getStackFrame(dgst digest.Digest) *frame {
 	}
 	t.frames[int32(f.Id)] = f
 	return f
+}
+
+func (t *thread) determineParent(op *pb.Op) int {
+	// Another section should have already checked this but
+	// double check here just in case we forget somewhere else.
+	// The rest of this method assumes there's at least one parent
+	// at index zero.
+	n := len(op.Inputs)
+	if n == 0 {
+		return -1
+	}
+
+	switch op := op.Op.(type) {
+	case *pb.Op_Exec:
+		for _, m := range op.Exec.Mounts {
+			if m.Dest == "/" {
+				return int(m.Input)
+			}
+		}
+		return -1
+	case *pb.Op_File:
+		// Use the first input where the index is from one of the inputs.
+		for _, action := range op.File.Actions {
+			if input := int(action.Input); input >= 0 && input < n {
+				return input
+			}
+		}
+
+		// Default to having no parent.
+		return -1
+	default:
+		// Default to index zero.
+		return 0
+	}
 }
 
 func (t *thread) reset() {
