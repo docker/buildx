@@ -45,6 +45,7 @@ type DeploymentOpt struct {
 	LimitsMemory             string
 	LimitsEphemeralStorage   string
 	Platforms                []ocispecs.Platform
+	Env                      []corev1.EnvVar // injected into main buildkitd container
 }
 
 const (
@@ -268,6 +269,10 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 			Name:      rootVolumeName,
 			MountPath: rootVolumePath,
 		})
+	}
+
+	if len(opt.Env) > 0 {
+		d.Spec.Template.Spec.Containers[0].Env = append(d.Spec.Template.Spec.Containers[0].Env, opt.Env...)
 	}
 
 	return

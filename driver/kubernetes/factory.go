@@ -176,38 +176,36 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 
 	defaultLoad := false
 	timeout := defaultTimeout
-
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
-
 	loadbalance := LoadbalanceSticky
 	var err error
 
 	for k, v := range cfg.DriverOpts {
-		switch k {
-		case "image":
+		switch {
+		case k == "image":
 			if v != "" {
 				deploymentOpt.Image = v
 			}
-		case "namespace":
+		case k == "namespace":
 			namespace = v
-		case "replicas":
+		case k == "replicas":
 			deploymentOpt.Replicas, err = strconv.Atoi(v)
 			if err != nil {
 				return nil, "", "", false, 0, err
 			}
-		case "requests.cpu":
+		case k == "requests.cpu":
 			deploymentOpt.RequestsCPU = v
-		case "requests.memory":
+		case k == "requests.memory":
 			deploymentOpt.RequestsMemory = v
-		case "requests.ephemeral-storage":
+		case k == "requests.ephemeral-storage":
 			deploymentOpt.RequestsEphemeralStorage = v
-		case "limits.cpu":
+		case k == "limits.cpu":
 			deploymentOpt.LimitsCPU = v
-		case "limits.memory":
+		case k == "limits.memory":
 			deploymentOpt.LimitsMemory = v
-		case "limits.ephemeral-storage":
+		case k == "limits.ephemeral-storage":
 			deploymentOpt.LimitsEphemeralStorage = v
-		case "rootless":
+		case k == "rootless":
 			deploymentOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
 				return nil, "", "", false, 0, err
@@ -215,26 +213,26 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			if _, isImage := cfg.DriverOpts["image"]; !isImage {
 				deploymentOpt.Image = bkimage.DefaultRootlessImage
 			}
-		case "schedulername":
+		case k == "schedulername":
 			deploymentOpt.SchedulerName = v
-		case "serviceaccount":
+		case k == "serviceaccount":
 			deploymentOpt.ServiceAccountName = v
-		case "nodeselector":
+		case k == "nodeselector":
 			deploymentOpt.NodeSelector, err = splitMultiValues(v, ",", "=")
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse node selector")
 			}
-		case "annotations":
+		case k == "annotations":
 			deploymentOpt.CustomAnnotations, err = splitMultiValues(v, ",", "=")
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse annotations")
 			}
-		case "labels":
+		case k == "labels":
 			deploymentOpt.CustomLabels, err = splitMultiValues(v, ",", "=")
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse labels")
 			}
-		case "tolerations":
+		case k == "tolerations":
 			ts := strings.Split(v, ";")
 			deploymentOpt.Tolerations = []corev1.Toleration{}
 			for i := range ts {
@@ -269,42 +267,46 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 
 				deploymentOpt.Tolerations = append(deploymentOpt.Tolerations, t)
 			}
-		case "loadbalance":
+		case k == "loadbalance":
 			switch v {
-			case LoadbalanceSticky:
-			case LoadbalanceRandom:
+			case LoadbalanceSticky, LoadbalanceRandom:
+				loadbalance = v
 			default:
 				return nil, "", "", false, 0, errors.Errorf("invalid loadbalance %q", v)
 			}
-			loadbalance = v
-		case "qemu.install":
+		case k == "qemu.install":
 			deploymentOpt.Qemu.Install, err = strconv.ParseBool(v)
 			if err != nil {
 				return nil, "", "", false, 0, err
 			}
-		case "qemu.image":
+		case k == "qemu.image":
 			if v != "" {
 				deploymentOpt.Qemu.Image = v
 			}
-		case "buildkit-root-volume-memory":
+		case k == "buildkit-root-volume-memory":
 			if v != "" {
 				deploymentOpt.BuildKitRootVolumeMemory = v
 			}
-		case "default-load":
+		case k == "default-load":
 			defaultLoad, err = strconv.ParseBool(v)
 			if err != nil {
 				return nil, "", "", false, 0, err
 			}
-		case "timeout":
+		case k == "timeout":
 			timeout, err = time.ParseDuration(v)
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse timeout")
 			}
+		case strings.HasPrefix(k, "env."):
+			envName := strings.TrimPrefix(k, "env.")
+			if envName == "" {
+				return nil, "", "", false, 0, errors.Errorf("invalid env option %q, expecting env.FOO=bar", k)
+			}
+			deploymentOpt.Env = append(deploymentOpt.Env, corev1.EnvVar{Name: envName, Value: v})
 		default:
 			return nil, "", "", false, 0, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
 		}
 	}
-
 	return deploymentOpt, loadbalance, namespace, defaultLoad, timeout, nil
 }
 
