@@ -11,72 +11,38 @@ Many [popular editors](https://microsoft.github.io/debug-adapter-protocol/implem
 - Pause on exception.
 - Set breakpoints on instructions.
 - Step next and continue.
+- Open terminal in an intermediate container image.
+- File explorer.
 
 ## Limitations
 
-- **Step In** is the same as **Next**.
-- **Step Out** is the same as **Continue**.
-- **FROM** directives may have unintuitive breakpoint lines.
-- Stack traces may not show the full sequence of events.
+- The debugger cannot differentiate between identical `FROM` directives.
 - Invalid `args` in launch request may not produce an error in the UI.
 - Does not support arbitrary pausing.
 - Output is always the plain text printer.
+- File explorer does not work when pausing on an exception.
 
 ## Future Improvements
 
 - Support for Bake.
-- Open terminal in an intermediate container image.
 - Backwards stepping.
 - Better UI for errors with invalid arguments.
 
 ## We would like feedback on
 
-- Stack traces.
 - Step/pause locations.
 - Variable inspections.
 - Additional information that would be helpful while debugging.
-
-### Stack Traces
-
-We would like feedback on whether the stack traces are easy to read and useful for debugging.
-
-The goal was to include the parent commands inside of a stack trace to make it easier to understand the previous commands used to reach the current step. Stack traces in normal programming languages will only have one parent (the calling function).
-
-In a Dockerfile, there are no functions which makes displaying a call stack not useful. Instead, we decided to show the input to the step as the "calling function" to make it easier to see the preceding steps.
-
-This method of showing a stack trace is not always clear. When a step has multiple parents, such as a `COPY --from` or a `RUN` with a bind mount, there are multiple parents. Only one can be the official "parent" in the stack trace. At the moment, we do not try to choose one and will break the stack trace into two separate call stacks. This is also the case when one step is used as the parent for multiple steps.
+- Annoyances or difficulties with the current implementation.
 
 ### Step/pause Locations
 
-Execution is paused **after** the step has been executed rather than before.
+Execution is paused **before** the step has been executed. Due to the way Dockerfiles are written, this sometimes creates
+some unclear visuals regarding where the pause happened.
 
-For example:
+For the last command in a stage, step **next** will highlight the same instruction twice. One of these is before the execution and the second is after. For every other command, they are only highlighted before the command is executed. It is not currently possible to set a breakpoint at the end of a stage. You must set the breakpoint on the last step and then use step **next**.
 
-```dockerfile
-FROM busybox
-RUN echo hello > /hello
-```
-
-If you set a breakpoint on line 2, then execution will pause **after** the `RUN` has executed rather than before.
-
-We thought this method would be more useful because we figured it was more common to want to inspect the state after a step rather than before the step.
-
-There are also Dockerfiles where some instructions are aliases for another instruction and don't have their own representation in the Dockerfile.
-
-```dockerfile
-FROM golang:1.24 AS golang-base
-
-# Does not show up as a breakpoint since it refers to the instruction
-# from earlier.
-FROM golang-base
-RUN go build ...
-```
-
-### Step into/out
-
-It is required to implement these for a debug adapter but we haven't determined a way that these map to Dockerfile execution. Feedback about how you would expect these to work would be helpful for future development.
-
-For now, step into is implemented the same as next while step out is implemented the same as continue. The logic here is that next step is always going into the next call and stepping out would be returning from the current function which is the same as building the final step.
+When a command has multiple parents, step **into** will step into one of the parents. Step **out** will then return from that stage. This will continue until there are no additional parents. There is currently no way to tell the difference between which parents have executed and which ones have not.
 
 ### Variable Inspections
 
