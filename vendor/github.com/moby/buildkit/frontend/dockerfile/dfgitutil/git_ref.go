@@ -1,10 +1,12 @@
-package gitutil
+// Package dfgitutil provides Dockerfile-specific utilities for git refs.
+package dfgitutil
 
 import (
 	"net/url"
 	"strings"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 )
 
@@ -25,6 +27,10 @@ type GitRef struct {
 	// Commit is optional.
 	Commit string
 
+	// Checksum verifies the Commit if specified.
+	// Checksum is optional.
+	Checksum string
+
 	// SubDir is a directory path inside the repo.
 	// SubDir is optional.
 	SubDir string
@@ -44,6 +50,12 @@ type GitRef struct {
 	// Discouraged, although not deprecated.
 	// Instead, consider using an encrypted TCP connection such as "git@github.com/foo/bar.git" or "https://github.com/foo/bar.git".
 	UnencryptedTCP bool
+
+	gitURL *gitutil.GitURL
+}
+
+func (r *GitRef) GitURL() *gitutil.GitURL {
+	return r.gitURL
 }
 
 // var gitURLPathWithFragmentSuffix = regexp.MustCompile(`\.git(?:#.+)?$`)
@@ -53,7 +65,7 @@ func ParseGitRef(ref string) (*GitRef, error) {
 	res := &GitRef{}
 
 	var (
-		remote *GitURL
+		remote *gitutil.GitURL
 		err    error
 	)
 
@@ -61,14 +73,17 @@ func ParseGitRef(ref string) (*GitRef, error) {
 		return nil, cerrdefs.ErrInvalidArgument
 	} else if strings.HasPrefix(ref, "github.com/") {
 		res.IndistinguishableFromLocal = true // Deprecated
-		remote = fromURL(&url.URL{
+		remote, err = gitutil.FromURL(&url.URL{
 			Scheme: "https",
 			Host:   "github.com",
 			Path:   strings.TrimPrefix(ref, "github.com/"),
 		})
+		if err != nil {
+			return nil, err
+		}
 	} else {
-		remote, err = ParseURL(ref)
-		if errors.Is(err, ErrUnknownProtocol) {
+		remote, err = gitutil.ParseURL(ref)
+		if errors.Is(err, gitutil.ErrUnknownProtocol) {
 			return nil, err
 		}
 		if err != nil {
@@ -76,13 +91,13 @@ func ParseGitRef(ref string) (*GitRef, error) {
 		}
 
 		switch remote.Scheme {
-		case HTTPProtocol, GitProtocol:
+		case gitutil.HTTPProtocol, gitutil.GitProtocol:
 			res.UnencryptedTCP = true // Discouraged, but not deprecated
 		}
 
 		switch remote.Scheme {
 		// An HTTP(S) URL is considered to be a valid git ref only when it has the ".git[...]" suffix.
-		case HTTPProtocol, HTTPSProtocol:
+		case gitutil.HTTPProtocol, gitutil.HTTPSProtocol:
 			if !strings.HasSuffix(remote.Path, ".git") {
 				return nil, cerrdefs.ErrInvalidArgument
 			}
@@ -94,11 +109,12 @@ func ParseGitRef(ref string) (*GitRef, error) {
 		_, res.Remote, _ = strings.Cut(res.Remote, "://")
 	}
 	if remote.Opts != nil {
-		res.Commit, res.SubDir = remote.Opts.Ref, remote.Opts.Subdir
+		res.Commit, res.Checksum, res.SubDir = remote.Opts.Ref, remote.Opts.Checksum, remote.Opts.Subdir
 	}
 
 	repoSplitBySlash := strings.Split(res.Remote, "/")
 	res.ShortName = strings.TrimSuffix(repoSplitBySlash[len(repoSplitBySlash)-1], ".git")
+	res.gitURL = remote
 
 	return res, nil
 }

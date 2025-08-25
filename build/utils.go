@@ -36,7 +36,7 @@ func IsRemoteURL(c string) bool {
 	if isHTTPURL(c) {
 		return true
 	}
-	if _, err := gitutil.ParseGitRef(c); err == nil {
+	if _, err := gitutil.ParseURL(c); err == nil {
 		return true
 	}
 	return false

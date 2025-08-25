@@ -57,7 +57,7 @@ require (
 	go.opentelemetry.io/otel/trace v1.35.0
 	go.yaml.in/yaml/v3 v3.0.4
 	golang.org/x/mod v0.24.0
-	golang.org/x/sync v0.14.0
+	golang.org/x/sync v0.16.0
 	golang.org/x/sys v0.33.0
 	golang.org/x/term v0.31.0
 	golang.org/x/text v0.24.0
@@ -183,3 +183,5 @@ exclude (
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
 )
+
+replace github.com/moby/buildkit => github.com/AkihiroSuda/buildkit_poc v0.3.2-0.20250822084057-35db37f482db
