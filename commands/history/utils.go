@@ -332,7 +332,7 @@ func valueFiler(key, value, sep string) matchFunc {
 				recValue = v
 			} else {
 				if context, ok := rec.FrontendAttrs["context"]; ok {
-					if ref, err := gitutil.ParseGitRef(context); err == nil {
+					if ref, err := gitutil.ParseURL(context); err == nil {
 						recValue = ref.Remote
 					}
 				}
