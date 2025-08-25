@@ -3,6 +3,7 @@ package commands
 import (
 	"context"
 	"fmt"
+	"io"
 	"os"
 	"strings"
 	"text/tabwriter"
@@ -240,4 +241,56 @@ func toBuildkitPruneInfo(f filters.Args) (*client.PruneInfo, error) {
 		KeepDuration: until,
 		Filter:       []string{strings.Join(filters, ",")},
 	}, nil
+}
+
+func printKV(w io.Writer, k string, v any) {
+	fmt.Fprintf(w, "%s:\t%v\n", k, v)
+}
+
+func printVerbose(tw *tabwriter.Writer, du []*client.UsageInfo) {
+	for _, di := range du {
+		printKV(tw, "ID", di.ID)
+		if len(di.Parents) != 0 {
+			printKV(tw, "Parent", strings.Join(di.Parents, ","))
+		}
+		printKV(tw, "Created at", di.CreatedAt)
+		printKV(tw, "Mutable", di.Mutable)
+		printKV(tw, "Reclaimable", !di.InUse)
+		printKV(tw, "Shared", di.Shared)
+		printKV(tw, "Size", units.HumanSize(float64(di.Size)))
+		if di.Description != "" {
+			printKV(tw, "Description", di.Description)
+		}
+		printKV(tw, "Usage count", di.UsageCount)
+		if di.LastUsedAt != nil {
+			printKV(tw, "Last used", units.HumanDuration(time.Since(*di.LastUsedAt))+" ago")
+		}
+		if di.RecordType != "" {
+			printKV(tw, "Type", di.RecordType)
+		}
+
+		fmt.Fprintf(tw, "\n")
+	}
+
+	tw.Flush()
+}
+
+func printTableHeader(tw *tabwriter.Writer) {
+	fmt.Fprintln(tw, "ID\tRECLAIMABLE\tSIZE\tLAST ACCESSED")
+}
+
+func printTableRow(tw *tabwriter.Writer, di *client.UsageInfo) {
+	id := di.ID
+	if di.Mutable {
+		id += "*"
+	}
+	size := units.HumanSize(float64(di.Size))
+	if di.Shared {
+		size += "*"
+	}
+	lastAccessed := ""
+	if di.LastUsedAt != nil {
+		lastAccessed = units.HumanDuration(time.Since(*di.LastUsedAt)) + " ago"
+	}
+	fmt.Fprintf(tw, "%-40s\t%-5v\t%-10s\t%s\n", id, !di.InUse, size, lastAccessed)
 }
