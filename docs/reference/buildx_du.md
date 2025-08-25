@@ -14,7 +14,8 @@ Disk usage
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance |
 | `-D`, `--debug`         | `bool`   |         | Enable debug logging                     |
 | `--filter`              | `filter` |         | Provide filter values                    |
-| [`--verbose`](#verbose) | `bool`   |         | Provide a more verbose output            |
+| [`--format`](#format)   | `string` |         | Format the output                        |
+| [`--verbose`](#verbose) | `bool`   |         | Shorthand for `--format=pretty`          |
 
 
 <!---MARKER_GEN_END-->
@@ -50,7 +51,7 @@ If `RECLAIMABLE` is false, the `docker buildx du prune` command won't delete
 the record, even if you use `--all`. That's because the record is actively in
 use by some component of the builder.
 
-The asterisks (\*) in the default output indicate the following:
+The asterisks (\*) in the default output format indicate the following:
 
 - An asterisk next to an ID (`zu7m6evdpebh5h8kfkpw9dlf2*`) indicates that the record
   is mutable. The size of the record may change, or another build can take ownership of
@@ -61,33 +62,146 @@ The asterisks (\*) in the default output indicate the following:
   If you prune such a record then you will lose build cache but only metadata
   will be deleted as the image still needs to actual storage layers.
 
+### <a name="format"></a> Format the output (--format)
+
+The formatting options (`--format`) pretty-prints usage information output
+using a Go template.
+
+Valid placeholders for the Go template are:
+
+* `.ID`
+* `.Parents`
+* `.CreatedAt`
+* `.Mutable`
+* `.Reclaimable`
+* `.Shared`
+* `.Size`
+* `.Description`
+* `.UsageCount`
+* `.LastUsedAt`
+* `.Type`
+
+When using the `--format` option, the `du` command will either output the data
+exactly as the template declares.
+
+The `pretty` format is useful for inspecting the disk usage records in more
+detail. It shows the mutable and shared states more clearly, as well as
+additional information about the corresponding layer:
+
+```console
+$ docker buildx du --format=pretty
+...
+ID:           6wqu0v6hjdwvhh8yjozrepaof
+Parents:
+ - bqx15bcewecz4wcg14b7iodvp
+Created at:   2025-06-12 15:44:02.715795569 +0000 UTC
+Mutable:      false
+Reclaimable:  true
+Shared:       true
+Size:         1.653GB
+Description:  [build-base 4/4] COPY . .
+Usage count:  1
+Last used:    2 months ago
+Type:         regular
+
+Shared:         35.57GB
+Private:        97.94GB
+Reclaimable:    131.5GB
+Total:          133.5GB
+```
+
+The following example uses a template without headers and outputs the
+`ID` and `Size` entries separated by a colon (`:`):
+
+```console
+$ docker buildx du --format "{{.ID}}: {{.Size}}"
+6wqu0v6hjdwvhh8yjozrepaof: 1.653GB
+4m8061kctvjyh9qleus8rgpgx: 1.723GB
+fcm9mlz2641u8r5eicjqdhy1l: 1.841GB
+z2qu1swvo3afzd9mhihi3l5k0: 1.873GB
+nmi6asc00aa3ja6xnt6o7wbrr: 2.027GB
+0qlam41jxqsq6i27yqllgxed3: 2.495GB
+3w9qhzzskq5jc262snfu90bfz: 2.617GB
+```
+
+The following example uses a `table` template and outputs the `ID` and
+`Description`:
+
+```console
+$ docker buildx du --format "table {{.ID}}	{{.Descirption}}"
+lu76wm07lk5u7fe9nul93o95o    [integration-tests 1/1] COPY . .
+v6zmkcmgujv34vnys9eszttnv    [dev 1/1] COPY --link . .
+nj4fwb6qxznswmij3fg30sns2    mount / from exec /bin/sh -c rpm-init $DISTRO_NAME
+```
+
+JSON output is also supported and will print as newline delimited JSON:
+
+```console
+$ docker buildx du --format=json
+{"CreatedAt":"2025-07-29T12:36:01Z","Description":"pulled from docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4","ID":"ic1gfidvev5nciupzz53alel4","LastUsedAt":"2025-07-29T12:36:01Z","Mutable":false,"Parents":["hmpdhm4sjrfpmae4xm2y3m0ra"],"Reclaimable":true,"Shared":false,"Size":"829889526","Type":"regular","UsageCount":1}
+{"CreatedAt":"2025-08-05T09:24:09Z","Description":"pulled from docker.io/library/node:22@sha256:3218f0d1b9e4b63def322e9ae362d581fbeac1ef21b51fc502ef91386667ce92","ID":"jsw7fx09l5zsda3bri1z4mwk5","LastUsedAt":"2025-08-05T09:24:09Z","Mutable":false,"Parents":["098jsj5ebbv1w47ikqigeuurs"],"Reclaimable":true,"Shared":true,"Size":"829898832","Type":"regular","UsageCount":1}
+```
+
+You can use `jq` to pretty-print the JSON output:
+
+```console
+$ docker buildx du --format=json | jq .
+{
+  "CreatedAt": "2025-07-29T12:36:01Z",
+  "Description": "pulled from docker.io/library/rust:1.85.1-bookworm@sha256:e51d0265072d2d9d5d320f6a44dde6b9ef13653b035098febd68cce8fa7c0bc4",
+  "ID": "ic1gfidvev5nciupzz53alel4",
+  "LastUsedAt": "2025-07-29T12:36:01Z",
+  "Mutable": false,
+  "Parents": [
+    "hmpdhm4sjrfpmae4xm2y3m0ra"
+  ],
+  "Reclaimable": true,
+  "Shared": false,
+  "Size": "829889526",
+  "Type": "regular",
+  "UsageCount": 1
+}
+{
+  "CreatedAt": "2025-08-05T09:24:09Z",
+  "Description": "pulled from docker.io/library/node:22@sha256:3218f0d1b9e4b63def322e9ae362d581fbeac1ef21b51fc502ef91386667ce92",
+  "ID": "jsw7fx09l5zsda3bri1z4mwk5",
+  "LastUsedAt": "2025-08-05T09:24:09Z",
+  "Mutable": false,
+  "Parents": [
+    "098jsj5ebbv1w47ikqigeuurs"
+  ],
+  "Reclaimable": true,
+  "Shared": true,
+  "Size": "829898832",
+  "Type": "regular",
+  "UsageCount": 1
+}
+```
+
 ### <a name="verbose"></a> Use verbose output (--verbose)
 
-The verbose output of the `docker buildx du` command is useful for inspecting
-the disk usage records in more detail. The verbose output shows the mutable and
-shared states more clearly, as well as additional information about the
-corresponding layer.
+Shorthand for [`--format=pretty`](#format):
 
 ```console
 $ docker buildx du --verbose
 ...
-Last used:      2 days ago
-Type:           regular
+ID:           6wqu0v6hjdwvhh8yjozrepaof
+Parents:
+ - bqx15bcewecz4wcg14b7iodvp
+Created at:   2025-06-12 15:44:02.715795569 +0000 UTC
+Mutable:      false
+Reclaimable:  true
+Shared:       true
+Size:         1.653GB
+Description:  [build-base 4/4] COPY . .
+Usage count:  1
+Last used:    2 months ago
+Type:         regular
 
-ID:             05d0elirb4mmvpmnzbrp3ssrg
-Parent:         e8sfdn4mygrg7msi9ak1dy6op
-Created at:     2023-11-20 09:53:30.881558721 +0000 UTC
-Mutable:        false
-Reclaimable:    true
-Shared:         false
-Size:           0B
-Description:    [gobase 3/3] WORKDIR /src
-Usage count:    3
-Last used:      24 hours ago
-Type:           regular
-
-Reclaimable:    4.453GB
-Total:          4.453GB
+Shared:         35.57GB
+Private:        97.94GB
+Reclaimable:    131.5GB
+Total:          133.5GB
 ```
 
 ### <a name="builder"></a> Override the configured builder instance (--builder)
