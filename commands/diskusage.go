@@ -4,8 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"os"
-	"strings"
 	"text/tabwriter"
 	"time"
 
@@ -13,20 +11,77 @@ import (
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/cli/command/formatter"
 	"github.com/docker/cli/opts"
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"golang.org/x/sync/errgroup"
+)
+
+const (
+	duIDHeader          = "ID"
+	duParentsHeader     = "PARENTS"
+	duCreatedAtHeader   = "CREATED AT"
+	duMutableHeader     = "MUTABLE"
+	duReclaimHeader     = "RECLAIMABLE"
+	duSharedHeader      = "SHARED"
+	duSizeHeader        = "SIZE"
+	duDescriptionHeader = "DESCRIPTION"
+	duUsageHeader       = "USAGE COUNT"
+	duLastUsedAtHeader  = "LAST ACCESSED"
+	duTypeHeader        = "TYPE"
+
+	duDefaultTableFormat = "table {{.ID}}\t{{.Reclaimable}}\t{{.Size}}\t{{.LastUsedAt}}"
+
+	duDefaultPrettyTemplate = `ID:           {{.ID}}
+{{- if .Parents }}
+Parents:
+{{- range .Parents }}
+ - {{.}}
+{{- end }}
+{{- end }}
+Created at:   {{.CreatedAt}}
+Mutable:      {{.Mutable}}
+Reclaimable:  {{.Reclaimable}}
+Shared:       {{.Shared}}
+Size:         {{.Size}}
+{{- if .Description}}
+Description:  {{ .Description }}
+{{- end }}
+Usage count:  {{.UsageCount}}
+{{- if .LastUsedAt}}
+Last used:    {{ .LastUsedAt }}
+{{- end }}
+{{- if .Type}}
+Type:         {{ .Type }}
+{{- end }}
+`
 )
 
 type duOptions struct {
 	builder string
 	filter  opts.FilterOpt
 	verbose bool
+	format  string
 }
 
 func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) error {
+	if opts.format != "" && opts.verbose {
+		return errors.New("--format and --verbose cannot be used together")
+	} else if opts.format == "" {
+		if opts.verbose {
+			opts.format = duDefaultPrettyTemplate
+		} else {
+			opts.format = duDefaultTableFormat
+		}
+	} else if opts.format == formatter.PrettyFormatKey {
+		opts.format = duDefaultPrettyTemplate
+	} else if opts.format == formatter.TableFormatKey {
+		opts.format = duDefaultTableFormat
+	}
+
 	pi, err := toBuildkitPruneInfo(opts.filter.Value())
 	if err != nil {
 		return err
@@ -74,33 +129,53 @@ func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) er
 		return err
 	}
 
-	tw := tabwriter.NewWriter(os.Stdout, 1, 8, 1, '\t', 0)
-	first := true
+	fctx := formatter.Context{
+		Output: dockerCli.Out(),
+		Format: formatter.Format(opts.format),
+	}
+
+	var dus []*client.UsageInfo
 	for _, du := range out {
-		if du == nil {
-			continue
-		}
-		if opts.verbose {
-			printVerbose(tw, du)
-		} else {
-			if first {
-				printTableHeader(tw)
-				first = false
-			}
-			for _, di := range du {
-				printTableRow(tw, di)
-			}
-
-			tw.Flush()
+		if du != nil {
+			dus = append(dus, du...)
 		}
 	}
 
-	if opts.filter.Value().Len() == 0 {
-		printSummary(tw, out)
+	render := func(format func(subContext formatter.SubContext) error) error {
+		for _, du := range dus {
+			if err := format(&diskusageContext{
+				format: fctx.Format,
+				du:     du,
+			}); err != nil {
+				return err
+			}
+		}
+		return nil
 	}
 
-	tw.Flush()
-	return nil
+	duCtx := diskusageContext{}
+	duCtx.Header = formatter.SubHeaderContext{
+		"ID":          duIDHeader,
+		"Parents":     duParentsHeader,
+		"CreatedAt":   duCreatedAtHeader,
+		"Mutable":     duMutableHeader,
+		"Reclaimable": duReclaimHeader,
+		"Shared":      duSharedHeader,
+		"Size":        duSizeHeader,
+		"Description": duDescriptionHeader,
+		"UsageCount":  duUsageHeader,
+		"LastUsedAt":  duLastUsedAtHeader,
+		"Type":        duTypeHeader,
+	}
+
+	defer func() {
+		if (fctx.Format != duDefaultTableFormat && fctx.Format != duDefaultPrettyTemplate) || fctx.Format.IsJSON() || opts.filter.Value().Len() > 0 {
+			return
+		}
+		printSummary(dockerCli.Out(), out)
+	}()
+
+	return fctx.Write(&duCtx, render)
 }
 
 func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
@@ -119,64 +194,78 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.Var(&options.filter, "filter", "Provide filter values")
-	flags.BoolVar(&options.verbose, "verbose", false, "Provide a more verbose output")
+	flags.BoolVar(&options.verbose, "verbose", false, `Shorthand for "--format=pretty"`)
+	flags.StringVar(&options.format, "format", "", "Format the output")
 
 	return cmd
 }
 
-func printKV(w io.Writer, k string, v any) {
-	fmt.Fprintf(w, "%s:\t%v\n", k, v)
+type diskusageContext struct {
+	formatter.HeaderContext
+	format formatter.Format
+	du     *client.UsageInfo
 }
 
-func printVerbose(tw *tabwriter.Writer, du []*client.UsageInfo) {
-	for _, di := range du {
-		printKV(tw, "ID", di.ID)
-		if len(di.Parents) != 0 {
-			printKV(tw, "Parent", strings.Join(di.Parents, ","))
-		}
-		printKV(tw, "Created at", di.CreatedAt)
-		printKV(tw, "Mutable", di.Mutable)
-		printKV(tw, "Reclaimable", !di.InUse)
-		printKV(tw, "Shared", di.Shared)
-		printKV(tw, "Size", units.HumanSize(float64(di.Size)))
-		if di.Description != "" {
-			printKV(tw, "Description", di.Description)
-		}
-		printKV(tw, "Usage count", di.UsageCount)
-		if di.LastUsedAt != nil {
-			printKV(tw, "Last used", units.HumanDuration(time.Since(*di.LastUsedAt))+" ago")
-		}
-		if di.RecordType != "" {
-			printKV(tw, "Type", di.RecordType)
-		}
-
-		fmt.Fprintf(tw, "\n")
-	}
-
-	tw.Flush()
+func (d *diskusageContext) MarshalJSON() ([]byte, error) {
+	return formatter.MarshalJSON(d)
 }
 
-func printTableHeader(tw *tabwriter.Writer) {
-	fmt.Fprintln(tw, "ID\tRECLAIMABLE\tSIZE\tLAST ACCESSED")
-}
-
-func printTableRow(tw *tabwriter.Writer, di *client.UsageInfo) {
-	id := di.ID
-	if di.Mutable {
+func (d *diskusageContext) ID() string {
+	id := d.du.ID
+	if d.format.IsTable() && d.du.Mutable {
 		id += "*"
 	}
-	size := units.HumanSize(float64(di.Size))
-	if di.Shared {
-		size += "*"
-	}
-	lastAccessed := ""
-	if di.LastUsedAt != nil {
-		lastAccessed = units.HumanDuration(time.Since(*di.LastUsedAt)) + " ago"
-	}
-	fmt.Fprintf(tw, "%-40s\t%-5v\t%-10s\t%s\n", id, !di.InUse, size, lastAccessed)
+	return id
 }
 
-func printSummary(tw *tabwriter.Writer, dus [][]*client.UsageInfo) {
+func (d *diskusageContext) Parents() []string {
+	return d.du.Parents
+}
+
+func (d *diskusageContext) CreatedAt() string {
+	return d.du.CreatedAt.String()
+}
+
+func (d *diskusageContext) Mutable() bool {
+	return d.du.Mutable
+}
+
+func (d *diskusageContext) Reclaimable() bool {
+	return !d.du.InUse
+}
+
+func (d *diskusageContext) Shared() bool {
+	return d.du.Shared
+}
+
+func (d *diskusageContext) Size() string {
+	size := units.HumanSize(float64(d.du.Size))
+	if d.format.IsTable() && d.du.Shared {
+		size += "*"
+	}
+	return size
+}
+
+func (d *diskusageContext) Description() string {
+	return d.du.Description
+}
+
+func (d *diskusageContext) UsageCount() int {
+	return d.du.UsageCount
+}
+
+func (d *diskusageContext) LastUsedAt() string {
+	if d.du.LastUsedAt != nil {
+		return units.HumanDuration(time.Since(*d.du.LastUsedAt)) + " ago"
+	}
+	return ""
+}
+
+func (d *diskusageContext) Type() string {
+	return string(d.du.RecordType)
+}
+
+func printSummary(w io.Writer, dus [][]*client.UsageInfo) {
 	total := int64(0)
 	reclaimable := int64(0)
 	shared := int64(0)
@@ -195,11 +284,11 @@ func printSummary(tw *tabwriter.Writer, dus [][]*client.UsageInfo) {
 		}
 	}
 
+	tw := tabwriter.NewWriter(w, 1, 8, 1, '\t', 0)
 	if shared > 0 {
 		fmt.Fprintf(tw, "Shared:\t%s\n", units.HumanSize(float64(shared)))
 		fmt.Fprintf(tw, "Private:\t%s\n", units.HumanSize(float64(total-shared)))
 	}
-
 	fmt.Fprintf(tw, "Reclaimable:\t%s\n", units.HumanSize(float64(reclaimable)))
 	fmt.Fprintf(tw, "Total:\t%s\n", units.HumanSize(float64(total)))
 	tw.Flush()
