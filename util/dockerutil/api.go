@@ -3,7 +3,7 @@ package dockerutil
 import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/context/docker"
-	dockerclient "github.com/docker/docker/client"
+	dockerclient "github.com/moby/moby/client"
 	"go.opentelemetry.io/contrib/instrumentation/net/http/otelhttp"
 	"go.opentelemetry.io/otel/propagation"
 )
