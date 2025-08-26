@@ -1544,12 +1544,12 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		return nil, err
 	}
 
-	annotations, err := buildflags.ParseAnnotations(t.Annotations)
+	bo.Annotations, err = buildflags.ParseAnnotations(t.Annotations)
 	if err != nil {
 		return nil, err
 	}
 	for _, e := range bo.Exports {
-		for k, v := range annotations {
+		for k, v := range bo.Annotations {
 			e.Attrs[k.String()] = v
 		}
 	}
