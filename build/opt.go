@@ -117,8 +117,10 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 
 	if v, ok := opt.BuildArgs["BUILDKIT_SYNTAX"]; ok {
+		p := strings.SplitN(strings.TrimSpace(v), " ", 2)
 		so.Frontend = "gateway.v0"
-		so.FrontendAttrs["source"] = v
+		so.FrontendAttrs["source"] = p[0]
+		so.FrontendAttrs["cmdline"] = v
 	}
 
 	if v, ok := opt.BuildArgs["BUILDKIT_MULTI_PLATFORM"]; ok {
