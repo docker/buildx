@@ -18,7 +18,7 @@ import (
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/cli/cli/command"
 	controlapi "github.com/moby/buildkit/api/services/control"
-	"github.com/moby/buildkit/util/gitutil"
+	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
@@ -332,7 +332,7 @@ func valueFiler(key, value, sep string) matchFunc {
 				recValue = v
 			} else {
 				if context, ok := rec.FrontendAttrs["context"]; ok {
-					if ref, err := gitutil.ParseGitRef(context); err == nil {
+					if ref, err := dfgitutil.ParseGitRef(context); err == nil {
 						recValue = ref.Remote
 					}
 				}

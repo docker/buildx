@@ -11,7 +11,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/cli/opts"
-	"github.com/moby/buildkit/util/gitutil"
+	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -36,7 +36,7 @@ func IsRemoteURL(c string) bool {
 	if isHTTPURL(c) {
 		return true
 	}
-	if _, err := gitutil.ParseGitRef(c); err == nil {
+	if _, err := dfgitutil.ParseGitRef(c); err == nil {
 		return true
 	}
 	return false
