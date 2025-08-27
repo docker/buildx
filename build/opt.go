@@ -28,6 +28,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/ociindex"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
@@ -184,6 +185,20 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	default:
 		if err := bopts.LLBCaps.Supports(pb.CapMultipleExporters); err != nil {
 			return nil, nil, errors.Errorf("multiple outputs currently unsupported by the current BuildKit daemon, please upgrade to version v0.13+ or use a single output")
+		}
+	}
+
+	// check if index annotations are supported by docker driver
+	if len(opt.Exports) > 0 && opt.CallFunc == nil && len(opt.Annotations) > 0 && nodeDriver.IsMobyDriver() && !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+		for _, exp := range opt.Exports {
+			if exp.Type == "image" || exp.Type == "docker" {
+				for ak := range opt.Annotations {
+					switch ak.Type {
+					case exptypes.AnnotationIndex, exptypes.AnnotationIndexDescriptor:
+						return nil, nil, errors.New("index annotations not supported for single platform export")
+					}
+				}
+			}
 		}
 	}
 

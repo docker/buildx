@@ -93,6 +93,7 @@ type Options struct {
 	ProvenanceResponseMode confutil.MetadataProvenanceMode
 	SourcePolicy           *spb.Policy
 	GroupRef               string
+	Annotations            map[exptypes.AnnotationKey]string // Not used during build, annotations are already set in Exports. Just used to check for support with drivers.
 }
 
 type CallFunc struct {

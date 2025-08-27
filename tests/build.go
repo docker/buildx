@@ -78,6 +78,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildCall,
 	testBuildCheckCallOutput,
 	testBuildExtraHosts,
+	testBuildIndexAnnotationsLoadDocker,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -1339,6 +1340,17 @@ RUN cat /etc/hosts | grep myhostmulti | grep 162.242.195.82
 	)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
+}
+
+func testBuildIndexAnnotationsLoadDocker(t *testing.T, sb integration.Sandbox) {
+	if sb.DockerAddress() == "" {
+		t.Skip("only testing with docker available")
+	}
+	skipNoCompatBuildKit(t, sb, ">= 0.11.0-0", "annotations")
+	dir := createTestProject(t)
+	out, err := buildCmd(sb, withArgs("--annotation", "index:foo=bar", "--provenance", "false", "--output", "type=docker", dir))
+	require.Error(t, err, out)
+	require.Contains(t, out, "index annotations not supported for single platform export")
 }
 
 func createTestProject(t *testing.T) string {

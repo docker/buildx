@@ -1062,13 +1062,13 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 		}
 	}
 
-	annotations, err := buildflags.ParseAnnotations(in.Annotations)
+	opts.Annotations, err = buildflags.ParseAnnotations(in.Annotations)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "parse annotations")
 	}
 
 	for _, o := range outputs {
-		for k, v := range annotations {
+		for k, v := range opts.Annotations {
 			o.Attrs[k.String()] = v
 		}
 	}
