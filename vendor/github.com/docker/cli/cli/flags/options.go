@@ -1,14 +1,14 @@
 package flags
 
 import (
+	"errors"
 	"fmt"
 	"os"
 	"path/filepath"
 
 	"github.com/docker/cli/cli/config"
-	"github.com/docker/cli/opts"
-	"github.com/docker/docker/client"
 	"github.com/docker/go-connections/tlsconfig"
+	"github.com/moby/moby/client"
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/pflag"
 )
@@ -54,6 +54,39 @@ var (
 	dockerTLS       = os.Getenv(EnvEnableTLS) != ""
 )
 
+// hostVar is used for the '--host' / '-H' flag to set [ClientOptions.Hosts].
+// The [ClientOptions.Hosts] field is a slice because it was originally shared
+// with the daemon config. However, the CLI only allows for a single host to
+// be specified.
+//
+// hostVar presents itself as a "string", but stores the value in a string
+// slice. It produces an error when trying to set multiple values, matching
+// the check in [getServerHost].
+//
+// [getServerHost]: https://github.com/docker/cli/blob/7eab668982645def1cd46fe1b60894cba6fd17a4/cli/command/cli.go#L542-L551
+type hostVar struct {
+	dst *[]string
+	set bool
+}
+
+func (h *hostVar) String() string {
+	if h.dst == nil || len(*h.dst) == 0 {
+		return ""
+	}
+	return (*h.dst)[0]
+}
+
+func (h *hostVar) Set(s string) error {
+	if h.set {
+		return errors.New("specify only one -H")
+	}
+	*h.dst = []string{s}
+	h.set = true
+	return nil
+}
+
+func (*hostVar) Type() string { return "string" }
+
 // ClientOptions are the options used to configure the client cli.
 type ClientOptions struct {
 	Debug      bool
@@ -77,26 +110,24 @@ func (o *ClientOptions) InstallFlags(flags *pflag.FlagSet) {
 	if dockerCertPath == "" {
 		dockerCertPath = configDir
 	}
+	o.TLSOptions = &tlsconfig.Options{
+		CAFile:   filepath.Join(dockerCertPath, DefaultCaFile),
+		CertFile: filepath.Join(dockerCertPath, DefaultCertFile),
+		KeyFile:  filepath.Join(dockerCertPath, DefaultKeyFile),
+	}
 
 	flags.StringVar(&o.ConfigDir, "config", configDir, "Location of client config files")
 	flags.BoolVarP(&o.Debug, "debug", "D", false, "Enable debug mode")
 	flags.StringVarP(&o.LogLevel, "log-level", "l", "info", `Set the logging level ("debug", "info", "warn", "error", "fatal")`)
 	flags.BoolVar(&o.TLS, "tls", dockerTLS, "Use TLS; implied by --tlsverify")
 	flags.BoolVar(&o.TLSVerify, FlagTLSVerify, dockerTLSVerify, "Use TLS and verify the remote")
+	flags.StringVar(&o.TLSOptions.CAFile, "tlscacert", o.TLSOptions.CAFile, "Trust certs signed only by this CA")
+	flags.StringVar(&o.TLSOptions.CertFile, "tlscert", o.TLSOptions.CertFile, "Path to TLS certificate file")
+	flags.StringVar(&o.TLSOptions.KeyFile, "tlskey", o.TLSOptions.KeyFile, "Path to TLS key file")
 
-	o.TLSOptions = &tlsconfig.Options{
-		CAFile:   filepath.Join(dockerCertPath, DefaultCaFile),
-		CertFile: filepath.Join(dockerCertPath, DefaultCertFile),
-		KeyFile:  filepath.Join(dockerCertPath, DefaultKeyFile),
-	}
-	tlsOptions := o.TLSOptions
-	flags.Var(opts.NewQuotedString(&tlsOptions.CAFile), "tlscacert", "Trust certs signed only by this CA")
-	flags.Var(opts.NewQuotedString(&tlsOptions.CertFile), "tlscert", "Path to TLS certificate file")
-	flags.Var(opts.NewQuotedString(&tlsOptions.KeyFile), "tlskey", "Path to TLS key file")
-
-	// opts.ValidateHost is not used here, so as to allow connection helpers
-	hostOpt := opts.NewNamedListOptsRef("hosts", &o.Hosts, nil)
-	flags.VarP(hostOpt, "host", "H", "Daemon socket to connect to")
+	// TODO(thaJeztah): show the default host.
+	// TODO(thaJeztah): this should be a string, not an "array" as we only allow a single host.
+	flags.VarP(&hostVar{dst: &o.Hosts}, "host", "H", "Daemon socket to connect to")
 	flags.StringVarP(&o.Context, "context", "c", "",
 		`Name of the context to use to connect to the daemon (overrides `+client.EnvOverrideHost+` env var and default context set with "docker context use")`)
 }

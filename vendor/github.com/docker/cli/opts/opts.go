@@ -9,8 +9,8 @@ import (
 	"strings"
 
 	"github.com/docker/cli/internal/lazyregexp"
-	"github.com/docker/docker/api/types/filters"
 	"github.com/docker/go-units"
+	"github.com/moby/moby/api/types/filters"
 )
 
 var (
@@ -79,13 +79,6 @@ func (opts *ListOpts) GetMap() map[string]struct{} {
 	return ret
 }
 
-// GetAll returns the values of slice.
-//
-// Deprecated: use [ListOpts.GetSlice] instead. This method will be removed in a future release.
-func (opts *ListOpts) GetAll() []string {
-	return *opts.values
-}
-
 // GetSlice returns the values of slice.
 //
 // It implements [cobra.SliceValue] to allow shell completion to be provided
@@ -132,35 +125,6 @@ func (opts *ListOpts) WithValidator(validator ValidatorFctType) *ListOpts {
 	return opts
 }
 
-// NamedOption is an interface that list and map options
-// with names implement.
-type NamedOption interface {
-	Name() string
-}
-
-// NamedListOpts is a ListOpts with a configuration name.
-// This struct is useful to keep reference to the assigned
-// field name in the internal configuration struct.
-type NamedListOpts struct {
-	name string
-	ListOpts
-}
-
-var _ NamedOption = &NamedListOpts{}
-
-// NewNamedListOptsRef creates a reference to a new NamedListOpts struct.
-func NewNamedListOptsRef(name string, values *[]string, validator ValidatorFctType) *NamedListOpts {
-	return &NamedListOpts{
-		name:     name,
-		ListOpts: *NewListOptsRef(values, validator),
-	}
-}
-
-// Name returns the name of the NamedListOpts in the configuration.
-func (o *NamedListOpts) Name() string {
-	return o.name
-}
-
 // MapOpts holds a map of values and a validation function.
 type MapOpts struct {
 	values    map[string]string
@@ -205,29 +169,6 @@ func NewMapOpts(values map[string]string, validator ValidatorFctType) *MapOpts {
 		values:    values,
 		validator: validator,
 	}
-}
-
-// NamedMapOpts is a MapOpts struct with a configuration name.
-// This struct is useful to keep reference to the assigned
-// field name in the internal configuration struct.
-type NamedMapOpts struct {
-	name string
-	MapOpts
-}
-
-var _ NamedOption = &NamedMapOpts{}
-
-// NewNamedMapOpts creates a reference to a new NamedMapOpts struct.
-func NewNamedMapOpts(name string, values map[string]string, validator ValidatorFctType) *NamedMapOpts {
-	return &NamedMapOpts{
-		name:    name,
-		MapOpts: *NewMapOpts(values, validator),
-	}
-}
-
-// Name returns the name of the NamedMapOpts in the configuration.
-func (o *NamedMapOpts) Name() string {
-	return o.name
 }
 
 // ValidatorFctType defines a validator function that returns a validated string and/or an error.

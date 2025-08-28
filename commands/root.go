@@ -79,7 +79,9 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 		cmd.SilenceErrors = true
 		cmd.TraverseChildren = true
 		cmd.DisableFlagsInUseLine = true
-		cli.DisableFlagsInUseLine(cmd)
+		visitAll(cmd, func(c *cobra.Command) {
+			c.DisableFlagsInUseLine = true
+		})
 		if !confutil.IsExperimental() {
 			cmd.SetHelpTemplate(cmd.HelpTemplate() + "\n" + experimentalCommandHint + "\n")
 		}
@@ -97,6 +99,13 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 
 	addCommands(cmd, &opt, dockerCli)
 	return cmd
+}
+
+func visitAll(root *cobra.Command, fn func(*cobra.Command)) {
+	for _, cmd := range root.Commands() {
+		visitAll(cmd, fn)
+	}
+	fn(root)
 }
 
 type rootOptions struct {
