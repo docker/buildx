@@ -82,7 +82,8 @@ Valid placeholders for the Go template are:
 * `.Type`
 
 When using the `--format` option, the `du` command will either output the data
-exactly as the template declares.
+exactly as the template declares or, when using the `table` directive, includes
+column headers as well.
 
 The `pretty` format is useful for inspecting the disk usage records in more
 detail. It shows the mutable and shared states more clearly, as well as
@@ -128,10 +129,15 @@ The following example uses a `table` template and outputs the `ID` and
 `Description`:
 
 ```console
-$ docker buildx du --format "table {{.ID}}	{{.Descirption}}"
-lu76wm07lk5u7fe9nul93o95o    [integration-tests 1/1] COPY . .
-v6zmkcmgujv34vnys9eszttnv    [dev 1/1] COPY --link . .
-nj4fwb6qxznswmij3fg30sns2    mount / from exec /bin/sh -c rpm-init $DISTRO_NAME
+$ docker buildx du --format "table {{.ID}}	{{.Description}}"
+ID                           DESCRIPTION
+03bbhchaib8cygqs68um6hfnl    [binaries-linux 2/5] LINK COPY --link --from=binfmt-filter /out/ /
+2h8un0tyg57oj64xvbas6mzea    [cni-plugins-export 2/4] LINK COPY --link --from=cni-plugins /opt/cni/bin/loopback /buildkit-cni-loopback
+evckox33t07ob9dmollhn4h4j    [cni-plugins-export 3/4] LINK COPY --link --from=cni-plugins /opt/cni/bin/host-local /buildkit-cni-host-local
+jlxzwcw6xaomxj8irerow9bhb    [binaries-linux 4/5] LINK COPY --link --from=buildctl /usr/bin/buildctl /
+ov2oetgebkhpsw39rv1sbh5w1    [buildkit-linux 1/1] LINK COPY --link --from=binaries / /usr/bin/
+ruoczhyq25n5v9ld7n231zalx    [binaries-linux 3/5] LINK COPY --link --from=cni-plugins-export-squashed / /
+ax7cov6kizxi9ufvcwsef4occ*   local source for context
 ```
 
 JSON output is also supported and will print as newline delimited JSON:
@@ -209,7 +215,7 @@ Total:          133.5GB
 Use the `--builder` flag to inspect the disk usage of a particular builder.
 
 ```console
-$ docker buildx du --builder youthful_shtern
+$ docker buildx du --builder mybuilder
 ID                                RECLAIMABLE    SIZE          LAST ACCESSED
 g41agepgdczekxg2mtw0dujsv*        true           1.312GB       47 hours ago
 e6ycrsa0bn9akigqgzu0sc6kr         true           318MB         47 hours ago
