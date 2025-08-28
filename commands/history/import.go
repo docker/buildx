@@ -125,7 +125,8 @@ func importCmd(dockerCli command.Cli, _ RootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runImport(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction:     completion.Disable,
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

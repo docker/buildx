@@ -490,6 +490,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 		ValidArgsFunction: func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
 			return nil, cobra.ShellCompDirectiveFilterDirs
 		},
+		DisableFlagsInUseLine: true,
 	}
 
 	var platformsDefault []string

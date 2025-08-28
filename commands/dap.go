@@ -23,6 +23,8 @@ func dapCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "dap",
 		Short: "Start debug adapter protocol compatible debugger",
+
+		DisableFlagsInUseLine: true,
 	}
 	cobrautil.MarkCommandExperimental(cmd)
 
@@ -116,6 +118,7 @@ func dapAttachCmd() *cobra.Command {
 			}
 			return nil
 		},
+		DisableFlagsInUseLine: true,
 	}
 	return cmd
 }

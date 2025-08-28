@@ -71,7 +71,8 @@ func useCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runUse(dockerCli, options)
 		},
-		ValidArgsFunction: completion.BuilderNames(dockerCli),
+		ValidArgsFunction:     completion.BuilderNames(dockerCli),
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

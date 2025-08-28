@@ -182,7 +182,8 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runInspect(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction: completion.BuilderNames(dockerCli),
+		ValidArgsFunction:     completion.BuilderNames(dockerCli),
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()
