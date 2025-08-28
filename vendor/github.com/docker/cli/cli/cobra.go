@@ -12,7 +12,6 @@ import (
 	"github.com/fvbommel/sortorder"
 	"github.com/moby/term"
 	"github.com/morikuni/aec"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -167,35 +166,6 @@ func (tcmd *TopLevelCommand) Initialize(ops ...command.CLIOption) error {
 	return tcmd.dockerCli.Initialize(tcmd.opts, ops...)
 }
 
-// VisitAll will traverse all commands from the root.
-// This is different from the VisitAll of cobra.Command where only parents
-// are checked.
-func VisitAll(root *cobra.Command, fn func(*cobra.Command)) {
-	for _, cmd := range root.Commands() {
-		VisitAll(cmd, fn)
-	}
-	fn(root)
-}
-
-// DisableFlagsInUseLine sets the DisableFlagsInUseLine flag on all
-// commands within the tree rooted at cmd.
-func DisableFlagsInUseLine(cmd *cobra.Command) {
-	VisitAll(cmd, func(ccmd *cobra.Command) {
-		// do not add a `[flags]` to the end of the usage line.
-		ccmd.DisableFlagsInUseLine = true
-	})
-}
-
-// HasCompletionArg returns true if a cobra completion arg request is found.
-func HasCompletionArg(args []string) bool {
-	for _, arg := range args {
-		if arg == cobra.ShellCompRequestCmd || arg == cobra.ShellCompNoDescRequestCmd {
-			return true
-		}
-	}
-	return false
-}
-
 var helpCommand = &cobra.Command{
 	Use:               "help [command]",
 	Short:             "Help about the command",
@@ -204,7 +174,7 @@ var helpCommand = &cobra.Command{
 	RunE: func(c *cobra.Command, args []string) error {
 		cmd, args, e := c.Root().Find(args)
 		if cmd == nil || e != nil || len(args) > 0 {
-			return errors.Errorf("unknown help topic: %v", strings.Join(args, " "))
+			return fmt.Errorf("unknown help topic: %v", strings.Join(args, " "))
 		}
 		helpFunc := cmd.HelpFunc()
 		helpFunc(cmd, args)

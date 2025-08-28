@@ -10,8 +10,18 @@ import (
 	"github.com/moby/moby/api/types/container"
 )
 
+// ContainerCommitOptions holds parameters to commit changes into a container.
+type ContainerCommitOptions struct {
+	Reference string
+	Comment   string
+	Author    string
+	Changes   []string
+	Pause     bool
+	Config    *container.Config
+}
+
 // ContainerCommit applies changes to a container and creates a new tagged image.
-func (cli *Client) ContainerCommit(ctx context.Context, containerID string, options container.CommitOptions) (container.CommitResponse, error) {
+func (cli *Client) ContainerCommit(ctx context.Context, containerID string, options ContainerCommitOptions) (container.CommitResponse, error) {
 	containerID, err := trimID("container", containerID)
 	if err != nil {
 		return container.CommitResponse{}, err
@@ -24,7 +34,7 @@ func (cli *Client) ContainerCommit(ctx context.Context, containerID string, opti
 			return container.CommitResponse{}, err
 		}
 
-		if _, isCanonical := ref.(reference.Canonical); isCanonical {
+		if _, ok := ref.(reference.Digested); ok {
 			return container.CommitResponse{}, errors.New("refusing to create a tag with a digest reference")
 		}
 		ref = reference.TagNameOnly(ref)

@@ -24,11 +24,11 @@ import (
 	mobyarchive "github.com/moby/go-archive"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/network"
-	"github.com/moby/moby/api/types/system"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/jsonmessage"
+	"github.com/moby/moby/client/pkg/security"
 	"github.com/pkg/errors"
 )
 
@@ -96,7 +96,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		resp, err := d.DockerAPI.ImageCreate(ctx, imageName, image.CreateOptions{
+		resp, err := d.DockerAPI.ImageCreate(ctx, imageName, dockerclient.ImageCreateOptions{
 			RegistryAuth: ra,
 		})
 		if err != nil {
@@ -195,7 +195,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				}
 			}
 
-			secOpts, err := system.DecodeSecurityOptions(info.SecurityOptions)
+			secOpts, err := security.DecodeOptions(info.SecurityOptions)
 			if err != nil {
 				return err
 			}
@@ -251,7 +251,7 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 }
 
 func (d *Driver) copyLogs(ctx context.Context, l progress.SubLogger) error {
-	rc, err := d.DockerAPI.ContainerLogs(ctx, d.Name, container.LogsOptions{
+	rc, err := d.DockerAPI.ContainerLogs(ctx, d.Name, dockerclient.ContainerLogsOptions{
 		ShowStdout: true, ShowStderr: true,
 	})
 	if err != nil {
@@ -282,7 +282,7 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 	defer srcArchive.Close()
 
 	baseDir := path.Dir(confutil.DefaultBuildKitConfigDir)
-	return d.DockerAPI.CopyToContainer(ctx, d.Name, baseDir, srcArchive, container.CopyToContainerOptions{})
+	return d.DockerAPI.CopyToContainer(ctx, d.Name, baseDir, srcArchive, dockerclient.CopyToContainerOptions{})
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
@@ -328,7 +328,7 @@ func (d *Driver) run(ctx context.Context, cmd []string, stdout, stderr io.Writer
 }
 
 func (d *Driver) start(ctx context.Context) error {
-	return d.DockerAPI.ContainerStart(ctx, d.Name, container.StartOptions{})
+	return d.DockerAPI.ContainerStart(ctx, d.Name, dockerclient.ContainerStartOptions{})
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
@@ -375,7 +375,7 @@ func (d *Driver) Stop(ctx context.Context, force bool) error {
 		return err
 	}
 	if info.Status == driver.Running {
-		return d.DockerAPI.ContainerStop(ctx, d.Name, container.StopOptions{})
+		return d.DockerAPI.ContainerStop(ctx, d.Name, dockerclient.ContainerStopOptions{})
 	}
 	return nil
 }
@@ -391,7 +391,7 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 			return err
 		}
 		if rmDaemon {
-			if err := d.DockerAPI.ContainerRemove(ctx, d.Name, container.RemoveOptions{
+			if err := d.DockerAPI.ContainerRemove(ctx, d.Name, dockerclient.ContainerRemoveOptions{
 				RemoveVolumes: true,
 				Force:         force,
 			}); err != nil {
@@ -475,7 +475,7 @@ func (d *Driver) hasGPUCapability(ctx context.Context, image string, gpus []cont
 	if err != nil {
 		return false
 	}
-	if err := d.DockerAPI.ContainerStart(ctx, resp.ID, container.StartOptions{}); err != nil {
+	if err := d.DockerAPI.ContainerStart(ctx, resp.ID, dockerclient.ContainerStartOptions{}); err != nil {
 		return false
 	}
 	return true
