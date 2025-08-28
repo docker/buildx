@@ -12,10 +12,11 @@ type RootOptions struct {
 
 func RootCmd(rootcmd *cobra.Command, dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:               "imagetools",
-		Short:             "Commands to work on images in registry",
-		ValidArgsFunction: completion.Disable,
-		RunE:              rootcmd.RunE,
+		Use:                   "imagetools",
+		Short:                 "Commands to work on images in registry",
+		ValidArgsFunction:     completion.Disable,
+		RunE:                  rootcmd.RunE,
+		DisableFlagsInUseLine: true,
 	}
 
 	cmd.AddCommand(

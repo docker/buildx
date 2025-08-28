@@ -199,7 +199,8 @@ func traceCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			options.builder = *rootOpts.Builder
 			return runTrace(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction:     completion.Disable,
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

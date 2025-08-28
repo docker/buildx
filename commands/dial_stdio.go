@@ -122,6 +122,7 @@ func dialStdioCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			opts.builder = rootOpts.builder
 			return runDialStdio(dockerCli, opts)
 		},
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

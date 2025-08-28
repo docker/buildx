@@ -189,7 +189,8 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			options.builder = rootOpts.builder
 			return runDiskUsage(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction:     completion.Disable,
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

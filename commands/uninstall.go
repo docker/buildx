@@ -53,8 +53,9 @@ func uninstallCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runUninstall(dockerCli, options)
 		},
-		Hidden:            true,
-		ValidArgsFunction: completion.Disable,
+		Hidden:                true,
+		ValidArgsFunction:     completion.Disable,
+		DisableFlagsInUseLine: true,
 	}
 
 	// hide builder persistent flag for this command

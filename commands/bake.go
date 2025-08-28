@@ -492,7 +492,8 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
 			return runBake(cmd.Context(), dockerCli, args, options, cFlags, filesFromEnv)
 		},
-		ValidArgsFunction: completion.BakeTargets(options.files),
+		ValidArgsFunction:     completion.BakeTargets(options.files),
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

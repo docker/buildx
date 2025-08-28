@@ -44,6 +44,8 @@ func debugCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "debug",
 		Short: "Start debugger",
+
+		DisableFlagsInUseLine: true,
 	}
 	cobrautil.MarkCommandExperimental(cmd)
 

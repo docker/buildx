@@ -98,7 +98,8 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runCreate(cmd.Context(), dockerCli, options, args)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction:     completion.Disable,
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

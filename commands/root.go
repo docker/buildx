@@ -71,6 +71,7 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 				Status:     fmt.Sprintf("ERROR: unknown command: %q", args[0]),
 			}
 		},
+		DisableFlagsInUseLine: true,
 	}
 	if !isPlugin {
 		// match plugin behavior for standalone mode
@@ -78,8 +79,6 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 		cmd.SilenceUsage = true
 		cmd.SilenceErrors = true
 		cmd.TraverseChildren = true
-		cmd.DisableFlagsInUseLine = true
-		cli.DisableFlagsInUseLine(cmd)
 		if !confutil.IsExperimental() {
 			cmd.SetHelpTemplate(cmd.HelpTemplate() + "\n" + experimentalCommandHint + "\n")
 		}

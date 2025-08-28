@@ -279,7 +279,8 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 			options.builder = *opts.Builder
 			return runCreate(cmd.Context(), dockerCli, options, args)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction:     completion.Disable,
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

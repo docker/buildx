@@ -160,7 +160,8 @@ func exportCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			options.builder = *rootOpts.Builder
 			return runExport(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction: completion.Disable,
+		ValidArgsFunction:     completion.Disable,
+		DisableFlagsInUseLine: true,
 	}
 
 	flags := cmd.Flags()

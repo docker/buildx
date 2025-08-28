@@ -16,6 +16,8 @@ func RootCmd(rootcmd *cobra.Command, dockerCli command.Cli, opts RootOptions) *c
 		Short:             "Commands to work on build records",
 		ValidArgsFunction: completion.Disable,
 		RunE:              rootcmd.RunE,
+
+		DisableFlagsInUseLine: true,
 	}
 
 	cmd.AddCommand(
