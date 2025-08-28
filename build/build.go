@@ -41,7 +41,7 @@ import (
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/util/progress/progresswriter"
 	"github.com/moby/buildkit/util/tracing"
-	"github.com/moby/moby/api/types/image"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/jsonmessage"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -802,7 +802,7 @@ func pushWithMoby(ctx context.Context, d *driver.DriverHandle, name string, l pr
 		return err
 	}
 
-	rc, err := api.ImagePush(ctx, name, image.PushOptions{
+	rc, err := api.ImagePush(ctx, name, dockerclient.ImagePushOptions{
 		RegistryAuth: creds,
 	})
 	if err != nil {
