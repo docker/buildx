@@ -2,7 +2,7 @@ module github.com/docker/buildx
 
 go 1.24.0
 
-replace github.com/docker/cli => github.com/docker/cli v28.3.4-0.20250806173736-4beddd3e257b+incompatible
+replace github.com/docker/cli => github.com/docker/cli v28.3.4-0.20250905221807-be97096566f2+incompatible // master
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
@@ -32,8 +32,8 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.25.0-rc1.0.20251011181741-9b6f60ac8bf9
 	github.com/moby/go-archive v0.1.0
-	github.com/moby/moby/api v1.52.0-alpha.1
-	github.com/moby/moby/client v0.1.0-alpha.0
+	github.com/moby/moby/api v1.52.0-beta.1
+	github.com/moby/moby/client v0.1.0-beta.0
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/morikuni/aec v1.0.0
@@ -98,7 +98,7 @@ require (
 	github.com/cpuguy83/go-md2man/v2 v2.0.7 // indirect
 	github.com/docker/distribution v2.8.3+incompatible // indirect
 	github.com/docker/docker-credential-helpers v0.9.3 // indirect
-	github.com/docker/go-connections v0.5.0 // indirect
+	github.com/docker/go-connections v0.6.0 // indirect
 	github.com/emicklei/go-restful/v3 v3.11.0 // indirect
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/fvbommel/sortorder v1.0.1 // indirect

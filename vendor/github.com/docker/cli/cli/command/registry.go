@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -15,9 +16,9 @@ import (
 	"github.com/docker/cli/cli/streams"
 	"github.com/docker/cli/internal/prompt"
 	"github.com/docker/cli/internal/tui"
+	"github.com/moby/moby/api/pkg/authconfig"
 	registrytypes "github.com/moby/moby/api/types/registry"
 	"github.com/morikuni/aec"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -31,36 +32,8 @@ const (
 // authConfigKey is the key used to store credentials for Docker Hub. It is
 // a copy of [registry.IndexServer].
 //
-// [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker/registry#IndexServer
+// [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#IndexServer
 const authConfigKey = "https://index.docker.io/v1/"
-
-// RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
-// for the given command to prompt the user for username and password.
-//
-// Deprecated: this function is no longer used and will be removed in the next release.
-func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) registrytypes.RequestAuthConfig {
-	configKey := getAuthConfigKey(index.Name)
-	isDefaultRegistry := configKey == authConfigKey || index.Official
-	return func(ctx context.Context) (string, error) {
-		_, _ = fmt.Fprintf(cli.Out(), "\nLogin prior to %s:\n", cmdName)
-		authConfig, err := GetDefaultAuthConfig(cli.ConfigFile(), true, configKey, isDefaultRegistry)
-		if err != nil {
-			_, _ = fmt.Fprintf(cli.Err(), "Unable to retrieve stored credentials for %s, error: %s.\n", configKey, err)
-		}
-
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		default:
-		}
-
-		authConfig, err = PromptUserForCredentials(ctx, cli, "", "", authConfig.Username, configKey)
-		if err != nil {
-			return "", err
-		}
-		return registrytypes.EncodeAuthConfig(authConfig)
-	}
-}
 
 // ResolveAuthConfig returns auth-config for the given registry from the
 // credential-store. It returns an empty AuthConfig if no credentials were
@@ -68,6 +41,8 @@ func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInf
 //
 // It is similar to [registry.ResolveAuthConfig], but uses the credentials-
 // store, instead of looking up credentials from a map.
+//
+// [registry.ResolveAuthConfig]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#ResolveAuthConfig
 func ResolveAuthConfig(cfg *configfile.ConfigFile, index *registrytypes.IndexInfo) registrytypes.AuthConfig {
 	configKey := index.Name
 	if index.Official {
@@ -84,19 +59,19 @@ func GetDefaultAuthConfig(cfg *configfile.ConfigFile, checkCredStore bool, serve
 	if !isDefaultRegistry {
 		serverAddress = credentials.ConvertToHostname(serverAddress)
 	}
-	authconfig := configtypes.AuthConfig{}
+	authCfg := configtypes.AuthConfig{}
 	var err error
 	if checkCredStore {
-		authconfig, err = cfg.GetAuthConfig(serverAddress)
+		authCfg, err = cfg.GetAuthConfig(serverAddress)
 		if err != nil {
 			return registrytypes.AuthConfig{
 				ServerAddress: serverAddress,
 			}, err
 		}
 	}
-	authconfig.ServerAddress = serverAddress
-	authconfig.IdentityToken = ""
-	return registrytypes.AuthConfig(authconfig), nil
+	authCfg.ServerAddress = serverAddress
+	authCfg.IdentityToken = ""
+	return registrytypes.AuthConfig(authCfg), nil
 }
 
 // PromptUserForCredentials handles the CLI prompt for the user to input
@@ -151,7 +126,7 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 			argUser = defaultUsername
 		}
 		if argUser == "" {
-			return registrytypes.AuthConfig{}, errors.Errorf("Error: Non-null Username Required")
+			return registrytypes.AuthConfig{}, errors.New("error: username is required")
 		}
 	}
 
@@ -183,7 +158,7 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 		}
 		_, _ = fmt.Fprintln(cli.Out())
 		if argPassword == "" {
-			return registrytypes.AuthConfig{}, errors.Errorf("Error: Password Required")
+			return registrytypes.AuthConfig{}, errors.New("error: password is required")
 		}
 	}
 
@@ -194,37 +169,28 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 	}, nil
 }
 
-// RetrieveAuthTokenFromImage retrieves an encoded auth token given a complete
-// image. The auth configuration is serialized as a base64url encoded RFC4648,
-// section 5) JSON string for sending through the X-Registry-Auth header.
+// RetrieveAuthTokenFromImage retrieves an encoded auth token given a
+// complete image reference. The auth configuration is serialized as a
+// base64url encoded ([RFC 4648, Section 5]) JSON string for sending through
+// the "X-Registry-Auth" header.
 //
-// For details on base64url encoding, see:
-// - RFC4648, section 5:   https://tools.ietf.org/html/rfc4648#section-5
+// [RFC 4648, Section 5]: https://tools.ietf.org/html/rfc4648#section-5
 func RetrieveAuthTokenFromImage(cfg *configfile.ConfigFile, image string) (string, error) {
-	// Retrieve encoded auth token from the image reference
-	authConfig, err := resolveAuthConfigFromImage(cfg, image)
+	registryRef, err := reference.ParseNormalizedNamed(image)
 	if err != nil {
 		return "", err
 	}
-	encodedAuth, err := registrytypes.EncodeAuthConfig(authConfig)
+	configKey := getAuthConfigKey(reference.Domain(registryRef))
+	authConfig, err := cfg.GetAuthConfig(configKey)
+	if err != nil {
+		return "", err
+	}
+
+	encodedAuth, err := authconfig.Encode(registrytypes.AuthConfig(authConfig))
 	if err != nil {
 		return "", err
 	}
 	return encodedAuth, nil
-}
-
-// resolveAuthConfigFromImage retrieves that AuthConfig using the image string
-func resolveAuthConfigFromImage(cfg *configfile.ConfigFile, image string) (registrytypes.AuthConfig, error) {
-	registryRef, err := reference.ParseNormalizedNamed(image)
-	if err != nil {
-		return registrytypes.AuthConfig{}, err
-	}
-	configKey := getAuthConfigKey(reference.Domain(registryRef))
-	a, err := cfg.GetAuthConfig(configKey)
-	if err != nil {
-		return registrytypes.AuthConfig{}, err
-	}
-	return registrytypes.AuthConfig(a), nil
 }
 
 // getAuthConfigKey special-cases using the full index address of the official
@@ -233,8 +199,8 @@ func resolveAuthConfigFromImage(cfg *configfile.ConfigFile, image string) (regis
 // It is similar to [registry.GetAuthConfigKey], but does not require on
 // [registrytypes.IndexInfo] as intermediate.
 //
-// [registry.GetAuthConfigKey]: https://pkg.go.dev/github.com/docker/docker/registry#GetAuthConfigKey
-// [registrytypes.IndexInfo]:https://pkg.go.dev/github.com/docker/docker/api/types/registry#IndexInfo
+// [registry.GetAuthConfigKey]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#GetAuthConfigKey
+// [registrytypes.IndexInfo]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/api/types/registry#IndexInfo
 func getAuthConfigKey(domainName string) string {
 	if domainName == "docker.io" || domainName == "index.docker.io" {
 		return authConfigKey
