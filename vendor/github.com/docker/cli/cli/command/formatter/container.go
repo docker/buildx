@@ -170,27 +170,33 @@ func (c *ContainerContext) Image() string {
 	if c.c.Image == "" {
 		return "<no image>"
 	}
-	if c.trunc {
-		if trunc := TruncateID(c.c.ImageID); trunc == TruncateID(c.c.Image) {
-			return trunc
+	if !c.trunc {
+		return c.c.Image
+	}
+	if trunc := TruncateID(c.c.ImageID); trunc == TruncateID(c.c.Image) {
+		return trunc
+	}
+	ref, err := reference.ParseNormalizedNamed(c.c.Image)
+	if err != nil {
+		return c.c.Image
+	}
+
+	if _, ok := ref.(reference.Digested); ok {
+		// strip the digest, but preserve the tag (if any)
+		var tag string
+		if t, ok := ref.(reference.Tagged); ok {
+			tag = t.Tag()
 		}
-		// truncate digest if no-trunc option was not selected
-		ref, err := reference.ParseNormalizedNamed(c.c.Image)
-		if err == nil {
-			if nt, ok := ref.(reference.NamedTagged); ok {
-				// case for when a tag is provided
-				if namedTagged, err := reference.WithTag(reference.TrimNamed(nt), nt.Tag()); err == nil {
-					return reference.FamiliarString(namedTagged)
-				}
-			} else {
-				// case for when a tag is not provided
-				named := reference.TrimNamed(ref)
-				return reference.FamiliarString(named)
+		ref = reference.TrimNamed(ref)
+		if tag != "" {
+			if out, err := reference.WithTag(ref, tag); err == nil {
+				ref = out
 			}
 		}
 	}
 
-	return c.c.Image
+	// Format as "familiar" name with "docker.io[/library]" trimmed.
+	return reference.FamiliarString(ref)
 }
 
 // Command returns's the container's command. If the trunc option is set, the
@@ -338,7 +344,7 @@ func (c *ContainerContext) Networks() string {
 // DisplayablePorts returns formatted string representing open ports of container
 // e.g. "0.0.0.0:80->9090/tcp, 9988/tcp"
 // it's used by command 'docker ps'
-func DisplayablePorts(ports []container.Port) string {
+func DisplayablePorts(ports []container.PortSummary) string {
 	type portGroup struct {
 		first uint16
 		last  uint16
@@ -404,7 +410,7 @@ func formGroup(key string, start, last uint16) string {
 	return group + "/" + groupType
 }
 
-func comparePorts(i, j container.Port) bool {
+func comparePorts(i, j container.PortSummary) bool {
 	if i.PrivatePort != j.PrivatePort {
 		return i.PrivatePort < j.PrivatePort
 	}
