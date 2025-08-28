@@ -24,10 +24,10 @@ import (
 	mobyarchive "github.com/moby/go-archive"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
-	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/mount"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/api/types/system"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/jsonmessage"
 	"github.com/pkg/errors"
 )
@@ -96,7 +96,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		resp, err := d.DockerAPI.ImageCreate(ctx, imageName, image.CreateOptions{
+		resp, err := d.DockerAPI.ImageCreate(ctx, imageName, dockerclient.ImageCreateOptions{
 			RegistryAuth: ra,
 		})
 		if err != nil {
