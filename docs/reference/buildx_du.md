@@ -13,7 +13,7 @@ Disk usage
 |:------------------------|:---------|:--------|:-----------------------------------------|
 | [`--builder`](#builder) | `string` |         | Override the configured builder instance |
 | `-D`, `--debug`         | `bool`   |         | Enable debug logging                     |
-| `--filter`              | `filter` |         | Provide filter values                    |
+| [`--filter`](#filter)   | `filter` |         | Provide filter values                    |
 | [`--format`](#format)   | `string` |         | Format the output                        |
 | [`--verbose`](#verbose) | `bool`   |         | Shorthand for `--format=pretty`          |
 
@@ -61,6 +61,10 @@ The asterisks (\*) in the default output format indicate the following:
   Storage of the record is shared with some other resource, typically an image.
   If you prune such a record then you will lose build cache but only metadata
   will be deleted as the image still needs to actual storage layers.
+
+### <a name="filter"></a> Provide filter values (--filter)
+
+Same as [`buildx prune --filter`](buildx_prune.md#filter).
 
 ### <a name="format"></a> Format the output (--format)
 

@@ -176,7 +176,7 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.BoolVarP(&options.all, "all", "a", false, "Include internal/frontend images")
-	flags.Var(&options.filter, "filter", `Provide filter values (e.g., "until=24h")`)
+	flags.Var(&options.filter, "filter", `Provide filter values`)
 	flags.Var(&options.reservedSpace, "reserved-space", "Amount of disk space always allowed to keep for cache")
 	flags.Var(&options.minFreeSpace, "min-free-space", "Target amount of free disk space after pruning")
 	flags.Var(&options.maxUsedSpace, "max-used-space", "Maximum amount of disk space allowed to keep for cache")
