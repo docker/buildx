@@ -332,7 +332,7 @@ func valueFiler(key, value, sep string) matchFunc {
 				recValue = v
 			} else {
 				if context, ok := rec.FrontendAttrs["context"]; ok {
-					if ref, err := dfgitutil.ParseGitRef(context); err == nil {
+					if ref, _, err := dfgitutil.ParseGitRef(context); err == nil {
 						recValue = ref.Remote
 					}
 				}
