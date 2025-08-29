@@ -36,7 +36,7 @@ func IsRemoteURL(c string) bool {
 	if isHTTPURL(c) {
 		return true
 	}
-	if _, err := dfgitutil.ParseGitRef(c); err == nil {
+	if _, ok, _ := dfgitutil.ParseGitRef(c); ok {
 		return true
 	}
 	return false

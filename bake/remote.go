@@ -32,8 +32,12 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 	var sessions []session.Attachable
 	var filename string
 
-	st, ok := dockerui.DetectGitContext(url, false)
+	keepGitDir := false
+	st, ok, err := dockerui.DetectGitContext(url, &keepGitDir)
 	if ok {
+		if err != nil {
+			return nil, nil, err
+		}
 		if ssh, err := build.CreateSSH([]*buildflags.SSH{{
 			ID:    "default",
 			Paths: strings.Split(os.Getenv("BUILDX_BAKE_GIT_SSH"), ","),
