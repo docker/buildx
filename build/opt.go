@@ -38,6 +38,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
+	"github.com/moby/buildkit/util/gitutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
@@ -404,6 +405,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		dockerfileName    = inp.DockerfilePath
 		dockerfileSrcName = inp.DockerfilePath
 		toRemove          []string
+		caps              = map[string]struct{}{}
 	)
 
 	switch {
@@ -469,6 +471,12 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			target.FrontendAttrs["dockerfilekey"] = "dockerfile"
 		}
 		target.FrontendAttrs["context"] = inp.ContextPath
+
+		gitRef, err := gitutil.ParseURL(inp.ContextPath)
+		if err == nil && len(gitRef.Query) > 0 {
+			caps["moby.buildkit.frontend.gitquerystring"] = struct{}{}
+		}
+
 	default:
 		return nil, errors.Errorf("unable to prepare context: path %q not found", inp.ContextPath)
 	}
@@ -516,7 +524,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 	target.FrontendAttrs["filename"] = dockerfileName
 
 	for k, v := range inp.NamedContexts {
-		target.FrontendAttrs["frontend.caps"] = "moby.buildkit.frontend.contexts+forward"
+		caps["moby.buildkit.frontend.contexts+forward"] = struct{}{}
 		if v.State != nil {
 			target.FrontendAttrs["context:"+k] = "input:" + k
 			if target.FrontendInputs == nil {
@@ -528,6 +536,12 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 
 		if IsRemoteURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
 			target.FrontendAttrs["context:"+k] = v.Path
+			gitRef, err := gitutil.ParseURL(v.Path)
+			if err == nil && len(gitRef.Query) > 0 {
+				if _, ok := caps["moby.buildkit.frontend.gitquerystring"]; !ok {
+					caps["moby.buildkit.frontend.gitquerystring+forward"] = struct{}{}
+				}
+			}
 			continue
 		}
 
@@ -557,6 +571,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			target.FrontendAttrs["context:"+k] = "oci-layout://" + storeName + ":" + tag + "@" + dig
 			continue
 		}
+
 		st, err := os.Stat(v.Path)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to get build context %v", k)
@@ -578,6 +593,12 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		for _, dir := range toRemove {
 			_ = os.RemoveAll(dir)
 		}
+	}
+
+	if len(caps) > 0 {
+		keys := slices.Collect(maps.Keys(caps))
+		slices.Sort(keys)
+		target.FrontendAttrs["frontend.caps"] = strings.Join(keys, ",")
 	}
 
 	inp.DockerfileMappingSrc = dockerfileSrcName
