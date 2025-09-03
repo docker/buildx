@@ -49,6 +49,7 @@ func testIntegration(t *testing.T, funcs ...func(t *testing.T, sb integration.Sa
 		}
 	}
 	mirroredImages["moby/buildkit:buildx-stable-1"] = buildkitImage
+	mirroredImages["docker/dockerfile-upstream:1.18.0"] = "docker.io/docker/dockerfile-upstream:1.18.0"
 	mirrors := integration.WithMirroredImages(mirroredImages)
 
 	tests := integration.TestFuncs(funcs...)
