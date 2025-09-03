@@ -14,8 +14,6 @@ import (
 )
 
 func TestLaunch(t *testing.T) {
-	t.Skip("test fails with errgroup v0.16.0, that doesn't swallow panic in goroutine")
-
 	adapter, conn, client := NewTestAdapter[common.Config](t)
 
 	ctx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, context.DeadlineExceeded)
@@ -83,14 +81,14 @@ func NewTestAdapter[C LaunchConfig](t *testing.T) (*Adapter[C], Conn, *Client) {
 	})
 
 	clientConn := logConn(t, "client", NewConn(rd2, wr1))
-	t.Cleanup(func() {
-		clientConn.Close()
-	})
+	t.Cleanup(func() { clientConn.Close() })
 
 	adapter := New[C]()
 	t.Cleanup(func() { adapter.Stop() })
 
 	client := NewClient(clientConn)
+	t.Cleanup(func() { client.Close() })
+
 	return adapter, srvConn, client
 }
 
