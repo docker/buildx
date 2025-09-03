@@ -115,28 +115,155 @@ COPY --from=base /etc/bar /bar
 }
 
 func testBuildRemote(t *testing.T, sb integration.Sandbox) {
-	dockerfile := []byte(`
+	t.Run("default branch", func(t *testing.T) {
+		dockerfile := []byte(`
 FROM busybox:latest
 COPY foo /foo
 `)
-	dir := tmpdir(
-		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
-	)
-	dirDest := t.TempDir()
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
-	require.NoError(t, err)
+		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		require.NoError(t, err)
 
-	gittestutil.GitInit(git, t)
-	gittestutil.GitAdd(git, t, "Dockerfile", "foo")
-	gittestutil.GitCommit(git, t, "initial commit")
-	addr := gittestutil.GitServeHTTP(git, t)
+		gittestutil.GitInit(git, t)
+		gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+		gittestutil.GitCommit(git, t, "initial commit")
+		addr := gittestutil.GitServeHTTP(git, t)
 
-	out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
-	require.NoError(t, err, out)
-	require.FileExists(t, filepath.Join(dirDest, "foo"))
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "foo"))
+	})
+
+	t.Run("tag ref with url fragment", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox:latest
+COPY foo /foo
+`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		require.NoError(t, err)
+
+		gittestutil.GitInit(git, t)
+		gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+		gittestutil.GitCommit(git, t, "initial commit")
+		gittestutil.GitTag(git, t, "v0.1.0")
+		addr := gittestutil.GitServeHTTP(git, t)
+		addr = addr + "#v0.1.0" // tag
+
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "foo"))
+	})
+
+	t.Run("tag ref with query string", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox:latest
+COPY foo /foo
+`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		require.NoError(t, err)
+
+		gittestutil.GitInit(git, t)
+		gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+		gittestutil.GitCommit(git, t, "initial commit")
+		gittestutil.GitTag(git, t, "v0.1.0")
+		addr := gittestutil.GitServeHTTP(git, t)
+		addr = addr + "?tag=v0.1.0" // tag
+
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
+		if matchesBuildKitVersion(t, sb, ">= 0.24.0-0") {
+			require.NoError(t, err, out)
+			require.FileExists(t, filepath.Join(dirDest, "foo"))
+		} else {
+			require.Error(t, err)
+			require.Contains(t, out, "current frontend does not support Git URLs with query string components")
+		}
+	})
+
+	t.Run("tag ref with query string frontend 1.17", func(t *testing.T) {
+		dockerfile := []byte(`
+# syntax=docker/dockerfile:1.17
+FROM busybox:latest
+COPY foo /foo
+`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		require.NoError(t, err)
+
+		gittestutil.GitInit(git, t)
+		gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+		gittestutil.GitCommit(git, t, "initial commit")
+		gittestutil.GitTag(git, t, "v0.1.0")
+		addr := gittestutil.GitServeHTTP(git, t)
+		addr = addr + "?tag=v0.1.0" // tag
+
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
+		if matchesBuildKitVersion(t, sb, ">= 0.24.0-0") {
+			require.NoError(t, err, out)
+			require.FileExists(t, filepath.Join(dirDest, "foo"))
+		} else {
+			require.Error(t, err)
+			require.Contains(t, out, "current frontend does not support Git URLs with query string components")
+		}
+	})
+
+	t.Run("tag ref with query string frontend 1.18.0", func(t *testing.T) {
+		dockerfile := []byte(`
+# syntax=docker/dockerfile-upstream:1.18.0
+FROM busybox:latest
+COPY foo /foo
+`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		require.NoError(t, err)
+
+		gittestutil.GitInit(git, t)
+		gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+		gittestutil.GitCommit(git, t, "initial commit")
+		gittestutil.GitTag(git, t, "v0.1.0")
+		addr := gittestutil.GitServeHTTP(git, t)
+		addr = addr + "?tag=v0.1.0" // tag
+
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dirDest, addr))
+		if matchesBuildKitVersion(t, sb, ">= 0.24.0-0") {
+			require.NoError(t, err, out)
+			require.FileExists(t, filepath.Join(dirDest, "foo"))
+		} else {
+			require.Error(t, err)
+			require.Contains(t, out, "current frontend does not support Git URLs with query string components")
+		}
+	})
 }
 
 func testBuildLocalState(t *testing.T, sb integration.Sandbox) {
