@@ -692,6 +692,11 @@ func wrapBuildError(err error, bake bool) error {
 			msg += " Named contexts are supported since Dockerfile v1.4. Use #syntax directive in Dockerfile or update to latest BuildKit."
 			return &wrapped{err, msg}
 		}
+		if st.Code() == codes.Unimplemented && strings.Contains(st.Message(), "unsupported frontend capability moby.buildkit.frontend.gitquerystring") {
+			msg := "current frontend does not support Git URLs with query string components."
+			msg += " Git URLs with query string are supported since Dockerfile v1.18 and BuildKit v0.24. Use BUILDKIT_SYNTAX build-arg, #syntax directive in Dockerfile or update to latest BuildKit."
+			return &wrapped{err, msg}
+		}
 	}
 	return err
 }
