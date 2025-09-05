@@ -35,9 +35,17 @@ func (f *frame) setNameFromMeta(meta llb.OpMetadata) {
 	// TODO: should we infer the name from somewhere else?
 }
 
-func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string) {
+func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string, next *step) {
 	for _, l := range loc.Locations {
 		for _, r := range l.Ranges {
+			if next != nil && f.Line != 0 {
+				// We have location information. See if the new location
+				// information matches with our location better.
+				if !betterLocation(r, f, next) {
+					continue
+				}
+			}
+
 			f.Line = int(r.Start.Line)
 			f.Column = int(r.Start.Character)
 			f.EndLine = int(r.End.Line)
@@ -48,7 +56,13 @@ func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string) 
 				Name: path.Base(info.Filename),
 				Path: filepath.Join(ws, info.Filename),
 			}
-			return
+
+			// If we do not have a next operation, then we don't have
+			// any information to make a determination about the "best" fit
+			// that happens at the beginning of this section. Exit early.
+			if next == nil {
+				return
+			}
 		}
 	}
 }
@@ -401,4 +415,24 @@ func brief(s string) string {
 		return s[:60] + " ..."
 	}
 	return s
+}
+
+func betterLocation(r *pb.Range, f *frame, next *step) bool {
+	// Ideal guess is one that is before the next frame.
+	if int(r.Start.Line) <= next.frame.Line {
+		// And is later than our current guess.
+		if int(r.Start.Line) > f.Line {
+			return true
+		}
+	}
+
+	// We're after the next frame so this is a bad guess.
+	// Was our original one even worse?
+	if int(r.Start.Line) < f.Line {
+		// Yes it was. We'll consider this a better location.
+		return true
+	}
+
+	// Doesn't seem to be a better location.
+	return false
 }

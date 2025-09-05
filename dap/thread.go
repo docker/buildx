@@ -33,13 +33,11 @@ type thread struct {
 	sourcePath string
 
 	// LLB state for the evaluate call.
-	def  *llb.Definition
-	ops  map[digest.Digest]*pb.Op
-	head digest.Digest
-	bps  map[digest.Digest]int
-
-	frames         map[int32]*frame
-	framesByDigest map[digest.Digest]*frame
+	def    *llb.Definition
+	ops    map[digest.Digest]*pb.Op
+	head   digest.Digest
+	bps    map[digest.Digest]int
+	frames map[int32]*frame
 
 	// Runtime state for the evaluate call.
 	entrypoint *step
@@ -141,14 +139,13 @@ type step struct {
 }
 
 func (t *thread) createProgram() error {
-	t.framesByDigest = make(map[digest.Digest]*frame)
 	t.frames = make(map[int32]*frame)
 
 	// Create the entrypoint by using the last node.
 	// We will build on top of that.
 	head := &step{
 		dgst:  t.head,
-		frame: t.getStackFrame(t.head),
+		frame: t.getStackFrame(t.head, nil),
 	}
 	t.entrypoint = t.createBranch(head)
 	return nil
@@ -166,7 +163,7 @@ func (t *thread) createBranch(last *step) (first *step) {
 			// exit point always matches the one set on first
 			out: first.out,
 			// always set to the same as next which is always first
-			frame: t.getStackFrame(first.dgst),
+			frame: t.getStackFrame(first.dgst, first),
 		}
 
 		op := t.ops[first.dgst]
@@ -195,7 +192,7 @@ func (t *thread) createBranch(last *step) (first *step) {
 					in:    exit,
 					next:  exit,
 					out:   exit,
-					frame: t.getStackFrame(digest.Digest(inp.Digest)),
+					frame: t.getStackFrame(digest.Digest(inp.Digest), nil),
 				}
 				prev.in = t.createBranch(head)
 			}
@@ -213,11 +210,7 @@ func (t *thread) createBranch(last *step) (first *step) {
 	return first
 }
 
-func (t *thread) getStackFrame(dgst digest.Digest) *frame {
-	if f := t.framesByDigest[dgst]; f != nil {
-		return f
-	}
-
+func (t *thread) getStackFrame(dgst digest.Digest, next *step) *frame {
 	f := &frame{
 		op: t.ops[dgst],
 	}
@@ -226,7 +219,7 @@ func (t *thread) getStackFrame(dgst digest.Digest) *frame {
 		f.setNameFromMeta(meta)
 	}
 	if loc, ok := t.def.Source.Locations[string(dgst)]; ok {
-		f.fillLocation(t.def, loc, t.sourcePath)
+		f.fillLocation(t.def, loc, t.sourcePath, next)
 	}
 	t.frames[int32(f.Id)] = f
 	return f
