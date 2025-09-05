@@ -67,10 +67,10 @@ func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string, 
 	}
 }
 
-func (f *frame) ExportVars(ctx context.Context, ref gateway.Reference, refs *variableReferences) {
+func (f *frame) ExportVars(ctx context.Context, mounts map[string]gateway.Reference, refs *variableReferences) {
 	f.fillVarsFromOp(f.op, refs)
-	if ref != nil {
-		f.fillVarsFromResult(ctx, ref, refs)
+	if len(mounts) > 0 {
+		f.fillVarsFromResult(ctx, mounts, refs)
 	}
 }
 
@@ -186,18 +186,23 @@ func execOpVars(exec *pb.ExecOp, refs *variableReferences) dap.Variable {
 	}
 }
 
-func (f *frame) fillVarsFromResult(ctx context.Context, ref gateway.Reference, refs *variableReferences) {
+func (f *frame) fillVarsFromResult(ctx context.Context, mounts map[string]gateway.Reference, refs *variableReferences) {
 	f.scopes = append(f.scopes, dap.Scope{
 		Name:             "File Explorer",
 		PresentationHint: "locals",
 		VariablesReference: refs.New(func() []dap.Variable {
-			return fsVars(ctx, ref, "/", refs)
+			return fsVars(ctx, mounts, "/", refs)
 		}),
 		Expensive: true,
 	})
 }
 
-func fsVars(ctx context.Context, ref gateway.Reference, path string, vars *variableReferences) []dap.Variable {
+func fsVars(ctx context.Context, mounts map[string]gateway.Reference, path string, vars *variableReferences) []dap.Variable {
+	path, ref := lookupPath(path, mounts)
+	if ref == nil {
+		return nil
+	}
+
 	files, err := ref.ReadDir(ctx, gateway.ReadDirRequest{
 		Path: path,
 	})
@@ -228,7 +233,7 @@ func fsVars(ctx context.Context, ref gateway.Reference, path string, vars *varia
 						return statVars(file)
 					}),
 				}
-				return append([]dap.Variable{dvar}, fsVars(ctx, ref, fullpath, vars)...)
+				return append([]dap.Variable{dvar}, fsVars(ctx, mounts, fullpath, vars)...)
 			})
 			fv.Value = ""
 		} else {
@@ -435,4 +440,16 @@ func betterLocation(r *pb.Range, f *frame, next *step) bool {
 
 	// Doesn't seem to be a better location.
 	return false
+}
+
+func lookupPath(path string, mounts map[string]gateway.Reference) (remainder string, ref gateway.Reference) {
+	var prefix string
+	for p, r := range mounts {
+		if len(p) > len(prefix) && strings.HasPrefix(path, p) {
+			prefix = p
+			remainder, _ = filepath.Rel(prefix, p)
+			ref = r
+		}
+	}
+	return "/" + remainder, ref
 }
