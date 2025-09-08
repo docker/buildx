@@ -203,7 +203,7 @@ func fsVars(ctx context.Context, ref gateway.Reference, path string, vars *varia
 			Name: file.Path,
 		}
 
-		fullpath := filepath.Join(path, file.Path)
+		fullpath := filepath.ToSlash(filepath.Join(path, file.Path))
 		if file.IsDir() {
 			fv.Name += "/"
 			fv.VariablesReference = vars.New(func() []dap.Variable {
