@@ -48,6 +48,13 @@ area/cli:
       - cmd/**
       - commands/**
 
+# Add 'area/dap' label to changes in dap files
+area/dap:
+  - changed-files:
+    - any-glob-to-any-file:
+      - commands/dap.go
+      - dap/**
+
 # Add 'area/docs' label to markdown files in the docs folder
 area/docs:
   - changed-files:
