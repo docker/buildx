@@ -509,7 +509,7 @@ func loadYamlFile(ctx context.Context,
 				break
 			}
 			if err != nil {
-				return nil, nil, err
+				return nil, nil, fmt.Errorf("failed to parse %s: %w", file.Filename, err)
 			}
 			processor = reset
 			if err := processRawYaml(raw, processor); err != nil {
