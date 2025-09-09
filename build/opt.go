@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strconv"
 	"strings"
+	"sync"
 	"syscall"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
@@ -29,6 +30,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/frontend/dockerui"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
@@ -43,6 +45,15 @@ import (
 	"github.com/pkg/errors"
 	"github.com/tonistiigi/fsutil"
 )
+
+var sendGitQueryAsInput = sync.OnceValue(func() bool {
+	if v, ok := os.LookupEnv("BUILDX_SEND_GIT_QUERY_AS_INPUT"); ok {
+		if vv, err := strconv.ParseBool(v); err == nil {
+			return vv
+		}
+	}
+	return false
+})
 
 func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *Options, bopts gateway.BuildOpts, cfg *confutil.Config, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
@@ -298,6 +309,13 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	so.Exports = opt.Exports
 	so.Session = slices.Clone(opt.Session)
 
+	for k, v := range opt.BuildArgs {
+		so.FrontendAttrs["build-arg:"+k] = v
+	}
+	for k, v := range opt.Labels {
+		so.FrontendAttrs["label:"+k] = v
+	}
+
 	releaseLoad, err := loadInputs(ctx, nodeDriver, &opt.Inputs, pw, &so)
 	if err != nil {
 		return nil, nil, err
@@ -323,12 +341,6 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 	if opt.NoCache {
 		so.FrontendAttrs["no-cache"] = ""
-	}
-	for k, v := range opt.BuildArgs {
-		so.FrontendAttrs["build-arg:"+k] = v
-	}
-	for k, v := range opt.Labels {
-		so.FrontendAttrs["label:"+k] = v
 	}
 
 	for k, v := range node.ProxyConfig {
@@ -472,9 +484,13 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		}
 		target.FrontendAttrs["context"] = inp.ContextPath
 
-		gitRef, err := gitutil.ParseURL(inp.ContextPath)
-		if err == nil && len(gitRef.Query) > 0 {
-			caps["moby.buildkit.frontend.gitquerystring"] = struct{}{}
+		if err := processGitURL(inp.ContextPath, "context", target, caps); err != nil {
+			return nil, err
+		}
+		if st, ok := target.FrontendInputs["context"]; ok {
+			if dockerfileReader == nil && !filepath.IsAbs(inp.DockerfilePath) {
+				target.FrontendInputs["dockerfile"] = st
+			}
 		}
 
 	default:
@@ -536,12 +552,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 
 		if IsRemoteURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
 			target.FrontendAttrs["context:"+k] = v.Path
-			gitRef, err := gitutil.ParseURL(v.Path)
-			if err == nil && len(gitRef.Query) > 0 {
-				if _, ok := caps["moby.buildkit.frontend.gitquerystring"]; !ok {
-					caps["moby.buildkit.frontend.gitquerystring+forward"] = struct{}{}
-				}
-			}
+			processGitURL(v.Path, "context:"+k, target, caps)
 			continue
 		}
 
@@ -670,6 +681,55 @@ func createTempDockerfile(r io.Reader, multiReader *SyncMultiReader) (string, er
 		return "", err
 	}
 	return dir, err
+}
+
+func processGitURL(url string, name string, target *client.SolveOpt, caps map[string]struct{}) error {
+	gitRef, err := gitutil.ParseURL(url)
+	if err != nil {
+		return err
+	}
+	if len(gitRef.Query) == 0 {
+		return nil
+	}
+	if !sendGitQueryAsInput() {
+		capName := "moby.buildkit.frontend.gitquerystring"
+		if name != "context" {
+			capName += "+forward"
+		}
+		caps[capName] = struct{}{}
+		return nil
+	}
+
+	var keepGitDir *bool
+	if name == "context" {
+		if v, ok := target.FrontendAttrs["build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR"]; ok {
+			if vv, err := strconv.ParseBool(v); err == nil {
+				keepGitDir = &vv
+			}
+		}
+	}
+
+	st, ok, err := dockerui.DetectGitContext(url, keepGitDir)
+	if err != nil {
+		return err
+	}
+	if !ok {
+		return nil
+	}
+
+	if target.FrontendInputs == nil {
+		target.FrontendInputs = make(map[string]llb.State)
+	}
+	if name == "context" {
+		target.FrontendInputs["context"] = *st
+		delete(target.FrontendAttrs, "context")
+	} else {
+		inputName := "git_state_" + name
+		target.FrontendInputs[inputName] = *st
+		target.FrontendAttrs[name] = "input:" + inputName
+	}
+
+	return nil
 }
 
 // handle https://github.com/moby/moby/pull/10858
