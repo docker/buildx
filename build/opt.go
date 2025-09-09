@@ -723,10 +723,12 @@ func processGitURL(url string, name string, target *client.SolveOpt, caps map[st
 	if name == "context" {
 		target.FrontendInputs["context"] = *st
 		delete(target.FrontendAttrs, "context")
+		target.FrontendAttrs["input:context"] = url
 	} else {
 		inputName := "git_state_" + name
 		target.FrontendInputs[inputName] = *st
 		target.FrontendAttrs[name] = "input:" + inputName
+		target.FrontendAttrs["input:"+name] = url
 	}
 
 	return nil
