@@ -190,8 +190,7 @@ func ParseAnnotations(inp []string) (map[exptypes.AnnotationKey]string, error) {
 			continue
 		}
 
-		typesSplit := strings.Split(types, ",")
-		for _, typeAndPlatform := range typesSplit {
+		for typeAndPlatform := range strings.SplitSeq(types, ",") {
 			groups := annotationTypeRegexp.FindStringSubmatch(typeAndPlatform)
 			if groups == nil {
 				return nil, errors.Errorf(

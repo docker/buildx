@@ -299,9 +299,8 @@ func validateTargetLinks(reqForNodes map[string][]*reqForNode, drivers map[strin
 
 func toRepoOnly(in string) (string, error) {
 	m := map[string]struct{}{}
-	p := strings.Split(in, ",")
-	for _, pp := range p {
-		n, err := reference.ParseNormalizedNamed(pp)
+	for ref := range strings.SplitSeq(in, ",") {
+		n, err := reference.ParseNormalizedNamed(ref)
 		if err != nil {
 			return "", err
 		}
