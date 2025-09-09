@@ -88,7 +88,7 @@ type inspectOutput struct {
 	BuildArgs []keyValueOutput `json:",omitempty"`
 	Labels    []keyValueOutput `json:",omitempty"`
 
-	Config configOutput `json:",omitempty"`
+	Config configOutput
 
 	Materials   []materialOutput   `json:",omitempty"`
 	Attachments []attachmentOutput `json:",omitempty"`
@@ -263,7 +263,7 @@ workers0:
 	readAttr(attrs, "platform", &out.Platform, func(v string) ([]string, bool) {
 		return tryParseValue(v, &out.Errors, func(v string) ([]string, error) {
 			var pp []string
-			for _, v := range strings.Split(v, ",") {
+			for v := range strings.SplitSeq(v, ",") {
 				p, err := platforms.Parse(v)
 				if err != nil {
 					return nil, err

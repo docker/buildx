@@ -27,8 +27,7 @@ func InitDockerWorker() {
 	})
 	// e.g. `docker@26.0=/opt/docker-26.0,docker@25.0=/opt/docker-25.0`
 	if s := os.Getenv("TEST_DOCKER_EXTRA"); s != "" {
-		entries := strings.Split(s, ",")
-		for _, entry := range entries {
+		for entry := range strings.SplitSeq(s, ",") {
 			ver, bin, err := func(entry string) (string, string, error) {
 				p1 := strings.Split(strings.TrimSpace(entry), "=")
 				if len(p1) != 2 {

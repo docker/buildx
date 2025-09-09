@@ -85,7 +85,7 @@ func toBuildkitExtraHosts(ctx context.Context, inp []string, nodeDriver *driver.
 			}
 			ips = append(ips, hgip.String())
 		} else {
-			for _, v := range strings.Split(ip, ",") {
+			for v := range strings.SplitSeq(ip, ",") {
 				// If the address is enclosed in square brackets, extract it
 				// (for IPv6, but permit it for IPv4 as well; we don't know the
 				// address family here, but it's unambiguous).

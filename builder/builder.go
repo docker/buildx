@@ -268,7 +268,7 @@ func (b *Builder) MarshalJSON() ([]byte, error) {
 	return json.Marshal(struct {
 		Name         string
 		Driver       string
-		LastActivity time.Time `json:",omitempty"`
+		LastActivity time.Time
 		Dynamic      bool
 		Nodes        []Node
 		Err          string `json:",omitempty"`

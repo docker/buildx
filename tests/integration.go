@@ -184,7 +184,7 @@ func buildkitVersion(t *testing.T, sb integration.Sandbox) string {
 	if !ok {
 		out, err := inspectCmd(sb, withArgs(sb.Address()))
 		require.NoError(t, err, out)
-		for _, line := range strings.Split(out, "\n") {
+		for line := range strings.SplitSeq(out, "\n") {
 			if v, ok := strings.CutPrefix(line, "BuildKit version:"); ok {
 				ver = strings.TrimSpace(v)
 				bkvers[sb.Name()] = ver

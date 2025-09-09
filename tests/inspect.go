@@ -32,7 +32,7 @@ func testInspect(t *testing.T, sb integration.Sandbox) {
 	var name string
 	var driver string
 	var hostGatewayIP string
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if v, ok := strings.CutPrefix(line, "Name:"); ok && name == "" {
 			name = strings.TrimSpace(v)
 		}
@@ -75,7 +75,7 @@ func testInspectBuildkitdFlags(t *testing.T, sb integration.Sandbox) {
 	out, err = inspectCmd(sb, withArgs(builderName))
 	require.NoError(t, err, out)
 
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if v, ok := strings.CutPrefix(line, "BuildKit daemon flags:"); ok {
 			require.Contains(t, v, "--oci-worker-net=bridge")
 			return
@@ -105,7 +105,7 @@ func testInspectNetworkHostEntitlement(t *testing.T, sb integration.Sandbox) {
 	out, err = inspectCmd(sb, withArgs(builderName))
 	require.NoError(t, err, out)
 
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if v, ok := strings.CutPrefix(line, "BuildKit daemon flags:"); ok {
 			require.Contains(t, v, "--allow-insecure-entitlement=network.host")
 			return
@@ -160,7 +160,7 @@ insecure-entitlements = ["network.host", "security.insecure"]
 	var fileLines []string
 	var fileFound bool
 	var reConfLine = regexp.MustCompile(`^[\s\t]*>\s(.*)`)
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if strings.HasPrefix(line, "File#buildkitd.toml:") {
 			fileFound = true
 			continue

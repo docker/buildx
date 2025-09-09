@@ -40,7 +40,7 @@ func testLs(t *testing.T, sb integration.Sandbox) {
 			out, err := lsCmd(sb, withArgs(tt.args...))
 			require.NoError(t, err, out)
 			found := false
-			for _, line := range strings.Split(out, "\n") {
+			for line := range strings.SplitSeq(out, "\n") {
 				if strings.Contains(line, sb.Address()) {
 					found = true
 					require.Contains(t, line, sbDriver)

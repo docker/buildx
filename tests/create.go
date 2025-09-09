@@ -100,7 +100,7 @@ func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
 	out, err = inspectCmd(sb, withArgs(remoteBuilderName))
 	require.NoError(t, err, out)
 
-	for _, line := range strings.Split(out, "\n") {
+	for line := range strings.SplitSeq(out, "\n") {
 		if v, ok := strings.CutPrefix(line, "Status:"); ok {
 			require.Equal(t, "running", strings.TrimSpace(v))
 			return
