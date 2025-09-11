@@ -16,7 +16,7 @@ Start a build
 | Name                                    | Type          | Default   | Description                                                                                                  |
 |:----------------------------------------|:--------------|:----------|:-------------------------------------------------------------------------------------------------------------|
 | [`--add-host`](#add-host)               | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                          |
-| [`--allow`](#allow)                     | `stringArray` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`)                               |
+| [`--allow`](#allow)                     | `stringArray` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`, `device`)                     |
 | [`--annotation`](#annotation)           | `stringArray` |           | Add annotation to the image                                                                                  |
 | [`--attest`](#attest)                   | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                                 |
 | [`--build-arg`](#build-arg)             | `stringArray` |           | Set build-time variables                                                                                     |
@@ -173,6 +173,10 @@ Allow extra privileged entitlement. List of entitlements:
 - `network.host` - Allows executions with host networking.
 - `security.insecure` - Allows executions without sandbox. See
   [related Dockerfile extensions](https://docs.docker.com/reference/dockerfile/#run---security).
+- `device` - Allows access to Container Device Interface (CDI) devices.
+   - `--allow device` - Grants access to all devices.
+   - `--allow device=kind|name` - Grants access to a specific device.
+   - `--allow device=kind|name,alias=kind|name` - Grants access to a specific device, with optional aliasing.
 
 For entitlements to be enabled, the BuildKit daemon also needs to allow them
 with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#buildkitd-flags)).
