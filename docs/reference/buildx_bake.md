@@ -65,7 +65,7 @@ entitlements, making it clear when a build or bake operation requires elevated
 privileges.
 
 In addition to BuildKit's `network.host` and `security.insecure` entitlements
-(see [`docker buildx build --allow`](https://docs.docker.com/reference/cli/docker/buildx/build/#allow),
+(see [`docker buildx build --allow`](https://docs.docker.com/reference/cli/docker/buildx/build/#allow)),
 Bake supports file system entitlements that grant granular control over file
 system access. These are particularly useful when working with builds that need
 access to files outside the default working directory.

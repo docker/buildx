@@ -502,7 +502,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
 
-	flags.StringArrayVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure")`)
+	flags.StringArrayVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure", "device")`)
 
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 
