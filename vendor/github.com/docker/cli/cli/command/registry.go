@@ -2,6 +2,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"runtime"
@@ -15,9 +16,9 @@ import (
 	"github.com/docker/cli/cli/streams"
 	"github.com/docker/cli/internal/prompt"
 	"github.com/docker/cli/internal/tui"
-	registrytypes "github.com/docker/docker/api/types/registry"
+	"github.com/moby/moby/api/pkg/authconfig"
+	registrytypes "github.com/moby/moby/api/types/registry"
 	"github.com/morikuni/aec"
-	"github.com/pkg/errors"
 )
 
 const (
@@ -33,34 +34,6 @@ const (
 //
 // [registry.IndexServer]: https://pkg.go.dev/github.com/docker/docker@v28.3.3+incompatible/registry#IndexServer
 const authConfigKey = "https://index.docker.io/v1/"
-
-// RegistryAuthenticationPrivilegedFunc returns a RequestPrivilegeFunc from the specified registry index info
-// for the given command to prompt the user for username and password.
-//
-// Deprecated: this function is no longer used and will be removed in the next release.
-func RegistryAuthenticationPrivilegedFunc(cli Cli, index *registrytypes.IndexInfo, cmdName string) registrytypes.RequestAuthConfig {
-	configKey := getAuthConfigKey(index.Name)
-	isDefaultRegistry := configKey == authConfigKey || index.Official
-	return func(ctx context.Context) (string, error) {
-		_, _ = fmt.Fprintf(cli.Out(), "\nLogin prior to %s:\n", cmdName)
-		authConfig, err := GetDefaultAuthConfig(cli.ConfigFile(), true, configKey, isDefaultRegistry)
-		if err != nil {
-			_, _ = fmt.Fprintf(cli.Err(), "Unable to retrieve stored credentials for %s, error: %s.\n", configKey, err)
-		}
-
-		select {
-		case <-ctx.Done():
-			return "", ctx.Err()
-		default:
-		}
-
-		authConfig, err = PromptUserForCredentials(ctx, cli, "", "", authConfig.Username, configKey)
-		if err != nil {
-			return "", err
-		}
-		return registrytypes.EncodeAuthConfig(authConfig)
-	}
-}
 
 // ResolveAuthConfig returns auth-config for the given registry from the
 // credential-store. It returns an empty AuthConfig if no credentials were
@@ -86,19 +59,19 @@ func GetDefaultAuthConfig(cfg *configfile.ConfigFile, checkCredStore bool, serve
 	if !isDefaultRegistry {
 		serverAddress = credentials.ConvertToHostname(serverAddress)
 	}
-	authconfig := configtypes.AuthConfig{}
+	authCfg := configtypes.AuthConfig{}
 	var err error
 	if checkCredStore {
-		authconfig, err = cfg.GetAuthConfig(serverAddress)
+		authCfg, err = cfg.GetAuthConfig(serverAddress)
 		if err != nil {
 			return registrytypes.AuthConfig{
 				ServerAddress: serverAddress,
 			}, err
 		}
 	}
-	authconfig.ServerAddress = serverAddress
-	authconfig.IdentityToken = ""
-	return registrytypes.AuthConfig(authconfig), nil
+	authCfg.ServerAddress = serverAddress
+	authCfg.IdentityToken = ""
+	return registrytypes.AuthConfig(authCfg), nil
 }
 
 // PromptUserForCredentials handles the CLI prompt for the user to input
@@ -153,7 +126,7 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 			argUser = defaultUsername
 		}
 		if argUser == "" {
-			return registrytypes.AuthConfig{}, errors.Errorf("Error: Non-null Username Required")
+			return registrytypes.AuthConfig{}, errors.New("error: username is required")
 		}
 	}
 
@@ -185,7 +158,7 @@ func PromptUserForCredentials(ctx context.Context, cli Cli, argUser, argPassword
 		}
 		_, _ = fmt.Fprintln(cli.Out())
 		if argPassword == "" {
-			return registrytypes.AuthConfig{}, errors.Errorf("Error: Password Required")
+			return registrytypes.AuthConfig{}, errors.New("error: password is required")
 		}
 	}
 
@@ -213,7 +186,7 @@ func RetrieveAuthTokenFromImage(cfg *configfile.ConfigFile, image string) (strin
 		return "", err
 	}
 
-	encodedAuth, err := registrytypes.EncodeAuthConfig(registrytypes.AuthConfig(authConfig))
+	encodedAuth, err := authconfig.Encode(registrytypes.AuthConfig(authConfig))
 	if err != nil {
 		return "", err
 	}
