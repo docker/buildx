@@ -205,3 +205,29 @@ func TestHomedir(t *testing.T) {
 	require.NotEmpty(t, home.AsString())
 	require.True(t, filepath.IsAbs(home.AsString()))
 }
+
+func TestUnixTimestampParseFunc(t *testing.T) {
+	fn := unixtimestampParseFunc()
+	input := cty.NumberIntVal(1690328596)
+	got, err := fn.Call([]cty.Value{input})
+	require.NoError(t, err)
+
+	expected := map[string]cty.Value{
+		"year":         cty.NumberIntVal(2023),
+		"year_day":     cty.NumberIntVal(206),
+		"day":          cty.NumberIntVal(25),
+		"month":        cty.NumberIntVal(7),
+		"month_name":   cty.StringVal("July"),
+		"weekday":      cty.NumberIntVal(2),
+		"weekday_name": cty.StringVal("Tuesday"),
+		"hour":         cty.NumberIntVal(23),
+		"minute":       cty.NumberIntVal(43),
+		"second":       cty.NumberIntVal(16),
+		"rfc3339":      cty.StringVal("2023-07-25T23:43:16Z"),
+		"iso_year":     cty.NumberIntVal(2023),
+		"iso_week":     cty.NumberIntVal(30),
+	}
+	for k, v := range expected {
+		require.True(t, got.GetAttr(k).RawEquals(v), "field %s: got %v, want %v", k, got.GetAttr(k), v)
+	}
+}
