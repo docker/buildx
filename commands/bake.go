@@ -499,8 +499,8 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags := cmd.Flags()
 
 	flags.StringArrayVarP(&options.files, "file", "f", []string{}, "Build definition file")
-	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker"`)
-	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry"`)
+	flags.BoolVar(&options.exportLoad, "load", false, `Shorthand for "--set=*.output=type=docker". Conditional.`)
+	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--set=*.output=type=registry". Conditional.`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
