@@ -385,8 +385,8 @@ github.com/hashicorp/errwrap
 # github.com/hashicorp/go-cleanhttp v0.5.2
 ## explicit; go 1.13
 github.com/hashicorp/go-cleanhttp
-# github.com/hashicorp/go-cty-funcs v0.0.0-20250210171435-dda779884a9f
-## explicit; go 1.23
+# github.com/hashicorp/go-cty-funcs v0.0.0-20250818135842-6aab67130928
+## explicit; go 1.24
 github.com/hashicorp/go-cty-funcs/cidr
 github.com/hashicorp/go-cty-funcs/crypto
 github.com/hashicorp/go-cty-funcs/encoding
@@ -394,8 +394,8 @@ github.com/hashicorp/go-cty-funcs/uuid
 # github.com/hashicorp/go-multierror v1.1.1
 ## explicit; go 1.13
 github.com/hashicorp/go-multierror
-# github.com/hashicorp/hcl/v2 v2.23.0
-## explicit; go 1.18
+# github.com/hashicorp/hcl/v2 v2.24.0
+## explicit; go 1.23.0
 github.com/hashicorp/hcl/v2
 github.com/hashicorp/hcl/v2/ext/customdecode
 github.com/hashicorp/hcl/v2/ext/tryfunc
@@ -442,8 +442,8 @@ github.com/mattn/go-runewidth
 # github.com/mattn/go-shellwords v1.0.12
 ## explicit; go 1.13
 github.com/mattn/go-shellwords
-# github.com/mitchellh/go-wordwrap v0.0.0-20150314170334-ad45545899c7
-## explicit
+# github.com/mitchellh/go-wordwrap v1.0.1
+## explicit; go 1.14
 github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
@@ -691,10 +691,11 @@ github.com/x448/float16
 # github.com/xhit/go-str2duration/v2 v2.1.0
 ## explicit; go 1.13
 github.com/xhit/go-str2duration/v2
-# github.com/zclconf/go-cty v1.16.2
-## explicit; go 1.18
+# github.com/zclconf/go-cty v1.17.0
+## explicit; go 1.23
 github.com/zclconf/go-cty/cty
 github.com/zclconf/go-cty/cty/convert
+github.com/zclconf/go-cty/cty/ctymarks
 github.com/zclconf/go-cty/cty/ctystrings
 github.com/zclconf/go-cty/cty/function
 github.com/zclconf/go-cty/cty/function/stdlib
@@ -811,7 +812,7 @@ go.opentelemetry.io/proto/otlp/trace/v1
 # go.yaml.in/yaml/v3 v3.0.4
 ## explicit; go 1.16
 go.yaml.in/yaml/v3
-# golang.org/x/crypto v0.37.0
+# golang.org/x/crypto v0.38.0
 ## explicit; go 1.23.0
 golang.org/x/crypto/bcrypt
 golang.org/x/crypto/blowfish
@@ -857,10 +858,10 @@ golang.org/x/sys/plan9
 golang.org/x/sys/unix
 golang.org/x/sys/windows
 golang.org/x/sys/windows/registry
-# golang.org/x/term v0.31.0
+# golang.org/x/term v0.32.0
 ## explicit; go 1.23.0
 golang.org/x/term
-# golang.org/x/text v0.24.0
+# golang.org/x/text v0.25.0
 ## explicit; go 1.23.0
 golang.org/x/text/cases
 golang.org/x/text/feature/plural
