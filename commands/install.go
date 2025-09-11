@@ -47,7 +47,6 @@ func installCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInstall(dockerCli, options)
 		},
-		Hidden:                true,
 		ValidArgsFunction:     completion.Disable,
 		DisableFlagsInUseLine: true,
 	}
