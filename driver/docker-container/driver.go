@@ -24,7 +24,6 @@ import (
 	"github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
-	"github.com/docker/docker/api/types/system"
 	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/docker/docker/pkg/stdcopy"
 	"github.com/moby/buildkit/client"
@@ -192,17 +191,6 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				hc.CgroupParent = "/docker/buildx"
 				if d.cgroupParent != "" {
 					hc.CgroupParent = d.cgroupParent
-				}
-			}
-
-			secOpts, err := system.DecodeSecurityOptions(info.SecurityOptions)
-			if err != nil {
-				return err
-			}
-			for _, f := range secOpts {
-				if f.Name == "userns" {
-					hc.UsernsMode = "host"
-					break
 				}
 			}
 		}
