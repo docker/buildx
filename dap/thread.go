@@ -49,7 +49,6 @@ type thread struct {
 	// Attributes set when a thread is paused.
 	cancel     context.CancelCauseFunc // invoked when the thread is resumed
 	rCtx       *build.ResultHandle
-	curPos     digest.Digest
 	stackTrace []int32
 }
 
@@ -74,15 +73,16 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, headRef gateway.Referen
 	}
 
 	var (
-		ref  gateway.Reference
-		next = t.entrypoint
-		err  error
+		ref    gateway.Reference
+		mounts map[string]gateway.Reference
+		next   = t.entrypoint
+		err    error
 	)
 	for next != nil {
 		event := t.needsDebug(next, action, err)
 		if event.Reason != "" {
 			select {
-			case action = <-t.pause(ctx, ref, err, next, event):
+			case action = <-t.pause(ctx, ref, err, mounts, next, event):
 				// do nothing here
 			case <-ctx.Done():
 				return context.Cause(ctx)
@@ -96,7 +96,7 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, headRef gateway.Referen
 		if action == stepContinue {
 			t.setBreakpoints(ctx)
 		}
-		ref, next, err = t.seekNext(ctx, next, action)
+		ref, next, mounts, err = t.seekNext(ctx, next, action)
 	}
 	return nil
 }
@@ -285,26 +285,17 @@ func (t *thread) needsDebug(cur *step, step stepType, err error) (e dap.StoppedE
 	return
 }
 
-func (t *thread) pause(c Context, ref gateway.Reference, err error, pos *step, event dap.StoppedEventBody) <-chan stepType {
+func (t *thread) pause(c Context, ref gateway.Reference, err error, mounts map[string]gateway.Reference, pos *step, event dap.StoppedEventBody) <-chan stepType {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
 	if t.paused != nil {
 		return t.paused
 	}
-
 	t.paused = make(chan stepType, 1)
-	if err != nil {
-		var solveErr *errdefs.SolveError
-		if errors.As(err, &solveErr) {
-			if dt, err := solveErr.Op.MarshalVT(); err == nil {
-				t.curPos = digest.FromBytes(dt)
-			}
-		}
-	}
 
 	ctx, cancel := context.WithCancelCause(c)
-	t.collectStackTrace(ctx, pos, ref)
+	t.collectStackTrace(ctx, pos, mounts)
 	t.cancel = cancel
 
 	if ref != nil || err != nil {
@@ -435,7 +426,7 @@ func (t *thread) setBreakpoints(ctx Context) {
 	t.bps = t.breakpointMap.Intersect(ctx, t.def.Source, t.sourcePath)
 }
 
-func (t *thread) seekNext(ctx Context, from *step, action stepType) (gateway.Reference, *step, error) {
+func (t *thread) seekNext(ctx Context, from *step, action stepType) (gateway.Reference, *step, map[string]gateway.Reference, error) {
 	// If we're at the end, return no digest to signal that
 	// we should conclude debugging.
 	var target *step
@@ -452,12 +443,12 @@ func (t *thread) seekNext(ctx Context, from *step, action stepType) (gateway.Ref
 	return t.seek(ctx, target)
 }
 
-func (t *thread) seek(ctx Context, target *step) (ref gateway.Reference, result *step, err error) {
+func (t *thread) seek(ctx Context, target *step) (ref gateway.Reference, result *step, mounts map[string]gateway.Reference, err error) {
 	if target != nil {
 		if target.dgst != "" {
-			ref, err = t.solve(ctx, target.dgst)
+			ref, err = t.solve(ctx, target.dgst, 0)
 			if err != nil {
-				return ref, nil, err
+				return ref, nil, nil, err
 			}
 		}
 
@@ -468,31 +459,15 @@ func (t *thread) seek(ctx Context, target *step) (ref gateway.Reference, result 
 
 	if ref != nil {
 		if err = ref.Evaluate(ctx); err != nil {
-			// If this is not a solve error, do not return the
-			// reference and target step.
-			var solveErr *errdefs.SolveError
-			if errors.As(err, &solveErr) {
-				if dt, err := solveErr.Op.MarshalVT(); err == nil {
-					// Find the error digest.
-					errDgst := digest.FromBytes(dt)
-
-					// Iterate from the first step to find the one
-					// we failed on.
-					result = t.entrypoint
-					for result != nil {
-						next := result.in
-						if next != nil && next.dgst == errDgst {
-							break
-						}
-						result = next
-					}
-				}
-			} else {
-				return nil, nil, err
+			result, mounts = t.rewind(ctx, err)
+			if result == nil {
+				return nil, nil, nil, err
 			}
+		} else {
+			mounts = map[string]gateway.Reference{"/": ref}
 		}
 	}
-	return ref, result, err
+	return ref, result, mounts, err
 }
 
 func (t *thread) continueDigest(from *step) *step {
@@ -523,13 +498,15 @@ func (t *thread) continueDigest(from *step) *step {
 	return next(from)
 }
 
-func (t *thread) solve(ctx context.Context, target digest.Digest) (gateway.Reference, error) {
+func (t *thread) solve(ctx context.Context, target digest.Digest, index int64) (gateway.Reference, error) {
 	if target == t.head {
 		return t.ref, nil
 	}
 
 	head := &pb.Op{
-		Inputs: []*pb.Input{{Digest: string(target)}},
+		Inputs: []*pb.Input{
+			{Digest: string(target), Index: index},
+		},
 	}
 	dt, err := head.MarshalVT()
 	if err != nil {
@@ -567,12 +544,12 @@ func (t *thread) releaseState() {
 	t.variables.Reset()
 }
 
-func (t *thread) collectStackTrace(ctx context.Context, pos *step, ref gateway.Reference) {
+func (t *thread) collectStackTrace(ctx context.Context, pos *step, mounts map[string]gateway.Reference) {
 	for pos != nil {
 		frame := pos.frame
-		frame.ExportVars(ctx, ref, t.variables)
+		frame.ExportVars(ctx, mounts, t.variables)
 		t.stackTrace = append(t.stackTrace, int32(frame.Id))
-		pos, ref = pos.out, nil
+		pos, mounts = pos.out, nil
 	}
 }
 
@@ -586,4 +563,49 @@ func (t *thread) hasFrame(id int) bool {
 
 	_, ok := t.frames[int32(id)]
 	return ok
+}
+
+func (t *thread) rewind(ctx context.Context, err error) (result *step, mounts map[string]gateway.Reference) {
+	var solveErr *errdefs.SolveError
+	if !errors.As(err, &solveErr) {
+		// If this is not a solve error, do not return the
+		// reference and target step.
+		return nil, nil
+	}
+
+	dt, err := solveErr.Op.MarshalVT()
+	if err != nil {
+		return nil, nil
+	}
+
+	// Find the error digest.
+	errDgst := digest.FromBytes(dt)
+
+	// Iterate from the first step to find the one
+	// we failed on.
+	result = t.entrypoint
+	for result != nil {
+		next := result.in
+		if next != nil && next.dgst == errDgst {
+			break
+		}
+		result = next
+	}
+
+	if exec, ok := solveErr.Op.GetOp().(*pb.Op_Exec); ok {
+		mounts = make(map[string]gateway.Reference, len(exec.Exec.Mounts))
+		for _, m := range exec.Exec.Mounts {
+			if m.Input < 0 {
+				continue
+			}
+
+			// TODO: Use the correct input index for this.
+			input := solveErr.Op.Inputs[m.Input]
+			target, index := digest.Digest(input.Digest), input.Index
+			if ref, err := t.solve(ctx, target, index); err == nil {
+				mounts[m.Dest] = ref
+			}
+		}
+	}
+	return result, mounts
 }
