@@ -11,17 +11,20 @@ import (
 	"strings"
 
 	"github.com/docker/cli/cli/config"
-	"github.com/moby/moby/api/types/filters"
+	"github.com/moby/moby/client"
 )
 
 // PruneFilters merges prune filters specified in config.json with those specified
-// as command-line flags.
+// as command-line flags. It returns a deep copy of filters to prevent mutating
+// the original.
 //
 // CLI label filters have precedence over those specified in config.json. If a
 // label filter specified as flag conflicts with a label defined in config.json
 // (i.e., "label=some-value" conflicts with "label!=some-value", and vice versa),
 // then the filter defined in config.json is omitted.
-func PruneFilters(dockerCLI config.Provider, pruneFilters filters.Args) filters.Args {
+func PruneFilters(dockerCLI config.Provider, filters client.Filters) client.Filters {
+	pruneFilters := filters.Clone()
+
 	cfg := dockerCLI.ConfigFile()
 	if cfg == nil {
 		return pruneFilters
@@ -37,13 +40,13 @@ func PruneFilters(dockerCLI config.Provider, pruneFilters filters.Args) filters.
 		switch k {
 		case "label":
 			// "label != some-value" conflicts with "label = some-value"
-			if pruneFilters.ExactMatch("label!", v) {
+			if pruneFilters["label!"][v] {
 				continue
 			}
 			pruneFilters.Add(k, v)
 		case "label!":
 			// "label != some-value" conflicts with "label = some-value"
-			if pruneFilters.ExactMatch("label", v) {
+			if pruneFilters["label"][v] {
 				continue
 			}
 			pruneFilters.Add(k, v)

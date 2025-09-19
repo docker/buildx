@@ -4,6 +4,7 @@ import (
 	"time"
 
 	dockerspec "github.com/moby/docker-image-spec/specs-go/v1"
+	"github.com/moby/moby/api/types/network"
 )
 
 // MinimumDuration puts a minimum on user configured duration.
@@ -28,7 +29,7 @@ type Config struct {
 	AttachStdin     bool                // Attach the standard input, makes possible user interaction
 	AttachStdout    bool                // Attach the standard output
 	AttachStderr    bool                // Attach the standard error
-	ExposedPorts    PortSet             `json:",omitempty"` // List of exposed ports
+	ExposedPorts    network.PortSet     `json:",omitempty"` // List of exposed ports
 	Tty             bool                // Attach standard streams to a tty, including stdin if it is not closed.
 	OpenStdin       bool                // Open stdin
 	StdinOnce       bool                // If true, close stdin after the 1 attached client disconnects.
@@ -45,7 +46,7 @@ type Config struct {
 	//
 	// Deprecated: this field is deprecated since API v1.44. Use EndpointSettings.MacAddress instead.
 	MacAddress  string            `json:",omitempty"`
-	OnBuild     []string          // ONBUILD metadata that were defined on the image Dockerfile
+	OnBuild     []string          `json:",omitempty"` // ONBUILD metadata that were defined on the image Dockerfile
 	Labels      map[string]string // List of labels set to this container
 	StopSignal  string            `json:",omitempty"` // Signal to stop a container
 	StopTimeout *int              `json:",omitempty"` // Timeout (in seconds) to stop a container

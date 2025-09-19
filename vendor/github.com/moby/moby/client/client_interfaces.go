@@ -4,13 +4,10 @@ import (
 	"context"
 	"io"
 	"net"
-	"net/http"
 
 	"github.com/moby/moby/api/types"
-	"github.com/moby/moby/api/types/build"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/events"
-	"github.com/moby/moby/api/types/filters"
 	"github.com/moby/moby/api/types/image"
 	"github.com/moby/moby/api/types/network"
 	"github.com/moby/moby/api/types/plugin"
@@ -38,7 +35,6 @@ type stableAPIClient interface {
 	VolumeAPIClient
 	ClientVersion() string
 	DaemonHost() string
-	HTTPClient() *http.Client
 	ServerVersion(ctx context.Context) (types.Version, error)
 	NegotiateAPIVersion(ctx context.Context)
 	NegotiateAPIVersionPing(types.Ping)
@@ -69,11 +65,7 @@ type ContainerAPIClient interface {
 	ContainerCommit(ctx context.Context, container string, options ContainerCommitOptions) (container.CommitResponse, error)
 	ContainerCreate(ctx context.Context, config *container.Config, hostConfig *container.HostConfig, networkingConfig *network.NetworkingConfig, platform *ocispec.Platform, containerName string) (container.CreateResponse, error)
 	ContainerDiff(ctx context.Context, container string) ([]container.FilesystemChange, error)
-	ContainerExecAttach(ctx context.Context, execID string, options container.ExecAttachOptions) (HijackedResponse, error)
-	ContainerExecCreate(ctx context.Context, container string, options container.ExecOptions) (container.ExecCreateResponse, error)
-	ContainerExecInspect(ctx context.Context, execID string) (container.ExecInspect, error)
-	ContainerExecResize(ctx context.Context, execID string, options ContainerResizeOptions) error
-	ContainerExecStart(ctx context.Context, execID string, options container.ExecStartOptions) error
+	ExecAPIClient
 	ContainerExport(ctx context.Context, container string) (io.ReadCloser, error)
 	ContainerInspect(ctx context.Context, container string) (container.InspectResponse, error)
 	ContainerInspectWithRaw(ctx context.Context, container string, getSize bool) (container.InspectResponse, []byte, error)
@@ -96,7 +88,15 @@ type ContainerAPIClient interface {
 	ContainerWait(ctx context.Context, container string, condition container.WaitCondition) (<-chan container.WaitResponse, <-chan error)
 	CopyFromContainer(ctx context.Context, container, srcPath string) (io.ReadCloser, container.PathStat, error)
 	CopyToContainer(ctx context.Context, container, path string, content io.Reader, options CopyToContainerOptions) error
-	ContainersPrune(ctx context.Context, pruneFilters filters.Args) (container.PruneReport, error)
+	ContainersPrune(ctx context.Context, pruneFilters Filters) (container.PruneReport, error)
+}
+
+type ExecAPIClient interface {
+	ContainerExecCreate(ctx context.Context, container string, options ExecCreateOptions) (container.ExecCreateResponse, error)
+	ContainerExecStart(ctx context.Context, execID string, options ExecStartOptions) error
+	ContainerExecAttach(ctx context.Context, execID string, options ExecAttachOptions) (HijackedResponse, error)
+	ContainerExecInspect(ctx context.Context, execID string) (ExecInspect, error)
+	ContainerExecResize(ctx context.Context, execID string, options ContainerResizeOptions) error
 }
 
 // DistributionAPIClient defines API client methods for the registry
@@ -107,18 +107,18 @@ type DistributionAPIClient interface {
 // ImageAPIClient defines API client methods for the images
 type ImageAPIClient interface {
 	ImageBuild(ctx context.Context, context io.Reader, options ImageBuildOptions) (ImageBuildResponse, error)
-	BuildCachePrune(ctx context.Context, opts BuildCachePruneOptions) (*build.CachePruneReport, error)
-	BuildCancel(ctx context.Context, id string) error
+	BuildCachePrune(ctx context.Context, opts BuildCachePruneOptions) (BuildCachePruneResult, error)
+	BuildCancel(ctx context.Context, id string, opts BuildCancelOptions) error
 	ImageCreate(ctx context.Context, parentReference string, options ImageCreateOptions) (io.ReadCloser, error)
 	ImageImport(ctx context.Context, source ImageImportSource, ref string, options ImageImportOptions) (io.ReadCloser, error)
 
 	ImageList(ctx context.Context, options ImageListOptions) ([]image.Summary, error)
-	ImagePull(ctx context.Context, ref string, options ImagePullOptions) (io.ReadCloser, error)
+	ImagePull(ctx context.Context, ref string, options ImagePullOptions) (ImagePullResponse, error)
 	ImagePush(ctx context.Context, ref string, options ImagePushOptions) (io.ReadCloser, error)
 	ImageRemove(ctx context.Context, image string, options ImageRemoveOptions) ([]image.DeleteResponse, error)
 	ImageSearch(ctx context.Context, term string, options ImageSearchOptions) ([]registry.SearchResult, error)
 	ImageTag(ctx context.Context, image, ref string) error
-	ImagesPrune(ctx context.Context, pruneFilter filters.Args) (image.PruneReport, error)
+	ImagesPrune(ctx context.Context, pruneFilter Filters) (image.PruneReport, error)
 
 	ImageInspect(ctx context.Context, image string, _ ...ImageInspectOption) (image.InspectResponse, error)
 	ImageHistory(ctx context.Context, image string, _ ...ImageHistoryOption) ([]image.HistoryResponseItem, error)
@@ -135,7 +135,7 @@ type NetworkAPIClient interface {
 	NetworkInspectWithRaw(ctx context.Context, network string, options NetworkInspectOptions) (network.Inspect, []byte, error)
 	NetworkList(ctx context.Context, options NetworkListOptions) ([]network.Summary, error)
 	NetworkRemove(ctx context.Context, network string) error
-	NetworksPrune(ctx context.Context, pruneFilter filters.Args) (network.PruneReport, error)
+	NetworksPrune(ctx context.Context, pruneFilter Filters) (network.PruneReport, error)
 }
 
 // NodeAPIClient defines API client methods for the nodes
@@ -148,7 +148,7 @@ type NodeAPIClient interface {
 
 // PluginAPIClient defines API client methods for the plugins
 type PluginAPIClient interface {
-	PluginList(ctx context.Context, filter filters.Args) (plugin.ListResponse, error)
+	PluginList(ctx context.Context, filter Filters) (plugin.ListResponse, error)
 	PluginRemove(ctx context.Context, name string, options PluginRemoveOptions) error
 	PluginEnable(ctx context.Context, name string, options PluginEnableOptions) error
 	PluginDisable(ctx context.Context, name string, options PluginDisableOptions) error
@@ -200,7 +200,7 @@ type VolumeAPIClient interface {
 	VolumeInspectWithRaw(ctx context.Context, volumeID string) (volume.Volume, []byte, error)
 	VolumeList(ctx context.Context, options VolumeListOptions) (volume.ListResponse, error)
 	VolumeRemove(ctx context.Context, volumeID string, force bool) error
-	VolumesPrune(ctx context.Context, pruneFilter filters.Args) (volume.PruneReport, error)
+	VolumesPrune(ctx context.Context, pruneFilter Filters) (volume.PruneReport, error)
 	VolumeUpdate(ctx context.Context, volumeID string, version swarm.Version, options volume.UpdateOptions) error
 }
 
