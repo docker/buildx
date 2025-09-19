@@ -5,6 +5,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,11 +24,9 @@ import (
 	"github.com/docker/cli/cli/streams"
 	"github.com/docker/cli/cli/version"
 	dopts "github.com/docker/cli/opts"
-	"github.com/docker/docker/api"
-	"github.com/docker/docker/api/types/build"
-	"github.com/docker/docker/api/types/swarm"
-	"github.com/docker/docker/client"
-	"github.com/pkg/errors"
+	"github.com/moby/moby/api/types/build"
+	"github.com/moby/moby/api/types/swarm"
+	"github.com/moby/moby/client"
 	"github.com/spf13/cobra"
 )
 
@@ -88,9 +87,9 @@ type DockerCli struct {
 	enableGlobalMeter, enableGlobalTracer bool
 }
 
-// DefaultVersion returns [api.DefaultVersion].
+// DefaultVersion returns [client.MaxAPIVersion].
 func (*DockerCli) DefaultVersion() string {
-	return api.DefaultVersion
+	return client.MaxAPIVersion
 }
 
 // CurrentVersion returns the API version currently negotiated, or the default
@@ -98,7 +97,7 @@ func (*DockerCli) DefaultVersion() string {
 func (cli *DockerCli) CurrentVersion() string {
 	_ = cli.initialize()
 	if cli.client == nil {
-		return api.DefaultVersion
+		return client.MaxAPIVersion
 	}
 	return cli.client.ClientVersion()
 }
@@ -169,7 +168,7 @@ func (cli *DockerCli) BuildKitEnabled() (bool, error) {
 	if v := os.Getenv("DOCKER_BUILDKIT"); v != "" {
 		enabled, err := strconv.ParseBool(v)
 		if err != nil {
-			return false, errors.Wrap(err, "DOCKER_BUILDKIT environment variable expects boolean value")
+			return false, fmt.Errorf("DOCKER_BUILDKIT environment variable expects boolean value: %w", err)
 		}
 		return enabled, nil
 	}
@@ -311,7 +310,7 @@ func NewAPIClientFromFlags(opts *cliflags.ClientOptions, configFile *configfile.
 	}
 	endpoint, err := resolveDockerEndpoint(contextStore, resolveContextName(opts, configFile))
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to resolve docker endpoint")
+		return nil, fmt.Errorf("unable to resolve docker endpoint: %w", err)
 	}
 	return newAPIClientFromEndpoint(endpoint, configFile)
 }
@@ -324,7 +323,14 @@ func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigF
 	if len(configFile.HTTPHeaders) > 0 {
 		opts = append(opts, client.WithHTTPHeaders(configFile.HTTPHeaders))
 	}
-	opts = append(opts, withCustomHeadersFromEnv(), client.WithUserAgent(UserAgent()))
+	withCustomHeaders, err := withCustomHeadersFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	if withCustomHeaders != nil {
+		opts = append(opts, withCustomHeaders)
+	}
+	opts = append(opts, client.WithUserAgent(UserAgent()))
 	return client.NewClientWithOpts(opts...)
 }
 
@@ -541,7 +547,7 @@ func (cli *DockerCli) initialize() error {
 	cli.init.Do(func() {
 		cli.dockerEndpoint, cli.initErr = cli.getDockerEndPoint()
 		if cli.initErr != nil {
-			cli.initErr = errors.Wrap(cli.initErr, "unable to resolve docker endpoint")
+			cli.initErr = fmt.Errorf("unable to resolve docker endpoint: %w", cli.initErr)
 			return
 		}
 		if cli.client == nil {
@@ -609,7 +615,7 @@ func getServerHost(hosts []string, defaultToTLS bool) (string, error) {
 	case 1:
 		return dopts.ParseHost(defaultToTLS, hosts[0])
 	default:
-		return "", errors.New("Specify only one -H")
+		return "", errors.New("specify only one -H")
 	}
 }
 

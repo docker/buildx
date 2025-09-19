@@ -7,7 +7,7 @@ import (
 
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	dockerclient "github.com/docker/docker/client"
+	dockerclient "github.com/moby/moby/client"
 )
 
 // Client represents an active docker object.
