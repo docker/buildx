@@ -3,6 +3,7 @@ package container
 import (
 	"errors"
 	"fmt"
+	"net/netip"
 	"strings"
 
 	"github.com/docker/go-units"
@@ -389,17 +390,12 @@ type Resources struct {
 	Devices              []DeviceMapping // List of devices to map inside the container
 	DeviceCgroupRules    []string        // List of rule to be added to the device cgroup
 	DeviceRequests       []DeviceRequest // List of device requests for device drivers
-
-	// KernelMemory specifies the kernel memory limit (in bytes) for the container.
-	// Deprecated: kernel 5.4 deprecated kmem.limit_in_bytes.
-	KernelMemory      int64     `json:",omitempty"`
-	KernelMemoryTCP   int64     `json:",omitempty"` // Hard limit for kernel TCP buffer memory (in bytes)
-	MemoryReservation int64     // Memory soft limit (in bytes)
-	MemorySwap        int64     // Total memory usage (memory + swap); set `-1` to enable unlimited swap
-	MemorySwappiness  *int64    // Tuning container memory swappiness behaviour
-	OomKillDisable    *bool     // Whether to disable OOM Killer or not
-	PidsLimit         *int64    // Setting PIDs limit for a container; Set `0` or `-1` for unlimited, or `null` to not change.
-	Ulimits           []*Ulimit // List of ulimits to be set in the container
+	MemoryReservation    int64           // Memory soft limit (in bytes)
+	MemorySwap           int64           // Total memory usage (memory + swap); set `-1` to enable unlimited swap
+	MemorySwappiness     *int64          // Tuning container memory swappiness behaviour
+	OomKillDisable       *bool           // Whether to disable OOM Killer or not
+	PidsLimit            *int64          // Setting PIDs limit for a container; Set `0` or `-1` for unlimited, or `null` to not change.
+	Ulimits              []*Ulimit       // List of ulimits to be set in the container
 
 	// Applicable to Windows
 	CPUCount           int64  `json:"CpuCount"`   // CPU count
@@ -425,7 +421,7 @@ type HostConfig struct {
 	ContainerIDFile string            // File (path) where the containerId is written
 	LogConfig       LogConfig         // Configuration of the logs for this container
 	NetworkMode     NetworkMode       // Network mode to use for the container
-	PortBindings    PortMap           // Port mapping between the exposed port (container) and the host
+	PortBindings    network.PortMap   // Port mapping between the exposed port (container) and the host
 	RestartPolicy   RestartPolicy     // Restart policy to be used for the container
 	AutoRemove      bool              // Automatically remove container when it exits
 	VolumeDriver    string            // Name of the volume driver used to mount volumes
@@ -437,7 +433,7 @@ type HostConfig struct {
 	CapAdd          []string          // List of kernel capabilities to add to the container
 	CapDrop         []string          // List of kernel capabilities to remove from the container
 	CgroupnsMode    CgroupnsMode      // Cgroup namespace mode to use for the container
-	DNS             []string          `json:"Dns"`        // List of DNS server to lookup
+	DNS             []netip.Addr      `json:"Dns"`        // List of DNS server to lookup
 	DNSOptions      []string          `json:"DnsOptions"` // List of DNSOption to look for
 	DNSSearch       []string          `json:"DnsSearch"`  // List of DNSSearch to look for
 	ExtraHosts      []string          // List of extra hosts

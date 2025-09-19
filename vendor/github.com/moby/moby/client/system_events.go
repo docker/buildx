@@ -2,13 +2,13 @@ package client
 
 import (
 	"context"
-	"encoding/json"
+	"net/http"
 	"net/url"
 	"time"
 
+	"github.com/moby/moby/api/types"
 	"github.com/moby/moby/api/types/events"
-	"github.com/moby/moby/api/types/filters"
-	"github.com/moby/moby/api/types/versions"
+	"github.com/moby/moby/client/internal"
 	"github.com/moby/moby/client/internal/timestamp"
 )
 
@@ -16,7 +16,7 @@ import (
 type EventsListOptions struct {
 	Since   string
 	Until   string
-	Filters filters.Args
+	Filters Filters
 }
 
 // Events returns a stream of events in the daemon. It's up to the caller to close the stream
@@ -31,24 +31,17 @@ func (cli *Client) Events(ctx context.Context, options EventsListOptions) (<-cha
 	go func() {
 		defer close(errs)
 
-		// Make sure we negotiated (if the client is configured to do so),
-		// as code below contains API-version specific handling of options.
-		//
-		// Normally, version-negotiation (if enabled) would not happen until
-		// the API request is made.
-		if err := cli.checkVersion(ctx); err != nil {
-			close(started)
-			errs <- err
-			return
-		}
-		query, err := buildEventsQueryParams(cli.version, options)
+		query, err := buildEventsQueryParams(options)
 		if err != nil {
 			close(started)
 			errs <- err
 			return
 		}
 
-		resp, err := cli.get(ctx, "/events", query, nil)
+		headers := http.Header{}
+		headers.Add("Accept", types.MediaTypeJSONSequence)
+		headers.Add("Accept", types.MediaTypeNDJSON)
+		resp, err := cli.get(ctx, "/events", query, headers)
 		if err != nil {
 			close(started)
 			errs <- err
@@ -56,7 +49,8 @@ func (cli *Client) Events(ctx context.Context, options EventsListOptions) (<-cha
 		}
 		defer resp.Body.Close()
 
-		decoder := json.NewDecoder(resp.Body)
+		contentType := resp.Header.Get("Content-Type")
+		decoder := internal.NewJSONStreamDecoder(resp.Body, contentType)
 
 		close(started)
 		for {
@@ -66,7 +60,7 @@ func (cli *Client) Events(ctx context.Context, options EventsListOptions) (<-cha
 				return
 			default:
 				var event events.Message
-				if err := decoder.Decode(&event); err != nil {
+				if err := decoder(&event); err != nil {
 					errs <- err
 					return
 				}
@@ -85,7 +79,7 @@ func (cli *Client) Events(ctx context.Context, options EventsListOptions) (<-cha
 	return messages, errs
 }
 
-func buildEventsQueryParams(cliVersion string, options EventsListOptions) (url.Values, error) {
+func buildEventsQueryParams(options EventsListOptions) (url.Values, error) {
 	query := url.Values{}
 	ref := time.Now()
 
@@ -105,20 +99,7 @@ func buildEventsQueryParams(cliVersion string, options EventsListOptions) (url.V
 		query.Set("until", ts)
 	}
 
-	if options.Filters.Len() > 0 {
-		filterJSON, err := filters.ToJSON(options.Filters)
-		if err != nil {
-			return nil, err
-		}
-		if cliVersion != "" && versions.LessThan(cliVersion, "1.22") {
-			legacyFormat, err := encodeLegacyFilters(filterJSON)
-			if err != nil {
-				return nil, err
-			}
-			filterJSON = legacyFormat
-		}
-		query.Set("filters", filterJSON)
-	}
+	options.Filters.updateURLValues(query)
 
 	return query, nil
 }
