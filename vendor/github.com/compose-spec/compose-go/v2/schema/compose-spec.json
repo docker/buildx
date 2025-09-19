@@ -992,6 +992,10 @@
               "exec": {
                 "$ref": "#/definitions/service_hook",
                 "description": "Command to execute when a change is detected and action is sync+exec."
+              },
+              "initial_sync": {
+                "type": "boolean",
+                "description": "Ensure that an initial synchronization is done before starting watch mode for sync+x triggers"
               }
             },
             "additionalProperties": false,

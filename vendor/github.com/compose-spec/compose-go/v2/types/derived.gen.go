@@ -2175,6 +2175,7 @@ func deriveDeepCopy_51(dst, src *Trigger) {
 		}
 		copy(dst.Ignore, src.Ignore)
 	}
+	dst.InitialSync = src.InitialSync
 	if src.Extensions != nil {
 		dst.Extensions = make(map[string]any, len(src.Extensions))
 		src.Extensions.DeepCopy(dst.Extensions)
