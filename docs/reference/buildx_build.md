@@ -54,9 +54,6 @@ Start a build
 
 <!---MARKER_GEN_END-->
 
-Flags marked with `[experimental]` need to be explicitly enabled by setting the
-`BUILDX_EXPERIMENTAL=1` environment variable.
-
 ## Description
 
 The `docker buildx build` command starts a build using BuildKit.
