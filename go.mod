@@ -2,6 +2,8 @@ module github.com/docker/buildx
 
 go 1.24.0
 
+replace github.com/docker/cli => github.com/thaJeztah/cli v0.0.0-20250919143055-4731d2b0b6fe // https://github.com/docker/cli/pull/6458
+
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
 	github.com/Microsoft/go-winio v0.6.2
@@ -30,8 +32,8 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.24.0
 	github.com/moby/go-archive v0.1.0
-	github.com/moby/moby/api v1.52.0-beta.1
-	github.com/moby/moby/client v0.1.0-beta.0
+	github.com/moby/moby/api v1.52.0-beta.1.0.20250919095748-0967d6ea6ba7 // master
+	github.com/moby/moby/client v0.1.0-beta.0.0.20250919095748-0967d6ea6ba7 // master
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/morikuni/aec v1.0.0

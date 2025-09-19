@@ -286,7 +286,7 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
-	response, err := d.DockerAPI.ContainerExecCreate(ctx, d.Name, container.ExecOptions{
+	response, err := d.DockerAPI.ContainerExecCreate(ctx, d.Name, dockerclient.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -301,7 +301,7 @@ func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, erro
 		return "", nil, errors.New("exec ID empty")
 	}
 
-	resp, err := d.DockerAPI.ContainerExecAttach(ctx, execID, container.ExecStartOptions{})
+	resp, err := d.DockerAPI.ContainerExecAttach(ctx, execID, dockerclient.ExecStartOptions{})
 	if err != nil {
 		return "", nil, err
 	}
