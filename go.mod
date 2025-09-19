@@ -2,7 +2,8 @@ module github.com/docker/buildx
 
 go 1.24.0
 
-replace github.com/docker/cli => github.com/docker/cli v28.3.4-0.20250905221807-be97096566f2+incompatible // master
+// Need a replace, because master pseudo-version is considered "older" than the 28.x branch
+replace github.com/docker/cli => github.com/docker/cli v28.3.4-0.20251010205301-01febbc3bb38+incompatible // master
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
@@ -32,8 +33,8 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.25.1
 	github.com/moby/go-archive v0.1.0
-	github.com/moby/moby/api v1.52.0-beta.1
-	github.com/moby/moby/client v0.1.0-beta.0
+	github.com/moby/moby/api v1.52.0-beta.1.0.20251010153343-0769fe708773 // master
+	github.com/moby/moby/client v0.1.0-beta.0.0.20251010153343-0769fe708773 // master
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/morikuni/aec v1.0.0

@@ -11,22 +11,12 @@ import (
 	"github.com/distribution/reference"
 	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/api/types/swarm"
-	"github.com/moby/moby/api/types/versions"
 	"github.com/opencontainers/go-digest"
 )
 
 // ServiceCreate creates a new service.
 func (cli *Client) ServiceCreate(ctx context.Context, service swarm.ServiceSpec, options ServiceCreateOptions) (swarm.ServiceCreateResponse, error) {
 	var response swarm.ServiceCreateResponse
-
-	// Make sure we negotiated (if the client is configured to do so),
-	// as code below contains API-version specific handling of options.
-	//
-	// Normally, version-negotiation (if enabled) would not happen until
-	// the API request is made.
-	if err := cli.checkVersion(ctx); err != nil {
-		return response, err
-	}
 
 	// Make sure containerSpec is not nil when no runtime is set or the runtime is set to container
 	if service.TaskTemplate.ContainerSpec == nil && (service.TaskTemplate.Runtime == "" || service.TaskTemplate.Runtime == swarm.RuntimeContainer) {
@@ -35,11 +25,6 @@ func (cli *Client) ServiceCreate(ctx context.Context, service swarm.ServiceSpec,
 
 	if err := validateServiceSpec(service); err != nil {
 		return response, err
-	}
-	if versions.LessThan(cli.version, "1.30") {
-		if err := validateAPIVersion(service, cli.version); err != nil {
-			return response, err
-		}
 	}
 
 	// ensure that the image is tagged
@@ -62,12 +47,6 @@ func (cli *Client) ServiceCreate(ctx context.Context, service swarm.ServiceSpec,
 	}
 
 	headers := http.Header{}
-	if versions.LessThan(cli.version, "1.30") {
-		// the custom "version" header was used by engine API before 20.10
-		// (API 1.30) to switch between client- and server-side lookup of
-		// image digests.
-		headers["version"] = []string{cli.version}
-	}
 	if options.EncodedRegistryAuth != "" {
 		headers[registry.AuthHeader] = []string{options.EncodedRegistryAuth}
 	}
@@ -192,21 +171,6 @@ func validateServiceSpec(s swarm.ServiceSpec) error {
 	}
 	if s.TaskTemplate.ContainerSpec != nil && (s.TaskTemplate.Runtime != "" && s.TaskTemplate.Runtime != swarm.RuntimeContainer) {
 		return errors.New("mismatched runtime with container spec")
-	}
-	return nil
-}
-
-func validateAPIVersion(c swarm.ServiceSpec, apiVersion string) error {
-	for _, m := range c.TaskTemplate.ContainerSpec.Mounts {
-		if m.BindOptions != nil {
-			if m.BindOptions.NonRecursive && versions.LessThan(apiVersion, "1.40") {
-				return errors.New("bind-recursive=disabled requires API v1.40 or later")
-			}
-			// ReadOnlyNonRecursive can be safely ignored when API < 1.44
-			if m.BindOptions.ReadOnlyForceRecursive && versions.LessThan(apiVersion, "1.44") {
-				return errors.New("bind-recursive=readonly requires API v1.44 or later")
-			}
-		}
 	}
 	return nil
 }

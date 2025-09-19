@@ -3,11 +3,11 @@ package command
 import (
 	"context"
 	"encoding/csv"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
-	"strconv"
 	"strings"
 
 	"github.com/docker/cli/cli/streams"
@@ -71,28 +71,6 @@ func WithOutputStream(out io.Writer) CLIOption {
 func WithErrorStream(err io.Writer) CLIOption {
 	return func(cli *DockerCli) error {
 		cli.err = streams.NewOut(err)
-		return nil
-	}
-}
-
-// WithContentTrustFromEnv enables content trust on a cli from environment variable DOCKER_CONTENT_TRUST value.
-func WithContentTrustFromEnv() CLIOption {
-	return func(cli *DockerCli) error {
-		cli.contentTrust = false
-		if e := os.Getenv("DOCKER_CONTENT_TRUST"); e != "" {
-			if t, err := strconv.ParseBool(e); t || err != nil {
-				// treat any other value as true
-				cli.contentTrust = true
-			}
-		}
-		return nil
-	}
-}
-
-// WithContentTrust enables content trust on a cli.
-func WithContentTrust(enabled bool) CLIOption {
-	return func(cli *DockerCli) error {
-		cli.contentTrust = enabled
 		return nil
 	}
 }
@@ -235,4 +213,15 @@ func withCustomHeadersFromEnv() (client.Opt, error) {
 	// TODO(thaJeztah): add a client.WithExtraHTTPHeaders() function to allow these headers to be _added_ to existing ones, instead of _replacing_
 	//  see https://github.com/docker/cli/pull/5098#issuecomment-2147403871  (when updating, also update the WARNING in the function and env-var GoDoc)
 	return client.WithHTTPHeaders(env), nil
+}
+
+// WithUserAgent configures the User-Agent string for cli HTTP requests.
+func WithUserAgent(userAgent string) CLIOption {
+	return func(cli *DockerCli) error {
+		if userAgent == "" {
+			return errors.New("user agent cannot be blank")
+		}
+		cli.userAgent = userAgent
+		return nil
+	}
 }
