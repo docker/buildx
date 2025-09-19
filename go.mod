@@ -42,8 +42,8 @@ require (
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10
 	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
 	github.com/sirupsen/logrus v1.9.3
-	github.com/spf13/cobra v1.9.1
-	github.com/spf13/pflag v1.0.7
+	github.com/spf13/cobra v1.10.1
+	github.com/spf13/pflag v1.0.10
 	github.com/stretchr/testify v1.11.0
 	github.com/tonistiigi/fsutil v0.0.0-20250605211040-586307ad452f
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240814133006-030d3b2625d0
