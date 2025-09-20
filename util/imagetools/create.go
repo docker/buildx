@@ -91,13 +91,13 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		}
 	}
 
-	m := map[digest.Digest]int{}
-	newDescs := make([]ocispecs.Descriptor, 0, len(srcs))
+	indexes := map[digest.Digest]int{}
+	descs := make([]ocispecs.Descriptor, 0, len(srcs))
 
 	addDesc := func(d ocispecs.Descriptor) {
-		idx, ok := m[d.Digest]
+		idx, ok := indexes[d.Digest]
 		if ok {
-			old := newDescs[idx]
+			old := descs[idx]
 			if old.MediaType == "" {
 				old.MediaType = d.MediaType
 			}
@@ -108,10 +108,10 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 				old.Annotations = map[string]string{}
 			}
 			maps.Copy(old.Annotations, d.Annotations)
-			newDescs[idx] = old
+			descs[idx] = old
 		} else {
-			m[d.Digest] = len(newDescs)
-			newDescs = append(newDescs, d)
+			indexes[d.Digest] = len(descs)
+			descs = append(descs, d)
 		}
 	}
 
@@ -131,14 +131,14 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 	}
 
 	dockerMfsts := 0
-	for _, desc := range newDescs {
+	for _, desc := range descs {
 		if strings.HasPrefix(desc.MediaType, "application/vnd.docker.") {
 			dockerMfsts++
 		}
 	}
 
 	var mt string
-	if dockerMfsts == len(newDescs) {
+	if dockerMfsts == len(descs) {
 		// all manifests are Docker types, use Docker manifest list
 		mt = images.MediaTypeDockerSchema2ManifestList
 	} else {
@@ -154,12 +154,12 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 			case exptypes.AnnotationIndex:
 				indexAnnotation[k.Key] = v
 			case exptypes.AnnotationManifestDescriptor:
-				for i := range newDescs {
-					if newDescs[i].Annotations == nil {
-						newDescs[i].Annotations = map[string]string{}
+				for i := range descs {
+					if descs[i].Annotations == nil {
+						descs[i].Annotations = map[string]string{}
 					}
-					if k.Platform == nil || k.PlatformString() == platforms.Format(*newDescs[i].Platform) {
-						newDescs[i].Annotations[k.Key] = v
+					if k.Platform == nil || k.PlatformString() == platforms.Format(*descs[i].Platform) {
+						descs[i].Annotations[k.Key] = v
 					}
 				}
 			case exptypes.AnnotationManifest, "":
@@ -175,7 +175,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		Versioned: specs.Versioned{
 			SchemaVersion: 2,
 		},
-		Manifests:   newDescs,
+		Manifests:   descs,
 		Annotations: indexAnnotation,
 	}, "", "  ")
 	if err != nil {
