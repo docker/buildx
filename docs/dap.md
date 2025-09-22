@@ -61,3 +61,17 @@ Please refer to the documentation in each of these repositories for installation
 
 - [Visual Studio Code](https://github.com/docker/vscode-extension/)
 - [Neovim](https://github.com/docker/nvim-dap-docker/)
+
+### Plugin Integration Guidelines
+
+An official debug adapter plugin must meet the requirements indicated in this section.
+
+The plugin MUST support `args` as a launch argument. The `args` value must be an array and it MUST be passed at the end of the tool invocation.
+
+The plugin MUST support `builder` as a launch argument. If present, `builder` will be passed as `--builder <value>` after the invocation of `buildx` but before the `build` argument.
+
+The plugin MUST provide a way to run the DAP command through the `docker` command (i.e. `docker buildx`).
+
+The plugin SHOULD provide a way to run the `buildx` binary in standalone mode.
+
+The plugin SHOULD invoke the DAP command from the workspace root. If it cannot invoke the command from the workspace root for some reason, it MUST invoke it from the current working directory.
