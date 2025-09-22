@@ -14,7 +14,7 @@ Proxy current stdio streams to builder instance
 | `--builder`     | `string` |         | Override the configured builder instance                                                            |
 | `-D`, `--debug` | `bool`   |         | Enable debug logging                                                                                |
 | `--platform`    | `string` |         | Target platform: this is used for node selection                                                    |
-| `--progress`    | `string` | `quiet` | Set type of progress output (`auto`, `plain`, `tty`, `rawjson`). Use plain to show container output |
+| `--progress`    | `string` | `none`  | Set type of progress output (`auto`, `plain`, `rawjson`, `tty`). Use plain to show container output |
 
 
 <!---MARKER_GEN_END-->

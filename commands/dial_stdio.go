@@ -44,7 +44,12 @@ func runDialStdio(dockerCli command.Cli, opts stdioOptions) error {
 		return err
 	}
 
-	printer, err := progress.NewPrinter(ctx, os.Stderr, progressui.DisplayMode(opts.progress), progress.WithPhase("dial-stdio"), progress.WithDesc("builder: "+b.Name, "builder:"+b.Name))
+	progressMode := opts.progress
+	if progressMode == "none" { // in buildx "quiet" means printing image ID in the end
+		progressMode = "quiet"
+	}
+
+	printer, err := progress.NewPrinter(ctx, os.Stderr, progressui.DisplayMode(progressMode), progress.WithPhase("dial-stdio"), progress.WithDesc("builder: "+b.Name, "builder:"+b.Name))
 	if err != nil {
 		return err
 	}
@@ -127,6 +132,6 @@ func dialStdioCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.StringVar(&opts.platform, "platform", os.Getenv("DOCKER_DEFAULT_PLATFORM"), "Target platform: this is used for node selection")
-	flags.StringVar(&opts.progress, "progress", "quiet", `Set type of progress output ("auto", "plain", "tty", "rawjson"). Use plain to show container output`)
+	flags.StringVar(&opts.progress, "progress", "none", `Set type of progress output ("auto", "plain", "rawjson", "tty"). Use plain to show container output`)
 	return cmd
 }
