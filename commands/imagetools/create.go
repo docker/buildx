@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/containerd/containerd/v2/core/remotes"
+	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/buildflags"
@@ -31,6 +33,7 @@ type createOptions struct {
 	actionAppend bool
 	progress     string
 	preferIndex  bool
+	platforms    []string
 }
 
 func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, args []string) error {
@@ -63,6 +66,11 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	}
 
 	srcs, err := parseSources(args)
+	if err != nil {
+		return err
+	}
+
+	platforms, err := parsePlatforms(in.platforms)
 	if err != nil {
 		return err
 	}
@@ -160,7 +168,11 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		return errors.Wrapf(err, "failed to parse annotations")
 	}
 
-	dt, desc, err := r.Combine(ctx, srcs, annotations, in.preferIndex)
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.oci.empty.v1+json", "empty")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.cosign.artifact.sig.v1+json", "cosign")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.cosign.simplesigning.v1+json", "simplesigning")
+
+	dt, desc, manifests, err := r.Combine(ctx, srcs, annotations, in.preferIndex, platforms)
 	if err != nil {
 		return err
 	}
@@ -168,6 +180,11 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	if in.dryrun {
 		fmt.Printf("%s\n", dt)
 		return nil
+	}
+
+	// manifests can be nil only if pushing one single-platform desc directly
+	if manifests == nil {
+		manifests = []imagetools.DescWithSource{{Descriptor: desc, Source: srcs[0]}}
 	}
 
 	// new resolver cause need new auth
@@ -187,17 +204,12 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		eg.Go(func() error {
 			return progress.Wrap(fmt.Sprintf("pushing %s", t.String()), pw.Write, func(sub progress.SubLogger) error {
 				eg2, _ := errgroup.WithContext(ctx)
-				for _, s := range srcs {
-					if reference.Domain(s.Ref) == reference.Domain(t) && reference.Path(s.Ref) == reference.Path(t) {
-						continue
-					}
-					s := s
+				for _, desc := range manifests {
 					eg2.Go(func() error {
-						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", s.Desc.Digest.String(), s.Ref.String(), t.String()))
-						return r.Copy(ctx, s, t)
+						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", desc.Digest.String(), desc.Source.Ref.String(), t.String()))
+						return r.Copy(ctx, desc.Source, t)
 					})
 				}
-
 				if err := eg2.Wait(); err != nil {
 					return err
 				}
@@ -224,6 +236,26 @@ func parseSources(in []string) ([]*imagetools.Source, error) {
 			return nil, errors.Wrapf(err, "failed to parse source %q, valid sources are digests, references and descriptors", in)
 		}
 		out[i] = s
+	}
+	return out, nil
+}
+
+func parsePlatforms(in []string) ([]ocispecs.Platform, error) {
+	out := make([]ocispecs.Platform, 0, len(in))
+	for _, p := range in {
+		if arr := strings.Split(p, ","); len(arr) > 1 {
+			v, err := parsePlatforms(arr)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, v...)
+			continue
+		}
+		plat, err := platforms.Parse(p)
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid platform %q", p)
+		}
+		out = append(out, plat)
 	}
 	return out, nil
 }
@@ -291,6 +323,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty", "rawjson"). Use plain to show container output`)
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 	flags.BoolVar(&options.preferIndex, "prefer-index", true, "When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy")
+	flags.StringArrayVarP(&options.platforms, "platform", "p", []string{}, "Filter specified platforms of target image")
 
 	return cmd
 }
