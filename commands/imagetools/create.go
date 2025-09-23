@@ -194,7 +194,11 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 
 	ctx2, cancel := context.WithCancelCause(context.TODO())
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
-	printer, err := progress.NewPrinter(ctx2, os.Stderr, progressui.DisplayMode(in.progress))
+	progressMode := in.progress
+	if progressMode == "none" {
+		progressMode = "quiet"
+	}
+	printer, err := progress.NewPrinter(ctx2, os.Stderr, progressui.DisplayMode(progressMode))
 	if err != nil {
 		return err
 	}
@@ -423,7 +427,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, "Set reference for new image")
 	flags.BoolVar(&options.dryrun, "dry-run", false, "Show final image instead of pushing")
 	flags.BoolVar(&options.actionAppend, "append", false, "Append to existing manifest")
-	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty", "rawjson"). Use plain to show container output`)
+	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "none", "plain", "rawjson", "tty"). Use plain to show container output`)
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 	flags.BoolVar(&options.preferIndex, "prefer-index", true, "When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy")
 	flags.StringArrayVarP(&options.platforms, "platform", "p", []string{}, "Filter specified platforms of target image")

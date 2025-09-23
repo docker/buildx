@@ -210,7 +210,14 @@ func (o *buildOptions) toOptions() (*BuildOptions, error) {
 }
 
 func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
-	progress := progressui.DisplayMode(o.progress)
+	progressMode := o.progress
+	if progressMode == "quiet" {
+		o.quiet = true
+	}
+	if progressMode == "none" { // in buildx "quiet" means printing image ID in the end
+		progressMode = "quiet"
+	}
+	progress := progressui.DisplayMode(progressMode)
 	if o.quiet {
 		if progress != progressui.AutoMode && progress != progressui.QuietMode {
 			return "", errors.Errorf("progress=%s and quiet cannot be used together", o.progress)
@@ -386,7 +393,9 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 	case progressui.RawJSONMode:
 		// no additional display
 	case progressui.QuietMode:
-		fmt.Println(getImageID(resp.ExporterResponse))
+		if options.quiet {
+			fmt.Println(getImageID(resp.ExporterResponse))
+		}
 	default:
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
@@ -624,7 +633,7 @@ type commonFlags struct {
 
 func commonBuildFlags(options *commonFlags, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
-	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "quiet", "plain", "tty", "rawjson"). Use plain to show container output`)
+	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "none",  "plain", "quiet", "rawjson", "tty"). Use plain to show container output`)
 	options.pull = flags.Bool("pull", false, "Always attempt to pull all referenced images")
 	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to a file")
 }
