@@ -49,9 +49,12 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 		return w.docker, w.dockerClose, w.dockerErr
 	}
 
-	cfgfile, err := integration.WriteConfig(cfg.DaemonConfig)
+	cfgfile, release, err := integration.WriteConfig(cfg.DaemonConfig)
 	if err != nil {
 		return nil, nil, err
+	}
+	if release != nil {
+		defer release()
 	}
 	defer os.RemoveAll(filepath.Dir(cfgfile))
 	name := "integration-container-" + identity.NewID()
