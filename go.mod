@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/in-toto/in-toto-golang v0.9.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.24.0
+	github.com/moby/buildkit v0.25.0-rc1
 	github.com/moby/go-archive v0.1.0
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
@@ -64,7 +64,7 @@ require (
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250218202821-56aae31c358a
 	google.golang.org/grpc v1.72.2
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
-	google.golang.org/protobuf v1.36.6
+	google.golang.org/protobuf v1.36.9
 	k8s.io/api v0.32.3
 	k8s.io/apimachinery v0.32.3
 	k8s.io/client-go v0.32.3
