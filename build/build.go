@@ -723,7 +723,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 								return err
 							}
 
-							dt, desc, _, err := itpull.Combine(ctx, srcs, indexAnnotations, false)
+							dt, desc, _, err := itpull.Combine(ctx, srcs, indexAnnotations, false, nil)
 							if err != nil {
 								return err
 							}
