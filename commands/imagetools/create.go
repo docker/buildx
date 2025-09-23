@@ -7,6 +7,8 @@ import (
 	"os"
 	"strings"
 
+	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/buildflags"
@@ -14,6 +16,7 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/util/attestation"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -31,6 +34,7 @@ type createOptions struct {
 	actionAppend bool
 	progress     string
 	preferIndex  bool
+	platforms    []string
 }
 
 func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, args []string) error {
@@ -63,6 +67,11 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	}
 
 	srcs, err := parseSources(args)
+	if err != nil {
+		return err
+	}
+
+	platforms, err := parsePlatforms(in.platforms)
 	if err != nil {
 		return err
 	}
@@ -160,7 +169,12 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		return errors.Wrapf(err, "failed to parse annotations")
 	}
 
-	dt, desc, err := r.Combine(ctx, srcs, annotations, in.preferIndex)
+	dt, desc, srcMap, err := r.Combine(ctx, srcs, annotations, in.preferIndex)
+	if err != nil {
+		return err
+	}
+
+	dt, desc, manifests, err := filterPlatforms(dt, desc, srcMap, platforms)
 	if err != nil {
 		return err
 	}
@@ -168,6 +182,11 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	if in.dryrun {
 		fmt.Printf("%s\n", dt)
 		return nil
+	}
+
+	// manifests can be nil only if pushing one single-platform desc directly
+	if manifests == nil {
+		manifests = []descWithSource{{Descriptor: desc, Source: srcs[0]}}
 	}
 
 	// new resolver cause need new auth
@@ -187,17 +206,12 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		eg.Go(func() error {
 			return progress.Wrap(fmt.Sprintf("pushing %s", t.String()), pw.Write, func(sub progress.SubLogger) error {
 				eg2, _ := errgroup.WithContext(ctx)
-				for _, s := range srcs {
-					if reference.Domain(s.Ref) == reference.Domain(t) && reference.Path(s.Ref) == reference.Path(t) {
-						continue
-					}
-					s := s
+				for _, desc := range manifests {
 					eg2.Go(func() error {
-						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", s.Desc.Digest.String(), s.Ref.String(), t.String()))
-						return r.Copy(ctx, s, t)
+						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", desc.Digest.String(), desc.Source.Ref.String(), t.String()))
+						return r.Copy(ctx, desc.Source, t)
 					})
 				}
-
 				if err := eg2.Wait(); err != nil {
 					return err
 				}
@@ -216,6 +230,107 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	return err
 }
 
+type descWithSource struct {
+	ocispecs.Descriptor
+	Source *imagetools.Source
+}
+
+func filterPlatforms(dt []byte, desc ocispecs.Descriptor, srcMap map[digest.Digest]*imagetools.Source, plats []ocispecs.Platform) ([]byte, ocispecs.Descriptor, []descWithSource, error) {
+	if len(plats) == 0 {
+		return dt, desc, nil, nil
+	}
+
+	matcher := platforms.Any(plats...)
+
+	if !images.IsIndexType(desc.MediaType) {
+		var mfst ocispecs.Manifest
+		if err := json.Unmarshal(dt, &mfst); err != nil {
+			return nil, ocispecs.Descriptor{}, nil, errors.Wrapf(err, "failed to parse manifest")
+		}
+		if desc.Platform == nil {
+			return nil, ocispecs.Descriptor{}, nil, errors.Errorf("cannot filter platforms from a manifest without platform information")
+		}
+		if !matcher.Match(*desc.Platform) {
+			return nil, ocispecs.Descriptor{}, nil, errors.Errorf("input platform %s does not match any of the provided platforms", platforms.Format(*desc.Platform))
+		}
+		return dt, desc, nil, nil
+	}
+
+	var idx ocispecs.Index
+	if err := json.Unmarshal(dt, &idx); err != nil {
+		return nil, ocispecs.Descriptor{}, nil, errors.Wrapf(err, "failed to parse index")
+	}
+
+	manifestMap := map[digest.Digest]ocispecs.Descriptor{}
+	for _, m := range idx.Manifests {
+		manifestMap[m.Digest] = m
+	}
+	references := map[digest.Digest]struct{}{}
+	for _, m := range idx.Manifests {
+		if refType, ok := m.Annotations[attestation.DockerAnnotationReferenceType]; ok && refType == attestation.DockerAnnotationReferenceTypeDefault {
+			dgstStr, ok := m.Annotations[attestation.DockerAnnotationReferenceDigest]
+			if !ok {
+				continue
+			}
+			dgst, err := digest.Parse(dgstStr)
+			if err != nil {
+				continue
+			}
+			subject, ok := manifestMap[dgst]
+			if !ok {
+				continue
+			}
+			if subject.Platform == nil || matcher.Match(*subject.Platform) {
+				references[m.Digest] = struct{}{}
+			}
+		}
+	}
+
+	var mfsts []ocispecs.Descriptor
+	var mfstsWithSource []descWithSource
+
+	for _, m := range idx.Manifests {
+		if _, isRef := references[m.Digest]; isRef || m.Platform == nil || matcher.Match(*m.Platform) {
+			src, ok := srcMap[m.Digest]
+			if !ok {
+				defaultSource, ok := srcMap[desc.Digest]
+				if !ok {
+					return nil, ocispecs.Descriptor{}, nil, errors.Errorf("internal error: no source found for %s", m.Digest)
+				}
+				src = defaultSource
+			}
+			mfsts = append(mfsts, m)
+			mfstsWithSource = append(mfstsWithSource, descWithSource{
+				Descriptor: m,
+				Source:     src,
+			})
+		}
+	}
+	if len(mfsts) == len(idx.Manifests) {
+		// all platforms matched, no need to rewrite index
+		return dt, desc, mfstsWithSource, nil
+	}
+
+	if len(mfsts) == 0 {
+		return nil, ocispecs.Descriptor{}, nil, errors.Errorf("none of the manifests match the provided platforms")
+	}
+
+	idx.Manifests = mfsts
+	idxBytes, err := json.MarshalIndent(&idx, "", "  ")
+	if err != nil {
+		return nil, ocispecs.Descriptor{}, nil, errors.Wrap(err, "failed to marshal index")
+	}
+
+	desc = ocispecs.Descriptor{
+		MediaType:   desc.MediaType,
+		Size:        int64(len(idxBytes)),
+		Digest:      digest.FromBytes(idxBytes),
+		Annotations: desc.Annotations,
+	}
+
+	return idxBytes, desc, mfstsWithSource, nil
+}
+
 func parseSources(in []string) ([]*imagetools.Source, error) {
 	out := make([]*imagetools.Source, len(in))
 	for i, in := range in {
@@ -224,6 +339,26 @@ func parseSources(in []string) ([]*imagetools.Source, error) {
 			return nil, errors.Wrapf(err, "failed to parse source %q, valid sources are digests, references and descriptors", in)
 		}
 		out[i] = s
+	}
+	return out, nil
+}
+
+func parsePlatforms(in []string) ([]ocispecs.Platform, error) {
+	out := make([]ocispecs.Platform, 0, len(in))
+	for _, p := range in {
+		if arr := strings.Split(p, ","); len(arr) > 1 {
+			v, err := parsePlatforms(arr)
+			if err != nil {
+				return nil, err
+			}
+			out = append(out, v...)
+			continue
+		}
+		plat, err := platforms.Parse(p)
+		if err != nil {
+			return nil, errors.Wrapf(err, "invalid platform %q", p)
+		}
+		out = append(out, plat)
 	}
 	return out, nil
 }
@@ -291,6 +426,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "plain", "tty", "rawjson"). Use plain to show container output`)
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 	flags.BoolVar(&options.preferIndex, "prefer-index", true, "When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy")
+	flags.StringArrayVarP(&options.platforms, "platform", "p", []string{}, "Filter specified platforms of target image")
 
 	return cmd
 }

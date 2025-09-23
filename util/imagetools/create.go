@@ -28,7 +28,7 @@ type Source struct {
 	Ref  reference.Named
 }
 
-func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes.AnnotationKey]string, preferIndex bool) ([]byte, ocispecs.Descriptor, error) {
+func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes.AnnotationKey]string, preferIndex bool) ([]byte, ocispecs.Descriptor, map[digest.Digest]*Source, error) {
 	eg, ctx := errgroup.WithContext(ctx)
 
 	dts := make([][]byte, len(srcs))
@@ -73,7 +73,7 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 	}
 
 	if err := eg.Wait(); err != nil {
-		return nil, ocispecs.Descriptor{}, err
+		return nil, ocispecs.Descriptor{}, nil, err
 	}
 
 	// on single source, return original bytes
@@ -83,21 +83,25 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		// of preferIndex since if set to true then the source is already in the preferred format, and if false
 		// it doesn't matter since we're not going to split it into separate manifests
 		case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
-			return dts[0], srcs[0].Desc, nil
+			srcMap := map[digest.Digest]*Source{
+				srcs[0].Desc.Digest: srcs[0],
+			}
+			return dts[0], srcs[0].Desc, srcMap, nil
 		default:
 			if !preferIndex {
-				return dts[0], srcs[0].Desc, nil
+				return dts[0], srcs[0].Desc, nil, nil
 			}
 		}
 	}
 
-	m := map[digest.Digest]int{}
-	newDescs := make([]ocispecs.Descriptor, 0, len(srcs))
+	indexes := map[digest.Digest]int{}
+	sources := map[digest.Digest]*Source{}
+	descs := make([]ocispecs.Descriptor, 0, len(srcs))
 
-	addDesc := func(d ocispecs.Descriptor) {
-		idx, ok := m[d.Digest]
+	addDesc := func(d ocispecs.Descriptor, src *Source) {
+		idx, ok := indexes[d.Digest]
 		if ok {
-			old := newDescs[idx]
+			old := descs[idx]
 			if old.MediaType == "" {
 				old.MediaType = d.MediaType
 			}
@@ -108,11 +112,12 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 				old.Annotations = map[string]string{}
 			}
 			maps.Copy(old.Annotations, d.Annotations)
-			newDescs[idx] = old
+			descs[idx] = old
 		} else {
-			m[d.Digest] = len(newDescs)
-			newDescs = append(newDescs, d)
+			indexes[d.Digest] = len(descs)
+			descs = append(descs, d)
 		}
+		sources[d.Digest] = src
 	}
 
 	for i, src := range srcs {
@@ -120,25 +125,25 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
 			var mfst ocispecs.Index
 			if err := json.Unmarshal(dts[i], &mfst); err != nil {
-				return nil, ocispecs.Descriptor{}, errors.WithStack(err)
+				return nil, ocispecs.Descriptor{}, nil, errors.WithStack(err)
 			}
 			for _, d := range mfst.Manifests {
-				addDesc(d)
+				addDesc(d, src)
 			}
 		default:
-			addDesc(src.Desc)
+			addDesc(src.Desc, src)
 		}
 	}
 
 	dockerMfsts := 0
-	for _, desc := range newDescs {
+	for _, desc := range descs {
 		if strings.HasPrefix(desc.MediaType, "application/vnd.docker.") {
 			dockerMfsts++
 		}
 	}
 
 	var mt string
-	if dockerMfsts == len(newDescs) {
+	if dockerMfsts == len(descs) {
 		// all manifests are Docker types, use Docker manifest list
 		mt = images.MediaTypeDockerSchema2ManifestList
 	} else {
@@ -154,18 +159,18 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 			case exptypes.AnnotationIndex:
 				indexAnnotation[k.Key] = v
 			case exptypes.AnnotationManifestDescriptor:
-				for i := range newDescs {
-					if newDescs[i].Annotations == nil {
-						newDescs[i].Annotations = map[string]string{}
+				for i := range descs {
+					if descs[i].Annotations == nil {
+						descs[i].Annotations = map[string]string{}
 					}
-					if k.Platform == nil || k.PlatformString() == platforms.Format(*newDescs[i].Platform) {
-						newDescs[i].Annotations[k.Key] = v
+					if k.Platform == nil || k.PlatformString() == platforms.Format(*descs[i].Platform) {
+						descs[i].Annotations[k.Key] = v
 					}
 				}
 			case exptypes.AnnotationManifest, "":
-				return nil, ocispecs.Descriptor{}, errors.Errorf("%q annotations are not supported yet", k.Type)
+				return nil, ocispecs.Descriptor{}, nil, errors.Errorf("%q annotations are not supported yet", k.Type)
 			case exptypes.AnnotationIndexDescriptor:
-				return nil, ocispecs.Descriptor{}, errors.Errorf("%q annotations are invalid while creating an image", k.Type)
+				return nil, ocispecs.Descriptor{}, nil, errors.Errorf("%q annotations are invalid while creating an image", k.Type)
 			}
 		}
 	}
@@ -175,18 +180,18 @@ func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		Versioned: specs.Versioned{
 			SchemaVersion: 2,
 		},
-		Manifests:   newDescs,
+		Manifests:   descs,
 		Annotations: indexAnnotation,
 	}, "", "  ")
 	if err != nil {
-		return nil, ocispecs.Descriptor{}, errors.Wrap(err, "failed to marshal index")
+		return nil, ocispecs.Descriptor{}, nil, errors.Wrap(err, "failed to marshal index")
 	}
 
 	return idxBytes, ocispecs.Descriptor{
 		MediaType: mt,
 		Size:      int64(len(idxBytes)),
 		Digest:    digest.FromBytes(idxBytes),
-	}, nil
+	}, sources, nil
 }
 
 func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispecs.Descriptor, dt []byte) error {
