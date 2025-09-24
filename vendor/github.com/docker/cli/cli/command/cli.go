@@ -48,9 +48,7 @@ type Cli interface {
 	Apply(ops ...CLIOption) error
 	config.Provider
 	ServerInfo() ServerInfo
-	DefaultVersion() string
 	CurrentVersion() string
-	ContentTrustEnabled() bool
 	BuildKitEnabled() (bool, error)
 	ContextStore() store.Store
 	CurrentContext() string
@@ -78,6 +76,7 @@ type DockerCli struct {
 	dockerEndpoint     docker.Endpoint
 	contextStoreConfig *store.Config
 	initTimeout        time.Duration
+	userAgent          string
 	res                telemetryResource
 
 	// baseCtx is the base context used for internal operations. In the future
@@ -89,6 +88,8 @@ type DockerCli struct {
 }
 
 // DefaultVersion returns [api.DefaultVersion].
+//
+// Deprecated: this function is no longer used and will be removed in the next release.
 func (*DockerCli) DefaultVersion() string {
 	return api.DefaultVersion
 }
@@ -159,6 +160,8 @@ func (cli *DockerCli) ServerInfo() ServerInfo {
 
 // ContentTrustEnabled returns whether content trust has been enabled by an
 // environment variable.
+//
+// Deprecated: check the value of the DOCKER_CONTENT_TRUST environment variable to detect whether content-trust is enabled.
 func (cli *DockerCli) ContentTrustEnabled() bool {
 	return cli.contentTrust
 }
@@ -269,7 +272,7 @@ func (cli *DockerCli) Initialize(opts *cliflags.ClientOptions, ops ...CLIOption)
 	cli.contextStore = &ContextStoreWithDefault{
 		Store: store.New(config.ContextStoreDir(), *cli.contextStoreConfig),
 		Resolver: func() (*DefaultContext, error) {
-			return ResolveDefaultContext(cli.options, *cli.contextStoreConfig)
+			return resolveDefaultContext(cli.options, *cli.contextStoreConfig)
 		},
 	}
 
@@ -306,17 +309,17 @@ func NewAPIClientFromFlags(opts *cliflags.ClientOptions, configFile *configfile.
 	contextStore := &ContextStoreWithDefault{
 		Store: store.New(config.ContextStoreDir(), storeConfig),
 		Resolver: func() (*DefaultContext, error) {
-			return ResolveDefaultContext(opts, storeConfig)
+			return resolveDefaultContext(opts, storeConfig)
 		},
 	}
 	endpoint, err := resolveDockerEndpoint(contextStore, resolveContextName(opts, configFile))
 	if err != nil {
 		return nil, errors.Wrap(err, "unable to resolve docker endpoint")
 	}
-	return newAPIClientFromEndpoint(endpoint, configFile)
+	return newAPIClientFromEndpoint(endpoint, configFile, client.WithUserAgent(UserAgent()))
 }
 
-func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigFile) (client.APIClient, error) {
+func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigFile, extraOpts ...client.Opt) (client.APIClient, error) {
 	opts, err := ep.ClientOpts()
 	if err != nil {
 		return nil, err
@@ -324,7 +327,14 @@ func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigF
 	if len(configFile.HTTPHeaders) > 0 {
 		opts = append(opts, client.WithHTTPHeaders(configFile.HTTPHeaders))
 	}
-	opts = append(opts, withCustomHeadersFromEnv(), client.WithUserAgent(UserAgent()))
+	withCustomHeaders, err := withCustomHeadersFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	if withCustomHeaders != nil {
+		opts = append(opts, withCustomHeaders)
+	}
+	opts = append(opts, extraOpts...)
 	return client.NewClientWithOpts(opts...)
 }
 
@@ -545,7 +555,8 @@ func (cli *DockerCli) initialize() error {
 			return
 		}
 		if cli.client == nil {
-			if cli.client, cli.initErr = newAPIClientFromEndpoint(cli.dockerEndpoint, cli.configFile); cli.initErr != nil {
+			ops := []client.Opt{client.WithUserAgent(cli.userAgent)}
+			if cli.client, cli.initErr = newAPIClientFromEndpoint(cli.dockerEndpoint, cli.configFile, ops...); cli.initErr != nil {
 				return
 			}
 		}
@@ -558,6 +569,8 @@ func (cli *DockerCli) initialize() error {
 }
 
 // Apply all the operation on the cli
+//
+// Deprecated: this method is no longer used and will be removed in the next release if there are no remaining users.
 func (cli *DockerCli) Apply(ops ...CLIOption) error {
 	for _, op := range ops {
 		if err := op(cli); err != nil {
@@ -589,15 +602,18 @@ type ServerInfo struct {
 // environment.
 func NewDockerCli(ops ...CLIOption) (*DockerCli, error) {
 	defaultOps := []CLIOption{
-		WithContentTrustFromEnv(),
+		withContentTrustFromEnv(),
 		WithDefaultContextStoreConfig(),
 		WithStandardStreams(),
+		WithUserAgent(UserAgent()),
 	}
 	ops = append(defaultOps, ops...)
 
 	cli := &DockerCli{baseCtx: context.Background()}
-	if err := cli.Apply(ops...); err != nil {
-		return nil, err
+	for _, op := range ops {
+		if err := op(cli); err != nil {
+			return nil, err
+		}
 	}
 	return cli, nil
 }
@@ -613,7 +629,7 @@ func getServerHost(hosts []string, defaultToTLS bool) (string, error) {
 	}
 }
 
-// UserAgent returns the user agent string used for making API requests
+// UserAgent returns the default user agent string used for making API requests.
 func UserAgent() string {
 	return "Docker-Client/" + version.Version + " (" + runtime.GOOS + ")"
 }
