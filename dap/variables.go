@@ -447,7 +447,7 @@ func lookupPath(path string, mounts map[string]gateway.Reference) (remainder str
 	for p, r := range mounts {
 		if len(p) > len(prefix) && strings.HasPrefix(path, p) {
 			prefix = p
-			remainder, _ = filepath.Rel(prefix, p)
+			remainder, _ = filepath.Rel(prefix, path)
 			ref = r
 		}
 	}
