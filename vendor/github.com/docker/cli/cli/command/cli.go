@@ -5,6 +5,7 @@ package command
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"io"
 	"os"
@@ -23,11 +24,9 @@ import (
 	"github.com/docker/cli/cli/streams"
 	"github.com/docker/cli/cli/version"
 	dopts "github.com/docker/cli/opts"
-	"github.com/docker/docker/api"
-	"github.com/docker/docker/api/types/build"
-	"github.com/docker/docker/api/types/swarm"
-	"github.com/docker/docker/client"
-	"github.com/pkg/errors"
+	"github.com/moby/moby/api/types/build"
+	"github.com/moby/moby/api/types/swarm"
+	"github.com/moby/moby/client"
 	"github.com/spf13/cobra"
 )
 
@@ -45,12 +44,9 @@ type Cli interface {
 	Client() client.APIClient
 	Streams
 	SetIn(in *streams.In)
-	Apply(ops ...CLIOption) error
 	config.Provider
 	ServerInfo() ServerInfo
-	DefaultVersion() string
 	CurrentVersion() string
-	ContentTrustEnabled() bool
 	BuildKitEnabled() (bool, error)
 	ContextStore() store.Store
 	CurrentContext() string
@@ -70,7 +66,6 @@ type DockerCli struct {
 	err                *streams.Out
 	client             client.APIClient
 	serverInfo         ServerInfo
-	contentTrust       bool
 	contextStore       store.Store
 	currentContext     string
 	init               sync.Once
@@ -78,6 +73,7 @@ type DockerCli struct {
 	dockerEndpoint     docker.Endpoint
 	contextStoreConfig *store.Config
 	initTimeout        time.Duration
+	userAgent          string
 	res                telemetryResource
 
 	// baseCtx is the base context used for internal operations. In the future
@@ -88,17 +84,12 @@ type DockerCli struct {
 	enableGlobalMeter, enableGlobalTracer bool
 }
 
-// DefaultVersion returns [api.DefaultVersion].
-func (*DockerCli) DefaultVersion() string {
-	return api.DefaultVersion
-}
-
 // CurrentVersion returns the API version currently negotiated, or the default
 // version otherwise.
 func (cli *DockerCli) CurrentVersion() string {
 	_ = cli.initialize()
 	if cli.client == nil {
-		return api.DefaultVersion
+		return client.MaxAPIVersion
 	}
 	return cli.client.ClientVersion()
 }
@@ -157,19 +148,13 @@ func (cli *DockerCli) ServerInfo() ServerInfo {
 	return cli.serverInfo
 }
 
-// ContentTrustEnabled returns whether content trust has been enabled by an
-// environment variable.
-func (cli *DockerCli) ContentTrustEnabled() bool {
-	return cli.contentTrust
-}
-
 // BuildKitEnabled returns buildkit is enabled or not.
 func (cli *DockerCli) BuildKitEnabled() (bool, error) {
 	// use DOCKER_BUILDKIT env var value if set and not empty
 	if v := os.Getenv("DOCKER_BUILDKIT"); v != "" {
 		enabled, err := strconv.ParseBool(v)
 		if err != nil {
-			return false, errors.Wrap(err, "DOCKER_BUILDKIT environment variable expects boolean value")
+			return false, fmt.Errorf("DOCKER_BUILDKIT environment variable expects boolean value: %w", err)
 		}
 		return enabled, nil
 	}
@@ -311,12 +296,12 @@ func NewAPIClientFromFlags(opts *cliflags.ClientOptions, configFile *configfile.
 	}
 	endpoint, err := resolveDockerEndpoint(contextStore, resolveContextName(opts, configFile))
 	if err != nil {
-		return nil, errors.Wrap(err, "unable to resolve docker endpoint")
+		return nil, fmt.Errorf("unable to resolve docker endpoint: %w", err)
 	}
-	return newAPIClientFromEndpoint(endpoint, configFile)
+	return newAPIClientFromEndpoint(endpoint, configFile, client.WithUserAgent(UserAgent()))
 }
 
-func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigFile) (client.APIClient, error) {
+func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigFile, extraOpts ...client.Opt) (client.APIClient, error) {
 	opts, err := ep.ClientOpts()
 	if err != nil {
 		return nil, err
@@ -324,7 +309,14 @@ func newAPIClientFromEndpoint(ep docker.Endpoint, configFile *configfile.ConfigF
 	if len(configFile.HTTPHeaders) > 0 {
 		opts = append(opts, client.WithHTTPHeaders(configFile.HTTPHeaders))
 	}
-	opts = append(opts, withCustomHeadersFromEnv(), client.WithUserAgent(UserAgent()))
+	withCustomHeaders, err := withCustomHeadersFromEnv()
+	if err != nil {
+		return nil, err
+	}
+	if withCustomHeaders != nil {
+		opts = append(opts, withCustomHeaders)
+	}
+	opts = append(opts, extraOpts...)
 	return client.NewClientWithOpts(opts...)
 }
 
@@ -541,11 +533,12 @@ func (cli *DockerCli) initialize() error {
 	cli.init.Do(func() {
 		cli.dockerEndpoint, cli.initErr = cli.getDockerEndPoint()
 		if cli.initErr != nil {
-			cli.initErr = errors.Wrap(cli.initErr, "unable to resolve docker endpoint")
+			cli.initErr = fmt.Errorf("unable to resolve docker endpoint: %w", cli.initErr)
 			return
 		}
 		if cli.client == nil {
-			if cli.client, cli.initErr = newAPIClientFromEndpoint(cli.dockerEndpoint, cli.configFile); cli.initErr != nil {
+			ops := []client.Opt{client.WithUserAgent(cli.userAgent)}
+			if cli.client, cli.initErr = newAPIClientFromEndpoint(cli.dockerEndpoint, cli.configFile, ops...); cli.initErr != nil {
 				return
 			}
 		}
@@ -555,16 +548,6 @@ func (cli *DockerCli) initialize() error {
 		cli.initializeFromClient()
 	})
 	return cli.initErr
-}
-
-// Apply all the operation on the cli
-func (cli *DockerCli) Apply(ops ...CLIOption) error {
-	for _, op := range ops {
-		if err := op(cli); err != nil {
-			return err
-		}
-	}
-	return nil
 }
 
 // ServerInfo stores details about the supported features and platform of the
@@ -589,15 +572,17 @@ type ServerInfo struct {
 // environment.
 func NewDockerCli(ops ...CLIOption) (*DockerCli, error) {
 	defaultOps := []CLIOption{
-		WithContentTrustFromEnv(),
 		WithDefaultContextStoreConfig(),
 		WithStandardStreams(),
+		WithUserAgent(UserAgent()),
 	}
 	ops = append(defaultOps, ops...)
 
 	cli := &DockerCli{baseCtx: context.Background()}
-	if err := cli.Apply(ops...); err != nil {
-		return nil, err
+	for _, op := range ops {
+		if err := op(cli); err != nil {
+			return nil, err
+		}
 	}
 	return cli, nil
 }
@@ -609,11 +594,11 @@ func getServerHost(hosts []string, defaultToTLS bool) (string, error) {
 	case 1:
 		return dopts.ParseHost(defaultToTLS, hosts[0])
 	default:
-		return "", errors.New("Specify only one -H")
+		return "", errors.New("specify only one -H")
 	}
 }
 
-// UserAgent returns the user agent string used for making API requests
+// UserAgent returns the default user agent string used for making API requests.
 func UserAgent() string {
 	return "Docker-Client/" + version.Version + " (" + runtime.GOOS + ")"
 }

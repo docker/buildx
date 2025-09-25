@@ -13,18 +13,7 @@ import (
 // basicFunctions are the set of initial
 // functions provided to every template.
 var basicFunctions = template.FuncMap{
-	"json": func(v any) string {
-		buf := &bytes.Buffer{}
-		enc := json.NewEncoder(buf)
-		enc.SetEscapeHTML(false)
-		err := enc.Encode(v)
-		if err != nil {
-			panic(err)
-		}
-
-		// Remove the trailing new line added by the encoder
-		return strings.TrimSpace(buf.String())
-	},
+	"json":     formatJSON,
 	"split":    strings.Split,
 	"join":     strings.Join,
 	"title":    strings.Title, //nolint:nolintlint,staticcheck // strings.Title is deprecated, but we only use it for ASCII, so replacing with golang.org/x/text is out of scope
@@ -71,19 +60,13 @@ var HeaderFunctions = template.FuncMap{
 // Parse creates a new anonymous template with the basic functions
 // and parses the given format.
 func Parse(format string) (*template.Template, error) {
-	return NewParse("", format)
+	return template.New("").Funcs(basicFunctions).Parse(format)
 }
 
 // New creates a new empty template with the provided tag and built-in
 // template functions.
 func New(tag string) *template.Template {
 	return template.New(tag).Funcs(basicFunctions)
-}
-
-// NewParse creates a new tagged template with the basic functions
-// and parses the given format.
-func NewParse(tag, format string) (*template.Template, error) {
-	return New(tag).Parse(format)
 }
 
 // padWithSpace adds whitespace to the input if the input is non-empty
@@ -100,4 +83,17 @@ func truncateWithLength(source string, length int) string {
 		return source
 	}
 	return source[:length]
+}
+
+func formatJSON(v any) string {
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(v)
+	if err != nil {
+		panic(err)
+	}
+
+	// Remove the trailing new line added by the encoder
+	return strings.TrimSpace(buf.String())
 }
