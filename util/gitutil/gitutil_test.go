@@ -9,8 +9,12 @@ import (
 )
 
 func TestGit(t *testing.T) {
+	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
+
+	gittestutil.GitInit(c, t)
+	gittestutil.GitCommit(c, t, "bar")
 
 	out, err := c.Run("status")
 	require.NoError(t, err)
