@@ -13,10 +13,20 @@ import (
 
 func TestDefaultContextInitializer(t *testing.T) {
 	t.Setenv("KUBECONFIG", "./fixtures/test-kubeconfig")
-	ctx, err := command.ResolveDefaultContext(&cliflags.ClientOptions{}, command.DefaultContextStoreConfig())
+	dockerCLI, err := command.NewDockerCli()
 	require.NoError(t, err)
-	assert.Equal(t, "default", ctx.Meta.Name)
-	assert.Equal(t, "zoinx", ctx.Meta.Endpoints[KubernetesEndpoint].(EndpointMeta).DefaultNamespace)
+
+	// FIXME(thaJeztah): the context-store is not initialized until "Initialize" is called.
+	err = dockerCLI.Initialize(cliflags.NewClientOptions())
+	require.NoError(t, err)
+
+	cs := dockerCLI.ContextStore()
+	assert.NotNil(t, cs)
+	meta, err := cs.GetMetadata(command.DefaultContextName)
+	require.NoError(t, err)
+
+	assert.Equal(t, "default", meta.Name)
+	assert.Equal(t, "zoinx", meta.Endpoints[KubernetesEndpoint].(EndpointMeta).DefaultNamespace)
 }
 
 func TestConfigFromEndpoint(t *testing.T) {
