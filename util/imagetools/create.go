@@ -222,6 +222,7 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispecs.
 
 func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.oci.empty.v1+json", "empty")
 
 	// push by digest
 	p, err := r.resolver().Pusher(ctx, dest.Name())
