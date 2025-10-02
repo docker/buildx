@@ -240,13 +240,12 @@ type descWithSource struct {
 }
 
 func filterPlatforms(dt []byte, desc ocispecs.Descriptor, srcMap map[digest.Digest]*imagetools.Source, plats []ocispecs.Platform) ([]byte, ocispecs.Descriptor, []descWithSource, error) {
-	if len(plats) == 0 {
-		return dt, desc, nil, nil
-	}
-
 	matcher := platforms.Any(plats...)
 
 	if !images.IsIndexType(desc.MediaType) {
+		if len(plats) == 0 {
+			return dt, desc, nil, nil
+		}
 		var mfst ocispecs.Manifest
 		if err := json.Unmarshal(dt, &mfst); err != nil {
 			return nil, ocispecs.Descriptor{}, nil, errors.Wrapf(err, "failed to parse manifest")
@@ -263,6 +262,24 @@ func filterPlatforms(dt []byte, desc ocispecs.Descriptor, srcMap map[digest.Dige
 	var idx ocispecs.Index
 	if err := json.Unmarshal(dt, &idx); err != nil {
 		return nil, ocispecs.Descriptor{}, nil, errors.Wrapf(err, "failed to parse index")
+	}
+	if len(plats) == 0 {
+		mfsts := make([]descWithSource, len(idx.Manifests))
+		for i, m := range idx.Manifests {
+			src, ok := srcMap[m.Digest]
+			if !ok {
+				defaultSource, ok := srcMap[desc.Digest]
+				if !ok {
+					return nil, ocispecs.Descriptor{}, nil, errors.Errorf("internal error: no source found for %s", m.Digest)
+				}
+				src = defaultSource
+			}
+			mfsts[i] = descWithSource{
+				Descriptor: m,
+				Source:     src,
+			}
+		}
+		return dt, desc, mfsts, nil
 	}
 
 	manifestMap := map[digest.Digest]ocispecs.Descriptor{}
