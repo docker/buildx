@@ -448,7 +448,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
 github.com/mitchellh/hashstructure/v2
-# github.com/moby/buildkit v0.25.0
+# github.com/moby/buildkit v0.25.0 => ../buildkit
 ## explicit; go 1.24.0
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -1343,3 +1343,4 @@ sigs.k8s.io/structured-merge-diff/v4/value
 ## explicit; go 1.12
 sigs.k8s.io/yaml
 sigs.k8s.io/yaml/goyaml.v2
+# github.com/moby/buildkit => ../buildkit

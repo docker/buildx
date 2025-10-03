@@ -13,6 +13,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/docker/buildx/build"
 	"github.com/google/go-dap"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
@@ -67,10 +68,10 @@ func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string, 
 	}
 }
 
-func (f *frame) ExportVars(ctx context.Context, mounts map[string]gateway.Reference, refs *variableReferences) {
+func (f *frame) ExportVars(ctx context.Context, res *build.ResultHandle, refs *variableReferences) {
 	f.fillVarsFromOp(f.op, refs)
-	if len(mounts) > 0 {
-		f.fillVarsFromResult(ctx, mounts, refs)
+	if res != nil {
+		f.fillVarsFromResult(ctx, res, refs)
 	}
 }
 
@@ -186,30 +187,35 @@ func execOpVars(exec *pb.ExecOp, refs *variableReferences) dap.Variable {
 	}
 }
 
-func (f *frame) fillVarsFromResult(ctx context.Context, mounts map[string]gateway.Reference, refs *variableReferences) {
+func (f *frame) fillVarsFromResult(ctx context.Context, res *build.ResultHandle, refs *variableReferences) {
 	f.scopes = append(f.scopes, dap.Scope{
 		Name:             "File Explorer",
 		PresentationHint: "locals",
 		VariablesReference: refs.New(func() []dap.Variable {
-			return fsVars(ctx, mounts, "/", refs)
+			ctr, err := build.NewContainer(ctx, res, &build.InvokeConfig{})
+			if err != nil {
+				return []dap.Variable{
+					{
+						Name:  "error1",
+						Value: err.Error(),
+					},
+				}
+			}
+			return fsVars(ctx, ctr, "/", refs)
 		}),
 		Expensive: true,
 	})
 }
 
-func fsVars(ctx context.Context, mounts map[string]gateway.Reference, path string, vars *variableReferences) []dap.Variable {
-	path, ref := lookupPath(path, mounts)
-	if ref == nil {
-		return nil
-	}
-
-	files, err := ref.ReadDir(ctx, gateway.ReadDirRequest{
+func fsVars(ctx context.Context, ctr *build.Container, path string, vars *variableReferences) []dap.Variable {
+	req := gateway.ReadDirRequest{
 		Path: path,
-	})
+	}
+	files, err := ctr.ReadDir(ctx, req)
 	if err != nil {
 		return []dap.Variable{
 			{
-				Name:  "error",
+				Name:  "error2",
 				Value: err.Error(),
 			},
 		}
@@ -233,7 +239,7 @@ func fsVars(ctx context.Context, mounts map[string]gateway.Reference, path strin
 						return statVars(file)
 					}),
 				}
-				return append([]dap.Variable{dvar}, fsVars(ctx, mounts, fullpath, vars)...)
+				return append([]dap.Variable{dvar}, fsVars(ctx, ctr, fullpath, vars)...)
 			})
 			fv.Value = ""
 		} else {
@@ -241,7 +247,7 @@ func fsVars(ctx context.Context, mounts map[string]gateway.Reference, path strin
 			fv.VariablesReference = vars.New(func() (dvars []dap.Variable) {
 				if fs.FileMode(file.Mode).IsRegular() {
 					// Regular file so display a small blurb of the file.
-					dvars = append(dvars, fileVars(ctx, ref, fullpath)...)
+					dvars = append(dvars, fileVars(ctx, ctr, fullpath)...)
 				}
 				return append(dvars, statVars(file)...)
 			})
@@ -257,8 +263,8 @@ func statf(st *types.Stat) string {
 	return fmt.Sprintf("%s %d:%d %s", mode, st.Uid, st.Gid, modTime.Format("Jan 2 15:04:05 2006"))
 }
 
-func fileVars(ctx context.Context, ref gateway.Reference, fullpath string) []dap.Variable {
-	b, err := ref.ReadFile(ctx, gateway.ReadRequest{
+func fileVars(ctx context.Context, ctr *build.Container, fullpath string) []dap.Variable {
+	b, err := ctr.ReadFile(ctx, gateway.ReadRequest{
 		Filename: fullpath,
 		Range:    &gateway.FileRange{Length: 512},
 	})
@@ -274,7 +280,7 @@ func fileVars(ctx context.Context, ref gateway.Reference, fullpath string) []dap
 	} else {
 		if len(b) == 512 {
 			// Get the remainder of the file.
-			remaining, err := ref.ReadFile(ctx, gateway.ReadRequest{
+			remaining, err := ctr.ReadFile(ctx, gateway.ReadRequest{
 				Filename: fullpath,
 				Range:    &gateway.FileRange{Offset: 512},
 			})
