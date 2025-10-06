@@ -3,6 +3,7 @@ package docker
 import (
 	"bytes"
 	"context"
+	"encoding/json"
 	"io"
 	"net"
 	"os"
@@ -57,6 +58,7 @@ type Driver struct {
 	env           []string
 	defaultLoad   bool
 	gpus          []container.DeviceRequest
+	noGHAEvent    bool
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -135,6 +137,17 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				Source: d.Name + volumeStateSuffix,
 				Target: confutil.DefaultBuildKitStateDir,
 			},
+		}
+
+		if !d.noGHAEvent {
+			if ghaedt, err := githubActionsEvent(); err != nil {
+				return err
+			} else if ghaedt != nil {
+				if d.Files == nil {
+					d.Files = make(map[string][]byte)
+				}
+				d.Files["provenance.d/github_event.json"] = ghaedt
+			}
 		}
 
 		// Mount WSL libaries if running in WSL environment and Docker context
@@ -563,4 +576,26 @@ func isSocket(addr string) bool {
 	default:
 		return false
 	}
+}
+
+func githubActionsEvent() ([]byte, error) {
+	m := make(map[string]any)
+	if v := os.Getenv("GITHUB_EVENT_NAME"); v != "" {
+		m["github_event_name"] = v
+	}
+	if v := os.Getenv("GITHUB_EVENT_PATH"); v != "" {
+		dt, err := os.ReadFile(v)
+		if err != nil && !os.IsNotExist(err) {
+			return nil, errors.Wrapf(err, "failed to read GITHUB_EVENT_PATH %q", v)
+		}
+		var evt map[string]any
+		if err := json.Unmarshal(dt, &evt); err == nil {
+			m["github_event_payload"] = evt
+		}
+	}
+	if len(m) == 0 {
+		return nil, nil
+	}
+	dt, err := json.Marshal(m)
+	return dt, err
 }
