@@ -47,9 +47,10 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		return nil, err
 	}
 	d := &Driver{
-		factory:       f,
-		InitConfig:    cfg,
-		restartPolicy: rp,
+		factory:            f,
+		InitConfig:         cfg,
+		restartPolicy:      rp,
+		writeProvenanceGHA: true,
 	}
 	var gpus dockeropts.GpuOpts
 	if err := gpus.Set("all"); err == nil {
@@ -111,6 +112,11 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 				return nil, errors.Errorf("invalid env option %q, expecting env.FOO=bar", k)
 			}
 			d.env = append(d.env, fmt.Sprintf("%s=%s", envName, v))
+		case k == "provenance-add-gha":
+			d.writeProvenanceGHA, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
+			}
 		default:
 			return nil, errors.Errorf("invalid driver option %s for docker-container driver", k)
 		}
