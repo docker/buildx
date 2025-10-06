@@ -57,6 +57,7 @@ type Driver struct {
 	env           []string
 	defaultLoad   bool
 	gpus          []container.DeviceRequest
+	mounts        map[string]string
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -135,6 +136,15 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				Source: d.Name + volumeStateSuffix,
 				Target: confutil.DefaultBuildKitStateDir,
 			},
+		}
+
+		for k, v := range d.mounts {
+			mounts = append(mounts, mount.Mount{
+				Type:     mount.TypeBind,
+				Source:   k,
+				Target:   v,
+				ReadOnly: true,
+			})
 		}
 
 		// Mount WSL libaries if running in WSL environment and Docker context
