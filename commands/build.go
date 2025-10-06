@@ -551,7 +551,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 
 	flags.StringArrayVar(&options.ssh, "ssh", []string{}, `SSH agent socket or keys to expose to the build (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
 
-	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, `Name and optionally a tag (format: "name:tag")`)
+	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, `Image identifier (format: "[registry/]repository[:tag]")`)
 
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build")
 
