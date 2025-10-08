@@ -15,7 +15,7 @@ ARG BUILDKIT_VERSION=v0.25.0
 ARG COMPOSE_VERSION=v2.39.1
 ARG UNDOCK_VERSION=0.9.0
 
-FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
+FROM --platform=$BUILDPLATFORM crazymax/xx:loong64 AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
 FROM moby/moby-bin:$DOCKER_VERSION AS docker-engine
 FROM dockereng/cli-bin:$DOCKER_CLI_VERSION AS docker-cli
