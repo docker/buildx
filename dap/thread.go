@@ -294,13 +294,13 @@ func (t *thread) pause(c Context, ref gateway.Reference, err error, mounts map[s
 	}
 	t.paused = make(chan stepType, 1)
 
-	ctx, cancel := context.WithCancelCause(c)
-	t.collectStackTrace(ctx, pos, mounts)
-	t.cancel = cancel
-
 	if ref != nil || err != nil {
 		t.prepareResultHandle(c, ref, err)
 	}
+
+	ctx, cancel := context.WithCancelCause(c)
+	t.collectStackTrace(ctx, pos)
+	t.cancel = cancel
 
 	event.ThreadId = t.id
 	c.C() <- &dap.StoppedEvent{
@@ -544,12 +544,13 @@ func (t *thread) releaseState() {
 	t.variables.Reset()
 }
 
-func (t *thread) collectStackTrace(ctx context.Context, pos *step, mounts map[string]gateway.Reference) {
+func (t *thread) collectStackTrace(ctx context.Context, pos *step) {
+	res := t.rCtx
 	for pos != nil {
 		frame := pos.frame
-		frame.ExportVars(ctx, mounts, t.variables)
+		frame.ExportVars(ctx, res, t.variables)
 		t.stackTrace = append(t.stackTrace, int32(frame.Id))
-		pos, mounts = pos.out, nil
+		pos, res = pos.out, nil
 	}
 }
 
