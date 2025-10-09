@@ -16,9 +16,9 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v28.4.0+incompatible
+	github.com/docker/cli v28.5.1+incompatible
 	github.com/docker/cli-docs-tool v0.10.0
-	github.com/docker/docker v28.4.0+incompatible
+	github.com/docker/docker v28.5.1+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
 	github.com/google/go-dap v0.12.0
@@ -29,7 +29,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/in-toto/in-toto-golang v0.9.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.25.0
+	github.com/moby/buildkit v0.25.1
 	github.com/moby/go-archive v0.1.0
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
