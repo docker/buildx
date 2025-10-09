@@ -240,6 +240,72 @@ COPY foo /foo
 		require.Equal(t, md.BuildRef, rec.Ref)
 		require.Equal(t, addr+"#main", rec.Name)
 	})
+
+	t.Run("bake git", func(t *testing.T) {
+		bakefile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		require.NoError(t, err)
+
+		gittestutil.GitInit(git, t)
+		gittestutil.GitAdd(git, t, "docker-bake.hcl", "foo")
+		gittestutil.GitCommit(git, t, "initial commit")
+		addr := gittestutil.GitServeHTTP(git, t)
+
+		out, err := bakeCmd(sb, withDir(dir),
+			withArgs(addr, "--set", "*.output=type=local,dest="+dirDest, "--metadata-file", filepath.Join(dir, "md.json")),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "foo"))
+
+		dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+		require.NoError(t, err)
+
+		type mdT struct {
+			Default struct {
+				BuildRef string `json:"buildx.build.ref"`
+			} `json:"default"`
+		}
+		var md mdT
+		err = json.Unmarshal(dt, &md)
+		require.NoError(t, err)
+
+		refParts := strings.Split(md.Default.BuildRef, "/")
+		require.Len(t, refParts, 3)
+
+		cmd := buildxCmd(sb, withArgs("history", "ls", "--filter=ref="+refParts[2], "--format=json"))
+		bout, err := cmd.Output()
+		require.NoError(t, err, string(bout))
+
+		type recT struct {
+			Ref            string     `json:"ref"`
+			Name           string     `json:"name"`
+			Status         string     `json:"status"`
+			CreatedAt      *time.Time `json:"created_at"`
+			CompletedAt    *time.Time `json:"completed_at"`
+			TotalSteps     int32      `json:"total_steps"`
+			CompletedSteps int32      `json:"completed_steps"`
+			CachedSteps    int32      `json:"cached_steps"`
+		}
+		var rec recT
+		err = json.Unmarshal(bout, &rec)
+		require.NoError(t, err)
+		require.Equal(t, md.Default.BuildRef, rec.Ref)
+		require.Equal(t, addr, rec.Name)
+	})
 }
 
 type buildRef struct {
