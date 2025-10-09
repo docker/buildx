@@ -23,6 +23,7 @@ var createTests = []func(t *testing.T, sb integration.Sandbox){
 	testCreateMemoryLimit,
 	testCreateRestartAlways,
 	testCreateRemoteContainer,
+	testCreateMount,
 }
 
 func testCreateMemoryLimit(t *testing.T, sb integration.Sandbox) {
@@ -107,4 +108,34 @@ func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
 		}
 	}
 	require.Fail(t, "remote builder is not running")
+}
+
+func testCreateMount(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
+	}
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	f, err := os.CreateTemp(os.TempDir(), "test-create-mount-*.json")
+	require.NoError(t, err)
+	defer os.Remove(f.Name())
+
+	_, err = f.Write([]byte(`{"test":{"foo":"bar"}}`))
+	f.Close()
+	require.NoError(t, err)
+
+	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--driver-opt", fmt.Sprintf(`mount.%s=/etc/buildkit/provenance.d/test.json`, f.Name())))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	out, err = inspectCmd(sb, withArgs(builderName, "--bootstrap"))
+	require.NoError(t, err, out)
 }

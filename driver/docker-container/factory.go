@@ -111,6 +111,15 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 				return nil, errors.Errorf("invalid env option %q, expecting env.FOO=bar", k)
 			}
 			d.env = append(d.env, fmt.Sprintf("%s=%s", envName, v))
+		case strings.HasPrefix(k, "mount."):
+			mountSrc := strings.TrimPrefix(k, "mount.")
+			if mountSrc == "" {
+				return nil, errors.Errorf("invalid mount option %q, expecting mount.<src>=<dest>", k)
+			}
+			if d.mounts == nil {
+				d.mounts = make(map[string]string)
+			}
+			d.mounts[mountSrc] = v
 		default:
 			return nil, errors.Errorf("invalid driver option %s for docker-container driver", k)
 		}
