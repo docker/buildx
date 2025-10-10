@@ -30,7 +30,7 @@ var supportedProtos = map[string]struct{}{
 
 var protoRegexp = regexp.MustCompile(`^[a-zA-Z0-9]+://`)
 
-// URL is a custom URL type that points to a remote Git repository.
+// GitURL is a custom URL type that points to a remote Git repository.
 //
 // URLs can be parsed from both standard URLs (e.g.
 // "https://github.com/moby/buildkit.git"), as well as SCP-like URLs (e.g.
@@ -123,6 +123,39 @@ func FromURL(url *url.URL) (*GitURL, error) {
 		Opts:   parseOpts(url.Fragment),
 		Remote: withoutOpts.String(),
 	}, nil
+}
+
+// FragmentFormat returns a simplified git URL in fragment format with only ref.
+// If the URL cannot be parsed, the original string is returned with false.
+func FragmentFormat(remote string) (string, bool) {
+	gitRef, err := ParseURL(remote)
+	if err != nil || gitRef == nil {
+		return remote, false
+	}
+	u := gitRef.Remote
+	var ref string
+	if gitRef.Opts != nil {
+		ref = gitRef.Opts.Ref
+	}
+	if len(gitRef.Query) > 0 {
+		for k, v := range gitRef.Query {
+			if len(v) == 0 {
+				continue
+			}
+			switch k {
+			case "ref":
+				ref = v[0]
+			case "branch":
+				ref = "refs/heads/" + v[0]
+			case "tag":
+				ref = "refs/tags/" + v[0]
+			}
+		}
+	}
+	if ref != "" {
+		u += "#" + ref
+	}
+	return u, true
 }
 
 func fromSCPStyleURL(url *sshutil.SCPStyleURL) (*GitURL, error) {
