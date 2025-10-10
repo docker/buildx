@@ -19,13 +19,14 @@ import (
 	"github.com/docker/cli/cli/command"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
+	"github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
 const recordsLimit = 50
 
-func buildName(fattrs map[string]string, ls *localstate.State) string {
+func BuildName(fattrs map[string]string, ls *localstate.State) string {
 	if v, ok := fattrs["build-arg:BUILDKIT_BUILD_NAME"]; ok && v != "" {
 		return v
 	}
@@ -43,6 +44,10 @@ func buildName(fattrs map[string]string, ls *localstate.State) string {
 	}
 	if v, ok := fattrs["vcs:source"]; ok {
 		vcsSource = v
+	} else if v, ok := fattrs["input:context"]; ok {
+		if _, ok, _ := dfgitutil.ParseGitRef(v); ok {
+			vcsSource = v
+		}
 	}
 	if v, ok := fattrs["filename"]; ok && v != "Dockerfile" {
 		dockerfilePath = filepath.ToSlash(v)
@@ -99,7 +104,8 @@ func buildName(fattrs map[string]string, ls *localstate.State) string {
 		}
 	}
 	if res == "" && vcsSource != "" {
-		return vcsSource
+		u, _ := gitutil.FragmentFormat(vcsSource)
+		return u
 	}
 	return res
 }
