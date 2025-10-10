@@ -243,7 +243,7 @@ workers0:
 	}
 	delete(attrs, "filename")
 
-	out.Name = buildName(rec.FrontendAttrs, st)
+	out.Name = BuildName(rec.FrontendAttrs, st)
 	out.Ref = rec.Ref
 
 	out.Context = context
