@@ -480,6 +480,79 @@ func TestHCLTypedValuelessVariables(t *testing.T) {
 	}
 }
 
+func TestHCLTypedValuelessVariablesUsedAsNull(t *testing.T) {
+	// Omitting complex types since they can't (shouldn't) be used as direct build arg values.
+	// Complex types can be used directly for other bake attributes, but that'll conflate HCL
+	// evaluation with whether the attribute accepts null in lieu of empty list/object, etc.
+	// This usage probably hits the 80/20 rule for usage of null variables.
+	types := []string{
+		"any",
+		"string", "number", "bool",
+	}
+
+	t.Run("assignment", func(t *testing.T) {
+		for _, varType := range types {
+			tName := fmt.Sprintf("value-less var typed %q", varType)
+			t.Run(tName, func(t *testing.T) {
+				dt := fmt.Sprintf(`
+                    variable "FOO" {
+                        type = %s
+                    }
+
+                    target "default" {
+                        args = {
+                            foo = FOO
+                        }
+                    }`, varType)
+				c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+				require.NoError(t, err)
+				require.Equal(t, 1, len(c.Targets))
+				require.Nil(t, c.Targets[0].Args["foo"])
+			})
+		}
+	})
+	t.Run("ternary", func(t *testing.T) {
+		for _, varType := range types {
+			tName := fmt.Sprintf("value-less var of %q on 'false' branch", varType)
+			t.Run(tName, func(t *testing.T) {
+				dt := fmt.Sprintf(`
+                    variable "FOO" {
+                        type = %s
+                    }
+
+                    target "default" {
+                        args = {
+                            foo = FOO == null ? "hi" : FOO
+                        }
+                    }`, varType)
+				c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+				require.NoError(t, err)
+				require.Equal(t, 1, len(c.Targets))
+				require.Equal(t, "hi", *c.Targets[0].Args["foo"])
+			})
+		}
+		for _, varType := range types {
+			tName := fmt.Sprintf("value-less var of %q on 'true' branch", varType)
+			t.Run(tName, func(t *testing.T) {
+				dt := fmt.Sprintf(`
+                    variable "FOO" {
+                        type = %s
+                    }
+
+                    target "default" {
+                        args = {
+                            foo = FOO == null ? FOO : "hi"
+                        }
+                    }`, varType)
+				c, err := ParseFile([]byte(dt), "docker-bake.hcl")
+				require.NoError(t, err)
+				require.Equal(t, 1, len(c.Targets))
+				require.Nil(t, c.Targets[0].Args["foo"])
+			})
+		}
+	})
+}
+
 func TestJSONNullVariables(t *testing.T) {
 	dt := []byte(`{
 		"variable": {
