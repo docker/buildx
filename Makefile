@@ -45,7 +45,7 @@ test:
 test-unit:
 	TESTPKGS=./... SKIP_INTEGRATION_TESTS=1 ./hack/test
 
-.PHONY: test
+.PHONY: test-integration
 test-integration:
 	TESTPKGS=./tests ./hack/test
 
