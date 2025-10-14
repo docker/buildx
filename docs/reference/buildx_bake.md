@@ -410,6 +410,12 @@ $ docker buildx bake --set foo*.no-cache                # bypass caching only fo
 $ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' to the platform list
 ```
 
+> [!NOTE]
+>
+> `--set` is a repeatable flag. For array fields such as `tags`, repeat `--set` to provide multiple values or use the `+=` operator to append without replacing.
+> Array literal syntax like `--set target.tags=[a,b]` is not supported.
+> The `platform` field is a special case. It also accepts a comma-separated list.
+
 You can override the following fields:
 
 * `annotations`
