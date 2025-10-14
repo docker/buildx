@@ -6,8 +6,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types/build"
 	"github.com/docker/go-units"
+	"github.com/moby/moby/api/types/build"
 )
 
 const (
@@ -126,8 +126,6 @@ func (c *buildCacheContext) Parent() string {
 	var parent string
 	if len(c.v.Parents) > 0 {
 		parent = strings.Join(c.v.Parents, ", ")
-	} else {
-		parent = c.v.Parent //nolint:staticcheck // Ignore SA1019: Field was deprecated in API v1.42, but kept for backward compatibility
 	}
 	if c.trunc {
 		return TruncateID(parent)
