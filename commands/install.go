@@ -47,6 +47,7 @@ func installCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runInstall(dockerCli, options)
 		},
+		Deprecated:            "use 'docker buildx' directly, without relying on the 'docker builder' alias",
 		Hidden:                true,
 		ValidArgsFunction:     completion.Disable,
 		DisableFlagsInUseLine: true,
