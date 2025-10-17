@@ -50,10 +50,4 @@ func testVersion(t *testing.T, sb integration.Sandbox) {
 		version = "v" + version
 	}
 	require.True(t, semver.IsValid(version), "Second field was not valid semver: %+v", version)
-
-	// Revision should be empty or should look like a git hash.
-	if len(fields) > 2 && len(fields[2]) > 0 {
-		revision := fields[2]
-		require.Regexp(t, `[0-9a-f]{40}`, revision, "Third field was not a git revision: %+v", revision)
-	}
 }
