@@ -304,17 +304,21 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 		}
 	}
 
+	var vv cty.Value
 	if def == nil {
 		// Lack of specified value, when untyped is considered to have an empty string value.
 		// A typed variable with no value will result in (typed) nil.
-		if _, ok, _ := p.valueHasOverride(name, false); !ok && !typeSpecified {
-			vv := cty.StringVal("")
+		if _, ok, _ := p.valueHasOverride(name, false); !ok {
+			if typeSpecified {
+				vv = cty.NullVal(varType)
+			} else {
+				vv = cty.StringVal("")
+			}
 			v = &vv
 			return
 		}
 	}
 
-	var vv cty.Value
 	if def != nil {
 		if diags := p.loadDeps(ectx, def.Expr, nil, true); diags.HasErrors() {
 			return diags
