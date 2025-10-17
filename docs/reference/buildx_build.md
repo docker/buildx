@@ -47,7 +47,7 @@ Start a build
 | [`--secret`](#secret)                   | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                                             |
 | [`--shm-size`](#shm-size)               | `bytes`       | `0`       | Shared memory size for build containers                                                                               |
 | [`--ssh`](#ssh)                         | `stringArray` |           | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`)                   |
-| [`-t`](#tag), [`--tag`](#tag)           | `stringArray` |           | Name and optionally a tag (format: `name:tag`)                                                                        |
+| [`-t`](#tag), [`--tag`](#tag)           | `stringArray` |           | Image identifier (format: `[registry/]repository[:tag]`)                                                              |
 | [`--target`](#target)                   | `string`      |           | Set the target build stage to build                                                                                   |
 | [`--ulimit`](#ulimit)                   | `ulimit`      |           | Ulimit options                                                                                                        |
 
