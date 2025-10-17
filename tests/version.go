@@ -45,6 +45,10 @@ func testVersion(t *testing.T, sb integration.Sandbox) {
 	// This defaults to something that's still compatible
 	// with semver.
 	version := fields[1]
+	// Some downstream distributions strip the initial "v"
+	if !strings.HasPrefix(version, "v") {
+		version = "v" + version
+	}
 	require.True(t, semver.IsValid(version), "Second field was not valid semver: %+v", version)
 
 	// Revision should be empty or should look like a git hash.
