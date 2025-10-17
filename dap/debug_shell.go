@@ -261,15 +261,23 @@ func (s *shell) canInvoke(ctx context.Context, rCtx *build.ResultHandle, cfg *bu
 // the socket path that was created by Init. This is intended to be run
 // from the adapter and interact directly with the client.
 func (s *shell) SendRunInTerminalRequest(ctx Context) error {
-	// TODO: this should work in standalone mode too.
-	docker := os.Getenv(metadata.ReexecEnvvar)
+	var args []string
+	if docker := os.Getenv(metadata.ReexecEnvvar); docker != "" {
+		args = []string{docker, "buildx"}
+	} else if len(os.Args) > 0 {
+		args = []string{os.Args[0]}
+	} else {
+		return errors.New("cannot find exec target for buildx")
+	}
+	args = append(args, "dap", "attach", s.SocketPath)
+
 	req := &dap.RunInTerminalRequest{
 		Request: dap.Request{
 			Command: "runInTerminal",
 		},
 		Arguments: dap.RunInTerminalRequestArguments{
 			Kind: "integrated",
-			Args: []string{docker, "buildx", "dap", "attach", s.SocketPath},
+			Args: args,
 			Env: map[string]any{
 				"BUILDX_EXPERIMENTAL": "1",
 			},
