@@ -883,7 +883,7 @@ This is the same as the `--no-cache` flag for `docker build`.
 
 ```hcl
 target "default" {
-  no-cache = 1
+  no-cache = true
 }
 ```
 
