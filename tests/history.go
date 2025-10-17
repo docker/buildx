@@ -9,6 +9,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/containerd/continuity/fs/fstest"
+	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/stretchr/testify/require"
 )
@@ -20,7 +23,7 @@ var historyTests = []func(t *testing.T, sb integration.Sandbox){
 	testHistoryLs,
 	testHistoryRm,
 	testHistoryLsStoppedBuilder,
-	testHistoryBuildNameOverride,
+	testHistoryBuildName,
 }
 
 func testHistoryExport(t *testing.T, sb integration.Sandbox) {
@@ -137,43 +140,106 @@ func testHistoryLsStoppedBuilder(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err, string(bout))
 }
 
-func testHistoryBuildNameOverride(t *testing.T, sb integration.Sandbox) {
-	dir := createTestProject(t)
-	out, err := buildCmd(sb, withArgs("--build-arg=BUILDKIT_BUILD_NAME=foobar", "--metadata-file", filepath.Join(dir, "md.json"), dir))
-	require.NoError(t, err, string(out))
+func testHistoryBuildName(t *testing.T, sb integration.Sandbox) {
+	t.Run("override", func(t *testing.T) {
+		dir := createTestProject(t)
+		out, err := buildCmd(sb, withArgs("--build-arg=BUILDKIT_BUILD_NAME=foobar", "--metadata-file", filepath.Join(dir, "md.json"), dir))
+		require.NoError(t, err, string(out))
 
-	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
-	require.NoError(t, err)
+		dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+		require.NoError(t, err)
 
-	type mdT struct {
-		BuildRef string `json:"buildx.build.ref"`
-	}
-	var md mdT
-	err = json.Unmarshal(dt, &md)
-	require.NoError(t, err)
+		type mdT struct {
+			BuildRef string `json:"buildx.build.ref"`
+		}
+		var md mdT
+		err = json.Unmarshal(dt, &md)
+		require.NoError(t, err)
 
-	refParts := strings.Split(md.BuildRef, "/")
-	require.Len(t, refParts, 3)
+		refParts := strings.Split(md.BuildRef, "/")
+		require.Len(t, refParts, 3)
 
-	cmd := buildxCmd(sb, withArgs("history", "ls", "--filter=ref="+refParts[2], "--format=json"))
-	bout, err := cmd.Output()
-	require.NoError(t, err, string(bout))
+		cmd := buildxCmd(sb, withArgs("history", "ls", "--filter=ref="+refParts[2], "--format=json"))
+		bout, err := cmd.Output()
+		require.NoError(t, err, string(bout))
 
-	type recT struct {
-		Ref            string     `json:"ref"`
-		Name           string     `json:"name"`
-		Status         string     `json:"status"`
-		CreatedAt      *time.Time `json:"created_at"`
-		CompletedAt    *time.Time `json:"completed_at"`
-		TotalSteps     int32      `json:"total_steps"`
-		CompletedSteps int32      `json:"completed_steps"`
-		CachedSteps    int32      `json:"cached_steps"`
-	}
-	var rec recT
-	err = json.Unmarshal(bout, &rec)
-	require.NoError(t, err)
-	require.Equal(t, md.BuildRef, rec.Ref)
-	require.Equal(t, "foobar", rec.Name)
+		type recT struct {
+			Ref            string     `json:"ref"`
+			Name           string     `json:"name"`
+			Status         string     `json:"status"`
+			CreatedAt      *time.Time `json:"created_at"`
+			CompletedAt    *time.Time `json:"completed_at"`
+			TotalSteps     int32      `json:"total_steps"`
+			CompletedSteps int32      `json:"completed_steps"`
+			CachedSteps    int32      `json:"cached_steps"`
+		}
+		var rec recT
+		err = json.Unmarshal(bout, &rec)
+		require.NoError(t, err)
+		require.Equal(t, md.BuildRef, rec.Ref)
+		require.Equal(t, "foobar", rec.Name)
+	})
+
+	t.Run("git query", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox:latest
+COPY foo /foo
+`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		require.NoError(t, err)
+
+		gittestutil.GitInit(git, t)
+		gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+		gittestutil.GitCommit(git, t, "initial commit")
+		addr := gittestutil.GitServeHTTP(git, t)
+
+		out, err := buildCmd(sb, withDir(dir),
+			withArgs("--output=type=local,dest="+dirDest, "--metadata-file", filepath.Join(dir, "md.json"), addr+"?ref=main"),
+			withEnv("BUILDX_SEND_GIT_QUERY_AS_INPUT=true"),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "foo"))
+
+		dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+		require.NoError(t, err)
+
+		type mdT struct {
+			BuildRef string `json:"buildx.build.ref"`
+		}
+		var md mdT
+		err = json.Unmarshal(dt, &md)
+		require.NoError(t, err)
+
+		refParts := strings.Split(md.BuildRef, "/")
+		require.Len(t, refParts, 3)
+
+		cmd := buildxCmd(sb, withArgs("history", "ls", "--filter=ref="+refParts[2], "--format=json"))
+		bout, err := cmd.Output()
+		require.NoError(t, err, string(bout))
+
+		type recT struct {
+			Ref            string     `json:"ref"`
+			Name           string     `json:"name"`
+			Status         string     `json:"status"`
+			CreatedAt      *time.Time `json:"created_at"`
+			CompletedAt    *time.Time `json:"completed_at"`
+			TotalSteps     int32      `json:"total_steps"`
+			CompletedSteps int32      `json:"completed_steps"`
+			CachedSteps    int32      `json:"cached_steps"`
+		}
+		var rec recT
+		err = json.Unmarshal(bout, &rec)
+		require.NoError(t, err)
+		require.Equal(t, md.BuildRef, rec.Ref)
+		require.Equal(t, addr+"#main", rec.Name)
+	})
 }
 
 type buildRef struct {
