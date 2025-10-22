@@ -876,11 +876,7 @@ func CreateExports(entries []*buildflags.ExportEntry) ([]client.ExportEntry, []s
 				if err == nil && fi.IsDir() {
 					return nil, nil, errors.Errorf("destination file %s is a directory", entry.Destination)
 				}
-				f, err := os.Create(entry.Destination)
-				if err != nil {
-					return nil, nil, errors.Errorf("failed to open %s", err)
-				}
-				out.Output = wrapWriteCloser(f)
+				out.Output = wrapWriteCloserLazy(entry.Destination)
 				localPaths = append(localPaths, entry.Destination)
 			}
 		}
@@ -893,6 +889,38 @@ func CreateExports(entries []*buildflags.ExportEntry) ([]client.ExportEntry, []s
 func wrapWriteCloser(wc io.WriteCloser) func(map[string]string) (io.WriteCloser, error) {
 	return func(map[string]string) (io.WriteCloser, error) {
 		return wc, nil
+	}
+}
+
+type lazyFileWriter struct {
+	path string
+	file *os.File
+}
+
+func (w *lazyFileWriter) Write(p []byte) (int, error) {
+	if w.file == nil {
+		if err := os.MkdirAll(filepath.Dir(w.path), 0755); err != nil {
+			return 0, err
+		}
+		f, err := os.Create(w.path)
+		if err != nil {
+			return 0, err
+		}
+		w.file = f
+	}
+	return w.file.Write(p)
+}
+
+func (w *lazyFileWriter) Close() error {
+	if w.file != nil {
+		return w.file.Close()
+	}
+	return nil
+}
+
+func wrapWriteCloserLazy(path string) func(map[string]string) (io.WriteCloser, error) {
+	return func(map[string]string) (io.WriteCloser, error) {
+		return &lazyFileWriter{path: path}, nil
 	}
 }
 
