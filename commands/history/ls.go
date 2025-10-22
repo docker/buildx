@@ -85,7 +85,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 
 	for i, rec := range out {
 		st, _ := ls.ReadRef(rec.node.Builder, rec.node.Name, rec.Ref)
-		rec.name = buildName(rec.FrontendAttrs, st)
+		rec.name = BuildName(rec.FrontendAttrs, st)
 		out[i] = rec
 	}
 
