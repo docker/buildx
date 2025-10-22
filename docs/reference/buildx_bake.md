@@ -412,9 +412,10 @@ $ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' 
 
 > [!NOTE]
 >
-> `--set` is a repeatable flag. For array fields such as `tags`, repeat `--set` to provide multiple values or use the `+=` operator to append without replacing.
-> Array literal syntax like `--set target.tags=[a,b]` is not supported.
-> The `platform` field is a special case. It also accepts a comma-separated list.
+> `--set` is a repeatable flag. For array fields such as `tags`, repeat `--set`
+> to provide multiple values or use the `+=` operator to append without
+> replacing. Array literal syntax like `--set target.tags=[a,b]` is not
+> supported.
 
 You can override the following fields:
 
