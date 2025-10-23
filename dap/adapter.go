@@ -568,6 +568,9 @@ func newBreakpointMap() *breakpointMap {
 func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoints []dap.Breakpoint) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
+	// explicitly initialize breakpoints so that
+	// we do not send a null back in the JSON if there are no breakpoints
+	breakpoints = []dap.Breakpoint{}
 
 	prev := b.byPath[fname]
 	for _, sbp := range sbps {
@@ -590,11 +593,6 @@ func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoi
 		breakpoints = append(breakpoints, bp)
 	}
 	b.byPath[fname] = breakpoints
-	if breakpoints == nil {
-		// explicitly initialize breakpoints so that
-		// we do not send a null back in the JSON if there are no breakpoints
-		breakpoints = []dap.Breakpoint{}
-	}
 	return breakpoints
 }
 
