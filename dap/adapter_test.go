@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"io"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -62,6 +63,70 @@ func TestLaunch(t *testing.T) {
 		case <-configurationDone:
 		case <-time.After(10 * time.Second):
 			assert.Fail(t, "did not receive configurationDone response")
+		}
+		return nil
+	})
+
+	eg.Wait()
+}
+
+// TestSetBreakpoints will test sending a setBreakpoints request with no breakpoints.
+// The response should be an empty array instead of null in the JSON.
+func TestSetBreakpoints(t *testing.T) {
+	adapter, conn, client := NewTestAdapter[common.Config](t)
+
+	ctx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, context.DeadlineExceeded)
+	defer cancel()
+
+	eg, _ := errgroup.WithContext(ctx)
+	eg.Go(func() error {
+		_, err := adapter.Start(ctx, conn)
+		assert.NoError(t, err)
+		return nil
+	})
+
+	var (
+		initialized    = make(chan struct{})
+		setBreakpoints <-chan *dap.SetBreakpointsResponse
+	)
+
+	client.RegisterEvent("initialized", func(em dap.EventMessage) {
+		setBreakpoints = DoRequest[*dap.SetBreakpointsResponse](t, client, &dap.SetBreakpointsRequest{
+			Request: dap.Request{Command: "setBreakpoints"},
+			Arguments: dap.SetBreakpointsArguments{
+				Source:      dap.Source{Name: "Dockerfile", Path: filepath.Join(t.TempDir(), "Dockerfile")},
+				Breakpoints: []dap.SourceBreakpoint{},
+			},
+		})
+		close(initialized)
+	})
+
+	eg.Go(func() error {
+		initializeResp := <-DoRequest[*dap.InitializeResponse](t, client, &dap.InitializeRequest{
+			Request: dap.Request{Command: "initialize"},
+		})
+		assert.True(t, initializeResp.Success)
+		assert.True(t, initializeResp.Body.SupportsConfigurationDoneRequest)
+
+		launchResp := <-DoRequest[*dap.LaunchResponse](t, client, &dap.LaunchRequest{
+			Request: dap.Request{Command: "launch"},
+		})
+		assert.True(t, launchResp.Success)
+
+		// We should have received the initialized event.
+		select {
+		case <-initialized:
+		default:
+			assert.Fail(t, "did not receive initialized event")
+		}
+
+		select {
+		case setBreakpointsResp := <-setBreakpoints:
+			assert.True(t, setBreakpointsResp.Success)
+			assert.Len(t, setBreakpointsResp.Body.Breakpoints, 0)
+			assert.NotNil(t, setBreakpointsResp.Body.Breakpoints, "breakpoints should be an empty array instead of null in the JSON")
+		case <-time.After(10 * time.Second):
+			assert.Fail(t, "did not receive setBreakpoints response")
 		}
 		return nil
 	})
