@@ -15,6 +15,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"golang.org/x/sync/errgroup"
 )
 
 type thread struct {
@@ -73,16 +74,16 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, headRef gateway.Referen
 	}
 
 	var (
-		ref    gateway.Reference
-		mounts map[string]gateway.Reference
-		next   = t.entrypoint
-		err    error
+		k    string
+		refs map[string]gateway.Reference
+		next = t.entrypoint
+		err  error
 	)
 	for next != nil {
 		event := t.needsDebug(next, action, err)
 		if event.Reason != "" {
 			select {
-			case action = <-t.pause(ctx, ref, err, mounts, next, event):
+			case action = <-t.pause(ctx, k, refs, err, next, event):
 				// do nothing here
 			case <-ctx.Done():
 				return context.Cause(ctx)
@@ -96,7 +97,7 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, headRef gateway.Referen
 		if action == stepContinue {
 			t.setBreakpoints(ctx)
 		}
-		ref, next, mounts, err = t.seekNext(ctx, next, action)
+		k, next, refs, err = t.seekNext(ctx, next, action)
 	}
 	return nil
 }
@@ -121,8 +122,8 @@ func (t *thread) init(ctx Context, c gateway.Client, ref gateway.Reference, meta
 }
 
 type step struct {
-	// dgst holds the digest that should be resolved by this step.
-	// If this is empty, no digest should be resolved.
+	// dgst holds the digest associated with this step. This is used for
+	// breakpoint resolution.
 	dgst digest.Digest
 
 	// in holds the next target when step in is used.
@@ -136,6 +137,9 @@ type step struct {
 
 	// frame will hold the stack frame associated with this step.
 	frame *frame
+
+	// parent holds the index of the parent step.
+	parent int
 }
 
 func (t *thread) createProgram() error {
@@ -143,71 +147,99 @@ func (t *thread) createProgram() error {
 
 	// Create the entrypoint by using the last node.
 	// We will build on top of that.
-	head := &step{
-		dgst:  t.head,
-		frame: t.getStackFrame(t.head, nil),
-	}
-	t.entrypoint = t.createBranch(head)
+	t.entrypoint = t.createBranch(t.head, nil)
 	return nil
 }
 
-func (t *thread) createBranch(last *step) (first *step) {
-	first = last
-	for first.dgst != "" {
-		prev := &step{
-			// set to first temporarily until we determine
-			// if there are other inputs.
-			in: first,
-			// always first
-			next: first,
-			// exit point always matches the one set on first
-			out: first.out,
-			// always set to the same as next which is always first
-			frame: t.getStackFrame(first.dgst, first),
-		}
-
-		op := t.ops[first.dgst]
-		if len(op.Inputs) > 0 {
-			parent := t.determineParent(op)
-			for i := len(op.Inputs) - 1; i >= 0; i-- {
-				if i == parent {
-					// Skip the direct parent.
-					continue
-				}
-				inp := op.Inputs[i]
-
-				// Create a pseudo-step that acts as an exit point for this
-				// branch. This step exists so this branch has a place to go
-				// after it has finished that will advance to the next
-				// instruction.
-				exit := &step{
-					in:    prev.in,
-					next:  prev.next,
-					out:   prev.out,
-					frame: prev.frame,
-				}
-
-				head := &step{
-					dgst:  digest.Digest(inp.Digest),
-					in:    exit,
-					next:  exit,
-					out:   exit,
-					frame: t.getStackFrame(digest.Digest(inp.Digest), nil),
-				}
-				prev.in = t.createBranch(head)
-			}
-
-			// Set the digest of the parent input on the first step associated
-			// with this step if it exists.
-			if parent >= 0 {
-				prev.dgst = digest.Digest(op.Inputs[parent].Digest)
-			}
-		}
-
-		// New first is the step we just created.
-		first = prev
+func (t *thread) createBranch(dgst digest.Digest, exitpoint *step) (entrypoint *step) {
+	// Construct the final two steps in this branch. The final steps
+	// both point to the same line. The difference between them is one
+	// step is before the execution of the digest and the other is
+	// after the execution of that digest.
+	returnpoint := &step{
+		in:     exitpoint,
+		next:   exitpoint,
+		out:    exitpoint,
+		parent: -1,
 	}
-	return first
+
+	entrypoint = &step{
+		dgst:   dgst,
+		in:     returnpoint,
+		next:   returnpoint,
+		out:    exitpoint,
+		frame:  t.getStackFrame(dgst, nil),
+		parent: -1,
+	}
+
+	// Create a pseudo-frame and attach it to the return point.
+	// This is mostly used for getting the correct inputs utilized
+	// by this frame.
+	//
+	// We don't save this frame or assign it a unique ID as it should
+	// never be returned.
+	returnpoint.frame = &frame{
+		StackFrame: entrypoint.frame.StackFrame,
+		op: &pb.Op{
+			Inputs: []*pb.Input{
+				{Digest: string(dgst), Index: 0},
+			},
+		},
+	}
+
+	for {
+		// Construct the input step for this digest based on the inputs.
+		op := t.ops[entrypoint.dgst]
+		if len(op.Inputs) == 0 {
+			return entrypoint
+		}
+
+		entrypoint.parent = t.determineParent(op)
+		for i := len(op.Inputs) - 1; i >= 0; i-- {
+			if i == entrypoint.parent {
+				// Skip the direct parent.
+				continue
+			}
+
+			// When we find inputs that aren't the direct parent,
+			// we want to add them as a step before the current step.
+			// We have to do a few things when inserting this.
+			//
+			// 1. We move the digest from the old entrypoint to this node.
+			// 		This is so the breakpoint happens before these inputs
+			// 		are evaluated.
+			// 2. We keep the next/out pointers the same but redirect in
+			// 		to point to the new branch.
+			// 3. The direct parent is excluded from this logic. We handle
+			// 		that later.
+			inp := op.Inputs[i]
+
+			head := *entrypoint
+			entrypoint.dgst = ""
+
+			// Create the routine associated with this input.
+			// Associate it with the entrypoint in step.
+			head.in = t.createBranch(digest.Digest(inp.Digest), entrypoint)
+			entrypoint = &head
+		}
+
+		// If we have no direct parent, return the current entrypoint
+		// as the beginning.
+		if entrypoint.parent < 0 {
+			return entrypoint
+		}
+
+		// Create a new step that refers to the direct parent.
+		head := &step{
+			dgst:   digest.Digest(op.Inputs[entrypoint.parent].Digest),
+			in:     entrypoint,
+			next:   entrypoint,
+			out:    entrypoint.out,
+			parent: -1,
+		}
+		head.frame = t.getStackFrame(head.dgst, entrypoint)
+		entrypoint = head
+	}
 }
 
 func (t *thread) getStackFrame(dgst digest.Digest, next *step) *frame {
@@ -274,18 +306,16 @@ func (t *thread) needsDebug(cur *step, step stepType, err error) (e dap.StoppedE
 	} else if cur != nil {
 		if step != stepContinue {
 			e.Reason = "step"
-		} else if next := cur.in; next != nil {
-			if id, ok := t.bps[next.dgst]; ok {
-				e.Reason = "breakpoint"
-				e.Description = "Paused on breakpoint"
-				e.HitBreakpointIds = []int{id}
-			}
+		} else if id, ok := t.bps[cur.dgst]; ok {
+			e.Reason = "breakpoint"
+			e.Description = "Paused on breakpoint"
+			e.HitBreakpointIds = []int{id}
 		}
 	}
 	return
 }
 
-func (t *thread) pause(c Context, ref gateway.Reference, err error, mounts map[string]gateway.Reference, pos *step, event dap.StoppedEventBody) <-chan stepType {
+func (t *thread) pause(c Context, k string, refs map[string]gateway.Reference, err error, pos *step, event dap.StoppedEventBody) <-chan stepType {
 	t.mu.Lock()
 	defer t.mu.Unlock()
 
@@ -295,10 +325,12 @@ func (t *thread) pause(c Context, ref gateway.Reference, err error, mounts map[s
 	t.paused = make(chan stepType, 1)
 
 	ctx, cancel := context.WithCancelCause(c)
-	t.collectStackTrace(ctx, pos, mounts)
+	t.collectStackTrace(ctx, pos, refs)
 	t.cancel = cancel
 
-	if ref != nil || err != nil {
+	// Used for exec. Only works if there was an error or if the step returns
+	// a root mount.
+	if ref, ok := refs[k]; ok || err != nil {
 		t.prepareResultHandle(c, ref, err)
 	}
 
@@ -412,7 +444,7 @@ func (t *thread) getLLBState(ctx Context) error {
 		dgst := digest.FromBytes(dt)
 
 		var op pb.Op
-		if err := op.UnmarshalVT(dt); err != nil {
+		if err := op.Unmarshal(dt); err != nil {
 			return err
 		}
 		t.ops[dgst] = &op
@@ -426,7 +458,7 @@ func (t *thread) setBreakpoints(ctx Context) {
 	t.bps = t.breakpointMap.Intersect(ctx, t.def.Source, t.sourcePath)
 }
 
-func (t *thread) seekNext(ctx Context, from *step, action stepType) (gateway.Reference, *step, map[string]gateway.Reference, error) {
+func (t *thread) seekNext(ctx Context, from *step, action stepType) (string, *step, map[string]gateway.Reference, error) {
 	// If we're at the end, return no digest to signal that
 	// we should conclude debugging.
 	var target *step
@@ -443,31 +475,26 @@ func (t *thread) seekNext(ctx Context, from *step, action stepType) (gateway.Ref
 	return t.seek(ctx, target)
 }
 
-func (t *thread) seek(ctx Context, target *step) (ref gateway.Reference, result *step, mounts map[string]gateway.Reference, err error) {
-	if target != nil {
-		if target.dgst != "" {
-			ref, err = t.solve(ctx, target.dgst, 0)
-			if err != nil {
-				return ref, nil, nil, err
-			}
-		}
+func (t *thread) seek(ctx Context, target *step) (k string, result *step, mounts map[string]gateway.Reference, err error) {
+	k = "/"
 
+	var refs map[string]gateway.Reference
+	if target != nil {
+		k, refs, err = t.solveInputs(ctx, target)
+		if err != nil {
+			return "", nil, nil, err
+		}
 		result = target
 	} else {
-		ref = t.ref
+		refs = map[string]gateway.Reference{"/": t.ref}
 	}
 
-	if ref != nil {
-		if err = ref.Evaluate(ctx); err != nil {
-			result, mounts = t.rewind(ctx, err)
-			if result == nil {
-				return nil, nil, nil, err
-			}
-		} else {
-			mounts = map[string]gateway.Reference{"/": ref}
+	if len(refs) > 0 {
+		if err := t.evaluateRefs(ctx, refs); err != nil {
+			return t.rewind(ctx, err)
 		}
 	}
-	return ref, result, mounts, err
+	return k, result, refs, nil
 }
 
 func (t *thread) continueDigest(from *step) *step {
@@ -487,28 +514,74 @@ func (t *thread) continueDigest(from *step) *step {
 	next := func(s *step) *step {
 		cur := s.in
 		for cur != nil {
-			next := cur.in
-			if next != nil && isBreakpoint(next.dgst) {
+			if isBreakpoint(cur.dgst) {
 				return cur
 			}
-			cur = next
+			cur = cur.in
 		}
 		return nil
 	}
 	return next(from)
 }
 
-func (t *thread) solve(ctx context.Context, target digest.Digest, index int64) (gateway.Reference, error) {
-	if target == t.head {
+func (t *thread) solveInputs(ctx context.Context, target *step) (string, map[string]gateway.Reference, error) {
+	if target == nil || target.frame.op == nil {
+		return "", nil, nil
+	}
+	op := target.frame.op
+
+	var root string
+	refs := make(map[string]gateway.Reference)
+	for i, input := range op.Inputs {
+		k := t.determineInputName(op, input)
+		if _, ok := refs[k]; ok || k == "" {
+			continue
+		}
+
+		if i == target.parent {
+			root = k
+		}
+
+		ref, err := t.solve(ctx, input)
+		if err != nil {
+			return "", nil, err
+		}
+		refs[k] = ref
+	}
+	return root, refs, nil
+}
+
+func (t *thread) determineInputName(op *pb.Op, input *pb.Input) string {
+	switch op := op.Op.(type) {
+	case *pb.Op_Exec:
+		for _, m := range op.Exec.Mounts {
+			if m.Input >= 0 && m.Input == input.Index {
+				return m.Dest
+			}
+		}
+	}
+	return input.Digest
+}
+
+func (t *thread) evaluateRefs(ctx context.Context, refs map[string]gateway.Reference) error {
+	eg, _ := errgroup.WithContext(ctx)
+	for _, ref := range refs {
+		eg.Go(func() error {
+			return ref.Evaluate(ctx)
+		})
+	}
+	return eg.Wait()
+}
+
+func (t *thread) solve(ctx context.Context, input *pb.Input) (gateway.Reference, error) {
+	if input.Digest == string(t.head) {
 		return t.ref, nil
 	}
 
 	head := &pb.Op{
-		Inputs: []*pb.Input{
-			{Digest: string(target), Index: index},
-		},
+		Inputs: []*pb.Input{input},
 	}
-	dt, err := head.MarshalVT()
+	dt, err := head.Marshal()
 	if err != nil {
 		return nil, err
 	}
@@ -565,47 +638,37 @@ func (t *thread) hasFrame(id int) bool {
 	return ok
 }
 
-func (t *thread) rewind(ctx context.Context, err error) (result *step, mounts map[string]gateway.Reference) {
+func (t *thread) rewind(ctx Context, inErr error) (k string, result *step, mounts map[string]gateway.Reference, retErr error) {
 	var solveErr *errdefs.SolveError
-	if !errors.As(err, &solveErr) {
+	if !errors.As(inErr, &solveErr) {
 		// If this is not a solve error, do not return the
 		// reference and target step.
-		return nil, nil
+		return "", nil, nil, inErr
 	}
 
-	dt, err := solveErr.Op.MarshalVT()
+	dt, err := solveErr.Op.Marshal()
 	if err != nil {
-		return nil, nil
+		return "", nil, nil, err
 	}
 
 	// Find the error digest.
 	errDgst := digest.FromBytes(dt)
 
-	// Iterate from the first step to find the one
-	// we failed on.
+	// Iterate from the first step to find the one we failed on.
 	result = t.entrypoint
-	for result != nil {
-		next := result.in
-		if next != nil && next.dgst == errDgst {
-			break
-		}
-		result = next
+	for result != nil && result.dgst != errDgst {
+		result = result.in
 	}
 
-	if exec, ok := solveErr.Op.GetOp().(*pb.Op_Exec); ok {
-		mounts = make(map[string]gateway.Reference, len(exec.Exec.Mounts))
-		for _, m := range exec.Exec.Mounts {
-			if m.Input < 0 {
-				continue
-			}
-
-			// TODO: Use the correct input index for this.
-			input := solveErr.Op.Inputs[m.Input]
-			target, index := digest.Digest(input.Digest), input.Index
-			if ref, err := t.solve(ctx, target, index); err == nil {
-				mounts[m.Dest] = ref
-			}
-		}
+	if result == nil {
+		return "", nil, nil, inErr
 	}
-	return result, mounts
+
+	// Seek to this step. This should succeed because otherwise
+	// we wouldn't have been able to even fail on it to begin with.
+	k, result, mounts, err = t.seek(ctx, result)
+	if err != nil {
+		return k, result, mounts, err
+	}
+	return k, result, mounts, inErr
 }
