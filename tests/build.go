@@ -417,10 +417,11 @@ func testBuildLocalExport(t *testing.T, sb integration.Sandbox) {
 
 func testBuildTarExport(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
-	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=tar,dest=%s/result.tar", dir), dir))
+	outdir := path.Join(dir, "out")
+	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=tar,dest=%s/result.tar", outdir), dir))
 	require.NoError(t, err, string(out))
 
-	dt, err := os.ReadFile(fmt.Sprintf("%s/result.tar", dir))
+	dt, err := os.ReadFile(fmt.Sprintf("%s/result.tar", outdir))
 	require.NoError(t, err)
 	m, err := testutil.ReadTarToMap(dt, false)
 	require.NoError(t, err)
