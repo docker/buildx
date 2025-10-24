@@ -16,6 +16,7 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/ghutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/context/docker"
@@ -43,20 +44,21 @@ type Driver struct {
 
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/docker-container.md
-	netMode       string
-	image         string
-	memory        opts.MemBytes
-	memorySwap    opts.MemSwapBytes
-	cpuQuota      int64
-	cpuPeriod     int64
-	cpuShares     int64
-	cpusetCpus    string
-	cpusetMems    string
-	cgroupParent  string
-	restartPolicy container.RestartPolicy
-	env           []string
-	defaultLoad   bool
-	gpus          []container.DeviceRequest
+	netMode            string
+	image              string
+	memory             opts.MemBytes
+	memorySwap         opts.MemSwapBytes
+	cpuQuota           int64
+	cpuPeriod          int64
+	cpuShares          int64
+	cpusetCpus         string
+	cpusetMems         string
+	cgroupParent       string
+	restartPolicy      container.RestartPolicy
+	env                []string
+	defaultLoad        bool
+	gpus               []container.DeviceRequest
+	writeProvenanceGHA bool
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -135,6 +137,17 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				Source: d.Name + volumeStateSuffix,
 				Target: confutil.DefaultBuildKitStateDir,
 			},
+		}
+
+		if d.writeProvenanceGHA {
+			if ghactx, err := ghutil.GithubActionsContext(); err != nil {
+				return err
+			} else if ghactx != nil {
+				if d.Files == nil {
+					d.Files = make(map[string][]byte)
+				}
+				d.Files["provenance.d/github_actions_context.json"] = ghactx
+			}
 		}
 
 		// Mount WSL libaries if running in WSL environment and Docker context

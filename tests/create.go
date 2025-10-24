@@ -3,6 +3,7 @@ package tests
 import (
 	"fmt"
 	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -23,6 +24,7 @@ var createTests = []func(t *testing.T, sb integration.Sandbox){
 	testCreateMemoryLimit,
 	testCreateRestartAlways,
 	testCreateRemoteContainer,
+	testCreateWithProvenanceGHA,
 }
 
 func testCreateMemoryLimit(t *testing.T, sb integration.Sandbox) {
@@ -107,4 +109,32 @@ func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
 		}
 	}
 	require.Fail(t, "remote builder is not running")
+}
+
+func testCreateWithProvenanceGHA(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
+	}
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	ghep := filepath.Join(t.TempDir(), "event.json")
+	require.NoError(t, os.WriteFile(ghep, []byte(`{"test":{"foo":"bar"}}`), 0644))
+
+	out, err := createCmd(sb,
+		withArgs("--driver", "docker-container"),
+		withEnv("GITHUB_ACTIONS=true", "GITHUB_EVENT_NAME=push", "GITHUB_EVENT_PATH="+ghep),
+	)
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	out, err = inspectCmd(sb, withArgs(builderName, "--bootstrap"))
+	require.NoError(t, err, out)
 }
