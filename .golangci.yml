@@ -64,7 +64,7 @@ linters:
       alias:
         - pkg: "github.com/containerd/errdefs"
           alias: "cerrdefs"
-        - pkg: "github.com/docker/docker/client"
+        - pkg: "github.com/moby/moby/client"
           alias: "dockerclient"
         - pkg: "github.com/opencontainers/image-spec/specs-go/v1"
           alias: "ocispecs"
