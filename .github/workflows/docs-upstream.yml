@@ -58,7 +58,7 @@ jobs:
           DOCS_FORMATS: yaml
       -
         name: Upload reference YAML docs
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: docs-yaml
           path: /tmp/buildx-docs/out/reference
