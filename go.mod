@@ -16,7 +16,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.0.0-rc.1.0.20251014130057-171a9b70b273+incompatible // master / v29.0.0-dev
+	github.com/docker/cli v29.0.0-rc.1.0.20251028182627-606f1c65d09e+incompatible // master / v29.0.0-dev
 	github.com/docker/cli-docs-tool v0.10.0
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.12.1
@@ -30,8 +30,8 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.25.0-rc1.0.20251011181741-9b6f60ac8bf9
 	github.com/moby/go-archive v0.1.0
-	github.com/moby/moby/api v1.52.0-beta.2
-	github.com/moby/moby/client v0.1.0-beta.2
+	github.com/moby/moby/api v1.52.0-beta.2.0.20251028144225-90109a373da9 // master
+	github.com/moby/moby/client v0.1.0-beta.2.0.20251028144225-90109a373da9 // master
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/morikuni/aec v1.0.0

@@ -888,7 +888,9 @@ func remoteDigestWithMoby(ctx context.Context, d *driver.DriverHandle, name stri
 	if len(img.RepoDigests) == 0 {
 		return "", nil
 	}
-	remoteImage, err := api.DistributionInspect(ctx, name, creds)
+	remoteImage, err := api.DistributionInspect(ctx, name, dockerclient.DistributionInspectOptions{
+		EncodedRegistryAuth: creds,
+	})
 	if err != nil {
 		return "", err
 	}

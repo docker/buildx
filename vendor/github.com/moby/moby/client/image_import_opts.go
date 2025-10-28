@@ -17,3 +17,22 @@ type ImageImportOptions struct {
 	Changes  []string // Changes are the raw changes to apply to this image
 	Platform string   // Platform is the target platform of the image
 }
+
+// ImageImportResult holds the response body returned by the daemon for image import.
+type ImageImportResult struct {
+	rc io.ReadCloser
+}
+
+func (r ImageImportResult) Read(p []byte) (n int, err error) {
+	if r.rc == nil {
+		return 0, io.EOF
+	}
+	return r.rc.Read(p)
+}
+
+func (r ImageImportResult) Close() error {
+	if r.rc == nil {
+		return nil
+	}
+	return r.rc.Close()
+}

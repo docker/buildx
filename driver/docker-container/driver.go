@@ -26,7 +26,6 @@ import (
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
-	"github.com/moby/moby/api/types/network"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/jsonmessage"
 	"github.com/moby/moby/client/pkg/security"
@@ -71,7 +70,7 @@ func (d *Driver) Config() driver.InitConfig {
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 	return progress.Wrap("[internal] booting buildkit", l, func(sub progress.SubLogger) error {
-		_, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
+		_, err := d.DockerAPI.ContainerInspect(ctx, d.Name, dockerclient.ContainerInspectOptions{})
 		if err != nil {
 			if cerrdefs.IsNotFound(err) {
 				return d.create(ctx, sub)
@@ -104,8 +103,8 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		defer resp.Close()
-		return jsonmessage.DisplayJSONMessagesStream(resp, io.Discard, 0, false, nil)
+		defer resp.Body.Close()
+		return jsonmessage.DisplayJSONMessagesStream(resp.Body, io.Discard, 0, false, nil)
 	}); err != nil {
 		// image pulling failed, check if it exists in local image store.
 		// if not, return pulling error. otherwise log it.
@@ -219,7 +218,11 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 				}
 			}
 		}
-		_, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, d.Name)
+		_, err := d.DockerAPI.ContainerCreate(ctx, dockerclient.ContainerCreateOptions{
+			Config:     cfg,
+			HostConfig: hc,
+			Name:       d.Name,
+		})
 		if err != nil && !cerrdefs.IsConflict(err) {
 			return err
 		}
@@ -299,7 +302,7 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 }
 
 func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, error) {
-	response, err := d.DockerAPI.ContainerExecCreate(ctx, d.Name, dockerclient.ExecCreateOptions{
+	response, err := d.DockerAPI.ExecCreate(ctx, d.Name, dockerclient.ExecCreateOptions{
 		Cmd:          cmd,
 		AttachStdin:  true,
 		AttachStdout: true,
@@ -314,7 +317,7 @@ func (d *Driver) exec(ctx context.Context, cmd []string) (string, net.Conn, erro
 		return "", nil, errors.New("exec ID empty")
 	}
 
-	resp, err := d.DockerAPI.ContainerExecAttach(ctx, execID, dockerclient.ExecStartOptions{})
+	resp, err := d.DockerAPI.ExecAttach(ctx, execID, dockerclient.ExecAttachOptions{})
 	if err != nil {
 		return "", nil, err
 	}
@@ -330,7 +333,7 @@ func (d *Driver) run(ctx context.Context, cmd []string, stdout, stderr io.Writer
 		return err
 	}
 	conn.Close()
-	resp, err := d.DockerAPI.ContainerExecInspect(ctx, id)
+	resp, err := d.DockerAPI.ExecInspect(ctx, id, dockerclient.ExecInspectOptions{})
 	if err != nil {
 		return err
 	}
@@ -341,11 +344,12 @@ func (d *Driver) run(ctx context.Context, cmd []string, stdout, stderr io.Writer
 }
 
 func (d *Driver) start(ctx context.Context) error {
-	return d.DockerAPI.ContainerStart(ctx, d.Name, dockerclient.ContainerStartOptions{})
+	_, err := d.DockerAPI.ContainerStart(ctx, d.Name, dockerclient.ContainerStartOptions{})
+	return err
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
-	ctn, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
+	res, err := d.DockerAPI.ContainerInspect(ctx, d.Name, dockerclient.ContainerInspectOptions{})
 	if err != nil {
 		if cerrdefs.IsNotFound(err) {
 			return &driver.Info{
@@ -355,7 +359,7 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 		return nil, err
 	}
 
-	if ctn.State.Running {
+	if res.Container.State.Running {
 		return &driver.Info{
 			Status: driver.Running,
 		}, nil
@@ -388,7 +392,8 @@ func (d *Driver) Stop(ctx context.Context, force bool) error {
 		return err
 	}
 	if info.Status == driver.Running {
-		return d.DockerAPI.ContainerStop(ctx, d.Name, dockerclient.ContainerStopOptions{})
+		_, err = d.DockerAPI.ContainerStop(ctx, d.Name, dockerclient.ContainerStopOptions{})
+		return err
 	}
 	return nil
 }
@@ -399,23 +404,23 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 		return err
 	}
 	if info.Status != driver.Inactive {
-		ctr, err := d.DockerAPI.ContainerInspect(ctx, d.Name)
+		res, err := d.DockerAPI.ContainerInspect(ctx, d.Name, dockerclient.ContainerInspectOptions{})
 		if err != nil {
 			return err
 		}
 		if rmDaemon {
-			if err := d.DockerAPI.ContainerRemove(ctx, d.Name, dockerclient.ContainerRemoveOptions{
+			if _, err := d.DockerAPI.ContainerRemove(ctx, d.Name, dockerclient.ContainerRemoveOptions{
 				RemoveVolumes: true,
 				Force:         force,
 			}); err != nil {
 				return err
 			}
-			for _, v := range ctr.Mounts {
+			for _, v := range res.Container.Mounts {
 				if v.Name != d.Name+volumeStateSuffix {
 					continue
 				}
 				if rmVolume {
-					return d.DockerAPI.VolumeRemove(ctx, d.Name+volumeStateSuffix, false)
+					return d.DockerAPI.VolumeRemove(ctx, d.Name+volumeStateSuffix, dockerclient.VolumeRemoveOptions{})
 				}
 			}
 		}
@@ -473,22 +478,23 @@ func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
 // a dummy container with GPU device to check if the daemon has this capability
 // because there is no API to check it yet.
 func (d *Driver) hasGPUCapability(ctx context.Context, image string, gpus []container.DeviceRequest) bool {
-	cfg := &container.Config{
-		Image:      image,
-		Entrypoint: []string{"/bin/true"},
-	}
-	hc := &container.HostConfig{
-		NetworkMode: container.NetworkMode(container.IPCModeNone),
-		AutoRemove:  true,
-		Resources: container.Resources{
-			DeviceRequests: gpus,
+	resp, err := d.DockerAPI.ContainerCreate(ctx, dockerclient.ContainerCreateOptions{
+		Config: &container.Config{
+			Image:      image,
+			Entrypoint: []string{"/bin/true"},
 		},
-	}
-	resp, err := d.DockerAPI.ContainerCreate(ctx, cfg, hc, &network.NetworkingConfig{}, nil, "")
+		HostConfig: &container.HostConfig{
+			NetworkMode: container.NetworkMode(container.IPCModeNone),
+			AutoRemove:  true,
+			Resources: container.Resources{
+				DeviceRequests: gpus,
+			},
+		},
+	})
 	if err != nil {
 		return false
 	}
-	if err := d.DockerAPI.ContainerStart(ctx, resp.ID, dockerclient.ContainerStartOptions{}); err != nil {
+	if _, err := d.DockerAPI.ContainerStart(ctx, resp.ID, dockerclient.ContainerStartOptions{}); err != nil {
 		return false
 	}
 	return true

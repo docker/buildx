@@ -8,18 +8,28 @@ import (
 	"github.com/moby/moby/api/types/plugin"
 )
 
+// PluginListOptions holds parameters to list plugins.
+type PluginListOptions struct {
+	Filters Filters
+}
+
+// PluginListResult represents the result of a plugin list operation.
+type PluginListResult struct {
+	Items []*plugin.Plugin
+}
+
 // PluginList returns the installed plugins
-func (cli *Client) PluginList(ctx context.Context, filter Filters) (plugin.ListResponse, error) {
-	var plugins plugin.ListResponse
+func (cli *Client) PluginList(ctx context.Context, options PluginListOptions) (PluginListResult, error) {
 	query := url.Values{}
 
-	filter.updateURLValues(query)
+	options.Filters.updateURLValues(query)
 	resp, err := cli.get(ctx, "/plugins", query, nil)
 	defer ensureReaderClosed(resp)
 	if err != nil {
-		return plugins, err
+		return PluginListResult{}, err
 	}
 
+	var plugins plugin.ListResponse
 	err = json.NewDecoder(resp.Body).Decode(&plugins)
-	return plugins, err
+	return PluginListResult{Items: plugins}, err
 }

@@ -48,7 +48,7 @@ import (
 	sourcepolicy "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/moby/buildkit/util/progress/progressui"
-	"github.com/moby/moby/api/types/versions"
+	"github.com/moby/moby/client/pkg/versions"
 	"github.com/moby/sys/atomicwriter"
 	"github.com/morikuni/aec"
 	"github.com/pkg/errors"
