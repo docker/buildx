@@ -2,9 +2,11 @@ package kubernetes
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"net"
 	"strings"
+	"syscall"
 	"time"
 
 	"github.com/docker/buildx/driver"
@@ -17,6 +19,7 @@ import (
 	"github.com/docker/go-units"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -212,11 +215,98 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	}
 	containerName := pod.Spec.Containers[0].Name
 	cmd := []string{"buildctl", "dial-stdio"}
-	conn, err := execconn.ExecConn(ctx, restClient, restClientConfig, pod.Namespace, pod.Name, containerName, cmd)
-	if err != nil {
-		return nil, err
+
+	// Retry connection with exponential backoff for transient errors
+	// See https://github.com/docker/buildx/issues/2668
+	var conn net.Conn
+	err = tryWithBackoff(ctx, pod.Name, func() error {
+		var err error
+		conn, err = execconn.ExecConn(ctx, restClient, restClientConfig, pod.Namespace, pod.Name, containerName, cmd)
+		return err
+	})
+	return conn, err
+}
+
+// tryWithBackoff retries a function with exponential backoff for transient errors.
+// This handles the race condition where Kubernetes marks nodes as "Ready" before their
+// Certificate Signing Requests (CSRs) are approved, causing transient TLS errors.
+func tryWithBackoff(ctx context.Context, podName string, fn func() error) error {
+	const (
+		maxRetries = 5
+		baseDelay  = 500 * time.Millisecond
+		maxDelay   = 10 * time.Second
+	)
+
+	var lastErr error
+	for attempt := range maxRetries {
+		err := fn()
+		if err == nil {
+			return nil
+		}
+
+		lastErr = err
+
+		if !isTransientConnectionError(err) {
+			return err
+		}
+
+		if attempt < maxRetries-1 {
+			delay := calculateBackoff(attempt, baseDelay, maxDelay)
+			logrus.Warnf("Transient connection error to pod %s (attempt %d/%d): %v. Retrying in %v...",
+				podName, attempt+1, maxRetries, err, delay)
+
+			select {
+			case <-ctx.Done():
+				return context.Cause(ctx)
+			case <-time.After(delay):
+			}
+		}
 	}
-	return conn, nil
+
+	return errors.Wrapf(lastErr, "failed to connect to pod %s after %d attempts", podName, maxRetries)
+}
+
+// isTransientConnectionError checks if an error is transient and should be retried.
+func isTransientConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	// Check for context deadline exceeded
+	if stderrors.Is(err, context.DeadlineExceeded) {
+		return true
+	}
+
+	// Check for closed network connection
+	if stderrors.Is(err, net.ErrClosed) {
+		return true
+	}
+
+	// Check for timeout errors using net.Error interface
+	var netErr net.Error
+	if stderrors.As(err, &netErr) && netErr.Timeout() {
+		return true
+	}
+
+	// Check for syscall errors (connection refused, connection reset)
+	var syscallErr syscall.Errno
+	if stderrors.As(err, &syscallErr) {
+		if syscallErr == syscall.ECONNREFUSED || syscallErr == syscall.ECONNRESET {
+			return true
+		}
+	}
+
+	// TLS internal errors don't have a specific type, so we still need to check the message
+	if strings.Contains(err.Error(), "tls: internal error") {
+		return true
+	}
+
+	return false
+}
+
+// calculateBackoff calculates the delay for the given attempt with exponential backoff.
+func calculateBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
+	return min(time.Duration(1<<uint(attempt))*baseDelay, maxDelay)
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
