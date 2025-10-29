@@ -4,6 +4,7 @@ import (
 	"context"
 	"path"
 	"path/filepath"
+	"slices"
 	"sync"
 
 	"github.com/docker/buildx/build"
@@ -646,29 +647,38 @@ func (t *thread) rewind(ctx Context, inErr error) (k string, result *step, mount
 		return "", nil, nil, inErr
 	}
 
-	dt, err := solveErr.Op.Marshal()
-	if err != nil {
-		return "", nil, nil, err
+	// Find the error digests we might have failed on.
+	var digests []digest.Digest
+	if dt, err := solveErr.Op.Marshal(); err == nil {
+		digests = append(digests, digest.FromBytes(dt))
 	}
 
-	// Find the error digest.
-	errDgst := digest.FromBytes(dt)
+	// Include a version of the digest without the platform
+	// if this is a file op.
+	if _, ok := solveErr.Op.Op.(*pb.Op_File); ok && solveErr.Op.Platform != nil {
+		op := solveErr.Op.CloneVT()
+		op.Platform = nil
+
+		if dt, err := op.Marshal(); err == nil {
+			digests = append(digests, digest.FromBytes(dt))
+		}
+	}
+
+	if len(digests) == 0 {
+		return "", nil, nil, inErr
+	}
 
 	// Iterate from the first step to find the one we failed on.
 	result = t.entrypoint
-	for result != nil && result.dgst != errDgst {
+	for result != nil && !slices.Contains(digests, result.dgst) {
 		result = result.in
-	}
-
-	if result == nil {
-		return "", nil, nil, inErr
 	}
 
 	// Seek to this step. This should succeed because otherwise
 	// we wouldn't have been able to even fail on it to begin with.
-	k, result, mounts, err = t.seek(ctx, result)
-	if err != nil {
-		return k, result, mounts, err
+	k, result, mounts, retErr = t.seek(ctx, result)
+	if retErr != nil {
+		return k, result, mounts, retErr
 	}
 	return k, result, mounts, inErr
 }
