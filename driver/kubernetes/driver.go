@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"net"
+	"os"
 	"strings"
 	"time"
 
@@ -24,6 +25,7 @@ import (
 	"k8s.io/client-go/kubernetes"
 	clientappsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
 	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
+	"k8s.io/client-go/rest"
 )
 
 const (
@@ -212,11 +214,81 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	}
 	containerName := pod.Spec.Containers[0].Name
 	cmd := []string{"buildctl", "dial-stdio"}
-	conn, err := execconn.ExecConn(ctx, restClient, restClientConfig, pod.Namespace, pod.Name, containerName, cmd)
-	if err != nil {
-		return nil, err
+
+	// Retry connection with exponential backoff for transient errors
+	// See https://github.com/docker/buildx/issues/2668
+	return d.dialWithRetry(ctx, restClient, restClientConfig, pod.Namespace, pod.Name, containerName, cmd)
+}
+
+// dialWithRetry attempts to establish a connection with retry logic for transient errors.
+// This handles the race condition where Kubernetes marks nodes as "Ready" before their
+// Certificate Signing Requests (CSRs) are approved, causing transient TLS errors.
+func (d *Driver) dialWithRetry(ctx context.Context, restClient rest.Interface, restConfig *rest.Config,
+	namespace, podName, containerName string, cmd []string) (net.Conn, error) {
+	const (
+		maxRetries = 5
+		baseDelay  = 500 * time.Millisecond
+		maxDelay   = 10 * time.Second
+	)
+
+	var lastErr error
+	for attempt := 0; attempt < maxRetries; attempt++ {
+		conn, err := execconn.ExecConn(ctx, restClient, restConfig, namespace, podName, containerName, cmd)
+		if err == nil {
+			return conn, nil
+		}
+
+		lastErr = err
+
+		if !isTransientConnectionError(err) {
+			return nil, err
+		}
+
+		if attempt < maxRetries-1 {
+			delay := calculateBackoff(attempt, baseDelay, maxDelay)
+			fmt.Fprintf(os.Stderr, "Transient connection error to pod %s (attempt %d/%d): %v. Retrying in %v...\n",
+				podName, attempt+1, maxRetries, err, delay)
+
+			if err := waitWithContext(ctx, delay); err != nil {
+				return nil, err
+			}
+		}
 	}
-	return conn, nil
+
+	return nil, errors.Wrapf(lastErr, "failed to connect to pod %s after %d attempts", podName, maxRetries)
+}
+
+// isTransientConnectionError checks if an error is transient and should be retried.
+func isTransientConnectionError(err error) bool {
+	if err == nil {
+		return false
+	}
+	errStr := err.Error()
+	return strings.Contains(errStr, "tls: internal error") ||
+		strings.Contains(errStr, "context deadline exceeded") ||
+		strings.Contains(errStr, "use of closed network connection") ||
+		strings.Contains(errStr, "i/o timeout") ||
+		strings.Contains(errStr, "connection refused") ||
+		strings.Contains(errStr, "connection reset")
+}
+
+// calculateBackoff calculates the delay for the given attempt with exponential backoff.
+func calculateBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
+	delay := time.Duration(1<<uint(attempt)) * baseDelay
+	if delay > maxDelay {
+		delay = maxDelay
+	}
+	return delay
+}
+
+// waitWithContext waits for the specified duration or until context is cancelled.
+func waitWithContext(ctx context.Context, delay time.Duration) error {
+	select {
+	case <-ctx.Done():
+		return context.Cause(ctx)
+	case <-time.After(delay):
+		return nil
+	}
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
