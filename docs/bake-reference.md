@@ -1099,7 +1099,7 @@ or interpolate them in attribute values in your Bake file.
 variable "TAG" {
   type = string
   default = "latest"
-  description: "Tag to use for build"
+  description = "Tag to use for build"
 }
 
 target "webapp-dev" {
