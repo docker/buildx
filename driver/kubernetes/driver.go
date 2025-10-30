@@ -236,7 +236,7 @@ func tryWithBackoff(ctx context.Context, podName string, fn func() error) error 
 	)
 
 	var lastErr error
-	for attempt := 0; attempt < maxRetries; attempt++ {
+	for attempt := range maxRetries {
 		err := fn()
 		if err == nil {
 			return nil
@@ -280,11 +280,7 @@ func isTransientConnectionError(err error) bool {
 
 // calculateBackoff calculates the delay for the given attempt with exponential backoff.
 func calculateBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
-	delay := time.Duration(1<<uint(attempt)) * baseDelay
-	if delay > maxDelay {
-		delay = maxDelay
-	}
-	return delay
+	return min(time.Duration(1<<uint(attempt))*baseDelay, maxDelay)
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
