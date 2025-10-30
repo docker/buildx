@@ -1359,17 +1359,19 @@ target "default" {
 
 	dirDest := t.TempDir()
 
+	envs := []string{"BUILDX_METADATA_PROVENANCE=" + metadataMode}
 	outFlag := "default.output=type=docker"
 	if sb.DockerAddress() == "" {
 		// there is no Docker atm to load the image
 		outFlag += ",dest=" + dirDest + "/image.tar"
+		envs = append(envs, "BUILDX_BAKE_ENTITLEMENTS_FS=0")
 	}
 
 	cmd := buildxCmd(
 		sb,
 		withDir(dir),
 		withArgs("bake", "--metadata-file", filepath.Join(dirDest, "md.json"), "--set", outFlag),
-		withEnv("BUILDX_METADATA_PROVENANCE="+metadataMode),
+		withEnv(envs...),
 	)
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
