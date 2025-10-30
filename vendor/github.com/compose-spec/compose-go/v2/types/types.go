@@ -145,7 +145,7 @@ type ServiceConfig struct {
 }
 
 type ServiceProviderConfig struct {
-	Type       string       `yaml:"type,omitempty" json:"driver,omitempty"`
+	Type       string       `yaml:"type,omitempty" json:"type,omitempty"`
 	Options    MultiOptions `yaml:"options,omitempty" json:"options,omitempty"`
 	Extensions Extensions   `yaml:"#extensions,inline,omitempty" json:"-"`
 }

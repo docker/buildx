@@ -81,13 +81,12 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 
 	var (
 		base      any
-		processor PostProcessor
+		processor PostProcessor = NoopPostProcessor{}
 	)
 
 	if file != nil {
 		refFilename := file.(string)
 		services, processor, err = getExtendsBaseFromFile(ctx, name, ref, filename, refFilename, opts, tracker)
-		post = append(post, processor)
 		if err != nil {
 			return nil, err
 		}
@@ -105,7 +104,7 @@ func applyServiceExtends(ctx context.Context, name string, services map[string]a
 	}
 
 	// recursively apply `extends`
-	base, err = applyServiceExtends(ctx, ref, services, opts, tracker, post...)
+	base, err = applyServiceExtends(ctx, ref, services, opts, tracker, processor)
 	if err != nil {
 		return nil, err
 	}

@@ -260,11 +260,13 @@ func WithProfiles(profiles []string) func(*Options) {
 // PostProcessor is used to tweak compose model based on metadata extracted during yaml Unmarshal phase
 // that hardly can be implemented using go-yaml and mapstructure
 type PostProcessor interface {
-	yaml.Unmarshaler
-
 	// Apply changes to compose model based on recorder metadata
 	Apply(interface{}) error
 }
+
+type NoopPostProcessor struct{}
+
+func (NoopPostProcessor) Apply(interface{}) error { return nil }
 
 // LoadConfigFiles ingests config files with ResourceLoader and returns config details with paths to local copies
 func LoadConfigFiles(ctx context.Context, configFiles []string, workingDir string, options ...func(*Options)) (*types.ConfigDetails, error) {
