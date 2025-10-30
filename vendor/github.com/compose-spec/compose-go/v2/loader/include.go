@@ -177,6 +177,9 @@ func importResources(source map[string]any, target map[string]any) error {
 	if err := importResource(source, target, "configs"); err != nil {
 		return err
 	}
+	if err := importResource(source, target, "models"); err != nil {
+		return err
+	}
 	return nil
 }
 

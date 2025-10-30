@@ -531,19 +531,24 @@
             {"type": "object",
               "patternProperties": {
                 "^[a-zA-Z0-9._-]+$": {
-                  "type": "object",
-                  "properties": {
-                    "endpoint_var": {
-                      "type": "string",
-                      "description": "Environment variable set to AI model endpoint."
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "endpoint_var": {
+                          "type": "string",
+                          "description": "Environment variable set to AI model endpoint."
+                        },
+                        "model_var": {
+                          "type": "string",
+                          "description": "Environment variable set to AI model name."
+                        }
+                      },
+                      "additionalProperties": false,
+                      "patternProperties": {"^x-": {}}
                     },
-                    "model_var": {
-                      "type": "string",
-                      "description": "Environment variable set to AI model name."
-                    }
-                  },
-                  "additionalProperties": false,
-                  "patternProperties": {"^x-": {}}
+                    {"type": "null"}
+                  ]
                 }
               }
             }
