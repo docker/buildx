@@ -25,6 +25,7 @@ import (
 	dopts "github.com/docker/cli/opts"
 	"github.com/google/shlex"
 	"github.com/moby/buildkit/util/progress/progressui"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 	"github.com/spf13/pflag"
 	"github.com/tonistiigi/go-csvvalue"
@@ -247,7 +248,7 @@ func (b *Builder) Factory(ctx context.Context, dialMeta map[string][]string) (_ 
 			}
 			// check if endpoint is healthy is needed to determine the driver type.
 			// if this fails then can't continue with driver selection.
-			if _, err = dockerapi.Ping(ctx); err != nil {
+			if _, err = dockerapi.Ping(ctx, dockerclient.PingOptions{}); err != nil {
 				return
 			}
 			b.driverFactory.Factory, err = driver.GetDefaultFactory(ctx, ep, dockerapi, false, dialMeta)

@@ -7,7 +7,7 @@ import (
 
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	dockerclient "github.com/docker/docker/client"
+	dockerclient "github.com/moby/moby/client"
 )
 
 // Client represents an active docker object.
@@ -61,7 +61,7 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 
 			status = progress.ResetTime(status)
 			if err := progress.Wrap("importing to docker", status.Write, func(l progress.SubLogger) error {
-				return fromReader(l, resp.Body)
+				return fromReader(l, resp)
 			}); err != nil {
 				handleErr(err)
 			}
