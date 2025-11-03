@@ -95,9 +95,7 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, headRef gateway.Referen
 			return err
 		}
 
-		if action == stepContinue {
-			t.setBreakpoints(ctx)
-		}
+		t.setBreakpoints(ctx)
 		k, next, refs, err = t.seekNext(ctx, next, action)
 	}
 	return nil
@@ -465,13 +463,13 @@ func (t *thread) seekNext(ctx Context, from *step, action stepType) (string, *st
 	var target *step
 	switch action {
 	case stepNext:
-		target = from.next
+		target = t.continueDigest(from, from.next)
 	case stepIn:
 		target = from.in
 	case stepOut:
-		target = from.out
+		target = t.continueDigest(from, from.out)
 	case stepContinue:
-		target = t.continueDigest(from)
+		target = t.continueDigest(from, nil)
 	}
 	return t.seek(ctx, target)
 }
@@ -498,8 +496,8 @@ func (t *thread) seek(ctx Context, target *step) (k string, result *step, mounts
 	return k, result, refs, nil
 }
 
-func (t *thread) continueDigest(from *step) *step {
-	if len(t.bps) == 0 {
+func (t *thread) continueDigest(from, until *step) *step {
+	if len(t.bps) == 0 && until == nil {
 		return nil
 	}
 
@@ -514,13 +512,13 @@ func (t *thread) continueDigest(from *step) *step {
 
 	next := func(s *step) *step {
 		cur := s.in
-		for cur != nil {
+		for cur != nil && cur != until {
 			if isBreakpoint(cur.dgst) {
 				return cur
 			}
 			cur = cur.in
 		}
-		return nil
+		return until
 	}
 	return next(from)
 }
