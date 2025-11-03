@@ -3,7 +3,6 @@ package docker
 import (
 	"context"
 	"net"
-	"strings"
 	"sync"
 
 	"github.com/docker/buildx/driver"
@@ -36,19 +35,6 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	return &driver.Info{
 		Status: driver.Running,
 	}, nil
-}
-
-func (d *Driver) Version(ctx context.Context) (string, error) {
-	v, err := d.DockerAPI.ServerVersion(ctx, dockerclient.ServerVersionOptions{})
-	if err != nil {
-		return "", errors.Wrap(driver.ErrNotConnecting{}, err.Error())
-	}
-	// TODO(thaJeztah): this code is only used for docker <= v23.0, which are deprecated.
-	if bkversion, _ := resolveBuildKitVersion(v.Version); bkversion != "" {
-		return bkversion, nil
-	}
-	// https://github.com/moby/moby/blob/efc7a2abc3ab6dfa7d8d5d8c1c3b99138989b0f1/builder/builder-next/worker/worker.go#L176
-	return strings.TrimSuffix(v.Version, "-moby"), nil
 }
 
 func (d *Driver) Stop(ctx context.Context, force bool) error {

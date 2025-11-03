@@ -14,11 +14,9 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/moby/buildkit/client"
-	"github.com/moby/buildkit/util/grpcerrors"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
-	"google.golang.org/grpc/codes"
 )
 
 type Node struct {
@@ -267,15 +265,9 @@ func (n *Node) loadData(ctx context.Context, clientOpt ...client.ClientOpt) erro
 		n.Platforms = platformutil.Dedupe(n.Platforms)
 		inf, err := driverClient.Info(ctx)
 		if err != nil {
-			if st, ok := grpcerrors.AsGRPCStatus(err); ok && st.Code() == codes.Unimplemented {
-				n.Version, err = n.Driver.Version(ctx)
-				if err != nil {
-					return errors.Wrap(err, "getting version")
-				}
-			}
-		} else {
-			n.Version = inf.BuildkitVersion.Version
+			return errors.Wrap(err, "getting version")
 		}
+		n.Version = inf.BuildkitVersion.Version
 	}
 	return nil
 }
