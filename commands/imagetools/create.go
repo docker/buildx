@@ -7,7 +7,7 @@ import (
 	"os"
 	"strings"
 
-	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
@@ -16,7 +16,6 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/util/attestation"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -169,12 +168,12 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		return errors.Wrapf(err, "failed to parse annotations")
 	}
 
-	dt, desc, srcMap, err := r.Combine(ctx, srcs, annotations, in.preferIndex)
-	if err != nil {
-		return err
-	}
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.oci.empty.v1+json", "empty")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.cosign.artifact.sig.v1+json", "cosign")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.cosign.simplesigning.v1+json", "simplesigning")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.sigstore.bundle.v0.3+json", "sigstore-bundle")
 
-	dt, desc, manifests, err := filterPlatforms(dt, desc, srcMap, platforms)
+	dt, desc, manifests, err := r.Combine(ctx, srcs, annotations, in.preferIndex, platforms)
 	if err != nil {
 		return err
 	}
@@ -186,7 +185,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 
 	// manifests can be nil only if pushing one single-platform desc directly
 	if manifests == nil {
-		manifests = []descWithSource{{Descriptor: desc, Source: srcs[0]}}
+		manifests = []imagetools.DescWithSource{{Descriptor: desc, Source: srcs[0]}}
 	}
 
 	// new resolver cause need new auth
@@ -232,124 +231,6 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	}
 
 	return err
-}
-
-type descWithSource struct {
-	ocispecs.Descriptor
-	Source *imagetools.Source
-}
-
-func filterPlatforms(dt []byte, desc ocispecs.Descriptor, srcMap map[digest.Digest]*imagetools.Source, plats []ocispecs.Platform) ([]byte, ocispecs.Descriptor, []descWithSource, error) {
-	matcher := platforms.Any(plats...)
-
-	if !images.IsIndexType(desc.MediaType) {
-		if len(plats) == 0 {
-			return dt, desc, nil, nil
-		}
-		var mfst ocispecs.Manifest
-		if err := json.Unmarshal(dt, &mfst); err != nil {
-			return nil, ocispecs.Descriptor{}, nil, errors.Wrapf(err, "failed to parse manifest")
-		}
-		if desc.Platform == nil {
-			return nil, ocispecs.Descriptor{}, nil, errors.Errorf("cannot filter platforms from a manifest without platform information")
-		}
-		if !matcher.Match(*desc.Platform) {
-			return nil, ocispecs.Descriptor{}, nil, errors.Errorf("input platform %s does not match any of the provided platforms", platforms.Format(*desc.Platform))
-		}
-		return dt, desc, nil, nil
-	}
-
-	var idx ocispecs.Index
-	if err := json.Unmarshal(dt, &idx); err != nil {
-		return nil, ocispecs.Descriptor{}, nil, errors.Wrapf(err, "failed to parse index")
-	}
-	if len(plats) == 0 {
-		mfsts := make([]descWithSource, len(idx.Manifests))
-		for i, m := range idx.Manifests {
-			src, ok := srcMap[m.Digest]
-			if !ok {
-				defaultSource, ok := srcMap[desc.Digest]
-				if !ok {
-					return nil, ocispecs.Descriptor{}, nil, errors.Errorf("internal error: no source found for %s", m.Digest)
-				}
-				src = defaultSource
-			}
-			mfsts[i] = descWithSource{
-				Descriptor: m,
-				Source:     src,
-			}
-		}
-		return dt, desc, mfsts, nil
-	}
-
-	manifestMap := map[digest.Digest]ocispecs.Descriptor{}
-	for _, m := range idx.Manifests {
-		manifestMap[m.Digest] = m
-	}
-	references := map[digest.Digest]struct{}{}
-	for _, m := range idx.Manifests {
-		if refType, ok := m.Annotations[attestation.DockerAnnotationReferenceType]; ok && refType == attestation.DockerAnnotationReferenceTypeDefault {
-			dgstStr, ok := m.Annotations[attestation.DockerAnnotationReferenceDigest]
-			if !ok {
-				continue
-			}
-			dgst, err := digest.Parse(dgstStr)
-			if err != nil {
-				continue
-			}
-			subject, ok := manifestMap[dgst]
-			if !ok {
-				continue
-			}
-			if subject.Platform == nil || matcher.Match(*subject.Platform) {
-				references[m.Digest] = struct{}{}
-			}
-		}
-	}
-
-	var mfsts []ocispecs.Descriptor
-	var mfstsWithSource []descWithSource
-
-	for _, m := range idx.Manifests {
-		if _, isRef := references[m.Digest]; isRef || m.Platform == nil || matcher.Match(*m.Platform) {
-			src, ok := srcMap[m.Digest]
-			if !ok {
-				defaultSource, ok := srcMap[desc.Digest]
-				if !ok {
-					return nil, ocispecs.Descriptor{}, nil, errors.Errorf("internal error: no source found for %s", m.Digest)
-				}
-				src = defaultSource
-			}
-			mfsts = append(mfsts, m)
-			mfstsWithSource = append(mfstsWithSource, descWithSource{
-				Descriptor: m,
-				Source:     src,
-			})
-		}
-	}
-	if len(mfsts) == len(idx.Manifests) {
-		// all platforms matched, no need to rewrite index
-		return dt, desc, mfstsWithSource, nil
-	}
-
-	if len(mfsts) == 0 {
-		return nil, ocispecs.Descriptor{}, nil, errors.Errorf("none of the manifests match the provided platforms")
-	}
-
-	idx.Manifests = mfsts
-	idxBytes, err := json.MarshalIndent(&idx, "", "  ")
-	if err != nil {
-		return nil, ocispecs.Descriptor{}, nil, errors.Wrap(err, "failed to marshal index")
-	}
-
-	desc = ocispecs.Descriptor{
-		MediaType:   desc.MediaType,
-		Size:        int64(len(idxBytes)),
-		Digest:      digest.FromBytes(idxBytes),
-		Annotations: desc.Annotations,
-	}
-
-	return idxBytes, desc, mfstsWithSource, nil
 }
 
 func parseSources(in []string) ([]*imagetools.Source, error) {
