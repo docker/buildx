@@ -27,11 +27,13 @@ import (
 const (
 	artifactTypeAttestationManifest = "application/vnd.docker.attestation.manifest.v1+json"
 	artifactTypeCosignSignature     = "application/vnd.dev.cosign.artifact.sig.v1+json"
+	artifactTypeSigstoreBundle      = "application/vnd.dev.sigstore.bundle.v0.3+json"
 )
 
 var supportedArtifactTypes = map[string]struct{}{
 	artifactTypeAttestationManifest: {},
 	artifactTypeCosignSignature:     {},
+	artifactTypeSigstoreBundle:      {},
 }
 
 type Source struct {

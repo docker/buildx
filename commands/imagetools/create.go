@@ -171,6 +171,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.oci.empty.v1+json", "empty")
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.cosign.artifact.sig.v1+json", "cosign")
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.cosign.simplesigning.v1+json", "simplesigning")
+	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.dev.sigstore.bundle.v0.3+json", "sigstore-bundle")
 
 	dt, desc, manifests, err := r.Combine(ctx, srcs, annotations, in.preferIndex, platforms)
 	if err != nil {
