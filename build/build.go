@@ -1074,9 +1074,12 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 		for _, v := range contexts {
 			if len(rr.Refs) > 0 {
 				for platform, r := range rr.Refs {
-					st, err := r.ToState()
-					if err != nil {
-						return err
+					st := llb.Scratch()
+					if r != nil {
+						st, err = r.ToState()
+						if err != nil {
+							return err
+						}
 					}
 					so.FrontendInputs[k+"::"+platform] = st
 					so.FrontendAttrs[v+"::"+platform] = "input:" + k + "::" + platform
