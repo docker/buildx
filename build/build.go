@@ -29,8 +29,6 @@ import (
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/buildx/util/waitmap"
 	"github.com/docker/cli/opts"
-	"github.com/docker/docker/api/types/image"
-	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
@@ -43,6 +41,8 @@ import (
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/util/progress/progresswriter"
 	"github.com/moby/buildkit/util/tracing"
+	"github.com/moby/moby/api/types/jsonstream"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -802,7 +802,7 @@ func pushWithMoby(ctx context.Context, d *driver.DriverHandle, name string, l pr
 		return err
 	}
 
-	rc, err := api.ImagePush(ctx, name, image.PushOptions{
+	rc, err := api.ImagePush(ctx, name, dockerclient.ImagePushOptions{
 		RegistryAuth: creds,
 	})
 	if err != nil {
@@ -824,7 +824,7 @@ func pushWithMoby(ctx context.Context, d *driver.DriverHandle, name string, l pr
 	dec := json.NewDecoder(rc)
 	var parsedError error
 	for {
-		var jm jsonmessage.JSONMessage
+		var jm jsonstream.Message
 		if err := dec.Decode(&jm); err != nil {
 			if parsedError != nil {
 				return parsedError
@@ -888,7 +888,9 @@ func remoteDigestWithMoby(ctx context.Context, d *driver.DriverHandle, name stri
 	if len(img.RepoDigests) == 0 {
 		return "", nil
 	}
-	remoteImage, err := api.DistributionInspect(ctx, name, creds)
+	remoteImage, err := api.DistributionInspect(ctx, name, dockerclient.DistributionInspectOptions{
+		EncodedRegistryAuth: creds,
+	})
 	if err != nil {
 		return "", err
 	}

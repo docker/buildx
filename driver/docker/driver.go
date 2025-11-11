@@ -9,6 +9,7 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 )
 
@@ -27,7 +28,8 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 }
 
 func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
-	_, err := d.DockerAPI.ServerVersion(ctx)
+	// TODO(thaJeztah): is "ping" enough for this?
+	_, err := d.DockerAPI.ServerVersion(ctx, dockerclient.ServerVersionOptions{})
 	if err != nil {
 		return nil, errors.Wrap(driver.ErrNotConnecting{}, err.Error())
 	}
@@ -37,10 +39,11 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 }
 
 func (d *Driver) Version(ctx context.Context) (string, error) {
-	v, err := d.DockerAPI.ServerVersion(ctx)
+	v, err := d.DockerAPI.ServerVersion(ctx, dockerclient.ServerVersionOptions{})
 	if err != nil {
 		return "", errors.Wrap(driver.ErrNotConnecting{}, err.Error())
 	}
+	// TODO(thaJeztah): this code is only used for docker <= v23.0, which are deprecated.
 	if bkversion, _ := resolveBuildKitVersion(v.Version); bkversion != "" {
 		return bkversion, nil
 	}

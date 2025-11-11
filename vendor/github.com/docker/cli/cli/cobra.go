@@ -12,7 +12,6 @@ import (
 	"github.com/fvbommel/sortorder"
 	"github.com/moby/term"
 	"github.com/morikuni/aec"
-	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
 )
@@ -167,31 +166,6 @@ func (tcmd *TopLevelCommand) Initialize(ops ...command.CLIOption) error {
 	return tcmd.dockerCli.Initialize(tcmd.opts, ops...)
 }
 
-// VisitAll will traverse all commands from the root.
-//
-// Deprecated: this utility was only used internally and will be removed in the next release.
-func VisitAll(root *cobra.Command, fn func(*cobra.Command)) {
-	visitAll(root, fn)
-}
-
-func visitAll(root *cobra.Command, fn func(*cobra.Command)) {
-	for _, cmd := range root.Commands() {
-		visitAll(cmd, fn)
-	}
-	fn(root)
-}
-
-// DisableFlagsInUseLine sets the DisableFlagsInUseLine flag on all
-// commands within the tree rooted at cmd.
-//
-// Deprecated: this utility was only used internally and will be removed in the next release.
-func DisableFlagsInUseLine(cmd *cobra.Command) {
-	visitAll(cmd, func(ccmd *cobra.Command) {
-		// do not add a `[flags]` to the end of the usage line.
-		ccmd.DisableFlagsInUseLine = true
-	})
-}
-
 var helpCommand = &cobra.Command{
 	Use:               "help [command]",
 	Short:             "Help about the command",
@@ -200,7 +174,7 @@ var helpCommand = &cobra.Command{
 	RunE: func(c *cobra.Command, args []string) error {
 		cmd, args, e := c.Root().Find(args)
 		if cmd == nil || e != nil || len(args) > 0 {
-			return errors.Errorf("unknown help topic: %v", strings.Join(args, " "))
+			return fmt.Errorf("unknown help topic: %v", strings.Join(args, " "))
 		}
 		helpFunc := cmd.HelpFunc()
 		helpFunc(cmd, args)
@@ -276,11 +250,12 @@ func commandAliases(cmd *cobra.Command) string {
 	if cmd.HasParent() {
 		parentPath = cmd.Parent().CommandPath() + " "
 	}
-	aliases := cmd.CommandPath()
+	var aliases strings.Builder
+	aliases.WriteString(cmd.CommandPath())
 	for _, alias := range cmd.Aliases {
-		aliases += ", " + parentPath + alias
+		aliases.WriteString(", " + parentPath + alias)
 	}
-	return aliases
+	return aliases.String()
 }
 
 func topCommands(cmd *cobra.Command) []*cobra.Command {
@@ -376,13 +351,10 @@ func orchestratorSubCommands(cmd *cobra.Command) []*cobra.Command {
 func allManagementSubCommands(cmd *cobra.Command) []*cobra.Command {
 	cmds := []*cobra.Command{}
 	for _, sub := range cmd.Commands() {
-		if isPlugin(sub) {
-			if invalidPluginReason(sub) == "" {
-				cmds = append(cmds, sub)
-			}
+		if invalidPluginReason(sub) != "" {
 			continue
 		}
-		if sub.IsAvailableCommand() && sub.HasSubCommands() {
+		if sub.IsAvailableCommand() && (isPlugin(sub) || sub.HasSubCommands()) {
 			cmds = append(cmds, sub)
 		}
 	}

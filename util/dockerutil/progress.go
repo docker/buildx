@@ -6,8 +6,8 @@ import (
 	"time"
 
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/docker/pkg/jsonmessage"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/moby/api/types/jsonstream"
 )
 
 const minTimeDelta = 2 * time.Second
@@ -27,7 +27,7 @@ func fromReader(l progress.SubLogger, rc io.ReadCloser) error {
 
 	dec := json.NewDecoder(rc)
 	var parsedErr error
-	var jm jsonmessage.JSONMessage
+	var jm jsonstream.Message
 	for {
 		if err := dec.Decode(&jm); err != nil {
 			if parsedErr != nil {

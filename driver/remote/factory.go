@@ -9,7 +9,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	util "github.com/docker/buildx/driver/remote/util"
-	dockerclient "github.com/docker/docker/client"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 
 	// import connhelpers for special url schemes
