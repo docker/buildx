@@ -1074,6 +1074,13 @@ func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *c
 		for _, v := range contexts {
 			if len(rr.Refs) > 0 {
 				for platform, r := range rr.Refs {
+					if r == nil {
+						// Skip nil references. This can occur when BuildKit determines
+						// that the build result is identical across platforms (e.g., with
+						// "FROM scratch" or other platform-independent content). In such
+						// cases, BuildKit may not materialize separate refs for each platform.
+						continue
+					}
 					st, err := r.ToState()
 					if err != nil {
 						return err
