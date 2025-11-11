@@ -241,8 +241,13 @@ Learn more about the built-in build arguments in the [Dockerfile reference docs]
 --build-context=name=VALUE
 ```
 
-Define additional build context with specified contents. In Dockerfile the context can be accessed when `FROM name` or `--from=name` is used.
-When Dockerfile defines a stage with the same name it is overwritten.
+Define additional build context with specified contents.
+
+In a Dockerfile:
+
+- the context can be accessed when `FROM name` or `--from=name` is used
+- the context overrides a stage called `name` when used as `FROM ... AS name`
+- the context overrides a `#syntax` directive when used as `#syntax=name`
 
 The value can be a:
 
