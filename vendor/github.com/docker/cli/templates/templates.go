@@ -1,5 +1,5 @@
 // FIXME(thaJeztah): remove once we are a module; the go:build directive prevents go from downgrading language version to go1.16:
-//go:build go1.23
+//go:build go1.24
 
 package templates
 
@@ -13,18 +13,7 @@ import (
 // basicFunctions are the set of initial
 // functions provided to every template.
 var basicFunctions = template.FuncMap{
-	"json": func(v any) string {
-		buf := &bytes.Buffer{}
-		enc := json.NewEncoder(buf)
-		enc.SetEscapeHTML(false)
-		err := enc.Encode(v)
-		if err != nil {
-			panic(err)
-		}
-
-		// Remove the trailing new line added by the encoder
-		return strings.TrimSpace(buf.String())
-	},
+	"json":     formatJSON,
 	"split":    strings.Split,
 	"join":     strings.Join,
 	"title":    strings.Title, //nolint:nolintlint,staticcheck // strings.Title is deprecated, but we only use it for ASCII, so replacing with golang.org/x/text is out of scope
@@ -80,14 +69,6 @@ func New(tag string) *template.Template {
 	return template.New(tag).Funcs(basicFunctions)
 }
 
-// NewParse creates a new tagged template with the basic functions
-// and parses the given format.
-//
-// Deprecated: this function is unused and will be removed in the next release. Use [New] if you need to set a tag, or [Parse] instead.
-func NewParse(tag, format string) (*template.Template, error) {
-	return template.New(tag).Funcs(basicFunctions).Parse(format)
-}
-
 // padWithSpace adds whitespace to the input if the input is non-empty
 func padWithSpace(source string, prefix, suffix int) string {
 	if source == "" {
@@ -102,4 +83,17 @@ func truncateWithLength(source string, length int) string {
 		return source
 	}
 	return source[:length]
+}
+
+func formatJSON(v any) string {
+	buf := &bytes.Buffer{}
+	enc := json.NewEncoder(buf)
+	enc.SetEscapeHTML(false)
+	err := enc.Encode(v)
+	if err != nil {
+		panic(err)
+	}
+
+	// Remove the trailing new line added by the encoder
+	return strings.TrimSpace(buf.String())
 }

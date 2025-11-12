@@ -1,5 +1,5 @@
 // FIXME(thaJeztah): remove once we are a module; the go:build directive prevents go from downgrading language version to go1.16:
-//go:build go1.23
+//go:build go1.24
 
 package formatter
 
@@ -13,8 +13,8 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
-	"github.com/docker/docker/api/types/container"
 	"github.com/docker/go-units"
+	"github.com/moby/moby/api/types/container"
 	ocispec "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
@@ -170,27 +170,33 @@ func (c *ContainerContext) Image() string {
 	if c.c.Image == "" {
 		return "<no image>"
 	}
-	if c.trunc {
-		if trunc := TruncateID(c.c.ImageID); trunc == TruncateID(c.c.Image) {
-			return trunc
+	if !c.trunc {
+		return c.c.Image
+	}
+	if trunc := TruncateID(c.c.ImageID); trunc == TruncateID(c.c.Image) {
+		return trunc
+	}
+	ref, err := reference.ParseNormalizedNamed(c.c.Image)
+	if err != nil {
+		return c.c.Image
+	}
+
+	if _, ok := ref.(reference.Digested); ok {
+		// strip the digest, but preserve the tag (if any)
+		var tag string
+		if t, ok := ref.(reference.Tagged); ok {
+			tag = t.Tag()
 		}
-		// truncate digest if no-trunc option was not selected
-		ref, err := reference.ParseNormalizedNamed(c.c.Image)
-		if err == nil {
-			if nt, ok := ref.(reference.NamedTagged); ok {
-				// case for when a tag is provided
-				if namedTagged, err := reference.WithTag(reference.TrimNamed(nt), nt.Tag()); err == nil {
-					return reference.FamiliarString(namedTagged)
-				}
-			} else {
-				// case for when a tag is not provided
-				named := reference.TrimNamed(ref)
-				return reference.FamiliarString(named)
+		ref = reference.TrimNamed(ref)
+		if tag != "" {
+			if out, err := reference.WithTag(ref, tag); err == nil {
+				ref = out
 			}
 		}
 	}
 
-	return c.c.Image
+	// Format as "familiar" name with "docker.io[/library]" trimmed.
+	return reference.FamiliarString(ref)
 }
 
 // Command returns's the container's command. If the trunc option is set, the
@@ -241,7 +247,7 @@ func (c *ContainerContext) Ports() string {
 // State returns the container's current state (e.g. "running" or "paused").
 // Refer to [container.ContainerState] for possible states.
 func (c *ContainerContext) State() string {
-	return c.c.State
+	return string(c.c.State)
 }
 
 // Status returns the container's status in a human readable form (for example,
@@ -338,7 +344,7 @@ func (c *ContainerContext) Networks() string {
 // DisplayablePorts returns formatted string representing open ports of container
 // e.g. "0.0.0.0:80->9090/tcp, 9988/tcp"
 // it's used by command 'docker ps'
-func DisplayablePorts(ports []container.Port) string {
+func DisplayablePorts(ports []container.PortSummary) string {
 	type portGroup struct {
 		first uint16
 		last  uint16
@@ -354,13 +360,13 @@ func DisplayablePorts(ports []container.Port) string {
 	for _, port := range ports {
 		current := port.PrivatePort
 		portKey := port.Type
-		if port.IP != "" {
+		if port.IP.IsValid() {
 			if port.PublicPort != current {
-				hAddrPort := net.JoinHostPort(port.IP, strconv.Itoa(int(port.PublicPort)))
+				hAddrPort := net.JoinHostPort(port.IP.String(), strconv.Itoa(int(port.PublicPort)))
 				hostMappings = append(hostMappings, fmt.Sprintf("%s->%d/%s", hAddrPort, port.PrivatePort, port.Type))
 				continue
 			}
-			portKey = port.IP + "/" + port.Type
+			portKey = port.IP.String() + "/" + port.Type
 		}
 		group := groupMap[portKey]
 
@@ -404,13 +410,13 @@ func formGroup(key string, start, last uint16) string {
 	return group + "/" + groupType
 }
 
-func comparePorts(i, j container.Port) bool {
+func comparePorts(i, j container.PortSummary) bool {
 	if i.PrivatePort != j.PrivatePort {
 		return i.PrivatePort < j.PrivatePort
 	}
 
 	if i.IP != j.IP {
-		return i.IP < j.IP
+		return i.IP.String() < j.IP.String()
 	}
 
 	if i.PublicPort != j.PublicPort {
