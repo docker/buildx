@@ -541,7 +541,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
-	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
+	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry,unpack=false"`)
 
 	flags.BoolVarP(&options.quiet, "quiet", "q", false, "Suppress the build output and print image ID on success")
 
@@ -1047,15 +1047,22 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 		for i := range outputs {
 			if outputs[i].Type == client.ExporterImage {
 				outputs[i].Attrs["push"] = "true"
+				// Skip unpacking when only pushing to registry (unless explicitly set)
+				if _, ok := outputs[i].Attrs["unpack"]; !ok {
+					outputs[i].Attrs["unpack"] = "false"
+				}
 				pushUsed = true
 			}
 		}
 		if !pushUsed {
+			attrs := map[string]string{
+				"push": "true",
+			}
+			// Skip unpacking when only pushing to registry
+			attrs["unpack"] = "false"
 			outputs = append(outputs, client.ExportEntry{
-				Type: client.ExporterImage,
-				Attrs: map[string]string{
-					"push": "true",
-				},
+				Type:  client.ExporterImage,
+				Attrs: attrs,
 			})
 		}
 	}
