@@ -831,6 +831,10 @@ func CreateExports(entries []*buildflags.ExportEntry) ([]client.ExportEntry, []s
 		case "registry":
 			out.Type = client.ExporterImage
 			out.Attrs["push"] = "true"
+			// Skip unpacking when only pushing to registry (unless explicitly set)
+			if _, ok := out.Attrs["unpack"]; !ok {
+				out.Attrs["unpack"] = "false"
+			}
 		}
 
 		if supportDir {
