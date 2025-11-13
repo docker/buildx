@@ -407,68 +407,45 @@ jobs:
           path: ${{ env.DESTDIR }}/*
           if-no-files-found: error
 
-  bin-image:
+  bin-image-prepare:
     runs-on: ubuntu-24.04
+    outputs:
+      repo-slug: ${{ env.REPO_SLUG }}
+    steps:
+      # FIXME: can't use env object in reusable workflow inputs: https://github.com/orgs/community/discussions/26671
+      - run: echo "Exposing env vars for reusable workflow"
+
+  bin-image:
+    if: ${{ github.repository == 'docker/buildx' }}
+    uses: docker/github-builder-experimental/.github/workflows/bake.yml@8fc70909404a502fd0eca6601b99b32fa7192b03
     needs:
+      - bin-image-prepare
       - test-integration
       - test-unit
-    if: ${{ github.event_name != 'pull_request' && github.repository == 'docker/buildx' }}
-    steps:
-      -
-        name: Free disk space
-        uses: jlumbroso/free-disk-space@54081f138730dfa15788a46383842cd2f914a1be # v1.3.1
-        with:
-          android: true
-          dotnet: true
-          haskell: true
-          large-packages: true
-          swap-storage: true
-      -
-        name: Checkout
-        uses: actions/checkout@v6
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
-        with:
-          version: ${{ env.SETUP_BUILDX_VERSION }}
-          driver-opts: image=${{ env.SETUP_BUILDKIT_IMAGE }}
-          buildkitd-flags: --debug
-      -
-        name: Docker meta
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: |
-            ${{ env.REPO_SLUG }}
-          tags: |
-            type=ref,event=branch
-            type=ref,event=pr
-            type=semver,pattern={{version}}
-          bake-target: meta-helper
-      -
-        name: Login to DockerHub
-        if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
-        with:
+    permissions:
+      contents: read # same as global permission
+      id-token: write # for signing attestation(s) with GitHub OIDC Token
+    with:
+      runner: amd64
+      target: image-cross
+      output: image
+      push: ${{ github.event_name != 'pull_request' }}
+      cache: true
+      cache-scope: bin-image
+      set-meta-labels: true
+      meta-images: |
+        ${{ needs.bin-image-prepare.outputs.repo-slug }}
+      meta-tags: |
+        type=ref,event=branch
+        type=ref,event=pr
+        type=semver,pattern={{version}}
+      meta-bake-target: meta-helper
+      bake-sbom: true
+    secrets:
+      registry-auths: |
+        - registry: docker.io
           username: ${{ vars.DOCKERPUBLICBOT_USERNAME }}
           password: ${{ secrets.DOCKERPUBLICBOT_WRITE_PAT }}
-      -
-        name: Build and push image
-        uses: docker/bake-action@v6
-        with:
-          source: .
-          files: |
-            ./docker-bake.hcl
-            ${{ steps.meta.outputs.bake-file }}
-          targets: image-cross
-          push: ${{ github.event_name != 'pull_request' }}
-          sbom: true
-          set: |
-            *.cache-from=type=gha,scope=bin-image
-            *.cache-to=type=gha,scope=bin-image,mode=max
 
   scout:
     runs-on: ubuntu-24.04
