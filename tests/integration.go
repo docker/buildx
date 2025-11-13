@@ -5,7 +5,6 @@ import (
 	"os/exec"
 	"path/filepath"
 	"reflect"
-	"strconv"
 	"strings"
 	"sync"
 	"testing"
@@ -63,9 +62,6 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 	}
 	if context := sb.DockerAddress(); context != "" {
 		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
-	}
-	if isExperimental() {
-		cmd.Env = append(cmd.Env, "BUILDX_EXPERIMENTAL=1")
 	}
 	if v := os.Getenv("GO_TEST_COVERPROFILE"); v != "" {
 		coverDir := filepath.Join(filepath.Dir(v), "helpers")
@@ -152,14 +148,6 @@ func driverName(sbName string) (string, bool, bool) {
 	return name, hasVersion, hasFeature
 }
 
-func isExperimental() bool {
-	if v, ok := os.LookupEnv("TEST_BUILDX_EXPERIMENTAL"); ok {
-		vv, _ := strconv.ParseBool(v)
-		return vv
-	}
-	return false
-}
-
 func buildkitTag() string {
 	if v := os.Getenv("TEST_BUILDKIT_TAG"); v != "" {
 		return v
@@ -196,9 +184,6 @@ func buildkitVersion(t *testing.T, sb integration.Sandbox) string {
 			require.NoError(t, err, "undock not found")
 
 			destDir := t.TempDir()
-			t.Cleanup(func() {
-				os.RemoveAll(destDir)
-			})
 
 			cmd := exec.Command(undockBin, "--cachedir", "/root/.cache/undock", "--include", "/usr/bin/buildkitd", "--rm-dist", buildkitImage, destDir)
 			require.NoErrorf(t, cmd.Run(), "failed to extract buildkitd binary from %q", buildkitImage)

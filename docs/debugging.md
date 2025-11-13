@@ -11,13 +11,6 @@ state of the build environment at any point.
 
 ## Starting the debugger
 
-To start the debugger, first, ensure that `BUILDX_EXPERIMENTAL=1` is set in
-your environment.
-
-```console
-$ export BUILDX_EXPERIMENTAL=1
-```
-
 To start a debug session for a build, you can use the `buildx debug` command with `--invoke` flag to specify a command to launch in the resulting image.
 `buildx debug` command provides `buildx debug build` subcommand that provides the same features as the normal `buildx build` command but allows launching the debugger session after the build.
 

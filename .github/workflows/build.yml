@@ -62,40 +62,19 @@ jobs:
           - remote
         pkg:
           - ./tests
-        mode:
-          - ""
-          - experimental
         include:
           - worker: docker
             pkg: ./tests
           - worker: docker+containerd  # same as docker, but with containerd snapshotter
             pkg: ./tests
-          - worker: docker
-            pkg: ./tests
-            mode: experimental
-          - worker: docker+containerd  # same as docker, but with containerd snapshotter
-            pkg: ./tests
-            mode: experimental
           - worker: "docker@27.5"
             pkg: ./tests
           - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
             pkg: ./tests
-          - worker: "docker@27.5"
-            pkg: ./tests
-            mode: experimental
-          - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
-            pkg: ./tests
-            mode: experimental
           - worker: "docker@26.1"
             pkg: ./tests
           - worker: "docker+containerd@26.1"  # same as docker, but with containerd snapshotter
             pkg: ./tests
-          - worker: "docker@26.1"
-            pkg: ./tests
-            mode: experimental
-          - worker: "docker+containerd@26.1"  # same as docker, but with containerd snapshotter
-            pkg: ./tests
-            mode: experimental
     steps:
       -
         name: Prepare
@@ -115,9 +94,6 @@ jobs:
           esac
           if [[ "${{ matrix.worker }}" == "docker"* ]]; then
             echo "TEST_DOCKERD=1" >> $GITHUB_ENV
-          fi
-          if [ "${{ matrix.mode }}" = "experimental" ]; then
-            echo "TEST_BUILDX_EXPERIMENTAL=1" >> $GITHUB_ENV
           fi
       -
         name: Checkout
