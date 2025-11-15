@@ -20,6 +20,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -112,6 +113,8 @@ type Inputs struct {
 	// DockerfileMappingSrc and DockerfileMappingDst are filled in by the builder.
 	DockerfileMappingSrc string
 	DockerfileMappingDst string
+
+	policy []policy.File
 }
 
 type NamedContext struct {
