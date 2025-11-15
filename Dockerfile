@@ -5,9 +5,9 @@ ARG ALPINE_VERSION=3.22
 ARG XX_VERSION=1.7.0
 
 # for testing
-ARG DOCKER_VERSION=28.4
+ARG DOCKER_VERSION=29.0.0
+ARG DOCKER_VERSION_ALT_28=28.5
 ARG DOCKER_VERSION_ALT_27=27.5.1
-ARG DOCKER_VERSION_ALT_26=26.1.3
 ARG DOCKER_CLI_VERSION=${DOCKER_VERSION}
 ARG GOTESTSUM_VERSION=v1.13.0
 ARG REGISTRY_VERSION=3.0.0
@@ -19,10 +19,10 @@ FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
 FROM moby/moby-bin:$DOCKER_VERSION AS docker-engine
 FROM dockereng/cli-bin:$DOCKER_CLI_VERSION AS docker-cli
+FROM moby/moby-bin:$DOCKER_VERSION_ALT_28 AS docker-engine-alt28
 FROM moby/moby-bin:$DOCKER_VERSION_ALT_27 AS docker-engine-alt27
-FROM moby/moby-bin:$DOCKER_VERSION_ALT_26 AS docker-engine-alt26
+FROM dockereng/cli-bin:$DOCKER_VERSION_ALT_28 AS docker-cli-alt28
 FROM dockereng/cli-bin:$DOCKER_VERSION_ALT_27 AS docker-cli-alt27
-FROM dockereng/cli-bin:$DOCKER_VERSION_ALT_26 AS docker-cli-alt26
 FROM registry:$REGISTRY_VERSION AS registry
 FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
 FROM docker/compose-bin:$COMPOSE_VERSION AS compose
@@ -133,17 +133,17 @@ COPY --link --from=gotestsum /out /usr/bin/
 COPY --link --from=registry /bin/registry /usr/bin/
 COPY --link --from=docker-engine / /usr/bin/
 COPY --link --from=docker-cli / /usr/bin/
+COPY --link --from=docker-engine-alt28 / /opt/docker-alt-28/
 COPY --link --from=docker-engine-alt27 / /opt/docker-alt-27/
-COPY --link --from=docker-engine-alt26 / /opt/docker-alt-26/
+COPY --link --from=docker-cli-alt28 / /opt/docker-alt-28/
 COPY --link --from=docker-cli-alt27 / /opt/docker-alt-27/
-COPY --link --from=docker-cli-alt26 / /opt/docker-alt-26/
 COPY --link --from=buildkit /usr/bin/buildkitd /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildctl /usr/bin/
 COPY --link --from=compose /docker-compose /usr/bin/compose
 COPY --link --from=undock /usr/local/bin/undock /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
-ENV TEST_DOCKER_EXTRA="docker@27.5=/opt/docker-alt-27,docker@26.1=/opt/docker-alt-26"
+ENV TEST_DOCKER_EXTRA="docker@28.5=/opt/docker-alt-28,docker@27.5=/opt/docker-alt-27"
 
 FROM integration-test-base AS integration-test
 COPY . .

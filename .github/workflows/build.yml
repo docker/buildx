@@ -76,6 +76,16 @@ jobs:
           - worker: docker+containerd  # same as docker, but with containerd snapshotter
             pkg: ./tests
             mode: experimental
+          - worker: "docker@28.5"
+            pkg: ./tests
+          - worker: "docker+containerd@28.5"  # same as docker, but with containerd snapshotter
+            pkg: ./tests
+          - worker: "docker@28.5"
+            pkg: ./tests
+            mode: experimental
+          - worker: "docker+containerd@28.5"  # same as docker, but with containerd snapshotter
+            pkg: ./tests
+            mode: experimental
           - worker: "docker@27.5"
             pkg: ./tests
           - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
@@ -84,16 +94,6 @@ jobs:
             pkg: ./tests
             mode: experimental
           - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
-            pkg: ./tests
-            mode: experimental
-          - worker: "docker@26.1"
-            pkg: ./tests
-          - worker: "docker+containerd@26.1"  # same as docker, but with containerd snapshotter
-            pkg: ./tests
-          - worker: "docker@26.1"
-            pkg: ./tests
-            mode: experimental
-          - worker: "docker+containerd@26.1"  # same as docker, but with containerd snapshotter
             pkg: ./tests
             mode: experimental
     steps:
