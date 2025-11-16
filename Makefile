@@ -30,10 +30,6 @@ install: binaries
 	mkdir -p ~/.docker/cli-plugins
 	install bin/build/buildx ~/.docker/cli-plugins/docker-buildx
 
-.PHONY: release
-release:
-	./hack/release
-
 .PHONY: validate-all
 validate-all: lint test validate-vendor validate-docs
 
