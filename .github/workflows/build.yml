@@ -346,64 +346,73 @@ jobs:
         with:
           sarif_file: ${{ env.DESTDIR }}/govulncheck.out
 
-  prepare-binaries:
-    runs-on: ubuntu-24.04
-    outputs:
-      matrix: ${{ steps.platforms.outputs.matrix }}
-    steps:
-      -
-        name: Checkout
-        uses: actions/checkout@v6
-      -
-        name: Create matrix
-        id: platforms
-        run: |
-          echo "matrix=$(docker buildx bake binaries-cross --print | jq -cr '.target."binaries-cross".platforms')" >>${GITHUB_OUTPUT}
-      -
-        name: Show matrix
-        run: |
-          echo ${{ steps.platforms.outputs.matrix }}
-
   binaries:
+    uses: docker/github-builder-experimental/.github/workflows/bake.yml@8fc70909404a502fd0eca6601b99b32fa7192b03
+    permissions:
+      contents: read # same as global permission
+      id-token: write # for signing attestation(s) with GitHub OIDC Token
+    with:
+      runner: amd64
+      target: release
+      output: local
+      push: ${{ github.event_name != 'pull_request' }}
+      artifact-name: buildx
+      cache: true
+      cache-scope: binaries
+      bake-sbom: true
+
+  binaries-finalize:
     runs-on: ubuntu-24.04
     needs:
-      - prepare-binaries
-    strategy:
-      fail-fast: false
-      matrix:
-        platform: ${{ fromJson(needs.prepare-binaries.outputs.matrix) }}
+      - binaries
     steps:
       -
-        name: Prepare
-        run: |
-          platform=${{ matrix.platform }}
-          echo "PLATFORM_PAIR=${platform//\//-}" >> $GITHUB_ENV
-      -
-        name: Checkout
-        uses: actions/checkout@v6
-      -
-        name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
-      -
-        name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+        name: Download artifacts
+        uses: actions/download-artifact@v6
         with:
-          version: ${{ env.SETUP_BUILDX_VERSION }}
-          driver-opts: image=${{ env.SETUP_BUILDKIT_IMAGE }}
-          buildkitd-flags: --debug
+          path: /tmp/buildx-output
+          pattern: ${{ needs.binaries.outputs.artifact-name }}*
+          merge-multiple: true
       -
-        name: Build
+        name: Rename provenance and sbom
         run: |
-          make release
-        env:
-          PLATFORMS: ${{ matrix.platform }}
-          CACHE_FROM: type=gha,scope=binaries-${{ env.PLATFORM_PAIR }}
-          CACHE_TO: type=gha,scope=binaries-${{ env.PLATFORM_PAIR }},mode=max
+          for pdir in /tmp/buildx-output/*/; do
+            (
+              cd "$pdir"
+              binname=$(find . -name 'buildx-*')
+              filename=$(basename "${binname%.exe}")
+              mv "provenance.json" "${filename}.provenance.json"
+              mv "sbom-binaries.spdx.json" "${filename}.sbom.json"
+              find . -name 'sbom*.json' -exec rm {} \;
+              if [ -f "provenance.sigstore.json" ]; then
+                mv "provenance.sigstore.json" "${filename}.provenance.sigstore.json"
+              fi
+            )
+          done
+          mkdir -p "${{ env.DESTDIR }}"
+          mv /tmp/buildx-output/**/* "${{ env.DESTDIR }}/"
       -
-        name: Upload artifacts
+        name: Create checksums
+        working-directory: ${{ env.DESTDIR }}
+        run: |
+          sha256sum -b buildx-* > ./checksums.txt
+          sed -i '/darwin/d' ./checksums.txt
+          sha256sum -c --strict checksums.txt
+      -
+        name: List artifacts
+        working-directory: ${{ env.DESTDIR }}
+        run: |
+          tree -nh .
+      -
+        name: Check artifacts
+        working-directory: ${{ env.DESTDIR }}
+        run: |
+          find . -type f -exec file -e ascii -- {} +
+      -
+        name: Upload release binaries
         uses: actions/upload-artifact@v6
         with:
-          name: buildx-${{ env.PLATFORM_PAIR }}
+          name: release
           path: ${{ env.DESTDIR }}/*
           if-no-files-found: error
 
@@ -486,29 +495,14 @@ jobs:
     needs:
       - test-integration
       - test-unit
-      - binaries
+      - binaries-finalize
     steps:
       -
-        name: Checkout
-        uses: actions/checkout@v6
-      -
-        name: Download binaries
+        name: Download release binaries
         uses: actions/download-artifact@v7
         with:
           path: ${{ env.DESTDIR }}
-          pattern: buildx-*
-          merge-multiple: true
-      -
-        name: Create checksums
-        run: ./hack/hash-files
-      -
-        name: List artifacts
-        run: |
-          tree -nh ${{ env.DESTDIR }}
-      -
-        name: Check artifacts
-        run: |
-          find ${{ env.DESTDIR }} -type f -exec file -e ascii -- {} +
+          name: release
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
