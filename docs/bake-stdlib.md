@@ -103,6 +103,7 @@ title: Bake standard library functions
 | [`trimspace`](#trimspace)                           | Removes any consecutive space characters (as defined by Unicode) from the start and end of the given string.                                                                                                 |
 | [`trimsuffix`](#trimsuffix)                         | Removes the given suffix from the start of the given string, if present.                                                                                                                                     |
 | [`try`](#try)                                       | Variadic function that tries to evaluate all of is arguments in sequence until one succeeds, in which case it returns that result, or returns an error if none of them succeed.                              |
+| [`unixtimestampparse`](#unixtimestampparse)         | Given a unix timestamp integer, will parse and return an object representation of that date and time. A unix timestamp is the number of seconds elapsed since January 1, 1970 UTC.                           |
 | [`upper`](#upper)                                   | Returns the given string with all Unicode letters translated to their uppercase equivalents.                                                                                                                 |
 | [`urlencode`](#urlencode)                           | Applies URL encoding to a given string.                                                                                                                                                                      |
 | [`uuidv4`](#uuidv4)                                 | Generates and returns a Type-4 UUID in the standard hexadecimal string format.                                                                                                                               |
@@ -1381,6 +1382,39 @@ target "webapp-dev" {
 
     # First expr errors (missing key), fallback string is used
     val2 = "${try(index({a="apple"}, "b"), "fallback")}"    # => "fallback"
+  }
+}
+```
+
+### <a name="unixtimestampparse"></a> `unixtimestampparse`
+
+The returned object has the following attributes:
+* `year` (Number) The year for the unix timestamp.
+* `year_day` (Number) The day of the year for the unix timestamp, in the range 1-365 for non-leap years, and 1-366 in leap years.
+* `day` (Number) The day of the month for the unix timestamp.
+* `month` (Number) The month of the year for the unix timestamp.
+* `month_name` (String) The name of the month for the unix timestamp (ex. "January").
+* `weekday` (Number) The day of the week for the unix timestamp.
+* `weekday_name` (String) The name of the day for the unix timestamp (ex. "Sunday").
+* `hour` (Number) The hour within the day for the unix timestamp, in the range 0-23.
+* `minute` (Number) The minute offset within the hour for the unix timestamp, in the range 0-59.
+* `second` (Number) The second offset within the minute for the unix timestamp, in the range 0-59.
+* `rfc3339` (String) The RFC3339 format string.
+* `iso_year` (Number) The ISO 8601 year number.
+* `iso_week` (Number) The ISO 8601 week number.
+
+```hcl
+# docker-bake.hcl
+variable "SOURCE_DATE_EPOCH" {
+  type     = number
+  default  = 1690328596
+}
+target "default" {
+  args = {
+    SOURCE_DATE_EPOCH = SOURCE_DATE_EPOCH
+  }
+  labels = {
+    "org.opencontainers.image.created" = unixtimestampparse(SOURCE_DATE_EPOCH).rfc3339
   }
 }
 ```
