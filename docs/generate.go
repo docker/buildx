@@ -152,7 +152,9 @@ func generateBakeStdlibDocs(filename string) error {
 	sort.Strings(names)
 	for _, name := range names {
 		fname := fmt.Sprintf("`%s`", name)
-		if strings.Contains(currentContent, "<a name=\""+name+"\"></a>") {
+		// Check if there's a heading for this function in the Examples section
+		// Headings are in the format: ### `functionname`
+		if strings.Contains(currentContent, "## `"+name+"`") {
 			fname = fmt.Sprintf("[`%s`](#%s)", name, name)
 		}
 		fdesc := hclparser.StdlibFuncDescription(name)
