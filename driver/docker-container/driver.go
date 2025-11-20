@@ -369,22 +369,6 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	}, nil
 }
 
-func (d *Driver) Version(ctx context.Context) (string, error) {
-	bufStdout := &bytes.Buffer{}
-	bufStderr := &bytes.Buffer{}
-	if err := d.run(ctx, []string{"buildkitd", "--version"}, bufStdout, bufStderr); err != nil {
-		if bufStderr.Len() > 0 {
-			return "", errors.Wrap(err, bufStderr.String())
-		}
-		return "", err
-	}
-	version := strings.Fields(bufStdout.String())
-	if len(version) != 4 {
-		return "", errors.Errorf("unexpected version format: %s", bufStdout.String())
-	}
-	return version[2], nil
-}
-
 func (d *Driver) Stop(ctx context.Context, force bool) error {
 	info, err := d.Info(ctx)
 	if err != nil {
