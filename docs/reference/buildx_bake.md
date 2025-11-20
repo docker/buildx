@@ -458,3 +458,7 @@ You can append using `+=` operator for the following fields:
 
 > [!NOTE]
 > ¹ These fields already append by default.
+
+### <a name="variables"></a> Override variables in a Bake file
+
+See the [Variable](buildx_bake.md#variable) section in the Bake file reference.
