@@ -60,29 +60,7 @@ func fetchProvenance(ctx context.Context, c *client.Client, ref string, mode con
 		if ev.Record == nil {
 			continue
 		}
-		if ev.Record.Result != nil {
-			desc, predicateType := lookupProvenance(ev.Record.Result)
-			if desc == nil {
-				continue
-			}
-			eg.Go(func() error {
-				dt, err := content.ReadBlob(ctx, store, *desc)
-				if err != nil {
-					return errors.Wrapf(err, "failed to load provenance blob from build record")
-				}
-				prv, err := encodeProvenance(dt, predicateType, mode)
-				if err != nil {
-					return err
-				}
-				mu.Lock()
-				if out == nil {
-					out = make(map[string]string)
-				}
-				out["buildx.build.provenance"] = prv
-				mu.Unlock()
-				return nil
-			})
-		} else if ev.Record.Results != nil {
+		if len(ev.Record.Results) > 0 {
 			for platform, res := range ev.Record.Results {
 				desc, predicateType := lookupProvenance(res)
 				if desc == nil {
@@ -106,6 +84,28 @@ func fetchProvenance(ctx context.Context, c *client.Client, ref string, mode con
 					return nil
 				})
 			}
+		} else if ev.Record.Result != nil {
+			desc, predicateType := lookupProvenance(ev.Record.Result)
+			if desc == nil {
+				continue
+			}
+			eg.Go(func() error {
+				dt, err := content.ReadBlob(ctx, store, *desc)
+				if err != nil {
+					return errors.Wrapf(err, "failed to load provenance blob from build record")
+				}
+				prv, err := encodeProvenance(dt, predicateType, mode)
+				if err != nil {
+					return err
+				}
+				mu.Lock()
+				if out == nil {
+					out = make(map[string]string)
+				}
+				out["buildx.build.provenance"] = prv
+				mu.Unlock()
+				return nil
+			})
 		}
 	}
 	return out, eg.Wait()
