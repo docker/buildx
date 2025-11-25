@@ -70,6 +70,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildShmSize,
 	testBuildUlimit,
 	testBuildMetadataProvenance,
+	testBuildMetadataProvenanceMultiplatform,
 	testBuildMetadataWarnings,
 	testBuildMultiExporters,
 	testBuildLoadPush,
@@ -965,6 +966,101 @@ func buildMetadataProvenance(t *testing.T, sb integration.Sandbox, metadataMode 
 	var prv provenancetypes.ProvenancePredicateSLSA02
 	require.NoError(t, json.Unmarshal(dtprv, &prv))
 	require.Equal(t, provenancetypes.BuildKitBuildType02, prv.BuildType)
+}
+
+func testBuildMetadataProvenanceMultiplatform(t *testing.T, sb integration.Sandbox) {
+	t.Run("default", func(t *testing.T) {
+		buildMetadataProvenanceMultiplatform(t, sb, "")
+	})
+	t.Run("max", func(t *testing.T) {
+		buildMetadataProvenanceMultiplatform(t, sb, "max")
+	})
+	t.Run("min", func(t *testing.T) {
+		buildMetadataProvenanceMultiplatform(t, sb, "min")
+	})
+	t.Run("disabled", func(t *testing.T) {
+		buildMetadataProvenanceMultiplatform(t, sb, "disabled")
+	})
+}
+
+func buildMetadataProvenanceMultiplatform(t *testing.T, sb integration.Sandbox, metadataMode string) {
+	if isMobyWorker(sb) {
+		t.Skip("multi-platform build is not supported")
+	}
+
+	dockerfile := []byte(`
+	FROM --platform=$BUILDPLATFORM busybox:latest AS base
+	COPY foo /etc/foo
+	RUN cp /etc/foo /etc/bar
+
+	FROM scratch
+	COPY --from=base /etc/bar /bar
+	`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/registry:latest"
+
+	cmd := buildxCmd(sb,
+		withArgs("build",
+			"--platform=linux/amd64,linux/arm64",
+			"--metadata-file", filepath.Join(dir, "md.json"),
+			fmt.Sprintf("--output=type=image,name=%s,push=true", target),
+			dir,
+		),
+		withEnv("BUILDX_METADATA_PROVENANCE="+metadataMode),
+	)
+
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	desc, provider, err := contentutil.ProviderFromRef(target)
+	require.NoError(t, err)
+	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
+	require.NoError(t, err)
+
+	img := imgs.Find("linux/amd64")
+	require.NotNil(t, img)
+	img = imgs.Find("linux/arm64")
+	require.NotNil(t, img)
+
+	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		BuildRef             string         `json:"buildx.build.ref"`
+		BuildProvenanceAmd64 map[string]any `json:"buildx.build.provenance/linux/amd64"`
+		BuildProvenanceArm64 map[string]any `json:"buildx.build.provenance/linux/arm64"`
+	}
+	var md mdT
+	err = json.Unmarshal(dt, &md)
+	require.NoError(t, err)
+
+	require.NotEmpty(t, md.BuildRef)
+	if metadataMode == "disabled" {
+		require.Empty(t, md.BuildProvenanceAmd64)
+		require.Empty(t, md.BuildProvenanceArm64)
+		return
+	}
+	require.NotEmpty(t, md.BuildProvenanceAmd64)
+	require.NotEmpty(t, md.BuildProvenanceArm64)
+
+	for _, prov := range []map[string]any{md.BuildProvenanceAmd64, md.BuildProvenanceArm64} {
+		dtprv, err := json.Marshal(prov)
+		require.NoError(t, err)
+
+		var prv provenancetypes.ProvenancePredicateSLSA02
+		require.NoError(t, json.Unmarshal(dtprv, &prv))
+		require.Equal(t, provenancetypes.BuildKitBuildType02, prv.BuildType)
+	}
 }
 
 func testBuildMetadataWarnings(t *testing.T, sb integration.Sandbox) {
