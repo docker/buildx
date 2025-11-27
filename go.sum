@@ -208,8 +208,8 @@ github.com/mitchellh/go-wordwrap v1.0.1 h1:TLuKupo69TCn6TQSyGxwI1EblZZEsQ0vMlAFQ
 github.com/mitchellh/go-wordwrap v1.0.1/go.mod h1:R62XHJLzvMFRBbcrT7m7WgmE1eOyTSsCt+hzestvNj0=
 github.com/mitchellh/hashstructure/v2 v2.0.2 h1:vGKWl0YJqUNxE8d+h8f6NJLcCJrgbhC4NcD46KavDd4=
 github.com/mitchellh/hashstructure/v2 v2.0.2/go.mod h1:MG3aRVU/N29oo/V/IhBX8GR/zz4kQkprJgF2EVszyDE=
-github.com/moby/buildkit v0.26.1 h1:Cf/AB/8/5N+GBQnVPBW+hR2tDWoImuZ28ciqaF+mzgs=
-github.com/moby/buildkit v0.26.1/go.mod h1:ylDa7IqzVJgLdi/wO7H1qLREFQpmhFbw2fbn4yoTw40=
+github.com/moby/buildkit v0.26.2 h1:EIh5j0gzRsCZmQzvgNNWzSDbuKqwUIiBH7ssqLv8RU8=
+github.com/moby/buildkit v0.26.2/go.mod h1:ylDa7IqzVJgLdi/wO7H1qLREFQpmhFbw2fbn4yoTw40=
 github.com/moby/docker-image-spec v1.3.1 h1:jMKff3w6PgbfSa69GfNg+zN/XLhfXJGnEx3Nl2EsFP0=
 github.com/moby/docker-image-spec v1.3.1/go.mod h1:eKmb5VW8vQEh/BAr2yvVNvuiJuY6UIocYsFu/DxxRpo=
 github.com/moby/go-archive v0.1.0 h1:Kk/5rdW/g+H8NHdJW2gsXyZ7UnzvJNOy6VKJqueWdcQ=
