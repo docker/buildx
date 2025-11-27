@@ -141,7 +141,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		return nil, err
 	}
 
-	d.minReplicas = deploymentOpt.Replicas
+	d.minReplicas = int(deploymentOpt.Replicas)
 
 	d.deploymentClient = clientset.AppsV1().Deployments(namespace)
 	d.podClient = clientset.CoreV1().Pods(namespace)
@@ -189,10 +189,11 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case k == "namespace":
 			namespace = v
 		case k == "replicas":
-			deploymentOpt.Replicas, err = strconv.Atoi(v)
+			r, err := strconv.ParseInt(v, 10, 32)
 			if err != nil {
 				return nil, "", "", false, 0, err
 			}
+			deploymentOpt.Replicas = int32(r)
 		case k == "requests.cpu":
 			deploymentOpt.RequestsCPU = v
 		case k == "requests.memory":

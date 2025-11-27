@@ -91,7 +91,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 
 			require.Equal(t, "test-ns", ns)
 			require.Equal(t, "test:latest", r.Image)
-			require.Equal(t, 2, r.Replicas)
+			require.Equal(t, int32(2), r.Replicas)
 			require.Equal(t, "100m", r.RequestsCPU)
 			require.Equal(t, "32Mi", r.RequestsMemory)
 			require.Equal(t, "200m", r.LimitsCPU)
@@ -119,7 +119,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 
 			require.Equal(t, "test", ns)
 			require.Equal(t, bkimage.DefaultImage, r.Image)
-			require.Equal(t, 1, r.Replicas)
+			require.Equal(t, int32(1), r.Replicas)
 			require.Equal(t, "", r.RequestsCPU)
 			require.Equal(t, "", r.RequestsMemory)
 			require.Equal(t, "", r.LimitsCPU)
@@ -150,7 +150,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 
 			require.Equal(t, "test", ns)
 			require.Equal(t, bkimage.DefaultRootlessImage, r.Image)
-			require.Equal(t, 1, r.Replicas)
+			require.Equal(t, int32(1), r.Replicas)
 			require.Equal(t, "", r.RequestsCPU)
 			require.Equal(t, "", r.RequestsMemory)
 			require.Equal(t, "", r.LimitsCPU)
