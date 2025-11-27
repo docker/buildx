@@ -16,7 +16,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/davecgh/go-spew v1.1.1
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.0.1+incompatible
+	github.com/docker/cli v29.1.1+incompatible
 	github.com/docker/cli-docs-tool v0.10.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
@@ -32,7 +32,7 @@ require (
 	github.com/moby/buildkit v0.26.2
 	github.com/moby/go-archive v0.1.0
 	github.com/moby/moby/api v1.52.0
-	github.com/moby/moby/client v0.1.0
+	github.com/moby/moby/client v0.2.1
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
 	github.com/morikuni/aec v1.0.0
