@@ -6,6 +6,7 @@ import (
 	"io"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -21,6 +22,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
@@ -38,6 +40,7 @@ import (
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
@@ -322,6 +325,20 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 	defers = append(defers, releaseLoad)
 
+	if len(opt.Inputs.policy) > 0 {
+		env := policy.Env{}
+		for k, v := range opt.BuildArgs {
+			if env.Args == nil {
+				env.Args = map[string]*string{}
+			}
+			env.Args[k] = &v
+		}
+		env.Filename = path.Base(opt.Inputs.DockerfilePath)
+		env.Target = opt.Target
+		env.Labels = opt.Labels
+		so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.NewPolicy(opt.Inputs.policy, env).CheckPolicy)
+	}
+
 	// add node identifier to shared key if one was specified
 	if so.SharedKey != "" {
 		so.SharedKey += ":" + cfg.TryNodeIdentifier()
@@ -535,6 +552,19 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			return nil, err
 		}
 		dockerfileName = handleLowercaseDockerfile(dockerfileDir, dockerfileName)
+
+		if fi, err := os.Lstat(filepath.Join(dockerfileDir, dockerfileName+".rego")); err == nil {
+			if fi.Mode().IsRegular() {
+				dt, err := os.ReadFile(filepath.Join(dockerfileDir, dockerfileName+".rego"))
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to read policy file %s.rego", dockerfileName)
+				}
+				inp.policy = append(inp.policy, policy.File{
+					Filename: dockerfileName + ".rego",
+					Data:     dt,
+				})
+			}
+		}
 	}
 
 	target.FrontendAttrs["filename"] = dockerfileName
