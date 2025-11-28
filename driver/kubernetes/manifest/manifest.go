@@ -17,7 +17,7 @@ type DeploymentOpt struct {
 	Namespace          string
 	Name               string
 	Image              string
-	Replicas           int
+	Replicas           int32
 	ServiceAccountName string
 	SchedulerName      string
 
@@ -73,7 +73,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 		LabelApp: opt.Name,
 	}
 	annotations := map[string]string{}
-	replicas := int32(opt.Replicas)
+	replicas := opt.Replicas
 	privileged := true
 	args := opt.BuildkitFlags
 
