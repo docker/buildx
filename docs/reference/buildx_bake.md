@@ -408,6 +408,7 @@ $ docker buildx bake --set foo*.args.mybuildarg=value   # overrides build arg fo
 $ docker buildx bake --set *.platform=linux/arm64       # overrides platform for all targets
 $ docker buildx bake --set foo*.no-cache                # bypass caching only for targets starting with 'foo'
 $ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' to the platform list
+$ docker buildx bake --set target.contexts.bar=../bar   # overrides 'bar' named context
 ```
 
 > [!NOTE]
@@ -426,6 +427,7 @@ You can override the following fields:
 * `cache-to`
 * `call`
 * `context`
+* `contexts`
 * `dockerfile`
 * `entitlements`
 * `extra-hosts`
