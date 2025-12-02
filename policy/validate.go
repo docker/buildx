@@ -88,27 +88,6 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			Path:   u.Path,
 			Query:  u.Query(),
 		}
-		if v, ok := src.Source.Attrs[pb.AttrHTTPPerm]; ok {
-			p, err := strconv.ParseInt(v, 10, 32)
-			if err != nil {
-				return nil, nil, errors.Wrapf(err, "failed to parse http source permission")
-			}
-			inp.HTTP.Perm = int(p)
-		}
-		if v, ok := src.Source.Attrs[pb.AttrHTTPUID]; ok {
-			uid, err := strconv.ParseInt(v, 10, 32)
-			if err != nil {
-				return nil, nil, errors.Wrapf(err, "failed to parse http source uid")
-			}
-			inp.HTTP.UID = int(uid)
-		}
-		if v, ok := src.Source.Attrs[pb.AttrHTTPGID]; ok {
-			gid, err := strconv.ParseInt(v, 10, 32)
-			if err != nil {
-				return nil, nil, errors.Wrapf(err, "failed to parse http source gid")
-			}
-			inp.HTTP.GID = int(gid)
-		}
 		if _, ok := src.Source.Attrs[pb.AttrHTTPAuthHeaderSecret]; ok {
 			inp.HTTP.HasAuth = true
 		}
