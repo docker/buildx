@@ -23,13 +23,9 @@ type HTTP struct {
 	Host    string              `json:"host,omitempty"`
 	Path    string              `json:"path,omitempty"`
 	Query   map[string][]string `json:"query,omitempty"`
-	Perm    int                 `json:"perm,omitempty"`
-	UID     int                 `json:"uid,omitempty"`
-	GID     int                 `json:"gid,omitempty"`
 	HasAuth bool                `json:"hasAuth,omitempty"`
 
 	Checksum string `json:"checksum,omitempty"`
-	// Filename string `json:"filename,omitempty"`
 
 	Signature         *PGPSignature      `json:"signature,omitempty"`
 	AttestationBundle *AttestationBundle `json:"attestationBundle,omitempty"`
