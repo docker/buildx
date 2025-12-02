@@ -7,6 +7,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"slices"
 	"strconv"
 	"strings"
 	"sync"
@@ -309,10 +310,19 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		return nil, nil, errors.Errorf("unsupported source scheme: %s", scheme)
 	}
 
+	caps := &ast.Capabilities{
+		Builtins: builtins(),
+		Features: slices.Clone(ast.Features),
+	}
+
+	comp := ast.NewCompiler().WithCapabilities(caps)
+
 	opts := []func(*rego.Rego){
+		rego.SetRegoVersion(ast.RegoV1),
 		rego.Query("data.docker.decision"),
 		rego.Input(inp),
 		rego.SkipPartialNamespace(true),
+		rego.Compiler(comp),
 	}
 	for _, file := range p.files {
 		opts = append(opts, rego.Module(file.Filename, string(file.Data)))
