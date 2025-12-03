@@ -23,6 +23,7 @@ import (
 	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/gitutil/gitobject"
+	"github.com/moby/buildkit/util/gitutil/gitsign"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/topdown/print"
@@ -51,9 +52,21 @@ type Policy struct {
 	funcs []fun
 }
 
+type state struct {
+	Input    Input
+	Unknowns map[string]struct{}
+}
+
+func (s *state) addUnknown(key string) {
+	if s.Unknowns == nil {
+		s.Unknowns = make(map[string]struct{})
+	}
+	s.Unknowns[key] = struct{}{}
+}
+
 type fun struct {
 	decl *rego.Function
-	impl func(*rego.Rego)
+	impl func(*state) func(*rego.Rego)
 }
 
 type Opt struct {
@@ -91,36 +104,97 @@ func (p *Policy) initBuiltinFuncs() {
 	}
 	p.funcs = append(p.funcs, fun{
 		decl: builtinLoadJSON,
-		impl: rego.Function1(builtinLoadJSON, p.builtinLoadJSONImpl),
+		impl: funcNoInput(rego.Function1(builtinLoadJSON, p.builtinLoadJSONImpl)),
+	})
+
+	verifyGitSignature := &rego.Function{
+		Name: "verify_git_signature",
+		Decl: types.NewFunction(
+			types.Args(
+				types.S,
+			),
+			types.B,
+		),
+		Memoize: false, // TODO:optimize
+	}
+	p.funcs = append(p.funcs, fun{
+		decl: verifyGitSignature,
+		impl: func(s *state) func(*rego.Rego) {
+			return rego.Function1(verifyGitSignature, func(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
+				return p.builtinVerifyGitSignatureImpl(bctx, a, s)
+			})
+		},
 	})
 }
 
-func (p *Policy) builtinLoadJSONImpl(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
-	if p.opt.FS == nil {
-		return nil, errors.Errorf("no policy FS defined for load_json")
+func (p *Policy) builtinVerifyGitSignatureImpl(_ rego.BuiltinContext, a *ast.Term, s *state) (*ast.Term, error) {
+	inp := s.Input
+	if inp.Git == nil {
+		return ast.BooleanTerm(false), nil
 	}
-	fs, cf, err := p.opt.FS()
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to get policy FS for load_json")
+
+	if inp.Git.Commit == nil {
+		s.addUnknown("verify_git_signature")
+		return ast.BooleanTerm(false), nil
 	}
-	defer cf()
 
 	path, ok := a.Value.(ast.String)
 	if !ok {
 		return nil, errors.Errorf("load_json: expected string path, got %T", a.Value)
 	}
 
-	f, err := fs.Open(string(path))
+	pubkey, err := p.readFile(string(path), 128*1024)
 	if err != nil {
-		return nil, errors.Wrapf(err, "load_json: failed opening file %q", path)
+		return nil, err
+	}
+
+	obj := inp.Git.Commit.obj
+	if inp.Git.Tag != nil {
+		obj = inp.Git.Tag.obj
+	}
+
+	if err := gitsign.VerifySignature(obj, pubkey, &gitsign.VerifyPolicy{
+		RejectExpiredKeys: false,
+	}); err != nil {
+		return nil, err
+	}
+
+	return ast.BooleanTerm(true), nil
+}
+
+func (p *Policy) readFile(path string, limit int64) ([]byte, error) {
+	if p.opt.FS == nil {
+		return nil, errors.Errorf("no policy FS defined for reading context files")
+	}
+	fs, cf, err := p.opt.FS()
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get policy FS for reading context files")
+	}
+	defer cf()
+
+	f, err := fs.Open(path)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed opening file %q", path)
 	}
 	defer f.Close()
 
-	rdr := io.LimitReader(f, 4*1024*1024) // 4MB max
-
+	rdr := io.LimitReader(f, limit)
 	data, err := io.ReadAll(rdr)
 	if err != nil {
-		return nil, errors.Wrapf(err, "load_json: failed reading %q", path)
+		return nil, errors.Wrapf(err, "failed reading %q", path)
+	}
+	return data, nil
+}
+
+func (p *Policy) builtinLoadJSONImpl(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
+	path, ok := a.Value.(ast.String)
+	if !ok {
+		return nil, errors.Errorf("load_json: expected string path, got %T", a.Value)
+	}
+
+	data, err := p.readFile(string(path), 4*1024*1024)
+	if err != nil {
+		return nil, err
 	}
 
 	var v any
@@ -272,7 +346,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 					Parents:   c.Parents,
 					Author:    Actor(c.Author),
 					Committer: Actor(c.Committer),
+					obj:       obj,
 				}
+				s := parseGitSignature(obj)
+				g.Commit.PGPSignature = s.PGPSignature
+				g.Commit.SSHSignature = s.SSHSignature
 
 				if dt := src.Git.TagObject; len(dt) > 0 {
 					obj, err := gitobject.Parse(src.Git.TagObject)
@@ -292,7 +370,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 						Type:    t.Type,
 						Tag:     t.Tag,
 						Tagger:  Actor(t.Tagger),
+						obj:     obj,
 					}
+					s := parseGitSignature(obj)
+					g.Tag.PGPSignature = s.PGPSignature
+					g.Tag.SSHSignature = s.SSHSignature
 				}
 			}
 		}
@@ -302,7 +384,6 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		}
 
 		unknowns = append(unknowns, withPrefix(unk, "input.git.")...)
-
 		inp.Git = g
 	case "docker-image":
 		ref, err := reference.ParseNormalizedNamed(refstr)
@@ -473,8 +554,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			rego.PrintHook(p),
 		)
 	}
+	st := &state{
+		Input: inp,
+	}
 	for _, f := range p.funcs {
-		opts = append(opts, f.impl)
+		opts = append(opts, f.impl(st))
 	}
 
 	for _, file := range p.opt.Files {
@@ -498,6 +582,9 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			return nil, nil, err
 		}
 		unk := collectUnknowns(pq.Support)
+		if _, ok := st.Unknowns["verify_git_signature"]; ok {
+			unk = append(unk, "input.git.commit")
+		}
 		if len(unk) > 0 {
 			next := &gwpb.ResolveSourceMetaRequest{
 				Source:   req.Source.Source,
@@ -647,4 +734,10 @@ func trimKey(s string) string {
 		}
 	}
 	return s
+}
+
+func funcNoInput(f func(*rego.Rego)) func(*state) func(*rego.Rego) {
+	return func(_ *state) func(*rego.Rego) {
+		return f
+	}
 }
