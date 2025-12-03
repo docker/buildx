@@ -192,6 +192,10 @@ func builtins() []*ast.Builtin {
 		// SemVers
 		ast.SemVerIsValid,
 		ast.SemVerCompare,
+
+		// Printing
+		ast.Print,
+		ast.InternalPrint,
 	}
 	return b
 }
