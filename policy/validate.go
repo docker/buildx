@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"encoding/json"
+	"io"
 	"io/fs"
 	"log"
 	"net/url"
@@ -25,6 +26,7 @@ import (
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/topdown/print"
+	"github.com/open-policy-agent/opa/v1/types"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -45,7 +47,13 @@ func debugf(format string, v ...any) {
 }
 
 type Policy struct {
-	opt Opt
+	opt   Opt
+	funcs []fun
+}
+
+type fun struct {
+	decl *rego.Function
+	impl func(*rego.Rego)
 }
 
 type Opt struct {
@@ -63,9 +71,69 @@ type File struct {
 }
 
 func NewPolicy(opt Opt) *Policy {
-	return &Policy{
+	p := &Policy{
 		opt: opt,
 	}
+	p.initBuiltinFuncs()
+	return p
+}
+
+func (p *Policy) initBuiltinFuncs() {
+	builtinLoadJSON := &rego.Function{
+		Name: "load_json",
+		Decl: types.NewFunction(
+			types.Args(
+				types.S,
+			),
+			types.A,
+		),
+		Memoize: true,
+	}
+	p.funcs = append(p.funcs, fun{
+		decl: builtinLoadJSON,
+		impl: rego.Function1(builtinLoadJSON, p.builtinLoadJSONImpl),
+	})
+}
+
+func (p *Policy) builtinLoadJSONImpl(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
+	if p.opt.FS == nil {
+		return nil, errors.Errorf("no policy FS defined for load_json")
+	}
+	fs, cf, err := p.opt.FS()
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to get policy FS for load_json")
+	}
+	defer cf()
+
+	path, ok := a.Value.(ast.String)
+	if !ok {
+		return nil, errors.Errorf("load_json: expected string path, got %T", a.Value)
+	}
+
+	f, err := fs.Open(string(path))
+	if err != nil {
+		return nil, errors.Wrapf(err, "load_json: failed opening file %q", path)
+	}
+	defer f.Close()
+
+	rdr := io.LimitReader(f, 4*1024*1024) // 4MB max
+
+	data, err := io.ReadAll(rdr)
+	if err != nil {
+		return nil, errors.Wrapf(err, "load_json: failed reading %q", path)
+	}
+
+	var v any
+	if err := json.Unmarshal(data, &v); err != nil {
+		return nil, errors.Wrapf(err, "load_json: invalid JSON in %q", path)
+	}
+
+	astVal, err := ast.InterfaceToValue(v)
+	if err != nil {
+		return nil, errors.Wrapf(err, "load_json: failed converting JSON from %q", path)
+	}
+
+	return ast.NewTerm(astVal), nil
 }
 
 func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
@@ -327,6 +395,15 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		comp = comp.WithEnablePrintStatements(true)
 	}
 
+	builtins := make(map[string]*ast.Builtin)
+	for _, f := range p.funcs {
+		builtins[f.decl.Name] = &ast.Builtin{
+			Name: f.decl.Name,
+			Decl: f.decl.Decl,
+		}
+	}
+	comp = comp.WithBuiltins(builtins)
+
 	var root fs.StatFS
 	var closeFS func() error
 
@@ -395,6 +472,9 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			rego.EnablePrintStatements(true),
 			rego.PrintHook(p),
 		)
+	}
+	for _, f := range p.funcs {
+		opts = append(opts, f.impl)
 	}
 
 	for _, file := range p.opt.Files {
