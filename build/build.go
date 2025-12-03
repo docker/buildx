@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
 	"slices"
@@ -114,7 +115,12 @@ type Inputs struct {
 	DockerfileMappingSrc string
 	DockerfileMappingDst string
 
-	policy []policy.File
+	policy *policyOpt
+}
+
+type policyOpt struct {
+	Files []policy.File
+	FS    func() (fs.StatFS, func() error, error)
 }
 
 type NamedContext struct {
@@ -925,7 +931,7 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 			}
 			fsMap := m[nodeName]
 			for name, m := range req.so.LocalMounts {
-				fs, ok := m.(*fs)
+				fs, ok := m.(*fsMount)
 				if !ok {
 					continue
 				}
