@@ -1,6 +1,10 @@
 package policy
 
-import "time"
+import (
+	"time"
+
+	"github.com/moby/buildkit/util/gitutil/gitobject"
+)
 
 type Input struct {
 	Env   Env    `json:"env,omitzero"`
@@ -66,8 +70,10 @@ type Commit struct {
 	Committer Actor    `json:"committer,omitzero"`
 	Message   string   `json:"message,omitempty"`
 
-	PGPSignature *PGPSignature `json:"PGPSignature,omitempty"`
-	SSHSignature *SSHSignature `json:"SSHSignature,omitempty"`
+	PGPSignature *PGPSignature `json:"pgpSignature,omitempty"`
+	SSHSignature *SSHSignature `json:"sshSignature,omitempty"`
+
+	obj *gitobject.GitObject
 }
 
 type Tag struct {
@@ -77,8 +83,10 @@ type Tag struct {
 	Tagger  Actor  `json:"tagger,omitzero"`
 	Message string `json:"message,omitempty"`
 
-	PGPSignature *PGPSignature `json:"PGPSignature,omitempty"`
-	SSHSignature *SSHSignature `json:"SSHSignature,omitempty"`
+	PGPSignature *PGPSignature `json:"pgpSignature,omitempty"`
+	SSHSignature *SSHSignature `json:"sshSignature,omitempty"`
+
+	obj *gitobject.GitObject
 }
 
 type PGPSignature struct {
