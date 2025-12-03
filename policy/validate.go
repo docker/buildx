@@ -23,6 +23,7 @@ import (
 	"github.com/moby/buildkit/util/gitutil/gitobject"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
+	"github.com/open-policy-agent/opa/v1/topdown/print"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -43,8 +44,13 @@ func debugf(format string, v ...any) {
 }
 
 type Policy struct {
-	files []File
-	env   Env
+	opt Opt
+}
+
+type Opt struct {
+	Files []File
+	Env   Env
+	Log   func(string)
 }
 
 var _ policysession.PolicyCallback = (&Policy{}).CheckPolicy
@@ -54,17 +60,16 @@ type File struct {
 	Data     []byte
 }
 
-func NewPolicy(files []File, env Env) *Policy {
+func NewPolicy(opt Opt) *Policy {
 	return &Policy{
-		files: files,
-		env:   env,
+		opt: opt,
 	}
 }
 
 func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
 	var inp Input
 	var unknowns []string
-	inp.Env = p.env
+	inp.Env = p.opt.Env
 
 	if req.Source == nil || req.Source.Source == nil {
 		return nil, nil, errors.Errorf("no source info in request")
@@ -316,6 +321,9 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	}
 
 	comp := ast.NewCompiler().WithCapabilities(caps)
+	if p.opt.Log != nil {
+		comp = comp.WithEnablePrintStatements(true)
+	}
 
 	opts := []func(*rego.Rego){
 		rego.SetRegoVersion(ast.RegoV1),
@@ -324,7 +332,14 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		rego.SkipPartialNamespace(true),
 		rego.Compiler(comp),
 	}
-	for _, file := range p.files {
+	if p.opt.Log != nil {
+		opts = append(opts,
+			rego.EnablePrintStatements(true),
+			rego.PrintHook(p),
+		)
+	}
+
+	for _, file := range p.opt.Files {
 		opts = append(opts, rego.Module(file.Filename, string(file.Data)))
 	}
 	dt, err := json.MarshalIndent(inp, "", "  ")
@@ -442,6 +457,13 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	debugf("policy decision: %s %v", resp.Action, resp.DenyMessages)
 
 	return resp, nil, nil
+}
+
+func (p *Policy) Print(ctx print.Context, msg string) error {
+	if p.opt.Log != nil {
+		p.opt.Log(ctx.Location.Format("%s", msg))
+	}
+	return nil
 }
 
 func withPrefix(arr []string, prefix string) []string {

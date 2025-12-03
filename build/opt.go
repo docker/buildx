@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"log"
 	"maps"
 	"os"
 	"path"
@@ -336,7 +337,14 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 		env.Filename = path.Base(opt.Inputs.DockerfilePath)
 		env.Target = opt.Target
 		env.Labels = opt.Labels
-		so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.NewPolicy(opt.Inputs.policy, env).CheckPolicy)
+		p := policy.NewPolicy(policy.Opt{
+			Files: opt.Inputs.policy,
+			Env:   env,
+			Log: func(msg string) {
+				log.Printf("[policy] %s", msg)
+			},
+		})
+		so.SourcePolicyProvider = policysession.NewPolicyProvider(p.CheckPolicy)
 	}
 
 	// add node identifier to shared key if one was specified
