@@ -135,7 +135,7 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 		}
 
 		for key, mount := range so.LocalMounts {
-			fs, ok := mount.(*fs)
+			fs, ok := mount.(*fsMount)
 			if !ok {
 				continue
 			}
