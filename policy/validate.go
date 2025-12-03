@@ -3,6 +3,7 @@ package policy
 import (
 	"context"
 	"encoding/json"
+	"io/fs"
 	"log"
 	"net/url"
 	"os"
@@ -51,6 +52,7 @@ type Opt struct {
 	Files []File
 	Env   Env
 	Log   func(string)
+	FS    func() (fs.StatFS, func() error, error)
 }
 
 var _ policysession.PolicyCallback = (&Policy{}).CheckPolicy
@@ -320,10 +322,66 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		Features: slices.Clone(ast.Features),
 	}
 
-	comp := ast.NewCompiler().WithCapabilities(caps)
+	comp := ast.NewCompiler().WithCapabilities(caps).WithKeepModules(true)
 	if p.opt.Log != nil {
 		comp = comp.WithEnablePrintStatements(true)
 	}
+
+	var root fs.StatFS
+	var closeFS func() error
+
+	defer func() {
+		if closeFS != nil {
+			closeFS()
+		}
+	}()
+
+	comp = comp.WithModuleLoader(func(resolved map[string]*ast.Module) (parsed map[string]*ast.Module, err error) {
+		out := make(map[string]*ast.Module)
+		for k, v := range resolved {
+			for _, imp := range v.Imports {
+				pv := imp.Path.Value.String()
+				pkgPath, ok := strings.CutPrefix(pv, "data.")
+				if !ok {
+					continue
+				}
+				fn := strings.ReplaceAll(pkgPath, ".", "/") + ".rego"
+				if _, ok := resolved[fn]; !ok {
+					if root == nil {
+						if p.opt.FS == nil {
+							return nil, errors.Errorf("no policy FS defined for import %s", pv)
+						}
+						f, cf, err := p.opt.FS()
+						if err != nil {
+							return nil, errors.Wrapf(err, "failed to get policy FS for import %s", pv)
+						}
+						root = f
+						closeFS = cf
+					}
+					if _, err := root.Stat(fn); err != nil {
+						return nil, errors.Wrapf(err, "import %s not found for module %s", pv, k)
+					}
+					dt, err := fs.ReadFile(root, fn)
+					if err != nil {
+						return nil, errors.Wrapf(err, "failed to read imported policy file %s for module %s", fn, k)
+					}
+					mod, err := ast.ParseModule(fn, string(dt))
+					if err != nil {
+						return nil, errors.Wrapf(err, "failed to parse imported policy file %s for module %s", fn, k)
+					}
+					// rewrite package to be less strict
+					pkgParts := strings.Split(pkgPath, ".")
+					ref := ast.Ref{mod.Package.Path[0]}
+					for _, p := range pkgParts {
+						ref = append(ref, ast.StringTerm(p))
+					}
+					mod.Package = &ast.Package{Path: ref}
+					out[fn] = mod
+				}
+			}
+		}
+		return out, nil
+	})
 
 	opts := []func(*rego.Rego){
 		rego.SetRegoVersion(ast.RegoV1),

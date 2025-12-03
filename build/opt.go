@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/fs"
 	"log"
 	"maps"
 	"os"
@@ -326,7 +327,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 	defers = append(defers, releaseLoad)
 
-	if len(opt.Inputs.policy) > 0 {
+	if opt.Inputs.policy != nil {
 		env := policy.Env{}
 		for k, v := range opt.BuildArgs {
 			if env.Args == nil {
@@ -338,11 +339,12 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 		env.Target = opt.Target
 		env.Labels = opt.Labels
 		p := policy.NewPolicy(policy.Opt{
-			Files: opt.Inputs.policy,
+			Files: opt.Inputs.policy.Files,
 			Env:   env,
 			Log: func(msg string) {
 				log.Printf("[policy] %s", msg)
 			},
+			FS: opt.Inputs.policy.FS,
 		})
 		so.SourcePolicyProvider = policysession.NewPolicyProvider(p.CheckPolicy)
 	}
@@ -438,6 +440,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 	var (
 		err               error
 		dockerfileReader  io.ReadCloser
+		contextDir        string
 		dockerfileDir     string
 		dockerfileName    = inp.DockerfilePath
 		dockerfileSrcName = inp.DockerfilePath
@@ -479,12 +482,14 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 				if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 					return nil, err
 				}
+				contextDir = inp.ContextPath
 			}
 		}
 	case osutil.IsLocalDir(inp.ContextPath):
 		if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 			return nil, err
 		}
+		contextDir = inp.ContextPath
 		sharedKey := inp.ContextPath
 		if p, err := filepath.Abs(sharedKey); err == nil {
 			sharedKey = filepath.Base(p)
@@ -567,10 +572,30 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 				if err != nil {
 					return nil, errors.Wrapf(err, "failed to read policy file %s.rego", dockerfileName)
 				}
-				inp.policy = append(inp.policy, policy.File{
-					Filename: dockerfileName + ".rego",
-					Data:     dt,
-				})
+				inp.policy = &policyOpt{
+					Files: []policy.File{
+						{
+							Filename: dockerfileName + ".rego",
+							Data:     dt,
+						},
+					},
+					FS: func() (fs.StatFS, func() error, error) {
+						if contextDir == "" {
+							return nil, nil, errors.Errorf("unimplemented, cannot use policy file without a local build context")
+						}
+						root, err := os.OpenRoot(contextDir)
+						if err != nil {
+							return nil, nil, errors.Wrapf(err, "failed to open root for policy file %s.rego", dockerfileName)
+						}
+						baseFS := root.FS()
+						statFS, ok := baseFS.(fs.StatFS)
+						if !ok {
+							root.Close()
+							return nil, nil, errors.Errorf("invalid root FS type %T", baseFS)
+						}
+						return statFS, root.Close, nil
+					},
+				}
 			}
 		}
 	}
@@ -687,7 +712,7 @@ func setLocalMount(name, dir string, so *client.SolveOpt) error {
 	if so.LocalMounts == nil {
 		so.LocalMounts = map[string]fsutil.FS{}
 	}
-	so.LocalMounts[name] = &fs{FS: lm, dir: dir}
+	so.LocalMounts[name] = &fsMount{FS: lm, dir: dir}
 	return nil
 }
 
@@ -799,12 +824,12 @@ func handleLowercaseDockerfile(dir, p string) string {
 	return p
 }
 
-type fs struct {
+type fsMount struct {
 	fsutil.FS
 	dir string
 }
 
-var _ fsutil.FS = &fs{}
+var _ fsutil.FS = &fsMount{}
 
 func CreateSSH(ssh []*buildflags.SSH) (session.Attachable, error) {
 	configs := make([]sshprovider.AgentConfig, 0, len(ssh))
