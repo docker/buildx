@@ -4,6 +4,7 @@ import (
 	"time"
 
 	"github.com/moby/buildkit/util/gitutil/gitobject"
+	policytypes "github.com/moby/policy-helpers/types"
 )
 
 type Input struct {
@@ -126,15 +127,48 @@ type Image struct {
 }
 
 type AttestationSignature struct {
-	Kind       string             `json:"kind,omitempty"`
-	Timestamps []TrustedTimestamp `json:"timestamps,omitempty"`
-	// CertificateSummary
+	SignatureType   SignatureType                             `json:"signatureType,omitempty"`
+	Timestamps      []policytypes.TimestampVerificationResult `json:"timestamps,omitempty"`
+	DockerReference string                                    `json:"dockerReference,omitempty"`
+	IsDHI           bool                                      `json:"isDHI,omitempty"`
+	Signer          *SignerInfo                               `json:"signer,omitempty"`
+
+	raw *policytypes.SignatureInfo
 }
 
 type TrustedTimestamp struct {
 	Tlog      bool      `json:"tlog,omitempty"`
+	URI       string    `json:"uri,omitempty"`
 	Timestamp time.Time `json:"timestamp,omitzero"`
 }
+
+type SignerInfo struct {
+	// certificate.Summary with deprecated fields removed
+	CertificateIssuer                   string `json:"certificateIssuer"`
+	SubjectAlternativeName              string `json:"subjectAlternativeName"`
+	Issuer                              string `json:"issuer,omitempty"`                              // OID 1.3.6.1.4.1.57264.1.8 and 1.3.6.1.4.1.57264.1.1 (Deprecated)
+	BuildSignerURI                      string `json:"buildSignerURI,omitempty"`                      //nolint:tagliatelle // 1.3.6.1.4.1.57264.1.9
+	BuildSignerDigest                   string `json:"buildSignerDigest,omitempty"`                   // 1.3.6.1.4.1.57264.1.10
+	RunnerEnvironment                   string `json:"runnerEnvironment,omitempty"`                   // 1.3.6.1.4.1.57264.1.11
+	SourceRepositoryURI                 string `json:"sourceRepositoryURI,omitempty"`                 //nolint:tagliatelle  // 1.3.6.1.4.1.57264.1.12
+	SourceRepositoryDigest              string `json:"sourceRepositoryDigest,omitempty"`              // 1.3.6.1.4.1.57264.1.13
+	SourceRepositoryRef                 string `json:"sourceRepositoryRef,omitempty"`                 // 1.3.6.1.4.1.57264.1.14
+	SourceRepositoryIdentifier          string `json:"sourceRepositoryIdentifier,omitempty"`          // 1.3.6.1.4.1.57264.1.15
+	SourceRepositoryOwnerURI            string `json:"sourceRepositoryOwnerURI,omitempty"`            //nolint:tagliatelle // 1.3.6.1.4.1.57264.1.16
+	SourceRepositoryOwnerIdentifier     string `json:"sourceRepositoryOwnerIdentifier,omitempty"`     // 1.3.6.1.4.1.57264.1.17
+	BuildConfigURI                      string `json:"buildConfigURI,omitempty"`                      //nolint:tagliatelle // 1.3.6.1.4.1.57264.1.18
+	BuildConfigDigest                   string `json:"buildConfigDigest,omitempty"`                   // 1.3.6.1.4.1.57264.1.19
+	BuildTrigger                        string `json:"buildTrigger,omitempty"`                        // 1.3.6.1.4.1.57264.1.20
+	RunInvocationURI                    string `json:"runInvocationURI,omitempty"`                    //nolint:tagliatelle // 1.3.6.1.4.1.57264.1.21
+	SourceRepositoryVisibilityAtSigning string `json:"sourceRepositoryVisibilityAtSigning,omitempty"` // 1.3.6.1.4.1.57264.1.22
+}
+
+type SignatureType string
+
+const (
+	SignatureTypeBundle       SignatureType = "bundle-v0.3"
+	SignatureTypeHashedRecord SignatureType = "hashedreckord"
+)
 
 type Local struct {
 	Name string `json:"name,omitempty"`

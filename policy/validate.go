@@ -9,6 +9,7 @@ import (
 	"net/url"
 	"os"
 	"path"
+	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -17,6 +18,7 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
+	"github.com/docker/buildx/util/confutil"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
 	moby_buildkit_v1_sourcepolicy "github.com/moby/buildkit/sourcepolicy/pb"
@@ -24,6 +26,7 @@ import (
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/gitutil/gitobject"
 	"github.com/moby/buildkit/util/gitutil/gitsign"
+	policyverifier "github.com/moby/policy-helpers"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/topdown/print"
@@ -50,6 +53,9 @@ func debugf(format string, v ...any) {
 type Policy struct {
 	opt   Opt
 	funcs []fun
+
+	verifierMu sync.Mutex
+	verifier   *policyverifier.Verifier
 }
 
 type state struct {
@@ -70,10 +76,11 @@ type fun struct {
 }
 
 type Opt struct {
-	Files []File
-	Env   Env
-	Log   func(string)
-	FS    func() (fs.StatFS, func() error, error)
+	Files  []File
+	Env    Env
+	Log    func(string)
+	FS     func() (fs.StatFS, func() error, error)
+	Config *confutil.Config
 }
 
 var _ policysession.PolicyCallback = (&Policy{}).CheckPolicy
@@ -89,6 +96,31 @@ func NewPolicy(opt Opt) *Policy {
 	}
 	p.initBuiltinFuncs()
 	return p
+}
+
+func (p *Policy) getVerifier() (*policyverifier.Verifier, error) {
+	p.verifierMu.Lock()
+	defer p.verifierMu.Unlock()
+
+	if p.verifier != nil {
+		return p.verifier, nil
+	}
+
+	root := p.opt.Config.Dir()
+
+	confDir := filepath.Join(root, "policy")
+	if err := p.opt.Config.MkdirAll("policy/tuf", 0o755); err != nil {
+		return nil, errors.Wrapf(err, "failed to create policy verifier config dir")
+	}
+
+	v, err := policyverifier.NewVerifier(policyverifier.Config{
+		StateDir: confDir,
+	})
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to create policy verifier")
+	}
+	p.verifier = v
+	return p.verifier, nil
 }
 
 func (p *Policy) initBuiltinFuncs() {
@@ -410,15 +442,15 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		if req.Platform.Variant != "" {
 			platformStr += "/" + req.Platform.Variant
 		}
-		p, err := platforms.Parse(platformStr)
+		pl, err := platforms.Parse(platformStr)
 		if err != nil {
 			return nil, nil, errors.Wrapf(err, "failed to parse platform")
 		}
-		p = platforms.Normalize(p)
-		inp.Image.Platform = platforms.Format(p)
-		inp.Image.OS = p.OS
-		inp.Image.Architecture = p.Architecture
-		inp.Image.Variant = p.Variant
+		pl = platforms.Normalize(pl)
+		inp.Image.Platform = platforms.Format(pl)
+		inp.Image.OS = pl.OS
+		inp.Image.Architecture = pl.Architecture
+		inp.Image.Variant = pl.Variant
 
 		configFields := []string{
 			"checksum", "labels", "user", "volumes", "workingDir", "env",
@@ -429,7 +461,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 				unknowns = append(unknowns, "input.image.checksum")
 			}
 			unknowns = append(unknowns, withPrefix(configFields, "input.image.")...)
-			unknowns = append(unknowns, "input.image.hasProvenance")
+			unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
 		} else {
 			inp.Image.Checksum = req.Source.Image.Digest
 			if cfg := req.Source.Image.Config; cfg != nil {
@@ -452,11 +484,16 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 
 			if ac := req.Source.Image.AttestationChain; ac != nil {
 				inp.Image.HasProvenance = ac.AttestationManifest != ""
+				signatures, err := p.parseSignatures(ctx, ac, &pl)
+				if err != nil {
+					debugf("failed to parse image signatures: %v", err)
+				} else {
+					inp.Image.Signatures = signatures
+				}
 			} else {
-				unknowns = append(unknowns, "input.image.hasProvenance")
+				unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
 			}
 		}
-		unknowns = append(unknowns, "input.image.signatures")
 	case "local":
 		inp.Local = &Local{
 			Name: refstr,
@@ -611,7 +648,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 							next.Image = &gwpb.ResolveSourceImageRequest{}
 						}
 						next.Image.NoConfig = false
-					case "image.hasProvenance":
+					case "image.hasProvenance", "image.signatures":
 						if next.Image == nil {
 							next.Image = &gwpb.ResolveSourceImageRequest{
 								NoConfig: true,
