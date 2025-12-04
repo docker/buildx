@@ -344,7 +344,8 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 			Log: func(msg string) {
 				log.Printf("[policy] %s", msg)
 			},
-			FS: opt.Inputs.policy.FS,
+			FS:     opt.Inputs.policy.FS,
+			Config: cfg,
 		})
 		so.SourcePolicyProvider = policysession.NewPolicyProvider(p.CheckPolicy)
 	}
