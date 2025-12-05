@@ -178,14 +178,5 @@ require (
 	sigs.k8s.io/yaml v1.6.0 // indirect
 )
 
-exclude (
-	// FIXME(thaJeztah): remoove this once kubernetes updated their dependencies to no longer need this.
-	//
-	// For additional details, see this PR and links mentioned in that PR:
-	// https://github.com/kubernetes-sigs/kustomize/pull/5830#issuecomment-2569960859
-	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2
-)
-
 // restore junctions to have os.ModeSymlink flag set on Windows: https://github.com/docker/buildx/issues/3221
 godebug winsymlink=0
