@@ -1,9 +1,10 @@
-package build
+package resolver
 
 import (
 	"context"
 	"fmt"
 	"slices"
+	"strconv"
 	"sync"
 
 	"github.com/containerd/platforms"
@@ -20,17 +21,42 @@ import (
 	"golang.org/x/sync/errgroup"
 )
 
-type resolvedNode struct {
+func Resolve(ctx context.Context, nodes []builder.Node, platforms []ocispecs.Platform, pw progress.Writer) ([]*ResolvedNode, error) {
+	result, err := ResolveAll(ctx, nodes, map[string][]ocispecs.Platform{"default": platforms}, pw)
+	if err != nil {
+		return nil, err
+	}
+	return result["default"], nil
+}
+
+func ResolveAll(ctx context.Context, nodes []builder.Node, optPlatforms map[string][]ocispecs.Platform, pw progress.Writer) (map[string][]*ResolvedNode, error) {
+	driverRes := newDriverResolver(nodes)
+	drivers, err := driverRes.Resolve(ctx, optPlatforms, pw)
+	if err != nil {
+		return nil, err
+	}
+	return drivers, err
+}
+
+type ResolvedNode struct {
 	resolver    *nodeResolver
 	driverIndex int
 	platforms   []ocispecs.Platform
 }
 
-func (dp resolvedNode) Node() builder.Node {
+func (dp ResolvedNode) Key() string {
+	return strconv.Itoa(dp.driverIndex)
+}
+
+func (dp ResolvedNode) Node() builder.Node {
 	return dp.resolver.nodes[dp.driverIndex]
 }
 
-func (dp resolvedNode) Client(ctx context.Context) (*client.Client, error) {
+func (dp ResolvedNode) Platforms() []ocispecs.Platform {
+	return dp.platforms
+}
+
+func (dp ResolvedNode) Client(ctx context.Context) (*client.Client, error) {
 	clients, err := dp.resolver.boot(ctx, []int{dp.driverIndex}, nil)
 	if err != nil {
 		return nil, err
@@ -38,7 +64,7 @@ func (dp resolvedNode) Client(ctx context.Context) (*client.Client, error) {
 	return clients[0], nil
 }
 
-func (dp resolvedNode) BuildOpts(ctx context.Context) (gateway.BuildOpts, error) {
+func (dp ResolvedNode) BuildOpts(ctx context.Context) (gateway.BuildOpts, error) {
 	opts, err := dp.resolver.opts(ctx, []int{dp.driverIndex}, nil)
 	if err != nil {
 		return gateway.BuildOpts{}, err
@@ -66,15 +92,6 @@ type nodeResolver struct {
 	buildOpts cachedGroup[gateway.BuildOpts]
 }
 
-func resolveDrivers(ctx context.Context, nodes []builder.Node, opt map[string]Options, pw progress.Writer) (map[string][]*resolvedNode, error) {
-	driverRes := newDriverResolver(nodes)
-	drivers, err := driverRes.Resolve(ctx, opt, pw)
-	if err != nil {
-		return nil, err
-	}
-	return drivers, err
-}
-
 func newDriverResolver(nodes []builder.Node) *nodeResolver {
 	r := &nodeResolver{
 		nodes:     nodes,
@@ -84,14 +101,14 @@ func newDriverResolver(nodes []builder.Node) *nodeResolver {
 	return r
 }
 
-func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw progress.Writer) (map[string][]*resolvedNode, error) {
+func (r *nodeResolver) Resolve(ctx context.Context, optPlatforms map[string][]ocispecs.Platform, pw progress.Writer) (map[string][]*ResolvedNode, error) {
 	if len(r.nodes) == 0 {
 		return nil, nil
 	}
 
-	nodes := map[string][]*resolvedNode{}
-	for k, opt := range opt {
-		node, perfect, err := r.resolve(ctx, opt.Platforms, pw, platforms.OnlyStrict, nil)
+	nodes := map[string][]*ResolvedNode{}
+	for k, optPlatforms := range optPlatforms {
+		node, perfect, err := r.resolve(ctx, optPlatforms, pw, platforms.OnlyStrict, nil)
 		if err != nil {
 			return nil, err
 		}
@@ -100,7 +117,7 @@ func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw p
 		}
 		nodes[k] = node
 	}
-	if len(nodes) != len(opt) {
+	if len(nodes) != len(optPlatforms) {
 		// if we didn't get a perfect match, we need to boot all drivers
 		allIndexes := make([]int, len(r.nodes))
 		for i := range allIndexes {
@@ -143,9 +160,9 @@ func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw p
 
 		// then we can attempt to match against all the available platforms
 		// (this time we don't care about imperfect matches)
-		nodes = map[string][]*resolvedNode{}
-		for k, opt := range opt {
-			node, _, err := r.resolve(ctx, opt.Platforms, pw, platforms.Only, func(idx int, n builder.Node) []ocispecs.Platform {
+		nodes = map[string][]*ResolvedNode{}
+		for k, optPlatforms := range optPlatforms {
+			node, _, err := r.resolve(ctx, optPlatforms, pw, platforms.Only, func(idx int, n builder.Node) []ocispecs.Platform {
 				return workers[idx]
 			})
 			if err != nil {
@@ -173,7 +190,7 @@ func (r *nodeResolver) Resolve(ctx context.Context, opt map[string]Options, pw p
 	return nodes, nil
 }
 
-func (r *nodeResolver) resolve(ctx context.Context, ps []ocispecs.Platform, pw progress.Writer, matcher matchMaker, additional func(idx int, n builder.Node) []ocispecs.Platform) ([]*resolvedNode, bool, error) {
+func (r *nodeResolver) resolve(ctx context.Context, ps []ocispecs.Platform, pw progress.Writer, matcher matchMaker, additional func(idx int, n builder.Node) []ocispecs.Platform) ([]*ResolvedNode, bool, error) {
 	if len(r.nodes) == 0 {
 		return nil, true, nil
 	}
@@ -189,16 +206,16 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []ocispecs.Platform, pw p
 		nodeIdxs = append(nodeIdxs, idx)
 	}
 
-	var nodes []*resolvedNode
+	var nodes []*ResolvedNode
 	if len(nodeIdxs) == 0 {
-		nodes = append(nodes, &resolvedNode{
+		nodes = append(nodes, &ResolvedNode{
 			resolver:    r,
 			driverIndex: 0,
 		})
 		nodeIdxs = append(nodeIdxs, 0)
 	} else {
 		for i, idx := range nodeIdxs {
-			node := &resolvedNode{
+			node := &ResolvedNode{
 				resolver:    r,
 				driverIndex: idx,
 			}
@@ -338,8 +355,8 @@ func (r *nodeResolver) opts(ctx context.Context, idxs []int, pw progress.Writer)
 
 // recombineDriverPairs recombines resolved nodes that are on the same driver
 // back together into a single node.
-func recombineNodes(nodes []*resolvedNode) []*resolvedNode {
-	result := make([]*resolvedNode, 0, len(nodes))
+func recombineNodes(nodes []*ResolvedNode) []*ResolvedNode {
+	result := make([]*ResolvedNode, 0, len(nodes))
 	lookup := map[int]int{}
 	for _, node := range nodes {
 		if idx, ok := lookup[node.driverIndex]; ok {

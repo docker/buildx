@@ -1,4 +1,4 @@
-package build
+package resolver
 
 import (
 	"context"
@@ -22,7 +22,7 @@ func TestFindDriverSanity(t *testing.T) {
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
 	require.Equal(t, "aaa", res[0].Node().Builder)
-	require.Equal(t, []ocispecs.Platform{platforms.DefaultSpec()}, res[0].platforms)
+	require.Equal(t, []ocispecs.Platform{platforms.DefaultSpec()}, res[0].Platforms())
 }
 
 func TestFindDriverEmpty(t *testing.T) {
@@ -228,7 +228,7 @@ func TestSelectNodeNoPlatform(t *testing.T) {
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, "aaa", res[0].Node().Builder)
-	require.Empty(t, res[0].platforms)
+	require.Empty(t, res[0].Platforms())
 }
 
 func TestSelectNodeAdditionalPlatforms(t *testing.T) {

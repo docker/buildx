@@ -7,6 +7,7 @@ import (
 	"slices"
 
 	"github.com/containerd/platforms"
+	"github.com/docker/buildx/build/resolver"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/progress"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -28,27 +29,25 @@ func Dial(ctx context.Context, nodes []builder.Node, pw progress.Writer, platfor
 		pls = []ocispecs.Platform{*platform}
 	}
 
-	opts := map[string]Options{"default": {Platforms: pls}}
-	resolved, err := resolveDrivers(ctx, nodes, opts, pw)
+	resolved, err := resolver.Resolve(ctx, nodes, pls, pw)
 	if err != nil {
 		return nil, err
 	}
 
 	var dialError error
-	for _, ls := range resolved {
-		for _, rn := range ls {
-			if platform != nil {
-				if !slices.ContainsFunc(rn.platforms, platforms.Only(*platform).Match) {
-					continue
-				}
+	for _, rnode := range resolved {
+		if platform != nil {
+			if !slices.ContainsFunc(rnode.Platforms(), platforms.Only(*platform).Match) {
+				continue
 			}
-
-			conn, err := nodes[rn.driverIndex].Driver.Dial(ctx)
-			if err == nil {
-				return conn, nil
-			}
-			dialError = stderrors.Join(err)
 		}
+
+		driver := rnode.Node().Driver
+		conn, err := driver.Dial(ctx)
+		if err == nil {
+			return conn, nil
+		}
+		dialError = stderrors.Join(err)
 	}
 
 	return nil, errors.Wrap(dialError, "no nodes available")

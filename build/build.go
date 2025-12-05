@@ -18,6 +18,7 @@ import (
 
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/distribution/reference"
+	noderesolver "github.com/docker/buildx/build/resolver"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/buildflags"
@@ -120,7 +121,7 @@ type NamedContext struct {
 }
 
 type reqForNode struct {
-	*resolvedNode
+	*noderesolver.ResolvedNode
 	so *client.SolveOpt
 }
 
@@ -189,7 +190,7 @@ func warnOnNoOutput(ctx context.Context, nodes []builder.Node, opts map[string]O
 	logrus.Warnf("%s. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", warnNoOutputBuf.String())
 }
 
-func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confutil.Config, drivers map[string][]*resolvedNode, w progress.Writer, opts map[string]Options) (_ map[string][]*reqForNode, _ func(), retErr error) {
+func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confutil.Config, drivers map[string][]*noderesolver.ResolvedNode, w progress.Writer, opts map[string]Options) (_ map[string][]*reqForNode, _ func(), retErr error) {
 	reqForNodes := make(map[string][]*reqForNode)
 
 	var releasers []func()
@@ -219,7 +220,7 @@ func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confu
 			if np.Node().Driver.IsMobyDriver() {
 				hasMobyDriver = true
 			}
-			opt.Platforms = np.platforms
+			opt.Platforms = np.Platforms()
 			gatewayOpts, err := np.BuildOpts(ctx)
 			if err != nil {
 				return nil, nil, err
@@ -236,7 +237,7 @@ func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confu
 			}
 			addGitAttrs(so)
 			reqn = append(reqn, &reqForNode{
-				resolvedNode: np,
+				ResolvedNode: np,
 				so:           so,
 			})
 		}
@@ -267,7 +268,7 @@ func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confu
 	return reqForNodes, releaseAll, nil
 }
 
-func validateTargetLinks(reqForNodes map[string][]*reqForNode, drivers map[string][]*resolvedNode, opts map[string]Options) error {
+func validateTargetLinks(reqForNodes map[string][]*reqForNode, drivers map[string][]*noderesolver.ResolvedNode, opts map[string]Options) error {
 	for name := range opts {
 		dps := reqForNodes[name]
 		for i, dp := range dps {
@@ -282,7 +283,7 @@ func validateTargetLinks(reqForNodes map[string][]*reqForNode, drivers map[strin
 
 					var found bool
 					for _, dp2 := range dps2 {
-						if dp2.driverIndex == dp.driverIndex {
+						if dp2.Key() == dp.Key() {
 							found = true
 							break
 						}
@@ -335,7 +336,11 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 	}
 	warnOnNoOutput(ctx, nodes, opts)
 
-	drivers, err := resolveDrivers(ctx, nodes, opts, w)
+	optPlatforms := make(map[string][]ocispecs.Platform, len(opts))
+	for k, opt := range opts {
+		optPlatforms[k] = opt.Platforms
+	}
+	drivers, err := noderesolver.ResolveAll(ctx, nodes, optPlatforms, w)
 	if err != nil {
 		return nil, err
 	}
@@ -459,7 +464,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 					pw = progress.ResetTime(pw)
 
-					if err := waitContextDeps(ctx, dp.driverIndex, results, so); err != nil {
+					if err := waitContextDeps(ctx, dp, results, so); err != nil {
 						return err
 					}
 
@@ -510,7 +515,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							callRes = res.Metadata
 						}
 
-						rKey := resultKey(dp.driverIndex, k)
+						rKey := resultKey(dp, k)
 						results.Set(rKey, res)
 
 						forceEval := false
@@ -897,8 +902,8 @@ func remoteDigestWithMoby(ctx context.Context, d *driver.DriverHandle, name stri
 	return remoteImage.Descriptor.Digest.String(), nil
 }
 
-func resultKey(index int, name string) string {
-	return fmt.Sprintf("%d-%s", index, name)
+func resultKey(node *noderesolver.ResolvedNode, name string) string {
+	return fmt.Sprintf("%s-%s", node.Key(), name)
 }
 
 // detectSharedMounts looks for same local mounts used by multiple requests to the same node
@@ -916,7 +921,7 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 	m := map[string]map[fsKey]*fsTracker{}
 	for _, reqs := range reqs {
 		for _, req := range reqs {
-			nodeName := req.resolvedNode.Node().Name
+			nodeName := req.ResolvedNode.Node().Name
 			if _, ok := m[nodeName]; !ok {
 				m[nodeName] = map[fsKey]*fsTracker{}
 			}
@@ -1028,8 +1033,8 @@ func calculateChildTargets(reqs map[string][]*reqForNode, opt map[string]Options
 			so := reqs[name][i].so
 			for k, v := range so.FrontendAttrs {
 				if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
-					target := resultKey(dp.driverIndex, strings.TrimPrefix(v, "target:"))
-					out[target] = append(out[target], resultKey(dp.driverIndex, name))
+					target := resultKey(dp.ResolvedNode, strings.TrimPrefix(v, "target:"))
+					out[target] = append(out[target], resultKey(dp.ResolvedNode, name))
 				}
 			}
 		}
@@ -1037,11 +1042,11 @@ func calculateChildTargets(reqs map[string][]*reqForNode, opt map[string]Options
 	return out
 }
 
-func waitContextDeps(ctx context.Context, index int, results *waitmap.Map, so *client.SolveOpt) error {
+func waitContextDeps(ctx context.Context, node *noderesolver.ResolvedNode, results *waitmap.Map, so *client.SolveOpt) error {
 	m := map[string][]string{}
 	for k, v := range so.FrontendAttrs {
 		if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
-			target := resultKey(index, strings.TrimPrefix(v, "target:"))
+			target := resultKey(node, strings.TrimPrefix(v, "target:"))
 			m[target] = append(m[target], k)
 		}
 	}
