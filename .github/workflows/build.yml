@@ -464,9 +464,9 @@ jobs:
             ./docker-bake.hcl
             ${{ steps.meta.outputs.bake-file }}
           targets: image-cross
-          push: ${{ github.event_name != 'pull_request' }}
           sbom: true
           set: |
+            *.output=type=image,push=${{ github.event_name != 'pull_request' }},oci-artifact=true
             *.cache-from=type=gha,scope=bin-image
             *.cache-to=type=gha,scope=bin-image,mode=max
 
