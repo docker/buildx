@@ -57,6 +57,7 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 				options := cliflags.NewClientOptions()
 				options.InstallFlags(nflags)
 				options.SetDefaultOptions(nflags)
+				options.Debug = opt.debug || debug.IsEnabled()
 				return dockerCli.Initialize(options)
 			}
 			return plugin.PersistentPreRunE(cmd, args)
