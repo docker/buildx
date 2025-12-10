@@ -23,12 +23,10 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/cli/cli/config"
 	dockeropts "github.com/docker/cli/opts"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
-	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
@@ -1256,18 +1254,12 @@ func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(
 }
 
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
-	// make sure local credentials are loaded multiple times for different targets
-	authProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		ConfigFile: config.LoadDefaultConfigFile(os.Stderr),
-	})
-
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
 		bo, err := toBuildOpt(v, inp)
 		if err != nil {
 			return nil, err
 		}
-		bo.Session = append(bo.Session, authProvider)
 		m2[k] = *bo
 	}
 	return m2, nil
