@@ -29,11 +29,13 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
+	"github.com/docker/buildx/util/dockerutil/dockerconfig"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -250,6 +252,16 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	bo, err := bake.TargetsToBuildOpt(tgts, inp)
 	if err != nil {
 		return err
+	}
+
+	// make sure local credentials aren't loaded multiple times for different targets
+	authProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		AuthConfigProvider: dockerconfig.LoadAuthConfig(dockerCli),
+	})
+
+	for k, opt := range bo {
+		opt.Session = append(opt.Session, authProvider)
+		bo[k] = opt
 	}
 
 	def := struct {
