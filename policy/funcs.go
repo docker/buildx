@@ -3,7 +3,6 @@ package policy
 import (
 	"encoding/json"
 	"io"
-	"log"
 
 	"github.com/moby/buildkit/util/gitutil/gitsign"
 	"github.com/open-policy-agent/opa/v1/ast"
@@ -12,9 +11,14 @@ import (
 	"github.com/pkg/errors"
 )
 
+const (
+	funcLoadJSON           = "load_json"
+	funcVerifyGitSignature = "verify_git_signature"
+)
+
 func (p *Policy) initBuiltinFuncs() {
 	builtinLoadJSON := &rego.Function{
-		Name: "load_json",
+		Name: funcLoadJSON,
 		Decl: types.NewFunction(
 			types.Args(
 				types.S,
@@ -29,9 +33,10 @@ func (p *Policy) initBuiltinFuncs() {
 	})
 
 	verifyGitSignature := &rego.Function{
-		Name: "verify_git_signature",
+		Name: funcVerifyGitSignature,
 		Decl: types.NewFunction(
 			types.Args(
+				types.A,
 				types.S,
 			),
 			types.B,
@@ -41,27 +46,51 @@ func (p *Policy) initBuiltinFuncs() {
 	p.funcs = append(p.funcs, fun{
 		decl: verifyGitSignature,
 		impl: func(s *state) func(*rego.Rego) {
-			return rego.Function1(verifyGitSignature, func(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
-				return p.builtinVerifyGitSignatureImpl(bctx, a, s)
+			return rego.Function2(verifyGitSignature, func(bctx rego.BuiltinContext, a1 *ast.Term, a2 *ast.Term) (*ast.Term, error) {
+				return p.builtinVerifyGitSignatureImpl(bctx, a1, a2, s)
 			})
 		},
 	})
 }
 
-func (p *Policy) builtinVerifyGitSignatureImpl(_ rego.BuiltinContext, a *ast.Term, s *state) (*ast.Term, error) {
+func (p *Policy) builtinVerifyGitSignatureImpl(_ rego.BuiltinContext, a1, a2 *ast.Term, s *state) (*ast.Term, error) {
 	inp := s.Input
 	if inp.Git == nil {
 		return ast.BooleanTerm(false), nil
 	}
 
 	if inp.Git.Commit == nil {
-		s.addUnknown("verify_git_signature")
+		s.addUnknown(funcVerifyGitSignature)
 		return ast.BooleanTerm(false), nil
 	}
 
-	path, ok := a.Value.(ast.String)
+	obja, ok := a1.Value.(ast.Object)
 	if !ok {
-		return nil, errors.Errorf("load_json: expected string path, got %T", a.Value)
+		return nil, errors.Errorf("%s: expected object, got %T", funcVerifyGitSignature, a1.Value)
+	}
+
+	commitValue, err := ast.InterfaceToValue(inp.Git.Commit)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: failed converting object to interface", funcVerifyGitSignature)
+	}
+	isCommit := obja.Compare(commitValue) == 0
+
+	var isTag bool
+	if !isCommit && inp.Git.Tag != nil {
+		tagValue, err := ast.InterfaceToValue(inp.Git.Tag)
+		if err != nil {
+			return nil, errors.Wrapf(err, "%s: failed converting object to interface", funcVerifyGitSignature)
+		}
+		isTag = obja.Compare(tagValue) == 0
+	}
+
+	if !isCommit && !isTag {
+		return nil, errors.Errorf("%s: object is neither commit nor tag", funcVerifyGitSignature)
+	}
+
+	path, ok := a2.Value.(ast.String)
+	if !ok {
+		return nil, errors.Errorf("%s: expected string path, got %T", funcVerifyGitSignature, a2.Value)
 	}
 
 	pubkey, err := p.readFile(string(path), 128*1024)
@@ -70,15 +99,12 @@ func (p *Policy) builtinVerifyGitSignatureImpl(_ rego.BuiltinContext, a *ast.Ter
 	}
 
 	obj := inp.Git.Commit.obj
-	if inp.Git.Tag != nil {
+	if isTag {
 		obj = inp.Git.Tag.obj
 	}
 
-	if err := gitsign.VerifySignature(obj, pubkey, &gitsign.VerifyPolicy{
-		RejectExpiredKeys: false,
-	}); err != nil {
-		log.Printf("git signature verification failed: %+v", err)
-		return nil, err
+	if err := gitsign.VerifySignature(obj, pubkey, nil); err != nil {
+		return nil, errors.Wrapf(err, "%s: verification failes", funcVerifyGitSignature)
 	}
 
 	return ast.BooleanTerm(true), nil
@@ -111,7 +137,7 @@ func (p *Policy) readFile(path string, limit int64) ([]byte, error) {
 func (p *Policy) builtinLoadJSONImpl(bctx rego.BuiltinContext, a *ast.Term) (*ast.Term, error) {
 	path, ok := a.Value.(ast.String)
 	if !ok {
-		return nil, errors.Errorf("load_json: expected string path, got %T", a.Value)
+		return nil, errors.Errorf("%s: expected string path, got %T", funcLoadJSON, a.Value)
 	}
 
 	data, err := p.readFile(string(path), 4*1024*1024)
@@ -121,12 +147,12 @@ func (p *Policy) builtinLoadJSONImpl(bctx rego.BuiltinContext, a *ast.Term) (*as
 
 	var v any
 	if err := json.Unmarshal(data, &v); err != nil {
-		return nil, errors.Wrapf(err, "load_json: invalid JSON in %q", path)
+		return nil, errors.Wrapf(err, "%s: invalid JSON in %q", funcLoadJSON, path)
 	}
 
 	astVal, err := ast.InterfaceToValue(v)
 	if err != nil {
-		return nil, errors.Wrapf(err, "load_json: failed converting JSON from %q", path)
+		return nil, errors.Wrapf(err, "%s: failed converting JSON from %q", funcLoadJSON, path)
 	}
 
 	return ast.NewTerm(astVal), nil
