@@ -251,7 +251,7 @@ github.com/docker/cli/internal/tui
 github.com/docker/cli/opts
 github.com/docker/cli/pkg/kvfile
 github.com/docker/cli/templates
-# github.com/docker/cli-docs-tool v0.10.0
+# github.com/docker/cli-docs-tool v0.11.0
 ## explicit; go 1.23.0
 github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
@@ -655,7 +655,7 @@ github.com/shibumi/go-pathspec
 # github.com/sirupsen/logrus v1.9.3
 ## explicit; go 1.13
 github.com/sirupsen/logrus
-# github.com/spf13/cobra v1.10.1
+# github.com/spf13/cobra v1.10.2
 ## explicit; go 1.15
 github.com/spf13/cobra
 github.com/spf13/cobra/doc
