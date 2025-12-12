@@ -497,7 +497,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			return nil, nil, err
 		}
 		unk := collectUnknowns(pq.Support)
-		if _, ok := st.Unknowns["verify_git_signature"]; ok {
+		if _, ok := st.Unknowns[funcVerifyGitSignature]; ok {
 			unk = append(unk, "input.git.commit")
 		}
 		if len(unk) > 0 {
