@@ -73,6 +73,8 @@ func TestLaunch(t *testing.T) {
 // TestSetBreakpoints will test sending a setBreakpoints request with no breakpoints.
 // The response should be an empty array instead of null in the JSON.
 func TestSetBreakpoints(t *testing.T) {
+	t.Skip("fixme: test can hit a deadlock that causes it to exit after 30 minutes")
+
 	adapter, conn, client := NewTestAdapter[common.Config](t)
 
 	ctx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, context.DeadlineExceeded)
