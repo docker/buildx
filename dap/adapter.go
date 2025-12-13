@@ -612,7 +612,16 @@ func (b *breakpointMap) Intersect(ctx Context, src *pb.Source, ws string) map[di
 
 func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Locations, ws string) int {
 	overlaps := func(r *pb.Range, bp *dap.Breakpoint) bool {
-		return r.Start.Line <= int32(bp.Line) && r.Start.Character <= int32(bp.Column) && r.End.Line >= int32(bp.EndLine) && r.End.Character >= int32(bp.EndColumn)
+		if bp.Line < int(r.Start.Line) || bp.Line > int(r.End.Line) {
+			return false
+		}
+		if bp.Line == int(r.Start.Line) && bp.Column < int(r.Start.Character) {
+			return false
+		}
+		if bp.Line == int(r.End.Line) && bp.Column > int(r.End.Character) {
+			return false
+		}
+		return true
 	}
 
 	for _, loc := range locs.Locations {
