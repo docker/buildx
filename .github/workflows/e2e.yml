@@ -57,7 +57,7 @@ jobs:
           mv ${{ env.DESTDIR }}/build/buildx ${{ env.DESTDIR }}/build/docker-buildx
       -
         name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: binary
           path: ${{ env.DESTDIR }}/build

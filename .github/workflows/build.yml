@@ -167,7 +167,7 @@ jobs:
       -
         name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ./bin/testreports
@@ -245,7 +245,7 @@ jobs:
       -
         name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ${{ env.TESTREPORTS_BASEDIR }}
@@ -401,7 +401,7 @@ jobs:
           CACHE_TO: type=gha,scope=binaries-${{ env.PLATFORM_PAIR }},mode=max
       -
         name: Upload artifacts
-        uses: actions/upload-artifact@v5
+        uses: actions/upload-artifact@v6
         with:
           name: buildx-${{ env.PLATFORM_PAIR }}
           path: ${{ env.DESTDIR }}/*
