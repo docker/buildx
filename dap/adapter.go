@@ -568,8 +568,9 @@ func newBreakpointMap() *breakpointMap {
 func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoints []dap.Breakpoint) {
 	b.mu.Lock()
 	defer b.mu.Unlock()
-	// explicitly initialize breakpoints so that
-	// we do not send a null back in the JSON if there are no breakpoints
+
+	// Explicitly initialize breakpoints so that we do not send a
+	// null back in the JSON if there are no breakpoints
 	breakpoints = []dap.Breakpoint{}
 
 	prev := b.byPath[fname]

@@ -2,7 +2,6 @@ package dap
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"io"
 	"path/filepath"
@@ -10,6 +9,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/dap/common"
+	"github.com/docker/buildx/util/daptest"
 	"github.com/google/go-dap"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/stretchr/testify/assert"
@@ -36,20 +36,20 @@ func TestLaunch(t *testing.T) {
 
 	client.RegisterEvent("initialized", func(em dap.EventMessage) {
 		// Send configuration done since we don't do any configuration.
-		configurationDone = DoRequest[*dap.ConfigurationDoneResponse](t, client, &dap.ConfigurationDoneRequest{
+		configurationDone = daptest.DoRequest[*dap.ConfigurationDoneResponse](t, client, &dap.ConfigurationDoneRequest{
 			Request: dap.Request{Command: "configurationDone"},
 		})
 		close(initialized)
 	})
 
 	eg.Go(func() error {
-		initializeResp := <-DoRequest[*dap.InitializeResponse](t, client, &dap.InitializeRequest{
+		initializeResp := <-daptest.DoRequest[*dap.InitializeResponse](t, client, &dap.InitializeRequest{
 			Request: dap.Request{Command: "initialize"},
 		})
 		assert.True(t, initializeResp.Success)
 		assert.True(t, initializeResp.Body.SupportsConfigurationDoneRequest)
 
-		launchResp := <-DoRequest[*dap.LaunchResponse](t, client, &dap.LaunchRequest{
+		launchResp := <-daptest.DoRequest[*dap.LaunchResponse](t, client, &dap.LaunchRequest{
 			Request: dap.Request{Command: "launch"},
 		})
 		assert.True(t, launchResp.Success)
@@ -93,7 +93,7 @@ func TestSetBreakpoints(t *testing.T) {
 	)
 
 	client.RegisterEvent("initialized", func(em dap.EventMessage) {
-		setBreakpoints = DoRequest[*dap.SetBreakpointsResponse](t, client, &dap.SetBreakpointsRequest{
+		setBreakpoints = daptest.DoRequest[*dap.SetBreakpointsResponse](t, client, &dap.SetBreakpointsRequest{
 			Request: dap.Request{Command: "setBreakpoints"},
 			Arguments: dap.SetBreakpointsArguments{
 				Source:      dap.Source{Name: "Dockerfile", Path: filepath.Join(t.TempDir(), "Dockerfile")},
@@ -104,13 +104,13 @@ func TestSetBreakpoints(t *testing.T) {
 	})
 
 	eg.Go(func() error {
-		initializeResp := <-DoRequest[*dap.InitializeResponse](t, client, &dap.InitializeRequest{
+		initializeResp := <-daptest.DoRequest[*dap.InitializeResponse](t, client, &dap.InitializeRequest{
 			Request: dap.Request{Command: "initialize"},
 		})
 		assert.True(t, initializeResp.Success)
 		assert.True(t, initializeResp.Body.SupportsConfigurationDoneRequest)
 
-		launchResp := <-DoRequest[*dap.LaunchResponse](t, client, &dap.LaunchRequest{
+		launchResp := <-daptest.DoRequest[*dap.LaunchResponse](t, client, &dap.LaunchRequest{
 			Request: dap.Request{Command: "launch"},
 		})
 		assert.True(t, launchResp.Success)
@@ -234,64 +234,27 @@ func TestBreakpointMapIntersectVerified(t *testing.T) {
 	}
 }
 
-func NewTestAdapter[C LaunchConfig](t *testing.T) (*Adapter[C], Conn, *Client) {
+func NewTestAdapter[C LaunchConfig](t *testing.T) (*Adapter[C], Conn, *daptest.Client) {
 	t.Helper()
 
 	rd1, wr1 := io.Pipe()
 	rd2, wr2 := io.Pipe()
 
-	srvConn := logConn(t, "server", NewConn(rd1, wr2))
+	srvConn := daptest.LogConn(t, "server", NewConn(rd1, wr2))
 	t.Cleanup(func() {
 		srvConn.Close()
 	})
 
-	clientConn := logConn(t, "client", NewConn(rd2, wr1))
+	clientConn := daptest.LogConn(t, "client", NewConn(rd2, wr1))
 	t.Cleanup(func() { clientConn.Close() })
 
 	adapter := New[C]()
 	t.Cleanup(func() { adapter.Stop() })
 
-	client := NewClient(clientConn)
+	client := daptest.NewClient(clientConn)
 	t.Cleanup(func() { client.Close() })
 
 	return adapter, srvConn, client
-}
-
-func logConn(t *testing.T, prefix string, conn Conn) Conn {
-	return &loggingConn{
-		Conn:   conn,
-		t:      t,
-		prefix: prefix,
-	}
-}
-
-type loggingConn struct {
-	Conn
-	t      *testing.T
-	prefix string
-}
-
-func (c *loggingConn) SendMsg(m dap.Message) error {
-	b, _ := json.Marshal(m)
-	c.t.Logf("[%s] send: %v", c.prefix, string(b))
-
-	err := c.Conn.SendMsg(m)
-	if err != nil {
-		c.t.Logf("[%s] send error: %v", c.prefix, err)
-	}
-	return err
-}
-
-func (c *loggingConn) RecvMsg(ctx context.Context) (dap.Message, error) {
-	m, err := c.Conn.RecvMsg(ctx)
-	if err != nil {
-		c.t.Logf("[%s] recv error: %v", c.prefix, err)
-		return nil, err
-	}
-
-	b, _ := json.Marshal(m)
-	c.t.Logf("[%s] recv: %v", c.prefix, string(b))
-	return m, nil
 }
 
 type breakpointTestContext struct {

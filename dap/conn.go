@@ -6,16 +6,13 @@ import (
 	"io"
 	"sync"
 
+	"github.com/docker/buildx/dap/common"
 	"github.com/google/go-dap"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"
 )
 
-type Conn interface {
-	SendMsg(m dap.Message) error
-	RecvMsg(ctx context.Context) (dap.Message, error)
-	io.Closer
-}
+type Conn = common.Conn
 
 type conn struct {
 	recvCh <-chan dap.Message
