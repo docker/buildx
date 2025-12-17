@@ -1,24 +1,26 @@
-package dap
+package daptest
 
 import (
 	"context"
+	"errors"
+	"io"
 	"sync"
 	"sync/atomic"
 	"testing"
 
+	"github.com/docker/buildx/dap/common"
 	"github.com/google/go-dap"
-	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"golang.org/x/sync/errgroup"
 )
 
 type Client struct {
-	conn Conn
+	conn common.Conn
 
 	requests   map[int]chan<- dap.ResponseMessage
 	requestsMu sync.Mutex
 
-	events   map[string]func(dap.EventMessage)
+	events   map[string][]func(dap.EventMessage)
 	eventsMu sync.RWMutex
 
 	seq    atomic.Int64
@@ -26,11 +28,11 @@ type Client struct {
 	cancel context.CancelCauseFunc
 }
 
-func NewClient(conn Conn) *Client {
+func NewClient(conn common.Conn) *Client {
 	c := &Client{
 		conn:     conn,
 		requests: make(map[int]chan<- dap.ResponseMessage),
-		events:   make(map[string]func(dap.EventMessage)),
+		events:   make(map[string][]func(dap.EventMessage)),
 	}
 
 	var ctx context.Context
@@ -41,7 +43,7 @@ func NewClient(conn Conn) *Client {
 		for {
 			m, err := conn.RecvMsg(ctx)
 			if err != nil {
-				if errors.Is(err, context.Canceled) {
+				if errors.Is(err, context.Canceled) || errors.Is(err, io.EOF) {
 					return nil
 				}
 				return err
@@ -83,15 +85,22 @@ func (c *Client) Do(t *testing.T, req dap.RequestMessage) <-chan dap.ResponseMes
 	req.GetRequest().Seq = c.nextSeq()
 
 	ch := make(chan dap.ResponseMessage, 1)
-	if err := c.conn.SendMsg(req); err != nil {
-		assert.NoError(t, err)
-		close(ch)
-		return ch
-	}
 
+	// We need to set the channel before we send the message
+	// because it's otherwise possible for us to receive the response
+	// before we've registered the original request.
 	c.requestsMu.Lock()
 	c.requests[req.GetSeq()] = ch
 	c.requestsMu.Unlock()
+
+	if err := c.conn.SendMsg(req); err != nil {
+		assert.NoError(t, err)
+		close(ch)
+
+		c.requestsMu.Lock()
+		delete(c.requests, req.GetSeq())
+		c.requestsMu.Unlock()
+	}
 	return ch
 }
 
@@ -111,15 +120,15 @@ func (c *Client) RegisterEvent(event string, fn func(dap.EventMessage)) {
 	c.eventsMu.Lock()
 	defer c.eventsMu.Unlock()
 
-	c.events[event] = fn
+	c.events[event] = append(c.events[event], fn)
 }
 
 func (c *Client) invokeEventCallback(event dap.EventMessage) {
 	c.eventsMu.RLock()
-	fn := c.events[event.GetEvent().Event]
+	fns := c.events[event.GetEvent().Event]
 	c.eventsMu.RUnlock()
 
-	if fn != nil {
+	for _, fn := range fns {
 		fn(event)
 	}
 }

@@ -400,7 +400,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
 	if options.imageIDFile != "" {
-		if err := os.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse)), 0644); err != nil {
+		if err := os.WriteFile(options.imageIDFile, []byte(getImageID(resp.ExporterResponse)), 0o644); err != nil {
 			return errors.Wrap(err, "writing image ID file")
 		}
 	}
@@ -655,7 +655,7 @@ func writeMetadataFile(filename string, dt any) error {
 	if err != nil {
 		return err
 	}
-	return atomicwriter.WriteFile(filename, b, 0644)
+	return atomicwriter.WriteFile(filename, b, 0o644)
 }
 
 func decodeExporterResponse(exporterResponse map[string]string) map[string]any {
