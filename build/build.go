@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
 	"slices"
@@ -21,6 +22,7 @@ import (
 	noderesolver "github.com/docker/buildx/build/resolver"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -113,6 +115,13 @@ type Inputs struct {
 	// DockerfileMappingSrc and DockerfileMappingDst are filled in by the builder.
 	DockerfileMappingSrc string
 	DockerfileMappingDst string
+
+	policy *policyOpt
+}
+
+type policyOpt struct {
+	Files []policy.File
+	FS    func() (fs.StatFS, func() error, error)
 }
 
 type NamedContext struct {
@@ -927,7 +936,7 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 			}
 			fsMap := m[nodeName]
 			for name, m := range req.so.LocalMounts {
-				fs, ok := m.(*fs)
+				fs, ok := m.(*fsMount)
 				if !ok {
 					continue
 				}

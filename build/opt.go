@@ -4,8 +4,11 @@ import (
 	"bytes"
 	"context"
 	"io"
+	"io/fs"
+	"log"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
@@ -21,6 +24,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
@@ -38,6 +42,7 @@ import (
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
@@ -322,6 +327,29 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 	defers = append(defers, releaseLoad)
 
+	if opt.Inputs.policy != nil {
+		env := policy.Env{}
+		for k, v := range opt.BuildArgs {
+			if env.Args == nil {
+				env.Args = map[string]*string{}
+			}
+			env.Args[k] = &v
+		}
+		env.Filename = path.Base(opt.Inputs.DockerfilePath)
+		env.Target = opt.Target
+		env.Labels = opt.Labels
+		p := policy.NewPolicy(policy.Opt{
+			Files: opt.Inputs.policy.Files,
+			Env:   env,
+			Log: func(msg string) {
+				log.Printf("[policy] %s", msg)
+			},
+			FS:     opt.Inputs.policy.FS,
+			Config: cfg,
+		})
+		so.SourcePolicyProvider = policysession.NewPolicyProvider(p.CheckPolicy)
+	}
+
 	// add node identifier to shared key if one was specified
 	if so.SharedKey != "" {
 		so.SharedKey += ":" + cfg.TryNodeIdentifier()
@@ -413,6 +441,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 	var (
 		err               error
 		dockerfileReader  io.ReadCloser
+		contextDir        string
 		dockerfileDir     string
 		dockerfileName    = inp.DockerfilePath
 		dockerfileSrcName = inp.DockerfilePath
@@ -454,12 +483,14 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 				if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 					return nil, err
 				}
+				contextDir = inp.ContextPath
 			}
 		}
 	case osutil.IsLocalDir(inp.ContextPath):
 		if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 			return nil, err
 		}
+		contextDir = inp.ContextPath
 		sharedKey := inp.ContextPath
 		if p, err := filepath.Abs(sharedKey); err == nil {
 			sharedKey = filepath.Base(p)
@@ -535,6 +566,39 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			return nil, err
 		}
 		dockerfileName = handleLowercaseDockerfile(dockerfileDir, dockerfileName)
+
+		if fi, err := os.Lstat(filepath.Join(dockerfileDir, dockerfileName+".rego")); err == nil {
+			if fi.Mode().IsRegular() {
+				dt, err := os.ReadFile(filepath.Join(dockerfileDir, dockerfileName+".rego"))
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to read policy file %s.rego", dockerfileName)
+				}
+				inp.policy = &policyOpt{
+					Files: []policy.File{
+						{
+							Filename: dockerfileName + ".rego",
+							Data:     dt,
+						},
+					},
+					FS: func() (fs.StatFS, func() error, error) {
+						if contextDir == "" {
+							return nil, nil, errors.Errorf("unimplemented, cannot use policy file without a local build context")
+						}
+						root, err := os.OpenRoot(contextDir)
+						if err != nil {
+							return nil, nil, errors.Wrapf(err, "failed to open root for policy file %s.rego", dockerfileName)
+						}
+						baseFS := root.FS()
+						statFS, ok := baseFS.(fs.StatFS)
+						if !ok {
+							root.Close()
+							return nil, nil, errors.Errorf("invalid root FS type %T", baseFS)
+						}
+						return statFS, root.Close, nil
+					},
+				}
+			}
+		}
 	}
 
 	target.FrontendAttrs["filename"] = dockerfileName
@@ -653,7 +717,7 @@ func setLocalMount(name, dir string, so *client.SolveOpt) error {
 	if so.LocalMounts == nil {
 		so.LocalMounts = map[string]fsutil.FS{}
 	}
-	so.LocalMounts[name] = &fs{FS: lm, dir: dir}
+	so.LocalMounts[name] = &fsMount{FS: lm, dir: dir}
 	return nil
 }
 
@@ -765,12 +829,12 @@ func handleLowercaseDockerfile(dir, p string) string {
 	return p
 }
 
-type fs struct {
+type fsMount struct {
 	fsutil.FS
 	dir string
 }
 
-var _ fsutil.FS = &fs{}
+var _ fsutil.FS = &fsMount{}
 
 func CreateSSH(ssh []*buildflags.SSH) (session.Attachable, error) {
 	configs := make([]sshprovider.AgentConfig, 0, len(ssh))
