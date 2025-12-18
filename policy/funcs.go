@@ -3,17 +3,23 @@ package policy
 import (
 	"encoding/json"
 	"io"
+	"maps"
+	"strings"
 
+	"github.com/distribution/reference"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/gitutil/gitsign"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/types"
+	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
 )
 
 const (
 	funcLoadJSON           = "load_json"
 	funcVerifyGitSignature = "verify_git_signature"
+	funcPinImage           = "pin_image"
 )
 
 func (p *Policy) initBuiltinFuncs() {
@@ -51,6 +57,69 @@ func (p *Policy) initBuiltinFuncs() {
 			})
 		},
 	})
+
+	pinImageDigest := &rego.Function{
+		Name: funcPinImage,
+		Decl: types.NewFunction(
+			types.Args(
+				types.A,
+				types.S,
+			),
+			types.B,
+		),
+		Memoize: false, // TODO: optimize
+	}
+
+	p.funcs = append(p.funcs, fun{
+		decl: pinImageDigest,
+		impl: func(s *state) func(*rego.Rego) {
+			return rego.Function2(pinImageDigest, func(bctx rego.BuiltinContext, a1 *ast.Term, a2 *ast.Term) (*ast.Term, error) {
+				return p.builtinPinImageImpl(bctx, a1, a2, s)
+			})
+		},
+	})
+}
+
+func (p *Policy) builtinPinImageImpl(_ rego.BuiltinContext, a1, a2 *ast.Term, s *state) (*ast.Term, error) {
+	inp := s.Input
+	if inp.Image == nil {
+		return ast.BooleanTerm(false), nil
+	}
+
+	obja, ok := a1.Value.(ast.Object)
+	if !ok {
+		return nil, errors.Errorf("%s: expected object, got %T", funcPinImage, a1.Value)
+	}
+
+	imageValue, err := ast.InterfaceToValue(inp.Image)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: failed converting object to interface", funcPinImage)
+	}
+
+	if obja.Compare(imageValue) != 0 {
+		return nil, errors.Errorf("%s: first argument is not the same as input image", funcPinImage)
+	}
+
+	dgstStr, ok := a2.Value.(ast.String)
+	if !ok {
+		return nil, errors.Errorf("%s: expected string path, got %T", funcPinImage, a2.Value)
+	}
+
+	dgst, err := digest.Parse(string(dgstStr))
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: invalid digest", funcPinImage)
+	}
+
+	if inp.Image.Checksum == string(dgst) {
+		return ast.BooleanTerm(true), nil
+	}
+
+	if s.ImagePins == nil {
+		s.ImagePins = make(map[digest.Digest]struct{})
+	}
+	s.ImagePins[dgst] = struct{}{}
+
+	return ast.BooleanTerm(true), nil
 }
 
 func (p *Policy) builtinVerifyGitSignatureImpl(_ rego.BuiltinContext, a1, a2 *ast.Term, s *state) (*ast.Term, error) {
@@ -156,4 +225,31 @@ func (p *Policy) builtinLoadJSONImpl(bctx rego.BuiltinContext, a *ast.Term) (*as
 	}
 
 	return ast.NewTerm(astVal), nil
+}
+
+func addPinToImage(src *pb.SourceOp, dgst digest.Digest) (*pb.SourceOp, error) {
+	id, ok := strings.CutPrefix(src.Identifier, "docker-image://")
+	if !ok {
+		return nil, errors.Errorf("cannot pin non-image source: %q", src.Identifier)
+	}
+
+	ref, err := reference.ParseNormalizedNamed(id)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed parsing image reference %q", id)
+	}
+
+	newRef, err := reference.WithDigest(ref, dgst)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed adding digest to image reference %q", id)
+	}
+	attrs := maps.Clone(src.Attrs)
+	if attrs == nil {
+		attrs = make(map[string]string)
+	}
+	attrs["image.checksum"] = dgst.String()
+
+	return &pb.SourceOp{
+		Identifier: "docker-image://" + newRef.String(),
+		Attrs:      attrs,
+	}, nil
 }
