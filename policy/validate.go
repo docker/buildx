@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"io/fs"
 	"log"
+	"maps"
 	"net/url"
 	"os"
 	"path"
@@ -28,6 +29,7 @@ import (
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/topdown/print"
+	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -58,6 +60,8 @@ type Policy struct {
 type state struct {
 	Input    Input
 	Unknowns map[string]struct{}
+
+	ImagePins map[digest.Digest]struct{}
 }
 
 func (s *state) addUnknown(key string) {
@@ -331,7 +335,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		inp.Image.Variant = pl.Variant
 
 		configFields := []string{
-			"checksum", "labels", "user", "volumes", "workingDir", "env",
+			"labels", "user", "volumes", "workingDir", "env",
 		}
 
 		if req.Source.Image == nil {
@@ -553,6 +557,8 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		}
 	}
 
+	st.ImagePins = nil
+
 	rs, err := r.Eval(ctx)
 	if err != nil {
 		return nil, nil, err
@@ -594,6 +600,23 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			}
 		}
 	}
+
+	if resp.Action == moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW {
+		if len(st.ImagePins) > 1 {
+			return nil, nil, errors.Errorf("multiple image pins set to %s: %v", src.Source.Identifier, st.ImagePins)
+		}
+		if len(st.ImagePins) == 1 {
+			newSrc, err := addPinToImage(src.Source, slices.Collect(maps.Keys(st.ImagePins))[0])
+			if err != nil {
+				return nil, nil, errors.Wrapf(err, "failed to add image pin to source")
+			}
+			return &policysession.DecisionResponse{
+				Action: moby_buildkit_v1_sourcepolicy.PolicyAction_CONVERT,
+				Update: newSrc,
+			}, nil, nil
+		}
+	}
+
 	debugf("policy decision: %s %v", resp.Action, resp.DenyMessages)
 
 	return resp, nil, nil
