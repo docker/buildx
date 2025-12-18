@@ -347,19 +347,20 @@ jobs:
           sarif_file: ${{ env.DESTDIR }}/govulncheck.out
 
   binaries:
-    uses: docker/github-builder-experimental/.github/workflows/bake.yml@8fc70909404a502fd0eca6601b99b32fa7192b03
+    uses: docker/github-builder-experimental/.github/workflows/bake.yml@5876e8deef3c899c298ec80b07c43dd9e89d37f6
     permissions:
       contents: read # same as global permission
       id-token: write # for signing attestation(s) with GitHub OIDC Token
     with:
       runner: amd64
+      artifact-name: buildx
+      artifact-upload: true
+      cache: true
+      cache-scope: bin-image
       target: release
       output: local
-      push: ${{ github.event_name != 'pull_request' }}
-      artifact-name: buildx
-      cache: true
-      cache-scope: binaries
-      bake-sbom: true
+      sbom: true
+      sign: ${{ github.event_name != 'pull_request' }}
 
   binaries-finalize:
     runs-on: ubuntu-24.04
@@ -371,8 +372,7 @@ jobs:
         uses: actions/download-artifact@v6
         with:
           path: /tmp/buildx-output
-          pattern: ${{ needs.binaries.outputs.artifact-name }}*
-          merge-multiple: true
+          name: ${{ needs.binaries.outputs.artifact-name }}
       -
         name: Rename provenance and sbom
         run: |
@@ -385,7 +385,7 @@ jobs:
               mv "sbom-binaries.spdx.json" "${filename}.sbom.json"
               find . -name 'sbom*.json' -exec rm {} \;
               if [ -f "provenance.sigstore.json" ]; then
-                mv "provenance.sigstore.json" "${filename}.provenance.sigstore.json"
+                mv "provenance.sigstore.json" "${filename}.sigstore.json"
               fi
             )
           done
@@ -426,7 +426,7 @@ jobs:
 
   bin-image:
     if: ${{ github.repository == 'docker/buildx' }}
-    uses: docker/github-builder-experimental/.github/workflows/bake.yml@8fc70909404a502fd0eca6601b99b32fa7192b03
+    uses: docker/github-builder-experimental/.github/workflows/bake.yml@5876e8deef3c899c298ec80b07c43dd9e89d37f6
     needs:
       - bin-image-prepare
       - test-integration
@@ -437,10 +437,11 @@ jobs:
     with:
       runner: amd64
       target: image-cross
-      output: image
-      push: ${{ github.event_name != 'pull_request' }}
       cache: true
       cache-scope: bin-image
+      output: image
+      push: ${{ github.event_name != 'pull_request' }}
+      sbom: true
       set-meta-labels: true
       meta-images: |
         ${{ needs.bin-image-prepare.outputs.repo-slug }}
@@ -449,7 +450,6 @@ jobs:
         type=ref,event=pr
         type=semver,pattern={{version}}
       meta-bake-target: meta-helper
-      bake-sbom: true
     secrets:
       registry-auths: |
         - registry: docker.io
