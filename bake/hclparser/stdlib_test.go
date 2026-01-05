@@ -205,3 +205,61 @@ func TestHomedir(t *testing.T) {
 	require.NotEmpty(t, home.AsString())
 	require.True(t, filepath.IsAbs(home.AsString()))
 }
+
+func TestSemverCmp(t *testing.T) {
+	type testCase struct {
+		version    cty.Value
+		constraint cty.Value
+		want       cty.Value
+		wantErr    bool
+	}
+	tests := map[string]testCase{
+		"valid constraint satisfied": {
+			version:    cty.StringVal("1.2.3"),
+			constraint: cty.StringVal(">= 1.0.0"),
+			want:       cty.BoolVal(true),
+		},
+		"valid constraint not satisfied": {
+			version:    cty.StringVal("2.1.0"),
+			constraint: cty.StringVal("< 2.0.0"),
+			want:       cty.BoolVal(false),
+		},
+		"valid constraint satisfied without patch": {
+			version:    cty.StringVal("3.22"),
+			constraint: cty.StringVal(">= 3.20"),
+			want:       cty.BoolVal(true),
+		},
+		"invalid version": {
+			version:    cty.StringVal("not-a-version"),
+			constraint: cty.StringVal(">= 1.0.0"),
+			wantErr:    true,
+		},
+		"invalid constraint": {
+			version:    cty.StringVal("1.2.3"),
+			constraint: cty.StringVal("not-a-constraint"),
+			wantErr:    true,
+		},
+		"empty version": {
+			version:    cty.StringVal(""),
+			constraint: cty.StringVal(">= 1.0.0"),
+			wantErr:    true,
+		},
+		"empty constraint": {
+			version:    cty.StringVal("1.2.3"),
+			constraint: cty.StringVal(""),
+			wantErr:    true,
+		},
+	}
+	for name, test := range tests {
+		name, test := name, test
+		t.Run(name, func(t *testing.T) {
+			got, err := semvercmpFunc().Call([]cty.Value{test.version, test.constraint})
+			if test.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.want, got)
+			}
+		})
+	}
+}

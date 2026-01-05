@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/docker/cli/cli/config"
 	"github.com/hashicorp/go-cty-funcs/cidr"
 	"github.com/hashicorp/go-cty-funcs/crypto"
@@ -103,6 +104,7 @@ var stdlibFunctions = []funcDef{
 	{name: "reverselist", fn: stdlib.ReverseListFunc},
 	{name: "rsadecrypt", fn: crypto.RsaDecryptFunc, descriptionAlt: `Decrypts an RSA-encrypted ciphertext.`},
 	{name: "sanitize", factory: sanitizeFunc},
+	{name: "semvercmp", factory: semvercmpFunc},
 	{name: "sethaselement", fn: stdlib.SetHasElementFunc},
 	{name: "setintersection", fn: stdlib.SetIntersectionFunc},
 	{name: "setproduct", fn: stdlib.SetProductFunc},
@@ -242,6 +244,36 @@ func sanitizeFunc() function.Function {
 				}
 			}
 			return cty.StringVal(b.String()), nil
+		},
+	})
+}
+
+// semvercmpFunc constructs a function that checks if a version satisfies a
+// constraint.
+func semvercmpFunc() function.Function {
+	return function.New(&function.Spec{
+		Description: `Returns true if version satisfies a constraint.`,
+		Params: []function.Parameter{
+			{
+				Name: "version",
+				Type: cty.String,
+			},
+			{
+				Name: "contraint",
+				Type: cty.String,
+			},
+		},
+		Type: function.StaticReturnType(cty.Bool),
+		Impl: func(args []cty.Value, retType cty.Type) (ret cty.Value, err error) {
+			version, err := semver.NewVersion(args[0].AsString())
+			if err != nil {
+				return cty.UnknownVal(cty.Bool), err
+			}
+			constraint, err := semver.NewConstraint(args[1].AsString())
+			if err != nil {
+				return cty.UnknownVal(cty.Bool), err
+			}
+			return cty.BoolVal(constraint.Check(version)), nil
 		},
 	})
 }
