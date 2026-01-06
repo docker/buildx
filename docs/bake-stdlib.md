@@ -79,6 +79,7 @@ title: Bake standard library functions
 | [`reverselist`](#reverselist)                       | Returns the given list with its elements in reverse order.                                                                                                                                                   |
 | [`rsadecrypt`](#rsadecrypt)                         | Decrypts an RSA-encrypted ciphertext.                                                                                                                                                                        |
 | [`sanitize`](#sanitize)                             | Replaces all non-alphanumeric characters with a underscore, leaving only characters that are valid for a Bake target name.                                                                                   |
+| [`semvercmp`](#semvercmp)                           | Returns true if version satisfies a constraint.                                                                                                                                                              |
 | [`sethaselement`](#sethaselement)                   | Returns true if the given set contains the given element, or false otherwise.                                                                                                                                |
 | [`setintersection`](#setintersection)               | Returns the intersection of all given sets.                                                                                                                                                                  |
 | [`setproduct`](#setproduct)                         | Calculates the cartesian product of two or more sets.                                                                                                                                                        |
@@ -1062,6 +1063,31 @@ target "webapp-dev" {
   args = {
     result = "${sanitize("My App! v1.0")}" # => "My_App__v1_0"
   }
+}
+```
+
+## `semvercmp`
+
+This function checks if a semantic version fits within a set of constraints.
+See [Checking Version Constraints](https://github.com/Masterminds/semver?tab=readme-ov-file#checking-version-constraints)
+for details.
+
+```hcl
+# docker-bake.hcl
+variable "ALPINE_VERSION" {
+  default = "3.23"
+}
+
+target "webapp-dev" {
+  dockerfile = "Dockerfile.webapp"
+  platforms = semvercmp(ALPINE_VERSION, ">= 3.20") ? [
+    "linux/amd64",
+    "linux/arm64",
+    "linux/riscv64"
+  ] : [
+    "linux/amd64",
+    "linux/arm64"
+  ]
 }
 ```
 
