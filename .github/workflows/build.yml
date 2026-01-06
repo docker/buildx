@@ -54,7 +54,7 @@ jobs:
           - master
           - latest
           - buildx-stable-1
-          - v0.26.2
+          - v0.26.3
           - v0.25.2
           - v0.24.0
         worker:
