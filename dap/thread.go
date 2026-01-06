@@ -532,7 +532,7 @@ func (t *thread) solveInputs(ctx context.Context, target *step) (string, map[str
 	var root string
 	refs := make(map[string]gateway.Reference)
 	for i, input := range op.Inputs {
-		k := t.determineInputName(op, input)
+		k := t.determineInputName(op, i, input)
 		if _, ok := refs[k]; ok || k == "" {
 			continue
 		}
@@ -550,11 +550,11 @@ func (t *thread) solveInputs(ctx context.Context, target *step) (string, map[str
 	return root, refs, nil
 }
 
-func (t *thread) determineInputName(op *pb.Op, input *pb.Input) string {
+func (t *thread) determineInputName(op *pb.Op, index int, input *pb.Input) string {
 	switch op := op.Op.(type) {
 	case *pb.Op_Exec:
 		for _, m := range op.Exec.Mounts {
-			if m.Input >= 0 && m.Input == input.Index {
+			if m.Input >= 0 && m.Input == int64(index) {
 				return m.Dest
 			}
 		}
