@@ -260,7 +260,11 @@ func parsePolicyConfigs(in []string) ([]build.PolicyConfig, error) {
 				if value == "" {
 					return nil, errors.Errorf("invalid value %s", field)
 				}
-				cfg.Files = append(cfg.Files, policy.File{Filename: value})
+				dt, err := os.ReadFile(value)
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to read policy file %s", value)
+				}
+				cfg.Files = append(cfg.Files, policy.File{Filename: value, Data: dt})
 			case "reset":
 				b, err := strconv.ParseBool(value)
 				if err != nil {
