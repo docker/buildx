@@ -20,6 +20,7 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
@@ -56,6 +57,7 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
+	"github.com/tonistiigi/go-csvvalue"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
@@ -79,6 +81,7 @@ type buildOptions struct {
 	noCacheFilter  []string
 	outputs        []string
 	platforms      []string
+	policy         []string
 	callFunc       string
 	secrets        []string
 	shmSize        dockeropts.MemBytes
@@ -146,6 +149,11 @@ func (o *buildOptions) toOptions() (*BuildOptions, error) {
 	}
 
 	opts.SourcePolicy, err = build.ReadSourcePolicy()
+	if err != nil {
+		return nil, err
+	}
+
+	opts.Policy, err = parsePolicyConfigs(o.policy)
 	if err != nil {
 		return nil, err
 	}
@@ -226,6 +234,64 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 		return progressui.QuietMode, nil
 	}
 	return progress, nil
+}
+
+func parsePolicyConfigs(in []string) ([]build.PolicyConfig, error) {
+	if len(in) == 0 {
+		return nil, nil
+	}
+
+	out := make([]build.PolicyConfig, 0, len(in))
+	for _, s := range in {
+		fields, err := csvvalue.Fields(s, nil)
+		if err != nil {
+			return nil, err
+		}
+
+		cfg := build.PolicyConfig{}
+		for _, field := range fields {
+			key, value, ok := strings.Cut(field, "=")
+			if !ok {
+				return nil, errors.Errorf("invalid value %s", field)
+			}
+			key = strings.TrimSpace(strings.ToLower(key))
+			switch key {
+			case "filename":
+				if value == "" {
+					return nil, errors.Errorf("invalid value %s", field)
+				}
+				cfg.Files = append(cfg.Files, policy.File{Filename: value})
+			case "reset":
+				b, err := strconv.ParseBool(value)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid value %s", field)
+				}
+				cfg.Reset = b
+			case "disabled":
+				b, err := strconv.ParseBool(value)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid value %s", field)
+				}
+				cfg.Disabled = b
+			case "strict":
+				b, err := strconv.ParseBool(value)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid value %s", field)
+				}
+				cfg.Strict = &b
+			case "log-level":
+				lvl, err := logrus.ParseLevel(value)
+				if err != nil {
+					return nil, errors.Wrapf(err, "invalid value %s", field)
+				}
+				cfg.LogLevel = &lvl
+			default:
+				return nil, errors.Errorf("invalid value %s", field)
+			}
+		}
+		out = append(out, cfg)
+	}
+	return out, nil
 }
 
 const (
@@ -541,6 +607,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
+
+	flags.StringArrayVar(&options.policy, "policy", []string{}, `Policy configuration (format: "filename=path[,filename=path][,reset=true|false][,disabled=true|false][,strict=true|false][,log-level=level]")`)
 
 	flags.BoolVar(&options.exportPush, "push", false, `Shorthand for "--output=type=registry"`)
 
@@ -976,6 +1044,7 @@ type BuildOptions struct {
 	GroupRef               string
 	Annotations            []string
 	ProvenanceResponseMode string
+	Policy                 []build.PolicyConfig
 }
 
 // RunBuild runs the specified build and returns the result.
@@ -1097,6 +1166,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 	opts.Attests = in.Attests.ToMap()
 
 	opts.SourcePolicy = in.SourcePolicy
+	opts.Policy = in.Policy
 
 	allow, err := buildflags.ParseEntitlements(in.Allow)
 	if err != nil {
