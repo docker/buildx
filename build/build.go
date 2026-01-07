@@ -97,6 +97,15 @@ type Options struct {
 	SourcePolicy           *spb.Policy
 	GroupRef               string
 	Annotations            map[exptypes.AnnotationKey]string // Not used during build, annotations are already set in Exports. Just used to check for support with drivers.
+	Policy                 []PolicyConfig
+}
+
+type PolicyConfig struct {
+	Files    []policy.File
+	Reset    bool
+	Disabled bool
+	Strict   *bool
+	LogLevel *logrus.Level
 }
 
 type CallFunc struct {
@@ -120,8 +129,80 @@ type Inputs struct {
 }
 
 type policyOpt struct {
-	Files []policy.File
-	FS    func() (fs.StatFS, func() error, error)
+	Files    []policy.File
+	FS       func() (fs.StatFS, func() error, error)
+	Strict   bool
+	LogLevel logrus.Level
+}
+
+func withPolicyConfig(defaultPolicy policyOpt, configs []PolicyConfig) ([]policyOpt, error) {
+	if len(configs) == 0 {
+		if len(defaultPolicy.Files) == 0 {
+			return nil, nil
+		}
+		return []policyOpt{defaultPolicy}, nil
+	}
+
+	for _, cfg := range configs {
+		if !cfg.Disabled {
+			continue
+		}
+		if cfg.Reset || cfg.Strict != nil || cfg.LogLevel != nil || len(cfg.Files) > 0 {
+			return nil, errors.New("disabled policy cannot be combined with other policy flags")
+		}
+		if len(configs) > 1 {
+			return nil, errors.New("disabled policy cannot be combined with other policy flags")
+		}
+		return nil, nil
+	}
+
+	out := make([]policyOpt, 0, len(configs)+1)
+	if len(defaultPolicy.Files) != 0 {
+		out = append(out, defaultPolicy)
+	}
+
+	var last PolicyConfig
+
+	for _, cfg := range configs {
+		if cfg.Reset {
+			out = nil
+		}
+
+		if len(cfg.Files) == 0 {
+			if len(out) == 0 {
+				last = cfg
+			} else {
+				last := &out[len(out)-1]
+				if cfg.Strict != nil {
+					last.Strict = *cfg.Strict
+				}
+				if cfg.LogLevel != nil {
+					last.LogLevel = *cfg.LogLevel
+				}
+			}
+			continue
+		}
+
+		opt := policyOpt{
+			Files: cfg.Files,
+		}
+		if last.Strict != nil {
+			opt.Strict = *last.Strict
+		}
+		if last.LogLevel != nil {
+			opt.LogLevel = *last.LogLevel
+		}
+		if cfg.Strict != nil {
+			opt.Strict = *cfg.Strict
+		}
+		if cfg.LogLevel != nil {
+			opt.LogLevel = *cfg.LogLevel
+		}
+		opt.FS = defaultPolicy.FS
+		out = append(out, opt)
+	}
+
+	return out, nil
 }
 
 type NamedContext struct {
