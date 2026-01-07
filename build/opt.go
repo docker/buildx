@@ -359,6 +359,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 				Config: cfg,
 			})
 			cbs = append(cbs, p.CheckPolicy)
+			if popt.Strict {
+				if bopts.LLBCaps.Supports(pb.CapSourcePolicySession) != nil {
+					return nil, nil, errors.New("strict policy is not supported by the current BuildKit daemon, please upgrade to version v0.27+")
+				}
+			}
 		}
 		so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(cbs...))
 	}
