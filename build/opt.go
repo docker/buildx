@@ -327,7 +327,11 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 	defers = append(defers, releaseLoad)
 
-	if opt.Inputs.policy != nil {
+	if opt.Inputs.policy == nil {
+		if len(opt.Policy) > 0 {
+			return nil, nil, errors.New("policy file specified but no policy FS in build context")
+		}
+	} else {
 		env := policy.Env{}
 		for k, v := range opt.BuildArgs {
 			if env.Args == nil {
@@ -338,16 +342,25 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 		env.Filename = path.Base(opt.Inputs.DockerfilePath)
 		env.Target = opt.Target
 		env.Labels = opt.Labels
-		p := policy.NewPolicy(policy.Opt{
-			Files: opt.Inputs.policy.Files,
-			Env:   env,
-			Log: func(msg string) {
-				log.Printf("[policy] %s", msg)
-			},
-			FS:     opt.Inputs.policy.FS,
-			Config: cfg,
-		})
-		so.SourcePolicyProvider = policysession.NewPolicyProvider(p.CheckPolicy)
+
+		popts, err := withPolicyConfig(*opt.Inputs.policy, opt.Policy)
+		if err != nil {
+			return nil, nil, err
+		}
+		var cbs []policysession.PolicyCallback
+		for _, popt := range popts {
+			p := policy.NewPolicy(policy.Opt{
+				Files: popt.Files,
+				Env:   env,
+				Log: func(msg string) {
+					log.Printf("[policy] %s", msg)
+				},
+				FS:     opt.Inputs.policy.FS,
+				Config: cfg,
+			})
+			cbs = append(cbs, p.CheckPolicy)
+		}
+		so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(cbs...))
 	}
 
 	// add node identifier to shared key if one was specified
@@ -561,6 +574,25 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		dockerfileName = "Dockerfile"
 	}
 
+	p := &policyOpt{
+		FS: func() (fs.StatFS, func() error, error) {
+			if contextDir == "" {
+				return nil, nil, errors.Errorf("unimplemented, cannot use policy file without a local build context")
+			}
+			root, err := os.OpenRoot(contextDir)
+			if err != nil {
+				return nil, nil, errors.Wrapf(err, "failed to open root for policy file %s.rego", dockerfileName)
+			}
+			baseFS := root.FS()
+			statFS, ok := baseFS.(fs.StatFS)
+			if !ok {
+				root.Close()
+				return nil, nil, errors.Errorf("invalid root FS type %T", baseFS)
+			}
+			return statFS, root.Close, nil
+		},
+	}
+
 	if dockerfileDir != "" {
 		if err := setLocalMount("dockerfile", dockerfileDir, target); err != nil {
 			return nil, err
@@ -573,33 +605,16 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 				if err != nil {
 					return nil, errors.Wrapf(err, "failed to read policy file %s.rego", dockerfileName)
 				}
-				inp.policy = &policyOpt{
-					Files: []policy.File{
-						{
-							Filename: dockerfileName + ".rego",
-							Data:     dt,
-						},
-					},
-					FS: func() (fs.StatFS, func() error, error) {
-						if contextDir == "" {
-							return nil, nil, errors.Errorf("unimplemented, cannot use policy file without a local build context")
-						}
-						root, err := os.OpenRoot(contextDir)
-						if err != nil {
-							return nil, nil, errors.Wrapf(err, "failed to open root for policy file %s.rego", dockerfileName)
-						}
-						baseFS := root.FS()
-						statFS, ok := baseFS.(fs.StatFS)
-						if !ok {
-							root.Close()
-							return nil, nil, errors.Errorf("invalid root FS type %T", baseFS)
-						}
-						return statFS, root.Close, nil
+				p.Files = []policy.File{
+					{
+						Filename: dockerfileName + ".rego",
+						Data:     dt,
 					},
 				}
 			}
 		}
 	}
+	inp.policy = p
 
 	target.FrontendAttrs["filename"] = dockerfileName
 
