@@ -9,7 +9,6 @@ import (
 	"net/url"
 	"os"
 	"path"
-	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
@@ -18,14 +17,12 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
-	"github.com/docker/buildx/util/confutil"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
 	moby_buildkit_v1_sourcepolicy "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/gitutil/gitobject"
-	policyverifier "github.com/moby/policy-helpers"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/topdown/print"
@@ -52,9 +49,6 @@ func debugf(format string, v ...any) {
 type Policy struct {
 	opt   Opt
 	funcs []fun
-
-	verifierMu sync.Mutex
-	verifier   *policyverifier.Verifier
 }
 
 type state struct {
@@ -77,11 +71,11 @@ type fun struct {
 }
 
 type Opt struct {
-	Files  []File
-	Env    Env
-	Log    func(string)
-	FS     func() (fs.StatFS, func() error, error)
-	Config *confutil.Config
+	Files            []File
+	Env              Env
+	Log              func(string)
+	FS               func() (fs.StatFS, func() error, error)
+	VerifierProvider PolicyVerifierProvider
 }
 
 var _ policysession.PolicyCallback = (&Policy{}).CheckPolicy
@@ -99,227 +93,13 @@ func NewPolicy(opt Opt) *Policy {
 	return p
 }
 
-func (p *Policy) getVerifier() (*policyverifier.Verifier, error) {
-	p.verifierMu.Lock()
-	defer p.verifierMu.Unlock()
-
-	if p.verifier != nil {
-		return p.verifier, nil
-	}
-
-	root := p.opt.Config.Dir()
-
-	confDir := filepath.Join(root, "policy")
-	if err := p.opt.Config.MkdirAll("policy/tuf", 0o755); err != nil {
-		return nil, errors.Wrapf(err, "failed to create policy verifier config dir")
-	}
-
-	v, err := policyverifier.NewVerifier(policyverifier.Config{
-		StateDir: confDir,
-	})
-	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create policy verifier")
-	}
-	p.verifier = v
-	return p.verifier, nil
-}
-
 func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
-	var inp Input
-	var unknowns []string
-	inp.Env = p.opt.Env
-
 	if req.Source == nil || req.Source.Source == nil {
 		return nil, nil, errors.Errorf("no source info in request")
 	}
 	src := req.Source
-
-	scheme, refstr, ok := strings.Cut(src.Source.Identifier, "://")
-	if !ok {
-		return nil, nil, errors.Errorf("invalid source identifier: %s", src.Source.Identifier)
-	}
-
-	switch scheme {
-	case "http", "https":
-		u, err := url.Parse(src.Source.Identifier)
-		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to parse http source url")
-		}
-		inp.HTTP = &HTTP{
-			URL:    src.Source.Identifier,
-			Schema: scheme,
-			Host:   u.Host,
-			Path:   u.Path,
-			Query:  u.Query(),
-		}
-		if _, ok := src.Source.Attrs[pb.AttrHTTPAuthHeaderSecret]; ok {
-			inp.HTTP.HasAuth = true
-		}
-		if req.Source.Image == nil {
-			unknowns = append(unknowns, "input.http.checksum")
-		} else {
-			inp.HTTP.Checksum = req.Source.Image.Digest
-		}
-	case "git":
-		if !gitutil.IsGitTransport(refstr) {
-			refstr = "https://" + refstr
-		}
-		u, err := gitutil.ParseURL(refstr)
-		if err != nil {
-			return nil, nil, err
-		}
-		g := &Git{
-			Schema: u.Scheme,
-			Remote: u.Remote,
-			Host:   u.Host,
-		}
-		var ref string
-		var isFullRef bool
-		if u.Opts != nil {
-			ref = u.Opts.Ref
-			g.Subdir = u.Opts.Subdir
-			if sd := path.Clean(g.Subdir); sd == "/" || sd == "." {
-				g.Subdir = ""
-			}
-		}
-		if v, ok := src.Source.Attrs[pb.AttrFullRemoteURL]; !ok {
-			if !gitutil.IsGitTransport(v) {
-				v = "https://" + v
-			}
-			u, err := gitutil.ParseURL(v)
-			if err != nil {
-				return nil, nil, err
-			}
-			g.Schema = u.Scheme
-			g.Remote = u.Remote
-			g.Host = u.Host
-			g.FullURL = v
-		}
-		if tag, ok := strings.CutPrefix(g.Ref, "refs/tags/"); ok {
-			g.TagName = tag
-			isFullRef = true
-		}
-		if branch, ok := strings.CutPrefix(g.Ref, "refs/heads/"); ok {
-			g.Branch = branch
-			isFullRef = true
-		}
-
-		if gitutil.IsCommitSHA(ref) {
-			g.IsCommitRef = true
-			g.Checksum = ref
-			g.CommitChecksum = ref
-			isFullRef = true
-		}
-
-		unk := []string{}
-
-		if src.Git == nil {
-			if !isFullRef {
-				unk = append(unk, "tagName", "branch", "ref")
-			} else {
-				g.Ref = ref
-			}
-			if g.Checksum == "" {
-				unk = append(unk, "checksum", "isAnnotatedTag", "commitChecksum", "isSHA256")
-			}
-			unk = append(unk, "tag", "commit")
-		} else {
-			g.Ref = src.Git.Ref
-			if tag, ok := strings.CutPrefix(g.Ref, "refs/tags/"); ok {
-				g.TagName = tag
-			}
-			if branch, ok := strings.CutPrefix(g.Ref, "refs/heads/"); ok {
-				g.Branch = branch
-			}
-			g.Checksum = src.Git.Checksum
-			g.CommitChecksum = src.Git.CommitChecksum
-			if g.CommitChecksum == "" {
-				g.CommitChecksum = g.Checksum
-			}
-			if g.Checksum != g.CommitChecksum {
-				g.IsAnnotatedTag = true
-			}
-
-			if len(src.Git.CommitObject) == 0 {
-				unk = append(unk, "commit", "tag")
-			} else {
-				obj, err := gitobject.Parse(src.Git.CommitObject)
-				if err != nil {
-					return nil, nil, err
-				}
-				if err := obj.VerifyChecksum(g.CommitChecksum); err != nil {
-					return nil, nil, err
-				}
-				c, err := obj.ToCommit()
-				if err != nil {
-					return nil, nil, err
-				}
-				g.Commit = &Commit{
-					Tree:      c.Tree,
-					Message:   c.Message,
-					Parents:   c.Parents,
-					Author:    Actor(c.Author),
-					Committer: Actor(c.Committer),
-					obj:       obj,
-				}
-				s := parseGitSignature(obj)
-				g.Commit.PGPSignature = s.PGPSignature
-				g.Commit.SSHSignature = s.SSHSignature
-
-				if dt := src.Git.TagObject; len(dt) > 0 {
-					obj, err := gitobject.Parse(src.Git.TagObject)
-					if err != nil {
-						return nil, nil, err
-					}
-					if err := obj.VerifyChecksum(g.Checksum); err != nil {
-						return nil, nil, err
-					}
-					t, err := obj.ToTag()
-					if err != nil {
-						return nil, nil, err
-					}
-					g.Tag = &Tag{
-						Object:  t.Object,
-						Message: t.Message,
-						Type:    t.Type,
-						Tag:     t.Tag,
-						Tagger:  Actor(t.Tagger),
-						obj:     obj,
-					}
-					s := parseGitSignature(obj)
-					g.Tag.PGPSignature = s.PGPSignature
-					g.Tag.SSHSignature = s.SSHSignature
-				}
-			}
-		}
-
-		if len(g.Checksum) == 64 {
-			g.IsSHA256 = true
-		}
-
-		unknowns = append(unknowns, withPrefix(unk, "input.git.")...)
-		inp.Git = g
-	case "docker-image":
-		ref, err := reference.ParseNormalizedNamed(refstr)
-		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to parse image source reference")
-		}
-		inp.Image = &Image{
-			Ref:      ref.String(),
-			Host:     reference.Domain(ref),
-			Repo:     reference.FamiliarName(ref),
-			FullRepo: ref.Name(),
-		}
-		if digested, ok := ref.(reference.Canonical); ok {
-			inp.Image.Checksum = digested.Digest().String()
-			inp.Image.IsCanonical = true
-		}
-		if tagged, ok := ref.(reference.Tagged); ok {
-			inp.Image.Tag = tagged.Tag()
-		}
-		if req.Platform == nil {
-			return nil, nil, errors.Errorf("platform required for image source")
-		}
+	var platform *ocispecs.Platform
+	if req.Platform != nil {
 		platformStr := req.Platform.OS + "/" + req.Platform.Architecture
 		if req.Platform.Variant != "" {
 			platformStr += "/" + req.Platform.Variant
@@ -329,61 +109,14 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			return nil, nil, errors.Wrapf(err, "failed to parse platform")
 		}
 		pl = platforms.Normalize(pl)
-		inp.Image.Platform = platforms.Format(pl)
-		inp.Image.OS = pl.OS
-		inp.Image.Architecture = pl.Architecture
-		inp.Image.Variant = pl.Variant
-
-		configFields := []string{
-			"labels", "user", "volumes", "workingDir", "env",
-		}
-
-		if req.Source.Image == nil {
-			if !inp.Image.IsCanonical {
-				unknowns = append(unknowns, "input.image.checksum")
-			}
-			unknowns = append(unknowns, withPrefix(configFields, "input.image.")...)
-			unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
-		} else {
-			inp.Image.Checksum = req.Source.Image.Digest
-			if cfg := req.Source.Image.Config; cfg != nil {
-				var img ocispecs.Image
-				if err := json.Unmarshal(cfg, &img); err != nil {
-					return nil, nil, errors.Wrapf(err, "failed to unmarshal image config")
-				}
-				inp.Image.CreatedTime = img.Created.Format(time.RFC3339)
-				inp.Image.Labels = img.Config.Labels
-				inp.Image.Env = img.Config.Env
-				inp.Image.User = img.Config.User
-				inp.Image.Volumes = make([]string, 0, len(img.Config.Volumes))
-				for v := range img.Config.Volumes {
-					inp.Image.Volumes = append(inp.Image.Volumes, v)
-				}
-				inp.Image.WorkingDir = img.Config.WorkingDir
-			} else {
-				unknowns = append(unknowns, withPrefix(configFields, "input.image.")...)
-			}
-
-			if ac := req.Source.Image.AttestationChain; ac != nil {
-				inp.Image.HasProvenance = ac.AttestationManifest != ""
-				signatures, err := p.parseSignatures(ctx, ac, &pl)
-				if err != nil {
-					debugf("failed to parse image signatures: %v", err)
-				} else {
-					inp.Image.Signatures = signatures
-				}
-			} else {
-				unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
-			}
-		}
-	case "local":
-		inp.Local = &Local{
-			Name: refstr,
-		}
-	default:
-		// oci-layout not supported yet
-		return nil, nil, errors.Errorf("unsupported source scheme: %s", scheme)
+		platform = &pl
 	}
+
+	inp, unknowns, err := SourceToInput(ctx, p.opt.VerifierProvider, src, platform)
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to convert source to policy input")
+	}
+	inp.Env = p.opt.Env
 
 	caps := &ast.Capabilities{
 		Builtins: builtins(),
@@ -509,48 +242,10 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 				Source:   req.Source.Source,
 				Platform: req.Platform,
 			}
-			unk2 := make([]string, 0, len(unk))
-			for _, u := range unk {
-				k := strings.TrimPrefix(u, "input.")
-				k = trimKey(k)
-				switch k {
-				case "image", "git", "http", "local":
-					// parents are returned as unknowns for some reason, ignore
-					continue
-				default:
-					unk2 = append(unk2, k)
-				}
+			if err := AddUnknowns(next, unk); err != nil {
+				return nil, nil, err
 			}
-			if len(unk2) > 0 {
-				debugf("collected unknowns: %+v", unk2)
-				for _, u := range unk2 {
-					switch u {
-					case "image.labels", "image.user", "image.volumes", "image.workingDir", "image.env":
-						if next.Image == nil {
-							next.Image = &gwpb.ResolveSourceImageRequest{}
-						}
-						next.Image.NoConfig = false
-					case "image.hasProvenance", "image.signatures":
-						if next.Image == nil {
-							next.Image = &gwpb.ResolveSourceImageRequest{
-								NoConfig: true,
-							}
-						}
-						next.Image.AttestationChain = true
-					case "image.checksum":
-
-					case "git.ref", "git.checksum", "git.commitChecksum", "git.isAnnotatedTag", "git.isSHA256", "git.tagName", "git.branch":
-
-					case "git.commit", "git.tag":
-						if next.Git == nil {
-							next.Git = &gwpb.ResolveSourceGitRequest{}
-						}
-						next.Git.ReturnObject = true
-
-					default:
-						return nil, nil, errors.Errorf("unhandled unknown property %s", u)
-					}
-				}
+			if next.Image != nil || next.Git != nil {
 				debugf("next resolve meta request: %+v", next)
 				return nil, next, nil
 			}
@@ -629,12 +324,321 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 	return nil
 }
 
+func SourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform) (Input, []string, error) {
+	var inp Input
+	var unknowns []string
+
+	if src == nil || src.Source == nil {
+		return inp, nil, errors.Errorf("no source info in request")
+	}
+
+	scheme, refstr, ok := strings.Cut(src.Source.Identifier, "://")
+	if !ok {
+		return inp, nil, errors.Errorf("invalid source identifier: %s", src.Source.Identifier)
+	}
+
+	switch scheme {
+	case "http", "https":
+		u, err := url.Parse(src.Source.Identifier)
+		if err != nil {
+			return inp, nil, errors.Wrapf(err, "failed to parse http source url")
+		}
+		inp.HTTP = &HTTP{
+			URL:    src.Source.Identifier,
+			Schema: scheme,
+			Host:   u.Host,
+			Path:   u.Path,
+			Query:  u.Query(),
+		}
+		if _, ok := src.Source.Attrs[pb.AttrHTTPAuthHeaderSecret]; ok {
+			inp.HTTP.HasAuth = true
+		}
+		if src.Image == nil {
+			unknowns = append(unknowns, "input.http.checksum")
+		} else {
+			inp.HTTP.Checksum = src.Image.Digest
+		}
+	case "git":
+		if !gitutil.IsGitTransport(refstr) {
+			refstr = "https://" + refstr
+		}
+		u, err := gitutil.ParseURL(refstr)
+		if err != nil {
+			return inp, nil, err
+		}
+		g := &Git{
+			Schema: u.Scheme,
+			Remote: u.Remote,
+			Host:   u.Host,
+		}
+		var ref string
+		var isFullRef bool
+		if u.Opts != nil {
+			ref = u.Opts.Ref
+			g.Subdir = u.Opts.Subdir
+			if sd := path.Clean(g.Subdir); sd == "/" || sd == "." {
+				g.Subdir = ""
+			}
+		}
+		if v, ok := src.Source.Attrs[pb.AttrFullRemoteURL]; !ok {
+			if !gitutil.IsGitTransport(v) {
+				v = "https://" + v
+			}
+			u, err := gitutil.ParseURL(v)
+			if err != nil {
+				return inp, nil, err
+			}
+			g.Schema = u.Scheme
+			g.Remote = u.Remote
+			g.Host = u.Host
+			g.FullURL = v
+		}
+		if tag, ok := strings.CutPrefix(g.Ref, "refs/tags/"); ok {
+			g.TagName = tag
+			isFullRef = true
+		}
+		if branch, ok := strings.CutPrefix(g.Ref, "refs/heads/"); ok {
+			g.Branch = branch
+			isFullRef = true
+		}
+
+		if gitutil.IsCommitSHA(ref) {
+			g.IsCommitRef = true
+			g.Checksum = ref
+			g.CommitChecksum = ref
+			isFullRef = true
+		}
+
+		unk := []string{}
+
+		if src.Git == nil {
+			if !isFullRef {
+				unk = append(unk, "tagName", "branch", "ref")
+			} else {
+				g.Ref = ref
+			}
+			if g.Checksum == "" {
+				unk = append(unk, "checksum", "isAnnotatedTag", "commitChecksum", "isSHA256")
+			}
+			unk = append(unk, "tag", "commit")
+		} else {
+			g.Ref = src.Git.Ref
+			if tag, ok := strings.CutPrefix(g.Ref, "refs/tags/"); ok {
+				g.TagName = tag
+			}
+			if branch, ok := strings.CutPrefix(g.Ref, "refs/heads/"); ok {
+				g.Branch = branch
+			}
+			g.Checksum = src.Git.Checksum
+			g.CommitChecksum = src.Git.CommitChecksum
+			if g.CommitChecksum == "" {
+				g.CommitChecksum = g.Checksum
+			}
+			if g.Checksum != g.CommitChecksum {
+				g.IsAnnotatedTag = true
+			}
+
+			if len(src.Git.CommitObject) == 0 {
+				unk = append(unk, "commit", "tag")
+			} else {
+				obj, err := gitobject.Parse(src.Git.CommitObject)
+				if err != nil {
+					return inp, nil, err
+				}
+				if err := obj.VerifyChecksum(g.CommitChecksum); err != nil {
+					return inp, nil, err
+				}
+				c, err := obj.ToCommit()
+				if err != nil {
+					return inp, nil, err
+				}
+				g.Commit = &Commit{
+					Tree:      c.Tree,
+					Message:   c.Message,
+					Parents:   c.Parents,
+					Author:    Actor(c.Author),
+					Committer: Actor(c.Committer),
+					obj:       obj,
+				}
+				s := parseGitSignature(obj)
+				g.Commit.PGPSignature = s.PGPSignature
+				g.Commit.SSHSignature = s.SSHSignature
+
+				if dt := src.Git.TagObject; len(dt) > 0 {
+					obj, err := gitobject.Parse(src.Git.TagObject)
+					if err != nil {
+						return inp, nil, err
+					}
+					if err := obj.VerifyChecksum(g.Checksum); err != nil {
+						return inp, nil, err
+					}
+					t, err := obj.ToTag()
+					if err != nil {
+						return inp, nil, err
+					}
+					g.Tag = &Tag{
+						Object:  t.Object,
+						Message: t.Message,
+						Type:    t.Type,
+						Tag:     t.Tag,
+						Tagger:  Actor(t.Tagger),
+						obj:     obj,
+					}
+					s := parseGitSignature(obj)
+					g.Tag.PGPSignature = s.PGPSignature
+					g.Tag.SSHSignature = s.SSHSignature
+				}
+			}
+		}
+
+		if len(g.Checksum) == 64 {
+			g.IsSHA256 = true
+		}
+
+		unknowns = append(unknowns, withPrefix(unk, "input.git.")...)
+		inp.Git = g
+	case "docker-image":
+		ref, err := reference.ParseNormalizedNamed(refstr)
+		if err != nil {
+			return inp, nil, errors.Wrapf(err, "failed to parse image source reference")
+		}
+		inp.Image = &Image{
+			Ref:      ref.String(),
+			Host:     reference.Domain(ref),
+			Repo:     reference.FamiliarName(ref),
+			FullRepo: ref.Name(),
+		}
+		if digested, ok := ref.(reference.Canonical); ok {
+			inp.Image.Checksum = digested.Digest().String()
+			inp.Image.IsCanonical = true
+		}
+		if tagged, ok := ref.(reference.Tagged); ok {
+			inp.Image.Tag = tagged.Tag()
+		}
+		if platform == nil {
+			return inp, nil, errors.Errorf("platform required for image source")
+		}
+		inp.Image.Platform = platforms.Format(*platform)
+		inp.Image.OS = platform.OS
+		inp.Image.Architecture = platform.Architecture
+		inp.Image.Variant = platform.Variant
+
+		configFields := []string{
+			"labels", "user", "volumes", "workingDir", "env",
+		}
+
+		if src.Image == nil {
+			if !inp.Image.IsCanonical {
+				unknowns = append(unknowns, "input.image.checksum")
+			}
+			unknowns = append(unknowns, withPrefix(configFields, "input.image.")...)
+			unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
+		} else {
+			inp.Image.Checksum = src.Image.Digest
+			if cfg := src.Image.Config; cfg != nil {
+				var img ocispecs.Image
+				if err := json.Unmarshal(cfg, &img); err != nil {
+					return inp, nil, errors.Wrapf(err, "failed to unmarshal image config")
+				}
+				inp.Image.CreatedTime = img.Created.Format(time.RFC3339)
+				inp.Image.Labels = img.Config.Labels
+				inp.Image.Env = img.Config.Env
+				inp.Image.User = img.Config.User
+				inp.Image.Volumes = make([]string, 0, len(img.Config.Volumes))
+				for v := range img.Config.Volumes {
+					inp.Image.Volumes = append(inp.Image.Volumes, v)
+				}
+				inp.Image.WorkingDir = img.Config.WorkingDir
+			} else {
+				unknowns = append(unknowns, withPrefix(configFields, "input.image.")...)
+			}
+
+			if ac := src.Image.AttestationChain; ac != nil {
+				inp.Image.HasProvenance = ac.AttestationManifest != ""
+				if getVerifier != nil {
+					signatures, err := parseSignatures(ctx, getVerifier, ac, platform)
+					if err != nil {
+						debugf("failed to parse image signatures: %v", err)
+					} else {
+						inp.Image.Signatures = signatures
+					}
+				}
+			} else {
+				unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
+			}
+		}
+	case "local":
+		inp.Local = &Local{
+			Name: refstr,
+		}
+	default:
+		// oci-layout not supported yet
+		return inp, nil, errors.Errorf("unsupported source scheme: %s", scheme)
+	}
+
+	return inp, unknowns, nil
+}
+
 func withPrefix(arr []string, prefix string) []string {
 	out := make([]string, len(arr))
 	for i, s := range arr {
 		out[i] = prefix + s
 	}
 	return out
+}
+
+func AddUnknowns(req *gwpb.ResolveSourceMetaRequest, unk []string) error {
+	unk2 := make([]string, 0, len(unk))
+	for _, u := range unk {
+		k := strings.TrimPrefix(u, "input.")
+		k = trimKey(k)
+		switch k {
+		case "image", "git", "http", "local":
+			// parents are returned as unknowns for some reason, ignore
+			continue
+		default:
+			unk2 = append(unk2, k)
+		}
+	}
+	if len(unk2) == 0 {
+		return nil
+	}
+
+	debugf("collected unknowns: %+v", unk2)
+	for _, u := range unk2 {
+		switch u {
+		case "image.labels", "image.user", "image.volumes", "image.workingDir", "image.env":
+			if req.Image == nil {
+				req.Image = &gwpb.ResolveSourceImageRequest{}
+			}
+			req.Image.NoConfig = false
+		case "image.hasProvenance", "image.signatures":
+			if req.Image == nil {
+				req.Image = &gwpb.ResolveSourceImageRequest{
+					NoConfig: true,
+				}
+			}
+			req.Image.AttestationChain = true
+		case "image.checksum":
+			if req.Image == nil {
+				req.Image = &gwpb.ResolveSourceImageRequest{
+					NoConfig: true,
+				}
+			}
+
+		case "git.ref", "git.checksum", "git.commitChecksum", "git.isAnnotatedTag", "git.isSHA256", "git.tagName", "git.branch":
+
+		case "git.commit", "git.tag":
+			if req.Git == nil {
+				req.Git = &gwpb.ResolveSourceGitRequest{}
+			}
+			req.Git.ReturnObject = true
+
+		default:
+			return errors.Errorf("unhandled unknown property %s", u)
+		}
+	}
+	return nil
 }
 
 func collectUnknowns(mods []*ast.Module) []string {

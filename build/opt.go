@@ -355,8 +355,8 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 				Log: func(msg string) {
 					log.Printf("[policy] %s", msg)
 				},
-				FS:     opt.Inputs.policy.FS,
-				Config: cfg,
+				FS:               opt.Inputs.policy.FS,
+				VerifierProvider: policy.SignatureVerifier(cfg),
 			})
 			cbs = append(cbs, p.CheckPolicy)
 			if popt.Strict {

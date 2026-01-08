@@ -1,11 +1,16 @@
 package policy
 
 import (
+	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
 )
 
+type RootOptions struct {
+	Builder *string
+}
+
 // RootCmd creates the policy command tree.
-func RootCmd(rootcmd *cobra.Command) *cobra.Command {
+func RootCmd(rootcmd *cobra.Command, dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	cmd := &cobra.Command{
 		Use:   "policy",
 		Short: "Commands for working with build policies",
@@ -13,7 +18,7 @@ func RootCmd(rootcmd *cobra.Command) *cobra.Command {
 
 	cmd.AddCommand(
 		jsonSchemaCmd(),
-		evalCmd(),
+		evalCmd(dockerCli, rootOpts),
 		testCmd(),
 	)
 
