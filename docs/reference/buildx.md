@@ -22,6 +22,7 @@ Extended build capabilities with BuildKit
 | [`imagetools`](buildx_imagetools.md) | Commands to work on images in registry                          |
 | [`inspect`](buildx_inspect.md)       | Inspect current builder instance                                |
 | [`ls`](buildx_ls.md)                 | List builder instances                                          |
+| [`policy`](buildx_policy.md)         | Commands for working with build policies                        |
 | [`prune`](buildx_prune.md)           | Remove build cache                                              |
 | [`rm`](buildx_rm.md)                 | Remove one or more builder instances                            |
 | [`stop`](buildx_stop.md)             | Stop builder instance                                           |

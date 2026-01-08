@@ -4,18 +4,57 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"path/filepath"
+	"sync"
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/remotes"
 	cerrderfs "github.com/containerd/errdefs"
+	"github.com/docker/buildx/util/confutil"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	policyverifier "github.com/moby/policy-helpers"
 	policyimage "github.com/moby/policy-helpers/image"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
-func (p *Policy) parseSignatures(ctx context.Context, ac *gwpb.AttestationChain, platform *ocispecs.Platform) ([]AttestationSignature, error) {
+type PolicyVerifierProvider func() (*policyverifier.Verifier, error)
+
+func SignatureVerifier(cfg *confutil.Config) PolicyVerifierProvider {
+	if cfg == nil {
+		return nil
+	}
+	var (
+		mu sync.Mutex
+		v  *policyverifier.Verifier
+	)
+	return func() (*policyverifier.Verifier, error) {
+		mu.Lock()
+		defer mu.Unlock()
+
+		if v != nil {
+			return v, nil
+		}
+
+		root := cfg.Dir()
+		confDir := filepath.Join(root, "policy")
+		if err := cfg.MkdirAll("policy/tuf", 0o755); err != nil {
+			return nil, errors.Wrapf(err, "failed to create policy verifier config dir")
+		}
+
+		nv, err := policyverifier.NewVerifier(policyverifier.Config{
+			StateDir: confDir,
+		})
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to create policy verifier")
+		}
+		v = nv
+		return v, nil
+	}
+}
+
+func parseSignatures(ctx context.Context, getVerifier PolicyVerifierProvider, ac *gwpb.AttestationChain, platform *ocispecs.Platform) ([]AttestationSignature, error) {
 	if ac.Root == "" || ac.AttestationManifest == "" || len(ac.SignatureManifests) == 0 {
 		return nil, nil
 	}
@@ -63,7 +102,10 @@ func (p *Policy) parseSignatures(ctx context.Context, ac *gwpb.AttestationChain,
 		return nil, errors.Errorf("attestation manifest digest mismatch: expected %s, got %s", att, sc.AttestationManifest.Digest)
 	}
 
-	v, err := p.getVerifier()
+	if getVerifier == nil {
+		return nil, errors.New("policy verifier is not configured")
+	}
+	v, err := getVerifier()
 	if err != nil {
 		return nil, errors.Wrapf(err, "getting policy verifier")
 	}
