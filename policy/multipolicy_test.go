@@ -5,9 +5,9 @@ import (
 	"testing"
 
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	solverpb "github.com/moby/buildkit/solver/pb"
 	moby_buildkit_v1_sourcepolicy "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/sourcepolicy/policysession"
-	solverpb "github.com/moby/buildkit/solver/pb"
 	"github.com/stretchr/testify/require"
 )
 

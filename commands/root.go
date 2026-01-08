@@ -121,7 +121,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 		installCmd(dockerCli),
 		uninstallCmd(dockerCli),
 		versionCmd(dockerCli),
-		policycmd.RootCmd(cmd),
+		policycmd.RootCmd(cmd, dockerCli, policycmd.RootOptions{Builder: &opts.builder}),
 		pruneCmd(dockerCli, opts),
 		duCmd(dockerCli, opts),
 		imagetoolscmd.RootCmd(cmd, dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
