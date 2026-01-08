@@ -589,6 +589,7 @@ func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoi
 				EndLine:   sbp.Line,
 				Column:    sbp.Column,
 				EndColumn: sbp.Column,
+				Reason:    "pending",
 			}
 		}
 		breakpoints = append(breakpoints, bp)
@@ -606,6 +607,27 @@ func (b *breakpointMap) Intersect(ctx Context, src *pb.Source, ws string) map[di
 	for dgst, locs := range src.Locations {
 		if id := b.intersect(ctx, src, locs, ws); id > 0 {
 			digests[digest.Digest(dgst)] = id
+		}
+	}
+
+	// Mark unverified breakpoints as failed at this point since we couldn't find an area
+	// in the source where they applied.
+	for _, info := range src.Infos {
+		fname := filepath.Join(ws, info.Filename)
+
+		bps := b.byPath[fname]
+		for _, bp := range bps {
+			if !bp.Verified && bp.Reason != "failed" {
+				bp.Reason = "failed"
+
+				ctx.C() <- &dap.BreakpointEvent{
+					Event: dap.Event{Event: "breakpoint"},
+					Body: dap.BreakpointEventBody{
+						Reason:     "changed",
+						Breakpoint: bp,
+					},
+				}
+			}
 		}
 	}
 	return digests
@@ -651,6 +673,7 @@ func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Location
 				bp.Column = int(r.Start.Character)
 				bp.EndColumn = int(r.End.Character)
 				bp.Verified = true
+				bp.Reason = ""
 
 				ctx.C() <- &dap.BreakpointEvent{
 					Event: dap.Event{Event: "breakpoint"},

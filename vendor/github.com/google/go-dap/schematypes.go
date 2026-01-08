@@ -112,7 +112,8 @@ type ErrorResponseBody struct {
 
 // CancelRequest: The `cancel` request is used by the client in two situations:
 // - to indicate that it is no longer interested in the result produced by a specific request issued earlier
-// - to cancel a progress sequence. Clients should only call this request if the corresponding capability `supportsCancelRequest` is true.
+// - to cancel a progress sequence.
+// Clients should only call this request if the corresponding capability `supportsCancelRequest` is true.
 // This request has a hint characteristic: a debug adapter can only be expected to make a 'best effort' in honoring this request but there are no guarantees.
 // The `cancel` request may return an error if it could not cancel an operation but a client should refrain from presenting this error to end users.
 // The request that got cancelled still needs to send a response back. This can either be a normal result (`success` attribute true) or an error response (`success` attribute false and the `message` set to `cancelled`).
@@ -232,6 +233,7 @@ type OutputEventBody struct {
 	Line               int             `json:"line,omitempty"`
 	Column             int             `json:"column,omitempty"`
 	Data               json.RawMessage `json:"data,omitempty"`
+	LocationReference  int             `json:"locationReference,omitempty"`
 }
 
 // BreakpointEvent: The event indicates that some information about a breakpoint has changed.
@@ -456,6 +458,7 @@ type InitializeRequestArguments struct {
 	SupportsMemoryEvent                 bool   `json:"supportsMemoryEvent,omitempty"`
 	SupportsArgsCanBeInterpretedByShell bool   `json:"supportsArgsCanBeInterpretedByShell,omitempty"`
 	SupportsStartDebuggingRequest       bool   `json:"supportsStartDebuggingRequest,omitempty"`
+	SupportsANSIStyling                 bool   `json:"supportsANSIStyling,omitempty"`
 }
 
 // InitializeResponse: Response to `initialize` request.
@@ -655,8 +658,7 @@ type SetFunctionBreakpointsResponseBody struct {
 	Breakpoints []Breakpoint `json:"breakpoints"`
 }
 
-// SetExceptionBreakpointsRequest: The request configures the debugger's response to thrown exceptions.
-// If an exception is configured to break, a `stopped` event is fired (with reason `exception`).
+// SetExceptionBreakpointsRequest: The request configures the debugger's response to thrown exceptions. Each of the `filters`, `filterOptions`, and `exceptionOptions` in the request are independent configurations to a debug adapter indicating a kind of exception to catch. An exception thrown in a program should result in a `stopped` event from the debug adapter (with reason `exception`) if any of the configured filters match.
 // Clients should only call this request if the corresponding capability `exceptionBreakpointFilters` returns one or more filters.
 type SetExceptionBreakpointsRequest struct {
 	Request
@@ -673,7 +675,7 @@ type SetExceptionBreakpointsArguments struct {
 
 // SetExceptionBreakpointsResponse: Response to `setExceptionBreakpoints` request.
 // The response contains an array of `Breakpoint` objects with information about each exception breakpoint or filter. The `Breakpoint` objects are in the same order as the elements of the `filters`, `filterOptions`, `exceptionOptions` arrays given as arguments. If both `filters` and `filterOptions` are given, the returned array must start with `filters` information first, followed by `filterOptions` information.
-// The `verified` property of a `Breakpoint` object signals whether the exception breakpoint or filter could be successfully created and whether the condition or hit count expressions are valid. In case of an error the `message` property explains the problem. The `id` property can be used to introduce a unique ID for the exception breakpoint or filter so that it can be updated subsequently by sending breakpoint events.
+// The `verified` property of a `Breakpoint` object signals whether the exception breakpoint or filter could be successfully created and whether the condition is valid. In case of an error the `message` property explains the problem. The `id` property can be used to introduce a unique ID for the exception breakpoint or filter so that it can be updated subsequently by sending breakpoint events.
 // For backward compatibility both the `breakpoints` array and the enclosing `body` are optional. If these elements are missing a client is not able to show problems for individual exception breakpoints or filters.
 type SetExceptionBreakpointsResponse struct {
 	Response
@@ -698,6 +700,9 @@ type DataBreakpointInfoArguments struct {
 	VariablesReference int    `json:"variablesReference,omitempty"`
 	Name               string `json:"name"`
 	FrameId            int    `json:"frameId,omitempty"`
+	Bytes              int    `json:"bytes,omitempty"`
+	AsAddress          bool   `json:"asAddress,omitempty"`
+	Mode               string `json:"mode,omitempty"`
 }
 
 // DataBreakpointInfoResponse: Response to `dataBreakpointInfo` request.
@@ -1062,11 +1067,13 @@ type SetVariableResponse struct {
 }
 
 type SetVariableResponseBody struct {
-	Value              string `json:"value"`
-	Type               string `json:"type,omitempty"`
-	VariablesReference int    `json:"variablesReference,omitempty"`
-	NamedVariables     int    `json:"namedVariables,omitempty"`
-	IndexedVariables   int    `json:"indexedVariables,omitempty"`
+	Value                  string `json:"value"`
+	Type                   string `json:"type,omitempty"`
+	VariablesReference     int    `json:"variablesReference,omitempty"`
+	NamedVariables         int    `json:"namedVariables,omitempty"`
+	IndexedVariables       int    `json:"indexedVariables,omitempty"`
+	MemoryReference        string `json:"memoryReference,omitempty"`
+	ValueLocationReference int    `json:"valueLocationReference,omitempty"`
 }
 
 // SourceRequest: The request retrieves the source code for a given source reference.
@@ -1177,7 +1184,7 @@ type LoadedSourcesResponseBody struct {
 	Sources []Source `json:"sources"`
 }
 
-// EvaluateRequest: Evaluates the given expression in the context of the topmost stack frame.
+// EvaluateRequest: Evaluates the given expression in the context of a stack frame.
 // The expression has access to any variables and arguments that are in scope.
 type EvaluateRequest struct {
 	Request
@@ -1189,6 +1196,9 @@ type EvaluateRequest struct {
 type EvaluateArguments struct {
 	Expression string       `json:"expression"`
 	FrameId    int          `json:"frameId,omitempty"`
+	Line       int          `json:"line,omitempty"`
+	Column     int          `json:"column,omitempty"`
+	Source     *Source      `json:"source,omitempty"`
 	Context    string       `json:"context,omitempty"`
 	Format     *ValueFormat `json:"format,omitempty"`
 }
@@ -1201,13 +1211,14 @@ type EvaluateResponse struct {
 }
 
 type EvaluateResponseBody struct {
-	Result             string                    `json:"result"`
-	Type               string                    `json:"type,omitempty"`
-	PresentationHint   *VariablePresentationHint `json:"presentationHint,omitempty"`
-	VariablesReference int                       `json:"variablesReference"`
-	NamedVariables     int                       `json:"namedVariables,omitempty"`
-	IndexedVariables   int                       `json:"indexedVariables,omitempty"`
-	MemoryReference    string                    `json:"memoryReference,omitempty"`
+	Result                 string                    `json:"result"`
+	Type                   string                    `json:"type,omitempty"`
+	PresentationHint       *VariablePresentationHint `json:"presentationHint,omitempty"`
+	VariablesReference     int                       `json:"variablesReference"`
+	NamedVariables         int                       `json:"namedVariables,omitempty"`
+	IndexedVariables       int                       `json:"indexedVariables,omitempty"`
+	MemoryReference        string                    `json:"memoryReference,omitempty"`
+	ValueLocationReference int                       `json:"valueLocationReference,omitempty"`
 }
 
 // SetExpressionRequest: Evaluates the given `value` expression and assigns it to the `expression` which must be a modifiable l-value.
@@ -1236,12 +1247,14 @@ type SetExpressionResponse struct {
 }
 
 type SetExpressionResponseBody struct {
-	Value              string                    `json:"value"`
-	Type               string                    `json:"type,omitempty"`
-	PresentationHint   *VariablePresentationHint `json:"presentationHint,omitempty"`
-	VariablesReference int                       `json:"variablesReference,omitempty"`
-	NamedVariables     int                       `json:"namedVariables,omitempty"`
-	IndexedVariables   int                       `json:"indexedVariables,omitempty"`
+	Value                  string                    `json:"value"`
+	Type                   string                    `json:"type,omitempty"`
+	PresentationHint       *VariablePresentationHint `json:"presentationHint,omitempty"`
+	VariablesReference     int                       `json:"variablesReference,omitempty"`
+	NamedVariables         int                       `json:"namedVariables,omitempty"`
+	IndexedVariables       int                       `json:"indexedVariables,omitempty"`
+	MemoryReference        string                    `json:"memoryReference,omitempty"`
+	ValueLocationReference int                       `json:"valueLocationReference,omitempty"`
 }
 
 // StepInTargetsRequest: This request retrieves the possible step-in targets for the specified stack frame.
@@ -1434,6 +1447,33 @@ type DisassembleResponseBody struct {
 	Instructions []DisassembledInstruction `json:"instructions"`
 }
 
+// LocationsRequest: Looks up information about a location reference previously returned by the debug adapter.
+type LocationsRequest struct {
+	Request
+
+	Arguments LocationsArguments `json:"arguments"`
+}
+
+// LocationsArguments: Arguments for `locations` request.
+type LocationsArguments struct {
+	LocationReference int `json:"locationReference"`
+}
+
+// LocationsResponse: Response to `locations` request.
+type LocationsResponse struct {
+	Response
+
+	Body LocationsResponseBody `json:"body,omitempty"`
+}
+
+type LocationsResponseBody struct {
+	Source    Source `json:"source"`
+	Line      int    `json:"line"`
+	Column    int    `json:"column,omitempty"`
+	EndLine   int    `json:"endLine,omitempty"`
+	EndColumn int    `json:"endColumn,omitempty"`
+}
+
 // Capabilities: Information about the capabilities of a debug adapter.
 type Capabilities struct {
 	SupportsConfigurationDoneRequest      bool                         `json:"supportsConfigurationDoneRequest,omitempty"`
@@ -1475,6 +1515,9 @@ type Capabilities struct {
 	SupportsInstructionBreakpoints        bool                         `json:"supportsInstructionBreakpoints,omitempty"`
 	SupportsExceptionFilterOptions        bool                         `json:"supportsExceptionFilterOptions,omitempty"`
 	SupportsSingleThreadExecutionRequests bool                         `json:"supportsSingleThreadExecutionRequests,omitempty"`
+	SupportsDataBreakpointBytes           bool                         `json:"supportsDataBreakpointBytes,omitempty"`
+	BreakpointModes                       []BreakpointMode             `json:"breakpointModes,omitempty"`
+	SupportsANSIStyling                   bool                         `json:"supportsANSIStyling,omitempty"`
 }
 
 // ExceptionBreakpointsFilter: An `ExceptionBreakpointsFilter` is shown in the UI as an filter option for configuring how exceptions are dealt with.
@@ -1527,12 +1570,6 @@ type ColumnDescriptor struct {
 	Format        string `json:"format,omitempty"`
 	Type          string `json:"type,omitempty"`
 	Width         int    `json:"width,omitempty"`
-}
-
-// ModulesViewDescriptor: The ModulesViewDescriptor is the container for all declarative configuration options of a module view.
-// For now it only specifies the columns to be shown in the modules view.
-type ModulesViewDescriptor struct {
-	Columns []ColumnDescriptor `json:"columns"`
 }
 
 // Thread: A Thread
@@ -1591,15 +1628,17 @@ type Scope struct {
 // If the number of named or indexed children is large, the numbers should be returned via the `namedVariables` and `indexedVariables` attributes.
 // The client can use this information to present the children in a paged UI and fetch them in chunks.
 type Variable struct {
-	Name               string                    `json:"name"`
-	Value              string                    `json:"value"`
-	Type               string                    `json:"type,omitempty"`
-	PresentationHint   *VariablePresentationHint `json:"presentationHint,omitempty"`
-	EvaluateName       string                    `json:"evaluateName,omitempty"`
-	VariablesReference int                       `json:"variablesReference"`
-	NamedVariables     int                       `json:"namedVariables,omitempty"`
-	IndexedVariables   int                       `json:"indexedVariables,omitempty"`
-	MemoryReference    string                    `json:"memoryReference,omitempty"`
+	Name                         string                    `json:"name"`
+	Value                        string                    `json:"value"`
+	Type                         string                    `json:"type,omitempty"`
+	PresentationHint             *VariablePresentationHint `json:"presentationHint,omitempty"`
+	EvaluateName                 string                    `json:"evaluateName,omitempty"`
+	VariablesReference           int                       `json:"variablesReference"`
+	NamedVariables               int                       `json:"namedVariables,omitempty"`
+	IndexedVariables             int                       `json:"indexedVariables,omitempty"`
+	MemoryReference              string                    `json:"memoryReference,omitempty"`
+	DeclarationLocationReference int                       `json:"declarationLocationReference,omitempty"`
+	ValueLocationReference       int                       `json:"valueLocationReference,omitempty"`
 }
 
 // VariablePresentationHint: Properties of a variable that can be used to determine how to render the variable in the UI.
@@ -1625,6 +1664,7 @@ type SourceBreakpoint struct {
 	Condition    string `json:"condition,omitempty"`
 	HitCondition string `json:"hitCondition,omitempty"`
 	LogMessage   string `json:"logMessage,omitempty"`
+	Mode         string `json:"mode,omitempty"`
 }
 
 // FunctionBreakpoint: Properties of a breakpoint passed to the `setFunctionBreakpoints` request.
@@ -1651,6 +1691,7 @@ type InstructionBreakpoint struct {
 	Offset               int    `json:"offset,omitempty"`
 	Condition            string `json:"condition,omitempty"`
 	HitCondition         string `json:"hitCondition,omitempty"`
+	Mode                 string `json:"mode,omitempty"`
 }
 
 // Breakpoint: Information about a breakpoint created in `setBreakpoints`, `setFunctionBreakpoints`, `setInstructionBreakpoints`, or `setDataBreakpoints` requests.
@@ -1665,6 +1706,7 @@ type Breakpoint struct {
 	EndColumn            int     `json:"endColumn,omitempty"`
 	InstructionReference string  `json:"instructionReference,omitempty"`
 	Offset               int     `json:"offset,omitempty"`
+	Reason               string  `json:"reason,omitempty"`
 }
 
 // SteppingGranularity: The granularity of one 'step' in the stepping requests `next`, `stepIn`, `stepOut`, and `stepBack`.
@@ -1739,6 +1781,7 @@ type StackFrameFormat struct {
 type ExceptionFilterOptions struct {
 	FilterId  string `json:"filterId"`
 	Condition string `json:"condition,omitempty"`
+	Mode      string `json:"mode,omitempty"`
 }
 
 // ExceptionOptions: An `ExceptionOptions` assigns configuration options to a set of exceptions.
@@ -1782,10 +1825,22 @@ type DisassembledInstruction struct {
 	Column           int     `json:"column,omitempty"`
 	EndLine          int     `json:"endLine,omitempty"`
 	EndColumn        int     `json:"endColumn,omitempty"`
+	PresentationHint string  `json:"presentationHint,omitempty"`
 }
 
 // InvalidatedAreas: Logical areas that can be invalidated by the `invalidated` event.
 type InvalidatedAreas string
+
+// BreakpointMode: A `BreakpointMode` is provided as a option when setting breakpoints on sources or instructions.
+type BreakpointMode struct {
+	Mode        string                        `json:"mode"`
+	Label       string                        `json:"label"`
+	Description string                        `json:"description,omitempty"`
+	AppliesTo   []BreakpointModeApplicability `json:"appliesTo"`
+}
+
+// BreakpointModeApplicability: Describes one or more type of breakpoint a `BreakpointMode` applies to. This is a non-exhaustive enumeration and may expand as future breakpoint types are added.
+type BreakpointModeApplicability string
 
 // Mapping of request commands and corresponding struct constructors that
 // can be passed to json.Unmarshal.
@@ -1843,6 +1898,7 @@ var requestCtor = map[string]messageCtor{
 	"readMemory":                func() Message { return &ReadMemoryRequest{} },
 	"writeMemory":               func() Message { return &WriteMemoryRequest{} },
 	"disassemble":               func() Message { return &DisassembleRequest{} },
+	"locations":                 func() Message { return &LocationsRequest{} },
 }
 
 // Mapping of response commands and corresponding struct constructors that
@@ -1892,6 +1948,7 @@ var responseCtor = map[string]messageCtor{
 	"readMemory":                func() Message { return &ReadMemoryResponse{} },
 	"writeMemory":               func() Message { return &WriteMemoryResponse{} },
 	"disassemble":               func() Message { return &DisassembleResponse{} },
+	"locations":                 func() Message { return &LocationsResponse{} },
 }
 
 // Mapping of event ids and corresponding struct constructors that

@@ -333,7 +333,7 @@ github.com/google/go-cmp/cmp/internal/diff
 github.com/google/go-cmp/cmp/internal/flags
 github.com/google/go-cmp/cmp/internal/function
 github.com/google/go-cmp/cmp/internal/value
-# github.com/google/go-dap v0.12.0
+# github.com/google/go-dap v0.12.1-0.20250904181021-d7a2259b058b
 ## explicit; go 1.18
 github.com/google/go-dap
 # github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
