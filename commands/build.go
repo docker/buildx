@@ -27,6 +27,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
+	"github.com/docker/buildx/util/dockerutil/dockerconfig"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metricutil"
 	"github.com/docker/buildx/util/osutil"
@@ -1019,7 +1020,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 	opts.Platforms = platforms
 
 	opts.Session = append(opts.Session, authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
-		ConfigFile: dockerCli.ConfigFile(),
+		AuthConfigProvider: dockerconfig.LoadAuthConfig(dockerCli),
 	}))
 
 	secrets, err := build.CreateSecrets(in.Secrets)
