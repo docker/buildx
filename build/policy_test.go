@@ -33,7 +33,7 @@ func TestWithPolicyConfigDefaults(t *testing.T) {
 	require.Len(t, out, 1)
 	require.Equal(t, defaultPolicy.Files, out[0].Files)
 	require.False(t, out[0].Strict)
-	require.Equal(t, logrus.Level(0), out[0].LogLevel)
+	require.Nil(t, out[0].LogLevel)
 	require.NotNil(t, out[0].FS)
 }
 
@@ -54,11 +54,10 @@ func TestWithPolicyConfigDisabled(t *testing.T) {
 	})
 	require.Error(t, err)
 
-	out, err := withPolicyConfig(policyOpt{}, []PolicyConfig{
+	_, err = withPolicyConfig(policyOpt{}, []PolicyConfig{
 		{Disabled: true, LogLevel: levelPtr(logrus.WarnLevel)},
 	})
-	require.NoError(t, err)
-	require.Nil(t, out)
+	require.Error(t, err)
 
 	_, err = withPolicyConfig(policyOpt{}, []PolicyConfig{
 		{Disabled: true},
@@ -66,7 +65,7 @@ func TestWithPolicyConfigDisabled(t *testing.T) {
 	})
 	require.Error(t, err)
 
-	out, err = withPolicyConfig(policyOpt{}, []PolicyConfig{
+	out, err := withPolicyConfig(policyOpt{}, []PolicyConfig{
 		{Disabled: true},
 	})
 	require.NoError(t, err)
@@ -104,7 +103,8 @@ func TestWithPolicyConfigStrictAndLogLevel(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, out, 1)
 	require.True(t, out[0].Strict)
-	require.Equal(t, logrus.WarnLevel, out[0].LogLevel)
+	require.NotNil(t, out[0].LogLevel)
+	require.Equal(t, logrus.WarnLevel, *out[0].LogLevel)
 }
 
 // TestWithPolicyConfigStrictIgnoredWithoutPolicy ensures strict without any policy produces no entries.
@@ -135,7 +135,8 @@ func TestWithPolicyConfigMultipleFilesAndOverrides(t *testing.T) {
 	require.Equal(t, "default.rego", out[0].Files[0].Filename)
 	require.Equal(t, "a.rego", out[1].Files[0].Filename)
 	require.True(t, out[1].Strict)
-	require.Equal(t, logrus.WarnLevel, out[1].LogLevel)
+	require.NotNil(t, out[1].LogLevel)
+	require.Equal(t, logrus.WarnLevel, *out[1].LogLevel)
 	require.Equal(t, "b.rego", out[2].Files[0].Filename)
 	require.True(t, out[2].Strict)
 	require.NotNil(t, out[1].FS)

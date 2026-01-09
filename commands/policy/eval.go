@@ -39,9 +39,10 @@ func evalCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	var opts evalOpts
 
 	cmd := &cobra.Command{
-		Use:   "eval source",
-		Short: "Evaluate policy for a source",
-		Args:  cobra.ExactArgs(1),
+		Use:                   "eval source",
+		Short:                 "Evaluate policy for a source",
+		Args:                  cobra.ExactArgs(1),
+		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			opts.builder = rootOpts.Builder
 			return runEval(cmd.Context(), dockerCli, args[0], opts)
@@ -378,8 +379,7 @@ func evalDecisionError(decision *policysession.DecisionResponse) error {
 }
 
 func parseSource(input string) (*pb.SourceOp, error) {
-	if strings.HasPrefix(input, "docker-image://") {
-		refstr := strings.TrimPrefix(input, "docker-image://")
+	if refstr, ok := strings.CutPrefix(input, "docker-image://"); ok {
 		ref, err := reference.ParseNormalizedNamed(refstr)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to parse image source reference")

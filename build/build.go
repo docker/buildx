@@ -132,7 +132,7 @@ type policyOpt struct {
 	Files    []policy.File
 	FS       func() (fs.StatFS, func() error, error)
 	Strict   bool
-	LogLevel logrus.Level
+	LogLevel *logrus.Level
 }
 
 func withPolicyConfig(defaultPolicy policyOpt, configs []PolicyConfig) ([]policyOpt, error) {
@@ -177,7 +177,7 @@ func withPolicyConfig(defaultPolicy policyOpt, configs []PolicyConfig) ([]policy
 					last.Strict = *cfg.Strict
 				}
 				if cfg.LogLevel != nil {
-					last.LogLevel = *cfg.LogLevel
+					last.LogLevel = cfg.LogLevel
 				}
 			}
 			continue
@@ -190,13 +190,13 @@ func withPolicyConfig(defaultPolicy policyOpt, configs []PolicyConfig) ([]policy
 			opt.Strict = *last.Strict
 		}
 		if last.LogLevel != nil {
-			opt.LogLevel = *last.LogLevel
+			opt.LogLevel = last.LogLevel
 		}
 		if cfg.Strict != nil {
 			opt.Strict = *cfg.Strict
 		}
 		if cfg.LogLevel != nil {
-			opt.LogLevel = *cfg.LogLevel
+			opt.LogLevel = cfg.LogLevel
 		}
 		opt.FS = defaultPolicy.FS
 		out = append(out, opt)
