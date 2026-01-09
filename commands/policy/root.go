@@ -12,8 +12,9 @@ type RootOptions struct {
 // RootCmd creates the policy command tree.
 func RootCmd(rootcmd *cobra.Command, dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "policy",
-		Short: "Commands for working with build policies",
+		Use:                   "policy",
+		Short:                 "Commands for working with build policies",
+		DisableFlagsInUseLine: true,
 	}
 
 	cmd.AddCommand(

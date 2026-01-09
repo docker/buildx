@@ -7,9 +7,10 @@ import (
 
 func testCmd() *cobra.Command {
 	cmd := &cobra.Command{
-		Use:   "test <path>",
-		Short: "Run policy tests",
-		Args:  cobra.ExactArgs(1),
+		Use:                   "test <path>",
+		Short:                 "Run policy tests",
+		Args:                  cobra.ExactArgs(1),
+		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runTest(args[0])
 		},
