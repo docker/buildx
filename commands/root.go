@@ -6,6 +6,7 @@ import (
 
 	historycmd "github.com/docker/buildx/commands/history"
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
+	policycmd "github.com/docker/buildx/commands/policy"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/logutil"
@@ -120,6 +121,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 		installCmd(dockerCli),
 		uninstallCmd(dockerCli),
 		versionCmd(dockerCli),
+		policycmd.RootCmd(cmd, dockerCli, policycmd.RootOptions{Builder: &opts.builder}),
 		pruneCmd(dockerCli, opts),
 		duCmd(dockerCli, opts),
 		imagetoolscmd.RootCmd(cmd, dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
