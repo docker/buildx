@@ -3,16 +3,13 @@ package policy
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"io/fs"
-	"log"
 	"maps"
 	"net/url"
-	"os"
 	"path"
 	"slices"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	"github.com/containerd/platforms"
@@ -29,22 +26,8 @@ import (
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 )
-
-// this is tempory debug, to be replaced with progressbar logging later
-var isDebug = sync.OnceValue(func() bool {
-	if v, ok := os.LookupEnv("BUILDX_POLICY_DEBUG"); ok {
-		b, _ := strconv.ParseBool(v)
-		return b
-	}
-	return false
-})
-
-func debugf(format string, v ...any) {
-	if isDebug() {
-		log.Printf(format, v...)
-	}
-}
 
 type Policy struct {
 	opt   Opt
@@ -73,7 +56,7 @@ type fun struct {
 type Opt struct {
 	Files            []File
 	Env              Env
-	Log              func(string)
+	Log              func(logrus.Level, string)
 	FS               func() (fs.StatFS, func() error, error)
 	VerifierProvider PolicyVerifierProvider
 }
@@ -91,6 +74,13 @@ func NewPolicy(opt Opt) *Policy {
 	}
 	p.initBuiltinFuncs()
 	return p
+}
+
+func (p *Policy) log(level logrus.Level, format string, v ...any) {
+	if p == nil || p.opt.Log == nil {
+		return
+	}
+	p.opt.Log(level, fmt.Sprintf(format, v...))
 }
 
 func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
@@ -112,7 +102,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		platform = &pl
 	}
 
-	inp, unknowns, err := SourceToInput(ctx, p.opt.VerifierProvider, src, platform)
+	inp, unknowns, err := SourceToInputWithLogger(ctx, p.opt.VerifierProvider, src, platform, p.opt.Log)
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to convert source to policy input")
 	}
@@ -220,10 +210,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to marshal policy input")
 	}
-	debugf("policy input: %s", dt)
+	p.log(logrus.InfoLevel, "checking policy for source %s", src.Source.Identifier)
+	p.log(logrus.DebugLevel, "policy input: %s", dt)
 
 	if len(unknowns) > 0 {
-		debugf("unknowns for policy evaluation: %+v", unknowns)
+		p.log(logrus.DebugLevel, "unknowns for policy evaluation: %+v", unknowns)
 		opts = append(opts, rego.Unknowns(unknowns))
 	}
 	r := rego.New(opts...)
@@ -242,11 +233,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 				Source:   req.Source.Source,
 				Platform: req.Platform,
 			}
-			if err := AddUnknowns(next, unk); err != nil {
+			if err := AddUnknownsWithLogger(p.opt.Log, next, unk); err != nil {
 				return nil, nil, err
 			}
 			if next.Image != nil || next.Git != nil {
-				debugf("next resolve meta request: %+v", next)
+				p.log(logrus.InfoLevel, "policy decision for source %s: resolve missing fields %+v", src.Source.Identifier, summarizeUnknownsForLog(unk))
 				return nil, next, nil
 			}
 		}
@@ -274,7 +265,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	resp := &policysession.DecisionResponse{
 		Action: moby_buildkit_v1_sourcepolicy.PolicyAction_DENY,
 	}
-	debugf("policy response: %+v", vt)
+	p.log(logrus.DebugLevel, "policy response: %+v", vt)
 
 	if v, ok := vt["allow"]; ok {
 		if vv, ok := v.(bool); !ok {
@@ -305,6 +296,8 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			if err != nil {
 				return nil, nil, errors.Wrapf(err, "failed to add image pin to source")
 			}
+			p.log(logrus.InfoLevel, "policy decision for source %s: convert to %s", src.Source.Identifier, newSrc.Identifier)
+
 			return &policysession.DecisionResponse{
 				Action: moby_buildkit_v1_sourcepolicy.PolicyAction_CONVERT,
 				Update: newSrc,
@@ -312,19 +305,23 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		}
 	}
 
-	debugf("policy decision: %s %v", resp.Action, resp.DenyMessages)
+	p.log(logrus.InfoLevel, "policy decision for source %s: %s %v", src.Source.Identifier, resp.Action, resp.DenyMessages)
 
 	return resp, nil, nil
 }
 
 func (p *Policy) Print(ctx print.Context, msg string) error {
 	if p.opt.Log != nil {
-		p.opt.Log(ctx.Location.Format("%s", msg))
+		p.opt.Log(logrus.InfoLevel, ctx.Location.Format("%s", msg))
 	}
 	return nil
 }
 
 func SourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform) (Input, []string, error) {
+	return SourceToInputWithLogger(ctx, getVerifier, src, platform, nil)
+}
+
+func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform, logf func(logrus.Level, string)) (Input, []string, error) {
 	var inp Input
 	var unknowns []string
 
@@ -558,7 +555,9 @@ func SourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 				if getVerifier != nil {
 					signatures, err := parseSignatures(ctx, getVerifier, ac, platform)
 					if err != nil {
-						debugf("failed to parse image signatures: %v", err)
+						if logf != nil {
+							logf(logrus.DebugLevel, fmt.Sprintf("failed to parse image signatures: %v", err))
+						}
 					} else {
 						inp.Image.Signatures = signatures
 					}
@@ -588,6 +587,10 @@ func withPrefix(arr []string, prefix string) []string {
 }
 
 func AddUnknowns(req *gwpb.ResolveSourceMetaRequest, unk []string) error {
+	return AddUnknownsWithLogger(nil, req, unk)
+}
+
+func AddUnknownsWithLogger(logf func(logrus.Level, string), req *gwpb.ResolveSourceMetaRequest, unk []string) error {
 	unk2 := make([]string, 0, len(unk))
 	for _, u := range unk {
 		k := strings.TrimPrefix(u, "input.")
@@ -604,7 +607,9 @@ func AddUnknowns(req *gwpb.ResolveSourceMetaRequest, unk []string) error {
 		return nil
 	}
 
-	debugf("collected unknowns: %+v", unk2)
+	if logf != nil {
+		logf(logrus.DebugLevel, fmt.Sprintf("collected unknowns: %+v", unk2))
+	}
 	for _, u := range unk2 {
 		switch u {
 		case "image.labels", "image.user", "image.volumes", "image.workingDir", "image.env":
@@ -656,6 +661,25 @@ func collectUnknowns(mods []*ast.Module) []string {
 			}
 			return true
 		})
+	}
+	return out
+}
+
+func summarizeUnknownsForLog(unk []string) []string {
+	out := make([]string, 0, len(unk))
+	seen := map[string]struct{}{}
+	for _, u := range unk {
+		if strings.HasPrefix(u, "input.image.signatures") {
+			u = "input.image.signatures"
+		}
+		if u == "input.image" {
+			continue
+		}
+		if _, ok := seen[u]; ok {
+			continue
+		}
+		seen[u] = struct{}{}
+		out = append(out, u)
 	}
 	return out
 }
