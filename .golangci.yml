@@ -89,6 +89,9 @@ linters:
         text: stutters
       - linters:
           - revive
+        text: var-naming
+      - linters:
+          - revive
         text: empty-block
       - linters:
           - revive

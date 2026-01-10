@@ -58,7 +58,7 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 	}
 	defer os.RemoveAll(filepath.Dir(cfgfile))
 	name := "integration-container-" + identity.NewID()
-	cmd := exec.Command("buildx", "create",
+	cmd := exec.CommandContext(ctx, "buildx", "create",
 		"--bootstrap",
 		"--name="+name,
 		"--buildkitd-config="+cfgfile,
@@ -75,7 +75,7 @@ func (w *containerWorker) New(ctx context.Context, cfg *integration.BackendConfi
 	}
 
 	cl := func() error {
-		cmd := exec.Command("buildx", "rm", "-f", name)
+		cmd := exec.CommandContext(context.Background(), "buildx", "rm", "-f", name)
 		cmd.Env = append(
 			os.Environ(),
 			"BUILDX_CONFIG=/tmp/buildx-"+name,

@@ -135,9 +135,9 @@ func generateBakeStdlibDocs(filename string) error {
 	}
 	currentContent := string(dt)
 
-	start := strings.Index(currentContent, "<!---MARKER_STDLIB_START-->")
+	before, _, ok := strings.Cut(currentContent, "<!---MARKER_STDLIB_START-->")
 	end := strings.Index(currentContent, "<!---MARKER_STDLIB_END-->")
-	if start == -1 {
+	if !ok {
 		return errors.Errorf("no start marker in %s", filename)
 	}
 	if end == -1 {
@@ -164,7 +164,7 @@ func generateBakeStdlibDocs(filename string) error {
 		table.AddRow(fname, fdesc)
 	}
 
-	newContent := currentContent[:start] + "<!---MARKER_STDLIB_START-->\n\n" + table.String() + "\n" + currentContent[end:]
+	newContent := before + "<!---MARKER_STDLIB_START-->\n\n" + table.String() + "\n" + currentContent[end:]
 	return os.WriteFile(filename, []byte(newContent), 0644)
 }
 

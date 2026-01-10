@@ -34,7 +34,6 @@ func TestIndexOf(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		name, test := name, test
 		t.Run(name, func(t *testing.T) {
 			got, err := indexOfFunc().Call([]cty.Value{test.input, test.key})
 			if test.wantErr {
@@ -85,7 +84,6 @@ func TestBasename(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		name, test := name, test
 		t.Run(name, func(t *testing.T) {
 			got, err := basenameFunc().Call([]cty.Value{test.input})
 			if test.wantErr {
@@ -136,7 +134,6 @@ func TestDirname(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		name, test := name, test
 		t.Run(name, func(t *testing.T) {
 			got, err := dirnameFunc().Call([]cty.Value{test.input})
 			if test.wantErr {
@@ -190,7 +187,6 @@ func TestSanitize(t *testing.T) {
 	}
 
 	for name, test := range tests {
-		name, test := name, test
 		t.Run(name, func(t *testing.T) {
 			got, err := sanitizeFunc().Call([]cty.Value{test.input})
 			require.NoError(t, err)
@@ -251,7 +247,6 @@ func TestSemverCmp(t *testing.T) {
 		},
 	}
 	for name, test := range tests {
-		name, test := name, test
 		t.Run(name, func(t *testing.T) {
 			got, err := semvercmpFunc().Call([]cty.Value{test.version, test.constraint})
 			if test.wantErr {

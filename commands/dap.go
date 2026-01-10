@@ -102,7 +102,8 @@ func dapAttachCmd() *cobra.Command {
 				return err
 			}
 
-			conn, err := net.Dial("unix", args[0])
+			dialer := net.Dialer{}
+			conn, err := dialer.DialContext(cmd.Context(), "unix", args[0])
 			if err != nil {
 				return err
 			}

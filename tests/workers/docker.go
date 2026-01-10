@@ -98,7 +98,7 @@ func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 	}
 
 	name := "integration-" + identity.NewID()
-	cmd := exec.Command("docker", "context", "create",
+	cmd := exec.CommandContext(ctx, "docker", "context", "create",
 		name,
 		"--docker", "host="+bk.DockerAddress(),
 	)
@@ -109,7 +109,7 @@ func (c dockerWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 
 	cl = func() error {
 		err := bkclose()
-		cmd := exec.Command("docker", "context", "rm", "-f", name)
+		cmd := exec.CommandContext(context.Background(), "docker", "context", "rm", "-f", name)
 		if err1 := cmd.Run(); err == nil {
 			err = errors.Wrapf(err1, "failed to remove buildx instance %s", name)
 		}

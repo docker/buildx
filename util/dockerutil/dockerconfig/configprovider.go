@@ -133,9 +133,9 @@ func parseConfigKey(key string) alternativeConfig {
 	var out alternativeConfig
 
 	var mainPart, scopePart string
-	if i := strings.IndexByte(key, '@'); i >= 0 {
-		mainPart = key[:i]
-		scopePart = key[i+1:]
+	if before, after, ok := strings.Cut(key, "@"); ok {
+		mainPart = before
+		scopePart = after
 	} else {
 		mainPart = key
 	}
@@ -153,14 +153,14 @@ func parseConfigKey(key string) alternativeConfig {
 		return out
 	}
 
-	slash := strings.IndexByte(mainPart, '/')
-	if slash < 0 {
+	before, after, ok := strings.Cut(mainPart, "/")
+	if !ok {
 		out.host = mainPart
 		return out
 	}
 
-	out.host = mainPart[:slash]
-	out.repo = mainPart[slash+1:]
+	out.host = before
+	out.repo = after
 
 	return out
 }

@@ -355,11 +355,9 @@ func (t *thread) prepareResultHandle(c Context, ref gateway.Reference, err error
 
 	// Start the attach. Use the context we created and perform it in
 	// a goroutine. We aren't necessarily assuming this will actually work.
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
+	wg.Go(func() {
 		t.sh.Attach(ctx, t)
-	}()
+	})
 }
 
 func (t *thread) Continue() {

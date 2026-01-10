@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"context"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -49,7 +50,7 @@ func withDir(dir string) cmdOpt {
 }
 
 func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
-	cmd := exec.Command("buildx")
+	cmd := exec.CommandContext(context.TODO(), "buildx")
 	cmd.Env = os.Environ()
 	for _, opt := range opts {
 		opt(cmd)
@@ -76,7 +77,7 @@ func buildxCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 }
 
 func composeCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
-	cmd := exec.Command("compose")
+	cmd := exec.CommandContext(context.TODO(), "compose")
 	cmd.Env = os.Environ()
 	for _, opt := range opts {
 		opt(cmd)
@@ -100,7 +101,7 @@ func composeCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 }
 
 func dockerCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
-	cmd := exec.Command("docker")
+	cmd := exec.CommandContext(context.TODO(), "docker")
 	cmd.Env = os.Environ()
 	for _, opt := range opts {
 		opt(cmd)
@@ -200,10 +201,10 @@ func buildkitVersion(t *testing.T, sb integration.Sandbox) string {
 				os.RemoveAll(destDir)
 			})
 
-			cmd := exec.Command(undockBin, "--cachedir", "/root/.cache/undock", "--include", "/usr/bin/buildkitd", "--rm-dist", buildkitImage, destDir)
+			cmd := exec.CommandContext(context.TODO(), undockBin, "--cachedir", "/root/.cache/undock", "--include", "/usr/bin/buildkitd", "--rm-dist", buildkitImage, destDir)
 			require.NoErrorf(t, cmd.Run(), "failed to extract buildkitd binary from %q", buildkitImage)
 
-			cmd = exec.Command(filepath.Join(destDir, "usr", "bin", "buildkitd"), "--version")
+			cmd = exec.CommandContext(context.TODO(), filepath.Join(destDir, "usr", "bin", "buildkitd"), "--version")
 			out, err := cmd.CombinedOutput()
 			require.NoErrorf(t, err, "failed to get BuildKit version from %q: %s", buildkitImage, string(out))
 

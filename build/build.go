@@ -395,7 +395,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 			var insecurePush bool
 
 			for i, dp := range dps {
-				i, dp := i, dp
 				node := dp.Node()
 				so := reqForNodes[k][i].so
 				if multiDriver {

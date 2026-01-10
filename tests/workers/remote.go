@@ -42,7 +42,7 @@ func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 	}
 
 	name := "integration-remote-" + identity.NewID()
-	cmd := exec.Command("buildx", "create",
+	cmd := exec.CommandContext(ctx, "buildx", "create",
 		"--bootstrap",
 		"--name="+name,
 		"--driver=remote",
@@ -55,7 +55,7 @@ func (w remoteWorker) New(ctx context.Context, cfg *integration.BackendConfig) (
 
 	cl = func() error {
 		err := bkclose()
-		cmd := exec.Command("buildx", "rm", "-f", name)
+		cmd := exec.CommandContext(context.Background(), "buildx", "rm", "-f", name)
 		cmd.Env = append(os.Environ(), "BUILDX_CONFIG=/tmp/buildx-"+name)
 		if err1 := cmd.Run(); err == nil {
 			err = err1
