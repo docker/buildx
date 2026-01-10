@@ -133,8 +133,8 @@ func impliedStructType(rt reflect.Type, path cty.Path) (cty.Type, error) {
 }
 
 var (
-	valueType  = reflect.TypeOf(cty.Value{})
-	stringType = reflect.TypeOf("")
+	valueType  = reflect.TypeFor[cty.Value]()
+	stringType = reflect.TypeFor[string]()
 )
 
 // structTagIndices interrogates the fields of the given type (which must

@@ -140,11 +140,11 @@ func getFieldTags(ty reflect.Type) *fieldTags {
 			continue
 		}
 
-		comma := strings.Index(tag, ",")
+		before, after, ok := strings.Cut(tag, ",")
 		var name, kind string
-		if comma != -1 {
-			name = tag[:comma]
-			kind = tag[comma+1:]
+		if ok {
+			name = before
+			kind = after
 		} else {
 			name = tag
 			kind = "attr"

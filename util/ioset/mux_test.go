@@ -303,11 +303,11 @@ func writeMasked(w io.Writer, s string) io.Writer {
 				pr.CloseWithError(readErr)
 				return
 			}
-			var masked string
+			var masked strings.Builder
 			for range n {
-				masked += s
+				masked.WriteString(s)
 			}
-			if _, err := w.Write([]byte(masked)); err != nil {
+			if _, err := w.Write([]byte(masked.String())); err != nil {
 				pr.CloseWithError(err)
 				return
 			}

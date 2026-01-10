@@ -120,7 +120,8 @@ func (t *thread) Exec(ctx Context, args []string) (message string, retErr error)
 	}()
 
 	socketPath := filepath.Join(dir, "s.sock")
-	l, err := net.Listen("unix", socketPath)
+	lc := net.ListenConfig{}
+	l, err := lc.Listen(ctx, "unix", socketPath)
 	if err != nil {
 		return "", err
 	}

@@ -66,7 +66,8 @@ func GitServeHTTP(c *gitutil.Git, t testing.TB, opts ...GitServeOpt) (url string
 		}
 
 		mux.Handle(prefix, handler(http.StripPrefix(prefix, http.FileServer(http.Dir(dir)))))
-		l, err := net.Listen("tcp", "localhost:0")
+		lc := net.ListenConfig{}
+		l, err := lc.Listen(ctx, "tcp", "localhost:0")
 		if err != nil {
 			panic(err)
 		}

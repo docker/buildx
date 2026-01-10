@@ -36,10 +36,7 @@ func NewMuxIO(in In, outs []MuxOut, initIdx int, toggleMessage func(prev int, re
 	var wg sync.WaitGroup
 	var mu sync.Mutex
 	for i, o := range outs {
-		i, o := i, o
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		wg.Go(func() {
 			if err := copyToFunc(o.Stdout, func() (io.Writer, error) {
 				if m.cur == i {
 					return in.Stdout, nil
@@ -51,10 +48,8 @@ func NewMuxIO(in In, outs []MuxOut, initIdx int, toggleMessage func(prev int, re
 			if err := o.Stdout.Close(); err != nil {
 				logrus.WithField("output index", i).WithError(err).Warnf("failed to close stdout")
 			}
-		}()
-		wg.Add(1)
-		go func() {
-			defer wg.Done()
+		})
+		wg.Go(func() {
 			if err := copyToFunc(o.Stderr, func() (io.Writer, error) {
 				if m.cur == i {
 					return in.Stderr, nil
@@ -66,7 +61,7 @@ func NewMuxIO(in In, outs []MuxOut, initIdx int, toggleMessage func(prev int, re
 			if err := o.Stderr.Close(); err != nil {
 				logrus.WithField("output index", i).WithError(err).Warnf("failed to close stderr")
 			}
-		}()
+		})
 	}
 	go func() {
 		errToggle := errors.Errorf("toggle IO")

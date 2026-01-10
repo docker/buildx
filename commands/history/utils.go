@@ -425,8 +425,8 @@ func timeBasedFilter(key, value, sep string) (matchFunc, error) {
 
 func cutAny(s string, seps ...string) (before, after, sep string, found bool) {
 	for _, sep := range seps {
-		if idx := strings.Index(s, sep); idx != -1 {
-			return s[:idx], s[idx+len(sep):], sep, true
+		if before0, after0, ok := strings.Cut(s, sep); ok {
+			return before0, after0, sep, true
 		}
 	}
 	return s, "", "", false

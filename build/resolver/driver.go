@@ -131,7 +131,6 @@ func (r *nodeResolver) Resolve(ctx context.Context, optPlatforms map[string][]oc
 		eg, egCtx := errgroup.WithContext(ctx)
 		workers := make([][]ocispecs.Platform, len(clients))
 		for i, c := range clients {
-			i, c := i, c
 			if c == nil {
 				continue
 			}
@@ -269,7 +268,6 @@ func (r *nodeResolver) boot(ctx context.Context, idxs []int, pw progress.Writer)
 	eg, ctx := errgroup.WithContext(ctx)
 
 	for i, idx := range idxs {
-		i, idx := i, idx
 		eg.Go(func() error {
 			c, err := r.clients.g.Do(ctx, fmt.Sprint(idx), func(ctx context.Context) (*client.Client, error) {
 				if r.nodes[idx].Driver == nil {

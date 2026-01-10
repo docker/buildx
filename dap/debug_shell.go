@@ -77,7 +77,8 @@ func (s *shell) listen() error {
 		}()
 		s.SocketPath = filepath.Join(dir, "s.sock")
 
-		s.l, s.err = net.Listen("unix", s.SocketPath)
+		lc := net.ListenConfig{}
+		s.l, s.err = lc.Listen(context.Background(), "unix", s.SocketPath)
 		if s.err != nil {
 			return
 		}

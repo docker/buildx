@@ -156,7 +156,8 @@ func runTrace(ctx context.Context, dockerCli command.Cli, opts traceOptions) err
 		return nil
 	}
 
-	ln, err := net.Listen("tcp", opts.addr)
+	lc := net.ListenConfig{}
+	ln, err := lc.Listen(ctx, "tcp", opts.addr)
 	if err != nil {
 		return err
 	}
