@@ -77,6 +77,7 @@ var dapBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testDapBuild,
 	testDapBuildStopOnEntry,
 	testDapBuildSetBreakpoints,
+	testDapBuildVerifiedBreakpoints,
 	testDapBuildStepIn,
 	testDapBuildStepNext,
 	testDapBuildStepOut,
@@ -197,6 +198,56 @@ func testDapBuildSetBreakpoints(t *testing.T, sb integration.Sandbox) {
 	doContinue(t, client, stopped.Body.ThreadId)
 
 	require.NoError(t, done(false))
+}
+
+func testDapBuildVerifiedBreakpoints(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	client, done, err := dapBuildCmd(t, sb, withArgs(dir))
+	require.NoError(t, err)
+
+	interruptCh := pollInterruptEvents(client)
+
+	var actual []dap.BreakpointEventBody
+	client.RegisterEvent("breakpoint", func(em dap.EventMessage) {
+		e := em.(*dap.BreakpointEvent)
+		actual = append(actual, e.Body)
+	})
+
+	doLaunch(t, client, commands.LaunchConfig{
+		Dockerfile:  path.Join(dir, "Dockerfile"),
+		ContextPath: dir,
+	},
+		dap.SourceBreakpoint{Line: 2},
+		dap.SourceBreakpoint{Line: 10},
+	)
+
+	stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	require.NotNil(t, stopped)
+
+	assert.Equal(t, []dap.BreakpointEventBody{
+		{
+			Reason: "changed",
+			Breakpoint: dap.Breakpoint{
+				Id:       1,
+				Line:     2,
+				EndLine:  2,
+				Verified: true,
+			},
+		},
+		{
+			Reason: "changed",
+			Breakpoint: dap.Breakpoint{
+				Id:       2,
+				Line:     10,
+				EndLine:  10,
+				Verified: false,
+				Reason:   "failed",
+			},
+		},
+	}, actual)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, done(true), &exitErr)
 }
 
 func testDapBuildStepIn(t *testing.T, sb integration.Sandbox) {
