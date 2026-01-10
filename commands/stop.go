@@ -2,16 +2,19 @@ package commands
 
 import (
 	"context"
+	"time"
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
+	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
 
 type stopOptions struct {
 	builder string
+	timeout time.Duration
 }
 
 func runStop(ctx context.Context, dockerCli command.Cli, in stopOptions) error {
@@ -22,7 +25,12 @@ func runStop(ctx context.Context, dockerCli command.Cli, in stopOptions) error {
 	if err != nil {
 		return err
 	}
-	nodes, err := b.LoadNodes(ctx)
+
+	timeoutCtx, cancel := context.WithCancelCause(ctx)
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, in.timeout, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
+
+	nodes, err := b.LoadNodes(timeoutCtx)
 	if err != nil {
 		return err
 	}
@@ -42,6 +50,7 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			if len(args) > 0 {
 				options.builder = args[0]
 			}
+			options.timeout = rootOpts.timeout
 			return runStop(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction:     completion.BuilderNames(dockerCli),

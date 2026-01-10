@@ -9,13 +9,14 @@ Disk usage
 
 ### Options
 
-| Name                    | Type     | Default | Description                              |
-|:------------------------|:---------|:--------|:-----------------------------------------|
-| [`--builder`](#builder) | `string` |         | Override the configured builder instance |
-| `-D`, `--debug`         | `bool`   |         | Enable debug logging                     |
-| [`--filter`](#filter)   | `filter` |         | Provide filter values                    |
-| [`--format`](#format)   | `string` |         | Format the output                        |
-| [`--verbose`](#verbose) | `bool`   |         | Shorthand for `--format=pretty`          |
+| Name                    | Type       | Default | Description                                                          |
+|:------------------------|:-----------|:--------|:---------------------------------------------------------------------|
+| [`--builder`](#builder) | `string`   |         | Override the configured builder instance                             |
+| `-D`, `--debug`         | `bool`     |         | Enable debug logging                                                 |
+| [`--filter`](#filter)   | `filter`   |         | Provide filter values                                                |
+| [`--format`](#format)   | `string`   |         | Format the output                                                    |
+| `--timeout`             | `duration` | `20s`   | Override the default global timeout (as duration, for example 1m20s) |
+| [`--verbose`](#verbose) | `bool`     |         | Shorthand for `--format=pretty`                                      |
 
 
 <!---MARKER_GEN_END-->

@@ -55,7 +55,6 @@ type Driver struct {
 	configMapClient  clientcorev1.ConfigMapInterface
 	podChooser       podchooser.PodChooser
 	defaultLoad      bool
-	timeout          time.Duration
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -94,7 +93,7 @@ func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
 			}
 		}
 		return sub.Wrap(
-			fmt.Sprintf("waiting for %d pods to be ready, timeout: %s", d.minReplicas, units.HumanDuration(d.timeout)),
+			fmt.Sprintf("waiting for %d pods to be ready, timeout: %s", d.minReplicas, units.HumanDuration(d.Timeout)),
 			func() error {
 				return d.wait(ctx)
 			})
@@ -108,7 +107,7 @@ func (d *Driver) wait(ctx context.Context) error {
 		depl *appsv1.Deployment
 	)
 
-	timeoutChan := time.After(d.timeout)
+	timeoutChan := time.After(d.Timeout)
 	ticker := time.NewTicker(100 * time.Millisecond)
 	defer ticker.Stop()
 

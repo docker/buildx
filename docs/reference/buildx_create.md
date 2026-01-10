@@ -22,6 +22,7 @@ Create a new builder instance
 | [`--name`](#name)                         | `string`      |         | Builder instance name                                                 |
 | [`--node`](#node)                         | `string`      |         | Create/modify node with given name                                    |
 | [`--platform`](#platform)                 | `stringArray` |         | Fixed platforms for current node                                      |
+| `--timeout`                               | `duration`    | `20s`   | Override the default global timeout (as duration, for example 1m20s)  |
 | [`--use`](#use)                           | `bool`        |         | Set the current builder instance                                      |
 
 

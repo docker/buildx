@@ -5,13 +5,14 @@ Export build records into Docker Desktop bundle
 
 ### Options
 
-| Name                                   | Type     | Default | Description                                         |
-|:---------------------------------------|:---------|:--------|:----------------------------------------------------|
-| [`--all`](#all)                        | `bool`   |         | Export all build records for the builder            |
-| [`--builder`](#builder)                | `string` |         | Override the configured builder instance            |
-| [`-D`](#debug), [`--debug`](#debug)    | `bool`   |         | Enable debug logging                                |
-| [`--finalize`](#finalize)              | `bool`   |         | Ensure build records are finalized before exporting |
-| [`-o`](#output), [`--output`](#output) | `string` |         | Output file path                                    |
+| Name                                   | Type       | Default | Description                                                          |
+|:---------------------------------------|:-----------|:--------|:---------------------------------------------------------------------|
+| [`--all`](#all)                        | `bool`     |         | Export all build records for the builder                             |
+| [`--builder`](#builder)                | `string`   |         | Override the configured builder instance                             |
+| [`-D`](#debug), [`--debug`](#debug)    | `bool`     |         | Enable debug logging                                                 |
+| [`--finalize`](#finalize)              | `bool`     |         | Ensure build records are finalized before exporting                  |
+| [`-o`](#output), [`--output`](#output) | `string`   |         | Output file path                                                     |
+| `--timeout`                            | `duration` | `20s`   | Override the default global timeout (as duration, for example 1m20s) |
 
 
 <!---MARKER_GEN_END-->

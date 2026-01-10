@@ -41,6 +41,7 @@ Start a build
 | `--ssh`             | `stringArray` |           | SSH agent socket or keys to expose to the build (format: `default\|<id>[=<socket>\|<key>[,<key>]]`)                   |
 | `-t`, `--tag`       | `stringArray` |           | Image identifier (format: `[registry/]repository[:tag]`)                                                              |
 | `--target`          | `string`      |           | Set the target build stage to build                                                                                   |
+| `--timeout`         | `duration`    | `20s`     | Override the default global timeout (as duration, for example 1m20s)                                                  |
 | `--ulimit`          | `ulimit`      |           | Ulimit options                                                                                                        |
 
 

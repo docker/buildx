@@ -36,6 +36,7 @@ type pruneOptions struct {
 	minFreeSpace  opts.MemBytes
 	force         bool
 	verbose       bool
+	timeout       time.Duration
 }
 
 const (
@@ -68,7 +69,11 @@ func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) err
 		return err
 	}
 
-	nodes, err := b.LoadNodes(ctx)
+	timeoutCtx, cancel := context.WithCancelCause(ctx)
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, opts.timeout, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
+
+	nodes, err := b.LoadNodes(timeoutCtx)
 	if err != nil {
 		return err
 	}
@@ -168,6 +173,7 @@ func pruneCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder
+			options.timeout = rootOpts.timeout
 			return runPrune(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction:     completion.Disable,

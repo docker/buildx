@@ -134,7 +134,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	}
 
 	d.defaultLoad = defaultLoad
-	d.timeout = timeout
+	d.Timeout = timeout
 
 	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
