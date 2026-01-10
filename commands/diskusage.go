@@ -65,6 +65,7 @@ type duOptions struct {
 	filter  opts.FilterOpt
 	verbose bool
 	format  string
+	timeout time.Duration
 }
 
 func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) error {
@@ -92,7 +93,11 @@ func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) er
 		return err
 	}
 
-	nodes, err := b.LoadNodes(ctx)
+	timeoutCtx, cancel := context.WithCancelCause(ctx)
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, opts.timeout, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
+	defer func() { cancel(errors.WithStack(context.Canceled)) }()
+
+	nodes, err := b.LoadNodes(timeoutCtx)
 	if err != nil {
 		return err
 	}
@@ -187,6 +192,7 @@ func duCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Args:  cli.NoArgs,
 		RunE: func(cmd *cobra.Command, args []string) error {
 			options.builder = rootOpts.builder
+			options.timeout = rootOpts.timeout
 			return runDiskUsage(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction:     completion.Disable,

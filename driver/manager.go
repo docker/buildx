@@ -4,6 +4,7 @@ import (
 	"context"
 	"sort"
 	"sync"
+	"time"
 
 	"github.com/docker/cli/cli/context/store"
 	"github.com/moby/buildkit/client"
@@ -39,6 +40,7 @@ type InitConfig struct {
 	Platforms       []ocispecs.Platform
 	ContextPathHash string
 	DialMeta        map[string][]string
+	Timeout         time.Duration
 }
 
 var drivers map[string]Factory

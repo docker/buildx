@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"context"
 	"fmt"
+	"time"
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
@@ -27,6 +28,7 @@ type createOptions struct {
 	buildkitdFlags      string
 	buildkitdConfigFile string
 	bootstrap           bool
+	timeout             time.Duration
 	// upgrade      bool // perform upgrade of the driver
 }
 
@@ -61,6 +63,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		Use:                 in.use,
 		Endpoint:            ep,
 		Append:              in.actionAppend,
+		Timeout:             in.timeout,
 	})
 	if err != nil {
 		return err
@@ -80,7 +83,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	return nil
 }
 
-func createCmd(dockerCli command.Cli) *cobra.Command {
+func createCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options createOptions
 
 	var drivers bytes.Buffer
@@ -96,6 +99,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "Create a new builder instance",
 		Args:  cli.RequiresMaxArgs(1),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.timeout = rootOpts.timeout
 			return runCreate(cmd.Context(), dockerCli, options, args)
 		},
 		ValidArgsFunction:     completion.Disable,
