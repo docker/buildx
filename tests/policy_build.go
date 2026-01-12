@@ -24,6 +24,7 @@ var policyBuildTests = []func(t *testing.T, sb integration.Sandbox){
 }
 
 func testBuildPolicyAllow(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	dockerfile := []byte(`
 FROM busybox:latest
 RUN echo policy-ok
@@ -57,6 +58,7 @@ decision := {"allow": allow}
 }
 
 func testBuildPolicyDeny(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	dockerfile := []byte(`
 FROM busybox:latest
 RUN echo policy-nope
@@ -93,6 +95,7 @@ decision := {"allow": allow, "deny_msg": deny_msg}
 }
 
 func testBuildPolicyImageName(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
@@ -415,6 +418,7 @@ decision := {"allow": allow}
 }
 
 func testBuildPolicyEnv(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	testCases := []struct {
 		name            string
 		policy          string

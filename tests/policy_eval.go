@@ -23,6 +23,7 @@ var policyEvalTests = []func(t *testing.T, sb integration.Sandbox){
 }
 
 func testPolicyEvalAllow(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	policyFile := []byte(`
 package docker
 
@@ -51,6 +52,7 @@ decision := {"allow": allow}
 }
 
 func testPolicyEvalDeny(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	policyFile := []byte(`
 package docker
 
@@ -80,6 +82,7 @@ decision := {"allow": allow}
 }
 
 func testPolicyEvalPrint(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	cmd := buildxCmd(sb, withArgs(
 		"policy",
 		"eval",
@@ -99,6 +102,7 @@ func testPolicyEvalPrint(t *testing.T, sb integration.Sandbox) {
 }
 
 func testPolicyEvalFields(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
@@ -171,6 +175,7 @@ func testPolicyEvalFields(t *testing.T, sb integration.Sandbox) {
 }
 
 func testPolicyEvalLabel(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
 		t.Skip(err.Error())
