@@ -14,8 +14,7 @@ BAKE_TARGETS := binaries binaries-cross lint lint-gopls validate-vendor validate
 all: binaries
 
 .PHONY: build
-build:
-	./hack/build
+build: binaries
 
 .PHONY: shell
 shell:
