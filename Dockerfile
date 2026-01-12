@@ -120,11 +120,13 @@ ARG BUILDKIT_SBOM_SCAN_STAGE=true
 FROM gobase AS integration-test-base
 # https://github.com/docker/docker/blob/master/project/PACKAGERS.md#runtime-dependencies
 RUN apk add --no-cache \
+      bash \
       btrfs-progs \
       e2fsprogs \
       e2fsprogs-extra \
       ip6tables \
       iptables \
+      make \
       openssl \
       shadow-uidmap \
       xfsprogs \
