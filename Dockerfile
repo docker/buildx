@@ -71,9 +71,11 @@ EOF
 FROM gobase AS buildx-version
 RUN --mount=type=bind,target=. <<EOT
   set -e
-  mkdir /buildx-version
-  echo -n "$(./hack/git-meta version)" | tee /buildx-version/version
-  echo -n "$(./hack/git-meta revision)" | tee /buildx-version/revision
+  PKG=github.com/docker/buildx
+  VERSION=$(git describe --match 'v[0-9]*' --dirty='.m' --always --tags)
+  REVISION=$(git rev-parse HEAD)$(if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi)
+  echo "-X ${PKG}/version.Version=${VERSION} -X ${PKG}/version.Revision=${REVISION} -X ${PKG}/version.Package=${PKG}" | tee /tmp/.ldflags
+  echo -n "${VERSION}" | tee /tmp/.version
 EOT
 
 FROM gobase AS buildx-build
@@ -82,10 +84,9 @@ ARG GO_EXTRA_FLAGS
 RUN --mount=type=bind,target=. \
   --mount=type=cache,target=/root/.cache \
   --mount=type=cache,target=/go/pkg/mod \
-  --mount=type=bind,from=buildx-version,source=/buildx-version,target=/buildx-version <<EOT
-  set -e
-  xx-go --wrap
-  DESTDIR=/usr/bin VERSION=$(cat /buildx-version/version) REVISION=$(cat /buildx-version/revision) GO_EXTRA_LDFLAGS="-s -w" ./hack/build
+  --mount=type=bind,from=buildx-version,source=/tmp/.ldflags,target=/tmp/.ldflags <<EOT
+  set -ex
+  xx-go build -trimpath ${GO_EXTRA_FLAGS} -ldflags "-s -w $(cat /tmp/.ldflags)" -o /usr/bin/docker-buildx ./cmd/buildx
   file /usr/bin/docker-buildx
   xx-verify --static /usr/bin/docker-buildx
 EOT
@@ -153,10 +154,10 @@ FROM --platform=$BUILDPLATFORM alpine:${ALPINE_VERSION} AS releaser
 WORKDIR /work
 ARG TARGETPLATFORM
 RUN --mount=from=binaries \
-  --mount=type=bind,from=buildx-version,source=/buildx-version,target=/buildx-version <<EOT
+  --mount=type=bind,from=buildx-version,source=/tmp/.version,target=/tmp/.version <<EOT
   set -e
   mkdir -p /out
-  cp buildx* "/out/buildx-$(cat /buildx-version/version).$(echo $TARGETPLATFORM | sed 's/\//-/g')$(ls buildx* | sed -e 's/^buildx//')"
+  cp buildx* "/out/buildx-$(cat /tmp/.version).$(echo $TARGETPLATFORM | sed 's/\//-/g')$(ls buildx* | sed -e 's/^buildx//')"
 EOT
 
 FROM scratch AS release
