@@ -703,9 +703,10 @@ decision := {"allow": allow}
 				}
 				skipNoCompatBuildKit(t, sb, ">= 0.26.3-0", "http checksum policy input")
 			}
+			dockerfile := fmt.Appendf(nil, "FROM busybox:latest\nADD %s /tmp/file\n", tc.addURL)
 			dir := tmpdir(
 				t,
-				fstest.CreateFile("Dockerfile", []byte(fmt.Sprintf("FROM busybox:latest\nADD %s /tmp/file\n", tc.addURL)), 0600),
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
 				fstest.CreateFile("policy.rego", []byte(tc.policy), 0600),
 			)
 			policyPath := filepath.Join(dir, "policy.rego")
@@ -747,8 +748,7 @@ func testBuildPolicyGit(t *testing.T, sb integration.Sandbox) {
 	gittestutil.GitAdd(git, t, "Dockerfile", "a")
 	gittestutil.GitCommit(git, t, "initial commit")
 
-	_, err = git.Run("tag", "-a", "v0.1", "-m", "v0.1release")
-	require.NoError(t, err)
+	gittestutil.GitTagAnnotated(git, t, "v0.1", "v0.1release")
 
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "b"), []byte("b"), 0600))
 	gittestutil.GitAdd(git, t, "b")

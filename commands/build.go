@@ -20,7 +20,6 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
@@ -57,7 +56,6 @@ import (
 	"github.com/sirupsen/logrus"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"
-	"github.com/tonistiigi/go-csvvalue"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
@@ -153,7 +151,7 @@ func (o *buildOptions) toOptions() (*BuildOptions, error) {
 		return nil, err
 	}
 
-	opts.Policy, err = parsePolicyConfigs(o.policy)
+	opts.Policy, err = buildflags.ParsePolicyConfigs(o.policy)
 	if err != nil {
 		return nil, err
 	}
@@ -234,68 +232,6 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 		return progressui.QuietMode, nil
 	}
 	return progress, nil
-}
-
-func parsePolicyConfigs(in []string) ([]build.PolicyConfig, error) {
-	if len(in) == 0 {
-		return nil, nil
-	}
-
-	out := make([]build.PolicyConfig, 0, len(in))
-	for _, s := range in {
-		fields, err := csvvalue.Fields(s, nil)
-		if err != nil {
-			return nil, err
-		}
-
-		cfg := build.PolicyConfig{}
-		for _, field := range fields {
-			key, value, ok := strings.Cut(field, "=")
-			if !ok {
-				return nil, errors.Errorf("invalid value %s", field)
-			}
-			key = strings.TrimSpace(strings.ToLower(key))
-			switch key {
-			case "filename":
-				if value == "" {
-					return nil, errors.Errorf("invalid value %s", field)
-				}
-				dt, err := os.ReadFile(value)
-				if err != nil {
-					return nil, errors.Wrapf(err, "failed to read policy file %s", value)
-				}
-				cfg.Files = append(cfg.Files, policy.File{Filename: value, Data: dt})
-			case "reset":
-				b, err := strconv.ParseBool(value)
-				if err != nil {
-					return nil, errors.Wrapf(err, "invalid value %s", field)
-				}
-				cfg.Reset = b
-			case "disabled":
-				b, err := strconv.ParseBool(value)
-				if err != nil {
-					return nil, errors.Wrapf(err, "invalid value %s", field)
-				}
-				cfg.Disabled = b
-			case "strict":
-				b, err := strconv.ParseBool(value)
-				if err != nil {
-					return nil, errors.Wrapf(err, "invalid value %s", field)
-				}
-				cfg.Strict = &b
-			case "log-level":
-				lvl, err := logrus.ParseLevel(value)
-				if err != nil {
-					return nil, errors.Wrapf(err, "invalid value %s", field)
-				}
-				cfg.LogLevel = &lvl
-			default:
-				return nil, errors.Errorf("invalid value %s", field)
-			}
-		}
-		out = append(out, cfg)
-	}
-	return out, nil
 }
 
 const (
@@ -1048,7 +984,7 @@ type BuildOptions struct {
 	GroupRef               string
 	Annotations            []string
 	ProvenanceResponseMode string
-	Policy                 []build.PolicyConfig
+	Policy                 []buildflags.PolicyConfig
 }
 
 // RunBuild runs the specified build and returns the result.
