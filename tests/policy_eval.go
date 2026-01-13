@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	urlpkg "net/url"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
@@ -14,7 +15,6 @@ import (
 	"github.com/moby/buildkit/util/testutil/integration"
 	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
-	urlpkg "net/url"
 )
 
 var policyEvalTests = []func(t *testing.T, sb integration.Sandbox){

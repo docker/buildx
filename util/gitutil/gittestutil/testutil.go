@@ -33,6 +33,13 @@ func GitTag(c *gitutil.Git, tb testing.TB, tag string) {
 	require.Empty(tb, out)
 }
 
+func GitTagAnnotated(c *gitutil.Git, tb testing.TB, tag, message string) {
+	tb.Helper()
+	out, err := fakeGit(c, "tag", "-a", tag, "-m", message)
+	require.NoError(tb, err)
+	require.Empty(tb, out)
+}
+
 func GitCheckoutBranch(c *gitutil.Git, tb testing.TB, name string) {
 	tb.Helper()
 	out, err := fakeGit(c, "checkout", "-b", name)

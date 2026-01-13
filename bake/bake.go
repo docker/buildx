@@ -588,7 +588,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			// IMPORTANT: if you add more fields here, do not forget to update
 			// docs/reference/buildx_bake.md (--set) and https://docs.docker.com/build/bake/overrides/
 			switch keys[1] {
-			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "network", "annotations":
+			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "network", "annotations", "policy":
 				if len(parts) == 2 {
 					override.Append = appendTo
 					override.ArrValue = append(override.ArrValue, parts[1])
@@ -732,31 +732,32 @@ type Target struct {
 	// Inherits is the only field that cannot be overridden with --set
 	Inherits []string `json:"inherits,omitempty" hcl:"inherits,optional" cty:"inherits"`
 
-	Annotations      []string                `json:"annotations,omitempty" hcl:"annotations,optional" cty:"annotations"`
-	Attest           buildflags.Attests      `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
-	Context          *string                 `json:"context,omitempty" hcl:"context,optional" cty:"context"`
-	Contexts         map[string]string       `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
-	Dockerfile       *string                 `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
-	DockerfileInline *string                 `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
-	Args             map[string]*string      `json:"args,omitempty" hcl:"args,optional" cty:"args"`
-	Labels           map[string]*string      `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
-	Tags             []string                `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
-	CacheFrom        buildflags.CacheOptions `json:"cache-from,omitempty" hcl:"cache-from,optional" cty:"cache-from"`
-	CacheTo          buildflags.CacheOptions `json:"cache-to,omitempty" hcl:"cache-to,optional" cty:"cache-to"`
-	Target           *string                 `json:"target,omitempty" hcl:"target,optional" cty:"target"`
-	Secrets          buildflags.Secrets      `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
-	SSH              buildflags.SSHKeys      `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
-	Platforms        []string                `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
-	Outputs          buildflags.Exports      `json:"output,omitempty" hcl:"output,optional" cty:"output"`
-	Pull             *bool                   `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
-	NoCache          *bool                   `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
-	NetworkMode      *string                 `json:"network,omitempty" hcl:"network,optional" cty:"network"`
-	NoCacheFilter    []string                `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
-	ShmSize          *string                 `json:"shm-size,omitempty" hcl:"shm-size,optional" cty:"shm-size"`
-	Ulimits          []string                `json:"ulimits,omitempty" hcl:"ulimits,optional" cty:"ulimits"`
-	Call             *string                 `json:"call,omitempty" hcl:"call,optional" cty:"call"`
-	Entitlements     []string                `json:"entitlements,omitempty" hcl:"entitlements,optional" cty:"entitlements"`
-	ExtraHosts       map[string]*string      `json:"extra-hosts,omitempty" hcl:"extra-hosts,optional" cty:"extra-hosts"`
+	Annotations      []string                 `json:"annotations,omitempty" hcl:"annotations,optional" cty:"annotations"`
+	Attest           buildflags.Attests       `json:"attest,omitempty" hcl:"attest,optional" cty:"attest"`
+	Context          *string                  `json:"context,omitempty" hcl:"context,optional" cty:"context"`
+	Contexts         map[string]string        `json:"contexts,omitempty" hcl:"contexts,optional" cty:"contexts"`
+	Dockerfile       *string                  `json:"dockerfile,omitempty" hcl:"dockerfile,optional" cty:"dockerfile"`
+	DockerfileInline *string                  `json:"dockerfile-inline,omitempty" hcl:"dockerfile-inline,optional" cty:"dockerfile-inline"`
+	Args             map[string]*string       `json:"args,omitempty" hcl:"args,optional" cty:"args"`
+	Labels           map[string]*string       `json:"labels,omitempty" hcl:"labels,optional" cty:"labels"`
+	Tags             []string                 `json:"tags,omitempty" hcl:"tags,optional" cty:"tags"`
+	CacheFrom        buildflags.CacheOptions  `json:"cache-from,omitempty" hcl:"cache-from,optional" cty:"cache-from"`
+	CacheTo          buildflags.CacheOptions  `json:"cache-to,omitempty" hcl:"cache-to,optional" cty:"cache-to"`
+	Target           *string                  `json:"target,omitempty" hcl:"target,optional" cty:"target"`
+	Secrets          buildflags.Secrets       `json:"secret,omitempty" hcl:"secret,optional" cty:"secret"`
+	SSH              buildflags.SSHKeys       `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
+	Platforms        []string                 `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
+	Outputs          buildflags.Exports       `json:"output,omitempty" hcl:"output,optional" cty:"output"`
+	Pull             *bool                    `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
+	NoCache          *bool                    `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
+	NetworkMode      *string                  `json:"network,omitempty" hcl:"network,optional" cty:"network"`
+	NoCacheFilter    []string                 `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
+	ShmSize          *string                  `json:"shm-size,omitempty" hcl:"shm-size,optional" cty:"shm-size"`
+	Ulimits          []string                 `json:"ulimits,omitempty" hcl:"ulimits,optional" cty:"ulimits"`
+	Call             *string                  `json:"call,omitempty" hcl:"call,optional" cty:"call"`
+	Entitlements     []string                 `json:"entitlements,omitempty" hcl:"entitlements,optional" cty:"entitlements"`
+	ExtraHosts       map[string]*string       `json:"extra-hosts,omitempty" hcl:"extra-hosts,optional" cty:"extra-hosts"`
+	Policy           buildflags.PolicyConfigs `json:"policy,omitempty" hcl:"policy,optional" cty:"policy"`
 	// IMPORTANT: if you add more fields here, do not forget to update newOverrides/AddOverrides and docs/bake-reference.md.
 
 	// linked is a private field to mark a target used as a linked one
@@ -891,6 +892,9 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.Attest != nil { // merge
 		t.Attest = t.Attest.Merge(t2.Attest)
 	}
+	if t2.Policy != nil { // merge
+		t.Policy = append(t.Policy, t2.Policy...)
+	}
 	if t2.Secrets != nil { // merge
 		t.Secrets = t.Secrets.Merge(t2.Secrets)
 	}
@@ -985,6 +989,17 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				t.Tags = append(t.Tags, o.ArrValue...)
 			} else {
 				t.Tags = o.ArrValue
+			}
+		case "policy":
+			if !o.Append {
+				t.Policy = nil
+			}
+			for _, v := range o.ArrValue {
+				cfg, err := buildflags.ParsePolicyConfig(v)
+				if err != nil {
+					return err
+				}
+				t.Policy = append(t.Policy, cfg)
 			}
 		case "cache-from":
 			cacheFrom, err := buildflags.ParseCacheEntry(o.ArrValue)
@@ -1547,6 +1562,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 
 	bo.Attests = t.Attest.ToMap()
+
+	bo.Policy = []buildflags.PolicyConfig(t.Policy)
 
 	bo.SourcePolicy, err = build.ReadSourcePolicy()
 	if err != nil {

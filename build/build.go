@@ -97,15 +97,7 @@ type Options struct {
 	SourcePolicy           *spb.Policy
 	GroupRef               string
 	Annotations            map[exptypes.AnnotationKey]string // Not used during build, annotations are already set in Exports. Just used to check for support with drivers.
-	Policy                 []PolicyConfig
-}
-
-type PolicyConfig struct {
-	Files    []policy.File
-	Reset    bool
-	Disabled bool
-	Strict   *bool
-	LogLevel *logrus.Level
+	Policy                 []buildflags.PolicyConfig
 }
 
 type CallFunc struct {
@@ -135,7 +127,7 @@ type policyOpt struct {
 	LogLevel *logrus.Level
 }
 
-func withPolicyConfig(defaultPolicy policyOpt, configs []PolicyConfig) ([]policyOpt, error) {
+func withPolicyConfig(defaultPolicy policyOpt, configs []buildflags.PolicyConfig) ([]policyOpt, error) {
 	if len(configs) == 0 {
 		if len(defaultPolicy.Files) == 0 {
 			return nil, nil
@@ -161,7 +153,7 @@ func withPolicyConfig(defaultPolicy policyOpt, configs []PolicyConfig) ([]policy
 		out = append(out, defaultPolicy)
 	}
 
-	var last PolicyConfig
+	var last buildflags.PolicyConfig
 
 	for _, cfg := range configs {
 		if cfg.Reset {
