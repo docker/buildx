@@ -10,6 +10,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/containerd/errdefs"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/policy"
@@ -406,7 +407,7 @@ func parseSource(input string) (*pb.SourceOp, error) {
 				},
 			}, nil
 		}
-		if err != nil {
+		if err != nil && !errors.Is(err, errdefs.ErrInvalidArgument) {
 			return nil, err
 		}
 		return &pb.SourceOp{Identifier: input}, nil
