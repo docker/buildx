@@ -10,8 +10,11 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/policy"
 	"github.com/moby/buildkit/identity"
+	"github.com/moby/buildkit/util/testutil/httpserver"
 	"github.com/moby/buildkit/util/testutil/integration"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
+	urlpkg "net/url"
 )
 
 var policyEvalTests = []func(t *testing.T, sb integration.Sandbox){
@@ -20,6 +23,7 @@ var policyEvalTests = []func(t *testing.T, sb integration.Sandbox){
 	testPolicyEvalPrint,
 	testPolicyEvalFields,
 	testPolicyEvalLabel,
+	testPolicyEvalHTTP,
 }
 
 func testPolicyEvalAllow(t *testing.T, sb integration.Sandbox) {
@@ -214,4 +218,152 @@ decision := {"allow": allow}
 	))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
+}
+
+func testPolicyEvalHTTP(t *testing.T, sb integration.Sandbox) {
+	resp := &httpserver.Response{Content: []byte("policy-eval-http")}
+	server := httpserver.NewTestServer(map[string]*httpserver.Response{
+		"/file": resp,
+	})
+	defer server.Close()
+
+	url := server.URL + "/file"
+	queryURL := url + "?policy=allow"
+	checksum := digest.FromBytes(resp.Content).String()
+	parsedURL, err := urlpkg.Parse(server.URL)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name            string
+		policy          string
+		sourceURL       string
+		wantErrContains string
+		needsChecksum   bool
+	}{
+		{
+			name: "http-url-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if input.http.url == "%s"
+
+decision := {"allow": allow}
+`, queryURL),
+			sourceURL: queryURL,
+		},
+		{
+			name: "http-host-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if input.http.host == "%s"
+
+decision := {"allow": allow}
+`, parsedURL.Host),
+			sourceURL: url,
+		},
+		{
+			name: "http-path-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if input.http.path == "/file"
+
+decision := {"allow": allow}
+`,
+			sourceURL: url,
+		},
+		{
+			name: "http-query-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if input.http.query["policy"][_] == "allow"
+
+decision := {"allow": allow}
+`,
+			sourceURL: queryURL,
+		},
+		{
+			name: "http-checksum-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if input.http.checksum == "%s"
+
+decision := {"allow": allow}
+`, checksum),
+			sourceURL:     url,
+			needsChecksum: true,
+		},
+		{
+			name: "http-checksum-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if input.http.checksum == "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+decision := {"allow": allow}
+`,
+			sourceURL:       url,
+			wantErrContains: "policy denied",
+			needsChecksum:   true,
+		},
+		{
+			name: "http-host-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if input.http.host == "example.invalid"
+
+decision := {"allow": allow}
+`,
+			sourceURL:       url,
+			wantErrContains: "policy denied",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.needsChecksum {
+				sbDriver, _, _ := driverName(sb.Name())
+				if sbDriver != "remote" {
+					t.Skip("http checksum policy eval requires remote driver")
+				}
+				skipNoCompatBuildKit(t, sb, ">= 0.26.3-0", "http checksum policy input")
+			}
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("policy.rego", []byte(tc.policy), 0600),
+			)
+			cmd := buildxCmd(sb, withDir(dir), withArgs(
+				"policy",
+				"eval",
+				"--filename",
+				"policy",
+				tc.sourceURL,
+			))
+			out, err := cmd.CombinedOutput()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err, string(out))
+			} else {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), tc.wantErrContains)
+			}
+		})
+	}
 }
