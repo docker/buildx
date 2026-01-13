@@ -25,6 +25,7 @@ var policyBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildPolicyImageName,
 	testBuildPolicyEnv,
 	testBuildPolicyHTTP,
+	testBuildPolicyConfigFlags,
 }
 
 func testBuildPolicyAllow(t *testing.T, sb integration.Sandbox) {
@@ -722,4 +723,152 @@ decision := {"allow": allow}
 			}
 		})
 	}
+}
+
+func testBuildPolicyConfigFlags(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+
+	dockerfile := []byte("FROM busybox:latest\nRUN echo policy-flags\n")
+	defaultPolicy := []byte(`
+package docker
+
+default allow = false
+
+allow if input.env.args["DEFAULT_OK"] == "1"
+
+decision := {"allow": allow}
+`)
+	extraPolicy := []byte(`
+package docker
+
+default allow = false
+
+allow if input.env.labels["com.example.extra"] == "1"
+
+decision := {"allow": allow}
+`)
+	denyPolicy := []byte(`
+package docker
+
+default allow = false
+
+decision := {"allow": allow}
+`)
+
+	t.Run("additional-policy-requires-default", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile.rego", defaultPolicy, 0600),
+			fstest.CreateFile("extra.rego", extraPolicy, 0600),
+		)
+		extraPath := filepath.Join(dir, "extra.rego")
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--build-arg", "DEFAULT_OK=1",
+			"--label", "com.example.extra=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		cmd = buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--label", "com.example.extra=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err = cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "not allowed by policy")
+
+		cmd = buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--build-arg", "DEFAULT_OK=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err = cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "not allowed by policy")
+	})
+
+	t.Run("reset-ignores-default", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile.rego", defaultPolicy, 0600),
+			fstest.CreateFile("extra.rego", extraPolicy, 0600),
+		)
+		extraPath := filepath.Join(dir, "extra.rego")
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "reset=true,filename="+extraPath,
+			"--label", "com.example.extra=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		cmd = buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "reset=true,filename="+extraPath,
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err = cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "not allowed by policy")
+	})
+
+	t.Run("disabled-skips-default", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile.rego", denyPolicy, 0600),
+		)
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "disabled=true",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+	})
+
+	t.Run("disabled-cannot-combine-with-extra", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("extra.rego", denyPolicy, 0600),
+		)
+		extraPath := filepath.Join(dir, "extra.rego")
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--policy", "disabled=true",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "disabled policy cannot be combined with other policy flags")
+	})
 }
