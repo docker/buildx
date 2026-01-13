@@ -40,6 +40,7 @@ const (
 type lsOptions struct {
 	format  string
 	noTrunc bool
+	timeout time.Duration
 }
 
 func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
@@ -60,7 +61,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 	}
 
 	timeoutCtx, cancel := context.WithCancelCause(ctx)
-	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, 20*time.Second, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
+	timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, in.timeout, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
 	eg, _ := errgroup.WithContext(timeoutCtx)
@@ -97,7 +98,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, in lsOptions) error {
 	return nil
 }
 
-func lsCmd(dockerCli command.Cli) *cobra.Command {
+func lsCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options lsOptions
 
 	cmd := &cobra.Command{
@@ -105,6 +106,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 		Short: "List builder instances",
 		Args:  cli.ExactArgs(0),
 		RunE: func(cmd *cobra.Command, args []string) error {
+			options.timeout = rootOpts.timeout
 			return runLs(cmd.Context(), dockerCli, options)
 		},
 		ValidArgsFunction:     completion.Disable,

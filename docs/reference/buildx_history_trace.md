@@ -9,12 +9,13 @@ Show the OpenTelemetry trace of a build record
 
 ### Options
 
-| Name                    | Type     | Default       | Description                              |
-|:------------------------|:---------|:--------------|:-----------------------------------------|
-| [`--addr`](#addr)       | `string` | `127.0.0.1:0` | Address to bind the UI server            |
-| `--builder`             | `string` |               | Override the configured builder instance |
-| [`--compare`](#compare) | `string` |               | Compare with another build record        |
-| `-D`, `--debug`         | `bool`   |               | Enable debug logging                     |
+| Name                    | Type       | Default       | Description                                                          |
+|:------------------------|:-----------|:--------------|:---------------------------------------------------------------------|
+| [`--addr`](#addr)       | `string`   | `127.0.0.1:0` | Address to bind the UI server                                        |
+| `--builder`             | `string`   |               | Override the configured builder instance                             |
+| [`--compare`](#compare) | `string`   |               | Compare with another build record                                    |
+| `-D`, `--debug`         | `bool`     |               | Enable debug logging                                                 |
+| `--timeout`             | `duration` | `20s`         | Override the default global timeout (as duration, for example 1m20s) |
 
 
 <!---MARKER_GEN_END-->
