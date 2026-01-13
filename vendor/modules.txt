@@ -733,6 +733,7 @@ github.com/moby/buildkit/util/system
 github.com/moby/buildkit/util/testutil
 github.com/moby/buildkit/util/testutil/dockerd
 github.com/moby/buildkit/util/testutil/dockerd/client
+github.com/moby/buildkit/util/testutil/httpserver
 github.com/moby/buildkit/util/testutil/integration
 github.com/moby/buildkit/util/testutil/workers
 github.com/moby/buildkit/util/tracing

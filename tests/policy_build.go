@@ -3,6 +3,7 @@ package tests
 import (
 	"errors"
 	"fmt"
+	"net/url"
 	"path/filepath"
 	"testing"
 
@@ -12,7 +13,9 @@ import (
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
+	"github.com/moby/buildkit/util/testutil/httpserver"
 	"github.com/moby/buildkit/util/testutil/integration"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,6 +24,7 @@ var policyBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildPolicyDeny,
 	testBuildPolicyImageName,
 	testBuildPolicyEnv,
+	testBuildPolicyHTTP,
 }
 
 func testBuildPolicyAllow(t *testing.T, sb integration.Sandbox) {
@@ -525,6 +529,188 @@ decision := {"allow": allow}
 
 			cmd := buildxCmd(sb, withDir(buildDir), withArgs(
 				args...,
+			))
+			out, err := cmd.CombinedOutput()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err, string(out))
+				require.Contains(t, string(out), "loading policies "+policyPath)
+			} else {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func testBuildPolicyHTTP(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+	resp := &httpserver.Response{Content: []byte("policy-http")}
+	server := httpserver.NewTestServer(map[string]*httpserver.Response{
+		"/file": resp,
+	})
+	defer server.Close()
+
+	parsedURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
+
+	baseURL := server.URL + "/file"
+	queryURL := baseURL + "?policy=allow&case=http"
+	checksum := digest.FromBytes(resp.Content).String()
+	testCases := []struct {
+		name                 string
+		policy               string
+		addURL               string
+		wantErrContains      string
+		requiresHTTPChecksum bool
+	}{
+		{
+			name: "http-url-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.url == "%s"
+
+decision := {"allow": allow}
+`, queryURL),
+			addURL: queryURL,
+		},
+		{
+			name: "http-schema-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.schema == "http"
+
+decision := {"allow": allow}
+`,
+			addURL: baseURL,
+		},
+		{
+			name: "http-host-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.host == "%s"
+
+decision := {"allow": allow}
+`, parsedURL.Host),
+			addURL: baseURL,
+		},
+		{
+			name: "http-path-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.path == "/file"
+
+decision := {"allow": allow}
+`,
+			addURL: baseURL,
+		},
+		{
+			name: "http-query-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.query["policy"][_] == "allow"
+
+decision := {"allow": allow}
+`,
+			addURL: queryURL,
+		},
+		{
+			name: "http-checksum-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.checksum == "%s"
+
+decision := {"allow": allow}
+`, checksum),
+			addURL:               baseURL,
+			requiresHTTPChecksum: true,
+		},
+		{
+			name: "http-checksum-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.checksum == "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+decision := {"allow": allow}
+`,
+			addURL:               baseURL,
+			wantErrContains:      "not allowed by policy",
+			requiresHTTPChecksum: true,
+		},
+		{
+			name: "http-host-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.host == "example.invalid"
+
+decision := {"allow": allow}
+`,
+			addURL:          baseURL,
+			wantErrContains: "not allowed by policy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.requiresHTTPChecksum {
+				sbDriver, _, _ := driverName(sb.Name())
+				if sbDriver != "remote" {
+					t.Skip("http checksum policy input requires remote driver")
+				}
+				skipNoCompatBuildKit(t, sb, ">= 0.26.3-0", "http checksum policy input")
+			}
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("Dockerfile", []byte(fmt.Sprintf("FROM busybox:latest\nADD %s /tmp/file\n", tc.addURL)), 0600),
+				fstest.CreateFile("policy.rego", []byte(tc.policy), 0600),
+			)
+			policyPath := filepath.Join(dir, "policy.rego")
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs(
+				"build",
+				"--progress=plain",
+				"--policy", "filename="+policyPath,
+				"--output=type=cacheonly",
+				dir,
 			))
 			out, err := cmd.CombinedOutput()
 			if tc.wantErrContains == "" {
