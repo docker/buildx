@@ -4,12 +4,15 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
+	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
@@ -25,6 +28,7 @@ var policyBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildPolicyImageName,
 	testBuildPolicyEnv,
 	testBuildPolicyHTTP,
+	testBuildPolicyGit,
 	testBuildPolicyConfigFlags,
 }
 
@@ -705,13 +709,316 @@ decision := {"allow": allow}
 				fstest.CreateFile("policy.rego", []byte(tc.policy), 0600),
 			)
 			policyPath := filepath.Join(dir, "policy.rego")
+			policyArg := "filename=" + policyPath
+			if tc.name == "git-schema-allow" {
+				policyArg = "log-level=debug," + policyArg
+			}
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs(
+				"build",
+				"--progress=plain",
+				"--policy", policyArg,
+				"--output=type=cacheonly",
+				dir,
+			))
+			out, err := cmd.CombinedOutput()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err, string(out))
+				require.Contains(t, string(out), "loading policies "+policyPath)
+			} else {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func testBuildPolicyGit(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+
+	gitDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "Dockerfile"), []byte("FROM busybox:latest\nRUN echo git\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "a"), []byte("a"), 0600))
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(gitDir))
+	require.NoError(t, err)
+
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "Dockerfile", "a")
+	gittestutil.GitCommit(git, t, "initial commit")
+
+	_, err = git.Run("tag", "-a", "v0.1", "-m", "v0.1release")
+	require.NoError(t, err)
+
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "b"), []byte("b"), 0600))
+	gittestutil.GitAdd(git, t, "b")
+	gittestutil.GitCommit(git, t, "b")
+	_, err = git.Run("checkout", "-B", "v2")
+	require.NoError(t, err)
+
+	commitHead, err := git.Run("rev-parse", "HEAD")
+	require.NoError(t, err)
+	commitTag, err := git.Run("rev-parse", "v0.1")
+	require.NoError(t, err)
+	commitTagCommit, err := git.Run("rev-parse", "v0.1^{commit}")
+	require.NoError(t, err)
+	baseURL := gittestutil.GitServeHTTP(git, t)
+	tagURL := baseURL + "#v0.1"
+	branchURL := baseURL + "#v2"
+	parsedURL, err := url.Parse(baseURL)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name               string
+		policy             string
+		context            string
+		wantErrContains    string
+		requiresGitResolve bool
+	}{
+		{
+			name: "git-schema-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.schema != ""
+
+decision := {"allow": allow}
+`,
+			context: baseURL,
+		},
+		{
+			name: "git-host-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.host == "%s"
+
+decision := {"allow": allow}
+`, parsedURL.Host),
+			context: baseURL,
+		},
+		{
+			name: "git-remote-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if endswith(input.git.remote, "%s")
+
+decision := {"allow": allow}
+`, parsedURL.Path),
+			context: baseURL,
+		},
+		{
+			name: "git-ref-tag-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.ref == "refs/tags/v0.1"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-branch-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.branch == "v2"
+
+decision := {"allow": allow}
+`,
+			context:            branchURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-tagname-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.tagName == "v0.1"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-checksum-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.checksum == "%s"
+
+decision := {"allow": allow}
+`, commitTag),
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-commit-checksum-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.commitChecksum == "%s"
+
+decision := {"allow": allow}
+`, commitTagCommit),
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-annotated-tag-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.isAnnotatedTag == true
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-commit-message-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.commit.message == "initial commit"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-tag-object-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.tag.tag == "v0.1"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-checksum-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.checksum == "deadbeef"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			wantErrContains:    "not allowed by policy",
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-commit-ref-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.isCommitRef == true
+
+decision := {"allow": allow}
+`,
+			context:            baseURL + "#" + commitHead,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-host-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.host == "example.invalid"
+
+decision := {"allow": allow}
+`,
+			context:         tagURL,
+			wantErrContains: "not allowed by policy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.requiresGitResolve {
+				sbDriver, _, _ := driverName(sb.Name())
+				if sbDriver != "remote" {
+					t.Skip("git policy metadata requires remote driver")
+				}
+			}
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("policy.rego", []byte(tc.policy), 0600),
+			)
+			policyPath := filepath.Join(dir, "policy.rego")
 
 			cmd := buildxCmd(sb, withDir(dir), withArgs(
 				"build",
 				"--progress=plain",
 				"--policy", "filename="+policyPath,
 				"--output=type=cacheonly",
-				dir,
+				tc.context,
 			))
 			out, err := cmd.CombinedOutput()
 			if tc.wantErrContains == "" {

@@ -636,7 +636,9 @@ func AddUnknownsWithLogger(logf func(logrus.Level, string), req *gwpb.ResolveSou
 			// HTTP checksums are resolved by BuildKit for the HTTP source itself.
 
 		case "git.ref", "git.checksum", "git.commitChecksum", "git.isAnnotatedTag", "git.isSHA256", "git.tagName", "git.branch":
-
+			if req.Git == nil {
+				req.Git = &gwpb.ResolveSourceGitRequest{}
+			}
 		case "git.commit", "git.tag":
 			if req.Git == nil {
 				req.Git = &gwpb.ResolveSourceGitRequest{}
