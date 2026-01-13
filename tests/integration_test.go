@@ -26,6 +26,7 @@ func TestIntegration(t *testing.T) {
 	tests = append(tests, policyBuildTests...)
 	tests = append(tests, policyEvalTests...)
 	tests = append(tests, policyBakeTests...)
+	tests = append(tests, policyTestTests...)
 	tests = append(tests, bakeTests...)
 	tests = append(tests, historyTests...)
 	tests = append(tests, inspectTests...)

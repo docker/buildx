@@ -15,6 +15,11 @@ type Input struct {
 	Git   *Git   `json:"git,omitempty"`
 }
 
+type Decision struct {
+	Allow        *bool    `json:"allow,omitempty"`
+	DenyMessages []string `json:"deny_msg,omitempty"`
+}
+
 type Env struct {
 	Args     map[string]*string `json:"args,omitempty"`
 	Labels   map[string]string  `json:"labels,omitempty"`
