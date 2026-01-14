@@ -47,7 +47,12 @@ func NewVerifier(cfg Config) (*Verifier, error) {
 	return v, nil
 }
 
-func (v *Verifier) VerifyArtifact(ctx context.Context, dgst digest.Digest, bundleBytes []byte) (*types.SignatureInfo, error) {
+func (v *Verifier) VerifyArtifact(ctx context.Context, dgst digest.Digest, bundleBytes []byte, opt ...ArtifactVerifyOpt) (*types.SignatureInfo, error) {
+	opts := &ArtifactVerifyOpts{}
+	for _, o := range opt {
+		o(opts)
+	}
+
 	anyCert, err := anyCerificateIdentity()
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -87,15 +92,18 @@ func (v *Verifier) VerifyArtifact(ctx context.Context, dgst digest.Digest, bundl
 		return nil, errors.Errorf("no valid signatures found")
 	}
 
-	if !isSLSAPredicateType(result.Statement.PredicateType) {
+	if !opts.SLSANotRequired && !isSLSAPredicateType(result.Statement.PredicateType) {
 		return nil, errors.Errorf("unexpected predicate type %q, expecting SLSA provenance", result.Statement.PredicateType)
 	}
 
-	return &types.SignatureInfo{
+	si := &types.SignatureInfo{
 		TrustRootStatus: toRootStatus(st),
 		Signer:          result.Signature.Certificate,
 		Timestamps:      toTimestamps(result.VerifiedTimestamps),
-	}, nil
+		SignatureType:   types.SignatureBundleV03,
+	}
+	si.Kind = si.DetectKind()
+	return si, nil
 }
 
 func (v *Verifier) VerifyImage(ctx context.Context, provider image.ReferrersProvider, desc ocispecs.Descriptor, platform *ocispecs.Platform) (*types.SignatureInfo, error) {
@@ -191,6 +199,7 @@ func (v *Verifier) VerifyImage(ctx context.Context, provider image.ReferrersProv
 	var dockerReference string
 
 	var se verify.SignedEntity
+	sigType := types.SignatureBundleV03
 	switch layer.MediaType {
 	case image.ArtifactTypeSigstoreBundle:
 		if mfst.ArtifactType != image.ArtifactTypeSigstoreBundle {
@@ -212,6 +221,7 @@ func (v *Verifier) VerifyImage(ctx context.Context, provider image.ReferrersProv
 		}
 		artifactPolicy = verify.WithArtifactDigest(alg, rawDgst)
 	case image.MediaTypeCosignSimpleSigning:
+		sigType = types.SignatureSimpleSigningV1
 		payloadBytes, err := image.ReadBlob(ctx, sc.Provider, layer)
 		if err != nil {
 			return nil, errors.Wrapf(err, "reading bundle layer %s from signature manifest %s", layer.Digest, sc.SignatureManifest.Digest)
@@ -297,13 +307,16 @@ func (v *Verifier) VerifyImage(ctx context.Context, provider image.ReferrersProv
 		return nil, errors.Errorf("no valid signatures found")
 	}
 
-	return &types.SignatureInfo{
+	si := &types.SignatureInfo{
 		TrustRootStatus: toRootStatus(st),
 		Signer:          result.Signature.Certificate,
 		Timestamps:      toTimestamps(result.VerifiedTimestamps),
 		DockerReference: dockerReference,
 		IsDHI:           sc.DHI,
-	}, nil
+		SignatureType:   sigType,
+	}
+	si.Kind = si.DetectKind()
+	return si, nil
 }
 
 func (v *Verifier) loadTrustProvider() (*roots.TrustProvider, error) {
@@ -342,9 +355,7 @@ func anyCerificateIdentity() (verify.PolicyOption, error) {
 		return nil, err
 	}
 
-	extensions := certificate.Extensions{
-		RunnerEnvironment: "github-hosted",
-	}
+	extensions := certificate.Extensions{}
 
 	certID, err := verify.NewCertificateIdentity(sanMatcher, issuerMatcher, extensions)
 	if err != nil {
@@ -352,6 +363,18 @@ func anyCerificateIdentity() (verify.PolicyOption, error) {
 	}
 
 	return verify.WithCertificateIdentity(certID), nil
+}
+
+type ArtifactVerifyOpts struct {
+	SLSANotRequired bool
+}
+
+type ArtifactVerifyOpt func(*ArtifactVerifyOpts)
+
+func WithSLSANotRequired() ArtifactVerifyOpt {
+	return func(o *ArtifactVerifyOpts) {
+		o.SLSANotRequired = true
+	}
 }
 
 func loadBundle(dt []byte) (*bundle.Bundle, error) {
