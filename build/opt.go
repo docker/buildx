@@ -3,15 +3,19 @@ package build
 import (
 	"bytes"
 	"context"
+	"fmt"
 	"io"
+	"io/fs"
 	"maps"
 	"os"
+	"path"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
 	"sync"
 	"syscall"
+	"time"
 
 	awsconfig "github.com/aws/aws-sdk-go-v2/config"
 	"github.com/containerd/console"
@@ -21,6 +25,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
@@ -38,11 +43,13 @@ import (
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/apicaps"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/tonistiigi/fsutil"
 )
 
@@ -54,6 +61,79 @@ var sendGitQueryAsInput = sync.OnceValue(func() bool {
 	}
 	return false
 })
+
+type policyProgressLogger struct {
+	ch      chan *client.SolveStatus
+	done    chan struct{}
+	dgst    digest.Digest
+	started time.Time
+	name    string
+}
+
+func newPolicyProgressLogger(pw progress.Writer, name string) *policyProgressLogger {
+	if pw == nil {
+		return nil
+	}
+	ch, done := progress.NewChannel(pw)
+	dgst := digest.FromBytes([]byte(identity.NewID()))
+	tm := time.Now()
+	vtx := client.Vertex{
+		Digest:  dgst,
+		Name:    name,
+		Started: &tm,
+	}
+	ch <- &client.SolveStatus{Vertexes: []*client.Vertex{&vtx}}
+	return &policyProgressLogger{
+		ch:      ch,
+		done:    done,
+		dgst:    dgst,
+		started: tm,
+		name:    name,
+	}
+}
+
+func (l *policyProgressLogger) Log(msg string) {
+	if l == nil || msg == "" {
+		return
+	}
+	if !strings.HasSuffix(msg, "\n") {
+		msg += "\n"
+	}
+	l.ch <- &client.SolveStatus{
+		Logs: []*client.VertexLog{{
+			Vertex:    l.dgst,
+			Stream:    1,
+			Data:      []byte(msg),
+			Timestamp: time.Now(),
+		}},
+	}
+}
+
+func (l *policyProgressLogger) Write(p []byte) (int, error) {
+	if len(p) > 0 {
+		l.Log(string(p))
+	}
+	return len(p), nil
+}
+
+func (l *policyProgressLogger) Close(err error) {
+	if l == nil {
+		return
+	}
+	tm := time.Now()
+	vtx := client.Vertex{
+		Digest:    l.dgst,
+		Name:      l.name,
+		Started:   &l.started,
+		Completed: &tm,
+	}
+	if err != nil {
+		vtx.Error = err.Error()
+	}
+	l.ch <- &client.SolveStatus{Vertexes: []*client.Vertex{&vtx}}
+	close(l.ch)
+	<-l.done
+}
 
 func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *Options, bopts gateway.BuildOpts, cfg *confutil.Config, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
 	nodeDriver := node.Driver
@@ -322,6 +402,72 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 	defers = append(defers, releaseLoad)
 
+	if opt.Inputs.policy == nil {
+		if len(opt.Policy) > 0 {
+			return nil, nil, errors.New("policy file specified but no policy FS in build context")
+		}
+	} else {
+		env := policy.Env{}
+		for k, v := range opt.BuildArgs {
+			if env.Args == nil {
+				env.Args = map[string]*string{}
+			}
+			env.Args[k] = &v
+		}
+		env.Filename = path.Base(opt.Inputs.DockerfilePath)
+		env.Target = opt.Target
+		env.Labels = opt.Labels
+
+		popts, err := withPolicyConfig(*opt.Inputs.policy, opt.Policy)
+		if err != nil {
+			return nil, nil, err
+		}
+		var policyFiles []string
+		for _, popt := range popts {
+			for _, f := range popt.Files {
+				if f.Filename != "" {
+					policyFiles = append(policyFiles, f.Filename)
+				}
+			}
+		}
+		var policyLogger *policyProgressLogger
+		if len(policyFiles) > 0 {
+			policyLogger = newPolicyProgressLogger(pw, fmt.Sprintf("loading policies %s", strings.Join(policyFiles, ", ")))
+		}
+		if policyLogger != nil {
+			defers = append(defers, func() {
+				policyLogger.Close(nil)
+			})
+		}
+		var cbs []policysession.PolicyCallback
+		for _, popt := range popts {
+			policyLevel := logrus.GetLevel()
+			if popt.LogLevel != nil {
+				policyLevel = *popt.LogLevel
+			}
+			logf := func(level logrus.Level, msg string) {
+				if policyLogger == nil || level > policyLevel {
+					return
+				}
+				policyLogger.Log(msg)
+			}
+			p := policy.NewPolicy(policy.Opt{
+				Files:            popt.Files,
+				Env:              env,
+				Log:              logf,
+				FS:               opt.Inputs.policy.FS,
+				VerifierProvider: policy.SignatureVerifier(cfg),
+			})
+			cbs = append(cbs, p.CheckPolicy)
+			if popt.Strict {
+				if bopts.LLBCaps.Supports(pb.CapSourcePolicySession) != nil {
+					return nil, nil, errors.New("strict policy is not supported by the current BuildKit daemon, please upgrade to version v0.27+")
+				}
+			}
+		}
+		so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(cbs...))
+	}
+
 	// add node identifier to shared key if one was specified
 	if so.SharedKey != "" {
 		so.SharedKey += ":" + cfg.TryNodeIdentifier()
@@ -413,6 +559,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 	var (
 		err               error
 		dockerfileReader  io.ReadCloser
+		contextDir        string
 		dockerfileDir     string
 		dockerfileName    = inp.DockerfilePath
 		dockerfileSrcName = inp.DockerfilePath
@@ -454,12 +601,14 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 				if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 					return nil, err
 				}
+				contextDir = inp.ContextPath
 			}
 		}
 	case osutil.IsLocalDir(inp.ContextPath):
 		if err := setLocalMount("context", inp.ContextPath, target); err != nil {
 			return nil, err
 		}
+		contextDir = inp.ContextPath
 		sharedKey := inp.ContextPath
 		if p, err := filepath.Abs(sharedKey); err == nil {
 			sharedKey = filepath.Base(p)
@@ -530,12 +679,47 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		dockerfileName = "Dockerfile"
 	}
 
+	p := &policyOpt{
+		FS: func() (fs.StatFS, func() error, error) {
+			if contextDir == "" {
+				return nil, nil, errors.Errorf("unimplemented, cannot use policy file without a local build context")
+			}
+			root, err := os.OpenRoot(contextDir)
+			if err != nil {
+				return nil, nil, errors.Wrapf(err, "failed to open root for policy file %s.rego", dockerfileName)
+			}
+			baseFS := root.FS()
+			statFS, ok := baseFS.(fs.StatFS)
+			if !ok {
+				root.Close()
+				return nil, nil, errors.Errorf("invalid root FS type %T", baseFS)
+			}
+			return statFS, root.Close, nil
+		},
+	}
+
 	if dockerfileDir != "" {
 		if err := setLocalMount("dockerfile", dockerfileDir, target); err != nil {
 			return nil, err
 		}
 		dockerfileName = handleLowercaseDockerfile(dockerfileDir, dockerfileName)
+
+		if fi, err := os.Lstat(filepath.Join(dockerfileDir, dockerfileName+".rego")); err == nil {
+			if fi.Mode().IsRegular() {
+				dt, err := os.ReadFile(filepath.Join(dockerfileDir, dockerfileName+".rego"))
+				if err != nil {
+					return nil, errors.Wrapf(err, "failed to read policy file %s.rego", dockerfileName)
+				}
+				p.Files = []policy.File{
+					{
+						Filename: dockerfileName + ".rego",
+						Data:     dt,
+					},
+				}
+			}
+		}
 	}
+	inp.policy = p
 
 	target.FrontendAttrs["filename"] = dockerfileName
 
@@ -649,7 +833,7 @@ func setLocalMount(name, dir string, so *client.SolveOpt) error {
 	if so.LocalMounts == nil {
 		so.LocalMounts = map[string]fsutil.FS{}
 	}
-	so.LocalMounts[name] = &fs{FS: lm, dir: dir}
+	so.LocalMounts[name] = &fsMount{FS: lm, dir: dir}
 	return nil
 }
 
@@ -761,12 +945,12 @@ func handleLowercaseDockerfile(dir, p string) string {
 	return p
 }
 
-type fs struct {
+type fsMount struct {
 	fsutil.FS
 	dir string
 }
 
-var _ fsutil.FS = &fs{}
+var _ fsutil.FS = &fsMount{}
 
 func CreateSSH(ssh []*buildflags.SSH) (session.Attachable, error) {
 	configs := make([]sshprovider.AgentConfig, 0, len(ssh))
