@@ -304,7 +304,11 @@ func validateCompose(dt []byte, envs map[string]string) error {
 }
 
 func composeEnv() (map[string]string, error) {
-	envs := sliceToMap(os.Environ())
+	var env []string
+	if envLookupAllowed() {
+		env = os.Environ()
+	}
+	envs := sliceToMap(env)
 	if wd, err := os.Getwd(); err == nil {
 		envs, err = loadDotEnv(envs, wd)
 		if err != nil {
