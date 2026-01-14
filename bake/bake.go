@@ -15,6 +15,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	composecli "github.com/compose-spec/compose-go/v2/cli"
@@ -375,8 +376,12 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 
 	var pm hclparser.ParseMeta
 	if len(hclFiles) > 0 {
+		lookup := func(string) (string, bool) { return "", false }
+		if envLookupAllowed() {
+			lookup = os.LookupEnv
+		}
 		res, err := hclparser.Parse(hclparser.MergeFiles(hclFiles), hclparser.Opt{
-			LookupVar:     os.LookupEnv,
+			LookupVar:     lookup,
 			Vars:          defaults,
 			ValidateLabel: validateTargetName,
 		}, &c)
@@ -597,7 +602,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 				if len(keys) != 3 {
 					return nil, errors.Errorf("invalid key %s, args requires name", parts[0])
 				}
-				if len(parts) < 2 {
+				if len(parts) < 2 && envLookupAllowed() {
 					v, ok := os.LookupEnv(keys[2])
 					if !ok {
 						continue
@@ -1728,3 +1733,13 @@ func parseArrValue[T any, PT arrValue[T]](s []string) ([]*T, error) {
 	}
 	return outputs, nil
 }
+
+var envLookupAllowed = sync.OnceValue(func() bool {
+	if v, ok := os.LookupEnv("BUILDX_BAKE_DISABLE_VARS_ENV_LOOKUP"); ok {
+		disable, err := strconv.ParseBool(v)
+		if err == nil && disable {
+			return false
+		}
+	}
+	return true
+})
