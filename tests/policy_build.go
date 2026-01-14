@@ -3,16 +3,22 @@ package tests
 import (
 	"errors"
 	"fmt"
+	"net/url"
+	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
+	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/testutil"
+	"github.com/moby/buildkit/util/testutil/httpserver"
 	"github.com/moby/buildkit/util/testutil/integration"
+	digest "github.com/opencontainers/go-digest"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,6 +27,9 @@ var policyBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildPolicyDeny,
 	testBuildPolicyImageName,
 	testBuildPolicyEnv,
+	testBuildPolicyHTTP,
+	testBuildPolicyGit,
+	testBuildPolicyConfigFlags,
 }
 
 func testBuildPolicyAllow(t *testing.T, sb integration.Sandbox) {
@@ -536,4 +545,637 @@ decision := {"allow": allow}
 			}
 		})
 	}
+}
+
+func testBuildPolicyHTTP(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+	resp := &httpserver.Response{Content: []byte("policy-http")}
+	server := httpserver.NewTestServer(map[string]*httpserver.Response{
+		"/file": resp,
+	})
+	defer server.Close()
+
+	parsedURL, err := url.Parse(server.URL)
+	require.NoError(t, err)
+
+	baseURL := server.URL + "/file"
+	queryURL := baseURL + "?policy=allow&case=http"
+	checksum := digest.FromBytes(resp.Content).String()
+	testCases := []struct {
+		name                 string
+		policy               string
+		addURL               string
+		wantErrContains      string
+		requiresHTTPChecksum bool
+	}{
+		{
+			name: "http-url-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.url == "%s"
+
+decision := {"allow": allow}
+`, queryURL),
+			addURL: queryURL,
+		},
+		{
+			name: "http-schema-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.schema == "http"
+
+decision := {"allow": allow}
+`,
+			addURL: baseURL,
+		},
+		{
+			name: "http-host-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.host == "%s"
+
+decision := {"allow": allow}
+`, parsedURL.Host),
+			addURL: baseURL,
+		},
+		{
+			name: "http-path-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.path == "/file"
+
+decision := {"allow": allow}
+`,
+			addURL: baseURL,
+		},
+		{
+			name: "http-query-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.query["policy"][_] == "allow"
+
+decision := {"allow": allow}
+`,
+			addURL: queryURL,
+		},
+		{
+			name: "http-checksum-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.checksum == "%s"
+
+decision := {"allow": allow}
+`, checksum),
+			addURL:               baseURL,
+			requiresHTTPChecksum: true,
+		},
+		{
+			name: "http-checksum-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.checksum == "sha256:0000000000000000000000000000000000000000000000000000000000000000"
+
+decision := {"allow": allow}
+`,
+			addURL:               baseURL,
+			wantErrContains:      "not allowed by policy",
+			requiresHTTPChecksum: true,
+		},
+		{
+			name: "http-host-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.http
+
+allow if input.http.host == "example.invalid"
+
+decision := {"allow": allow}
+`,
+			addURL:          baseURL,
+			wantErrContains: "not allowed by policy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.requiresHTTPChecksum {
+				sbDriver, _, _ := driverName(sb.Name())
+				if sbDriver != "remote" {
+					t.Skip("http checksum policy input requires remote driver")
+				}
+				skipNoCompatBuildKit(t, sb, ">= 0.26.3-0", "http checksum policy input")
+			}
+			dockerfile := fmt.Appendf(nil, "FROM busybox:latest\nADD %s /tmp/file\n", tc.addURL)
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("Dockerfile", dockerfile, 0600),
+				fstest.CreateFile("policy.rego", []byte(tc.policy), 0600),
+			)
+			policyPath := filepath.Join(dir, "policy.rego")
+			policyArg := "filename=" + policyPath
+			if tc.name == "git-schema-allow" {
+				policyArg = "log-level=debug," + policyArg
+			}
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs(
+				"build",
+				"--progress=plain",
+				"--policy", policyArg,
+				"--output=type=cacheonly",
+				dir,
+			))
+			out, err := cmd.CombinedOutput()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err, string(out))
+				require.Contains(t, string(out), "loading policies "+policyPath)
+			} else {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func testBuildPolicyGit(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+
+	gitDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "Dockerfile"), []byte("FROM busybox:latest\nRUN echo git\n"), 0600))
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "a"), []byte("a"), 0600))
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(gitDir))
+	require.NoError(t, err)
+
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "Dockerfile", "a")
+	gittestutil.GitCommit(git, t, "initial commit")
+
+	gittestutil.GitTagAnnotated(git, t, "v0.1", "v0.1release")
+
+	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "b"), []byte("b"), 0600))
+	gittestutil.GitAdd(git, t, "b")
+	gittestutil.GitCommit(git, t, "b")
+	_, err = git.Run("checkout", "-B", "v2")
+	require.NoError(t, err)
+
+	commitHead, err := git.Run("rev-parse", "HEAD")
+	require.NoError(t, err)
+	commitTag, err := git.Run("rev-parse", "v0.1")
+	require.NoError(t, err)
+	commitTagCommit, err := git.Run("rev-parse", "v0.1^{commit}")
+	require.NoError(t, err)
+	baseURL := gittestutil.GitServeHTTP(git, t)
+	tagURL := baseURL + "#v0.1"
+	branchURL := baseURL + "#v2"
+	parsedURL, err := url.Parse(baseURL)
+	require.NoError(t, err)
+
+	testCases := []struct {
+		name               string
+		policy             string
+		context            string
+		wantErrContains    string
+		requiresGitResolve bool
+	}{
+		{
+			name: "git-schema-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.schema != ""
+
+decision := {"allow": allow}
+`,
+			context: baseURL,
+		},
+		{
+			name: "git-host-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.host == "%s"
+
+decision := {"allow": allow}
+`, parsedURL.Host),
+			context: baseURL,
+		},
+		{
+			name: "git-remote-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if endswith(input.git.remote, "%s")
+
+decision := {"allow": allow}
+`, parsedURL.Path),
+			context: baseURL,
+		},
+		{
+			name: "git-ref-tag-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.ref == "refs/tags/v0.1"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-branch-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.branch == "v2"
+
+decision := {"allow": allow}
+`,
+			context:            branchURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-tagname-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.tagName == "v0.1"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-checksum-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.checksum == "%s"
+
+decision := {"allow": allow}
+`, commitTag),
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-commit-checksum-allow",
+			policy: fmt.Sprintf(`
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.commitChecksum == "%s"
+
+decision := {"allow": allow}
+`, commitTagCommit),
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-annotated-tag-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.isAnnotatedTag == true
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-commit-message-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.commit.message == "initial commit"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-tag-object-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.tag.tag == "v0.1"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-checksum-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.checksum == "deadbeef"
+
+decision := {"allow": allow}
+`,
+			context:            tagURL,
+			wantErrContains:    "not allowed by policy",
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-commit-ref-allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.isCommitRef == true
+
+decision := {"allow": allow}
+`,
+			context:            baseURL + "#" + commitHead,
+			requiresGitResolve: true,
+		},
+		{
+			name: "git-host-deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.git
+
+allow if input.git.host == "example.invalid"
+
+decision := {"allow": allow}
+`,
+			context:         tagURL,
+			wantErrContains: "not allowed by policy",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			if tc.requiresGitResolve {
+				sbDriver, _, _ := driverName(sb.Name())
+				if sbDriver != "remote" {
+					t.Skip("git policy metadata requires remote driver")
+				}
+			}
+			dir := tmpdir(
+				t,
+				fstest.CreateFile("policy.rego", []byte(tc.policy), 0600),
+			)
+			policyPath := filepath.Join(dir, "policy.rego")
+
+			cmd := buildxCmd(sb, withDir(dir), withArgs(
+				"build",
+				"--progress=plain",
+				"--policy", "filename="+policyPath,
+				"--output=type=cacheonly",
+				tc.context,
+			))
+			out, err := cmd.CombinedOutput()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err, string(out))
+				require.Contains(t, string(out), "loading policies "+policyPath)
+			} else {
+				require.Error(t, err, string(out))
+				require.Contains(t, string(out), tc.wantErrContains)
+			}
+		})
+	}
+}
+
+func testBuildPolicyConfigFlags(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+
+	dockerfile := []byte("FROM busybox:latest\nRUN echo policy-flags\n")
+	defaultPolicy := []byte(`
+package docker
+
+default allow = false
+
+allow if input.env.args["DEFAULT_OK"] == "1"
+
+decision := {"allow": allow}
+`)
+	extraPolicy := []byte(`
+package docker
+
+default allow = false
+
+allow if input.env.labels["com.example.extra"] == "1"
+
+decision := {"allow": allow}
+`)
+	denyPolicy := []byte(`
+package docker
+
+default allow = false
+
+decision := {"allow": allow}
+`)
+
+	t.Run("additional-policy-requires-default", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile.rego", defaultPolicy, 0600),
+			fstest.CreateFile("extra.rego", extraPolicy, 0600),
+		)
+		extraPath := filepath.Join(dir, "extra.rego")
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--build-arg", "DEFAULT_OK=1",
+			"--label", "com.example.extra=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		cmd = buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--label", "com.example.extra=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err = cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "not allowed by policy")
+
+		cmd = buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--build-arg", "DEFAULT_OK=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err = cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "not allowed by policy")
+	})
+
+	t.Run("reset-ignores-default", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile.rego", defaultPolicy, 0600),
+			fstest.CreateFile("extra.rego", extraPolicy, 0600),
+		)
+		extraPath := filepath.Join(dir, "extra.rego")
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "reset=true,filename="+extraPath,
+			"--label", "com.example.extra=1",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+
+		cmd = buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "reset=true,filename="+extraPath,
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err = cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "not allowed by policy")
+	})
+
+	t.Run("disabled-skips-default", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile.rego", denyPolicy, 0600),
+		)
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "disabled=true",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+	})
+
+	t.Run("disabled-cannot-combine-with-extra", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("extra.rego", denyPolicy, 0600),
+		)
+		extraPath := filepath.Join(dir, "extra.rego")
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs(
+			"build",
+			"--progress=plain",
+			"--policy", "filename="+extraPath,
+			"--policy", "disabled=true",
+			"--output=type=cacheonly",
+			dir,
+		))
+		out, err := cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "disabled policy cannot be combined with other policy flags")
+	})
 }

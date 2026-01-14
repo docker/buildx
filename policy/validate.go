@@ -236,7 +236,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			if err := AddUnknownsWithLogger(p.opt.Log, next, unk); err != nil {
 				return nil, nil, err
 			}
-			if next.Image != nil || next.Git != nil {
+			if next.Image != nil || next.Git != nil || hasHTTPUnknowns(unk) {
 				p.log(logrus.InfoLevel, "policy decision for source %s: resolve missing fields %+v", src.Source.Identifier, summarizeUnknownsForLog(unk))
 				return nil, next, nil
 			}
@@ -347,13 +347,14 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 			Path:   u.Path,
 			Query:  u.Query(),
 		}
+		if src.HTTP != nil {
+			inp.HTTP.Checksum = src.HTTP.Checksum
+		}
+		if inp.HTTP.Checksum == "" {
+			unknowns = append(unknowns, "input.http.checksum")
+		}
 		if _, ok := src.Source.Attrs[pb.AttrHTTPAuthHeaderSecret]; ok {
 			inp.HTTP.HasAuth = true
-		}
-		if src.Image == nil {
-			unknowns = append(unknowns, "input.http.checksum")
-		} else {
-			inp.HTTP.Checksum = src.Image.Digest
 		}
 	case "git":
 		if !gitutil.IsGitTransport(refstr) {
@@ -625,8 +626,13 @@ func AddUnknownsWithLogger(logf func(logrus.Level, string), req *gwpb.ResolveSou
 			}
 			req.Image.AttestationChain = true
 
-		case "git.ref", "git.checksum", "git.commitChecksum", "git.isAnnotatedTag", "git.isSHA256", "git.tagName", "git.branch":
+		case "http.checksum":
+			// HTTP checksums are resolved by BuildKit for the HTTP source itself.
 
+		case "git.ref", "git.checksum", "git.commitChecksum", "git.isAnnotatedTag", "git.isSHA256", "git.tagName", "git.branch":
+			if req.Git == nil {
+				req.Git = &gwpb.ResolveSourceGitRequest{}
+			}
 		case "git.commit", "git.tag":
 			if req.Git == nil {
 				req.Git = &gwpb.ResolveSourceGitRequest{}
@@ -676,6 +682,15 @@ func summarizeUnknownsForLog(unk []string) []string {
 		out = append(out, u)
 	}
 	return out
+}
+
+func hasHTTPUnknowns(unk []string) bool {
+	for _, u := range unk {
+		if strings.HasPrefix(u, "input.http.") {
+			return true
+		}
+	}
+	return false
 }
 
 func trimKey(s string) string {

@@ -5,6 +5,7 @@ import (
 	"testing"
 
 	"github.com/docker/buildx/policy"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -39,33 +40,33 @@ func TestWithPolicyConfigDefaults(t *testing.T) {
 
 // TestWithPolicyConfigDisabled validates disabled policy behavior across invalid and valid combinations.
 func TestWithPolicyConfigDisabled(t *testing.T) {
-	_, err := withPolicyConfig(policyOpt{}, []PolicyConfig{
+	_, err := withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
 		{Disabled: true, Files: []policy.File{{Filename: "x.rego"}}},
 	})
 	require.Error(t, err)
 
-	_, err = withPolicyConfig(policyOpt{}, []PolicyConfig{
+	_, err = withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
 		{Disabled: true, Reset: true},
 	})
 	require.Error(t, err)
 
-	_, err = withPolicyConfig(policyOpt{}, []PolicyConfig{
+	_, err = withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
 		{Disabled: true, Strict: boolPtr(true)},
 	})
 	require.Error(t, err)
 
-	_, err = withPolicyConfig(policyOpt{}, []PolicyConfig{
+	_, err = withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
 		{Disabled: true, LogLevel: levelPtr(logrus.WarnLevel)},
 	})
 	require.Error(t, err)
 
-	_, err = withPolicyConfig(policyOpt{}, []PolicyConfig{
+	_, err = withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
 		{Disabled: true},
 		{},
 	})
 	require.Error(t, err)
 
-	out, err := withPolicyConfig(policyOpt{}, []PolicyConfig{
+	out, err := withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
 		{Disabled: true},
 	})
 	require.NoError(t, err)
@@ -81,7 +82,7 @@ func TestWithPolicyConfigResetAndFiles(t *testing.T) {
 		},
 	}
 
-	out, err := withPolicyConfig(defaultPolicy, []PolicyConfig{
+	out, err := withPolicyConfig(defaultPolicy, []buildflags.PolicyConfig{
 		{Reset: true},
 		{Files: []policy.File{{Filename: "a.rego"}}},
 	})
@@ -97,7 +98,7 @@ func TestWithPolicyConfigStrictAndLogLevel(t *testing.T) {
 		Files: []policy.File{{Filename: "default.rego"}},
 	}
 
-	out, err := withPolicyConfig(defaultPolicy, []PolicyConfig{
+	out, err := withPolicyConfig(defaultPolicy, []buildflags.PolicyConfig{
 		{Strict: boolPtr(true), LogLevel: levelPtr(logrus.WarnLevel)},
 	})
 	require.NoError(t, err)
@@ -109,7 +110,7 @@ func TestWithPolicyConfigStrictAndLogLevel(t *testing.T) {
 
 // TestWithPolicyConfigStrictIgnoredWithoutPolicy ensures strict without any policy produces no entries.
 func TestWithPolicyConfigStrictIgnoredWithoutPolicy(t *testing.T) {
-	out, err := withPolicyConfig(policyOpt{}, []PolicyConfig{
+	out, err := withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
 		{Strict: boolPtr(true)},
 	})
 	require.NoError(t, err)
@@ -125,7 +126,7 @@ func TestWithPolicyConfigMultipleFilesAndOverrides(t *testing.T) {
 		},
 	}
 
-	out, err := withPolicyConfig(defaultPolicy, []PolicyConfig{
+	out, err := withPolicyConfig(defaultPolicy, []buildflags.PolicyConfig{
 		{Files: []policy.File{{Filename: "a.rego"}}},
 		{Strict: boolPtr(true), LogLevel: levelPtr(logrus.WarnLevel)},
 		{Files: []policy.File{{Filename: "b.rego"}}, Strict: boolPtr(true)},
