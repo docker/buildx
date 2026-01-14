@@ -81,3 +81,78 @@ func TestParseOCILayoutPath(t *testing.T) {
 		assert.Equal(t, tt.tag, tag, "comparing tag: %s", tt.s)
 	}
 }
+
+func TestCreateExports_RegistryUnpack(t *testing.T) {
+	tests := []struct {
+		name       string
+		entries    []*buildflags.ExportEntry
+		wantType   string
+		wantPush   string
+		wantUnpack string
+	}{
+		{
+			name: "registry type sets unpack=false",
+			entries: []*buildflags.ExportEntry{
+				{
+					Type:  "registry",
+					Attrs: map[string]string{},
+				},
+			},
+			wantType:   "image",
+			wantPush:   "true",
+			wantUnpack: "false",
+		},
+		{
+			name: "registry type respects explicit unpack=true",
+			entries: []*buildflags.ExportEntry{
+				{
+					Type: "registry",
+					Attrs: map[string]string{
+						"unpack": "true",
+					},
+				},
+			},
+			wantType:   "image",
+			wantPush:   "true",
+			wantUnpack: "true",
+		},
+		{
+			name: "registry type respects explicit unpack=false",
+			entries: []*buildflags.ExportEntry{
+				{
+					Type: "registry",
+					Attrs: map[string]string{
+						"unpack": "false",
+					},
+				},
+			},
+			wantType:   "image",
+			wantPush:   "true",
+			wantUnpack: "false",
+		},
+		{
+			name: "image type without push does not set unpack",
+			entries: []*buildflags.ExportEntry{
+				{
+					Type:  "image",
+					Attrs: map[string]string{},
+				},
+			},
+			wantType:   "image",
+			wantPush:   "",
+			wantUnpack: "",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			exports, _, err := CreateExports(tt.entries)
+			require.NoError(t, err)
+			require.Len(t, exports, 1)
+
+			require.Equal(t, tt.wantType, exports[0].Type)
+			require.Equal(t, tt.wantPush, exports[0].Attrs["push"])
+			require.Equal(t, tt.wantUnpack, exports[0].Attrs["unpack"])
+		})
+	}
+}

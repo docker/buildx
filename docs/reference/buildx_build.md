@@ -41,7 +41,7 @@ Start a build
 | [`--progress`](#progress)               | `string`      | `auto`    | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output |
 | [`--provenance`](#provenance)           | `string`      |           | Shorthand for `--attest=type=provenance`                                                                              |
 | `--pull`                                | `bool`        |           | Always attempt to pull all referenced images                                                                          |
-| [`--push`](#push)                       | `bool`        |           | Shorthand for `--output=type=registry`                                                                                |
+| [`--push`](#push)                       | `bool`        |           | Shorthand for `--output=type=registry,unpack=false`                                                                   |
 | `-q`, `--quiet`                         | `bool`        |           | Suppress the build output and print image ID on success                                                               |
 | [`--sbom`](#sbom)                       | `string`      |           | Shorthand for `--attest=type=sbom`                                                                                    |
 | [`--secret`](#secret)                   | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                                             |
