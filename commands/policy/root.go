@@ -20,7 +20,7 @@ func RootCmd(rootcmd *cobra.Command, dockerCli command.Cli, rootOpts RootOptions
 	cmd.AddCommand(
 		jsonSchemaCmd(),
 		evalCmd(dockerCli, rootOpts),
-		testCmd(),
+		testCmd(dockerCli, rootOpts),
 	)
 
 	return cmd
