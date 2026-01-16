@@ -120,6 +120,8 @@ func parseSignatures(ctx context.Context, getVerifier PolicyVerifierProvider, ac
 		Timestamps:      siRaw.Timestamps,
 		IsDHI:           siRaw.IsDHI,
 		DockerReference: siRaw.DockerReference,
+		SignatureType:   toSignatureType(siRaw.SignatureType),
+		SignatureKind:   toSignatureKind(siRaw.Kind),
 	}
 
 	// TODO: signature type after upstream update
