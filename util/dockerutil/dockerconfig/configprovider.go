@@ -18,6 +18,12 @@ import (
 	"github.com/moby/buildkit/session/auth/authprovider"
 )
 
+const (
+	dockerHubRegistryHost   = "registry-1.docker.io"
+	dockerDHIRegistryHost   = "dhi.io"
+	dockerScoutRegistryHost = "registry.scout.docker.com"
+)
+
 func LoadAuthConfig(cli command.Cli) authprovider.AuthConfigProvider {
 	acp := &authConfigProvider{
 		buildxConfig:    confutil.NewConfig(cli),
@@ -37,6 +43,27 @@ type authConfigProvider struct {
 }
 
 func (ap *authConfigProvider) load(ctx context.Context, host string, scopes []string, cacheExpireCheck authprovider.ExpireCachedAuthCheck) (types.AuthConfig, error) {
+	ac, err := ap.loadHost(ctx, host, scopes, cacheExpireCheck)
+	if err != nil {
+		return types.AuthConfig{}, err
+	}
+	if ac == (types.AuthConfig{}) {
+		// DHI and Scout are also Hub backed registries by Docker, fallback if no specific auth found
+		switch host {
+		case dockerDHIRegistryHost, dockerScoutRegistryHost:
+			ac, err := ap.loadHost(ctx, dockerHubRegistryHost, scopes, cacheExpireCheck)
+			if err != nil {
+				return types.AuthConfig{}, nil
+			}
+			return ac, nil
+		default:
+			return types.AuthConfig{}, err
+		}
+	}
+	return ac, nil
+}
+
+func (ap *authConfigProvider) loadHost(_ context.Context, host string, scopes []string, cacheExpireCheck authprovider.ExpireCachedAuthCheck) (types.AuthConfig, error) {
 	ap.initOnce.Do(func() {
 		ap.init()
 	})
