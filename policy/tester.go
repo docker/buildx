@@ -195,6 +195,13 @@ func loadPolicyModules(root fs.StatFS, filename string) (map[string]*ast.Module,
 	modules := map[string]*ast.Module{
 		filepath.ToSlash(policyFile): mod,
 	}
+	builtinMod, err := builtinPolicyModuleAST()
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "parse builtin policy module %s", builtinPolicyModuleFilename)
+	}
+	if _, ok := modules[builtinPolicyModuleFilename]; !ok {
+		modules[builtinPolicyModuleFilename] = builtinMod
+	}
 	files := []File{
 		{
 			Filename: filepath.ToSlash(policyFile),

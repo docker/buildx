@@ -201,6 +201,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		opts = append(opts, f.impl(st))
 	}
 
+	opts = append(opts, rego.Module(builtinPolicyModuleFilename, builtinPolicyModule))
 	for _, file := range p.opt.Files {
 		opts = append(opts, rego.Module(file.Filename, string(file.Data)))
 	}
