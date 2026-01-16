@@ -82,6 +82,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeCheckCallOutput,
 	testBakeExtraHosts,
 	testBakeFileFromEnvironment,
+	testBakeDisableEnvLookup,
 }
 
 func testBakePrint(t *testing.T, sb integration.Sandbox) {
@@ -169,6 +170,74 @@ RUN echo "Hello ${HELLO}"
   }
 }
 `, stdout.String())
+		})
+	}
+}
+
+func testBakeDisableEnvLookup(t *testing.T, sb integration.Sandbox) {
+	testCases := []struct {
+		name string
+		f    string
+		dt   []byte
+	}{
+		{
+			name: "HCL",
+			f:    "docker-bake.hcl",
+			dt: []byte(`
+variable "HELLO" {
+  default = "fallback"
+}
+
+target "build" {
+  args = {
+    HELLO = HELLO
+  }
+}
+`),
+		},
+		{
+			name: "Compose",
+			f:    "compose.yml",
+			dt: []byte(`
+services:
+  build:
+    build:
+      context: .
+      args:
+        HELLO: ${HELLO:-fallback}
+`),
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			dir := tmpdir(
+				t,
+				fstest.CreateFile(tc.f, tc.dt, 0600),
+				fstest.CreateFile("Dockerfile", []byte(`
+FROM busybox
+ARG HELLO
+RUN echo "Hello ${HELLO}"
+`), 0600),
+			)
+
+			cmd := buildxCmd(
+				sb,
+				withDir(dir),
+				withArgs("bake", "--print", "build"),
+				withEnv(
+					"BUILDX_BAKE_DISABLE_VARS_ENV_LOOKUP=1",
+					"HELLO=fromenv",
+				),
+			)
+			stdout := bytes.Buffer{}
+			stderr := bytes.Buffer{}
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+
+			require.Contains(t, stdout.String(), `"HELLO": "fallback"`)
+			require.NotContains(t, stdout.String(), "fromenv")
 		})
 	}
 }
