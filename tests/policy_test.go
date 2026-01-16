@@ -247,6 +247,50 @@ test_docker_github_builder_denied if {
 	}
 	not result.allow
 }
+
+test_docker_github_builder_tag if {
+	docker_github_builder_tag({
+		"hasProvenance": true,
+		"signatures": [{
+			"kind": "docker-github-builder",
+			"type": "bundle-v0.3",
+			"signer": {
+				"certificateIssuer": "CN=sigstore-intermediate,O=sigstore.dev",
+				"issuer": "https://token.actions.githubusercontent.com",
+				"sourceRepositoryURI": "https://github.com/org/repo",
+				"sourceRepositoryRef": "refs/tags/v1.2.3",
+				"runnerEnvironment": "github-hosted"
+			},
+			"timestamps": [{
+				"type": "tlog",
+				"uri": "https://example.com/tlog",
+				"timestamp": "2024-01-01T00:00:00Z"
+			}]
+		}]
+	}, "org/repo", "v1.2.3")
+}
+
+test_docker_github_builder_tag_denied if {
+	not docker_github_builder_tag({
+		"hasProvenance": true,
+		"signatures": [{
+			"kind": "docker-github-builder",
+			"type": "bundle-v0.3",
+			"signer": {
+				"certificateIssuer": "CN=sigstore-intermediate,O=sigstore.dev",
+				"issuer": "https://token.actions.githubusercontent.com",
+				"sourceRepositoryURI": "https://github.com/org/repo",
+				"sourceRepositoryRef": "refs/tags/other",
+				"runnerEnvironment": "github-hosted"
+			},
+			"timestamps": [{
+				"type": "tlog",
+				"uri": "https://example.com/tlog",
+				"timestamp": "2024-01-01T00:00:00Z"
+			}]
+		}]
+	}, "org/repo", "v1.2.3")
+}
 `), 0600),
 	)
 
@@ -261,4 +305,6 @@ test_docker_github_builder_denied if {
 	require.NoError(t, err, string(out))
 	require.Contains(t, string(out), "test_docker_github_builder: PASS")
 	require.Contains(t, string(out), "test_docker_github_builder_denied: PASS")
+	require.Contains(t, string(out), "test_docker_github_builder_tag: PASS")
+	require.Contains(t, string(out), "test_docker_github_builder_tag_denied: PASS")
 }
