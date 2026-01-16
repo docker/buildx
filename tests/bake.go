@@ -41,6 +41,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrintSensitive,
 	testBakePrintOverrideEmpty,
 	testBakePrintKeepEscaped,
+	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeRemote,
@@ -527,6 +528,78 @@ EOT
 	cmd = buildxCmd(sb, withDir(dir), withArgs("bake"))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
+}
+
+func testBakePrintRemoteContextSubdir(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target default {
+	context = "bar"
+}
+`)
+	dockerfile := []byte(`
+FROM scratch
+COPY super-cool.txt /
+`)
+
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateDir("bar", 0700),
+		fstest.CreateFile("bar/Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("bar/super-cool.txt", []byte("super cool"), 0600),
+	)
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "bar")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
+
+	tests := []struct {
+		name            string
+		ref             string
+		expectedContext string
+	}{
+		{
+			name:            "no ref",
+			expectedContext: addr,
+		},
+		{
+			name:            "branch ref",
+			ref:             "main",
+			expectedContext: addr + "#main",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			u := addr
+			if tt.ref != "" {
+				u += "#" + tt.ref
+			}
+			cmd := buildxCmd(sb, withDir("/tmp"), withArgs("bake", u, "--print"))
+			stdout := bytes.Buffer{}
+			stderr := bytes.Buffer{}
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+			require.JSONEq(t, fmt.Sprintf(`{
+	"group": {
+		"default": {
+			"targets": [
+				"default"
+			]
+		}
+	},
+	"target": {
+		"default": {
+			"context": %q,
+			"dockerfile": "Dockerfile"
+		}
+	}
+}`, tt.expectedContext), stdout.String())
+		})
+	}
 }
 
 func testBakeLocal(t *testing.T, sb integration.Sandbox) {
