@@ -67,9 +67,16 @@ type policyProgressLogger struct {
 	ch      chan *client.SolveStatus
 	done    chan struct{}
 	dgst    digest.Digest
-	started time.Time
 	name    string
+	started time.Time
+	mu      sync.Mutex
+	timer   *time.Timer
+	window  int
+	open    bool
+	closed  bool
 }
+
+const policyProgressWindow = 500 * time.Millisecond
 
 func newPolicyProgressLogger(pw progress.Writer, name string) *policyProgressLogger {
 	if pw == nil {
@@ -77,25 +84,45 @@ func newPolicyProgressLogger(pw progress.Writer, name string) *policyProgressLog
 	}
 	ch, done := progress.NewChannel(pw)
 	dgst := digest.FromBytes([]byte(identity.NewID()))
-	tm := time.Now()
-	vtx := client.Vertex{
-		Digest:  dgst,
-		Name:    name,
-		Started: &tm,
-	}
-	ch <- &client.SolveStatus{Vertexes: []*client.Vertex{&vtx}}
 	return &policyProgressLogger{
-		ch:      ch,
-		done:    done,
-		dgst:    dgst,
-		started: tm,
-		name:    name,
+		ch:   ch,
+		done: done,
+		dgst: dgst,
+		name: name,
 	}
 }
 
 func (l *policyProgressLogger) Log(msg string) {
 	if l == nil || msg == "" {
 		return
+	}
+	needStart := false
+	var started time.Time
+	var window int
+
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	if !l.open {
+		needStart = true
+		l.open = true
+		l.window++
+		window = l.window
+		started = time.Now()
+		l.started = started
+	} else {
+		window = l.window
+	}
+	if l.timer != nil {
+		l.timer.Stop()
+	}
+	l.timer = time.AfterFunc(policyProgressWindow, func() {
+		l.completeWindow(window, nil)
+	})
+	if needStart {
+		l.sendVertexStart(started)
 	}
 	if !strings.HasSuffix(msg, "\n") {
 		msg += "\n"
@@ -108,6 +135,7 @@ func (l *policyProgressLogger) Log(msg string) {
 			Timestamp: time.Now(),
 		}},
 	}
+	l.mu.Unlock()
 }
 
 func (l *policyProgressLogger) Write(p []byte) (int, error) {
@@ -121,19 +149,66 @@ func (l *policyProgressLogger) Close(err error) {
 	if l == nil {
 		return
 	}
+	shouldComplete := false
+	var started time.Time
+
+	l.mu.Lock()
+	if l.closed {
+		l.mu.Unlock()
+		return
+	}
+	l.closed = true
+	if l.open {
+		shouldComplete = true
+		started = l.started
+		l.open = false
+	}
+	l.window++
+	if l.timer != nil {
+		l.timer.Stop()
+		l.timer = nil
+	}
+	if shouldComplete {
+		l.sendVertexComplete(started, err)
+	}
+	l.mu.Unlock()
+	close(l.ch)
+	<-l.done
+}
+
+func (l *policyProgressLogger) completeWindow(window int, err error) {
+	l.mu.Lock()
+	if l.closed || !l.open || window != l.window {
+		l.mu.Unlock()
+		return
+	}
+	started := l.started
+	l.open = false
+	l.sendVertexComplete(started, err)
+	l.mu.Unlock()
+}
+
+func (l *policyProgressLogger) sendVertexStart(started time.Time) {
+	vtx := client.Vertex{
+		Digest:  l.dgst,
+		Name:    l.name,
+		Started: &started,
+	}
+	l.ch <- &client.SolveStatus{Vertexes: []*client.Vertex{&vtx}}
+}
+
+func (l *policyProgressLogger) sendVertexComplete(started time.Time, err error) {
 	tm := time.Now()
 	vtx := client.Vertex{
 		Digest:    l.dgst,
 		Name:      l.name,
-		Started:   &l.started,
+		Started:   &started,
 		Completed: &tm,
 	}
 	if err != nil {
 		vtx.Error = err.Error()
 	}
 	l.ch <- &client.SolveStatus{Vertexes: []*client.Vertex{&vtx}}
-	close(l.ch)
-	<-l.done
 }
 
 func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *Options, bopts gateway.BuildOpts, cfg *confutil.Config, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(), err error) {
