@@ -3,6 +3,7 @@ package bake
 import (
 	"context"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -20,8 +21,8 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-func ParseComposeFiles(fs []File) (*Config, error) {
-	envs, err := composeEnv()
+func ParseComposeFiles(fs []File, envOverrides map[string]string) (*Config, error) {
+	envs, err := composeEnv(envOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -278,8 +279,8 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 	})
 }
 
-func validateComposeFile(dt []byte, fn string) (bool, error) {
-	envs, err := composeEnv()
+func validateComposeFile(dt []byte, fn string, envOverrides map[string]string) (bool, error) {
+	envs, err := composeEnv(envOverrides)
 	if err != nil {
 		return false, err
 	}
@@ -303,7 +304,7 @@ func validateCompose(dt []byte, envs map[string]string) error {
 	return err
 }
 
-func composeEnv() (map[string]string, error) {
+func composeEnv(envOverrides map[string]string) (map[string]string, error) {
 	var env []string
 	if envLookupAllowed() {
 		env = os.Environ()
@@ -315,6 +316,7 @@ func composeEnv() (map[string]string, error) {
 			return nil, err
 		}
 	}
+	maps.Copy(envs, envOverrides)
 	return envs, nil
 }
 

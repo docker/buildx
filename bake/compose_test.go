@@ -443,7 +443,7 @@ services:
 	c, err := ParseComposeFiles([]File{{
 		Name: "docker-compose.yml",
 		Data: dt,
-	}})
+	}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"FOO": ptrstr("bar")}, c.Targets[0].Args)
 }
@@ -716,7 +716,7 @@ target "default" {
 	}
 	for _, tt := range cases {
 		t.Run(tt.name, func(t *testing.T) {
-			isCompose, err := validateComposeFile(tt.dt, tt.fn)
+			isCompose, err := validateComposeFile(tt.dt, tt.fn, nil)
 			assert.Equal(t, tt.isCompose, isCompose)
 			if tt.wantErr {
 				require.Error(t, err)
@@ -790,7 +790,7 @@ services:
 	c, err := ParseComposeFiles([]File{{
 		Name: "composetypes.yml",
 		Data: dt,
-	}})
+	}}, nil)
 	require.NoError(t, err)
 
 	require.Equal(t, 2, len(c.Targets))
@@ -943,7 +943,7 @@ services:
 `)
 
 	chdir(t, tmpdir)
-	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}}, nil)
 	require.NoError(t, err)
 }
 
@@ -968,7 +968,7 @@ services:
 	t.Setenv("SYSTEM_VALUE", "abc")
 
 	chdir(t, tmpdir)
-	c, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	c, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}}, nil)
 	require.NoError(t, err)
 	require.Equal(t, map[string]*string{"TEST_VALUE": ptrstr("abc"), "FOO_VALUE": ptrstr("abc")}, c.Targets[0].Args)
 }
@@ -987,7 +987,7 @@ foo:
 `)
 
 	chdir(t, tmpdir)
-	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}}, nil)
 	require.NoError(t, err)
 }
 
@@ -1002,7 +1002,7 @@ services:
 `)
 
 	chdir(t, tmpdir)
-	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}})
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: dt}}, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, `additional properties 'foo' not allowed`)
 }
@@ -1010,7 +1010,7 @@ services:
 func TestEmptyComposeFile(t *testing.T) {
 	tmpdir := t.TempDir()
 	chdir(t, tmpdir)
-	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: []byte(``)}})
+	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: []byte(``)}}, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, `empty compose file`) // https://github.com/compose-spec/compose-go/blob/a42e7579d813e64c0c1f598a666358bc0c0a0eb4/loader/loader.go#L542
 }

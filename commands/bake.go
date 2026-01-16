@@ -51,6 +51,7 @@ const (
 type bakeOptions struct {
 	files     []string
 	overrides []string
+	vars      []string
 
 	sbom       string
 	provenance string
@@ -209,9 +210,13 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		"BAKE_CMD_CONTEXT":    cmdContext,
 		"BAKE_LOCAL_PLATFORM": platforms.Format(platforms.DefaultSpec()),
 	}
+	vars, err := parseBakeVars(in.vars)
+	if err != nil {
+		return err
+	}
 
 	if in.list != "" {
-		cfg, pm, err := bake.ParseFiles(files, defaults)
+		cfg, pm, err := bake.ParseFiles(files, defaults, vars)
 		if err != nil {
 			return err
 		}
@@ -230,7 +235,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		}
 	}
 
-	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults, &ent)
+	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults, vars, &ent)
 	if err != nil {
 		return err
 	}
@@ -516,6 +521,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--set=*.attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--set=*.attest=type=provenance"`)
 	flags.StringArrayVar(&options.overrides, "set", nil, `Override target value (e.g., "targetpattern.key=value")`)
+	flags.StringArrayVar(&options.vars, "var", nil, `Set a variable value (e.g., "name=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
 
@@ -715,6 +721,27 @@ func parseList(input string) (listEntry, error) {
 	}
 
 	return res, nil
+}
+
+func parseBakeVars(values []string) (map[string]string, error) {
+	if len(values) == 0 {
+		return nil, nil
+	}
+	vars := make(map[string]string, len(values))
+	for _, value := range values {
+		if value == "" {
+			continue
+		}
+		key, val, ok := strings.Cut(value, "=")
+		if !ok {
+			return nil, errors.Errorf("invalid variable %q, expected key=value", value)
+		}
+		if key == "" {
+			return nil, errors.Errorf("invalid variable %q, key is empty", value)
+		}
+		vars[key] = val
+	}
+	return vars, nil
 }
 
 func printVars(w io.Writer, format string, vars []*hclparser.Variable) error {

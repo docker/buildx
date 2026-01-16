@@ -180,7 +180,7 @@ func readWithProgress(r io.Reader, setStatus func(st *client.VertexStatus)) (dt 
 }
 
 func ListTargets(files []File) ([]string, error) {
-	c, _, err := ParseFiles(files, nil)
+	c, _, err := ParseFiles(files, nil, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -194,8 +194,8 @@ func ListTargets(files []File) ([]string, error) {
 	return dedupSlice(targets), nil
 }
 
-func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults map[string]string, ent *EntitlementConf) (map[string]*Target, map[string]*Group, error) {
-	c, _, err := ParseFiles(files, defaults)
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults, vars map[string]string, ent *EntitlementConf) (map[string]*Target, map[string]*Group, error) {
+	c, _, err := ParseFiles(files, defaults, vars)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -334,7 +334,7 @@ func (c Config) matchNames(pattern string) ([]string, error) {
 	return names, nil
 }
 
-func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
+func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
 	defer func() {
 		err = formatHCLError(err, files)
 	}()
@@ -343,7 +343,7 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 	var composeFiles []File
 	var hclFiles []*hcl.File
 	for _, f := range files {
-		isCompose, composeErr := validateComposeFile(f.Data, f.Name)
+		isCompose, composeErr := validateComposeFile(f.Data, f.Name, vars)
 		if isCompose {
 			if composeErr != nil {
 				return nil, nil, composeErr
@@ -366,7 +366,7 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 	}
 
 	if len(composeFiles) > 0 {
-		cfg, cmperr := ParseComposeFiles(composeFiles)
+		cfg, cmperr := ParseComposeFiles(composeFiles, vars)
 		if cmperr != nil {
 			return nil, nil, errors.Wrap(cmperr, "failed to parse compose file")
 		}
@@ -376,9 +376,14 @@ func ParseFiles(files []File, defaults map[string]string) (_ *Config, _ *hclpars
 
 	var pm hclparser.ParseMeta
 	if len(hclFiles) > 0 {
-		lookup := func(string) (string, bool) { return "", false }
-		if envLookupAllowed() {
-			lookup = os.LookupEnv
+		lookup := func(key string) (string, bool) {
+			if v, ok := vars[key]; ok {
+				return v, true
+			}
+			if envLookupAllowed() {
+				return os.LookupEnv(key)
+			}
+			return "", false
 		}
 		res, err := hclparser.Parse(hclparser.MergeFiles(hclFiles), hclparser.Opt{
 			LookupVar:     lookup,
@@ -430,7 +435,7 @@ func dedupeConfig(c Config) Config {
 }
 
 func ParseFile(dt []byte, fn string) (*Config, error) {
-	c, _, err := ParseFiles([]File{{Data: dt, Name: fn}}, nil)
+	c, _, err := ParseFiles([]File{{Data: dt, Name: fn}}, nil, nil)
 	return c, err
 }
 
