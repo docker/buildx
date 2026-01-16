@@ -72,8 +72,13 @@ FROM gobase AS buildx-version
 RUN --mount=type=bind,target=. <<EOT
   set -e
   PKG=github.com/docker/buildx
-  VERSION=$(git describe --match 'v[0-9]*' --dirty='.m' --always --tags)
-  REVISION=$(git rev-parse HEAD)$(if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi)
+  if [ -f .git ] && head -n 1 .git | grep -q "^gitdir:"; then
+    VERSION=dev
+    REVISION=dev
+  else
+    VERSION=$(git describe --match 'v[0-9]*' --dirty='.m' --always --tags)
+    REVISION=$(git rev-parse HEAD)$(if ! git diff --no-ext-diff --quiet --exit-code; then echo .m; fi)
+  fi
   echo "-X ${PKG}/version.Version=${VERSION} -X ${PKG}/version.Revision=${REVISION} -X ${PKG}/version.Package=${PKG}" | tee /tmp/.ldflags
   echo -n "${VERSION}" | tee /tmp/.version
 EOT
