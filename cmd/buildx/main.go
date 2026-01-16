@@ -16,6 +16,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/debug"
 	solvererrdefs "github.com/moby/buildkit/solver/errdefs"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/grpcerrors"
 	"github.com/moby/buildkit/util/stack"
 	"github.com/pkg/errors"
@@ -107,6 +108,11 @@ func main() {
 	var exitCodeErr cobrautil.ExitCodeError
 	if errors.As(err, &exitCodeErr) {
 		os.Exit(int(exitCodeErr))
+	}
+	for _, msg := range policysession.DenyMessages(err) {
+		if msg.GetMessage() != "" {
+			fmt.Fprintf(os.Stderr, "Policy: %s\n", msg.GetMessage())
+		}
 	}
 
 	for _, s := range solvererrdefs.Sources(err) {

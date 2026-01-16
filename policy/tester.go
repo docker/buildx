@@ -195,6 +195,13 @@ func loadPolicyModules(root fs.StatFS, filename string) (map[string]*ast.Module,
 	modules := map[string]*ast.Module{
 		filepath.ToSlash(policyFile): mod,
 	}
+	builtinMod, err := builtinPolicyModuleAST()
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "parse builtin policy module %s", builtinPolicyModuleFilename)
+	}
+	if _, ok := modules[builtinPolicyModuleFilename]; !ok {
+		modules[builtinPolicyModuleFilename] = builtinMod
+	}
 	files := []File{
 		{
 			Filename: filepath.ToSlash(policyFile),
@@ -593,7 +600,7 @@ func missingInputRefs(mods []*ast.Module, input *Input) []string {
 		return nil
 	}
 	inputMap := normalizeInput(input)
-	refs := collectUnknowns(mods)
+	refs := collectUnknowns(mods, nil)
 	missing := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		key := strings.TrimPrefix(ref, "input.")

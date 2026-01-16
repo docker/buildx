@@ -89,6 +89,10 @@ func parseSignatures(ctx context.Context, getVerifier PolicyVerifierProvider, ac
 	}
 	desc := toOCIDescriptor(rootBlob.Descriptor_)
 
+	if desc.MediaType != ocispecs.MediaTypeImageIndex {
+		return nil, nil
+	}
+
 	sc, err := policyimage.ResolveSignatureChain(ctx, acp, desc, platform)
 	if err != nil {
 		return nil, errors.Wrapf(err, "resolving signature chain for image %s", desc.Digest)
@@ -120,6 +124,8 @@ func parseSignatures(ctx context.Context, getVerifier PolicyVerifierProvider, ac
 		Timestamps:      siRaw.Timestamps,
 		IsDHI:           siRaw.IsDHI,
 		DockerReference: siRaw.DockerReference,
+		SignatureType:   toSignatureType(siRaw.SignatureType),
+		SignatureKind:   toSignatureKind(siRaw.Kind),
 	}
 
 	// TODO: signature type after upstream update

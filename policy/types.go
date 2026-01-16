@@ -132,7 +132,8 @@ type Image struct {
 }
 
 type AttestationSignature struct {
-	SignatureType   SignatureType                             `json:"signatureType,omitempty"`
+	SignatureKind   SignatureKind                             `json:"kind,omitempty"`
+	SignatureType   SignatureType                             `json:"type,omitempty"`
 	Timestamps      []policytypes.TimestampVerificationResult `json:"timestamps,omitempty"`
 	DockerReference string                                    `json:"dockerReference,omitempty"`
 	IsDHI           bool                                      `json:"isDHI,omitempty"`
@@ -171,9 +172,45 @@ type SignerInfo struct {
 type SignatureType string
 
 const (
-	SignatureTypeBundle       SignatureType = "bundle-v0.3"
-	SignatureTypeHashedRecord SignatureType = "hashedreckord"
+	SignatureTypeBundleV03       SignatureType = "bundle-v0.3"
+	SignatureTypeSimpleSigningV1 SignatureType = "simplesigning-v1"
 )
+
+func toSignatureType(st policytypes.SignatureType) SignatureType {
+	switch st {
+	case policytypes.SignatureBundleV03:
+		return SignatureTypeBundleV03
+	case policytypes.SignatureSimpleSigningV1:
+		return SignatureTypeSimpleSigningV1
+	}
+	return ""
+}
+
+type SignatureKind string
+
+const (
+	SignatureKindDockerGithubBuilder  SignatureKind = "docker-github-builder"
+	SignatureKindDockerHardenedImage  SignatureKind = "docker-hardened-image"
+	SignatureKindSelfSignedGithubRepo SignatureKind = "self-signed-github-repo"
+	SignatureKindSelfSigned           SignatureKind = "self-signed"
+	SignatureKindUntrusted            SignatureKind = "untrusted"
+)
+
+func toSignatureKind(k policytypes.Kind) SignatureKind {
+	switch k {
+	case policytypes.KindDockerGithubBuilder:
+		return SignatureKindDockerGithubBuilder
+	case policytypes.KindDockerHardenedImage:
+		return SignatureKindDockerHardenedImage
+	case policytypes.KindSelfSignedGithubRepo:
+		return SignatureKindSelfSignedGithubRepo
+	case policytypes.KindSelfSigned:
+		return SignatureKindSelfSigned
+	case policytypes.KindUntrusted:
+		return SignatureKindUntrusted
+	}
+	return ""
+}
 
 type Local struct {
 	Name string `json:"name,omitempty"`

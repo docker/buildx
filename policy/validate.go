@@ -59,6 +59,7 @@ type Opt struct {
 	Log              func(logrus.Level, string)
 	FS               func() (fs.StatFS, func() error, error)
 	VerifierProvider PolicyVerifierProvider
+	DefaultPlatform  *ocispecs.Platform
 }
 
 var _ policysession.PolicyCallback = (&Policy{}).CheckPolicy
@@ -90,16 +91,13 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	src := req.Source
 	var platform *ocispecs.Platform
 	if req.Platform != nil {
-		platformStr := req.Platform.OS + "/" + req.Platform.Architecture
-		if req.Platform.Variant != "" {
-			platformStr += "/" + req.Platform.Variant
-		}
-		pl, err := platforms.Parse(platformStr)
+		pl, err := platformFromReq(req)
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to parse platform")
+			return nil, nil, err
 		}
-		pl = platforms.Normalize(pl)
-		platform = &pl
+		platform = pl
+	} else {
+		platform = p.opt.DefaultPlatform
 	}
 
 	inp, unknowns, err := SourceToInputWithLogger(ctx, p.opt.VerifierProvider, src, platform, p.opt.Log)
@@ -203,6 +201,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		opts = append(opts, f.impl(st))
 	}
 
+	opts = append(opts, rego.Module(builtinPolicyModuleFilename, builtinPolicyModule))
 	for _, file := range p.opt.Files {
 		opts = append(opts, rego.Module(file.Filename, string(file.Data)))
 	}
@@ -210,7 +209,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to marshal policy input")
 	}
-	p.log(logrus.InfoLevel, "checking policy for source %s", src.Source.Identifier)
+	p.log(logrus.InfoLevel, "checking policy for source %s", sourceName(req))
 	p.log(logrus.DebugLevel, "policy input: %s", dt)
 
 	if len(unknowns) > 0 {
@@ -224,10 +223,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		if err != nil {
 			return nil, nil, err
 		}
-		unk := collectUnknowns(pq.Support)
+		unk := collectUnknowns(pq.Support, unknowns)
 		if _, ok := st.Unknowns[funcVerifyGitSignature]; ok {
 			unk = append(unk, "input.git.commit")
 		}
+
 		if len(unk) > 0 {
 			next := &gwpb.ResolveSourceMetaRequest{
 				Source:   req.Source.Source,
@@ -237,7 +237,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 				return nil, nil, err
 			}
 			if next.Image != nil || next.Git != nil || hasHTTPUnknowns(unk) {
-				p.log(logrus.InfoLevel, "policy decision for source %s: resolve missing fields %+v", src.Source.Identifier, summarizeUnknownsForLog(unk))
+				p.log(logrus.InfoLevel, "policy decision for source %s: resolve missing fields %+v", sourceName(req), summarizeUnknownsForLog(unk))
 				return nil, next, nil
 			}
 		}
@@ -289,14 +289,14 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 
 	if resp.Action == moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW {
 		if len(st.ImagePins) > 1 {
-			return nil, nil, errors.Errorf("multiple image pins set to %s: %v", src.Source.Identifier, st.ImagePins)
+			return nil, nil, errors.Errorf("multiple image pins set to %s: %v", sourceName(req), st.ImagePins)
 		}
 		if len(st.ImagePins) == 1 {
 			newSrc, err := addPinToImage(src.Source, slices.Collect(maps.Keys(st.ImagePins))[0])
 			if err != nil {
 				return nil, nil, errors.Wrapf(err, "failed to add image pin to source")
 			}
-			p.log(logrus.InfoLevel, "policy decision for source %s: convert to %s", src.Source.Identifier, newSrc.Identifier)
+			p.log(logrus.InfoLevel, "policy decision for source %s: convert to %s", sourceName(req), newSrc.Identifier)
 
 			return &policysession.DecisionResponse{
 				Action: moby_buildkit_v1_sourcepolicy.PolicyAction_CONVERT,
@@ -305,9 +305,36 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		}
 	}
 
-	p.log(logrus.InfoLevel, "policy decision for source %s: %s %v", src.Source.Identifier, resp.Action, resp.DenyMessages)
+	p.log(logrus.InfoLevel, "policy decision for source %s: %s", sourceName(req), resp.Action)
+	for _, dm := range resp.DenyMessages {
+		p.log(logrus.InfoLevel, " - %s", dm.Message)
+	}
 
 	return resp, nil, nil
+}
+
+func platformFromReq(req *policysession.CheckPolicyRequest) (*ocispecs.Platform, error) {
+	if req.Platform != nil {
+		platformStr := req.Platform.OS + "/" + req.Platform.Architecture
+		if req.Platform.Variant != "" {
+			platformStr += "/" + req.Platform.Variant
+		}
+		pl, err := platforms.Parse(platformStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse platform")
+		}
+		pl = platforms.Normalize(pl)
+		return &pl, nil
+	}
+	return nil, nil
+}
+
+func sourceName(req *policysession.CheckPolicyRequest) string {
+	name := req.Source.Source.Identifier
+	if p, _ := platformFromReq(req); p != nil {
+		name += " (" + platforms.Format(*p) + ")"
+	}
+	return name
 }
 
 func (p *Policy) Print(ctx print.Context, msg string) error {
@@ -646,7 +673,7 @@ func AddUnknownsWithLogger(logf func(logrus.Level, string), req *gwpb.ResolveSou
 	return nil
 }
 
-func collectUnknowns(mods []*ast.Module) []string {
+func collectUnknowns(mods []*ast.Module, allowed []string) []string {
 	seen := map[string]struct{}{}
 	var out []string
 
@@ -654,6 +681,7 @@ func collectUnknowns(mods []*ast.Module) []string {
 		ast.WalkRefs(mod, func(ref ast.Ref) bool {
 			if ref.HasPrefix(ast.InputRootRef) {
 				s := ref.String() // e.g. "input.request.path"
+				s = "input." + trimKey(strings.TrimPrefix(s, "input."))
 				if _, ok := seen[s]; !ok {
 					seen[s] = struct{}{}
 					out = append(out, s)
@@ -662,7 +690,23 @@ func collectUnknowns(mods []*ast.Module) []string {
 			return true
 		})
 	}
-	return out
+	if allowed == nil {
+		return out
+	}
+
+	valid := map[string]struct{}{}
+	for _, k := range allowed {
+		valid[k] = struct{}{}
+	}
+
+	filtered := make([]string, 0, len(out))
+	for _, k := range out {
+		if _, ok := valid[k]; ok {
+			filtered = append(filtered, k)
+		}
+	}
+
+	return filtered
 }
 
 func summarizeUnknownsForLog(unk []string) []string {
