@@ -384,7 +384,9 @@ jobs:
               mv "provenance.json" "${filename}.provenance.json"
               mv "sbom-binaries.spdx.json" "${filename}.sbom.json"
               find . -name 'sbom*.json' -exec rm {} \;
-              if [ -f "provenance.sigstore.json" ]; then
+              if [[ "$binname" == *darwin* ]]; then
+                rm -f "provenance.sigstore.json"
+              elif [ -f "provenance.sigstore.json" ]; then
                 mv "provenance.sigstore.json" "${filename}.sigstore.json"
               fi
             )
