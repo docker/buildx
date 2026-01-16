@@ -600,7 +600,7 @@ func missingInputRefs(mods []*ast.Module, input *Input) []string {
 		return nil
 	}
 	inputMap := normalizeInput(input)
-	refs := collectUnknowns(mods)
+	refs := collectUnknowns(mods, nil)
 	missing := make([]string, 0, len(refs))
 	for _, ref := range refs {
 		key := strings.TrimPrefix(ref, "input.")

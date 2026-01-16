@@ -223,10 +223,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		if err != nil {
 			return nil, nil, err
 		}
-		unk := collectUnknowns(pq.Support)
+		unk := collectUnknowns(pq.Support, unknowns)
 		if _, ok := st.Unknowns[funcVerifyGitSignature]; ok {
 			unk = append(unk, "input.git.commit")
 		}
+
 		if len(unk) > 0 {
 			next := &gwpb.ResolveSourceMetaRequest{
 				Source:   req.Source.Source,
@@ -672,7 +673,7 @@ func AddUnknownsWithLogger(logf func(logrus.Level, string), req *gwpb.ResolveSou
 	return nil
 }
 
-func collectUnknowns(mods []*ast.Module) []string {
+func collectUnknowns(mods []*ast.Module, allowed []string) []string {
 	seen := map[string]struct{}{}
 	var out []string
 
@@ -680,6 +681,7 @@ func collectUnknowns(mods []*ast.Module) []string {
 		ast.WalkRefs(mod, func(ref ast.Ref) bool {
 			if ref.HasPrefix(ast.InputRootRef) {
 				s := ref.String() // e.g. "input.request.path"
+				s = "input." + trimKey(strings.TrimPrefix(s, "input."))
 				if _, ok := seen[s]; !ok {
 					seen[s] = struct{}{}
 					out = append(out, s)
@@ -688,7 +690,23 @@ func collectUnknowns(mods []*ast.Module) []string {
 			return true
 		})
 	}
-	return out
+	if allowed == nil {
+		return out
+	}
+
+	valid := map[string]struct{}{}
+	for _, k := range allowed {
+		valid[k] = struct{}{}
+	}
+
+	filtered := make([]string, 0, len(out))
+	for _, k := range out {
+		if _, ok := valid[k]; ok {
+			filtered = append(filtered, k)
+		}
+	}
+
+	return filtered
 }
 
 func summarizeUnknownsForLog(unk []string) []string {
