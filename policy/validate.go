@@ -91,16 +91,11 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	src := req.Source
 	var platform *ocispecs.Platform
 	if req.Platform != nil {
-		platformStr := req.Platform.OS + "/" + req.Platform.Architecture
-		if req.Platform.Variant != "" {
-			platformStr += "/" + req.Platform.Variant
-		}
-		pl, err := platforms.Parse(platformStr)
+		pl, err := platformFromReq(req)
 		if err != nil {
-			return nil, nil, errors.Wrapf(err, "failed to parse platform")
+			return nil, nil, err
 		}
-		pl = platforms.Normalize(pl)
-		platform = &pl
+		platform = pl
 	} else {
 		platform = p.opt.DefaultPlatform
 	}
@@ -213,7 +208,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to marshal policy input")
 	}
-	p.log(logrus.InfoLevel, "checking policy for source %s", src.Source.Identifier)
+	p.log(logrus.InfoLevel, "checking policy for source %s", sourceName(req))
 	p.log(logrus.DebugLevel, "policy input: %s", dt)
 
 	if len(unknowns) > 0 {
@@ -240,7 +235,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 				return nil, nil, err
 			}
 			if next.Image != nil || next.Git != nil || hasHTTPUnknowns(unk) {
-				p.log(logrus.InfoLevel, "policy decision for source %s: resolve missing fields %+v", src.Source.Identifier, summarizeUnknownsForLog(unk))
+				p.log(logrus.InfoLevel, "policy decision for source %s: resolve missing fields %+v", sourceName(req), summarizeUnknownsForLog(unk))
 				return nil, next, nil
 			}
 		}
@@ -292,14 +287,14 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 
 	if resp.Action == moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW {
 		if len(st.ImagePins) > 1 {
-			return nil, nil, errors.Errorf("multiple image pins set to %s: %v", src.Source.Identifier, st.ImagePins)
+			return nil, nil, errors.Errorf("multiple image pins set to %s: %v", sourceName(req), st.ImagePins)
 		}
 		if len(st.ImagePins) == 1 {
 			newSrc, err := addPinToImage(src.Source, slices.Collect(maps.Keys(st.ImagePins))[0])
 			if err != nil {
 				return nil, nil, errors.Wrapf(err, "failed to add image pin to source")
 			}
-			p.log(logrus.InfoLevel, "policy decision for source %s: convert to %s", src.Source.Identifier, newSrc.Identifier)
+			p.log(logrus.InfoLevel, "policy decision for source %s: convert to %s", sourceName(req), newSrc.Identifier)
 
 			return &policysession.DecisionResponse{
 				Action: moby_buildkit_v1_sourcepolicy.PolicyAction_CONVERT,
@@ -308,9 +303,36 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		}
 	}
 
-	p.log(logrus.InfoLevel, "policy decision for source %s: %s %v", src.Source.Identifier, resp.Action, resp.DenyMessages)
+	p.log(logrus.InfoLevel, "policy decision for source %s: %s", sourceName(req), resp.Action)
+	for _, dm := range resp.DenyMessages {
+		p.log(logrus.InfoLevel, " - %s", dm.Message)
+	}
 
 	return resp, nil, nil
+}
+
+func platformFromReq(req *policysession.CheckPolicyRequest) (*ocispecs.Platform, error) {
+	if req.Platform != nil {
+		platformStr := req.Platform.OS + "/" + req.Platform.Architecture
+		if req.Platform.Variant != "" {
+			platformStr += "/" + req.Platform.Variant
+		}
+		pl, err := platforms.Parse(platformStr)
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to parse platform")
+		}
+		pl = platforms.Normalize(pl)
+		return &pl, nil
+	}
+	return nil, nil
+}
+
+func sourceName(req *policysession.CheckPolicyRequest) string {
+	name := req.Source.Source.Identifier
+	if p, _ := platformFromReq(req); p != nil {
+		name += " (" + platforms.Format(*p) + ")"
+	}
+	return name
 }
 
 func (p *Policy) Print(ctx print.Context, msg string) error {
