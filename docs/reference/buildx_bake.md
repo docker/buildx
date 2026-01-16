@@ -32,6 +32,7 @@ Build from a file
 | [`--push`](#push)                   | `bool`        |         | Shorthand for `--set=*.output=type=registry`. Conditional.                                                            |
 | [`--sbom`](#sbom)                   | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                                              |
 | [`--set`](#set)                     | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                                               |
+| `--var`                             | `stringArray` |         | Set a variable value (e.g., `name=value`)                                                                             |
 
 
 <!---MARKER_GEN_END-->
