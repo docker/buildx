@@ -216,6 +216,7 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 		Env:              env,
 		FS:               fsProvider,
 		VerifierProvider: verifier,
+		DefaultPlatform:  &p,
 	})
 
 	srcReq := &gwpb.ResolveSourceMetaResponse{

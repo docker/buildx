@@ -59,6 +59,7 @@ type Opt struct {
 	Log              func(logrus.Level, string)
 	FS               func() (fs.StatFS, func() error, error)
 	VerifierProvider PolicyVerifierProvider
+	DefaultPlatform  *ocispecs.Platform
 }
 
 var _ policysession.PolicyCallback = (&Policy{}).CheckPolicy
@@ -100,6 +101,8 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 		}
 		pl = platforms.Normalize(pl)
 		platform = &pl
+	} else {
+		platform = p.opt.DefaultPlatform
 	}
 
 	inp, unknowns, err := SourceToInputWithLogger(ctx, p.opt.VerifierProvider, src, platform, p.opt.Log)

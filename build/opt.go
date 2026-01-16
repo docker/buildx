@@ -48,6 +48,7 @@ import (
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/opencontainers/go-digest"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/tonistiigi/fsutil"
@@ -457,6 +458,7 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 				Log:              logf,
 				FS:               opt.Inputs.policy.FS,
 				VerifierProvider: policy.SignatureVerifier(cfg),
+				DefaultPlatform:  defaultPlatform(bopts),
 			})
 			cbs = append(cbs, p.CheckPolicy)
 			if popt.Strict {
@@ -1232,4 +1234,13 @@ func parseOCILayoutPath(s string) (localPath, dgst, tag string) {
 		tag = "latest"
 	}
 	return
+}
+
+func defaultPlatform(bopts gateway.BuildOpts) *ocispecs.Platform {
+	pl := bopts.Workers[0].Platforms
+	if len(pl) == 0 {
+		return nil
+	}
+	p := platforms.Normalize(pl[0])
+	return &p
 }
