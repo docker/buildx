@@ -89,6 +89,10 @@ func parseSignatures(ctx context.Context, getVerifier PolicyVerifierProvider, ac
 	}
 	desc := toOCIDescriptor(rootBlob.Descriptor_)
 
+	if desc.MediaType != ocispecs.MediaTypeImageIndex {
+		return nil, nil
+	}
+
 	sc, err := policyimage.ResolveSignatureChain(ctx, acp, desc, platform)
 	if err != nil {
 		return nil, errors.Wrapf(err, "resolving signature chain for image %s", desc.Digest)

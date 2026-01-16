@@ -388,6 +388,7 @@ func parseSource(input string) (*pb.SourceOp, error) {
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to parse image source reference")
 		}
+		ref = reference.TagNameOnly(ref)
 		return &pb.SourceOp{Identifier: "docker-image://" + ref.String()}, nil
 	}
 	if strings.HasPrefix(input, "git://") {
