@@ -209,7 +209,10 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 					eg2.Go(func() error {
 						ctx = withMediaTypeKeyPrefix(baseCtx)
 						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", desc.Digest.String(), desc.Source.Ref.String(), t.String()))
-						return r.Copy(ctx, desc.Source, t)
+						return r.Copy(ctx, &imagetools.Source{
+							Ref:  desc.Source.Ref,
+							Desc: desc.Descriptor,
+						}, t)
 					})
 				}
 				if err := eg2.Wait(); err != nil {
