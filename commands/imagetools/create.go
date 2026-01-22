@@ -200,25 +200,37 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	eg, _ := errgroup.WithContext(ctx)
 	pw := progress.WithPrefix(printer, "internal", true)
 
+	tagsByRepo := map[string][]reference.Named{}
 	for _, t := range tags {
+		repo := t.Name()
+		tagsByRepo[repo] = append(tagsByRepo[repo], t)
+	}
+
+	for repo, repoTags := range tagsByRepo {
 		eg.Go(func() error {
-			return progress.Wrap(fmt.Sprintf("pushing %s", t.String()), pw.Write, func(sub progress.SubLogger) error {
+			seed := repoTags[0]
+			return progress.Wrap(fmt.Sprintf("pushing %s", repo), pw.Write, func(sub progress.SubLogger) error {
 				ctx = withMediaTypeKeyPrefix(ctx)
 				eg2, _ := errgroup.WithContext(ctx)
 				for _, desc := range manifests {
 					eg2.Go(func() error {
-						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", desc.Digest.String(), desc.Source.Ref.String(), t.String()))
+						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", desc.Digest.String(), desc.Source.Ref.String(), repo))
 						return r.Copy(ctx, &imagetools.Source{
 							Ref:  desc.Source.Ref,
 							Desc: desc.Descriptor,
-						}, t)
+						}, seed)
 					})
 				}
 				if err := eg2.Wait(); err != nil {
 					return err
 				}
-				sub.Log(1, fmt.Appendf(nil, "pushing %s to %s\n", desc.Digest.String(), t.String()))
-				return r.Push(ctx, t, desc, dt)
+				for _, t := range repoTags {
+					sub.Log(1, fmt.Appendf(nil, "pushing %s to %s\n", desc.Digest.String(), t.String()))
+					if err := r.Push(ctx, t, desc, dt); err != nil {
+						return err
+					}
+				}
+				return nil
 			})
 		})
 	}
