@@ -11,6 +11,7 @@ import (
 	"github.com/containerd/log"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/util/resolver"
+	"github.com/docker/buildx/util/resolver/auth"
 	clitypes "github.com/docker/cli/cli/config/types"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/tracing"
@@ -35,7 +36,7 @@ type Resolver struct {
 
 func New(opt Opt) *Resolver {
 	ac := newAuthConfig(opt.Auth)
-	dockerAuth := docker.NewDockerAuthorizer(docker.WithAuthCreds(ac.credentials), docker.WithAuthClient(http.DefaultClient))
+	dockerAuth := auth.NewDockerAuthorizer(auth.WithAuthCreds(ac.credentials), auth.WithAuthClient(http.DefaultClient))
 	auth := &withBearerAuthorizer{
 		Authorizer: dockerAuth,
 		AuthConfig: ac,
