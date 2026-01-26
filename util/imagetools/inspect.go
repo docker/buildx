@@ -12,19 +12,15 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/buildx/util/resolver/auth"
-	clitypes "github.com/docker/cli/cli/config/types"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/moby/buildkit/util/tracing"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/sirupsen/logrus"
 )
 
-type Auth interface {
-	GetAuthConfig(registryHostname string) (clitypes.AuthConfig, error)
-}
-
 type Opt struct {
-	Auth           Auth
+	Auth           authprovider.AuthConfigProvider
 	RegistryConfig map[string]resolver.RegistryConfig
 }
 
@@ -35,11 +31,10 @@ type Resolver struct {
 }
 
 func New(opt Opt) *Resolver {
-	ac := newAuthConfig(opt.Auth)
-	dockerAuth := auth.NewDockerAuthorizer(auth.WithAuthCreds(ac.credentials), auth.WithAuthClient(http.DefaultClient))
+	dockerAuth := auth.NewDockerAuthorizer(auth.WithAuthProvider(opt.Auth), auth.WithAuthClient(http.DefaultClient))
 	auth := &withBearerAuthorizer{
 		Authorizer: dockerAuth,
-		AuthConfig: ac,
+		AuthConfig: opt.Auth,
 	}
 	return &Resolver{
 		auth:   auth,

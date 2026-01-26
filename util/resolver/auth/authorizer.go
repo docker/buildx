@@ -14,13 +14,15 @@ import (
 	"github.com/containerd/containerd/v2/core/remotes/docker/auth"
 	remoteerrors "github.com/containerd/containerd/v2/core/remotes/errors"
 	"github.com/containerd/errdefs"
+	"github.com/docker/cli/cli/config/types"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/bklog"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
 
 type dockerAuthorizer struct {
-	credentials func(string) (string, string, error)
+	credentials authprovider.AuthConfigProvider
 
 	client *http.Client
 	header http.Header
@@ -31,7 +33,7 @@ type dockerAuthorizer struct {
 }
 
 type authorizerConfig struct {
-	credentials func(string) (string, string, error)
+	credentials authprovider.AuthConfigProvider
 	client      *http.Client
 	header      http.Header
 }
@@ -47,9 +49,9 @@ func WithAuthClient(client *http.Client) AuthorizerOpt {
 }
 
 // WithAuthCreds provides a credential function to the authorizer
-func WithAuthCreds(creds func(string) (string, string, error)) AuthorizerOpt {
+func WithAuthProvider(provider authprovider.AuthConfigProvider) AuthorizerOpt {
 	return func(opt *authorizerConfig) {
-		opt.credentials = creds
+		opt.credentials = provider
 	}
 }
 
@@ -143,10 +145,11 @@ func (a *dockerAuthorizer) AddResponses(ctx context.Context, responses []*http.R
 			var username, secret string
 			if a.credentials != nil {
 				var err error
-				username, secret, err = a.credentials(host)
+				ac, err := a.credentials(ctx, host, strings.Split(c.Parameters["scope"], " "), nil)
 				if err != nil {
 					return err
 				}
+				username, secret = parseAuthConfig(ac)
 			}
 
 			common, err := auth.GenerateTokenOptions(ctx, host, username, secret, c)
@@ -157,10 +160,12 @@ func (a *dockerAuthorizer) AddResponses(ctx context.Context, responses []*http.R
 			a.handlers[host] = newAuthHandler(a.client, a.header, c.Scheme, common)
 			return nil
 		} else if c.Scheme == auth.BasicAuth && a.credentials != nil {
-			username, secret, err := a.credentials(host)
+			ac, err := a.credentials(ctx, host, nil, nil)
 			if err != nil {
 				return err
 			}
+
+			username, secret := parseAuthConfig(ac)
 
 			if username == "" || secret == "" {
 				return errors.Wrap(err, "no basic auth credentials")
@@ -174,6 +179,13 @@ func (a *dockerAuthorizer) AddResponses(ctx context.Context, responses []*http.R
 		}
 	}
 	return errors.Wrap(errdefs.ErrNotImplemented, "failed to find supported auth scheme")
+}
+
+func parseAuthConfig(ac types.AuthConfig) (string, string) {
+	if ac.IdentityToken != "" {
+		return "", ac.IdentityToken
+	}
+	return ac.Username, ac.Password
 }
 
 // authResult is used to control limit rate.
