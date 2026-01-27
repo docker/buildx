@@ -33,6 +33,8 @@ linters:
               desc: The containerd log package was migrated to a separate module. Use github.com/containerd/log instead.
             - pkg: "github.com/containerd/containerd/platforms"
               desc: The containerd platforms package was migrated to a separate module. Use github.com/containerd/platforms instead.
+            - pkg: "github.com/hashicorp/go-multierror"
+              desc: Use stdlib errors.Join instead.
             - pkg: "io/ioutil"
               desc: The io/ioutil package has been deprecated.
     forbidigo:
