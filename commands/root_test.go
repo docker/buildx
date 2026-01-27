@@ -1,7 +1,7 @@
 package commands
 
 import (
-	stderrs "errors"
+	stderrors "errors"
 	"testing"
 
 	"github.com/docker/cli/cli/command"
@@ -21,7 +21,7 @@ func TestDisableFlagsInUseLineIsSet(t *testing.T) {
 			errs = append(errs, errors.New("DisableFlagsInUseLine is not set for "+c.CommandPath()))
 		}
 	})
-	err = stderrs.Join(errs...)
+	err = stderrors.Join(errs...)
 	require.NoError(t, err)
 }
 

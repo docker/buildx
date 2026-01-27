@@ -64,6 +64,8 @@ linters:
         - unusedwrite
     importas:
       alias:
+        - pkg: "errors"
+          alias: "stderrors"
         - pkg: "github.com/containerd/errdefs"
           alias: "cerrdefs"
         - pkg: "github.com/moby/moby/client"
