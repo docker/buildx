@@ -16,7 +16,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.1.5+incompatible
+	github.com/docker/cli v29.2.0+incompatible
 	github.com/docker/cli-docs-tool v0.11.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
@@ -30,8 +30,8 @@ require (
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.27.0
 	github.com/moby/go-archive v0.2.0
-	github.com/moby/moby/api v1.52.0
-	github.com/moby/moby/client v0.2.1
+	github.com/moby/moby/api v1.53.0
+	github.com/moby/moby/client v0.2.2
 	github.com/moby/policy-helpers v0.0.0-20251206004813-9fcc1a9ec5c9
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.2
@@ -59,12 +59,12 @@ require (
 	go.opentelemetry.io/otel/sdk v1.38.0
 	go.opentelemetry.io/otel/trace v1.38.0
 	go.yaml.in/yaml/v3 v3.0.4
-	golang.org/x/crypto v0.46.0
-	golang.org/x/mod v0.31.0
+	golang.org/x/crypto v0.47.0
+	golang.org/x/mod v0.32.0
 	golang.org/x/sync v0.19.0
-	golang.org/x/sys v0.39.0
-	golang.org/x/term v0.38.0
-	golang.org/x/text v0.32.0
+	golang.org/x/sys v0.40.0
+	golang.org/x/term v0.39.0
+	golang.org/x/text v0.33.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20251103181224-f26f9409b101
 	google.golang.org/grpc v1.76.0
 	google.golang.org/grpc/cmd/protoc-gen-go-grpc v1.5.1
@@ -138,7 +138,7 @@ require (
 	github.com/go-openapi/swag/typeutils v0.25.3 // indirect
 	github.com/go-openapi/swag/yamlutils v0.25.3 // indirect
 	github.com/go-openapi/validate v0.25.1 // indirect
-	github.com/go-viper/mapstructure/v2 v2.4.0 // indirect
+	github.com/go-viper/mapstructure/v2 v2.5.0 // indirect
 	github.com/gobwas/glob v0.2.3 // indirect
 	github.com/goccy/go-json v0.10.5 // indirect
 	github.com/gogo/protobuf v1.3.2 // indirect
@@ -154,7 +154,7 @@ require (
 	github.com/in-toto/attestation v1.1.2 // indirect
 	github.com/inconshreveable/mousetrap v1.1.0 // indirect
 	github.com/json-iterator/go v1.1.12 // indirect
-	github.com/klauspost/compress v1.18.2 // indirect
+	github.com/klauspost/compress v1.18.3 // indirect
 	github.com/lestrrat-go/blackmagic v1.0.4 // indirect
 	github.com/lestrrat-go/dsig v1.0.0 // indirect
 	github.com/lestrrat-go/dsig-secp256k1 v1.0.0 // indirect
@@ -224,10 +224,10 @@ require (
 	go.opentelemetry.io/otel/sdk/metric v1.38.0 // indirect
 	go.opentelemetry.io/proto/otlp v1.7.1 // indirect
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
-	golang.org/x/net v0.48.0 // indirect
+	golang.org/x/net v0.49.0 // indirect
 	golang.org/x/oauth2 v0.33.0 // indirect
 	golang.org/x/time v0.14.0 // indirect
-	golang.org/x/tools v0.39.0 // indirect
+	golang.org/x/tools v0.41.0 // indirect
 	google.golang.org/genproto/googleapis/api v0.0.0-20251103181224-f26f9409b101 // indirect
 	gopkg.in/evanphx/json-patch.v4 v4.12.0 // indirect
 	gopkg.in/inf.v0 v0.9.1 // indirect
