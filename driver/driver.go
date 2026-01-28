@@ -8,7 +8,6 @@ import (
 
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/progress"
-	clitypes "github.com/docker/cli/cli/config/types"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
@@ -56,10 +55,6 @@ type Info struct {
 	Status Status
 	// DynamicNodes must be empty if the actual nodes are statically listed in the store
 	DynamicNodes []store.Node
-}
-
-type Auth interface {
-	GetAuthConfig(registryHostname string) (clitypes.AuthConfig, error)
 }
 
 type Driver interface {

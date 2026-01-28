@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/cli/cli/context/store"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/tracing/delegated"
 	dockerclient "github.com/moby/moby/client"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -35,7 +36,7 @@ type InitConfig struct {
 	BuildkitdFlags  []string
 	Files           map[string][]byte
 	DriverOpts      map[string]string
-	Auth            Auth
+	Auth            authprovider.AuthConfigProvider
 	Platforms       []ocispecs.Platform
 	ContextPathHash string
 	DialMeta        map[string][]string

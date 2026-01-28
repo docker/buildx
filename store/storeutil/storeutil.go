@@ -8,6 +8,7 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
+	"github.com/docker/buildx/util/dockerutil/dockerconfig"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/cli/cli/command"
@@ -109,7 +110,7 @@ func GetNodeGroup(txn *store.Txn, dockerCli command.Cli, name string) (*store.No
 }
 
 func GetImageConfig(dockerCli command.Cli, ng *store.NodeGroup) (opt imagetools.Opt, err error) {
-	opt.Auth = dockerCli.ConfigFile()
+	opt.Auth = dockerconfig.LoadAuthConfig(dockerCli)
 
 	if ng == nil || len(ng.Nodes) == 0 {
 		return opt, nil

@@ -43,6 +43,13 @@ type authConfigProvider struct {
 }
 
 func (ap *authConfigProvider) load(ctx context.Context, host string, scopes []string, cacheExpireCheck authprovider.ExpireCachedAuthCheck) (types.AuthConfig, error) {
+	if cacheExpireCheck == nil {
+		cacheExpireCheck = func(created time.Time, _ string) bool {
+			// Tokens for Google Artifact Registry via Workload Identity expire after 5 minutes.
+			return time.Since(created) > 4*time.Minute+50*time.Second
+		}
+	}
+
 	ac, err := ap.loadHost(ctx, host, scopes, cacheExpireCheck)
 	if err != nil {
 		return types.AuthConfig{}, err
