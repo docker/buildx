@@ -26,9 +26,15 @@ type debugOptions struct {
 	OnFlag string
 }
 
+type debuggerInfo struct {
+	Name      string
+	UserAgent string
+}
+
 // debuggerOptions will start a debuggerOptions instance.
 type debuggerOptions interface {
 	New(in ioset.In) (debuggerInstance, error)
+	Info() debuggerInfo
 }
 
 // debuggerInstance is an instance of a Debugger that has been started.
@@ -69,6 +75,12 @@ func (d *debugOptions) New(in ioset.In) (debuggerInstance, error) {
 		cfg: cfg,
 		in:  in.Stdin,
 	}, nil
+}
+
+func (d *debugOptions) Info() debuggerInfo {
+	return debuggerInfo{
+		Name: "debug",
+	}
 }
 
 type monitorDebuggerInstance struct {

@@ -239,10 +239,12 @@ const (
 	commandOptionsHash   = attribute.Key("command.options.hash")
 	driverNameAttribute  = attribute.Key("driver.name")
 	driverTypeAttribute  = attribute.Key("driver.type")
+	debuggerName         = attribute.Key("debugger.name")
+	debuggerUserAgent    = attribute.Key("debugger.user.agent")
 )
 
-func buildMetricAttributes(dockerCli command.Cli, driverType string, options *buildOptions) attribute.Set {
-	return attribute.NewSet(
+func buildMetricAttributes(dockerCli command.Cli, driverType string, options *buildOptions, debugger debuggerOptions) attribute.Set {
+	kvs := []attribute.KeyValue{
 		commandNameAttribute.String("build"),
 		attribute.Stringer(string(commandOptionsHash), &buildOptionsHash{
 			buildOptions: options,
@@ -250,7 +252,16 @@ func buildMetricAttributes(dockerCli command.Cli, driverType string, options *bu
 		}),
 		driverNameAttribute.String(options.builder),
 		driverTypeAttribute.String(driverType),
-	)
+	}
+
+	if debugger != nil {
+		d := debugger.Info()
+		kvs = append(kvs,
+			debuggerName.String(d.Name),
+			debuggerUserAgent.String(d.UserAgent),
+		)
+	}
+	return attribute.NewSet(kvs...)
 }
 
 // buildOptionsHash computes a hash for the buildOptions when the String method is invoked.
@@ -331,7 +342,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 	}
 	driverType := b.Driver
 
-	attributes := buildMetricAttributes(dockerCli, driverType, &options)
+	attributes := buildMetricAttributes(dockerCli, driverType, &options, debugOpts)
 
 	ctx2, cancel := context.WithCancelCause(context.TODO())
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
