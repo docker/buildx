@@ -524,6 +524,10 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	if v := os.Getenv("DOCKER_DEFAULT_PLATFORM"); v != "" {
 		platformsDefault = []string{v}
 	}
+	var outputDefault []string
+	if v := os.Getenv("DOCKER_DEFAULT_OUTPUT"); v != "" {
+		outputDefault = []string{v}
+	}
 
 	flags := cmd.Flags()
 
@@ -555,7 +559,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 
 	flags.StringArrayVar(&options.noCacheFilter, "no-cache-filter", []string{}, "Do not cache specified stages")
 
-	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
+	flags.StringArrayVarP(&options.outputs, "output", "o", outputDefault, `Output destination (format: "type=local,dest=path")`)
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
 
