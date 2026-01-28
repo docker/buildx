@@ -429,6 +429,9 @@ func (r *Resolver) filterPlatforms(ctx context.Context, dt []byte, desc ocispecs
 	// try to pull in attestation manifest via referrer if one exists
 	addedRef := false
 	for d := range matchedManifests {
+		if _, ok := references[d]; ok { // manifest itself is already attestation
+			continue
+		}
 		hasRef := false
 		for _, subject := range references {
 			if subject.Digest == d {
