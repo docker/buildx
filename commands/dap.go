@@ -18,6 +18,10 @@ import (
 	"github.com/spf13/cobra"
 )
 
+const (
+	dapEnvUserAgent = "BUILDX_DAP_USER_AGENT"
+)
+
 func dapCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options dapOptions
 	cmd := &cobra.Command{
@@ -49,6 +53,13 @@ func (d *dapOptions) New(in ioset.In) (debuggerInstance, error) {
 		Adapter: dap.New[LaunchConfig](),
 		conn:    conn,
 	}, nil
+}
+
+func (d *dapOptions) Info() debuggerInfo {
+	return debuggerInfo{
+		Name:      "dap",
+		UserAgent: os.Getenv(dapEnvUserAgent),
+	}
 }
 
 type LaunchConfig struct {
