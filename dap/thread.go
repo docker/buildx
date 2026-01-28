@@ -549,14 +549,25 @@ func (t *thread) solveInputs(ctx context.Context, target *step) (string, map[str
 }
 
 func (t *thread) determineInputName(op *pb.Op, index int, input *pb.Input) string {
-	switch op := op.Op.(type) {
-	case *pb.Op_Exec:
-		for _, m := range op.Exec.Mounts {
+	// Attempt to match the input to one of the mount destinations if we have
+	// an exec operation.
+	if exec, ok := op.Op.(*pb.Op_Exec); ok {
+		for _, m := range exec.Exec.Mounts {
 			if m.Input >= 0 && m.Input == int64(index) {
 				return m.Dest
 			}
 		}
 	}
+
+	// Is our input digest a source? Use the identifier if it is.
+	// That should give us something that is at least more user-friendly.
+	if op := t.ops[digest.Digest(input.Digest)]; op != nil && input.Index == 0 {
+		if source, ok := op.Op.(*pb.Op_Source); ok {
+			return source.Source.Identifier
+		}
+	}
+
+	// Use a default name that matches the input digest.
 	return input.Digest
 }
 
