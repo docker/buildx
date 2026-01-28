@@ -546,8 +546,14 @@ func toSolveOpt(ctx context.Context, node builder.Node, multiDriver bool, opt *O
 	}
 
 	// add node identifier to shared key if one was specified
+	nodeID := cfg.TryNodeIdentifier()
 	if so.SharedKey != "" {
-		so.SharedKey += ":" + cfg.TryNodeIdentifier()
+		so.SharedKey += ":" + nodeID
+	}
+	for k, v := range so.FrontendAttrs {
+		if strings.HasPrefix(k, "sharedkey:localdir:") {
+			so.FrontendAttrs[k] = v + ":" + nodeID
+		}
 	}
 
 	if opt.Pull {
@@ -855,6 +861,13 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			return nil, err
 		}
 		target.FrontendAttrs["context:"+k] = "local:" + localName
+		sharedKey := v.Path
+		if p, err := filepath.Abs(sharedKey); err == nil {
+			sharedKey = filepath.Base(p)
+		} else {
+			sharedKey = filepath.Base(sharedKey)
+		}
+		target.FrontendAttrs["sharedkey:localdir:"+k] = sharedKey
 	}
 
 	release := func() {
