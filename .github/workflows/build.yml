@@ -347,7 +347,7 @@ jobs:
           sarif_file: ${{ env.DESTDIR }}/govulncheck.out
 
   binaries:
-    uses: docker/github-builder-experimental/.github/workflows/bake.yml@7643588149117bf0ca3a906caa3968c70484027a
+    uses: docker/github-builder/.github/workflows/bake.yml@v1
     permissions:
       contents: read # same as global permission
       id-token: write # for signing attestation(s) with GitHub OIDC Token
@@ -428,7 +428,7 @@ jobs:
 
   bin-image:
     if: ${{ github.repository == 'docker/buildx' }}
-    uses: docker/github-builder-experimental/.github/workflows/bake.yml@7643588149117bf0ca3a906caa3968c70484027a
+    uses: docker/github-builder/.github/workflows/bake.yml@v1
     needs:
       - bin-image-prepare
       - test-integration
