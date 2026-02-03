@@ -9,18 +9,19 @@ Create a new image based on source images
 
 ### Options
 
-| Name                             | Type          | Default | Description                                                                                                                   |
-|:---------------------------------|:--------------|:--------|:------------------------------------------------------------------------------------------------------------------------------|
-| [`--annotation`](#annotation)    | `stringArray` |         | Add annotation to the image                                                                                                   |
-| [`--append`](#append)            | `bool`        |         | Append to existing manifest                                                                                                   |
-| [`--builder`](#builder)          | `string`      |         | Override the configured builder instance                                                                                      |
-| `-D`, `--debug`                  | `bool`        |         | Enable debug logging                                                                                                          |
-| [`--dry-run`](#dry-run)          | `bool`        |         | Show final image instead of pushing                                                                                           |
-| [`-f`](#file), [`--file`](#file) | `stringArray` |         | Read source descriptor from file                                                                                              |
-| `-p`, `--platform`               | `stringArray` |         | Filter specified platforms of target image                                                                                    |
-| `--prefer-index`                 | `bool`        | `true`  | When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy |
-| `--progress`                     | `string`      | `auto`  | Set type of progress output (`auto`, `none`, `plain`, `rawjson`, `tty`). Use plain to show container output                   |
-| [`-t`](#tag), [`--tag`](#tag)    | `stringArray` |         | Set reference for new image                                                                                                   |
+| Name                                | Type          | Default | Description                                                                                                                   |
+|:------------------------------------|:--------------|:--------|:------------------------------------------------------------------------------------------------------------------------------|
+| [`--annotation`](#annotation)       | `stringArray` |         | Add annotation to the image                                                                                                   |
+| [`--append`](#append)               | `bool`        |         | Append to existing manifest                                                                                                   |
+| [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                                                      |
+| `-D`, `--debug`                     | `bool`        |         | Enable debug logging                                                                                                          |
+| [`--dry-run`](#dry-run)             | `bool`        |         | Show final image instead of pushing                                                                                           |
+| [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Read source descriptor from file                                                                                              |
+| [`--metadata-file`](#metadata-file) | `string`      |         | Write create result metadata to a file                                                                                        |
+| `-p`, `--platform`                  | `stringArray` |         | Filter specified platforms of target image                                                                                    |
+| `--prefer-index`                    | `bool`        | `true`  | When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy |
+| `--progress`                        | `string`      | `auto`  | Set type of progress output (`auto`, `none`, `plain`, `rawjson`, `tty`). Use plain to show container output                   |
+| [`-t`](#tag), [`--tag`](#tag)       | `stringArray` |         | Set reference for new image                                                                                                   |
 
 
 <!---MARKER_GEN_END-->
@@ -99,6 +100,28 @@ $ docker buildx imagetools create -f descr.json myuser/image
 The descriptor in the file is merged with existing descriptor in the registry if it exists.
 
 The supported fields for the descriptor are defined in [OCI spec](https://github.com/opencontainers/image-spec/blob/master/descriptor.md#properties) .
+
+### <a name="metadata-file"></a> Write create result metadata to a file (--metadata-file)
+
+To output metadata such as the image digest, pass the `--metadata-file` flag.
+The metadata will be written as a JSON object to the specified file. The
+directory of the specified file must already exist and be writable.
+
+```console
+$ docker buildx imagetools create -t user/app:latest -f image1 -f image2 --metadata-file metadata.json
+$ cat metadata.json
+```
+
+```json
+{
+  "containerimage.descriptor": {
+    "mediaType": "application/vnd.oci.image.index.v1+json",
+    "digest": "sha256:19ffeab6f8bc9293ac2c3fdf94ebe28396254c993aea0b5a542cfb02e0883fa3",
+    "size": 4654
+  },
+  "image.name": "docker.io/user/app"
+}
+```
 
 ### <a name="tag"></a> Set reference for new image  (-t, --tag)
 

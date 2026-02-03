@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"os"
+	"sort"
 	"strings"
 
 	"github.com/containerd/containerd/v2/core/remotes"
@@ -16,7 +17,9 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/util/progress/progressui"
+	"github.com/moby/sys/atomicwriter"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -34,6 +37,7 @@ type createOptions struct {
 	progress     string
 	preferIndex  bool
 	platforms    []string
+	metadataFile string
 }
 
 func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, args []string) error {
@@ -76,10 +80,15 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	}
 
 	repos := map[string]struct{}{}
-
 	for _, t := range tags {
 		repos[t.Name()] = struct{}{}
 	}
+
+	repoNames := make([]string, 0, len(repos))
+	for repo := range repos {
+		repoNames = append(repoNames, repo)
+	}
+	sort.Strings(repoNames)
 
 	sourceRefs := false
 	for _, s := range srcs {
@@ -241,6 +250,15 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		err = err1
 	}
 
+	if err == nil && len(in.metadataFile) > 0 {
+		if err := writeMetadataFile(in.metadataFile, map[string]any{
+			exptypes.ExporterImageDescriptorKey: desc,
+			exptypes.ExporterImageNameKey:       strings.Join(repoNames, ","),
+		}); err != nil {
+			return err
+		}
+	}
+
 	return err
 }
 
@@ -348,6 +366,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 	flags.BoolVar(&options.preferIndex, "prefer-index", true, "When only a single source is specified, prefer outputting an image index or manifest list instead of performing a carbon copy")
 	flags.StringArrayVarP(&options.platforms, "platform", "p", []string{}, "Filter specified platforms of target image")
+	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write create result metadata to a file")
 
 	return cmd
 }
@@ -366,4 +385,12 @@ func mergeDesc(d1, d2 ocispecs.Descriptor) (ocispecs.Descriptor, error) {
 		d1.Platform = d2.Platform // missing items filled in later from image config
 	}
 	return d1, nil
+}
+
+func writeMetadataFile(filename string, dt any) error {
+	b, err := json.MarshalIndent(dt, "", "  ")
+	if err != nil {
+		return err
+	}
+	return atomicwriter.WriteFile(filename, b, 0o644)
 }
