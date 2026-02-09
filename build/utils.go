@@ -11,7 +11,6 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/cli/opts"
-	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
@@ -24,23 +23,6 @@ const (
 	// host.docker.internal to the host IP
 	mobyHostGatewayName = "host-gateway"
 )
-
-// isHTTPURL returns true if the provided str is an HTTP(S) URL by checking if it
-// has a http:// or https:// scheme. No validation is performed to verify if the
-// URL is well-formed.
-func isHTTPURL(str string) bool {
-	return strings.HasPrefix(str, "https://") || strings.HasPrefix(str, "http://")
-}
-
-func IsRemoteURL(c string) bool {
-	if isHTTPURL(c) {
-		return true
-	}
-	if _, ok, _ := dfgitutil.ParseGitRef(c); ok {
-		return true
-	}
-	return false
-}
 
 func isArchive(header []byte) bool {
 	for _, m := range [][]byte{

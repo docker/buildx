@@ -13,9 +13,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
+	"github.com/docker/buildx/util/urlutil"
 	"github.com/docker/cli/cli/command"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
@@ -56,7 +56,7 @@ func BuildName(fattrs map[string]string, ls *localstate.State) string {
 	}
 
 	var localPath string
-	if ls != nil && !build.IsRemoteURL(ls.LocalPath) {
+	if ls != nil && !urlutil.IsRemoteURL(ls.LocalPath) {
 		if ls.LocalPath != "" && ls.LocalPath != "-" {
 			localPath = filepath.ToSlash(ls.LocalPath)
 		}
