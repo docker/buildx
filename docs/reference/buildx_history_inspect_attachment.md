@@ -183,7 +183,7 @@ $ docker buildx history inspect attachment --type provenance
 
 ### Inspect an attachment by digest
 
-You can inspect an attachment directly using its digset, which you can get from
+You can inspect an attachment directly using its digest, which you can get from
 the `inspect` output:
 
 ```console
