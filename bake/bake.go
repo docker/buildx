@@ -1508,18 +1508,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 
 	secrets := t.Secrets
 	if isRemoteContext(bi, inp) {
-		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_TOKEN"); ok {
-			secrets = append(secrets, &buildflags.Secret{
-				ID:  llb.GitAuthTokenKey,
-				Env: "BUILDX_BAKE_GIT_AUTH_TOKEN",
-			})
-		}
-		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_HEADER"); ok {
-			secrets = append(secrets, &buildflags.Secret{
-				ID:  llb.GitAuthHeaderKey,
-				Env: "BUILDX_BAKE_GIT_AUTH_HEADER",
-			})
-		}
+		secrets = append(secrets, gitAuthSecretsFromEnv()...)
 	}
 	bo.SecretSpecs = secrets.Normalize()
 	secretAttachment, err := build.CreateSecrets(bo.SecretSpecs)
