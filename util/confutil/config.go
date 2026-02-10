@@ -8,10 +8,7 @@ import (
 	"sync"
 
 	"github.com/docker/cli/cli/command"
-	"github.com/moby/buildkit/cmd/buildkitd/config"
 	"github.com/moby/sys/atomicwriter"
-	"github.com/pelletier/go-toml"
-	"github.com/pkg/errors"
 	fs "github.com/tonistiigi/fsutil/copy"
 )
 
@@ -138,25 +135,4 @@ func (c *Config) TryNodeIdentifier() (out string) {
 		return string(dt)
 	}
 	return
-}
-
-// LoadConfigTree loads BuildKit config toml tree
-func LoadConfigTree(fp string) (*toml.Tree, error) {
-	f, err := os.Open(fp)
-	if err != nil {
-		if errors.Is(err, os.ErrNotExist) {
-			return nil, nil
-		}
-		return nil, errors.Wrapf(err, "failed to load config from %s", fp)
-	}
-	defer f.Close()
-	t, err := toml.LoadReader(f)
-	if err != nil {
-		return t, errors.Wrap(err, "failed to parse buildkit config")
-	}
-	var bkcfg config.Config
-	if err = t.Unmarshal(&bkcfg); err != nil {
-		return t, errors.Wrap(err, "failed to parse buildkit config")
-	}
-	return t, nil
 }
