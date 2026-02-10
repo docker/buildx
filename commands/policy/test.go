@@ -84,7 +84,7 @@ func runTest(ctx context.Context, out io.Writer, path string, opts policy.TestOp
 			_, _ = fmt.Fprintln(out, "decision: <nil>")
 		}
 		if len(result.MissingInput) > 0 {
-			_, _ = fmt.Fprintf(out, "missing_input: %s\n", strings.Join(result.MissingInput, ", "))
+			_, _ = fmt.Fprintf(out, "missing_input: %s\n", strings.Join(withInputPrefix(result.MissingInput), ", "))
 		}
 		if len(result.MetadataNeeded) > 0 {
 			_, _ = fmt.Fprintf(out, "metadata_resolve: %s\n", strings.Join(result.MetadataNeeded, ", "))
@@ -104,6 +104,14 @@ func writeJSON(out io.Writer, label string, v any) {
 		return
 	}
 	_, _ = fmt.Fprintf(out, "%s:\n%s\n", label, string(dt))
+}
+
+func withInputPrefix(keys []string) []string {
+	out := make([]string, len(keys))
+	for i, k := range keys {
+		out[i] = "input." + k
+	}
+	return out
 }
 
 type policyTestResolver struct {
