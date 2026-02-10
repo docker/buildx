@@ -377,6 +377,14 @@ func TestSourceToInputWithLogger(t *testing.T) {
 				"input.image.workingDir",
 				"input.image.env",
 			},
+			assert: func(t *testing.T, inp Input, unknowns []string, err error) {
+				t.Helper()
+				require.NoError(t, err)
+				require.NotNil(t, inp.Image)
+				require.False(t, inp.Image.HasProvenance)
+				require.NotContains(t, unknowns, "input.image.hasProvenance")
+				require.NotContains(t, unknowns, "input.image.signatures")
+			},
 		},
 		{
 			name: "image-source-with-config-and-no-attestation-chain",
@@ -667,6 +675,28 @@ func TestSourceToInputWithLogger(t *testing.T) {
 					Remote:         "https://github.com/docker/buildx.git",
 					Checksum:       "3333333333333333333333333333333333333333",
 					CommitChecksum: "3333333333333333333333333333333333333333",
+				},
+			},
+			expUnk: []string{"input.git.commit", "input.git.tag"},
+		},
+		{
+			name: "git-meta-sha256-checksum-sets-is-sha256",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "git://github.com/docker/buildx.git",
+				},
+				Git: &gwpb.ResolveSourceGitResponse{
+					Checksum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				},
+			},
+			expInput: Input{
+				Git: &Git{
+					Schema:         "https",
+					Host:           "github.com",
+					Remote:         "https://github.com/docker/buildx.git",
+					Checksum:       "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					CommitChecksum: "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+					IsSHA256:       true,
 				},
 			},
 			expUnk: []string{"input.git.commit", "input.git.tag"},
