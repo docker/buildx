@@ -1,6 +1,7 @@
 package policy
 
 import (
+	"context"
 	"crypto/sha1" //nolint:gosec // used for git object checksums in tests
 	"encoding/hex"
 	"encoding/json"
@@ -10,7 +11,11 @@ import (
 
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
+	policyimage "github.com/moby/policy-helpers/image"
+	policytypes "github.com/moby/policy-helpers/types"
+	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sigstore/sigstore-go/pkg/fulcio/certificate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -21,6 +26,7 @@ func TestSourceToInputWithLogger(t *testing.T) {
 		name      string
 		src       *gwpb.ResolveSourceMetaResponse
 		platform  *ocispecs.Platform
+		verifier  PolicyVerifierProvider
 		expInput  Input
 		expUnk    []string
 		expErrMsg string
@@ -253,6 +259,88 @@ func TestSourceToInputWithLogger(t *testing.T) {
 				"input.image.volumes",
 				"input.image.workingDir",
 				"input.image.env",
+			},
+		},
+		{
+			name: "image-attestation-chain-with-mock-verifier-sets-signature-properties",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "docker-image://alpine:latest",
+				},
+				Image: &gwpb.ResolveSourceImageResponse{
+					Digest:           "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+					AttestationChain: newTestAttestationChain(t),
+				},
+			},
+			platform: &ocispecs.Platform{OS: "linux", Architecture: "amd64"},
+			verifier: func() (PolicyVerifier, error) {
+				return &mockPolicyVerifier{
+					verifyImage: func(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+						ts := time.Date(2024, 2, 3, 4, 5, 6, 0, time.UTC)
+						return &policytypes.SignatureInfo{
+							Kind:            policytypes.KindDockerGithubBuilder,
+							SignatureType:   policytypes.SignatureSimpleSigningV1,
+							DockerReference: "docker.io/library/alpine:latest",
+							IsDHI:           true,
+							Timestamps: []policytypes.TimestampVerificationResult{
+								{Type: "rekor", URI: "https://rekor.sigstore.dev", Timestamp: ts},
+							},
+							Signer: &certificate.Summary{
+								CertificateIssuer:      "https://token.actions.githubusercontent.com",
+								SubjectAlternativeName: "https://github.com/docker/buildx/.github/workflows/ci.yml@refs/heads/main",
+								Extensions: certificate.Extensions{
+									BuildSignerURI:             "https://github.com/docker/buildx/.github/workflows/ci.yml",
+									BuildSignerDigest:          "sha256:1234",
+									RunnerEnvironment:          "github-hosted",
+									SourceRepositoryURI:        "https://github.com/docker/buildx",
+									SourceRepositoryDigest:     "abcdef",
+									SourceRepositoryRef:        "refs/heads/main",
+									SourceRepositoryOwnerURI:   "https://github.com/docker",
+									BuildConfigURI:             "https://github.com/docker/buildx/.github/workflows/ci.yml",
+									BuildConfigDigest:          "sha256:5678",
+									RunInvocationURI:           "https://github.com/docker/buildx/actions/runs/1",
+									SourceRepositoryIdentifier: "docker/buildx",
+								},
+							},
+						}, nil
+					},
+				}, nil
+			},
+			assert: func(t *testing.T, inp Input, unknowns []string, err error) {
+				t.Helper()
+				require.NoError(t, err)
+				require.Equal(t, []string{
+					"input.image.labels",
+					"input.image.user",
+					"input.image.volumes",
+					"input.image.workingDir",
+					"input.image.env",
+				}, unknowns)
+				require.NotNil(t, inp.Image)
+				require.True(t, inp.Image.HasProvenance)
+				require.Len(t, inp.Image.Signatures, 1)
+				sig := inp.Image.Signatures[0]
+				require.Equal(t, SignatureKindDockerGithubBuilder, sig.SignatureKind)
+				require.Equal(t, SignatureTypeSimpleSigningV1, sig.SignatureType)
+				require.Equal(t, "docker.io/library/alpine:latest", sig.DockerReference)
+				require.True(t, sig.IsDHI)
+				require.Len(t, sig.Timestamps, 1)
+				require.Equal(t, "rekor", sig.Timestamps[0].Type)
+				require.Equal(t, "https://rekor.sigstore.dev", sig.Timestamps[0].URI)
+				require.NotNil(t, sig.Signer)
+				require.Equal(t, "https://token.actions.githubusercontent.com", sig.Signer.CertificateIssuer)
+				require.Equal(t, "https://github.com/docker/buildx/.github/workflows/ci.yml@refs/heads/main", sig.Signer.SubjectAlternativeName)
+				require.Equal(t, "https://github.com/docker/buildx/.github/workflows/ci.yml", sig.Signer.BuildSignerURI)
+				require.Equal(t, "sha256:1234", sig.Signer.BuildSignerDigest)
+				require.Equal(t, "github-hosted", sig.Signer.RunnerEnvironment)
+				require.Equal(t, "https://github.com/docker/buildx", sig.Signer.SourceRepositoryURI)
+				require.Equal(t, "abcdef", sig.Signer.SourceRepositoryDigest)
+				require.Equal(t, "refs/heads/main", sig.Signer.SourceRepositoryRef)
+				require.Equal(t, "https://github.com/docker", sig.Signer.SourceRepositoryOwnerURI)
+				require.Equal(t, "https://github.com/docker/buildx/.github/workflows/ci.yml", sig.Signer.BuildConfigURI)
+				require.Equal(t, "sha256:5678", sig.Signer.BuildConfigDigest)
+				require.Equal(t, "https://github.com/docker/buildx/actions/runs/1", sig.Signer.RunInvocationURI)
+				require.Equal(t, "docker/buildx", sig.Signer.SourceRepositoryIdentifier)
 			},
 		},
 		{
@@ -635,7 +723,7 @@ func TestSourceToInputWithLogger(t *testing.T) {
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
-			inp, unknowns, err := SourceToInputWithLogger(t.Context(), nil, tc.src, tc.platform, nil)
+			inp, unknowns, err := SourceToInputWithLogger(t.Context(), tc.verifier, tc.src, tc.platform, nil)
 			if tc.assert != nil {
 				tc.assert(t, inp, unknowns, err)
 				return
@@ -664,4 +752,82 @@ func gitObjectSHA1(objType string, raw []byte) string {
 	//nolint:gosec // Git object IDs are defined using SHA-1 for this test fixture.
 	sum := sha1.Sum(append(prefix, raw...))
 	return hex.EncodeToString(sum[:])
+}
+
+type mockPolicyVerifier struct {
+	verifyImage func(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error)
+}
+
+func (m *mockPolicyVerifier) VerifyImage(ctx context.Context, provider policyimage.ReferrersProvider, desc ocispecs.Descriptor, platform *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+	return m.verifyImage(ctx, provider, desc, platform)
+}
+
+func newTestAttestationChain(t *testing.T) *gwpb.AttestationChain {
+	t.Helper()
+
+	imgDigest := digest.FromString("image-manifest")
+	attDigest := digest.FromString("attestation-manifest")
+
+	indexBytes := mustMarshalJSON(t, map[string]any{
+		"mediaType": ocispecs.MediaTypeImageIndex,
+		"manifests": []map[string]any{
+			{
+				"mediaType": ocispecs.MediaTypeImageManifest,
+				"digest":    imgDigest.String(),
+				"size":      int64(10),
+				"platform": map[string]any{
+					"os":           "linux",
+					"architecture": "amd64",
+				},
+			},
+			{
+				"mediaType": ocispecs.MediaTypeImageManifest,
+				"digest":    attDigest.String(),
+				"size":      int64(10),
+				"annotations": map[string]string{
+					policyimage.AnnotationDockerReferenceType:   policyimage.AttestationManifestType,
+					policyimage.AnnotationDockerReferenceDigest: imgDigest.String(),
+				},
+			},
+		},
+	})
+	indexDigest := digest.FromBytes(indexBytes)
+
+	sigManifestBytes := mustMarshalJSON(t, map[string]any{
+		"schemaVersion": 2,
+		"mediaType":     ocispecs.MediaTypeImageManifest,
+		"artifactType":  policyimage.ArtifactTypeSigstoreBundle,
+	})
+	sigDigest := digest.FromBytes(sigManifestBytes)
+
+	return &gwpb.AttestationChain{
+		Root:                indexDigest.String(),
+		AttestationManifest: attDigest.String(),
+		SignatureManifests:  []string{sigDigest.String()},
+		Blobs: map[string]*gwpb.Blob{
+			indexDigest.String(): {
+				Descriptor_: &gwpb.Descriptor{
+					MediaType: ocispecs.MediaTypeImageIndex,
+					Digest:    indexDigest.String(),
+					Size:      int64(len(indexBytes)),
+				},
+				Data: indexBytes,
+			},
+			sigDigest.String(): {
+				Descriptor_: &gwpb.Descriptor{
+					MediaType: ocispecs.MediaTypeImageManifest,
+					Digest:    sigDigest.String(),
+					Size:      int64(len(sigManifestBytes)),
+				},
+				Data: sigManifestBytes,
+			},
+		},
+	}
+}
+
+func mustMarshalJSON(t *testing.T, v any) []byte {
+	t.Helper()
+	dt, err := json.Marshal(v)
+	require.NoError(t, err)
+	return dt
 }
