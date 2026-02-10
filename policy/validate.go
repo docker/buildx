@@ -224,9 +224,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			return nil, nil, err
 		}
 		unk := collectUnknowns(pq.Support, unknowns)
-		if _, ok := st.Unknowns[funcVerifyGitSignature]; ok {
-			unk = append(unk, "input.git.commit")
-		}
+		unk = append(unk, runtimeUnknownInputRefs(st)...)
 
 		if len(unk) > 0 {
 			next := &gwpb.ResolveSourceMetaRequest{
@@ -405,7 +403,7 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 				g.Subdir = ""
 			}
 		}
-		if v, ok := src.Source.Attrs[pb.AttrFullRemoteURL]; !ok {
+		if v, ok := src.Source.Attrs[pb.AttrFullRemoteURL]; ok {
 			if !gitutil.IsGitTransport(v) {
 				v = "https://" + v
 			}
@@ -418,11 +416,11 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 			g.Host = u.Host
 			g.FullURL = v
 		}
-		if tag, ok := strings.CutPrefix(g.Ref, "refs/tags/"); ok {
+		if tag, ok := strings.CutPrefix(ref, "refs/tags/"); ok {
 			g.TagName = tag
 			isFullRef = true
 		}
-		if branch, ok := strings.CutPrefix(g.Ref, "refs/heads/"); ok {
+		if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
 			g.Branch = branch
 			isFullRef = true
 		}
@@ -621,14 +619,12 @@ func AddUnknowns(req *gwpb.ResolveSourceMetaRequest, unk []string) error {
 func AddUnknownsWithLogger(logf func(logrus.Level, string), req *gwpb.ResolveSourceMetaRequest, unk []string) error {
 	unk2 := make([]string, 0, len(unk))
 	for _, u := range unk {
-		k := strings.TrimPrefix(u, "input.")
-		k = trimKey(k)
-		switch k {
+		switch u {
 		case "image", "git", "http", "local":
 			// parents are returned as unknowns for some reason, ignore
 			continue
 		default:
-			unk2 = append(unk2, k)
+			unk2 = append(unk2, u)
 		}
 	}
 	if len(unk2) == 0 {
@@ -680,8 +676,10 @@ func collectUnknowns(mods []*ast.Module, allowed []string) []string {
 	for _, mod := range mods {
 		ast.WalkRefs(mod, func(ref ast.Ref) bool {
 			if ref.HasPrefix(ast.InputRootRef) {
-				s := ref.String() // e.g. "input.request.path"
-				s = "input." + trimKey(strings.TrimPrefix(s, "input."))
+				s := trimKey(ref.String())
+				if s == "" {
+					return true
+				}
 				if _, ok := seen[s]; !ok {
 					seen[s] = struct{}{}
 					out = append(out, s)
@@ -696,6 +694,10 @@ func collectUnknowns(mods []*ast.Module, allowed []string) []string {
 
 	valid := map[string]struct{}{}
 	for _, k := range allowed {
+		k = trimKey(k)
+		if k == "" {
+			continue
+		}
 		valid[k] = struct{}{}
 	}
 
@@ -709,14 +711,25 @@ func collectUnknowns(mods []*ast.Module, allowed []string) []string {
 	return filtered
 }
 
+func runtimeUnknownInputRefs(st *state) []string {
+	if st == nil || len(st.Unknowns) == 0 {
+		return nil
+	}
+	var out []string
+	if _, ok := st.Unknowns[funcVerifyGitSignature]; ok {
+		out = append(out, "git.commit")
+	}
+	return out
+}
+
 func summarizeUnknownsForLog(unk []string) []string {
 	out := make([]string, 0, len(unk))
 	seen := map[string]struct{}{}
 	for _, u := range unk {
-		if strings.HasPrefix(u, "input.image.signatures") {
-			u = "input.image.signatures"
+		if strings.HasPrefix(u, "image.signatures") {
+			u = "image.signatures"
 		}
-		if u == "input.image" {
+		if u == "image" {
 			continue
 		}
 		if _, ok := seen[u]; ok {
@@ -730,7 +743,7 @@ func summarizeUnknownsForLog(unk []string) []string {
 
 func hasHTTPUnknowns(unk []string) bool {
 	for _, u := range unk {
-		if strings.HasPrefix(u, "input.http.") {
+		if strings.HasPrefix(u, "http.") {
 			return true
 		}
 	}
@@ -738,6 +751,8 @@ func hasHTTPUnknowns(unk []string) bool {
 }
 
 func trimKey(s string) string {
+	s = strings.TrimPrefix(s, "input.")
+
 	const (
 		dot = '.'
 		sb  = '['

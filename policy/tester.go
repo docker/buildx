@@ -311,7 +311,7 @@ func runPolicyTest(ctx context.Context, policyModules map[string]*ast.Module, te
 	result.Allow = allow
 	result.DenyMessages = deny
 
-	missing := missingInputRefs(policyPackageModules, effectiveInput)
+	missing := missingInputRefs(policyPackageModules, effectiveInput, runtimeUnknownInputRefs(testState), runtimeUnknownInputRefs(decisionState))
 	result.MissingInput = uniqueSortedStrings(missing)
 	result.MetadataNeeded = summarizeMetadataRequests(result.MissingInput)
 
@@ -534,7 +534,7 @@ func hasEnv(env Env) bool {
 func filterResolvableMissing(missing []string) []string {
 	out := make([]string, 0, len(missing))
 	for _, m := range missing {
-		if strings.HasPrefix(m, "input.image.") || strings.HasPrefix(m, "input.git.") {
+		if strings.HasPrefix(m, "image.") || strings.HasPrefix(m, "git.") {
 			out = append(out, m)
 		}
 	}
@@ -595,24 +595,27 @@ func modulesForPackage(modules map[string]*ast.Module, pkgPath string) []*ast.Mo
 	return out
 }
 
-func missingInputRefs(mods []*ast.Module, input *Input) []string {
+func missingInputRefs(mods []*ast.Module, input *Input, extraRefs ...[]string) []string {
 	if len(mods) == 0 {
 		return nil
 	}
 	inputMap := normalizeInput(input)
 	refs := collectUnknowns(mods, nil)
+	for _, er := range extraRefs {
+		refs = append(refs, er...)
+	}
+	seen := map[string]struct{}{}
 	missing := make([]string, 0, len(refs))
-	for _, ref := range refs {
-		key := strings.TrimPrefix(ref, "input.")
-		if key == ref {
-			continue
-		}
-		key = trimKey(key)
+	for _, key := range refs {
 		if key == "" {
 			continue
 		}
+		if _, ok := seen[key]; ok {
+			continue
+		}
+		seen[key] = struct{}{}
 		if !inputHasPath(inputMap, strings.Split(key, ".")) {
-			missing = append(missing, "input."+key)
+			missing = append(missing, key)
 		}
 	}
 	return missing
@@ -703,11 +706,7 @@ func summarizeMetadataRequests(missing []string) []string {
 		return nil
 	}
 	req := &gwpb.ResolveSourceMetaRequest{}
-	trimmed := make([]string, 0, len(missing))
-	for _, m := range missing {
-		trimmed = append(trimmed, strings.TrimPrefix(m, "input."))
-	}
-	if err := AddUnknowns(req, trimmed); err != nil {
+	if err := AddUnknowns(req, missing); err != nil {
 		return nil
 	}
 	var out []string

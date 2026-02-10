@@ -14,12 +14,17 @@ import (
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	policyverifier "github.com/moby/policy-helpers"
 	policyimage "github.com/moby/policy-helpers/image"
+	policytypes "github.com/moby/policy-helpers/types"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
-type PolicyVerifierProvider func() (*policyverifier.Verifier, error)
+type PolicyVerifier interface {
+	VerifyImage(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error)
+}
+
+type PolicyVerifierProvider func() (PolicyVerifier, error)
 
 func SignatureVerifier(cfg *confutil.Config) PolicyVerifierProvider {
 	if cfg == nil {
@@ -27,9 +32,9 @@ func SignatureVerifier(cfg *confutil.Config) PolicyVerifierProvider {
 	}
 	var (
 		mu sync.Mutex
-		v  *policyverifier.Verifier
+		v  PolicyVerifier
 	)
-	return func() (*policyverifier.Verifier, error) {
+	return func() (PolicyVerifier, error) {
 		mu.Lock()
 		defer mu.Unlock()
 
