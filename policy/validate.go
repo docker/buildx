@@ -405,7 +405,7 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 				g.Subdir = ""
 			}
 		}
-		if v, ok := src.Source.Attrs[pb.AttrFullRemoteURL]; !ok {
+		if v, ok := src.Source.Attrs[pb.AttrFullRemoteURL]; ok {
 			if !gitutil.IsGitTransport(v) {
 				v = "https://" + v
 			}
@@ -418,11 +418,11 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 			g.Host = u.Host
 			g.FullURL = v
 		}
-		if tag, ok := strings.CutPrefix(g.Ref, "refs/tags/"); ok {
+		if tag, ok := strings.CutPrefix(ref, "refs/tags/"); ok {
 			g.TagName = tag
 			isFullRef = true
 		}
-		if branch, ok := strings.CutPrefix(g.Ref, "refs/heads/"); ok {
+		if branch, ok := strings.CutPrefix(ref, "refs/heads/"); ok {
 			g.Branch = branch
 			isFullRef = true
 		}
