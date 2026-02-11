@@ -35,6 +35,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
@@ -657,6 +658,9 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		}
 		target.FrontendInputs["context"] = *inp.ContextState
 		target.FrontendInputs["dockerfile"] = *inp.ContextState
+		if _, ok, _ := dfgitutil.ParseGitRef(inp.ContextPath); ok {
+			target.FrontendAttrs["input:context"] = inp.ContextPath
+		}
 	case inp.ContextPath == "-":
 		if inp.DockerfilePath == "-" {
 			return nil, errors.Errorf("invalid argument: can't use stdin for both build context and dockerfile")
@@ -810,6 +814,9 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		caps["moby.buildkit.frontend.contexts+forward"] = struct{}{}
 		if v.State != nil {
 			target.FrontendAttrs["context:"+k] = "input:" + k
+			if _, ok, _ := dfgitutil.ParseGitRef(v.Path); ok {
+				target.FrontendAttrs["input:git_state_"+k] = v.Path
+			}
 			if target.FrontendInputs == nil {
 				target.FrontendInputs = make(map[string]llb.State)
 			}

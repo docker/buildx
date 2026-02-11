@@ -1306,7 +1306,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 			continue
 		}
 		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
-		t.NamedContexts[k] = build.NamedContext{State: &st}
+		t.NamedContexts[k] = build.NamedContext{State: &st, Path: inp.URL}
 	}
 
 	if t.ContextPath == "." {
@@ -1326,6 +1326,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 		llb.WithCustomNamef("set context to %s", t.ContextPath),
 	)
 	t.ContextState = &st
+	t.ContextPath = inp.URL
 }
 
 func isRemoteContext(t build.Inputs, inp *Input) bool {
