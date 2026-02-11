@@ -2,7 +2,10 @@ package tests
 
 import (
 	"encoding/json"
+	"os"
 	"os/exec"
+	"path"
+	"path/filepath"
 	"testing"
 
 	"github.com/containerd/containerd/v2/core/images"
@@ -50,9 +53,22 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 	target2 := registry2 + "/buildx/imtools2-manifest:latest"
 
-	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target2, target))
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--metadata-file", path.Join(dir, "md.json"), "-t", target2, target))
 	dt, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
+
+	mddt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		ImageDescriptor ocispecs.Descriptor `json:"containerimage.descriptor"`
+		ImageName       string              `json:"image.name"`
+	}
+	var md mdT
+	err = json.Unmarshal(mddt, &md)
+	require.NoError(t, err)
+	require.NotEmpty(t, md.ImageDescriptor)
+	require.Equal(t, registry2+"/buildx/imtools2-manifest", md.ImageName)
 
 	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2, "--raw"))
 	dt, err = cmd.CombinedOutput()
@@ -123,9 +139,22 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 	target2 := registry2 + "/buildx/imtools2:latest"
 
-	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target2, target))
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--metadata-file", path.Join(dir, "md.json"), "-t", target2, target))
 	dt, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
+
+	mddt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		ImageDescriptor ocispecs.Descriptor `json:"containerimage.descriptor"`
+		ImageName       string              `json:"image.name"`
+	}
+	var md mdT
+	err = json.Unmarshal(mddt, &md)
+	require.NoError(t, err)
+	require.NotEmpty(t, md.ImageDescriptor)
+	require.Equal(t, registry2+"/buildx/imtools2", md.ImageName)
 
 	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2, "--raw"))
 	dt, err = cmd.CombinedOutput()
