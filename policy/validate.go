@@ -555,7 +555,7 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 				unknowns = append(unknowns, "input.image.checksum")
 			}
 			unknowns = append(unknowns, withPrefix(configFields, "input.image.")...)
-			unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
+			unknowns = append(unknowns, "input.image.hasProvenance", "input.image.provenance", "input.image.signatures")
 		} else {
 			inp.Image.Checksum = src.Image.Digest
 			if cfg := src.Image.Config; cfg != nil {
@@ -577,7 +577,14 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 			}
 
 			if ac := src.Image.AttestationChain; ac != nil {
-				inp.Image.HasProvenance = ac.AttestationManifest != ""
+				if prv, err := parseProvenance(ac); err != nil {
+					if logf != nil {
+						logf(logrus.DebugLevel, fmt.Sprintf("failed to parse image provenance: %v", err))
+					}
+				} else {
+					inp.Image.Provenance = prv
+				}
+				inp.Image.HasProvenance = ac.AttestationManifest != "" || inp.Image.Provenance != nil
 				if getVerifier != nil {
 					signatures, err := parseSignatures(ctx, getVerifier, ac, platform)
 					if err != nil {
@@ -589,7 +596,7 @@ func SourceToInputWithLogger(ctx context.Context, getVerifier PolicyVerifierProv
 					}
 				}
 			} else {
-				unknowns = append(unknowns, "input.image.hasProvenance", "input.image.signatures")
+				unknowns = append(unknowns, "input.image.hasProvenance", "input.image.provenance", "input.image.signatures")
 			}
 		}
 	case "local":
@@ -635,6 +642,17 @@ func AddUnknownsWithLogger(logf func(logrus.Level, string), req *gwpb.ResolveSou
 		logf(logrus.DebugLevel, fmt.Sprintf("collected unknowns: %+v", unk2))
 	}
 	for _, u := range unk2 {
+		if u == "image.provenance" || strings.HasPrefix(u, "image.provenance.") {
+			if req.Image == nil {
+				req.Image = &gwpb.ResolveSourceImageRequest{
+					NoConfig: true,
+				}
+			}
+			req.Image.AttestationChain = true
+			req.Image.ResolveAttestations = appendUnique(req.Image.ResolveAttestations, resolveProvenanceAttestations...)
+			continue
+		}
+
 		switch u {
 		case "image.checksum", "image.labels", "image.user", "image.volumes", "image.workingDir", "image.env":
 			if req.Image == nil {
@@ -729,6 +747,9 @@ func summarizeUnknownsForLog(unk []string) []string {
 		if strings.HasPrefix(u, "image.signatures") {
 			u = "image.signatures"
 		}
+		if strings.HasPrefix(u, "image.provenance") {
+			u = "image.provenance"
+		}
 		if u == "image" {
 			continue
 		}
@@ -739,6 +760,15 @@ func summarizeUnknownsForLog(unk []string) []string {
 		out = append(out, u)
 	}
 	return out
+}
+
+func appendUnique(dst []string, values ...string) []string {
+	for _, v := range values {
+		if !slices.Contains(dst, v) {
+			dst = append(dst, v)
+		}
+	}
+	return dst
 }
 
 func hasHTTPUnknowns(unk []string) bool {

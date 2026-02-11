@@ -9,6 +9,8 @@ import (
 	"testing"
 	"time"
 
+	slsa02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
+	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
 	policyimage "github.com/moby/policy-helpers/image"
@@ -177,6 +179,7 @@ func TestSourceToInputWithLogger(t *testing.T) {
 				"input.image.workingDir",
 				"input.image.env",
 				"input.image.hasProvenance",
+				"input.image.provenance",
 				"input.image.signatures",
 			},
 		},
@@ -208,6 +211,7 @@ func TestSourceToInputWithLogger(t *testing.T) {
 				"input.image.workingDir",
 				"input.image.env",
 				"input.image.hasProvenance",
+				"input.image.provenance",
 				"input.image.signatures",
 			},
 		},
@@ -344,6 +348,113 @@ func TestSourceToInputWithLogger(t *testing.T) {
 			},
 		},
 		{
+			name: "image-attestation-chain-loads-provenance-fields-v0.2",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "docker-image://alpine:latest",
+				},
+				Image: &gwpb.ResolveSourceImageResponse{
+					Digest:           "sha256:efefefefefefefefefefefefefefefefefefefefefefefefefefefefefefefef",
+					AttestationChain: newTestAttestationChainWithProvenance(t),
+				},
+			},
+			platform: &ocispecs.Platform{OS: "linux", Architecture: "amd64"},
+			assert: func(t *testing.T, inp Input, unknowns []string, err error) {
+				t.Helper()
+				require.NoError(t, err)
+				require.Equal(t, []string{
+					"input.image.labels",
+					"input.image.user",
+					"input.image.volumes",
+					"input.image.workingDir",
+					"input.image.env",
+				}, unknowns)
+				require.NotNil(t, inp.Image)
+				require.True(t, inp.Image.HasProvenance)
+				require.NotNil(t, inp.Image.Provenance)
+				require.Equal(t, slsa02.PredicateSLSAProvenance, inp.Image.Provenance.PredicateType)
+				require.Equal(t, "https://example.com/build-type", inp.Image.Provenance.BuildType)
+				require.Equal(t, "https://example.com/builder-id", inp.Image.Provenance.BuilderID)
+				require.Equal(t, "inv-v02", inp.Image.Provenance.InvocationID)
+				require.Equal(t, "2024-01-02T03:04:05Z", inp.Image.Provenance.StartedOn)
+				require.Equal(t, "2024-01-02T03:05:05Z", inp.Image.Provenance.FinishedOn)
+				require.Equal(t, "gateway.v0", inp.Image.Provenance.Frontend)
+				require.Equal(t, map[string]string{"BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1"}, inp.Image.Provenance.BuildArgs)
+				require.Equal(t, map[string]string{
+					"build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1",
+					"cmdline": "docker/dockerfile-upstream:master",
+				}, inp.Image.Provenance.RawArgs)
+				require.NotNil(t, inp.Image.Provenance.ConfigSource)
+				require.Equal(t, "https://github.com/moby/buildkit.git#refs/tags/v0.21.0", inp.Image.Provenance.ConfigSource.URI)
+				require.Equal(t, "Dockerfile", inp.Image.Provenance.ConfigSource.Path)
+				require.Equal(t, map[string]string{"sha1": "52b004d2afe20c5c80967cc1784e718b52d69dae"}, inp.Image.Provenance.ConfigSource.Digest)
+				require.NotNil(t, inp.Image.Provenance.Completeness)
+				require.NotNil(t, inp.Image.Provenance.Completeness.Parameters)
+				require.True(t, *inp.Image.Provenance.Completeness.Parameters)
+				require.NotNil(t, inp.Image.Provenance.Completeness.Environment)
+				require.True(t, *inp.Image.Provenance.Completeness.Environment)
+				require.NotNil(t, inp.Image.Provenance.Completeness.Materials)
+				require.False(t, *inp.Image.Provenance.Completeness.Materials)
+				require.NotNil(t, inp.Image.Provenance.Reproducible)
+				require.True(t, *inp.Image.Provenance.Reproducible)
+				require.NotNil(t, inp.Image.Provenance.Hermetic)
+				require.True(t, *inp.Image.Provenance.Hermetic)
+			},
+		},
+		{
+			name: "image-attestation-chain-loads-provenance-fields-v1",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "docker-image://alpine:latest",
+				},
+				Image: &gwpb.ResolveSourceImageResponse{
+					Digest:           "sha256:f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0f0",
+					AttestationChain: newTestAttestationChainWithProvenanceV1(t),
+				},
+			},
+			platform: &ocispecs.Platform{OS: "linux", Architecture: "amd64"},
+			assert: func(t *testing.T, inp Input, unknowns []string, err error) {
+				t.Helper()
+				require.NoError(t, err)
+				require.Equal(t, []string{
+					"input.image.labels",
+					"input.image.user",
+					"input.image.volumes",
+					"input.image.workingDir",
+					"input.image.env",
+				}, unknowns)
+				require.NotNil(t, inp.Image)
+				require.True(t, inp.Image.HasProvenance)
+				require.NotNil(t, inp.Image.Provenance)
+				require.Equal(t, slsa1.PredicateSLSAProvenance, inp.Image.Provenance.PredicateType)
+				require.Equal(t, "https://example.com/build-type-v1", inp.Image.Provenance.BuildType)
+				require.Equal(t, "https://example.com/builder-id-v1", inp.Image.Provenance.BuilderID)
+				require.Equal(t, "inv-v1", inp.Image.Provenance.InvocationID)
+				require.Equal(t, "2024-02-03T04:05:06Z", inp.Image.Provenance.StartedOn)
+				require.Equal(t, "2024-02-03T04:06:06Z", inp.Image.Provenance.FinishedOn)
+				require.Equal(t, "gateway.v0", inp.Image.Provenance.Frontend)
+				require.Equal(t, map[string]string{"BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1"}, inp.Image.Provenance.BuildArgs)
+				require.Equal(t, map[string]string{
+					"build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1",
+					"source": "docker/dockerfile-upstream:master",
+				}, inp.Image.Provenance.RawArgs)
+				require.NotNil(t, inp.Image.Provenance.ConfigSource)
+				require.Equal(t, "https://github.com/moby/buildkit.git#refs/heads/master", inp.Image.Provenance.ConfigSource.URI)
+				require.Equal(t, "Dockerfile", inp.Image.Provenance.ConfigSource.Path)
+				require.Equal(t, map[string]string{"sha1": "9836771d0c5b21cbc7f0c38b81be39c42fc46b7b"}, inp.Image.Provenance.ConfigSource.Digest)
+				require.NotNil(t, inp.Image.Provenance.Completeness)
+				require.NotNil(t, inp.Image.Provenance.Completeness.Parameters)
+				require.True(t, *inp.Image.Provenance.Completeness.Parameters)
+				require.Nil(t, inp.Image.Provenance.Completeness.Environment)
+				require.NotNil(t, inp.Image.Provenance.Completeness.Materials)
+				require.False(t, *inp.Image.Provenance.Completeness.Materials)
+				require.NotNil(t, inp.Image.Provenance.Reproducible)
+				require.True(t, *inp.Image.Provenance.Reproducible)
+				require.NotNil(t, inp.Image.Provenance.Hermetic)
+				require.True(t, *inp.Image.Provenance.Hermetic)
+			},
+		},
+		{
 			name: "image-attestation-chain-without-manifest-keeps-has-provenance-false",
 			src: &gwpb.ResolveSourceMetaResponse{
 				Source: &pb.SourceOp{
@@ -428,7 +539,7 @@ func TestSourceToInputWithLogger(t *testing.T) {
 					WorkingDir:   "/work",
 				},
 			},
-			expUnk: []string{"input.image.hasProvenance", "input.image.signatures"},
+			expUnk: []string{"input.image.hasProvenance", "input.image.provenance", "input.image.signatures"},
 		},
 		{
 			name: "git-source-missing-full-remote-url-attr",
@@ -853,6 +964,133 @@ func newTestAttestationChain(t *testing.T) *gwpb.AttestationChain {
 			},
 		},
 	}
+}
+
+func newTestAttestationChainWithProvenance(t *testing.T) *gwpb.AttestationChain {
+	t.Helper()
+
+	ac := newTestAttestationChain(t)
+	provenancePredicate := map[string]any{
+		"builder": map[string]any{
+			"id": "https://example.com/builder-id",
+		},
+		"buildType": "https://example.com/build-type",
+		"invocation": map[string]any{
+			"configSource": map[string]any{
+				"digest": map[string]any{
+					"sha1": "52b004d2afe20c5c80967cc1784e718b52d69dae",
+				},
+				"entryPoint": "Dockerfile",
+				"uri":        "https://github.com/moby/buildkit.git#refs/tags/v0.21.0",
+			},
+			"parameters": map[string]any{
+				"frontend": "gateway.v0",
+				"args": map[string]any{
+					"build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1",
+					"cmdline": "docker/dockerfile-upstream:master",
+				},
+			},
+			"environment": map[string]any{
+				"platform": "linux/amd64",
+			},
+		},
+		"metadata": map[string]any{
+			"buildInvocationID": "inv-v02",
+			"buildStartedOn":    "2024-01-02T03:04:05Z",
+			"buildFinishedOn":   "2024-01-02T03:05:05Z",
+			"completeness": map[string]any{
+				"parameters":  true,
+				"environment": true,
+				"materials":   false,
+			},
+			"reproducible": true,
+			"https://mobyproject.org/buildkit@v1#hermetic": true,
+		},
+	}
+	provenanceBytes := mustMarshalJSON(t, map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": slsa02.PredicateSLSAProvenance,
+		"predicate":     provenancePredicate,
+	})
+	provenanceDigest := digest.FromBytes(provenanceBytes)
+
+	ac.Blobs[provenanceDigest.String()] = &gwpb.Blob{
+		Descriptor_: &gwpb.Descriptor{
+			MediaType: "application/vnd.in-toto+json",
+			Digest:    provenanceDigest.String(),
+			Size:      int64(len(provenanceBytes)),
+			Annotations: map[string]string{
+				predicateTypeAnnotation: slsa02.PredicateSLSAProvenance,
+			},
+		},
+		Data: provenanceBytes,
+	}
+
+	return ac
+}
+
+func newTestAttestationChainWithProvenanceV1(t *testing.T) *gwpb.AttestationChain {
+	t.Helper()
+
+	ac := newTestAttestationChain(t)
+	provenancePredicate := map[string]any{
+		"buildDefinition": map[string]any{
+			"buildType": "https://example.com/build-type-v1",
+			"externalParameters": map[string]any{
+				"configSource": map[string]any{
+					"digest": map[string]any{
+						"sha1": "9836771d0c5b21cbc7f0c38b81be39c42fc46b7b",
+					},
+					"path": "Dockerfile",
+					"uri":  "https://github.com/moby/buildkit.git#refs/heads/master",
+				},
+				"request": map[string]any{
+					"frontend": "gateway.v0",
+					"args": map[string]any{
+						"build-arg:BUILDKIT_CONTEXT_KEEP_GIT_DIR": "1",
+						"source": "docker/dockerfile-upstream:master",
+					},
+				},
+			},
+			"internalParameters": map[string]any{},
+		},
+		"runDetails": map[string]any{
+			"builder": map[string]any{
+				"id": "https://example.com/builder-id-v1",
+			},
+			"metadata": map[string]any{
+				"invocationID": "inv-v1",
+				"startedOn":    "2024-02-03T04:05:06Z",
+				"finishedOn":   "2024-02-03T04:06:06Z",
+				"buildkit_completeness": map[string]any{
+					"request":              true,
+					"resolvedDependencies": false,
+				},
+				"buildkit_reproducible": true,
+				"buildkit_hermetic":     true,
+			},
+		},
+	}
+	provenanceBytes := mustMarshalJSON(t, map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": slsa1.PredicateSLSAProvenance,
+		"predicate":     provenancePredicate,
+	})
+	provenanceDigest := digest.FromBytes(provenanceBytes)
+
+	ac.Blobs[provenanceDigest.String()] = &gwpb.Blob{
+		Descriptor_: &gwpb.Descriptor{
+			MediaType: "application/vnd.in-toto+json",
+			Digest:    provenanceDigest.String(),
+			Size:      int64(len(provenanceBytes)),
+			Annotations: map[string]string{
+				predicateTypeAnnotation: slsa1.PredicateSLSAProvenance,
+			},
+		},
+		Data: provenanceBytes,
+	}
+
+	return ac
 }
 
 func mustMarshalJSON(t *testing.T, v any) []byte {

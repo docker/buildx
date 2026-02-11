@@ -158,7 +158,7 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 				if err != nil {
 					return err
 				}
-				srcReq = buildSourceMetaResponse(resp, req)
+				srcReq = buildSourceMetaResponse(resp)
 				continue
 			}
 			break
@@ -249,7 +249,7 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 		if err != nil {
 			return err
 		}
-		srcReq = buildSourceMetaResponse(resp, next)
+		srcReq = buildSourceMetaResponse(resp)
 	}
 }
 
@@ -293,10 +293,11 @@ func sourceResolverOpt(req *gwpb.ResolveSourceMetaRequest, platform *ocispecs.Pl
 	}
 	if req.Image != nil {
 		opt.ImageOpt = &sourceresolver.ResolveImageOpt{
-			NoConfig:         req.Image.NoConfig,
-			AttestationChain: req.Image.AttestationChain,
-			Platform:         platform,
-			ResolveMode:      req.ResolveMode,
+			NoConfig:            req.Image.NoConfig,
+			AttestationChain:    req.Image.AttestationChain,
+			ResolveAttestations: slices.Clone(req.Image.ResolveAttestations),
+			Platform:            platform,
+			ResolveMode:         req.ResolveMode,
 		}
 	}
 	if req.Git != nil {
@@ -307,15 +308,12 @@ func sourceResolverOpt(req *gwpb.ResolveSourceMetaRequest, platform *ocispecs.Pl
 	return opt
 }
 
-func buildSourceMetaResponse(resp *sourceresolver.MetaResponse, req *gwpb.ResolveSourceMetaRequest) *gwpb.ResolveSourceMetaResponse {
+func buildSourceMetaResponse(resp *sourceresolver.MetaResponse) *gwpb.ResolveSourceMetaResponse {
 	out := &gwpb.ResolveSourceMetaResponse{
 		Source: resp.Op,
 	}
 	if resp.Image != nil {
 		chain := toGatewayAttestationChain(resp.Image.AttestationChain)
-		if chain == nil && req != nil && req.Image != nil && req.Image.AttestationChain {
-			chain = &gwpb.AttestationChain{}
-		}
 		out.Image = &gwpb.ResolveSourceImageResponse{
 			Digest:           resp.Image.Digest.String(),
 			Config:           resp.Image.Config,

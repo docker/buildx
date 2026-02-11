@@ -167,7 +167,7 @@ func (r *policyTestResolver) Resolve(ctx context.Context, source *pb.SourceOp, r
 	if err != nil {
 		return nil, err
 	}
-	return buildSourceMetaResponse(resp, req), nil
+	return buildSourceMetaResponse(resp), nil
 }
 
 func (r *policyTestResolver) init(ctx context.Context) error {

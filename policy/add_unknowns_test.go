@@ -47,6 +47,47 @@ func TestAddUnknowns(t *testing.T) {
 			},
 		},
 		{
+			name:     "image-provenance-enables-resolve-attestations",
+			unknowns: []string{"image.provenance"},
+			initial:  &gwpb.ResolveSourceMetaRequest{},
+			expected: &gwpb.ResolveSourceMetaRequest{
+				Image: &gwpb.ResolveSourceImageRequest{
+					NoConfig:            true,
+					AttestationChain:    true,
+					ResolveAttestations: resolveProvenanceAttestations,
+				},
+			},
+		},
+		{
+			name:     "nested-image-provenance-enables-resolve-attestations",
+			unknowns: []string{"image.provenance.buildType"},
+			initial:  &gwpb.ResolveSourceMetaRequest{},
+			expected: &gwpb.ResolveSourceMetaRequest{
+				Image: &gwpb.ResolveSourceImageRequest{
+					NoConfig:            true,
+					AttestationChain:    true,
+					ResolveAttestations: resolveProvenanceAttestations,
+				},
+			},
+		},
+		{
+			name:     "image-provenance-on-existing-image-request-preserves-fields",
+			unknowns: []string{"image.provenance.builderID"},
+			initial: &gwpb.ResolveSourceMetaRequest{
+				Image: &gwpb.ResolveSourceImageRequest{
+					NoConfig:         false,
+					AttestationChain: true,
+				},
+			},
+			expected: &gwpb.ResolveSourceMetaRequest{
+				Image: &gwpb.ResolveSourceImageRequest{
+					NoConfig:            false,
+					AttestationChain:    true,
+					ResolveAttestations: resolveProvenanceAttestations,
+				},
+			},
+		},
+		{
 			name:     "image-attestation-on-existing-image-request",
 			unknowns: []string{"image.hasProvenance"},
 			initial: &gwpb.ResolveSourceMetaRequest{
