@@ -24,6 +24,7 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/urlutil"
 	dockeropts "github.com/docker/cli/opts"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client"
@@ -1302,7 +1303,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
 			continue
 		}
-		if build.IsRemoteURL(v.Path) {
+		if urlutil.IsRemoteURL(v.Path) {
 			continue
 		}
 		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
@@ -1316,7 +1317,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 	if strings.HasPrefix(t.ContextPath, "cwd://") {
 		return
 	}
-	if build.IsRemoteURL(t.ContextPath) {
+	if urlutil.IsRemoteURL(t.ContextPath) {
 		return
 	}
 	st := llb.Scratch().File(
@@ -1330,10 +1331,10 @@ func updateContext(t *build.Inputs, inp *Input) {
 }
 
 func isRemoteContext(t build.Inputs, inp *Input) bool {
-	if build.IsRemoteURL(t.ContextPath) {
+	if urlutil.IsRemoteURL(t.ContextPath) {
 		return true
 	}
-	if inp != nil && build.IsRemoteURL(inp.URL) && !strings.HasPrefix(t.ContextPath, "cwd://") {
+	if inp != nil && urlutil.IsRemoteURL(inp.URL) && !strings.HasPrefix(t.ContextPath, "cwd://") {
 		return true
 	}
 	return false
@@ -1363,7 +1364,7 @@ func collectLocalPaths(t build.Inputs) []string {
 }
 
 func isLocalPath(p string) (string, bool) {
-	if build.IsRemoteURL(p) || strings.HasPrefix(p, "target:") || strings.HasPrefix(p, "docker-image:") {
+	if urlutil.IsRemoteURL(p) || strings.HasPrefix(p, "target:") || strings.HasPrefix(p, "docker-image:") {
 		return "", false
 	}
 	return strings.TrimPrefix(p, "cwd://"), true
@@ -1381,7 +1382,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.Context != nil {
 		contextPath = *t.Context
 	}
-	if !strings.HasPrefix(contextPath, "cwd://") && !build.IsRemoteURL(contextPath) {
+	if !strings.HasPrefix(contextPath, "cwd://") && !urlutil.IsRemoteURL(contextPath) {
 		contextPath = path.Clean(contextPath)
 	}
 	dockerfilePath := "Dockerfile"
@@ -1411,7 +1412,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		if err != nil {
 			return nil, err
 		}
-	} else if !build.IsRemoteURL(bi.DockerfilePath) && strings.HasPrefix(bi.ContextPath, "cwd://") && (inp != nil && build.IsRemoteURL(inp.URL)) {
+	} else if !urlutil.IsRemoteURL(bi.DockerfilePath) && strings.HasPrefix(bi.ContextPath, "cwd://") && (inp != nil && urlutil.IsRemoteURL(inp.URL)) {
 		// We don't currently support reading a remote Dockerfile with a local
 		// context when doing a remote invocation because we automatically
 		// derive the dockerfile from the context atm:
@@ -1433,7 +1434,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if v, ok := strings.CutPrefix(bi.ContextPath, "cwd://"); ok {
 		bi.ContextPath = path.Clean(v)
 	}
-	if !build.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && !filepath.IsAbs(bi.DockerfilePath) {
+	if !urlutil.IsRemoteURL(bi.ContextPath) && bi.ContextState == nil && !filepath.IsAbs(bi.DockerfilePath) {
 		bi.DockerfilePath = filepath.Join(bi.ContextPath, bi.DockerfilePath)
 	}
 	for k, v := range bi.NamedContexts {

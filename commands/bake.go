@@ -33,6 +33,7 @@ import (
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/tracing"
+	"github.com/docker/buildx/util/urlutil"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session/auth/authprovider"
@@ -613,11 +614,11 @@ func saveLocalStateGroup(dockerCli command.Cli, in bakeOptions, targets []string
 // from the command line arguments.
 func bakeArgs(args []string) (url, cmdContext string, targets []string) {
 	cmdContext, targets = "cwd://", args
-	if len(targets) == 0 || !build.IsRemoteURL(targets[0]) {
+	if len(targets) == 0 || !urlutil.IsRemoteURL(targets[0]) {
 		return url, cmdContext, targets
 	}
 	url, targets = targets[0], targets[1:]
-	if len(targets) == 0 || !build.IsRemoteURL(targets[0]) {
+	if len(targets) == 0 || !urlutil.IsRemoteURL(targets[0]) {
 		return url, cmdContext, targets
 	}
 	cmdContext, targets = targets[0], targets[1:]

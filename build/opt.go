@@ -31,6 +31,7 @@ import (
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/urlutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/ociindex"
@@ -710,7 +711,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			dockerfileDir = filepath.Dir(inp.DockerfilePath)
 			dockerfileName = filepath.Base(inp.DockerfilePath)
 		}
-	case IsRemoteURL(inp.ContextPath):
+	case urlutil.IsRemoteURL(inp.ContextPath):
 		if inp.DockerfilePath == "-" {
 			dockerfileReader = inp.InStream.NewReadCloser()
 		} else if filepath.IsAbs(inp.DockerfilePath) {
@@ -751,7 +752,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		dockerfileName = "Dockerfile"
 		target.FrontendAttrs["dockerfilekey"] = "dockerfile"
 	}
-	if isHTTPURL(inp.DockerfilePath) {
+	if urlutil.IsHTTPURL(inp.DockerfilePath) {
 		dockerfileDir, err = createTempDockerfileFromURL(ctx, d, inp.DockerfilePath, pw)
 		if err != nil {
 			return nil, err
@@ -824,7 +825,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			continue
 		}
 
-		if IsRemoteURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
+		if urlutil.IsRemoteURL(v.Path) || strings.HasPrefix(v.Path, "docker-image://") || strings.HasPrefix(v.Path, "target:") {
 			target.FrontendAttrs["context:"+k] = v.Path
 			processGitURL(v.Path, "context:"+k, target, caps)
 			continue

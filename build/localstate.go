@@ -6,6 +6,7 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/urlutil"
 	"github.com/moby/buildkit/client"
 )
 
@@ -16,13 +17,13 @@ func saveLocalState(so *client.SolveOpt, target string, opts Options, node build
 	}
 	lp := opts.Inputs.ContextPath
 	dp := opts.Inputs.DockerfilePath
-	if dp != "" && !IsRemoteURL(lp) && lp != "-" && dp != "-" {
+	if dp != "" && !urlutil.IsRemoteURL(lp) && lp != "-" && dp != "-" {
 		dp, err = filepath.Abs(dp)
 		if err != nil {
 			return err
 		}
 	}
-	if lp != "" && !IsRemoteURL(lp) && lp != "-" {
+	if lp != "" && !urlutil.IsRemoteURL(lp) && lp != "-" {
 		lp, err = filepath.Abs(lp)
 		if err != nil {
 			return err
