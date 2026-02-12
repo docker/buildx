@@ -1,13 +1,14 @@
 package confutil
 
 import (
-	"bytes"
 	"io"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 
-	"github.com/pelletier/go-toml"
+	buildkitdconfig "github.com/moby/buildkit/cmd/buildkitd/config"
+	"github.com/pelletier/go-toml/v2"
 	"github.com/pkg/errors"
 )
 
@@ -30,14 +31,29 @@ func LoadConfigFiles(bkconfig string) (map[string][]byte, error) {
 	} else if err != nil {
 		return nil, errors.Wrapf(err, "invalid buildkit configuration file: %s", bkconfig)
 	}
-
-	// Load config tree
-	btoml, err := LoadConfigTree(bkconfig)
+	dt, err := readFile(bkconfig)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "failed to read buildkit configuration file: %s", bkconfig)
+	}
+
+	cfg, err := buildkitdconfig.LoadFile(bkconfig)
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to load buildkit configuration file: %s", bkconfig)
 	}
 
 	m := make(map[string][]byte)
+	// unmarshal the config file to a map because marshalling the struct back can cause errors with empty fields on buildkit side
+	var conf map[string]any
+	if err := toml.Unmarshal(dt, &conf); err != nil {
+		return nil, errors.Wrapf(err, "failed to parse buildkit configuration file: %s", bkconfig)
+	}
+	if conf == nil {
+		conf = map[string]any{}
+	}
+	registry, hadRegistry := conf["registry"].(map[string]any)
+	if registry == nil {
+		registry = map[string]any{}
+	}
 
 	// Iterate through registry config to copy certs and update
 	// BuildKit config with the underlying certs' path in the container.
@@ -57,70 +73,71 @@ func LoadConfigFiles(bkconfig string) (map[string][]byte, error) {
 	//   [[registry."myregistry.io".keypair]]
 	//     key="/etc/buildkit/certs/myregistry.io/key.pem"
 	//     cert="/etc/buildkit/certs/myregistry.io/cert.pem"
-	if btoml.Has("registry") {
-		for regName := range btoml.GetArray("registry").(*toml.Tree).Values() {
-			regConf := btoml.GetPath([]string{"registry", regName}).(*toml.Tree)
-			if regConf == nil {
-				continue
+	if cfg.Registries != nil {
+		for regName, regConf := range cfg.Registries {
+			regOut, ok := registry[regName].(map[string]any)
+			if !ok {
+				return nil, errors.Errorf("invalid registry config for %q", regName)
 			}
-			pfx := path.Join("certs", reInvalidCertsDir.ReplaceAllString(regName, "_"))
-			if regConf.Has("ca") {
-				regCAs := regConf.GetArray("ca").([]string)
-				if len(regCAs) > 0 {
-					var cas []string
-					for _, ca := range regCAs {
-						fp := path.Join(pfx, path.Base(ca))
-						cas = append(cas, path.Join(DefaultBuildKitConfigDir, fp))
 
-						dt, err := readFile(ca)
-						if err != nil {
-							return nil, errors.Wrapf(err, "failed to read CA file: %s", ca)
-						}
-						m[fp] = dt
+			pfx := path.Join("certs", reInvalidCertsDir.ReplaceAllString(regName, "_"))
+			if regCAs := regConf.RootCAs; len(regCAs) > 0 {
+				cas := make([]string, 0, len(regCAs))
+				for _, ca := range regCAs {
+					fp := path.Join(pfx, filepath.Base(ca))
+					dst := path.Join(DefaultBuildKitConfigDir, fp)
+					cas = append(cas, dst)
+
+					dt, err := readFile(ca)
+					if err != nil {
+						return nil, errors.Wrapf(err, "failed to read CA file: %s", ca)
 					}
-					regConf.Set("ca", cas)
+					m[fp] = dt
 				}
+				regOut["ca"] = cas
 			}
-			if regConf.Has("keypair") {
-				regKeyPairs := regConf.GetArray("keypair").([]*toml.Tree)
-				if len(regKeyPairs) == 0 {
-					continue
-				}
+			if regKeyPairs := regConf.KeyPairs; len(regKeyPairs) > 0 {
+				keypairs := make([]map[string]any, 0, len(regKeyPairs))
 				for _, kp := range regKeyPairs {
-					if kp == nil {
-						continue
-					}
-					key := kp.Get("key").(string)
+					kpv := map[string]any{}
+					key := kp.Key
 					if len(key) > 0 {
-						fp := path.Join(pfx, path.Base(key))
-						kp.Set("key", path.Join(DefaultBuildKitConfigDir, fp))
+						fp := path.Join(pfx, filepath.Base(key))
+						dst := path.Join(DefaultBuildKitConfigDir, fp)
+						kpv["key"] = dst
 						dt, err := readFile(key)
 						if err != nil {
 							return nil, errors.Wrapf(err, "failed to read key file: %s", key)
 						}
 						m[fp] = dt
 					}
-					cert := kp.Get("cert").(string)
+					cert := kp.Certificate
 					if len(cert) > 0 {
-						fp := path.Join(pfx, path.Base(cert))
-						kp.Set("cert", path.Join(DefaultBuildKitConfigDir, fp))
+						fp := path.Join(pfx, filepath.Base(cert))
+						dst := path.Join(DefaultBuildKitConfigDir, fp)
+						kpv["cert"] = dst
 						dt, err := readFile(cert)
 						if err != nil {
 							return nil, errors.Wrapf(err, "failed to read cert file: %s", cert)
 						}
 						m[fp] = dt
 					}
+					keypairs = append(keypairs, kpv)
 				}
+				regOut["keypair"] = keypairs
 			}
+			registry[regName] = regOut
 		}
 	}
 
-	b := bytes.NewBuffer(nil)
-	_, err = btoml.WriteTo(b)
-	if err != nil {
-		return nil, err
+	if hadRegistry || len(registry) > 0 {
+		conf["registry"] = registry
 	}
-	m["buildkitd.toml"] = b.Bytes()
+	out, err := toml.Marshal(conf)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to marshal buildkit configuration file")
+	}
+	m["buildkitd.toml"] = out
 
 	return m, nil
 }

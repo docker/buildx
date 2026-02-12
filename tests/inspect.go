@@ -131,10 +131,10 @@ insecure-entitlements = [ "network.host", "security.insecure" ]
 `
 
 	expectedContent := `debug = true
-insecure-entitlements = ["network.host", "security.insecure"]
+insecure-entitlements = ['network.host', 'security.insecure']
 
 [log]
-  format = "text"
+format = 'text'
 `
 
 	var builderName string

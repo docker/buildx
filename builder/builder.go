@@ -24,6 +24,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	dopts "github.com/docker/cli/opts"
 	"github.com/google/shlex"
+	buildkitdconfig "github.com/moby/buildkit/cmd/buildkitd/config"
 	"github.com/moby/buildkit/util/progress/progressui"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
@@ -662,15 +663,12 @@ func parseBuildkitdFlags(inp string, driver string, driverOpts map[string]string
 
 	var hasNetworkHostEntitlementInConf bool
 	if buildkitdConfigFile != "" {
-		btoml, err := confutil.LoadConfigTree(buildkitdConfigFile)
+		cfg, err := buildkitdconfig.LoadFile(buildkitdConfigFile)
 		if err != nil {
 			return nil, err
-		} else if btoml != nil {
-			if ies := btoml.GetArray("insecure-entitlements"); ies != nil {
-				if slices.Contains(ies.([]string), "network.host") {
-					hasNetworkHostEntitlementInConf = true
-				}
-			}
+		}
+		if slices.Contains(cfg.Entitlements, "network.host") {
+			hasNetworkHostEntitlementInConf = true
 		}
 	}
 
