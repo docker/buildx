@@ -25,7 +25,7 @@ type TestOptions struct {
 	Run      string
 	Filename string
 	Root     fs.StatFS
-	Resolver *TestResolver
+	Provider *TestOptionsProvider
 }
 
 type TestSummary struct {
@@ -50,7 +50,7 @@ type testDef struct {
 	PkgPath string
 }
 
-type TestResolver struct {
+type TestOptionsProvider struct {
 	Resolve          func(context.Context, *pb.SourceOp, *gwpb.ResolveSourceMetaRequest) (*gwpb.ResolveSourceMetaResponse, error)
 	Platform         func(context.Context) (*ocispecs.Platform, error)
 	VerifierProvider PolicyVerifierProvider
@@ -286,8 +286,8 @@ func runPolicyTest(ctx context.Context, policyModules map[string]*ast.Module, te
 		return result, err
 	}
 	effectiveInput := input
-	if opts.Resolver != nil {
-		resolvedInput, ok, err := resolveTestInput(ctx, policyFiles, opts.Resolver, policyPackageModules, input, fsProvider)
+	if opts.Provider != nil {
+		resolvedInput, ok, err := resolveTestInput(ctx, policyFiles, opts.Provider, policyPackageModules, input, fsProvider)
 		if err != nil {
 			return result, err
 		}
@@ -397,7 +397,7 @@ func stateFromInput(input *Input) *state {
 	return st
 }
 
-func resolveTestInput(ctx context.Context, files []File, resolver *TestResolver, policyModules []*ast.Module, input *Input, fsProvider func() (fs.StatFS, func() error, error)) (*Input, bool, error) {
+func resolveTestInput(ctx context.Context, files []File, resolver *TestOptionsProvider, policyModules []*ast.Module, input *Input, fsProvider func() (fs.StatFS, func() error, error)) (*Input, bool, error) {
 	if resolver == nil {
 		return nil, false, nil
 	}
