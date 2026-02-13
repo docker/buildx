@@ -128,7 +128,39 @@ type Image struct {
 	WorkingDir  string            `json:"workingDir,omitempty"`
 
 	HasProvenance bool                   `json:"hasProvenance,omitempty"`
+	Provenance    *ImageProvenance       `json:"provenance,omitempty"`
 	Signatures    []AttestationSignature `json:"signatures,omitempty"`
+}
+
+type ImageProvenance struct {
+	PredicateType string `json:"predicateType,omitempty"`
+	BuildType     string `json:"buildType,omitempty"`
+	BuilderID     string `json:"builderID,omitempty"`
+
+	InvocationID string `json:"invocationID,omitempty"`
+	StartedOn    string `json:"startedOn,omitempty"`
+	FinishedOn   string `json:"finishedOn,omitempty"`
+
+	ConfigSource *ImageProvenanceConfigSource `json:"configSource,omitempty"`
+	Frontend     string                       `json:"frontend,omitempty"`
+	BuildArgs    map[string]string            `json:"buildArgs,omitempty"`
+	RawArgs      map[string]string            `json:"rawArgs,omitempty"`
+	Reproducible *bool                        `json:"reproducible,omitempty"`
+	Hermetic     *bool                        `json:"hermetic,omitempty"`
+
+	Completeness *ImageProvenanceCompleteness `json:"completeness,omitempty"`
+}
+
+type ImageProvenanceConfigSource struct {
+	URI    string            `json:"uri,omitempty"`
+	Digest map[string]string `json:"digest,omitempty"`
+	Path   string            `json:"path,omitempty"`
+}
+
+type ImageProvenanceCompleteness struct {
+	Parameters  *bool `json:"parameters,omitempty"`
+	Environment *bool `json:"environment,omitempty"`
+	Materials   *bool `json:"materials,omitempty"`
 }
 
 type AttestationSignature struct {
