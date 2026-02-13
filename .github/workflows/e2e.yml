@@ -153,7 +153,7 @@ jobs:
       -
         name: Install k3s
         if: matrix.driver == 'kubernetes'
-        uses: crazy-max/.github/.github/actions/install-k3s@7730d1434364d4b9aded32735b078a7ace5ea79a
+        uses: crazy-max/.github/.github/actions/install-k3s@a94383ec9e125b23907fb6fcebf7ff87964595e5
         with:
           version: ${{ env.K3S_VERSION }}
       -
