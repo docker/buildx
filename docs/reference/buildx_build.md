@@ -553,13 +553,37 @@ the daemon runs the containers used in the build with the
 ### <a name="file"></a> Specify a Dockerfile (-f, --file)
 
 ```console
-$ docker buildx build -f <filepath> .
+$ docker buildx build -f [PATH|URL|-] .
 ```
 
-Specifies the filepath of the Dockerfile to use.
+Specifies the location of the Dockerfile to use.
 If unspecified, a file named `Dockerfile` at the root of the build context is used by default.
 
-To read a Dockerfile from stdin, you can use `-` as the argument for `--file`.
+The supported inputs formats are:
+
+- [`local file path`](#local-file-path)
+- [`remote URL`](#remote-url)
+- [`stdin`](#stdin)
+
+#### local file path
+
+To specify a path to a local Dockerfile:
+
+```console
+$ docker buildx build -f path/to/Dockerfile .
+```
+
+#### remote URL
+
+To specify a URL to a remote Dockerfile:
+
+```console
+$ docker buildx build -f https://raw.githubusercontent.com/docker/buildx/refs/tags/v0.29.0/Dockerfile .
+```
+
+#### stdin
+
+To read a Dockerfile from stdin, you can use `-` as the argument:
 
 ```console
 $ cat Dockerfile | docker buildx build -f - .
