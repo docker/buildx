@@ -22,6 +22,7 @@ import (
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/pathutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/urlutil"
@@ -825,7 +826,76 @@ var (
 	_ hclparser.WithGetName      = &Group{}
 )
 
+// expandPaths expands tilde in all path fields of the target
+func (t *Target) expandPaths() {
+	// Expand context path
+	if t.Context != nil {
+		expanded := pathutil.ExpandTilde(*t.Context)
+		t.Context = &expanded
+	}
+
+	// Expand dockerfile path
+	if t.Dockerfile != nil {
+		expanded := pathutil.ExpandTilde(*t.Dockerfile)
+		t.Dockerfile = &expanded
+	}
+
+	// Expand named contexts
+	if t.Contexts != nil {
+		for k, v := range t.Contexts {
+			t.Contexts[k] = pathutil.ExpandTilde(v)
+		}
+	}
+
+	// Expand secret file paths
+	for _, s := range t.Secrets {
+		if s.FilePath != "" {
+			s.FilePath = pathutil.ExpandTilde(s.FilePath)
+		}
+	}
+
+	// Expand SSH key paths
+	for _, s := range t.SSH {
+		if len(s.Paths) > 0 {
+			s.Paths = pathutil.ExpandTildePaths(s.Paths)
+		}
+	}
+
+	// Expand cache paths if they're local
+	for _, c := range t.CacheFrom {
+		if c.Type == "local" && c.Attrs != nil {
+			if src, ok := c.Attrs["src"]; ok {
+				c.Attrs["src"] = pathutil.ExpandTilde(src)
+			}
+		}
+	}
+	for _, c := range t.CacheTo {
+		if c.Type == "local" && c.Attrs != nil {
+			if dest, ok := c.Attrs["dest"]; ok {
+				c.Attrs["dest"] = pathutil.ExpandTilde(dest)
+			}
+		}
+	}
+
+	// Expand output paths
+	for _, o := range t.Outputs {
+		// Expand the Destination field
+		if o.Destination != "" {
+			o.Destination = pathutil.ExpandTilde(o.Destination)
+		}
+		// Also expand dest in Attrs if present
+		if o.Attrs != nil {
+			if dest, ok := o.Attrs["dest"]; ok {
+				o.Attrs["dest"] = pathutil.ExpandTilde(dest)
+			}
+		}
+	}
+}
+
 func (t *Target) normalize() {
+	// Expand tilde in all path fields
+	t.expandPaths()
+
 	t.Annotations = removeDupesStr(t.Annotations)
 	t.Attest = t.Attest.Normalize()
 	t.Tags = removeDupesStr(t.Tags)
