@@ -44,19 +44,7 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 		}}); err == nil {
 			sessions = append(sessions, ssh)
 		}
-		var gitAuthSecrets []*buildflags.Secret
-		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_TOKEN"); ok {
-			gitAuthSecrets = append(gitAuthSecrets, &buildflags.Secret{
-				ID:  llb.GitAuthTokenKey,
-				Env: "BUILDX_BAKE_GIT_AUTH_TOKEN",
-			})
-		}
-		if _, ok := os.LookupEnv("BUILDX_BAKE_GIT_AUTH_HEADER"); ok {
-			gitAuthSecrets = append(gitAuthSecrets, &buildflags.Secret{
-				ID:  llb.GitAuthHeaderKey,
-				Env: "BUILDX_BAKE_GIT_AUTH_HEADER",
-			})
-		}
+		gitAuthSecrets := gitAuthSecretsFromEnv()
 		if len(gitAuthSecrets) > 0 {
 			if secrets, err := build.CreateSecrets(gitAuthSecrets); err == nil {
 				sessions = append(sessions, secrets)

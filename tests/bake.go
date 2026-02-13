@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"encoding/pem"
 	"fmt"
+	"net/url"
 	"os"
 	"path/filepath"
 	"strconv"
@@ -46,6 +47,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeLocalMulti,
 	testBakeRemote,
 	testBakeRemoteAuth,
+	testBakeRemoteAuthHostSuffix,
 	testBakeRemoteCmdContext,
 	testBakeRemoteLocalOverride,
 	testBakeLocalCwdOverride,
@@ -728,6 +730,45 @@ EOT
 
 	out, err := bakeCmd(sb, withDir(dir),
 		withEnv("BUILDX_BAKE_GIT_AUTH_TOKEN="+token),
+		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
+	)
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBakeRemoteAuthHostSuffix(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "default" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY foo /foo
+EOT
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "foo")
+	gittestutil.GitCommit(git, t, "initial commit")
+
+	token := identity.NewID()
+	addr := gittestutil.GitServeHTTP(git, t, gittestutil.WithAccessToken(token))
+	parsed, err := url.Parse(addr)
+	require.NoError(t, err)
+	host := parsed.Host
+	require.NotEmpty(t, host)
+
+	out, err := bakeCmd(sb, withDir(dir),
+		withEnv("BUILDX_BAKE_GIT_AUTH_TOKEN."+host+"="+token),
 		withArgs(addr, "--set", "*.output=type=local,dest="+dirDest),
 	)
 	require.NoError(t, err, out)
