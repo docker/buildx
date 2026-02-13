@@ -6,11 +6,12 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/docker/buildx/driver"
-	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
+
+	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/progress"
 )
 
 type Driver struct {
@@ -64,14 +65,39 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
-	opts = append([]client.ClientOpt{
-		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			return d.Dial(ctx)
-		}), client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
-			return d.DockerAPI.DialHijack(ctx, "/session", proto, meta)
-		}),
-	}, opts...)
-	return client.New(ctx, "", opts...)
+	c, _, err := d.client(ctx, opts...)
+	return c, err
+}
+
+func (d *Driver) client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, []*client.WorkerInfo, error) {
+	var (
+		c, err  = client.New(ctx, d.DockerAPI.DaemonHost(), opts...)
+		workers []*client.WorkerInfo
+	)
+	if err == nil {
+		workers, err = c.ListWorkers(ctx)
+		if err != nil {
+			c.Close()
+		}
+	}
+	if err != nil {
+		opts = append([]client.ClientOpt{
+			client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+				return d.Dial(ctx)
+			}), client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
+				return d.DockerAPI.DialHijack(ctx, "/session", proto, meta)
+			}),
+		}, opts...)
+		c, err = client.New(ctx, "", opts...)
+		if err == nil {
+			workers, err = c.ListWorkers(ctx)
+			if err != nil {
+				c.Close()
+			}
+		}
+	}
+
+	return c, workers, err
 }
 
 type features struct {
@@ -82,14 +108,14 @@ type features struct {
 func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	d.features.once.Do(func() {
 		var useContainerdSnapshotter bool
-		if c, err := d.Client(ctx); err == nil {
-			workers, _ := c.ListWorkers(ctx)
-			for _, w := range workers {
-				if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
-					useContainerdSnapshotter = true
-				}
-			}
+		c, workers, err := d.client(ctx)
+		if err != nil {
 			c.Close()
+		}
+		for _, w := range workers {
+			if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
+				useContainerdSnapshotter = true
+			}
 		}
 		d.features.list = map[driver.Feature]bool{
 			driver.OCIExporter:    useContainerdSnapshotter,
