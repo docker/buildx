@@ -13,7 +13,7 @@ import (
 
 func TestFindDriverSanity(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.DefaultSpec()},
+		"builder-amd64": {platforms.DefaultSpec()},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.DefaultSpec()}, nil, platforms.OnlyStrict, nil)
@@ -21,7 +21,7 @@ func TestFindDriverSanity(t *testing.T) {
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 	require.Equal(t, []ocispecs.Platform{platforms.DefaultSpec()}, res[0].Platforms())
 }
 
@@ -36,22 +36,22 @@ func TestFindDriverEmpty(t *testing.T) {
 
 func TestFindDriverWeirdName(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/foobar")},
+		"builder-amd64": {platforms.MustParse("linux/amd64")},
+		"builder-beta":  {platforms.MustParse("linux/beta")},
 	})
 
 	// find first platform
-	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/foobar")}, nil, platforms.Only, nil)
+	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/beta")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 1, res[0].driverIndex)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-beta", res[0].Node().Builder)
 }
 
 func TestFindDriverUnknown(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
+		"builder-amd64": {platforms.MustParse("linux/amd64")},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/riscv64")}, nil, platforms.Only, nil)
@@ -59,44 +59,44 @@ func TestFindDriverUnknown(t *testing.T) {
 	require.False(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 }
 
 func TestSelectNodeSinglePlatform(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/riscv64")},
+		"builder-amd64":   {platforms.MustParse("linux/amd64")},
+		"builder-riscv64": {platforms.MustParse("linux/riscv64")},
 	})
 
-	// find first platform
+	// Request linux/amd64 platform, should match builder-amd64
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/amd64")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 
-	// find second platform
+	// Request linux/riscv64 platform, should match builder-riscv64
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/riscv64")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 1, res[0].driverIndex)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-riscv64", res[0].Node().Builder)
 
-	// find an unknown platform, should match the first driver
-	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/s390x")}, nil, platforms.Only, nil)
+	// Request unknown platform like linux/unknown, should default to first builder (builder-amd64)
+	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/unknown")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.False(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 }
 
 func TestSelectNodeMultiPlatform(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/arm64")},
-		"bbb": {platforms.MustParse("linux/riscv64")},
+		"builder-amd64-arm64": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/arm64")},
+		"builder-riscv64":     {platforms.MustParse("linux/riscv64")},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/amd64")}, nil, platforms.Only, nil)
@@ -104,27 +104,27 @@ func TestSelectNodeMultiPlatform(t *testing.T) {
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64-arm64", res[0].Node().Builder)
 
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm64")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 0, res[0].driverIndex)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64-arm64", res[0].Node().Builder)
 
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/riscv64")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
 	require.Equal(t, 1, res[0].driverIndex)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-riscv64", res[0].Node().Builder)
 }
 
 func TestSelectNodeNonStrict(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/arm64")},
+		"builder-amd64": {platforms.MustParse("linux/amd64")},
+		"builder-arm64": {platforms.MustParse("linux/arm64")},
 	})
 
 	// arm64 should match itself
@@ -132,47 +132,47 @@ func TestSelectNodeNonStrict(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-arm64", res[0].Node().Builder)
 
 	// arm64 may support arm/v8
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v8")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-arm64", res[0].Node().Builder)
 
 	// arm64 may support arm/v7
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v7")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-arm64", res[0].Node().Builder)
 }
 
 func TestSelectNodeNonStrictARM(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/arm64")},
-		"ccc": {platforms.MustParse("linux/arm/v8")},
+		"builder-amd64": {platforms.MustParse("linux/amd64")},
+		"builder-arm64": {platforms.MustParse("linux/arm64")},
+		"builder-armv8": {platforms.MustParse("linux/arm/v8")},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v8")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "ccc", res[0].Node().Builder)
+	require.Equal(t, "builder-armv8", res[0].Node().Builder)
 
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v7")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "ccc", res[0].Node().Builder)
+	require.Equal(t, "builder-armv8", res[0].Node().Builder)
 }
 
 func TestSelectNodeNonStrictLower(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/arm/v7")},
+		"builder-amd64": {platforms.MustParse("linux/amd64")},
+		"builder-armv7": {platforms.MustParse("linux/arm/v7")},
 	})
 
 	// v8 can't be built on v7 (so we should select the default)...
@@ -180,71 +180,71 @@ func TestSelectNodeNonStrictLower(t *testing.T) {
 	require.NoError(t, err)
 	require.False(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 
 	// ...but v6 can be built on v8
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v6")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-armv7", res[0].Node().Builder)
 }
 
 func TestSelectNodePreferStart(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/riscv64")},
-		"ccc": {platforms.MustParse("linux/riscv64")},
+		"builder-amd64":     {platforms.MustParse("linux/amd64")},
+		"builder-riscv64-1": {platforms.MustParse("linux/riscv64")},
+		"builder-riscv64-2": {platforms.MustParse("linux/riscv64")},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/riscv64")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-riscv64-1", res[0].Node().Builder)
 }
 
 func TestSelectNodePreferExact(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/arm/v8")},
-		"bbb": {platforms.MustParse("linux/arm/v7")},
+		"builder-armv8": {platforms.MustParse("linux/arm/v8")},
+		"builder-armv7": {platforms.MustParse("linux/arm/v7")},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v7")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-armv7", res[0].Node().Builder)
 }
 
 func TestSelectNodeNoPlatform(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/foobar")},
-		"bbb": {platforms.DefaultSpec()},
+		"builder-beta":    {platforms.MustParse("linux/beta")},
+		"builder-default": {platforms.DefaultSpec()},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-beta", res[0].Node().Builder)
 	require.Empty(t, res[0].Platforms())
 }
 
 func TestSelectNodeAdditionalPlatforms(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/arm/v8")},
+		"builder-amd64": {platforms.MustParse("linux/amd64")},
+		"builder-armv8": {platforms.MustParse("linux/arm/v8")},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v7")}, nil, platforms.Only, nil)
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "bbb", res[0].Node().Builder)
+	require.Equal(t, "builder-armv8", res[0].Node().Builder)
 
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("linux/arm/v7")}, nil, platforms.Only, func(idx int, n builder.Node) []ocispecs.Platform {
-		if n.Builder == "aaa" {
+		if n.Builder == "builder-amd64" {
 			return []ocispecs.Platform{platforms.MustParse("linux/arm/v7")}
 		}
 		return nil
@@ -252,13 +252,13 @@ func TestSelectNodeAdditionalPlatforms(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 }
 
 func TestSplitNodeMultiPlatform(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/arm64")},
-		"bbb": {platforms.MustParse("linux/riscv64")},
+		"builder-amd64-arm64": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/arm64")},
+		"builder-riscv64":     {platforms.MustParse("linux/riscv64")},
 	})
 
 	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{
@@ -268,7 +268,7 @@ func TestSplitNodeMultiPlatform(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 1)
-	require.Equal(t, "aaa", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64-arm64", res[0].Node().Builder)
 
 	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{
 		platforms.MustParse("linux/amd64"),
@@ -277,14 +277,14 @@ func TestSplitNodeMultiPlatform(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 2)
-	require.Equal(t, "aaa", res[0].Node().Builder)
-	require.Equal(t, "bbb", res[1].Node().Builder)
+	require.Equal(t, "builder-amd64-arm64", res[0].Node().Builder)
+	require.Equal(t, "builder-riscv64", res[1].Node().Builder)
 }
 
 func TestSplitNodeMultiPlatformNoUnify(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
-		"aaa": {platforms.MustParse("linux/amd64")},
-		"bbb": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/riscv64")},
+		"builder-amd64":         {platforms.MustParse("linux/amd64")},
+		"builder-amd64-riscv64": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/riscv64")},
 	})
 
 	// the "best" choice would be the node with both platforms, but we're using
@@ -296,8 +296,8 @@ func TestSplitNodeMultiPlatformNoUnify(t *testing.T) {
 	require.NoError(t, err)
 	require.True(t, perfect)
 	require.Len(t, res, 2)
-	require.Equal(t, "aaa", res[0].Node().Builder)
-	require.Equal(t, "bbb", res[1].Node().Builder)
+	require.Equal(t, "builder-amd64", res[0].Node().Builder)
+	require.Equal(t, "builder-amd64-riscv64", res[1].Node().Builder)
 }
 
 func makeTestResolver(nodes map[string][]ocispecs.Platform) *nodeResolver {
