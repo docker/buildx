@@ -14,6 +14,7 @@ import (
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/sourcemeta"
 	"github.com/docker/cli/cli/command"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
@@ -30,9 +31,9 @@ func testCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 		Args:                  cobra.ExactArgs(1),
 		DisableFlagsInUseLine: true,
 		RunE: func(cmd *cobra.Command, args []string) error {
-			resolver := newPolicyTestResolver(dockerCli, rootOpts.Builder)
-			opts.Resolver = resolver.Options()
-			defer resolver.Close()
+			optionsProvider := newPolicyTestOptionsProvider(dockerCli, rootOpts.Builder)
+			opts.Provider = optionsProvider.TestOptionsProvider()
+			defer optionsProvider.Close()
 			return runTest(cmd.Context(), cmd.OutOrStdout(), args[0], opts)
 		},
 	}
@@ -114,63 +115,58 @@ func withInputPrefix(keys []string) []string {
 	return out
 }
 
-type policyTestResolver struct {
+type policyTestOptionsProvider struct {
 	dockerCli   command.Cli
 	builderName *string
 
-	once       sync.Once
-	platform   *ocispecs.Platform
-	openClient gatewayClientOpener
-	release    func() error
-	err        error
+	once         sync.Once
+	platform     *ocispecs.Platform
+	metaResolver *sourcemeta.Resolver
+	err          error
 }
 
-func newPolicyTestResolver(dockerCli command.Cli, builderName *string) *policyTestResolver {
-	return &policyTestResolver{
+func newPolicyTestOptionsProvider(dockerCli command.Cli, builderName *string) *policyTestOptionsProvider {
+	return &policyTestOptionsProvider{
 		dockerCli:   dockerCli,
 		builderName: builderName,
 	}
 }
 
-func (r *policyTestResolver) Options() *policy.TestResolver {
-	return &policy.TestResolver{
+func (r *policyTestOptionsProvider) TestOptionsProvider() *policy.TestOptionsProvider {
+	return &policy.TestOptionsProvider{
 		Resolve:          r.Resolve,
 		Platform:         r.Platform,
 		VerifierProvider: policy.SignatureVerifier(confutil.NewConfig(r.dockerCli)),
 	}
 }
 
-func (r *policyTestResolver) Close() error {
-	if r.release == nil {
+func (r *policyTestOptionsProvider) Close() error {
+	if r.metaResolver == nil {
 		return nil
 	}
-	return r.release()
+	return r.metaResolver.Close()
 }
 
-func (r *policyTestResolver) Platform(ctx context.Context) (*ocispecs.Platform, error) {
+func (r *policyTestOptionsProvider) Platform(ctx context.Context) (*ocispecs.Platform, error) {
 	if err := r.init(ctx); err != nil {
 		return nil, err
 	}
 	return r.platform, nil
 }
 
-func (r *policyTestResolver) Resolve(ctx context.Context, source *pb.SourceOp, req *gwpb.ResolveSourceMetaRequest) (*gwpb.ResolveSourceMetaResponse, error) {
+func (r *policyTestOptionsProvider) Resolve(ctx context.Context, source *pb.SourceOp, req *gwpb.ResolveSourceMetaRequest) (*gwpb.ResolveSourceMetaResponse, error) {
 	if err := r.init(ctx); err != nil {
 		return nil, err
 	}
-	gwClient, err := r.openClient(ctx)
-	if err != nil {
-		return nil, err
-	}
 	opt := sourceResolverOpt(req, r.platform)
-	resp, err := gwClient.ResolveSourceMetadata(ctx, source, opt)
+	resp, err := r.metaResolver.ResolveSourceMetadata(ctx, source, opt)
 	if err != nil {
 		return nil, err
 	}
 	return buildSourceMetaResponse(resp), nil
 }
 
-func (r *policyTestResolver) init(ctx context.Context) error {
+func (r *policyTestOptionsProvider) init(ctx context.Context) error {
 	r.once.Do(func() {
 		bopts := []builder.Option{}
 		if r.builderName != nil {
@@ -208,13 +204,7 @@ func (r *policyTestResolver) init(ctx context.Context) error {
 			OS:           defaultPlatform.OS,
 			Variant:      defaultPlatform.Variant,
 		}
-		openClient, release, err := gatewayClientFactory(c)
-		if err != nil {
-			r.err = err
-			return
-		}
-		r.openClient = openClient
-		r.release = release
+		r.metaResolver = sourcemeta.NewResolver(c)
 	})
 	return r.err
 }

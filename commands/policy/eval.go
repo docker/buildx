@@ -15,6 +15,7 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/sourcemeta"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	"github.com/moby/buildkit/frontend/dockerui"
@@ -96,11 +97,8 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 		OS:           defaultPlatform.OS,
 		Variant:      defaultPlatform.Variant,
 	}
-	openClient, release, err := gatewayClientFactory(c)
-	if err != nil {
-		return err
-	}
-	defer release()
+	metaResolver := sourcemeta.NewResolver(c)
+	defer metaResolver.Close()
 
 	platform := &pb.Platform{
 		Architecture: p.Architecture,
@@ -148,13 +146,8 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 				if err := policy.AddUnknowns(req, toReload); err != nil {
 					return err
 				}
-				gwClient, err := openClient(ctx)
-				if err != nil {
-					return err
-				}
-
 				opt := sourceResolverOpt(req, &p)
-				resp, err := gwClient.ResolveSourceMetadata(ctx, src, opt)
+				resp, err := metaResolver.ResolveSourceMetadata(ctx, src, opt)
 				if err != nil {
 					return err
 				}
@@ -240,12 +233,8 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 			return evalDecisionError(decision)
 		}
 
-		gwClient, err := openClient(ctx)
-		if err != nil {
-			return err
-		}
 		opt := sourceResolverOpt(next, &p)
-		resp, err := gwClient.ResolveSourceMetadata(ctx, src, opt)
+		resp, err := metaResolver.ResolveSourceMetadata(ctx, src, opt)
 		if err != nil {
 			return err
 		}
