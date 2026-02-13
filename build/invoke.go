@@ -11,6 +11,7 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"github.com/tonistiigi/fsutil/types"
 )
 
 type InvokeConfig struct {
@@ -143,6 +144,18 @@ func (c *Container) Exec(ctx context.Context, cfg *InvokeConfig, stdin io.ReadCl
 		c.markUnavailable()
 	}
 	return err
+}
+
+func (c *Container) ReadFile(ctx context.Context, req gateway.ReadContainerRequest) ([]byte, error) {
+	return c.container.ReadFile(ctx, req)
+}
+
+func (c *Container) ReadDir(ctx context.Context, req gateway.ReadDirContainerRequest) ([]*types.Stat, error) {
+	return c.container.ReadDir(ctx, req)
+}
+
+func (c *Container) StatFile(ctx context.Context, req gateway.StatContainerRequest) (*types.Stat, error) {
+	return c.container.StatFile(ctx, req)
 }
 
 func exec(ctx context.Context, resultCtx *ResultHandle, cfg *InvokeConfig, ctr gateway.Container, stdin io.ReadCloser, stdout io.WriteCloser, stderr io.WriteCloser) error {

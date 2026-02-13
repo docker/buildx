@@ -12,10 +12,12 @@ import (
 	"github.com/google/go-dap"
 	"github.com/moby/buildkit/client/llb"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/opencontainers/go-digest"
 	"github.com/pkg/errors"
+	"github.com/tonistiigi/fsutil/types"
 	"golang.org/x/sync/errgroup"
 )
 
@@ -323,15 +325,11 @@ func (t *thread) pause(c Context, k string, refs map[string]gateway.Reference, e
 	}
 	t.paused = make(chan stepType, 1)
 
+	t.prepareResultHandle(c, k, refs, err)
+
 	ctx, cancel := context.WithCancelCause(c)
 	t.collectStackTrace(ctx, pos, refs)
 	t.cancel = cancel
-
-	// Used for exec. Only works if there was an error or if the step returns
-	// a root mount.
-	if ref, ok := refs[k]; ok || err != nil {
-		t.prepareResultHandle(c, ref, err)
-	}
 
 	event.ThreadId = t.id
 	c.C() <- &dap.StoppedEvent{
@@ -341,7 +339,15 @@ func (t *thread) pause(c Context, k string, refs map[string]gateway.Reference, e
 	return t.paused
 }
 
-func (t *thread) prepareResultHandle(c Context, ref gateway.Reference, err error) {
+func (t *thread) prepareResultHandle(c Context, k string, refs map[string]gateway.Reference, err error) {
+	var ref gateway.Reference
+	if err == nil {
+		var ok bool
+		if ref, ok = refs[k]; !ok {
+			return
+		}
+	}
+
 	// Create a context for cancellations and make the cancel function
 	// block on the wait group.
 	var wg sync.WaitGroup
@@ -352,6 +358,31 @@ func (t *thread) prepareResultHandle(c Context, ref gateway.Reference, err error
 	}
 
 	t.rCtx = build.NewResultHandle(ctx, t.c, ref, t.meta, err)
+
+	if err != nil {
+		gwcaps := t.c.BuildOpts().Caps
+
+		var solveErr *errdefs.SolveError
+		// If we had a solve error and the exec filesystem capability, we can
+		// get the filesystem mounts used in the actual build rather than only the input
+		// mounts.
+		if gwcaps.Supports(gwpb.CapGatewayExecFilesystem) == nil && errors.As(err, &solveErr) {
+			if exec, ok := solveErr.Op.Op.(*pb.Op_Exec); ok {
+				rCtx := t.rCtx
+
+				getContainer := sync.OnceValues(func() (*build.Container, error) {
+					return build.NewContainer(c, rCtx, &build.InvokeConfig{})
+				})
+
+				for i, m := range exec.Exec.Mounts {
+					refs[m.Dest] = &mountReference{
+						getContainer: getContainer,
+						index:        i,
+					}
+				}
+			}
+		}
+	}
 
 	// Start the attach. Use the context we created and perform it in
 	// a goroutine. We aren't necessarily assuming this will actually work.
@@ -688,4 +719,53 @@ func (t *thread) rewind(ctx Context, inErr error) (k string, result *step, mount
 		return k, result, mounts, retErr
 	}
 	return k, result, mounts, inErr
+}
+
+type mountReference struct {
+	getContainer func() (*build.Container, error)
+	index        int
+}
+
+func (r *mountReference) ToState() (llb.State, error) {
+	return llb.State{}, errors.New("unimplemented, cannot use ToState with mount reference")
+}
+
+func (r *mountReference) Evaluate(ctx context.Context) error {
+	return nil
+}
+
+func (r *mountReference) ReadFile(ctx context.Context, req gateway.ReadRequest) ([]byte, error) {
+	ctr, err := r.getContainer()
+	if err != nil {
+		return nil, err
+	}
+
+	return ctr.ReadFile(ctx, gateway.ReadContainerRequest{
+		ReadRequest: req,
+		MountIndex:  r.index,
+	})
+}
+
+func (r *mountReference) StatFile(ctx context.Context, req gateway.StatRequest) (*types.Stat, error) {
+	ctr, err := r.getContainer()
+	if err != nil {
+		return nil, err
+	}
+
+	return ctr.StatFile(ctx, gateway.StatContainerRequest{
+		StatRequest: req,
+		MountIndex:  r.index,
+	})
+}
+
+func (r *mountReference) ReadDir(ctx context.Context, req gateway.ReadDirRequest) ([]*types.Stat, error) {
+	ctr, err := r.getContainer()
+	if err != nil {
+		return nil, err
+	}
+
+	return ctr.ReadDir(ctx, gateway.ReadDirContainerRequest{
+		ReadDirRequest: req,
+		MountIndex:     r.index,
+	})
 }
