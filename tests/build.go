@@ -1379,6 +1379,33 @@ FROM second
 		require.Equal(t, 1, len(res.Sources))
 	})
 
+	// docker/buildx#3651
+	t.Run("outline-quiet-output", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM busybox
+ARG FOO=bar
+`)
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		)
+
+		runOutline := func(args ...string) string {
+			cmd := buildxCmd(sb, withArgs(args...))
+			var stdout bytes.Buffer
+			var stderr bytes.Buffer
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+			return stdout.String()
+		}
+
+		quietOut := runOutline("build", "-q", "--call=outline", dir)
+		noneOut := runOutline("build", "--progress=none", "--call=outline", dir)
+		assert.Equal(t, noneOut, quietOut)
+		assert.False(t, strings.HasPrefix(quietOut, "\n"))
+	})
+
 	t.Run("targets", func(t *testing.T) {
 		dockerfile := []byte(`
 # build defines stage for compiling the binary

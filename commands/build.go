@@ -411,7 +411,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 	case progressui.RawJSONMode:
 		// no additional display
 	case progressui.QuietMode:
-		if options.quiet {
+		if options.quiet && opts.CallFunc == nil {
 			fmt.Println(getImageID(resp.ExporterResponse))
 		}
 	default:
