@@ -17,10 +17,12 @@ var _ sourceresolver.MetaResolver = &Resolver{}
 type Resolver struct {
 	startOnce sync.Once
 	closeOnce sync.Once
+	openOnce  sync.Once
 	started   atomic.Bool
 	mu        sync.Mutex
 
 	ready   chan sourceresolver.MetaResolver
+	opened  chan struct{}
 	done    chan struct{}
 	openErr error
 	doneErr error
@@ -44,10 +46,17 @@ func NewResolver(c *client.Client) *Resolver {
 
 func newWithRun(run func(context.Context, chan<- sourceresolver.MetaResolver) error) *Resolver {
 	return &Resolver{
-		ready: make(chan sourceresolver.MetaResolver, 1),
-		done:  make(chan struct{}),
-		run:   run,
+		ready:  make(chan sourceresolver.MetaResolver, 1),
+		opened: make(chan struct{}),
+		done:   make(chan struct{}),
+		run:    run,
 	}
+}
+
+func (r *Resolver) notifyOpenComplete() {
+	r.openOnce.Do(func() {
+		close(r.opened)
+	})
 }
 
 func (r *Resolver) ResolveSourceMetadata(ctx context.Context, op *pb.SourceOp, opt sourceresolver.Opt) (*sourceresolver.MetaResponse, error) {
@@ -107,6 +116,7 @@ func (r *Resolver) open(ctx context.Context) (sourceresolver.MetaResolver, error
 			r.mu.Lock()
 			if r.metaResolver == nil {
 				r.metaResolver = mr
+				r.notifyOpenComplete()
 			}
 			r.mu.Unlock()
 		case <-r.done:
@@ -117,8 +127,10 @@ func (r *Resolver) open(ctx context.Context) (sourceresolver.MetaResolver, error
 					err = errors.New("gateway build finished without a source metadata resolver")
 				}
 				r.openErr = err
+				r.notifyOpenComplete()
 			}
 			r.mu.Unlock()
+		case <-r.opened:
 		case <-ctx.Done():
 			return nil, context.Cause(ctx)
 		}
