@@ -167,7 +167,7 @@ jobs:
       -
         name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ./bin/testreports
@@ -245,7 +245,7 @@ jobs:
       -
         name: Upload test reports
         if: always()
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ${{ env.TESTREPORTS_BASEDIR }}
@@ -412,7 +412,7 @@ jobs:
           find . -type f -exec file -e ascii -- {} +
       -
         name: Upload release binaries
-        uses: actions/upload-artifact@v6
+        uses: actions/upload-artifact@v7
         with:
           name: release
           path: ${{ env.DESTDIR }}/*
