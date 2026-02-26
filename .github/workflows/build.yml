@@ -369,7 +369,7 @@ jobs:
     steps:
       -
         name: Download artifacts
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: /tmp/buildx-output
           name: ${{ needs.binaries.outputs.artifact-name }}
@@ -501,7 +501,7 @@ jobs:
     steps:
       -
         name: Download release binaries
-        uses: actions/download-artifact@v7
+        uses: actions/download-artifact@v8
         with:
           path: ${{ env.DESTDIR }}
           name: release
