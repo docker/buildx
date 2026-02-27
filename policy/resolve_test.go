@@ -6,7 +6,9 @@ import (
 
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
+	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -65,4 +67,41 @@ func TestResolveInputUnknownsResolvesMaterialField(t *testing.T) {
 	require.True(t, retry)
 	require.Nil(t, next)
 	require.True(t, inp.Image.Provenance.Materials[0].Image.HasProvenance)
+}
+
+func TestResolveInputUnknownsHTTPChecksumResponseRequest(t *testing.T) {
+	inp := Input{
+		HTTP: &HTTP{
+			URL:    "https://example.com/file.tgz",
+			Schema: "https",
+			Host:   "example.com",
+			Path:   "/file.tgz",
+			Query:  map[string][]string{},
+		},
+	}
+	checksumReq := &gwpb.ChecksumRequest{
+		Algo:   gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA384,
+		Suffix: []byte{0xaa, 0xbb, 0xcc},
+	}
+
+	p := NewPolicy(Opt{})
+	retry, next, err := p.resolveUnknowns(
+		context.Background(),
+		&inp,
+		&policysession.CheckPolicyRequest{
+			Source: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "https://example.com/file.tgz"},
+			},
+		},
+		nil,
+		nil,
+		&state{checksumNeededForSignature: checksumReq},
+	)
+	require.NoError(t, err)
+	require.False(t, retry)
+	require.NotNil(t, next)
+	require.NotNil(t, next.HTTP)
+	require.NotNil(t, next.HTTP.ChecksumRequest)
+	require.Equal(t, checksumReq.Algo, next.HTTP.ChecksumRequest.Algo)
+	require.Equal(t, checksumReq.Suffix, next.HTTP.ChecksumRequest.Suffix)
 }
