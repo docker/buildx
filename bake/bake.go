@@ -1299,6 +1299,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 	for k, v := range t.NamedContexts {
 		if v.Path == "." {
 			t.NamedContexts[k] = build.NamedContext{Path: inp.URL}
+			continue
 		}
 		if strings.HasPrefix(v.Path, "cwd://") || strings.HasPrefix(v.Path, "target:") || strings.HasPrefix(v.Path, "docker-image:") {
 			continue
@@ -1306,7 +1307,9 @@ func updateContext(t *build.Inputs, inp *Input) {
 		if urlutil.IsRemoteURL(v.Path) {
 			continue
 		}
-		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/"), llb.WithCustomNamef("set context %s to %s", k, v.Path))
+		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/", &llb.CopyInfo{
+			CopyDirContentsOnly: true,
+		}), llb.WithCustomNamef("set context %s to %s", k, v.Path))
 		t.NamedContexts[k] = build.NamedContext{State: &st, Path: inp.URL}
 	}
 
