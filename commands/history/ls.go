@@ -18,6 +18,7 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/formatter"
+	cliflags "github.com/docker/cli/cli/flags"
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -85,7 +86,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 
 	for i, rec := range out {
 		st, _ := ls.ReadRef(rec.node.Builder, rec.node.Name, rec.Ref)
-		rec.name = BuildName(rec.FrontendAttrs, st)
+		rec.Name = BuildName(rec.FrontendAttrs, st)
 		out[i] = rec
 	}
 
@@ -108,7 +109,7 @@ func lsCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	}
 
 	flags := cmd.Flags()
-	flags.StringVar(&options.format, "format", formatter.TableFormatKey, "Format the output")
+	flags.StringVar(&options.format, "format", formatter.TableFormatKey, cliflags.FormatHelp)
 	flags.BoolVar(&options.noTrunc, "no-trunc", false, "Don't truncate output")
 	flags.StringArrayVar(&options.filters, "filter", nil, `Provide filter values (e.g., "status=error")`)
 	flags.BoolVar(&options.local, "local", false, "List records for current repository only")
@@ -144,10 +145,10 @@ func lsPrint(dockerCli command.Cli, records []historyRecord, in lsOptions) error
 	render := func(format func(subContext formatter.SubContext) error) error {
 		for _, r := range records {
 			if err := format(&lsContext{
-				format: formatter.Format(in.format),
-				isTerm: term,
-				trunc:  !in.noTrunc,
-				record: &r,
+				format:        formatter.Format(in.format),
+				isTerm:        term,
+				trunc:         !in.noTrunc,
+				historyRecord: &r,
 			}); err != nil {
 				return err
 			}
@@ -177,7 +178,7 @@ type lsContext struct {
 	isTerm bool
 	trunc  bool
 	format formatter.Format
-	record *historyRecord
+	*historyRecord
 }
 
 func (c *lsContext) MarshalJSON() ([]byte, error) {
@@ -185,27 +186,27 @@ func (c *lsContext) MarshalJSON() ([]byte, error) {
 		"ref":             c.FullRef(),
 		"name":            c.Name(),
 		"status":          c.Status(),
-		"created_at":      c.record.CreatedAt.AsTime().Format(time.RFC3339Nano),
-		"total_steps":     c.record.NumTotalSteps,
-		"completed_steps": c.record.NumCompletedSteps,
-		"cached_steps":    c.record.NumCachedSteps,
+		"created_at":      c.historyRecord.CreatedAt.AsTime().Format(time.RFC3339Nano),
+		"total_steps":     c.historyRecord.NumTotalSteps,
+		"completed_steps": c.historyRecord.NumCompletedSteps,
+		"cached_steps":    c.historyRecord.NumCachedSteps,
 	}
-	if c.record.CompletedAt != nil {
-		m["completed_at"] = c.record.CompletedAt.AsTime().Format(time.RFC3339Nano)
+	if c.historyRecord.CompletedAt != nil {
+		m["completed_at"] = c.historyRecord.CompletedAt.AsTime().Format(time.RFC3339Nano)
 	}
 	return json.Marshal(m)
 }
 
 func (c *lsContext) Ref() string {
-	return c.record.Ref
+	return c.historyRecord.Ref
 }
 
 func (c *lsContext) FullRef() string {
-	return fmt.Sprintf("%s/%s/%s", c.record.node.Builder, c.record.node.Name, c.record.Ref)
+	return fmt.Sprintf("%s/%s/%s", c.historyRecord.node.Builder, c.historyRecord.node.Name, c.historyRecord.Ref)
 }
 
 func (c *lsContext) Name() string {
-	name := c.record.name
+	name := c.historyRecord.Name
 	if c.trunc && c.format.IsTable() {
 		return trimBeginning(name, 36)
 	}
@@ -213,8 +214,8 @@ func (c *lsContext) Name() string {
 }
 
 func (c *lsContext) Status() string {
-	if c.record.CompletedAt != nil {
-		if c.record.Error != nil {
+	if c.historyRecord.CompletedAt != nil {
+		if c.historyRecord.Error != nil {
 			return "Error"
 		}
 		return "Completed"
@@ -223,20 +224,20 @@ func (c *lsContext) Status() string {
 }
 
 func (c *lsContext) CreatedAt() string {
-	return units.HumanDuration(time.Since(c.record.CreatedAt.AsTime())) + " ago"
+	return units.HumanDuration(time.Since(c.historyRecord.CreatedAt.AsTime())) + " ago"
 }
 
 func (c *lsContext) Duration() string {
-	lastTime := c.record.currentTimestamp
-	if c.record.CompletedAt != nil {
-		tm := c.record.CompletedAt.AsTime()
+	lastTime := c.historyRecord.currentTimestamp
+	if c.historyRecord.CompletedAt != nil {
+		tm := c.historyRecord.CompletedAt.AsTime()
 		lastTime = &tm
 	}
 	if lastTime == nil {
 		return ""
 	}
-	v := formatDuration(lastTime.Sub(c.record.CreatedAt.AsTime()))
-	if c.record.CompletedAt == nil {
+	v := formatDuration(lastTime.Sub(c.historyRecord.CreatedAt.AsTime()))
+	if c.historyRecord.CompletedAt == nil {
 		v += "+"
 	}
 	return v
