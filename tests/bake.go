@@ -565,12 +565,12 @@ COPY super-cool.txt /
 	}{
 		{
 			name:            "no ref",
-			expectedContext: addr,
+			expectedContext: addr + "#:bar",
 		},
 		{
 			name:            "branch ref",
 			ref:             "main",
-			expectedContext: addr + "#main",
+			expectedContext: addr + "#main:bar",
 		},
 	}
 	for _, tt := range tests {
