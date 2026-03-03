@@ -11,8 +11,8 @@ import (
 	"strings"
 
 	"github.com/distribution/reference"
-	"github.com/golang/snappy"
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
+	"github.com/klauspost/compress/snappy"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
