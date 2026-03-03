@@ -51,6 +51,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeLocalCwdOverride,
 	testBakeRemoteCmdContextOverride,
 	testBakeRemoteContextSubdir,
+	testBakeRemoteNamedContextSubdir,
+	testBakeRemoteNamedContextDot,
 	testBakeRemoteCmdContextEscapeRoot,
 	testBakeRemoteCmdContextEscapeRelative,
 	testBakeRemoteDockerfileCwd,
@@ -563,12 +565,12 @@ COPY super-cool.txt /
 	}{
 		{
 			name:            "no ref",
-			expectedContext: addr,
+			expectedContext: addr + "#:bar",
 		},
 		{
 			name:            "branch ref",
 			ref:             "main",
-			expectedContext: addr + "#main",
+			expectedContext: addr + "#main:bar",
 		},
 	}
 	for _, tt := range tests {
@@ -918,6 +920,80 @@ COPY super-cool.txt /
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "super-cool.txt"))
+}
+
+// https://github.com/docker/buildx/issues/3670
+func testBakeRemoteNamedContextSubdir(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target default {
+	context = "./build"
+	dockerfile = "Dockerfile"
+	contexts = {
+		files = "./files-src/"
+	}
+}
+`)
+	dockerfile := []byte(`
+FROM scratch
+COPY --from=files file.txt /file.txt
+`)
+
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateDir("build", 0700),
+		fstest.CreateFile("build/Dockerfile", dockerfile, 0600),
+		fstest.CreateDir("files-src", 0700),
+		fstest.CreateFile("files-src/file.txt", []byte("hello"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "build", "files-src")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(sb, withDir("/tmp"), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "file.txt"))
+}
+
+func testBakeRemoteNamedContextDot(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target default {
+	context = "./build"
+	dockerfile = "Dockerfile"
+	contexts = {
+		files = "."
+	}
+}
+`)
+	dockerfile := []byte(`
+FROM scratch
+COPY --from=files marker.txt /marker.txt
+`)
+
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateDir("build", 0700),
+		fstest.CreateFile("build/Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("marker.txt", []byte("hello"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl", "build", "marker.txt")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
+
+	out, err := bakeCmd(sb, withDir("/tmp"), withArgs(addr, "--set", "*.output=type=local,dest="+dirDest))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "marker.txt"))
 }
 
 func testBakeRemoteCmdContextEscapeRoot(t *testing.T, sb integration.Sandbox) {

@@ -2415,6 +2415,52 @@ target "mtx" {
 	}
 }
 
+func TestRemoteURLWithSubdir(t *testing.T) {
+	tests := []struct {
+		name   string
+		remote string
+		subdir string
+		want   string
+	}{
+		{
+			name:   "git no ref",
+			remote: "https://github.com/docker/buildx.git",
+			subdir: "components/interface",
+			want:   "https://github.com/docker/buildx.git#:components/interface",
+		},
+		{
+			name:   "git with ref",
+			remote: "https://github.com/docker/buildx.git#main",
+			subdir: "components/interface",
+			want:   "https://github.com/docker/buildx.git#main:components/interface",
+		},
+		{
+			name:   "git with existing subdir",
+			remote: "https://github.com/docker/buildx.git#main:base",
+			subdir: "components/interface",
+			want:   "https://github.com/docker/buildx.git#main:base/components/interface",
+		},
+		{
+			name:   "git query ref",
+			remote: "https://github.com/docker/buildx.git?branch=main",
+			subdir: "components/interface",
+			want:   "https://github.com/docker/buildx.git?branch=main#:components/interface",
+		},
+		{
+			name:   "non git",
+			remote: "https://example.com/context.tar.gz",
+			subdir: "components/interface",
+			want:   "https://example.com/context.tar.gz",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			got := remoteURLWithSubdir(tt.remote, tt.subdir)
+			assert.Equal(t, tt.want, got)
+		})
+	}
+}
+
 func stringify[V fmt.Stringer](values []V) []string {
 	s := make([]string, len(values))
 	for i, v := range values {
