@@ -33,7 +33,7 @@ type historyRecord struct {
 	*controlapi.BuildHistoryRecord
 	currentTimestamp *time.Time
 	node             *builder.Node
-	name             string
+	Name             string
 }
 
 type queryOptions struct {
