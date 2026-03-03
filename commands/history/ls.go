@@ -51,7 +51,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 		return err
 	}
 
-	queryOptions := &queryOptions{}
+	queryOpts := &queryOptions{}
 
 	if opts.local {
 		wd, err := os.Getwd()
@@ -69,11 +69,11 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 		if err != nil {
 			return errors.Wrapf(err, "could not get remote URL for local filter")
 		}
-		queryOptions.Filters = append(queryOptions.Filters, fmt.Sprintf("repository=%s", remote))
+		queryOpts.Filters = append(queryOpts.Filters, fmt.Sprintf("repository=%s", remote))
 	}
-	queryOptions.Filters = append(queryOptions.Filters, opts.filters...)
+	queryOpts.Filters = append(queryOpts.Filters, opts.filters...)
 
-	out, err := queryRecords(ctx, "", nodes, queryOptions)
+	out, err := queryRecords(ctx, "", nodes, queryOpts)
 	if err != nil {
 		return err
 	}
