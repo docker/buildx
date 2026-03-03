@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"maps"
+	"net/url"
 	"os"
 	"path"
 	"path/filepath"
@@ -29,6 +30,7 @@ import (
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
+	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
@@ -1310,7 +1312,7 @@ func updateContext(t *build.Inputs, inp *Input) {
 		st := llb.Scratch().File(llb.Copy(*inp.State, v.Path, "/", &llb.CopyInfo{
 			CopyDirContentsOnly: true,
 		}), llb.WithCustomNamef("set context %s to %s", k, v.Path))
-		t.NamedContexts[k] = build.NamedContext{State: &st, Path: inp.URL}
+		t.NamedContexts[k] = build.NamedContext{State: &st, Path: remoteURLWithSubdir(inp.URL, v.Path)}
 	}
 
 	if t.ContextPath == "." {
@@ -1330,7 +1332,44 @@ func updateContext(t *build.Inputs, inp *Input) {
 		llb.WithCustomNamef("set context to %s", t.ContextPath),
 	)
 	t.ContextState = &st
-	t.ContextPath = inp.URL
+	t.ContextPath = remoteURLWithSubdir(inp.URL, t.ContextPath)
+}
+
+func remoteURLWithSubdir(remoteURL, subdir string) string {
+	subdir = path.Clean(subdir)
+	if subdir == "." || remoteURL == "" {
+		return remoteURL
+	}
+
+	// only relevant for git urls
+	parsed, ok, err := dfgitutil.ParseGitRef(remoteURL)
+	if err != nil || !ok {
+		return remoteURL
+	}
+	if parsed.SubDir != "" {
+		subdir = path.Clean(path.Join(parsed.SubDir, subdir))
+	}
+
+	// keep query string and transport style untouched nad only append/adjust
+	// fragment subdir
+	if !strings.Contains(remoteURL, "#") && subdir != "" {
+		if u, err := url.Parse(remoteURL); err == nil {
+			q := u.Query()
+			if q.Has("subdir") {
+				q.Set("subdir", subdir)
+				u.RawQuery = q.Encode()
+				return u.String()
+			}
+		}
+	}
+
+	// otherwise, we adjust the fragment part to add/replace subdir
+	base, frag, _ := strings.Cut(remoteURL, "#")
+	ref, _, _ := strings.Cut(frag, ":")
+	if ref == "" {
+		return base + "#:" + subdir
+	}
+	return base + "#" + ref + ":" + subdir
 }
 
 func collectLocalPaths(t build.Inputs) []string {
