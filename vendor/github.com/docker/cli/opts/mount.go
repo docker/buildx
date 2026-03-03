@@ -57,7 +57,7 @@ func (m *MountOpt) Set(value string) error {
 
 		if !hasValue {
 			switch key {
-			case "readonly", "ro", "volume-nocopy", "bind-nonrecursive":
+			case "readonly", "ro", "volume-nocopy", "bind-nonrecursive", "bind-create-src":
 				// boolean values
 			default:
 				return fmt.Errorf("invalid field '%s' must be a key=value pair", field)
@@ -101,6 +101,11 @@ func (m *MountOpt) Set(value string) error {
 				// https://github.com/docker/cli/pull/4316#discussion_r1341974730
 			default:
 				return fmt.Errorf(`invalid value for %s: %s (must be "enabled", "disabled", "writable", or "readonly")`, key, val)
+			}
+		case "bind-create-src":
+			ensureBindOptions(&mount).CreateMountpoint, err = parseBoolValue(key, val, hasValue)
+			if err != nil {
+				return err
 			}
 		case "volume-subpath":
 			ensureVolumeOptions(&mount).Subpath = val
@@ -151,7 +156,7 @@ func (*MountOpt) Type() string {
 
 // String returns a string repr of this option
 func (m *MountOpt) String() string {
-	mounts := []string{}
+	mounts := make([]string, 0, len(m.values))
 	for _, mount := range m.values {
 		repr := fmt.Sprintf("%s %s %s", mount.Type, mount.Source, mount.Target)
 		mounts = append(mounts, repr)
