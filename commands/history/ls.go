@@ -33,7 +33,7 @@ const (
 	lsHeaderDuration = "DURATION"
 	lsHeaderLink     = ""
 
-	lsDefaultTableFormat = "table {{.Ref}}\t{{.Name}}\t{{.Status}}\t{{.CreatedAt}}\t{{.Duration}}\t{{.Link}}"
+	lsDefaultTableFormat = "table {{.BuildID}}\t{{.Name}}\t{{.Status}}\t{{.Created}}\t{{.Duration}}\t{{.Link}}"
 
 	headerKeyTimestamp = "buildkit-current-timestamp"
 )
@@ -87,7 +87,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 
 	for i, rec := range out {
 		st, _ := ls.ReadRef(rec.node.Builder, rec.node.Name, rec.Ref)
-		rec.Name = historyutil.BuildName(rec.FrontendAttrs, st)
+		rec.name = historyutil.BuildName(rec.FrontendAttrs, st)
 		out[i] = rec
 	}
 
@@ -162,12 +162,12 @@ func lsPrint(dockerCli command.Cli, records []historyRecord, in lsOptions) error
 		trunc:  !in.noTrunc,
 	}
 	lsCtx.Header = formatter.SubHeaderContext{
-		"Ref":       lsHeaderBuildID,
-		"Name":      lsHeaderName,
-		"Status":    lsHeaderStatus,
-		"CreatedAt": lsHeaderCreated,
-		"Duration":  lsHeaderDuration,
-		"Link":      lsHeaderLink,
+		"BuildID":  lsHeaderBuildID,
+		"Name":     lsHeaderName,
+		"Status":   lsHeaderStatus,
+		"Created":  lsHeaderCreated,
+		"Duration": lsHeaderDuration,
+		"Link":     lsHeaderLink,
 	}
 
 	return ctx.Write(&lsCtx, render)
@@ -187,27 +187,27 @@ func (c *lsContext) MarshalJSON() ([]byte, error) {
 		"ref":             c.FullRef(),
 		"name":            c.Name(),
 		"status":          c.Status(),
-		"created_at":      c.historyRecord.CreatedAt.AsTime().Format(time.RFC3339Nano),
-		"total_steps":     c.historyRecord.NumTotalSteps,
-		"completed_steps": c.historyRecord.NumCompletedSteps,
-		"cached_steps":    c.historyRecord.NumCachedSteps,
+		"created_at":      c.CreatedAt.AsTime().Format(time.RFC3339Nano),
+		"total_steps":     c.NumTotalSteps,
+		"completed_steps": c.NumCompletedSteps,
+		"cached_steps":    c.NumCachedSteps,
 	}
-	if c.historyRecord.CompletedAt != nil {
-		m["completed_at"] = c.historyRecord.CompletedAt.AsTime().Format(time.RFC3339Nano)
+	if c.CompletedAt != nil {
+		m["completed_at"] = c.CompletedAt.AsTime().Format(time.RFC3339Nano)
 	}
 	return json.Marshal(m)
 }
 
-func (c *lsContext) Ref() string {
-	return c.historyRecord.Ref
+func (c *lsContext) BuildID() string {
+	return c.Ref
 }
 
 func (c *lsContext) FullRef() string {
-	return fmt.Sprintf("%s/%s/%s", c.historyRecord.node.Builder, c.historyRecord.node.Name, c.historyRecord.Ref)
+	return fmt.Sprintf("%s/%s/%s", c.node.Builder, c.node.Name, c.Ref)
 }
 
 func (c *lsContext) Name() string {
-	name := c.historyRecord.Name
+	name := c.name
 	if c.trunc && c.format.IsTable() {
 		return trimBeginning(name, 36)
 	}
@@ -215,8 +215,8 @@ func (c *lsContext) Name() string {
 }
 
 func (c *lsContext) Status() string {
-	if c.historyRecord.CompletedAt != nil {
-		if c.historyRecord.Error != nil {
+	if c.CompletedAt != nil {
+		if c.Error != nil {
 			return "Error"
 		}
 		return "Completed"
@@ -224,21 +224,21 @@ func (c *lsContext) Status() string {
 	return "Running"
 }
 
-func (c *lsContext) CreatedAt() string {
-	return units.HumanDuration(time.Since(c.historyRecord.CreatedAt.AsTime())) + " ago"
+func (c *lsContext) Created() string {
+	return units.HumanDuration(time.Since(c.CreatedAt.AsTime())) + " ago"
 }
 
 func (c *lsContext) Duration() string {
-	lastTime := c.historyRecord.currentTimestamp
-	if c.historyRecord.CompletedAt != nil {
-		tm := c.historyRecord.CompletedAt.AsTime()
+	lastTime := c.currentTimestamp
+	if c.CompletedAt != nil {
+		tm := c.CompletedAt.AsTime()
 		lastTime = &tm
 	}
 	if lastTime == nil {
 		return ""
 	}
-	v := formatDuration(lastTime.Sub(c.historyRecord.CreatedAt.AsTime()))
-	if c.historyRecord.CompletedAt == nil {
+	v := formatDuration(lastTime.Sub(c.CreatedAt.AsTime()))
+	if c.CompletedAt == nil {
 		v += "+"
 	}
 	return v
