@@ -48,6 +48,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildAlias,
 	testBuildStdin,
 	testBuildRemote,
+	testBuildRemoteAuth,
 	testBuildLocalState,
 	testBuildLocalStateStdin,
 	testBuildLocalStateRemote,
@@ -265,6 +266,41 @@ COPY foo /foo
 			require.Contains(t, out, "current frontend does not support Git URLs with query string components")
 		}
 	})
+}
+
+func testBuildRemoteAuth(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM busybox:latest
+COPY foo /foo
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	require.NoError(t, err)
+
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+	gittestutil.GitCommit(git, t, "initial commit")
+
+	token := identity.NewID()
+	addr := gittestutil.GitServeHTTP(git, t, gittestutil.WithAccessToken(token))
+
+	out, err := buildCmd(sb, withDir(dir),
+		withEnv("GIT_AUTH_TOKEN="+token),
+		withArgs(
+			"--secret", "id=GIT_AUTH_TOKEN,env=GIT_AUTH_TOKEN",
+			"--output=type=local,dest="+dirDest,
+			addr,
+		),
+	)
+	require.NoError(t, err, out)
+
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
 }
 
 func testBuildLocalState(t *testing.T, sb integration.Sandbox) {

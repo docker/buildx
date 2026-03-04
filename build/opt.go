@@ -619,7 +619,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	if err != nil {
 		return nil, err
 	}
-	sourceResolver := sourcemeta.NewResolver(c, sourcemeta.WithProgressWriter(pw))
+	sourceResolver := sourcemeta.NewResolver(c, sourcemeta.WithProgressWriter(pw), sourcemeta.WithSession(so.Session))
 	defers = []func(error){
 		func(error) {
 			_ = sourceResolver.Close()
