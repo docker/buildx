@@ -3,6 +3,7 @@ package sourcemeta
 import (
 	"context"
 	"errors"
+	"slices"
 	"sync"
 	"sync/atomic"
 
@@ -11,6 +12,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/llb/sourceresolver"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/session"
 	"github.com/moby/buildkit/solver/pb"
 )
 
@@ -44,11 +46,18 @@ type Option func(*newResolverOpts)
 
 type newResolverOpts struct {
 	progressWriter progress.Writer
+	session        []session.Attachable
 }
 
 func WithProgressWriter(pw progress.Writer) Option {
 	return func(o *newResolverOpts) {
 		o.progressWriter = pw
+	}
+}
+
+func WithSession(session []session.Attachable) Option {
+	return func(o *newResolverOpts) {
+		o.session = slices.Clone(session)
 	}
 }
 
@@ -72,7 +81,14 @@ func NewResolver(c *client.Client, opts ...Option) *Resolver {
 			}()
 		}
 
-		_, err := c.Build(ctx, client.SolveOpt{Internal: true}, "buildx", func(ctx context.Context, gw gwclient.Client) (*gwclient.Result, error) {
+		solveOpt := client.SolveOpt{
+			Internal: true,
+		}
+		if len(cfg.session) > 0 {
+			solveOpt.Session = cfg.session
+		}
+
+		_, err := c.Build(ctx, solveOpt, "buildx", func(ctx context.Context, gw gwclient.Client) (*gwclient.Result, error) {
 			ready <- gw
 			<-ctx.Done()
 			return nil, context.Cause(ctx)
