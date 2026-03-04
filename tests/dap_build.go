@@ -77,6 +77,7 @@ var dapBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testDapBuild,
 	testDapBuildStopOnEntry,
 	testDapBuildSetBreakpoints,
+	testDapBuildEntryBreakpoint,
 	testDapBuildVerifiedBreakpoints,
 	testDapBuildStepIn,
 	testDapBuildStepNext,
@@ -198,6 +199,37 @@ func testDapBuildSetBreakpoints(t *testing.T, sb integration.Sandbox) {
 	doContinue(t, client, stopped.Body.ThreadId)
 
 	require.NoError(t, done(false))
+}
+
+// testDapBuildEntryBreakpoint checks that the entrypoint is a valid breakpoint.
+func testDapBuildEntryBreakpoint(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	client, done, err := dapBuildCmd(t, sb, withArgs(dir))
+	require.NoError(t, err)
+
+	interruptCh := pollInterruptEvents(client)
+	doLaunch(t, client, commands.LaunchConfig{
+		Dockerfile:  path.Join(dir, "Dockerfile"),
+		ContextPath: dir,
+	},
+		dap.SourceBreakpoint{Line: 7},
+	)
+
+	stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	threads := doThreads(t, client)
+	require.ElementsMatch(t, []int{stopped.Body.ThreadId}, threads)
+
+	stackTraceResp := <-daptest.DoRequest[*dap.StackTraceResponse](t, client, &dap.StackTraceRequest{
+		Request: dap.Request{Command: "stackTrace"},
+		Arguments: dap.StackTraceArguments{
+			ThreadId: stopped.Body.ThreadId,
+		},
+	})
+	require.True(t, stackTraceResp.Success)
+	require.Len(t, stackTraceResp.Body.StackFrames, 1)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, done(true), &exitErr)
 }
 
 func testDapBuildVerifiedBreakpoints(t *testing.T, sb integration.Sandbox) {
