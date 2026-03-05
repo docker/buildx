@@ -156,3 +156,43 @@ func TestCreateExports_RegistryUnpack(t *testing.T) {
 		})
 	}
 }
+
+func TestProxyArgKeyExists(t *testing.T) {
+	tests := []struct {
+		name      string
+		proxyArgs map[string]string
+		key       string
+		want      bool
+	}{
+		{
+			name:      "exact match",
+			proxyArgs: map[string]string{"NO_PROXY": "cli"},
+			key:       "NO_PROXY",
+			want:      true,
+		},
+		{
+			name:      "case insensitive match",
+			proxyArgs: map[string]string{"no_proxy": "cli"},
+			key:       "NO_PROXY",
+			want:      true,
+		},
+		{
+			name:      "no match",
+			proxyArgs: map[string]string{"HTTP_PROXY": "cli"},
+			key:       "NO_PROXY",
+			want:      false,
+		},
+		{
+			name:      "nil map",
+			proxyArgs: nil,
+			key:       "NO_PROXY",
+			want:      false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, proxyArgKeyExists(tt.proxyArgs, tt.key))
+		})
+	}
+}
