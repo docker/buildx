@@ -9,6 +9,7 @@ import (
 	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 	"sync/atomic"
 
@@ -573,7 +574,9 @@ func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoi
 	// null back in the JSON if there are no breakpoints
 	breakpoints = []dap.Breakpoint{}
 
-	prev := b.byPath[fname]
+	// Use lowercase paths to normalize the case. We can only know the correct casing after
+	// we intersect the breakpoint map. When we report the pending breakpoint to the editor,
+	prev := b.getByPath(fname)
 	for _, sbp := range sbps {
 		index := slices.IndexFunc(prev, func(e dap.Breakpoint) bool {
 			return sbp.Line >= e.Line && sbp.Line <= e.EndLine && sbp.Column >= e.Column && sbp.Column <= e.EndColumn
@@ -589,12 +592,16 @@ func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoi
 				EndLine:   sbp.Line,
 				Column:    sbp.Column,
 				EndColumn: sbp.Column,
-				Reason:    "pending",
+				Source: &dap.Source{
+					Name: path.Base(fname),
+					Path: fname,
+				},
+				Reason: "pending",
 			}
 		}
 		breakpoints = append(breakpoints, bp)
 	}
-	b.byPath[fname] = breakpoints
+	b.setByPath(fname, breakpoints)
 	return breakpoints
 }
 
@@ -615,7 +622,7 @@ func (b *breakpointMap) Intersect(ctx Context, src *pb.Source, ws string) map[di
 	for _, info := range src.Infos {
 		fname := filepath.Join(ws, info.Filename)
 
-		bps := b.byPath[fname]
+		bps := b.getByPath(fname)
 		for _, bp := range bps {
 			if !bp.Verified && bp.Reason != "failed" {
 				bp.Reason = "failed"
@@ -656,7 +663,7 @@ func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Location
 		info := src.Infos[loc.SourceIndex]
 		fname := filepath.Join(ws, info.Filename)
 
-		bps := b.byPath[fname]
+		bps := b.getByPath(fname)
 		if len(bps) == 0 {
 			// No breakpoints for this file.
 			continue
@@ -675,6 +682,13 @@ func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Location
 				bp.Verified = true
 				bp.Reason = ""
 
+				// The path from the source might be different than the path
+				// the editor sent to us just because of different casing.
+				// Prefer the version given to us from buildkit and tell
+				// the editor what the proper casing for this should be.
+				bp.Source.Name = path.Base(fname)
+				bp.Source.Path = fname
+
 				ctx.C() <- &dap.BreakpointEvent{
 					Event: dap.Event{Event: "breakpoint"},
 					Body: dap.BreakpointEventBody{
@@ -688,4 +702,12 @@ func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Location
 		}
 	}
 	return 0
+}
+
+func (b *breakpointMap) setByPath(fname string, bps []dap.Breakpoint) {
+	b.byPath[strings.ToLower(fname)] = bps
+}
+
+func (b *breakpointMap) getByPath(fname string) []dap.Breakpoint {
+	return b.byPath[strings.ToLower(fname)]
 }
