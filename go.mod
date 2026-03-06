@@ -246,3 +246,5 @@ require (
 
 // restore junctions to have os.ModeSymlink flag set on Windows: https://github.com/docker/buildx/issues/3221
 godebug winsymlink=0
+
+replace github.com/moby/buildkit => github.com/crazy-max/buildkit v0.7.1-0.20260306115246-48e766ece564
