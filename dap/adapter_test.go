@@ -202,7 +202,7 @@ func TestBreakpointMapIntersectVerified(t *testing.T) {
 	assert.Len(t, digests, wantMatches)
 
 	expectedEvents := make(map[int]struct{})
-	for i, bp := range bm.byPath[fpath] {
+	for i, bp := range bm.getByPath(fpath) {
 		if breakpointCases[i].expectVerified {
 			expectedEvents[bp.Id] = struct{}{}
 		}
@@ -226,7 +226,7 @@ func TestBreakpointMapIntersectVerified(t *testing.T) {
 		}
 	}
 
-	stored := bm.byPath[fpath]
+	stored := bm.getByPath(fpath)
 	if assert.Len(t, stored, len(breakpointCases)) {
 		for i, bc := range breakpointCases {
 			assert.Equal(t, bc.expectVerified, stored[i].Verified, "breakpoint %d (%s) mismatch", i, bc.desc)
