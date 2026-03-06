@@ -13,7 +13,7 @@ import (
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/buildflags"
-	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
@@ -353,7 +353,7 @@ func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
 			options.builder = *opts.Builder
 			return runCreate(cmd.Context(), dockerCli, options, args)
 		},
-		ValidArgsFunction:     completion.Disable,
+		ValidArgsFunction:     cobrautil.DisableCompletion,
 		DisableFlagsInUseLine: true,
 	}
 

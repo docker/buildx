@@ -14,7 +14,6 @@ import (
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/cobrautil"
-	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -110,7 +109,7 @@ func lsCmd(dockerCli command.Cli) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runLs(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.Disable,
+		ValidArgsFunction:     cobrautil.DisableCompletion,
 		DisableFlagsInUseLine: true,
 	}
 

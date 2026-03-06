@@ -11,7 +11,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/localstate"
-	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/gitutil"
@@ -103,7 +103,7 @@ func lsCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			options.builder = *rootOpts.Builder
 			return runLs(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.Disable,
+		ValidArgsFunction:     cobrautil.DisableCompletion,
 		DisableFlagsInUseLine: true,
 	}
 

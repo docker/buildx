@@ -1,7 +1,7 @@
 package commands
 
 import (
-	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
 )
@@ -14,7 +14,7 @@ func RootCmd(rootcmd *cobra.Command, dockerCli command.Cli, opts RootOptions) *c
 	cmd := &cobra.Command{
 		Use:                   "imagetools",
 		Short:                 "Commands to work on images in registry",
-		ValidArgsFunction:     completion.Disable,
+		ValidArgsFunction:     cobrautil.DisableCompletion,
 		RunE:                  rootcmd.RunE,
 		DisableFlagsInUseLine: true,
 	}

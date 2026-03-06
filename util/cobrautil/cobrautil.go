@@ -51,3 +51,10 @@ func MarkCommandExperimental(c *cobra.Command) {
 	c.Annotations[annotationExperimentalCLI] = ""
 	c.Short += " (EXPERIMENTAL)"
 }
+
+// ValidArgsFn defines a completion func to be returned to fetch completion options
+type ValidArgsFn func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective)
+
+func DisableCompletion(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+	return nil, cobra.ShellCompDirectiveNoSpace
+}
