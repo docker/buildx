@@ -11,7 +11,6 @@ import (
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
-	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -185,7 +184,7 @@ func inspectCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runInspect(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.BuilderNames(dockerCli),
+		ValidArgsFunction:     builderNamesCompletion(dockerCli),
 		DisableFlagsInUseLine: true,
 	}
 
