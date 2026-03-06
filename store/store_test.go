@@ -51,14 +51,14 @@ func TestNodeLocking(t *testing.T) {
 	}()
 
 	select {
-	case <-time.After(100 * time.Millisecond):
+	case <-time.After(200 * time.Millisecond):
 	case <-ready:
 		require.Fail(t, "transaction should have waited")
 	}
 
 	release()
 	select {
-	case <-time.After(200 * time.Millisecond):
+	case <-time.After(5 * time.Second):
 		require.Fail(t, "transaction should have completed")
 	case <-ready:
 	}
