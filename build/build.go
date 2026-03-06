@@ -630,7 +630,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 								return nil, err
 							}
 						} else if forceEval {
-							if err := res.EachRef(func(ref gateway.Reference) error {
+							if err := eachRefParallel(ctx, res, func(ctx context.Context, ref gateway.Reference) error {
 								return ref.Evaluate(ctx)
 							}); err != nil {
 								return nil, err
@@ -1319,6 +1319,24 @@ func solve(ctx context.Context, c gateway.Client, req gateway.SolveRequest) (*ga
 		}
 	}
 	return res, nil
+}
+
+func eachRefParallel(ctx context.Context, res *gateway.Result, fn func(context.Context, gateway.Reference) error) error {
+	var refs []gateway.Reference
+	if err := res.EachRef(func(ref gateway.Reference) error {
+		refs = append(refs, ref)
+		return nil
+	}); err != nil {
+		return err
+	}
+
+	eg, ctx := errgroup.WithContext(ctx)
+	for _, ref := range refs {
+		eg.Go(func() error {
+			return fn(ctx, ref)
+		})
+	}
+	return eg.Wait()
 }
 
 func catchFrontendError(retErr, frontendErr *error) {
