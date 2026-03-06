@@ -484,9 +484,6 @@ github.com/golang/protobuf/jsonpb
 github.com/golang/protobuf/proto
 github.com/golang/protobuf/ptypes/any
 github.com/golang/protobuf/ptypes/timestamp
-# github.com/golang/snappy v1.0.0
-## explicit
-github.com/golang/snappy
 # github.com/google/certificate-transparency-go v1.3.2
 ## explicit; go 1.23.0
 github.com/google/certificate-transparency-go
@@ -582,7 +579,10 @@ github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/le
+github.com/klauspost/compress/internal/race
 github.com/klauspost/compress/internal/snapref
+github.com/klauspost/compress/s2
+github.com/klauspost/compress/snappy
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/lestrrat-go/blackmagic v1.0.4
