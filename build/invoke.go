@@ -3,7 +3,10 @@ package build
 import (
 	"context"
 	_ "crypto/sha256" // ensure digests can be computed
+	"fmt"
 	"io"
+	"io/fs"
+	"os"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -144,6 +147,51 @@ func (c *Container) Exec(ctx context.Context, cfg *InvokeConfig, stdin io.ReadCl
 		c.markUnavailable()
 	}
 	return err
+}
+
+func (c *Container) CanInvoke(ctx context.Context, cfg *InvokeConfig) (string, bool) {
+	var cmd string
+	if len(cfg.Entrypoint) > 0 {
+		cmd = cfg.Entrypoint[0]
+	} else if len(cfg.Cmd) > 0 {
+		cmd = cfg.Cmd[0]
+	}
+
+	if cmd == "" {
+		return "no command specified", false
+	}
+
+	for {
+		path, index, err := c.resultCtx.inferMountIndex(cmd, cfg)
+		if err != nil {
+			return err.Error(), false
+		}
+
+		st, err := c.container.StatFile(ctx, gateway.StatContainerRequest{
+			StatRequest: gateway.StatRequest{
+				Path: path,
+			},
+			MountIndex: index,
+		})
+		if err != nil {
+			return fmt.Sprintf("stat error %s: %s", cmd, err), false
+		}
+
+		mode := fs.FileMode(st.Mode)
+		if mode&os.ModeSymlink != 0 {
+			// Follow the link.
+			cmd = st.Linkname
+			continue
+		}
+
+		if !mode.IsRegular() {
+			return fmt.Sprintf("%s: not a file", cmd), false
+		}
+		if mode&0o111 == 0 {
+			return fmt.Sprintf("%s: not an executable", cmd), false
+		}
+		return "", true
+	}
 }
 
 func (c *Container) ReadFile(ctx context.Context, req gateway.ReadContainerRequest) ([]byte, error) {

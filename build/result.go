@@ -19,7 +19,6 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
-	"github.com/tonistiigi/fsutil/types"
 )
 
 // NewResultHandle stores a gateway client, gateway reference, and the error from
@@ -81,38 +80,40 @@ func (r *ResultHandle) NewContainer(ctx context.Context, cfg *InvokeConfig) (gat
 	return r.gwClient.NewContainer(ctx, req)
 }
 
-func (r *ResultHandle) StatFile(ctx context.Context, fpath string, cfg *InvokeConfig) (*types.Stat, error) {
+func (r *ResultHandle) inferMountIndex(fpath string, cfg *InvokeConfig) (string, int, error) {
 	containerCfg, err := r.getContainerConfig(cfg)
 	if err != nil {
-		return nil, err
+		return "", 0, err
 	}
 
-	candidateMounts := make([]gateway.Mount, 0, len(containerCfg.Mounts))
-	for _, m := range containerCfg.Mounts {
+	type mountCandidate struct {
+		gateway.Mount
+		Index int
+	}
+
+	candidateMounts := make([]mountCandidate, 0, len(containerCfg.Mounts))
+	for i, m := range containerCfg.Mounts {
 		if strings.HasPrefix(fpath, m.Dest) {
-			candidateMounts = append(candidateMounts, m)
+			candidateMounts = append(candidateMounts, mountCandidate{
+				Mount: m,
+				Index: i,
+			})
 		}
 	}
 	if len(candidateMounts) == 0 {
-		return nil, iofs.ErrNotExist
+		return "", 0, iofs.ErrNotExist
 	}
 
-	slices.SortFunc(candidateMounts, func(a, b gateway.Mount) int {
+	slices.SortFunc(candidateMounts, func(a, b mountCandidate) int {
 		return cmp.Compare(len(a.Dest), len(b.Dest))
 	})
 
 	m := candidateMounts[len(candidateMounts)-1]
 	relpath, err := filepath.Rel(m.Dest, fpath)
 	if err != nil {
-		return nil, err
+		return "", 0, err
 	}
-
-	if m.Ref == nil {
-		return nil, iofs.ErrNotExist
-	}
-
-	req := gateway.StatRequest{Path: filepath.ToSlash(relpath)}
-	return m.Ref.StatFile(ctx, req)
+	return filepath.Join("/", relpath), m.Index, nil
 }
 
 func (r *ResultHandle) getContainerConfig(cfg *InvokeConfig) (containerCfg gateway.NewContainerRequest, _ error) {
