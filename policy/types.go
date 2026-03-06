@@ -41,11 +41,13 @@ type HTTP struct {
 
 	Checksum string `json:"checksum,omitempty"`
 
-	Signature         *PGPSignature      `json:"signature,omitempty"`
-	AttestationBundle *AttestationBundle `json:"attestationBundle,omitempty"`
+	checksumResponseForSignature *httpChecksumResponseForSignature `json:"-"`
 }
 
-type AttestationBundle struct{}
+type httpChecksumResponseForSignature struct {
+	Digest string `json:"-"`
+	Suffix []byte `json:"-"`
+}
 
 type Git struct {
 	Schema      string `json:"schema,omitempty"`
