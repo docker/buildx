@@ -2,6 +2,7 @@ package dap
 
 import (
 	"context"
+	"maps"
 	"path"
 	"path/filepath"
 	"slices"
@@ -71,18 +72,20 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, headRef gateway.Referen
 	}
 	defer t.reset()
 
+	var next *step
 	action := stepContinue
 	if cfg.StopOnEntry {
-		action = stepNext
+		// If we are stopping on entry, automatically advance to the
+		// entrypoint.
+		action, next = stepNext, t.entrypoint
 	}
 
 	var (
 		k    string
 		refs map[string]gateway.Reference
-		next = t.entrypoint
 		err  error
 	)
-	for next != nil {
+	for {
 		event := t.needsDebug(next, action, err)
 		if event.Reason != "" {
 			select {
@@ -98,7 +101,9 @@ func (t *thread) Evaluate(ctx Context, c gateway.Client, headRef gateway.Referen
 		}
 
 		t.setBreakpoints(ctx)
-		k, next, refs, err = t.seekNext(ctx, next, action)
+		if k, next, refs, err = t.seekNext(ctx, next, action); next == nil {
+			break
+		}
 	}
 	return nil
 }
@@ -126,6 +131,11 @@ type step struct {
 	// dgst holds the digest associated with this step. This is used for
 	// breakpoint resolution.
 	dgst digest.Digest
+
+	// deferred holds the inputs that should have its evaluation deferred.
+	// These inputs are still included in the references but will only be
+	// evaluated when needed.
+	deferred map[int]bool
 
 	// in holds the next target when step in is used.
 	in *step
@@ -221,6 +231,13 @@ func (t *thread) createBranch(dgst digest.Digest, exitpoint *step) (entrypoint *
 			// Create the routine associated with this input.
 			// Associate it with the entrypoint in step.
 			head.in = t.createBranch(digest.Digest(inp.Digest), entrypoint)
+
+			// Filter this input from the target so it doesn't get solved
+			// when moving to this step.
+			head.deferred = make(map[int]bool)
+			maps.Copy(head.deferred, entrypoint.deferred)
+			head.deferred[i] = true
+
 			entrypoint = &head
 		}
 
@@ -232,11 +249,12 @@ func (t *thread) createBranch(dgst digest.Digest, exitpoint *step) (entrypoint *
 
 		// Create a new step that refers to the direct parent.
 		head := &step{
-			dgst:   digest.Digest(op.Inputs[entrypoint.parent].Digest),
-			in:     entrypoint,
-			next:   entrypoint,
-			out:    entrypoint.out,
-			parent: -1,
+			dgst:     digest.Digest(op.Inputs[entrypoint.parent].Digest),
+			deferred: entrypoint.deferred,
+			in:       entrypoint,
+			next:     entrypoint,
+			out:      entrypoint.out,
+			parent:   -1,
 		}
 		head.frame = t.getStackFrame(head.dgst, entrypoint)
 		entrypoint = head
@@ -487,19 +505,24 @@ func (t *thread) setBreakpoints(ctx Context) {
 }
 
 func (t *thread) seekNext(ctx Context, from *step, action stepType) (string, *step, map[string]gateway.Reference, error) {
-	// If we're at the end, return no digest to signal that
-	// we should conclude debugging.
-	var target *step
+	// Determine how we are going to limit the scan for the next step.
+	var limit func(s *step) *step
 	switch action {
 	case stepNext:
-		target = t.continueDigest(from, from.next)
+		limit = func(s *step) *step {
+			return s.next
+		}
 	case stepIn:
-		target = from.in
+		limit = func(s *step) *step {
+			return s.in
+		}
 	case stepOut:
-		target = t.continueDigest(from, from.out)
-	case stepContinue:
-		target = t.continueDigest(from, nil)
+		limit = func(s *step) *step {
+			return s.out
+		}
 	}
+
+	target := t.continueDigest(from, limit)
 	return t.seek(ctx, target)
 }
 
@@ -525,8 +548,10 @@ func (t *thread) seek(ctx Context, target *step) (k string, result *step, mounts
 	return k, result, refs, nil
 }
 
-func (t *thread) continueDigest(from, until *step) *step {
-	if len(t.bps) == 0 && until == nil {
+func (t *thread) continueDigest(from *step, limit func(*step) *step) *step {
+	// First chance to exit early. If there's no function for limiting
+	// the until step and no breakpoints then just go directly to the end step.
+	if len(t.bps) == 0 && limit == nil {
 		return nil
 	}
 
@@ -537,6 +562,27 @@ func (t *thread) continueDigest(from, until *step) *step {
 
 		_, ok := t.bps[dgst]
 		return ok
+	}
+
+	// Special case. When we aren't coming from any step we consider
+	// whether the entrypoint itself is a breakpoint. If it is, we stop
+	// there. Otherwise, we treat the entrypoint as the from location.
+	if from == nil {
+		if isBreakpoint(t.entrypoint.dgst) {
+			return t.entrypoint
+		}
+		from = t.entrypoint
+	}
+
+	var until *step
+	if limit != nil {
+		until = limit(from)
+	}
+
+	// Second chance to exit early. If we've fully resolved from and the
+	// limit function doesn't return an end step, just go directly to the end.
+	if len(t.bps) == 0 && until == nil {
+		return nil
 	}
 
 	next := func(s *step) *step {
@@ -573,6 +619,12 @@ func (t *thread) solveInputs(ctx context.Context, target *step) (string, map[str
 		ref, err := t.solve(ctx, input)
 		if err != nil {
 			return "", nil, err
+		}
+
+		// If we have marked this input to be deferred, wrap it in a reference
+		// that suppresses the evaluate call.
+		if target.deferred[i] {
+			ref = &deferredReference{Reference: ref}
 		}
 		refs[k] = ref
 	}
@@ -768,4 +820,12 @@ func (r *mountReference) ReadDir(ctx context.Context, req gateway.ReadDirRequest
 		ReadDirRequest: req,
 		MountIndex:     r.index,
 	})
+}
+
+type deferredReference struct {
+	gateway.Reference
+}
+
+func (r *deferredReference) Evaluate(ctx context.Context) error {
+	return nil
 }
