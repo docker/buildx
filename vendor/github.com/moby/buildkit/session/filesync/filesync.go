@@ -251,10 +251,18 @@ type FSSyncTarget interface {
 	target() *fsSyncTarget
 }
 
+type FSSyncDirMode string
+
+const (
+	FSSyncDirModeCopy   FSSyncDirMode = "copy"
+	FSSyncDirModeMirror FSSyncDirMode = "mirror"
+)
+
 type fsSyncTarget struct {
-	id     int
-	outdir string
-	f      FileOutputFunc
+	id         int
+	outdir     string
+	outdirMode FSSyncDirMode
+	f          FileOutputFunc
 }
 
 func (target *fsSyncTarget) target() *fsSyncTarget {
@@ -270,23 +278,40 @@ func WithFSSync(id int, f FileOutputFunc) FSSyncTarget {
 
 func WithFSSyncDir(id int, outdir string) FSSyncTarget {
 	return &fsSyncTarget{
-		id:     id,
-		outdir: outdir,
+		id:         id,
+		outdir:     outdir,
+		outdirMode: FSSyncDirModeCopy,
+	}
+}
+
+func WithFSSyncDirMode(id int, outdir string, mode FSSyncDirMode) FSSyncTarget {
+	if mode == "" {
+		mode = FSSyncDirModeCopy
+	}
+	return &fsSyncTarget{
+		id:         id,
+		outdir:     outdir,
+		outdirMode: mode,
 	}
 }
 
 func NewFSSyncTarget(targets ...FSSyncTarget) *SyncTarget {
 	st := &SyncTarget{
 		fs:      make(map[int]FileOutputFunc),
-		outdirs: make(map[int]string),
+		outdirs: make(map[int]syncTargetDir),
 	}
 	st.Add(targets...)
 	return st
 }
 
+type syncTargetDir struct {
+	dir  string
+	mode FSSyncDirMode
+}
+
 type SyncTarget struct {
 	fs      map[int]FileOutputFunc
-	outdirs map[int]string
+	outdirs map[int]syncTargetDir
 }
 
 var _ session.Attachable = &SyncTarget{}
@@ -298,7 +323,14 @@ func (sp *SyncTarget) Add(targets ...FSSyncTarget) {
 			sp.fs[t.id] = t.f
 		}
 		if t.outdir != "" {
-			sp.outdirs[t.id] = t.outdir
+			mode := t.outdirMode
+			if mode == "" {
+				mode = FSSyncDirModeCopy
+			}
+			sp.outdirs[t.id] = syncTargetDir{
+				dir:  t.outdir,
+				mode: mode,
+			}
 		}
 	}
 }
@@ -326,7 +358,7 @@ func (sp *SyncTarget) chooser(ctx context.Context) int {
 func (sp *SyncTarget) DiffCopy(stream FileSend_DiffCopyServer) (err error) {
 	id := sp.chooser(stream.Context())
 	if outdir, ok := sp.outdirs[id]; ok {
-		return syncTargetDiffCopy(stream, outdir)
+		return syncTargetDiffCopy(stream, outdir.dir, outdir.mode)
 	}
 	f, ok := sp.fs[id]
 	if !ok {

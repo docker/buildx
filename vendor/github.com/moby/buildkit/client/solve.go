@@ -188,7 +188,15 @@ func (c *Client) solve(ctx context.Context, def *llb.Definition, runGateway runG
 				if ex.OutputDir == "" {
 					return nil, errors.Errorf("output directory is required for %s exporter", ex.Type)
 				}
-				syncTargets = append(syncTargets, filesync.WithFSSyncDir(exID, ex.OutputDir))
+				if ex.Type == ExporterLocal {
+					mode, err := parseLocalExporterMode(ex.Attrs)
+					if err != nil {
+						return nil, err
+					}
+					syncTargets = append(syncTargets, filesync.WithFSSyncDirMode(exID, ex.OutputDir, mode))
+				} else {
+					syncTargets = append(syncTargets, filesync.WithFSSyncDir(exID, ex.OutputDir))
+				}
 			}
 			if supportStore {
 				store := ex.OutputStore
@@ -594,4 +602,20 @@ func prepareMounts(opt *SolveOpt) (map[string]fsutil.FS, error) {
 		mounts[k] = mount
 	}
 	return mounts, nil
+}
+
+func parseLocalExporterMode(attrs map[string]string) (filesync.FSSyncDirMode, error) {
+	if attrs == nil {
+		return filesync.FSSyncDirModeCopy, nil
+	}
+
+	mode := strings.TrimSpace(strings.ToLower(attrs["mode"]))
+	switch mode {
+	case "", string(filesync.FSSyncDirModeCopy):
+		return filesync.FSSyncDirModeCopy, nil
+	case string(filesync.FSSyncDirModeMirror):
+		return filesync.FSSyncDirModeMirror, nil
+	default:
+		return "", errors.Errorf("invalid local exporter mode %q", attrs["mode"])
+	}
 }
