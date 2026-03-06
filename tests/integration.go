@@ -83,13 +83,15 @@ func composeCmd(sb integration.Sandbox, opts ...cmdOpt) *exec.Cmd {
 		opt(cmd)
 	}
 
-	if builder := sb.Address(); builder != "" {
+	builder := sb.Address()
+	context := sb.DockerAddress()
+	if builder != "" && builder != context {
 		cmd.Env = append(cmd.Env,
 			"BUILDX_CONFIG="+buildxConfig(sb),
 			"BUILDX_BUILDER="+builder,
 		)
 	}
-	if context := sb.DockerAddress(); context != "" {
+	if context != "" {
 		cmd.Env = append(cmd.Env, "DOCKER_CONTEXT="+context)
 	}
 	if v := os.Getenv("GO_TEST_COVERPROFILE"); v != "" {
