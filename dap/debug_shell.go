@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"net"
 	"os"
 	"path/filepath"
@@ -192,14 +191,6 @@ func (s *shell) attach(ctx context.Context, f dap.StackFrame, rCtx *build.Result
 		}
 	}()
 
-	// Check if the entrypoint is executable. If it isn't, don't bother
-	// trying to invoke.
-	if reason, ok := s.canInvoke(ctx, rCtx, cfg); !ok {
-		writeLineF(in.Stdout, "Build container is not executable. (reason: %s)", reason)
-		<-ctx.Done()
-		return context.Cause(ctx)
-	}
-
 	if err := s.sem.Acquire(ctx, 1); err != nil {
 		return err
 	}
@@ -210,6 +201,14 @@ func (s *shell) attach(ctx context.Context, f dap.StackFrame, rCtx *build.Result
 		return err
 	}
 	defer ctr.Cancel()
+
+	// Check if the entrypoint is executable. If it isn't, don't bother
+	// trying to invoke.
+	if reason, ok := ctr.CanInvoke(ctx, cfg); !ok {
+		writeLineF(in.Stdout, "Build container is not executable. (reason: %s)", reason)
+		<-ctx.Done()
+		return context.Cause(ctx)
+	}
 
 	writeLineF(in.Stdout, "Running %s in build container from line %d.",
 		strings.Join(append(cfg.Entrypoint, cfg.Cmd...), " "),
@@ -229,33 +228,6 @@ func (s *shell) attach(ctx context.Context, f dap.StackFrame, rCtx *build.Result
 	fwd.Close()
 	s.resetSession()
 	return nil
-}
-
-func (s *shell) canInvoke(ctx context.Context, rCtx *build.ResultHandle, cfg *build.InvokeConfig) (reason string, ok bool) {
-	var cmd string
-	if len(cfg.Entrypoint) > 0 {
-		cmd = cfg.Entrypoint[0]
-	} else if len(cfg.Cmd) > 0 {
-		cmd = cfg.Cmd[0]
-	}
-
-	if cmd == "" {
-		return "no command specified", false
-	}
-
-	st, err := rCtx.StatFile(ctx, cmd, cfg)
-	if err != nil {
-		return fmt.Sprintf("stat error: %s", err), false
-	}
-
-	mode := fs.FileMode(st.Mode)
-	if !mode.IsRegular() {
-		return fmt.Sprintf("%s: not a file", cmd), false
-	}
-	if mode&0111 == 0 {
-		return fmt.Sprintf("%s: not an executable", cmd), false
-	}
-	return "", true
 }
 
 // SendRunInTerminalRequest will send the request to the client to attach to
