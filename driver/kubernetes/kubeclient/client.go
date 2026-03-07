@@ -61,7 +61,7 @@ func newRESTClient(config *rest.Config, httpClient *http.Client, gv schema.Group
 	cfg := *config
 	cfg.GroupVersion = &gv
 	cfg.APIPath = apiPath
-	cfg.NegotiatedSerializer = rest.CodecFactoryForGeneratedClient(Scheme, Codecs).WithoutConversion()
+	cfg.NegotiatedSerializer = rest.CodecFactoryForGeneratedClient(Scheme(), Codecs()).WithoutConversion()
 	if cfg.UserAgent == "" {
 		cfg.UserAgent = rest.DefaultKubernetesUserAgent()
 	}
@@ -80,7 +80,7 @@ func (c *deploymentClient) Get(ctx context.Context, name string, opts metav1.Get
 		Namespace(c.namespace).
 		Resource("deployments").
 		Name(name).
-		VersionedParams(&opts, ParameterCodec).
+		VersionedParams(&opts, ParameterCodec()).
 		Do(ctx).
 		Into(result)
 	return result, err
@@ -92,7 +92,7 @@ func (c *deploymentClient) Create(ctx context.Context, deployment *appsv1.Deploy
 		UseProtobufAsDefault().
 		Namespace(c.namespace).
 		Resource("deployments").
-		VersionedParams(&opts, ParameterCodec).
+		VersionedParams(&opts, ParameterCodec()).
 		Body(deployment).
 		Do(ctx).
 		Into(result)
@@ -121,7 +121,7 @@ func (c *configMapClient) Create(ctx context.Context, configMap *corev1.ConfigMa
 		UseProtobufAsDefault().
 		Namespace(c.namespace).
 		Resource("configmaps").
-		VersionedParams(&opts, ParameterCodec).
+		VersionedParams(&opts, ParameterCodec()).
 		Body(configMap).
 		Do(ctx).
 		Into(result)
@@ -135,7 +135,7 @@ func (c *configMapClient) Update(ctx context.Context, configMap *corev1.ConfigMa
 		Namespace(c.namespace).
 		Resource("configmaps").
 		Name(configMap.Name).
-		VersionedParams(&opts, ParameterCodec).
+		VersionedParams(&opts, ParameterCodec()).
 		Body(configMap).
 		Do(ctx).
 		Into(result)
@@ -164,7 +164,7 @@ func (c *podClient) List(ctx context.Context, opts metav1.ListOptions) (*corev1.
 		UseProtobufAsDefault().
 		Namespace(c.namespace).
 		Resource("pods").
-		VersionedParams(&opts, ParameterCodec).
+		VersionedParams(&opts, ParameterCodec()).
 		Do(ctx).
 		Into(result)
 	return result, err

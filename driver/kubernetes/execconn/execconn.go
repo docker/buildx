@@ -29,7 +29,7 @@ func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.C
 			Stdout:    true,
 			Stderr:    true,
 			TTY:       false,
-		}, kubeclient.ParameterCodec)
+		}, kubeclient.ParameterCodec())
 	exec, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
 	if err != nil {
 		return nil, err
