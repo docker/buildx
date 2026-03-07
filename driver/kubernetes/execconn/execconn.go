@@ -8,9 +8,9 @@ import (
 	"sync"
 	"time"
 
+	"github.com/docker/buildx/driver/kubernetes/kubeclient"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes/scheme"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 )
@@ -29,7 +29,7 @@ func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.C
 			Stdout:    true,
 			Stderr:    true,
 			TTY:       false,
-		}, scheme.ParameterCodec)
+		}, kubeclient.ParameterCodec())
 	exec, err := remotecommand.NewSPDYExecutor(restConfig, "POST", req.URL())
 	if err != nil {
 		return nil, err

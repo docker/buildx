@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/kubernetes/execconn"
+	"github.com/docker/buildx/driver/kubernetes/kubeclient"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
 	"github.com/docker/buildx/store"
@@ -24,9 +25,6 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/client-go/kubernetes"
-	clientappsv1 "k8s.io/client-go/kubernetes/typed/apps/v1"
-	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 const (
@@ -49,10 +47,9 @@ type Driver struct {
 	minReplicas      int
 	deployment       *appsv1.Deployment
 	configMaps       []*corev1.ConfigMap
-	clientset        *kubernetes.Clientset
-	deploymentClient clientappsv1.DeploymentInterface
-	podClient        clientcorev1.PodInterface
-	configMapClient  clientcorev1.ConfigMapInterface
+	deploymentClient kubeclient.DeploymentClient
+	podClient        kubeclient.PodClient
+	configMapClient  kubeclient.ConfigMapClient
 	podChooser       podchooser.PodChooser
 	defaultLoad      bool
 	timeout          time.Duration
@@ -201,7 +198,6 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 }
 
 func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
-	restClient := d.clientset.CoreV1().RESTClient()
 	restClientConfig, err := d.clientConfig.ClientConfig()
 	if err != nil {
 		return nil, err
@@ -221,7 +217,7 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 	var conn net.Conn
 	err = tryWithBackoff(ctx, pod.Name, func() error {
 		var err error
-		conn, err = execconn.ExecConn(ctx, restClient, restClientConfig, pod.Namespace, pod.Name, containerName, cmd)
+		conn, err = execconn.ExecConn(ctx, d.podClient.RESTClient(), restClientConfig, pod.Namespace, pod.Name, containerName, cmd)
 		return err
 	})
 	return conn, err

@@ -10,13 +10,13 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
 	ctxkube "github.com/docker/buildx/driver/kubernetes/context"
+	"github.com/docker/buildx/driver/kubernetes/kubeclient"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 )
 
@@ -116,16 +116,11 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	if err != nil {
 		return nil, err
 	}
-	clientset, err := kubernetes.NewForConfig(restClientConfig)
-	if err != nil {
-		return nil, err
-	}
 
 	d := &Driver{
 		factory:      f,
 		clientConfig: cc,
 		InitConfig:   cfg,
-		clientset:    clientset,
 	}
 
 	deploymentOpt, loadbalance, namespace, defaultLoad, timeout, err := f.processDriverOpts(deploymentName, namespace, cfg)
@@ -143,9 +138,13 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 
 	d.minReplicas = int(deploymentOpt.Replicas)
 
-	d.deploymentClient = clientset.AppsV1().Deployments(namespace)
-	d.podClient = clientset.CoreV1().Pods(namespace)
-	d.configMapClient = clientset.CoreV1().ConfigMaps(namespace)
+	clients, err := kubeclient.New(restClientConfig, namespace)
+	if err != nil {
+		return nil, err
+	}
+	d.deploymentClient = clients.Deployments
+	d.podClient = clients.Pods
+	d.configMapClient = clients.ConfigMaps
 
 	switch loadbalance {
 	case LoadbalanceSticky:
