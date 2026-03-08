@@ -6,13 +6,13 @@ import (
 	"sort"
 	"time"
 
+	"github.com/docker/buildx/driver/kubernetes/kubeclient"
 	"github.com/pkg/errors"
 	"github.com/serialx/hashring"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	clientcorev1 "k8s.io/client-go/kubernetes/typed/core/v1"
 )
 
 type PodChooser interface {
@@ -21,7 +21,7 @@ type PodChooser interface {
 
 type RandomPodChooser struct {
 	RandSource rand.Source
-	PodClient  clientcorev1.PodInterface
+	PodClient  kubeclient.PodClient
 	Deployment *appsv1.Deployment
 }
 
@@ -45,7 +45,7 @@ func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 
 type StickyPodChooser struct {
 	Key        string
-	PodClient  clientcorev1.PodInterface
+	PodClient  kubeclient.PodClient
 	Deployment *appsv1.Deployment
 }
 
@@ -74,7 +74,7 @@ func (pc *StickyPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 	return podMap[chosen], nil
 }
 
-func ListRunningPods(ctx context.Context, client clientcorev1.PodInterface, depl *appsv1.Deployment) ([]*corev1.Pod, error) {
+func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *appsv1.Deployment) ([]*corev1.Pod, error) {
 	selector, err := metav1.LabelSelectorAsSelector(depl.Spec.Selector)
 	if err != nil {
 		return nil, err
