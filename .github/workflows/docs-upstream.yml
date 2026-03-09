@@ -46,7 +46,7 @@ jobs:
           buildkitd-flags: --debug
       -
         name: Build reference YAML docs
-        uses: docker/bake-action@v6
+        uses: docker/bake-action@v7
         with:
           targets: update-docs
           provenance: false
