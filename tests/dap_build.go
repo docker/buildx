@@ -7,6 +7,7 @@ import (
 	"path"
 	"runtime"
 	"slices"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -77,11 +78,13 @@ var dapBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testDapBuild,
 	testDapBuildStopOnEntry,
 	testDapBuildSetBreakpoints,
+	testDapBuildEntryBreakpoint,
 	testDapBuildVerifiedBreakpoints,
 	testDapBuildStepIn,
 	testDapBuildStepNext,
 	testDapBuildStepOut,
 	testDapBuildVariables,
+	testDapBuildDeferredEval,
 }
 
 func testDapBuild(t *testing.T, sb integration.Sandbox) {
@@ -198,6 +201,37 @@ func testDapBuildSetBreakpoints(t *testing.T, sb integration.Sandbox) {
 	doContinue(t, client, stopped.Body.ThreadId)
 
 	require.NoError(t, done(false))
+}
+
+// testDapBuildEntryBreakpoint checks that the entrypoint is a valid breakpoint.
+func testDapBuildEntryBreakpoint(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	client, done, err := dapBuildCmd(t, sb, withArgs(dir))
+	require.NoError(t, err)
+
+	interruptCh := pollInterruptEvents(client)
+	doLaunch(t, client, commands.LaunchConfig{
+		Dockerfile:  path.Join(dir, "Dockerfile"),
+		ContextPath: dir,
+	},
+		dap.SourceBreakpoint{Line: 7},
+	)
+
+	stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	threads := doThreads(t, client)
+	require.ElementsMatch(t, []int{stopped.Body.ThreadId}, threads)
+
+	stackTraceResp := <-daptest.DoRequest[*dap.StackTraceResponse](t, client, &dap.StackTraceRequest{
+		Request: dap.Request{Command: "stackTrace"},
+		Arguments: dap.StackTraceArguments{
+			ThreadId: stopped.Body.ThreadId,
+		},
+	})
+	require.True(t, stackTraceResp.Success)
+	require.Len(t, stackTraceResp.Body.StackFrames, 1)
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, done(true), &exitErr)
 }
 
 func testDapBuildVerifiedBreakpoints(t *testing.T, sb integration.Sandbox) {
@@ -760,6 +794,53 @@ func testDapBuildVariables(t *testing.T, sb integration.Sandbox) {
 			require.ErrorAs(t, done(true), &exitErr)
 		})
 	}
+}
+
+func testDapBuildDeferredEval(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	client, done, err := dapBuildCmd(t, sb)
+	require.NoError(t, err)
+
+	// Track when we see this message.
+	seen := false
+	client.RegisterEvent("output", func(em dap.EventMessage) {
+		e := em.(*dap.OutputEvent)
+		seen = seen || strings.Contains(e.Body.Output, "RUN cp /etc/foo /etc/bar")
+	})
+
+	interruptCh := pollInterruptEvents(client)
+	doLaunch(t, client, commands.LaunchConfig{
+		Dockerfile:  path.Join(dir, "Dockerfile"),
+		ContextPath: dir,
+	},
+		dap.SourceBreakpoint{Line: 7},
+	)
+
+	stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	require.NotNil(t, stopped)
+
+	// The output event is usually immediate but it can sometimes be delayed due to
+	// the multithreading in the printer. Just wait for a little bit.
+	<-time.After(100 * time.Millisecond)
+
+	// We should not have seen this message since the branch this
+	// message comes from should be deferred because we have
+	// not passed the breakpoint.
+	require.False(t, seen, "step has been invoked before intended")
+	doNext(t, client, stopped.Body.ThreadId)
+
+	stopped = waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	require.NotNil(t, stopped)
+
+	if !seen {
+		// If we haven't seen the output then wait for a little bit
+		// due to the printer being potentially delayed.
+		<-time.After(100 * time.Millisecond)
+	}
+	require.True(t, seen, "step should have been seen")
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, done(true), &exitErr)
 }
 
 func doLaunch(t *testing.T, client *daptest.Client, config commands.LaunchConfig, bps ...dap.SourceBreakpoint) {
