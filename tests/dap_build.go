@@ -11,6 +11,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/commands"
 	debug "github.com/docker/buildx/dap"
 	"github.com/docker/buildx/dap/common"
@@ -78,6 +79,7 @@ var dapBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testDapBuildStopOnEntry,
 	testDapBuildSetBreakpoints,
 	testDapBuildVerifiedBreakpoints,
+	testDapBuildLoadedSource,
 	testDapBuildStepIn,
 	testDapBuildStepNext,
 	testDapBuildStepOut,
@@ -248,6 +250,103 @@ func testDapBuildVerifiedBreakpoints(t *testing.T, sb integration.Sandbox) {
 
 	var exitErr *exec.ExitError
 	require.ErrorAs(t, done(true), &exitErr)
+}
+
+func testDapBuildLoadedSource(t *testing.T, sb integration.Sandbox) {
+	type test struct {
+		Name           string
+		ContextPath    string
+		DockerfilePath string
+	}
+
+	runTest := func(t *testing.T, tt test, abspath bool) string {
+		dockerfile := []byte(`
+FROM busybox:latest AS base
+COPY foo /etc/foo
+RUN cp /etc/foo /etc/bar
+
+FROM scratch
+COPY --from=base /etc/bar /bar
+`)
+
+		appliers := []fstest.Applier{}
+		if tt.ContextPath != "" {
+			appliers = append(appliers, fstest.CreateDir(tt.ContextPath, 0o700))
+		}
+		if tt.DockerfilePath != "" {
+			appliers = append(appliers, fstest.CreateDir(path.Join(tt.ContextPath, tt.DockerfilePath), 0o700))
+		}
+		appliers = append(appliers,
+			fstest.CreateFile(path.Join(tt.ContextPath, tt.DockerfilePath, "Dockerfile"), dockerfile, 0o600),
+			fstest.CreateFile(path.Join(tt.ContextPath, "foo"), []byte("foo"), 0o600),
+		)
+		dir := tmpdir(t, appliers...)
+
+		client, done, err := dapBuildCmd(t, sb, withDir(dir))
+		require.NoError(t, err)
+
+		var source *dap.Source
+		client.RegisterEvent("loadedSource", func(em dap.EventMessage) {
+			e := em.(*dap.LoadedSourceEvent)
+			source = &e.Body.Source
+		})
+
+		launchCfg := commands.LaunchConfig{
+			Config: common.Config{
+				StopOnEntry: true,
+			},
+		}
+		if abspath {
+			launchCfg.ContextPath = path.Join(dir, tt.ContextPath)
+		} else {
+			launchCfg.ContextPath = tt.ContextPath
+		}
+		launchCfg.Dockerfile = path.Join(launchCfg.ContextPath, tt.DockerfilePath, "Dockerfile")
+		doLaunch(t, client, launchCfg)
+
+		interruptCh := pollInterruptEvents(client)
+		stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+		require.NotNil(t, stopped)
+
+		expected := path.Join(dir, tt.ContextPath, tt.DockerfilePath, "Dockerfile")
+		require.NotNil(t, source)
+		require.Equal(t, expected, source.Path)
+		require.Equal(t, "Dockerfile", source.Name)
+
+		var exitErr *exec.ExitError
+		require.ErrorAs(t, done(true), &exitErr)
+		return dir
+	}
+
+	for _, tt := range []test{
+		{
+			Name:        "base path",
+			ContextPath: ".",
+		},
+		{
+			Name:        "nested context",
+			ContextPath: "nested",
+		},
+		{
+			Name:           "nested dockerfile",
+			ContextPath:    ".",
+			DockerfilePath: "nested",
+		},
+		{
+			Name:           "both nested",
+			ContextPath:    "nested",
+			DockerfilePath: "subdir",
+		},
+	} {
+		t.Run(tt.Name, func(t *testing.T) {
+			t.Run("absolute paths", func(t *testing.T) {
+				runTest(t, tt, true)
+			})
+			t.Run("relative paths", func(t *testing.T) {
+				runTest(t, tt, false)
+			})
+		})
+	}
 }
 
 func testDapBuildStepIn(t *testing.T, sb integration.Sandbox) {

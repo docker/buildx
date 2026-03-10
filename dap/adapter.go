@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"path"
-	"path/filepath"
 	"slices"
 	"sync"
 	"sync/atomic"
@@ -598,14 +597,14 @@ func (b *breakpointMap) Set(fname string, sbps []dap.SourceBreakpoint) (breakpoi
 	return breakpoints
 }
 
-func (b *breakpointMap) Intersect(ctx Context, src *pb.Source, ws string) map[digest.Digest]int {
+func (b *breakpointMap) Intersect(ctx Context, src *pb.Source) map[digest.Digest]int {
 	b.mu.Lock()
 	defer b.mu.Unlock()
 
 	digests := make(map[digest.Digest]int)
 
 	for dgst, locs := range src.Locations {
-		if id := b.intersect(ctx, src, locs, ws); id > 0 {
+		if id := b.intersect(ctx, src, locs); id > 0 {
 			digests[digest.Digest(dgst)] = id
 		}
 	}
@@ -613,7 +612,7 @@ func (b *breakpointMap) Intersect(ctx Context, src *pb.Source, ws string) map[di
 	// Mark unverified breakpoints as failed at this point since we couldn't find an area
 	// in the source where they applied.
 	for _, info := range src.Infos {
-		fname := filepath.Join(ws, info.Filename)
+		fname := info.Filename
 
 		bps := b.byPath[fname]
 		for _, bp := range bps {
@@ -633,7 +632,7 @@ func (b *breakpointMap) Intersect(ctx Context, src *pb.Source, ws string) map[di
 	return digests
 }
 
-func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Locations, ws string) int {
+func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Locations) int {
 	overlaps := func(r *pb.Range, bp *dap.Breakpoint) bool {
 		if bp.Line < int(r.Start.Line) || bp.Line > int(r.End.Line) {
 			return false
@@ -654,7 +653,7 @@ func (b *breakpointMap) intersect(ctx Context, src *pb.Source, locs *pb.Location
 		r := loc.Ranges[0]
 
 		info := src.Infos[loc.SourceIndex]
-		fname := filepath.Join(ws, info.Filename)
+		fname := info.Filename
 
 		bps := b.byPath[fname]
 		if len(bps) == 0 {

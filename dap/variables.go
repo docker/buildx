@@ -38,7 +38,7 @@ func (f *frame) setNameFromMeta(meta llb.OpMetadata) {
 	// TODO: should we infer the name from somewhere else?
 }
 
-func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string, next *step) {
+func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, next *step) {
 	for _, l := range loc.Locations {
 		for _, r := range l.Ranges {
 			if next != nil && f.Line != 0 {
@@ -57,7 +57,7 @@ func (f *frame) fillLocation(def *llb.Definition, loc *pb.Locations, ws string, 
 			info := def.Source.Infos[l.SourceIndex]
 			f.Source = &dap.Source{
 				Name: path.Base(info.Filename),
-				Path: filepath.Join(ws, info.Filename),
+				Path: info.Filename,
 			}
 
 			// If we do not have a next operation, then we don't have

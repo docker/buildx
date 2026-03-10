@@ -107,7 +107,7 @@ COPY --from=base /etc/bar /bar
 `)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("build", "--progress=quiet", "-f-", dir))
@@ -124,8 +124,8 @@ COPY foo /foo
 `)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
-			fstest.CreateFile("foo", []byte("foo"), 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+			fstest.CreateFile("foo", []byte("foo"), 0o600),
 		)
 		dirDest := t.TempDir()
 
@@ -149,8 +149,8 @@ COPY foo /foo
 `)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
-			fstest.CreateFile("foo", []byte("foo"), 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+			fstest.CreateFile("foo", []byte("foo"), 0o600),
 		)
 		dirDest := t.TempDir()
 
@@ -176,8 +176,8 @@ COPY foo /foo
 `)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
-			fstest.CreateFile("foo", []byte("foo"), 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+			fstest.CreateFile("foo", []byte("foo"), 0o600),
 		)
 		dirDest := t.TempDir()
 
@@ -209,8 +209,8 @@ COPY foo /foo
 `)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
-			fstest.CreateFile("foo", []byte("foo"), 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+			fstest.CreateFile("foo", []byte("foo"), 0o600),
 		)
 		dirDest := t.TempDir()
 
@@ -242,8 +242,8 @@ COPY foo /foo
 `)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
-			fstest.CreateFile("foo", []byte("foo"), 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+			fstest.CreateFile("foo", []byte("foo"), 0o600),
 		)
 		dirDest := t.TempDir()
 
@@ -275,8 +275,8 @@ COPY foo /foo
 `)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 	dirDest := t.TempDir()
 
@@ -314,8 +314,8 @@ COPY --from=base /etc/bar /bar
 `)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("build.Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("build.Dockerfile", dockerfile, 0o600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 
 	out, err := buildCmd(sb, withDir(dir), withArgs(
@@ -359,7 +359,7 @@ COPY --from=base /etc/bar /bar
 `)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 
 	cmd := buildxCmd(sb, withDir(dir), withArgs("build", "--progress=quiet", "--metadata-file", filepath.Join(dir, "md.json"), "-f-", dir))
@@ -397,8 +397,8 @@ COPY foo /foo
 `)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("build.Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("build.Dockerfile", dockerfile, 0o600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 	dirDest := t.TempDir()
 
@@ -534,7 +534,7 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 	dockerfile := []byte(`FROM busybox:latest`)
 
 	dir := tmpdir(t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 	)
 	targetDir := t.TempDir()
 
@@ -607,7 +607,7 @@ func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {
 
 	// build image
 	dockerfile := []byte(`FROM buildx-test:busybox`)
-	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
 	cmd = buildxCmd(
 		sb,
 		withArgs("build", "-q", "--output=type=cacheonly", dir),
@@ -626,7 +626,7 @@ func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {
 FROM busybox:1.35
 RUN busybox | head -1 | grep v1.36.1
 `)
-	dir = tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	dir = tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
 	cmd = buildxCmd(
 		sb,
 		withArgs("build", "-q", "--output=type=cacheonly", dir),
@@ -642,7 +642,7 @@ func testBuildDetailsLink(t *testing.T, sb integration.Sandbox) {
 	// build simple dockerfile
 	dockerfile := []byte(`FROM busybox:latest
 RUN echo foo > /bar`)
-	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
 	cmd := buildxCmd(sb, withArgs("build", "--output=type=cacheonly", dir))
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
@@ -652,7 +652,7 @@ RUN echo foo > /bar`)
 	home, err := os.UserHomeDir() // TODO: sandbox should create a temp home dir and expose it through its interface
 	require.NoError(t, err)
 	dbDir := path.Join(home, ".docker", "desktop-build")
-	require.NoError(t, os.MkdirAll(dbDir, 0755))
+	require.NoError(t, os.MkdirAll(dbDir, 0o755))
 	dblaFile, err := os.Create(path.Join(dbDir, ".lastaccess"))
 	require.NoError(t, err)
 	defer func() {
@@ -671,7 +671,7 @@ RUN echo foo > /bar`)
 	// build erroneous dockerfile
 	dockerfile = []byte(`FROM busybox:latest
 RUN exit 1`)
-	dir = tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	dir = tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
 	cmd = buildxCmd(sb, withArgs("build", "--output=type=cacheonly", dir))
 	out, err = cmd.CombinedOutput()
 	require.Error(t, err, string(out))
@@ -802,8 +802,8 @@ func testBuildMultiPlatform(t *testing.T, sb integration.Sandbox) {
 	`)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 	registry, err := sb.NewRegistry()
 	if errors.Is(err, integration.ErrRequirements) {
@@ -838,7 +838,7 @@ func testDockerHostGateway(t *testing.T, sb integration.Sandbox) {
 FROM busybox
 RUN ping -c 1 buildx.host-gateway-ip.local
 `)
-	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
 	cmd := buildxCmd(sb, withArgs("build", "--add-host=buildx.host-gateway-ip.local:host-gateway", "--output=type=cacheonly", dir))
 	out, err := cmd.CombinedOutput()
 	if !isDockerWorker(sb) {
@@ -877,7 +877,7 @@ RUN ip a show eth0 | awk '/inet / {split($2, a, "/"); print a[1]}' > /ip-bridge.
 RUN --network=host ip a show eth0 | awk '/inet / {split($2, a, "/"); print a[1]}' > /ip-host.txt
 FROM scratch
 COPY --from=build /ip*.txt /`)
-	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
 
 	cmd := buildxCmd(sb, withArgs("build", "--allow=network.host", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
 	cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
@@ -912,7 +912,7 @@ COPY --from=build /shmsize /
 	`)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 	)
 
 	cmd := buildxCmd(sb, withArgs("build", "--shm-size=128m", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
@@ -933,7 +933,7 @@ COPY --from=build /ulimit /
 	`)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 	)
 
 	cmd := buildxCmd(sb, withArgs("build", "--ulimit=nofile=1024:1024", fmt.Sprintf("--output=type=local,dest=%s", dir), dir))
@@ -1034,8 +1034,8 @@ func buildMetadataProvenanceMultiplatform(t *testing.T, sb integration.Sandbox, 
 	`)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 
 	registry, err := sb.NewRegistry()
@@ -1122,7 +1122,7 @@ COPy --from=base \
 	`)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 	)
 
 	cmd := buildxCmd(
@@ -1258,8 +1258,8 @@ COPY --from=build /token /
 	`)
 	dir := tmpdir(
 		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("tokenfile", []byte(token), 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+		fstest.CreateFile("tokenfile", []byte(token), 0o600),
 	)
 
 	t.Run("env", func(t *testing.T) {
@@ -1347,7 +1347,7 @@ COPy --from=base \
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		cmd := buildxCmd(sb, withArgs("build", "--call=check,format=json", dir))
@@ -1382,7 +1382,7 @@ FROM second
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		cmd := buildxCmd(sb, withArgs("build", "--build-arg=BAR=678", "--target=target", "--call=outline,format=json", dir))
@@ -1423,7 +1423,7 @@ ARG FOO=bar
 `)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		runOutline := func(args ...string) string {
@@ -1459,7 +1459,7 @@ FROM second AS binary
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		cmd := buildxCmd(sb, withArgs("build", "--call=targets,format=json", dir))
@@ -1501,7 +1501,7 @@ COPy --from=base \
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		cmd := buildxCmd(sb, withArgs("build", "--call=check,format=json", "--metadata-file", filepath.Join(dir, "md.json"), dir))
@@ -1537,7 +1537,7 @@ COPY Dockerfile .
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		cmd := buildxCmd(sb, withArgs("build", "--call=check", dir))
@@ -1556,7 +1556,7 @@ COPY Dockerfile .
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		cmd := buildxCmd(sb, withArgs("build", "--call=check", dir))
@@ -1575,7 +1575,7 @@ cOpy Dockerfile .
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0o600),
 		)
 
 		cmd := buildxCmd(sb, withArgs("build", "--call=check", dir))
@@ -1594,8 +1594,8 @@ cOpy Dockerfile .
 	`)
 		dir := tmpdir(
 			t,
-			fstest.CreateDir("subdir", 0700),
-			fstest.CreateFile("subdir/Dockerfile", dockerfile, 0600),
+			fstest.CreateDir("subdir", 0o700),
+			fstest.CreateFile("subdir/Dockerfile", dockerfile, 0o600),
 		)
 		dockerfilePath := filepath.Join(dir, "subdir", "Dockerfile")
 
@@ -1618,7 +1618,7 @@ RUN cat /etc/hosts | grep myhost | grep 1.2.3.4
 RUN cat /etc/hosts | grep myhostmulti | grep 162.242.195.81
 RUN cat /etc/hosts | grep myhostmulti | grep 162.242.195.82
 `)
-	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0600))
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
 	cmd := buildxCmd(sb, withArgs("build",
 		"--add-host=myhost=1.2.3.4",
 		"--add-host=myhostmulti=162.242.195.81",
@@ -1649,10 +1649,9 @@ RUN cp /etc/foo /etc/bar
 FROM scratch
 COPY --from=base /etc/bar /bar
 `)
-	dir := tmpdir(
-		t,
-		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo", []byte("foo"), 0600),
+	dir := tmpdir(t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0o600),
+		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 	return dir
 }

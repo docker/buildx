@@ -2,9 +2,9 @@ package dap
 
 import (
 	"context"
-	"path"
 	"path/filepath"
 	"slices"
+	"strings"
 	"sync"
 
 	"github.com/docker/buildx/build"
@@ -31,10 +31,10 @@ type thread struct {
 	variables *variableReferences
 
 	// Inputs to the evaluate call.
-	c          gateway.Client
-	ref        gateway.Reference
-	meta       map[string][]byte
-	sourcePath string
+	c             gateway.Client
+	ref           gateway.Reference
+	meta          map[string][]byte
+	sourceInfoMap func(*pb.Source) *pb.Source
 
 	// LLB state for the evaluate call.
 	def    *llb.Definition
@@ -107,14 +107,21 @@ func (t *thread) init(ctx Context, c gateway.Client, ref gateway.Reference, meta
 	t.c = c
 	t.ref = ref
 	t.meta = meta
+	t.sourceInfoMap = func(s *pb.Source) *pb.Source {
+		s = s.CloneVT()
+		for _, sinfo := range s.Infos {
+			// Map the filename from the source info from the frontend location to the
+			// client location.
+			fname := strings.Replace(sinfo.Filename, inputs.DockerfileMappingDst, inputs.DockerfileMappingSrc, 1)
 
-	// Combine the dockerfile directory with the context path to find the
-	// real base path. The frontend will report the base path as the filename.
-	dir := path.Dir(inputs.DockerfilePath)
-	if !path.IsAbs(dir) {
-		dir = path.Join(inputs.ContextPath, dir)
+			// Convert to an absolute path.
+			if abspath, err := filepath.Abs(fname); err == nil {
+				fname = abspath
+			}
+			sinfo.Filename = fname
+		}
+		return s
 	}
-	t.sourcePath = dir
 
 	if err := t.getLLBState(ctx); err != nil {
 		return err
@@ -252,7 +259,7 @@ func (t *thread) getStackFrame(dgst digest.Digest, next *step) *frame {
 		f.setNameFromMeta(meta)
 	}
 	if loc, ok := t.def.Source.Locations[string(dgst)]; ok {
-		f.fillLocation(t.def, loc, t.sourcePath, next)
+		f.fillLocation(t.def, loc, next)
 	}
 	t.frames[int32(f.Id)] = f
 	return f
@@ -296,7 +303,6 @@ func (t *thread) reset() {
 	t.c = nil
 	t.ref = nil
 	t.meta = nil
-	t.sourcePath = ""
 	t.ops = nil
 }
 
@@ -462,9 +468,12 @@ func (t *thread) getLLBState(ctx Context) error {
 		return err
 	}
 
+	if t.sourceInfoMap != nil {
+		t.def.Source = t.sourceInfoMap(t.def.Source)
+	}
+
 	for _, src := range t.def.Source.Infos {
-		fname := filepath.Join(t.sourcePath, src.Filename)
-		t.sourceMap.Put(ctx, fname, src.Data)
+		t.sourceMap.Put(ctx, src.Filename, src.Data)
 	}
 
 	t.ops = make(map[digest.Digest]*pb.Op, len(t.def.Def))
@@ -483,7 +492,7 @@ func (t *thread) getLLBState(ctx Context) error {
 }
 
 func (t *thread) setBreakpoints(ctx Context) {
-	t.bps = t.breakpointMap.Intersect(ctx, t.def.Source, t.sourcePath)
+	t.bps = t.breakpointMap.Intersect(ctx, t.def.Source)
 }
 
 func (t *thread) seekNext(ctx Context, from *step, action stepType) (string, *step, map[string]gateway.Reference, error) {
