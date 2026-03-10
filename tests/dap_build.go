@@ -299,54 +299,6 @@ func testDapBuildStepIn(t *testing.T, sb integration.Sandbox) {
 				Name:       `^\[stage-1 .*\] COPY .* /etc/bar`,
 			},
 		},
-		// the following three steps are unintended and are the result
-		// of a bug in the debug adapter.
-		// see issue https://github.com/docker/buildx/issues/3565
-		{
-			{
-				Name: `^\[internal\] load build context`,
-			},
-			{
-				SourceName: "Dockerfile",
-				Line:       3,
-				Name:       `^\[base .*\] COPY foo`,
-			},
-			{
-				SourceName: "Dockerfile",
-				Line:       7,
-				Name:       `^\[stage-1 .*\] COPY .* /etc/bar`,
-			},
-		},
-		// todo: this shouldn't be a stop point.
-		{
-			{
-				Name: `^\[internal\] load build context`,
-			},
-			{
-				SourceName: "Dockerfile",
-				Line:       3,
-				Name:       `^\[base .*\] COPY foo`,
-			},
-			{
-				SourceName: "Dockerfile",
-				Line:       7,
-				Name:       `^\[stage-1 .*\] COPY .* /etc/bar`,
-			},
-		},
-		// duplicate of stop point 3 because of unintended branch
-		// associated with the build context copy.
-		{
-			{
-				SourceName: "Dockerfile",
-				Line:       3,
-				Name:       `^\[base .*\] COPY foo`,
-			},
-			{
-				SourceName: "Dockerfile",
-				Line:       7,
-				Name:       `^\[stage-1 .*\] COPY .* /etc/bar`,
-			},
-		},
 		// stop point 4
 		{
 			{
