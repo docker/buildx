@@ -67,10 +67,10 @@ func New[C LaunchConfig]() *Adapter[C] {
 	return d
 }
 
-func (d *Adapter[C]) Start(ctx context.Context, conn Conn) (C, error) {
-	d.eg, _ = errgroup.WithContext(ctx)
+func (d *Adapter[C]) Start(conn Conn) (C, error) {
+	d.eg, _ = errgroup.WithContext(context.Background())
 	d.eg.Go(func() error {
-		return d.srv.Serve(ctx, conn)
+		return d.srv.Serve(conn)
 	})
 
 	<-d.initialized

@@ -1,7 +1,6 @@
 package commands
 
 import (
-	"context"
 	"io"
 	"net"
 	"os"
@@ -75,7 +74,7 @@ type adapterProtocolDebugger struct {
 }
 
 func (d *adapterProtocolDebugger) Start(printer *progress.Printer, opts *BuildOptions) error {
-	cfg, err := d.Adapter.Start(context.Background(), d.conn)
+	cfg, err := d.Adapter.Start(d.conn)
 	if err != nil {
 		return errors.Wrap(err, "debug adapter did not start")
 	}

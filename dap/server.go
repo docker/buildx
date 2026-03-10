@@ -33,11 +33,11 @@ func NewServer(h Handler) *Server {
 	return &Server{h: h}
 }
 
-func (s *Server) Serve(ctx context.Context, conn Conn) error {
+func (s *Server) Serve(conn Conn) error {
 	writeCh := make(chan dap.Message)
 	s.ch = writeCh
 
-	s.ctx, s.cancel = context.WithCancelCause(ctx)
+	s.ctx, s.cancel = context.WithCancelCause(context.Background())
 
 	// Start an error group to handle server-initiated tasks.
 	s.eg, _ = errgroup.WithContext(s.ctx)

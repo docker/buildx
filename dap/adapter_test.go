@@ -24,7 +24,7 @@ func TestLaunch(t *testing.T) {
 
 	eg, _ := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		_, err := adapter.Start(ctx, conn)
+		_, err := adapter.Start(conn)
 		assert.NoError(t, err)
 		return nil
 	})
@@ -57,13 +57,13 @@ func TestLaunch(t *testing.T) {
 		// We should have received the initialized event.
 		select {
 		case <-initialized:
-		default:
+		case <-ctx.Done():
 			assert.Fail(t, "did not receive initialized event")
 		}
 
 		select {
 		case <-configurationDone:
-		case <-time.After(10 * time.Second):
+		case <-ctx.Done():
 			assert.Fail(t, "did not receive configurationDone response")
 		}
 		return nil
@@ -82,7 +82,7 @@ func TestSetBreakpoints(t *testing.T) {
 
 	eg, _ := errgroup.WithContext(ctx)
 	eg.Go(func() error {
-		_, err := adapter.Start(ctx, conn)
+		_, err := adapter.Start(conn)
 		assert.NoError(t, err)
 		return nil
 	})
@@ -118,7 +118,7 @@ func TestSetBreakpoints(t *testing.T) {
 		// We should have received the initialized event.
 		select {
 		case <-initialized:
-		default:
+		case <-ctx.Done():
 			assert.Fail(t, "did not receive initialized event")
 		}
 
@@ -127,7 +127,7 @@ func TestSetBreakpoints(t *testing.T) {
 			assert.True(t, setBreakpointsResp.Success)
 			assert.Len(t, setBreakpointsResp.Body.Breakpoints, 0)
 			assert.NotNil(t, setBreakpointsResp.Body.Breakpoints, "breakpoints should be an empty array instead of null in the JSON")
-		case <-time.After(10 * time.Second):
+		case <-ctx.Done():
 			assert.Fail(t, "did not receive setBreakpoints response")
 		}
 		return nil
@@ -249,11 +249,11 @@ func NewTestAdapter[C LaunchConfig](t *testing.T) (*Adapter[C], Conn, *daptest.C
 	t.Cleanup(func() { clientConn.Close() })
 
 	adapter := New[C]()
-	t.Cleanup(func() { adapter.Stop() })
 
 	client := daptest.NewClient(clientConn)
 	t.Cleanup(func() { client.Close() })
 
+	t.Cleanup(func() { adapter.Stop() })
 	return adapter, srvConn, client
 }
 
