@@ -1,6 +1,8 @@
 package tests
 
 import (
+	"bytes"
+	"context"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -8,11 +10,17 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/containerd/v2/core/remotes/docker"
 	"github.com/containerd/continuity/fs/fstest"
+	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
+	"github.com/distribution/reference"
+	"github.com/docker/buildx/util/resolver"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -26,6 +34,7 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 	testImagetoolsMergeSources,
 	testImagetoolsMergeSourcesWithAttestations,
 	testImagetoolsMergeSourcesWithFallbackAttestations,
+	testImagetoolsCopyAttestationWithSignature,
 }
 
 // testImagetoolsCopyManifest verifies create/inspect behavior for a single-platform image.
@@ -338,6 +347,111 @@ func testImagetoolsMergeSourcesWithFallbackAttestations(t *testing.T, sb integra
 	testImagetoolsMergeSourcesWithMode(t, sb, imagetoolsMergeFallbackAttestations)
 }
 
+// testImagetoolsCopyAttestationWithSignature verifies copying an attested image
+// also copies a fake sigstore bundle attached to the attestation manifest.
+func testImagetoolsCopyAttestationWithSignature(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+
+	registrySource, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	registryTarget, err := sb.NewRegistry()
+	require.NoError(t, err)
+
+	source := registrySource + "/buildx/imtools-signature-src:latest"
+	out, err := buildCmd(sb, withArgs(
+		"--output", "type=image,name="+source+",push=true,oci-mediatypes=true,oci-artifact=true",
+		"--platform=linux/amd64,linux/arm64",
+		"--provenance=mode=min",
+		dir,
+	))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx ocispecs.Index
+	err = json.Unmarshal(dt, &idx)
+	require.NoError(t, err)
+	require.Len(t, idx.Manifests, 4)
+
+	platformManifests := make(map[digest.Digest]ocispecs.Descriptor, 2)
+	attestations := make([]ocispecs.Descriptor, 0, 2)
+	for _, desc := range idx.Manifests {
+		if desc.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			attestations = append(attestations, desc)
+			continue
+		}
+		platformManifests[desc.Digest] = desc
+	}
+	require.Len(t, platformManifests, 2)
+	require.Len(t, attestations, 2)
+
+	signatures := make(map[digest.Digest]ocispecs.Descriptor, len(attestations))
+	for _, attestationDesc := range attestations {
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", source+"@"+string(attestationDesc.Digest), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+
+		var attestationManifest ocispecs.Manifest
+		err = json.Unmarshal(dt, &attestationManifest)
+		require.NoError(t, err)
+		require.NotNil(t, attestationManifest.Subject)
+		_, ok := platformManifests[attestationManifest.Subject.Digest]
+		require.True(t, ok)
+
+		signatures[attestationDesc.Digest] = pushFakeSignatureReferrer(t, source, attestationDesc)
+	}
+
+	target := registryTarget + "/buildx/imtools-signature-target:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var copiedIdx ocispecs.Index
+	err = json.Unmarshal(dt, &copiedIdx)
+	require.NoError(t, err)
+	require.Len(t, copiedIdx.Manifests, 4)
+	for _, attestationDesc := range attestations {
+		require.Contains(t, copiedIdx.Manifests, attestationDesc)
+
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+string(attestationDesc.Digest), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+
+		var attestationManifest ocispecs.Manifest
+		err = json.Unmarshal(dt, &attestationManifest)
+		require.NoError(t, err)
+		require.NotNil(t, attestationManifest.Subject)
+		_, ok := platformManifests[attestationManifest.Subject.Digest]
+		require.True(t, ok)
+
+		signatureDesc := signatures[attestationDesc.Digest]
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+string(signatureDesc.Digest), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+
+		var signatureManifest ocispecs.Manifest
+		err = json.Unmarshal(dt, &signatureManifest)
+		require.NoError(t, err)
+		require.Equal(t, "application/vnd.dev.sigstore.bundle.v0.3+json", signatureManifest.ArtifactType)
+		require.NotNil(t, signatureManifest.Subject)
+		require.Equal(t, attestationDesc.Digest, signatureManifest.Subject.Digest)
+		require.Equal(t, "dsse-envelope", signatureManifest.Annotations["dev.sigstore.bundle.content"])
+	}
+}
+
 type imagetoolsMergeMode int
 
 const (
@@ -444,6 +558,105 @@ func prepareSinglePlatformFallbackAsset(t *testing.T, sb integration.Sandbox, di
 	require.Equal(t, "application/vnd.docker.attestation.manifest.v1+json", fallbackIdx.Manifests[0].ArtifactType)
 
 	return copiedSingle
+}
+
+func pushFakeSignatureReferrer(t *testing.T, sourceRef string, subject ocispecs.Descriptor) ocispecs.Descriptor {
+	t.Helper()
+
+	repoName := mustRepoName(t, sourceRef)
+
+	configBytes := []byte("{}")
+	configDesc := ocispecs.Descriptor{
+		MediaType:    "application/vnd.oci.empty.v1+json",
+		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		Digest:       digest.FromBytes(configBytes),
+		Size:         int64(len(configBytes)),
+	}
+
+	layerBytes := []byte(`{"kind":"fake-sigstore-bundle"}`)
+	layerDesc := ocispecs.Descriptor{
+		MediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		Digest:    digest.FromBytes(layerBytes),
+		Size:      int64(len(layerBytes)),
+	}
+
+	annotations := map[string]string{
+		"dev.sigstore.bundle.content":       "dsse-envelope",
+		"dev.sigstore.bundle.predicateType": "https://sigstore.dev/cosign/sign/v1",
+		"org.opencontainers.image.created":  "2025-12-05T10:16:57Z",
+	}
+	signatureManifest := ocispecs.Manifest{
+		Versioned:    specsVersioned(),
+		MediaType:    ocispecs.MediaTypeImageManifest,
+		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		Config:       configDesc,
+		Layers:       []ocispecs.Descriptor{layerDesc},
+		Subject:      &subject,
+		Annotations:  annotations,
+	}
+	signatureBytes, err := json.Marshal(signatureManifest)
+	require.NoError(t, err)
+
+	signatureDesc := ocispecs.Descriptor{
+		MediaType:    ocispecs.MediaTypeImageManifest,
+		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		Digest:       digest.FromBytes(signatureBytes),
+		Size:         int64(len(signatureBytes)),
+		Annotations:  annotations,
+	}
+
+	pushRegistryObject(t, repoName, configDesc, configBytes)
+	pushRegistryObject(t, repoName, layerDesc, layerBytes)
+	pushRegistryObject(t, repoName, signatureDesc, signatureBytes)
+
+	fallbackIndex := ocispecs.Index{
+		Versioned: specsVersioned(),
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Manifests: []ocispecs.Descriptor{signatureDesc},
+	}
+	fallbackBytes, err := json.Marshal(fallbackIndex)
+	require.NoError(t, err)
+	fallbackDesc := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Digest:    digest.FromBytes(fallbackBytes),
+		Size:      int64(len(fallbackBytes)),
+	}
+	pushRegistryObject(t, repoName+":sha256-"+subject.Digest.Encoded(), fallbackDesc, fallbackBytes)
+
+	return signatureDesc
+}
+
+func pushRegistryObject(t *testing.T, ref string, desc ocispecs.Descriptor, dt []byte) {
+	t.Helper()
+
+	ctx := context.TODO()
+	r := docker.NewResolver(docker.ResolverOptions{
+		Hosts: resolver.NewRegistryConfig(map[string]resolver.RegistryConfig{}),
+	})
+	p, err := r.Pusher(ctx, ref)
+	require.NoError(t, err)
+	cw, err := p.Push(ctx, desc)
+	if errdefs.IsAlreadyExists(err) {
+		return
+	}
+	require.NoError(t, err)
+	err = content.Copy(ctx, cw, bytes.NewReader(dt), desc.Size, desc.Digest)
+	if errdefs.IsAlreadyExists(err) {
+		return
+	}
+	require.NoError(t, err)
+}
+
+func mustRepoName(t *testing.T, ref string) string {
+	t.Helper()
+
+	named, err := reference.ParseNormalizedNamed(ref)
+	require.NoError(t, err)
+	return named.Name()
+}
+
+func specsVersioned() specs.Versioned {
+	return specs.Versioned{SchemaVersion: 2}
 }
 
 func testImagetoolsMergeSourcesWithMode(t *testing.T, sb integration.Sandbox, mode imagetoolsMergeMode) {
