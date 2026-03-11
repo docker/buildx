@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/containerd/platforms"
 	"github.com/moby/buildkit/util/testutil/integration"
+	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
@@ -24,6 +25,7 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 	testImagetoolsAnnotation,
 }
 
+// testImagetoolsCopyManifest verifies create/inspect behavior for a single-platform image.
 func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
@@ -109,6 +111,7 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	require.Equal(t, images.MediaTypeDockerSchema2Manifest, idx3.MediaType)
 }
 
+// testImagetoolsCopyIndex verifies create/inspect behavior for a multi-platform index.
 func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
@@ -128,6 +131,7 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
 	dt, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
+	sourceDigest := digest.FromBytes(dt)
 
 	var idx ocispecs.Index
 	err = json.Unmarshal(dt, &idx)
@@ -155,10 +159,12 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 	require.NotEmpty(t, md.ImageDescriptor)
 	require.Equal(t, registry2+"/buildx/imtools2", md.ImageName)
+	require.Equal(t, sourceDigest, md.ImageDescriptor.Digest)
 
 	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2, "--raw"))
 	dt, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
 
 	var idx2 ocispecs.Index
 	err = json.Unmarshal(dt, &idx2)
@@ -189,6 +195,7 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	}
 }
 
+// testImagetoolsInspectAndFilter verifies inspect output and digest-based platform selection.
 func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
@@ -221,7 +228,7 @@ func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
 	mfst = idx.Manifests[1]
 	require.Equal(t, "linux/arm64", platforms.Format(*mfst.Platform))
 
-	// create amd64 only image
+	// create arm64 image only
 	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target+"-arm64", target+"@"+string(idx.Manifests[1].Digest)))
 	dt, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
@@ -240,6 +247,7 @@ func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
 	require.Equal(t, platforms.Format(*idx.Manifests[1].Platform), platforms.Format(*idx2.Manifests[0].Platform))
 }
 
+// testImagetoolsAnnotation verifies index and manifest annotations added by imagetools create.
 func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
