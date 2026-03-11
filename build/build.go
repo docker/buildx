@@ -805,11 +805,10 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 							itpull := imagetools.New(imageopt)
 
-							ref, err := reference.ParseNormalizedNamed(names[0])
+							ref, err := imagetools.ParseLocation(names[0])
 							if err != nil {
 								return err
 							}
-							ref = reference.TagNameOnly(ref)
 
 							srcs := make([]*imagetools.Source, len(descs))
 							for i, desc := range descs {
@@ -832,7 +831,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							itpush := imagetools.New(imageopt)
 
 							for _, n := range names {
-								nn, err := reference.ParseNormalizedNamed(n)
+								nn, err := imagetools.ParseLocation(n)
 								if err != nil {
 									return err
 								}

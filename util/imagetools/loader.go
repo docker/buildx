@@ -16,7 +16,6 @@ import (
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/containerd/platforms"
-	"github.com/distribution/reference"
 	intoto "github.com/in-toto/in-toto-golang/in_toto"
 	"github.com/moby/buildkit/util/contentutil"
 	"github.com/opencontainers/go-digest"
@@ -43,8 +42,13 @@ type contentCache interface {
 	content.Ingester
 }
 
+type loaderResolver interface {
+	Resolve(ctx context.Context, ref string) (string, ocispecs.Descriptor, error)
+	Fetcher(ctx context.Context, ref string) (remotes.Fetcher, error)
+}
+
 type loader struct {
-	resolver remotes.Resolver
+	resolver loaderResolver
 	cache    contentCache
 }
 
@@ -78,7 +82,7 @@ type result struct {
 	assets    map[string]asset
 }
 
-func newLoader(resolver remotes.Resolver) *loader {
+func newLoader(resolver loaderResolver) *loader {
 	return &loader{
 		resolver: resolver,
 		cache:    contentutil.NewBuffer(),
@@ -86,22 +90,17 @@ func newLoader(resolver remotes.Resolver) *loader {
 }
 
 func (l *loader) Load(ctx context.Context, ref string) (*result, error) {
-	named, err := parseRef(ref)
+	loc, err := ParseLocation(ref)
 	if err != nil {
 		return nil, err
 	}
 
-	_, desc, err := l.resolver.Resolve(ctx, named.String())
+	_, desc, err := l.resolver.Resolve(ctx, loc.String())
 	if err != nil {
 		return nil, err
 	}
 
-	canonical, err := reference.WithDigest(named, desc.Digest)
-	if err != nil {
-		return nil, err
-	}
-
-	fetcher, err := l.resolver.Fetcher(ctx, canonical.String())
+	fetcher, err := l.resolver.Fetcher(ctx, loc.String())
 	if err != nil {
 		return nil, err
 	}

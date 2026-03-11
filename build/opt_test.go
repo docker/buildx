@@ -40,48 +40,6 @@ func TestCacheOptions_DerivedVars(t *testing.T) {
 	}, CreateCaches(cacheFrom))
 }
 
-func TestParseOCILayoutPath(t *testing.T) {
-	for _, tt := range []struct {
-		s    string
-		path string
-		dgst string
-		tag  string
-	}{
-		{
-			s:    "/path/to/oci/layout",
-			path: "/path/to/oci/layout",
-			tag:  "latest",
-		},
-		{
-			s:    "/path/to/oci/layout:1.3",
-			path: "/path/to/oci/layout",
-			tag:  "1.3",
-		},
-		{
-			s:    "/path/to/oci/layout@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			path: "/path/to/oci/layout",
-			dgst: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			tag:  "latest",
-		},
-		{
-			s:    "/path/to/oci/@/layout@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			path: "/path/to/oci/@/layout",
-			dgst: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-			tag:  "latest",
-		},
-		{
-			s:    "/path/to/oci/@/layout",
-			path: "/path/to/oci/@/layout",
-			tag:  "latest",
-		},
-	} {
-		path, dgst, tag := parseOCILayoutPath(tt.s)
-		assert.Equal(t, tt.path, path, "comparing path: %s", tt.s)
-		assert.Equal(t, tt.dgst, dgst, "comparing digest: %s", tt.s)
-		assert.Equal(t, tt.tag, tag, "comparing tag: %s", tt.s)
-	}
-}
-
 func TestCreateExports_RegistryUnpack(t *testing.T) {
 	tests := []struct {
 		name       string

@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/containerd/containerd/v2/core/content"
@@ -31,6 +32,10 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 	testImagetoolsCopyIndex,
 	testImagetoolsInspectAndFilter,
 	testImagetoolsCreatePlatformFilter,
+	testImagetoolsOCILayoutInspect,
+	testImagetoolsOCILayoutCreateSourceAndTarget,
+	testImagetoolsOCILayoutMergeSources,
+	testImagetoolsOCILayoutTargetDigest,
 	testImagetoolsAppend,
 	testImagetoolsFile,
 	testImagetoolsAnnotation,
@@ -357,6 +362,179 @@ func testImagetoolsCreatePlatformFilter(t *testing.T, sb integration.Sandbox) {
 	}
 	require.Equal(t, 1, platformCount)
 	require.Equal(t, 1, attestationCount)
+}
+
+// testImagetoolsOCILayoutInspect verifies inspect works against local OCI layout sources.
+func testImagetoolsOCILayoutInspect(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	source := registry + "/buildx/imtools-oci-layout-inspect-src:latest"
+	out, err := buildCmd(sb, withArgs("-t", source, "--push", "--platform=linux/amd64,linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	sourceDigest := digest.FromBytes(dt)
+
+	layoutPath := filepath.Join(dir, "layout-inspect")
+	layoutRef := "oci-layout://" + layoutPath + ":latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", layoutRef, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", layoutRef, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", "oci-layout://"+layoutPath+"@"+sourceDigest.String(), "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", layoutRef, "--format", "{{.Manifest.Digest}}"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest.String(), strings.TrimSpace(string(dt)))
+}
+
+// testImagetoolsOCILayoutCreateSourceAndTarget verifies create can round-trip
+// between registry and OCI layout sources and targets.
+func testImagetoolsOCILayoutCreateSourceAndTarget(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry1, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+
+	source := registry1 + "/buildx/imtools-oci-layout-roundtrip-src:latest"
+	out, err := buildCmd(sb, withArgs("-t", source, "--push", "--platform=linux/amd64,linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	sourceDigest := digest.FromBytes(dt)
+
+	layoutPath := filepath.Join(dir, "layout-roundtrip")
+	layoutRef := "oci-layout://" + layoutPath + ":v1"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", layoutRef, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	target := registry2 + "/buildx/imtools-oci-layout-roundtrip-dst:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target, layoutRef))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+}
+
+// testImagetoolsOCILayoutMergeSources verifies create merges registry and local OCI layout sources.
+func testImagetoolsOCILayoutMergeSources(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry1, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+	registry3, err := sb.NewRegistry()
+	require.NoError(t, err)
+
+	srcLocalSeed := registry1 + "/buildx/imtools-oci-layout-merge-local:latest"
+	out, err := buildCmd(sb, withArgs("-t", srcLocalSeed, "--push", "--platform=linux/amd64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	layoutPath := filepath.Join(dir, "layout-merge")
+	layoutRef := "oci-layout://" + layoutPath + ":latest"
+	cmd := buildxCmd(sb, withArgs("imagetools", "create", "-t", layoutRef, srcLocalSeed))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	srcRegistry := registry2 + "/buildx/imtools-oci-layout-merge-registry:latest"
+	out, err = buildCmd(sb, withArgs("-t", srcRegistry, "--push", "--platform=linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	target := registry3 + "/buildx/imtools-oci-layout-merge-target:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target, layoutRef, srcRegistry))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx ocispecs.Index
+	err = json.Unmarshal(dt, &idx)
+	require.NoError(t, err)
+	require.Len(t, idx.Manifests, 2)
+}
+
+// testImagetoolsOCILayoutTargetDigest verifies exact digest targets work for
+// OCI layouts and mismatched digests fail.
+func testImagetoolsOCILayoutTargetDigest(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfile(t)
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	source := registry + "/buildx/imtools-oci-layout-digest-src:latest"
+	out, err := buildCmd(sb, withArgs("-t", source, "--push", "--platform=linux/amd64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	sourceDigest := digest.FromBytes(dt)
+
+	layoutPath := filepath.Join(dir, "layout-digest")
+	exactRef := "oci-layout://" + layoutPath + "@" + sourceDigest.String()
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", exactRef, "--prefer-index=false", source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", exactRef, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+
+	wrongRef := "oci-layout://" + filepath.Join(dir, "layout-digest-wrong") + "@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", wrongRef, "--prefer-index=false", source))
+	dt, err = cmd.CombinedOutput()
+	require.Error(t, err, string(dt))
+	require.Contains(t, string(dt), "requested digest")
 }
 
 // testImagetoolsAppend verifies create --append adds a new source onto an

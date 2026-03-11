@@ -15,6 +15,13 @@ func RegistryAuthForRef(ref string, auth authprovider.AuthConfigProvider) (strin
 	if auth == nil {
 		return "", nil
 	}
+	loc, err := ParseLocation(ref)
+	if err != nil {
+		return "", err
+	}
+	if loc.IsOCILayout() {
+		return "", nil
+	}
 	r, err := parseRef(ref)
 	if err != nil {
 		return "", err
