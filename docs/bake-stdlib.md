@@ -38,8 +38,9 @@ title: Bake standard library functions
 | [`flatten`](#flatten)                               | Transforms a list, set, or tuple value into a tuple by replacing any given elements that are themselves sequences with a flattened tuple of all of the nested elements concatenated together.                |
 | [`floor`](#floor)                                   | Returns the greatest whole number that is less than or equal to the given value.                                                                                                                             |
 | [`format`](#format)                                 | Constructs a string by applying formatting verbs to a series of arguments, using a similar syntax to the C function \"printf\".                                                                              |
-| [`formatdate`](#formatdate)                         | Formats a timestamp given in RFC 3339 syntax into another timestamp in some other machine-oriented time syntax, as described in the format string.                                                           |
+| [`formatdate`](#formatdate)                         | Deprecated: use formattimestamp instead. Formats a timestamp given in RFC 3339 syntax into another timestamp in some other machine-oriented time syntax, as described in the format string.                  |
 | [`formatlist`](#formatlist)                         | Constructs a list of strings by applying formatting verbs to a series of arguments, using a similar syntax to the C function \"printf\".                                                                     |
+| [`formattimestamp`](#formattimestamp)               | Formats a timestamp string in RFC 3339 syntax or a unix timestamp integer into another timestamp in some other machine-oriented time syntax, as described in the format string.                              |
 | [`greaterthan`](#greaterthan)                       | Returns true if and only if the second number is greater than the first.                                                                                                                                     |
 | [`greaterthanorequalto`](#greaterthanorequalto)     | Returns true if and only if the second number is greater than or equal to the first.                                                                                                                         |
 | [`hasindex`](#hasindex)                             | Returns true if if the given collection can be indexed with the given key without producing an error, or false otherwise.                                                                                    |
@@ -533,6 +534,10 @@ target "webapp-dev" {
 
 ## `formatdate`
 
+> [!WARNING]
+> Deprecated: use `formattimestamp` instead. `formatdate` only accepts RFC3339
+> timestamp strings.
+
 ```hcl
 # docker-bake.hcl
 target "webapp-dev" {
@@ -540,6 +545,28 @@ target "webapp-dev" {
   tags = ["docker.io/username/webapp:latest"]
   args = {
     date = "${formatdate("YYYY-MM-DD", "2025-09-16T12:00:00Z")}" # => "2025-09-16"
+  }
+}
+```
+
+## `formattimestamp`
+
+Formats either an RFC3339 timestamp string or a unix timestamp integer.
+
+```hcl
+# docker-bake.hcl
+variable "SOURCE_DATE_EPOCH" {
+  type    = number
+  default = 1690328596
+}
+
+target "default" {
+  dockerfile = "Dockerfile"
+  labels = {
+    "org.opencontainers.image.created" = formattimestamp("YYYY-MM-DD'T'hh:mm:ssZ", SOURCE_DATE_EPOCH) # => "2023-07-25T23:43:16Z"
+  }
+  args = {
+    build_date = formattimestamp("YYYY-MM-DD", "2025-09-16T12:00:00Z") # => "2025-09-16"
   }
 }
 ```
