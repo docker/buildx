@@ -527,7 +527,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	for k, v := range node.ProxyConfig {
-		if _, ok := opt.BuildArgs[k]; !ok {
+		if !proxyArgKeyExists(opt.BuildArgs, k) {
 			so.FrontendAttrs["build-arg:"+k] = v
 		}
 	}
@@ -584,6 +584,15 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	return &so, releaseF, nil
+}
+
+func proxyArgKeyExists(buildArgs map[string]string, key string) bool {
+	for k := range buildArgs {
+		if strings.EqualFold(k, key) {
+			return true
+		}
+	}
+	return false
 }
 
 func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, opt *Options, cfg *confutil.Config, bopts gateway.BuildOpts, so *client.SolveOpt, pw progress.Writer) (defers []func(error), err error) {
