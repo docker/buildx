@@ -187,12 +187,12 @@ func TestBreakpointMapIntersectVerified(t *testing.T) {
 	src := &pb.Source{
 		Locations: srcLocs,
 		Infos: []*pb.SourceInfo{
-			{Filename: filename},
+			{Filename: fpath},
 		},
 	}
 
 	ctx := newBreakpointTestContext(t)
-	digests := bm.Intersect(ctx, src, ws)
+	digests := bm.Intersect(ctx, src)
 	wantMatches := 0
 	for _, bc := range breakpointCases {
 		if bc.expectVerified {
