@@ -2,6 +2,7 @@ package hclparser
 
 import (
 	"errors"
+	"math/big"
 	"os"
 	"os/user"
 	"path"
@@ -63,7 +64,8 @@ var stdlibFunctions = []funcDef{
 	{name: "flatten", fn: stdlib.FlattenFunc},
 	{name: "floor", fn: stdlib.FloorFunc},
 	{name: "format", fn: stdlib.FormatFunc},
-	{name: "formatdate", fn: stdlib.FormatDateFunc},
+	{name: "formatdate", fn: stdlib.FormatDateFunc, descriptionAlt: `Deprecated: use formattimestamp instead. Formats a timestamp given in RFC 3339 syntax into another timestamp in some other machine-oriented time syntax, as described in the format string.`},
+	{name: "formattimestamp", factory: formatTimestampFunc},
 	{name: "formatlist", fn: stdlib.FormatListFunc},
 	{name: "greaterthan", fn: stdlib.GreaterThanFunc},
 	{name: "greaterthanorequalto", fn: stdlib.GreaterThanOrEqualToFunc},
@@ -279,6 +281,40 @@ func semvercmpFunc() function.Function {
 	})
 }
 
+// formatTimestampFunc constructs a function that formats either an RFC3339
+// timestamp string or a unix timestamp integer using the same format verbs as
+// formatdate.
+func formatTimestampFunc() function.Function {
+	return function.New(&function.Spec{
+		Description: `Formats a timestamp string in RFC 3339 syntax or a unix timestamp integer into another timestamp in some other machine-oriented time syntax, as described in the format string.`,
+		Params: []function.Parameter{
+			{
+				Name: "format",
+				Type: cty.String,
+			},
+			{
+				Name: "time",
+				Type: cty.DynamicPseudoType,
+			},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			switch args[1].Type() {
+			case cty.String:
+				return stdlib.FormatDateFunc.Call([]cty.Value{args[0], args[1]})
+			case cty.Number:
+				t, err := unixTimestampValue(args[1])
+				if err != nil {
+					return cty.DynamicVal, function.NewArgError(1, err)
+				}
+				return stdlib.FormatDateFunc.Call([]cty.Value{args[0], cty.StringVal(t.Format(time.RFC3339))})
+			default:
+				return cty.DynamicVal, function.NewArgErrorf(1, "must be a string timestamp or a unix timestamp number")
+			}
+		},
+	})
+}
+
 // timestampFunc constructs a function that returns a string representation of the current date and time.
 //
 // This function was imported from Terraform's datetime utilities.
@@ -345,8 +381,10 @@ func unixtimestampParseFunc() function.Function {
 			"iso_week":     cty.Number,
 		})),
 		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
-			ts, _ := args[0].AsBigFloat().Int64()
-			unixTime := time.Unix(ts, 0).UTC()
+			unixTime, err := unixTimestampValue(args[0])
+			if err != nil {
+				return cty.DynamicVal, function.NewArgError(0, err)
+			}
 			isoYear, isoWeek := unixTime.ISOWeek()
 			return cty.ObjectVal(map[string]cty.Value{
 				"year":         cty.NumberIntVal(int64(unixTime.Year())),
@@ -365,6 +403,15 @@ func unixtimestampParseFunc() function.Function {
 			}), nil
 		},
 	})
+}
+
+func unixTimestampValue(v cty.Value) (time.Time, error) {
+	bf := v.AsBigFloat()
+	ts, acc := bf.Int64()
+	if acc != big.Exact {
+		return time.Time{}, errors.New("unix timestamp must be an integer")
+	}
+	return time.Unix(ts, 0).UTC(), nil
 }
 
 func Stdlib() map[string]function.Function {
