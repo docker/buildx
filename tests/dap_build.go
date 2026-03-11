@@ -228,18 +228,26 @@ func testDapBuildVerifiedBreakpoints(t *testing.T, sb integration.Sandbox) {
 		{
 			Reason: "changed",
 			Breakpoint: dap.Breakpoint{
-				Id:       1,
-				Line:     2,
-				EndLine:  2,
+				Id:      1,
+				Line:    2,
+				EndLine: 2,
+				Source: &dap.Source{
+					Name: "Dockerfile",
+					Path: path.Join(dir, "Dockerfile"),
+				},
 				Verified: true,
 			},
 		},
 		{
 			Reason: "changed",
 			Breakpoint: dap.Breakpoint{
-				Id:       2,
-				Line:     10,
-				EndLine:  10,
+				Id:      2,
+				Line:    10,
+				EndLine: 10,
+				Source: &dap.Source{
+					Name: "Dockerfile",
+					Path: path.Join(dir, "Dockerfile"),
+				},
 				Verified: false,
 				Reason:   "failed",
 			},
