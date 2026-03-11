@@ -25,6 +25,7 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 	testImagetoolsAnnotation,
 	testImagetoolsMergeSources,
 	testImagetoolsMergeSourcesWithAttestations,
+	testImagetoolsMergeSourcesWithFallbackAttestations,
 }
 
 // testImagetoolsCopyManifest verifies create/inspect behavior for a single-platform image.
@@ -323,15 +324,129 @@ func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
 
 // testImagetoolsMergeSources verifies create merges manifests from distinct source registries.
 func testImagetoolsMergeSources(t *testing.T, sb integration.Sandbox) {
-	testImagetoolsMergeSourcesWithOptions(t, sb, false)
+	testImagetoolsMergeSourcesWithMode(t, sb, imagetoolsMergeNoAttestations)
 }
 
 // testImagetoolsMergeSourcesWithAttestations verifies merged sources retain attestation manifests.
 func testImagetoolsMergeSourcesWithAttestations(t *testing.T, sb integration.Sandbox) {
-	testImagetoolsMergeSourcesWithOptions(t, sb, true)
+	testImagetoolsMergeSourcesWithMode(t, sb, imagetoolsMergeInlineAttestations)
 }
 
-func testImagetoolsMergeSourcesWithOptions(t *testing.T, sb integration.Sandbox, withAttestations bool) {
+// testImagetoolsMergeSourcesWithFallbackAttestations verifies merged sources
+// pull a copied single-platform attestation via the referrers fallback tag.
+func testImagetoolsMergeSourcesWithFallbackAttestations(t *testing.T, sb integration.Sandbox) {
+	testImagetoolsMergeSourcesWithMode(t, sb, imagetoolsMergeFallbackAttestations)
+}
+
+type imagetoolsMergeMode int
+
+const (
+	imagetoolsMergeNoAttestations imagetoolsMergeMode = iota
+	imagetoolsMergeInlineAttestations
+	imagetoolsMergeFallbackAttestations
+)
+
+func prepareSinglePlatformFallbackAsset(t *testing.T, sb integration.Sandbox, dir, registryTarget string) string {
+	t.Helper()
+
+	registrySource, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	singleSource := registrySource + "/buildx/imtools-merge-single-src:latest"
+	out, err := buildCmd(sb, withArgs(
+		"--output", "type=image,name="+singleSource+",push=true,oci-mediatypes=true,oci-artifact=true",
+		"--platform=linux/arm",
+		"--provenance=mode=min",
+		dir,
+	))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", singleSource, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	singleSourceIndexDigest := digest.FromBytes(dt)
+
+	var singleSourceIdx ocispecs.Index
+	err = json.Unmarshal(dt, &singleSourceIdx)
+	require.NoError(t, err)
+	require.Len(t, singleSourceIdx.Manifests, 2)
+
+	var singleManifest, singleAttestation ocispecs.Descriptor
+	for _, mfst := range singleSourceIdx.Manifests {
+		if mfst.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			singleAttestation = mfst
+			continue
+		}
+		require.NotNil(t, mfst.Platform)
+		if mfst.Platform.OS == "linux" && mfst.Platform.Architecture == "arm" {
+			singleManifest = mfst
+		}
+	}
+	require.NotEmpty(t, singleManifest.Digest)
+	require.NotEmpty(t, singleAttestation.Digest)
+
+	copiedSingle := registryTarget + "/buildx/imtools-merge-single:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--prefer-index=false", "-t", copiedSingle, singleSource+"@"+string(singleManifest.Digest)))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", copiedSingle, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var copiedManifest ocispecs.Manifest
+	err = json.Unmarshal(dt, &copiedManifest)
+	require.NoError(t, err)
+	require.Contains(t, []string{images.MediaTypeDockerSchema2Manifest, ocispecs.MediaTypeImageManifest}, copiedManifest.MediaType)
+
+	// no index was copied
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", copiedSingle+"@"+string(singleSourceIndexDigest), "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.Error(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", singleSource+"@"+string(singleAttestation.Digest), "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var attestationManifest ocispecs.Manifest
+	err = json.Unmarshal(dt, &attestationManifest)
+	require.NoError(t, err)
+	require.NotNil(t, attestationManifest.Subject)
+	require.Equal(t, singleManifest.Digest, attestationManifest.Subject.Digest)
+
+	copiedSingleAttestation := registryTarget + "/buildx/imtools-merge-single:attestation-copy"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--prefer-index=false", "-t", copiedSingleAttestation, singleSource+"@"+string(singleAttestation.Digest)))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	fallbackDescriptor := singleAttestation
+	fallbackDescriptor.ArtifactType = "application/vnd.docker.attestation.manifest.v1+json"
+	fallbackDescriptorJSON, err := json.Marshal(fallbackDescriptor)
+	require.NoError(t, err)
+
+	fallbackRef := registryTarget + "/buildx/imtools-merge-single:sha256-" + singleManifest.Digest.Encoded()
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", fallbackRef, string(fallbackDescriptorJSON)))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", fallbackRef, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var fallbackIdx ocispecs.Index
+	err = json.Unmarshal(dt, &fallbackIdx)
+	require.NoError(t, err)
+	require.Len(t, fallbackIdx.Manifests, 1)
+	require.Equal(t, singleAttestation.Digest, fallbackIdx.Manifests[0].Digest)
+	require.Equal(t, "application/vnd.docker.attestation.manifest.v1+json", fallbackIdx.Manifests[0].ArtifactType)
+
+	return copiedSingle
+}
+
+func testImagetoolsMergeSourcesWithMode(t *testing.T, sb integration.Sandbox, mode imagetoolsMergeMode) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
 	}
@@ -349,9 +464,11 @@ func testImagetoolsMergeSourcesWithOptions(t *testing.T, sb integration.Sandbox,
 	require.NoError(t, err)
 	registryMerged, err := sb.NewRegistry()
 	require.NoError(t, err)
+	registrySingleCopied, err := sb.NewRegistry()
+	require.NoError(t, err)
 
 	multiPlatformProvenanceFlag := "--provenance=false"
-	if withAttestations {
+	if mode != imagetoolsMergeNoAttestations {
 		multiPlatformProvenanceFlag = "--provenance=true"
 	}
 
@@ -363,9 +480,15 @@ func testImagetoolsMergeSourcesWithOptions(t *testing.T, sb integration.Sandbox,
 	out, err = buildCmd(sb, withArgs("-t", src2, "--push", "--platform=linux/riscv64,linux/ppc64le", multiPlatformProvenanceFlag, dir))
 	require.NoError(t, err, string(out))
 
-	src3 := registry3 + "/buildx/imtools-merge-3:latest"
-	out, err = buildCmd(sb, withArgs("-t", src3, "--push", "--platform=linux/arm", "--provenance=false", dir))
-	require.NoError(t, err, string(out))
+	var src3 string
+	switch mode {
+	case imagetoolsMergeFallbackAttestations:
+		src3 = prepareSinglePlatformFallbackAsset(t, sb, dir, registrySingleCopied)
+	default:
+		src3 = registry3 + "/buildx/imtools-merge-3:latest"
+		out, err = buildCmd(sb, withArgs("-t", src3, "--push", "--platform=linux/arm", "--provenance=false", dir))
+		require.NoError(t, err, string(out))
+	}
 
 	merged := registryMerged + "/buildx/imtools-merge:latest"
 	cmd := buildxCmd(sb, withArgs("imagetools", "create", "-t", merged, src1, src2, src3))
@@ -382,23 +505,28 @@ func testImagetoolsMergeSourcesWithOptions(t *testing.T, sb integration.Sandbox,
 
 	expectedManifestCount := 5
 	expectedAttestationCount := 0
-	if withAttestations {
+	switch mode {
+	case imagetoolsMergeInlineAttestations:
 		expectedManifestCount = 9
 		expectedAttestationCount = 4
+	case imagetoolsMergeFallbackAttestations:
+		expectedManifestCount = 10
+		expectedAttestationCount = 5
 	}
+	assertMergedIndex(t, idx, expectedManifestCount, expectedAttestationCount)
+}
+
+func assertMergedIndex(t *testing.T, idx ocispecs.Index, expectedManifestCount, expectedAttestationCount int) {
+	t.Helper()
+
 	require.Len(t, idx.Manifests, expectedManifestCount)
 
 	platformsFound := map[string]struct{}{}
 	platformDigests := map[digest.Digest]string{}
-	attestationCount := 0
+	attestations := make([]ocispecs.Descriptor, 0, expectedAttestationCount)
 	for _, mfst := range idx.Manifests {
 		if mfst.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
-			refDigest, ok := mfst.Annotations["vnd.docker.reference.digest"]
-			require.True(t, ok)
-			refPlatform, ok := platformDigests[digest.Digest(refDigest)]
-			require.True(t, ok, "attestation %s references unknown manifest %s", mfst.Digest, refDigest)
-			require.NotEmpty(t, refPlatform)
-			attestationCount++
+			attestations = append(attestations, mfst)
 			continue
 		}
 		require.NotNil(t, mfst.Platform)
@@ -407,7 +535,15 @@ func testImagetoolsMergeSourcesWithOptions(t *testing.T, sb integration.Sandbox,
 		platformDigests[mfst.Digest] = platform
 	}
 
-	require.Equal(t, expectedAttestationCount, attestationCount)
+	require.Len(t, attestations, expectedAttestationCount)
+	for _, mfst := range attestations {
+		refDigest, ok := mfst.Annotations["vnd.docker.reference.digest"]
+		require.True(t, ok)
+		refPlatform, ok := platformDigests[digest.Digest(refDigest)]
+		require.True(t, ok, "attestation %s references unknown manifest %s", mfst.Digest, refDigest)
+		require.NotEmpty(t, refPlatform)
+	}
+
 	require.Len(t, platformsFound, 5)
 	for _, p := range []string{"linux/amd64", "linux/arm64", "linux/riscv64", "linux/ppc64le", "linux/arm"} {
 		_, ok := platformsFound[p]
