@@ -623,6 +623,21 @@ func testImagetoolsCopyAttestationWithSignature(t *testing.T, sb integration.San
 	require.Len(t, platformManifests, 2)
 	require.Len(t, attestations, 2)
 
+	// Negative controls: signatures on image manifests, and unsupported
+	// artifact types, should not be copied by imagetools create.
+	platformSignatures := make(map[digest.Digest]ocispecs.Descriptor, len(platformManifests))
+	platformUnsupportedReferrers := make(map[digest.Digest]ocispecs.Descriptor, len(platformManifests))
+	for platformDigest, platformDesc := range platformManifests {
+		platformSignatures[platformDigest] = pushFakeSignatureReferrer(t, source, platformDesc)
+		platformUnsupportedReferrers[platformDigest] = pushFakeReferrer(
+			t,
+			source,
+			platformDesc,
+			"application/vnd.example.attachment.v1+json",
+			map[string]string{"example.type": "unsupported"},
+		)
+	}
+
 	signatures := make(map[digest.Digest]ocispecs.Descriptor, len(attestations))
 	for _, attestationDesc := range attestations {
 		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", source+"@"+string(attestationDesc.Digest), "--raw"))
@@ -678,6 +693,21 @@ func testImagetoolsCopyAttestationWithSignature(t *testing.T, sb integration.San
 		require.NotNil(t, signatureManifest.Subject)
 		require.Equal(t, attestationDesc.Digest, signatureManifest.Subject.Digest)
 		require.Equal(t, "dsse-envelope", signatureManifest.Annotations["dev.sigstore.bundle.content"])
+
+	}
+
+	// Only attestation signatures should be present after the copy. The
+	// negative-control referrers attached to image manifests must not exist.
+	for _, platformDesc := range platformManifests {
+		signatureDesc := platformSignatures[platformDesc.Digest]
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+string(signatureDesc.Digest), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.Error(t, err, string(dt))
+
+		unsupportedDesc := platformUnsupportedReferrers[platformDesc.Digest]
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+string(unsupportedDesc.Digest), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.Error(t, err, string(dt))
 	}
 }
 
@@ -790,6 +820,14 @@ func prepareSinglePlatformFallbackAsset(t *testing.T, sb integration.Sandbox, di
 }
 
 func pushFakeSignatureReferrer(t *testing.T, sourceRef string, subject ocispecs.Descriptor) ocispecs.Descriptor {
+	return pushFakeReferrer(t, sourceRef, subject, "application/vnd.dev.sigstore.bundle.v0.3+json", map[string]string{
+		"dev.sigstore.bundle.content":       "dsse-envelope",
+		"dev.sigstore.bundle.predicateType": "https://sigstore.dev/cosign/sign/v1",
+		"org.opencontainers.image.created":  "2025-12-05T10:16:57Z",
+	})
+}
+
+func pushFakeReferrer(t *testing.T, sourceRef string, subject ocispecs.Descriptor, artifactType string, annotations map[string]string) ocispecs.Descriptor {
 	t.Helper()
 
 	repoName := mustRepoName(t, sourceRef)
@@ -797,27 +835,22 @@ func pushFakeSignatureReferrer(t *testing.T, sourceRef string, subject ocispecs.
 	configBytes := []byte("{}")
 	configDesc := ocispecs.Descriptor{
 		MediaType:    "application/vnd.oci.empty.v1+json",
-		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		ArtifactType: artifactType,
 		Digest:       digest.FromBytes(configBytes),
 		Size:         int64(len(configBytes)),
 	}
 
-	layerBytes := []byte(`{"kind":"fake-sigstore-bundle"}`)
+	layerBytes := []byte(`{"kind":"fake-referrer"}`)
 	layerDesc := ocispecs.Descriptor{
-		MediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		MediaType: artifactType,
 		Digest:    digest.FromBytes(layerBytes),
 		Size:      int64(len(layerBytes)),
 	}
 
-	annotations := map[string]string{
-		"dev.sigstore.bundle.content":       "dsse-envelope",
-		"dev.sigstore.bundle.predicateType": "https://sigstore.dev/cosign/sign/v1",
-		"org.opencontainers.image.created":  "2025-12-05T10:16:57Z",
-	}
 	signatureManifest := ocispecs.Manifest{
 		Versioned:    specsVersioned(),
 		MediaType:    ocispecs.MediaTypeImageManifest,
-		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		ArtifactType: artifactType,
 		Config:       configDesc,
 		Layers:       []ocispecs.Descriptor{layerDesc},
 		Subject:      &subject,
@@ -828,7 +861,7 @@ func pushFakeSignatureReferrer(t *testing.T, sourceRef string, subject ocispecs.
 
 	signatureDesc := ocispecs.Descriptor{
 		MediaType:    ocispecs.MediaTypeImageManifest,
-		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		ArtifactType: artifactType,
 		Digest:       digest.FromBytes(signatureBytes),
 		Size:         int64(len(signatureBytes)),
 		Annotations:  annotations,
