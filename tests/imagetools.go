@@ -30,6 +30,7 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 	testImagetoolsCopyManifest,
 	testImagetoolsCopyIndex,
 	testImagetoolsInspectAndFilter,
+	testImagetoolsCreatePlatformFilter,
 	testImagetoolsAnnotation,
 	testImagetoolsMergeSources,
 	testImagetoolsMergeSourcesWithAttestations,
@@ -257,6 +258,78 @@ func testImagetoolsInspectAndFilter(t *testing.T, sb integration.Sandbox) {
 
 	require.Equal(t, idx.Manifests[1].Digest, idx2.Manifests[0].Digest)
 	require.Equal(t, platforms.Format(*idx.Manifests[1].Platform), platforms.Format(*idx2.Manifests[0].Platform))
+}
+
+// testImagetoolsCreatePlatformFilter verifies create --platform keeps only the
+// selected platform and its matching attestation descriptor.
+func testImagetoolsCreatePlatformFilter(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	source := registry + "/buildx/imtools-platform-filter-src:latest"
+	out, err := buildCmd(sb, withArgs(
+		"--output", "type=image,name="+source+",push=true,oci-mediatypes=true,oci-artifact=true",
+		"--platform=linux/amd64,linux/arm64",
+		"--provenance=mode=min",
+		dir,
+	))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var srcIdx ocispecs.Index
+	err = json.Unmarshal(dt, &srcIdx)
+	require.NoError(t, err)
+	require.Len(t, srcIdx.Manifests, 4)
+
+	var arm64Manifest ocispecs.Descriptor
+	for _, desc := range srcIdx.Manifests {
+		if desc.Platform != nil && platforms.Format(*desc.Platform) == "linux/arm64" {
+			arm64Manifest = desc
+			break
+		}
+	}
+	require.NotEmpty(t, arm64Manifest.Digest)
+
+	target := registry + "/buildx/imtools-platform-filter-dst:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--platform=linux/arm64", "-t", target, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var filteredIdx ocispecs.Index
+	err = json.Unmarshal(dt, &filteredIdx)
+	require.NoError(t, err)
+	require.Len(t, filteredIdx.Manifests, 2)
+
+	platformCount := 0
+	attestationCount := 0
+	for _, desc := range filteredIdx.Manifests {
+		if desc.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			attestationCount++
+			require.Equal(t, arm64Manifest.Digest.String(), desc.Annotations["vnd.docker.reference.digest"])
+			continue
+		}
+		platformCount++
+		require.NotNil(t, desc.Platform)
+		require.Equal(t, "linux/arm64", platforms.Format(*desc.Platform))
+		require.Equal(t, arm64Manifest.Digest, desc.Digest)
+	}
+	require.Equal(t, 1, platformCount)
+	require.Equal(t, 1, attestationCount)
 }
 
 // testImagetoolsAnnotation verifies index and manifest annotations added by imagetools create.
