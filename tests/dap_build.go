@@ -78,6 +78,7 @@ var dapBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testDapBuild,
 	testDapBuildStopOnEntry,
 	testDapBuildSetBreakpoints,
+	testDapBuildEntryBreakpoint,
 	testDapBuildVerifiedBreakpoints,
 	testDapBuildLoadedSource,
 	testDapBuildStepIn,
@@ -121,17 +122,19 @@ func testDapBuildStopOnEntry(t *testing.T, sb integration.Sandbox) {
 	})
 
 	stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	require.Equal(t, "step", stopped.Body.Reason)
+
 	threads := doThreads(t, client)
 	require.ElementsMatch(t, []int{stopped.Body.ThreadId}, threads)
 
-	stackTraceResp := <-daptest.DoRequest[*dap.StackTraceResponse](t, client, &dap.StackTraceRequest{
-		Request: dap.Request{Command: "stackTrace"},
-		Arguments: dap.StackTraceArguments{
-			ThreadId: stopped.Body.ThreadId,
+	stackFrames := doStackTrace(t, client, stopped.Body.ThreadId)
+	assertStackTrace(t, stackFrames, []stackFrameMatcher{
+		{
+			SourceName: "Dockerfile",
+			Line:       7,
+			Name:       `^\[stage-1 .*\] COPY`,
 		},
 	})
-	require.True(t, stackTraceResp.Success)
-	require.Len(t, stackTraceResp.Body.StackFrames, 1)
 
 	var exitErr *exec.ExitError
 	require.ErrorAs(t, done(true), &exitErr)
@@ -200,6 +203,39 @@ func testDapBuildSetBreakpoints(t *testing.T, sb integration.Sandbox) {
 	doContinue(t, client, stopped.Body.ThreadId)
 
 	require.NoError(t, done(false))
+}
+
+// testDapBuildEntryBreakpoint checks that the entrypoint is a valid breakpoint.
+func testDapBuildEntryBreakpoint(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	client, done, err := dapBuildCmd(t, sb, withArgs(dir))
+	require.NoError(t, err)
+
+	interruptCh := pollInterruptEvents(client)
+	doLaunch(t, client, commands.LaunchConfig{
+		Dockerfile:  path.Join(dir, "Dockerfile"),
+		ContextPath: dir,
+	},
+		dap.SourceBreakpoint{Line: 7},
+	)
+
+	stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	require.Equal(t, "breakpoint", stopped.Body.Reason)
+
+	threads := doThreads(t, client)
+	require.ElementsMatch(t, []int{stopped.Body.ThreadId}, threads)
+
+	stackFrames := doStackTrace(t, client, stopped.Body.ThreadId)
+	assertStackTrace(t, stackFrames, []stackFrameMatcher{
+		{
+			SourceName: "Dockerfile",
+			Line:       7,
+			Name:       `^\[stage-1 .*\] COPY`,
+		},
+	})
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, done(true), &exitErr)
 }
 
 func testDapBuildVerifiedBreakpoints(t *testing.T, sb integration.Sandbox) {
