@@ -303,6 +303,31 @@ func testImagetoolsCreatePlatformFilter(t *testing.T, sb integration.Sandbox) {
 	}
 	require.NotEmpty(t, arm64Manifest.Digest)
 
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--dry-run", "--platform=linux/arm64", source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var dryRunIdx ocispecs.Index
+	err = json.Unmarshal(dt, &dryRunIdx)
+	require.NoError(t, err)
+	require.Len(t, dryRunIdx.Manifests, 2)
+
+	platformCount := 0
+	attestationCount := 0
+	for _, desc := range dryRunIdx.Manifests {
+		if desc.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			attestationCount++
+			require.Equal(t, arm64Manifest.Digest.String(), desc.Annotations["vnd.docker.reference.digest"])
+			continue
+		}
+		platformCount++
+		require.NotNil(t, desc.Platform)
+		require.Equal(t, "linux/arm64", platforms.Format(*desc.Platform))
+		require.Equal(t, arm64Manifest.Digest, desc.Digest)
+	}
+	require.Equal(t, 1, platformCount)
+	require.Equal(t, 1, attestationCount)
+
 	target := registry + "/buildx/imtools-platform-filter-dst:latest"
 	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--platform=linux/arm64", "-t", target, source))
 	dt, err = cmd.CombinedOutput()
@@ -317,8 +342,8 @@ func testImagetoolsCreatePlatformFilter(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 	require.Len(t, filteredIdx.Manifests, 2)
 
-	platformCount := 0
-	attestationCount := 0
+	platformCount = 0
+	attestationCount = 0
 	for _, desc := range filteredIdx.Manifests {
 		if desc.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
 			attestationCount++
@@ -908,16 +933,12 @@ func testImagetoolsMergeSourcesWithMode(t *testing.T, sb integration.Sandbox, mo
 	}
 
 	merged := registryMerged + "/buildx/imtools-merge:latest"
-	cmd := buildxCmd(sb, withArgs("imagetools", "create", "-t", merged, src1, src2, src3))
+	cmd := buildxCmd(sb, withArgs("imagetools", "create", "--dry-run", src1, src2, src3))
 	dt, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
 
-	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", merged, "--raw"))
-	dt, err = cmd.CombinedOutput()
-	require.NoError(t, err, string(dt))
-
-	var idx ocispecs.Index
-	err = json.Unmarshal(dt, &idx)
+	var dryRunIdx ocispecs.Index
+	err = json.Unmarshal(dt, &dryRunIdx)
 	require.NoError(t, err)
 
 	expectedManifestCount := 5
@@ -930,6 +951,20 @@ func testImagetoolsMergeSourcesWithMode(t *testing.T, sb integration.Sandbox, mo
 		expectedManifestCount = 10
 		expectedAttestationCount = 5
 	}
+	assertMergedIndex(t, dryRunIdx, expectedManifestCount, expectedAttestationCount)
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", merged, src1, src2, src3))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", merged, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx ocispecs.Index
+	err = json.Unmarshal(dt, &idx)
+	require.NoError(t, err)
+
 	assertMergedIndex(t, idx, expectedManifestCount, expectedAttestationCount)
 }
 
