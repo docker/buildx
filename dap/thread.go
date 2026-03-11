@@ -180,6 +180,12 @@ func (t *thread) createBranch(dgst digest.Digest, exitpoint *step) (entrypoint *
 		parent: -1,
 	}
 
+	// The entrypoint doesn't have a source entry. Just skip this
+	// branch.
+	if entrypoint.frame.Source == nil {
+		return nil
+	}
+
 	// Create a pseudo-frame and attach it to the return point.
 	// This is mostly used for getting the correct inputs utilized
 	// by this frame.
@@ -223,11 +229,18 @@ func (t *thread) createBranch(dgst digest.Digest, exitpoint *step) (entrypoint *
 			inp := op.Inputs[i]
 
 			head := *entrypoint
-			entrypoint.dgst = ""
 
 			// Create the routine associated with this input.
 			// Associate it with the entrypoint in step.
 			head.in = t.createBranch(digest.Digest(inp.Digest), entrypoint)
+
+			// If this branch is empty (signified by a nil return value) then
+			// skip it.
+			if head.in == nil {
+				continue
+			}
+
+			entrypoint.dgst = ""
 			entrypoint = &head
 		}
 
