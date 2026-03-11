@@ -23,6 +23,8 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 	testImagetoolsCopyIndex,
 	testImagetoolsInspectAndFilter,
 	testImagetoolsAnnotation,
+	testImagetoolsMergeSources,
+	testImagetoolsMergeSourcesWithAttestations,
 }
 
 // testImagetoolsCopyManifest verifies create/inspect behavior for a single-platform image.
@@ -319,17 +321,116 @@ func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
 	}
 }
 
+// testImagetoolsMergeSources verifies create merges manifests from distinct source registries.
+func testImagetoolsMergeSources(t *testing.T, sb integration.Sandbox) {
+	testImagetoolsMergeSourcesWithOptions(t, sb, false)
+}
+
+// testImagetoolsMergeSourcesWithAttestations verifies merged sources retain attestation manifests.
+func testImagetoolsMergeSourcesWithAttestations(t *testing.T, sb integration.Sandbox) {
+	testImagetoolsMergeSourcesWithOptions(t, sb, true)
+}
+
+func testImagetoolsMergeSourcesWithOptions(t *testing.T, sb integration.Sandbox, withAttestations bool) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64", "riscv64", "ppc64le", "arm")
+
+	registry1, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+	registry3, err := sb.NewRegistry()
+	require.NoError(t, err)
+	registryMerged, err := sb.NewRegistry()
+	require.NoError(t, err)
+
+	multiPlatformProvenanceFlag := "--provenance=false"
+	if withAttestations {
+		multiPlatformProvenanceFlag = "--provenance=true"
+	}
+
+	src1 := registry1 + "/buildx/imtools-merge-1:latest"
+	out, err := buildCmd(sb, withArgs("-t", src1, "--push", "--platform=linux/amd64,linux/arm64", multiPlatformProvenanceFlag, dir))
+	require.NoError(t, err, string(out))
+
+	src2 := registry2 + "/buildx/imtools-merge-2:latest"
+	out, err = buildCmd(sb, withArgs("-t", src2, "--push", "--platform=linux/riscv64,linux/ppc64le", multiPlatformProvenanceFlag, dir))
+	require.NoError(t, err, string(out))
+
+	src3 := registry3 + "/buildx/imtools-merge-3:latest"
+	out, err = buildCmd(sb, withArgs("-t", src3, "--push", "--platform=linux/arm", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	merged := registryMerged + "/buildx/imtools-merge:latest"
+	cmd := buildxCmd(sb, withArgs("imagetools", "create", "-t", merged, src1, src2, src3))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", merged, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx ocispecs.Index
+	err = json.Unmarshal(dt, &idx)
+	require.NoError(t, err)
+
+	expectedManifestCount := 5
+	expectedAttestationCount := 0
+	if withAttestations {
+		expectedManifestCount = 9
+		expectedAttestationCount = 4
+	}
+	require.Len(t, idx.Manifests, expectedManifestCount)
+
+	platformsFound := map[string]struct{}{}
+	platformDigests := map[digest.Digest]string{}
+	attestationCount := 0
+	for _, mfst := range idx.Manifests {
+		if mfst.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			refDigest, ok := mfst.Annotations["vnd.docker.reference.digest"]
+			require.True(t, ok)
+			refPlatform, ok := platformDigests[digest.Digest(refDigest)]
+			require.True(t, ok, "attestation %s references unknown manifest %s", mfst.Digest, refDigest)
+			require.NotEmpty(t, refPlatform)
+			attestationCount++
+			continue
+		}
+		require.NotNil(t, mfst.Platform)
+		platform := mfst.Platform.OS + "/" + mfst.Platform.Architecture
+		platformsFound[platform] = struct{}{}
+		platformDigests[mfst.Digest] = platform
+	}
+
+	require.Equal(t, expectedAttestationCount, attestationCount)
+	require.Len(t, platformsFound, 5)
+	for _, p := range []string{"linux/amd64", "linux/arm64", "linux/riscv64", "linux/ppc64le", "linux/arm"} {
+		_, ok := platformsFound[p]
+		require.True(t, ok, "missing merged platform %s", p)
+	}
+}
+
 func createDockerfile(t *testing.T) string {
+	return createDockerfileWithArches(t, "amd64", "arm64")
+}
+
+func createDockerfileWithArches(t *testing.T, archs ...string) string {
 	dockerfile := []byte(`
 	FROM scratch
 	ARG TARGETARCH
 	COPY foo-${TARGETARCH} /foo
 	`)
-	dir := tmpdir(
-		t,
+	appliers := []fstest.Applier{
 		fstest.CreateFile("Dockerfile", dockerfile, 0600),
-		fstest.CreateFile("foo-amd64", []byte("foo-amd64"), 0600),
-		fstest.CreateFile("foo-arm64", []byte("foo-arm64"), 0600),
-	)
+	}
+	for _, arch := range archs {
+		appliers = append(appliers, fstest.CreateFile("foo-"+arch, []byte("foo-"+arch), 0600))
+	}
+	dir := tmpdir(t, appliers...)
 	return dir
 }
