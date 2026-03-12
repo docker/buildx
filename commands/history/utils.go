@@ -257,25 +257,19 @@ func queryRecords(ctx context.Context, ref string, nodes []builder.Node, opts *q
 	return out, nil
 }
 
-func finalizeRecord(ctx context.Context, ref string, nodes []builder.Node) error {
-	eg, ctx := errgroup.WithContext(ctx)
-	for _, node := range nodes {
-		eg.Go(func() error {
-			if node.Driver == nil {
-				return nil
-			}
-			c, err := node.Driver.Client(ctx)
-			if err != nil {
-				return err
-			}
-			_, err = c.ControlClient().UpdateBuildHistory(ctx, &controlapi.UpdateBuildHistoryRequest{
-				Ref:      ref,
-				Finalize: true,
-			})
-			return err
-		})
+func finalizeRecord(ctx context.Context, ref string, node builder.Node) error {
+	if node.Driver == nil {
+		return nil
 	}
-	return eg.Wait()
+	c, err := node.Driver.Client(ctx)
+	if err != nil {
+		return err
+	}
+	_, err = c.ControlClient().UpdateBuildHistory(ctx, &controlapi.UpdateBuildHistoryRequest{
+		Ref:      ref,
+		Finalize: true,
+	})
+	return err
 }
 
 func formatDuration(d time.Duration) string {

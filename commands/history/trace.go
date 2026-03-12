@@ -56,7 +56,7 @@ func loadTrace(ctx context.Context, ref string, nodes []builder.Node) (string, [
 		// build is complete but no trace yet. try to finalize the trace
 		time.Sleep(1 * time.Second) // give some extra time for last parts of trace to be written
 
-		err := finalizeRecord(ctx, rec.Ref, []builder.Node{*rec.node})
+		err := finalizeRecord(ctx, rec.Ref, *rec.node)
 		if err != nil {
 			return "", nil, err
 		}
