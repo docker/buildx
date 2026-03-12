@@ -14,6 +14,7 @@ func init() {
 	if bkworkers.IsTestDockerd() {
 		workers.InitDockerWorker()
 		workers.InitDockerContainerWorker()
+		workers.InitRemoteMultiNodeWorker()
 	} else {
 		workers.InitRemoteWorker()
 	}

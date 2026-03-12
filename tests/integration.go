@@ -141,6 +141,15 @@ func isDockerContainerWorker(sb integration.Sandbox) bool {
 	return name == "docker-container"
 }
 
+func isRemoteWorker(sb integration.Sandbox) bool {
+	name, _, _ := driverName(sb.Name())
+	return name == "remote"
+}
+
+func isRemoteMultiNodeWorker(sb integration.Sandbox) bool {
+	return sb.Name() == "remote+multinode"
+}
+
 func driverName(sbName string) (string, bool, bool) {
 	name := sbName
 	var hasVersion, hasFeature bool
