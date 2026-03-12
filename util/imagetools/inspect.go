@@ -3,7 +3,6 @@ package imagetools
 import (
 	"bytes"
 	"context"
-	"encoding/json"
 	"io"
 	"net/http"
 	"sync"
@@ -38,6 +37,7 @@ type Resolver struct {
 	buffer       contentutil.Buffer
 	localStoreMu sync.Mutex
 	localStores  map[string]content.Store
+	ociReferrers ociLayoutReferrerRecorder
 }
 
 func New(opt Opt) *Resolver {
@@ -172,7 +172,7 @@ func (r *Resolver) localStore(path string) (content.Store, error) {
 
 func (r *Resolver) FetchReferrers(ctx context.Context, loc *Location, dgst digest.Digest, opts ...remotes.FetchReferrersOpt) ([]ocispecs.Descriptor, error) {
 	if loc.IsOCILayout() {
-		return r.fetchOCILayoutReferrers(ctx, loc, dgst)
+		return fetchOCILayoutReferrers(ctx, r.GetDescriptor, loc, dgst)
 	}
 	f, err := r.registryResolver().Fetcher(ctx, loc.String())
 	if err != nil {
@@ -246,30 +246,6 @@ func (r *Resolver) resolveOCILayout(ctx context.Context, loc *Location) (string,
 		return "", ocispecs.Descriptor{}, errors.Wrapf(errdefs.ErrNotFound, "reference %s not found", loc.String())
 	}
 	return loc.String(), *desc, nil
-}
-
-func (r *Resolver) fetchOCILayoutReferrers(ctx context.Context, loc *Location, dgst digest.Digest) ([]ocispecs.Descriptor, error) {
-	idx := ociindex.NewStoreIndex(loc.OCILayout().Path)
-	// TODO: temporary fallback tag, should use annotations instead
-	desc, err := idx.Get("sha256-" + dgst.Encoded())
-	if err != nil {
-		return nil, err
-	}
-	if desc == nil {
-		return nil, errors.WithStack(errdefs.ErrNotFound)
-	}
-	dt, err := r.GetDescriptor(ctx, loc, *desc)
-	if err != nil {
-		return nil, err
-	}
-	if desc.MediaType != ocispecs.MediaTypeImageIndex {
-		return nil, errors.Errorf("unsupported referrers media type %s", desc.MediaType)
-	}
-	var referrersIndex ocispecs.Index
-	if err := json.Unmarshal(dt, &referrersIndex); err != nil {
-		return nil, err
-	}
-	return referrersIndex.Manifests, nil
 }
 
 func parseRef(s string) (reference.Named, error) {

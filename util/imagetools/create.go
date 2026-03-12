@@ -273,7 +273,7 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest *Location) error 
 		return err
 	}
 
-	recorder := &recordingReferrersProvider{base: referrersFunc(func(ctx context.Context, subject ocispecs.Descriptor) ([]ocispecs.Descriptor, error) {
+	referrers := &referrersProvider{base: referrersFunc(func(ctx context.Context, subject ocispecs.Descriptor) ([]ocispecs.Descriptor, error) {
 		descs, err := r.FetchReferrers(ctx, src.Ref, subject.Digest)
 		if err != nil {
 			return nil, err
@@ -287,12 +287,14 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest *Location) error 
 		return filtered, nil
 	})}
 
-	err = contentutil.CopyChain(ctx, ingester, provider, desc, contentutil.WithReferrers(recorder))
+	err = contentutil.CopyChain(ctx, ingester, provider, desc, contentutil.WithReferrers(referrers))
 	if err != nil {
 		return err
 	}
 	if dest.IsOCILayout() {
-		return r.writeRecordedReferrers(ctx, dest, recorder)
+		for subject, descs := range referrers.refs {
+			r.ociReferrers.record(dest.OCILayout().Path, subject, descs)
+		}
 	}
 	return nil
 }
@@ -490,21 +492,38 @@ func (r *Resolver) filterPlatforms(ctx context.Context, dt []byte, desc ocispecs
 	return idxBytes, desc, mfstsWithSource, nil
 }
 
-type recordingReferrersProvider struct {
+type referrersProvider struct {
 	base referrersFunc
 	refs map[digest.Digest][]ocispecs.Descriptor
 }
 
-func (r *recordingReferrersProvider) Referrers(ctx context.Context, desc ocispecs.Descriptor) ([]ocispecs.Descriptor, error) {
+func (r *referrersProvider) Referrers(ctx context.Context, desc ocispecs.Descriptor) ([]ocispecs.Descriptor, error) {
 	out, err := r.base(ctx, desc)
 	if err != nil {
 		return nil, err
 	}
+	out = dedupeDescriptors(out)
 	if r.refs == nil {
 		r.refs = map[digest.Digest][]ocispecs.Descriptor{}
 	}
-	r.refs[desc.Digest] = append(r.refs[desc.Digest], out...)
+	r.refs[desc.Digest] = dedupeDescriptors(append(r.refs[desc.Digest], out...))
 	return out, nil
+}
+
+func dedupeDescriptors(descs []ocispecs.Descriptor) []ocispecs.Descriptor {
+	if len(descs) < 2 {
+		return descs
+	}
+	seen := make(map[digest.Digest]struct{}, len(descs))
+	out := descs[:0]
+	for _, desc := range descs {
+		if _, ok := seen[desc.Digest]; ok {
+			continue
+		}
+		seen[desc.Digest] = struct{}{}
+		out = append(out, desc)
+	}
+	return out
 }
 
 func (r *Resolver) ingesterForLocation(loc *Location) (content.Ingester, error) {
@@ -552,52 +571,19 @@ func (r *Resolver) pushOCILayout(ctx context.Context, ref *Location, desc ocispe
 	idx := ociindex.NewStoreIndex(ref.OCILayout().Path)
 	switch {
 	case ref.Digest() != "":
-		return idx.Put(desc)
+		if err := idx.Put(desc); err != nil {
+			return err
+		}
 	case ref.Tag() != "":
-		return idx.Put(desc, ociindex.Tag(ref.Tag()))
+		if err := idx.Put(desc, ociindex.Tag(ref.Tag())); err != nil {
+			return err
+		}
 	default:
-		return idx.Put(desc, ociindex.Tag("latest"))
-	}
-}
-
-func (r *Resolver) writeRecordedReferrers(ctx context.Context, loc *Location, refs *recordingReferrersProvider) error {
-	if refs == nil || len(refs.refs) == 0 {
-		return nil
-	}
-	store, err := r.localStore(loc.OCILayout().Path)
-	if err != nil {
-		return err
-	}
-	idx := ociindex.NewStoreIndex(loc.OCILayout().Path)
-	for subject, manifests := range refs.refs {
-		fallback := ocispecs.Index{
-			Versioned: specs.Versioned{SchemaVersion: 2},
-			MediaType: ocispecs.MediaTypeImageIndex,
-			Manifests: manifests,
-		}
-		dt, err := json.Marshal(fallback)
-		if err != nil {
-			return err
-		}
-		desc := ocispecs.Descriptor{
-			MediaType: ocispecs.MediaTypeImageIndex,
-			Digest:    digest.FromBytes(dt),
-			Size:      int64(len(dt)),
-		}
-		w, err := store.Writer(ctx, content.WithRef(desc.Digest.String()), content.WithDescriptor(desc))
-		if err != nil && !errdefs.IsAlreadyExists(err) {
-			return err
-		}
-		if err == nil {
-			if err := content.Copy(ctx, w, bytes.NewReader(dt), desc.Size, desc.Digest); err != nil && !errdefs.IsAlreadyExists(err) {
-				return err
-			}
-		}
-		if err := idx.Put(desc, ociindex.Tag("sha256-"+subject.Encoded())); err != nil {
+		if err := idx.Put(desc, ociindex.Tag("latest")); err != nil {
 			return err
 		}
 	}
-	return nil
+	return writePendingOCILayoutReferrers(ctx, r.ociReferrers.take(ref.OCILayout().Path), r.GetDescriptor, idx, ref)
 }
 
 func detectMediaType(dt []byte) (string, error) {
