@@ -134,6 +134,8 @@ buildxCmd build ${buildPlatformFlag} \
   --metadata-file="${context}/metadata-build.json" \
   "${context}"
 cat "${context}/metadata-build.json"
+buildRef=$(awk -F'"' '/"buildx.build.ref"/ {print $4; exit}' "${context}/metadata-build.json")
+buildID=${buildRef##*/}
 
 # load to docker store
 if [ "$DRIVER" != "docker" ]; then
@@ -142,6 +144,15 @@ if [ "$DRIVER" != "docker" ]; then
     --builder="${builderName}" \
     "${context}"
 fi
+
+# list build records
+buildxCmd --builder="${builderName}" history ls
+
+# export build records
+buildxCmd --builder="${builderName}" history export --finalize "${buildID}" --output "${context}/record.dockerbuild"
+file "${context}/record.dockerbuild"
+buildxCmd --builder="${builderName}" history export --finalize --all --output "${context}/records.dockerbuild"
+file "${context}/records.dockerbuild"
 
 # create bake def
 cat > "${bakedef}" <<EOL
