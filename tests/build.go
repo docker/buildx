@@ -28,6 +28,7 @@ import (
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/appdefaults"
 	"github.com/moby/buildkit/util/contentutil"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/opencontainers/go-digest"
@@ -129,7 +130,7 @@ COPY foo /foo
 		)
 		dirDest := t.TempDir()
 
-		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		git, err := gitutil.New(bkgitutil.WithDir(dir))
 		require.NoError(t, err)
 
 		gittestutil.GitInit(git, t)
@@ -154,7 +155,7 @@ COPY foo /foo
 		)
 		dirDest := t.TempDir()
 
-		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		git, err := gitutil.New(bkgitutil.WithDir(dir))
 		require.NoError(t, err)
 
 		gittestutil.GitInit(git, t)
@@ -181,7 +182,7 @@ COPY foo /foo
 		)
 		dirDest := t.TempDir()
 
-		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		git, err := gitutil.New(bkgitutil.WithDir(dir))
 		require.NoError(t, err)
 
 		gittestutil.GitInit(git, t)
@@ -214,7 +215,7 @@ COPY foo /foo
 		)
 		dirDest := t.TempDir()
 
-		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		git, err := gitutil.New(bkgitutil.WithDir(dir))
 		require.NoError(t, err)
 
 		gittestutil.GitInit(git, t)
@@ -247,7 +248,7 @@ COPY foo /foo
 		)
 		dirDest := t.TempDir()
 
-		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		git, err := gitutil.New(bkgitutil.WithDir(dir))
 		require.NoError(t, err)
 
 		gittestutil.GitInit(git, t)
@@ -280,7 +281,7 @@ COPY foo /foo
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -402,7 +403,7 @@ COPY foo /foo
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)

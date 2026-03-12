@@ -3,6 +3,7 @@ package tests
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -20,6 +21,7 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/contentutil"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/httpserver"
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -823,7 +825,7 @@ func testBuildPolicyGit(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "Dockerfile"), []byte("FROM busybox:latest\nRUN echo git\n"), 0600))
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "a"), []byte("a"), 0600))
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(gitDir))
+	git, err := gitutil.New(bkgitutil.WithDir(gitDir))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -835,15 +837,18 @@ func testBuildPolicyGit(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, os.WriteFile(filepath.Join(gitDir, "b"), []byte("b"), 0600))
 	gittestutil.GitAdd(git, t, "b")
 	gittestutil.GitCommit(git, t, "b")
-	_, err = git.Run("checkout", "-B", "v2")
+	_, err = git.Run(context.TODO(), "checkout", "-B", "v2")
 	require.NoError(t, err)
 
-	commitHead, err := git.Run("rev-parse", "HEAD")
+	commitHeadB, err := git.Run(context.TODO(), "rev-parse", "HEAD")
 	require.NoError(t, err)
-	commitTag, err := git.Run("rev-parse", "v0.1")
+	commitHead := strings.TrimSpace(string(commitHeadB))
+	commitTagB, err := git.Run(context.TODO(), "rev-parse", "v0.1")
 	require.NoError(t, err)
-	commitTagCommit, err := git.Run("rev-parse", "v0.1^{commit}")
+	commitTag := strings.TrimSpace(string(commitTagB))
+	commitTagCommitB, err := git.Run(context.TODO(), "rev-parse", "v0.1^{commit}")
 	require.NoError(t, err)
+	commitTagCommit := strings.TrimSpace(string(commitTagCommitB))
 	baseURL := gittestutil.GitServeHTTP(git, t)
 	tagURL := baseURL + "#v0.1"
 	branchURL := baseURL + "#v2"
@@ -1320,7 +1325,7 @@ default allow = true
 decision := {"allow": allow}
 `), 0600))
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(gitDir))
+	git, err := gitutil.New(bkgitutil.WithDir(gitDir))
 	require.NoError(t, err)
 	gittestutil.GitInit(git, t)
 	gittestutil.GitAdd(git, t, ".")

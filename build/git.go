@@ -12,6 +12,7 @@ import (
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/client"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -61,7 +62,7 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 	}
 	wd = osutil.SanitizePath(wd)
 
-	gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
+	gitc, err := gitutil.New(bkgitutil.WithDir(wd))
 	if err != nil {
 		if st, err1 := os.Stat(path.Join(wd, ".git")); err1 == nil && st.IsDir() {
 			return nil, errors.Wrap(err, "git was not found in the system")
@@ -69,21 +70,22 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 		return nil, nil
 	}
 
-	if !gitc.IsInsideWorkTree() {
+	if !gitc.IsInsideWorkTree(ctx) {
 		if st, err := os.Stat(path.Join(wd, ".git")); err == nil && st.IsDir() {
 			return nil, errors.New("failed to read current commit information with git rev-parse --is-inside-work-tree")
 		}
 		return nil, nil
 	}
 
-	root, err := gitc.RootDir()
+	root, err := gitc.WorkTree(ctx)
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to get git root dir")
 	}
+	root = osutil.SanitizePath(root)
 
 	res := make(map[string]string)
 
-	if sha, err := gitc.FullCommit(); err != nil && !gitutil.IsUnknownRevision(err) {
+	if sha, err := gitc.FullCommit(ctx); err != nil && !gitutil.IsUnknownRevision(err) {
 		return nil, errors.Wrap(err, "failed to get git commit")
 	} else if sha != "" {
 		checkDirty := false
@@ -92,7 +94,7 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 				checkDirty = v
 			}
 		}
-		if checkDirty && gitc.IsDirty() {
+		if checkDirty && gitc.IsDirty(ctx) {
 			sha += "-dirty"
 		}
 		if setGitLabels {
@@ -103,7 +105,7 @@ func getGitAttributes(ctx context.Context, contextPath, dockerfilePath string) (
 		}
 	}
 
-	if rurl, err := gitc.RemoteURL(); err == nil && rurl != "" {
+	if rurl, err := gitc.RemoteURL(ctx); err == nil && rurl != "" {
 		if setGitLabels {
 			res["label:"+ocispecs.AnnotationSource] = rurl
 		}
