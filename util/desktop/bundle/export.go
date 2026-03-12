@@ -38,7 +38,7 @@ func Export(ctx context.Context, c []*client.Client, w io.Writer, records []*Rec
 		s := proxy.NewContentStore(c.ContentClient())
 		if store == nil {
 			store = s
-			break
+			continue
 		}
 		store = &nsFallbackStore{
 			main: store,
