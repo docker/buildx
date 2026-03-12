@@ -779,8 +779,7 @@ decision := {"allow": allow}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.requiresHTTPChecksum {
-				sbDriver, _, _ := driverName(sb.Name())
-				if sbDriver != "remote" {
+				if !isRemoteWorker(sb) {
 					t.Skip("http checksum policy input requires remote driver")
 				}
 				skipNoCompatBuildKit(t, sb, ">= 0.26.3-0", "http checksum policy input")
@@ -1084,8 +1083,7 @@ decision := {"allow": allow}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.requiresGitResolve {
-				sbDriver, _, _ := driverName(sb.Name())
-				if sbDriver != "remote" {
+				if !isRemoteWorker(sb) {
 					t.Skip("git policy metadata requires remote driver")
 				}
 			}

@@ -492,8 +492,7 @@ decision := {"allow": allow}
 	for _, tc := range testCases {
 		t.Run(tc.name, func(t *testing.T) {
 			if tc.needsChecksum {
-				sbDriver, _, _ := driverName(sb.Name())
-				if sbDriver != "remote" {
+				if !isRemoteWorker(sb) {
 					t.Skip("http checksum policy eval requires remote driver")
 				}
 				skipNoCompatBuildKit(t, sb, ">= 0.26.3-0", "http checksum policy input")

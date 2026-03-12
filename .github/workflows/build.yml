@@ -66,13 +66,18 @@ jobs:
           - ""
           - experimental
         include:
-          - worker: docker
+          - worker: remote+multinode
             pkg: ./tests
-          - worker: docker+containerd  # same as docker, but with containerd snapshotter
+          - worker: remote+multinode
+            pkg: ./tests
+            mode: experimental
+          - worker: docker
             pkg: ./tests
           - worker: docker
             pkg: ./tests
             mode: experimental
+          - worker: docker+containerd  # same as docker, but with containerd snapshotter
+            pkg: ./tests
           - worker: docker+containerd  # same as docker, but with containerd snapshotter
             pkg: ./tests
             mode: experimental
@@ -106,14 +111,14 @@ jobs:
           fi
           testFlags="--run=//worker=$(echo "${{ matrix.worker }}" | sed 's/\+/\\+/g')$"
           case "${{ matrix.worker }}" in
-            docker | docker+containerd | docker@* | docker+containerd@*)
+            docker | docker+containerd | docker@* | docker+containerd@* | remote+multinode)
               echo "TESTFLAGS=${{ env.TESTFLAGS_DOCKER }} $testFlags" >> $GITHUB_ENV
               ;;
             *)
               echo "TESTFLAGS=${{ env.TESTFLAGS }} $testFlags" >> $GITHUB_ENV
               ;;
           esac
-          if [[ "${{ matrix.worker }}" == "docker"* ]]; then
+          if [[ "${{ matrix.worker }}" == "docker"* || "${{ matrix.worker }}" == "remote+multinode" ]]; then
             echo "TEST_DOCKERD=1" >> $GITHUB_ENV
           fi
           if [ "${{ matrix.mode }}" = "experimental" ]; then
