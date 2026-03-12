@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"slices"
 
 	"github.com/containerd/console"
 	"github.com/containerd/platforms"
@@ -53,37 +52,67 @@ func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) e
 			return errors.Errorf("no record found for ref %q", ref)
 		}
 
-		if opts.finalize {
-			var finalized bool
+		selected := recs
+		if !opts.all && ref == "" {
+			latestRef := recs[0].Ref
+			prefixLen := 0
 			for _, rec := range recs {
-				if rec.Trace == nil {
-					finalized = true
-					if err := finalizeRecord(ctx, rec.Ref, nodes); err != nil {
-						return err
-					}
+				if rec.Ref != latestRef {
+					break
+				}
+				prefixLen++
+			}
+			selected = recs[:prefixLen]
+		}
+		if opts.finalize {
+			seen := make(map[string]struct{}, len(selected))
+			var finalized bool
+			for _, rec := range selected {
+				if rec.node == nil || rec.Trace != nil {
+					continue
+				}
+				key := rec.node.Builder + "\x00" + rec.node.Name + "\x00" + rec.Ref
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				finalized = true
+				if err := finalizeRecord(ctx, rec.Ref, *rec.node); err != nil {
+					return err
 				}
 			}
 			if finalized {
-				recs, err = queryRecords(ctx, ref, nodes, &queryOptions{
+				queryRef := ref
+				if !opts.all {
+					queryRef = selected[0].Ref
+				}
+				recs, err = queryRecords(ctx, queryRef, nodes, &queryOptions{
 					CompletedOnly: true,
 				})
 				if err != nil {
 					return err
 				}
+				selected = recs
 			}
 		}
-
-		if ref == "" {
-			slices.SortFunc(recs, func(a, b historyRecord) int {
-				return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
-			})
+		if len(selected) > 1 {
+			// A logical build ref can appear once per node. Keep one candidate
+			// per ref and let bundle export resolve content across node stores.
+			deduped := selected[:0]
+			seen := make(map[string]struct{}, len(selected))
+			for _, rec := range selected {
+				if _, ok := seen[rec.Ref]; ok {
+					continue
+				}
+				seen[rec.Ref] = struct{}{}
+				deduped = append(deduped, rec)
+			}
+			selected = deduped
 		}
 
+		res = append(res, selected...)
 		if opts.all {
-			res = append(res, recs...)
 			break
-		} else {
-			res = append(res, recs[0])
 		}
 	}
 
