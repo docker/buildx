@@ -3,9 +3,11 @@ package imagetools
 import (
 	"context"
 	"encoding/json"
+	"slices"
 	"sync"
 
 	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/containerd/errdefs"
 	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/util/attestation"
@@ -54,7 +56,7 @@ func hasSubjectAnnotation(desc ocispecs.Descriptor) bool {
 // fetchOCILayoutReferrers resolves referrers for a subject from an OCI layout by
 // combining directly indexed subject entries with referrers reachable from the
 // regular named roots in index.json.
-func fetchOCILayoutReferrers(ctx context.Context, getDescriptor func(context.Context, *Location, ocispecs.Descriptor) ([]byte, error), loc *Location, subject digest.Digest) ([]ocispecs.Descriptor, error) {
+func fetchOCILayoutReferrers(ctx context.Context, getDescriptor func(context.Context, *Location, ocispecs.Descriptor) ([]byte, error), loc *Location, subject digest.Digest, opts ...remotes.FetchReferrersOpt) ([]ocispecs.Descriptor, error) {
 	idx, err := ociindex.NewStoreIndex(loc.OCILayout().Path).Read()
 	if err != nil {
 		return nil, err
@@ -84,7 +86,26 @@ func fetchOCILayoutReferrers(ctx context.Context, getDescriptor func(context.Con
 	for _, desc := range out {
 		refs = append(refs, desc)
 	}
-	return refs, nil
+	return filterOCILayoutReferrers(ctx, refs, opts...)
+}
+
+func filterOCILayoutReferrers(ctx context.Context, refs []ocispecs.Descriptor, opts ...remotes.FetchReferrersOpt) ([]ocispecs.Descriptor, error) {
+	var cfg remotes.FetchReferrersConfig
+	for _, opt := range opts {
+		if err := opt(ctx, &cfg); err != nil {
+			return nil, err
+		}
+	}
+	if len(cfg.ArtifactTypes) == 0 {
+		return refs, nil
+	}
+	out := make([]ocispecs.Descriptor, 0, len(refs))
+	for _, ref := range refs {
+		if slices.Contains(cfg.ArtifactTypes, ref.ArtifactType) {
+			out = append(out, ref)
+		}
+	}
+	return out, nil
 }
 
 // collectReachableOCILayoutReferrers walks a regular OCI layout root and records

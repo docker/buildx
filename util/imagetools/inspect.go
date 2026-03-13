@@ -172,7 +172,7 @@ func (r *Resolver) localStore(path string) (content.Store, error) {
 
 func (r *Resolver) FetchReferrers(ctx context.Context, loc *Location, dgst digest.Digest, opts ...remotes.FetchReferrersOpt) ([]ocispecs.Descriptor, error) {
 	if loc.IsOCILayout() {
-		return fetchOCILayoutReferrers(ctx, r.GetDescriptor, loc, dgst)
+		return fetchOCILayoutReferrers(ctx, r.GetDescriptor, loc, dgst, opts...)
 	}
 	f, err := r.registryResolver().Fetcher(ctx, loc.String())
 	if err != nil {
