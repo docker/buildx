@@ -558,14 +558,14 @@ func (r *Resolver) pushOCILayout(ctx context.Context, ref *Location, desc ocispe
 	}
 	w, err := store.Writer(ctx, content.WithRef(desc.Digest.String()), content.WithDescriptor(desc))
 	if err != nil {
-		if errdefs.IsAlreadyExists(err) {
-			return nil
+		if !errdefs.IsAlreadyExists(err) {
+			return err
 		}
-		return err
-	}
-	err = content.Copy(ctx, w, bytes.NewReader(dt), desc.Size, desc.Digest)
-	if err != nil && !errdefs.IsAlreadyExists(err) {
-		return err
+	} else {
+		err = content.Copy(ctx, w, bytes.NewReader(dt), desc.Size, desc.Digest)
+		if err != nil && !errdefs.IsAlreadyExists(err) {
+			return err
+		}
 	}
 
 	idx := ociindex.NewStoreIndex(ref.OCILayout().Path)
