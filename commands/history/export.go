@@ -102,6 +102,7 @@ func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) e
 		if err != nil {
 			return err
 		}
+		visited[rec.node] = struct{}{}
 		clients = append(clients, c)
 	}
 
