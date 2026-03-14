@@ -8,6 +8,7 @@ import (
 	"os/exec"
 	"path"
 	"path/filepath"
+	"strings"
 	"testing"
 
 	"github.com/containerd/containerd/v2/core/content"
@@ -31,6 +32,12 @@ var imagetoolsTests = []func(t *testing.T, sb integration.Sandbox){
 	testImagetoolsCopyIndex,
 	testImagetoolsInspectAndFilter,
 	testImagetoolsCreatePlatformFilter,
+	testImagetoolsOCILayoutInspect,
+	testImagetoolsOCILayoutCreateSourceAndTarget,
+	testImagetoolsOCILayoutReferrers,
+	testImagetoolsOCILayoutExistingContent,
+	testImagetoolsOCILayoutMergeSources,
+	testImagetoolsOCILayoutTargetDigest,
 	testImagetoolsAppend,
 	testImagetoolsFile,
 	testImagetoolsAnnotation,
@@ -359,6 +366,378 @@ func testImagetoolsCreatePlatformFilter(t *testing.T, sb integration.Sandbox) {
 	require.Equal(t, 1, attestationCount)
 }
 
+// testImagetoolsOCILayoutInspect verifies inspect works against local OCI layout sources.
+func testImagetoolsOCILayoutInspect(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	source := registry + "/buildx/imtools-oci-layout-inspect-src:latest"
+	out, err := buildCmd(sb, withArgs("-t", source, "--push", "--platform=linux/amd64,linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	sourceDigest := digest.FromBytes(dt)
+
+	layoutPath := filepath.Join(dir, "layout-inspect")
+	layoutRef := "oci-layout://" + layoutPath + ":latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", layoutRef, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", layoutRef, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", "oci-layout://"+layoutPath+"@"+sourceDigest.String(), "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", layoutRef, "--format", "{{.Manifest.Digest}}"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest.String(), strings.TrimSpace(string(dt)))
+}
+
+// testImagetoolsOCILayoutCreateSourceAndTarget verifies create can round-trip
+// between registry and OCI layout sources and targets.
+func testImagetoolsOCILayoutCreateSourceAndTarget(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry1, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+
+	source := registry1 + "/buildx/imtools-oci-layout-roundtrip-src:latest"
+	out, err := buildCmd(sb, withArgs("-t", source, "--push", "--platform=linux/amd64,linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	sourceDigest := digest.FromBytes(dt)
+
+	layoutPath := filepath.Join(dir, "layout-roundtrip")
+	layoutRef := "oci-layout://" + layoutPath + ":v1"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", layoutRef, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	target := registry2 + "/buildx/imtools-oci-layout-roundtrip-dst:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target, layoutRef))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+}
+
+// testImagetoolsOCILayoutReferrers verifies standalone referrers are recorded
+// directly in OCI layout index.json with a subject annotation, while reachable
+// attestation manifests are not duplicated there.
+func testImagetoolsOCILayoutReferrers(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry1, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+
+	source := registry1 + "/buildx/imtools-oci-layout-referrers-src:latest"
+	out, err := buildCmd(sb, withArgs(
+		"--output", "type=image,name="+source+",push=true,oci-mediatypes=true,oci-artifact=true",
+		"--platform=linux/amd64,linux/arm64",
+		"--provenance=mode=min",
+		dir,
+	))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var srcIdx ocispecs.Index
+	err = json.Unmarshal(dt, &srcIdx)
+	require.NoError(t, err)
+
+	var attestations []ocispecs.Descriptor
+	for _, mfst := range srcIdx.Manifests {
+		if mfst.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			attestations = append(attestations, mfst)
+		}
+	}
+	require.Len(t, attestations, 2)
+
+	signatures := make([]ocispecs.Descriptor, 0, len(attestations))
+	for _, attestation := range attestations {
+		signatures = append(signatures, pushFakeSignatureReferrer(t, source, attestation))
+	}
+
+	layoutPath := filepath.Join(dir, "layout-referrers")
+	layoutRef := "oci-layout://" + layoutPath + ":latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", layoutRef, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	idxBytes, err := os.ReadFile(filepath.Join(layoutPath, "index.json"))
+	require.NoError(t, err)
+
+	var layoutIdx ocispecs.Index
+	err = json.Unmarshal(idxBytes, &layoutIdx)
+	require.NoError(t, err)
+
+	directReferrers := map[digest.Digest]ocispecs.Descriptor{}
+	directReferrerCount := 0
+	for _, desc := range layoutIdx.Manifests {
+		if desc.Annotations["io.containerd.manifest.subject"] != "" {
+			directReferrerCount++
+			directReferrers[desc.Digest] = desc
+		}
+	}
+	require.Len(t, directReferrers, directReferrerCount)
+	require.Len(t, directReferrers, len(signatures))
+	for i, sig := range signatures {
+		desc, ok := directReferrers[sig.Digest]
+		require.True(t, ok)
+		require.Equal(t, attestations[i].Digest.String(), desc.Annotations["io.containerd.manifest.subject"])
+	}
+	for _, attestation := range attestations {
+		_, ok := directReferrers[attestation.Digest]
+		require.False(t, ok)
+	}
+
+	target := registry2 + "/buildx/imtools-oci-layout-referrers-dst:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target, layoutRef))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var dstIdx ocispecs.Index
+	err = json.Unmarshal(dt, &dstIdx)
+	require.NoError(t, err)
+
+	copiedAttestations := map[digest.Digest]struct{}{}
+	for _, mfst := range dstIdx.Manifests {
+		if mfst.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			copiedAttestations[mfst.Digest] = struct{}{}
+		}
+	}
+	require.Len(t, copiedAttestations, len(attestations))
+
+	for _, sig := range signatures {
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+sig.Digest.String(), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+
+		var sigManifest ocispecs.Manifest
+		err = json.Unmarshal(dt, &sigManifest)
+		require.NoError(t, err)
+		require.NotNil(t, sigManifest.Subject)
+		_, ok := copiedAttestations[sigManifest.Subject.Digest]
+		require.True(t, ok)
+	}
+}
+
+// testImagetoolsOCILayoutExistingContent verifies importing into an existing OCI
+// layout still updates index.json state when the top-level descriptor blob is
+// already present.
+func testImagetoolsOCILayoutExistingContent(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	source := registry + "/buildx/imtools-oci-layout-existing-content-src:latest"
+	out, err := buildCmd(sb, withArgs(
+		"--output", "type=image,name="+source+",push=true,oci-mediatypes=true,oci-artifact=true",
+		"--platform=linux/amd64,linux/arm64",
+		"--provenance=mode=min",
+		dir,
+	))
+	require.NoError(t, err, string(out))
+
+	layoutPath := filepath.Join(dir, "layout-existing-content")
+	initialRef := "oci-layout://" + layoutPath + ":latest"
+	cmd := buildxCmd(sb, withArgs("imagetools", "create", "-t", initialRef, source))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var srcIdx ocispecs.Index
+	err = json.Unmarshal(dt, &srcIdx)
+	require.NoError(t, err)
+
+	var attestations []ocispecs.Descriptor
+	for _, mfst := range srcIdx.Manifests {
+		if mfst.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			attestations = append(attestations, mfst)
+		}
+	}
+	require.Len(t, attestations, 2)
+
+	signatures := make([]ocispecs.Descriptor, 0, len(attestations))
+	for _, attestation := range attestations {
+		signatures = append(signatures, pushFakeSignatureReferrer(t, source, attestation))
+	}
+
+	secondRef := "oci-layout://" + layoutPath + ":second"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", secondRef, source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", secondRef, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	idxBytes, err := os.ReadFile(filepath.Join(layoutPath, "index.json"))
+	require.NoError(t, err)
+
+	var layoutIdx ocispecs.Index
+	err = json.Unmarshal(idxBytes, &layoutIdx)
+	require.NoError(t, err)
+
+	directReferrers := map[digest.Digest]ocispecs.Descriptor{}
+	directReferrerCount := 0
+	for _, desc := range layoutIdx.Manifests {
+		if desc.Annotations["io.containerd.manifest.subject"] != "" {
+			directReferrerCount++
+			directReferrers[desc.Digest] = desc
+		}
+	}
+	require.Len(t, directReferrers, directReferrerCount)
+	require.Len(t, directReferrers, len(signatures))
+	for i, sig := range signatures {
+		desc, ok := directReferrers[sig.Digest]
+		require.True(t, ok)
+		require.Equal(t, attestations[i].Digest.String(), desc.Annotations["io.containerd.manifest.subject"])
+	}
+}
+
+// testImagetoolsOCILayoutMergeSources verifies create merges registry and local OCI layout sources.
+func testImagetoolsOCILayoutMergeSources(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfileWithArches(t, "amd64", "arm64")
+	registry1, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	registry2, err := sb.NewRegistry()
+	require.NoError(t, err)
+	registry3, err := sb.NewRegistry()
+	require.NoError(t, err)
+
+	srcLocalSeed := registry1 + "/buildx/imtools-oci-layout-merge-local:latest"
+	out, err := buildCmd(sb, withArgs("-t", srcLocalSeed, "--push", "--platform=linux/amd64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	layoutPath := filepath.Join(dir, "layout-merge")
+	layoutRef := "oci-layout://" + layoutPath + ":latest"
+	cmd := buildxCmd(sb, withArgs("imagetools", "create", "-t", layoutRef, srcLocalSeed))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	srcRegistry := registry2 + "/buildx/imtools-oci-layout-merge-registry:latest"
+	out, err = buildCmd(sb, withArgs("-t", srcRegistry, "--push", "--platform=linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	target := registry3 + "/buildx/imtools-oci-layout-merge-target:latest"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", target, layoutRef, srcRegistry))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx ocispecs.Index
+	err = json.Unmarshal(dt, &idx)
+	require.NoError(t, err)
+	require.Len(t, idx.Manifests, 2)
+}
+
+// testImagetoolsOCILayoutTargetDigest verifies exact digest targets work for
+// OCI layouts and mismatched digests fail.
+func testImagetoolsOCILayoutTargetDigest(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
+	}
+
+	dir := createDockerfile(t)
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	source := registry + "/buildx/imtools-oci-layout-digest-src:latest"
+	out, err := buildCmd(sb, withArgs("-t", source, "--push", "--platform=linux/amd64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", source, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	sourceDigest := digest.FromBytes(dt)
+
+	layoutPath := filepath.Join(dir, "layout-digest")
+	exactRef := "oci-layout://" + layoutPath + "@" + sourceDigest.String()
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", exactRef, "--prefer-index=false", source))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", exactRef, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	require.Equal(t, sourceDigest, digest.FromBytes(dt))
+
+	wrongRef := "oci-layout://" + filepath.Join(dir, "layout-digest-wrong") + "@sha256:1111111111111111111111111111111111111111111111111111111111111111"
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "-t", wrongRef, "--prefer-index=false", source))
+	dt, err = cmd.CombinedOutput()
+	require.Error(t, err, string(dt))
+	require.Contains(t, string(dt), "requested digest")
+}
+
 // testImagetoolsAppend verifies create --append adds a new source onto an
 // existing target image and rewrites it as a combined index.
 func testImagetoolsAppend(t *testing.T, sb integration.Sandbox) {
@@ -623,6 +1002,21 @@ func testImagetoolsCopyAttestationWithSignature(t *testing.T, sb integration.San
 	require.Len(t, platformManifests, 2)
 	require.Len(t, attestations, 2)
 
+	// Negative controls: signatures on image manifests, and unsupported
+	// artifact types, should not be copied by imagetools create.
+	platformSignatures := make(map[digest.Digest]ocispecs.Descriptor, len(platformManifests))
+	platformUnsupportedReferrers := make(map[digest.Digest]ocispecs.Descriptor, len(platformManifests))
+	for platformDigest, platformDesc := range platformManifests {
+		platformSignatures[platformDigest] = pushFakeSignatureReferrer(t, source, platformDesc)
+		platformUnsupportedReferrers[platformDigest] = pushFakeReferrer(
+			t,
+			source,
+			platformDesc,
+			"application/vnd.example.attachment.v1+json",
+			map[string]string{"example.type": "unsupported"},
+		)
+	}
+
 	signatures := make(map[digest.Digest]ocispecs.Descriptor, len(attestations))
 	for _, attestationDesc := range attestations {
 		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", source+"@"+string(attestationDesc.Digest), "--raw"))
@@ -678,6 +1072,20 @@ func testImagetoolsCopyAttestationWithSignature(t *testing.T, sb integration.San
 		require.NotNil(t, signatureManifest.Subject)
 		require.Equal(t, attestationDesc.Digest, signatureManifest.Subject.Digest)
 		require.Equal(t, "dsse-envelope", signatureManifest.Annotations["dev.sigstore.bundle.content"])
+	}
+
+	// Only attestation signatures should be present after the copy. The
+	// negative-control referrers attached to image manifests must not exist.
+	for _, platformDesc := range platformManifests {
+		signatureDesc := platformSignatures[platformDesc.Digest]
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+string(signatureDesc.Digest), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.Error(t, err, string(dt))
+
+		unsupportedDesc := platformUnsupportedReferrers[platformDesc.Digest]
+		cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target+"@"+string(unsupportedDesc.Digest), "--raw"))
+		dt, err = cmd.CombinedOutput()
+		require.Error(t, err, string(dt))
 	}
 }
 
@@ -790,6 +1198,14 @@ func prepareSinglePlatformFallbackAsset(t *testing.T, sb integration.Sandbox, di
 }
 
 func pushFakeSignatureReferrer(t *testing.T, sourceRef string, subject ocispecs.Descriptor) ocispecs.Descriptor {
+	return pushFakeReferrer(t, sourceRef, subject, "application/vnd.dev.sigstore.bundle.v0.3+json", map[string]string{
+		"dev.sigstore.bundle.content":       "dsse-envelope",
+		"dev.sigstore.bundle.predicateType": "https://sigstore.dev/cosign/sign/v1",
+		"org.opencontainers.image.created":  "2025-12-05T10:16:57Z",
+	})
+}
+
+func pushFakeReferrer(t *testing.T, sourceRef string, subject ocispecs.Descriptor, artifactType string, annotations map[string]string) ocispecs.Descriptor {
 	t.Helper()
 
 	repoName := mustRepoName(t, sourceRef)
@@ -797,27 +1213,22 @@ func pushFakeSignatureReferrer(t *testing.T, sourceRef string, subject ocispecs.
 	configBytes := []byte("{}")
 	configDesc := ocispecs.Descriptor{
 		MediaType:    "application/vnd.oci.empty.v1+json",
-		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		ArtifactType: artifactType,
 		Digest:       digest.FromBytes(configBytes),
 		Size:         int64(len(configBytes)),
 	}
 
-	layerBytes := []byte(`{"kind":"fake-sigstore-bundle"}`)
+	layerBytes := []byte(`{"kind":"fake-referrer"}`)
 	layerDesc := ocispecs.Descriptor{
-		MediaType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		MediaType: artifactType,
 		Digest:    digest.FromBytes(layerBytes),
 		Size:      int64(len(layerBytes)),
 	}
 
-	annotations := map[string]string{
-		"dev.sigstore.bundle.content":       "dsse-envelope",
-		"dev.sigstore.bundle.predicateType": "https://sigstore.dev/cosign/sign/v1",
-		"org.opencontainers.image.created":  "2025-12-05T10:16:57Z",
-	}
 	signatureManifest := ocispecs.Manifest{
 		Versioned:    specsVersioned(),
 		MediaType:    ocispecs.MediaTypeImageManifest,
-		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		ArtifactType: artifactType,
 		Config:       configDesc,
 		Layers:       []ocispecs.Descriptor{layerDesc},
 		Subject:      &subject,
@@ -828,7 +1239,7 @@ func pushFakeSignatureReferrer(t *testing.T, sourceRef string, subject ocispecs.
 
 	signatureDesc := ocispecs.Descriptor{
 		MediaType:    ocispecs.MediaTypeImageManifest,
-		ArtifactType: "application/vnd.dev.sigstore.bundle.v0.3+json",
+		ArtifactType: artifactType,
 		Digest:       digest.FromBytes(signatureBytes),
 		Size:         int64(len(signatureBytes)),
 		Annotations:  annotations,

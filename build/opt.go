@@ -27,6 +27,7 @@ import (
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
+	"github.com/docker/buildx/util/ocilayout"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/sourcemeta"
@@ -913,7 +914,11 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 
 		// handle OCI layout
 		if localPath, ok := strings.CutPrefix(v.Path, "oci-layout://"); ok {
-			localPath, dig, tag := parseOCILayoutPath(localPath)
+			ref, _, err := ocilayout.Parse("oci-layout://" + localPath)
+			if err != nil {
+				return nil, err
+			}
+			localPath, dig, tag := ref.Path, ref.Digest.String(), ref.Tag
 			if dig == "" {
 				dig, err = resolveDigest(localPath, tag)
 				if err != nil {
@@ -1400,38 +1405,6 @@ func isActive(ce *client.CacheOptionsEntry) bool {
 		return true
 	}
 	return ce.Attrs["token"] != "" && (ce.Attrs["url"] != "" || ce.Attrs["url_v2"] != "")
-}
-
-// parseOCILayoutPath handles the oci-layout url accepted by buildx.
-func parseOCILayoutPath(s string) (localPath, dgst, tag string) {
-	localPath = s
-
-	// Look for the digest reference. There might be multiple @ symbols
-	// in the path and the @ symbol may be part of the path or part of
-	// the digest. If we find the @ symbol, verify that it's a valid
-	// digest reference instead of just assuming it is because it
-	// might be part of the file path.
-	if i := strings.LastIndex(localPath, "@"); i >= 0 {
-		after := localPath[i+1:]
-		if reference.DigestRegexp.MatchString(after) {
-			localPath, dgst = localPath[:i], after
-		}
-	}
-
-	// Do the same with the tag. This isn't as necessary since colons
-	// aren't valid as file paths on Linux/Unix systems, but they are valid
-	// on Windows systems so we might as well just be safe.
-	if i := strings.LastIndex(localPath, ":"); i >= 0 {
-		after := localPath[i+1:]
-		if reference.TagRegexp.MatchString(after) {
-			localPath, tag = localPath[:i], after
-		}
-	}
-
-	if tag == "" {
-		tag = "latest"
-	}
-	return
 }
 
 func defaultPlatform(bopts gateway.BuildOpts) *ocispecs.Platform {

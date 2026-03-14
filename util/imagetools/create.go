@@ -5,7 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"maps"
-	"net/url"
+	"os"
 	"strings"
 
 	"github.com/containerd/containerd/v2/core/content"
@@ -13,7 +13,7 @@ import (
 	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/containerd/errdefs"
 	"github.com/containerd/platforms"
-	"github.com/distribution/reference"
+	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/util/attestation"
 	"github.com/moby/buildkit/util/contentutil"
@@ -38,7 +38,7 @@ var supportedArtifactTypes = map[string]struct{}{
 
 type Source struct {
 	Desc ocispecs.Descriptor
-	Ref  reference.Named
+	Ref  *Location
 }
 
 func (r *Resolver) Combine(ctx context.Context, srcs []*Source, ann map[exptypes.AnnotationKey]string, preferIndex bool, platforms []ocispecs.Platform) ([]byte, ocispecs.Descriptor, []DescWithSource, error) {
@@ -60,7 +60,7 @@ func (r *Resolver) combine(ctx context.Context, srcs []*Source, ann map[exptypes
 	for i := range dts {
 		func(i int) {
 			eg.Go(func() error {
-				dt, err := r.GetDescriptor(ctx, srcs[i].Ref.String(), srcs[i].Desc)
+				dt, err := r.GetDescriptor(ctx, srcs[i].Ref, srcs[i].Desc)
 				if err != nil {
 					return err
 				}
@@ -83,7 +83,7 @@ func (r *Resolver) combine(ctx context.Context, srcs []*Source, ann map[exptypes
 						p = &ocispecs.Platform{}
 					}
 					if p.OS == "" || p.Architecture == "" {
-						if err := r.loadPlatform(ctx, p, srcs[i].Ref.String(), dt); err != nil {
+						if err := r.loadPlatform(ctx, srcs[i].Ref, p, dt); err != nil {
 							return err
 						}
 					}
@@ -219,14 +219,20 @@ func (r *Resolver) combine(ctx context.Context, srcs []*Source, ann map[exptypes
 	}, sources, nil
 }
 
-func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispecs.Descriptor, dt []byte) error {
+func (r *Resolver) Push(ctx context.Context, ref *Location, desc ocispecs.Descriptor, dt []byte) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
+	if ref.IsOCILayout() {
+		if err := ref.ValidateTargetDigest(desc.Digest); err != nil {
+			return err
+		}
+		return r.pushOCILayout(ctx, ref, desc, dt)
+	}
 
-	fullRef, err := reference.WithDigest(reference.TagNameOnly(ref), desc.Digest)
+	fullRef, err := ref.WithDigest(desc.Digest)
 	if err != nil {
 		return errors.Wrapf(err, "failed to combine ref %s with digest %s", ref, desc.Digest)
 	}
-	p, err := r.resolver().Pusher(ctx, fullRef.String())
+	p, err := r.registryResolver().Pusher(ctx, fullRef.String())
 	if err != nil {
 		return err
 	}
@@ -245,72 +251,61 @@ func (r *Resolver) Push(ctx context.Context, ref reference.Named, desc ocispecs.
 	return err
 }
 
-func (r *Resolver) Copy(ctx context.Context, src *Source, dest reference.Named) error {
+func (r *Resolver) Copy(ctx context.Context, src *Source, dest *Location) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.oci.empty.v1+json", "empty")
-
-	// push by digest
-	p, err := r.resolver().Pusher(ctx, dest.Name())
-	if err != nil {
-		return err
-	}
-
-	srcRef := reference.TagNameOnly(src.Ref)
-	f, err := r.resolver().Fetcher(ctx, srcRef.String())
-	if err != nil {
-		return err
-	}
-
-	refspec := reference.TrimNamed(src.Ref).String()
-	u, err := url.Parse("dummy://" + refspec)
-	if err != nil {
-		return err
-	}
 
 	desc := src.Desc
 	desc.Annotations = maps.Clone(desc.Annotations)
 	if desc.Annotations == nil {
 		desc.Annotations = make(map[string]string)
 	}
-
-	source, repo := u.Hostname(), strings.TrimPrefix(u.Path, "/")
-	desc.Annotations["containerd.io/distribution.source."+source] = repo
-
-	referrersFetcher, ok := f.(remotes.ReferrersFetcher)
-	if !ok {
-		return errors.Errorf("fetcher for %s does not support referrers", src.Ref.String())
+	if src.Ref.IsRegistry() {
+		desc.Annotations["containerd.io/distribution.source."+src.Ref.Named().Name()] = src.Ref.Named().Name()
 	}
 
-	opts := []contentutil.CopyOption{
-		contentutil.WithReferrers(referrersFunc(func(ctx context.Context, desc ocispecs.Descriptor) ([]ocispecs.Descriptor, error) {
-			descs, err := referrersFetcher.FetchReferrers(ctx, desc.Digest)
-			if err != nil {
-				return nil, err
-			}
-			var filtered []ocispecs.Descriptor
-			for _, d := range descs {
-				if _, ok := supportedArtifactTypes[d.ArtifactType]; ok {
-					filtered = append(filtered, d)
-				}
-			}
-			return filtered, nil
-		})),
-	}
-
-	err = contentutil.CopyChain(ctx, contentutil.FromPusher(p), contentutil.FromFetcher(f), desc, opts...)
+	provider, err := r.providerForLocation(src.Ref)
 	if err != nil {
 		return err
+	}
+	ingester, err := r.ingesterForLocation(dest)
+	if err != nil {
+		return err
+	}
+
+	referrers := &referrersProvider{base: referrersFunc(func(ctx context.Context, subject ocispecs.Descriptor) ([]ocispecs.Descriptor, error) {
+		descs, err := r.FetchReferrers(ctx, src.Ref, subject.Digest)
+		if err != nil {
+			return nil, err
+		}
+		var filtered []ocispecs.Descriptor
+		for _, d := range descs {
+			if _, ok := supportedArtifactTypes[d.ArtifactType]; ok {
+				filtered = append(filtered, d)
+			}
+		}
+		return filtered, nil
+	})}
+
+	err = contentutil.CopyChain(ctx, ingester, provider, desc, contentutil.WithReferrers(referrers))
+	if err != nil {
+		return err
+	}
+	if dest.IsOCILayout() {
+		for subject, descs := range referrers.refs {
+			r.ociReferrers.record(dest.OCILayout().Path, subject, descs)
+		}
 	}
 	return nil
 }
 
-func (r *Resolver) loadPlatform(ctx context.Context, p2 *ocispecs.Platform, in string, dt []byte) error {
+func (r *Resolver) loadPlatform(ctx context.Context, loc *Location, p2 *ocispecs.Platform, dt []byte) error {
 	var manifest ocispecs.Manifest
 	if err := json.Unmarshal(dt, &manifest); err != nil {
 		return errors.WithStack(err)
 	}
 
-	dt, err := r.GetDescriptor(ctx, in, manifest.Config)
+	dt, err := r.GetDescriptor(ctx, loc, manifest.Config)
 	if err != nil {
 		return err
 	}
@@ -450,15 +445,7 @@ func (r *Resolver) filterPlatforms(ctx context.Context, dt []byte, desc ocispecs
 			}
 			src = defaultSource
 		}
-		f, err := r.resolver().Fetcher(ctx, src.Ref.String())
-		if err != nil {
-			return nil, ocispecs.Descriptor{}, nil, err
-		}
-		rf, ok := f.(remotes.ReferrersFetcher)
-		if !ok {
-			return nil, ocispecs.Descriptor{}, nil, errors.Errorf("fetcher for %s does not support referrers", srcMap[d].Ref.String())
-		}
-		refs, err := rf.FetchReferrers(ctx, d, remotes.WithReferrerArtifactTypes(artifactTypeAttestationManifest))
+		refs, err := r.FetchReferrers(ctx, src.Ref, d, remotes.WithReferrerArtifactTypes(artifactTypeAttestationManifest))
 		if err != nil {
 			if errors.Is(err, errdefs.ErrNotFound) {
 				continue
@@ -503,6 +490,100 @@ func (r *Resolver) filterPlatforms(ctx context.Context, dt []byte, desc ocispecs
 	}
 
 	return idxBytes, desc, mfstsWithSource, nil
+}
+
+type referrersProvider struct {
+	base referrersFunc
+	refs map[digest.Digest][]ocispecs.Descriptor
+}
+
+func (r *referrersProvider) Referrers(ctx context.Context, desc ocispecs.Descriptor) ([]ocispecs.Descriptor, error) {
+	out, err := r.base(ctx, desc)
+	if err != nil {
+		return nil, err
+	}
+	out = dedupeDescriptors(out)
+	if r.refs == nil {
+		r.refs = map[digest.Digest][]ocispecs.Descriptor{}
+	}
+	r.refs[desc.Digest] = dedupeDescriptors(append(r.refs[desc.Digest], out...))
+	return out, nil
+}
+
+func dedupeDescriptors(descs []ocispecs.Descriptor) []ocispecs.Descriptor {
+	if len(descs) < 2 {
+		return descs
+	}
+	seen := make(map[digest.Digest]struct{}, len(descs))
+	out := descs[:0]
+	for _, desc := range descs {
+		if _, ok := seen[desc.Digest]; ok {
+			continue
+		}
+		seen[desc.Digest] = struct{}{}
+		out = append(out, desc)
+	}
+	return out
+}
+
+func (r *Resolver) ingesterForLocation(loc *Location) (content.Ingester, error) {
+	if loc.IsRegistry() {
+		p, err := r.registryResolver().Pusher(context.TODO(), loc.Name())
+		if err != nil {
+			return nil, err
+		}
+		return contentutil.FromPusher(p), nil
+	}
+	return r.localStore(loc.OCILayout().Path)
+}
+
+func (r *Resolver) providerForLocation(loc *Location) (content.Provider, error) {
+	if loc.IsRegistry() {
+		f, err := r.registryResolver().Fetcher(context.TODO(), loc.String())
+		if err != nil {
+			return nil, err
+		}
+		return contentutil.FromFetcher(f), nil
+	}
+	return r.localStore(loc.OCILayout().Path)
+}
+
+func (r *Resolver) pushOCILayout(ctx context.Context, ref *Location, desc ocispecs.Descriptor, dt []byte) error {
+	if err := os.MkdirAll(ref.OCILayout().Path, 0o755); err != nil {
+		return err
+	}
+	store, err := r.localStore(ref.OCILayout().Path)
+	if err != nil {
+		return err
+	}
+	w, err := store.Writer(ctx, content.WithRef(desc.Digest.String()), content.WithDescriptor(desc))
+	if err != nil {
+		if !errdefs.IsAlreadyExists(err) {
+			return err
+		}
+	} else {
+		err = content.Copy(ctx, w, bytes.NewReader(dt), desc.Size, desc.Digest)
+		if err != nil && !errdefs.IsAlreadyExists(err) {
+			return err
+		}
+	}
+
+	idx := ociindex.NewStoreIndex(ref.OCILayout().Path)
+	switch {
+	case ref.Digest() != "":
+		if err := idx.Put(desc); err != nil {
+			return err
+		}
+	case ref.Tag() != "":
+		if err := idx.Put(desc, ociindex.Tag(ref.Tag())); err != nil {
+			return err
+		}
+	default:
+		if err := idx.Put(desc, ociindex.Tag("latest")); err != nil {
+			return err
+		}
+	}
+	return writePendingOCILayoutReferrers(ctx, r.ociReferrers.take(ref.OCILayout().Path), r.GetDescriptor, idx, ref)
 }
 
 func detectMediaType(dt []byte) (string, error) {

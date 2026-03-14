@@ -10,7 +10,6 @@ import (
 
 	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/containerd/platforms"
-	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil/completion"
@@ -60,7 +59,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 
 	args = append(fileArgs, args...)
 
-	tags, err := parseRefs(in.tags)
+	tags, err := parseLocations(in.tags)
 	if err != nil {
 		return err
 	}
@@ -102,10 +101,16 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		return errors.Errorf("no repositories specified, please set a reference in tag or source")
 	}
 
-	var defaultRepo *string
+	var defaultRepo *imagetools.Location
 	if len(repos) == 1 {
-		for repo := range repos {
-			defaultRepo = &repo
+		for _, src := range srcs {
+			if src.Ref != nil {
+				defaultRepo = src.Ref
+				break
+			}
+		}
+		if defaultRepo == nil && len(tags) > 0 {
+			defaultRepo = tags[0]
 		}
 	}
 
@@ -114,19 +119,19 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 			if defaultRepo == nil {
 				return errors.Errorf("multiple repositories specified, cannot infer repository for %q", args[i])
 			}
-			n, err := reference.ParseNormalizedNamed(*defaultRepo)
-			if err != nil {
-				return err
-			}
 			if s.Desc.MediaType == "" && s.Desc.Digest != "" {
-				r, err := reference.WithDigest(n, s.Desc.Digest)
+				r, err := defaultRepo.WithDigest(s.Desc.Digest)
 				if err != nil {
 					return err
 				}
 				srcs[i].Ref = r
 				sourceRefs = true
 			} else {
-				srcs[i].Ref = reference.TagNameOnly(n)
+				r, err := defaultRepo.TagNameOnly()
+				if err != nil {
+					return err
+				}
+				srcs[i].Ref = r
 			}
 		}
 	}
@@ -209,7 +214,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 	eg, _ := errgroup.WithContext(ctx)
 	pw := progress.WithPrefix(printer, "internal", true)
 
-	tagsByRepo := map[string][]reference.Named{}
+	tagsByRepo := map[string][]*imagetools.Location{}
 	for _, t := range tags {
 		repo := t.Name()
 		tagsByRepo[repo] = append(tagsByRepo[repo], t)
@@ -224,10 +229,14 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 				for _, desc := range manifests {
 					eg2.Go(func() error {
 						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", desc.Digest.String(), desc.Source.Ref.String(), repo))
-						return r.Copy(ctx, &imagetools.Source{
+						err := r.Copy(ctx, &imagetools.Source{
 							Ref:  desc.Source.Ref,
 							Desc: desc.Descriptor,
 						}, seed)
+						if err != nil {
+							return errors.Wrapf(err, "copy %s from %s to %s", desc.Digest.String(), desc.Source.Ref.String(), seed.String())
+						}
+						return nil
 					})
 				}
 				if err := eg2.Wait(); err != nil {
@@ -236,7 +245,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 				for _, t := range repoTags {
 					sub.Log(1, fmt.Appendf(nil, "pushing %s to %s\n", desc.Digest.String(), t.String()))
 					if err := r.Push(ctx, t, desc, dt); err != nil {
-						return err
+						return errors.Wrapf(err, "publish %s to %s", desc.Digest.String(), t.String())
 					}
 				}
 				return nil
@@ -302,10 +311,10 @@ func withMediaTypeKeyPrefix(ctx context.Context) context.Context {
 	return ctx
 }
 
-func parseRefs(in []string) ([]reference.Named, error) {
-	refs := make([]reference.Named, len(in))
+func parseLocations(in []string) ([]*imagetools.Location, error) {
+	refs := make([]*imagetools.Location, len(in))
 	for i, in := range in {
-		n, err := reference.ParseNormalizedNamed(in)
+		n, err := imagetools.ParseLocation(in)
 		if err != nil {
 			return nil, err
 		}
@@ -327,10 +336,10 @@ func parseSource(in string) (*imagetools.Source, error) {
 		return nil, err
 	}
 
-	ref, err := reference.ParseNormalizedNamed(in)
+	loc, err := imagetools.ParseLocation(in)
 	if err == nil {
 		return &imagetools.Source{
-			Ref: ref,
+			Ref: loc,
 		}, nil
 	} else if !strings.HasPrefix(in, "{") {
 		return nil, err
