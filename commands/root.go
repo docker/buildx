@@ -3,12 +3,15 @@ package commands
 import (
 	"fmt"
 	"os"
+	"strings"
 	"time"
 
+	"github.com/docker/buildx/builder"
 	historycmd "github.com/docker/buildx/commands/history"
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	policycmd "github.com/docker/buildx/commands/policy"
-	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/logutil"
 	"github.com/docker/cli-docs-tool/annotation"
@@ -135,7 +138,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 
 	cmd.RegisterFlagCompletionFunc( //nolint:errcheck
 		"builder",
-		completion.BuilderNames(dockerCli),
+		builderNamesCompletion(dockerCli),
 	)
 }
 
@@ -146,4 +149,25 @@ func rootFlags(options *rootOptions, flags *pflag.FlagSet) {
 
 func setBuilderStatusTimeoutFlag(flags *pflag.FlagSet, target *time.Duration) {
 	flags.DurationVar(target, "timeout", 20*time.Second, "Override the default timeout for loading builder status")
+}
+
+func builderNamesCompletion(dockerCli command.Cli) cobrautil.ValidArgsFn {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		txn, release, err := storeutil.GetStore(dockerCli)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		defer release()
+		builders, err := builder.GetBuilders(dockerCli, txn)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		var filtered []string
+		for _, b := range builders {
+			if toComplete == "" || strings.HasPrefix(b.Name, toComplete) {
+				filtered = append(filtered, b.Name)
+			}
+		}
+		return filtered, cobra.ShellCompDirectiveNoFileComp
+	}
 }

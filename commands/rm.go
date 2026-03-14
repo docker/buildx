@@ -8,7 +8,6 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
-	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
@@ -118,7 +117,7 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runRm(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.BuilderNames(dockerCli),
+		ValidArgsFunction:     builderNamesCompletion(dockerCli),
 		DisableFlagsInUseLine: true,
 	}
 
