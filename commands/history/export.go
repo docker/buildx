@@ -4,7 +4,6 @@ import (
 	"context"
 	"io"
 	"os"
-	"slices"
 
 	"github.com/containerd/console"
 	"github.com/containerd/platforms"
@@ -53,37 +52,52 @@ func runExport(ctx context.Context, dockerCli command.Cli, opts exportOptions) e
 			return errors.Errorf("no record found for ref %q", ref)
 		}
 
-		if opts.finalize {
-			var finalized bool
+		toExport := recs
+		if !opts.all && ref == "" {
+			latestRef := recs[0].Ref
+			recCount := 0
 			for _, rec := range recs {
-				if rec.Trace == nil {
-					finalized = true
-					if err := finalizeRecord(ctx, rec.Ref, nodes); err != nil {
-						return err
-					}
+				if rec.Ref != latestRef {
+					break
+				}
+				recCount++
+			}
+			toExport = recs[:recCount]
+		}
+		if opts.finalize {
+			seen := make(map[string]struct{}, len(toExport))
+			var finalized bool
+			for _, rec := range toExport {
+				if rec.node == nil || rec.Trace != nil {
+					continue
+				}
+				key := rec.node.Builder + "\x00" + rec.node.Name + "\x00" + rec.Ref
+				if _, ok := seen[key]; ok {
+					continue
+				}
+				seen[key] = struct{}{}
+				finalized = true
+				if err := finalizeRecord(ctx, rec.Ref, *rec.node); err != nil {
+					return err
 				}
 			}
 			if finalized {
-				recs, err = queryRecords(ctx, ref, nodes, &queryOptions{
+				queryRef := ref
+				if !opts.all {
+					queryRef = toExport[0].Ref
+				}
+				recs, err = queryRecords(ctx, queryRef, nodes, &queryOptions{
 					CompletedOnly: true,
 				})
 				if err != nil {
 					return err
 				}
+				toExport = recs
 			}
 		}
-
-		if ref == "" {
-			slices.SortFunc(recs, func(a, b historyRecord) int {
-				return b.CreatedAt.AsTime().Compare(a.CreatedAt.AsTime())
-			})
-		}
-
+		res = append(res, toExport...)
 		if opts.all {
-			res = append(res, recs...)
 			break
-		} else {
-			res = append(res, recs[0])
 		}
 	}
 
