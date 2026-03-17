@@ -4,6 +4,9 @@ import (
 	"context"
 	_ "crypto/sha256" // ensure digests can be computed
 	"io"
+	"io/fs"
+	"os"
+	"path"
 	"sync"
 	"sync/atomic"
 	"syscall"
@@ -144,6 +147,57 @@ func (c *Container) Exec(ctx context.Context, cfg *InvokeConfig, stdin io.ReadCl
 		c.markUnavailable()
 	}
 	return err
+}
+
+func (c *Container) CanInvoke(ctx context.Context, cfg *InvokeConfig) error {
+	var cmd string
+	if len(cfg.Entrypoint) > 0 {
+		cmd = cfg.Entrypoint[0]
+	} else if len(cfg.Cmd) > 0 {
+		cmd = cfg.Cmd[0]
+	}
+
+	if cmd == "" {
+		return errors.New("no command specified")
+	}
+
+	const symlinkResolutionLimit = 40
+	for range symlinkResolutionLimit {
+		fpath, index, err := c.resultCtx.inferMountIndex(cmd, cfg)
+		if err != nil {
+			return err
+		}
+
+		st, err := c.container.StatFile(ctx, gateway.StatContainerRequest{
+			StatRequest: gateway.StatRequest{
+				Path: fpath,
+			},
+			MountIndex: index,
+		})
+		if err != nil {
+			return errors.Wrapf(err, "stat error: %s", cmd)
+		}
+
+		mode := fs.FileMode(st.Mode)
+		if mode&os.ModeSymlink != 0 {
+			// Follow the link.
+			if path.IsAbs(st.Linkname) {
+				cmd = st.Linkname
+			} else {
+				cmd = path.Join(path.Dir(fpath), st.Linkname)
+			}
+			continue
+		}
+
+		if !mode.IsRegular() {
+			return errors.Errorf("%s: not a file", cmd)
+		}
+		if mode&0o111 == 0 {
+			return errors.Errorf("%s: not an executable", cmd)
+		}
+		return nil
+	}
+	return errors.Errorf("%s: reached symlink resolution limit", cmd)
 }
 
 func (c *Container) ReadFile(ctx context.Context, req gateway.ReadContainerRequest) ([]byte, error) {
