@@ -15,6 +15,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/gitutil"
+	historyutil "github.com/docker/buildx/util/history"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/formatter"
@@ -85,7 +86,7 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 
 	for i, rec := range out {
 		st, _ := ls.ReadRef(rec.node.Builder, rec.node.Name, rec.Ref)
-		rec.name = BuildName(rec.FrontendAttrs, st)
+		rec.name = historyutil.BuildName(rec.FrontendAttrs, st)
 		out[i] = rec
 	}
 
