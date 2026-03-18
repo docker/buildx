@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"regexp"
 	"strings"
 	"text/tabwriter"
 	"text/template"
@@ -162,7 +163,7 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 }
 
 func isWholeManifestTemplate(format string) bool {
-	return strings.TrimSpace(format) == "{{.Manifest}}"
+	return regexp.MustCompile(`^\{\{\s*\.Manifest\s*\}\}$`).MatchString(strings.TrimSpace(format))
 }
 
 func (p *Printer) printManifestList(out io.Writer) error {
