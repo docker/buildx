@@ -24,6 +24,7 @@ import (
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
+	historyutil "github.com/docker/buildx/util/history"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/formatter"
 	"github.com/docker/cli/cli/debug"
@@ -243,7 +244,7 @@ workers0:
 	}
 	delete(attrs, "filename")
 
-	out.Name = BuildName(rec.FrontendAttrs, st)
+	out.Name = historyutil.BuildName(rec.FrontendAttrs, st)
 	out.Ref = rec.Ref
 
 	out.Context = context
