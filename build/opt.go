@@ -298,10 +298,12 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	if v, ok := opt.BuildArgs["BUILDKIT_SYNTAX"]; ok {
-		p := strings.SplitN(strings.TrimSpace(v), " ", 2)
-		so.Frontend = "gateway.v0"
-		so.FrontendAttrs["source"] = p[0]
-		so.FrontendAttrs["cmdline"] = v
+		if cmdline := strings.TrimSpace(v); cmdline != "" {
+			p := strings.SplitN(cmdline, " ", 2)
+			so.Frontend = "gateway.v0"
+			so.FrontendAttrs["source"] = p[0]
+			so.FrontendAttrs["cmdline"] = v
+		}
 	}
 
 	if v, ok := opt.BuildArgs["BUILDKIT_MULTI_PLATFORM"]; ok {
