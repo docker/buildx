@@ -225,14 +225,22 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 			seed := repoTags[0]
 			return progress.Wrap(fmt.Sprintf("pushing %s", repo), pw.Write, func(sub progress.SubLogger) error {
 				ctx = withMediaTypeKeyPrefix(ctx)
+				// Create a single shared ingester for all concurrent
+				// copies to this repo. The pushingIngester's per-digest
+				// locking prevents concurrent pushes of the same blob
+				// from racing against each other on the registry.
+				ingester, err := r.IngesterForLocation(ctx, seed)
+				if err != nil {
+					return err
+				}
 				eg2, _ := errgroup.WithContext(ctx)
 				for _, desc := range manifests {
 					eg2.Go(func() error {
 						sub.Log(1, fmt.Appendf(nil, "copying %s from %s to %s\n", desc.Digest.String(), desc.Source.Ref.String(), repo))
-						err := r.Copy(ctx, &imagetools.Source{
+						err := r.CopyWithIngester(ctx, &imagetools.Source{
 							Ref:  desc.Source.Ref,
 							Desc: desc.Descriptor,
-						}, seed)
+						}, seed, ingester)
 						if err != nil {
 							return errors.Wrapf(err, "copy %s from %s to %s", desc.Digest.String(), desc.Source.Ref.String(), seed.String())
 						}

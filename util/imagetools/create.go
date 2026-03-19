@@ -252,6 +252,19 @@ func (r *Resolver) Push(ctx context.Context, ref *Location, desc ocispecs.Descri
 }
 
 func (r *Resolver) Copy(ctx context.Context, src *Source, dest *Location) error {
+	ingester, err := r.IngesterForLocation(ctx, dest)
+	if err != nil {
+		return err
+	}
+	return r.CopyWithIngester(ctx, src, dest, ingester)
+}
+
+// CopyWithIngester copies a source manifest and its referrers to the
+// destination using the provided ingester. Callers that issue multiple
+// concurrent copies to the same destination should share a single ingester
+// so that the underlying per-digest locking prevents duplicate blob pushes
+// from racing against each other.
+func (r *Resolver) CopyWithIngester(ctx context.Context, src *Source, dest *Location, ingester content.Ingester) error {
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.in-toto+json", "intoto")
 	ctx = remotes.WithMediaTypeKeyPrefix(ctx, "application/vnd.oci.empty.v1+json", "empty")
 
@@ -265,10 +278,6 @@ func (r *Resolver) Copy(ctx context.Context, src *Source, dest *Location) error 
 	}
 
 	provider, err := r.providerForLocation(src.Ref)
-	if err != nil {
-		return err
-	}
-	ingester, err := r.ingesterForLocation(dest)
 	if err != nil {
 		return err
 	}
@@ -526,9 +535,12 @@ func dedupeDescriptors(descs []ocispecs.Descriptor) []ocispecs.Descriptor {
 	return out
 }
 
-func (r *Resolver) ingesterForLocation(loc *Location) (content.Ingester, error) {
+// IngesterForLocation returns a content ingester for the given location.
+// For registry locations a new pusher is created; for OCI layout locations
+// the local content store is returned.
+func (r *Resolver) IngesterForLocation(ctx context.Context, loc *Location) (content.Ingester, error) {
 	if loc.IsRegistry() {
-		p, err := r.registryResolver().Pusher(context.TODO(), loc.Name())
+		p, err := r.registryResolver().Pusher(ctx, loc.Name())
 		if err != nil {
 			return nil, err
 		}
