@@ -13,7 +13,7 @@ import (
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/otelutil"
 	"github.com/docker/buildx/util/otelutil/jaeger"
 	"github.com/docker/cli/cli/command"
@@ -200,7 +200,7 @@ func traceCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			options.builder = *rootOpts.Builder
 			return runTrace(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.Disable,
+		ValidArgsFunction:     cobrautil.DisableCompletion,
 		DisableFlagsInUseLine: true,
 	}
 

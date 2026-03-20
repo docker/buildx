@@ -9,7 +9,7 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/localstate"
-	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop/bundle"
 	"github.com/docker/cli/cli/command"
@@ -175,7 +175,7 @@ func exportCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			options.builder = *rootOpts.Builder
 			return runExport(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.Disable,
+		ValidArgsFunction:     cobrautil.DisableCompletion,
 		DisableFlagsInUseLine: true,
 	}
 

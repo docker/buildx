@@ -25,7 +25,6 @@ import (
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil"
-	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
@@ -510,7 +509,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			// Other common flags (noCache, pull and progress) are processed in runBake function.
 			return runBake(cmd.Context(), dockerCli, args, options, cFlags, filesFromEnv)
 		},
-		ValidArgsFunction:     completion.BakeTargets(options.files),
+		ValidArgsFunction:     bakeTargetsCompletion(options.files),
 		DisableFlagsInUseLine: true,
 	}
 
@@ -543,6 +542,29 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	commonBuildFlags(&cFlags, flags)
 
 	return cmd
+}
+
+func bakeTargetsCompletion(files []string) cobrautil.ValidArgsFn {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		f, err := bake.ReadLocalFiles(files, nil, nil)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		tgts, err := bake.ListTargets(f)
+		if err != nil {
+			return nil, cobra.ShellCompDirectiveError
+		}
+		var filtered []string
+		if toComplete == "" {
+			return tgts, cobra.ShellCompDirectiveNoFileComp
+		}
+		for _, tgt := range tgts {
+			if strings.HasPrefix(tgt, toComplete) {
+				filtered = append(filtered, tgt)
+			}
+		}
+		return filtered, cobra.ShellCompDirectiveNoFileComp
+	}
 }
 
 func bakeEnvFiles(lookup func(string string) (string, bool)) ([]string, error) {

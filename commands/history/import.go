@@ -11,7 +11,7 @@ import (
 	"strings"
 
 	remoteutil "github.com/docker/buildx/driver/remote/util"
-	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/cli/cli/command"
 	"github.com/pkg/browser"
@@ -125,7 +125,7 @@ func importCmd(dockerCli command.Cli, _ RootOptions) *cobra.Command {
 		RunE: func(cmd *cobra.Command, args []string) error {
 			return runImport(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.Disable,
+		ValidArgsFunction:     cobrautil.DisableCompletion,
 		DisableFlagsInUseLine: true,
 	}
 

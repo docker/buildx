@@ -4,7 +4,6 @@ import (
 	"context"
 
 	"github.com/docker/buildx/builder"
-	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
@@ -44,7 +43,7 @@ func stopCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 			}
 			return runStop(cmd.Context(), dockerCli, options)
 		},
-		ValidArgsFunction:     completion.BuilderNames(dockerCli),
+		ValidArgsFunction:     builderNamesCompletion(dockerCli),
 		DisableFlagsInUseLine: true,
 	}
 
