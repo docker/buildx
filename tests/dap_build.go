@@ -24,10 +24,6 @@ import (
 )
 
 func dapBuildCmd(t *testing.T, sb integration.Sandbox, opts ...cmdOpt) (*daptest.Client, func(interrupt bool) error, error) {
-	if !isExperimental() {
-		t.Skip("only testing when experimental is enabled")
-	}
-
 	opts = append([]cmdOpt{withArgs("dap", "build")}, opts...)
 
 	cmd := buildxCmd(sb, opts...)

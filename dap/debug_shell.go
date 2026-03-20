@@ -251,9 +251,6 @@ func (s *shell) SendRunInTerminalRequest(ctx Context) error {
 		Arguments: dap.RunInTerminalRequestArguments{
 			Kind: "integrated",
 			Args: args,
-			Env: map[string]any{
-				"BUILDX_EXPERIMENTAL": "1",
-			},
 		},
 	}
 

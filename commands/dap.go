@@ -8,7 +8,6 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/dap"
 	"github.com/docker/buildx/dap/common"
-	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli"
@@ -29,7 +28,6 @@ func dapCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 
 		DisableFlagsInUseLine: true,
 	}
-	cobrautil.MarkCommandExperimental(cmd)
 
 	dapBuildCmd := buildCmd(dockerCli, rootOpts, &options)
 	dapBuildCmd.Args = cobra.RangeArgs(0, 1)
