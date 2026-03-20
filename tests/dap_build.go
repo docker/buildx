@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"path"
+	"path/filepath"
 	"runtime"
 	"slices"
 	"strings"
@@ -87,6 +88,7 @@ var dapBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testDapBuildStepOut,
 	testDapBuildVariables,
 	testDapBuildDeferredEval,
+	testDapBuildExitedEvent,
 }
 
 func testDapBuild(t *testing.T, sb integration.Sandbox) {
@@ -912,6 +914,73 @@ func testDapBuildDeferredEval(t *testing.T, sb integration.Sandbox) {
 
 	var exitErr *exec.ExitError
 	require.ErrorAs(t, done(true), &exitErr)
+}
+
+func testDapBuildExitedEvent(t *testing.T, sb integration.Sandbox) {
+	t.Run("success", func(t *testing.T) {
+		dir := createTestProject(t)
+		client, done, err := dapBuildCmd(t, sb)
+		require.NoError(t, err)
+
+		ch := make(chan *dap.ExitedEvent, 1)
+		client.RegisterEvent("exited", func(em dap.EventMessage) {
+			ch <- em.(*dap.ExitedEvent)
+			close(ch)
+		})
+
+		// Project should just build normally.
+		doLaunch(t, client, commands.LaunchConfig{
+			Dockerfile:  path.Join(dir, "Dockerfile"),
+			ContextPath: dir,
+		})
+
+		select {
+		case exited := <-ch:
+			require.Equal(t, 0, exited.Body.ExitCode)
+		case <-time.After(5 * time.Second):
+			require.Fail(t, "timeout reached")
+		}
+
+		require.NoError(t, done(true))
+	})
+
+	t.Run("failure", func(t *testing.T) {
+		dir := createTestProject(t)
+		client, done, err := dapBuildCmd(t, sb)
+		require.NoError(t, err)
+
+		ch := make(chan *dap.ExitedEvent, 1)
+		client.RegisterEvent("exited", func(em dap.EventMessage) {
+			ch <- em.(*dap.ExitedEvent)
+			close(ch)
+		})
+
+		// Delete foo from the test project so this will fail.
+		err = os.Remove(filepath.Join(dir, "foo"))
+		require.NoError(t, err)
+
+		interruptCh := pollInterruptEvents(client)
+		doLaunch(t, client, commands.LaunchConfig{
+			Dockerfile:  path.Join(dir, "Dockerfile"),
+			ContextPath: dir,
+		})
+
+		// We will hit an interrupt because of the failure.
+		stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+		require.Equal(t, "exception", stopped.Body.Reason)
+
+		// Continue execution which should trigger the exited event.
+		doNext(t, client, stopped.Body.ThreadId)
+		select {
+		case exited := <-ch:
+			require.NotEqual(t, 0, exited.Body.ExitCode)
+		case <-time.After(time.Second):
+			require.Fail(t, "timeout reached")
+		}
+
+		var exitErr *exec.ExitError
+		require.ErrorAs(t, done(false), &exitErr)
+	})
 }
 
 func doLaunch(t *testing.T, client *daptest.Client, config commands.LaunchConfig, bps ...dap.SourceBreakpoint) {

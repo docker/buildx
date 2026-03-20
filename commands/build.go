@@ -398,10 +398,6 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 	done := timeBuildCommand(mp, attributes)
 	resp, inputs, retErr := runBuildWithOptions(ctx, dockerCli, opts, dbg, printer)
 
-	if err := printer.Wait(); retErr == nil {
-		retErr = err
-	}
-
 	done(retErr)
 	if retErr != nil {
 		return retErr
@@ -462,11 +458,20 @@ func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *Build
 		if err := dbg.Start(printer, opts); err != nil {
 			return nil, nil, err
 		}
-		defer dbg.Stop()
+		defer func() { dbg.Stop(retErr) }()
 
 		bh = dbg.Handler()
 		dockerCli.SetIn(nil)
 	}
+
+	// Ensure messages sent to the printer are flushed before the debugger completes.
+	// This prevents late messages from not being sent because the connection was
+	// terminated before completion of the debugger.
+	defer func() {
+		if err := printer.Wait(); retErr == nil {
+			retErr = err
+		}
+	}()
 
 	in := dockerCli.In()
 	for {

@@ -253,7 +253,7 @@ func NewTestAdapter[C LaunchConfig](t *testing.T) (*Adapter[C], Conn, *daptest.C
 	client := daptest.NewClient(clientConn)
 	t.Cleanup(func() { client.Close() })
 
-	t.Cleanup(func() { adapter.Stop() })
+	t.Cleanup(func() { adapter.Stop(nil) })
 	return adapter, srvConn, client
 }
 
