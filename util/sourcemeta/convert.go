@@ -33,6 +33,14 @@ func ToResolverOpt(req *gwpb.ResolveSourceMetaRequest, defaultPlatform *ocispecs
 	if req != nil && req.Git != nil {
 		opt.GitOpt = &sourceresolver.ResolveGitOpt{ReturnObject: req.Git.ReturnObject}
 	}
+	if req != nil && req.HTTP != nil && req.HTTP.ChecksumRequest != nil {
+		opt.HTTPOpt = &sourceresolver.ResolveHTTPOpt{
+			ChecksumReq: &sourceresolver.ResolveHTTPChecksumRequest{
+				Algo:   toResolverChecksumAlgo(req.HTTP.ChecksumRequest.Algo),
+				Suffix: append([]byte(nil), req.HTTP.ChecksumRequest.Suffix...),
+			},
+		}
+	}
 	return opt
 }
 
@@ -64,8 +72,25 @@ func ToGatewayMetaResponse(resp *sourceresolver.MetaResponse) *gwpb.ResolveSourc
 			Filename:     resp.HTTP.Filename,
 			LastModified: lastModified,
 		}
+		if resp.HTTP.ChecksumResponse != nil {
+			out.HTTP.ChecksumResponse = &gwpb.ChecksumResponse{
+				Digest: resp.HTTP.ChecksumResponse.Digest,
+				Suffix: append([]byte(nil), resp.HTTP.ChecksumResponse.Suffix...),
+			}
+		}
 	}
 	return out
+}
+
+func toResolverChecksumAlgo(in gwpb.ChecksumRequest_ChecksumAlgo) sourceresolver.ResolveHTTPChecksumAlgo {
+	switch in {
+	case gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA384:
+		return sourceresolver.ResolveHTTPChecksumAlgoSHA384
+	case gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA512:
+		return sourceresolver.ResolveHTTPChecksumAlgoSHA512
+	default:
+		return sourceresolver.ResolveHTTPChecksumAlgoSHA256
+	}
 }
 
 func toGatewayDescriptor(desc ocispecs.Descriptor) *gwpb.Descriptor {
