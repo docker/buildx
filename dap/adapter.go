@@ -83,7 +83,7 @@ func (d *Adapter[C]) Start(conn Conn) (C, error) {
 	return resp.Config, resp.Error
 }
 
-func (d *Adapter[C]) Stop() error {
+func (d *Adapter[C]) Stop(retErr error) error {
 	if d.eg == nil {
 		return nil
 	}
@@ -94,15 +94,27 @@ func (d *Adapter[C]) Stop() error {
 				Event: "terminated",
 			},
 		}
-		// TODO: detect exit code from threads
-		// c.C() <- &dap.ExitedEvent{
-		// 	Event: dap.Event{
-		// 		Event: "exited",
-		// 	},
-		// 	Body: dap.ExitedEventBody{
-		// 		ExitCode: exitCode,
-		// 	},
-		// }
+
+		// Send an exit code based on the returned error.
+		// Any error results in sending an exit code of 1 while
+		// no error sends zero for success.
+		//
+		// The exited event is sent after the terminated event.
+		// See the specification overview diagram on the bottom of the page
+		// for a detailed flowchart.
+		// https://microsoft.github.io/debug-adapter-protocol/overview
+		exitCode := 0
+		if retErr != nil {
+			exitCode = 1
+		}
+		c.C() <- &dap.ExitedEvent{
+			Event: dap.Event{
+				Event: "exited",
+			},
+			Body: dap.ExitedEventBody{
+				ExitCode: exitCode,
+			},
+		}
 	})
 	d.srv.Stop()
 

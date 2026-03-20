@@ -91,9 +91,9 @@ func (d *adapterProtocolDebugger) Start(printer *progress.Printer, opts *BuildOp
 	return nil
 }
 
-func (d *adapterProtocolDebugger) Stop() error {
+func (d *adapterProtocolDebugger) Stop(retErr error) error {
 	defer d.conn.Close()
-	return d.Adapter.Stop()
+	return d.Adapter.Stop(retErr)
 }
 
 func dapAttachCmd() *cobra.Command {

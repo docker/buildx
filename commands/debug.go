@@ -41,7 +41,7 @@ type debuggerOptions interface {
 type debuggerInstance interface {
 	Start(printer *progress.Printer, opts *BuildOptions) error
 	Handler() build.Handler
-	Stop() error
+	Stop(retErr error) error
 	Out() io.Writer
 }
 
@@ -98,7 +98,7 @@ func (d *monitorDebuggerInstance) Handler() build.Handler {
 	return d.m.Handler()
 }
 
-func (d *monitorDebuggerInstance) Stop() error {
+func (d *monitorDebuggerInstance) Stop(_ error) error {
 	return d.m.Close()
 }
 
