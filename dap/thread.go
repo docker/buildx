@@ -2,6 +2,7 @@ package dap
 
 import (
 	"context"
+	"maps"
 	"path/filepath"
 	"slices"
 	"strings"
@@ -138,6 +139,11 @@ type step struct {
 	// breakpoint resolution.
 	dgst digest.Digest
 
+	// deferred holds the inputs that should have its evaluation deferred.
+	// These inputs are still included in the references but will only be
+	// evaluated when needed.
+	deferred map[int]bool
+
 	// in holds the next target when step in is used.
 	in *step
 
@@ -241,10 +247,21 @@ func (t *thread) createBranch(dgst digest.Digest, exitpoint *step) (entrypoint *
 			// If this branch is empty (signified by a nil return value) then
 			// skip it.
 			if head.in == nil {
+				// Always mark this input as deferred since it doesn't have
+				// an associated branch.
+				if entrypoint.deferred == nil {
+					entrypoint.deferred = make(map[int]bool)
+				}
+				entrypoint.deferred[i] = true
 				continue
 			}
-
 			entrypoint.dgst = ""
+
+			// Filter this input from the target so it doesn't get solved
+			// when moving to this step.
+			head.deferred = make(map[int]bool)
+			maps.Copy(head.deferred, entrypoint.deferred)
+			head.deferred[i] = true
 			entrypoint = &head
 		}
 
@@ -256,11 +273,12 @@ func (t *thread) createBranch(dgst digest.Digest, exitpoint *step) (entrypoint *
 
 		// Create a new step that refers to the direct parent.
 		head := &step{
-			dgst:   digest.Digest(op.Inputs[entrypoint.parent].Digest),
-			in:     entrypoint,
-			next:   entrypoint,
-			out:    entrypoint.out,
-			parent: -1,
+			dgst:     digest.Digest(op.Inputs[entrypoint.parent].Digest),
+			deferred: entrypoint.deferred,
+			in:       entrypoint,
+			next:     entrypoint,
+			out:      entrypoint.out,
+			parent:   -1,
 		}
 		head.frame = t.getStackFrame(head.dgst, entrypoint)
 		entrypoint = head
@@ -628,6 +646,12 @@ func (t *thread) solveInputs(ctx context.Context, target *step) (string, map[str
 		if err != nil {
 			return "", nil, err
 		}
+
+		// If we have marked this input to be deferred, wrap it in a reference
+		// that suppresses the evaluate call.
+		if target.deferred[i] {
+			ref = &deferredReference{Reference: ref}
+		}
 		refs[k] = ref
 	}
 	return root, refs, nil
@@ -822,4 +846,12 @@ func (r *mountReference) ReadDir(ctx context.Context, req gateway.ReadDirRequest
 		ReadDirRequest: req,
 		MountIndex:     r.index,
 	})
+}
+
+type deferredReference struct {
+	gateway.Reference
+}
+
+func (r *deferredReference) Evaluate(ctx context.Context) error {
+	return nil
 }

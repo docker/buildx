@@ -7,6 +7,7 @@ import (
 	"path"
 	"runtime"
 	"slices"
+	"strings"
 	"syscall"
 	"testing"
 	"time"
@@ -85,6 +86,7 @@ var dapBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testDapBuildStepNext,
 	testDapBuildStepOut,
 	testDapBuildVariables,
+	testDapBuildDeferredEval,
 }
 
 func testDapBuild(t *testing.T, sb integration.Sandbox) {
@@ -855,6 +857,61 @@ func testDapBuildVariables(t *testing.T, sb integration.Sandbox) {
 			require.ErrorAs(t, done(true), &exitErr)
 		})
 	}
+}
+
+func testDapBuildDeferredEval(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	client, done, err := dapBuildCmd(t, sb)
+	require.NoError(t, err)
+
+	// Track when we see this message.
+	seen := make(chan struct{}, 1)
+	client.RegisterEvent("output", func(em dap.EventMessage) {
+		e := em.(*dap.OutputEvent)
+		if strings.Contains(e.Body.Output, "RUN cp /etc/foo /etc/bar") {
+			select {
+			case seen <- struct{}{}:
+			default:
+			}
+		}
+	})
+
+	interruptCh := pollInterruptEvents(client)
+	doLaunch(t, client, commands.LaunchConfig{
+		Dockerfile:  path.Join(dir, "Dockerfile"),
+		ContextPath: dir,
+	},
+		dap.SourceBreakpoint{Line: 7},
+	)
+
+	stopped := waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	require.NotNil(t, stopped)
+
+	// The output event is usually immediate but it can sometimes be delayed due to
+	// the multithreading in the printer. Just wait for a little bit.
+	select {
+	case <-seen:
+		// We should not have seen this message since the branch this
+		// message comes from should be deferred because we have
+		// not passed the breakpoint.
+		t.Fatal("step has been invoked before intended")
+	case <-time.After(100 * time.Millisecond):
+	}
+
+	doNext(t, client, stopped.Body.ThreadId)
+
+	stopped = waitForInterrupt[*dap.StoppedEvent](t, interruptCh)
+	require.NotNil(t, stopped)
+
+	select {
+	case <-seen:
+		// Wait up to a second for the input to be seen.
+	case <-time.After(time.Second):
+		t.Fatal("step should have been seen")
+	}
+
+	var exitErr *exec.ExitError
+	require.ErrorAs(t, done(true), &exitErr)
 }
 
 func doLaunch(t *testing.T, client *daptest.Client, config commands.LaunchConfig, bps ...dap.SourceBreakpoint) {
