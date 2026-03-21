@@ -33,6 +33,7 @@ type evalOpts struct {
 	filename    string
 	printOutput bool
 	fields      []string
+	platform    string
 	builder     *string
 }
 
@@ -52,6 +53,7 @@ func evalCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	cmd.Flags().StringVar(&opts.filename, "filename", "Dockerfile", "Policy filename to evaluate")
 	cmd.Flags().BoolVar(&opts.printOutput, "print", false, "Print policy output")
 	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Fields to evaluate")
+	cmd.Flags().StringVar(&opts.platform, "platform", "", "Target platform for policy evaluation")
 	return cmd
 }
 
@@ -81,29 +83,29 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 		return err
 	}
 
-	workers, err := c.ListWorkers(ctx)
-	if err != nil {
-		return err
-	}
+	var p ocispecs.Platform
+	if opts.platform != "" {
+		parsedPlatform, err := parsePlatform(opts.platform)
+		if err != nil {
+			return err
+		}
+		p = *parsedPlatform
+	} else {
+		workers, err := c.ListWorkers(ctx)
+		if err != nil {
+			return err
+		}
 
-	if len(workers) == 0 {
-		return errors.New("no workers available in the builder")
-	}
+		if len(workers) == 0 {
+			return errors.New("no workers available in the builder")
+		}
 
-	defaultPlatform := workers[0].Platforms[0]
-	p := ocispecs.Platform{
-		Architecture: defaultPlatform.Architecture,
-		OS:           defaultPlatform.OS,
-		Variant:      defaultPlatform.Variant,
+		p = workers[0].Platforms[0]
 	}
 	metaResolver := sourcemeta.NewResolver(c)
 	defer metaResolver.Close()
 
-	platform := &pb.Platform{
-		Architecture: p.Architecture,
-		OS:           p.OS,
-		Variant:      p.Variant,
-	}
+	platform := toPBPlatform(p)
 	verifier := policy.SignatureVerifier(confutil.NewConfig(dockerCli))
 
 	if opts.printOutput {

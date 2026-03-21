@@ -6,9 +6,38 @@ import (
 	policytypes "github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/sourcemeta"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
+
+func TestParsePlatform(t *testing.T) {
+	t.Run("normalize", func(t *testing.T) {
+		platform, err := parsePlatform("linux/arm/v7")
+		require.NoError(t, err)
+		require.Equal(t, &ocispecs.Platform{
+			OS:           "linux",
+			Architecture: "arm",
+			Variant:      "v7",
+		}, platform)
+	})
+
+	t.Run("invalid", func(t *testing.T) {
+		platform, err := parsePlatform("not-a-platform")
+		require.Nil(t, platform)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "invalid platform \"not-a-platform\"")
+		require.ErrorContains(t, err, "unknown operating system or architecture")
+	})
+}
+
+func TestToPBPlatform(t *testing.T) {
+	platform := ocispecs.Platform{OS: "linux", Architecture: "amd64"}
+	require.Equal(t, &pb.Platform{
+		OS:           "linux",
+		Architecture: "amd64",
+	}, toPBPlatform(platform))
+}
 
 func TestSourceResolverOptIncludesResolveAttestations(t *testing.T) {
 	req := &gwpb.ResolveSourceMetaRequest{
