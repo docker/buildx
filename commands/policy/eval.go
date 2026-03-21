@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -191,9 +192,8 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 	if opts.filename == "" {
 		return errors.New("filename is required")
 	}
-	policyName := opts.filename
-	policyFile := policyName + ".rego"
-	policyData, err := os.ReadFile(policyFile)
+	policyName, policyFile := policyFileNames(opts.filename)
+	policyData, err := readPolicyData(policyFile, os.Stdin)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read policy file %s", policyFile)
 	}
@@ -265,6 +265,20 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 		}
 		srcReq = sourcemeta.ToGatewayMetaResponse(resp)
 	}
+}
+
+func policyFileNames(filename string) (string, string) {
+	if filename == "-" {
+		return "stdin", filename
+	}
+	return filename, filename + ".rego"
+}
+
+func readPolicyData(filename string, stdin io.Reader) ([]byte, error) {
+	if filename == "-" {
+		return io.ReadAll(stdin)
+	}
+	return os.ReadFile(filename)
 }
 
 func selectReloadFields(fields []string, unknowns []string) ([]string, []string) {
