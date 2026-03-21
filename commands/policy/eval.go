@@ -50,10 +50,14 @@ func evalCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			return runEval(cmd.Context(), dockerCli, args[0], opts)
 		},
 	}
-	cmd.Flags().StringVar(&opts.filename, "filename", "Dockerfile", "Policy filename to evaluate")
-	cmd.Flags().BoolVar(&opts.printOutput, "print", false, "Print policy output")
-	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Fields to evaluate")
-	cmd.Flags().StringVar(&opts.platform, "platform", "", "Target platform for policy evaluation")
+	flags := cmd.Flags()
+	flags.StringVarP(&opts.filename, "file", "f", "Dockerfile", "Policy filename to evaluate")
+	flags.BoolVar(&opts.printOutput, "print", false, "Print policy output")
+	flags.StringSliceVar(&opts.fields, "fields", nil, "Fields to evaluate")
+	flags.StringVar(&opts.platform, "platform", "", "Target platform for policy evaluation")
+	// Deprecated: use --file instead
+	flags.StringVar(&opts.filename, "filename", "Dockerfile", "Policy filename to evaluate")
+	flags.MarkHidden("filename")
 	return cmd
 }
 
