@@ -213,6 +213,24 @@ DEBUG         bool      false                Add debug symbols
 
 Variable types will be shown when set using the `type` property in the Bake file.
 
+The `--list=variables` option displays variables defined in the Bake file, including their descriptions and default values.
+
+### Example: listing variables with descriptions
+
+```hcl
+variable "GO_VERSION" {
+  default     = "1.22"
+  description = "Go version used for building the application"
+}
+```
+
+```console
+$ docker buildx bake --list=variables
+
+NAME          DESCRIPTION                                      DEFAULT
+GO_VERSION    Go version used for building the application     1.22
+```
+
 By default, the output of `docker buildx bake --list` is presented in a table
 format. Alternatively, you can use a long-form CSV syntax and specify a
 `format` attribute to output the list in JSON.
