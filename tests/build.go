@@ -62,6 +62,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildProgress,
 	testBuildAnnotations,
 	testBuildBuildArgNoKey,
+	testBuildBuildKitSyntaxEmpty,
 	testBuildLabelNoKey,
 	testBuildCacheExportNotSupported,
 	testBuildOCIExportNotSupported,
@@ -757,6 +758,14 @@ func testBuildBuildArgNoKey(t *testing.T, sb integration.Sandbox) {
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err, string(out))
 	require.Equal(t, `ERROR: invalid key-value pair "=TEST_STRING": empty key`, strings.TrimSpace(string(out)))
+}
+
+func testBuildBuildKitSyntaxEmpty(t *testing.T, sb integration.Sandbox) {
+	dir := createTestProject(t)
+	cmd := buildxCmd(sb, withArgs("build", "--build-arg", "BUILDKIT_SYNTAX=", dir))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), `empty BUILDKIT_SYNTAX build-arg is invalid, use --build-arg BUILDKIT_SYNTAX without '=' for optional behavior`)
 }
 
 func testBuildLabelNoKey(t *testing.T, sb integration.Sandbox) {
