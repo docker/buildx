@@ -5,6 +5,8 @@ updates:
     directory: "/"
     schedule:
       interval: "daily"
+    cooldown:
+      default-days: 2
     ignore:
       # ignore this dependency
       # it seems a bug with dependabot as pining to commit sha should not
