@@ -640,7 +640,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
 github.com/mitchellh/hashstructure/v2
-# github.com/moby/buildkit v0.28.0
+# github.com/moby/buildkit v0.28.1
 ## explicit; go 1.25.5
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -778,7 +778,7 @@ github.com/moby/moby/client/pkg/jsonmessage
 github.com/moby/moby/client/pkg/security
 github.com/moby/moby/client/pkg/stringid
 github.com/moby/moby/client/pkg/versions
-# github.com/moby/patternmatcher v0.6.0
+# github.com/moby/patternmatcher v0.6.1
 ## explicit; go 1.19
 github.com/moby/patternmatcher
 github.com/moby/patternmatcher/ignorefile
