@@ -258,3 +258,152 @@ func TestSemverCmp(t *testing.T) {
 		})
 	}
 }
+
+func TestUnixTimestampParseFunc(t *testing.T) {
+	type testCase struct {
+		input   cty.Value
+		want    map[string]cty.Value
+		wantErr bool
+	}
+	tests := map[string]testCase{
+		"positive timestamp": {
+			input: cty.NumberIntVal(1690328596),
+			want: map[string]cty.Value{
+				"year":         cty.NumberIntVal(2023),
+				"year_day":     cty.NumberIntVal(206),
+				"day":          cty.NumberIntVal(25),
+				"month":        cty.NumberIntVal(7),
+				"month_name":   cty.StringVal("July"),
+				"weekday":      cty.NumberIntVal(2),
+				"weekday_name": cty.StringVal("Tuesday"),
+				"hour":         cty.NumberIntVal(23),
+				"minute":       cty.NumberIntVal(43),
+				"second":       cty.NumberIntVal(16),
+				"rfc3339":      cty.StringVal("2023-07-25T23:43:16Z"),
+				"iso_year":     cty.NumberIntVal(2023),
+				"iso_week":     cty.NumberIntVal(30),
+			},
+		},
+		"zero timestamp": {
+			input: cty.NumberIntVal(0),
+			want: map[string]cty.Value{
+				"year":         cty.NumberIntVal(1970),
+				"year_day":     cty.NumberIntVal(1),
+				"day":          cty.NumberIntVal(1),
+				"month":        cty.NumberIntVal(1),
+				"month_name":   cty.StringVal("January"),
+				"weekday":      cty.NumberIntVal(4),
+				"weekday_name": cty.StringVal("Thursday"),
+				"hour":         cty.NumberIntVal(0),
+				"minute":       cty.NumberIntVal(0),
+				"second":       cty.NumberIntVal(0),
+				"rfc3339":      cty.StringVal("1970-01-01T00:00:00Z"),
+				"iso_year":     cty.NumberIntVal(1970),
+				"iso_week":     cty.NumberIntVal(1),
+			},
+		},
+		"negative timestamp": {
+			input: cty.NumberIntVal(-1),
+			want: map[string]cty.Value{
+				"year":         cty.NumberIntVal(1969),
+				"year_day":     cty.NumberIntVal(365),
+				"day":          cty.NumberIntVal(31),
+				"month":        cty.NumberIntVal(12),
+				"month_name":   cty.StringVal("December"),
+				"weekday":      cty.NumberIntVal(3),
+				"weekday_name": cty.StringVal("Wednesday"),
+				"hour":         cty.NumberIntVal(23),
+				"minute":       cty.NumberIntVal(59),
+				"second":       cty.NumberIntVal(59),
+				"rfc3339":      cty.StringVal("1969-12-31T23:59:59Z"),
+				"iso_year":     cty.NumberIntVal(1970),
+				"iso_week":     cty.NumberIntVal(1),
+			},
+		},
+		"fractional timestamp": {
+			input:   cty.NumberFloatVal(1.2),
+			wantErr: true,
+		},
+		"string timestamp": {
+			input:   cty.StringVal("0"),
+			wantErr: true,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := unixtimestampParseFunc().Call([]cty.Value{test.input})
+			if test.wantErr {
+				require.Error(t, err)
+				return
+			}
+			require.NoError(t, err)
+			for k, v := range test.want {
+				require.True(t, got.GetAttr(k).RawEquals(v), "field %s: got %v, want %v", k, got.GetAttr(k), v)
+			}
+		})
+	}
+}
+
+func TestFormatTimestampFunc(t *testing.T) {
+	type testCase struct {
+		format  cty.Value
+		input   cty.Value
+		want    cty.Value
+		wantErr bool
+	}
+	tests := map[string]testCase{
+		"unix format from rfc3339 string": {
+			format: cty.StringVal("X"),
+			input:  cty.StringVal("2015-10-21T00:00:00Z"),
+			want:   cty.StringVal("1445385600"),
+		},
+		"unix format from unix timestamp input": {
+			format: cty.StringVal("X"),
+			input:  cty.NumberIntVal(1445385600),
+			want:   cty.StringVal("1445385600"),
+		},
+		"rfc3339 string input": {
+			format: cty.StringVal("YYYY-MM-DD"),
+			input:  cty.StringVal("2025-09-16T12:00:00Z"),
+			want:   cty.StringVal("2025-09-16"),
+		},
+		"unix timestamp input": {
+			format: cty.StringVal("YYYY-MM-DD'T'hh:mm:ssZ"),
+			input:  cty.NumberIntVal(1690328596),
+			want:   cty.StringVal("2023-07-25T23:43:16Z"),
+		},
+		"negative unix timestamp input": {
+			format: cty.StringVal("YYYY-MM-DD'T'hh:mm:ssZ"),
+			input:  cty.NumberIntVal(-1),
+			want:   cty.StringVal("1969-12-31T23:59:59Z"),
+		},
+		"fractional unix timestamp input": {
+			format:  cty.StringVal("YYYY-MM-DD"),
+			input:   cty.NumberFloatVal(1.2),
+			wantErr: true,
+		},
+		"invalid string input": {
+			format:  cty.StringVal("YYYY-MM-DD"),
+			input:   cty.StringVal("0"),
+			wantErr: true,
+		},
+		"invalid string input for unix format": {
+			format:  cty.StringVal("X"),
+			input:   cty.StringVal("0"),
+			wantErr: true,
+		},
+	}
+
+	for name, test := range tests {
+		t.Run(name, func(t *testing.T) {
+			got, err := formatTimestampFunc().Call([]cty.Value{test.format, test.input})
+			if test.wantErr {
+				require.Error(t, err)
+			} else {
+				require.NoError(t, err)
+				require.Equal(t, test.want, got)
+			}
+		})
+	}
+}

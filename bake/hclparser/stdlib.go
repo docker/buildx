@@ -2,11 +2,13 @@ package hclparser
 
 import (
 	"errors"
+	"math/big"
 	"os"
 	"os/user"
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -63,7 +65,8 @@ var stdlibFunctions = []funcDef{
 	{name: "flatten", fn: stdlib.FlattenFunc},
 	{name: "floor", fn: stdlib.FloorFunc},
 	{name: "format", fn: stdlib.FormatFunc},
-	{name: "formatdate", fn: stdlib.FormatDateFunc},
+	{name: "formatdate", fn: stdlib.FormatDateFunc, descriptionAlt: `Deprecated: use formattimestamp instead. Formats a timestamp given in RFC 3339 syntax into another timestamp in some other machine-oriented time syntax, as described in the format string.`},
+	{name: "formattimestamp", factory: formatTimestampFunc},
 	{name: "formatlist", fn: stdlib.FormatListFunc},
 	{name: "greaterthan", fn: stdlib.GreaterThanFunc},
 	{name: "greaterthanorequalto", fn: stdlib.GreaterThanOrEqualToFunc},
@@ -129,6 +132,7 @@ var stdlibFunctions = []funcDef{
 	{name: "trimspace", fn: stdlib.TrimSpaceFunc},
 	{name: "trimsuffix", fn: stdlib.TrimSuffixFunc},
 	{name: "try", fn: tryfunc.TryFunc, descriptionAlt: `Variadic function that tries to evaluate all of is arguments in sequence until one succeeds, in which case it returns that result, or returns an error if none of them succeed.`},
+	{name: "unixtimestampparse", factory: unixtimestampParseFunc},
 	{name: "upper", fn: stdlib.UpperFunc},
 	{name: "urlencode", fn: encoding.URLEncodeFunc, descriptionAlt: `Applies URL encoding to a given string.`},
 	{name: "uuidv4", fn: uuid.V4Func, descriptionAlt: `Generates and returns a Type-4 UUID in the standard hexadecimal string format.`},
@@ -278,9 +282,54 @@ func semvercmpFunc() function.Function {
 	})
 }
 
+// formatTimestampFunc constructs a function that formats either an RFC3339
+// timestamp string or a unix timestamp integer using the same format verbs as
+// formatdate.
+func formatTimestampFunc() function.Function {
+	return function.New(&function.Spec{
+		Description: `Formats a timestamp string in RFC 3339 syntax or a unix timestamp integer into another timestamp in some other machine-oriented time syntax, as described in the format string. The special format string "X" returns the unix timestamp in seconds.`,
+		Params: []function.Parameter{
+			{
+				Name: "format",
+				Type: cty.String,
+			},
+			{
+				Name: "time",
+				Type: cty.DynamicPseudoType,
+			},
+		},
+		Type: function.StaticReturnType(cty.String),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			formatStr := args[0].AsString()
+			switch args[1].Type() {
+			case cty.String:
+				if formatStr == "X" {
+					t, err := time.Parse(time.RFC3339, args[1].AsString())
+					if err != nil {
+						return cty.DynamicVal, function.NewArgErrorf(1, "timestamp string must be RFC3339")
+					}
+					return cty.StringVal(strconv.FormatInt(t.Unix(), 10)), nil
+				}
+				return stdlib.FormatDateFunc.Call([]cty.Value{args[0], args[1]})
+			case cty.Number:
+				t, err := unixTimestampValue(args[1])
+				if err != nil {
+					return cty.DynamicVal, function.NewArgError(1, err)
+				}
+				if formatStr == "X" {
+					return cty.StringVal(strconv.FormatInt(t.Unix(), 10)), nil
+				}
+				return stdlib.FormatDateFunc.Call([]cty.Value{args[0], cty.StringVal(t.Format(time.RFC3339))})
+			default:
+				return cty.DynamicVal, function.NewArgErrorf(1, "must be a string timestamp or a unix timestamp number")
+			}
+		},
+	})
+}
+
 // timestampFunc constructs a function that returns a string representation of the current date and time.
 //
-// This function was imported from terraform's datetime utilities.
+// This function was imported from Terraform's datetime utilities.
 func timestampFunc() function.Function {
 	return function.New(&function.Spec{
 		Description: `Returns a string representation of the current date and time.`,
@@ -311,6 +360,70 @@ func homedirFunc() function.Function {
 			return cty.StringVal(home), nil
 		},
 	})
+}
+
+// unixtimestampParseFunc, given a unix timestamp integer, will parse and
+// return an object representation of that date and time
+//
+// This function is similar to the `unix_timestamp_parse` function in Terraform:
+// https://registry.terraform.io/providers/hashicorp/time/latest/docs/functions/unix_timestamp_parse
+func unixtimestampParseFunc() function.Function {
+	return function.New(&function.Spec{
+		Description: `Given a unix timestamp integer, will parse and return an object representation of that date and time. A unix timestamp is the number of seconds elapsed since January 1, 1970 UTC.`,
+		Params: []function.Parameter{
+			{
+				Name:        "unix_timestamp",
+				Description: "Unix Timestamp integer to parse",
+				Type:        cty.Number,
+			},
+		},
+		Type: function.StaticReturnType(cty.Object(map[string]cty.Type{
+			"year":         cty.Number,
+			"year_day":     cty.Number,
+			"day":          cty.Number,
+			"month":        cty.Number,
+			"month_name":   cty.String,
+			"weekday":      cty.Number,
+			"weekday_name": cty.String,
+			"hour":         cty.Number,
+			"minute":       cty.Number,
+			"second":       cty.Number,
+			"rfc3339":      cty.String,
+			"iso_year":     cty.Number,
+			"iso_week":     cty.Number,
+		})),
+		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			unixTime, err := unixTimestampValue(args[0])
+			if err != nil {
+				return cty.DynamicVal, function.NewArgError(0, err)
+			}
+			isoYear, isoWeek := unixTime.ISOWeek()
+			return cty.ObjectVal(map[string]cty.Value{
+				"year":         cty.NumberIntVal(int64(unixTime.Year())),
+				"year_day":     cty.NumberIntVal(int64(unixTime.YearDay())),
+				"day":          cty.NumberIntVal(int64(unixTime.Day())),
+				"month":        cty.NumberIntVal(int64(unixTime.Month())),
+				"month_name":   cty.StringVal(unixTime.Month().String()),
+				"weekday":      cty.NumberIntVal(int64(unixTime.Weekday())),
+				"weekday_name": cty.StringVal(unixTime.Weekday().String()),
+				"hour":         cty.NumberIntVal(int64(unixTime.Hour())),
+				"minute":       cty.NumberIntVal(int64(unixTime.Minute())),
+				"second":       cty.NumberIntVal(int64(unixTime.Second())),
+				"rfc3339":      cty.StringVal(unixTime.Format(time.RFC3339)),
+				"iso_year":     cty.NumberIntVal(int64(isoYear)),
+				"iso_week":     cty.NumberIntVal(int64(isoWeek)),
+			}), nil
+		},
+	})
+}
+
+func unixTimestampValue(v cty.Value) (time.Time, error) {
+	bf := v.AsBigFloat()
+	ts, acc := bf.Int64()
+	if acc != big.Exact {
+		return time.Time{}, errors.New("unix timestamp must be an integer")
+	}
+	return time.Unix(ts, 0).UTC(), nil
 }
 
 func Stdlib() map[string]function.Function {
