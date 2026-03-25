@@ -16,8 +16,6 @@ on:
     tags:
       - 'v*'
   pull_request:
-    paths-ignore:
-      - '.github/releases.json'
 
 env:
   SETUP_BUILDX_VERSION: "edge"
