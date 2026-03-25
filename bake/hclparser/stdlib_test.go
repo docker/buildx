@@ -353,6 +353,16 @@ func TestFormatTimestampFunc(t *testing.T) {
 		wantErr bool
 	}
 	tests := map[string]testCase{
+		"unix format from rfc3339 string": {
+			format: cty.StringVal("X"),
+			input:  cty.StringVal("2015-10-21T00:00:00Z"),
+			want:   cty.StringVal("1445385600"),
+		},
+		"unix format from unix timestamp input": {
+			format: cty.StringVal("X"),
+			input:  cty.NumberIntVal(1445385600),
+			want:   cty.StringVal("1445385600"),
+		},
 		"rfc3339 string input": {
 			format: cty.StringVal("YYYY-MM-DD"),
 			input:  cty.StringVal("2025-09-16T12:00:00Z"),
@@ -375,6 +385,11 @@ func TestFormatTimestampFunc(t *testing.T) {
 		},
 		"invalid string input": {
 			format:  cty.StringVal("YYYY-MM-DD"),
+			input:   cty.StringVal("0"),
+			wantErr: true,
+		},
+		"invalid string input for unix format": {
+			format:  cty.StringVal("X"),
 			input:   cty.StringVal("0"),
 			wantErr: true,
 		},

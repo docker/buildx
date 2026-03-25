@@ -8,6 +8,7 @@ import (
 	"path"
 	"path/filepath"
 	"runtime"
+	"strconv"
 	"strings"
 	"time"
 
@@ -286,7 +287,7 @@ func semvercmpFunc() function.Function {
 // formatdate.
 func formatTimestampFunc() function.Function {
 	return function.New(&function.Spec{
-		Description: `Formats a timestamp string in RFC 3339 syntax or a unix timestamp integer into another timestamp in some other machine-oriented time syntax, as described in the format string.`,
+		Description: `Formats a timestamp string in RFC 3339 syntax or a unix timestamp integer into another timestamp in some other machine-oriented time syntax, as described in the format string. The special format string "X" returns the unix timestamp in seconds.`,
 		Params: []function.Parameter{
 			{
 				Name: "format",
@@ -299,13 +300,24 @@ func formatTimestampFunc() function.Function {
 		},
 		Type: function.StaticReturnType(cty.String),
 		Impl: func(args []cty.Value, retType cty.Type) (cty.Value, error) {
+			formatStr := args[0].AsString()
 			switch args[1].Type() {
 			case cty.String:
+				if formatStr == "X" {
+					t, err := time.Parse(time.RFC3339, args[1].AsString())
+					if err != nil {
+						return cty.DynamicVal, function.NewArgErrorf(1, "timestamp string must be RFC3339")
+					}
+					return cty.StringVal(strconv.FormatInt(t.Unix(), 10)), nil
+				}
 				return stdlib.FormatDateFunc.Call([]cty.Value{args[0], args[1]})
 			case cty.Number:
 				t, err := unixTimestampValue(args[1])
 				if err != nil {
 					return cty.DynamicVal, function.NewArgError(1, err)
+				}
+				if formatStr == "X" {
+					return cty.StringVal(strconv.FormatInt(t.Unix(), 10)), nil
 				}
 				return stdlib.FormatDateFunc.Call([]cty.Value{args[0], cty.StringVal(t.Format(time.RFC3339))})
 			default:
