@@ -1,14 +1,8 @@
 package dap
 
 import (
-	"context"
 	"fmt"
-	"net"
-	"os"
-	"path/filepath"
 
-	"github.com/docker/buildx/build"
-	"github.com/docker/cli/cli-plugins/metadata"
 	"github.com/google/go-dap"
 	"github.com/google/shlex"
 	"github.com/pkg/errors"
@@ -85,96 +79,4 @@ func replCmd[Flags any, RetVal any](ctx Context, name string, resp *dap.Evaluate
 			resp.Body.Result = fmt.Sprint(v)
 		},
 	}, flags
-}
-
-func (t *thread) Exec(ctx Context, args []string) (message string, retErr error) {
-	if t.rCtx == nil {
-		return "", errors.New("no container context for exec")
-	}
-
-	cfg := &build.InvokeConfig{Tty: true}
-	if len(cfg.Entrypoint) == 0 && len(cfg.Cmd) == 0 {
-		cfg.Entrypoint = []string{"/bin/sh"} // launch shell by default
-		cfg.Cmd = []string{}
-		cfg.NoCmd = false
-	}
-
-	ctr, err := build.NewContainer(ctx, t.rCtx, cfg)
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		if retErr != nil {
-			ctr.Cancel()
-		}
-	}()
-
-	dir, err := os.MkdirTemp("", "buildx-dap-exec")
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		if retErr != nil {
-			os.RemoveAll(dir)
-		}
-	}()
-
-	socketPath := filepath.Join(dir, "s.sock")
-	lc := net.ListenConfig{}
-	l, err := lc.Listen(ctx, "unix", socketPath)
-	if err != nil {
-		return "", err
-	}
-
-	go func() {
-		defer os.RemoveAll(dir)
-		t.runExec(l, ctr, cfg)
-	}()
-
-	// TODO: this should work in standalone mode too.
-	docker := os.Getenv(metadata.ReexecEnvvar)
-	req := &dap.RunInTerminalRequest{
-		Request: dap.Request{
-			Command: "runInTerminal",
-		},
-		Arguments: dap.RunInTerminalRequestArguments{
-			Kind: "integrated",
-			Args: []string{docker, "buildx", "dap", "attach", socketPath},
-			Env: map[string]any{
-				"BUILDX_EXPERIMENTAL": "1",
-			},
-		},
-	}
-
-	resp := ctx.Request(req)
-	if !resp.GetResponse().Success {
-		return "", errors.New(resp.GetResponse().Message)
-	}
-
-	message = fmt.Sprintf("Started process attached to %s.", socketPath)
-	return message, nil
-}
-
-func (t *thread) runExec(l net.Listener, ctr *build.Container, cfg *build.InvokeConfig) {
-	defer l.Close()
-	defer ctr.Cancel()
-
-	conn, err := l.Accept()
-	if err != nil {
-		return
-	}
-	defer conn.Close()
-
-	// start a background goroutine to politely refuse any subsequent connections.
-	go func() {
-		for {
-			conn, err := l.Accept()
-			if err != nil {
-				return
-			}
-			fmt.Fprint(conn, "Error: Already connected to exec instance.")
-			conn.Close()
-		}
-	}()
-	ctr.Exec(context.Background(), cfg, conn, conn, conn)
 }
