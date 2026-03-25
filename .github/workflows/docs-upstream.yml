@@ -59,7 +59,7 @@ jobs:
           retention-days: 1
 
   validate:
-    uses: docker/docs/.github/workflows/validate-upstream.yml@8f0cf552fd0a69bcd19bb3f53a17a346b399673c # main
+    uses: docker/docs/.github/workflows/validate-upstream.yml@main # zizmor: ignore[unpinned-uses] needs to validate against latest docs changes
     needs:
       - docs-yaml
     with:
