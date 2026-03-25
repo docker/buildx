@@ -298,7 +298,11 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	if v, ok := opt.BuildArgs["BUILDKIT_SYNTAX"]; ok {
-		p := strings.SplitN(strings.TrimSpace(v), " ", 2)
+		cmdline := strings.TrimSpace(v)
+		if cmdline == "" {
+			return nil, nil, errors.Errorf("empty BUILDKIT_SYNTAX build-arg is invalid, use --build-arg BUILDKIT_SYNTAX without '=' for optional behavior")
+		}
+		p := strings.SplitN(cmdline, " ", 2)
 		so.Frontend = "gateway.v0"
 		so.FrontendAttrs["source"] = p[0]
 		so.FrontendAttrs["cmdline"] = v
