@@ -21,6 +21,7 @@ import (
 var policyEvalTests = []func(t *testing.T, sb integration.Sandbox){
 	testPolicyEvalAllow,
 	testPolicyEvalDeny,
+	testPolicyEvalStdinFile,
 	testPolicyEvalPrint,
 	testPolicyEvalFields,
 	testPolicyEvalLabel,
@@ -86,6 +87,63 @@ decision := {"allow": allow}
 	out, err := cmd.CombinedOutput()
 	require.Error(t, err, string(out))
 	require.Contains(t, string(out), "policy denied")
+}
+
+func testPolicyEvalStdinFile(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+	testCases := []struct {
+		name            string
+		policy          string
+		wantErrContains string
+	}{
+		{
+			name: "allow",
+			policy: `
+package docker
+
+default allow = false
+
+allow if not input.image
+
+allow if input.image.repo == "busybox"
+
+decision := {"allow": allow}
+`,
+		},
+		{
+			name: "deny",
+			policy: `
+package docker
+
+default allow = false
+
+allow if input.image.repo == "alpine"
+
+decision := {"allow": allow}
+`,
+			wantErrContains: "policy denied",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			cmd := buildxCmd(sb, withArgs(
+				"policy",
+				"eval",
+				"--file",
+				"-",
+				"docker-image://busybox:latest",
+			))
+			cmd.Stdin = strings.NewReader(tc.policy)
+			out, err := cmd.CombinedOutput()
+			if tc.wantErrContains == "" {
+				require.NoError(t, err, string(out))
+				return
+			}
+			require.Error(t, err, string(out))
+			require.Contains(t, string(out), tc.wantErrContains)
+		})
+	}
 }
 
 func testPolicyEvalPrint(t *testing.T, sb integration.Sandbox) {

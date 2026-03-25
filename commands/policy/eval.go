@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"io"
 	"io/fs"
 	"maps"
 	"os"
@@ -33,6 +34,7 @@ type evalOpts struct {
 	filename    string
 	printOutput bool
 	fields      []string
+	platform    string
 	builder     *string
 }
 
@@ -49,9 +51,14 @@ func evalCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 			return runEval(cmd.Context(), dockerCli, args[0], opts)
 		},
 	}
-	cmd.Flags().StringVar(&opts.filename, "filename", "Dockerfile", "Policy filename to evaluate")
-	cmd.Flags().BoolVar(&opts.printOutput, "print", false, "Print policy output")
-	cmd.Flags().StringSliceVar(&opts.fields, "fields", nil, "Fields to evaluate")
+	flags := cmd.Flags()
+	flags.StringVarP(&opts.filename, "file", "f", "Dockerfile", "Policy filename to evaluate")
+	flags.BoolVar(&opts.printOutput, "print", false, "Print policy output")
+	flags.StringSliceVar(&opts.fields, "fields", nil, "Fields to evaluate")
+	flags.StringVar(&opts.platform, "platform", "", "Target platform for policy evaluation")
+	// Deprecated: use --file instead
+	flags.StringVar(&opts.filename, "filename", "Dockerfile", "Policy filename to evaluate")
+	flags.MarkHidden("filename")
 	return cmd
 }
 
@@ -81,29 +88,29 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 		return err
 	}
 
-	workers, err := c.ListWorkers(ctx)
-	if err != nil {
-		return err
-	}
+	var p ocispecs.Platform
+	if opts.platform != "" {
+		parsedPlatform, err := parsePlatform(opts.platform)
+		if err != nil {
+			return err
+		}
+		p = *parsedPlatform
+	} else {
+		workers, err := c.ListWorkers(ctx)
+		if err != nil {
+			return err
+		}
 
-	if len(workers) == 0 {
-		return errors.New("no workers available in the builder")
-	}
+		if len(workers) == 0 {
+			return errors.New("no workers available in the builder")
+		}
 
-	defaultPlatform := workers[0].Platforms[0]
-	p := ocispecs.Platform{
-		Architecture: defaultPlatform.Architecture,
-		OS:           defaultPlatform.OS,
-		Variant:      defaultPlatform.Variant,
+		p = workers[0].Platforms[0]
 	}
 	metaResolver := sourcemeta.NewResolver(c)
 	defer metaResolver.Close()
 
-	platform := &pb.Platform{
-		Architecture: p.Architecture,
-		OS:           p.OS,
-		Variant:      p.Variant,
-	}
+	platform := toPBPlatform(p)
 	verifier := policy.SignatureVerifier(confutil.NewConfig(dockerCli))
 
 	if opts.printOutput {
@@ -185,9 +192,8 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 	if opts.filename == "" {
 		return errors.New("filename is required")
 	}
-	policyName := opts.filename
-	policyFile := policyName + ".rego"
-	policyData, err := os.ReadFile(policyFile)
+	policyName, policyFile := policyFileNames(opts.filename)
+	policyData, err := readPolicyData(policyFile, os.Stdin)
 	if err != nil {
 		return errors.Wrapf(err, "failed to read policy file %s", policyFile)
 	}
@@ -259,6 +265,20 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 		}
 		srcReq = sourcemeta.ToGatewayMetaResponse(resp)
 	}
+}
+
+func policyFileNames(filename string) (string, string) {
+	if filename == "-" {
+		return "stdin", filename
+	}
+	return filename, filename + ".rego"
+}
+
+func readPolicyData(filename string, stdin io.Reader) ([]byte, error) {
+	if filename == "-" {
+		return io.ReadAll(stdin)
+	}
+	return os.ReadFile(filename)
 }
 
 func selectReloadFields(fields []string, unknowns []string) ([]string, []string) {

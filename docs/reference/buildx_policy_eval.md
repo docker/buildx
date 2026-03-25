@@ -10,7 +10,8 @@ Evaluate policy for a source
 | `--builder`     | `string`      |              | Override the configured builder instance |
 | `-D`, `--debug` | `bool`        |              | Enable debug logging                     |
 | `--fields`      | `stringSlice` |              | Fields to evaluate                       |
-| `--filename`    | `string`      | `Dockerfile` | Policy filename to evaluate              |
+| `-f`, `--file`  | `string`      | `Dockerfile` | Policy filename to evaluate              |
+| `--platform`    | `string`      |              | Target platform for policy evaluation    |
 | `--print`       | `bool`        |              | Print policy output                      |
 
 
