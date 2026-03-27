@@ -23,6 +23,7 @@ import (
 	"github.com/moby/buildkit/identity"
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/contentutil"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/pkg/errors"
@@ -551,7 +552,7 @@ COPY super-cool.txt /
 		fstest.CreateFile("bar/super-cool.txt", []byte("super cool"), 0600),
 	)
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 	gittestutil.GitInit(git, t)
 	gittestutil.GitAdd(git, t, "docker-bake.hcl", "bar")
@@ -688,7 +689,7 @@ EOT
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -718,7 +719,7 @@ EOT
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -765,7 +766,7 @@ EOT
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	git, err := gitutil.New(bkgitutil.WithDir(dirSpec))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -834,7 +835,7 @@ EOT
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	git, err := gitutil.New(bkgitutil.WithDir(dirSpec))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -868,14 +869,14 @@ EOT
 	)
 	dirDest := t.TempDir()
 
-	gitSpec, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	gitSpec, err := gitutil.New(bkgitutil.WithDir(dirSpec))
 	require.NoError(t, err)
 	gittestutil.GitInit(gitSpec, t)
 	gittestutil.GitAdd(gitSpec, t, "docker-bake.hcl")
 	gittestutil.GitCommit(gitSpec, t, "initial commit")
 	addrSpec := gittestutil.GitServeHTTP(gitSpec, t)
 
-	gitSrc, err := gitutil.New(gitutil.WithWorkingDir(dirSrc))
+	gitSrc, err := gitutil.New(bkgitutil.WithDir(dirSrc))
 	require.NoError(t, err)
 	gittestutil.GitInit(gitSrc, t)
 	gittestutil.GitAdd(gitSrc, t, "foo")
@@ -909,7 +910,7 @@ COPY super-cool.txt /
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 	gittestutil.GitInit(git, t)
 	gittestutil.GitAdd(git, t, "docker-bake.hcl", "bar")
@@ -948,7 +949,7 @@ COPY --from=files file.txt /file.txt
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 	gittestutil.GitInit(git, t)
 	gittestutil.GitAdd(git, t, "docker-bake.hcl", "build", "files-src")
@@ -984,7 +985,7 @@ COPY --from=files marker.txt /marker.txt
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
 	require.NoError(t, err)
 	gittestutil.GitInit(git, t)
 	gittestutil.GitAdd(git, t, "docker-bake.hcl", "build", "marker.txt")
@@ -1023,7 +1024,7 @@ EOT
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	git, err := gitutil.New(bkgitutil.WithDir(dirSpec))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -1071,7 +1072,7 @@ EOT
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	git, err := gitutil.New(bkgitutil.WithDir(dirSpec))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -1127,7 +1128,7 @@ COPY foo /foo
 	)
 	dirDest := t.TempDir()
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	git, err := gitutil.New(bkgitutil.WithDir(dirSpec))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)
@@ -1179,7 +1180,7 @@ COPY foo /foo
 		fstest.CreateFile("foo", []byte("foo"), 0600),
 	)
 
-	git, err := gitutil.New(gitutil.WithWorkingDir(dirSpec))
+	git, err := gitutil.New(bkgitutil.WithDir(dirSpec))
 	require.NoError(t, err)
 
 	gittestutil.GitInit(git, t)

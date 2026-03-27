@@ -1,6 +1,8 @@
 package gitutil_test
 
 import (
+	"context"
+	"strings"
 	"testing"
 
 	"github.com/docker/buildx/util/gitutil"
@@ -9,6 +11,7 @@ import (
 )
 
 func TestGit(t *testing.T) {
+	ctx := context.TODO()
 	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
@@ -16,17 +19,18 @@ func TestGit(t *testing.T) {
 	gittestutil.GitInit(c, t)
 	gittestutil.GitCommit(c, t, "bar")
 
-	out, err := c.Run("status")
+	out, err := c.Run(ctx, "status")
 	require.NoError(t, err)
 	require.NotEmpty(t, out)
 
-	out, err = c.Run("not-exist")
+	out, err = c.Run(ctx, "not-exist")
 	require.Error(t, err)
 	require.Empty(t, out)
-	require.Equal(t, "git: 'not-exist' is not a git command. See 'git --help'.", err.Error())
+	require.Contains(t, err.Error(), "git: 'not-exist' is not a git command. See 'git --help'.")
 }
 
 func TestGitFullCommit(t *testing.T) {
+	ctx := context.TODO()
 	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
@@ -34,12 +38,13 @@ func TestGitFullCommit(t *testing.T) {
 	gittestutil.GitInit(c, t)
 	gittestutil.GitCommit(c, t, "bar")
 
-	out, err := c.FullCommit()
+	out, err := c.FullCommit(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 40, len(out))
 }
 
 func TestGitShortCommit(t *testing.T) {
+	ctx := context.TODO()
 	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
@@ -47,38 +52,41 @@ func TestGitShortCommit(t *testing.T) {
 	gittestutil.GitInit(c, t)
 	gittestutil.GitCommit(c, t, "bar")
 
-	out, err := c.ShortCommit()
+	out, err := c.ShortCommit(ctx)
 	require.NoError(t, err)
 	require.Equal(t, 7, len(out))
 }
 
 func TestGitFullCommitErr(t *testing.T) {
+	ctx := context.TODO()
 	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
 
 	gittestutil.GitInit(c, t)
 
-	_, err = c.FullCommit()
+	_, err = c.FullCommit(ctx)
 	require.Error(t, err)
 	require.True(t, gitutil.IsUnknownRevision(err))
 	require.False(t, gittestutil.IsAmbiguousArgument(err))
 }
 
 func TestGitShortCommitErr(t *testing.T) {
+	ctx := context.TODO()
 	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
 
 	gittestutil.GitInit(c, t)
 
-	_, err = c.ShortCommit()
+	_, err = c.ShortCommit(ctx)
 	require.Error(t, err)
 	require.True(t, gitutil.IsUnknownRevision(err))
 	require.False(t, gittestutil.IsAmbiguousArgument(err))
 }
 
 func TestGitTagsPointsAt(t *testing.T) {
+	ctx := context.TODO()
 	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
@@ -89,12 +97,13 @@ func TestGitTagsPointsAt(t *testing.T) {
 	gittestutil.GitCommit(c, t, "foo")
 	gittestutil.GitTag(c, t, "v0.9.0")
 
-	out, err := c.Run("tag", "--points-at", "HEAD", "--sort", "-version:creatordate")
+	out, err := c.Run(ctx, "tag", "--points-at", "HEAD", "--sort", "-version:creatordate")
 	require.NoError(t, err)
-	require.Equal(t, "v0.9.0", out)
+	require.Equal(t, "v0.9.0", strings.TrimSpace(string(out)))
 }
 
 func TestGitDescribeTags(t *testing.T) {
+	ctx := context.TODO()
 	gittestutil.Mktmp(t)
 	c, err := gitutil.New()
 	require.NoError(t, err)
@@ -105,12 +114,13 @@ func TestGitDescribeTags(t *testing.T) {
 	gittestutil.GitCommit(c, t, "foo")
 	gittestutil.GitTag(c, t, "v0.9.0")
 
-	out, err := c.Run("describe", "--tags", "--abbrev=0")
+	out, err := c.Run(ctx, "describe", "--tags", "--abbrev=0")
 	require.NoError(t, err)
-	require.Equal(t, "v0.9.0", out)
+	require.Equal(t, "v0.9.0", strings.TrimSpace(string(out)))
 }
 
 func TestGitRemoteURL(t *testing.T) {
+	ctx := context.TODO()
 	type remote struct {
 		name     string
 		url      string
@@ -218,7 +228,7 @@ func TestGitRemoteURL(t *testing.T) {
 				}
 			}
 
-			ru, err := c.RemoteURL()
+			ru, err := c.RemoteURL(ctx)
 			if tt.fail {
 				require.Error(t, err)
 				return
