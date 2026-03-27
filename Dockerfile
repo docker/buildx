@@ -5,7 +5,7 @@ ARG ALPINE_VERSION=3.23
 ARG XX_VERSION=1.7.0
 
 # for testing
-ARG DOCKER_VERSION=29.2
+ARG DOCKER_VERSION=29.3
 ARG DOCKER_VERSION_ALT_28=28.5
 ARG DOCKER_VERSION_ALT_27=27.5.1
 ARG DOCKER_CLI_VERSION=${DOCKER_VERSION}
@@ -17,8 +17,7 @@ ARG UNDOCK_VERSION=0.9.0
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
-# FIXME: temporary workaround for tags not pushed since Docker 29.2 related to https://github.com/moby/moby/pull/52000
-FROM moby/moby-bin:master@sha256:5a2d5ae3372e7e362fbd9595811549a45d69604d513e0c37d9fe526ed9e75b8c AS docker-engine
+FROM moby/moby-bin:$DOCKER_VERSION AS docker-engine
 FROM dockereng/cli-bin:$DOCKER_CLI_VERSION AS docker-cli
 FROM moby/moby-bin:$DOCKER_VERSION_ALT_28 AS docker-engine-alt28
 FROM moby/moby-bin:$DOCKER_VERSION_ALT_27 AS docker-engine-alt27
