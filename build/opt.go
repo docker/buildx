@@ -301,11 +301,12 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		cmdline := strings.TrimSpace(v)
 		if cmdline == "" {
 			return nil, nil, errors.Errorf("empty BUILDKIT_SYNTAX build-arg is invalid, use --build-arg BUILDKIT_SYNTAX without '=' for optional behavior")
+		} else if cmdline != "dockerfile.v0" { // https://github.com/moby/buildkit/pull/6594
+			p := strings.SplitN(cmdline, " ", 2)
+			so.Frontend = "gateway.v0"
+			so.FrontendAttrs["source"] = p[0]
+			so.FrontendAttrs["cmdline"] = v
 		}
-		p := strings.SplitN(cmdline, " ", 2)
-		so.Frontend = "gateway.v0"
-		so.FrontendAttrs["source"] = p[0]
-		so.FrontendAttrs["cmdline"] = v
 	}
 
 	if v, ok := opt.BuildArgs["BUILDKIT_MULTI_PLATFORM"]; ok {
