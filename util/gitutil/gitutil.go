@@ -101,11 +101,11 @@ func (c *Git) RemoteURL() (string, error) {
 }
 
 func (c *Git) FullCommit() (string, error) {
-	return c.clean(c.run("show", "--format=%H", "HEAD", "--quiet", "--"))
+	return c.clean(c.run("rev-parse", "HEAD"))
 }
 
 func (c *Git) ShortCommit() (string, error) {
-	return c.clean(c.run("show", "--format=%h", "HEAD", "--quiet", "--"))
+	return c.clean(c.run("rev-parse", "--short", "HEAD"))
 }
 
 func (c *Git) Tag() (string, error) {
