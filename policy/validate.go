@@ -45,7 +45,8 @@ type state struct {
 	Input    Input
 	Unknowns map[string]struct{}
 
-	ImagePins map[digest.Digest]struct{}
+	ImagePins                  map[digest.Digest]struct{}
+	checksumNeededForSignature *gwpb.ChecksumRequest
 }
 
 func (s *state) addUnknown(key string) {
@@ -274,7 +275,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			unk := collectUnknowns(pq.Support, unknowns)
 			unk = append(unk, runtimeUnknownInputRefs(st)...)
 
-			retry, next, err := p.resolveUnknowns(ctx, &inp, req, platform, unk)
+			retry, next, err := p.resolveUnknowns(ctx, &inp, req, platform, unk, st)
 			if err != nil {
 				return nil, nil, err
 			}
@@ -292,7 +293,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			return nil, nil, err
 		}
 
-		retry, next, err := p.resolveUnknowns(ctx, &inp, req, platform, runtimeUnknownInputRefs(st))
+		retry, next, err := p.resolveUnknowns(ctx, &inp, req, platform, runtimeUnknownInputRefs(st), st)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -372,11 +373,29 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	return nil, nil, errors.Errorf("maximum attempts reached for resolving policy metadata")
 }
 
-func (p *Policy) resolveUnknowns(ctx context.Context, input *Input, req *policysession.CheckPolicyRequest, defaultPlatform *ocispecs.Platform, unk []string) (bool, *gwpb.ResolveSourceMetaRequest, error) {
+func (p *Policy) resolveUnknowns(ctx context.Context, input *Input, req *policysession.CheckPolicyRequest, defaultPlatform *ocispecs.Platform, unk []string, st *state) (bool, *gwpb.ResolveSourceMetaRequest, error) {
 	var resolver SourceMetadataResolver
 	if p.opt.SourceResolver != nil {
 		resolver = p.opt.SourceResolver
 	}
+
+	if st != nil && st.checksumNeededForSignature != nil {
+		next := &gwpb.ResolveSourceMetaRequest{
+			Source: req.Source.Source,
+		}
+		if req.Platform != nil {
+			next.Platform = req.Platform
+		}
+		if err := AddUnknownsWithLogger(p.opt.Log, next, normalizeNodeUnknowns(unk)); err != nil {
+			return false, nil, err
+		}
+		next.HTTP = &gwpb.ResolveSourceHTTPRequest{
+			ChecksumRequest: st.checksumNeededForSignature.CloneVT(),
+		}
+		p.log(logrus.InfoLevel, "policy decision for source %s: resolve missing fields %+v", sourceName(req), summarizeUnknownsForLog(unk))
+		return false, next, nil
+	}
+
 	retry, next, err := ResolveInputUnknowns(ctx, input, req.Source.Source, unk, req.Platform, defaultPlatform, resolver, p.opt.VerifierProvider, p.opt.Log)
 	if err != nil {
 		return false, nil, err
@@ -387,6 +406,7 @@ func (p *Policy) resolveUnknowns(ctx context.Context, input *Input, req *policys
 	}
 	return retry, nil, nil
 }
+
 func platformFromReq(req *policysession.CheckPolicyRequest) (*ocispecs.Platform, error) {
 	if req.Platform != nil {
 		platformStr := req.Platform.OS + "/" + req.Platform.Architecture
@@ -446,6 +466,12 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 		}
 		if src.HTTP != nil {
 			inp.HTTP.Checksum = src.HTTP.Checksum
+			if src.HTTP.ChecksumResponse != nil {
+				inp.HTTP.checksumResponseForSignature = &httpChecksumResponseForSignature{
+					Digest: src.HTTP.ChecksumResponse.Digest,
+					Suffix: slices.Clone(src.HTTP.ChecksumResponse.Suffix),
+				}
+			}
 		}
 		if inp.HTTP.Checksum == "" {
 			unknowns = append(unknowns, "input.http.checksum")
