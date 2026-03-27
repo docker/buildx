@@ -26,8 +26,6 @@ jobs:
       contents: read
       security-events: write
     with:
-      version: v1.22.0
       min-severity: medium
       min-confidence: medium
       persona: pedantic
-      no-online-audits: true
