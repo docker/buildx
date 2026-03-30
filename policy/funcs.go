@@ -3,11 +3,13 @@ package policy
 import (
 	"bytes"
 	"context"
+	"crypto"
 	"encoding/json"
 	"fmt"
 	"io"
 	"maps"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/distribution/reference"
@@ -15,8 +17,10 @@ import (
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	"github.com/moby/buildkit/client/llb"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
+	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/gitutil/gitsign"
+	"github.com/moby/buildkit/util/pgpsign"
 	"github.com/open-policy-agent/opa/v1/ast"
 	"github.com/open-policy-agent/opa/v1/rego"
 	"github.com/open-policy-agent/opa/v1/types"
@@ -26,11 +30,12 @@ import (
 )
 
 const (
-	funcLoadJSON            = "load_json"
-	funcVerifyGitSignature  = "verify_git_signature"
-	funcPinImage            = "pin_image"
-	funcArtifactAttestation = "artifact_attestation"
-	funcGithubAttestation   = "github_attestation"
+	funcLoadJSON               = "load_json"
+	funcVerifyGitSignature     = "verify_git_signature"
+	funcVerifyHTTPPGPSignature = "verify_http_pgp_signature"
+	funcPinImage               = "pin_image"
+	funcArtifactAttestation    = "artifact_attestation"
+	funcGithubAttestation      = "github_attestation"
 )
 
 func (p *Policy) initBuiltinFuncs() {
@@ -65,6 +70,27 @@ func (p *Policy) initBuiltinFuncs() {
 		impl: func(s *state) func(*rego.Rego) {
 			return rego.Function2(verifyGitSignature, func(bctx rego.BuiltinContext, a1 *ast.Term, a2 *ast.Term) (*ast.Term, error) {
 				return p.builtinVerifyGitSignatureImpl(bctx, a1, a2, s)
+			})
+		},
+	})
+
+	verifyHTTPPGPSignature := &rego.Function{
+		Name: funcVerifyHTTPPGPSignature,
+		Decl: types.NewFunction(
+			types.Args(
+				types.A,
+				types.S,
+				types.S,
+			),
+			types.B,
+		),
+		Memoize: false, // TODO:optimize
+	}
+	p.funcs = append(p.funcs, fun{
+		decl: verifyHTTPPGPSignature,
+		impl: func(s *state) func(*rego.Rego) {
+			return rego.Function3(verifyHTTPPGPSignature, func(bctx rego.BuiltinContext, a1 *ast.Term, a2 *ast.Term, a3 *ast.Term) (*ast.Term, error) {
+				return p.builtinVerifyHTTPPGPSignatureImpl(bctx, a1, a2, a3, s)
 			})
 		},
 	})
@@ -480,6 +506,113 @@ func (p *Policy) builtinVerifyGitSignatureImpl(_ rego.BuiltinContext, a1, a2 *as
 	}
 
 	return ast.BooleanTerm(true), nil
+}
+
+func (p *Policy) builtinVerifyHTTPPGPSignatureImpl(_ rego.BuiltinContext, a1, a2, a3 *ast.Term, s *state) (*ast.Term, error) {
+	inp := s.Input
+	if inp.HTTP == nil {
+		return ast.BooleanTerm(false), nil
+	}
+
+	obja, ok := a1.Value.(ast.Object)
+	if !ok {
+		return nil, errors.Errorf("%s: expected object, got %T", funcVerifyHTTPPGPSignature, a1.Value)
+	}
+
+	httpValue, err := ast.InterfaceToValue(inp.HTTP)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: failed converting object to interface", funcVerifyHTTPPGPSignature)
+	}
+
+	if obja.Compare(httpValue) != 0 {
+		return nil, errors.Errorf("%s: first argument is not the same as input http", funcVerifyHTTPPGPSignature)
+	}
+
+	sigPath, ok := a2.Value.(ast.String)
+	if !ok {
+		return nil, errors.Errorf("%s: expected string signature path, got %T", funcVerifyHTTPPGPSignature, a2.Value)
+	}
+	pubKeyPath, ok := a3.Value.(ast.String)
+	if !ok {
+		return nil, errors.Errorf("%s: expected string pubkey path, got %T", funcVerifyHTTPPGPSignature, a3.Value)
+	}
+
+	signatureData, err := p.readFile(string(sigPath), 512*1024)
+	if err != nil {
+		return nil, err
+	}
+	pubKeyData, err := p.readFile(string(pubKeyPath), 512*1024)
+	if err != nil {
+		return nil, err
+	}
+
+	sig, _, err := pgpsign.ParseArmoredDetachedSignature(signatureData)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: failed to parse detached signature", funcVerifyHTTPPGPSignature)
+	}
+	keyring, err := pgpsign.ReadAllArmoredKeyRings(pubKeyData)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: failed to read armored keyring", funcVerifyHTTPPGPSignature)
+	}
+
+	algo, err := toPBChecksumAlgo(sig.Hash)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: unsupported signature hash", funcVerifyHTTPPGPSignature)
+	}
+	suffix := slices.Clone(sig.HashSuffix)
+	checksumReq := &gwpb.ChecksumRequest{Algo: algo, Suffix: suffix}
+
+	resp := inp.HTTP.checksumResponseForSignature
+	if resp == nil || resp.Digest == "" {
+		s.checksumNeededForSignature = checksumReq
+		s.addUnknown(funcVerifyHTTPPGPSignature)
+		return ast.BooleanTerm(false), nil
+	}
+	if !bytes.Equal(resp.Suffix, suffix) {
+		s.checksumNeededForSignature = checksumReq
+		s.addUnknown(funcVerifyHTTPPGPSignature)
+		return ast.BooleanTerm(false), nil
+	}
+	dgst, err := digest.Parse(resp.Digest)
+	if err != nil {
+		return nil, errors.Wrapf(err, "%s: invalid checksum digest", funcVerifyHTTPPGPSignature)
+	}
+	if !checksumAlgoMatches(algo, dgst.Algorithm()) {
+		s.checksumNeededForSignature = checksumReq
+		s.addUnknown(funcVerifyHTTPPGPSignature)
+		return ast.BooleanTerm(false), nil
+	}
+
+	if err := pgpsign.VerifySignatureWithDigest(sig, keyring, dgst); err != nil {
+		return ast.BooleanTerm(false), nil
+	}
+	return ast.BooleanTerm(true), nil
+}
+
+func toPBChecksumAlgo(hash crypto.Hash) (gwpb.ChecksumRequest_ChecksumAlgo, error) {
+	switch hash {
+	case crypto.SHA256:
+		return gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA256, nil
+	case crypto.SHA384:
+		return gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA384, nil
+	case crypto.SHA512:
+		return gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA512, nil
+	default:
+		return gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA256, errors.Errorf("unsupported signature hash algorithm %v", hash)
+	}
+}
+
+func checksumAlgoMatches(algo gwpb.ChecksumRequest_ChecksumAlgo, digestAlgo digest.Algorithm) bool {
+	switch algo {
+	case gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA256:
+		return digestAlgo == digest.SHA256
+	case gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA384:
+		return digestAlgo == digest.SHA384
+	case gwpb.ChecksumRequest_CHECKSUM_ALGO_SHA512:
+		return digestAlgo == digest.SHA512
+	default:
+		return false
+	}
 }
 
 func (p *Policy) readFile(path string, limit int64) ([]byte, error) {
