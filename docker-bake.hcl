@@ -147,7 +147,7 @@ target "test" {
 target "binaries" {
   inherits = ["_common"]
   target = "binaries"
-  output = ["${DESTDIR}/build"]
+  output = ["type=local,dest=${DESTDIR}/build,mode=delete"]
   platforms = ["local"]
 }
 
