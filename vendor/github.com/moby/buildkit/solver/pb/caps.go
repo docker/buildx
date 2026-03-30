@@ -34,7 +34,6 @@ const (
 	CapSourceGitChecksum        apicaps.CapID = "source.git.checksum"
 	CapSourceGitSkipSubmodules  apicaps.CapID = "source.git.skipsubmodules"
 	CapSourceGitSignatureVerify apicaps.CapID = "source.git.signatureverify"
-	CapSourceGitMTime           apicaps.CapID = "source.git.mtime"
 
 	CapSourceHTTP         apicaps.CapID = "source.http"
 	CapSourceHTTPAuth     apicaps.CapID = "source.http.auth"
@@ -252,12 +251,6 @@ func init() {
 
 	Caps.Init(apicaps.Cap{
 		ID:      CapSourceGitSignatureVerify,
-		Enabled: true,
-		Status:  apicaps.CapStatusExperimental,
-	})
-
-	Caps.Init(apicaps.Cap{
-		ID:      CapSourceGitMTime,
 		Enabled: true,
 		Status:  apicaps.CapStatusExperimental,
 	})

@@ -2,7 +2,6 @@ package gitutil
 
 import (
 	"net/url"
-	"path"
 	"regexp"
 	"strings"
 
@@ -73,8 +72,6 @@ func parseOpts(fragment string) *GitURLOpts {
 		return nil
 	}
 	ref, subdir, _ := strings.Cut(fragment, ":")
-	subdir = path.Join("/", subdir)
-	subdir = strings.TrimPrefix(subdir, "/")
 	return &GitURLOpts{Ref: ref, Subdir: subdir}
 }
 
