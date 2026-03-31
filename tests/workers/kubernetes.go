@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"strings"
 	"sync"
 
 	"github.com/docker/buildx/tests/helpers"
@@ -28,6 +29,7 @@ type kubernetesWorker struct {
 	dockerErr   error
 	dockerOnce  sync.Once
 
+	k3dName   string
 	k3dConfig string
 	k3dClose  func() error
 	k3dErr    error
@@ -55,25 +57,30 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 	}
 
 	w.k3dOnce.Do(func() {
-		w.k3dConfig, w.k3dClose, w.k3dErr = helpers.NewK3dServer(ctx, cfg, w.docker.DockerAddress())
+		w.k3dName, w.k3dConfig, w.k3dClose, w.k3dErr = helpers.NewK3dServer(ctx, cfg, w.docker.DockerAddress())
 	})
 	if w.k3dErr != nil {
 		return nil, w.k3dClose, w.k3dErr
 	}
 
 	name := "integration-kubernetes-" + identity.NewID()
-	// The generic integration harness injects a host-local registry mirror config.
-	// That works for host-networked workers, but not for a BuildKit pod where
-	// localhost points at the pod itself instead of the runner.
-	cmd := exec.CommandContext(ctx, "buildx", "create", "--bootstrap", "--name="+name, "--driver=kubernetes")
+	cmd := exec.CommandContext(ctx, "buildx", "create",
+		"--bootstrap",
+		"--name="+name,
+		"--driver=kubernetes",
+		"--driver-opt=image="+helpers.KubernetesBuildkitImage(),
+		"--driver-opt=timeout=60s",
+	)
 	cmd.Env = append(
 		os.Environ(),
 		"BUILDX_CONFIG=/tmp/buildx-"+name,
 		"DOCKER_CONTEXT="+w.docker.DockerAddress(),
 		"KUBECONFIG="+w.k3dConfig,
 	)
-	if err := cmd.Run(); err != nil {
-		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s", name)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		diag := helpers.KubernetesDiagnostics(w.k3dName, w.docker.DockerAddress())
+		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s with image %s: %s\n%s", name, helpers.KubernetesBuildkitImage(), strings.TrimSpace(string(out)), diag)
 	}
 
 	cl := func() error {
@@ -114,6 +121,7 @@ func (w *kubernetesWorker) Close() error {
 	w.dockerClose = nil
 	w.dockerErr = nil
 	w.dockerOnce = sync.Once{}
+	w.k3dName = ""
 	w.k3dConfig = ""
 	w.k3dClose = nil
 	w.k3dErr = nil

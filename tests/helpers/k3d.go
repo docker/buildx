@@ -15,9 +15,9 @@ const (
 	k3dBin = "k3d"
 )
 
-func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAddress string) (kubeConfig string, cl func() error, err error) {
+func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAddress string) (clusterName, kubeConfig string, cl func() error, err error) {
 	if _, err := exec.LookPath(k3dBin); err != nil {
-		return "", nil, errors.Wrapf(err, "failed to lookup %s binary", k3dBin)
+		return "", "", nil, errors.Wrapf(err, "failed to lookup %s binary", k3dBin)
 	}
 
 	deferF := &integration.MultiCloser{}
@@ -30,7 +30,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 		}
 	}()
 
-	clusterName := "bk-" + identity.NewID()
+	clusterName = "bk-" + identity.NewID()
 
 	cmd := exec.CommandContext(ctx, k3dBin, "cluster", "create", clusterName,
 		"--wait",
@@ -41,7 +41,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s", clusterName, string(out))
+		return "", "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s", clusterName, string(out))
 	}
 	deferF.Append(func() error {
 		cmd := exec.Command(k3dBin, "cluster", "delete", clusterName)
@@ -63,7 +63,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
-		return "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s", clusterName, string(out))
+		return "", "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s", clusterName, string(out))
 	}
 	kubeConfig = strings.TrimSpace(string(out))
 
