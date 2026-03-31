@@ -15,6 +15,7 @@ func init() {
 		workers.InitDockerWorker()
 		workers.InitDockerContainerWorker()
 		workers.InitRemoteMultiNodeWorker()
+		workers.InitKubernetesWorker()
 	} else {
 		workers.InitRemoteWorker()
 	}
