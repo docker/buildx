@@ -8,7 +8,6 @@ const AttrKnownSSHHosts = "git.knownsshhosts"
 const AttrMountSSHSock = "git.mountsshsock"
 const AttrGitChecksum = "git.checksum"
 const AttrGitSkipSubmodules = "git.skipsubmodules"
-const AttrGitMTime = "git.mtime"
 
 const AttrGitSignatureVerifyPubKey = "git.sig.pubkey"
 const AttrGitSignatureVerifyRejectExpired = "git.sig.rejectexpired"
