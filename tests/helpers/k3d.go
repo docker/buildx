@@ -5,6 +5,7 @@ import (
 	"os"
 	"os/exec"
 	"strings"
+	"time"
 
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -32,7 +33,10 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 
 	clusterName = "bk-" + identity.NewID()
 
-	cmd := exec.CommandContext(ctx, k3dBin, "cluster", "create", clusterName,
+	createCtx, cancelCreate := context.WithTimeout(ctx, 90*time.Second)
+	defer cancelCreate()
+
+	cmd := exec.CommandContext(createCtx, k3dBin, "cluster", "create", clusterName,
 		"--wait",
 	)
 	cmd.Env = append(
@@ -41,7 +45,8 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return "", "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s", clusterName, string(out))
+		diag := KubernetesDiagnostics(clusterName, dockerAddress)
+		return "", "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s\n%s", clusterName, strings.TrimSpace(string(out)), diag)
 	}
 	deferF.Append(func() error {
 		cmd := exec.Command(k3dBin, "cluster", "delete", clusterName)
@@ -56,14 +61,18 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 		return nil
 	})
 
-	cmd = exec.CommandContext(ctx, k3dBin, "kubeconfig", "write", clusterName)
+	kubeconfigCtx, cancelKubeconfig := context.WithTimeout(ctx, 30*time.Second)
+	defer cancelKubeconfig()
+
+	cmd = exec.CommandContext(kubeconfigCtx, k3dBin, "kubeconfig", "write", clusterName)
 	cmd.Env = append(
 		os.Environ(),
 		"DOCKER_CONTEXT="+dockerAddress,
 	)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
-		return "", "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s", clusterName, string(out))
+		diag := KubernetesDiagnostics(clusterName, dockerAddress)
+		return "", "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s\n%s", clusterName, strings.TrimSpace(string(out)), diag)
 	}
 	kubeConfig = strings.TrimSpace(string(out))
 
