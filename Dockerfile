@@ -127,6 +127,8 @@ FROM binaries-$TARGETOS AS binaries
 ARG BUILDKIT_SBOM_SCAN_STAGE=true
 
 FROM gobase AS integration-test-base
+ARG K3D_VERSION
+ARG K3S_VERSION
 # https://github.com/docker/docker/blob/master/project/PACKAGERS.md#runtime-dependencies
 RUN apk add --no-cache \
       bash \
