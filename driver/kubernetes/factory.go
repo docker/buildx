@@ -131,7 +131,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	d.defaultLoad = defaultLoad
 	d.timeout = timeout
 
-	d.deployment, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
+	d.deployment, d.statefulSet, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
 		return nil, err
 	}
@@ -143,20 +143,23 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		return nil, err
 	}
 	d.deploymentClient = clients.Deployments
+	d.statefulSetClient = clients.StatefulSets
 	d.podClient = clients.Pods
 	d.configMapClient = clients.ConfigMaps
 
 	switch loadbalance {
 	case LoadbalanceSticky:
 		d.podChooser = &podchooser.StickyPodChooser{
-			Key:        cfg.ContextPathHash,
-			PodClient:  d.podClient,
-			Deployment: d.deployment,
+			Key:         cfg.ContextPathHash,
+			PodClient:   d.podClient,
+			Deployment:  d.deployment,
+			StatefulSet: d.statefulSet,
 		}
 	case LoadbalanceRandom:
 		d.podChooser = &podchooser.RandomPodChooser{
-			PodClient:  d.podClient,
-			Deployment: d.deployment,
+			PodClient:   d.podClient,
+			Deployment:  d.deployment,
+			StatefulSet: d.statefulSet,
 		}
 	}
 	return d, nil
@@ -199,6 +202,8 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			deploymentOpt.RequestsMemory = v
 		case k == "requests.ephemeral-storage":
 			deploymentOpt.RequestsEphemeralStorage = v
+		case k == "persistent-volume-claim.requests.storage":
+			deploymentOpt.RequestsPersistentStorage = v
 		case k == "limits.cpu":
 			deploymentOpt.LimitsCPU = v
 		case k == "limits.memory":

@@ -32,28 +32,36 @@ type DeploymentOpt struct {
 	// files mounted at /etc/buildkitd
 	ConfigFiles map[string][]byte
 
-	BuildKitRootVolumeMemory string
-	Rootless                 bool
-	NodeSelector             map[string]string
-	CustomAnnotations        map[string]string
-	CustomLabels             map[string]string
-	Tolerations              []corev1.Toleration
-	RequestsCPU              string
-	RequestsMemory           string
-	RequestsEphemeralStorage string
-	LimitsCPU                string
-	LimitsMemory             string
-	LimitsEphemeralStorage   string
-	Platforms                []ocispecs.Platform
-	Env                      []corev1.EnvVar // injected into main buildkitd container
+	BuildKitRootVolumeMemory  string
+	Rootless                  bool
+	NodeSelector              map[string]string
+	CustomAnnotations         map[string]string
+	CustomLabels              map[string]string
+	Tolerations               []corev1.Toleration
+	RequestsCPU               string
+	RequestsMemory            string
+	RequestsEphemeralStorage  string
+	RequestsPersistentStorage string
+	LimitsCPU                 string
+	LimitsMemory              string
+	LimitsEphemeralStorage    string
+	Platforms                 []ocispecs.Platform
+	Env                       []corev1.EnvVar // injected into main buildkitd container
 }
 
 const (
-	containerName      = "buildkitd"
-	AnnotationPlatform = "buildx.docker.com/platform"
-	LabelApp           = "app"
-	rootVolumeName     = "buildkit-memory"
-	rootVolumePath     = "/var/lib/buildkit"
+	containerName             = "buildkitd"
+	AnnotationPlatform        = "buildx.docker.com/platform"
+	LabelApp                  = "app"
+	rootVolumeName            = "buildkit-memory"
+	rootVolumePath            = "/var/lib/buildkit"
+	persistentVolumeClaimName = "buildkitd"
+
+	probeFailureThreshold    = 3
+	probeInitialDelaySeconds = 5
+	probePeriodSeconds       = 30
+	probeSuccessThreshold    = 1
+	probeTimeoutSeconds      = 60
 )
 
 type ErrReservedAnnotationPlatform struct{}
@@ -68,7 +76,7 @@ func (ErrReservedLabelApp) Error() string {
 	return fmt.Sprintf("the label %q is reserved and cannot be customized", LabelApp)
 }
 
-func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.ConfigMap, err error) {
+func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.StatefulSet, c []*corev1.ConfigMap, err error) {
 	labels := map[string]string{
 		LabelApp: opt.Name,
 	}
@@ -83,67 +91,75 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 
 	for k, v := range opt.CustomAnnotations {
 		if k == AnnotationPlatform {
-			return nil, nil, ErrReservedAnnotationPlatform{}
+			return nil, nil, nil, ErrReservedAnnotationPlatform{}
 		}
 		annotations[k] = v
 	}
 
 	for k, v := range opt.CustomLabels {
 		if k == LabelApp {
-			return nil, nil, ErrReservedLabelApp{}
+			return nil, nil, nil, ErrReservedLabelApp{}
 		}
 		labels[k] = v
 	}
 
-	d = &appsv1.Deployment{
-		TypeMeta: metav1.TypeMeta{
-			APIVersion: appsv1.SchemeGroupVersion.String(),
-			Kind:       "Deployment",
-		},
+	probeHandlerCommand := []string{"buildctl", "debug", "workers"}
+	podTemplate := corev1.PodTemplateSpec{
 		ObjectMeta: metav1.ObjectMeta{
-			Namespace:   opt.Namespace,
-			Name:        opt.Name,
 			Labels:      labels,
 			Annotations: annotations,
 		},
-		Spec: appsv1.DeploymentSpec{
-			Replicas: &replicas,
-			Selector: &metav1.LabelSelector{
-				MatchLabels: labels,
-			},
-			Template: corev1.PodTemplateSpec{
-				ObjectMeta: metav1.ObjectMeta{
-					Labels:      labels,
-					Annotations: annotations,
-				},
-				Spec: corev1.PodSpec{
-					ServiceAccountName: opt.ServiceAccountName,
-					SchedulerName:      opt.SchedulerName,
-					Containers: []corev1.Container{
-						{
-							Name:  containerName,
-							Image: opt.Image,
-							Args:  args,
-							SecurityContext: &corev1.SecurityContext{
-								Privileged: &privileged,
-							},
-							ReadinessProbe: &corev1.Probe{
-								ProbeHandler: corev1.ProbeHandler{
-									Exec: &corev1.ExecAction{
-										Command: []string{"buildctl", "debug", "workers"},
-									},
-								},
-							},
-							Resources: corev1.ResourceRequirements{
-								Requests: corev1.ResourceList{},
-								Limits:   corev1.ResourceList{},
+		Spec: corev1.PodSpec{
+			ServiceAccountName: opt.ServiceAccountName,
+			SchedulerName:      opt.SchedulerName,
+			Containers: []corev1.Container{
+				{
+					Name:  containerName,
+					Image: opt.Image,
+					Args:  args,
+					SecurityContext: &corev1.SecurityContext{
+						Privileged: &privileged,
+					},
+					ReadinessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							Exec: &corev1.ExecAction{
+								Command: probeHandlerCommand,
 							},
 						},
+						FailureThreshold:    probeFailureThreshold,
+						InitialDelaySeconds: probeInitialDelaySeconds,
+						PeriodSeconds:       probePeriodSeconds,
+						SuccessThreshold:    probeSuccessThreshold,
+						TimeoutSeconds:      probeTimeoutSeconds,
+					},
+					LivenessProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							Exec: &corev1.ExecAction{
+								Command: probeHandlerCommand,
+							},
+						},
+						FailureThreshold:    probeFailureThreshold,
+						InitialDelaySeconds: probeInitialDelaySeconds,
+						PeriodSeconds:       probePeriodSeconds,
+						SuccessThreshold:    probeSuccessThreshold,
+						TimeoutSeconds:      probeTimeoutSeconds,
+					},
+					Resources: corev1.ResourceRequirements{
+						Requests: corev1.ResourceList{},
+						Limits:   corev1.ResourceList{},
 					},
 				},
 			},
 		},
 	}
+
+	meta := metav1.ObjectMeta{
+		Namespace:   opt.Namespace,
+		Name:        opt.Name,
+		Labels:      labels,
+		Annotations: annotations,
+	}
+
 	for _, cfg := range splitConfigFiles(opt.ConfigFiles) {
 		cc := &corev1.ConfigMap{
 			TypeMeta: metav1.TypeMeta{
@@ -158,12 +174,12 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 			Data: cfg.files,
 		}
 
-		d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+		podTemplate.Spec.Containers[0].VolumeMounts = append(podTemplate.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 			Name:      cfg.name,
 			MountPath: path.Join("/etc/buildkit", cfg.path),
 		})
 
-		d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, corev1.Volume{
+		podTemplate.Spec.Volumes = append(podTemplate.Spec.Volumes, corev1.Volume{
 			Name: cfg.name,
 			VolumeSource: corev1.VolumeSource{
 				ConfigMap: &corev1.ConfigMapVolumeSource{
@@ -177,7 +193,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 	}
 
 	if opt.Qemu.Install {
-		d.Spec.Template.Spec.InitContainers = []corev1.Container{
+		podTemplate.Spec.InitContainers = []corev1.Container{
 			{
 				Name:  "qemu",
 				Image: opt.Qemu.Image,
@@ -190,73 +206,73 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 	}
 
 	if opt.Rootless {
-		if err := toRootless(d); err != nil {
-			return nil, nil, err
+		if err := toRootless(&podTemplate); err != nil {
+			return nil, nil, nil, err
 		}
 	}
 
 	if len(opt.NodeSelector) > 0 {
-		d.Spec.Template.Spec.NodeSelector = opt.NodeSelector
+		podTemplate.Spec.NodeSelector = opt.NodeSelector
 	}
 
 	if len(opt.Tolerations) > 0 {
-		d.Spec.Template.Spec.Tolerations = opt.Tolerations
+		podTemplate.Spec.Tolerations = opt.Tolerations
 	}
 
 	if opt.RequestsCPU != "" {
 		reqCPU, err := resource.ParseQuantity(opt.RequestsCPU)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = reqCPU
+		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceCPU] = reqCPU
 	}
 
 	if opt.RequestsMemory != "" {
 		reqMemory, err := resource.ParseQuantity(opt.RequestsMemory)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = reqMemory
+		podTemplate.Spec.Containers[0].Resources.Requests[corev1.ResourceMemory] = reqMemory
 	}
 
 	if opt.RequestsEphemeralStorage != "" {
-		reqEphemeralStorage, err := resource.ParseQuantity(opt.RequestsEphemeralStorage)
+		reqStorage, err := resource.ParseQuantity(opt.RequestsEphemeralStorage)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Requests[corev1.ResourceEphemeralStorage] = reqEphemeralStorage
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceEphemeralStorage] = reqStorage
 	}
 
 	if opt.LimitsCPU != "" {
 		limCPU, err := resource.ParseQuantity(opt.LimitsCPU)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = limCPU
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceCPU] = limCPU
 	}
 
 	if opt.LimitsMemory != "" {
 		limMemory, err := resource.ParseQuantity(opt.LimitsMemory)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = limMemory
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceMemory] = limMemory
 	}
 
 	if opt.LimitsEphemeralStorage != "" {
-		limEphemeralStorage, err := resource.ParseQuantity(opt.LimitsEphemeralStorage)
+		limStorage, err := resource.ParseQuantity(opt.LimitsEphemeralStorage)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		d.Spec.Template.Spec.Containers[0].Resources.Limits[corev1.ResourceEphemeralStorage] = limEphemeralStorage
+		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceEphemeralStorage] = limStorage
 	}
 
 	if opt.BuildKitRootVolumeMemory != "" {
 		buildKitRootVolumeMemory, err := resource.ParseQuantity(opt.BuildKitRootVolumeMemory)
 		if err != nil {
-			return nil, nil, err
+			return nil, nil, nil, err
 		}
-		d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, corev1.Volume{
+		podTemplate.Spec.Volumes = append(podTemplate.Spec.Volumes, corev1.Volume{
 			Name: rootVolumeName,
 			VolumeSource: corev1.VolumeSource{
 				EmptyDir: &corev1.EmptyDirVolumeSource{
@@ -265,45 +281,122 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, c []*corev1.Config
 				},
 			},
 		})
-		d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+		podTemplate.Spec.Containers[0].VolumeMounts = append(podTemplate.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 			Name:      rootVolumeName,
 			MountPath: rootVolumePath,
 		})
 	}
 
 	if len(opt.Env) > 0 {
-		d.Spec.Template.Spec.Containers[0].Env = append(d.Spec.Template.Spec.Containers[0].Env, opt.Env...)
+		podTemplate.Spec.Containers[0].Env = append(podTemplate.Spec.Containers[0].Env, opt.Env...)
+	}
+
+	if opt.IsPersistentStorage() {
+		s = &appsv1.StatefulSet{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: appsv1.SchemeGroupVersion.String(),
+				Kind:       "StatefulSet",
+			},
+			ObjectMeta: meta,
+			Spec: appsv1.StatefulSetSpec{
+				ServiceName:         "buildkitd",
+				PodManagementPolicy: appsv1.ParallelPodManagement,
+				Replicas:            &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: labels,
+				},
+				Template: podTemplate,
+			},
+		}
+
+		if err := setupPersistentStorage(s, opt); err != nil {
+			return nil, nil, nil, err
+		}
+	} else {
+		d = &appsv1.Deployment{
+			TypeMeta: metav1.TypeMeta{
+				APIVersion: appsv1.SchemeGroupVersion.String(),
+				Kind:       "Deployment",
+			},
+			ObjectMeta: meta,
+			Spec: appsv1.DeploymentSpec{
+				Replicas: &replicas,
+				Selector: &metav1.LabelSelector{
+					MatchLabels: labels,
+				},
+				Template: podTemplate,
+			},
+		}
 	}
 
 	return
 }
 
-func toRootless(d *appsv1.Deployment) error {
-	d.Spec.Template.Spec.Containers[0].Args = append(
-		d.Spec.Template.Spec.Containers[0].Args,
+func (opt *DeploymentOpt) IsPersistentStorage() bool {
+	return opt.RequestsPersistentStorage != ""
+}
+
+func setupPersistentStorage(s *appsv1.StatefulSet, opt *DeploymentOpt) error {
+	reqStorage, err := resource.ParseQuantity(opt.RequestsPersistentStorage)
+	if err != nil {
+		return err
+	}
+
+	// Rootless already sets up the data mount.
+	if !opt.Rootless {
+		s.Spec.Template.Spec.Containers[0].VolumeMounts = []corev1.VolumeMount{
+			{
+				Name:      persistentVolumeClaimName,
+				ReadOnly:  false,
+				MountPath: "/var/lib/buildkit",
+			},
+		}
+	}
+
+	s.Spec.VolumeClaimTemplates = []corev1.PersistentVolumeClaim{
+		{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: persistentVolumeClaimName,
+			},
+			Spec: corev1.PersistentVolumeClaimSpec{
+				AccessModes: []corev1.PersistentVolumeAccessMode{corev1.ReadWriteOnce},
+				Resources: corev1.VolumeResourceRequirements{
+					Requests: corev1.ResourceList{
+						corev1.ResourceStorage: reqStorage,
+					},
+				},
+			},
+		},
+	}
+	return nil
+}
+
+func toRootless(p *corev1.PodTemplateSpec) error {
+	p.Spec.Containers[0].Args = append(
+		p.Spec.Containers[0].Args,
 		"--oci-worker-no-process-sandbox",
 	)
-	d.Spec.Template.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+	p.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
 		SeccompProfile: &corev1.SeccompProfile{
 			Type: corev1.SeccompProfileTypeUnconfined,
 		},
 	}
-	if d.Spec.Template.Annotations == nil {
-		d.Spec.Template.Annotations = make(map[string]string, 1)
+	if p.Annotations == nil {
+		p.Annotations = make(map[string]string, 1)
 	}
-	d.Spec.Template.Annotations["container.apparmor.security.beta.kubernetes.io/"+containerName] = "unconfined"
+	p.Annotations["container.apparmor.security.beta.kubernetes.io/"+containerName] = "unconfined"
 
 	// Dockerfile has `VOLUME /home/user/.local/share/buildkit` by default too,
 	// but the default VOLUME does not work with rootless on Google's Container-Optimized OS
 	// as it is mounted with `nosuid,nodev`.
 	// https://github.com/moby/buildkit/issues/879#issuecomment-1240347038
 	// https://github.com/moby/buildkit/pull/3097
-	const emptyDirVolName = "buildkitd"
-	d.Spec.Template.Spec.Containers[0].VolumeMounts = append(d.Spec.Template.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
+	const emptyDirVolName = persistentVolumeClaimName
+	p.Spec.Containers[0].VolumeMounts = append(p.Spec.Containers[0].VolumeMounts, corev1.VolumeMount{
 		Name:      emptyDirVolName,
 		MountPath: "/home/user/.local/share/buildkit",
 	})
-	d.Spec.Template.Spec.Volumes = append(d.Spec.Template.Spec.Volumes, corev1.Volume{
+	p.Spec.Volumes = append(p.Spec.Volumes, corev1.Volume{
 		Name: emptyDirVolName,
 		VolumeSource: corev1.VolumeSource{
 			EmptyDir: &corev1.EmptyDirVolumeSource{},

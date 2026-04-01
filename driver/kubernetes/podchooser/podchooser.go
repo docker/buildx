@@ -20,13 +20,14 @@ type PodChooser interface {
 }
 
 type RandomPodChooser struct {
-	RandSource rand.Source
-	PodClient  kubeclient.PodClient
-	Deployment *appsv1.Deployment
+	RandSource  rand.Source
+	PodClient   kubeclient.PodClient
+	Deployment  *appsv1.Deployment
+	StatefulSet *appsv1.StatefulSet
 }
 
 func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) {
-	pods, err := ListRunningPods(ctx, pc.PodClient, pc.Deployment)
+	pods, err := ListRunningPods(ctx, pc.PodClient, pc.Deployment, pc.StatefulSet)
 	if err != nil {
 		return nil, err
 	}
@@ -44,13 +45,14 @@ func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 }
 
 type StickyPodChooser struct {
-	Key        string
-	PodClient  kubeclient.PodClient
-	Deployment *appsv1.Deployment
+	Key         string
+	PodClient   kubeclient.PodClient
+	Deployment  *appsv1.Deployment
+	StatefulSet *appsv1.StatefulSet
 }
 
 func (pc *StickyPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) {
-	pods, err := ListRunningPods(ctx, pc.PodClient, pc.Deployment)
+	pods, err := ListRunningPods(ctx, pc.PodClient, pc.Deployment, pc.StatefulSet)
 	if err != nil {
 		return nil, err
 	}
@@ -66,16 +68,24 @@ func (pc *StickyPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 		// NOTREACHED
 		logrus.Errorf("no pod found for key %q", pc.Key)
 		rpc := &RandomPodChooser{
-			PodClient:  pc.PodClient,
-			Deployment: pc.Deployment,
+			PodClient:   pc.PodClient,
+			Deployment:  pc.Deployment,
+			StatefulSet: pc.StatefulSet,
 		}
 		return rpc.ChoosePod(ctx)
 	}
 	return podMap[chosen], nil
 }
 
-func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *appsv1.Deployment) ([]*corev1.Pod, error) {
-	selector, err := metav1.LabelSelectorAsSelector(depl.Spec.Selector)
+func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *appsv1.Deployment, stat *appsv1.StatefulSet) ([]*corev1.Pod, error) {
+	var labelSelector *metav1.LabelSelector
+	if depl != nil {
+		labelSelector = depl.Spec.Selector
+	} else if stat != nil {
+		labelSelector = stat.Spec.Selector
+	}
+
+	selector, err := metav1.LabelSelectorAsSelector(labelSelector)
 	if err != nil {
 		return nil, err
 	}
