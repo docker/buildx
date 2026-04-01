@@ -39,6 +39,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	args := []string{
 		"cluster", "create", clusterName,
 		"--wait",
+		"--k3s-arg=--debug@server:0",
 	}
 	if image := KubernetesK3sImage(); image != "" {
 		args = append(args, "--image="+image)
