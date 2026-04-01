@@ -48,7 +48,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		diag := KubernetesDiagnostics(clusterName, dockerAddress)
-		return "", "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s\n%s", clusterName, strings.TrimSpace(string(out)), diag)
+		return "", "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s\n%s\nouter dockerd logs: %s", clusterName, strings.TrimSpace(string(out)), diag, integration.FormatLogs(cfg.Logs))
 	}
 	deferF.Append(func() error {
 		cmd := exec.Command(k3dBin, "cluster", "delete", clusterName)
@@ -68,7 +68,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		diag := KubernetesDiagnostics(clusterName, dockerAddress)
-		return "", "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s\n%s", clusterName, strings.TrimSpace(string(out)), diag)
+		return "", "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s\n%s\nouter dockerd logs: %s", clusterName, strings.TrimSpace(string(out)), diag, integration.FormatLogs(cfg.Logs))
 	}
 	kubeConfig = strings.TrimSpace(string(out))
 
