@@ -33,7 +33,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 
 	clusterName = "bk-" + identity.NewID()
 
-	createCtx, cancelCreate := context.WithTimeout(ctx, 90*time.Second)
+	createCtx, cancelCreate := context.WithTimeoutCause(ctx, 90*time.Second, errors.New("timed out creating k3d cluster"))
 	defer cancelCreate()
 
 	args := []string{
@@ -48,11 +48,13 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	cmd.Env = k3dEnv(dockerAddress)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		diag := KubernetesDiagnostics(clusterName, dockerAddress)
+		diag := KubernetesDiagnostics(ctx, clusterName, dockerAddress)
 		return "", "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s\n%s\nouter dockerd logs: %s", clusterName, strings.TrimSpace(string(out)), diag, integration.FormatLogs(cfg.Logs))
 	}
 	deferF.Append(func() error {
-		cmd := exec.Command(k3dBin, "cluster", "delete", clusterName)
+		deleteCtx, cancelDelete := context.WithTimeoutCause(context.WithoutCancel(ctx), 30*time.Second, errors.New("timed out deleting k3d cluster"))
+		defer cancelDelete()
+		cmd := exec.CommandContext(deleteCtx, k3dBin, "cluster", "delete", clusterName)
 		cmd.Env = k3dEnv(dockerAddress)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
@@ -61,14 +63,14 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 		return nil
 	})
 
-	kubeconfigCtx, cancelKubeconfig := context.WithTimeout(ctx, 30*time.Second)
+	kubeconfigCtx, cancelKubeconfig := context.WithTimeoutCause(ctx, 30*time.Second, errors.New("timed out writing k3d kubeconfig"))
 	defer cancelKubeconfig()
 
 	cmd = exec.CommandContext(kubeconfigCtx, k3dBin, "kubeconfig", "write", clusterName)
 	cmd.Env = k3dEnv(dockerAddress)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
-		diag := KubernetesDiagnostics(clusterName, dockerAddress)
+		diag := KubernetesDiagnostics(ctx, clusterName, dockerAddress)
 		return "", "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s\n%s\nouter dockerd logs: %s", clusterName, strings.TrimSpace(string(out)), diag, integration.FormatLogs(cfg.Logs))
 	}
 	kubeConfig = strings.TrimSpace(string(out))

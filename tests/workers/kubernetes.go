@@ -79,7 +79,7 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 	)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		diag := helpers.KubernetesDiagnostics(w.k3dName, w.docker.DockerAddress())
+		diag := helpers.KubernetesDiagnostics(ctx, w.k3dName, w.docker.DockerAddress())
 		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s with image %s: %s\n%s", name, helpers.KubernetesBuildkitImage(), strings.TrimSpace(string(out)), diag)
 	}
 

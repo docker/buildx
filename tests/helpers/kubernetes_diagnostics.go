@@ -3,6 +3,7 @@ package helpers
 import (
 	"bytes"
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -35,8 +36,8 @@ func KubernetesK3DLoadBalancerImage() string {
 	return os.Getenv("TEST_K3D_LOADBALANCER_IMAGE")
 }
 
-func KubernetesDiagnostics(clusterName, dockerContext string) string {
-	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
+func KubernetesDiagnostics(ctx context.Context, clusterName, dockerContext string) string {
+	ctx, cancel := context.WithTimeoutCause(context.WithoutCancel(ctx), 20*time.Second, errors.New("timed out collecting kubernetes diagnostics"))
 	defer cancel()
 
 	var buf bytes.Buffer
