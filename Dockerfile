@@ -15,6 +15,7 @@ ARG BUILDKIT_VERSION=v0.29.0
 ARG COMPOSE_VERSION=v5.1.0
 ARG UNDOCK_VERSION=0.9.0
 ARG K3D_VERSION=5.8.3
+ARG K3S_VERSION=v1.32.2-k3s1
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
@@ -155,6 +156,9 @@ COPY --link --from=k3d /bin/k3d /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 ENV TEST_DOCKER_EXTRA="docker@28.5=/opt/docker-alt-28,docker@27.5=/opt/docker-alt-27"
+ENV TEST_K3S_IMAGE="rancher/k3s:${K3S_VERSION}"
+ENV TEST_K3D_TOOLS_IMAGE="ghcr.io/k3d-io/k3d-tools:${K3D_VERSION}"
+ENV TEST_K3D_LOADBALANCER_IMAGE="ghcr.io/k3d-io/k3d-proxy:${K3D_VERSION}"
 
 FROM integration-test-base AS integration-test
 COPY . .

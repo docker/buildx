@@ -23,6 +23,18 @@ func KubernetesBuildkitImage() string {
 	return "moby/buildkit:" + tag
 }
 
+func KubernetesK3sImage() string {
+	return os.Getenv("TEST_K3S_IMAGE")
+}
+
+func KubernetesK3DToolsImage() string {
+	return os.Getenv("TEST_K3D_TOOLS_IMAGE")
+}
+
+func KubernetesK3DLoadBalancerImage() string {
+	return os.Getenv("TEST_K3D_LOADBALANCER_IMAGE")
+}
+
 func KubernetesDiagnostics(clusterName, dockerContext string) string {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
@@ -56,6 +68,12 @@ func appendK3sServerDiagnostics(ctx context.Context, buf *bytes.Buffer, clusterN
 	}
 
 	for _, nodeName := range nodeNames {
+		appendCommandOutput(ctx, buf, "docker inspect "+nodeName, "docker", []string{
+			"inspect",
+			"--format",
+			"Status={{.State.Status}} Health={{if .State.Health}}{{.State.Health.Status}}{{else}}<none>{{end}} Restarting={{.State.Restarting}} ExitCode={{.State.ExitCode}} Error={{.State.Error}}",
+			nodeName,
+		}, []string{"DOCKER_CONTEXT=" + dockerContext})
 		appendCommandOutput(ctx, buf, "docker logs "+nodeName, "docker", []string{"logs", "--tail", "80", nodeName}, []string{"DOCKER_CONTEXT=" + dockerContext})
 	}
 
@@ -63,9 +81,9 @@ func appendK3sServerDiagnostics(ctx context.Context, buf *bytes.Buffer, clusterN
 		if !strings.Contains(nodeName, "-server-") {
 			continue
 		}
-		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" k3s kubectl get pods", "docker", []string{"exec", nodeName, "k3s", "kubectl", "get", "pods", "-A", "-o", "wide"}, []string{"DOCKER_CONTEXT=" + dockerContext})
-		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" k3s kubectl get events", "docker", []string{"exec", nodeName, "k3s", "kubectl", "get", "events", "-A", "--sort-by=.lastTimestamp"}, []string{"DOCKER_CONTEXT=" + dockerContext})
-		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" k3s kubectl describe pods", "docker", []string{"exec", nodeName, "k3s", "kubectl", "describe", "pods", "-A"}, []string{"DOCKER_CONTEXT=" + dockerContext})
+		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl get pods", "docker", []string{"exec", nodeName, "kubectl", "get", "pods", "-A", "-o", "wide"}, []string{"DOCKER_CONTEXT=" + dockerContext})
+		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl get events", "docker", []string{"exec", nodeName, "kubectl", "get", "events", "-A", "--sort-by=.lastTimestamp"}, []string{"DOCKER_CONTEXT=" + dockerContext})
+		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl describe pods", "docker", []string{"exec", nodeName, "kubectl", "describe", "pods", "-A"}, []string{"DOCKER_CONTEXT=" + dockerContext})
 		break
 	}
 }

@@ -36,13 +36,15 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	createCtx, cancelCreate := context.WithTimeout(ctx, 90*time.Second)
 	defer cancelCreate()
 
-	cmd := exec.CommandContext(createCtx, k3dBin, "cluster", "create", clusterName,
+	args := []string{
+		"cluster", "create", clusterName,
 		"--wait",
-	)
-	cmd.Env = append(
-		os.Environ(),
-		"DOCKER_CONTEXT="+dockerAddress,
-	)
+	}
+	if image := KubernetesK3sImage(); image != "" {
+		args = append(args, "--image="+image)
+	}
+	cmd := exec.CommandContext(createCtx, k3dBin, args...)
+	cmd.Env = k3dEnv(dockerAddress)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		diag := KubernetesDiagnostics(clusterName, dockerAddress)
@@ -50,10 +52,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	}
 	deferF.Append(func() error {
 		cmd := exec.Command(k3dBin, "cluster", "delete", clusterName)
-		cmd.Env = append(
-			os.Environ(),
-			"DOCKER_CONTEXT="+dockerAddress,
-		)
+		cmd.Env = k3dEnv(dockerAddress)
 		out, err := cmd.CombinedOutput()
 		if err != nil {
 			return errors.Wrapf(err, "failed to delete k3d cluster %s: %s", clusterName, string(out))
@@ -65,10 +64,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	defer cancelKubeconfig()
 
 	cmd = exec.CommandContext(kubeconfigCtx, k3dBin, "kubeconfig", "write", clusterName)
-	cmd.Env = append(
-		os.Environ(),
-		"DOCKER_CONTEXT="+dockerAddress,
-	)
+	cmd.Env = k3dEnv(dockerAddress)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		diag := KubernetesDiagnostics(clusterName, dockerAddress)
@@ -77,4 +73,18 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	kubeConfig = strings.TrimSpace(string(out))
 
 	return
+}
+
+func k3dEnv(dockerAddress string) []string {
+	env := append(
+		os.Environ(),
+		"DOCKER_CONTEXT="+dockerAddress,
+	)
+	if image := KubernetesK3DToolsImage(); image != "" {
+		env = append(env, "K3D_IMAGE_TOOLS="+image)
+	}
+	if image := KubernetesK3DLoadBalancerImage(); image != "" {
+		env = append(env, "K3D_IMAGE_LOADBALANCER="+image)
+	}
+	return env
 }
