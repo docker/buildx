@@ -82,6 +82,7 @@ func appendK3sServerDiagnostics(ctx context.Context, buf *bytes.Buffer, clusterN
 		if !strings.Contains(nodeName, "-server-") {
 			continue
 		}
+		kubectl := "KUBECONFIG=/var/lib/rancher/k3s/server/cred/admin.kubeconfig kubectl"
 		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" ps", "docker", []string{"exec", nodeName, "sh", "-c", "ps auxww"}, []string{"DOCKER_CONTEXT=" + dockerContext})
 		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" sockets", "docker", []string{"exec", nodeName, "sh", "-c", "ss -lntp || netstat -lnt"}, []string{"DOCKER_CONTEXT=" + dockerContext})
 		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" cgroup", "docker", []string{"exec", nodeName, "sh", "-c", "cat /proc/1/cgroup && echo && mount | grep cgroup"}, []string{"DOCKER_CONTEXT=" + dockerContext})
@@ -90,9 +91,9 @@ func appendK3sServerDiagnostics(ctx context.Context, buf *bytes.Buffer, clusterN
 		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" entrypoint logs", "docker", []string{"exec", nodeName, "sh", "-c", "for f in /var/log/k3d-entrypoints_*.log; do if [ -f \"$f\" ]; then echo \"== $f ==\"; tail -n 200 \"$f\"; echo; fi; done"}, []string{"DOCKER_CONTEXT=" + dockerContext})
 		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" k3s files", "docker", []string{"exec", nodeName, "sh", "-c", "find /var/lib/rancher/k3s -maxdepth 3 -type f 2>/dev/null | sort"}, []string{"DOCKER_CONTEXT=" + dockerContext})
 		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" k3s logs", "docker", []string{"exec", nodeName, "sh", "-c", "for f in /var/log/k3s.log /var/lib/rancher/k3s/agent/containerd/containerd.log /var/lib/rancher/k3s/server/logs/*; do if [ -f \"$f\" ]; then echo \"== $f ==\"; tail -n 200 \"$f\"; echo; fi; done"}, []string{"DOCKER_CONTEXT=" + dockerContext})
-		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl get pods", "docker", []string{"exec", nodeName, "kubectl", "get", "pods", "-A", "-o", "wide"}, []string{"DOCKER_CONTEXT=" + dockerContext})
-		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl get events", "docker", []string{"exec", nodeName, "kubectl", "get", "events", "-A", "--sort-by=.lastTimestamp"}, []string{"DOCKER_CONTEXT=" + dockerContext})
-		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl describe pods", "docker", []string{"exec", nodeName, "kubectl", "describe", "pods", "-A"}, []string{"DOCKER_CONTEXT=" + dockerContext})
+		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl get pods", "docker", []string{"exec", nodeName, "sh", "-c", kubectl + " get pods -A -o wide"}, []string{"DOCKER_CONTEXT=" + dockerContext})
+		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl get events", "docker", []string{"exec", nodeName, "sh", "-c", kubectl + " get events -A --sort-by=.lastTimestamp"}, []string{"DOCKER_CONTEXT=" + dockerContext})
+		appendCommandOutput(ctx, buf, "docker exec "+nodeName+" kubectl describe pods", "docker", []string{"exec", nodeName, "sh", "-c", kubectl + " describe pods -A"}, []string{"DOCKER_CONTEXT=" + dockerContext})
 		break
 	}
 }
@@ -107,7 +108,7 @@ func clusterNodeNames(ctx context.Context, clusterName, dockerContext string) ([
 		return nil, err
 	}
 	var names []string
-	for _, line := range strings.Split(strings.TrimSpace(out), "\n") {
+	for line := range strings.SplitSeq(strings.TrimSpace(out), "\n") {
 		line = strings.TrimSpace(line)
 		if line == "" {
 			continue

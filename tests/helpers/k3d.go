@@ -14,6 +14,10 @@ import (
 
 const (
 	k3dBin = "k3d"
+
+	k3dCreateTimeout     = 3 * time.Minute
+	k3dKubeconfigTimeout = 30 * time.Second
+	k3dDeleteTimeout     = 30 * time.Second
 )
 
 func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAddress string) (clusterName, kubeConfig string, cl func() error, err error) {
@@ -33,7 +37,7 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 
 	clusterName = "bk-" + identity.NewID()
 
-	createCtx, cancelCreate := context.WithTimeoutCause(ctx, 90*time.Second, errors.New("timed out creating k3d cluster"))
+	createCtx, cancelCreate := context.WithTimeoutCause(ctx, k3dCreateTimeout, errors.New("timed out creating k3d cluster"))
 	defer cancelCreate()
 
 	args := []string{
@@ -48,11 +52,14 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 	cmd.Env = k3dEnv(dockerAddress)
 	out, err := cmd.CombinedOutput()
 	if err != nil {
+		if cause := context.Cause(createCtx); cause != nil && cause != context.Canceled {
+			err = cause
+		}
 		diag := KubernetesDiagnostics(ctx, clusterName, dockerAddress)
 		return "", "", nil, errors.Wrapf(err, "failed to create k3d cluster %s: %s\n%s\nouter dockerd logs: %s", clusterName, strings.TrimSpace(string(out)), diag, integration.FormatLogs(cfg.Logs))
 	}
 	deferF.Append(func() error {
-		deleteCtx, cancelDelete := context.WithTimeoutCause(context.WithoutCancel(ctx), 30*time.Second, errors.New("timed out deleting k3d cluster"))
+		deleteCtx, cancelDelete := context.WithTimeoutCause(context.WithoutCancel(ctx), k3dDeleteTimeout, errors.New("timed out deleting k3d cluster"))
 		defer cancelDelete()
 		cmd := exec.CommandContext(deleteCtx, k3dBin, "cluster", "delete", clusterName)
 		cmd.Env = k3dEnv(dockerAddress)
@@ -63,13 +70,16 @@ func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAdd
 		return nil
 	})
 
-	kubeconfigCtx, cancelKubeconfig := context.WithTimeoutCause(ctx, 30*time.Second, errors.New("timed out writing k3d kubeconfig"))
+	kubeconfigCtx, cancelKubeconfig := context.WithTimeoutCause(ctx, k3dKubeconfigTimeout, errors.New("timed out writing k3d kubeconfig"))
 	defer cancelKubeconfig()
 
 	cmd = exec.CommandContext(kubeconfigCtx, k3dBin, "kubeconfig", "write", clusterName)
 	cmd.Env = k3dEnv(dockerAddress)
 	out, err = cmd.CombinedOutput()
 	if err != nil {
+		if cause := context.Cause(kubeconfigCtx); cause != nil && cause != context.Canceled {
+			err = cause
+		}
 		diag := KubernetesDiagnostics(ctx, clusterName, dockerAddress)
 		return "", "", nil, errors.Wrapf(err, "failed to write kubeconfig for cluster %s: %s\n%s\nouter dockerd logs: %s", clusterName, strings.TrimSpace(string(out)), diag, integration.FormatLogs(cfg.Logs))
 	}
