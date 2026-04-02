@@ -2,6 +2,7 @@ package gitutil
 
 import "testing"
 
+// #nosec G101 -- ignoring: Potential hardcoded credentials
 func TestStripCredentials(t *testing.T) {
 	cases := []struct {
 		name string
