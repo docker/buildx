@@ -1287,7 +1287,7 @@ func ReadSourcePolicy() (*spb.Policy, error) {
 		return nil, nil
 	}
 
-	data, err := os.ReadFile(p)
+	data, err := os.ReadFile(p) // #nosec G703 -- using user-controlled path by design
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read policy file")
 	}
