@@ -17,6 +17,12 @@ type DeploymentClient interface {
 	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
 }
 
+type StatefulSetClient interface {
+	Get(ctx context.Context, name string, opts metav1.GetOptions) (*appsv1.StatefulSet, error)
+	Create(ctx context.Context, deployment *appsv1.StatefulSet, opts metav1.CreateOptions) (*appsv1.StatefulSet, error)
+	Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error
+}
+
 type ConfigMapClient interface {
 	Create(ctx context.Context, configMap *corev1.ConfigMap, opts metav1.CreateOptions) (*corev1.ConfigMap, error)
 	Update(ctx context.Context, configMap *corev1.ConfigMap, opts metav1.UpdateOptions) (*corev1.ConfigMap, error)
@@ -29,9 +35,10 @@ type PodClient interface {
 }
 
 type Clients struct {
-	Deployments DeploymentClient
-	ConfigMaps  ConfigMapClient
-	Pods        PodClient
+	Deployments  DeploymentClient
+	StatefulSets StatefulSetClient
+	ConfigMaps   ConfigMapClient
+	Pods         PodClient
 }
 
 func New(config *rest.Config, namespace string) (*Clients, error) {
@@ -51,9 +58,10 @@ func New(config *rest.Config, namespace string) (*Clients, error) {
 	}
 
 	return &Clients{
-		Deployments: &deploymentClient{client: appsClient, namespace: namespace},
-		ConfigMaps:  &configMapClient{client: coreClient, namespace: namespace},
-		Pods:        &podClient{client: coreClient, namespace: namespace},
+		Deployments:  &deploymentClient{client: appsClient, namespace: namespace},
+		StatefulSets: &statefulSetClient{client: appsClient, namespace: namespace},
+		ConfigMaps:   &configMapClient{client: coreClient, namespace: namespace},
+		Pods:         &podClient{client: coreClient, namespace: namespace},
 	}, nil
 }
 
@@ -104,6 +112,48 @@ func (c *deploymentClient) Delete(ctx context.Context, name string, opts metav1.
 		UseProtobufAsDefault().
 		Namespace(c.namespace).
 		Resource("deployments").
+		Name(name).
+		Body(&opts).
+		Do(ctx).
+		Error()
+}
+
+type statefulSetClient struct {
+	client    rest.Interface
+	namespace string
+}
+
+func (c *statefulSetClient) Get(ctx context.Context, name string, opts metav1.GetOptions) (*appsv1.StatefulSet, error) {
+	result := &appsv1.StatefulSet{}
+	err := c.client.Get().
+		UseProtobufAsDefault().
+		Namespace(c.namespace).
+		Resource("statefulsets").
+		Name(name).
+		VersionedParams(&opts, ParameterCodec()).
+		Do(ctx).
+		Into(result)
+	return result, err
+}
+
+func (c *statefulSetClient) Create(ctx context.Context, statefulSet *appsv1.StatefulSet, opts metav1.CreateOptions) (*appsv1.StatefulSet, error) {
+	result := &appsv1.StatefulSet{}
+	err := c.client.Post().
+		UseProtobufAsDefault().
+		Namespace(c.namespace).
+		Resource("statefulsets").
+		VersionedParams(&opts, ParameterCodec()).
+		Body(statefulSet).
+		Do(ctx).
+		Into(result)
+	return result, err
+}
+
+func (c *statefulSetClient) Delete(ctx context.Context, name string, opts metav1.DeleteOptions) error {
+	return c.client.Delete().
+		UseProtobufAsDefault().
+		Namespace(c.namespace).
+		Resource("statefulsets").
 		Name(name).
 		Body(&opts).
 		Do(ctx).
