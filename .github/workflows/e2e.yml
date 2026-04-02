@@ -15,7 +15,6 @@ on:
       - 'v[0-9]*'
   pull_request:
     paths-ignore:
-      - '.github/releases.json'
       - 'README.md'
       - 'docs/**'
 
