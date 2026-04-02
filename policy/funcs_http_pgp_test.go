@@ -67,7 +67,11 @@ func TestBuiltinVerifyHTTPPGPSignatureImpl(t *testing.T) {
 	t.Run("verify-failure-returns-false", func(t *testing.T) {
 		encoded := checksumDigest.Encoded()
 		require.NotEmpty(t, encoded)
-		flipped := "0" + encoded[1:]
+		flippedFirst := byte('0')
+		if encoded[0] == '0' {
+			flippedFirst = '1'
+		}
+		flipped := string(flippedFirst) + encoded[1:]
 		badDigest := digest.NewDigestFromEncoded(checksumDigest.Algorithm(), flipped)
 
 		st := &state{
