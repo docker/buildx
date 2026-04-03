@@ -80,15 +80,22 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s: %s", name, strings.TrimSpace(string(out)))
 	}
 
-	if err := patchBuilderDeployment(ctx, env, nodeName); err != nil {
-		return nil, nil, err
-	}
-
 	cmd = exec.CommandContext(ctx, "buildx", "inspect", "--bootstrap", name)
 	cmd.Env = env
 	out, err = cmd.CombinedOutput()
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to bootstrap buildx instance %s: %s", name, strings.TrimSpace(string(out)))
+	}
+
+	if err := patchBuilderDeployment(ctx, env, nodeName); err != nil {
+		return nil, nil, err
+	}
+
+	cmd = exec.CommandContext(ctx, "buildx", "inspect", name)
+	cmd.Env = env
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to inspect buildx instance %s after host-network patch: %s", name, strings.TrimSpace(string(out)))
 	}
 
 	cl := func() error {
