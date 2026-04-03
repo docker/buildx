@@ -43,7 +43,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/validation"
 	"github.com/go-viper/mapstructure/v2"
 	"github.com/sirupsen/logrus"
-	"go.yaml.in/yaml/v3"
+	"go.yaml.in/yaml/v4"
 )
 
 // Options supported by Load
@@ -260,11 +260,13 @@ func WithProfiles(profiles []string) func(*Options) {
 // PostProcessor is used to tweak compose model based on metadata extracted during yaml Unmarshal phase
 // that hardly can be implemented using go-yaml and mapstructure
 type PostProcessor interface {
-	yaml.Unmarshaler
-
 	// Apply changes to compose model based on recorder metadata
 	Apply(interface{}) error
 }
+
+type NoopPostProcessor struct{}
+
+func (NoopPostProcessor) Apply(interface{}) error { return nil }
 
 // LoadConfigFiles ingests config files with ResourceLoader and returns config details with paths to local copies
 func LoadConfigFiles(ctx context.Context, configFiles []string, workingDir string, options ...func(*Options)) (*types.ConfigDetails, error) {
@@ -425,7 +427,7 @@ func loadYamlFile(ctx context.Context,
 		file.Content = content
 	}
 
-	processRawYaml := func(raw interface{}, processors ...PostProcessor) error {
+	processRawYaml := func(raw interface{}, processor PostProcessor) error {
 		converted, err := convertToStringKeysRecursive(raw, "")
 		if err != nil {
 			return err
@@ -445,21 +447,19 @@ func loadYamlFile(ctx context.Context,
 		fixEmptyNotNull(cfg)
 
 		if !opts.SkipExtends {
-			err = ApplyExtends(ctx, cfg, opts, ct, processors...)
+			err = ApplyExtends(ctx, cfg, opts, ct, processor)
 			if err != nil {
 				return err
 			}
 		}
 
-		for _, processor := range processors {
-			if err := processor.Apply(dict); err != nil {
-				return err
-			}
+		if err := processor.Apply(dict); err != nil {
+			return err
 		}
 
 		if !opts.SkipInclude {
 			included = append(included, file.Filename)
-			err = ApplyInclude(ctx, workingDir, environment, cfg, opts, included)
+			err = ApplyInclude(ctx, workingDir, environment, cfg, opts, included, processor)
 			if err != nil {
 				return err
 			}
@@ -517,7 +517,7 @@ func loadYamlFile(ctx context.Context,
 			}
 		}
 	} else {
-		if err := processRawYaml(file.Config); err != nil {
+		if err := processRawYaml(file.Config, NoopPostProcessor{}); err != nil {
 			return nil, nil, err
 		}
 	}

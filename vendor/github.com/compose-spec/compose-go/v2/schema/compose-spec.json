@@ -121,6 +121,7 @@
                 "cache_from": {"type": "array", "items": {"type": "string"}, "description": "List of sources the image builder should use for cache resolution"},
                 "cache_to": {"type": "array", "items": {"type": "string"}, "description": "Cache destinations for the build cache."},
                 "no_cache": {"type": ["boolean", "string"], "description": "Do not use cache when building the image."},
+                "no_cache_filter": {"$ref": "#/definitions/string_or_list", "description": "Do not use build cache for the specified stages."},
                 "additional_contexts": {"$ref": "#/definitions/list_or_dict", "description": "Additional build contexts to use, specified as a map of name to context path or URL."},
                 "network": {"type": "string", "description": "Network mode to use for the build. Options include 'default', 'none', 'host', or a network name."},
                 "provenance": {"type": ["string","boolean"], "description": "Add a provenance attestation"},
@@ -531,19 +532,24 @@
             {"type": "object",
               "patternProperties": {
                 "^[a-zA-Z0-9._-]+$": {
-                  "type": "object",
-                  "properties": {
-                    "endpoint_var": {
-                      "type": "string",
-                      "description": "Environment variable set to AI model endpoint."
+                  "oneOf": [
+                    {
+                      "type": "object",
+                      "properties": {
+                        "endpoint_var": {
+                          "type": "string",
+                          "description": "Environment variable set to AI model endpoint."
+                        },
+                        "model_var": {
+                          "type": "string",
+                          "description": "Environment variable set to AI model name."
+                        }
+                      },
+                      "additionalProperties": false,
+                      "patternProperties": {"^x-": {}}
                     },
-                    "model_var": {
-                      "type": "string",
-                      "description": "Environment variable set to AI model name."
-                    }
-                  },
-                  "additionalProperties": false,
-                  "patternProperties": {"^x-": {}}
+                    {"type": "null"}
+                  ]
                 }
               }
             }

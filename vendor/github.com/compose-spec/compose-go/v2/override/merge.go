@@ -26,7 +26,7 @@ import (
 
 // Merge applies overrides to a config model
 func Merge(right, left map[string]any) (map[string]any, error) {
-	merged, err := mergeYaml(right, left, tree.NewPath())
+	merged, err := MergeYaml(right, left, tree.NewPath())
 	if err != nil {
 		return nil, err
 	}
@@ -70,8 +70,8 @@ func init() {
 	mergeSpecials["services.*.ulimits.*"] = mergeUlimit
 }
 
-// mergeYaml merges map[string]any yaml trees handling special rules
-func mergeYaml(e any, o any, p tree.Path) (any, error) {
+// MergeYaml merges map[string]any yaml trees handling special rules
+func MergeYaml(e any, o any, p tree.Path) (any, error) {
 	for pattern, merger := range mergeSpecials {
 		if p.Matches(pattern) {
 			merged, err := merger(e, o, p)
@@ -110,7 +110,7 @@ func mergeMappings(mapping map[string]any, other map[string]any, p tree.Path) (m
 			continue
 		}
 		next := p.Next(k)
-		merged, err := mergeYaml(e, v, next)
+		merged, err := MergeYaml(e, v, next)
 		if err != nil {
 			return nil, err
 		}

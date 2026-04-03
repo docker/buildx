@@ -938,6 +938,24 @@ func deriveDeepCopy_6(dst, src *BuildConfig) {
 		copy(dst.CacheTo, src.CacheTo)
 	}
 	dst.NoCache = src.NoCache
+	if src.NoCacheFilter == nil {
+		dst.NoCacheFilter = nil
+	} else {
+		if dst.NoCacheFilter != nil {
+			if len(src.NoCacheFilter) > len(dst.NoCacheFilter) {
+				if cap(dst.NoCacheFilter) >= len(src.NoCacheFilter) {
+					dst.NoCacheFilter = (dst.NoCacheFilter)[:len(src.NoCacheFilter)]
+				} else {
+					dst.NoCacheFilter = make([]string, len(src.NoCacheFilter))
+				}
+			} else if len(src.NoCacheFilter) < len(dst.NoCacheFilter) {
+				dst.NoCacheFilter = (dst.NoCacheFilter)[:len(src.NoCacheFilter)]
+			}
+		} else {
+			dst.NoCacheFilter = make([]string, len(src.NoCacheFilter))
+		}
+		copy(dst.NoCacheFilter, src.NoCacheFilter)
+	}
 	if src.AdditionalContexts != nil {
 		dst.AdditionalContexts = make(map[string]string, len(src.AdditionalContexts))
 		deriveDeepCopy_5(dst.AdditionalContexts, src.AdditionalContexts)
