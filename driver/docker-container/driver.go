@@ -104,7 +104,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 			return err
 		}
 		defer resp.Close()
-		return jsonmessage.DisplayJSONMessagesStream(resp, io.Discard, 0, false, nil)
+		return jsonmessage.DisplayStream(resp, io.Discard)
 	}); err != nil {
 		// image pulling failed, check if it exists in local image store.
 		// if not, return pulling error. otherwise log it.
