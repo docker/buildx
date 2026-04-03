@@ -31,6 +31,7 @@ type kubernetesWorker struct {
 
 	k3dName   string
 	k3dConfig string
+	registry  string
 	k3dClose  func() error
 	k3dErr    error
 	k3dOnce   sync.Once
@@ -58,6 +59,10 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 
 	w.k3dOnce.Do(func() {
 		w.k3dName, w.k3dConfig, w.k3dClose, w.k3dErr = helpers.NewK3dServer(ctx, cfg, w.docker.DockerAddress())
+		if w.k3dErr != nil {
+			return
+		}
+		w.registry, w.k3dErr = helpers.K3dNetworkGateway(ctx, w.k3dName, w.docker.DockerAddress())
 	})
 	if w.k3dErr != nil {
 		return nil, w.k3dClose, w.k3dErr
@@ -97,6 +102,7 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 	return &backend{
 		context:             w.docker.DockerAddress(),
 		builder:             name,
+		registryHost:        w.registry,
 		unsupportedFeatures: w.unsupported,
 	}, cl, nil
 }
@@ -123,6 +129,7 @@ func (w *kubernetesWorker) Close() error {
 	w.dockerOnce = sync.Once{}
 	w.k3dName = ""
 	w.k3dConfig = ""
+	w.registry = ""
 	w.k3dClose = nil
 	w.k3dErr = nil
 	w.k3dOnce = sync.Once{}

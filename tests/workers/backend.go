@@ -1,6 +1,7 @@
 package workers
 
 import (
+	"net"
 	"os"
 	"slices"
 	"strings"
@@ -11,6 +12,7 @@ import (
 type backend struct {
 	builder             string
 	context             string
+	registryHost        string
 	unsupportedFeatures []string
 }
 
@@ -46,6 +48,20 @@ func (s *backend) NetNSDetached() bool {
 
 func (s *backend) ExtraEnv() []string {
 	return nil
+}
+
+func (s *backend) RewriteRegistryAddress(in string) string {
+	if s.registryHost == "" {
+		return in
+	}
+	host, port, err := net.SplitHostPort(in)
+	if err != nil {
+		return in
+	}
+	if host != "localhost" && host != "127.0.0.1" {
+		return in
+	}
+	return net.JoinHostPort(s.registryHost, port)
 }
 
 func (s backend) Supports(feature string) bool {

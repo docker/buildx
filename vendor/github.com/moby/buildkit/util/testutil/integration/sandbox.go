@@ -65,6 +65,9 @@ func (sb *sandbox) NewRegistry() (string, error) {
 		return "", err
 	}
 	sb.cleanup.Append(cl)
+	if rewriter, ok := sb.Backend.(interface{ RewriteRegistryAddress(string) string }); ok {
+		url = rewriter.RewriteRegistryAddress(url)
+	}
 	return url, nil
 }
 

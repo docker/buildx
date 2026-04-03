@@ -14,10 +14,12 @@ import (
 
 const (
 	k3dBin = "k3d"
+	dockerBin = "docker"
 
 	k3dCreateTimeout     = 3 * time.Minute
 	k3dKubeconfigTimeout = 30 * time.Second
 	k3dDeleteTimeout     = 30 * time.Second
+	k3dInspectTimeout    = 30 * time.Second
 )
 
 func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAddress string) (clusterName, kubeConfig string, cl func() error, err error) {
@@ -101,4 +103,24 @@ func k3dEnv(dockerAddress string) []string {
 		env = append(env, "K3D_IMAGE_LOADBALANCER="+image)
 	}
 	return env
+}
+
+func K3dNetworkGateway(ctx context.Context, clusterName, dockerAddress string) (string, error) {
+	inspectCtx, cancelInspect := context.WithTimeoutCause(ctx, k3dInspectTimeout, errors.New("timed out inspecting k3d network"))
+	defer cancelInspect()
+
+	cmd := exec.CommandContext(inspectCtx, dockerBin, "network", "inspect", "k3d-"+clusterName, "--format", "{{(index .IPAM.Config 0).Gateway}}")
+	cmd.Env = append(os.Environ(), "DOCKER_CONTEXT="+dockerAddress)
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		if cause := context.Cause(inspectCtx); cause != nil && cause != context.Canceled {
+			err = cause
+		}
+		return "", errors.Wrapf(err, "failed to inspect k3d network %s: %s", clusterName, strings.TrimSpace(string(out)))
+	}
+	gateway := strings.TrimSpace(string(out))
+	if gateway == "" {
+		return "", errors.Errorf("empty gateway for k3d network %s", clusterName)
+	}
+	return gateway, nil
 }
