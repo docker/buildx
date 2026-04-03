@@ -30,12 +30,13 @@ type kubernetesWorker struct {
 	dockerErr   error
 	dockerOnce  sync.Once
 
-	k3dName   string
-	k3dConfig string
-	registry  string
-	k3dClose  func() error
-	k3dErr    error
-	k3dOnce   sync.Once
+	k3dName       string
+	k3dConfig     string
+	registry      string
+	registryPorts []int
+	k3dClose      func() error
+	k3dErr        error
+	k3dOnce       sync.Once
 }
 
 func (w *kubernetesWorker) Name() string {
@@ -64,13 +65,17 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 			return
 		}
 		w.registry, w.k3dErr = helpers.K3dNetworkGateway(ctx, w.k3dName, w.docker.DockerAddress())
+		if w.k3dErr != nil {
+			return
+		}
+		w.registryPorts, w.k3dErr = helpers.ReserveK3dRegistryPorts(helpers.K3dRegistryPortCount)
 	})
 	if w.k3dErr != nil {
 		return nil, w.k3dClose, w.k3dErr
 	}
 
 	daemonConfig := append([]integration.ConfigUpdater{}, cfg.DaemonConfig...)
-	daemonConfig = append(daemonConfig, helpers.K3dRegistryConfig(w.registry))
+	daemonConfig = append(daemonConfig, helpers.K3dRegistryConfig(w.registry, w.registryPorts))
 	cfgfile, release, err := integration.WriteConfig(daemonConfig)
 	if err != nil {
 		return nil, nil, err
@@ -116,6 +121,7 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 		context:             w.docker.DockerAddress(),
 		builder:             name,
 		registryHost:        w.registry,
+		registryPorts:       append([]int(nil), w.registryPorts...),
 		unsupportedFeatures: w.unsupported,
 	}, cl, nil
 }
@@ -143,6 +149,7 @@ func (w *kubernetesWorker) Close() error {
 	w.k3dName = ""
 	w.k3dConfig = ""
 	w.registry = ""
+	w.registryPorts = nil
 	w.k3dClose = nil
 	w.k3dErr = nil
 	w.k3dOnce = sync.Once{}

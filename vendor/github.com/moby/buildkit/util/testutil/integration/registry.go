@@ -15,6 +15,10 @@ import (
 )
 
 func NewRegistry(dir string) (url string, cl func() error, err error) {
+	return NewRegistryAt(dir, "0.0.0.0:0")
+}
+
+func NewRegistryAt(dir, addr string) (url string, cl func() error, err error) {
 	if err := LookupBinary("registry"); err != nil {
 		return "", nil, err
 	}
@@ -42,14 +46,17 @@ func NewRegistry(dir string) (url string, cl func() error, err error) {
 		if !errors.Is(err, os.ErrNotExist) {
 			return "", nil, err
 		}
+		if addr == "" {
+			addr = "0.0.0.0:0"
+		}
 		template := fmt.Sprintf(`version: 0.1
 loglevel: debug
 storage:
     filesystem:
         rootdirectory: %s
 http:
-    addr: 0.0.0.0:0
-`, filepath.Join(dir, "data"))
+    addr: %s
+`, filepath.Join(dir, "data"), addr)
 
 		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(template), 0600); err != nil {
 			return "", nil, err

@@ -3,8 +3,10 @@ package helpers
 import (
 	"context"
 	"fmt"
+	"net"
 	"os"
 	"os/exec"
+	"strconv"
 	"strings"
 	"time"
 
@@ -14,13 +16,14 @@ import (
 )
 
 const (
-	k3dBin = "k3d"
+	k3dBin    = "k3d"
 	dockerBin = "docker"
 
 	k3dCreateTimeout     = 3 * time.Minute
 	k3dKubeconfigTimeout = 30 * time.Second
 	k3dDeleteTimeout     = 30 * time.Second
 	k3dInspectTimeout    = 30 * time.Second
+	K3dRegistryPortCount = 16
 )
 
 func NewK3dServer(ctx context.Context, cfg *integration.BackendConfig, dockerAddress string) (clusterName, kubeConfig string, cl func() error, err error) {
@@ -126,17 +129,57 @@ func K3dNetworkGateway(ctx context.Context, clusterName, dockerAddress string) (
 	return gateway, nil
 }
 
-func K3dRegistryConfig(host string) integration.ConfigUpdater {
-	return k3dRegistryConfig(host)
+func ReserveK3dRegistryPorts(count int) ([]int, error) {
+	listeners := make([]net.Listener, 0, count)
+	ports := make([]int, 0, count)
+	defer func() {
+		for _, l := range listeners {
+			l.Close()
+		}
+	}()
+
+	for i := 0; i < count; i++ {
+		l, err := net.Listen("tcp", "0.0.0.0:0")
+		if err != nil {
+			return nil, err
+		}
+		listeners = append(listeners, l)
+		addr, ok := l.Addr().(*net.TCPAddr)
+		if !ok {
+			return nil, errors.Errorf("unexpected registry listener address %T", l.Addr())
+		}
+		ports = append(ports, addr.Port)
+	}
+
+	return ports, nil
 }
 
-type k3dRegistryConfig string
+func K3dRegistryConfig(host string, ports []int) integration.ConfigUpdater {
+	return k3dRegistryConfig{
+		host:  host,
+		ports: append([]int(nil), ports...),
+	}
+}
+
+type k3dRegistryConfig struct {
+	host  string
+	ports []int
+}
 
 func (rc k3dRegistryConfig) UpdateConfigFile(in string) (string, func() error) {
-	return fmt.Sprintf(`%s
+	if rc.host == "" || len(rc.ports) == 0 {
+		return in, nil
+	}
+
+	var b strings.Builder
+	b.WriteString(in)
+	for _, port := range rc.ports {
+		fmt.Fprintf(&b, `
 
 [registry.%q]
   http = true
   insecure = true
-`, in, string(rc)), nil
+`, net.JoinHostPort(rc.host, strconv.Itoa(port)))
+	}
+	return b.String(), nil
 }
