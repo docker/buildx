@@ -92,7 +92,8 @@ func (sb *sandbox) Value(k string) any {
 
 func newSandbox(ctx context.Context, t *testing.T, w Worker, mirror string, mv matrixValue) (s Sandbox, cl func() error, err error) {
 	cfg := &BackendConfig{
-		Logs: make(map[string]*bytes.Buffer),
+		Logs:   make(map[string]*bytes.Buffer),
+		Mirror: mirror,
 	}
 
 	for _, v := range mv.values {
