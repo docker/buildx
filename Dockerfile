@@ -156,11 +156,13 @@ COPY --link --from=compose /docker-compose /usr/bin/compose
 COPY --link --from=undock /usr/local/bin/undock /usr/bin/
 COPY --link --from=k3d /bin/k3d /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
+COPY --chmod=755 ./hack/test-entrypoint.sh /usr/bin/
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 ENV TEST_DOCKER_EXTRA="docker@28.5=/opt/docker-alt-28,docker@27.5=/opt/docker-alt-27"
 ENV TEST_K3S_IMAGE="rancher/k3s:${K3S_VERSION}"
 ENV TEST_K3D_TOOLS_IMAGE="ghcr.io/k3d-io/k3d-tools:${K3D_VERSION}"
 ENV TEST_K3D_LOADBALANCER_IMAGE="ghcr.io/k3d-io/k3d-proxy:${K3D_VERSION}"
+ENTRYPOINT ["/usr/bin/test-entrypoint.sh"]
 
 FROM integration-test-base AS integration-test
 COPY . .
