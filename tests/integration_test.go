@@ -17,6 +17,7 @@ func init() {
 		workers.InitRemoteMultiNodeWorker()
 	} else {
 		workers.InitRemoteWorker()
+		workers.InitKubernetesWorker()
 	}
 }
 

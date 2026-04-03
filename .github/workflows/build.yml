@@ -94,6 +94,11 @@ jobs:
           - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
             pkg: ./tests
             mode: experimental
+          - worker: kubernetes
+            pkg: ./tests
+          - worker: kubernetes
+            pkg: ./tests
+            mode: experimental
     steps:
       -
         name: Prepare
@@ -104,7 +109,7 @@ jobs:
           fi
           testFlags="--run=//worker=$(echo "${{ matrix.worker }}" | sed 's/\+/\\+/g')$"
           case "${{ matrix.worker }}" in
-            docker | docker+containerd | docker@* | docker+containerd@* | remote+multinode)
+            docker | docker+containerd | docker@* | docker+containerd@* | remote+multinode | kubernetes)
               echo "TESTFLAGS=${{ env.TESTFLAGS_DOCKER }} $testFlags" >> $GITHUB_ENV
               ;;
             *)
