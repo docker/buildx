@@ -19,6 +19,7 @@ import (
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/containerd/v2/pkg/epoch"
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/cobrautil/completion"
@@ -392,7 +393,7 @@ workers0:
 	readAttr(attrs, "ulimit", &out.Config.Ulimit, nil)
 	readAttr(attrs, "build-arg:BUILDKIT_CACHE_MOUNT_NS", &out.Config.CacheMountNS, nil)
 	readAttr(attrs, "build-arg:BUILDKIT_DOCKERFILE_CHECK", &out.Config.DockerfileCheckConfig, nil)
-	readAttr(attrs, "build-arg:SOURCE_DATE_EPOCH", &out.Config.SourceDateEpoch, nil)
+	readAttr(attrs, "build-arg:"+epoch.SourceDateEpochEnv, &out.Config.SourceDateEpoch, nil)
 	readAttr(attrs, "build-arg:SANDBOX_HOSTNAME", &out.Config.SandboxHostname, nil)
 
 	var unusedAttrs []keyValueOutput

@@ -18,6 +18,7 @@ import (
 	"time"
 
 	"github.com/containerd/console"
+	"github.com/containerd/containerd/v2/pkg/epoch"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store"
@@ -139,10 +140,9 @@ func (o *buildOptions) toOptions() (*BuildOptions, error) {
 		ExportLoad:     o.exportLoad,
 	}
 
-	// TODO: extract env var parsing to a method easily usable by library consumers
-	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
-		if _, ok := opts.BuildArgs["SOURCE_DATE_EPOCH"]; !ok {
-			opts.BuildArgs["SOURCE_DATE_EPOCH"] = v
+	if _, ok := opts.BuildArgs[epoch.SourceDateEpochEnv]; !ok {
+		if v := os.Getenv(epoch.SourceDateEpochEnv); v != "" {
+			opts.BuildArgs[epoch.SourceDateEpochEnv] = v
 		}
 	}
 

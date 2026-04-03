@@ -222,6 +222,7 @@ github.com/containerd/containerd/v2/internal/fsverity
 github.com/containerd/containerd/v2/internal/lazyregexp
 github.com/containerd/containerd/v2/internal/randutil
 github.com/containerd/containerd/v2/pkg/archive/compression
+github.com/containerd/containerd/v2/pkg/epoch
 github.com/containerd/containerd/v2/pkg/filters
 github.com/containerd/containerd/v2/pkg/identifiers
 github.com/containerd/containerd/v2/pkg/kernelversion
