@@ -61,6 +61,7 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 	defer os.RemoveAll(filepath.Dir(cfgfile))
 
 	name := "integration-kubernetes-" + identity.NewID()
+	nodeName := "buildkit-" + identity.NewID()
 	env := append(
 		os.Environ(),
 		"BUILDX_CONFIG=/tmp/buildx-"+name,
@@ -69,6 +70,7 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 
 	cmd := exec.CommandContext(ctx, "buildx", "create",
 		"--name="+name,
+		"--node="+nodeName,
 		"--buildkitd-config="+cfgfile,
 		"--driver=kubernetes",
 	)
@@ -78,7 +80,7 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s: %s", name, strings.TrimSpace(string(out)))
 	}
 
-	if err := patchBuilderDeployment(ctx, env, name); err != nil {
+	if err := patchBuilderDeployment(ctx, env, nodeName); err != nil {
 		return nil, nil, err
 	}
 
@@ -101,19 +103,19 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 	}, cl, nil
 }
 
-func patchBuilderDeployment(ctx context.Context, env []string, name string) error {
-	cmd := exec.CommandContext(ctx, "kubectl", "patch", "deployment", name, "--type=merge", "-p", `{"spec":{"template":{"spec":{"hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}}}`)
+func patchBuilderDeployment(ctx context.Context, env []string, nodeName string) error {
+	cmd := exec.CommandContext(ctx, "kubectl", "patch", "deployment", nodeName, "--type=merge", "-p", `{"spec":{"template":{"spec":{"hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}}}`)
 	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
-		return errors.Wrapf(err, "failed to patch deployment %s for host networking: %s", name, strings.TrimSpace(string(out)))
+		return errors.Wrapf(err, "failed to patch deployment %s for host networking: %s", nodeName, strings.TrimSpace(string(out)))
 	}
 
-	cmd = exec.CommandContext(ctx, "kubectl", "rollout", "status", "deployment/"+name, "--timeout=120s")
+	cmd = exec.CommandContext(ctx, "kubectl", "rollout", "status", "deployment/"+nodeName, "--timeout=120s")
 	cmd.Env = env
 	out, err = cmd.CombinedOutput()
 	if err != nil {
-		return errors.Wrapf(err, "deployment %s did not roll out after host-network patch: %s", name, strings.TrimSpace(string(out)))
+		return errors.Wrapf(err, "deployment %s did not roll out after host-network patch: %s", nodeName, strings.TrimSpace(string(out)))
 	}
 	return nil
 }
