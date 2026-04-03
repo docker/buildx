@@ -61,29 +61,37 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 	defer os.RemoveAll(filepath.Dir(cfgfile))
 
 	name := "integration-kubernetes-" + identity.NewID()
-	cmd := exec.CommandContext(ctx, "buildx", "create",
-		"--bootstrap",
-		"--name="+name,
-		"--buildkitd-config="+cfgfile,
-		"--driver=kubernetes",
-	)
-	cmd.Env = append(
+	env := append(
 		os.Environ(),
 		"BUILDX_CONFIG=/tmp/buildx-"+name,
 		"KUBECONFIG="+w.k3sConfig,
 	)
+
+	cmd := exec.CommandContext(ctx, "buildx", "create",
+		"--name="+name,
+		"--buildkitd-config="+cfgfile,
+		"--driver=kubernetes",
+	)
+	cmd.Env = env
 	out, err := cmd.CombinedOutput()
 	if err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to create buildx instance %s: %s", name, strings.TrimSpace(string(out)))
 	}
 
+	if err := patchBuilderDeployment(ctx, env, name); err != nil {
+		return nil, nil, err
+	}
+
+	cmd = exec.CommandContext(ctx, "buildx", "inspect", "--bootstrap", name)
+	cmd.Env = env
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		return nil, nil, errors.Wrapf(err, "failed to bootstrap buildx instance %s: %s", name, strings.TrimSpace(string(out)))
+	}
+
 	cl := func() error {
 		cmd := exec.CommandContext(context.Background(), "buildx", "rm", "-f", name)
-		cmd.Env = append(
-			os.Environ(),
-			"BUILDX_CONFIG=/tmp/buildx-"+name,
-			"KUBECONFIG="+w.k3sConfig,
-		)
+		cmd.Env = env
 		return cmd.Run()
 	}
 
@@ -91,6 +99,23 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 		builder:             name,
 		unsupportedFeatures: w.unsupported,
 	}, cl, nil
+}
+
+func patchBuilderDeployment(ctx context.Context, env []string, name string) error {
+	cmd := exec.CommandContext(ctx, "kubectl", "patch", "deployment", name, "--type=merge", "-p", `{"spec":{"template":{"spec":{"hostNetwork":true,"dnsPolicy":"ClusterFirstWithHostNet"}}}}`)
+	cmd.Env = env
+	out, err := cmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "failed to patch deployment %s for host networking: %s", name, strings.TrimSpace(string(out)))
+	}
+
+	cmd = exec.CommandContext(ctx, "kubectl", "rollout", "status", "deployment/"+name, "--timeout=120s")
+	cmd.Env = env
+	out, err = cmd.CombinedOutput()
+	if err != nil {
+		return errors.Wrapf(err, "deployment %s did not roll out after host-network patch: %s", name, strings.TrimSpace(string(out)))
+	}
+	return nil
 }
 
 func (w *kubernetesWorker) Close() error {
