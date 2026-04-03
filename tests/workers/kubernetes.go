@@ -4,6 +4,7 @@ import (
 	"context"
 	"os"
 	"os/exec"
+	"path/filepath"
 	"strings"
 	"sync"
 
@@ -68,10 +69,22 @@ func (w *kubernetesWorker) New(ctx context.Context, cfg *integration.BackendConf
 		return nil, w.k3dClose, w.k3dErr
 	}
 
+	daemonConfig := append([]integration.ConfigUpdater{}, cfg.DaemonConfig...)
+	daemonConfig = append(daemonConfig, helpers.K3dRegistryConfig(w.registry))
+	cfgfile, release, err := integration.WriteConfig(daemonConfig)
+	if err != nil {
+		return nil, nil, err
+	}
+	if release != nil {
+		defer release()
+	}
+	defer os.RemoveAll(filepath.Dir(cfgfile))
+
 	name := "integration-kubernetes-" + identity.NewID()
 	cmd := exec.CommandContext(ctx, "buildx", "create",
 		"--bootstrap",
 		"--name="+name,
+		"--buildkitd-config="+cfgfile,
 		"--driver=kubernetes",
 		"--driver-opt=image="+helpers.KubernetesBuildkitImage(),
 		"--driver-opt=timeout=60s",

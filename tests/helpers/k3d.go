@@ -2,6 +2,7 @@ package helpers
 
 import (
 	"context"
+	"fmt"
 	"os"
 	"os/exec"
 	"strings"
@@ -123,4 +124,19 @@ func K3dNetworkGateway(ctx context.Context, clusterName, dockerAddress string) (
 		return "", errors.Errorf("empty gateway for k3d network %s", clusterName)
 	}
 	return gateway, nil
+}
+
+func K3dRegistryConfig(host string) integration.ConfigUpdater {
+	return k3dRegistryConfig(host)
+}
+
+type k3dRegistryConfig string
+
+func (rc k3dRegistryConfig) UpdateConfigFile(in string) (string, func() error) {
+	return fmt.Sprintf(`%s
+
+[registry.%q]
+  http = true
+  insecure = true
+`, in, string(rc)), nil
 }
