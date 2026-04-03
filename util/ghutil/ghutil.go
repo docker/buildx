@@ -30,7 +30,7 @@ func GithubActionsContext() ([]byte, error) {
 	// "GITHUB_EVENT_NAME": "push"
 	// "GITHUB_EVENT_PATH": "/home/runner/work/_temp/_github_workflow/event.json"
 	m["github_event_name"] = githubEventName
-	dt, err := os.ReadFile(githubEventPath)
+	dt, err := os.ReadFile(githubEventPath) // #nosec G703 -- using parameterized path by design
 	if err != nil {
 		return nil, errors.Wrapf(err, "failed to read GITHUB_EVENT_PATH %q", githubEventPath)
 	}
