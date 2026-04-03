@@ -297,46 +297,16 @@ workers0:
 	}
 
 	if rec.Error != nil || rec.ExternalError != nil {
-		out.Error = &errorOutput{}
 		if rec.Error != nil {
 			if codes.Code(rec.Error.Code) == codes.Canceled {
 				out.Status = statusCanceled
 			} else {
 				out.Status = statusError
 			}
-			out.Error.Code = int(codes.Code(rec.Error.Code))
-			out.Error.Message = rec.Error.Message
 		}
-		if rec.ExternalError != nil {
-			dt, err := content.ReadBlob(ctx, store, ociDesc(rec.ExternalError))
-			if err != nil {
-				return errors.Wrapf(err, "failed to read external error %s", rec.ExternalError.Digest)
-			}
-			var st spb.Status
-			if err := proto.Unmarshal(dt, &st); err != nil {
-				return errors.Wrapf(err, "failed to unmarshal external error %s", rec.ExternalError.Digest)
-			}
-			retErr := grpcerrors.FromGRPC(status.ErrorProto(&st))
-			var errsources bytes.Buffer
-			for _, s := range errdefs.Sources(retErr) {
-				s.Print(&errsources)
-				errsources.WriteString("\n")
-			}
-			out.Error.Sources = errsources.Bytes()
-			var ve *errdefs.VertexError
-			if errors.As(retErr, &ve) {
-				dgst, err := digest.Parse(ve.Digest)
-				if err != nil {
-					return errors.Wrapf(err, "failed to parse vertex digest %s", ve.Digest)
-				}
-				name, logs, err := loadVertexLogs(ctx, c, rec.Ref, dgst, 16)
-				if err != nil {
-					return errors.Wrapf(err, "failed to load vertex logs %s", dgst)
-				}
-				out.Error.Name = name
-				out.Error.Logs = logs
-			}
-			out.Error.Stack = fmt.Appendf(nil, "%+v", stack.Formatter(retErr))
+		var loadErr error
+		if out.Error, loadErr = loadBuildErrorOutput(ctx, c, rec); loadErr != nil {
+			return loadErr
 		}
 	}
 
@@ -616,24 +586,7 @@ workers0:
 	}
 
 	if out.Error != nil {
-		if out.Error.Sources != nil {
-			fmt.Fprint(dockerCli.Out(), string(out.Error.Sources))
-		}
-		if len(out.Error.Logs) > 0 {
-			fmt.Fprintln(dockerCli.Out(), "Logs:")
-			fmt.Fprintf(dockerCli.Out(), "> => %s:\n", out.Error.Name)
-			for _, l := range out.Error.Logs {
-				fmt.Fprintln(dockerCli.Out(), "> "+l)
-			}
-			fmt.Fprintln(dockerCli.Out())
-		}
-		if len(out.Error.Stack) > 0 {
-			if debug.IsEnabled() {
-				fmt.Fprintf(dockerCli.Out(), "\n%s\n", out.Error.Stack)
-			} else {
-				fmt.Fprintf(dockerCli.Out(), "Enable --debug to see stack traces for error\n")
-			}
-		}
+		printErrorDetails(dockerCli.Out(), out.Error)
 	}
 
 	fmt.Fprintf(dockerCli.Out(), "Print build logs: docker buildx history logs %s\n", rec.Ref)
@@ -669,6 +622,78 @@ func inspectCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 	flags.StringVar(&options.format, "format", formatter.PrettyFormatKey, "Format the output")
 
 	return cmd
+}
+
+// printErrorDetails prints the sources, logs, and stack trace from an error output.
+func printErrorDetails(w io.Writer, errOut *errorOutput) {
+	if len(errOut.Sources) > 0 {
+		fmt.Fprint(w, string(errOut.Sources))
+	}
+	if len(errOut.Logs) > 0 {
+		fmt.Fprintln(w, "Logs:")
+		fmt.Fprintf(w, "> => %s:\n", errOut.Name)
+		for _, l := range errOut.Logs {
+			fmt.Fprintln(w, "> "+l)
+		}
+		fmt.Fprintln(w)
+	}
+	if len(errOut.Stack) > 0 {
+		if debug.IsEnabled() {
+			fmt.Fprintf(w, "\n%s\n", errOut.Stack)
+		} else {
+			fmt.Fprintf(w, "Enable --debug to see stack traces for error\n")
+		}
+	}
+}
+
+// loadBuildErrorOutput builds an errorOutput from a history record's error fields.
+// It returns nil if the record has no error.
+func loadBuildErrorOutput(ctx context.Context, c *client.Client, rec *historyRecord) (*errorOutput, error) {
+	if rec.Error == nil && rec.ExternalError == nil {
+		return nil, nil
+	}
+
+	out := &errorOutput{}
+
+	if rec.Error != nil {
+		out.Code = int(codes.Code(rec.Error.Code))
+		out.Message = rec.Error.Message
+	}
+
+	if rec.ExternalError != nil {
+		store := proxy.NewContentStore(c.ContentClient())
+		dt, err := content.ReadBlob(ctx, store, ociDesc(rec.ExternalError))
+		if err != nil {
+			return nil, errors.Wrapf(err, "failed to read external error %s", rec.ExternalError.Digest)
+		}
+		var st spb.Status
+		if err := proto.Unmarshal(dt, &st); err != nil {
+			return nil, errors.Wrapf(err, "failed to unmarshal external error %s", rec.ExternalError.Digest)
+		}
+		retErr := grpcerrors.FromGRPC(status.ErrorProto(&st))
+		var errsources bytes.Buffer
+		for _, s := range errdefs.Sources(retErr) {
+			s.Print(&errsources)
+			errsources.WriteString("\n")
+		}
+		out.Sources = errsources.Bytes()
+		var ve *errdefs.VertexError
+		if errors.As(retErr, &ve) {
+			dgst, err := digest.Parse(ve.Digest)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to parse vertex digest %s", ve.Digest)
+			}
+			name, logs, err := loadVertexLogs(ctx, c, rec.Ref, dgst, 16)
+			if err != nil {
+				return nil, errors.Wrapf(err, "failed to load vertex logs %s", dgst)
+			}
+			out.Name = name
+			out.Logs = logs
+		}
+		out.Stack = fmt.Appendf(nil, "%+v", stack.Formatter(retErr))
+	}
+
+	return out, nil
 }
 
 func loadVertexLogs(ctx context.Context, c *client.Client, ref string, dgst digest.Digest, limit int) (string, []string, error) {
