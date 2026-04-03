@@ -17,6 +17,7 @@ import (
 	"text/tabwriter"
 
 	"github.com/containerd/console"
+	"github.com/containerd/containerd/v2/pkg/epoch"
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/bake/hclparser"
@@ -241,16 +242,20 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	if v := os.Getenv("SOURCE_DATE_EPOCH"); v != "" {
-		// TODO: extract env var parsing to a method easily usable by library consumers
-		for _, t := range tgts {
-			if _, ok := t.Args["SOURCE_DATE_EPOCH"]; ok {
-				continue
-			}
+	var sourceDateEpoch *string
+	for _, t := range tgts {
+		if _, ok := t.Args[epoch.SourceDateEpochEnv]; ok {
+			continue
+		}
+
+		v := os.Getenv(epoch.SourceDateEpochEnv)
+		sourceDateEpoch = &v
+
+		if *sourceDateEpoch != "" {
 			if t.Args == nil {
 				t.Args = map[string]*string{}
 			}
-			t.Args["SOURCE_DATE_EPOCH"] = &v
+			t.Args[epoch.SourceDateEpochEnv] = sourceDateEpoch
 		}
 	}
 
