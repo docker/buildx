@@ -19,7 +19,6 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.3.1+incompatible
 	github.com/docker/cli-docs-tool v0.11.0
-	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
 	github.com/gofrs/flock v0.13.0
 	github.com/golang/snappy v1.0.0
