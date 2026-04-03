@@ -94,6 +94,11 @@ jobs:
           - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
             pkg: ./tests
             mode: experimental
+          - worker: kubernetes
+            pkg: ./tests
+          - worker: kubernetes
+            pkg: ./tests
+            mode: experimental
     steps:
       -
         name: Prepare
