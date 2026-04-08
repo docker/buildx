@@ -1,5 +1,5 @@
 // FIXME(thaJeztah): remove once we are a module; the go:build directive prevents go from downgrading language version to go1.16:
-//go:build go1.24
+//go:build go1.25
 
 package formatter
 
@@ -24,7 +24,7 @@ func MarshalJSON(x any) ([]byte, error) {
 // marshalMap marshals x to map[string]any
 func marshalMap(x any) (map[string]any, error) {
 	val := reflect.ValueOf(x)
-	if val.Kind() != reflect.Ptr {
+	if val.Kind() != reflect.Pointer {
 		return nil, fmt.Errorf("expected a pointer to a struct, got %v", val.Kind())
 	}
 	if val.IsNil() {
