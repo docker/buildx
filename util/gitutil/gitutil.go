@@ -101,11 +101,11 @@ func (c *Git) RemoteURL() (string, error) {
 }
 
 func (c *Git) FullCommit() (string, error) {
-	return c.clean(c.run("show", "--format=%H", "HEAD", "--quiet", "--"))
+	return c.clean(c.run("rev-parse", "HEAD"))
 }
 
 func (c *Git) ShortCommit() (string, error) {
-	return c.clean(c.run("show", "--format=%h", "HEAD", "--quiet", "--"))
+	return c.clean(c.run("rev-parse", "--short", "HEAD"))
 }
 
 func (c *Git) Tag() (string, error) {
@@ -185,8 +185,11 @@ func IsUnknownRevision(err error) bool {
 		return false
 	}
 	// https://github.com/git/git/blob/a6a323b31e2bcbac2518bddec71ea7ad558870eb/setup.c#L204
+	// https://github.com/git/git/blob/1adf5bca8c3cf778103548b9355777cf2d12efdd/builtin/rev-parse.c#L585
 	errMsg := strings.ToLower(err.Error())
-	return strings.Contains(errMsg, "unknown revision or path not in the working tree") || strings.Contains(errMsg, "bad revision")
+	return strings.Contains(errMsg, "unknown revision or path not in the working tree") ||
+		strings.Contains(errMsg, "bad revision") ||
+		strings.Contains(errMsg, "needed a single revision")
 }
 
 // stripCredentials takes a URL and strips username and password from it.
