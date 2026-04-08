@@ -20,6 +20,7 @@ import (
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/context/docker"
+	contextstore "github.com/docker/cli/cli/context/store"
 	"github.com/docker/cli/opts"
 	"github.com/moby/buildkit/client"
 	mobyarchive "github.com/moby/go-archive"
@@ -153,19 +154,15 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		// is a local socket as requesting GPU on container builder creation
 		// is not enough when generating the CDI specification for GPU devices.
 		// https://github.com/docker/buildx/pull/3320
-		if os.Getenv("WSL_DISTRO_NAME") != "" {
-			if cm, err := d.ContextStore.GetMetadata(d.DockerContext); err == nil {
-				if epm, err := docker.EndpointFromContext(cm); err == nil && isSocket(epm.Host) {
-					wslLibPath := "/usr/lib/wsl"
-					if st, err := os.Stat(wslLibPath); err == nil && st.IsDir() {
-						mounts = append(mounts, mount.Mount{
-							Type:     mount.TypeBind,
-							Source:   wslLibPath,
-							Target:   wslLibPath,
-							ReadOnly: true,
-						})
-					}
-				}
+		if os.Getenv("WSL_DISTRO_NAME") != "" && hasLocalSocketEndpoint(d.EndpointAddr, d.ContextStore) {
+			wslLibPath := "/usr/lib/wsl"
+			if st, err := os.Stat(wslLibPath); err == nil && st.IsDir() {
+				mounts = append(mounts, mount.Mount{
+					Type:     mount.TypeBind,
+					Source:   wslLibPath,
+					Target:   wslLibPath,
+					ReadOnly: true,
+				})
 			}
 		}
 		hc.Mounts = mounts
@@ -572,6 +569,24 @@ func getBuildkitFlags(initConfig driver.InitConfig) []string {
 		flags = append(newFlags, flags...)
 	}
 	return flags
+}
+
+func hasLocalSocketEndpoint(endpoint string, contextStore contextstore.Reader) bool {
+	if isSocket(endpoint) {
+		return true
+	}
+	if contextStore == nil {
+		return false
+	}
+	cm, err := contextStore.GetMetadata(endpoint)
+	if err != nil {
+		return false
+	}
+	epm, err := docker.EndpointFromContext(cm)
+	if err != nil {
+		return false
+	}
+	return isSocket(epm.Host)
 }
 
 func isSocket(addr string) bool {
