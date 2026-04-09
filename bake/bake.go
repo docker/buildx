@@ -1513,7 +1513,8 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	}
 
 	var extraHosts []string
-	for k, v := range t.ExtraHosts {
+	for _, k := range slices.Sorted(maps.Keys(t.ExtraHosts)) {
+		v := t.ExtraHosts[k]
 		if v == nil {
 			continue
 		}
