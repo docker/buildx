@@ -1,9 +1,11 @@
 package commands
 
 import (
+	"context"
 	"io"
 	"net"
 	"os"
+	"sync"
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/build"
@@ -79,27 +81,66 @@ func runDialStdio(dockerCli command.Cli, opts stdioOptions) error {
 			return err
 		}
 
-		defer conn.Close()
-
-		go func() {
-			<-ctx.Done()
-			closeWrite(conn)
-		}()
-
-		var eg errgroup.Group
-
-		eg.Go(func() error {
-			_, err := io.Copy(conn, os.Stdin)
-			closeWrite(conn)
-			return err
-		})
-		eg.Go(func() error {
-			_, err := io.Copy(os.Stdout, conn)
-			closeRead(conn)
-			return err
-		})
-		return eg.Wait()
+		return proxyConn(ctx, conn, os.Stdin, os.Stdout)
 	})
+}
+
+var errStdinProxyCanceled = errors.New("stdin proxy canceled")
+
+func proxyConn(ctx context.Context, conn net.Conn, stdin io.Reader, stdout io.Writer) error {
+	defer conn.Close()
+
+	cancelableStdin := newCancelableReader(stdin)
+	defer cancelableStdin.cancel(errStdinProxyCanceled)
+
+	stopAfterFunc := context.AfterFunc(ctx, func() {
+		cancelableStdin.cancel(context.Cause(ctx))
+		closeWrite(conn)
+	})
+	defer stopAfterFunc()
+
+	var eg errgroup.Group
+	eg.Go(func() error {
+		_, err := io.Copy(conn, cancelableStdin)
+		closeWrite(conn)
+		if err != nil && !errors.Is(err, errStdinProxyCanceled) {
+			return err
+		}
+		return nil
+	})
+	eg.Go(func() error {
+		_, err := io.Copy(stdout, conn)
+		cancelableStdin.cancel(errStdinProxyCanceled)
+		closeRead(conn)
+		if err != nil && !errors.Is(err, io.EOF) {
+			return err
+		}
+		return nil
+	})
+	return eg.Wait()
+}
+
+type cancelableReader struct {
+	io.Reader
+	cancel func(error)
+}
+
+func newCancelableReader(r io.Reader) *cancelableReader {
+	pr, pw := io.Pipe()
+	var once sync.Once
+	closePipe := func(err error) {
+		once.Do(func() {
+			_ = pw.CloseWithError(err)
+		})
+	}
+	go func() {
+		_, err := io.Copy(pw, r)
+		closePipe(err)
+	}()
+	return &cancelableReader{
+		Reader: pr,
+		cancel: closePipe,
+	}
 }
 
 func closeRead(conn net.Conn) error {
