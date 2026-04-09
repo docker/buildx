@@ -38,6 +38,7 @@ type DeploymentOpt struct {
 	CustomAnnotations         map[string]string
 	CustomLabels              map[string]string
 	Tolerations               []corev1.Toleration
+	OwnerReferences           []metav1.OwnerReference
 	RequestsCPU               string
 	RequestsMemory            string
 	RequestsEphemeralStorage  string
@@ -154,10 +155,11 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 	}
 
 	meta := metav1.ObjectMeta{
-		Namespace:   opt.Namespace,
-		Name:        opt.Name,
-		Labels:      labels,
-		Annotations: annotations,
+		Namespace:       opt.Namespace,
+		Name:            opt.Name,
+		Labels:          labels,
+		Annotations:     annotations,
+		OwnerReferences: opt.OwnerReferences,
 	}
 
 	for _, cfg := range splitConfigFiles(opt.ConfigFiles) {
