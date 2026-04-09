@@ -646,7 +646,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
 github.com/mitchellh/hashstructure/v2
-# github.com/moby/buildkit v0.29.0
+# github.com/moby/buildkit v0.29.1-0.20260408185135-a243ce438aee
 ## explicit; go 1.25.5
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -743,6 +743,7 @@ github.com/moby/buildkit/util/tracing/delegated
 github.com/moby/buildkit/util/tracing/detect
 github.com/moby/buildkit/util/tracing/env
 github.com/moby/buildkit/util/tracing/otlptracegrpc
+github.com/moby/buildkit/util/urlutil
 github.com/moby/buildkit/version
 # github.com/moby/docker-image-spec v1.3.1
 ## explicit; go 1.18
