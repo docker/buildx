@@ -74,6 +74,12 @@ linters:
           alias: "ocispecs"
         - pkg: "github.com/opencontainers/go-digest"
           alias: "digest"
+    staticcheck:
+      # Enable all options, with some exceptions.
+      # For defaults, see https://golangci-lint.run/usage/linters/#staticcheck
+      checks:
+        - all
+        - -QF1008     # Omit embedded fields from selector expression; https://staticcheck.dev/docs/checks/#QF1008
     testifylint:
       disable:
         - empty
