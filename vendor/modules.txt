@@ -743,6 +743,7 @@ github.com/moby/buildkit/util/tracing/delegated
 github.com/moby/buildkit/util/tracing/detect
 github.com/moby/buildkit/util/tracing/env
 github.com/moby/buildkit/util/tracing/otlptracegrpc
+github.com/moby/buildkit/util/urlutil
 github.com/moby/buildkit/version
 # github.com/moby/docker-image-spec v1.3.1
 ## explicit; go 1.18

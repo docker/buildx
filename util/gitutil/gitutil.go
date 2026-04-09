@@ -2,12 +2,12 @@ package gitutil
 
 import (
 	"context"
-	"net/url"
 	"path/filepath"
 	"strings"
 
 	"github.com/docker/buildx/util/osutil"
 	bkgitutil "github.com/moby/buildkit/util/gitutil"
+	bkurlutil "github.com/moby/buildkit/util/urlutil"
 	"github.com/pkg/errors"
 )
 
@@ -62,16 +62,16 @@ func (cli *GitCLI) RemoteURL(ctx context.Context) (string, error) {
 	// Try default remote based on remote tracking branch.
 	if remote, err := cli.currentRemote(ctx); err == nil && remote != "" {
 		if ru, err := cli.clean(cli.Run(ctx, "remote", "get-url", remote)); err == nil && ru != "" {
-			return stripCredentials(ru), nil
+			return bkurlutil.RedactCredentials(ru), nil
 		}
 	}
 	// Next try to get the remote URL from the origin remote first.
 	if ru, err := cli.clean(cli.Run(ctx, "remote", "get-url", "origin")); err == nil && ru != "" {
-		return stripCredentials(ru), nil
+		return bkurlutil.RedactCredentials(ru), nil
 	}
 	// If that fails, try to get the remote URL from the upstream remote.
 	if ru, err := cli.clean(cli.Run(ctx, "remote", "get-url", "upstream")); err == nil && ru != "" {
-		return stripCredentials(ru), nil
+		return bkurlutil.RedactCredentials(ru), nil
 	}
 	return "", errors.New("no remote URL found for either origin or upstream")
 }
@@ -134,17 +134,4 @@ func IsUnknownRevision(err error) bool {
 	// https://github.com/git/git/blob/a6a323b31e2bcbac2518bddec71ea7ad558870eb/setup.c#L204
 	errMsg := strings.ToLower(err.Error())
 	return strings.Contains(errMsg, "unknown revision or path not in the working tree") || strings.Contains(errMsg, "bad revision")
-}
-
-// stripCredentials takes a URL and strips username and password from it.
-// e.g. "https://user:password@host.tld/path.git" will be changed to
-// "https://host.tld/path.git".
-// TODO: remove this function once fix from BuildKit is vendored here
-func stripCredentials(s string) string {
-	ru, err := url.Parse(s)
-	if err != nil {
-		return s // string is not a URL, just return it
-	}
-	ru.User = nil
-	return ru.String()
 }
