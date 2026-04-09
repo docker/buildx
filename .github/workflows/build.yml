@@ -37,6 +37,7 @@ jobs:
     runs-on: ubuntu-24.04
     env:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
+      TESTFLAGS_KUBERNETES: "-v --parallel=2 --timeout=60m"
       TEST_IMAGE_BUILD: "0"
       TEST_IMAGE_ID: "buildx-tests"
       TEST_COVERAGE: "1"
@@ -94,6 +95,11 @@ jobs:
           - worker: "docker+containerd@27.5"  # same as docker, but with containerd snapshotter
             pkg: ./tests
             mode: experimental
+          - worker: kubernetes
+            pkg: ./tests
+          - worker: kubernetes
+            pkg: ./tests
+            mode: experimental
     steps:
       -
         name: Prepare
@@ -106,6 +112,9 @@ jobs:
           case "${{ matrix.worker }}" in
             docker | docker+containerd | docker@* | docker+containerd@* | remote+multinode)
               echo "TESTFLAGS=${{ env.TESTFLAGS_DOCKER }} $testFlags" >> $GITHUB_ENV
+              ;;
+            kubernetes)
+              echo "TESTFLAGS=${{ env.TESTFLAGS_KUBERNETES }} $testFlags" >> $GITHUB_ENV
               ;;
             *)
               echo "TESTFLAGS=${{ env.TESTFLAGS }} $testFlags" >> $GITHUB_ENV

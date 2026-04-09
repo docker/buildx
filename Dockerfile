@@ -14,6 +14,7 @@ ARG REGISTRY_VERSION=3.0.0
 ARG BUILDKIT_VERSION=v0.29.0
 ARG COMPOSE_VERSION=v5.1.0
 ARG UNDOCK_VERSION=0.9.0
+ARG K3S_VERSION=v1.32.13-k3s1
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 FROM --platform=$BUILDPLATFORM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS golatest
@@ -27,6 +28,7 @@ FROM registry:$REGISTRY_VERSION AS registry
 FROM moby/buildkit:$BUILDKIT_VERSION AS buildkit
 FROM docker/compose-bin:$COMPOSE_VERSION AS compose
 FROM crazymax/undock:$UNDOCK_VERSION AS undock
+FROM rancher/k3s:${K3S_VERSION} AS k3s
 
 FROM golatest AS gobase
 COPY --from=xx / /
@@ -128,15 +130,24 @@ FROM gobase AS integration-test-base
 RUN apk add --no-cache \
       bash \
       btrfs-progs \
+      busybox-binsh \
+      cni-plugin-flannel \
+      cni-plugins \
+      conntrack-tools \
+      coreutils \
+      dbus \
       e2fsprogs \
       e2fsprogs-extra \
+      findutils \
       ip6tables \
+      ipset \
       iptables \
       make \
       openssl \
       shadow-uidmap \
       xfsprogs \
       xz
+ENV PATH="/usr/libexec/cni:${PATH}"
 COPY --link --from=gotestsum /out /usr/bin/
 COPY --link --from=registry /bin/registry /usr/bin/
 COPY --link --from=docker-engine / /usr/bin/
@@ -145,6 +156,8 @@ COPY --link --from=docker-engine-alt28 / /opt/docker-alt-28/
 COPY --link --from=docker-engine-alt27 / /opt/docker-alt-27/
 COPY --link --from=docker-cli-alt28 / /opt/docker-alt-28/
 COPY --link --from=docker-cli-alt27 / /opt/docker-alt-27/
+COPY --link --from=k3s /bin/k3s /usr/bin/
+COPY --link --from=k3s /bin/kubectl /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildkitd /usr/bin/
 COPY --link --from=buildkit /usr/bin/buildctl /usr/bin/
 COPY --link --from=compose /docker-compose /usr/bin/compose
@@ -152,6 +165,19 @@ COPY --link --from=undock /usr/local/bin/undock /usr/bin/
 COPY --link --from=binaries /buildx /usr/bin/
 RUN mkdir -p /usr/local/lib/docker/cli-plugins && ln -s /usr/bin/buildx /usr/local/lib/docker/cli-plugins/docker-buildx
 ENV TEST_DOCKER_EXTRA="docker@28.5=/opt/docker-alt-28,docker@27.5=/opt/docker-alt-27"
+COPY --chmod=755 <<-"EOF" /entrypoint.sh
+#!/bin/sh
+set -e
+# cgroup v2: enable nesting
+# https://github.com/moby/moby/blob/v25.0.0/hack/dind#L59-L69
+if [ -f /sys/fs/cgroup/cgroup.controllers ]; then
+  mkdir -p /sys/fs/cgroup/init
+  xargs -rn1 < /sys/fs/cgroup/cgroup.procs > /sys/fs/cgroup/init/cgroup.procs || :
+  sed -e 's/ / +/g' -e 's/^/+/' < /sys/fs/cgroup/cgroup.controllers > /sys/fs/cgroup/cgroup.subtree_control
+fi
+exec "$@"
+EOF
+ENTRYPOINT ["/entrypoint.sh"]
 
 FROM integration-test-base AS integration-test
 COPY . .

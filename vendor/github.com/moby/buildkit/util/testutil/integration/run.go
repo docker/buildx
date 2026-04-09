@@ -72,6 +72,7 @@ type BackendConfig struct {
 	Logs         map[string]*bytes.Buffer
 	DaemonConfig []ConfigUpdater
 	CDISpecDir   string
+	Mirror       string
 }
 
 type Worker interface {
