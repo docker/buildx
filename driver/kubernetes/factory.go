@@ -17,8 +17,6 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 )
 
@@ -239,6 +237,8 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse labels")
 			}
+		case k == "manifest-patch":
+			deploymentOpt.ManifestPatch = v
 		case k == "tolerations":
 			ts := strings.Split(v, ";")
 			deploymentOpt.Tolerations = []corev1.Toleration{}
@@ -273,46 +273,6 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 				}
 
 				deploymentOpt.Tolerations = append(deploymentOpt.Tolerations, t)
-			}
-		case k == "ownerrefs":
-			refs := strings.Split(v, ";")
-			deploymentOpt.OwnerReferences = []metav1.OwnerReference{}
-			for i := range refs {
-				kvs := strings.Split(refs[i], ",")
-
-				ref := metav1.OwnerReference{}
-
-				for j := range kvs {
-					kv := strings.SplitN(kvs[j], "=", 2)
-					if len(kv) == 2 {
-						switch kv[0] {
-						case "apiVersion":
-							ref.APIVersion = kv[1]
-						case "kind":
-							ref.Kind = kv[1]
-						case "name":
-							ref.Name = kv[1]
-						case "uid":
-							ref.UID = types.UID(kv[1])
-						case "controller":
-							b, err := strconv.ParseBool(kv[1])
-							if err != nil {
-								return nil, "", "", false, 0, errors.Wrap(err, "invalid ownerrefs controller value")
-							}
-							ref.Controller = &b
-						case "blockOwnerDeletion":
-							b, err := strconv.ParseBool(kv[1])
-							if err != nil {
-								return nil, "", "", false, 0, errors.Wrap(err, "invalid ownerrefs blockOwnerDeletion value")
-							}
-							ref.BlockOwnerDeletion = &b
-						default:
-							return nil, "", "", false, 0, errors.Errorf("invalid ownerrefs key %q", kv[0])
-						}
-					}
-				}
-
-				deploymentOpt.OwnerReferences = append(deploymentOpt.OwnerReferences, ref)
 			}
 		case k == "loadbalance":
 			switch v {

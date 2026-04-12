@@ -8,8 +8,6 @@ import (
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 )
 
@@ -271,57 +269,25 @@ func TestFactory_processDriverOpts(t *testing.T) {
 	)
 
 	t.Run(
-		"OwnerRefs", func(t *testing.T) {
-			controller := true
-			blockOwnerDeletion := false
+		"ManifestPatch", func(t *testing.T) {
+			patch := `.metadata.ownerReferences = [{apiVersion: "actions.github.com/v1alpha1", kind: "EphemeralRunner", name: "runner-xyz", uid: "b636330d-26b7-417a-8464-c2641438feed", controller: true, blockOwnerDeletion: false}]`
 			cfg.DriverOpts = map[string]string{
-				"ownerrefs": "apiVersion=actions.github.com/v1alpha1,kind=EphemeralRunner,name=runner-xyz,uid=b636330d-26b7-417a-8464-c2641438feed,controller=true,blockOwnerDeletion=false",
+				"manifest-patch": patch,
 			}
 			r, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.NoError(t, err)
-			require.Equal(t, []metav1.OwnerReference{
-				{
-					APIVersion:         "actions.github.com/v1alpha1",
-					Kind:               "EphemeralRunner",
-					Name:               "runner-xyz",
-					UID:                types.UID("b636330d-26b7-417a-8464-c2641438feed"),
-					Controller:         &controller,
-					BlockOwnerDeletion: &blockOwnerDeletion,
-				},
-			}, r.OwnerReferences)
+			require.Equal(t, patch, r.ManifestPatch)
 		},
 	)
 
 	t.Run(
-		"MultipleOwnerRefs", func(t *testing.T) {
+		"EmptyManifestPatch", func(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
-				"ownerrefs": "apiVersion=v1,kind=Pod,name=pod1,uid=uid-1;apiVersion=v1,kind=Pod,name=pod2,uid=uid-2",
+				"manifest-patch": "",
 			}
 			r, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.NoError(t, err)
-			require.Len(t, r.OwnerReferences, 2)
-			require.Equal(t, types.UID("uid-1"), r.OwnerReferences[0].UID)
-			require.Equal(t, types.UID("uid-2"), r.OwnerReferences[1].UID)
-		},
-	)
-
-	t.Run(
-		"InvalidOwnerRefKey", func(t *testing.T) {
-			cfg.DriverOpts = map[string]string{
-				"ownerrefs": "apiVersion=v1,invalid=foo",
-			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-			require.Error(t, err)
-		},
-	)
-
-	t.Run(
-		"InvalidOwnerRefController", func(t *testing.T) {
-			cfg.DriverOpts = map[string]string{
-				"ownerrefs": "apiVersion=v1,controller=notabool",
-			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
-			require.Error(t, err)
+			require.Empty(t, r.ManifestPatch)
 		},
 	)
 }
