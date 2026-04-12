@@ -267,4 +267,27 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			require.Error(t, err)
 		},
 	)
+
+	t.Run(
+		"ManifestPatch", func(t *testing.T) {
+			patch := `.metadata.ownerReferences = [{apiVersion: "actions.github.com/v1alpha1", kind: "EphemeralRunner", name: "runner-xyz", uid: "b636330d-26b7-417a-8464-c2641438feed", controller: true, blockOwnerDeletion: false}]`
+			cfg.DriverOpts = map[string]string{
+				"manifest-patch": patch,
+			}
+			r, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.NoError(t, err)
+			require.Equal(t, patch, r.ManifestPatch)
+		},
+	)
+
+	t.Run(
+		"EmptyManifestPatch", func(t *testing.T) {
+			cfg.DriverOpts = map[string]string{
+				"manifest-patch": "",
+			}
+			r, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.NoError(t, err)
+			require.Empty(t, r.ManifestPatch)
+		},
+	)
 }

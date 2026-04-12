@@ -237,6 +237,8 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 			if err != nil {
 				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse labels")
 			}
+		case k == "manifest-patch":
+			deploymentOpt.ManifestPatch = v
 		case k == "tolerations":
 			ts := strings.Split(v, ";")
 			deploymentOpt.Tolerations = []corev1.Toleration{}

@@ -1,12 +1,15 @@
 package manifest
 
 import (
+	"encoding/json"
 	"fmt"
 	"path"
 	"strings"
 
 	"github.com/docker/buildx/util/platformutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
+	yaml "go.yaml.in/yaml/v3"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
@@ -38,6 +41,7 @@ type DeploymentOpt struct {
 	CustomAnnotations         map[string]string
 	CustomLabels              map[string]string
 	Tolerations               []corev1.Toleration
+	ManifestPatch             string
 	RequestsCPU               string
 	RequestsMemory            string
 	RequestsEphemeralStorage  string
@@ -329,7 +333,107 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 		}
 	}
 
+	if opt.ManifestPatch != "" {
+		if d != nil {
+			if err := applyManifestPatch(d, opt.ManifestPatch); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+		if s != nil {
+			if err := applyManifestPatch(s, opt.ManifestPatch); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+		for _, cfgMap := range c {
+			if err := applyManifestPatch(cfgMap, opt.ManifestPatch); err != nil {
+				return nil, nil, nil, err
+			}
+		}
+	}
+
 	return
+}
+
+func applyManifestPatch(obj any, patch string) error {
+	path, value, err := parseManifestPatch(patch)
+	if err != nil {
+		return err
+	}
+
+	dt, err := json.Marshal(obj)
+	if err != nil {
+		return errors.Wrap(err, "marshal manifest")
+	}
+
+	var doc map[string]any
+	if err := json.Unmarshal(dt, &doc); err != nil {
+		return errors.Wrap(err, "unmarshal manifest")
+	}
+
+	if err := setManifestPatchValue(doc, path, value); err != nil {
+		return err
+	}
+
+	dt, err = json.Marshal(doc)
+	if err != nil {
+		return errors.Wrap(err, "marshal patched manifest")
+	}
+	if err := json.Unmarshal(dt, obj); err != nil {
+		return errors.Wrap(err, "unmarshal patched manifest")
+	}
+	return nil
+}
+
+func parseManifestPatch(patch string) ([]string, any, error) {
+	lhs, rhs, ok := strings.Cut(patch, "=")
+	if !ok {
+		return nil, nil, errors.Errorf("invalid manifest-patch %q: expected assignment expression", patch)
+	}
+
+	lhs = strings.TrimSpace(lhs)
+	rhs = strings.TrimSpace(rhs)
+	if lhs == "" || rhs == "" {
+		return nil, nil, errors.Errorf("invalid manifest-patch %q: expected non-empty assignment", patch)
+	}
+	if !strings.HasPrefix(lhs, ".") {
+		return nil, nil, errors.Errorf("invalid manifest-patch %q: path must start with '.'", patch)
+	}
+
+	path := strings.Split(strings.TrimPrefix(lhs, "."), ".")
+	for _, segment := range path {
+		if segment == "" {
+			return nil, nil, errors.Errorf("invalid manifest-patch %q: empty path segment", patch)
+		}
+	}
+
+	var value any
+	if err := yaml.Unmarshal([]byte(rhs), &value); err != nil {
+		return nil, nil, errors.Wrapf(err, "invalid manifest-patch %q", patch)
+	}
+	return path, value, nil
+}
+
+func setManifestPatchValue(doc map[string]any, path []string, value any) error {
+	current := doc
+	for i, segment := range path {
+		if i == len(path)-1 {
+			current[segment] = value
+			return nil
+		}
+		next, ok := current[segment]
+		if !ok {
+			child := map[string]any{}
+			current[segment] = child
+			current = child
+			continue
+		}
+		child, ok := next.(map[string]any)
+		if !ok {
+			return errors.Errorf("invalid manifest-patch path %q: %q is not an object", strings.Join(path, "."), strings.Join(path[:i+1], "."))
+		}
+		current = child
+	}
+	return nil
 }
 
 func (opt *DeploymentOpt) IsPersistentStorage() bool {
