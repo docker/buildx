@@ -1812,6 +1812,28 @@ func TestAttestDuplicates(t *testing.T) {
 	}, opts["default"].Attests)
 }
 
+func TestExtraHostsDeterministicOrder(t *testing.T) {
+	expected := []string{
+		"alpha.example.com=1.1.1.1",
+		"beta.example.com=2.2.2.2",
+		"delta.example.com=4.4.4.4",
+		"gamma.example.com=3.3.3.3",
+	}
+	for range 64 {
+		bo, err := toBuildOpt(&Target{
+			DockerfileInline: ptrstr("FROM scratch"),
+			ExtraHosts: map[string]*string{
+				"gamma.example.com": ptrstr("3.3.3.3"),
+				"alpha.example.com": ptrstr("1.1.1.1"),
+				"delta.example.com": ptrstr("4.4.4.4"),
+				"beta.example.com":  ptrstr("2.2.2.2"),
+			},
+		}, &Input{})
+		require.NoError(t, err)
+		require.Equal(t, expected, bo.ExtraHosts)
+	}
+}
+
 func TestAnnotations(t *testing.T) {
 	fp := File{
 		Name: "docker-bake.hcl",
