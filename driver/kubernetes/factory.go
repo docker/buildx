@@ -352,7 +352,7 @@ func applyManifestPatch[T any](obj *T, patch string) (*T, error) {
 	if err != nil {
 		return nil, err
 	}
-	var input interface{}
+	var input any
 	if err := json.Unmarshal(b, &input); err != nil {
 		return nil, err
 	}
