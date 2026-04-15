@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/buildx/util/gitutil/gittestutil"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/stretchr/testify/require"
 )
@@ -196,7 +197,7 @@ COPY foo /foo
 		)
 		dirDest := t.TempDir()
 
-		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		git, err := gitutil.New(bkgitutil.WithDir(dir))
 		require.NoError(t, err)
 
 		gittestutil.GitInit(git, t)
@@ -245,7 +246,7 @@ EOT
 		)
 		dirDest := t.TempDir()
 
-		git, err := gitutil.New(gitutil.WithWorkingDir(dir))
+		git, err := gitutil.New(bkgitutil.WithDir(dir))
 		require.NoError(t, err)
 
 		gittestutil.GitInit(git, t)

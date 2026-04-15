@@ -20,6 +20,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/cli/cli/command/formatter"
 	"github.com/docker/go-units"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -59,14 +60,14 @@ func runLs(ctx context.Context, dockerCli command.Cli, opts lsOptions) error {
 		if err != nil {
 			return err
 		}
-		gitc, err := gitutil.New(gitutil.WithContext(ctx), gitutil.WithWorkingDir(wd))
+		gitc, err := gitutil.New(bkgitutil.WithDir(wd))
 		if err != nil {
 			if st, err1 := os.Stat(path.Join(wd, ".git")); err1 == nil && st.IsDir() {
 				return errors.Wrap(err, "git was not found in the system")
 			}
 			return errors.Wrapf(err, "could not find git repository for local filter")
 		}
-		remote, err := gitc.RemoteURL()
+		remote, err := gitc.RemoteURL(ctx)
 		if err != nil {
 			return errors.Wrapf(err, "could not get remote URL for local filter")
 		}

@@ -30,7 +30,7 @@ require (
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/in-toto/in-toto-golang v0.10.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
-	github.com/moby/buildkit v0.29.0
+	github.com/moby/buildkit v0.29.1-0.20260408185135-a243ce438aee
 	github.com/moby/go-archive v0.2.0
 	github.com/moby/moby/api v1.54.1
 	github.com/moby/moby/client v0.4.0
