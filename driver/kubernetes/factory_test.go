@@ -7,7 +7,10 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/stretchr/testify/require"
+	appsv1 "k8s.io/api/apps/v1"
 	v1 "k8s.io/api/core/v1"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	"k8s.io/client-go/rest"
 )
 
@@ -55,7 +58,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 				"qemu.image":      "qemu:latest",
 				"default-load":    "true",
 			}
-			r, loadbalance, ns, defaultLoad, timeout, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			r, loadbalance, ns, defaultLoad, timeout, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
 			nodeSelectors := map[string]string{
 				"selector1": "value1",
@@ -113,7 +116,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 		"NoOptions", func(t *testing.T) {
 			cfg.DriverOpts = map[string]string{}
 
-			r, loadbalance, ns, defaultLoad, timeout, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			r, loadbalance, ns, defaultLoad, timeout, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
 			require.NoError(t, err)
 
@@ -144,7 +147,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 				"loadbalance": "sticky",
 			}
 
-			r, loadbalance, ns, defaultLoad, timeout, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			r, loadbalance, ns, defaultLoad, timeout, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 
 			require.NoError(t, err)
 
@@ -173,7 +176,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"replicas": "invalid",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -183,7 +186,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"rootless": "invalid",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -193,7 +196,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"tolerations": "key=foo,value=bar,invalid=foo2",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -203,7 +206,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"tolerations": "key=foo,value=bar,tolerationSeconds=invalid",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -213,7 +216,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"annotations": "key,value",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -223,7 +226,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"labels": "key=value=foo",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -233,7 +236,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"loadbalance": "invalid",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -243,7 +246,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"qemu.install": "invalid",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -253,7 +256,7 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"invalid": "foo",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
@@ -263,8 +266,54 @@ func TestFactory_processDriverOpts(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"timeout": "invalid",
 			}
-			_, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
 			require.Error(t, err)
 		},
 	)
+
+	t.Run(
+		"ManifestPatch", func(t *testing.T) {
+			cfg.DriverOpts = map[string]string{
+				"manifest-patch": `.metadata.ownerReferences=[{"apiVersion":"actions.github.com/v1alpha1","kind":"EphemeralRunner","name":"runner-xyz","uid":"b636330d-26b7-417a-8464-c2641438feed"}]`,
+			}
+			_, _, _, _, _, patch, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.NoError(t, err)
+			require.NotEmpty(t, patch)
+		},
+	)
+
+	t.Run(
+		"InvalidManifestPatch", func(t *testing.T) {
+			cfg.DriverOpts = map[string]string{
+				"manifest-patch": "invalid jq [[[",
+			}
+			_, _, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.Error(t, err)
+		},
+	)
+}
+
+func TestApplyManifestPatch(t *testing.T) {
+	t.Run("SetOwnerReferences", func(t *testing.T) {
+		d := &appsv1.Deployment{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      "test",
+				Namespace: "default",
+			},
+		}
+		patch := `.metadata.ownerReferences=[{"apiVersion":"actions.github.com/v1alpha1","kind":"EphemeralRunner","name":"runner-xyz","uid":"b636330d-26b7-417a-8464-c2641438feed"}]`
+		result, err := applyManifestPatch(d, patch)
+		require.NoError(t, err)
+		require.Len(t, result.OwnerReferences, 1)
+		require.Equal(t, "actions.github.com/v1alpha1", result.OwnerReferences[0].APIVersion)
+		require.Equal(t, "EphemeralRunner", result.OwnerReferences[0].Kind)
+		require.Equal(t, "runner-xyz", result.OwnerReferences[0].Name)
+		require.Equal(t, types.UID("b636330d-26b7-417a-8464-c2641438feed"), result.OwnerReferences[0].UID)
+	})
+
+	t.Run("InvalidExpression", func(t *testing.T) {
+		d := &appsv1.Deployment{}
+		_, err := applyManifestPatch(d, "invalid [[[")
+		require.Error(t, err)
+	})
 }
