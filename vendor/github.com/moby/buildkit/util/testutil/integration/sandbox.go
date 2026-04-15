@@ -60,7 +60,25 @@ func (sb *sandbox) ClearLogs() {
 }
 
 func (sb *sandbox) NewRegistry() (string, error) {
-	url, cl, err := NewRegistry("")
+	type registryProvider interface {
+		NewRegistry() (string, func() error, error)
+	}
+
+	var (
+		url string
+		cl  func() error
+		err error
+	)
+	if provider, ok := sb.Backend.(registryProvider); ok {
+		url, cl, err = provider.NewRegistry()
+	} else {
+		url, cl, err = NewRegistry("")
+		if err == nil {
+			if rewriter, ok := sb.Backend.(interface{ RewriteRegistryAddress(string) string }); ok {
+				url = rewriter.RewriteRegistryAddress(url)
+			}
+		}
+	}
 	if err != nil {
 		return "", err
 	}
