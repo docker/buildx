@@ -9,6 +9,7 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+// #nosec G101 -- ignoring: Potential hardcoded credentials
 func TestCacheOptions_DerivedVars(t *testing.T) {
 	t.Setenv("ACTIONS_RUNTIME_TOKEN", "sensitive_token")
 	t.Setenv("ACTIONS_CACHE_URL", "https://cache.github.com")

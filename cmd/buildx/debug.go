@@ -27,7 +27,7 @@ func setupDebugProfiles(ctx context.Context) (stop func()) {
 
 func setupCPUProfile(ctx context.Context) (stop func()) {
 	if cpuProfile := os.Getenv("BUILDX_CPU_PROFILE"); cpuProfile != "" {
-		f, err := os.Create(cpuProfile)
+		f, err := os.Create(cpuProfile) // #nosec G703 -- using user-controlled path by design
 		if err != nil {
 			bklog.G(ctx).Warn("could not create cpu profile", logrus.WithError(err))
 			return nil
@@ -53,7 +53,7 @@ func setupHeapProfile(ctx context.Context) (stop func()) {
 	if heapProfile := os.Getenv("BUILDX_MEM_PROFILE"); heapProfile != "" {
 		// Memory profile is only created on stop.
 		return func() {
-			f, err := os.Create(heapProfile)
+			f, err := os.Create(heapProfile) // #nosec G703 -- using user-controlled path by design
 			if err != nil {
 				bklog.G(ctx).Warn("could not create memory profile", logrus.WithError(err))
 				return
