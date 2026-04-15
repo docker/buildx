@@ -357,6 +357,9 @@ func parseSource(in string) (*imagetools.Source, error) {
 	if err := json.Unmarshal([]byte(in), &s.Desc); err != nil {
 		return nil, errors.WithStack(err)
 	}
+	if s.Desc.Digest == "" {
+		return nil, errors.Errorf("descriptor is missing required 'digest' field (source must be a descriptor JSON, not a manifest or manifest list)")
+	}
 	return &s, nil
 }
 
