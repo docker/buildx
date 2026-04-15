@@ -62,7 +62,7 @@ func TestGitFullCommitErr(t *testing.T) {
 	_, err = c.FullCommit()
 	require.Error(t, err)
 	require.True(t, gitutil.IsUnknownRevision(err))
-	require.False(t, gittestutil.IsAmbiguousArgument(err))
+	require.True(t, gittestutil.IsAmbiguousArgument(err))
 }
 
 func TestGitShortCommitErr(t *testing.T) {
