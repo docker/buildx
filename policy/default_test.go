@@ -306,3 +306,97 @@ func TestDefaultPolicyImages(t *testing.T) {
 		})
 	}
 }
+
+func TestDefaultPolicySyftScannerImages(t *testing.T) {
+	testCases := []struct {
+		name    string
+		sig     *policytypes.SignatureInfo
+		ref     string
+		allow   bool
+		denyMsg string
+	}{
+		{
+			name:  "syft_scanner_old_version_allowed_unsigned",
+			ref:   "docker/buildkit-syft-scanner:1.9.0",
+			allow: true,
+		},
+		{
+			name:    "syft_scanner_new_version_requires_signature",
+			ref:     "docker/buildkit-syft-scanner:1.10.0",
+			denyMsg: "signature is required for 1.10.0 tag",
+		},
+		{
+			name:    "syft_scanner_new_minor_version_requires_signature",
+			ref:     "docker/buildkit-syft-scanner:1.10",
+			denyMsg: "signature is required for 1.10 tag",
+		},
+		{
+			name:    "syft_scanner_new_major_version_requires_signature",
+			ref:     "docker/buildkit-syft-scanner:1",
+			denyMsg: "signature is required for 1 tag",
+		},
+		{
+			name:  "syft_scanner_new_version_allowed_with_matching_signature",
+			sig:   dockerGithubBuilderSig("docker/buildkit-syft-scanner", "refs/tags/1.10.0"),
+			ref:   "docker/buildkit-syft-scanner:1.10.0",
+			allow: true,
+		},
+		{
+			name:  "syft_scanner_new_minor_version_allowed_with_matching_patch_signature",
+			sig:   dockerGithubBuilderSig("docker/buildkit-syft-scanner", "refs/tags/1.10.0"),
+			ref:   "docker/buildkit-syft-scanner:1.10",
+			allow: true,
+		},
+		{
+			name:  "syft_scanner_new_major_version_allowed_with_matching_minor_signature",
+			sig:   dockerGithubBuilderSig("docker/buildkit-syft-scanner", "refs/tags/1.10.0"),
+			ref:   "docker/buildkit-syft-scanner:1",
+			allow: true,
+		},
+		{
+			name:    "syft_scanner_new_version_denied_with_wrong_signature_repo",
+			sig:     dockerGithubBuilderSig("moby/buildkit", "refs/tags/1.10.0"),
+			ref:     "docker/buildkit-syft-scanner:1.10.0",
+			denyMsg: "signature is required for 1.10.0 tag",
+		},
+		{
+			name:    "syft_scanner_new_version_denied_with_mismatched_ref",
+			sig:     dockerGithubBuilderSig("docker/buildkit-syft-scanner", "refs/tags/1.11.0"),
+			ref:     "docker/buildkit-syft-scanner:1.10.0",
+			denyMsg: "signature is required for 1.10.0 tag",
+		},
+		{
+			name:    "syft_scanner_new_minor_version_denied_with_newer_patch_ref",
+			sig:     dockerGithubBuilderSig("docker/buildkit-syft-scanner", "refs/tags/1.11.0"),
+			ref:     "docker/buildkit-syft-scanner:1.10",
+			denyMsg: "signature is required for 1.10 tag",
+		},
+		{
+			name:  "syft_scanner_latest_allowed_with_signature_any_ref",
+			sig:   dockerGithubBuilderSig("docker/buildkit-syft-scanner", "refs/tags/1.10.0"),
+			ref:   "docker/buildkit-syft-scanner:latest",
+			allow: true,
+		},
+		{
+			name:    "syft_scanner_latest_denied_without_signature",
+			ref:     "docker/buildkit-syft-scanner:latest",
+			denyMsg: "signature is required for latest tag",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := makeDefaultPolicy(t, tc.sig)
+			resp := runDefaultPolicyImage(t, p, tc.ref)
+			if tc.allow {
+				require.Equal(t, moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW, resp.Action)
+				require.Empty(t, resp.DenyMessages)
+				return
+			}
+
+			require.Equal(t, moby_buildkit_v1_sourcepolicy.PolicyAction_DENY, resp.Action)
+			require.Len(t, resp.DenyMessages, 1)
+			require.Contains(t, resp.DenyMessages[0].Message, tc.denyMsg)
+		})
+	}
+}

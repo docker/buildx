@@ -5,6 +5,7 @@ package docker
 #
 #   - docker/dockerfile
 #   - docker/dockerfile-upstream
+#   - docker/buildkit-syft-scanner
 #
 # Any image outside this managed set is allowed and passes through to user
 # policies unchanged. Access by digest is always allowed. For tag-based
@@ -22,12 +23,22 @@ is_dockerfile if {
 	input.image.fullRepo == "docker.io/docker/dockerfile-upstream"
 }
 
+is_syft_scanner if {
+	input.image
+	input.image.fullRepo == "docker.io/docker/buildkit-syft-scanner"
+}
+
 dockerfile_floating_tag(tag) if tag == "latest"
 dockerfile_floating_tag(tag) if tag == "labs"
 dockerfile_floating_tag(tag) if tag == "master"
 
 dockerfile_tag_requires_sig(tag) if dockerfile_floating_tag(tag)
 dockerfile_tag_requires_sig(tag) if version_tag_ge(tag, 1, 21)
+
+syft_scanner_floating_tag(tag) if tag == "latest"
+
+syft_scanner_tag_requires_sig(tag) if syft_scanner_floating_tag(tag)
+syft_scanner_tag_requires_sig(tag) if version_tag_ge(tag, 1, 10)
 
 
 default_policy_deny_msgs contains msg if {
@@ -36,6 +47,15 @@ default_policy_deny_msgs contains msg if {
 	tag != ""
 	dockerfile_tag_requires_sig(tag)
 	not dockerfile_sig_ok(tag)
+	msg := sprintf("image %s is not allowed by default policy: a verified docker-github-builder signature is required for %s tag", [input.image.ref, input.image.tag])
+}
+
+default_policy_deny_msgs contains msg if {
+	is_syft_scanner
+	tag := input.image.tag
+	tag != ""
+	syft_scanner_tag_requires_sig(tag)
+	not syft_scanner_sig_ok(tag)
 	msg := sprintf("image %s is not allowed by default policy: a verified docker-github-builder signature is required for %s tag", [input.image.ref, input.image.tag])
 }
 
@@ -50,6 +70,19 @@ dockerfile_sig_ok(tag) if {
 	some sig in input.image.signatures
 	docker_github_builder_signature(sig, "moby/buildkit")
 	dockerfile_sig_ref_matches(sig, tag)
+}
+
+syft_scanner_sig_ok(tag) if {
+	syft_scanner_floating_tag(tag)
+	some sig in input.image.signatures
+	docker_github_builder_signature(sig, "docker/buildkit-syft-scanner")
+}
+
+syft_scanner_sig_ok(tag) if {
+	not syft_scanner_floating_tag(tag)
+	some sig in input.image.signatures
+	docker_github_builder_signature(sig, "docker/buildkit-syft-scanner")
+	syft_scanner_sig_ref_matches(sig, tag)
 }
 
 
@@ -89,14 +122,24 @@ version_tag_ge(tag, target_major, target_minor) if {
 }
 
 dockerfile_sig_ref_matches(sig, tag) if {
-	ref := trim_prefix(sig.signer.sourceRepositoryRef, "refs/tags/dockerfile/")
+	sig_ref_matches(sig.signer.sourceRepositoryRef, tag, "refs/tags/dockerfile/")
+}
+
+syft_scanner_sig_ref_matches(sig, tag) if {
+	ref := trim_prefix(sig.signer.sourceRepositoryRef, "refs/tags/")
 	ref != sig.signer.sourceRepositoryRef
+	version_tag_selector_matches(tag, ref)
+}
+
+sig_ref_matches(ref, tag, prefix) if {
+	stripped_ref := trim_prefix(ref, prefix)
+	stripped_ref != ref
 	tag_labs := endswith(tag, "-labs")
-	ref_labs := endswith(ref, "-labs")
+	ref_labs := endswith(stripped_ref, "-labs")
 	tag_labs == ref_labs
 	version_tag_selector_matches(
 		trim_suffix(tag, "-labs"),
-		trim_suffix(ref, "-labs"),
+		trim_suffix(stripped_ref, "-labs"),
 	)
 }
 
