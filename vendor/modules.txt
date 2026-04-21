@@ -206,6 +206,8 @@ github.com/compose-spec/compose-go/v2/validation
 # github.com/containerd/console v1.0.5
 ## explicit; go 1.13
 github.com/containerd/console
+# github.com/containerd/containerd v1.7.30
+## explicit; go 1.24.0
 # github.com/containerd/containerd/api v1.10.0
 ## explicit; go 1.23.0
 github.com/containerd/containerd/api/services/content/v1
