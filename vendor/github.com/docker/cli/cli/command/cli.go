@@ -566,11 +566,12 @@ type ServerInfo struct {
 // It applies by default the standard streams, and the content trust from
 // environment.
 func NewDockerCli(ops ...CLIOption) (*DockerCli, error) {
-	defaultOps := []CLIOption{
+	defaultOps := make([]CLIOption, 0, 3+len(ops))
+	defaultOps = append(defaultOps,
 		WithDefaultContextStoreConfig(),
 		WithStandardStreams(),
 		WithUserAgent(UserAgent()),
-	}
+	)
 	ops = append(defaultOps, ops...)
 
 	cli := &DockerCli{baseCtx: context.Background()}
