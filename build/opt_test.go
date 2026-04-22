@@ -1,10 +1,16 @@
 package build
 
 import (
+	"context"
 	"testing"
 
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/ocilayout"
+	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/ociindex"
+	"github.com/opencontainers/go-digest"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -154,3 +160,91 @@ func TestProxyArgKeyExists(t *testing.T) {
 		})
 	}
 }
+
+func TestLoadInputsOCILayoutNamedContext(t *testing.T) {
+	layoutPath := t.TempDir()
+
+	idx := ociindex.NewStoreIndex(layoutPath)
+	manifestDigest := digest.FromString("manifest")
+	err := idx.Put(ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Digest:    manifestDigest,
+		Size:      1,
+	}, ociindex.Tag("latest"))
+	require.NoError(t, err)
+
+	tests := []struct {
+		name    string
+		ref     string
+		wantRef ocilayout.Ref
+	}{
+		{
+			name: "digest only",
+			ref:  "oci-layout://" + layoutPath + "@" + manifestDigest.String(),
+			wantRef: ocilayout.Ref{
+				Digest: manifestDigest,
+			},
+		},
+		{
+			name: "tag only",
+			ref:  "oci-layout://" + layoutPath + ":latest",
+			wantRef: ocilayout.Ref{
+				Tag:    "latest",
+				Digest: manifestDigest,
+			},
+		},
+		{
+			name: "tag and digest",
+			ref:  "oci-layout://" + layoutPath + ":latest@" + manifestDigest.String(),
+			wantRef: ocilayout.Ref{
+				Tag:    "latest",
+				Digest: manifestDigest,
+			},
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			target := &client.SolveOpt{
+				FrontendAttrs: map[string]string{},
+			}
+			inp := &Inputs{
+				ContextPath: "https://example.com/context.tar.gz",
+				NamedContexts: map[string]NamedContext{
+					"proxy": {
+						Path: tt.ref,
+					},
+				},
+			}
+
+			release, err := loadInputs(context.Background(), nil, inp, testProgressWriter{}, target)
+			require.NoError(t, err)
+			require.NotNil(t, release)
+			t.Cleanup(release)
+
+			attr, ok := target.FrontendAttrs["context:proxy"]
+			require.True(t, ok)
+			require.Len(t, target.OCIStores, 1)
+
+			parsed, ok, err := ocilayout.Parse(attr)
+			require.True(t, ok)
+			require.NoError(t, err)
+			require.NotEmpty(t, parsed.Path)
+			assert.Equal(t, tt.wantRef.Tag, parsed.Tag)
+			assert.Equal(t, tt.wantRef.Digest, parsed.Digest)
+			target.OCIStores = nil
+		})
+	}
+}
+
+type testProgressWriter struct{}
+
+func (testProgressWriter) Write(*client.SolveStatus) {}
+
+func (testProgressWriter) WriteBuildRef(string, string) {}
+
+func (testProgressWriter) ValidateLogSource(digest.Digest, any) bool { return true }
+
+func (testProgressWriter) ClearLogSource(any) {}
+
+var _ progress.Writer = testProgressWriter{}

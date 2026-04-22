@@ -917,29 +917,33 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		}
 
 		// handle OCI layout
-		if localPath, ok := strings.CutPrefix(v.Path, "oci-layout://"); ok {
-			ref, _, err := ocilayout.Parse("oci-layout://" + localPath)
+		if ref, ok, err := ocilayout.Parse(v.Path); ok {
 			if err != nil {
 				return nil, err
 			}
-			localPath, dig, tag := ref.Path, ref.Digest.String(), ref.Tag
-			if dig == "" {
-				dig, err = resolveDigest(localPath, tag)
+			localPath := ref.Path
+
+			if ref.Digest == "" {
+				dig, err := resolveDigest(localPath, ref.Tag)
 				if err != nil {
 					return nil, errors.Wrapf(err, "oci-layout reference %q could not be resolved", v.Path)
 				}
+				ref.Digest = digest.Digest(dig)
 			}
+
 			store, err := local.NewStore(localPath)
 			if err != nil {
 				return nil, errors.Wrapf(err, "invalid store at %s", localPath)
 			}
+
 			storeName := identity.NewID()
 			if target.OCIStores == nil {
 				target.OCIStores = map[string]content.Store{}
 			}
 			target.OCIStores[storeName] = store
 
-			target.FrontendAttrs["context:"+k] = "oci-layout://" + storeName + ":" + tag + "@" + dig
+			ref.Path = storeName
+			target.FrontendAttrs["context:"+k] = ref.String()
 			continue
 		}
 
