@@ -5,11 +5,15 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/docker/docker/pkg/namesgenerator"
+	"github.com/moby/buildkit/identity"
 	"github.com/pkg/errors"
 )
 
 var namePattern = regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9\.\-_]*$`)
+
+const generatedNamePrefix = "builder_"
+
+var newID = identity.NewID
 
 type errInvalidName struct {
 	error
@@ -39,8 +43,8 @@ func ValidateName(s string) (string, error) {
 
 func GenerateName(txn *Txn) (string, error) {
 	var name string
-	for i := range 6 {
-		name = namesgenerator.GetRandomName(i)
+	for range 6 {
+		name = generatedNamePrefix + newID()[:12]
 		if _, err := txn.NodeGroupByName(name); err != nil {
 			if !os.IsNotExist(errors.Cause(err)) {
 				return "", err
