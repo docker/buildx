@@ -939,7 +939,18 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			}
 			target.OCIStores[storeName] = store
 
-			target.FrontendAttrs["context:"+k] = "oci-layout://" + storeName + ":" + tag + "@" + dig
+			// Re-serialise the store ref without leaving empty :tag or @digest
+			// segments; concatenating them unconditionally produced refs like
+			// "oci-layout://storeID:@sha256:..." which fail parsing downstream
+			// when the user passed a digest-only oci-layout context (#3793).
+			attr := "oci-layout://" + storeName
+			if tag != "" {
+				attr += ":" + tag
+			}
+			if dig != "" {
+				attr += "@" + dig
+			}
+			target.FrontendAttrs["context:"+k] = attr
 			continue
 		}
 
