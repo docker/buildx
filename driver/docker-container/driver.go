@@ -28,7 +28,6 @@ import (
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
 	dockerclient "github.com/moby/moby/client"
-	"github.com/moby/moby/client/pkg/jsonmessage"
 	"github.com/moby/moby/client/pkg/security"
 	"github.com/pkg/errors"
 )
@@ -104,8 +103,7 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		if err != nil {
 			return err
 		}
-		defer resp.Close()
-		return jsonmessage.DisplayStream(resp, io.Discard)
+		return resp.Wait(ctx)
 	}); err != nil {
 		// image pulling failed, check if it exists in local image store.
 		// if not, return pulling error. otherwise log it.
