@@ -159,7 +159,7 @@ jobs:
       -
         name: Generate annotations
         if: always()
-        uses: crazy-max/.github/.github/actions/gotest-annotations@d89fe92d808a15e2b2ed5cdb62db7c172c31410d # v1.6.0
+        uses: crazy-max/.github/.github/actions/gotest-annotations@64a0bfaf6e6bb1c448d6e4c42b11034ee7094f16 # v1.7.1
         with:
           directory: ./bin/testreports
       -
@@ -237,7 +237,7 @@ jobs:
       -
         name: Generate annotations
         if: always()
-        uses: crazy-max/.github/.github/actions/gotest-annotations@d89fe92d808a15e2b2ed5cdb62db7c172c31410d # v1.6.0
+        uses: crazy-max/.github/.github/actions/gotest-annotations@64a0bfaf6e6bb1c448d6e4c42b11034ee7094f16 # v1.7.1
         with:
           directory: ${{ env.TESTREPORTS_DIR }}
       -
@@ -409,7 +409,7 @@ jobs:
       -
         name: Scout
         id: scout
-        uses: crazy-max/.github/.github/actions/docker-scout@d89fe92d808a15e2b2ed5cdb62db7c172c31410d # v1.6.0
+        uses: crazy-max/.github/.github/actions/docker-scout@64a0bfaf6e6bb1c448d6e4c42b11034ee7094f16 # v1.7.1
         with:
           version: ${{ env.SCOUT_VERSION }}
           format: sarif
