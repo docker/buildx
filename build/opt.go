@@ -65,6 +65,30 @@ var sendGitQueryAsInput = sync.OnceValue(func() bool {
 	return false
 })
 
+// defaultPolicyEnabled reports whether the builtin default source policy is
+// enabled via the BUILDX_DEFAULT_POLICY environment variable. It is opt-in
+// for now; a future release may flip the default to on.
+var defaultPolicyEnabled = sync.OnceValue(func() bool {
+	if v, ok := os.LookupEnv("BUILDX_DEFAULT_POLICY"); ok {
+		if vv, err := strconv.ParseBool(v); err == nil {
+			return vv
+		}
+	}
+	return false
+})
+
+// policyExplicitlyDisabled reports whether the user passed `--policy
+// disabled=true`, which suppresses both user-defined and builtin default
+// policies.
+func policyExplicitlyDisabled(configs []buildflags.PolicyConfig) bool {
+	for _, cfg := range configs {
+		if cfg.Disabled {
+			return true
+		}
+	}
+	return false
+}
+
 type policyProgressLogger struct {
 	ch      chan *client.SolveStatus
 	done    chan struct{}
@@ -624,6 +648,22 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	if err != nil {
 		return nil, err
 	}
+
+	// Prepend the builtin default policy when enabled and not explicitly
+	// disabled. The default policy verifies trust for Docker-managed images
+	// (docker/dockerfile, docker/dockerfile-upstream) that may be implicitly
+	// loaded during a build, and passes through any other source so user
+	// policies retain full control.
+	if defaultPolicyEnabled() && !policyExplicitlyDisabled(opt.Policy) {
+		builtin := policyOpt{
+			Files: []policyFileSpec{{
+				Filename: policy.DefaultPolicyFilename,
+				Data:     policy.DefaultPolicyData(),
+			}},
+		}
+		popts = append([]policyOpt{builtin}, popts...)
+	}
+
 	if len(popts) == 0 {
 		so.SourcePolicyProvider = nil
 		return nil, nil
