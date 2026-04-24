@@ -2,6 +2,7 @@ package store
 
 import (
 	"os"
+	"strings"
 	"testing"
 	"time"
 
@@ -259,4 +260,67 @@ func TestNodeInvalidName(t *testing.T) {
 	})
 	require.Error(t, err)
 	require.True(t, IsErrInvalidName(err))
+}
+
+func TestGenerateName(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(tmpdir)))
+	require.NoError(t, err)
+
+	txn, release, err := s.Txn()
+	require.NoError(t, err)
+	defer release()
+
+	oldNewID := newID
+	newID = func() string {
+		return "abc123def456ghi789jklmno"
+	}
+	defer func() {
+		newID = oldNewID
+	}()
+
+	name, err := GenerateName(txn)
+	require.NoError(t, err)
+	require.Equal(t, "builder_abc123def456", name)
+	require.True(t, strings.HasPrefix(name, generatedNamePrefix))
+
+	validated, err := ValidateName(name)
+	require.NoError(t, err)
+	require.Equal(t, name, validated)
+}
+
+func TestGenerateNameCollisionRetry(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(tmpdir)))
+	require.NoError(t, err)
+
+	txn, release, err := s.Txn()
+	require.NoError(t, err)
+	defer release()
+
+	err = txn.Save(&NodeGroup{
+		Name:   "builder_collisionabc",
+		Driver: "docker-container",
+	})
+	require.NoError(t, err)
+
+	oldNewID := newID
+	ids := []string{
+		"collisionabc0000000000000",
+		"freshnamexyz0000000000000",
+	}
+	newID = func() string {
+		id := ids[0]
+		ids = ids[1:]
+		return id
+	}
+	defer func() {
+		newID = oldNewID
+	}()
+
+	name, err := GenerateName(txn)
+	require.NoError(t, err)
+	require.Equal(t, "builder_freshnamexyz", name)
 }
