@@ -347,7 +347,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 				return nil, nil, errors.Errorf("multiple image pins set to %s: %v", sourceName(req), st.ImagePins)
 			}
 			if len(st.ImagePins) == 1 {
-				newSrc, err := addPinToImage(req.Source.Source, slices.Collect(maps.Keys(st.ImagePins))[0])
+				newSrc, err := AddPinToImage(req.Source.Source, slices.Collect(maps.Keys(st.ImagePins))[0])
 				if err != nil {
 					return nil, nil, errors.Wrapf(err, "failed to add image pin to source")
 				}
