@@ -74,13 +74,13 @@ func runRm(ctx context.Context, dockerCli command.Cli, in rmOptions) error {
 					return err
 				}
 
+				if b.DockerContext {
+					return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", b.Name)
+				}
+
 				nodes, err := b.LoadNodes(timeoutCtx)
 				if err != nil {
 					return err
-				}
-
-				if cb := b.ContextName(); cb != "" {
-					return errors.Errorf("context builder cannot be removed, run `docker context rm %s` to remove this context", cb)
 				}
 
 				err1 := rm(ctx, nodes, in)
