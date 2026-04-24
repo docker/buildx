@@ -34,7 +34,7 @@ func Parse(s string) (Ref, bool, error) {
 		}
 	}
 
-	if i := strings.LastIndex(localPath, ":"); i >= 0 {
+	if i := strings.LastIndex(localPath, ":"); i >= 0 && !isWindowsDrivePath(localPath, i) {
 		after := localPath[i+1:]
 		if reference.TagRegexp.MatchString(after) {
 			localPath, out.Tag = localPath[:i], after
@@ -51,10 +51,18 @@ func Parse(s string) (Ref, bool, error) {
 func (r Ref) String() string {
 	s := prefix + r.Path
 	if r.Tag != "" {
-		return s + ":" + r.Tag
+		s += ":" + r.Tag
 	}
 	if r.Digest != "" {
-		return s + "@" + r.Digest.String()
+		s += "@" + r.Digest.String()
 	}
 	return s
+}
+
+func isWindowsDrivePath(path string, colon int) bool {
+	if colon != 1 || len(path) < 2 {
+		return false
+	}
+	c := path[0]
+	return ('a' <= c && c <= 'z') || ('A' <= c && c <= 'Z')
 }

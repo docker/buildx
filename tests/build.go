@@ -1,7 +1,9 @@
 package tests
 
 import (
+	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -13,6 +15,8 @@ import (
 	"strings"
 	"testing"
 
+	"github.com/containerd/containerd/v2/core/content"
+	"github.com/containerd/containerd/v2/plugins/content/local"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/containerd/platforms"
 	"github.com/creack/pty"
@@ -21,6 +25,7 @@ import (
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
 	"github.com/moby/buildkit/frontend/subrequests/outline"
 	"github.com/moby/buildkit/frontend/subrequests/targets"
@@ -32,6 +37,8 @@ import (
 	"github.com/moby/buildkit/util/testutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/opencontainers/go-digest"
+	"github.com/opencontainers/image-spec/specs-go"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -50,6 +57,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildStdin,
 	testBuildRemote,
 	testBuildRemoteAuth,
+	testBuildNamedContextOCILayoutDigestOnly,
 	testBuildLocalState,
 	testBuildLocalStateStdin,
 	testBuildLocalStateRemote,
@@ -303,6 +311,35 @@ COPY foo /foo
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBuildNamedContextOCILayoutDigestOnly(t *testing.T, sb integration.Sandbox) {
+	if isMobyWorker(sb) {
+		t.Skip("oci-layout named contexts are not supported by the docker worker")
+	}
+
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", []byte(`
+FROM scratch
+COPY --from=proxy /foo /foo
+`), 0o600))
+	layoutPath := filepath.Join(dir, "layout")
+	expected := "from-oci-layout"
+	manifestDigest := createOCILayoutImage(t, layoutPath, "foo", []byte(expected), "latest")
+	dirDest := t.TempDir()
+
+	out, err := buildCmd(sb,
+		withDir(dir),
+		withArgs(
+			"--build-context", "proxy=oci-layout://layout@"+manifestDigest.String(),
+			"--output=type=local,dest="+dirDest,
+			dir,
+		),
+	)
+	require.NoError(t, err, out)
+
+	dt, err := os.ReadFile(filepath.Join(dirDest, "foo"))
+	require.NoError(t, err)
+	require.Equal(t, expected, string(dt))
 }
 
 func testBuildLocalState(t *testing.T, sb integration.Sandbox) {
@@ -1664,4 +1701,77 @@ COPY --from=base /etc/bar /bar
 		fstest.CreateFile("foo", []byte("foo"), 0o600),
 	)
 	return dir
+}
+
+func createOCILayoutImage(t *testing.T, layoutPath, fileName string, fileContents []byte, tag string) digest.Digest {
+	t.Helper()
+
+	store, err := local.NewStore(layoutPath)
+	require.NoError(t, err)
+
+	layerBytes := bytes.NewBuffer(nil)
+	tw := tar.NewWriter(layerBytes)
+	err = tw.WriteHeader(&tar.Header{
+		Name: fileName,
+		Mode: 0o644,
+		Size: int64(len(fileContents)),
+	})
+	require.NoError(t, err)
+	_, err = tw.Write(fileContents)
+	require.NoError(t, err)
+	require.NoError(t, tw.Close())
+
+	ctx := context.Background()
+	layerDesc := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageLayer,
+		Digest:    digest.FromBytes(layerBytes.Bytes()),
+		Size:      int64(layerBytes.Len()),
+	}
+	err = content.WriteBlob(ctx, store, "layer-"+layerDesc.Digest.String(), bytes.NewReader(layerBytes.Bytes()), layerDesc)
+	require.NoError(t, err)
+
+	cfgBytes, err := json.Marshal(ocispecs.Image{
+		Platform: ocispecs.Platform{
+			Architecture: "amd64",
+			OS:           "linux",
+		},
+		Config: ocispecs.ImageConfig{
+			WorkingDir: "/",
+		},
+		RootFS: ocispecs.RootFS{
+			Type:    "layers",
+			DiffIDs: []digest.Digest{layerDesc.Digest},
+		},
+	})
+	require.NoError(t, err)
+	cfgDesc := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageConfig,
+		Digest:    digest.FromBytes(cfgBytes),
+		Size:      int64(len(cfgBytes)),
+	}
+	err = content.WriteBlob(ctx, store, "config-"+cfgDesc.Digest.String(), bytes.NewReader(cfgBytes), cfgDesc)
+	require.NoError(t, err)
+
+	manifestBytes, err := json.Marshal(ocispecs.Manifest{
+		Versioned: specs.Versioned{
+			SchemaVersion: 2,
+		},
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Config:    cfgDesc,
+		Layers:    []ocispecs.Descriptor{layerDesc},
+	})
+	require.NoError(t, err)
+	manifestDesc := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Digest:    digest.FromBytes(manifestBytes),
+		Size:      int64(len(manifestBytes)),
+	}
+	err = content.WriteBlob(ctx, store, "manifest-"+manifestDesc.Digest.String(), bytes.NewReader(manifestBytes), manifestDesc)
+	require.NoError(t, err)
+
+	idx := ociindex.NewStoreIndex(layoutPath)
+	err = idx.Put(manifestDesc, ociindex.Tag(tag))
+	require.NoError(t, err)
+
+	return manifestDesc.Digest
 }

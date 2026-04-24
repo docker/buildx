@@ -1,8 +1,6 @@
 package imagetools
 
 import (
-	"strings"
-
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/util/ocilayout"
 	digest "github.com/opencontainers/go-digest"
@@ -180,8 +178,4 @@ func (l *Location) ValidateTargetDigest(desc digest.Digest) error {
 		return errors.Errorf("target %s requested digest %s but produced %s", l.String(), l.Digest(), desc)
 	}
 	return nil
-}
-
-func IsOCILayout(s string) bool {
-	return strings.HasPrefix(s, "oci-layout://")
 }
