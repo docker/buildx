@@ -222,9 +222,13 @@ func containerConfigFromError(solveErr *errdefs.SolveError, cfg *InvokeConfig) (
 	}
 	var mounts []gateway.Mount
 	for i, mnt := range exec.Mounts {
-		rid := solveErr.MountIDs[i]
+		var rid string
 		if cfg.Initial {
-			rid = solveErr.InputIDs[i]
+			if i < len(solveErr.InputIDs) {
+				rid = solveErr.InputIDs[i]
+			}
+		} else if i < len(solveErr.MountIDs) {
+			rid = solveErr.MountIDs[i]
 		}
 		mounts = append(mounts, gateway.Mount{
 			Selector:  mnt.Selector,
