@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/moby/buildkit/util/entitlements"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -2490,4 +2491,117 @@ func stringify[V fmt.Stringer](values []V) []string {
 	}
 	sort.Strings(s)
 	return s
+}
+
+func TestWarnDuplicateCacheExports(t *testing.T) {
+	var buf strings.Builder
+	logrus.SetOutput(&buf)
+	logrus.SetLevel(logrus.WarnLevel)
+	t.Cleanup(func() { logrus.SetOutput(os.Stderr) })
+
+	t.Run("duplicate cache-to", func(t *testing.T) {
+		buf.Reset()
+		m := map[string]*Target{
+			"app": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared"}},
+				},
+			},
+			"worker": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared"}},
+				},
+			},
+		}
+		warnDuplicateCacheExports(m)
+		require.Contains(t, buf.String(), "registry.example.com/cache/shared")
+	})
+
+	t.Run("same destination different mode", func(t *testing.T) {
+		buf.Reset()
+		m := map[string]*Target{
+			"app": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared", "mode": "min"}},
+				},
+			},
+			"worker": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared", "mode": "max"}},
+				},
+			},
+		}
+		warnDuplicateCacheExports(m)
+		require.Contains(t, buf.String(), "registry.example.com/cache/shared")
+	})
+
+	t.Run("no duplicate", func(t *testing.T) {
+		buf.Reset()
+		m := map[string]*Target{
+			"app": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/app"}},
+				},
+			},
+			"worker": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/worker"}},
+				},
+			},
+		}
+		warnDuplicateCacheExports(m)
+		require.Empty(t, buf.String())
+	})
+
+	t.Run("inline not flagged", func(t *testing.T) {
+		buf.Reset()
+		m := map[string]*Target{
+			"app":    {CacheTo: buildflags.CacheOptions{{Type: "inline", Attrs: map[string]string{}}}},
+			"worker": {CacheTo: buildflags.CacheOptions{{Type: "inline", Attrs: map[string]string{}}}},
+		}
+		warnDuplicateCacheExports(m)
+		require.Empty(t, buf.String())
+	})
+
+	t.Run("within-target entries not double-counted", func(t *testing.T) {
+		buf.Reset()
+		m := map[string]*Target{
+			"app": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared", "mode": "min"}},
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared", "mode": "max"}},
+				},
+			},
+		}
+		warnDuplicateCacheExports(m)
+		require.Empty(t, buf.String())
+	})
+}
+
+func TestWarnDuplicateCacheExportsInheritance(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+			target "base" {
+				cache-to = ["type=registry,ref=registry.example.com/cache/shared,mode=max"]
+			}
+			target "app" {
+				inherits = ["base"]
+			}
+			target "worker" {
+				inherits = ["base"]
+			}
+		`),
+	}
+
+	var buf strings.Builder
+	logrus.SetOutput(&buf)
+	logrus.SetLevel(logrus.WarnLevel)
+	t.Cleanup(func() { logrus.SetOutput(os.Stderr) })
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app", "worker"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	_, err = TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Contains(t, buf.String(), "registry.example.com/cache/shared")
 }
