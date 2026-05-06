@@ -11,6 +11,7 @@ import (
 
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/moby/buildkit/util/entitlements"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -2490,4 +2491,47 @@ func stringify[V fmt.Stringer](values []V) []string {
 	}
 	sort.Strings(s)
 	return s
+}
+
+func TestWarnDuplicateCacheExports(t *testing.T) {
+	var buf strings.Builder
+	logrus.SetOutput(&buf)
+	logrus.SetLevel(logrus.WarnLevel)
+	t.Cleanup(func() { logrus.SetOutput(os.Stderr) })
+
+	t.Run("duplicate cache-to", func(t *testing.T) {
+		buf.Reset()
+		m := map[string]*Target{
+			"app": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared"}},
+				},
+			},
+			"worker": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/shared"}},
+				},
+			},
+		}
+		warnDuplicateCacheExports(m)
+		require.Contains(t, buf.String(), "registry.example.com/cache/shared")
+	})
+
+	t.Run("no duplicate", func(t *testing.T) {
+		buf.Reset()
+		m := map[string]*Target{
+			"app": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/app"}},
+				},
+			},
+			"worker": {
+				CacheTo: buildflags.CacheOptions{
+					{Type: "registry", Attrs: map[string]string{"ref": "registry.example.com/cache/worker"}},
+				},
+			},
+		}
+		warnDuplicateCacheExports(m)
+		require.Empty(t, buf.String())
+	})
 }
