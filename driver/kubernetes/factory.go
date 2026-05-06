@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"encoding/json"
 	"os"
 	"strconv"
 	"strings"
@@ -13,6 +14,7 @@ import (
 	"github.com/docker/buildx/driver/kubernetes/kubeclient"
 	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/docker/buildx/driver/kubernetes/podchooser"
+	"github.com/itchyny/gojq"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -123,7 +125,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		InitConfig:   cfg,
 	}
 
-	deploymentOpt, loadbalance, namespace, defaultLoad, timeout, err := f.processDriverOpts(deploymentName, namespace, cfg)
+	deploymentOpt, loadbalance, namespace, defaultLoad, timeout, manifestPatch, err := f.processDriverOpts(deploymentName, namespace, cfg)
 	if nil != err {
 		return nil, err
 	}
@@ -134,6 +136,19 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	d.deployment, d.statefulSet, d.configMaps, err = manifest.NewDeployment(deploymentOpt)
 	if err != nil {
 		return nil, err
+	}
+
+	if manifestPatch != "" {
+		if d.deployment != nil {
+			if d.deployment, err = applyManifestPatch(d.deployment, manifestPatch); err != nil {
+				return nil, errors.Wrap(err, "failed to apply manifest-patch to Deployment")
+			}
+		}
+		if d.statefulSet != nil {
+			if d.statefulSet, err = applyManifestPatch(d.statefulSet, manifestPatch); err != nil {
+				return nil, errors.Wrap(err, "failed to apply manifest-patch to StatefulSet")
+			}
+		}
 	}
 
 	d.minReplicas = int(deploymentOpt.Replicas)
@@ -165,7 +180,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 	return d, nil
 }
 
-func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg driver.InitConfig) (*manifest.DeploymentOpt, string, string, bool, time.Duration, error) {
+func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg driver.InitConfig) (*manifest.DeploymentOpt, string, string, bool, time.Duration, string, error) {
 	deploymentOpt := &manifest.DeploymentOpt{
 		Name:          deploymentName,
 		Image:         bkimage.DefaultImage,
@@ -180,6 +195,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 	timeout := defaultTimeout
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
 	loadbalance := LoadbalanceSticky
+	manifestPatch := ""
 	var err error
 
 	for k, v := range cfg.DriverOpts {
@@ -193,7 +209,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case k == "replicas":
 			r, err := strconv.ParseInt(v, 10, 32)
 			if err != nil {
-				return nil, "", "", false, 0, err
+				return nil, "", "", false, 0, "", err
 			}
 			deploymentOpt.Replicas = int32(r)
 		case k == "requests.cpu":
@@ -213,7 +229,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case k == "rootless":
 			deploymentOpt.Rootless, err = strconv.ParseBool(v)
 			if err != nil {
-				return nil, "", "", false, 0, err
+				return nil, "", "", false, 0, "", err
 			}
 			if _, isImage := cfg.DriverOpts["image"]; !isImage {
 				deploymentOpt.Image = bkimage.DefaultRootlessImage
@@ -225,17 +241,17 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case k == "nodeselector":
 			deploymentOpt.NodeSelector, err = splitMultiValues(v, ",", "=")
 			if err != nil {
-				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse node selector")
+				return nil, "", "", false, 0, "", errors.Wrap(err, "cannot parse node selector")
 			}
 		case k == "annotations":
 			deploymentOpt.CustomAnnotations, err = splitMultiValues(v, ",", "=")
 			if err != nil {
-				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse annotations")
+				return nil, "", "", false, 0, "", errors.Wrap(err, "cannot parse annotations")
 			}
 		case k == "labels":
 			deploymentOpt.CustomLabels, err = splitMultiValues(v, ",", "=")
 			if err != nil {
-				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse labels")
+				return nil, "", "", false, 0, "", errors.Wrap(err, "cannot parse labels")
 			}
 		case k == "tolerations":
 			ts := strings.Split(v, ";")
@@ -260,29 +276,34 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 						case "tolerationSeconds":
 							c, err := strconv.Atoi(kv[1])
 							if nil != err {
-								return nil, "", "", false, 0, err
+								return nil, "", "", false, 0, "", err
 							}
 							c64 := int64(c)
 							t.TolerationSeconds = &c64
 						default:
-							return nil, "", "", false, 0, errors.Errorf("invalid tolaration %q", v)
+							return nil, "", "", false, 0, "", errors.Errorf("invalid tolaration %q", v)
 						}
 					}
 				}
 
 				deploymentOpt.Tolerations = append(deploymentOpt.Tolerations, t)
 			}
+		case k == "manifest-patch":
+			if _, err := gojq.Parse(v); err != nil {
+				return nil, "", "", false, 0, "", errors.Wrap(err, "invalid manifest-patch jq expression")
+			}
+			manifestPatch = v
 		case k == "loadbalance":
 			switch v {
 			case LoadbalanceSticky, LoadbalanceRandom:
 				loadbalance = v
 			default:
-				return nil, "", "", false, 0, errors.Errorf("invalid loadbalance %q", v)
+				return nil, "", "", false, 0, "", errors.Errorf("invalid loadbalance %q", v)
 			}
 		case k == "qemu.install":
 			deploymentOpt.Qemu.Install, err = strconv.ParseBool(v)
 			if err != nil {
-				return nil, "", "", false, 0, err
+				return nil, "", "", false, 0, "", err
 			}
 		case k == "qemu.image":
 			if v != "" {
@@ -295,24 +316,65 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		case k == "default-load":
 			defaultLoad, err = strconv.ParseBool(v)
 			if err != nil {
-				return nil, "", "", false, 0, err
+				return nil, "", "", false, 0, "", err
 			}
 		case k == "timeout":
 			timeout, err = time.ParseDuration(v)
 			if err != nil {
-				return nil, "", "", false, 0, errors.Wrap(err, "cannot parse timeout")
+				return nil, "", "", false, 0, "", errors.Wrap(err, "cannot parse timeout")
 			}
 		case strings.HasPrefix(k, "env."):
 			envName := strings.TrimPrefix(k, "env.")
 			if envName == "" {
-				return nil, "", "", false, 0, errors.Errorf("invalid env option %q, expecting env.FOO=bar", k)
+				return nil, "", "", false, 0, "", errors.Errorf("invalid env option %q, expecting env.FOO=bar", k)
 			}
 			deploymentOpt.Env = append(deploymentOpt.Env, corev1.EnvVar{Name: envName, Value: v})
 		default:
-			return nil, "", "", false, 0, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
+			return nil, "", "", false, 0, "", errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
 		}
 	}
-	return deploymentOpt, loadbalance, namespace, defaultLoad, timeout, nil
+	return deploymentOpt, loadbalance, namespace, defaultLoad, timeout, manifestPatch, nil
+}
+
+// applyManifestPatch applies a jq expression to patch a Kubernetes manifest object.
+// The expression receives the manifest as input and must produce a single object as output.
+func applyManifestPatch[T any](obj *T, patch string) (*T, error) {
+	query, err := gojq.Parse(patch)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to parse manifest-patch expression")
+	}
+	code, err := gojq.Compile(query)
+	if err != nil {
+		return nil, errors.Wrap(err, "failed to compile manifest-patch expression")
+	}
+
+	b, err := json.Marshal(obj)
+	if err != nil {
+		return nil, err
+	}
+	var input any
+	if err := json.Unmarshal(b, &input); err != nil {
+		return nil, err
+	}
+
+	iter := code.Run(input)
+	v, ok := iter.Next()
+	if !ok {
+		return nil, errors.New("manifest-patch expression produced no output")
+	}
+	if err, ok := v.(error); ok {
+		return nil, errors.Wrap(err, "manifest-patch expression failed")
+	}
+
+	b, err = json.Marshal(v)
+	if err != nil {
+		return nil, err
+	}
+	var result T
+	if err := json.Unmarshal(b, &result); err != nil {
+		return nil, err
+	}
+	return &result, nil
 }
 
 func splitMultiValues(in string, itemsep string, kvsep string) (map[string]string, error) {
