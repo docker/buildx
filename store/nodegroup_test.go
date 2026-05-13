@@ -42,3 +42,17 @@ func TestNodeGroupUpdate(t *testing.T) {
 	require.Equal(t, 1, len(ng.Nodes))
 	require.Equal(t, []string{"linux/arm64"}, platformutil.Format(ng.Nodes[0].Platforms))
 }
+
+func TestNodeGroupNextNodeName(t *testing.T) {
+	t.Parallel()
+
+	ng := &NodeGroup{
+		Name: "foo",
+		Nodes: []Node{
+			{Name: "foo0"},
+			{Name: "foo1"},
+		},
+	}
+
+	require.Equal(t, "foo2", ng.nextNodeName())
+}
