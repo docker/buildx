@@ -1,11 +1,11 @@
 package store
 
 import (
+	"math/rand/v2"
 	"os"
 	"regexp"
 	"strings"
 
-	"github.com/docker/docker/pkg/namesgenerator"
 	"github.com/pkg/errors"
 )
 
@@ -39,8 +39,11 @@ func ValidateName(s string) (string, error) {
 
 func GenerateName(txn *Txn) (string, error) {
 	var name string
-	for i := range 6 {
-		name = namesgenerator.GetRandomName(i)
+	for range 6 {
+		name = adjectives[rand.IntN(len(adjectives))] + "_" +
+			nouns[rand.IntN(len(nouns))] + "_" +
+			themes[rand.IntN(len(themes))] // #nosec G404 -- ignore "Use of weak random number generator"
+
 		if _, err := txn.NodeGroupByName(name); err != nil {
 			if !os.IsNotExist(errors.Cause(err)) {
 				return "", err
