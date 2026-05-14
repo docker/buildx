@@ -32,6 +32,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -1281,7 +1282,25 @@ func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(
 	return value.AsString(), nil
 }
 
+func warnDuplicateCacheExports(m map[string]*Target) {
+	seen := map[string][]string{}
+	for _, name := range slices.Sorted(maps.Keys(m)) {
+		t := m[name]
+		for _, entry := range t.CacheTo {
+			key := entry.String()
+			seen[key] = append(seen[key], name)
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(seen)) {
+		names := seen[key]
+		if len(names) > 1 {
+			logrus.Warnf("multiple targets write to the same cache export %q: %s", key, strings.Join(names, ", "))
+		}
+	}
+}
+
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
+	warnDuplicateCacheExports(m)
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
 		bo, err := toBuildOpt(v, inp)
