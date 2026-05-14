@@ -17,7 +17,7 @@ require (
 	github.com/creack/pty v1.1.24
 	github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 	github.com/distribution/reference v0.6.0
-	github.com/docker/cli v29.5.0-rc.1+incompatible
+	github.com/docker/cli v29.5.0-rc.1.0.20260514121544-653dc8f03d16+incompatible // master / v29.5.0
 	github.com/docker/cli-docs-tool v0.11.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0

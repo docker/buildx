@@ -298,7 +298,7 @@ github.com/digitorus/timestamp
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v29.5.0-rc.1+incompatible
+# github.com/docker/cli v29.5.0-rc.1.0.20260514121544-653dc8f03d16+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/metadata
