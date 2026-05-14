@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/codes"
 )
 
 type logsOptions struct {
@@ -79,7 +81,29 @@ loop0:
 		}
 	}
 
-	return printer.Wait()
+	printerErr := printer.Wait()
+
+	errOut, err := loadBuildErrorOutput(ctx, c, rec)
+	if err != nil {
+		return err
+	}
+	printLogsError(dockerCli.Err(), errOut)
+
+	return printerErr
+}
+
+// printLogsError prints a summary of a build error at the end of log output.
+func printLogsError(w io.Writer, errOut *errorOutput) {
+	if errOut == nil {
+		return
+	}
+	fmt.Fprintln(w)
+	if codes.Code(errOut.Code) == codes.Canceled {
+		fmt.Fprintf(w, "Build canceled\n")
+	} else if errOut.Message != "" {
+		fmt.Fprintf(w, "Error: %s %s\n", codes.Code(errOut.Code).String(), errOut.Message)
+	}
+	printErrorDetails(w, errOut)
 }
 
 func logsCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
