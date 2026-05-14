@@ -278,9 +278,9 @@ func warnOnNoOutput(ctx context.Context, nodes []builder.Node, opts map[string]O
 	var warnNoOutputBuf bytes.Buffer
 	warnNoOutputBuf.WriteString("No output specified ")
 	if len(noOutputTargets) == 1 && noOutputTargets[0] == "default" {
-		warnNoOutputBuf.WriteString(fmt.Sprintf("with %s driver", noMobyDriver.Factory().Name()))
+		fmt.Fprintf(&warnNoOutputBuf, "with %s driver", noMobyDriver.Factory().Name())
 	} else {
-		warnNoOutputBuf.WriteString(fmt.Sprintf("for %s target(s) with %s driver", strings.Join(noOutputTargets, ", "), noMobyDriver.Factory().Name()))
+		fmt.Fprintf(&warnNoOutputBuf, "for %s target(s) with %s driver", strings.Join(noOutputTargets, ", "), noMobyDriver.Factory().Name())
 	}
 	logrus.Warnf("%s. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", warnNoOutputBuf.String())
 }
@@ -1287,7 +1287,7 @@ func ReadSourcePolicy() (*spb.Policy, error) {
 		return nil, nil
 	}
 
-	data, err := os.ReadFile(p)
+	data, err := os.ReadFile(p) // #nosec G703 -- using user-controlled path by design
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read policy file")
 	}
