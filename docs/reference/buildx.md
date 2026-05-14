@@ -24,6 +24,7 @@ Extended build capabilities with BuildKit
 | [`ls`](buildx_ls.md)                 | List builder instances                           |
 | [`policy`](buildx_policy.md)         | Commands for working with build policies         |
 | [`prune`](buildx_prune.md)           | Remove build cache                               |
+| [`replay`](buildx_replay.md)         | Replay a build from its provenance               |
 | [`rm`](buildx_rm.md)                 | Remove one or more builder instances             |
 | [`stop`](buildx_stop.md)             | Stop builder instance                            |
 | [`use`](buildx_use.md)               | Set the current builder instance                 |

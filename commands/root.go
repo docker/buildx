@@ -8,6 +8,7 @@ import (
 	historycmd "github.com/docker/buildx/commands/history"
 	imagetoolscmd "github.com/docker/buildx/commands/imagetools"
 	policycmd "github.com/docker/buildx/commands/policy"
+	replaycmd "github.com/docker/buildx/commands/replay"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/logutil"
@@ -127,6 +128,7 @@ func addCommands(cmd *cobra.Command, opts *rootOptions, dockerCli command.Cli) {
 		duCmd(dockerCli, opts),
 		imagetoolscmd.RootCmd(cmd, dockerCli, imagetoolscmd.RootOptions{Builder: &opts.builder}),
 		historycmd.RootCmd(cmd, dockerCli, historycmd.RootOptions{Builder: &opts.builder}),
+		replaycmd.RootCmd(cmd, dockerCli, replaycmd.RootOptions{Builder: &opts.builder}),
 		dapCmd(dockerCli, opts),
 	)
 	if confutil.IsExperimental() {
