@@ -588,6 +588,11 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			return nil, err
 		}
 
+		// Normalize plural alias so both "platform" and "platforms" are accepted.
+		if keys[1] == "platforms" {
+			keys[1] = "platform"
+		}
+
 		okey := strings.Join(keys[1:], ".")
 		for _, name := range names {
 			t, ok := m[name]

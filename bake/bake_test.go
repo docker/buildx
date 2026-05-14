@@ -201,6 +201,25 @@ target "webapp" {
 		require.Equal(t, []string{"linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
 	})
 
+	t.Run("PlatformsOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platforms=linux/arm64"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/arm64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("PlatformsAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platforms+=linux/arm64"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/amd64", "linux/arm64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("PlatformsMixedForms", func(t *testing.T) {
+		// Both singular and plural forms should map to the same field and accumulate identically.
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform=linux/arm64", "webapp.platforms=linux/riscv64"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
+	})
+
 	t.Run("SecretsOverride", func(t *testing.T) {
 		t.Setenv("FOO", "foo")
 		t.Setenv("BAR", "bar")
