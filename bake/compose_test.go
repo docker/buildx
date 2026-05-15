@@ -93,6 +93,23 @@ secrets:
 	require.Equal(t, "FROM alpine\n", *c.Targets[2].DockerfileInline)
 }
 
+func TestParseComposeEmptyCacheLists(t *testing.T) {
+	dt := []byte(`
+services:
+  webapp:
+    build:
+      context: ./dir
+      cache_from: []
+      cache_to: []
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Len(t, c.Targets, 1)
+	require.Empty(t, c.Targets[0].CacheFrom)
+	require.Empty(t, c.Targets[0].CacheTo)
+}
+
 func TestNoBuildOutOfTreeService(t *testing.T) {
 	dt := []byte(`
 services:
