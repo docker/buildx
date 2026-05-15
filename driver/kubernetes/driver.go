@@ -206,7 +206,7 @@ func (d *Driver) Info(ctx context.Context) (_ *driver.Info, err error) {
 				Status: driver.Inactive,
 			}, nil
 		}
-		if depl.Status.ReadyReplicas <= 0 {
+		if stat.Status.ReadyReplicas <= 0 {
 			return &driver.Info{
 				Status: driver.Stopped,
 			}, nil
