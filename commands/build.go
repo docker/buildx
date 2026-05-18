@@ -731,6 +731,11 @@ func wrapBuildError(err error, bake bool) error {
 			msg += " Git URLs with query string are supported since Dockerfile v1.18 and BuildKit v0.24. Use BUILDKIT_SYNTAX build-arg, #syntax directive in Dockerfile or update to latest BuildKit."
 			return &wrapped{err, msg}
 		}
+		if st.Code() == codes.Unimplemented && strings.Contains(st.Message(), "unsupported frontend capability moby.buildkit.frontend.gitfetchbycommit") {
+			msg := "current frontend does not support Git URLs with fetch-by-commit query attribute."
+			msg += " Git URLs with fetch-by-commit with query attribute are supported since Dockerfile v1.24 and BuildKit v0.30. Use BUILDKIT_SYNTAX build-arg, #syntax directive in Dockerfile or update to latest BuildKit."
+			return &wrapped{err, msg}
+		}
 	}
 	return err
 }

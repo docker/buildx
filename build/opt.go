@@ -1120,19 +1120,20 @@ func createTempDockerfile(r io.Reader, multiReader *SyncMultiReader) (string, er
 }
 
 func processGitURL(url string, name string, target *client.SolveOpt, caps map[string]struct{}) error {
-	gitRef, err := gitutil.ParseURL(url)
+	gitURL, err := gitutil.ParseURL(url)
 	if err != nil {
 		return err
 	}
-	if len(gitRef.Query) == 0 {
+	if len(gitURL.Query) == 0 {
 		return nil
 	}
+	if gitRef, ok, err := dfgitutil.ParseGitRef(url); err != nil && ok {
+		return err
+	} else if ok && gitRef.FetchByCommit {
+		addFrontendCap(caps, "moby.buildkit.frontend.gitfetchbycommit", name)
+	}
 	if !sendGitQueryAsInput() {
-		capName := "moby.buildkit.frontend.gitquerystring"
-		if name != "context" {
-			capName += "+forward"
-		}
-		caps[capName] = struct{}{}
+		addFrontendCap(caps, "moby.buildkit.frontend.gitquerystring", name)
 		return nil
 	}
 
@@ -1168,6 +1169,13 @@ func processGitURL(url string, name string, target *client.SolveOpt, caps map[st
 	}
 
 	return nil
+}
+
+func addFrontendCap(caps map[string]struct{}, capName, name string) {
+	if name != "context" {
+		capName += "+forward"
+	}
+	caps[capName] = struct{}{}
 }
 
 // handle https://github.com/moby/moby/pull/10858
