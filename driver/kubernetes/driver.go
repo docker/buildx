@@ -113,7 +113,7 @@ func bootstrap[S any](ctx context.Context, d *Driver, client appClient[S], name 
 		}
 
 		if _, err = client.Create(ctx, spec, metav1.CreateOptions{}); err != nil {
-			return errors.Wrapf(err, "error while calling Create for %q", d.deployment.Name)
+			return errors.Wrapf(err, "error while calling Create for %q", name)
 		}
 	}
 	return nil
@@ -206,7 +206,7 @@ func (d *Driver) Info(ctx context.Context) (_ *driver.Info, err error) {
 				Status: driver.Inactive,
 			}, nil
 		}
-		if depl.Status.ReadyReplicas <= 0 {
+		if stat.Status.ReadyReplicas <= 0 {
 			return &driver.Info{
 				Status: driver.Stopped,
 			}, nil
