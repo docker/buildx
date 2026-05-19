@@ -298,7 +298,7 @@ github.com/digitorus/timestamp
 # github.com/distribution/reference v0.6.0
 ## explicit; go 1.20
 github.com/distribution/reference
-# github.com/docker/cli v29.4.3+incompatible
+# github.com/docker/cli v29.5.1+incompatible
 ## explicit
 github.com/docker/cli/cli
 github.com/docker/cli/cli-plugins/metadata
@@ -337,7 +337,7 @@ github.com/docker/cli-docs-tool/annotation
 # github.com/docker/docker v28.5.2+incompatible
 ## explicit
 github.com/docker/docker/pkg/namesgenerator
-# github.com/docker/docker-credential-helpers v0.9.6
+# github.com/docker/docker-credential-helpers v0.9.7
 ## explicit; go 1.21
 github.com/docker/docker-credential-helpers/client
 github.com/docker/docker-credential-helpers/credentials
