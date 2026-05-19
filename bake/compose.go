@@ -266,6 +266,10 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 		return nil, errors.New("empty compose file")
 	}
 
+	// compose-go schema validation does a JSON round trip that converts nil slices
+	// from YAML [] values into null, so keep empty lists as arrays before validation.
+	// buildx#3849
+	normalizeEmptyLists(filtered)
 	if err := composeschema.Validate(filtered); err != nil {
 		return nil, err
 	}
@@ -277,6 +281,23 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 		ConfigFiles: cfgs,
 		Environment: envs,
 	})
+}
+
+func normalizeEmptyLists(value any) any {
+	switch v := value.(type) {
+	case []any:
+		if v == nil {
+			return []any{}
+		}
+		for i, e := range v {
+			v[i] = normalizeEmptyLists(e)
+		}
+	case map[string]any:
+		for k, e := range v {
+			v[k] = normalizeEmptyLists(e)
+		}
+	}
+	return value
 }
 
 func validateComposeFile(dt []byte, fn string, envOverrides map[string]string) (bool, error) {
