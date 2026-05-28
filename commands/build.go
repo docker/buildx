@@ -9,6 +9,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path/filepath"
 	"slices"
@@ -19,6 +20,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/v2/pkg/epoch"
+	"github.com/containerd/platforms"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store"
@@ -29,6 +31,7 @@ import (
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/dockerutil/dockerconfig"
+	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/metricutil"
 	"github.com/docker/buildx/util/osutil"
@@ -61,6 +64,8 @@ import (
 	"go.opentelemetry.io/otel/metric"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/protobuf/proto"
+
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
 
 type buildOptions struct {
@@ -95,6 +100,7 @@ type buildOptions struct {
 
 	progress string
 	quiet    bool
+	validate []string
 
 	builder      string
 	metadataFile string
@@ -318,6 +324,11 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 		return err
 	}
 
+	validate, err := parseValidateFlags(options.validate)
+	if err != nil {
+		return err
+	}
+
 	// Avoid leaving a stale file if we eventually fail
 	if options.imageIDFile != "" {
 		if err := os.Remove(options.imageIDFile); err != nil && !os.IsNotExist(err) {
@@ -396,9 +407,70 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 	}
 
 	done := timeBuildCommand(mp, attributes)
-	resp, inputs, retErr := runBuildWithOptions(ctx, dockerCli, opts, dbg, printer)
+	var (
+		resp   *client.SolveResponse
+		inputs *build.Inputs
+		retErr error
+	)
 
-	done(retErr)
+	if validate.repro {
+		if _, ok := opts.BuildArgs[epoch.SourceDateEpochEnv]; !ok {
+			// Ensure both runs use the same epoch.
+			opts.BuildArgs[epoch.SourceDateEpochEnv] = strconv.FormatInt(time.Now().Unix(), 10)
+		}
+
+		// First run is used only for digest comparison; keep it quiet.
+		printer1, err := progress.NewPrinter(ctx2, io.Discard, progressui.QuietMode,
+			progress.WithDesc(
+				fmt.Sprintf("validating reproducibility (1/2) with %q instance using %s driver", b.Name, b.Driver),
+				fmt.Sprintf("%s:%s", b.Driver, b.Name),
+			),
+			progress.WithMetrics(mp, attributes),
+		)
+		if err != nil {
+			return err
+		}
+		resp1, _, err1 := runBuildWithOptions(ctx, dockerCli, opts, nil, printer1)
+		if err1 != nil {
+			done(err1)
+			return err1
+		}
+		dgst1, err := getReproDigest(ctx, dockerCli, resp1.ExporterResponse)
+		if err != nil {
+			done(err)
+			return err
+		}
+
+		// Ensure the second run does not share the same-second wall clock with the
+		// first run (some exporters/attestations may still embed time-based fields).
+		time.Sleep(time.Second)
+
+		opts2 := cloneBuildOptions(opts)
+		opts2.NoCache = true
+
+		// Second run is the "real" run whose output and artifacts we keep.
+		_, _ = fmt.Fprintln(out, "Validating reproducibility (2/2)")
+		resp2, inputs2, err2 := runBuildWithOptions(ctx, dockerCli, opts2, dbg, printer)
+		done(err2)
+		if err2 != nil {
+			return err2
+		}
+		dgst2, err := getReproDigest(ctx, dockerCli, resp2.ExporterResponse)
+		if err != nil {
+			done(err)
+			return err
+		}
+		if dgst1 != dgst2 {
+			err := errors.Errorf("reproducibility validation failed: digest mismatch (%s != %s)", dgst1, dgst2)
+			done(err)
+			return err
+		}
+		resp, inputs, retErr = resp2, inputs2, nil
+	} else {
+		resp, inputs, retErr = runBuildWithOptions(ctx, dockerCli, opts, dbg, printer)
+		done(retErr)
+	}
+
 	if retErr != nil {
 		return retErr
 	}
@@ -486,6 +558,125 @@ func runBuildWithOptions(ctx context.Context, dockerCli command.Cli, opts *Build
 
 		return resp, inputs, err
 	}
+}
+
+type validateFlags struct {
+	repro bool
+}
+
+func parseValidateFlags(flags []string) (validateFlags, error) {
+	var out validateFlags
+	for _, v := range flags {
+		switch strings.TrimSpace(v) {
+		case "":
+			continue
+		case "repro":
+			out.repro = true
+		default:
+			return validateFlags{}, errors.Errorf("unknown --validate value %q (supported: repro)", v)
+		}
+	}
+	return out, nil
+}
+
+func getReproDigest(ctx context.Context, dockerCli command.Cli, resp map[string]string) (string, error) {
+	// Prefer the image manifest digest key. This is the digest we want to compare
+	// for reproducibility (not the config digest).
+	//
+	// NOTE: For multi-platform exports, containerimage.digest can be the index/list
+	// digest. Indices themselves are not expected to be reproducible (e.g., they may
+	// contain provenance or other attached artifacts). For indices, compare the
+	// per-platform manifest digests when we can resolve the index content.
+	if descb64 := resp[exptypes.ExporterImageDescriptorKey]; descb64 != "" {
+		descJSON, err := base64.StdEncoding.DecodeString(descb64)
+		if err != nil {
+			return "", errors.Wrapf(err, "failed to decode %q", exptypes.ExporterImageDescriptorKey)
+		}
+		var desc ocispecs.Descriptor
+		if err := json.Unmarshal(descJSON, &desc); err != nil {
+			return "", errors.Wrapf(err, "failed to parse %q", exptypes.ExporterImageDescriptorKey)
+		}
+		switch desc.MediaType {
+		case ocispecs.MediaTypeImageIndex, "application/vnd.docker.distribution.manifest.list.v2+json":
+			imgName := strings.TrimSpace(resp[exptypes.ExporterImageNameKey])
+			if imgName == "" {
+				return "", errors.Errorf("reproducibility validation for multi-platform outputs requires an image name to resolve the index content; set a tag (e.g. -t repo/name:tag) and push/load accordingly, or use a single platform")
+			}
+			// Exporter may return multiple names separated by commas; pick the first.
+			if i := strings.IndexByte(imgName, ','); i >= 0 {
+				imgName = strings.TrimSpace(imgName[:i])
+			}
+
+			r := imagetools.New(imagetools.Opt{
+				Auth: dockerconfig.LoadAuthConfig(dockerCli),
+				// RegistryConfig is optional; nil falls back to default resolver behavior.
+			})
+			dt, _, err := r.Get(ctx, imgName)
+			if err != nil {
+				return "", errors.Wrapf(err, "failed to resolve index %q for reproducibility validation", imgName)
+			}
+			var idx ocispecs.Index
+			if err := json.Unmarshal(dt, &idx); err != nil {
+				return "", errors.Wrapf(err, "failed to parse index %q for reproducibility validation", imgName)
+			}
+			type ent struct {
+				p    string
+				dgst string
+			}
+			ents := make([]ent, 0, len(idx.Manifests))
+			for _, m := range idx.Manifests {
+				if m.Platform == nil {
+					continue
+				}
+				ents = append(ents, ent{
+					p:    platforms.FormatAll(*m.Platform),
+					dgst: m.Digest.String(),
+				})
+			}
+			if len(ents) == 0 {
+				return "", errors.Errorf("no platform manifests found in index %q for reproducibility validation", imgName)
+			}
+			slices.SortFunc(ents, func(a, b ent) int {
+				if a.p < b.p {
+					return -1
+				}
+				if a.p > b.p {
+					return 1
+				}
+				if a.dgst < b.dgst {
+					return -1
+				}
+				if a.dgst > b.dgst {
+					return 1
+				}
+				return 0
+			})
+			var sb strings.Builder
+			for i, e := range ents {
+				if i > 0 {
+					sb.WriteByte(',')
+				}
+				sb.WriteString(e.p)
+				sb.WriteByte('=')
+				sb.WriteString(e.dgst)
+			}
+			return sb.String(), nil
+		}
+	}
+	if dgst := resp[exptypes.ExporterImageDigestKey]; dgst != "" {
+		return dgst, nil
+	}
+	return "", errors.Errorf("missing %q in exporter response", exptypes.ExporterImageDigestKey)
+}
+
+func cloneBuildOptions(in *BuildOptions) *BuildOptions {
+	// Shallow copy first, then deep-copy the fields we may mutate.
+	out := *in
+	if in.BuildArgs != nil {
+		out.BuildArgs = make(map[string]string, len(in.BuildArgs))
+		maps.Copy(out.BuildArgs, in.BuildArgs)
+	}
+	return &out
 }
 
 func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOptions) *cobra.Command {
@@ -579,6 +770,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	flags.StringArrayVarP(&options.tags, "tag", "t", []string{}, `Image identifier (format: "[registry/]repository[:tag]")`)
 
 	flags.StringVar(&options.target, "target", "", "Set the target build stage to build")
+
+	flags.StringArrayVar(&options.validate, "validate", []string{}, `Validate build result (e.g., "repro")`)
 
 	options.ulimits = dockeropts.NewUlimitOpt(nil)
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")

@@ -47,6 +47,7 @@ Start a build
 | `-t`, `--tag`       | `stringArray` |           | Image identifier (format: `[registry/]repository[:tag]`)                                                                                         |
 | `--target`          | `string`      |           | Set the target build stage to build                                                                                                              |
 | `--ulimit`          | `ulimit`      |           | Ulimit options                                                                                                                                   |
+| `--validate`        | `stringArray` |           | Validate build result (e.g., `repro`)                                                                                                            |
 
 
 <!---MARKER_GEN_END-->
