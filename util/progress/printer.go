@@ -29,9 +29,11 @@ type Printer struct {
 	mode progressui.DisplayMode
 	opt  *printerOpts
 
-	status    chan *client.SolveStatus
-	interrupt chan interruptRequest
-	state     printerState
+	status       chan *client.SolveStatus
+	statusMu     sync.Mutex
+	statusClosed bool
+	interrupt    chan interruptRequest
+	state        printerState
 
 	done      chan struct{}
 	closeOnce sync.Once
@@ -50,7 +52,10 @@ type Printer struct {
 
 func (p *Printer) Wait() error {
 	p.closeOnce.Do(func() {
+		p.statusMu.Lock()
+		p.statusClosed = true
 		close(p.status)
+		p.statusMu.Unlock()
 	})
 	<-p.done
 	return p.err
@@ -86,7 +91,16 @@ func (p *Printer) Resume() {
 }
 
 func (p *Printer) Write(s *client.SolveStatus) {
-	p.status <- s
+	p.statusMu.Lock()
+	if !p.statusClosed {
+		// Progress updates are best-effort; dropping updates is preferred over blocking
+		// or panicking when the printer is shutting down.
+		select {
+		case p.status <- s:
+		default:
+		}
+	}
+	p.statusMu.Unlock()
 	if p.metrics != nil {
 		p.metrics.Write(s)
 	}
@@ -140,7 +154,7 @@ func NewPrinter(ctx context.Context, out io.Writer, mode progressui.DisplayMode,
 		out:       out,
 		mode:      mode,
 		opt:       opt,
-		status:    make(chan *client.SolveStatus),
+		status:    make(chan *client.SolveStatus, 32),
 		interrupt: make(chan interruptRequest),
 		state:     printerStateRunning,
 		done:      make(chan struct{}),
