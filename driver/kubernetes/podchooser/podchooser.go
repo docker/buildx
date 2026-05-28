@@ -4,7 +4,6 @@ import (
 	"context"
 	"math/rand"
 	"sort"
-	"time"
 
 	"github.com/docker/buildx/driver/kubernetes/kubeclient"
 	"github.com/pkg/errors"
@@ -20,7 +19,6 @@ type PodChooser interface {
 }
 
 type RandomPodChooser struct {
-	RandSource  rand.Source
 	PodClient   kubeclient.PodClient
 	Deployment  *appsv1.Deployment
 	StatefulSet *appsv1.StatefulSet
@@ -34,12 +32,7 @@ func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 	if len(pods) == 0 {
 		return nil, errors.New("no running buildkit pods found")
 	}
-	randSource := pc.RandSource
-	if randSource == nil {
-		randSource = rand.NewSource(time.Now().Unix())
-	}
-	rnd := rand.New(randSource) // #nosec G404 -- no strong seeding required
-	n := rnd.Int() % len(pods)
+	n := rand.Intn(len(pods)) // #nosec G404 -- no strong seeding required
 	logrus.Debugf("RandomPodChooser.ChoosePod(): len(pods)=%d, n=%d", len(pods), n)
 	return pods[n], nil
 }

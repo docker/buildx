@@ -45,6 +45,7 @@ type Driver struct {
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/kubernetes.md
 	minReplicas       int
+	loadbalance       string
 	deployment        *appsv1.Deployment
 	statefulSet       *appsv1.StatefulSet
 	configMaps        []*corev1.ConfigMap
@@ -59,6 +60,10 @@ type Driver struct {
 
 func (d *Driver) IsMobyDriver() bool {
 	return false
+}
+
+func (d *Driver) RequiresUncachedClient() bool {
+	return d.loadbalance == LoadbalanceRandom
 }
 
 func (d *Driver) Config() driver.InitConfig {

@@ -57,6 +57,14 @@ func (dp ResolvedNode) Platforms() []ocispecs.Platform {
 }
 
 func (dp ResolvedNode) Client(ctx context.Context) (*client.Client, error) {
+	node := dp.resolver.nodes[dp.driverIndex]
+	// loadbalance=random requires a fresh connection per call so each target lands on a different pod.
+	if node.Driver != nil && node.Driver.RequiresUncachedClient() {
+		if _, err := dp.resolver.boot(ctx, []int{dp.driverIndex}, nil); err != nil {
+			return nil, err
+		}
+		return node.Driver.UncachedClient(ctx)
+	}
 	clients, err := dp.resolver.boot(ctx, []int{dp.driverIndex}, nil)
 	if err != nil {
 		return nil, err
