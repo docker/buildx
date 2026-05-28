@@ -206,7 +206,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 	}
 
 	if opt.Rootless {
-		if err := toRootless(&podTemplate); err != nil {
+		if err := toRootless(&podTemplate, opt.BuildKitRootVolumeMemory); err != nil {
 			return nil, nil, nil, err
 		}
 	}
@@ -267,7 +267,7 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 		podTemplate.Spec.Containers[0].Resources.Limits[corev1.ResourceEphemeralStorage] = limStorage
 	}
 
-	if opt.BuildKitRootVolumeMemory != "" {
+	if opt.BuildKitRootVolumeMemory != "" && !opt.Rootless {
 		buildKitRootVolumeMemory, err := resource.ParseQuantity(opt.BuildKitRootVolumeMemory)
 		if err != nil {
 			return nil, nil, nil, err
@@ -371,7 +371,7 @@ func setupPersistentStorage(s *appsv1.StatefulSet, opt *DeploymentOpt) error {
 	return nil
 }
 
-func toRootless(p *corev1.PodTemplateSpec) error {
+func toRootless(p *corev1.PodTemplateSpec, buildKitRootVolumeMemory string) error {
 	p.Spec.Containers[0].Args = append(
 		p.Spec.Containers[0].Args,
 		"--oci-worker-no-process-sandbox",
@@ -396,10 +396,19 @@ func toRootless(p *corev1.PodTemplateSpec) error {
 		Name:      emptyDirVolName,
 		MountPath: "/home/user/.local/share/buildkit",
 	})
+	emptyDir := &corev1.EmptyDirVolumeSource{}
+	if buildKitRootVolumeMemory != "" {
+		mem, err := resource.ParseQuantity(buildKitRootVolumeMemory)
+		if err != nil {
+			return err
+		}
+		emptyDir.Medium = corev1.StorageMediumMemory
+		emptyDir.SizeLimit = &mem
+	}
 	p.Spec.Volumes = append(p.Spec.Volumes, corev1.Volume{
 		Name: emptyDirVolName,
 		VolumeSource: corev1.VolumeSource{
-			EmptyDir: &corev1.EmptyDirVolumeSource{},
+			EmptyDir: emptyDir,
 		},
 	})
 
