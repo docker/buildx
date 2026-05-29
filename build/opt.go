@@ -610,6 +610,9 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		so.FrontendAttrs["ulimit"] = ulimits
 	}
 
+	// setup per-step resource limits
+	addResourceLimits(opt.ResourceLimits, so.FrontendAttrs)
+
 	// mark call request as internal
 	if opt.CallFunc != nil {
 		so.Internal = true

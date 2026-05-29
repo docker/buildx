@@ -44,6 +44,7 @@ Start a build
 | `--pull`                                | `bool`        |           | Always attempt to pull all referenced images                                                                                                     |
 | [`--push`](#push)                       | `bool`        |           | Shorthand for `--output=type=registry,unpack=false`                                                                                              |
 | `-q`, `--quiet`                         | `bool`        |           | Suppress the build output and print image ID on success                                                                                          |
+| [`--resource`](#resource)               | `stringArray` |           | Resource limits for build containers (format: `memory=2g`, `cpu-quota=50000`)                                                                    |
 | [`--sbom`](#sbom)                       | `string`      |           | Shorthand for `--attest=type=sbom`                                                                                                               |
 | [`--secret`](#secret)                   | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                                                                        |
 | [`--shm-size`](#shm-size)               | `bytes`       | `0`       | Shared memory size for build containers                                                                                                          |
@@ -1153,6 +1154,43 @@ $ docker buildx build --ulimit nofile=1024:1024 .
 > If you don't provide a `hard limit`, the `soft limit` is used
 > for both values. If no `ulimits` are set, they're inherited from
 > the default `ulimits` set on the daemon.
+
+> [!NOTE]
+> In most cases, it is recommended to let the builder automatically determine
+> the appropriate configurations. Manual adjustments should only be considered
+> when specific performance tuning is required for complex build scenarios.
+
+### <a name="resource"></a> Set CPU and memory limits for build containers (--resource)
+
+The `--resource` flag constrains the resources available to the containers that
+run your `RUN` instructions during the build. It's repeatable and takes
+`key=value` pairs, where `key` is one of:
+
+| Key           | Description                                                                  |
+|:--------------|:-----------------------------------------------------------------------------|
+| `memory`      | Memory limit (format: `<number><unit>`, e.g. `512m`, `2g`).                  |
+| `memory-swap` | Total memory plus swap limit. Set to `-1` to allow unlimited swap.           |
+| `cpu-shares`  | CPU shares (relative weight).                                                |
+| `cpu-period`  | Length of a CPU CFS (Completely Fair Scheduler) period, in microseconds.     |
+| `cpu-quota`   | CPU CFS quota, in microseconds, within each `cpu-period`.                    |
+| `cpuset-cpus` | CPUs in which to allow execution (`0-3`, `0,1`).                             |
+| `cpuset-mems` | Memory nodes (MEMs) in which to allow execution (`0-3`, `0,1`).              |
+
+```console
+$ docker buildx build --resource memory=2g --resource cpu-quota=50000 --resource cpu-period=100000 .
+```
+
+These map to the cgroup resource limits of the legacy `docker build` API and
+only apply to individual build steps. They don't affect the build cache key.
+
+> [!NOTE]
+> These limits require a BuildKit daemon that supports per-step resource limits
+> (the `exec.meta.linux.resources` capability) and only take effect on Linux.
+
+> [!NOTE]
+> Because BuildKit can run build steps in parallel, these limits apply to each
+> step in isolation rather than to the build as a whole. When the same step is
+> requested with different limits, the most relaxed limits are used.
 
 > [!NOTE]
 > In most cases, it is recommended to let the builder automatically determine

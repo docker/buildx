@@ -99,6 +99,97 @@ func toBuildkitUlimits(inp *opts.UlimitOpt) (string, error) {
 	return strings.Join(ulimits, ","), nil
 }
 
+// User-facing resource keys accepted in `--resource key=value` entries, mirroring docker run flag names.
+const (
+	resourceKeyMemory     = "memory"
+	resourceKeyMemorySwap = "memory-swap"
+	resourceKeyCPUShares  = "cpu-shares"
+	resourceKeyCPUPeriod  = "cpu-period"
+	resourceKeyCPUQuota   = "cpu-quota"
+	resourceKeyCPUSetCPUs = "cpuset-cpus"
+	resourceKeyCPUSetMems = "cpuset-mems"
+)
+
+// Frontend attribute keys, must match those parsed by BuildKit's dockerui frontend.
+const (
+	attrMemory     = "memory"
+	attrMemorySwap = "memswap"
+	attrCPUShares  = "cpushares"
+	attrCPUPeriod  = "cpuperiod"
+	attrCPUQuota   = "cpuquota"
+	attrCPUSetCPUs = "cpusetcpus"
+	attrCPUSetMems = "cpusetmems"
+)
+
+// ParseResourceLimits parses `key=value` entries from the `--resource` flag into ResourceLimits.
+func ParseResourceLimits(entries []string) (ResourceLimits, error) {
+	var rl ResourceLimits
+	for _, entry := range entries {
+		k, v, ok := strings.Cut(entry, "=")
+		if !ok {
+			return rl, errors.Errorf("invalid resource %q, expected key=value", entry)
+		}
+		k = strings.TrimSpace(k)
+		v = strings.TrimSpace(v)
+		switch k {
+		case resourceKeyMemory:
+			if err := rl.Memory.Set(v); err != nil {
+				return rl, errors.Wrapf(err, "invalid value %q for resource %s", v, k)
+			}
+		case resourceKeyMemorySwap:
+			if err := rl.MemorySwap.Set(v); err != nil {
+				return rl, errors.Wrapf(err, "invalid value %q for resource %s", v, k)
+			}
+		case resourceKeyCPUShares, resourceKeyCPUPeriod, resourceKeyCPUQuota:
+			n, err := strconv.ParseInt(v, 10, 64)
+			if err != nil {
+				return rl, errors.Wrapf(err, "invalid value %q for resource %s", v, k)
+			}
+			switch k {
+			case resourceKeyCPUShares:
+				rl.CPUShares = n
+			case resourceKeyCPUPeriod:
+				rl.CPUPeriod = n
+			case resourceKeyCPUQuota:
+				rl.CPUQuota = n
+			}
+		case resourceKeyCPUSetCPUs:
+			rl.CPUSetCPUs = v
+		case resourceKeyCPUSetMems:
+			rl.CPUSetMems = v
+		default:
+			return rl, errors.Errorf("unknown resource %q", k)
+		}
+	}
+	return rl, nil
+}
+
+// addResourceLimits sets the frontend attributes for the resource limits.
+// Only non-zero values are sent, so builds against a daemon without the feature keep working.
+func addResourceLimits(rl ResourceLimits, attrs map[string]string) {
+	if v := rl.Memory.Value(); v > 0 {
+		attrs[attrMemory] = strconv.FormatInt(v, 10)
+	}
+	if v := rl.MemorySwap.Value(); v != 0 {
+		attrs[attrMemorySwap] = strconv.FormatInt(v, 10)
+	}
+	if rl.CPUShares > 0 {
+		attrs[attrCPUShares] = strconv.FormatInt(rl.CPUShares, 10)
+	}
+	if rl.CPUPeriod > 0 {
+		attrs[attrCPUPeriod] = strconv.FormatInt(rl.CPUPeriod, 10)
+	}
+	if rl.CPUQuota > 0 {
+		attrs[attrCPUQuota] = strconv.FormatInt(rl.CPUQuota, 10)
+	}
+	if rl.CPUSetCPUs != "" {
+		attrs[attrCPUSetCPUs] = rl.CPUSetCPUs
+	}
+	if rl.CPUSetMems != "" {
+		attrs[attrCPUSetMems] = rl.CPUSetMems
+	}
+}
+
 func notSupported(f driver.Feature, d *driver.DriverHandle, docs string) error {
 	return errors.Errorf(`%s is not supported for the %s driver.
 Switch to a different driver, or turn on the containerd image store, and try again.
