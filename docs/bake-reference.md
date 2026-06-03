@@ -902,7 +902,7 @@ target "default" {
 ```
 
 > [!NOTE]
-> Local outputs with `mode=delete` require granting `--allow=local-output-delete`
+> Local outputs with `mode=delete` require granting `--allow=buildx.local.delete`
 > when invoking `docker buildx bake`.
 
 ### `target.policy`

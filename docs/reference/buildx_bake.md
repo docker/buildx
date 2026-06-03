@@ -85,7 +85,7 @@ The `fs` entitlements take a path value (relative or absolute) to a directory
 on the filesystem. Alternatively, you can pass a wildcard (`*`) to allow Bake
 to access the entire filesystem.
 
-Bake also supports `--allow=local-output-delete` to grant local outputs
+Bake also supports `--allow=buildx.local.delete` to grant local outputs
 permission to delete stale files when `mode=delete` is set.
 
 ### Example: fs.read

@@ -6,16 +6,15 @@ import (
 	"context"
 	"fmt"
 	"io"
-	"io/fs"
 	"os"
 	"path/filepath"
 	"slices"
 	"strconv"
 	"strings"
-	"syscall"
 
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/entitlements"
@@ -37,7 +36,7 @@ const (
 	EntitlementKeyImageLoad         EntitlementKey = "image.load"
 	EntitlementKeyImage             EntitlementKey = "image"
 	EntitlementKeySSH               EntitlementKey = "ssh"
-	EntitlementKeyLocalOutputDelete EntitlementKey = "local-output-delete"
+	EntitlementKeyBuildxLocalDelete EntitlementKey = EntitlementKey(buildflags.EntitlementBuildxLocalDelete)
 )
 
 type EntitlementConf struct {
@@ -67,7 +66,7 @@ func ParseEntitlements(in []string) (EntitlementConf, error) {
 			conf.SecurityInsecure = true
 		case string(EntitlementKeySSH):
 			conf.SSH = true
-		case string(EntitlementKeyLocalOutputDelete):
+		case string(EntitlementKeyBuildxLocalDelete):
 			conf.LocalOutputDelete = true
 		default:
 			k, v, _ := strings.Cut(e, "=")
@@ -102,8 +101,8 @@ func ParseEntitlements(in []string) (EntitlementConf, error) {
 			case string(EntitlementKeyImage):
 				conf.ImagePush = append(conf.ImagePush, v)
 				conf.ImageLoad = append(conf.ImageLoad, v)
-			case string(EntitlementKeyLocalOutputDelete):
-				return conf, errors.Errorf("%s does not accept a value", EntitlementKeyLocalOutputDelete)
+			case string(EntitlementKeyBuildxLocalDelete):
+				return conf, errors.Errorf("%s does not accept a value", EntitlementKeyBuildxLocalDelete)
 			default:
 				return conf, errors.Errorf("unknown entitlement key %q", k)
 			}
@@ -271,7 +270,7 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 	}
 	if c.LocalOutputDelete {
 		msgs = append(msgs, " - Deleting stale files from local output destinations")
-		flags = append(flags, string(EntitlementKeyLocalOutputDelete))
+		flags = append(flags, string(EntitlementKeyBuildxLocalDelete))
 	}
 
 	roPaths, rwPaths, commonPaths := groupSamePaths(c.FSRead, c.FSWrite)
@@ -530,7 +529,7 @@ func evaluatePaths(in []string) ([]string, bool, error) {
 			logrus.Warnf("failed to evaluate entitlement path %q: %v", p, err)
 			continue
 		}
-		v, rest, err := evaluateToExistingPath(v)
+		v, rest, err := osutil.EvaluateToExistingPath(v)
 		if err != nil {
 			return nil, false, errors.Wrapf(err, "failed to evaluate path %q", p)
 		}
@@ -549,7 +548,7 @@ func evaluatePaths(in []string) ([]string, bool, error) {
 func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error) {
 	m := make(map[string]struct{}, len(in))
 	for p := range in {
-		v, _, err := evaluateToExistingPath(p)
+		v, _, err := osutil.EvaluateToExistingPath(p)
 		if err != nil {
 			return nil, errors.Wrapf(err, "failed to evaluate path %q", p)
 		}
@@ -563,121 +562,5 @@ func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error
 }
 
 func evaluateToExistingPath(in string) (string, string, error) {
-	in, err := filepath.Abs(in)
-	if err != nil {
-		return "", "", err
-	}
-
-	volLen := volumeNameLen(in)
-	pathSeparator := string(os.PathSeparator)
-
-	if volLen < len(in) && os.IsPathSeparator(in[volLen]) {
-		volLen++
-	}
-	vol := in[:volLen]
-	dest := vol
-	linksWalked := 0
-	var end int
-	for start := volLen; start < len(in); start = end {
-		for start < len(in) && os.IsPathSeparator(in[start]) {
-			start++
-		}
-		end = start
-		for end < len(in) && !os.IsPathSeparator(in[end]) {
-			end++
-		}
-
-		if end == start {
-			break
-		} else if in[start:end] == "." {
-			continue
-		} else if in[start:end] == ".." {
-			var r int
-			for r = len(dest) - 1; r >= volLen; r-- {
-				if os.IsPathSeparator(dest[r]) {
-					break
-				}
-			}
-			if r < volLen || dest[r+1:] == ".." {
-				if len(dest) > volLen {
-					dest += pathSeparator
-				}
-				dest += ".."
-			} else {
-				dest = dest[:r]
-			}
-			continue
-		}
-
-		if len(dest) > volumeNameLen(dest) && !os.IsPathSeparator(dest[len(dest)-1]) {
-			dest += pathSeparator
-		}
-		dest += in[start:end]
-
-		fi, err := os.Lstat(dest)
-		if err != nil {
-			// If the component doesn't exist, return the last valid path
-			if os.IsNotExist(err) {
-				for r := len(dest) - 1; r >= volLen; r-- {
-					if os.IsPathSeparator(dest[r]) {
-						return dest[:r], in[start:], nil
-					}
-				}
-				return vol, in[start:], nil
-			}
-			return "", "", err
-		}
-
-		if fi.Mode()&fs.ModeSymlink == 0 {
-			if !fi.Mode().IsDir() && end < len(in) {
-				return "", "", syscall.ENOTDIR
-			}
-			continue
-		}
-
-		linksWalked++
-		if linksWalked > 255 {
-			return "", "", errors.New("too many symlinks")
-		}
-
-		link, err := os.Readlink(dest)
-		if err != nil {
-			return "", "", err
-		}
-
-		in = link + in[end:]
-
-		v := volumeNameLen(link)
-		if v > 0 {
-			if v < len(link) && os.IsPathSeparator(link[v]) {
-				v++
-			}
-			vol = link[:v]
-			dest = vol
-			end = len(vol)
-		} else if len(link) > 0 && os.IsPathSeparator(link[0]) {
-			dest = link[:1]
-			end = 1
-			vol = link[:1]
-			volLen = 1
-		} else {
-			var r int
-			for r = len(dest) - 1; r >= volLen; r-- {
-				if os.IsPathSeparator(dest[r]) {
-					break
-				}
-			}
-			if r < volLen {
-				dest = vol
-			} else {
-				dest = dest[:r]
-			}
-			end = 0
-		}
-	}
-	return filepath.Clean(dest), "", nil
-}
-
-func volumeNameLen(s string) int {
-	return len(filepath.VolumeName(s))
+	return osutil.EvaluateToExistingPath(in)
 }

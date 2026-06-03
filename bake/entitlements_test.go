@@ -506,12 +506,12 @@ func TestValidateEntitlementsInvalidLocalOutputMode(t *testing.T) {
 }
 
 func TestParseEntitlementsLocalOutputDelete(t *testing.T) {
-	conf, err := ParseEntitlements([]string{string(EntitlementKeyLocalOutputDelete)})
+	conf, err := ParseEntitlements([]string{string(EntitlementKeyBuildxLocalDelete)})
 	require.NoError(t, err)
 	require.True(t, conf.LocalOutputDelete)
 
-	_, err = ParseEntitlements([]string{string(EntitlementKeyLocalOutputDelete) + "=true"})
-	require.ErrorContains(t, err, "local-output-delete does not accept a value")
+	_, err = ParseEntitlements([]string{string(EntitlementKeyBuildxLocalDelete) + "=true"})
+	require.ErrorContains(t, err, "buildx.local.delete does not accept a value")
 }
 
 func TestPromptLocalOutputDeleteCannotBeDisabledWithFSEntitlements(t *testing.T) {
@@ -524,7 +524,7 @@ func TestPromptLocalOutputDeleteCannotBeDisabledWithFSEntitlements(t *testing.T)
 	err := EntitlementConf{LocalOutputDelete: true}.Prompt(ctx, true, &out)
 	require.ErrorContains(t, err, "additional privileges requested")
 	require.Contains(t, out.String(), "Deleting stale files from local output destinations")
-	require.Contains(t, out.String(), "--allow=local-output-delete")
+	require.Contains(t, out.String(), "--allow=buildx.local.delete")
 }
 
 func TestGroupSamePaths(t *testing.T) {
