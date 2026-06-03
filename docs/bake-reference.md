@@ -1016,6 +1016,12 @@ RUN --mount=type=ssh \
     && git clone git@github.com:user/my-private-repo.git
 ```
 
+> [!NOTE]
+> When overriding `ssh` from the command line with `--set`, use the inline
+> `id=path` string form rather than the object form shown above, for example
+> `docker buildx bake --set "*.ssh=default=$HOME/.ssh/id_ed25519"`. Separate
+> multiple paths with commas. See [`bake --set`][set] for details.
+
 ### `target.tags`
 
 Image names and tags to use for the build target.
@@ -1478,6 +1484,7 @@ target "webapp-dev" {
 [platform]: https://docs.docker.com/reference/cli/docker/buildx/build/#platform
 [run_mount_secret]: https://docs.docker.com/reference/dockerfile/#run---mounttypesecret
 [secret]: https://docs.docker.com/reference/cli/docker/buildx/build/#secret
+[set]: https://docs.docker.com/reference/cli/docker/buildx/bake/#set
 [ssh]: https://docs.docker.com/reference/cli/docker/buildx/build/#ssh
 [tag]: https://docs.docker.com/reference/cli/docker/image/build/#tag
 [target]: https://docs.docker.com/reference/cli/docker/image/build/#target
