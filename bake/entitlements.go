@@ -17,6 +17,7 @@ import (
 	"github.com/containerd/console"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/osutil"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
@@ -26,27 +27,29 @@ import (
 type EntitlementKey string
 
 const (
-	EntitlementKeyNetworkHost      EntitlementKey = "network.host"
-	EntitlementKeySecurityInsecure EntitlementKey = "security.insecure"
-	EntitlementKeyDevice           EntitlementKey = "device"
-	EntitlementKeyFSRead           EntitlementKey = "fs.read"
-	EntitlementKeyFSWrite          EntitlementKey = "fs.write"
-	EntitlementKeyFS               EntitlementKey = "fs"
-	EntitlementKeyImagePush        EntitlementKey = "image.push"
-	EntitlementKeyImageLoad        EntitlementKey = "image.load"
-	EntitlementKeyImage            EntitlementKey = "image"
-	EntitlementKeySSH              EntitlementKey = "ssh"
+	EntitlementKeyNetworkHost       EntitlementKey = "network.host"
+	EntitlementKeySecurityInsecure  EntitlementKey = "security.insecure"
+	EntitlementKeyDevice            EntitlementKey = "device"
+	EntitlementKeyFSRead            EntitlementKey = "fs.read"
+	EntitlementKeyFSWrite           EntitlementKey = "fs.write"
+	EntitlementKeyFS                EntitlementKey = "fs"
+	EntitlementKeyImagePush         EntitlementKey = "image.push"
+	EntitlementKeyImageLoad         EntitlementKey = "image.load"
+	EntitlementKeyImage             EntitlementKey = "image"
+	EntitlementKeySSH               EntitlementKey = "ssh"
+	EntitlementKeyLocalOutputDelete EntitlementKey = "local-output-delete"
 )
 
 type EntitlementConf struct {
-	NetworkHost      bool
-	SecurityInsecure bool
-	Devices          *EntitlementsDevicesConf
-	FSRead           []string
-	FSWrite          []string
-	ImagePush        []string
-	ImageLoad        []string
-	SSH              bool
+	NetworkHost       bool
+	SecurityInsecure  bool
+	Devices           *EntitlementsDevicesConf
+	FSRead            []string
+	FSWrite           []string
+	ImagePush         []string
+	ImageLoad         []string
+	SSH               bool
+	LocalOutputDelete bool
 }
 
 type EntitlementsDevicesConf struct {
@@ -64,6 +67,8 @@ func ParseEntitlements(in []string) (EntitlementConf, error) {
 			conf.SecurityInsecure = true
 		case string(EntitlementKeySSH):
 			conf.SSH = true
+		case string(EntitlementKeyLocalOutputDelete):
+			conf.LocalOutputDelete = true
 		default:
 			k, v, _ := strings.Cut(e, "=")
 			switch k {
@@ -97,6 +102,8 @@ func ParseEntitlements(in []string) (EntitlementConf, error) {
 			case string(EntitlementKeyImage):
 				conf.ImagePush = append(conf.ImagePush, v)
 				conf.ImageLoad = append(conf.ImageLoad, v)
+			case string(EntitlementKeyLocalOutputDelete):
+				return conf, errors.Errorf("%s does not accept a value", EntitlementKeyLocalOutputDelete)
 			default:
 				return conf, errors.Errorf("unknown entitlement key %q", k)
 			}
@@ -162,6 +169,19 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 
 	for _, p := range bo.ExportsLocalPathsTemporary {
 		rwPaths[p] = struct{}{}
+	}
+
+	for _, ex := range bo.Exports {
+		if ex.Type != client.ExporterLocal {
+			continue
+		}
+		mode, err := client.ParseLocalExporterMode(ex.Attrs["mode"])
+		if err != nil {
+			return err
+		}
+		if mode == client.LocalExporterModeDelete && !c.LocalOutputDelete {
+			expected.LocalOutputDelete = true
+		}
 	}
 
 	for _, ce := range bo.CacheTo {
@@ -248,6 +268,10 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 	if c.SSH {
 		msgsFS = append(msgsFS, " - Forwarding default SSH agent socket")
 		flagsFS = append(flagsFS, string(EntitlementKeySSH))
+	}
+	if c.LocalOutputDelete {
+		msgs = append(msgs, " - Deleting stale files from local output destinations")
+		flags = append(flags, string(EntitlementKeyLocalOutputDelete))
 	}
 
 	roPaths, rwPaths, commonPaths := groupSamePaths(c.FSRead, c.FSWrite)

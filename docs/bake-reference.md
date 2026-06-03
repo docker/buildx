@@ -901,6 +901,10 @@ target "default" {
 }
 ```
 
+> [!NOTE]
+> Local outputs with `mode=delete` require granting `--allow=local-output-delete`
+> when invoking `docker buildx bake`.
+
 ### `target.policy`
 
 Policies to validate build sources and metadata. Each entry uses the same keys
