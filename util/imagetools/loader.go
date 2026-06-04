@@ -466,3 +466,62 @@ func withIntotoMediaTypes(ctx context.Context) context.Context {
 	}
 	return ctx
 }
+
+// ReadProvenancePredicate loads the SLSA provenance predicate payload from the
+// attestation manifest referenced by attestManifest, reading blobs through the
+// supplied content provider. Returns the raw predicate JSON bytes and the
+// predicate type URI. When the manifest has no provenance layer both return
+// values are empty without error so callers can distinguish "no provenance"
+// from a hard failure.
+//
+// This exposes the provenance scan + DSSE unwrap logic used internally by
+// scanProvenance for reuse by `buildx replay` (see
+// /src/hack/poc/replay/SPEC.md section 3).
+func ReadProvenancePredicate(ctx context.Context, provider content.Provider, attestManifest ocispecs.Descriptor) ([]byte, string, error) {
+	ctx = withIntotoMediaTypes(ctx)
+	dt, err := content.ReadBlob(ctx, provider, attestManifest)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to read attestation manifest")
+	}
+	var mfst ocispecs.Manifest
+	if err := json.Unmarshal(dt, &mfst); err != nil {
+		return nil, "", errors.Wrap(err, "failed to unmarshal attestation manifest")
+	}
+	var (
+		layer    ocispecs.Descriptor
+		predType string
+	)
+	for _, l := range mfst.Layers {
+		annot := l.Annotations["in-toto.io/predicate-type"]
+		if (l.MediaType == inTotoGenericMime || isInTotoDSSE(l.MediaType)) &&
+			strings.HasPrefix(annot, "https://slsa.dev/provenance/") {
+			layer = l
+			predType = annot
+			break
+		}
+	}
+	if predType == "" {
+		return nil, "", nil
+	}
+	layerDt, err := content.ReadBlob(ctx, provider, layer)
+	if err != nil {
+		return nil, "", errors.Wrapf(err, "failed to read provenance layer %s", layer.Digest)
+	}
+	layerDt, err = decodeDSSE(layerDt, layer.MediaType)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to decode DSSE envelope")
+	}
+	var stmt struct {
+		Predicate     json.RawMessage `json:"predicate"`
+		PredicateType string          `json:"predicateType"`
+	}
+	if err := json.Unmarshal(layerDt, &stmt); err != nil {
+		return nil, "", errors.Wrap(err, "failed to unmarshal in-toto statement")
+	}
+	// Prefer the in-toto Statement's predicateType over the annotation when
+	// both are set — the annotation is a hint; the payload is canonical.
+	if stmt.PredicateType != "" {
+		predType = stmt.PredicateType
+	}
+	return stmt.Predicate, predType, nil
+}

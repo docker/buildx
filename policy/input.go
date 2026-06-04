@@ -46,7 +46,7 @@ func sourceToInputRecursive(ctx context.Context, verifier PolicyVerifierProvider
 
 	materials := make([]Input, 0, len(inp.Image.Provenance.materialsRaw))
 	for _, m := range inp.Image.Provenance.materialsRaw {
-		matSrc, matPlatform, err := parseSLSAMaterial(m)
+		matSrc, matPlatform, err := ParseSLSAMaterial(m)
 		if err != nil {
 			materials = append(materials, Input{})
 			continue
