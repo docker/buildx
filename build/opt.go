@@ -627,7 +627,7 @@ func proxyArgKeyExists(buildArgs map[string]string, key string) bool {
 	return false
 }
 
-func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, opt *Options, cfg *confutil.Config, bopts gateway.BuildOpts, so *client.SolveOpt, pw progress.Writer) (defers []func(error), err error) {
+func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, opt *Options, cfg *confutil.Config, bopts gateway.BuildOpts, so *client.SolveOpt, pw progress.Writer) (_ []func(error), err error) {
 	if opt.Inputs.policy == nil {
 		if len(opt.Policy) > 0 {
 			return nil, errors.New("policy file specified but no policy FS in build context")
@@ -677,7 +677,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 		return nil, err
 	}
 	sourceResolver := sourcemeta.NewResolver(c, sourcemeta.WithProgressWriter(pw), sourcemeta.WithSession(so.Session))
-	defers = []func(error){
+	defers := []func(error){
 		func(error) {
 			_ = sourceResolver.Close()
 		},
