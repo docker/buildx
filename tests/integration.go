@@ -12,8 +12,10 @@ import (
 	"testing"
 
 	"github.com/Masterminds/semver/v3"
+	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/moby/buildkit/util/testutil/integration"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -248,6 +250,20 @@ func skipNoCompatBuildKit(t *testing.T, sb integration.Sandbox, constraint strin
 	if !matchesBuildKitVersion(t, sb, constraint) {
 		t.Skipf("buildkit version %s does not match %s constraint (%s)", buildkitVersion(t, sb), constraint, msg)
 	}
+}
+
+func defaultManifestMediaType(t *testing.T, sb integration.Sandbox) string {
+	if matchesBuildKitVersion(t, sb, ">= 0.31.0-0") {
+		return ocispecs.MediaTypeImageManifest
+	}
+	return images.MediaTypeDockerSchema2Manifest
+}
+
+func defaultIndexMediaType(t *testing.T, sb integration.Sandbox) string {
+	if matchesBuildKitVersion(t, sb, ">= 0.31.0-0") {
+		return ocispecs.MediaTypeImageIndex
+	}
+	return images.MediaTypeDockerSchema2ManifestList
 }
 
 func ptrstr(s any) *string {

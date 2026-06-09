@@ -71,7 +71,7 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	var mfst ocispecs.Manifest
 	err = json.Unmarshal(dt, &mfst)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2Manifest, mfst.MediaType)
+	require.Equal(t, defaultManifestMediaType(t, sb), mfst.MediaType)
 
 	registry2, err := sb.NewRegistry()
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	var idx2 ocispecs.Index
 	err = json.Unmarshal(dt, &idx2)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx2.MediaType)
+	require.Equal(t, defaultIndexMediaType(t, sb), idx2.MediaType)
 	require.Equal(t, 1, len(idx2.Manifests))
 
 	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", target2+"@"+string(idx2.Manifests[0].Digest), "--raw"))
@@ -111,7 +111,7 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	var mfst2 ocispecs.Manifest
 	err = json.Unmarshal(dt, &mfst2)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2Manifest, mfst2.MediaType)
+	require.Equal(t, defaultManifestMediaType(t, sb), mfst2.MediaType)
 
 	require.Equal(t, mfst.Config.Digest, mfst2.Config.Digest)
 	require.Equal(t, len(mfst.Layers), len(mfst2.Layers))
@@ -127,10 +127,10 @@ func testImagetoolsCopyManifest(t *testing.T, sb integration.Sandbox) {
 	dt, err = cmd.CombinedOutput()
 	require.NoError(t, err, string(dt))
 
-	var idx3 ocispecs.Manifest
-	err = json.Unmarshal(dt, &idx3)
+	var mfst3 ocispecs.Manifest
+	err = json.Unmarshal(dt, &mfst3)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2Manifest, idx3.MediaType)
+	require.Equal(t, defaultManifestMediaType(t, sb), mfst3.MediaType)
 }
 
 // testImagetoolsCopyIndex verifies create/inspect behavior for a multi-platform index.
@@ -158,7 +158,7 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	var idx ocispecs.Index
 	err = json.Unmarshal(dt, &idx)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx.MediaType)
+	require.Equal(t, defaultIndexMediaType(t, sb), idx.MediaType)
 	require.Equal(t, 2, len(idx.Manifests))
 
 	registry2, err := sb.NewRegistry()
@@ -191,7 +191,7 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	var idx2 ocispecs.Index
 	err = json.Unmarshal(dt, &idx2)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx2.MediaType)
+	require.Equal(t, defaultIndexMediaType(t, sb), idx2.MediaType)
 
 	require.Equal(t, len(idx.Manifests), len(idx2.Manifests))
 	for i := range idx.Manifests {
@@ -209,7 +209,7 @@ func testImagetoolsCopyIndex(t *testing.T, sb integration.Sandbox) {
 	var idx3 ocispecs.Index
 	err = json.Unmarshal(dt, &idx3)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx3.MediaType)
+	require.Equal(t, defaultIndexMediaType(t, sb), idx3.MediaType)
 
 	require.Equal(t, len(idx.Manifests), len(idx3.Manifests))
 	for i := range idx.Manifests {
@@ -763,7 +763,7 @@ func testImagetoolsAppend(t *testing.T, sb integration.Sandbox) {
 	var amd64Manifest ocispecs.Manifest
 	err = json.Unmarshal(dt, &amd64Manifest)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2Manifest, amd64Manifest.MediaType)
+	require.Equal(t, defaultManifestMediaType(t, sb), amd64Manifest.MediaType)
 	amd64Digest := digest.FromBytes(dt)
 
 	source := registry + "/buildx/imtools-append-source:latest"
@@ -777,7 +777,7 @@ func testImagetoolsAppend(t *testing.T, sb integration.Sandbox) {
 	var arm64Manifest ocispecs.Manifest
 	err = json.Unmarshal(dt, &arm64Manifest)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2Manifest, arm64Manifest.MediaType)
+	require.Equal(t, defaultManifestMediaType(t, sb), arm64Manifest.MediaType)
 	arm64Digest := digest.FromBytes(dt)
 
 	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--append", "-t", target, source))
@@ -791,7 +791,7 @@ func testImagetoolsAppend(t *testing.T, sb integration.Sandbox) {
 	var idx ocispecs.Index
 	err = json.Unmarshal(dt, &idx)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx.MediaType)
+	require.Equal(t, defaultIndexMediaType(t, sb), idx.MediaType)
 	require.Len(t, idx.Manifests, 2)
 
 	platformsByDigest := map[digest.Digest]string{}
@@ -852,7 +852,7 @@ func testImagetoolsFile(t *testing.T, sb integration.Sandbox) {
 	var idx ocispecs.Index
 	err = json.Unmarshal(dt, &idx)
 	require.NoError(t, err)
-	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, idx.MediaType)
+	require.Equal(t, defaultIndexMediaType(t, sb), idx.MediaType)
 	require.Len(t, idx.Manifests, 1)
 	require.Equal(t, sourceDesc.Digest, idx.Manifests[0].Digest)
 
