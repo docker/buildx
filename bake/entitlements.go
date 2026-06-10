@@ -560,7 +560,3 @@ func evaluateToExistingPaths(in map[string]struct{}) (map[string]struct{}, error
 	}
 	return m, nil
 }
-
-func evaluateToExistingPath(in string) (string, string, error) {
-	return osutil.EvaluateToExistingPath(in)
-}
