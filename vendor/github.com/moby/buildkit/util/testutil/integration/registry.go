@@ -38,7 +38,13 @@ func NewRegistry(dir string) (url string, cl func() error, err error) {
 		dir = tmpdir
 	}
 
-	if _, err := os.Stat(filepath.Join(dir, "config.yaml")); err != nil {
+	root, err := os.OpenRoot(dir)
+	if err != nil {
+		return "", nil, errors.WithStack(err)
+	}
+	defer root.Close()
+
+	if _, err := root.Stat("config.yaml"); err != nil {
 		if !errors.Is(err, os.ErrNotExist) {
 			return "", nil, err
 		}
@@ -51,7 +57,7 @@ http:
     addr: 127.0.0.1:0
 `, filepath.Join(dir, "data"))
 
-		if err := os.WriteFile(filepath.Join(dir, "config.yaml"), []byte(template), 0600); err != nil {
+		if err := root.WriteFile("config.yaml", []byte(template), 0600); err != nil {
 			return "", nil, err
 		}
 	}
