@@ -87,6 +87,7 @@ type Options struct {
 	Tags                       []string
 	Target                     string
 	Ulimits                    *opts.UlimitOpt
+	ResourceLimits             ResourceLimits
 
 	Session                []session.Attachable
 	Linked                 bool // Linked marks this target as exclusively linked (not requested by the user).
@@ -96,6 +97,18 @@ type Options struct {
 	GroupRef               string
 	Annotations            map[exptypes.AnnotationKey]string // Not used during build, annotations are already set in Exports. Just used to check for support with drivers.
 	Policy                 []buildflags.PolicyConfig
+}
+
+// ResourceLimits holds the cgroup resource constraints applied to individual
+// build steps (RUN instructions). They don't affect the build cache key.
+type ResourceLimits struct {
+	Memory     opts.MemBytes
+	MemorySwap opts.MemSwapBytes
+	CPUShares  int64
+	CPUPeriod  int64
+	CPUQuota   int64
+	CPUSetCPUs string
+	CPUSetMems string
 }
 
 type CallFunc struct {
