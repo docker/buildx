@@ -1,5 +1,5 @@
 {
-  "$schema": "https://json-schema.org/draft-07/schema",
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
   "$id": "compose_spec.json",
   "type": "object",
   "title": "Compose Specification",
@@ -20,7 +20,7 @@
     "include": {
       "type": "array",
       "items": {
-        "$ref": "#/definitions/include"
+        "$ref": "#/$defs/include"
       },
       "description": "compose sub-projects to be included."
     },
@@ -29,7 +29,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9._-]+$": {
-          "$ref": "#/definitions/service"
+          "$ref": "#/$defs/service"
         }
       },
       "additionalProperties": false,
@@ -40,7 +40,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9._-]+$": {
-          "$ref": "#/definitions/model"
+          "$ref": "#/$defs/model"
         }
       },
       "description": "Language models that will be used by your application."
@@ -51,7 +51,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9._-]+$": {
-          "$ref": "#/definitions/network"
+          "$ref": "#/$defs/network"
         }
       },
       "description": "Networks that are shared among multiple services."
@@ -61,7 +61,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9._-]+$": {
-          "$ref": "#/definitions/volume"
+          "$ref": "#/$defs/volume"
         }
       },
       "additionalProperties": false,
@@ -72,7 +72,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9._-]+$": {
-          "$ref": "#/definitions/secret"
+          "$ref": "#/$defs/secret"
         }
       },
       "additionalProperties": false,
@@ -83,7 +83,7 @@
       "type": "object",
       "patternProperties": {
         "^[a-zA-Z0-9._-]+$": {
-          "$ref": "#/definitions/config"
+          "$ref": "#/$defs/config"
         }
       },
       "additionalProperties": false,
@@ -94,15 +94,15 @@
   "patternProperties": {"^x-": {}},
   "additionalProperties": false,
 
-  "definitions": {
+  "$defs": {
 
     "service": {
       "type": "object",
       "description": "Configuration for a service.",
       "properties": {
-        "develop": {"$ref": "#/definitions/development"},
-        "deploy": {"$ref": "#/definitions/deployment"},
-        "annotations": {"$ref": "#/definitions/list_or_dict"},
+        "develop": {"$ref": "#/$defs/development"},
+        "deploy": {"$ref": "#/$defs/deployment"},
+        "annotations": {"$ref": "#/$defs/list_or_dict"},
         "attach": {"type": ["boolean", "string"]},
         "build": {
           "description": "Configuration options for building the service's image.",
@@ -115,26 +115,26 @@
                 "dockerfile": {"type": "string", "description": "Name of the Dockerfile to use for building the image."},
                 "dockerfile_inline": {"type": "string", "description": "Inline Dockerfile content to use instead of a Dockerfile from the build context."},
                 "entitlements": {"type": "array", "items": {"type": "string"}, "description": "List of extra privileged entitlements to grant to the build process."},
-                "args": {"$ref": "#/definitions/list_or_dict", "description": "Build-time variables, specified as a map or a list of KEY=VAL pairs."},
-                "ssh": {"$ref": "#/definitions/list_or_dict", "description": "SSH agent socket or keys to expose to the build. Format is either a string or a list of 'default|<id>[=<socket>|<key>[,<key>]]'."},
-                "labels": {"$ref": "#/definitions/list_or_dict", "description": "Labels to apply to the built image."},
+                "args": {"$ref": "#/$defs/list_or_dict", "description": "Build-time variables, specified as a map or a list of KEY=VAL pairs."},
+                "ssh": {"$ref": "#/$defs/list_or_dict", "description": "SSH agent socket or keys to expose to the build. Format is either a string or a list of 'default|<id>[=<socket>|<key>[,<key>]]'."},
+                "labels": {"$ref": "#/$defs/list_or_dict", "description": "Labels to apply to the built image."},
                 "cache_from": {"type": "array", "items": {"type": "string"}, "description": "List of sources the image builder should use for cache resolution"},
                 "cache_to": {"type": "array", "items": {"type": "string"}, "description": "Cache destinations for the build cache."},
                 "no_cache": {"type": ["boolean", "string"], "description": "Do not use cache when building the image."},
-                "no_cache_filter": {"$ref": "#/definitions/string_or_list", "description": "Do not use build cache for the specified stages."},
-                "additional_contexts": {"$ref": "#/definitions/list_or_dict", "description": "Additional build contexts to use, specified as a map of name to context path or URL."},
+                "no_cache_filter": {"$ref": "#/$defs/string_or_list", "description": "Do not use build cache for the specified stages."},
+                "additional_contexts": {"$ref": "#/$defs/list_or_dict", "description": "Additional build contexts to use, specified as a map of name to context path or URL."},
                 "network": {"type": "string", "description": "Network mode to use for the build. Options include 'default', 'none', 'host', or a network name."},
                 "provenance": {"type": ["string","boolean"], "description": "Add a provenance attestation"},
                 "sbom": {"type": ["string","boolean"], "description": "Add a SBOM attestation"},
                 "pull": {"type": ["boolean", "string"], "description": "Always attempt to pull a newer version of the image."},
                 "target": {"type": "string", "description": "Build stage to target in a multi-stage Dockerfile."},
                 "shm_size": {"type": ["integer", "string"], "description": "Size of /dev/shm for the build container. A string value can use suffix like '2g' for 2 gigabytes."},
-                "extra_hosts": {"$ref": "#/definitions/extra_hosts", "description": "Add hostname mappings for the build container."},
+                "extra_hosts": {"$ref": "#/$defs/extra_hosts", "description": "Add hostname mappings for the build container."},
                 "isolation": {"type": "string", "description": "Container isolation technology to use for the build process."},
                 "privileged": {"type": ["boolean", "string"], "description": "Give extended privileges to the build container."},
-                "secrets": {"$ref": "#/definitions/service_config_or_secret", "description": "Secrets to expose to the build. These are accessible at build-time."},
+                "secrets": {"$ref": "#/$defs/service_config_or_secret", "description": "Secrets to expose to the build. These are accessible at build-time."},
                 "tags": {"type": "array", "items": {"type": "string"}, "description": "Additional tags to apply to the built image."},
-                "ulimits": {"$ref": "#/definitions/ulimits", "description": "Override the default ulimits for the build container."},
+                "ulimits": {"$ref": "#/$defs/ulimits", "description": "Override the default ulimits for the build container."},
                 "platforms": {"type": "array", "items": {"type": "string"}, "description": "Platforms to build for, e.g., 'linux/amd64', 'linux/arm64', or 'windows/amd64'."}
               },
               "additionalProperties": false,
@@ -149,22 +149,22 @@
             "device_read_bps": {
               "type": "array",
               "description": "Limit read rate (bytes per second) from a device.",
-              "items": {"$ref": "#/definitions/blkio_limit"}
+              "items": {"$ref": "#/$defs/blkio_limit"}
             },
             "device_read_iops": {
               "type": "array",
               "description": "Limit read rate (IO per second) from a device.",
-              "items": {"$ref": "#/definitions/blkio_limit"}
+              "items": {"$ref": "#/$defs/blkio_limit"}
             },
             "device_write_bps": {
               "type": "array",
               "description": "Limit write rate (bytes per second) to a device.",
-              "items": {"$ref": "#/definitions/blkio_limit"}
+              "items": {"$ref": "#/$defs/blkio_limit"}
             },
             "device_write_iops": {
               "type": "array",
               "description": "Limit write rate (IO per second) to a device.",
-              "items": {"$ref": "#/definitions/blkio_limit"}
+              "items": {"$ref": "#/$defs/blkio_limit"}
             },
             "weight": {
               "type": ["integer", "string"],
@@ -173,7 +173,7 @@
             "weight_device": {
               "type": "array",
               "description": "Block IO weight (relative weight) for specific devices.",
-              "items": {"$ref": "#/definitions/blkio_weight"}
+              "items": {"$ref": "#/$defs/blkio_weight"}
             }
           },
           "additionalProperties": false
@@ -200,11 +200,11 @@
           "description": "Specify an optional parent cgroup for the container."
         },
         "command": {
-          "$ref": "#/definitions/command",
+          "$ref": "#/$defs/command",
           "description": "Override the default command declared by the container image, for example 'CMD' in Dockerfile."
         },
         "configs": {
-          "$ref": "#/definitions/service_config_or_secret",
+          "$ref": "#/$defs/service_config_or_secret",
           "description": "Grant access to Configs on a per-service basis."
         },
         "container_name": {
@@ -276,7 +276,7 @@
         },
         "depends_on": {
           "oneOf": [
-            {"$ref": "#/definitions/list_of_strings"},
+            {"$ref": "#/$defs/list_of_strings"},
             {
               "type": "object",
               "additionalProperties": false,
@@ -309,7 +309,7 @@
           "description": "Express dependency between services. Service dependencies cause services to be started in dependency order. The dependent service will wait for the dependency to be ready before starting."
         },
         "device_cgroup_rules": {
-          "$ref": "#/definitions/list_of_strings",
+          "$ref": "#/$defs/list_of_strings",
           "description": "Add rules to the cgroup allowed devices list."
         },
         "devices": {
@@ -342,7 +342,7 @@
           }
         },
         "dns": {
-          "$ref": "#/definitions/string_or_list",
+          "$ref": "#/$defs/string_or_list",
           "description": "Custom DNS servers to set for the service container."
         },
         "dns_opt": {
@@ -352,7 +352,7 @@
           "description": "Custom DNS options to be passed to the container's DNS resolver."
         },
         "dns_search": {
-          "$ref": "#/definitions/string_or_list",
+          "$ref": "#/$defs/string_or_list",
           "description": "Custom DNS search domains to set on the service container."
         },
         "domainname": {
@@ -360,19 +360,19 @@
           "description": "Custom domain name to use for the service container."
         },
         "entrypoint": {
-          "$ref": "#/definitions/command",
+          "$ref": "#/$defs/command",
           "description": "Override the default entrypoint declared by the container image, for example 'ENTRYPOINT' in Dockerfile."
         },
         "env_file": {
-          "$ref": "#/definitions/env_file",
+          "$ref": "#/$defs/env_file",
           "description": "Add environment variables from a file or multiple files. Can be a single file path or a list of file paths."
         },
         "label_file": {
-          "$ref": "#/definitions/label_file",
+          "$ref": "#/$defs/label_file",
           "description": "Add metadata to containers using files containing Docker labels."
         },
         "environment": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Add environment variables. You can use either an array or a list of KEY=VAL pairs."
         },
         "expose": {
@@ -434,11 +434,11 @@
           "description": "Link to services started outside this Compose application. Specify services as <service_name>:<alias>."
         },
         "extra_hosts": {
-          "$ref": "#/definitions/extra_hosts",
+          "$ref": "#/$defs/extra_hosts",
           "description": "Add hostname mappings to the container network interface configuration."
         },
         "gpus": {
-          "$ref": "#/definitions/gpus",
+          "$ref": "#/$defs/gpus",
           "description": "Define GPU devices to use. Can be set to 'all' to use all GPUs, or a list of specific GPU devices."
         },
         "group_add": {
@@ -450,7 +450,7 @@
           "description": "Add additional groups which user inside the container should be member of."
         },
         "healthcheck": {
-          "$ref": "#/definitions/healthcheck",
+          "$ref": "#/$defs/healthcheck",
           "description": "Configure a health check for the container to monitor its health status."
         },
         "hostname": {
@@ -474,7 +474,7 @@
           "description": "Container isolation technology to use. Supported values are platform-specific."
         },
         "labels": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Add metadata to containers using Docker labels. You can use either an array or a list."
         },
         "links": {
@@ -528,7 +528,7 @@
         },
         "models": {
           "oneOf": [
-            {"$ref": "#/definitions/list_of_strings"},
+            {"$ref": "#/$defs/list_of_strings"},
             {"type": "object",
               "patternProperties": {
                 "^[a-zA-Z0-9._-]+$": {
@@ -558,7 +558,7 @@
         },
         "networks": {
           "oneOf": [
-            {"$ref": "#/definitions/list_of_strings"},
+            {"$ref": "#/$defs/list_of_strings"},
             {
               "type": "object",
               "patternProperties": {
@@ -568,7 +568,7 @@
                       "type": "object",
                       "properties": {
                         "aliases": {
-                          "$ref": "#/definitions/list_of_strings",
+                          "$ref": "#/$defs/list_of_strings",
                           "description": "Alternative hostnames for this service on the network."
                         },
                         "interface_name": {
@@ -584,7 +584,7 @@
                           "description": "Specify a static IPv6 address for this service on this network."
                         },
                         "link_local_ips": {
-                          "$ref": "#/definitions/list_of_strings",
+                          "$ref": "#/$defs/list_of_strings",
                           "description": "List of link-local IPs."
                         },
                         "mac_address": {
@@ -690,12 +690,12 @@
         },
         "post_start": {
           "type": "array",
-          "items": {"$ref": "#/definitions/service_hook"},
+          "items": {"$ref": "#/$defs/service_hook"},
           "description": "Commands to run after the container starts. If any command fails, the container stops."
         },
         "pre_stop": {
           "type": "array",
-          "items": {"$ref": "#/definitions/service_hook"},
+          "items": {"$ref": "#/$defs/service_hook"},
           "description": "Commands to run before the container stops. If any command fails, the container stop is aborted."
         },
         "privileged": {
@@ -703,7 +703,7 @@
           "description": "Give extended privileges to the service container."
         },
         "profiles": {
-          "$ref": "#/definitions/list_of_strings",
+          "$ref": "#/$defs/list_of_strings",
           "description": "List of profiles for this service. When profiles are specified, services are only started when the profile is activated."
         },
         "pull_policy": {
@@ -742,11 +742,11 @@
           "description": "Size of /dev/shm. A string value can use suffix like '2g' for 2 gigabytes."
         },
         "secrets": {
-          "$ref": "#/definitions/service_config_or_secret",
+          "$ref": "#/$defs/service_config_or_secret",
           "description": "Grant access to Secrets on a per-service basis."
         },
         "sysctls": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Kernel parameters to set in the container. You can use either an array or a list."
         },
         "stdin_open": {
@@ -766,7 +766,7 @@
           "description": "Storage driver options for the container."
         },
         "tmpfs": {
-          "$ref": "#/definitions/string_or_list",
+          "$ref": "#/$defs/string_or_list",
           "description": "Mount a temporary filesystem (tmpfs) into the container. Can be a single value or a list."
         },
         "tty": {
@@ -774,7 +774,7 @@
           "description": "Allocate a pseudo-TTY to service container."
         },
         "ulimits": {
-          "$ref": "#/definitions/ulimits",
+          "$ref": "#/$defs/ulimits",
           "description": "Override the default ulimits for a container."
         },
         "use_api_socket": {
@@ -855,7 +855,7 @@
                     "description": "Configuration specific to volume mounts.",
                     "properties": {
                       "labels": {
-                        "$ref": "#/definitions/list_or_dict",
+                        "$ref": "#/$defs/list_or_dict",
                         "description": "Labels to apply to the volume."
                       },
                       "nocopy": {
@@ -975,11 +975,11 @@
             "required": ["path", "action"],
             "properties": {
               "ignore": {
-                "$ref": "#/definitions/string_or_list",
+                "$ref": "#/$defs/string_or_list",
                 "description": "Patterns to exclude from watching."
               },
               "include": {
-                "$ref": "#/definitions/string_or_list",
+                "$ref": "#/$defs/string_or_list",
                 "description": "Patterns to include in watching."
               },
               "path": {
@@ -996,7 +996,7 @@
                 "description": "Target path in the container for sync operations."
               },
               "exec": {
-                "$ref": "#/definitions/service_hook",
+                "$ref": "#/$defs/service_hook",
                 "description": "Command to execute when a change is detected and action is sync+exec."
               },
               "initial_sync": {
@@ -1029,7 +1029,7 @@
           "description": "Number of replicas of the service container to run."
         },
         "labels": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Labels to apply to the service."
         },
         "rollback_config": {
@@ -1135,11 +1135,11 @@
                   "description": "Reservation on the amount of memory a container can allocate (e.g., '1g', '1024m')."
                 },
                 "generic_resources": {
-                  "$ref": "#/definitions/generic_resources",
+                  "$ref": "#/$defs/generic_resources",
                   "description": "User-defined resources to reserve."
                 },
                 "devices": {
-                  "$ref": "#/definitions/devices",
+                  "$ref": "#/$defs/devices",
                   "description": "Device reservations for the container."
                 }
               },
@@ -1246,7 +1246,7 @@
         "type": "object",
         "properties": {
           "capabilities": {
-            "$ref": "#/definitions/list_of_strings",
+            "$ref": "#/$defs/list_of_strings",
             "description": "List of capabilities the device needs to have (e.g., 'gpu', 'compute', 'utility')."
           },
           "count": {
@@ -1254,7 +1254,7 @@
             "description": "Number of devices of this type to reserve."
           },
           "device_ids": {
-            "$ref": "#/definitions/list_of_strings",
+            "$ref": "#/$defs/list_of_strings",
             "description": "List of specific device IDs to reserve."
           },
           "driver": {
@@ -1262,7 +1262,7 @@
             "description": "Device driver to use (e.g., 'nvidia')."
           },
           "options": {
-            "$ref": "#/definitions/list_or_dict",
+            "$ref": "#/$defs/list_or_dict",
             "description": "Driver-specific options for the device."
           }
         },
@@ -1288,7 +1288,7 @@
             "type": "object",
             "properties": {
               "capabilities": {
-                "$ref": "#/definitions/list_of_strings",
+                "$ref": "#/$defs/list_of_strings",
                 "description": "List of capabilities the GPU needs to have (e.g., 'compute', 'utility')."
               },
               "count": {
@@ -1296,7 +1296,7 @@
                 "description": "Number of GPUs to use."
               },
               "device_ids": {
-                "$ref": "#/definitions/list_of_strings",
+                "$ref": "#/$defs/list_of_strings",
                 "description": "List of specific GPU device IDs to use."
               },
               "driver": {
@@ -1304,7 +1304,7 @@
                 "description": "GPU driver to use (e.g., 'nvidia')."
               },
               "options": {
-                "$ref": "#/definitions/list_or_dict",
+                "$ref": "#/$defs/list_or_dict",
                 "description": "Driver-specific options for the GPU."
               }
             }
@@ -1323,11 +1323,11 @@
           "type": "object",
           "properties": {
             "path": {
-              "$ref": "#/definitions/string_or_list",
+              "$ref": "#/$defs/string_or_list",
               "description": "Path to the Compose application or sub-project files to include."
             },
             "env_file": {
-              "$ref": "#/definitions/string_or_list",
+              "$ref": "#/$defs/string_or_list",
               "description": "Path to the environment files to use to define default values when interpolating variables in the Compose files being parsed."
             },
             "project_directory": {
@@ -1436,7 +1436,7 @@
           "description": "If true, standalone containers can attach to this network."
         },
         "labels": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Add metadata to the network using labels."
         }
       },
@@ -1477,7 +1477,7 @@
           "patternProperties": {"^x-": {}}
         },
         "labels": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Add metadata to the volume using labels."
         }
       },
@@ -1512,7 +1512,7 @@
           }
         },
         "labels": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Add metadata to the secret using labels."
         },
         "driver": {
@@ -1567,7 +1567,7 @@
           }
         },
         "labels": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Add metadata to the config using labels."
         },
         "template_driver": {
@@ -1632,7 +1632,7 @@
       "description": "Configuration for service lifecycle hooks, which are commands executed at specific points in a container's lifecycle.",
       "properties": {
         "command": {
-          "$ref": "#/definitions/command",
+          "$ref": "#/$defs/command",
           "description": "Command to execute as part of the hook."
         },
         "user": {
@@ -1648,7 +1648,7 @@
           "description": "Working directory for the command."
         },
         "environment": {
-          "$ref": "#/definitions/list_or_dict",
+          "$ref": "#/$defs/list_or_dict",
           "description": "Environment variables for the command."
         }
       },
@@ -1725,7 +1725,7 @@
           "description": "A single string value."
         },
         {
-          "$ref": "#/definitions/list_of_strings",
+          "$ref": "#/$defs/list_of_strings",
           "description": "A list of string values."
         }
       ],
