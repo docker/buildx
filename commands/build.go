@@ -554,7 +554,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
 
-	flags.StringArrayVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure", "device")`)
+	flags.StringArrayVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure", "device", "buildx.local.delete")`)
 
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 
@@ -1138,6 +1138,14 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 		}
 	}
 
+	allow, allowLocalOutputDelete, err := buildflags.ParseEntitlements(in.Allow)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := build.ValidateLocalExportDelete(outputs, allowLocalOutputDelete); err != nil {
+		return nil, nil, err
+	}
+
 	opts.Annotations, err = buildflags.ParseAnnotations(in.Annotations)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "parse annotations")
@@ -1159,10 +1167,6 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 	opts.SourcePolicy = in.SourcePolicy
 	opts.Policy = in.Policy
 
-	allow, err := buildflags.ParseEntitlements(in.Allow)
-	if err != nil {
-		return nil, nil, err
-	}
 	opts.Allow = allow
 
 	if in.CallFunc != nil {

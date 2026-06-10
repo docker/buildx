@@ -1,6 +1,8 @@
 package bake
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,6 +12,7 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/osutil"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/stretchr/testify/require"
@@ -405,6 +408,73 @@ func TestValidateEntitlements(t *testing.T) {
 				FSWrite: []string{dir1},
 			},
 		},
+		{
+			name: "LocalOutputDeleteMissing",
+			conf: EntitlementConf{
+				FSWrite: []string{"*"},
+			},
+			opt: build.Options{
+				Inputs: build.Inputs{
+					ContextState: &llb.State{},
+				},
+				Exports: []client.ExportEntry{
+					{
+						Type:      client.ExporterLocal,
+						OutputDir: dir1,
+						Attrs: map[string]string{
+							"mode": string(client.LocalExporterModeDelete),
+						},
+					},
+				},
+				ExportsLocalPathsTemporary: []string{dir1},
+			},
+			expected: EntitlementConf{
+				LocalOutputDelete: true,
+			},
+		},
+		{
+			name: "LocalOutputDeleteSet",
+			conf: EntitlementConf{
+				FSWrite:           []string{"*"},
+				LocalOutputDelete: true,
+			},
+			opt: build.Options{
+				Inputs: build.Inputs{
+					ContextState: &llb.State{},
+				},
+				Exports: []client.ExportEntry{
+					{
+						Type:      client.ExporterLocal,
+						OutputDir: dir1,
+						Attrs: map[string]string{
+							"mode": string(client.LocalExporterModeDelete),
+						},
+					},
+				},
+				ExportsLocalPathsTemporary: []string{dir1},
+			},
+		},
+		{
+			name: "LocalOutputCopy",
+			conf: EntitlementConf{
+				FSWrite: []string{"*"},
+			},
+			opt: build.Options{
+				Inputs: build.Inputs{
+					ContextState: &llb.State{},
+				},
+				Exports: []client.ExportEntry{
+					{
+						Type:      client.ExporterLocal,
+						OutputDir: dir1,
+						Attrs: map[string]string{
+							"mode": string(client.LocalExporterModeCopy),
+						},
+					},
+				},
+				ExportsLocalPathsTemporary: []string{dir1},
+			},
+		},
 	}
 
 	for _, tc := range tcases {
@@ -414,6 +484,47 @@ func TestValidateEntitlements(t *testing.T) {
 			require.Equal(t, tc.expected, expected)
 		})
 	}
+}
+
+func TestValidateEntitlementsInvalidLocalOutputMode(t *testing.T) {
+	_, err := EntitlementConf{}.Validate(map[string]build.Options{
+		"test": {
+			Inputs: build.Inputs{
+				ContextState: &llb.State{},
+			},
+			Exports: []client.ExportEntry{
+				{
+					Type: client.ExporterLocal,
+					Attrs: map[string]string{
+						"mode": "backup",
+					},
+				},
+			},
+		},
+	})
+	require.ErrorContains(t, err, `invalid local exporter mode "backup"`)
+}
+
+func TestParseEntitlementsLocalOutputDelete(t *testing.T) {
+	conf, err := ParseEntitlements([]string{string(EntitlementKeyBuildxLocalDelete)})
+	require.NoError(t, err)
+	require.True(t, conf.LocalOutputDelete)
+
+	_, err = ParseEntitlements([]string{string(EntitlementKeyBuildxLocalDelete) + "=true"})
+	require.ErrorContains(t, err, "buildx.local.delete does not accept a value")
+}
+
+func TestPromptLocalOutputDeleteCannotBeDisabledWithFSEntitlements(t *testing.T) {
+	t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "0")
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(nil)
+
+	var out bytes.Buffer
+	err := EntitlementConf{LocalOutputDelete: true}.Prompt(ctx, true, &out)
+	require.ErrorContains(t, err, "additional privileges requested")
+	require.Contains(t, out.String(), "Deleting stale files from local output destinations")
+	require.Contains(t, out.String(), "--allow=buildx.local.delete")
 }
 
 func TestGroupSamePaths(t *testing.T) {
