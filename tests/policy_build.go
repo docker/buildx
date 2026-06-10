@@ -40,6 +40,82 @@ var policyBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildPolicyRemotePolicyFiles,
 	testBuildPolicyRemoteHTTPPolicyFiles,
 	testBuildPolicyConfigFlags,
+	testBuildPolicyCapsProxy,
+	testBuildPolicyCapsProxyUnsupported,
+}
+
+func policyCapsProxyFile(serverURL string) []byte {
+	return fmt.Appendf(nil, `
+package docker
+default allow = true
+default deny_msg := []
+default caps := {}
+caps := {"exec.proxy": true} if input.env.capsRequest
+allow := false if input.http.url == "%s/file"
+deny_msg := ["exec proxy http source denied by policy"] if input.http.url == "%s/file"
+decision := {"allow": allow, "deny_msg": deny_msg, "caps": caps}
+`, serverURL, serverURL)
+}
+
+func testBuildPolicyCapsProxy(t *testing.T, sb integration.Sandbox) {
+	if buildkitTag() != "master" {
+		skipNoCompatBuildKit(t, sb, ">= 0.31.0-0", "network proxy requires BuildKit v0.31.0+")
+	}
+	resp := &httpserver.Response{Content: []byte("policy-caps-proxy")}
+	server := httpserver.NewTestServer(map[string]*httpserver.Response{
+		"/file": resp,
+	})
+	defer server.Close()
+
+	dockerfile := []byte(`
+FROM busybox:latest
+RUN wget -O- ` + server.URL + `/file
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile.rego", policyCapsProxyFile(server.URL), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs(
+		"build",
+		"--progress=plain",
+		"--output=type=cacheonly",
+		dir,
+	))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "policy enabled network proxy")
+	require.Contains(t, string(out), "exec proxy http source denied by policy")
+	require.Contains(t, string(out), "policy decision for source "+server.URL+"/file")
+	require.Contains(t, string(out), "DENY")
+}
+
+func testBuildPolicyCapsProxyUnsupported(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+	if buildkitTag() == "master" || matchesBuildKitVersion(t, sb, ">= 0.31.0-0") {
+		t.Skip("BuildKit daemon supports network proxy")
+	}
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile.rego", policyCapsProxyFile(""), 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs(
+		"build",
+		"--progress=plain",
+		"--output=type=cacheonly",
+		dir,
+	))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "network proxy requested by policy is not supported by the current BuildKit daemon")
 }
 
 func testBuildPolicyAllow(t *testing.T, sb integration.Sandbox) {

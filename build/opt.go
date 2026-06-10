@@ -667,6 +667,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 				Data:     policy.DefaultPolicyData(),
 			}},
 		}
+		builtin.SkipCaps = true
 		popts = append([]policyOpt{builtin}, popts...)
 	}
 
@@ -742,6 +743,11 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 			DefaultPlatform:  defaultPlatform(bopts),
 			SourceResolver:   sourceResolver,
 		})
+		if !popt.SkipCaps {
+			if err := applyPolicyCaps(ctx, p, bopts, so); err != nil {
+				return nil, err
+			}
+		}
 		policies = append(policies, p)
 		cbs = append(cbs, p.CheckPolicy)
 		if popt.Strict {
@@ -750,8 +756,28 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 			}
 		}
 	}
+	if so.ProxyNetwork {
+		if policyLogger != nil {
+			policyLogger.Log("policy enabled network proxy")
+		}
+	}
 	so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(cbs...))
 	return defers, nil
+}
+
+func applyPolicyCaps(ctx context.Context, p *policy.Policy, bopts gateway.BuildOpts, so *client.SolveOpt) error {
+	caps, err := p.CheckCaps(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to evaluate policy caps")
+	}
+	if !caps[policy.CapExecProxy] {
+		return nil
+	}
+	if err := bopts.LLBCaps.Supports(pb.CapExecMetaNetworkProxy); err != nil {
+		return errors.New("network proxy requested by policy is not supported by the current BuildKit daemon, please upgrade to version v0.31+")
+	}
+	so.ProxyNetwork = true
+	return nil
 }
 
 func policyEnvFilename(inp Inputs) string {
