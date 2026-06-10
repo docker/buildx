@@ -683,9 +683,23 @@ func decodeDecision(decision any) *Decision {
 	if len(denyMsgs) == 0 {
 		denyMsgs = nil
 	}
+	caps := Caps{}
+	if v, ok := obj["caps"]; ok {
+		if m, ok := v.(map[string]any); ok {
+			for k, entry := range m {
+				if b, ok := entry.(bool); ok {
+					caps[k] = b
+				}
+			}
+		}
+	}
+	if len(caps) == 0 {
+		caps = nil
+	}
 	return &Decision{
 		Allow:        allow,
 		DenyMessages: denyMsgs,
+		Caps:         caps,
 	}
 }
 

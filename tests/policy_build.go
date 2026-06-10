@@ -40,6 +40,69 @@ var policyBuildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildPolicyRemotePolicyFiles,
 	testBuildPolicyRemoteHTTPPolicyFiles,
 	testBuildPolicyConfigFlags,
+	testBuildPolicyCapsProxy,
+	testBuildPolicyCapsProxyUnsupported,
+}
+
+var policyCapsProxyFile = []byte(`
+package docker
+default allow = true
+default caps := {}
+caps := {"exec.proxy": true} if input.env.capsRequest
+decision := {"allow": allow, "caps": caps}
+`)
+
+func testBuildPolicyCapsProxy(t *testing.T, sb integration.Sandbox) {
+	if buildkitTag() != "master" {
+		skipNoCompatBuildKit(t, sb, ">= 0.31.0-0", "network proxy requires BuildKit v0.31.0+")
+	}
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile.rego", policyCapsProxyFile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs(
+		"build",
+		"--progress=plain",
+		"--output=type=cacheonly",
+		dir,
+	))
+	out, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.Contains(t, string(out), "policy enabled network proxy")
+}
+
+func testBuildPolicyCapsProxyUnsupported(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.26.0-0", "policy input requires BuildKit v0.26.0+")
+	if buildkitTag() == "master" || matchesBuildKitVersion(t, sb, ">= 0.31.0-0") {
+		t.Skip("BuildKit daemon supports network proxy")
+	}
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("Dockerfile.rego", policyCapsProxyFile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs(
+		"build",
+		"--progress=plain",
+		"--output=type=cacheonly",
+		dir,
+	))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "network proxy requested by policy is not supported by the current BuildKit daemon")
 }
 
 func testBuildPolicyAllow(t *testing.T, sb integration.Sandbox) {
