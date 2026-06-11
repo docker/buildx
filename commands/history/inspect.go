@@ -585,10 +585,10 @@ workers0:
 		fmt.Fprintf(tw, "Resource Limits:\t%s\n", out.Config.Ulimit)
 	}
 	if out.Config.Memory != "" {
-		fmt.Fprintf(tw, "Memory:\t%s\n", out.Config.Memory)
+		fmt.Fprintf(tw, "Memory:\t%s\n", humanizeBytes(out.Config.Memory))
 	}
 	if out.Config.MemorySwap != "" {
-		fmt.Fprintf(tw, "Memory Swap:\t%s\n", out.Config.MemorySwap)
+		fmt.Fprintf(tw, "Memory Swap:\t%s\n", humanizeBytes(out.Config.MemorySwap))
 	}
 	if out.Config.CPUShares != "" {
 		fmt.Fprintf(tw, "CPU Shares:\t%s\n", out.Config.CPUShares)
