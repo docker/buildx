@@ -41,7 +41,7 @@ func omitEmpty(data any, p tree.Path) any {
 		}
 		return v
 	case []any:
-		var c []any
+		c := make([]any, 0, len(v))
 		for _, e := range v {
 			if isEmpty(e) && mustOmit(p) {
 				continue
