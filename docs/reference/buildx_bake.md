@@ -432,6 +432,7 @@ $ docker buildx bake --set *.platform=linux/arm64       # overrides platform for
 $ docker buildx bake --set foo*.no-cache                # bypass caching only for targets starting with 'foo'
 $ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' to the platform list
 $ docker buildx bake --set target.contexts.bar=../bar   # overrides 'bar' named context
+$ docker buildx bake --set target.resources.memory=2g   # overrides memory resource limit
 ```
 
 > [!NOTE]
@@ -462,6 +463,7 @@ You can override the following fields:
 * `platform`
 * `pull`
 * `push`
+* `resources`
 * `secrets`
 * `ssh`
 * `tags`
