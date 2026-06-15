@@ -188,6 +188,27 @@ func TestHCLWithUserDefinedFunctions(t *testing.T) {
 	require.Equal(t, ptrstr("124"), c.Targets[0].Args["buildno"])
 }
 
+func TestTargetDisallowsGroupTargetsAttribute(t *testing.T) {
+	dt := []byte(`
+		target "app" {
+			dockerfile = "app.Dockerfile"
+		}
+
+		target "db" {
+			dockerfile = "db.Dockerfile"
+		}
+
+		target "foo" {
+			targets = ["app", "db"]
+		}
+	`)
+
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.Error(t, err)
+	require.ErrorContains(t, err, "Unsupported argument")
+	require.ErrorContains(t, err, "targets")
+}
+
 func TestHCLWithVariables(t *testing.T) {
 	dt := []byte(`
 		variable "BUILD_NUMBER" {

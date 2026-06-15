@@ -413,6 +413,10 @@ func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *h
 		pm = *res
 	}
 
+	if err := validateTargetGroups(hclFiles); err != nil {
+		return nil, nil, err
+	}
+
 	return &c, &pm, nil
 }
 
@@ -440,6 +444,36 @@ func dedupeConfig(c Config) Config {
 func ParseFile(dt []byte, fn string) (*Config, error) {
 	c, _, err := ParseFiles([]File{{Data: dt, Name: fn}}, nil, nil)
 	return c, err
+}
+
+func validateTargetGroups(files []*hcl.File) error {
+	schema := &hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: "target", LabelNames: []string{"name"}},
+		},
+	}
+	for _, f := range files {
+		content, _, diags := f.Body.PartialContent(schema)
+		if diags.HasErrors() {
+			return diags
+		}
+		for _, block := range content.Blocks {
+			attrs, diags := block.Body.JustAttributes()
+			if diags.HasErrors() {
+				return diags
+			}
+			if attr, ok := attrs["targets"]; ok {
+				return hcl.Diagnostics{&hcl.Diagnostic{
+					Severity: hcl.DiagError,
+					Summary:  "Unsupported argument",
+					Detail:   "The \"targets\" argument is not valid inside a target block; use a group block instead.",
+					Subject:  attr.NameRange.Ptr(),
+					Context:  attr.Range.Ptr(),
+				}}
+			}
+		}
+	}
+	return nil
 }
 
 type Config struct {
