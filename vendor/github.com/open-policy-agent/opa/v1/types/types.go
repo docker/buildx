@@ -219,7 +219,7 @@ func (t *Array) toMap() map[string]any {
 
 func (t *Array) String() string {
 	prefix := "array"
-	buf := []string{}
+	buf := make([]string, 0, len(t.static))
 	for _, tpe := range t.static {
 		buf = append(buf, Sprint(tpe))
 	}
@@ -716,6 +716,7 @@ func (t *Function) NamedFuncArgs() FuncArgs {
 }
 
 // Args returns the function's arguments as a slice, ignoring variadic arguments.
+//
 // Deprecated: Use FuncArgs instead.
 func (t *Function) Args() []Type {
 	cpy := make([]Type, len(t.args))

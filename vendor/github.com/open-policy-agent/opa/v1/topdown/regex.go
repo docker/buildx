@@ -7,6 +7,7 @@ package topdown
 import (
 	"fmt"
 	"regexp"
+	"regexp/syntax"
 	"sync"
 
 	gintersect "github.com/yashtewari/glob-intersection"
@@ -15,25 +16,24 @@ import (
 	"github.com/open-policy-agent/opa/v1/topdown/builtins"
 )
 
-const regexCacheMaxSize = 100
-const regexInterQueryValueCacheHits = "rego_builtin_regex_interquery_value_cache_hits"
+const (
+	regexCacheMaxSize             = 100
+	regexInterQueryValueCacheHits = "rego_builtin_regex_interquery_value_cache_hits"
+)
 
-var regexpCacheLock = sync.Mutex{}
-var regexpCache map[string]*regexp.Regexp
+var (
+	regexpCacheLock = sync.RWMutex{}
+	regexpCache     = make(map[string]*regexp.Regexp)
+)
 
 func builtinRegexIsValid(_ BuiltinContext, operands []*ast.Term, iter func(*ast.Term) error) error {
-
-	s, err := builtins.StringOperand(operands[0].Value, 1)
-	if err != nil {
-		return iter(ast.InternedTerm(false))
+	if s, err := builtins.StringOperand(operands[0].Value, 1); err == nil {
+		if _, err = syntax.Parse(string(s), syntax.Perl); err == nil {
+			return iter(ast.InternedTerm(true))
+		}
 	}
 
-	_, err = regexp.Compile(string(s))
-	if err != nil {
-		return iter(ast.InternedTerm(false))
-	}
-
-	return iter(ast.InternedTerm(true))
+	return iter(ast.InternedTerm(false))
 }
 
 func builtinRegexMatch(bctx BuiltinContext, operands []*ast.Term, iter func(*ast.Term) error) error {
@@ -107,7 +107,8 @@ func builtinRegexSplit(bctx BuiltinContext, operands []*ast.Term, iter func(*ast
 func getRegexp(bctx BuiltinContext, pat string) (*regexp.Regexp, error) {
 	if bctx.InterQueryBuiltinValueCache != nil {
 		// TODO: Use named cache
-		val, ok := bctx.InterQueryBuiltinValueCache.Get(ast.String(pat))
+		var key ast.Value = ast.String(pat)
+		val, ok := bctx.InterQueryBuiltinValueCache.Get(key)
 		if ok {
 			res, valid := val.(*regexp.Regexp)
 			if !valid {
@@ -124,20 +125,23 @@ func getRegexp(bctx BuiltinContext, pat string) (*regexp.Regexp, error) {
 		if err != nil {
 			return nil, err
 		}
-		bctx.InterQueryBuiltinValueCache.Insert(ast.String(pat), re)
+		bctx.InterQueryBuiltinValueCache.Insert(key, re)
 		return re, nil
 	}
 
-	regexpCacheLock.Lock()
-	defer regexpCacheLock.Unlock()
+	regexpCacheLock.RLock()
 	re, ok := regexpCache[pat]
+	numCached := len(regexpCache)
+	regexpCacheLock.RUnlock()
 	if !ok {
 		var err error
 		re, err = regexp.Compile(pat)
 		if err != nil {
 			return nil, err
 		}
-		if len(regexpCache) >= regexCacheMaxSize {
+
+		regexpCacheLock.Lock()
+		if numCached >= regexCacheMaxSize {
 			// Delete a (semi-)random key to make room for the new one.
 			for k := range regexpCache {
 				delete(regexpCache, k)
@@ -145,21 +149,24 @@ func getRegexp(bctx BuiltinContext, pat string) (*regexp.Regexp, error) {
 			}
 		}
 		regexpCache[pat] = re
+		regexpCacheLock.Unlock()
 	}
 	return re, nil
 }
 
 func getRegexpTemplate(pat string, delimStart, delimEnd byte) (*regexp.Regexp, error) {
-	regexpCacheLock.Lock()
-	defer regexpCacheLock.Unlock()
+	regexpCacheLock.RLock()
 	re, ok := regexpCache[pat]
+	regexpCacheLock.RUnlock()
 	if !ok {
 		var err error
 		re, err = compileRegexTemplate(pat, delimStart, delimEnd)
 		if err != nil {
 			return nil, err
 		}
+		regexpCacheLock.Lock()
 		regexpCache[pat] = re
+		regexpCacheLock.Unlock()
 	}
 	return re, nil
 }
@@ -259,7 +266,41 @@ func builtinRegexReplace(bctx BuiltinContext, operands []*ast.Term, iter func(*a
 		return err
 	}
 
-	res := re.ReplaceAllString(string(base), string(value))
+	// If no cancellation context, use the fast path
+	if bctx.Cancel == nil {
+		res := re.ReplaceAllString(string(base), string(value))
+		if res == string(base) {
+			return iter(operands[0])
+		}
+		return iter(ast.InternedTerm(res))
+	}
+
+	// Use sink writer for cancellation-aware replacement
+	sink := newSink(ast.RegexReplace.Name, len(base), bctx.Cancel)
+	src := []byte(base)
+	repl := []byte(value)
+
+	// Find all matches at once to preserve anchor behavior: replace("foo", "^[a-z]", "F") => "Foo"
+	allMatches := re.FindAllSubmatchIndex(src, -1)
+
+	lastEnd := 0
+	for _, match := range allMatches {
+		if _, err := sink.Write(src[lastEnd:match[0]]); err != nil {
+			return err
+		}
+
+		if _, err := sink.Write(re.Expand(nil, repl, src, match)); err != nil {
+			return err
+		}
+
+		lastEnd = match[1]
+	}
+
+	if _, err := sink.Write(src[lastEnd:]); err != nil {
+		return err
+	}
+
+	res := sink.String()
 	if res == string(base) {
 		return iter(operands[0])
 	}
@@ -268,7 +309,6 @@ func builtinRegexReplace(bctx BuiltinContext, operands []*ast.Term, iter func(*a
 }
 
 func init() {
-	regexpCache = map[string]*regexp.Regexp{}
 	RegisterBuiltinFunc(ast.RegexIsValid.Name, builtinRegexIsValid)
 	RegisterBuiltinFunc(ast.RegexMatch.Name, builtinRegexMatch)
 	RegisterBuiltinFunc(ast.RegexMatchDeprecated.Name, builtinRegexMatch)

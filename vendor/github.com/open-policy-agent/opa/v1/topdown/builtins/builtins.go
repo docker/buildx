@@ -209,14 +209,24 @@ func SetOperand(x ast.Value, pos int) (ast.Set, error) {
 	return s, nil
 }
 
-// StringOperand converts x to a string. If the cast fails, a descriptive error is
-// returned.
+// StringOperand returns x as [ast.String], or a descriptive error if the conversion fails.
 func StringOperand(x ast.Value, pos int) (ast.String, error) {
 	s, ok := x.(ast.String)
 	if !ok {
 		return ast.String(""), NewOperandTypeErr(pos, x, "string")
 	}
 	return s, nil
+}
+
+// StringOperandByteSlice returns x a []byte, assuming x is [ast.String], or a descriptive error
+// if that is not the case. The returned byte slice points directly at the underlying array backing
+// the string, and should not be modified.
+func StringOperandByteSlice(x ast.Value, pos int) ([]byte, error) {
+	s, err := StringOperand(x, pos)
+	if err != nil {
+		return nil, err
+	}
+	return util.StringToByteSlice(string(s)), nil
 }
 
 // ObjectOperand converts x to an object. If the cast fails, a descriptive
@@ -241,11 +251,18 @@ func ArrayOperand(x ast.Value, pos int) (*ast.Array, error) {
 
 // NumberToFloat converts n to a big float.
 func NumberToFloat(n ast.Number) *big.Float {
-	r, ok := new(big.Float).SetString(string(n))
-	if !ok {
+	return NumberToFloatInto(nil, n)
+}
+
+// NumberToFloatInto converts n to a big float, storing it in dst when provided.
+func NumberToFloatInto(dst *big.Float, n ast.Number) *big.Float {
+	if dst == nil {
+		dst = new(big.Float)
+	}
+	if _, ok := dst.SetString(string(n)); !ok {
 		panic("illegal value")
 	}
-	return r
+	return dst
 }
 
 // FloatToNumber converts f to a number.
