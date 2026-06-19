@@ -130,24 +130,25 @@ func (p *Policy) IsPolicyError(err error) bool {
 	return false
 }
 
-func (p *Policy) regoBaseOpts() ([]func(*rego.Rego), func(), error) {
+func (p *Policy) capabilities() *ast.Capabilities {
 	caps := &ast.Capabilities{
 		Builtins: builtins(),
 		Features: slices.Clone(ast.Features),
 	}
-	comp := ast.NewCompiler().WithCapabilities(caps).WithKeepModules(true)
+	for _, f := range p.funcs {
+		caps.Builtins = append(caps.Builtins, &ast.Builtin{
+			Name: f.decl.Name,
+			Decl: f.decl.Decl,
+		})
+	}
+	return caps
+}
+
+func (p *Policy) regoBaseOpts() ([]func(*rego.Rego), func(), error) {
+	comp := ast.NewCompiler().WithCapabilities(p.capabilities()).WithKeepModules(true)
 	if p.opt.Log != nil {
 		comp = comp.WithEnablePrintStatements(true)
 	}
-
-	builtins := make(map[string]*ast.Builtin)
-	for _, f := range p.funcs {
-		builtins[f.decl.Name] = &ast.Builtin{
-			Name: f.decl.Name,
-			Decl: f.decl.Decl,
-		}
-	}
-	comp = comp.WithBuiltins(builtins)
 
 	var root fs.StatFS
 	var closeFS func() error
