@@ -1000,7 +1000,7 @@ github.com/secure-systems-lab/go-securesystemslib/cjson
 github.com/secure-systems-lab/go-securesystemslib/dsse
 github.com/secure-systems-lab/go-securesystemslib/encrypted
 github.com/secure-systems-lab/go-securesystemslib/signerverifier
-# github.com/segmentio/asm v1.2.0
+# github.com/segmentio/asm v1.2.1
 ## explicit; go 1.18
 github.com/segmentio/asm/base64
 github.com/segmentio/asm/cpu
