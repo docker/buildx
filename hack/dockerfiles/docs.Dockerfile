@@ -21,7 +21,7 @@ RUN --mount=target=/context \
   --mount=target=.,type=tmpfs <<EOT
 set -e
 rsync -a /context/. .
-docsgen --formats "$FORMATS" --source "docs/reference" --bake-stdlib-source "docs/bake-stdlib.md"
+docsgen --formats "$FORMATS" --source "docs/reference/" --bake-stdlib-source "docs/bake-stdlib.md"
 mkdir /out
 cp -r docs/reference docs/bake-stdlib.md /out
 rm -f /out/reference/*__INTERNAL_SERVE.yaml /out/reference/*__INTERNAL_SERVE.md
@@ -35,12 +35,25 @@ RUN --mount=target=/context \
   --mount=target=.,type=tmpfs <<EOT
 set -e
 rsync -a /context/. .
-git add -A
-rm -rf docs/reference/* docs/bake-stdlib.md
-cp -rf /out/* ./docs/
+
+# Replace the checked-in docs with freshly generated output, then verify that
+# the working tree still matches HEAD under these paths. This enforces the
+# same contract as `make docs`: after regenerating, the repo must be clean.
+rsync -a --delete /out/reference/ docs/reference/
+cp /out/bake-stdlib.md docs/bake-stdlib.md
+
+# Intent-to-add so untracked files (e.g. a new command's docs) appear in the
+# diff below; `git diff` skips untracked files by default.
+git add -N -- docs/reference docs/bake-stdlib.md
+
 if [ -n "$(git status --porcelain -- docs/reference docs/bake-stdlib.md)" ]; then
-  echo >&2 'ERROR: Docs result differs. Please update with "make docs"'
+  echo >&2 'ERROR: Docs are out of date. Run "make docs" and commit the result.'
+  echo >&2
+  echo >&2 '--- changed paths ---'
   git status --porcelain -- docs/reference docs/bake-stdlib.md
+  echo >&2
+  echo >&2 '--- diff (truncated to 200 lines) ---'
+  git diff -- docs/reference docs/bake-stdlib.md | head -n 200
   exit 1
 fi
 EOT
