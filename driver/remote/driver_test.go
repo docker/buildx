@@ -1,0 +1,70 @@
+package remote
+
+import (
+	"context"
+	"net"
+	"testing"
+	"time"
+
+	"github.com/docker/buildx/driver"
+	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/metadata"
+	"google.golang.org/grpc/status"
+)
+
+// TestClientAuthority verifies that the remote driver derives the gRPC
+// ":authority" pseudo-header from the configured endpoint address instead of
+// defaulting to "localhost" (see docker/buildx#3880). It stands up an
+// in-process gRPC server on a loopback listener and asserts the authority of
+// the request it receives matches the endpoint host.
+func TestClientAuthority(t *testing.T) {
+	ctx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, context.DeadlineExceeded)
+	defer cancel()
+
+	lc := net.ListenConfig{}
+	lis, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
+	require.NoError(t, err)
+	defer lis.Close()
+
+	authorityCh := make(chan string, 1)
+	srv := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
+		authority := ""
+		if md, ok := metadata.FromIncomingContext(stream.Context()); ok {
+			if a := md.Get(":authority"); len(a) > 0 {
+				authority = a[0]
+			}
+		}
+		select {
+		case authorityCh <- authority:
+		default:
+		}
+		return status.Error(codes.Unimplemented, "unimplemented")
+	}))
+	go func() {
+		_ = srv.Serve(lis)
+	}()
+	defer srv.Stop()
+
+	d := &Driver{
+		InitConfig: driver.InitConfig{
+			EndpointAddr: "tcp://" + lis.Addr().String(),
+		},
+	}
+
+	c, err := d.Client(ctx)
+	require.NoError(t, err)
+	defer c.Close()
+
+	// Any RPC will do: it fails server-side with Unimplemented, but the server
+	// records the ":authority" it received from the client before responding.
+	_, _ = c.ListWorkers(ctx)
+
+	select {
+	case authority := <-authorityCh:
+		require.Equal(t, lis.Addr().String(), authority)
+	case <-ctx.Done():
+		t.Fatal("timed out waiting for request to reach the server")
+	}
+}
