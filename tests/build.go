@@ -63,6 +63,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildLocalStateRemote,
 	testImageIDOutput,
 	testBuildLocalExport,
+	testBuildLocalExportDeleteMode,
 	testBuildRegistryExport,
 	testBuildRegistryExportAttestations,
 	testBuildTarExport,
@@ -489,6 +490,69 @@ func testBuildLocalExport(t *testing.T, sb integration.Sandbox) {
 	dt, err := os.ReadFile(dir + "/result/bar")
 	require.NoError(t, err)
 	require.Equal(t, "foo", string(dt))
+}
+
+func testBuildLocalExportDeleteMode(t *testing.T, sb integration.Sandbox) {
+	t.Run("requires allow for current working directory", func(t *testing.T) {
+		dir := createTestProject(t)
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest=.,mode=delete", "."))
+		require.Error(t, err, out)
+		require.Contains(t, out, "--allow=buildx.local.delete")
+	})
+
+	t.Run("requires allow for outside destination", func(t *testing.T) {
+		dir := createTestProject(t)
+		dest := filepath.Join(t.TempDir(), "out")
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest="+dest+",mode=delete", "."))
+		require.Error(t, err, out)
+		require.Contains(t, out, "--allow=buildx.local.delete")
+	})
+
+	t.Run("requires allow for symlink outside destination", func(t *testing.T) {
+		dir := createTestProject(t)
+		require.NoError(t, os.Symlink(t.TempDir(), filepath.Join(dir, "out")))
+
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest=out,mode=delete", "."))
+		require.Error(t, err, out)
+		require.Contains(t, out, "--allow=buildx.local.delete")
+	})
+
+	t.Run("allow does not accept value", func(t *testing.T) {
+		dir := createTestProject(t)
+		out, err := buildCmd(sb, withDir(dir), withArgs("--allow=buildx.local.delete=true", "--output=type=local,dest=out", "."))
+		require.Error(t, err, out)
+		require.Contains(t, out, "buildx.local.delete does not accept a value")
+	})
+
+	t.Run("deletes stale files in subdirectory without allow", func(t *testing.T) {
+		skipNoCompatBuildKit(t, sb, ">= 0.31.0-0", "local exporter mode=delete")
+
+		dir := createTestProject(t)
+		dest := filepath.Join(dir, "out")
+		stale := filepath.Join(dest, "stale")
+		require.NoError(t, os.MkdirAll(dest, 0o755))
+		require.NoError(t, os.WriteFile(stale, []byte("stale"), 0o600))
+
+		out, err := buildCmd(sb, withDir(dir), withArgs("--output=type=local,dest=out,mode=delete", "."))
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dest, "bar"))
+		_, err = os.Stat(stale)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	})
+
+	t.Run("allow permits current working directory", func(t *testing.T) {
+		skipNoCompatBuildKit(t, sb, ">= 0.31.0-0", "local exporter mode=delete")
+
+		dir := createTestProject(t)
+		stale := filepath.Join(dir, "stale")
+		require.NoError(t, os.WriteFile(stale, []byte("stale"), 0o600))
+
+		out, err := buildCmd(sb, withDir(dir), withArgs("--allow=buildx.local.delete", "--output=type=local,dest=.,mode=delete", "."))
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dir, "bar"))
+		_, err = os.Stat(stale)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	})
 }
 
 func testBuildTarExport(t *testing.T, sb integration.Sandbox) {

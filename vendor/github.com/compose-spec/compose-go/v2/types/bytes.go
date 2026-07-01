@@ -17,9 +17,12 @@
 package types
 
 import (
+	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"github.com/docker/go-units"
+	"go.yaml.in/yaml/v4"
 )
 
 // UnitBytes is the bytes type
@@ -35,14 +38,53 @@ func (u UnitBytes) MarshalJSON() ([]byte, error) {
 	return []byte(fmt.Sprintf(`"%d"`, u)), nil
 }
 
+// parseString parses a string into a UnitBytes value, supporting plain
+// integers, negative values (e.g., "-1"), and human-readable byte units
+// (e.g., "1g", "512m").
+func (u *UnitBytes) parseString(s string) error {
+	if n, err := strconv.ParseInt(s, 10, 64); err == nil {
+		*u = UnitBytes(n)
+		return nil
+	}
+	b, err := units.RAMInBytes(s)
+	*u = UnitBytes(b)
+	return err
+}
+
+// UnmarshalJSON makes UnitBytes implement json.Unmarshaler
+func (u *UnitBytes) UnmarshalJSON(data []byte) error {
+	var v int64
+	if err := json.Unmarshal(data, &v); err == nil {
+		*u = UnitBytes(v)
+		return nil
+	}
+	var s string
+	if err := json.Unmarshal(data, &s); err != nil {
+		return err
+	}
+	return u.parseString(s)
+}
+
+// UnmarshalYAML makes UnitBytes implement yaml.Unmarshaler
+func (u *UnitBytes) UnmarshalYAML(value *yaml.Node) error {
+	var v int64
+	if err := value.Decode(&v); err == nil {
+		*u = UnitBytes(v)
+		return nil
+	}
+	var s string
+	if err := value.Decode(&s); err != nil {
+		return err
+	}
+	return u.parseString(s)
+}
+
 func (u *UnitBytes) DecodeMapstructure(value interface{}) error {
 	switch v := value.(type) {
 	case int:
 		*u = UnitBytes(v)
 	case string:
-		b, err := units.RAMInBytes(fmt.Sprint(value))
-		*u = UnitBytes(b)
-		return err
+		return u.parseString(v)
 	}
 	return nil
 }

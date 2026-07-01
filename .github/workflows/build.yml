@@ -119,12 +119,12 @@ jobs:
           fi
       -
         name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       -
         name: Set up QEMU
-        uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a # v4.0.0
+        uses: docker/setup-qemu-action@06116385d9baf250c9f4dcb4858b16962ea869c3 # v4.1.0
       -
         name: Set up Docker Buildx
         uses: docker/setup-buildx-action@d7f5e7f509e45cec5c76c4d5afdd7de93d0b3df5 # v4.1.0
@@ -148,18 +148,28 @@ jobs:
           TEST_REPORT_SUFFIX: "-${{ env.TESTREPORTS_NAME }}"
           TESTPKGS: "${{ matrix.pkg }}"
       -
-        name: Send to Codecov
+        name: Upload coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           directory: ./bin/testreports
           flags: integration
           token: ${{ secrets.CODECOV_TOKEN }}
-          disable_file_fixes: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Upload test results to Codecov
+        if: always()
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          report_type: test_results
+          directory: ./bin/testreports
+          flags: integration
+          token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
       -
         name: Generate annotations
         if: always()
-        uses: crazy-max/.github/.github/actions/gotest-annotations@9ba6e6f9450baf3b1237f8035c1fdc45932510bd # v1.8.0
+        uses: crazy-max/.github/.github/actions/gotest-annotations@46267a6e61cd56aac2fc79943df180152f4c89d6 # v1.10.1
         with:
           directory: ./bin/testreports
       -
@@ -189,10 +199,10 @@ jobs:
           git config --global core.eol lf
       -
         name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       -
         name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "${{ env.GO_VERSION }}"
       -
@@ -225,19 +235,30 @@ jobs:
               "-covermode" "atomic" ${{ env.TESTFLAGS }}
         shell: bash
       -
-        name: Send to Codecov
+        name: Upload coverage to Codecov
         if: always()
-        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           directory: ${{ env.TESTREPORTS_DIR }}
           env_vars: RUNNER_OS
           flags: unit
           token: ${{ secrets.CODECOV_TOKEN }}
-          disable_file_fixes: true
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+      -
+        name: Upload test results to Codecov
+        if: always()
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
+        with:
+          report_type: test_results
+          directory: ${{ env.TESTREPORTS_DIR }}
+          env_vars: RUNNER_OS
+          flags: unit
+          token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
       -
         name: Generate annotations
         if: always()
-        uses: crazy-max/.github/.github/actions/gotest-annotations@9ba6e6f9450baf3b1237f8035c1fdc45932510bd # v1.8.0
+        uses: crazy-max/.github/.github/actions/gotest-annotations@46267a6e61cd56aac2fc79943df180152f4c89d6 # v1.10.1
         with:
           directory: ${{ env.TESTREPORTS_DIR }}
       -
@@ -273,12 +294,12 @@ jobs:
       -
         name: Upload SARIF report
         if: ${{ github.ref == 'refs/heads/master' && github.repository == 'docker/buildx' }}
-        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           sarif_file: ${{ env.DESTDIR }}/govulncheck.out
 
   binaries:
-    uses: docker/github-builder/.github/workflows/bake.yml@073833262a23a17675c95c4541ab063b7646756b # v1.9.0
+    uses: docker/github-builder/.github/workflows/bake.yml@5f637c833aa76bc99372a1dc9a6f8bcd8056fb85 # v1.12.0
     permissions:
       contents: read # same as global permission
       id-token: write # for signing attestation(s) with GitHub OIDC Token
@@ -359,7 +380,7 @@ jobs:
 
   bin-image:
     if: ${{ github.repository == 'docker/buildx' }}
-    uses: docker/github-builder/.github/workflows/bake.yml@073833262a23a17675c95c4541ab063b7646756b # v1.9.0
+    uses: docker/github-builder/.github/workflows/bake.yml@5f637c833aa76bc99372a1dc9a6f8bcd8056fb85 # v1.12.0
     needs:
       - bin-image-prepare
       - test-integration
@@ -409,14 +430,14 @@ jobs:
       -
         name: Scout
         id: scout
-        uses: crazy-max/.github/.github/actions/docker-scout@9ba6e6f9450baf3b1237f8035c1fdc45932510bd # v1.8.0
+        uses: crazy-max/.github/.github/actions/docker-scout@46267a6e61cd56aac2fc79943df180152f4c89d6 # v1.10.1
         with:
           version: ${{ env.SCOUT_VERSION }}
           format: sarif
           image: registry://${{ env.REPO_SLUG }}:master
       -
         name: Upload SARIF report
-        uses: github/codeql-action/upload-sarif@7211b7c8077ea37d8641b6271f6a365a22a5fbfa # v4.36.0
+        uses: github/codeql-action/upload-sarif@8aad20d150bbac5944a9f9d289da16a4b0d87c1e # v4.36.2
         with:
           sarif_file: ${{ steps.scout.outputs.result-file }}
 
@@ -439,7 +460,7 @@ jobs:
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

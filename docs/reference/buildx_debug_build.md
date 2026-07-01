@@ -12,7 +12,7 @@ Start a build
 | Name                | Type          | Default   | Description                                                                                                                                      |
 |:--------------------|:--------------|:----------|:-------------------------------------------------------------------------------------------------------------------------------------------------|
 | `--add-host`        | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                                                              |
-| `--allow`           | `stringArray` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`, `device`)                                                         |
+| `--allow`           | `stringArray` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`, `device`, `buildx.local.delete`)                                  |
 | `--annotation`      | `stringArray` |           | Add annotation to the image                                                                                                                      |
 | `--attest`          | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                                                                     |
 | `--build-arg`       | `stringArray` |           | Set build-time variables                                                                                                                         |
@@ -40,6 +40,7 @@ Start a build
 | `--pull`            | `bool`        |           | Always attempt to pull all referenced images                                                                                                     |
 | `--push`            | `bool`        |           | Shorthand for `--output=type=registry,unpack=false`                                                                                              |
 | `-q`, `--quiet`     | `bool`        |           | Suppress the build output and print image ID on success                                                                                          |
+| `--resource`        | `stringArray` |           | Resource limits for build containers (format: `memory=2g`, `cpu-quota=50000`)                                                                    |
 | `--sbom`            | `string`      |           | Shorthand for `--attest=type=sbom`                                                                                                               |
 | `--secret`          | `stringArray` |           | Secret to expose to the build (format: `id=mysecret[,src=/local/secret]`)                                                                        |
 | `--shm-size`        | `bytes`       | `0`       | Shared memory size for build containers                                                                                                          |
@@ -50,4 +51,3 @@ Start a build
 
 
 <!---MARKER_GEN_END-->
-

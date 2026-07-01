@@ -89,6 +89,11 @@ type buildOptions struct {
 	target         string
 	ulimits        *dockeropts.UlimitOpt
 
+	resources []string
+	// legacyResources is kept separate from resources because the pflag
+	// StringArray for --resource resets its backing slice on first use.
+	legacyResources []string
+
 	attests    []string
 	sbom       string
 	provenance string
@@ -133,6 +138,7 @@ func (o *buildOptions) toOptions() (*BuildOptions, error) {
 		Tags:           o.tags,
 		Target:         o.target,
 		Ulimits:        o.ulimits,
+		Resources:      append(o.legacyResources, o.resources...),
 		Builder:        o.builder,
 		NoCache:        o.noCache,
 		Pull:           o.pull,
@@ -232,6 +238,20 @@ func (o *buildOptions) toDisplayMode() (progressui.DisplayMode, error) {
 		return progressui.QuietMode, nil
 	}
 	return progress, nil
+}
+
+// legacyResourceValue is a pflag.Value that appends a "<key>=value" entry to
+// the --resource list, wiring the hidden legacy flags into the same code path.
+type legacyResourceValue struct {
+	key       string
+	resources *[]string
+}
+
+func (v *legacyResourceValue) String() string { return "" }
+func (v *legacyResourceValue) Type() string   { return "string" }
+func (v *legacyResourceValue) Set(s string) error {
+	*v.resources = append(*v.resources, v.key+"="+s)
+	return nil
 }
 
 const (
@@ -534,7 +554,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 
 	flags.StringSliceVar(&options.extraHosts, "add-host", []string{}, `Add a custom host-to-IP mapping (format: "host:ip")`)
 
-	flags.StringArrayVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure", "device")`)
+	flags.StringArrayVar(&options.allow, "allow", []string{}, `Allow extra privileged entitlement (e.g., "network.host", "security.insecure", "device", "buildx.local.delete")`)
 
 	flags.StringArrayVarP(&options.annotations, "annotation", "", []string{}, "Add annotation to the image")
 
@@ -583,6 +603,8 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	options.ulimits = dockeropts.NewUlimitOpt(nil)
 	flags.Var(options.ulimits, "ulimit", "Ulimit options")
 
+	flags.StringArrayVar(&options.resources, "resource", []string{}, `Resource limits for build containers (format: "memory=2g", "cpu-quota=50000")`)
+
 	flags.StringArrayVar(&options.attests, "attest", []string{}, `Attestation parameters (format: "type=sbom,generator=image")`)
 	flags.StringVar(&options.sbom, "sbom", "", `Shorthand for "--attest=type=sbom"`)
 	flags.StringVar(&options.provenance, "provenance", "", `Shorthand for "--attest=type=provenance"`)
@@ -595,11 +617,32 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	var ignore string
 	var ignoreSlice []string
 	var ignoreBool bool
-	var ignoreInt int64
 
 	flags.StringVar(&options.callFunc, "print", "", "Print result of information request (e.g., outline, targets)")
 	cobrautil.MarkFlagsExperimental(flags, "print")
 	flags.MarkHidden("print")
+
+	// Legacy per-resource flags, hidden and superseded by --resource.
+	flags.VarP(&legacyResourceValue{key: "memory", resources: &options.legacyResources}, "memory", "m", "Memory limit")
+	flags.MarkHidden("memory")
+
+	flags.VarP(&legacyResourceValue{key: "memory-swap", resources: &options.legacyResources}, "memory-swap", "", `Swap limit equal to memory plus swap: "-1" to enable unlimited swap`)
+	flags.MarkHidden("memory-swap")
+
+	flags.VarP(&legacyResourceValue{key: "cpu-shares", resources: &options.legacyResources}, "cpu-shares", "c", "CPU shares (relative weight)")
+	flags.MarkHidden("cpu-shares")
+
+	flags.VarP(&legacyResourceValue{key: "cpu-period", resources: &options.legacyResources}, "cpu-period", "", "Limit the CPU CFS (Completely Fair Scheduler) period")
+	flags.MarkHidden("cpu-period")
+
+	flags.VarP(&legacyResourceValue{key: "cpu-quota", resources: &options.legacyResources}, "cpu-quota", "", "Limit the CPU CFS (Completely Fair Scheduler) quota")
+	flags.MarkHidden("cpu-quota")
+
+	flags.VarP(&legacyResourceValue{key: "cpuset-cpus", resources: &options.legacyResources}, "cpuset-cpus", "", `CPUs in which to allow execution ("0-3", "0,1")`)
+	flags.MarkHidden("cpuset-cpus")
+
+	flags.VarP(&legacyResourceValue{key: "cpuset-mems", resources: &options.legacyResources}, "cpuset-mems", "", `MEMs in which to allow execution ("0-3", "0,1")`)
+	flags.MarkHidden("cpuset-mems")
 
 	flags.BoolVar(&ignoreBool, "compress", false, "Compress the build context using gzip")
 	flags.MarkHidden("compress")
@@ -616,27 +659,6 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	flags.MarkHidden("squash")
 	flags.SetAnnotation("squash", "flag-warn", []string{"experimental flag squash is removed with BuildKit. You should squash inside build using a multi-stage Dockerfile for efficiency."})
 	cobrautil.MarkFlagsExperimental(flags, "squash")
-
-	flags.StringVarP(&ignore, "memory", "m", "", "Memory limit")
-	flags.MarkHidden("memory")
-
-	flags.StringVar(&ignore, "memory-swap", "", `Swap limit equal to memory plus swap: "-1" to enable unlimited swap`)
-	flags.MarkHidden("memory-swap")
-
-	flags.Int64VarP(&ignoreInt, "cpu-shares", "c", 0, "CPU shares (relative weight)")
-	flags.MarkHidden("cpu-shares")
-
-	flags.Int64Var(&ignoreInt, "cpu-period", 0, "Limit the CPU CFS (Completely Fair Scheduler) period")
-	flags.MarkHidden("cpu-period")
-
-	flags.Int64Var(&ignoreInt, "cpu-quota", 0, "Limit the CPU CFS (Completely Fair Scheduler) quota")
-	flags.MarkHidden("cpu-quota")
-
-	flags.StringVar(&ignore, "cpuset-cpus", "", `CPUs in which to allow execution ("0-3", "0,1")`)
-	flags.MarkHidden("cpuset-cpus")
-
-	flags.StringVar(&ignore, "cpuset-mems", "", `MEMs in which to allow execution ("0-3", "0,1")`)
-	flags.MarkHidden("cpuset-mems")
 
 	flags.BoolVar(&ignoreBool, "rm", true, "Remove intermediate containers after a successful build")
 	flags.MarkHidden("rm")
@@ -990,6 +1012,7 @@ type BuildOptions struct {
 	Tags                   []string
 	Target                 string
 	Ulimits                *dockeropts.UlimitOpt
+	Resources              []string
 	Builder                string
 	NoCache                bool
 	Pull                   bool
@@ -1014,6 +1037,11 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 		contexts[name] = build.NamedContext{Path: path}
 	}
 
+	resourceLimits, err := build.ParseResourceLimits(in.Resources)
+	if err != nil {
+		return nil, nil, err
+	}
+
 	opts := build.Options{
 		Inputs: build.Inputs{
 			ContextPath:    in.ContextPath,
@@ -1034,6 +1062,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 		Tags:                   in.Tags,
 		Target:                 in.Target,
 		Ulimits:                in.Ulimits,
+		ResourceLimits:         resourceLimits,
 		GroupRef:               in.GroupRef,
 		ProvenanceResponseMode: confutil.ParseMetadataProvenance(in.ProvenanceResponseMode),
 	}
@@ -1109,6 +1138,14 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 		}
 	}
 
+	allow, allowLocalOutputDelete, err := buildflags.ParseEntitlements(in.Allow)
+	if err != nil {
+		return nil, nil, err
+	}
+	if err := build.ValidateLocalExportDelete(outputs, allowLocalOutputDelete); err != nil {
+		return nil, nil, err
+	}
+
 	opts.Annotations, err = buildflags.ParseAnnotations(in.Annotations)
 	if err != nil {
 		return nil, nil, errors.Wrap(err, "parse annotations")
@@ -1130,10 +1167,6 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 	opts.SourcePolicy = in.SourcePolicy
 	opts.Policy = in.Policy
 
-	allow, err := buildflags.ParseEntitlements(in.Allow)
-	if err != nil {
-		return nil, nil, err
-	}
 	opts.Allow = allow
 
 	if in.CallFunc != nil {

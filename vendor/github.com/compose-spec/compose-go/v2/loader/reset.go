@@ -25,17 +25,38 @@ import (
 	"go.yaml.in/yaml/v4"
 )
 
+// defaultMaxNodeVisits caps total resolveReset calls per document.
+// Sized to accommodate large real-world compose files while rejecting documents that would
+// cause unbounded traversal. Callers can override this via Options.MaxNodeVisits.
+const defaultMaxNodeVisits = 100_000
+
+// nodeCache stores a resolved node and the relative sub-paths within its subtree that
+// carried !reset/!override tags, so cache hits at different call sites can replay them.
+type nodeCache struct {
+	node          *yaml.Node
+	relativePaths []tree.Path
+}
+
 type ResetProcessor struct {
-	target       interface{}
-	paths        []tree.Path
-	visitedNodes map[*yaml.Node][]string
+	target        any
+	paths         []tree.Path
+	visitedNodes  map[*yaml.Node][]string
+	resolvedNodes map[*yaml.Node]nodeCache
+	visitCount    int
+	// maxNodeVisits is the per-document cap; when zero, defaultMaxNodeVisits is used.
+	maxNodeVisits int
 }
 
 // UnmarshalYAML implement yaml.Unmarshaler
 func (p *ResetProcessor) UnmarshalYAML(value *yaml.Node) error {
 	p.visitedNodes = make(map[*yaml.Node][]string)
+	p.resolvedNodes = make(map[*yaml.Node]nodeCache)
+	p.visitCount = 0
+	defer func() {
+		p.visitedNodes = nil
+		p.resolvedNodes = nil
+	}()
 	resolved, err := p.resolveReset(value, tree.NewPath())
-	p.visitedNodes = nil
 	if err != nil {
 		return err
 	}
@@ -44,19 +65,19 @@ func (p *ResetProcessor) UnmarshalYAML(value *yaml.Node) error {
 
 // resolveReset detects `!reset` tag being set on yaml nodes and record position in the yaml tree
 func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.Node, error) {
+	p.visitCount++
+	limit := p.maxNodeVisits
+	if limit <= 0 {
+		limit = defaultMaxNodeVisits
+	}
+	if p.visitCount > limit {
+		return nil, fmt.Errorf("compose file exceeds maximum node visit limit (%d)", limit)
+	}
+
 	pathStr := path.String()
 	// If the path contains "<<", removing the "<<" element and merging the path
 	if strings.Contains(pathStr, ".<<") {
 		path = tree.NewPath(strings.Replace(pathStr, ".<<", "", 1))
-	}
-
-	// If the node is an alias, We need to process the alias field in order to consider the !override and !reset tags
-	if node.Kind == yaml.AliasNode {
-		if err := p.checkForCycle(node.Alias, path); err != nil {
-			return nil, err
-		}
-
-		return p.resolveReset(node.Alias, path)
 	}
 
 	if node.Tag == "!reset" {
@@ -68,7 +89,69 @@ func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.No
 		return node, nil
 	}
 
-	keys := map[string]int{}
+	// If the node is an alias, process the alias target via the cache so each anchor is
+	// processed at most once.
+	if node.Kind == yaml.AliasNode {
+		if err := p.checkForCycle(node.Alias, path); err != nil {
+			return nil, err
+		}
+		// Handle !reset/!override on the alias target before delegating to the cache,
+		// keeping all tag-handling logic in resolveReset rather than split across functions.
+		target := node.Alias
+		if target.Tag == "!reset" {
+			p.paths = append(p.paths, path)
+			return nil, nil
+		}
+		if target.Tag == "!override" {
+			p.paths = append(p.paths, path)
+			return target, nil
+		}
+		return p.cachedResolve(target, path)
+	}
+
+	// Container nodes are resolved through the cache, ensuring resolved containers are
+	// not re-traversed.
+	if node.Kind == yaml.SequenceNode || node.Kind == yaml.MappingNode {
+		return p.cachedResolve(node, path)
+	}
+
+	return node, nil
+}
+
+// cachedResolve resolves node (a container without !reset/!override), serving from cache on
+// repeat visits to prevent re-traversal. It is only called after tag checks are done in
+// resolveReset, so it never receives !reset/!override-tagged nodes.
+func (p *ResetProcessor) cachedResolve(node *yaml.Node, path tree.Path) (*yaml.Node, error) {
+	if cached, ok := p.resolvedNodes[node]; ok {
+		for _, rel := range cached.relativePaths {
+			p.paths = append(p.paths, joinPath(path, rel))
+		}
+		return cached.node, nil
+	}
+
+	startIdx := len(p.paths)
+	resolved, err := p.resolveContainer(node, path)
+	if err != nil {
+		return nil, err
+	}
+
+	var relPaths []tree.Path
+	for _, addedPath := range p.paths[startIdx:] {
+		rel, err := subPath(addedPath, path)
+		if err != nil {
+			return nil, err
+		}
+		relPaths = append(relPaths, rel)
+	}
+	p.resolvedNodes[node] = nodeCache{node: resolved, relativePaths: relPaths}
+	return resolved, nil
+}
+
+// resolveContainer processes the children of a Sequence or Mapping node.
+// AliasNodes must be kept as-is in the output Content; the resolved value is used only
+// for tag inspection. Changing this will affect how the YAML library handles the document
+// during decoding.
+func (p *ResetProcessor) resolveContainer(node *yaml.Node, path tree.Path) (*yaml.Node, error) {
 	switch node.Kind {
 	case yaml.SequenceNode:
 		var nodes []*yaml.Node
@@ -78,12 +161,18 @@ func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.No
 			if err != nil {
 				return nil, err
 			}
-			if resolved != nil {
+			if resolved == nil {
+				continue
+			}
+			if v.Kind == yaml.AliasNode {
+				nodes = append(nodes, v)
+			} else {
 				nodes = append(nodes, resolved)
 			}
 		}
 		node.Content = nodes
 	case yaml.MappingNode:
+		keys := map[string]int{}
 		var key string
 		var nodes []*yaml.Node
 		for idx, v := range node.Content {
@@ -98,7 +187,12 @@ func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.No
 				if err != nil {
 					return nil, err
 				}
-				if resolved != nil {
+				if resolved == nil {
+					continue
+				}
+				if v.Kind == yaml.AliasNode {
+					nodes = append(nodes, node.Content[idx-1], v)
+				} else {
 					nodes = append(nodes, node.Content[idx-1], resolved)
 				}
 			}
@@ -106,6 +200,38 @@ func (p *ResetProcessor) resolveReset(node *yaml.Node, path tree.Path) (*yaml.No
 		node.Content = nodes
 	}
 	return node, nil
+}
+
+// subPath strips base from full to produce a relative path for cache storage.
+// Returns "" when full == base (the !reset/!override tag is on the node root itself).
+// Returns an error when full is not rooted at base, which would indicate a logic error
+// in resolveReset/cachedResolve.
+func subPath(full, base tree.Path) (tree.Path, error) {
+	if base == "" {
+		return full, nil
+	}
+	fullStr := string(full)
+	baseStr := string(base)
+	if fullStr == baseStr {
+		return "", nil
+	}
+	prefix := baseStr + "."
+	if strings.HasPrefix(fullStr, prefix) {
+		return tree.Path(fullStr[len(prefix):]), nil
+	}
+	return "", fmt.Errorf("internal error: path %q is not a sub-path of %q", fullStr, baseStr)
+}
+
+// joinPath reconstructs an absolute path from a call-site base and a cached relative path.
+// A relative path of "" means the tag was on the node root, so base is returned unchanged.
+func joinPath(base, rel tree.Path) tree.Path {
+	if rel == "" {
+		return base
+	}
+	if base == "" {
+		return rel
+	}
+	return tree.Path(string(base) + "." + string(rel))
 }
 
 // Apply finds the go attributes matching recorded paths and reset them to zero value
@@ -180,15 +306,11 @@ func (p *ResetProcessor) checkForCycle(node *yaml.Node, path tree.Path) error {
 
 // areInDifferentServices checks if two paths are in different service definitions
 func areInDifferentServices(path1, path2 string) bool {
-	// Split paths into components
 	parts1 := strings.Split(path1, ".")
 	parts2 := strings.Split(path2, ".")
-
-	// Look for the services component and compare the service names
 	for i := 0; i < len(parts1) && i < len(parts2); i++ {
 		if parts1[i] == "services" && i+1 < len(parts1) &&
 			parts2[i] == "services" && i+1 < len(parts2) {
-			// If they're different services, it's not a cycle
 			return parts1[i+1] != parts2[i+1]
 		}
 	}

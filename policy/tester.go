@@ -7,7 +7,6 @@ import (
 	"io/fs"
 	"maps"
 	"path/filepath"
-	"slices"
 	"sort"
 	"strings"
 
@@ -212,20 +211,7 @@ func loadPolicyModules(root fs.StatFS, filename string) (map[string]*ast.Module,
 }
 
 func compilePolicyModules(modules map[string]*ast.Module, p *Policy, fsProvider func() (fs.StatFS, func() error, error)) (*ast.Compiler, func() error, error) {
-	caps := &ast.Capabilities{
-		Builtins: builtins(),
-		Features: slices.Clone(ast.Features),
-	}
-	comp := ast.NewCompiler().WithCapabilities(caps).WithKeepModules(true)
-
-	builtinDefs := make(map[string]*ast.Builtin)
-	for _, f := range p.funcs {
-		builtinDefs[f.decl.Name] = &ast.Builtin{
-			Name: f.decl.Name,
-			Decl: f.decl.Decl,
-		}
-	}
-	comp = comp.WithBuiltins(builtinDefs)
+	comp := ast.NewCompiler().WithCapabilities(p.capabilities()).WithKeepModules(true)
 
 	loader, closeLoader := newPolicyModuleLoader(fsProvider)
 	comp = comp.WithModuleLoader(loader)
@@ -683,9 +669,23 @@ func decodeDecision(decision any) *Decision {
 	if len(denyMsgs) == 0 {
 		denyMsgs = nil
 	}
+	caps := Caps{}
+	if v, ok := obj["caps"]; ok {
+		if m, ok := v.(map[string]any); ok {
+			for k, entry := range m {
+				if b, ok := entry.(bool); ok {
+					caps[k] = b
+				}
+			}
+		}
+	}
+	if len(caps) == 0 {
+		caps = nil
+	}
 	return &Decision{
 		Allow:        allow,
 		DenyMessages: denyMsgs,
+		Caps:         caps,
 	}
 }
 

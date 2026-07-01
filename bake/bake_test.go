@@ -28,6 +28,15 @@ target "webDEP" {
 	no-cache = true
 	shm-size = "128m"
 	ulimits = ["nofile=1024:1024"]
+	resources = {
+		memory = "2g"
+		memory-swap = "4g"
+		cpu-shares = 1024
+		cpu-period = 100000
+		cpu-quota = 50000
+		cpuset-cpus = "0-3"
+		cpuset-mems = "0,1"
+	}
 	extra-hosts = {
 		my_hostname = "8.8.8.8"
 	}
@@ -68,6 +77,14 @@ target "webapp" {
 		require.Equal(t, true, *m["webapp"].NoCache)
 		require.Equal(t, "128m", *m["webapp"].ShmSize)
 		require.Equal(t, []string{"nofile=1024:1024"}, m["webapp"].Ulimits)
+		require.NotNil(t, m["webapp"].Resources)
+		require.Equal(t, ptrstr("2g"), m["webapp"].Resources.Memory)
+		require.Equal(t, ptrstr("4g"), m["webapp"].Resources.MemorySwap)
+		require.Equal(t, int64(1024), *m["webapp"].Resources.CPUShares)
+		require.Equal(t, int64(100000), *m["webapp"].Resources.CPUPeriod)
+		require.Equal(t, int64(50000), *m["webapp"].Resources.CPUQuota)
+		require.Equal(t, ptrstr("0-3"), m["webapp"].Resources.CPUSetCPUs)
+		require.Equal(t, ptrstr("0,1"), m["webapp"].Resources.CPUSetMems)
 		require.Equal(t, map[string]*string{"my_hostname": ptrstr("8.8.8.8")}, m["webapp"].ExtraHosts)
 		require.Nil(t, m["webapp"].Pull)
 
@@ -225,6 +242,21 @@ target "webapp" {
 		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.shm-size=256m"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, "256m", *m["webapp"].ShmSize)
+	})
+
+	t.Run("ResourceLimitsOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			"webapp.resources.memory=512m",
+			"webapp.resources.cpu-quota=25000",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, ptrstr("512m"), m["webapp"].Resources.Memory)
+		require.Equal(t, int64(25000), *m["webapp"].Resources.CPUQuota)
+	})
+
+	t.Run("ResourceLimitsInvalidOverride", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.resources.cpu-quota=notanumber"}, nil, nil, &EntitlementConf{})
+		require.Error(t, err)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {
@@ -1833,6 +1865,100 @@ func TestExtraHostsDeterministicOrder(t *testing.T) {
 		require.NoError(t, err)
 		require.Equal(t, expected, bo.ExtraHosts)
 	}
+}
+
+func TestResourceLimitsToBuildOpt(t *testing.T) {
+	newInt64 := func(v int64) *int64 { return &v }
+	bo, err := toBuildOpt(&Target{
+		DockerfileInline: ptrstr("FROM scratch"),
+		Resources: &buildflags.ResourcesConfig{
+			Memory:     ptrstr("2g"),
+			MemorySwap: ptrstr("4g"),
+			CPUShares:  newInt64(1024),
+			CPUPeriod:  newInt64(100000),
+			CPUQuota:   newInt64(50000),
+			CPUSetCPUs: ptrstr("0-3"),
+			CPUSetMems: ptrstr("0,1"),
+		},
+	}, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, int64(2*1024*1024*1024), bo.ResourceLimits.Memory.Value())
+	require.Equal(t, int64(4*1024*1024*1024), bo.ResourceLimits.MemorySwap.Value())
+	require.Equal(t, int64(1024), bo.ResourceLimits.CPUShares)
+	require.Equal(t, int64(100000), bo.ResourceLimits.CPUPeriod)
+	require.Equal(t, int64(50000), bo.ResourceLimits.CPUQuota)
+	require.Equal(t, "0-3", bo.ResourceLimits.CPUSetCPUs)
+	require.Equal(t, "0,1", bo.ResourceLimits.CPUSetMems)
+}
+
+func TestResourceLimitsUnlimitedSwap(t *testing.T) {
+	bo, err := toBuildOpt(&Target{
+		DockerfileInline: ptrstr("FROM scratch"),
+		Resources:        &buildflags.ResourcesConfig{MemorySwap: ptrstr("-1")},
+	}, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, int64(-1), bo.ResourceLimits.MemorySwap.Value())
+}
+
+func TestResourceLimitsInvalid(t *testing.T) {
+	_, err := toBuildOpt(&Target{
+		DockerfileInline: ptrstr("FROM scratch"),
+		Resources:        &buildflags.ResourcesConfig{Memory: ptrstr("notabyte")},
+	}, &Input{})
+	require.Error(t, err)
+}
+
+func TestResourcesObject(t *testing.T) {
+	ctx := context.TODO()
+
+	cpuShares, cpuQuota := int64(1024), int64(50000)
+	want := &buildflags.ResourcesConfig{
+		Memory:     ptrstr("2g"),
+		MemorySwap: ptrstr("4g"),
+		CPUShares:  &cpuShares,
+		CPUQuota:   &cpuQuota,
+		CPUSetCPUs: ptrstr("0-3"),
+	}
+
+	data := `target "app" {
+		resources = {
+			memory = "2g"
+			memory-swap = "4g"
+			cpu-shares = 1024
+			cpu-quota = 50000
+			cpuset-cpus = "0-3"
+		}
+	}`
+
+	m, _, err := ReadTargets(ctx, []File{{Name: "docker-bake.hcl", Data: []byte(data)}}, []string{"app"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Equal(t, want, m["app"].Resources)
+}
+
+// TestResourcesInheritIsolation ensures merging resources from a shared base
+// target doesn't leak a child's override into the base or a sibling.
+func TestResourcesInheritIsolation(t *testing.T) {
+	ctx := context.TODO()
+
+	data := `target "base" {
+		resources = {
+			memory = "1g"
+		}
+	}
+	target "child1" {
+		inherits = ["base"]
+		resources = {
+			memory = "2g"
+		}
+	}
+	target "child2" {
+		inherits = ["base"]
+	}`
+
+	m, _, err := ReadTargets(ctx, []File{{Name: "docker-bake.hcl", Data: []byte(data)}}, []string{"child1", "child2"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Equal(t, ptrstr("2g"), m["child1"].Resources.Memory)
+	require.Equal(t, ptrstr("1g"), m["child2"].Resources.Memory)
 }
 
 func TestAnnotations(t *testing.T) {

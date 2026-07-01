@@ -14,6 +14,7 @@ import (
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/cli/cli/command"
+	"github.com/docker/go-units"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
@@ -190,6 +191,17 @@ func formatDuration(d time.Duration) string {
 		return fmt.Sprintf("%.1fs", d.Seconds())
 	}
 	return fmt.Sprintf("%dm %2ds", int(d.Minutes()), int(d.Seconds())%60)
+}
+
+// humanizeBytes formats a raw byte-count string (as stored in the frontend
+// attributes) into a human-readable size. Non-numeric values such as "-1"
+// (unlimited swap) are returned unchanged.
+func humanizeBytes(v string) string {
+	n, err := strconv.ParseInt(v, 10, 64)
+	if err != nil || n < 0 {
+		return v
+	}
+	return units.BytesSize(float64(n))
 }
 
 type matchFunc func(*controlapi.BuildHistoryRecord) bool

@@ -130,52 +130,33 @@ func (p *Policy) IsPolicyError(err error) bool {
 	return false
 }
 
-func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
-	if req.Source == nil || req.Source.Source == nil {
-		return nil, nil, errors.Errorf("no source info in request")
-	}
-
-	var platform *ocispecs.Platform
-	if req.Platform != nil {
-		pl, err := platformFromReq(req)
-		if err != nil {
-			return nil, nil, err
-		}
-		platform = pl
-	} else {
-		platform = p.opt.DefaultPlatform
-	}
-
-	inp, err := SourceToInput(ctx, p.opt.VerifierProvider, req.Source, platform, p.opt.Log)
-	if err != nil {
-		return nil, nil, errors.Wrap(err, "failed to build policy input")
-	}
-
+func (p *Policy) capabilities() *ast.Capabilities {
 	caps := &ast.Capabilities{
 		Builtins: builtins(),
 		Features: slices.Clone(ast.Features),
 	}
-	comp := ast.NewCompiler().WithCapabilities(caps).WithKeepModules(true)
+	for _, f := range p.funcs {
+		caps.Builtins = append(caps.Builtins, &ast.Builtin{
+			Name: f.decl.Name,
+			Decl: f.decl.Decl,
+		})
+	}
+	return caps
+}
+
+func (p *Policy) regoBaseOpts() ([]func(*rego.Rego), func(), error) {
+	comp := ast.NewCompiler().WithCapabilities(p.capabilities()).WithKeepModules(true)
 	if p.opt.Log != nil {
 		comp = comp.WithEnablePrintStatements(true)
 	}
 
-	builtins := make(map[string]*ast.Builtin)
-	for _, f := range p.funcs {
-		builtins[f.decl.Name] = &ast.Builtin{
-			Name: f.decl.Name,
-			Decl: f.decl.Decl,
-		}
-	}
-	comp = comp.WithBuiltins(builtins)
-
 	var root fs.StatFS
 	var closeFS func() error
-	defer func() {
+	closeRoot := func() {
 		if closeFS != nil {
 			closeFS()
 		}
-	}()
+	}
 
 	comp = comp.WithModuleLoader(func(resolved map[string]*ast.Module) (parsed map[string]*ast.Module, err error) {
 		out := make(map[string]*ast.Module)
@@ -239,6 +220,36 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	for _, file := range p.opt.Files {
 		baseOpts = append(baseOpts, rego.Module(file.Filename, string(file.Data)))
 	}
+
+	return baseOpts, closeRoot, nil
+}
+
+func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
+	if req.Source == nil || req.Source.Source == nil {
+		return nil, nil, errors.Errorf("no source info in request")
+	}
+
+	var platform *ocispecs.Platform
+	if req.Platform != nil {
+		pl, err := platformFromReq(req)
+		if err != nil {
+			return nil, nil, err
+		}
+		platform = pl
+	} else {
+		platform = p.opt.DefaultPlatform
+	}
+
+	inp, err := SourceToInput(ctx, p.opt.VerifierProvider, req.Source, platform, p.opt.Log)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to build policy input")
+	}
+
+	baseOpts, closeRoot, err := p.regoBaseOpts()
+	if err != nil {
+		return nil, nil, err
+	}
+	defer closeRoot()
 
 	p.log(logrus.InfoLevel, "checking policy for source %s", sourceName(req))
 
@@ -304,42 +315,23 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 			continue
 		}
 
-		if len(rs) == 0 {
-			return nil, nil, errors.Errorf("policy returned zero result")
+		decision, err := policyDecisionFromResult(rs)
+		if err != nil {
+			return nil, nil, err
 		}
-		rsz := rs[0]
-		if len(rsz.Expressions) == 0 {
-			return nil, nil, errors.Errorf("policy returned zero expressions")
-		}
-		v := rsz.Expressions[0].Value
-		vt, ok := v.(map[string]any)
-		if !ok {
-			return nil, nil, errors.Errorf("unexpected policy return type: %T %s", vt, rsz.Expressions[0].Text)
-		}
-
 		resp := &policysession.DecisionResponse{
 			Action: moby_buildkit_v1_sourcepolicy.PolicyAction_DENY,
 		}
-		p.log(logrus.DebugLevel, "policy response: %+v", vt)
+		p.log(logrus.DebugLevel, "policy response: %+v", decision)
 
-		if v, ok := vt["allow"]; ok {
-			if vv, ok := v.(bool); !ok {
-				return nil, nil, errors.Errorf("invalid allowed property type %T, expecting bool", v)
-			} else if vv {
-				resp.Action = moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW
-			}
+		if decision.Allow != nil && *decision.Allow {
+			resp.Action = moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW
 		}
 
-		if v, ok := vt["deny_msg"]; ok {
-			if vv, ok := v.([]any); ok {
-				for _, m := range vv {
-					if m, ok := m.(string); ok {
-						resp.DenyMessages = append(resp.DenyMessages, &policysession.DenyMessage{
-							Message: m,
-						})
-					}
-				}
-			}
+		for _, m := range decision.DenyMessages {
+			resp.DenyMessages = append(resp.DenyMessages, &policysession.DenyMessage{
+				Message: m,
+			})
 		}
 
 		if resp.Action == moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW {
@@ -371,6 +363,108 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 	}
 
 	return nil, nil, errors.Errorf("maximum attempts reached for resolving policy metadata")
+}
+
+func (p *Policy) CheckCaps(ctx context.Context) (Caps, error) {
+	baseOpts, closeRoot, err := p.regoBaseOpts()
+	if err != nil {
+		return nil, err
+	}
+	defer closeRoot()
+
+	env := p.opt.Env
+	env.CapsRequest = true
+	runInput := Input{}
+	applyEnvWithDepth(&runInput, env, 0)
+
+	runOpts := append([]func(*rego.Rego){}, baseOpts...)
+	runOpts = append(runOpts, rego.Input(runInput))
+
+	st := &state{Input: runInput}
+	for _, f := range p.funcs {
+		runOpts = append(runOpts, f.impl(st))
+	}
+
+	dt, err := json.MarshalIndent(runInput, "", "  ")
+	if err != nil {
+		return nil, errors.Wrapf(err, "failed to marshal policy input")
+	}
+	p.log(logrus.DebugLevel, "policy input: %s", dt)
+
+	rs, err := rego.New(runOpts...).Eval(ctx)
+	if err != nil {
+		return nil, err
+	}
+	if refs := runtimeUnknownInputRefs(st); len(refs) > 0 || st.checksumNeededForSignature != nil {
+		return nil, errors.Errorf("policy caps request cannot resolve source metadata: %+v", summarizeUnknownsForLog(refs))
+	}
+
+	decision, err := policyDecisionFromResult(rs)
+	if err != nil {
+		return nil, err
+	}
+	if len(decision.Caps) == 0 {
+		return nil, nil
+	}
+	return decision.Caps, nil
+}
+
+func policyDecisionFromResult(rs rego.ResultSet) (*Decision, error) {
+	if len(rs) == 0 {
+		return nil, errors.Errorf("policy returned zero result")
+	}
+	rsz := rs[0]
+	if len(rsz.Expressions) == 0 {
+		return nil, errors.Errorf("policy returned zero expressions")
+	}
+	v := rsz.Expressions[0].Value
+	vt, ok := v.(map[string]any)
+	if !ok {
+		return nil, errors.Errorf("unexpected policy return type: %T %s", v, rsz.Expressions[0].Text)
+	}
+	return parsePolicyDecision(vt)
+}
+
+func parsePolicyDecision(vt map[string]any) (*Decision, error) {
+	decision := &Decision{}
+
+	if v, ok := vt["allow"]; ok {
+		vv, ok := v.(bool)
+		if !ok {
+			return nil, errors.Errorf("invalid allowed property type %T, expecting bool", v)
+		}
+		decision.Allow = &vv
+	}
+
+	if v, ok := vt["deny_msg"]; ok {
+		if vv, ok := v.([]any); ok {
+			for _, m := range vv {
+				if m, ok := m.(string); ok {
+					decision.DenyMessages = append(decision.DenyMessages, m)
+				}
+			}
+		}
+	}
+
+	if v, ok := vt["caps"]; ok {
+		vv, ok := v.(map[string]any)
+		if !ok {
+			return nil, errors.Errorf("invalid caps property type %T, expecting object", v)
+		}
+		decision.Caps = make(Caps, len(vv))
+		for k, cv := range vv {
+			if _, ok := KnownCaps[k]; !ok {
+				return nil, errors.Errorf("unknown policy cap %q", k)
+			}
+			b, ok := cv.(bool)
+			if !ok {
+				return nil, errors.Errorf("invalid caps.%s property type %T, expecting bool", k, cv)
+			}
+			decision.Caps[k] = b
+		}
+	}
+
+	return decision, nil
 }
 
 func (p *Policy) resolveUnknowns(ctx context.Context, input *Input, req *policysession.CheckPolicyRequest, defaultPlatform *ocispecs.Platform, unk []string, st *state) (bool, *gwpb.ResolveSourceMetaRequest, error) {
