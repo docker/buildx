@@ -16,7 +16,7 @@ Start a build
 | Name                                    | Type          | Default   | Description                                                                                                                                      |
 |:----------------------------------------|:--------------|:----------|:-------------------------------------------------------------------------------------------------------------------------------------------------|
 | [`--add-host`](#add-host)               | `stringSlice` |           | Add a custom host-to-IP mapping (format: `host:ip`)                                                                                              |
-| [`--allow`](#allow)                     | `stringArray` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`, `device`)                                                         |
+| [`--allow`](#allow)                     | `stringArray` |           | Allow extra privileged entitlement (e.g., `network.host`, `security.insecure`, `device`, `buildx.local.delete`)                                  |
 | [`--annotation`](#annotation)           | `stringArray` |           | Add annotation to the image                                                                                                                      |
 | [`--attest`](#attest)                   | `stringArray` |           | Attestation parameters (format: `type=sbom,generator=image`)                                                                                     |
 | [`--build-arg`](#build-arg)             | `stringArray` |           | Set build-time variables                                                                                                                         |
@@ -179,9 +179,14 @@ Allow extra privileged entitlement. List of entitlements:
    - `--allow device` - Grants access to all devices.
    - `--allow device=kind|name` - Grants access to a specific device.
    - `--allow device=kind|name,alias=kind|name` - Grants access to a specific device, with optional aliasing.
+- `buildx.local.delete` - Allows local outputs using `mode=delete` to delete
+  stale destination files when the destination is the current working directory
+  or outside it.
 
-For entitlements to be enabled, the BuildKit daemon also needs to allow them
-with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#buildkitd-flags)).
+For BuildKit entitlements to be enabled, the BuildKit daemon also needs to allow
+them with `--allow-insecure-entitlement` (see [`create --buildkitd-flags`](buildx_create.md#buildkitd-flags)).
+The `buildx.local.delete` entitlement is checked by Buildx and isn't sent to the
+BuildKit daemon.
 
 ```console
 $ docker buildx create --use --name insecure-builder --buildkitd-flags '--allow-insecure-entitlement security.insecure'
@@ -753,6 +758,11 @@ will be put in subdirectories by their platform.
 Attribute key:
 
 - `dest` - destination directory where files will be written
+- `mode` - write mode, either `copy` or `delete`. The default is `copy`.
+  `delete` removes stale files from the destination after exporting the build
+  result. It can be used without `--allow` when `dest` resolves to a
+  subdirectory of the current working directory. If `dest` is the current working
+  directory or resolves outside it, pass `--allow=buildx.local.delete`.
 
 For more information, see
 [Local and tar exporters](https://docs.docker.com/build/exporters/local-tar/).

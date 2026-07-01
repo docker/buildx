@@ -119,7 +119,7 @@ jobs:
           fi
       -
         name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
         with:
           fetch-depth: 0
       -
@@ -159,7 +159,7 @@ jobs:
       -
         name: Upload test results to Codecov
         if: always()
-        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           report_type: test_results
           directory: ./bin/testreports
@@ -169,7 +169,7 @@ jobs:
       -
         name: Generate annotations
         if: always()
-        uses: crazy-max/.github/.github/actions/gotest-annotations@716fd1c51a46c5d93a41d44a94b439c9ee802536 # v1.10.0
+        uses: crazy-max/.github/.github/actions/gotest-annotations@46267a6e61cd56aac2fc79943df180152f4c89d6 # v1.10.1
         with:
           directory: ./bin/testreports
       -
@@ -199,10 +199,10 @@ jobs:
           git config --global core.eol lf
       -
         name: Checkout
-        uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+        uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
       -
         name: Set up Go
-        uses: actions/setup-go@4a3601121dd01d1626a1e23e37211e3254c1c06c # v6.4.0
+        uses: actions/setup-go@924ae3a1cded613372ab5595356fb5720e22ba16 # v6.5.0
         with:
           go-version: "${{ env.GO_VERSION }}"
       -
@@ -247,7 +247,7 @@ jobs:
       -
         name: Upload test results to Codecov
         if: always()
-        uses: codecov/codecov-action@e79a6962e0d4c0c17b229090214935d2e33f8354 # v6.0.1
+        uses: codecov/codecov-action@fb8b3582c8e4def4969c97caa2f19720cb33a72f # v7.0.0
         with:
           report_type: test_results
           directory: ${{ env.TESTREPORTS_DIR }}
@@ -258,7 +258,7 @@ jobs:
       -
         name: Generate annotations
         if: always()
-        uses: crazy-max/.github/.github/actions/gotest-annotations@716fd1c51a46c5d93a41d44a94b439c9ee802536 # v1.10.0
+        uses: crazy-max/.github/.github/actions/gotest-annotations@46267a6e61cd56aac2fc79943df180152f4c89d6 # v1.10.1
         with:
           directory: ${{ env.TESTREPORTS_DIR }}
       -
@@ -299,7 +299,7 @@ jobs:
           sarif_file: ${{ env.DESTDIR }}/govulncheck.out
 
   binaries:
-    uses: docker/github-builder/.github/workflows/bake.yml@70ac3fc303efa83d2b94905e6ab78bb83cbdc2ae # v1.11.0
+    uses: docker/github-builder/.github/workflows/bake.yml@5f637c833aa76bc99372a1dc9a6f8bcd8056fb85 # v1.12.0
     permissions:
       contents: read # same as global permission
       id-token: write # for signing attestation(s) with GitHub OIDC Token
@@ -380,7 +380,7 @@ jobs:
 
   bin-image:
     if: ${{ github.repository == 'docker/buildx' }}
-    uses: docker/github-builder/.github/workflows/bake.yml@70ac3fc303efa83d2b94905e6ab78bb83cbdc2ae # v1.11.0
+    uses: docker/github-builder/.github/workflows/bake.yml@5f637c833aa76bc99372a1dc9a6f8bcd8056fb85 # v1.12.0
     needs:
       - bin-image-prepare
       - test-integration
@@ -430,7 +430,7 @@ jobs:
       -
         name: Scout
         id: scout
-        uses: crazy-max/.github/.github/actions/docker-scout@716fd1c51a46c5d93a41d44a94b439c9ee802536 # v1.10.0
+        uses: crazy-max/.github/.github/actions/docker-scout@46267a6e61cd56aac2fc79943df180152f4c89d6 # v1.10.1
         with:
           version: ${{ env.SCOUT_VERSION }}
           format: sarif
@@ -460,7 +460,7 @@ jobs:
       -
         name: GitHub Release
         if: startsWith(github.ref, 'refs/tags/v')
-        uses: softprops/action-gh-release@b4309332981a82ec1c5618f44dd2e27cc8bfbfda  # v3.0.0
+        uses: softprops/action-gh-release@718ea10b132b3b2eba29c1007bb80653f286566b  # v3.0.1
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         with:

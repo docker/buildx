@@ -5,11 +5,15 @@ import (
 	"sync"
 	"testing"
 
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/ocilayout"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/ociindex"
+	gateway "github.com/moby/buildkit/frontend/gateway/client"
+	"github.com/moby/buildkit/solver/pb"
+	"github.com/moby/buildkit/util/apicaps"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -163,6 +167,67 @@ func TestProxyArgKeyExists(t *testing.T) {
 	}
 }
 
+func TestApplyPolicyCapsEnablesProxyNetwork(t *testing.T) {
+	p := policyWithDecision(`
+package docker
+
+decision := {
+	"allow": false,
+	"caps": {"exec.proxy": true},
+}
+`)
+	var so client.SolveOpt
+
+	err := applyPolicyCaps(context.Background(), p, buildOptsWithCaps(pb.CapExecMetaNetworkProxy), &so)
+	require.NoError(t, err)
+	require.True(t, so.ProxyNetwork)
+}
+
+func TestApplyPolicyCapsOrsProxyNetwork(t *testing.T) {
+	falsePolicy := policyWithDecision(`
+package docker
+
+decision := {
+	"allow": true,
+	"caps": {"exec.proxy": false},
+}
+`)
+	truePolicy := policyWithDecision(`
+package docker
+
+decision := {
+	"allow": true,
+	"caps": {"exec.proxy": true},
+}
+`)
+	var so client.SolveOpt
+
+	err := applyPolicyCaps(context.Background(), falsePolicy, buildOptsWithCaps(pb.CapExecMetaNetworkProxy), &so)
+	require.NoError(t, err)
+	require.False(t, so.ProxyNetwork)
+
+	err = applyPolicyCaps(context.Background(), truePolicy, buildOptsWithCaps(pb.CapExecMetaNetworkProxy), &so)
+	require.NoError(t, err)
+	require.True(t, so.ProxyNetwork)
+}
+
+func TestApplyPolicyCapsRequiresBuildKitCap(t *testing.T) {
+	p := policyWithDecision(`
+package docker
+
+decision := {
+	"allow": true,
+	"caps": {"exec.proxy": true},
+}
+`)
+	var so client.SolveOpt
+
+	err := applyPolicyCaps(context.Background(), p, buildOptsWithCaps(), &so)
+	require.ErrorContains(t, err, "network proxy requested by policy is not supported by the current BuildKit daemon")
+	require.ErrorContains(t, err, "please upgrade to version v0.31+")
+	require.False(t, so.ProxyNetwork)
+}
+
 func TestLoadInputsOCILayoutNamedContext(t *testing.T) {
 	layoutPath := t.TempDir()
 
@@ -299,3 +364,25 @@ func (w *captureProgressWriter) ValidateLogSource(digest.Digest, any) bool { ret
 func (w *captureProgressWriter) ClearLogSource(any) {}
 
 var _ progress.Writer = (*captureProgressWriter)(nil)
+
+func policyWithDecision(decision string) *policy.Policy {
+	return policy.NewPolicy(policy.Opt{
+		Files: []policy.File{{
+			Filename: "policy.rego",
+			Data:     []byte(decision),
+		}},
+	})
+}
+
+func buildOptsWithCaps(caps ...apicaps.CapID) gateway.BuildOpts {
+	out := make([]*apicaps.PBCap, 0, len(caps))
+	for _, c := range caps {
+		out = append(out, &apicaps.PBCap{
+			ID:      string(c),
+			Enabled: true,
+		})
+	}
+	return gateway.BuildOpts{
+		LLBCaps: pb.Caps.CapSet(out),
+	}
+}

@@ -667,6 +667,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 				Data:     policy.DefaultPolicyData(),
 			}},
 		}
+		builtin.SkipCaps = true
 		popts = append([]policyOpt{builtin}, popts...)
 	}
 
@@ -742,6 +743,11 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 			DefaultPlatform:  defaultPlatform(bopts),
 			SourceResolver:   sourceResolver,
 		})
+		if !popt.SkipCaps {
+			if err := applyPolicyCaps(ctx, p, bopts, so); err != nil {
+				return nil, err
+			}
+		}
 		policies = append(policies, p)
 		cbs = append(cbs, p.CheckPolicy)
 		if popt.Strict {
@@ -750,8 +756,28 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 			}
 		}
 	}
+	if so.ProxyNetwork {
+		if policyLogger != nil {
+			policyLogger.Log("policy enabled network proxy")
+		}
+	}
 	so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(cbs...))
 	return defers, nil
+}
+
+func applyPolicyCaps(ctx context.Context, p *policy.Policy, bopts gateway.BuildOpts, so *client.SolveOpt) error {
+	caps, err := p.CheckCaps(ctx)
+	if err != nil {
+		return errors.Wrap(err, "failed to evaluate policy caps")
+	}
+	if !caps[policy.CapExecProxy] {
+		return nil
+	}
+	if err := bopts.LLBCaps.Supports(pb.CapExecMetaNetworkProxy); err != nil {
+		return errors.New("network proxy requested by policy is not supported by the current BuildKit daemon, please upgrade to version v0.31+")
+	}
+	so.ProxyNetwork = true
+	return nil
 }
 
 func policyEnvFilename(inp Inputs) string {
@@ -1327,6 +1353,69 @@ func CreateExports(entries []*buildflags.ExportEntry) ([]client.ExportEntry, []s
 		outs = append(outs, out)
 	}
 	return outs, localPaths, nil
+}
+
+func ValidateLocalExportDelete(outputs []client.ExportEntry, allowDelete bool) error {
+	for _, ex := range outputs {
+		if ex.Type != client.ExporterLocal {
+			continue
+		}
+		mode, err := client.ParseLocalExporterMode(ex.Attrs["mode"])
+		if err != nil {
+			return err
+		}
+		if mode != client.LocalExporterModeDelete || allowDelete {
+			continue
+		}
+		ok, err := isSafeLocalDeleteDest(ex.OutputDir)
+		if err != nil {
+			return err
+		}
+		if !ok {
+			return errors.Errorf("local output mode=delete for destination %q requires --allow=%s", ex.OutputDir, buildflags.EntitlementBuildxLocalDelete)
+		}
+	}
+	return nil
+}
+
+func isSafeLocalDeleteDest(dest string) (bool, error) {
+	wd, err := os.Getwd()
+	if err != nil {
+		return false, errors.Wrap(err, "failed to get current working directory")
+	}
+	wd, err = resolveOutputPath(wd)
+	if err != nil {
+		return false, errors.Wrap(err, "failed to evaluate current working directory")
+	}
+
+	dest, err = resolveOutputPath(dest)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to evaluate local output destination %q", dest)
+	}
+
+	rel, err := filepath.Rel(wd, dest)
+	if err != nil {
+		return false, nil
+	}
+	if rel == "." || rel == ".." || filepath.IsAbs(rel) || strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
+		return false, nil
+	}
+	return true, nil
+}
+
+func resolveOutputPath(p string) (string, error) {
+	p, rest, err := osutil.EvaluateToExistingPath(p)
+	if err != nil {
+		return "", err
+	}
+	p, err = osutil.GetLongPathName(p)
+	if err != nil {
+		return "", err
+	}
+	if rest != "" {
+		p = filepath.Join(p, rest)
+	}
+	return filepath.Clean(p), nil
 }
 
 func wrapWriteCloser(wc io.WriteCloser) func(map[string]string) (io.WriteCloser, error) {

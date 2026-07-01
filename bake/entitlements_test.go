@@ -1,6 +1,8 @@
 package bake
 
 import (
+	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -10,96 +12,11 @@ import (
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/osutil"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/stretchr/testify/require"
 )
-
-func TestEvaluateToExistingPath(t *testing.T) {
-	tempDir, err := osutil.GetLongPathName(t.TempDir())
-	require.NoError(t, err)
-
-	// Setup temporary directory structure for testing
-	existingFile := filepath.Join(tempDir, "existing_file")
-	require.NoError(t, os.WriteFile(existingFile, []byte("test"), 0644))
-
-	existingDir := filepath.Join(tempDir, "existing_dir")
-	require.NoError(t, os.Mkdir(existingDir, 0755))
-
-	symlinkToFile := filepath.Join(tempDir, "symlink_to_file")
-	require.NoError(t, os.Symlink(existingFile, symlinkToFile))
-
-	symlinkToDir := filepath.Join(tempDir, "symlink_to_dir")
-	require.NoError(t, os.Symlink(existingDir, symlinkToDir))
-
-	nonexistentPath := filepath.Join(tempDir, "nonexistent", "path", "file.txt")
-
-	tests := []struct {
-		name      string
-		input     string
-		expected  string
-		expectErr bool
-	}{
-		{
-			name:      "Existing file",
-			input:     existingFile,
-			expected:  existingFile,
-			expectErr: false,
-		},
-		{
-			name:      "Existing directory",
-			input:     existingDir,
-			expected:  existingDir,
-			expectErr: false,
-		},
-		{
-			name:      "Symlink to file",
-			input:     symlinkToFile,
-			expected:  existingFile,
-			expectErr: false,
-		},
-		{
-			name:      "Symlink to directory",
-			input:     symlinkToDir,
-			expected:  existingDir,
-			expectErr: false,
-		},
-		{
-			name:      "Non-existent path",
-			input:     nonexistentPath,
-			expected:  tempDir,
-			expectErr: false,
-		},
-		{
-			name:      "Non-existent intermediate path",
-			input:     filepath.Join(tempDir, "nonexistent", "file.txt"),
-			expected:  tempDir,
-			expectErr: false,
-		},
-		{
-			name:  "Root path",
-			input: "/",
-			expected: func() string {
-				root, _ := filepath.Abs("/")
-				return root
-			}(),
-			expectErr: false,
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			result, _, err := evaluateToExistingPath(tt.input)
-
-			if tt.expectErr {
-				require.Error(t, err)
-			} else {
-				require.NoError(t, err)
-				require.Equal(t, tt.expected, result)
-			}
-		})
-	}
-}
 
 func TestDedupePaths(t *testing.T) {
 	wd := osutil.GetWd()
@@ -341,7 +258,7 @@ func TestValidateEntitlements(t *testing.T) {
 						return nil
 					}
 					// if not, then escapeLink is not allowed
-					exp, _, err := evaluateToExistingPath(escapeLink)
+					exp, _, err := osutil.EvaluateToExistingPath(escapeLink)
 					require.NoError(t, err)
 					exp, err = filepath.EvalSymlinks(exp)
 					require.NoError(t, err)
@@ -405,6 +322,73 @@ func TestValidateEntitlements(t *testing.T) {
 				FSWrite: []string{dir1},
 			},
 		},
+		{
+			name: "LocalOutputDeleteMissing",
+			conf: EntitlementConf{
+				FSWrite: []string{"*"},
+			},
+			opt: build.Options{
+				Inputs: build.Inputs{
+					ContextState: &llb.State{},
+				},
+				Exports: []client.ExportEntry{
+					{
+						Type:      client.ExporterLocal,
+						OutputDir: dir1,
+						Attrs: map[string]string{
+							"mode": string(client.LocalExporterModeDelete),
+						},
+					},
+				},
+				ExportsLocalPathsTemporary: []string{dir1},
+			},
+			expected: EntitlementConf{
+				LocalOutputDelete: true,
+			},
+		},
+		{
+			name: "LocalOutputDeleteSet",
+			conf: EntitlementConf{
+				FSWrite:           []string{"*"},
+				LocalOutputDelete: true,
+			},
+			opt: build.Options{
+				Inputs: build.Inputs{
+					ContextState: &llb.State{},
+				},
+				Exports: []client.ExportEntry{
+					{
+						Type:      client.ExporterLocal,
+						OutputDir: dir1,
+						Attrs: map[string]string{
+							"mode": string(client.LocalExporterModeDelete),
+						},
+					},
+				},
+				ExportsLocalPathsTemporary: []string{dir1},
+			},
+		},
+		{
+			name: "LocalOutputCopy",
+			conf: EntitlementConf{
+				FSWrite: []string{"*"},
+			},
+			opt: build.Options{
+				Inputs: build.Inputs{
+					ContextState: &llb.State{},
+				},
+				Exports: []client.ExportEntry{
+					{
+						Type:      client.ExporterLocal,
+						OutputDir: dir1,
+						Attrs: map[string]string{
+							"mode": string(client.LocalExporterModeCopy),
+						},
+					},
+				},
+				ExportsLocalPathsTemporary: []string{dir1},
+			},
+		},
 	}
 
 	for _, tc := range tcases {
@@ -414,6 +398,47 @@ func TestValidateEntitlements(t *testing.T) {
 			require.Equal(t, tc.expected, expected)
 		})
 	}
+}
+
+func TestValidateEntitlementsInvalidLocalOutputMode(t *testing.T) {
+	_, err := EntitlementConf{}.Validate(map[string]build.Options{
+		"test": {
+			Inputs: build.Inputs{
+				ContextState: &llb.State{},
+			},
+			Exports: []client.ExportEntry{
+				{
+					Type: client.ExporterLocal,
+					Attrs: map[string]string{
+						"mode": "backup",
+					},
+				},
+			},
+		},
+	})
+	require.ErrorContains(t, err, `invalid local exporter mode "backup"`)
+}
+
+func TestParseEntitlementsLocalOutputDelete(t *testing.T) {
+	conf, err := ParseEntitlements([]string{string(EntitlementKeyBuildxLocalDelete)})
+	require.NoError(t, err)
+	require.True(t, conf.LocalOutputDelete)
+
+	_, err = ParseEntitlements([]string{string(EntitlementKeyBuildxLocalDelete) + "=true"})
+	require.ErrorContains(t, err, "buildx.local.delete does not accept a value")
+}
+
+func TestPromptLocalOutputDeleteCannotBeDisabledWithFSEntitlements(t *testing.T) {
+	t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "0")
+
+	ctx, cancel := context.WithCancelCause(context.Background())
+	cancel(nil)
+
+	var out bytes.Buffer
+	err := EntitlementConf{LocalOutputDelete: true}.Prompt(ctx, true, &out)
+	require.ErrorContains(t, err, "additional privileges requested")
+	require.Contains(t, out.String(), "Deleting stale files from local output destinations")
+	require.Contains(t, out.String(), "--allow=buildx.local.delete")
 }
 
 func TestGroupSamePaths(t *testing.T) {

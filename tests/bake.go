@@ -45,6 +45,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
 	testBakeLocalMulti,
+	testBakeLocalExportDeleteMode,
 	testBakeRemote,
 	testBakeRemoteAuth,
 	testBakeRemoteCmdContext,
@@ -671,6 +672,80 @@ services:
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest2, "foo"))
+}
+
+func testBakeLocalExportDeleteMode(t *testing.T, sb integration.Sandbox) {
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+`)
+	bakefile := []byte(`
+target "default" {
+	output = ["type=local,dest=out,mode=delete"]
+}
+`)
+
+	t.Run("definition requires allow", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=rawjson"))
+		out, err := cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "--allow=buildx.local.delete")
+	})
+
+	t.Run("set requires allow", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", []byte(`target "default" {}`), 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+
+		cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--progress=rawjson", "--set", "*.output=type=local,dest=out,mode=delete"))
+		out, err := cmd.CombinedOutput()
+		require.Error(t, err, string(out))
+		require.Contains(t, string(out), "--allow=buildx.local.delete")
+	})
+
+	t.Run("allow does not accept value", func(t *testing.T) {
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+
+		out, err := bakeCmd(sb, withDir(dir), withArgs("--allow=buildx.local.delete=true"))
+		require.Error(t, err, out)
+		require.Contains(t, out, "buildx.local.delete does not accept a value")
+	})
+
+	t.Run("allow deletes stale files", func(t *testing.T) {
+		skipNoCompatBuildKit(t, sb, ">= 0.31.0-0", "local exporter mode=delete")
+
+		dir := tmpdir(
+			t,
+			fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		dest := filepath.Join(dir, "out")
+		stale := filepath.Join(dest, "stale")
+		require.NoError(t, os.MkdirAll(dest, 0o755))
+		require.NoError(t, os.WriteFile(stale, []byte("stale"), 0o600))
+
+		out, err := bakeCmd(sb, withDir(dir), withArgs("--allow=buildx.local.delete"))
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dest, "foo"))
+		_, err = os.Stat(stale)
+		require.ErrorIs(t, err, os.ErrNotExist)
+	})
 }
 
 func testBakeRemote(t *testing.T, sb integration.Sandbox) {

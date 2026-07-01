@@ -140,6 +140,7 @@ type policyFileSpec struct {
 type policyEvalOpt struct {
 	Strict   bool
 	LogLevel *logrus.Level
+	SkipCaps bool
 }
 
 type policyOpt struct {

@@ -610,9 +610,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 				if len(keys) != 3 {
 					return nil, errors.Errorf("invalid key %s, resources requires name", parts[0])
 				}
-				if len(parts) == 2 {
-					override.Value = parts[1]
-				}
+				override.Value = parts[1]
 			case "args":
 				if len(keys) != 3 {
 					return nil, errors.Errorf("invalid key %s, args requires name", parts[0])
