@@ -128,6 +128,17 @@ func (d *DriverHandle) Client(ctx context.Context, opt ...client.ClientOpt) (*cl
 	return d.client, d.err
 }
 
+func (d *DriverHandle) UncachedClient(ctx context.Context) (*client.Client, error) {
+	return d.Driver.Client(ctx, d.getClientOptions()...)
+}
+
+func (d *DriverHandle) RequiresUncachedClient() bool {
+	if p, ok := d.Driver.(UncachedClientDriver); ok {
+		return p.RequiresUncachedClient()
+	}
+	return false
+}
+
 func (d *DriverHandle) getClientOptions() []client.ClientOpt {
 	return []client.ClientOpt{
 		client.WithTracerDelegate(delegated.DefaultExporter),

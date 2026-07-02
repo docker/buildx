@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"math/rand"
 	"os"
 	"strconv"
 	"strings"
@@ -157,11 +158,13 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		}
 	case LoadbalanceRandom:
 		d.podChooser = &podchooser.RandomPodChooser{
+			RandSource:  rand.NewSource(time.Now().UnixNano()), // #nosec G404 -- no strong seeding required
 			PodClient:   d.podClient,
 			Deployment:  d.deployment,
 			StatefulSet: d.statefulSet,
 		}
 	}
+	d.loadbalance = loadbalance
 	return d, nil
 }
 
