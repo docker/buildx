@@ -93,7 +93,13 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 			}),
 			client.WithTracerDelegate(delegated.DefaultExporter),
 		}, opts...)
-		c, err := client.New(ctx, "", opts...)
+		// Pass the configured endpoint address (rather than an empty string) so
+		// the buildkit client derives the gRPC ":authority" pseudo-header from
+		// the remote endpoint hostname. An empty address falls back to the
+		// system-default buildkit address, which makes the authority resolve to
+		// "localhost". The connection itself still goes through the custom
+		// dialer above, so the actual dial target is unaffected.
+		c, err := client.New(ctx, d.EndpointAddr, opts...)
 		d.client = c
 		d.err = err
 	})
