@@ -188,6 +188,164 @@ func TestHCLWithUserDefinedFunctions(t *testing.T) {
 	require.Equal(t, ptrstr("124"), c.Targets[0].Args["buildno"])
 }
 
+func TestTargetDisallowsGroupTargetsAttribute(t *testing.T) {
+	t.Run("hcl", func(t *testing.T) {
+		dt := []byte(`
+			target "app" {
+				dockerfile = "app.Dockerfile"
+			}
+
+			target "db" {
+				dockerfile = "db.Dockerfile"
+			}
+
+			target "foo" {
+				targets = ["app", "db"]
+			}
+		`)
+
+		_, err := ParseFile(dt, "docker-bake.hcl")
+		require.Error(t, err)
+		require.ErrorContains(t, err, "Unsupported argument")
+		require.ErrorContains(t, err, "targets")
+		require.ErrorContains(t, err, "docker-bake.hcl")
+	})
+
+	t.Run("json", func(t *testing.T) {
+		dt := []byte(`{
+			"group": {
+				"default": {
+					"targets": ["foo"]
+				}
+			},
+			"target": {
+				"app": {
+					"dockerfile": "app.Dockerfile"
+				},
+				"db": {
+					"dockerfile": "db.Dockerfile"
+				},
+				"foo": {
+					"targets": ["app", "db"]
+				}
+			}
+		}`)
+
+		_, err := ParseFile(dt, "docker-bake.json")
+		require.Error(t, err)
+		require.ErrorContains(t, err, "Unsupported argument")
+		require.ErrorContains(t, err, "targets")
+		require.ErrorContains(t, err, "docker-bake.json")
+	})
+
+	t.Run("merged hcl files", func(t *testing.T) {
+		_, _, err := ParseFiles([]File{
+			{
+				Name: "base.hcl",
+				Data: []byte(`
+					target "app" {
+						dockerfile = "app.Dockerfile"
+					}
+
+					target "db" {
+						dockerfile = "db.Dockerfile"
+					}
+				`),
+			},
+			{
+				Name: "group-as-target.hcl",
+				Data: []byte(`
+					target "foo" {
+						targets = ["app", "db"]
+					}
+				`),
+			},
+		}, nil, nil)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "Unsupported argument")
+		require.ErrorContains(t, err, "targets")
+		require.ErrorContains(t, err, "group-as-target.hcl")
+	})
+
+	t.Run("merged hcl and json", func(t *testing.T) {
+		_, _, err := ParseFiles([]File{
+			{
+				Name: "docker-bake.hcl",
+				Data: []byte(`
+					group "default" {
+						targets = ["foo"]
+					}
+
+					target "app" {
+						dockerfile = "app.Dockerfile"
+					}
+				`),
+			},
+			{
+				Name: "extra.json",
+				Data: []byte(`{
+					"target": {
+						"foo": {
+							"targets": ["app"]
+						}
+					}
+				}`),
+			},
+		}, nil, nil)
+		require.Error(t, err)
+		require.ErrorContains(t, err, "Unsupported argument")
+		require.ErrorContains(t, err, "targets")
+		require.ErrorContains(t, err, "extra.json")
+	})
+
+	t.Run("group targets still valid", func(t *testing.T) {
+		dt := []byte(`
+			target "app" {
+				dockerfile = "app.Dockerfile"
+			}
+
+			target "db" {
+				dockerfile = "db.Dockerfile"
+			}
+
+			group "foo" {
+				targets = ["app", "db"]
+			}
+		`)
+
+		c, err := ParseFile(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Groups))
+		require.Equal(t, "foo", c.Groups[0].Name)
+		require.Equal(t, []string{"app", "db"}, c.Groups[0].Targets)
+	})
+
+	t.Run("merged valid files", func(t *testing.T) {
+		c, _, err := ParseFiles([]File{
+			{
+				Name: "targets.hcl",
+				Data: []byte(`
+					target "app" {
+						dockerfile = "app.Dockerfile"
+					}
+				`),
+			},
+			{
+				Name: "groups.hcl",
+				Data: []byte(`
+					group "foo" {
+						targets = ["app"]
+					}
+				`),
+			},
+		}, nil, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Groups))
+		require.Equal(t, "foo", c.Groups[0].Name)
+		require.Equal(t, []string{"app"}, c.Groups[0].Targets)
+	})
+}
+
 func TestHCLWithVariables(t *testing.T) {
 	dt := []byte(`
 		variable "BUILD_NUMBER" {
