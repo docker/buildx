@@ -20,12 +20,13 @@ import (
 	"strings"
 	"unicode/utf8"
 
-	"gopkg.in/yaml.v3"
+	"go.yaml.in/yaml/v3"
 
 	"github.com/open-policy-agent/opa/v1/ast/internal/scanner"
 	"github.com/open-policy-agent/opa/v1/ast/internal/tokens"
 	astJSON "github.com/open-policy-agent/opa/v1/ast/json"
 	"github.com/open-policy-agent/opa/v1/ast/location"
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
 // DefaultMaxParsingRecursionDepth is the default maximum recursion
@@ -55,6 +56,25 @@ const (
 	// 'if' and 'contains' required in rule heads;
 	// (some) strict checks on by default.
 	RegoV1
+)
+
+var (
+	// this is the name to use for instantiating an empty set, e.g., `set()`.
+	setConstructor = RefTerm(VarTerm("set"))
+
+	preAllocWildcards = [...]Value{
+		Var("$0"), Var("$1"), Var("$2"), Var("$3"), Var("$4"), Var("$5"),
+		Var("$6"), Var("$7"), Var("$8"), Var("$9"), Var("$10"),
+	}
+
+	// use static references to avoid allocations, and
+	// copy them to  the call term only when needed
+	memberWithKeyRef = MemberWithKey.Ref()
+	memberRef        = Member.Ref()
+
+	newlineBytes       = []byte{'\n'}
+	metadataBytes      = []byte("METADATA")
+	metadataParserPool = util.NewSyncPool[metadataParser]()
 )
 
 func (v RegoVersion) Int() int {
@@ -88,17 +108,17 @@ func RegoVersionFromInt(i int) RegoVersion {
 // can do efficient shallow copies of these values when doing a
 // save() and restore().
 type state struct {
-	s         *scanner.Scanner
-	lastEnd   int
-	skippedNL bool
-	tok       tokens.Token
-	tokEnd    int
-	lit       string
-	loc       Location
 	errors    Errors
-	hints     []string
 	comments  []*Comment
+	hints     []string
+	s         *scanner.Scanner
+	loc       Location
+	lit       string
+	lastEnd   int
+	tokEnd    int
 	wildcard  int
+	tok       tokens.Token
+	skippedNL bool
 }
 
 func (s *state) String() string {
@@ -451,7 +471,6 @@ func (p *Parser) Parse() ([]Statement, []*Comment, Errors) {
 	// next type of statement. If a statement can be parsed, continue from that
 	// point trying to parse packages, imports, etc. in the same order.
 	for p.s.tok != tokens.EOF {
-
 		s := p.save()
 
 		if pkg := p.parsePackage(); pkg != nil {
@@ -512,12 +531,12 @@ func (p *Parser) Parse() ([]Statement, []*Comment, Errors) {
 }
 
 func (p *Parser) parseAnnotations(stmts []Statement) []Statement {
-
 	annotStmts, errs := parseAnnotations(p.s.comments)
 	for _, err := range errs {
 		p.error(err.Location, err.Message)
 	}
 
+	stmts = slices.Grow(stmts, len(annotStmts))
 	for _, annotStmt := range annotStmts {
 		stmts = append(stmts, annotStmt)
 	}
@@ -525,52 +544,53 @@ func (p *Parser) parseAnnotations(stmts []Statement) []Statement {
 	return stmts
 }
 
-func parseAnnotations(comments []*Comment) ([]*Annotations, Errors) {
+func parseAnnotations(comments []*Comment) (stmts []*Annotations, errs Errors) {
+	numBlocks := CountFunc(comments, isMetadataComment)
+	if numBlocks == 0 {
+		return nil, nil
+	}
 
-	var hint = []byte("METADATA")
-	var curr *metadataParser
-	var blocks []*metadataParser
+	stmts = make([]*Annotations, 0, numBlocks)
+	mdp := metadataParserPool.Get()
+	if mdp.buf == nil {
+		mdp.buf = &bytes.Buffer{}
+	}
 
 	for i := range comments {
-		if curr != nil {
-			if comments[i].Location.Row == comments[i-1].Location.Row+1 && comments[i].Location.Col == 1 {
-				curr.Append(comments[i])
-				continue
+		if isMetadataComment(comments[i]) { // scan until end of block
+			mdp.Reset(comments[i].Location)
+			for i++; i < len(comments) && !blockBuster(comments[i], comments[i-1]); i++ {
+				mdp.Append(comments[i])
 			}
-			curr = nil
-		}
-		if bytes.HasPrefix(bytes.TrimSpace(comments[i].Text), hint) {
-			curr = newMetadataParser(comments[i].Location)
-			blocks = append(blocks, curr)
+
+			if a, err := mdp.Parse(); err != nil {
+				errs = append(errs, &Error{Code: ParseErr, Message: err.Error(), Location: mdp.loc})
+			} else {
+				stmts = append(stmts, a)
+			}
 		}
 	}
 
-	var stmts []*Annotations
-	var errs Errors
-	for _, b := range blocks {
-		a, err := b.Parse()
-		if err != nil {
-			errs = append(errs, &Error{
-				Code:     ParseErr,
-				Message:  err.Error(),
-				Location: b.loc,
-			})
-		} else {
-			stmts = append(stmts, a)
-		}
-	}
+	metadataParserPool.Put(mdp)
 
 	return stmts, errs
 }
 
+func isMetadataComment(c *Comment) bool {
+	return c.Location.Col == 1 && bytes.HasPrefix(bytes.TrimSpace(c.Text), metadataBytes)
+}
+
+func blockBuster(curr, prev *Comment) bool { // or endOfBlock, but the name was too good to pass up
+	return curr.Location.Col != 1 || curr.Location.Row-1 != prev.Location.Row
+}
+
 func (p *Parser) parsePackage() *Package {
-
-	var pkg Package
-	pkg.SetLoc(p.s.Loc())
-
 	if p.s.tok != tokens.Package {
 		return nil
 	}
+
+	var pkg Package
+	pkg.SetLoc(p.s.Loc())
 
 	p.scanWS()
 
@@ -633,13 +653,12 @@ func (p *Parser) parsePackage() *Package {
 }
 
 func (p *Parser) parseImport() *Import {
-
-	var imp Import
-	imp.SetLoc(p.s.Loc())
-
 	if p.s.tok != tokens.Import {
 		return nil
 	}
+
+	var imp Import
+	imp.SetLoc(p.s.Loc())
 
 	p.scanWS()
 
@@ -952,7 +971,7 @@ func (p *Parser) parseRules() []*Rule {
 		next.Head.keywords = rule.Head.keywords
 		for i := range next.Head.Args {
 			if v, ok := next.Head.Args[i].Value.(Var); ok && v.IsWildcard() {
-				next.Head.Args[i].Value = Var(p.genwildcard())
+				next.Head.Args[i].Value = p.genwildcard()
 			}
 		}
 		setLocRecursive(next.Head, loc)
@@ -972,7 +991,7 @@ func (p *Parser) parseElse(head *Head) *Rule {
 	rule.Head.generatedValue = false
 	for i := range rule.Head.Args {
 		if v, ok := rule.Head.Args[i].Value.(Var); ok && v.IsWildcard() {
-			rule.Head.Args[i].Value = Var(p.genwildcard())
+			rule.Head.Args[i].Value = p.genwildcard()
 		}
 	}
 	rule.Head.SetLoc(p.s.Loc())
@@ -1281,14 +1300,11 @@ func (p *Parser) parseLiteralExpr(negated bool) *Expr {
 }
 
 func (p *Parser) parseWith() []*With {
-
 	withs := []*With{}
 
 	for {
+		with := With{Location: p.s.Loc()}
 
-		with := With{
-			Location: p.s.Loc(),
-		}
 		p.scan()
 
 		if p.s.tok != tokens.Ident {
@@ -1525,11 +1541,6 @@ func (p *Parser) parseTermInfixCallInList() *Term {
 	return p.parseTermIn(nil, false, p.s.loc.Offset)
 }
 
-// use static references to avoid allocations, and
-// copy them to  the call term only when needed
-var memberWithKeyRef = MemberWithKey.Ref()
-var memberRef = Member.Ref()
-
 func (p *Parser) parseTermIn(lhs *Term, keyVal bool, offset int) *Term {
 	if !p.enter() {
 		return nil
@@ -1731,6 +1742,10 @@ func (p *Parser) parseTerm() *Term {
 		term = p.parseNumber()
 	case tokens.String:
 		term = p.parseString()
+	case tokens.TemplateStringPart, tokens.TemplateStringEnd:
+		term = p.parseTemplateString(false)
+	case tokens.RawTemplateStringPart, tokens.RawTemplateStringEnd:
+		term = p.parseTemplateString(true)
 	case tokens.Ident, tokens.Contains: // NOTE(sr): contains anywhere BUT in rule heads gets no special treatment
 		term = p.parseVar()
 	case tokens.LBrack:
@@ -1762,7 +1777,7 @@ func (p *Parser) parseTermFinish(head *Term, skipws bool) *Term {
 		return nil
 	}
 	offset := p.s.loc.Offset
-	p.doScan(skipws)
+	p.doScan(skipws, noScanOptions...)
 
 	switch p.s.tok {
 	case tokens.LParen, tokens.Dot, tokens.LBrack:
@@ -1783,7 +1798,7 @@ func (p *Parser) parseHeadFinish(head *Term, skipws bool) *Term {
 		return nil
 	}
 	offset := p.s.loc.Offset
-	p.doScan(false)
+	p.scanWS()
 
 	switch p.s.tok {
 	case tokens.Add, tokens.Sub, tokens.Mul, tokens.Quo, tokens.Rem,
@@ -1791,7 +1806,7 @@ func (p *Parser) parseHeadFinish(head *Term, skipws bool) *Term {
 		tokens.Equal, tokens.Neq, tokens.Gt, tokens.Gte, tokens.Lt, tokens.Lte:
 		p.illegalToken()
 	case tokens.Whitespace:
-		p.doScan(skipws)
+		p.doScan(skipws, noScanOptions...)
 	}
 
 	switch p.s.tok {
@@ -1878,7 +1893,12 @@ func (p *Parser) parseNumber() *Term {
 func (p *Parser) parseString() *Term {
 	if p.s.lit[0] == '"' {
 		if p.s.lit == "\"\"" {
-			return NewTerm(InternedEmptyString.Value).SetLocation(p.s.Loc())
+			return NewTerm(InternedEmptyStringValue).SetLocation(p.s.Loc())
+		}
+
+		inner := p.s.lit[1 : len(p.s.lit)-1]
+		if !strings.ContainsRune(inner, '\\') { // nothing to un-escape
+			return StringTerm(inner).SetLocation(p.s.Loc())
 		}
 
 		var s string
@@ -1898,8 +1918,119 @@ func (p *Parser) parseRawString() *Term {
 	return StringTerm(p.s.lit[1 : len(p.s.lit)-1]).SetLocation(p.s.Loc())
 }
 
-// this is the name to use for instantiating an empty set, e.g., `set()`.
-var setConstructor = RefTerm(VarTerm("set"))
+func templateStringPartToStringLiteral(tok tokens.Token, lit string) (string, error) {
+	switch tok {
+	case tokens.TemplateStringPart, tokens.TemplateStringEnd:
+		inner := lit[1 : len(lit)-1]
+		if !strings.ContainsRune(inner, '\\') { // nothing to un-escape
+			return inner, nil
+		}
+
+		buf := make([]byte, 0, len(inner)+2)
+		buf = append(buf, '"')
+		buf = append(buf, inner...)
+		buf = append(buf, '"')
+		var s string
+		if err := json.Unmarshal(buf, &s); err != nil {
+			return "", fmt.Errorf("illegal template-string part: %s", lit)
+		}
+		return s, nil
+	case tokens.RawTemplateStringPart, tokens.RawTemplateStringEnd:
+		return lit[1 : len(lit)-1], nil
+	default:
+		return "", errors.New("expected template-string part")
+	}
+}
+
+func (p *Parser) parseTemplateString(multiLine bool) *Term {
+	loc := p.s.Loc()
+
+	if !p.po.Capabilities.ContainsFeature(FeatureTemplateStrings) {
+		p.errorf(loc, "template strings are not supported by current capabilities")
+		return nil
+	}
+
+	var parts []Node
+
+	for {
+		s, err := templateStringPartToStringLiteral(p.s.tok, p.s.lit)
+		if err != nil {
+			p.error(p.s.Loc(), err.Error())
+			return nil
+		}
+
+		// Don't add empty strings
+		if len(s) > 0 {
+			parts = append(parts, StringTerm(s).SetLocation(p.s.Loc()))
+		}
+
+		if p.s.tok == tokens.TemplateStringEnd || p.s.tok == tokens.RawTemplateStringEnd {
+			break
+		}
+
+		numCommentsBefore := len(p.s.comments)
+		p.scan()
+		numCommentsAfter := len(p.s.comments)
+
+		expr := p.parseLiteral()
+		if expr == nil {
+			p.error(p.s.Loc(), "invalid template-string expression")
+			return nil
+		}
+
+		if expr.Negated {
+			p.errorf(expr.Loc(), "unexpected negation ('%s') in template-string expression", tokens.KeywordFor(tokens.Not))
+			return nil
+		}
+
+		// Note: Actually unification
+		if expr.IsEquality() {
+			p.errorf(expr.Loc(), "unexpected unification ('=') in template-string expression")
+			return nil
+		}
+
+		if expr.IsAssignment() {
+			p.errorf(expr.Loc(), "unexpected assignment (':=') in template-string expression")
+			return nil
+		}
+
+		if expr.IsEvery() {
+			p.errorf(expr.Loc(), "unexpected '%s' in template-string expression", tokens.KeywordFor(tokens.Every))
+			return nil
+		}
+
+		if expr.IsSome() {
+			p.errorf(expr.Loc(), "unexpected '%s' in template-string expression", tokens.KeywordFor(tokens.Some))
+			return nil
+		}
+
+		// FIXME: Can we optimize for collections and comprehensions too? To qualify, they must not contain refs or calls.
+		var nonOptional bool
+		if term, ok := expr.Terms.(*Term); ok && numCommentsAfter == numCommentsBefore {
+			switch term.Value.(type) {
+			case String, Number, Boolean, Null:
+				nonOptional = true
+				parts = append(parts, term)
+			}
+		}
+
+		if !nonOptional {
+			parts = append(parts, expr)
+		}
+
+		if p.s.tok != tokens.RBrace {
+			p.errorf(p.s.Loc(), "expected %s to end template string expression", tokens.RBrace)
+			return nil
+		}
+
+		p.doScan(false, scanner.ContinueTemplateString(multiLine))
+	}
+
+	// When there are template-expressions, the initial location will only contain the text up to the first expression
+	loc.Text = p.s.Text(loc.Offset, p.s.tokEnd)
+
+	return TemplateStringTerm(multiLine, parts...).SetLocation(loc)
+}
 
 func (p *Parser) parseCall(operator *Term, offset int) (term *Term) {
 	if !p.enter() {
@@ -1978,7 +2109,7 @@ func (p *Parser) parseRef(head *Term, offset int) (term *Term) {
 					term = p.parseRef(term, offset)
 				}
 			}
-			end = p.s.tokEnd
+			end = p.s.lastEnd
 			return term
 		case tokens.LBrack:
 			p.scan()
@@ -2042,7 +2173,6 @@ func (p *Parser) parseArray() (term *Term) {
 	// Does this represent a set comprehension or a set containing binary OR
 	// call? We resolve the ambiguity by prioritizing comprehensions.
 	head := p.parseTerm()
-
 	if head == nil {
 		return nil
 	}
@@ -2286,7 +2416,7 @@ func (p *Parser) parseTermList(end tokens.Token, r []*Term) []*Term {
 				}
 				continue
 			default:
-				p.illegal(fmt.Sprintf("expected %q or %q", tokens.Comma, end))
+				p.illegal("expected %q or %q", tokens.Comma, end)
 				return nil
 			}
 		}
@@ -2316,12 +2446,12 @@ func (p *Parser) parseTermPairList(end tokens.Token, r [][2]*Term) [][2]*Term {
 						}
 						continue
 					default:
-						p.illegal(fmt.Sprintf("expected %q or %q", tokens.Comma, end))
+						p.illegal("expected %q or %q", tokens.Comma, end)
 						return nil
 					}
 				}
 			default:
-				p.illegal(fmt.Sprintf("expected %q", tokens.Colon))
+				p.illegal("expected %q", tokens.Colon)
 				return nil
 			}
 		}
@@ -2331,7 +2461,8 @@ func (p *Parser) parseTermPairList(end tokens.Token, r [][2]*Term) [][2]*Term {
 
 func (p *Parser) parseTermOp(values ...tokens.Token) *Term {
 	if slices.Contains(values, p.s.tok) {
-		r := RefTerm(VarTerm(p.s.tok.String()).SetLocation(p.s.Loc())).SetLocation(p.s.Loc())
+		loc := p.s.Loc()
+		r := RefTerm(VarTerm(p.s.tok.String()).SetLocation(loc)).SetLocation(loc)
 		p.scan()
 		return r
 	}
@@ -2341,11 +2472,12 @@ func (p *Parser) parseTermOp(values ...tokens.Token) *Term {
 func (p *Parser) parseTermOpName(ref Ref, values ...tokens.Token) *Term {
 	if slices.Contains(values, p.s.tok) {
 		cp := ref.Copy()
+		loc := p.s.Loc()
 		for _, r := range cp {
-			r.SetLocation(p.s.Loc())
+			r.SetLocation(loc)
 		}
 		t := RefTerm(cp...)
-		t.SetLocation(p.s.Loc())
+		t.SetLocation(loc)
 		p.scan()
 		return t
 	}
@@ -2353,48 +2485,69 @@ func (p *Parser) parseTermOpName(ref Ref, values ...tokens.Token) *Term {
 }
 
 func (p *Parser) parseVar() *Term {
-
-	s := p.s.lit
-
-	term := VarTerm(s).SetLocation(p.s.Loc())
-
-	// Update wildcard values with unique identifiers
-	if term.Equal(Wildcard) {
-		term.Value = Var(p.genwildcard())
+	if p.s.lit == WildcardString {
+		// Update wildcard values with unique identifiers
+		return NewTerm(p.genwildcard()).SetLocation(p.s.Loc())
 	}
 
-	return term
+	return VarTerm(p.s.lit).SetLocation(p.s.Loc())
 }
 
-func (p *Parser) genwildcard() string {
-	c := p.s.wildcard
+func (p *Parser) genwildcard() Value {
+	var v Value
+	if p.s.wildcard < len(preAllocWildcards) {
+		v = preAllocWildcards[p.s.wildcard]
+	} else {
+		v = Var(WildcardPrefix + strconv.Itoa(p.s.wildcard))
+	}
 	p.s.wildcard++
-	return fmt.Sprintf("%v%d", WildcardPrefix, c)
+
+	return v
 }
 
-func (p *Parser) error(loc *location.Location, reason string) {
-	p.errorf(loc, "%s", reason)
-}
-
-func (p *Parser) errorf(loc *location.Location, f string, a ...any) {
-	msg := strings.Builder{}
-	msg.WriteString(fmt.Sprintf(f, a...))
-
-	switch len(p.s.hints) {
+func writeHints(msg *strings.Builder, hints []string) {
+	switch len(hints) {
 	case 0: // nothing to do
 	case 1:
 		msg.WriteString(" (hint: ")
-		msg.WriteString(p.s.hints[0])
-		msg.WriteRune(')')
+		msg.WriteString(hints[0])
+		msg.WriteByte(')')
 	default:
 		msg.WriteString(" (hints: ")
-		for i, h := range p.s.hints {
+		for i, h := range hints {
 			if i > 0 {
 				msg.WriteString(", ")
 			}
 			msg.WriteString(h)
 		}
-		msg.WriteRune(')')
+		msg.WriteByte(')')
+	}
+}
+
+func (p *Parser) error(loc *location.Location, reason string) {
+	msg := reason
+	if len(p.s.hints) > 0 {
+		sb := &strings.Builder{}
+		sb.WriteString(reason)
+		writeHints(sb, p.s.hints)
+		msg = sb.String()
+	}
+
+	p.s.errors = append(p.s.errors, &Error{
+		Code:     ParseErr,
+		Message:  msg,
+		Location: loc,
+		Details:  newParserErrorDetail(p.s.s.Bytes(), loc.Offset),
+	})
+	p.s.hints = nil
+}
+
+func (p *Parser) errorf(loc *location.Location, f string, a ...any) {
+	msg := &strings.Builder{}
+	fmt.Fprintf(msg, f, a...)
+
+	if len(p.s.hints) > 0 {
+		writeHints(msg, p.s.hints)
 	}
 
 	p.s.errors = append(p.s.errors, &Error{
@@ -2406,28 +2559,25 @@ func (p *Parser) errorf(loc *location.Location, f string, a ...any) {
 	p.s.hints = nil
 }
 
-func (p *Parser) hint(f string, a ...any) {
-	p.s.hints = append(p.s.hints, fmt.Sprintf(f, a...))
+func (p *Parser) hint(s string) {
+	p.s.hints = append(p.s.hints, s)
 }
 
 func (p *Parser) illegal(note string, a ...any) {
-	tok := p.s.tok.String()
-
 	if p.s.tok == tokens.Illegal {
 		p.errorf(p.s.Loc(), "illegal token")
 		return
 	}
 
+	tok := p.s.tok.String()
+
 	tokType := "token"
-	if tokens.IsKeyword(p.s.tok) {
-		tokType = "keyword"
-	} else if _, ok := allFutureKeywords[p.s.tok.String()]; ok {
+	if _, ok := allFutureKeywords[tok]; ok || tokens.IsKeyword(p.s.tok) {
 		tokType = "keyword"
 	}
 
-	note = fmt.Sprintf(note, a...)
 	if len(note) > 0 {
-		p.errorf(p.s.Loc(), "unexpected %s %s: %s", tok, tokType, note)
+		p.errorf(p.s.Loc(), "unexpected %s %s: %s", tok, tokType, fmt.Sprintf(note, a...))
 	} else {
 		p.errorf(p.s.Loc(), "unexpected %s %s", tok, tokType)
 	}
@@ -2437,15 +2587,17 @@ func (p *Parser) illegalToken() {
 	p.illegal("")
 }
 
+var noScanOptions []scanner.ScanOption
+
 func (p *Parser) scan() {
-	p.doScan(true)
+	p.doScan(true, noScanOptions...)
 }
 
 func (p *Parser) scanWS() {
-	p.doScan(false)
+	p.doScan(false, noScanOptions...)
 }
 
-func (p *Parser) doScan(skipws bool) {
+func (p *Parser) doScan(skipws bool, scanOpts ...scanner.ScanOption) {
 
 	// NOTE(tsandall): the last position is used to compute the "text" field for
 	// complex AST nodes. Whitespace never affects the last position of an AST
@@ -2458,7 +2610,7 @@ func (p *Parser) doScan(skipws bool) {
 	var errs []scanner.Error
 	for {
 		var pos scanner.Position
-		p.s.tok, pos, p.s.lit, errs = p.s.s.Scan()
+		p.s.tok, pos, p.s.lit, errs = p.s.s.Scan(scanOpts...)
 
 		p.s.tokEnd = pos.End
 		p.s.loc.Row = pos.Row
@@ -2513,12 +2665,10 @@ func (p *Parser) restore(s *state) {
 }
 
 func setLocRecursive(x any, loc *location.Location) {
-	NewGenericVisitor(func(x any) bool {
-		if node, ok := x.(Node); ok {
-			node.SetLoc(loc)
-		}
+	WalkNodes(x, func(n Node) bool {
+		n.SetLoc(loc)
 		return false
-	}).Walk(x)
+	})
 }
 
 func (p *Parser) setLoc(term *Term, loc *location.Location, offset, end int) *Term {
@@ -2601,13 +2751,17 @@ type rawAnnotation struct {
 }
 
 type metadataParser struct {
-	buf      *bytes.Buffer
 	comments []*Comment
+	buf      *bytes.Buffer
 	loc      *location.Location
 }
 
-func newMetadataParser(loc *Location) *metadataParser {
-	return &metadataParser{loc: loc, buf: bytes.NewBuffer(nil)}
+func (b *metadataParser) Reset(loc *location.Location) {
+	b.comments = b.comments[:0]
+	b.loc = loc
+	if b.buf != nil {
+		b.buf.Reset()
+	}
 }
 
 func (b *metadataParser) Append(c *Comment) {
@@ -2618,14 +2772,12 @@ func (b *metadataParser) Append(c *Comment) {
 
 var yamlLineErrRegex = regexp.MustCompile(`^yaml:(?: unmarshal errors:[\n\s]*)? line ([[:digit:]]+):`)
 
-func (b *metadataParser) Parse() (*Annotations, error) {
-
-	var raw rawAnnotation
-
+func (b *metadataParser) Parse() (result *Annotations, err error) {
 	if len(bytes.TrimSpace(b.buf.Bytes())) == 0 {
 		return nil, errors.New("expected METADATA block, found whitespace")
 	}
 
+	var raw rawAnnotation
 	if err := yaml.Unmarshal(b.buf.Bytes(), &raw); err != nil {
 		var comment *Comment
 		match := yamlLineErrRegex.FindStringSubmatch(err.Error())
@@ -2648,13 +2800,14 @@ func (b *metadataParser) Parse() (*Annotations, error) {
 		return nil, augmentYamlError(err, b.comments)
 	}
 
-	var result Annotations
-	result.comments = b.comments
-	result.Scope = raw.Scope
-	result.Entrypoint = raw.Entrypoint
-	result.Title = raw.Title
-	result.Description = raw.Description
-	result.Organizations = raw.Organizations
+	result = &Annotations{
+		comments:      b.comments,
+		Scope:         raw.Scope,
+		Entrypoint:    raw.Entrypoint,
+		Title:         raw.Title,
+		Description:   raw.Description,
+		Organizations: raw.Organizations,
+	}
 
 	for _, v := range raw.RelatedResources {
 		rr, err := parseRelatedResource(v)
@@ -2736,32 +2889,30 @@ func (b *metadataParser) Parse() (*Annotations, error) {
 		result.Authors = append(result.Authors, author)
 	}
 
-	result.Custom = make(map[string]any)
-	for k, v := range raw.Custom {
-		val, err := convertYAMLMapKeyTypes(v, nil)
-		if err != nil {
-			return nil, err
+	if raw.Custom != nil {
+		result.Custom = make(map[string]any, len(raw.Custom))
+		for k, v := range raw.Custom {
+			if result.Custom[k], err = convertYAMLMapKeyTypes(v, nil); err != nil {
+				return nil, err
+			}
 		}
-		result.Custom[k] = val
 	}
 
 	result.Location = b.loc
 
 	// recreate original text of entire metadata block for location text attribute
-	sb := strings.Builder{}
-	sb.WriteString("# METADATA\n")
+	original := bytes.TrimSuffix(b.buf.Bytes(), newlineBytes)
+	numLines := bytes.Count(original, newlineBytes) + 1
+	preAlloc := len("# METADATA\n") + len(original) + numLines*2 // '# ' prefix added per line
 
-	lines := bytes.Split(b.buf.Bytes(), []byte{'\n'})
+	result.Location.Text = append(make([]byte, 0, preAlloc), "# METADATA\n"...)
 
-	for _, line := range lines[:len(lines)-1] {
-		sb.WriteString("# ")
-		sb.Write(line)
-		sb.WriteByte('\n')
+	for line := range bytes.SplitAfterSeq(original, newlineBytes) {
+		result.Location.Text = append(result.Location.Text, "# "...)
+		result.Location.Text = append(result.Location.Text, line...)
 	}
 
-	result.Location.Text = []byte(strings.TrimSuffix(sb.String(), "\n"))
-
-	return &result, nil
+	return result, err
 }
 
 // augmentYamlError augments a YAML error with hints intended to help the user figure out the cause of an otherwise
@@ -2770,30 +2921,29 @@ func (b *metadataParser) Parse() (*Annotations, error) {
 func augmentYamlError(err error, comments []*Comment) error {
 	// Adding hints for when key/value ':' separator isn't suffixed with a legal YAML space symbol
 	for _, comment := range comments {
-		txt := string(comment.Text)
-		parts := strings.Split(txt, ":")
-		if len(parts) > 1 {
-			parts = parts[1:]
-			var invalidSpaces []string
-			for partIndex, part := range parts {
-				if len(part) == 0 && partIndex == len(parts)-1 {
-					invalidSpaces = []string{}
-					break
-				}
+		if bytes.IndexByte(comment.Text, ':') == -1 {
+			continue
+		}
+		parts := bytes.Split(comment.Text, []byte{':'})[1:]
 
-				r, _ := utf8.DecodeRuneInString(part)
-				if r == ' ' || r == '\t' {
-					invalidSpaces = []string{}
-					break
-				}
+		var invalidSpaces []string
+		for partIndex, part := range parts {
+			if len(part) == 0 && partIndex == len(parts)-1 {
+				break
+			}
 
-				invalidSpaces = append(invalidSpaces, fmt.Sprintf("%+q", r))
+			r, _ := utf8.DecodeRune(part)
+			if r == ' ' || r == '\t' {
+				break
 			}
-			if len(invalidSpaces) > 0 {
-				err = fmt.Errorf(
-					"%s\n  Hint: on line %d, symbol(s) %v immediately following a key/value separator ':' is not a legal yaml space character",
-					err.Error(), comment.Location.Row, invalidSpaces)
-			}
+
+			invalidSpaces = append(invalidSpaces, fmt.Sprintf("%+q", r))
+		}
+		if len(invalidSpaces) > 0 {
+			err = fmt.Errorf(
+				"%s\n  Hint: on line %d, symbol(s) %v immediately following a"+
+					" key/value separator ':' is not a legal yaml space character",
+				err.Error(), comment.Location.Row, invalidSpaces)
 		}
 	}
 	return err
@@ -2911,7 +3061,7 @@ func parseAuthorString(s string) (*AuthorAnnotation, error) {
 	if len(trailing) >= len(emailPrefix)+len(emailSuffix) && strings.HasPrefix(trailing, emailPrefix) &&
 		strings.HasSuffix(trailing, emailSuffix) {
 		email = trailing[len(emailPrefix):]
-		email = email[0 : len(email)-len(emailSuffix)]
+		email = email[:len(email)-len(emailSuffix)]
 		namePartCount -= 1
 	}
 
@@ -2999,10 +3149,7 @@ func (p *Parser) futureImport(imp *Import, allowedFutureKeywords map[string]toke
 		return
 	}
 
-	kwds := make([]string, 0, len(allowedFutureKeywords))
-	for k := range allowedFutureKeywords {
-		kwds = append(kwds, k)
-	}
+	kwds := util.Keys(allowedFutureKeywords)
 
 	switch len(path) {
 	case 2: // all keywords imported, nothing to do
@@ -3052,10 +3199,7 @@ func (p *Parser) regoV1Import(imp *Import) {
 	}
 
 	// import all future keywords with the rego.v1 import
-	kwds := make([]string, 0, len(futureKeywordsV0))
-	for k := range futureKeywordsV0 {
-		kwds = append(kwds, k)
-	}
+	kwds := util.Keys(futureKeywordsV0)
 
 	p.s.s.SetRegoV1Compatible()
 	for _, kw := range kwds {

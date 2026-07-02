@@ -36,6 +36,9 @@ type Argument struct {
 	Comment  *CommentGroup
 }
 
-func (f *Field) ArgumentMap(vars map[string]interface{}) map[string]interface{} {
+func (f *Field) ArgumentMap(vars map[string]any) map[string]any {
+	if f.Definition == nil {
+		return nil
+	}
 	return arg2map(f.Definition.Arguments, f.Arguments, vars)
 }

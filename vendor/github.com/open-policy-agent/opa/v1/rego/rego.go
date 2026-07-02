@@ -25,8 +25,8 @@ import (
 	"github.com/open-policy-agent/opa/v1/bundle"
 	"github.com/open-policy-agent/opa/v1/ir"
 	"github.com/open-policy-agent/opa/v1/loader"
+	"github.com/open-policy-agent/opa/v1/loader/filter"
 	"github.com/open-policy-agent/opa/v1/metrics"
-	"github.com/open-policy-agent/opa/v1/plugins"
 	"github.com/open-policy-agent/opa/v1/resolver"
 	"github.com/open-policy-agent/opa/v1/storage"
 	"github.com/open-policy-agent/opa/v1/storage/inmem"
@@ -44,7 +44,7 @@ const (
 	wasmVarPrefix           = "^"
 )
 
-// nolint: deadcode,varcheck
+// nolint:varcheck
 const (
 	targetWasm = "wasm"
 	targetRego = "rego"
@@ -235,6 +235,7 @@ func EvalInstrument(instrument bool) EvalOption {
 }
 
 // EvalTracer configures a tracer for a Prepared Query's evaluation
+//
 // Deprecated: Use EvalQueryTracer instead.
 func EvalTracer(tracer topdown.Tracer) EvalOption {
 	return func(e *EvalContext) {
@@ -664,12 +665,11 @@ type Rego struct {
 	enablePrintStatements       bool
 	distributedTracingOpts      tracing.Options
 	strict                      bool
-	pluginMgr                   *plugins.Manager
-	plugins                     []TargetPlugin
 	targetPrepState             TargetPluginEval
 	regoVersion                 ast.RegoVersion
 	compilerHook                func(*ast.Compiler)
 	evalMode                    *ast.CompilerEvalMode
+	filter                      filter.LoaderFilter
 }
 
 func (r *Rego) RegoVersion() ast.RegoVersion {
@@ -1046,6 +1046,12 @@ func LoadBundle(path string) func(r *Rego) {
 	}
 }
 
+func WithFilter(f filter.LoaderFilter) func(r *Rego) {
+	return func(r *Rego) {
+		r.filter = f
+	}
+}
+
 // ParsedBundle returns an argument that adds a bundle to be loaded.
 func ParsedBundle(name string, b *bundle.Bundle) func(r *Rego) {
 	return func(r *Rego) {
@@ -1068,6 +1074,16 @@ func Compiler(c *ast.Compiler) func(r *Rego) {
 func Store(s storage.Store) func(r *Rego) {
 	return func(r *Rego) {
 		r.store = s
+	}
+}
+
+// Data returns an argument that sets the Rego data document. Data should be
+// a map representing the data document. This is a simpler alternative to
+// using Store with inmem.NewFromObject for cases where an in-memory store
+// with static data is sufficient.
+func Data(x map[string]any) func(r *Rego) {
+	return func(r *Rego) {
+		r.store = inmem.NewFromObject(x)
 	}
 }
 
@@ -1115,6 +1131,7 @@ func Trace(yes bool) func(r *Rego) {
 }
 
 // Tracer returns an argument that adds a query tracer to r.
+//
 // Deprecated: Use QueryTracer instead.
 func Tracer(t topdown.Tracer) func(r *Rego) {
 	return func(r *Rego) {
@@ -1406,15 +1423,6 @@ func New(options ...func(r *Rego)) *Rego {
 
 	if r.generateJSON == nil {
 		r.generateJSON = generateJSON
-	}
-
-	if r.pluginMgr != nil {
-		for _, pluginName := range r.pluginMgr.Plugins() {
-			p := r.pluginMgr.Plugin(pluginName)
-			if p0, ok := p.(TargetPlugin); ok {
-				r.plugins = append(r.plugins, p0)
-			}
-		}
 	}
 
 	if t := r.targetPlugin(r.target); t != nil {
@@ -2044,6 +2052,7 @@ func (r *Rego) loadBundles(_ context.Context, _ storage.Transaction, m metrics.M
 			WithSkipBundleVerification(r.skipBundleVerification).
 			WithRegoVersion(r.regoVersion).
 			WithCapabilities(r.capabilities).
+			WithFilter(r.filter).
 			AsBundle(path)
 		if err != nil {
 			return fmt.Errorf("loading error: %s", err)
@@ -2201,7 +2210,7 @@ func (r *Rego) compileQuery(query ast.Body, imports []*ast.Import, _ metrics.Met
 
 	if r.pkg != "" {
 		var err error
-		pkg, err = ast.ParsePackage(fmt.Sprintf("package %v", r.pkg))
+		pkg, err = ast.ParsePackage("package " + r.pkg)
 		if err != nil {
 			return nil, nil, err
 		}
@@ -2220,7 +2229,7 @@ func (r *Rego) compileQuery(query ast.Body, imports []*ast.Import, _ metrics.Met
 		WithStrict(false)
 
 	for _, extra := range extras {
-		qc = qc.WithStageAfter(extra.after, extra.stage)
+		qc = qc.WithStageAfterID(extra.after, extra.stage)
 	}
 
 	compiled, err := qc.Compile(query)
@@ -2868,7 +2877,7 @@ func (m rawModule) ParseWithOpts(opts ast.ParserOptions) (*ast.Module, error) {
 }
 
 type extraStage struct {
-	after string
+	after ast.StageID
 	stage ast.QueryCompilerStageDefinition
 }
 
