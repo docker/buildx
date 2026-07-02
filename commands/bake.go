@@ -594,7 +594,7 @@ func bakePolicyOverrides(in []string) ([]string, bool, error) {
 	return overrides, false, nil
 }
 
-func bakeEnvFiles(lookup func(string string) (string, bool)) ([]string, error) {
+func bakeEnvFiles(lookup func(string) (string, bool)) ([]string, error) {
 	sep, _ := lookup(bakeEnvFileSeparator)
 	if sep == "" {
 		sep = string(os.PathListSeparator)
