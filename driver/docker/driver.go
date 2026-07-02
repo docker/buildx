@@ -21,6 +21,9 @@ type Driver struct {
 	// https://github.com/docker/docs/blob/main/content/build/drivers/docker.md
 	features    features
 	hostGateway hostGateway
+
+	// Controls the fallback code behavior.
+	fallbackMode fallbackMode
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
@@ -64,6 +67,49 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
+	c, _, err := d.client(ctx, opts...)
+	return c, err
+}
+
+type listWorkersFunc func(ctx context.Context) []*client.WorkerInfo
+
+func (d *Driver) client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, listWorkersFunc, error) {
+	if d.fallbackMode.AttemptPrimaryClient() {
+		if c, err := client.New(ctx, d.DockerAPI.DaemonHost(), opts...); err == nil {
+			// We do not allow fallback so there's no reason to test the connection.
+			if !d.fallbackMode.AllowFallback() {
+				return c, lazyListWorkers(c), nil
+			}
+
+			// Fallback is allowed so test the client before we return it.
+			// Keep the returned workers in the function closure to prevent duplicate
+			// calls to list workers.
+			if workers, err := c.ListWorkers(ctx); err == nil {
+				// Client works so package the workers we listed into the function so we don't
+				// have to call this endpoint again. We also mark that the client succeeded this
+				// test at least once and prevent fallback mode from happening.
+				d.fallbackMode = disableFallbackMode
+				return c, func(context.Context) []*client.WorkerInfo {
+					return workers
+				}, nil
+			}
+
+			// Failed to use the updated client. Provide the fallback.
+			_ = c.Close()
+		} else if !d.fallbackMode.AllowFallback() {
+			// Fallback is not allowed so return this error.
+			return nil, nil, err
+		}
+	}
+
+	// We are required to use the fallback since the docker daemon does not support
+	// the client directly. Mark that we need to use the fallback so future calls don't
+	// bother with the above check.
+	d.fallbackMode = forceFallbackMode
+	return d.fallbackClient(ctx, opts...)
+}
+
+func (d *Driver) fallbackClient(ctx context.Context, opts ...client.ClientOpt) (*client.Client, listWorkersFunc, error) {
 	opts = append([]client.ClientOpt{
 		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return d.Dial(ctx)
@@ -71,7 +117,12 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 			return d.DockerAPI.DialHijack(ctx, "/session", proto, meta)
 		}),
 	}, opts...)
-	return client.New(ctx, "", opts...)
+
+	c, err := client.New(ctx, "", opts...)
+	if err != nil {
+		return nil, nil, err
+	}
+	return c, lazyListWorkers(c), nil
 }
 
 type features struct {
@@ -82,11 +133,11 @@ type features struct {
 func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 	d.features.once.Do(func() {
 		var useContainerdSnapshotter bool
-		if c, err := d.Client(ctx); err == nil {
-			workers, _ := c.ListWorkers(ctx)
-			for _, w := range workers {
+		if c, workers, err := d.client(ctx); err == nil {
+			for _, w := range workers(ctx) {
 				if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
 					useContainerdSnapshotter = true
+					break
 				}
 			}
 			c.Close()
@@ -149,4 +200,33 @@ func (d *Driver) IsMobyDriver() bool {
 
 func (d *Driver) Config() driver.InitConfig {
 	return d.InitConfig
+}
+
+type fallbackMode int
+
+const (
+	allowFallbackMode fallbackMode = iota
+	disableFallbackMode
+	forceFallbackMode
+)
+
+func (m fallbackMode) AttemptPrimaryClient() bool {
+	return m != forceFallbackMode
+}
+
+func (m fallbackMode) AllowFallback() bool {
+	return m == allowFallbackMode
+}
+
+func lazyListWorkers(c *client.Client) listWorkersFunc {
+	var (
+		workers     []*client.WorkerInfo
+		workersOnce sync.Once
+	)
+	return func(ctx context.Context) []*client.WorkerInfo {
+		workersOnce.Do(func() {
+			workers, _ = c.ListWorkers(ctx)
+		})
+		return workers
+	}
 }
