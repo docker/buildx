@@ -32,6 +32,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -1300,7 +1301,52 @@ func (t *Target) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(
 	return value.AsString(), nil
 }
 
+func cachePrimaryKey(e *buildflags.CacheOptionsEntry) string {
+	switch e.Type {
+	case "registry":
+		return "type=registry,ref=" + e.Attrs["ref"]
+	case "local":
+		return "type=local,dest=" + e.Attrs["dest"]
+	case "gha":
+		return "type=gha,scope=" + e.Attrs["scope"]
+	case "s3":
+		return "type=s3,bucket=" + e.Attrs["bucket"] + ",name=" + e.Attrs["name"]
+	case "azblob":
+		return "type=azblob,name=" + e.Attrs["name"]
+	case "inline":
+		return ""
+	default:
+		return "type=" + e.Type
+	}
+}
+
+func warnDuplicateCacheExports(m map[string]*Target) {
+	seen := map[string][]string{}
+	for _, name := range slices.Sorted(maps.Keys(m)) {
+		t := m[name]
+		seenForTarget := map[string]struct{}{}
+		for _, entry := range t.CacheTo {
+			key := cachePrimaryKey(entry)
+			if key == "" {
+				continue
+			}
+			if _, ok := seenForTarget[key]; ok {
+				continue
+			}
+			seenForTarget[key] = struct{}{}
+			seen[key] = append(seen[key], name)
+		}
+	}
+	for _, key := range slices.Sorted(maps.Keys(seen)) {
+		names := seen[key]
+		if len(names) > 1 {
+			logrus.Warnf("multiple targets write to the same cache export %q: %s", key, strings.Join(names, ", "))
+		}
+	}
+}
+
 func TargetsToBuildOpt(m map[string]*Target, inp *Input) (map[string]build.Options, error) {
+	warnDuplicateCacheExports(m)
 	m2 := make(map[string]build.Options, len(m))
 	for k, v := range m {
 		bo, err := toBuildOpt(v, inp)
