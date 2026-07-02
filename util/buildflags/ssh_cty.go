@@ -55,9 +55,9 @@ func (s SSHKeys) ToCtyValue() cty.Value {
 	return cty.ListVal(vals)
 }
 
-func (e *SSH) FromCtyValue(in cty.Value, p cty.Path) error {
+func (s *SSH) FromCtyValue(in cty.Value, p cty.Path) error {
 	if in.Type() == cty.String {
-		if err := e.UnmarshalText([]byte(in.AsString())); err != nil {
+		if err := s.UnmarshalText([]byte(in.AsString())); err != nil {
 			return p.NewError(err)
 		}
 		return nil
@@ -69,25 +69,25 @@ func (e *SSH) FromCtyValue(in cty.Value, p cty.Path) error {
 	}
 
 	if id := conv.GetAttr("id"); !id.IsNull() && id.IsKnown() {
-		e.ID = id.AsString()
+		s.ID = id.AsString()
 	}
 	if paths := conv.GetAttr("paths"); !paths.IsNull() && paths.IsKnown() {
-		if err := gocty.FromCtyValue(paths, &e.Paths); err != nil {
+		if err := gocty.FromCtyValue(paths, &s.Paths); err != nil {
 			return err
 		}
 	}
 	return nil
 }
 
-func (e *SSH) ToCtyValue() cty.Value {
-	if e == nil {
+func (s *SSH) ToCtyValue() cty.Value {
+	if s == nil {
 		return cty.NullVal(sshType())
 	}
 
 	var ctyPaths cty.Value
-	if len(e.Paths) > 0 {
-		paths := make([]cty.Value, len(e.Paths))
-		for i, path := range e.Paths {
+	if len(s.Paths) > 0 {
+		paths := make([]cty.Value, len(s.Paths))
+		for i, path := range s.Paths {
 			paths[i] = cty.StringVal(path)
 		}
 		ctyPaths = cty.ListVal(paths)
@@ -96,7 +96,7 @@ func (e *SSH) ToCtyValue() cty.Value {
 	}
 
 	return cty.ObjectVal(map[string]cty.Value{
-		"id":    cty.StringVal(e.ID),
+		"id":    cty.StringVal(s.ID),
 		"paths": ctyPaths,
 	})
 }
