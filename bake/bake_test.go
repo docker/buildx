@@ -1557,6 +1557,81 @@ func TestTargetName(t *testing.T) {
 	}
 }
 
+func TestTargetsCurrentDirectTarget(t *testing.T) {
+	ctx := context.TODO()
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "app" {
+  args = {
+    TARGET = targets.current
+  }
+  tags = ["example/${targets.current}:latest"]
+}
+`),
+	}
+
+	m, _, err := ReadTargets(ctx, []File{f}, []string{"app"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Equal(t, "app", *m["app"].Args["TARGET"])
+	require.Equal(t, []string{"example/app:latest"}, m["app"].Tags)
+}
+
+func TestTargetsCurrentInheritedTarget(t *testing.T) {
+	ctx := context.TODO()
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "_common" {
+  args = {
+    TARGET = targets.current
+  }
+  tags = ["example/${targets.current}:latest"]
+  cache-from = ["type=registry,ref=cache/${targets.current}"]
+}
+
+target "image1" {
+  inherits = ["_common"]
+}
+
+target "image2" {
+  inherits = ["_common"]
+}
+`),
+	}
+
+	m, _, err := ReadTargets(ctx, []File{f}, []string{"image1", "image2"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Equal(t, "image1", *m["image1"].Args["TARGET"])
+	require.Equal(t, []string{"example/image1:latest"}, m["image1"].Tags)
+	require.Equal(t, []string{"cache/image1"}, stringify(m["image1"].CacheFrom))
+	require.Equal(t, "image2", *m["image2"].Args["TARGET"])
+	require.Equal(t, []string{"example/image2:latest"}, m["image2"].Tags)
+	require.Equal(t, []string{"cache/image2"}, stringify(m["image2"].CacheFrom))
+}
+
+func TestTargetsCurrentMatrixTarget(t *testing.T) {
+	ctx := context.TODO()
+	f := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+target "image" {
+  matrix = {
+    flavor = ["one", "two"]
+  }
+  name = "image-${flavor}"
+  tags = ["example/${targets.current}:latest"]
+}
+`),
+	}
+
+	m, g, err := ReadTargets(ctx, []File{f}, []string{"image"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.ElementsMatch(t, []string{"image-one", "image-two"}, g["image"].Targets)
+	require.Equal(t, []string{"example/image-one:latest"}, m["image-one"].Tags)
+	require.Equal(t, []string{"example/image-two:latest"}, m["image-two"].Tags)
+}
+
 func TestNestedGroupsWithSameTarget(t *testing.T) {
 	ctx := context.TODO()
 
