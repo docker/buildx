@@ -40,7 +40,7 @@ type nodeCache struct {
 type ResetProcessor struct {
 	target        any
 	paths         []tree.Path
-	visitedNodes  map[*yaml.Node][]string
+	visitedNodes  map[*yaml.Node][]tree.Path
 	resolvedNodes map[*yaml.Node]nodeCache
 	visitCount    int
 	// maxNodeVisits is the per-document cap; when zero, defaultMaxNodeVisits is used.
@@ -49,7 +49,7 @@ type ResetProcessor struct {
 
 // UnmarshalYAML implement yaml.Unmarshaler
 func (p *ResetProcessor) UnmarshalYAML(value *yaml.Node) error {
-	p.visitedNodes = make(map[*yaml.Node][]string)
+	p.visitedNodes = make(map[*yaml.Node][]tree.Path)
 	p.resolvedNodes = make(map[*yaml.Node]nodeCache)
 	p.visitCount = 0
 	defer func() {
@@ -190,7 +190,12 @@ func (p *ResetProcessor) resolveContainer(node *yaml.Node, path tree.Path) (*yam
 				if resolved == nil {
 					continue
 				}
-				if v.Kind == yaml.AliasNode {
+				// Under the merge key `<<`, the YAML library only accepts an
+				// AliasNode value when its target is a MappingNode. An alias to a
+				// SequenceNode (the spec-allowed "sequence of mappings" form via an
+				// anchor) is rejected. Substitute the resolved target so the YAML
+				// library sees the underlying node directly for merge keys.
+				if v.Kind == yaml.AliasNode && key != "<<" {
 					nodes = append(nodes, node.Content[idx-1], v)
 				} else {
 					nodes = append(nodes, node.Content[idx-1], resolved)
@@ -278,36 +283,41 @@ func (p *ResetProcessor) applyNullOverrides(target any, path tree.Path) error {
 
 func (p *ResetProcessor) checkForCycle(node *yaml.Node, path tree.Path) error {
 	paths := p.visitedNodes[node]
-	pathStr := path.String()
 
 	for _, prevPath := range paths {
 		// If we're visiting the exact same path, it's not a cycle
-		if pathStr == prevPath {
+		if path == prevPath {
 			continue
 		}
 
+		// Compare on the raw form so dots inside escaped segment names (e.g.
+		// service names containing ".") aren't conflated with path separators.
+		pathStr := string(path)
+		prevStr := string(prevPath)
+
 		// If either path is using a merge key, it's legitimate YAML merging
-		if strings.Contains(prevPath, "<<") || strings.Contains(pathStr, "<<") {
+		if strings.Contains(prevStr, "<<") || strings.Contains(pathStr, "<<") {
 			continue
 		}
 
 		// Only consider it a cycle if one path is contained within the other
 		// and they're not in different service definitions
-		if (strings.HasPrefix(pathStr, prevPath+".") ||
-			strings.HasPrefix(prevPath, pathStr+".")) &&
-			!areInDifferentServices(pathStr, prevPath) {
-			return fmt.Errorf("cycle detected: node at path %s references node at path %s", pathStr, prevPath)
+		if (strings.HasPrefix(pathStr, prevStr+".") ||
+			strings.HasPrefix(prevStr, pathStr+".")) &&
+			!areInDifferentServices(path, prevPath) {
+			return fmt.Errorf("cycle detected: node at path %s references node at path %s",
+				path.String(), prevPath.String())
 		}
 	}
 
-	p.visitedNodes[node] = append(paths, pathStr)
+	p.visitedNodes[node] = append(paths, path)
 	return nil
 }
 
 // areInDifferentServices checks if two paths are in different service definitions
-func areInDifferentServices(path1, path2 string) bool {
-	parts1 := strings.Split(path1, ".")
-	parts2 := strings.Split(path2, ".")
+func areInDifferentServices(path1, path2 tree.Path) bool {
+	parts1 := path1.Parts()
+	parts2 := path2.Parts()
 	for i := 0; i < len(parts1) && i < len(parts2); i++ {
 		if parts1[i] == "services" && i+1 < len(parts1) &&
 			parts2[i] == "services" && i+1 < len(parts2) {

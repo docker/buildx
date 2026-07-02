@@ -16,13 +16,17 @@
 
 package types
 
-// ServiceHook is a command to exec inside container by some lifecycle events
+// ServiceHook is a hook executed at a service lifecycle event: a command exec'd
+// inside the service container for post_start/pre_stop, or an ephemeral
+// container run before the service starts for pre_start.
 type ServiceHook struct {
 	Command     ShellCommand      `yaml:"command,omitempty" json:"command"`
+	Image       string            `yaml:"image,omitempty" json:"image,omitempty"`
 	User        string            `yaml:"user,omitempty" json:"user,omitempty"`
 	Privileged  bool              `yaml:"privileged,omitempty" json:"privileged,omitempty"`
 	WorkingDir  string            `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
 	Environment MappingWithEquals `yaml:"environment,omitempty" json:"environment,omitempty"`
+	PerReplica  bool              `yaml:"per_replica,omitempty" json:"per_replica,omitempty"`
 
 	Extensions Extensions `yaml:"#extensions,inline,omitempty" json:"-"`
 }

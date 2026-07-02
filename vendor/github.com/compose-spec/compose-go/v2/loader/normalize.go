@@ -133,6 +133,9 @@ func Normalize(dict map[string]any, env types.Mapping) (map[string]any, error) {
 			if len(dependsOn) > 0 {
 				service["depends_on"] = dependsOn
 			}
+
+			inheritPreStartImage(service)
+
 			services[name] = service
 		}
 
@@ -141,6 +144,25 @@ func Normalize(dict map[string]any, env types.Mapping) (map[string]any, error) {
 	setNameFromKey(dict)
 
 	return dict, nil
+}
+
+// inheritPreStartImage propagates the parent service's image to any pre_start
+// hook that does not declare its own, per compose-spec PR #647.
+func inheritPreStartImage(service map[string]any) {
+	hooks, ok := service["pre_start"].([]any)
+	if !ok {
+		return
+	}
+	image, ok := service["image"].(string)
+	if !ok || image == "" {
+		return
+	}
+	for _, h := range hooks {
+		hook := h.(map[string]any)
+		if _, set := hook["image"]; !set {
+			hook["image"] = image
+		}
+	}
 }
 
 func normalizeNetworks(dict map[string]any) {

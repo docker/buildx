@@ -383,6 +383,24 @@ func WithoutEnvironmentResolution(o *ProjectOptions) error {
 	return nil
 }
 
+// WithSelectedServices restricts the loaded project to the given services and their
+// dependencies. An empty list means "all services". When set, services not in the
+// list are dropped from the project before environment resolution, so their
+// `env_file` / `label_file` entries are not loaded from disk.
+func WithSelectedServices(services ...string) ProjectOptionsFn {
+	return func(o *ProjectOptions) error {
+		o.loadOptions = append(o.loadOptions, loader.WithSelectedServices(services))
+		return nil
+	}
+}
+
+// WithoutUnnecessaryResources drops networks/volumes/secrets/configs/models that
+// are not referenced by services remaining after selection.
+func WithoutUnnecessaryResources(o *ProjectOptions) error {
+	o.loadOptions = append(o.loadOptions, loader.WithoutUnnecessaryResources)
+	return nil
+}
+
 // DefaultFileNames defines the Compose file names for auto-discovery (in order of preference)
 var DefaultFileNames = []string{"compose.yaml", "compose.yml", "docker-compose.yml", "docker-compose.yaml"}
 

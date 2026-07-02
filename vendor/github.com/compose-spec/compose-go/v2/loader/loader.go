@@ -78,6 +78,14 @@ type Options struct {
 	projectNameImperativelySet bool
 	// Profiles set profiles to enable
 	Profiles []string
+	// SelectedServices restricts the project model to these services (and their dependencies)
+	// after parsing. An empty slice means "all services". When set, services not in the list
+	// are dropped from the project before environment resolution, so their env_file / label_file
+	// entries are not loaded.
+	SelectedServices []string
+	// PruneUnnecessaryResources drops networks/volumes/secrets/configs/models that are not
+	// referenced by active services after service selection.
+	PruneUnnecessaryResources bool
 	// ResourceLoaders manages support for remote resources
 	ResourceLoaders []ResourceLoader
 	// KnownExtensions manages x-* attribute we know and the corresponding go structs
@@ -187,6 +195,8 @@ func (o *Options) clone() *Options {
 		projectName:                o.projectName,
 		projectNameImperativelySet: o.projectNameImperativelySet,
 		Profiles:                   o.Profiles,
+		SelectedServices:           o.SelectedServices,
+		PruneUnnecessaryResources:  o.PruneUnnecessaryResources,
 		ResourceLoaders:            o.ResourceLoaders,
 		KnownExtensions:            o.KnownExtensions,
 		Listeners:                  o.Listeners,
@@ -258,6 +268,22 @@ func WithProfiles(profiles []string) func(*Options) {
 	return func(opts *Options) {
 		opts.Profiles = profiles
 	}
+}
+
+// WithSelectedServices restricts the loaded project to the given services and their
+// dependencies. An empty slice means "all services". When set, services not in the
+// list are dropped from the project before environment resolution: their `env_file`
+// and `label_file` entries will not be loaded from disk.
+func WithSelectedServices(services []string) func(*Options) {
+	return func(opts *Options) {
+		opts.SelectedServices = services
+	}
+}
+
+// WithoutUnnecessaryResources drops networks/volumes/secrets/configs/models that
+// are not referenced by services remaining after selection.
+func WithoutUnnecessaryResources(opts *Options) {
+	opts.PruneUnnecessaryResources = true
 }
 
 // PostProcessor is used to tweak compose model based on metadata extracted during yaml Unmarshal phase
@@ -601,6 +627,24 @@ func ModelToProject(dict map[string]interface{}, opts *Options, configDetails ty
 		if err != nil {
 			return nil, err
 		}
+	}
+
+	if len(opts.SelectedServices) > 0 {
+		// WithServicesEnabled must precede WithSelectedServices: the latter walks
+		// only active services, so any selected service currently sitting in
+		// DisabledServices (e.g. gated by a profile) would otherwise be invisible.
+		project, err = project.WithServicesEnabled(opts.SelectedServices...)
+		if err != nil {
+			return nil, err
+		}
+		project, err = project.WithSelectedServices(opts.SelectedServices)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if opts.PruneUnnecessaryResources {
+		project = project.WithoutUnnecessaryResources()
 	}
 
 	if !opts.SkipResolveEnvironment {

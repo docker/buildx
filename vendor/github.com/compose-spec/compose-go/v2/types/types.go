@@ -138,6 +138,7 @@ type ServiceConfig struct {
 	Volumes         []ServiceVolumeConfig            `yaml:"volumes,omitempty" json:"volumes,omitempty"`
 	VolumesFrom     []string                         `yaml:"volumes_from,omitempty" json:"volumes_from,omitempty"`
 	WorkingDir      string                           `yaml:"working_dir,omitempty" json:"working_dir,omitempty"`
+	PreStart        []ServiceHook                    `yaml:"pre_start,omitempty" json:"pre_start,omitempty"`
 	PostStart       []ServiceHook                    `yaml:"post_start,omitempty" json:"post_start,omitempty"`
 	PreStop         []ServiceHook                    `yaml:"pre_stop,omitempty" json:"pre_stop,omitempty"`
 
@@ -753,6 +754,7 @@ type NetworkConfig struct {
 type IPAMConfig struct {
 	Driver     string      `yaml:"driver,omitempty" json:"driver,omitempty"`
 	Config     []*IPAMPool `yaml:"config,omitempty" json:"config,omitempty"`
+	Options    Options     `yaml:"options,omitempty" json:"options,omitempty"`
 	Extensions Extensions  `yaml:"#extensions,inline,omitempty" json:"-"`
 }
 

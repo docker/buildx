@@ -190,7 +190,7 @@ github.com/cloudflare/circl/math/mlsbset
 github.com/cloudflare/circl/sign
 github.com/cloudflare/circl/sign/ed25519
 github.com/cloudflare/circl/sign/ed448
-# github.com/compose-spec/compose-go/v2 v2.11.0
+# github.com/compose-spec/compose-go/v2 v2.13.0
 ## explicit; go 1.24
 github.com/compose-spec/compose-go/v2/cli
 github.com/compose-spec/compose-go/v2/consts

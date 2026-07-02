@@ -729,6 +729,24 @@ func deriveDeepCopyService(dst, src *ServiceConfig) {
 		copy(dst.VolumesFrom, src.VolumesFrom)
 	}
 	dst.WorkingDir = src.WorkingDir
+	if src.PreStart == nil {
+		dst.PreStart = nil
+	} else {
+		if dst.PreStart != nil {
+			if len(src.PreStart) > len(dst.PreStart) {
+				if cap(dst.PreStart) >= len(src.PreStart) {
+					dst.PreStart = (dst.PreStart)[:len(src.PreStart)]
+				} else {
+					dst.PreStart = make([]ServiceHook, len(src.PreStart))
+				}
+			} else if len(src.PreStart) < len(dst.PreStart) {
+				dst.PreStart = (dst.PreStart)[:len(src.PreStart)]
+			}
+		} else {
+			dst.PreStart = make([]ServiceHook, len(src.PreStart))
+		}
+		deriveDeepCopy_26(dst.PreStart, src.PreStart)
+	}
 	if src.PostStart == nil {
 		dst.PostStart = nil
 	} else {
@@ -2101,6 +2119,7 @@ func deriveDeepCopy_49(dst, src *ServiceHook) {
 		}
 		copy(dst.Command, src.Command)
 	}
+	dst.Image = src.Image
 	dst.User = src.User
 	dst.Privileged = src.Privileged
 	dst.WorkingDir = src.WorkingDir
@@ -2110,6 +2129,7 @@ func deriveDeepCopy_49(dst, src *ServiceHook) {
 	} else {
 		dst.Environment = nil
 	}
+	dst.PerReplica = src.PerReplica
 	if src.Extensions != nil {
 		dst.Extensions = make(map[string]any, len(src.Extensions))
 		src.Extensions.DeepCopy(dst.Extensions)
@@ -2138,6 +2158,12 @@ func deriveDeepCopy_50(dst, src *IPAMConfig) {
 			dst.Config = make([]*IPAMPool, len(src.Config))
 		}
 		deriveDeepCopy_60(dst.Config, src.Config)
+	}
+	if src.Options != nil {
+		dst.Options = make(map[string]string, len(src.Options))
+		deriveDeepCopy_5(dst.Options, src.Options)
+	} else {
+		dst.Options = nil
 	}
 	if src.Extensions != nil {
 		dst.Extensions = make(map[string]any, len(src.Extensions))
