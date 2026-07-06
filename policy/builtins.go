@@ -55,6 +55,7 @@ func builtins() []*ast.Builtin {
 
 		// Arrays
 		ast.ArrayConcat,
+		ast.ArrayFlatten,
 		ast.ArraySlice,
 		ast.ArrayReverse,
 
@@ -196,6 +197,9 @@ func builtins() []*ast.Builtin {
 		// Printing
 		ast.Print,
 		ast.InternalPrint,
+
+		// Internal implementation for template strings.
+		ast.InternalTemplateString,
 	}
 	return b
 }

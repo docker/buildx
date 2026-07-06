@@ -917,6 +917,35 @@ decision := {
 	}, caps)
 }
 
+func TestPolicyOPA114Builtins(t *testing.T) {
+	p := NewPolicy(Opt{
+		Files: []File{{
+			Filename: "policy.rego",
+			Data: []byte(`
+package docker
+
+segments := array.flatten([["exec"], ["proxy"]])
+
+decision := {
+	"allow": true,
+	"caps": {
+		"exec.proxy": true,
+	},
+} if {
+	msg := $"execute {segments[0]}.{segments[1]}"
+	msg == "execute exec.proxy"
+}
+`),
+		}},
+	})
+
+	caps, err := p.CheckCaps(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, Caps{
+		CapExecProxy: true,
+	}, caps)
+}
+
 func TestCheckCapsMalformedCaps(t *testing.T) {
 	p := NewPolicy(Opt{
 		Files: []File{{
