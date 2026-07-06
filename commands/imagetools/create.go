@@ -357,7 +357,29 @@ func parseSource(in string) (*imagetools.Source, error) {
 	if err := json.Unmarshal([]byte(in), &s.Desc); err != nil {
 		return nil, errors.WithStack(err)
 	}
+	if err := validateDescriptorJSON(in, s.Desc); err != nil {
+		return nil, err
+	}
 	return &s, nil
+}
+
+func validateDescriptorJSON(raw string, desc ocispecs.Descriptor) error {
+	var meta struct {
+		SchemaVersion int `json:"schemaVersion"`
+	}
+	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
+		return errors.WithStack(err)
+	}
+	if meta.SchemaVersion != 0 {
+		return errors.Errorf("expected an OCI content descriptor, got a manifest or index (schemaVersion %d)", meta.SchemaVersion)
+	}
+	if desc.Digest == "" {
+		return errors.Errorf("invalid descriptor: digest is required")
+	}
+	if _, err := digest.Parse(desc.Digest.String()); err != nil {
+		return errors.Wrap(err, "invalid descriptor digest")
+	}
+	return nil
 }
 
 func createCmd(dockerCli command.Cli, opts RootOptions) *cobra.Command {
