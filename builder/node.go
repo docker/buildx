@@ -47,14 +47,21 @@ func (b *Builder) Nodes() []Node {
 type LoadNodesOption func(*loadNodesOptions)
 
 type loadNodesOptions struct {
-	data      bool
-	dialMeta  map[string][]string
-	clientOpt []client.ClientOpt
+	data         bool
+	skipImageOpt bool
+	dialMeta     map[string][]string
+	clientOpt    []client.ClientOpt
 }
 
 func WithData() LoadNodesOption {
 	return func(o *loadNodesOptions) {
 		o.data = true
+	}
+}
+
+func WithSkippedImageOpt() LoadNodesOption {
+	return func(o *loadNodesOptions) {
+		o.skipImageOpt = true
 	}
 }
 
@@ -94,9 +101,12 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 		return nil, err
 	}
 
-	imageopt, err := b.ImageOpt()
-	if err != nil {
-		return nil, err
+	var imageopt imagetools.Opt
+	if !lno.skipImageOpt {
+		imageopt, err = b.ImageOpt()
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	for i, n := range b.NodeGroup.Nodes {
