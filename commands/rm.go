@@ -2,6 +2,7 @@ package commands
 
 import (
 	"context"
+	stderrors "errors"
 	"fmt"
 	"time"
 
@@ -90,7 +91,7 @@ func runRm(ctx context.Context, dockerCli command.Cli, in rmOptions) error {
 					return err
 				}
 
-				err1 := rm(ctx, nodes, in)
+				err1 := rm(timeoutCtx, nodes, in)
 				if err := txn.Remove(b.Name); err != nil {
 					return err
 				}
@@ -140,24 +141,36 @@ func rmCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 }
 
 func rm(ctx context.Context, nodes []builder.Node, in rmOptions) (err error) {
+	errCh := make(chan error, len(nodes)*3)
+	var eg errgroup.Group
 	for _, node := range nodes {
-		if node.Driver == nil {
-			continue
-		}
-		// Do not stop the buildkitd daemon when --keep-daemon is provided
-		if !in.keepDaemon {
-			if err := node.Driver.Stop(ctx, true); err != nil {
-				return err
+		eg.Go(func() error {
+			if node.Err != nil {
+				errCh <- errors.Wrapf(node.Err, "failed to load node %s", node.Name)
 			}
-		}
-		if err := node.Driver.Rm(ctx, true, !in.keepState, !in.keepDaemon); err != nil {
-			return err
-		}
-		if node.Err != nil {
-			err = node.Err
-		}
+			if node.Driver == nil {
+				return nil
+			}
+			// Do not stop the buildkitd daemon when --keep-daemon is provided
+			if !in.keepDaemon {
+				if err := node.Driver.Stop(ctx, true); err != nil {
+					errCh <- errors.Wrapf(err, "failed to stop node %s", node.Name)
+				}
+			}
+			if err := node.Driver.Rm(ctx, true, !in.keepState, !in.keepDaemon); err != nil {
+				errCh <- errors.Wrapf(err, "failed to remove node %s", node.Name)
+			}
+			return nil
+		})
 	}
-	return err
+	_ = eg.Wait()
+	close(errCh)
+
+	var errs []error
+	for err := range errCh {
+		errs = append(errs, err)
+	}
+	return stderrors.Join(errs...)
 }
 
 func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, in rmOptions) error {
@@ -187,7 +200,7 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 					return nil
 				}
 				if b.Inactive() {
-					rmerr := rm(ctx, nodes, in)
+					rmerr := rm(timeoutCtx, nodes, in)
 					if err := txn.Remove(b.Name); err != nil {
 						return err
 					}
