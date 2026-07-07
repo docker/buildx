@@ -200,7 +200,7 @@ func (p *policyPathFSRef) resolve(name string) (fs.StatFS, string, error) {
 		if err != nil {
 			return nil, "", err
 		}
-		return cwd, filepath.Clean(v), nil
+		return cwd, path.Clean(filepath.ToSlash(v)), nil
 	}
 
 	contextFS, err := p.getContextFS()
@@ -276,13 +276,12 @@ func (p *policyPathFSRef) Close() error {
 func normalizeLocalPolicyPath(name, contextDir string) string {
 	if filepath.IsAbs(name) && contextDir != "" {
 		if rel, err := filepath.Rel(contextDir, name); err == nil {
-			rel = filepath.Clean(rel)
 			if rel != ".." && !strings.HasPrefix(rel, ".."+string(filepath.Separator)) {
-				return rel
+				return path.Clean(filepath.ToSlash(rel))
 			}
 		}
 	}
-	return filepath.Clean(name)
+	return path.Clean(filepath.ToSlash(name))
 }
 
 type memoizedPolicyFS struct {
