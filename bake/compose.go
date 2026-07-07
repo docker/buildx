@@ -21,11 +21,42 @@ import (
 	"go.yaml.in/yaml/v3"
 )
 
-func ParseComposeFiles(fs []File, envOverrides map[string]string) (*Config, error) {
+func ParseComposeFiles(fs []File, envOverrides map[string]string, opts ...ParseOpt) (*Config, error) {
+	frel := fileRelativePaths(opts)
+	cfg, err := parseComposeFilesWithBase(fs, envOverrides, frel)
+	if err != nil {
+		return nil, err
+	}
+	if frel {
+		rebaseContextPaths(cfg)
+	}
+	return cfg, nil
+}
+
+func parseComposeFilesWithBase(fs []File, envOverrides map[string]string, withBase bool) (*Config, error) {
 	envs, err := composeEnv(envOverrides)
 	if err != nil {
 		return nil, err
 	}
+
+	if withBase && len(fs) > 0 {
+		var c Config
+		for _, f := range fs {
+			cfg, err := parseComposeFiles([]File{f}, envs)
+			if err != nil {
+				return nil, err
+			}
+			setComposeContextBase(cfg, f.Name)
+			c = mergeConfig(c, *cfg)
+			c = dedupeConfig(c)
+		}
+		return &c, nil
+	}
+
+	return parseComposeFiles(fs, envs)
+}
+
+func parseComposeFiles(fs []File, envs map[string]string) (*Config, error) {
 	var cfgs []composetypes.ConfigFile
 	for _, f := range fs {
 		cfgs = append(cfgs, composetypes.ConfigFile{
@@ -34,6 +65,19 @@ func ParseComposeFiles(fs []File, envOverrides map[string]string) (*Config, erro
 		})
 	}
 	return ParseCompose(cfgs, envs)
+}
+
+func setComposeContextBase(c *Config, name string) {
+	base, _ := localFileDir(name)
+	for _, t := range c.Targets {
+		t.defaultContextBase = base
+		t.hasDefaultContextBase = true
+		if t.Context != nil {
+			t.contextBase = base
+			t.hasContextBase = true
+		}
+		t.setContextsBase(base)
+	}
 }
 
 func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Config, error) {

@@ -715,6 +715,34 @@ services:
 		require.FileExists(t, filepath.Join(dirDest, "shared-marker"))
 	})
 
+	t.Run("default context", func(t *testing.T) {
+		bakefile := []byte(`
+target "default" {
+  dockerfile-inline = <<EOT
+FROM scratch
+COPY marker /marker
+EOT
+}
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("definitions", 0700),
+			fstest.CreateFile("definitions/docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("definitions/marker", []byte("marker"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "definitions/docker-bake.hcl", "--set", "*.output=type=local,dest="+dirDest),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "marker"))
+	})
+
 	t.Run("cwd prefix", func(t *testing.T) {
 		bakefile := []byte(`
 target "default" {

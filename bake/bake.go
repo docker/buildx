@@ -347,6 +347,8 @@ func ParseFiles(files []File, defaults, vars map[string]string, opts ...ParseOpt
 		err = formatHCLError(err, files)
 	}()
 
+	frel := fileRelativePaths(opts)
+
 	var c Config
 	var composeFiles []File
 	var hclFiles []*hcl.File
@@ -374,7 +376,7 @@ func ParseFiles(files []File, defaults, vars map[string]string, opts ...ParseOpt
 	}
 
 	if len(composeFiles) > 0 {
-		cfg, cmperr := ParseComposeFiles(composeFiles, vars)
+		cfg, cmperr := parseComposeFilesWithBase(composeFiles, vars, frel)
 		if cmperr != nil {
 			return nil, nil, errors.Wrap(cmperr, "failed to parse compose file")
 		}
@@ -418,41 +420,51 @@ func ParseFiles(files []File, defaults, vars map[string]string, opts ...ParseOpt
 		pm = *res
 	}
 
-	for _, opt := range opts {
-		if opt.FileRelativePaths {
-			rebaseContextPaths(&c, files)
-			break
-		}
+	if frel {
+		rebaseContextPaths(&c)
 	}
 
 	return &c, &pm, nil
 }
 
-func rebaseContextPaths(c *Config, files []File) {
-	base, ok := firstLocalFileDir(files)
-	if !ok {
-		return
-	}
+func fileRelativePaths(opts []ParseOpt) bool {
+	return slices.ContainsFunc(opts, func(opt ParseOpt) bool {
+		return opt.FileRelativePaths
+	})
+}
+
+func rebaseContextPaths(c *Config) {
 	for _, t := range c.Targets {
-		if t.Context != nil {
-			contextPath := rebaseContextPath(base, *t.Context)
+		t.rebaseContextPaths()
+	}
+}
+
+func (t *Target) rebaseContextPaths() {
+	if t.Context != nil {
+		if t.hasContextBase {
+			contextPath := rebaseContextPath(t.contextBase, *t.Context)
 			t.Context = &contextPath
 		}
-		for k, v := range t.Contexts {
+	} else if t.hasDefaultContextBase {
+		contextPath := rebaseContextPath(t.defaultContextBase, ".")
+		t.Context = &contextPath
+	}
+	for k, v := range t.Contexts {
+		if base, ok := t.contextsBase[k]; ok {
 			t.Contexts[k] = rebaseContextPath(base, v)
 		}
 	}
 }
 
-func firstLocalFileDir(files []File) (string, bool) {
-	if len(files) == 0 || files[0].Name == "-" || urlutil.IsRemoteURL(files[0].Name) {
+func localFileDir(name string) (string, bool) {
+	if name == "" || name == "-" || urlutil.IsRemoteURL(name) {
 		return "", false
 	}
-	return filepath.Dir(files[0].Name), true
+	return filepath.Dir(name), true
 }
 
 func rebaseContextPath(base, p string) string {
-	if p == "" || isSpecialContextPath(p) || filepath.IsAbs(p) {
+	if base == "" || p == "" || isSpecialContextPath(p) || filepath.IsAbs(p) {
 		return p
 	}
 	return osutil.SanitizePath(filepath.Join(base, filepath.FromSlash(p)))
@@ -831,6 +843,12 @@ type Target struct {
 
 	// linked is a private field to mark a target used as a linked one
 	linked bool
+
+	defaultContextBase    string
+	hasDefaultContextBase bool
+	contextBase           string
+	hasContextBase        bool
+	contextsBase          map[string]string
 }
 
 func (t *Target) MarshalJSON() ([]byte, error) {
@@ -879,9 +897,45 @@ func (t *Target) MarshalJSON() ([]byte, error) {
 var (
 	_ hclparser.WithEvalContexts = &Target{}
 	_ hclparser.WithGetName      = &Target{}
+	_ hclparser.WithBlockSource  = &Target{}
 	_ hclparser.WithEvalContexts = &Group{}
 	_ hclparser.WithGetName      = &Group{}
 )
+
+func (t *Target) SetBlockSource(block *hcl.Block) {
+	base, _ := localFileDir(block.DefRange.Filename)
+	t.defaultContextBase = base
+	t.hasDefaultContextBase = true
+
+	content, _, diags := block.Body.PartialContent(&hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{
+			{Name: "context"},
+			{Name: "contexts"},
+		},
+	})
+	if diags.HasErrors() {
+		return
+	}
+	if _, ok := content.Attributes["context"]; ok {
+		t.contextBase = base
+		t.hasContextBase = true
+	}
+	if _, ok := content.Attributes["contexts"]; ok {
+		t.setContextsBase(base)
+	}
+}
+
+func (t *Target) setContextsBase(base string) {
+	if len(t.Contexts) == 0 {
+		return
+	}
+	if t.contextsBase == nil {
+		t.contextsBase = map[string]string{}
+	}
+	for k := range t.Contexts {
+		t.contextsBase[k] = base
+	}
+}
 
 func (t *Target) normalize() {
 	t.Annotations = removeDupesStr(t.Annotations)
@@ -913,8 +967,14 @@ func (t *Target) normalize() {
 }
 
 func (t *Target) Merge(t2 *Target) {
+	if t2.hasDefaultContextBase {
+		t.defaultContextBase = t2.defaultContextBase
+		t.hasDefaultContextBase = true
+	}
 	if t2.Context != nil {
 		t.Context = t2.Context
+		t.contextBase = t2.contextBase
+		t.hasContextBase = t2.hasContextBase
 	}
 	if t2.Dockerfile != nil {
 		t.Dockerfile = t2.Dockerfile
@@ -936,6 +996,14 @@ func (t *Target) Merge(t2 *Target) {
 			t.Contexts = map[string]string{}
 		}
 		t.Contexts[k] = v
+		if t.contextsBase == nil {
+			t.contextsBase = map[string]string{}
+		}
+		if base, ok := t2.contextsBase[k]; ok {
+			t.contextsBase[k] = base
+		} else {
+			delete(t.contextsBase, k)
+		}
 	}
 	for k, v := range t2.Labels {
 		if v == nil {

@@ -417,9 +417,9 @@ target "app" {
 
 This resolves to the current working directory (`"."`) by default.
 Set `BUILDX_BAKE_FILE_RELATIVE_PATHS=1` to resolve local directory paths in
-`target.context` and `target.contexts` relative to the directory of the first
-Bake file. Use `cwd://` for paths that should remain relative to the current
-working directory when this opt-in is enabled.
+`target.context` and `target.contexts` relative to the Bake or Compose file
+that defines each path. Use `cwd://` for paths that should remain relative to
+the current working directory when this opt-in is enabled.
 
 ```console
 $ docker buildx bake --print -f - <<< 'target "default" {}'

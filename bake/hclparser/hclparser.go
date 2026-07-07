@@ -91,6 +91,10 @@ type WithGetName interface {
 	GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) (string, error)
 }
 
+type WithBlockSource interface {
+	SetBlockSource(block *hcl.Block)
+}
+
 // errUndefined is returned when a variable or function is not defined.
 type errUndefined struct{}
 
@@ -944,6 +948,10 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 
 		vvs := p.blockValues[b]
 		for _, vv := range vvs {
+			if v, ok := vv.Interface().(WithBlockSource); ok {
+				v.SetBlockSource(b)
+			}
+
 			t := types[b.Type]
 			lblIndex, lblExists := getNameIndex(vv)
 			lblName, _ := getName(vv)
