@@ -353,25 +353,22 @@ func parseSource(in string) (*imagetools.Source, error) {
 		return nil, err
 	}
 
-	var s imagetools.Source
-	if err := json.Unmarshal([]byte(in), &s.Desc); err != nil {
+	var parsed struct {
+		SchemaVersion int `json:"schemaVersion"`
+		ocispecs.Descriptor
+	}
+	if err := json.Unmarshal([]byte(in), &parsed); err != nil {
 		return nil, errors.WithStack(err)
 	}
-	if err := validateDescriptorJSON(in, s.Desc); err != nil {
+	if err := validateDescriptor(parsed.Descriptor, parsed.SchemaVersion); err != nil {
 		return nil, err
 	}
-	return &s, nil
+	return &imagetools.Source{Desc: parsed.Descriptor}, nil
 }
 
-func validateDescriptorJSON(raw string, desc ocispecs.Descriptor) error {
-	var meta struct {
-		SchemaVersion int `json:"schemaVersion"`
-	}
-	if err := json.Unmarshal([]byte(raw), &meta); err != nil {
-		return errors.WithStack(err)
-	}
-	if meta.SchemaVersion != 0 {
-		return errors.Errorf("expected an OCI content descriptor, got a manifest or index (schemaVersion %d)", meta.SchemaVersion)
+func validateDescriptor(desc ocispecs.Descriptor, schemaVersion int) error {
+	if schemaVersion != 0 {
+		return errors.Errorf("expected an OCI content descriptor, got a manifest or index (schemaVersion %d)", schemaVersion)
 	}
 	if desc.Digest == "" {
 		return errors.Errorf("invalid descriptor: digest is required")
