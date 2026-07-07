@@ -11,6 +11,9 @@ updates:
       crazy-max-dot-github:
         patterns:
           - "crazy-max/.github/*"
+      codeql-actions:
+        patterns:
+          - "github/codeql-action/*"
     labels:
       - "area/dependencies"
       - "bot"
