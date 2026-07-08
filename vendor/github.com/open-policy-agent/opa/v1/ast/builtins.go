@@ -26,11 +26,16 @@ func RegisterBuiltin(b *Builtin) {
 		BuiltinMap[b.Infix] = b
 
 		InternStringTerm(b.Infix)
+		InternVarValue(b.Infix)
 	}
 
-	InternStringTerm(b.Name)
 	if strings.Contains(b.Name, ".") {
-		InternStringTerm(strings.Split(b.Name, ".")...)
+		parts := strings.Split(b.Name, ".")
+		InternStringTerm(parts...)
+		InternVarValue(parts[0])
+	} else {
+		InternStringTerm(b.Name)
+		InternVarValue(b.Name)
 	}
 }
 
@@ -90,6 +95,7 @@ var DefaultBuiltins = [...]*Builtin{
 
 	// Arrays
 	ArrayConcat,
+	ArrayFlatten,
 	ArraySlice,
 	ArrayReverse,
 
@@ -146,6 +152,7 @@ var DefaultBuiltins = [...]*Builtin{
 	Sprintf,
 	StringReverse,
 	RenderTemplate,
+	InternalTemplateString,
 
 	// Numbers
 	NumbersRange,
@@ -887,6 +894,18 @@ var ArrayConcat = &Builtin{
 	CanSkipBctx: true,
 }
 
+var ArrayFlatten = &Builtin{
+	Name:        "array.flatten",
+	Description: "Non-recursively unpacks array items in arr into the flattened array. Other types are appended as-is.",
+	Decl: types.NewFunction(
+		types.Args(
+			types.Named("arr", types.NewArray(nil, types.A)).Description("the array to be flattened"),
+		),
+		types.Named("flattened", types.NewArray(nil, types.A)).Description("array flattened one level"),
+	),
+	CanSkipBctx: true,
+}
+
 var ArraySlice = &Builtin{
 	Name:        "array.slice",
 	Description: "Returns a slice of a given array. If `start` is greater or equal than `stop`, `slice` is `[]`.",
@@ -1104,7 +1123,7 @@ var Concat = &Builtin{
 		types.Named("output", types.S).Description("the joined string"),
 	),
 	Categories:  stringsCat,
-	CanSkipBctx: true,
+	CanSkipBctx: false,
 }
 
 var FormatInt = &Builtin{
@@ -1272,7 +1291,7 @@ var Replace = &Builtin{
 		types.Named("y", types.S).Description("string with replaced substrings"),
 	),
 	Categories:  stringsCat,
-	CanSkipBctx: true,
+	CanSkipBctx: false,
 }
 
 var ReplaceN = &Builtin{
@@ -1292,7 +1311,7 @@ The old string comparisons are done in argument order.`,
 		),
 		types.Named("output", types.S).Description("string with replaced substrings"),
 	),
-	CanSkipBctx: true,
+	CanSkipBctx: false,
 }
 
 var RegexReplace = &Builtin{
@@ -1656,7 +1675,7 @@ var JSONPatch = &Builtin{
 		"Additionally works on sets, where a value contained in the set is considered to be its path.",
 	Decl: types.NewFunction(
 		types.Args(
-			types.Named("object", types.A).Description("the object to patch"), // TODO(sr): types.A?
+			types.Named("target", types.A).Description("the object, array or set to patch"),
 			types.Named("patches", types.NewArray(
 				nil,
 				types.NewObject(
@@ -1817,7 +1836,8 @@ var ObjectKeys = &Builtin{
 /*
  *  Encoding
  */
-var encoding = category("encoding")
+// Not using 'encoding' to avoid having to alias stdlib "encoding" imports
+var catEncoding = category("encoding")
 
 var JSONMarshal = &Builtin{
 	Name:        "json.marshal",
@@ -1828,7 +1848,7 @@ var JSONMarshal = &Builtin{
 		),
 		types.Named("y", types.S).Description("the JSON string representation of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1850,7 +1870,7 @@ var JSONMarshalWithOptions = &Builtin{
 		),
 		types.Named("y", types.S).Description("the JSON string representation of `x`, with configured prefix/indent string(s) as appropriate"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1863,7 +1883,7 @@ var JSONUnmarshal = &Builtin{
 		),
 		types.Named("y", types.A).Description("the term deserialized from `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1876,7 +1896,7 @@ var JSONIsValid = &Builtin{
 		),
 		types.Named("result", types.B).Description("`true` if `x` is valid JSON, `false` otherwise"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1889,7 +1909,7 @@ var Base64Encode = &Builtin{
 		),
 		types.Named("y", types.S).Description("base64 serialization of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1902,7 +1922,7 @@ var Base64Decode = &Builtin{
 		),
 		types.Named("y", types.S).Description("base64 deserialization of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1915,7 +1935,7 @@ var Base64IsValid = &Builtin{
 		),
 		types.Named("result", types.B).Description("`true` if `x` is valid base64 encoded value, `false` otherwise"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1928,7 +1948,7 @@ var Base64UrlEncode = &Builtin{
 		),
 		types.Named("y", types.S).Description("base64url serialization of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1941,7 +1961,7 @@ var Base64UrlEncodeNoPad = &Builtin{
 		),
 		types.Named("y", types.S).Description("base64url serialization of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1954,7 +1974,7 @@ var Base64UrlDecode = &Builtin{
 		),
 		types.Named("y", types.S).Description("base64url deserialization of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1967,7 +1987,7 @@ var URLQueryDecode = &Builtin{
 		),
 		types.Named("y", types.S).Description("URL-encoding deserialization of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -1980,7 +2000,7 @@ var URLQueryEncode = &Builtin{
 		),
 		types.Named("y", types.S).Description("URL-encoding serialization of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -2004,7 +2024,7 @@ var URLQueryEncodeObject = &Builtin{
 		),
 		types.Named("y", types.S).Description("the URL-encoded serialization of `object`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -2019,7 +2039,7 @@ var URLQueryDecodeObject = &Builtin{
 			types.S,
 			types.NewArray(nil, types.S)))).Description("the resulting object"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -2032,7 +2052,7 @@ var YAMLMarshal = &Builtin{
 		),
 		types.Named("y", types.S).Description("the YAML string representation of `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -2045,7 +2065,7 @@ var YAMLUnmarshal = &Builtin{
 		),
 		types.Named("y", types.A).Description("the term deserialized from `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -2059,7 +2079,7 @@ var YAMLIsValid = &Builtin{
 		),
 		types.Named("result", types.B).Description("`true` if `x` is valid YAML, `false` otherwise"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -2072,7 +2092,7 @@ var HexEncode = &Builtin{
 		),
 		types.Named("y", types.S).Description("serialization of `x` using hex-encoding"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -2085,7 +2105,7 @@ var HexDecode = &Builtin{
 		),
 		types.Named("y", types.S).Description("deserialized from `x`"),
 	),
-	Categories:  encoding,
+	Categories:  catEncoding,
 	CanSkipBctx: true,
 }
 
@@ -3383,6 +3403,12 @@ var InternalTestCase = &Builtin{
 	Decl: types.NewFunction([]types.Type{types.NewArray(nil, types.A)}, nil),
 }
 
+var InternalTemplateString = &Builtin{
+	Name:        "internal.template_string",
+	Decl:        types.NewFunction([]types.Type{types.NewArray(nil, types.A)}, types.S),
+	CanSkipBctx: true, // Uses bctx.Location for error reporting, but that is always provided in eval
+}
+
 /**
  * Deprecated built-ins.
  */
@@ -3397,7 +3423,7 @@ var SetDiff = &Builtin{
 		),
 		types.SetOfAny,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3411,7 +3437,7 @@ var NetCIDROverlap = &Builtin{
 		),
 		types.B,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3423,7 +3449,7 @@ var CastArray = &Builtin{
 		types.Args(types.A),
 		types.NewArray(nil, types.A),
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3437,7 +3463,7 @@ var CastSet = &Builtin{
 		types.Args(types.A),
 		types.SetOfAny,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3449,7 +3475,7 @@ var CastString = &Builtin{
 		types.Args(types.A),
 		types.S,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3460,7 +3486,7 @@ var CastBoolean = &Builtin{
 		types.Args(types.A),
 		types.B,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3471,7 +3497,7 @@ var CastNull = &Builtin{
 		types.Args(types.A),
 		types.Nl,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3482,11 +3508,11 @@ var CastObject = &Builtin{
 		types.Args(types.A),
 		types.NewObject(nil, types.NewDynamicProperty(types.A, types.A)),
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
-// RegexMatchDeprecated declares `re_match` which has been deprecated. Use `regex.match` instead.
+// RegexMatchDeprecated declares `re_match` which has been Deprecated. Use `regex.match` instead.
 var RegexMatchDeprecated = &Builtin{
 	Name: "re_match",
 	Decl: types.NewFunction(
@@ -3496,7 +3522,7 @@ var RegexMatchDeprecated = &Builtin{
 		),
 		types.B,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: false,
 }
 
@@ -3513,7 +3539,7 @@ var All = &Builtin{
 		),
 		types.B,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3530,7 +3556,7 @@ var Any = &Builtin{
 		),
 		types.B,
 	),
-	deprecated:  true,
+	Deprecated:  true,
 	CanSkipBctx: true,
 }
 
@@ -3548,7 +3574,7 @@ type Builtin struct {
 	Decl             *types.Function `json:"decl"`                       // Built-in function type declaration.
 	Infix            string          `json:"infix,omitempty"`            // Unique name of infix operator. Default should be unset.
 	Relation         bool            `json:"relation,omitempty"`         // Indicates if the built-in acts as a relation.
-	deprecated       bool            `json:"-"`                          // Indicates if the built-in has been deprecated.
+	Deprecated       bool            `json:"deprecated,omitempty"`       // Indicates if the built-in has been deprecated.
 	CanSkipBctx      bool            `json:"-"`                          // Built-in needs no data from the built-in context.
 	Nondeterministic bool            `json:"nondeterministic,omitempty"` // Indicates if the built-in returns non-deterministic results.
 }
@@ -3573,12 +3599,12 @@ func (b *Builtin) Minimal() *Builtin {
 	return &cpy
 }
 
-// IsDeprecated returns true if the Builtin function is deprecated and will be removed in a future release.
+// IsDeprecated returns true if the Builtin function is Deprecated and will be removed in a future release.
 func (b *Builtin) IsDeprecated() bool {
-	return b.deprecated
+	return b.Deprecated
 }
 
-// IsDeterministic returns true if the Builtin function returns non-deterministic results.
+// IsNondeterministic returns true if the Builtin function returns non-deterministic results.
 func (b *Builtin) IsNondeterministic() bool {
 	return b.Nondeterministic
 }

@@ -1,51 +1,29 @@
 package ast
 
 import (
-	"strings"
+	"bytes"
 	"sync"
+
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
-type termPtrPool struct {
-	pool sync.Pool
-}
+var (
+	TermPtrPool     = util.NewSyncPool[Term]()
+	BytesReaderPool = util.NewSyncPool[bytes.Reader]()
+	IndexResultPool = util.NewSyncPool[IndexResult]()
 
-type stringBuilderPool struct {
-	pool sync.Pool
-}
-
-type indexResultPool struct {
-	pool sync.Pool
-}
+	// Needs custom pool because of custom Put logic.
+	varVisitorPool = &vvPool{
+		pool: sync.Pool{
+			New: func() any {
+				return NewVarVisitor()
+			},
+		},
+	}
+)
 
 type vvPool struct {
 	pool sync.Pool
-}
-
-func (p *termPtrPool) Get() *Term {
-	return p.pool.Get().(*Term)
-}
-
-func (p *termPtrPool) Put(t *Term) {
-	p.pool.Put(t)
-}
-
-func (p *stringBuilderPool) Get() *strings.Builder {
-	return p.pool.Get().(*strings.Builder)
-}
-
-func (p *stringBuilderPool) Put(sb *strings.Builder) {
-	sb.Reset()
-	p.pool.Put(sb)
-}
-
-func (p *indexResultPool) Get() *IndexResult {
-	return p.pool.Get().(*IndexResult)
-}
-
-func (p *indexResultPool) Put(x *IndexResult) {
-	if x != nil {
-		p.pool.Put(x)
-	}
 }
 
 func (p *vvPool) Get() *VarVisitor {
@@ -57,36 +35,4 @@ func (p *vvPool) Put(vv *VarVisitor) {
 		vv.Clear()
 		p.pool.Put(vv)
 	}
-}
-
-var TermPtrPool = &termPtrPool{
-	pool: sync.Pool{
-		New: func() any {
-			return &Term{}
-		},
-	},
-}
-
-var sbPool = &stringBuilderPool{
-	pool: sync.Pool{
-		New: func() any {
-			return &strings.Builder{}
-		},
-	},
-}
-
-var varVisitorPool = &vvPool{
-	pool: sync.Pool{
-		New: func() any {
-			return NewVarVisitor()
-		},
-	},
-}
-
-var IndexResultPool = &indexResultPool{
-	pool: sync.Pool{
-		New: func() any {
-			return &IndexResult{}
-		},
-	},
 }
