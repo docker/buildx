@@ -376,9 +376,12 @@ func ParseFiles(files []File, defaults, vars map[string]string, opts ...ParseOpt
 	}
 
 	if len(composeFiles) > 0 {
-		cfg, cmperr := parseComposeFilesWithBase(composeFiles, vars, frel)
+		cfg, cmperr := ParseComposeFiles(composeFiles, vars)
 		if cmperr != nil {
 			return nil, nil, errors.Wrap(cmperr, "failed to parse compose file")
+		}
+		if frel {
+			setComposeContextBase(cfg, composeFiles)
 		}
 		c = mergeConfig(c, *cfg)
 		c = dedupeConfig(c)

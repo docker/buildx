@@ -22,38 +22,19 @@ import (
 )
 
 func ParseComposeFiles(fs []File, envOverrides map[string]string, opts ...ParseOpt) (*Config, error) {
-	frel := fileRelativePaths(opts)
-	cfg, err := parseComposeFilesWithBase(fs, envOverrides, frel)
-	if err != nil {
-		return nil, err
-	}
-	if frel {
-		rebaseContextPaths(cfg)
-	}
-	return cfg, nil
-}
-
-func parseComposeFilesWithBase(fs []File, envOverrides map[string]string, withBase bool) (*Config, error) {
 	envs, err := composeEnv(envOverrides)
 	if err != nil {
 		return nil, err
 	}
-
-	if withBase && len(fs) > 0 {
-		var c Config
-		for _, f := range fs {
-			cfg, err := parseComposeFiles([]File{f}, envs)
-			if err != nil {
-				return nil, err
-			}
-			setComposeContextBase(cfg, f.Name)
-			c = mergeConfig(c, *cfg)
-			c = dedupeConfig(c)
-		}
-		return &c, nil
+	cfg, err := parseComposeFiles(fs, envs)
+	if err != nil {
+		return nil, err
 	}
-
-	return parseComposeFiles(fs, envs)
+	if fileRelativePaths(opts) {
+		setComposeContextBase(cfg, fs)
+		rebaseContextPaths(cfg)
+	}
+	return cfg, nil
 }
 
 func parseComposeFiles(fs []File, envs map[string]string) (*Config, error) {
@@ -67,8 +48,14 @@ func parseComposeFiles(fs []File, envs map[string]string) (*Config, error) {
 	return ParseCompose(cfgs, envs)
 }
 
-func setComposeContextBase(c *Config, name string) {
-	base, _ := localFileDir(name)
+func setComposeContextBase(c *Config, files []File) {
+	if len(files) == 0 {
+		return
+	}
+	base, ok := localFileDir(files[0].Name)
+	if !ok {
+		return
+	}
 	for _, t := range c.Targets {
 		t.defaultContextBase = base
 		t.hasDefaultContextBase = true

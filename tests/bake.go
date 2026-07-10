@@ -715,6 +715,49 @@ services:
 		require.FileExists(t, filepath.Join(dirDest, "shared-marker"))
 	})
 
+	t.Run("compose project", func(t *testing.T) {
+		composefile := []byte(`
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile_inline: |
+        FROM scratch
+        COPY marker /marker
+        COPY --from=shared shared-marker /shared-marker
+`)
+		overridefile := []byte(`
+services:
+  app:
+    build:
+      additional_contexts:
+        shared: ./shared
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("project", 0700),
+			fstest.CreateDir("project/app", 0700),
+			fstest.CreateDir("project/shared", 0700),
+			fstest.CreateDir("overrides", 0700),
+			fstest.CreateFile("project/compose.yml", composefile, 0600),
+			fstest.CreateFile("project/app/marker", []byte("marker"), 0600),
+			fstest.CreateFile("project/shared/shared-marker", []byte("shared"), 0600),
+			fstest.CreateFile("overrides/compose.yml", overridefile, 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "project/compose.yml", "--file", "overrides/compose.yml", "--set", "app.output=type=local,dest="+dirDest),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "marker"))
+		require.FileExists(t, filepath.Join(dirDest, "shared-marker"))
+	})
+
 	t.Run("default context", func(t *testing.T) {
 		bakefile := []byte(`
 target "default" {

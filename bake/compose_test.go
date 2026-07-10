@@ -174,6 +174,45 @@ services:
 	require.Equal(t, "webapp", *c.Targets[1].Target)
 }
 
+func TestComposeProjectBase(t *testing.T) {
+	fp := File{
+		Name: filepath.Join("project", "compose.yml"),
+		Data: []byte(`
+services:
+  app:
+    build:
+      context: ./app
+`),
+	}
+	fp2 := File{
+		Name: filepath.Join("overrides", "compose.yml"),
+		Data: []byte(`
+services:
+  app:
+    build:
+      additional_contexts:
+        shared: ./shared
+  other:
+    build:
+      context: ./other
+`),
+	}
+
+	c, err := ParseComposeFiles([]File{fp, fp2}, nil, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	targets := map[string]*Target{}
+	for _, t := range c.Targets {
+		targets[t.Name] = t
+	}
+
+	require.Equal(t, filepath.ToSlash(filepath.Clean("project/app")), *targets["app"].Context)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("project/shared")), targets["app"].Contexts["shared"])
+	require.Equal(t, filepath.ToSlash(filepath.Clean("project/other")), *targets["other"].Context)
+}
+
 func TestBuildArgEnvCompose(t *testing.T) {
 	dt := []byte(`
 version: "3.8"

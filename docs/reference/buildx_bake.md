@@ -155,9 +155,11 @@ Multiple definitions can be specified by separating them with the system's path 
 
 By default, local directory build contexts in Bake files are resolved from the
 current working directory. To opt in to resolving local directory build contexts
-from the Bake or Compose file that defines each path, set
-`BUILDX_BAKE_FILE_RELATIVE_PATHS=1`. Use the `cwd://` prefix for paths that
-should remain relative to the current working directory.
+from the Bake file that defines each path, set
+`BUILDX_BAKE_FILE_RELATIVE_PATHS=1`. Compose files use the first Compose file
+directory as the base, which matches Compose project directory semantics. Use
+the `cwd://` prefix for paths that should remain relative to the current working
+directory.
 
 You can pass the names of the targets to build, to build only specific target(s).
 The following example builds the `db` and `webapp-release` targets that are
