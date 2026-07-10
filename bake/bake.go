@@ -23,6 +23,7 @@ import (
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/urlutil"
@@ -44,6 +45,10 @@ var (
 type File struct {
 	Name string
 	Data []byte
+}
+
+type ParseOpt struct {
+	FileRelativePaths bool
 }
 
 type Override struct {
@@ -197,8 +202,8 @@ func ListTargets(files []File) ([]string, error) {
 	return dedupSlice(targets), nil
 }
 
-func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults, vars map[string]string, ent *EntitlementConf) (map[string]*Target, map[string]*Group, error) {
-	c, _, err := ParseFiles(files, defaults, vars)
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults, vars map[string]string, ent *EntitlementConf, opts ...ParseOpt) (map[string]*Target, map[string]*Group, error) {
+	c, _, err := ParseFiles(files, defaults, vars, opts...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -337,7 +342,7 @@ func (c Config) matchNames(pattern string) ([]string, error) {
 	return names, nil
 }
 
-func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
+func ParseFiles(files []File, defaults, vars map[string]string, opts ...ParseOpt) (_ *Config, _ *hclparser.ParseMeta, err error) {
 	defer func() {
 		err = formatHCLError(err, files)
 	}()
@@ -413,7 +418,52 @@ func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *h
 		pm = *res
 	}
 
+	for _, opt := range opts {
+		if opt.FileRelativePaths {
+			rebaseContextPaths(&c, files)
+			break
+		}
+	}
+
 	return &c, &pm, nil
+}
+
+func rebaseContextPaths(c *Config, files []File) {
+	base, ok := firstLocalFileDir(files)
+	if !ok {
+		return
+	}
+	for _, t := range c.Targets {
+		if t.Context != nil {
+			contextPath := rebaseContextPath(base, *t.Context)
+			t.Context = &contextPath
+		}
+		for k, v := range t.Contexts {
+			t.Contexts[k] = rebaseContextPath(base, v)
+		}
+	}
+}
+
+func firstLocalFileDir(files []File) (string, bool) {
+	if len(files) == 0 || files[0].Name == "-" || urlutil.IsRemoteURL(files[0].Name) {
+		return "", false
+	}
+	return filepath.Dir(files[0].Name), true
+}
+
+func rebaseContextPath(base, p string) string {
+	if p == "" || isSpecialContextPath(p) || filepath.IsAbs(p) {
+		return p
+	}
+	return osutil.SanitizePath(filepath.Join(base, filepath.FromSlash(p)))
+}
+
+func isSpecialContextPath(p string) bool {
+	return strings.HasPrefix(p, "cwd://") ||
+		strings.HasPrefix(p, "target:") ||
+		strings.HasPrefix(p, "docker-image:") ||
+		strings.HasPrefix(p, "oci-layout://") ||
+		urlutil.IsRemoteURL(p)
 }
 
 func dedupeConfig(c Config) Config {

@@ -12,6 +12,7 @@ import (
 	"os"
 	"slices"
 	"sort"
+	"strconv"
 	"strings"
 	"sync"
 	"text/tabwriter"
@@ -48,6 +49,7 @@ import (
 const (
 	bakeEnvFileSeparator = "BUILDX_BAKE_PATH_SEPARATOR"
 	bakeEnvFilePath      = "BUILDX_BAKE_FILE"
+	bakeEnvFileRelative  = "BUILDX_BAKE_FILE_RELATIVE_PATHS"
 )
 
 type bakeOptions struct {
@@ -225,9 +227,16 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	if err != nil {
 		return err
 	}
+	fileRelativePaths, err := bakeFileRelativePaths()
+	if err != nil {
+		return err
+	}
+	parseOpt := bake.ParseOpt{
+		FileRelativePaths: fileRelativePaths,
+	}
 
 	if in.list != "" {
-		cfg, pm, err := bake.ParseFiles(files, defaults, vars)
+		cfg, pm, err := bake.ParseFiles(files, defaults, vars, parseOpt)
 		if err != nil {
 			return err
 		}
@@ -246,7 +255,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		}
 	}
 
-	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults, vars, &ent)
+	tgts, grps, err := bake.ReadTargets(ctx, files, targets, overrides, defaults, vars, &ent, parseOpt)
 	if err != nil {
 		return err
 	}
@@ -672,6 +681,18 @@ func bakeArgs(args []string) (url, cmdContext string, targets []string) {
 	}
 	cmdContext, targets = targets[0], targets[1:]
 	return url, cmdContext, targets
+}
+
+func bakeFileRelativePaths() (bool, error) {
+	v := strings.TrimSpace(os.Getenv(bakeEnvFileRelative))
+	if v == "" {
+		return false, nil
+	}
+	enabled, err := strconv.ParseBool(v)
+	if err != nil {
+		return false, errors.Wrapf(err, "failed to parse %s value %q", bakeEnvFileRelative, v)
+	}
+	return enabled, nil
 }
 
 func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names []string, stdin io.Reader, pw progress.Writer, filesFromEnv bool) (files []bake.File, inp *bake.Input, err error) {
