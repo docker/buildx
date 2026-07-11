@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/moby/buildkit/client/connhelper"
 	"github.com/moby/buildkit/util/tracing/delegated"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
 type Driver struct {
@@ -93,17 +95,38 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 			}),
 			client.WithTracerDelegate(delegated.DefaultExporter),
 		}, opts...)
-		// Pass the configured endpoint address (rather than an empty string) so
-		// the buildkit client derives the gRPC ":authority" pseudo-header from
-		// the remote endpoint hostname. An empty address falls back to the
-		// system-default buildkit address, which makes the authority resolve to
-		// "localhost". The connection itself still goes through the custom
-		// dialer above, so the actual dial target is unaffected.
+		// The remote driver establishes the connection itself through a custom
+		// dialer (including TLS), so the buildkit client cannot derive the gRPC
+		// ":authority" pseudo-header from the connection and would fall back to
+		// "localhost". Set it explicitly from the configured endpoint so HTTP/2
+		// reverse proxies (e.g. Envoy) can route on it. Passing the endpoint
+		// address also keeps the gRPC dial target meaningful; the actual dial
+		// target is unaffected as it still goes through the dialer above.
+		if authority := d.clientAuthority(); authority != "" {
+			opts = append(opts, client.WithGRPCDialOption(grpc.WithAuthority(authority)))
+		}
 		c, err := client.New(ctx, d.EndpointAddr, opts...)
 		d.client = c
 		d.err = err
 	})
 	return d.client, d.err
+}
+
+// clientAuthority returns the value to use for the gRPC ":authority"
+// pseudo-header when connecting to the remote endpoint. A configured
+// servername takes precedence, since it is also used for TLS SNI and
+// certificate validation; otherwise the authority is the endpoint host. This
+// mirrors how the buildkit client derives the authority when TLS credentials
+// are supplied. Endpoints without a host (e.g. unix sockets) have no authority.
+func (d *Driver) clientAuthority() string {
+	if d.tlsOpts != nil && d.serverName != "" {
+		return d.serverName
+	}
+	u, err := url.Parse(d.EndpointAddr)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }
 
 func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {

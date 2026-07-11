@@ -14,9 +14,47 @@ import (
 	"google.golang.org/grpc/status"
 )
 
-// TestClientAuthority verifies that the remote driver derives the gRPC
-// ":authority" pseudo-header from the configured endpoint address instead of
-// defaulting to "localhost" (see docker/buildx#3880). It stands up an
+// TestClientAuthorityValue exercises the authority derivation logic: the
+// endpoint host is used by default, and a configured servername takes
+// precedence (it is also used for TLS SNI). See docker/buildx#3880.
+func TestClientAuthorityValue(t *testing.T) {
+	tests := []struct {
+		name     string
+		endpoint string
+		tls      *tlsOpts
+		expected string
+	}{
+		{
+			name:     "tcp endpoint without tls",
+			endpoint: "tcp://my-buildkit.example.com:443",
+			expected: "my-buildkit.example.com:443",
+		},
+		{
+			name:     "servername takes precedence over endpoint host",
+			endpoint: "tcp://10.0.0.5:443",
+			tls:      &tlsOpts{serverName: "my-buildkit.example.com"},
+			expected: "my-buildkit.example.com",
+		},
+		{
+			name:     "unix endpoint has no authority",
+			endpoint: "unix:///run/buildkit/buildkitd.sock",
+			expected: "",
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			d := &Driver{
+				InitConfig: driver.InitConfig{EndpointAddr: tt.endpoint},
+				tlsOpts:    tt.tls,
+			}
+			require.Equal(t, tt.expected, d.clientAuthority())
+		})
+	}
+}
+
+// TestClientAuthority verifies end-to-end that the remote driver sends the
+// configured endpoint address as the gRPC ":authority" pseudo-header instead
+// of defaulting to "localhost" (see docker/buildx#3880). It stands up an
 // in-process gRPC server on a loopback listener and asserts the authority of
 // the request it receives matches the endpoint host.
 func TestClientAuthority(t *testing.T) {
