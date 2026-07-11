@@ -449,8 +449,7 @@ func (t *Target) rebaseContextPaths() {
 			t.Context = &contextPath
 		}
 	} else if t.hasDefaultContextBase {
-		contextPath := rebaseContextPath(t.defaultContextBase, ".")
-		t.Context = &contextPath
+		t.useDefaultContextBase = true
 	}
 	for k, v := range t.Contexts {
 		if base, ok := t.contextsBase[k]; ok {
@@ -755,6 +754,9 @@ func (c Config) ResolveTarget(name string, overrides map[string]map[string]Overr
 	t.Inherits = nil
 	if t.Context == nil {
 		s := "."
+		if t.useDefaultContextBase {
+			s = rebaseContextPath(t.defaultContextBase, ".")
+		}
 		t.Context = &s
 	}
 	if t.Dockerfile == nil || (t.Dockerfile != nil && *t.Dockerfile == "") {
@@ -849,6 +851,7 @@ type Target struct {
 
 	defaultContextBase    string
 	hasDefaultContextBase bool
+	useDefaultContextBase bool
 	contextBase           string
 	hasContextBase        bool
 	contextsBase          map[string]string
@@ -973,6 +976,7 @@ func (t *Target) Merge(t2 *Target) {
 	if t2.hasDefaultContextBase {
 		t.defaultContextBase = t2.defaultContextBase
 		t.hasDefaultContextBase = true
+		t.useDefaultContextBase = t2.useDefaultContextBase
 	}
 	if t2.Context != nil {
 		t.Context = t2.Context
