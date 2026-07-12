@@ -32,6 +32,7 @@ import (
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"github.com/zclconf/go-cty/cty"
 	"github.com/zclconf/go-cty/cty/convert"
 )
@@ -345,6 +346,7 @@ func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *h
 	var c Config
 	var composeFiles []File
 	var hclFiles []*hcl.File
+	var hclFileNames []string
 	for _, f := range files {
 		isCompose, composeErr := validateComposeFile(f.Data, f.Name, vars)
 		if isCompose {
@@ -360,6 +362,7 @@ func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *h
 					return nil, nil, err
 				}
 				hclFiles = append(hclFiles, hf)
+				hclFileNames = append(hclFileNames, f.Name)
 			} else if composeErr != nil {
 				return nil, nil, errors.Wrapf(err, "failed to parse %s: parsing yaml: %v, parsing hcl", f.Name, composeErr)
 			} else {
@@ -413,6 +416,10 @@ func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *h
 		pm = *res
 	}
 
+	if err := validateTargetGroups(hclFiles, hclFileNames); err != nil {
+		return nil, nil, err
+	}
+
 	return &c, &pm, nil
 }
 
@@ -440,6 +447,32 @@ func dedupeConfig(c Config) Config {
 func ParseFile(dt []byte, fn string) (*Config, error) {
 	c, _, err := ParseFiles([]File{{Data: dt, Name: fn}}, nil, nil)
 	return c, err
+}
+
+func validateTargetGroups(files []*hcl.File, names []string) error {
+	schema := &hcl.BodySchema{
+		Blocks: []hcl.BlockHeaderSchema{
+			{Type: "target", LabelNames: []string{"name"}},
+		},
+	}
+	for i, f := range files {
+		name := names[i]
+		content, _, diags := f.Body.PartialContent(schema)
+		if diags.HasErrors() {
+			return diags
+		}
+		for _, block := range content.Blocks {
+			attrs, diags := block.Body.JustAttributes()
+			if diags.HasErrors() {
+				return diags
+			}
+			if attr, ok := attrs["targets"]; ok {
+				logrus.Warnf("%s:%d: the \"targets\" argument is not valid inside a target block; use a group block instead",
+					name, attr.NameRange.Start.Line)
+			}
+		}
+	}
+	return nil
 }
 
 type Config struct {
