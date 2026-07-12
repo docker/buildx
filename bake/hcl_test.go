@@ -1,6 +1,7 @@
 package bake
 
 import (
+	"bytes"
 	"fmt"
 	"reflect"
 	"regexp"
@@ -8,6 +9,7 @@ import (
 	"testing"
 
 	hcl "github.com/hashicorp/hcl/v2"
+	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
 
@@ -186,6 +188,181 @@ func TestHCLWithUserDefinedFunctions(t *testing.T) {
 	require.Equal(t, 1, len(c.Targets))
 	require.Equal(t, "webapp", c.Targets[0].Name)
 	require.Equal(t, ptrstr("124"), c.Targets[0].Args["buildno"])
+}
+
+func TestTargetWarnsOnGroupTargetsAttributeInTargetBlock(t *testing.T) {
+	assertTargetsInTargetWarning := func(t *testing.T, output string, file string) {
+		t.Helper()
+		require.NotEmpty(t, output)
+		require.Contains(t, output, "targets")
+		require.Contains(t, output, "group block")
+		require.Contains(t, output, file)
+	}
+
+	withWarnings := func(t *testing.T, fn func()) string {
+		t.Helper()
+		var buf bytes.Buffer
+		logrus.SetOutput(&buf)
+		t.Cleanup(func() { logrus.SetOutput(nil) })
+		fn()
+		return buf.String()
+	}
+
+	t.Run("hcl", func(t *testing.T) {
+		dt := []byte(`
+			target "app" {
+				dockerfile = "app.Dockerfile"
+			}
+
+			target "db" {
+				dockerfile = "db.Dockerfile"
+			}
+
+			target "foo" {
+				targets = ["app", "db"]
+			}
+		`)
+
+		output := withWarnings(t, func() {
+			_, err := ParseFile(dt, "docker-bake.hcl")
+			require.NoError(t, err)
+		})
+		assertTargetsInTargetWarning(t, output, "docker-bake.hcl")
+	})
+
+	t.Run("json", func(t *testing.T) {
+		dt := []byte(`{
+			"group": {
+				"default": {
+					"targets": ["foo"]
+				}
+			},
+			"target": {
+				"app": {
+					"dockerfile": "app.Dockerfile"
+				},
+				"db": {
+					"dockerfile": "db.Dockerfile"
+				},
+				"foo": {
+					"targets": ["app", "db"]
+				}
+			}
+		}`)
+
+		output := withWarnings(t, func() {
+			_, err := ParseFile(dt, "docker-bake.json")
+			require.NoError(t, err)
+		})
+		assertTargetsInTargetWarning(t, output, "docker-bake.json")
+	})
+
+	t.Run("merged hcl files", func(t *testing.T) {
+		output := withWarnings(t, func() {
+			_, _, err := ParseFiles([]File{
+				{
+					Name: "base.hcl",
+					Data: []byte(`
+					target "app" {
+						dockerfile = "app.Dockerfile"
+					}
+
+					target "db" {
+						dockerfile = "db.Dockerfile"
+					}
+				`),
+				},
+				{
+					Name: "group-as-target.hcl",
+					Data: []byte(`
+					target "foo" {
+						targets = ["app", "db"]
+					}
+				`),
+				},
+			}, nil, nil)
+			require.NoError(t, err)
+		})
+		assertTargetsInTargetWarning(t, output, "group-as-target.hcl")
+	})
+
+	t.Run("merged hcl and json", func(t *testing.T) {
+		output := withWarnings(t, func() {
+			_, _, err := ParseFiles([]File{
+				{
+					Name: "docker-bake.hcl",
+					Data: []byte(`
+					group "default" {
+						targets = ["foo"]
+					}
+
+					target "app" {
+						dockerfile = "app.Dockerfile"
+					}
+				`),
+				},
+				{
+					Name: "extra.json",
+					Data: []byte(`{
+					"target": {
+						"foo": {
+							"targets": ["app"]
+						}
+					}
+				}`),
+				},
+			}, nil, nil)
+			require.NoError(t, err)
+		})
+		assertTargetsInTargetWarning(t, output, "extra.json")
+	})
+
+	t.Run("group targets still valid", func(t *testing.T) {
+		dt := []byte(`
+			target "app" {
+				dockerfile = "app.Dockerfile"
+			}
+
+			target "db" {
+				dockerfile = "db.Dockerfile"
+			}
+
+			group "foo" {
+				targets = ["app", "db"]
+			}
+		`)
+
+		c, err := ParseFile(dt, "docker-bake.hcl")
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Groups))
+		require.Equal(t, "foo", c.Groups[0].Name)
+		require.Equal(t, []string{"app", "db"}, c.Groups[0].Targets)
+	})
+
+	t.Run("merged valid files", func(t *testing.T) {
+		c, _, err := ParseFiles([]File{
+			{
+				Name: "targets.hcl",
+				Data: []byte(`
+					target "app" {
+						dockerfile = "app.Dockerfile"
+					}
+				`),
+			},
+			{
+				Name: "groups.hcl",
+				Data: []byte(`
+					group "foo" {
+						targets = ["app"]
+					}
+				`),
+			},
+		}, nil, nil)
+		require.NoError(t, err)
+		require.Equal(t, 1, len(c.Groups))
+		require.Equal(t, "foo", c.Groups[0].Name)
+		require.Equal(t, []string{"app"}, c.Groups[0].Targets)
+	})
 }
 
 func TestHCLWithVariables(t *testing.T) {
