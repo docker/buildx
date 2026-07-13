@@ -8,5 +8,6 @@ const DockerExporter Feature = "Docker exporter"
 const CacheExport Feature = "Cache export"
 const MultiPlatform Feature = "Multi-platform build"
 const DirectPush Feature = "Direct push"
+const PreferImageDigest Feature = "Prefer image digest"
 
 const DefaultLoad Feature = "Automatically load images to the Docker Engine image store"

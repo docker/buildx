@@ -491,6 +491,10 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 		if e.Type == "image" && nodeDriver.IsMobyDriver() {
 			opt.Exports[i].Type = "moby"
+			// The containerd image store resolves images by manifest or index digest.
+			if nodeDriver.Features(ctx)[driver.PreferImageDigest] {
+				opt.Exports[i].Attrs["prefer-image-digest"] = "true"
+			}
 			if e.Attrs["push"] != "" {
 				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
 					if ok, _ := strconv.ParseBool(e.Attrs["push-by-digest"]); ok {

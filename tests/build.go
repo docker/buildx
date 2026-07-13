@@ -682,12 +682,19 @@ func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
 	err = json.Unmarshal(dt, &md)
 	require.NoError(t, err)
 
-	require.NotEmpty(t, md.ConfigDigest)
 	require.NotEmpty(t, md.Digest)
+	if !isMobyContainerdSnapWorker(sb) {
+		require.NotEmpty(t, md.ConfigDigest)
+	}
 
 	// verify the image ID output is correct
-	// XXX: improve this by checking that it's one of the two expected digests depending on the scenario.
 	require.Contains(t, []digest.Digest{digest.Digest(md.ConfigDigest), digest.Digest(md.Digest)}, dgst)
+
+	if sb.DockerAddress() != "" {
+		cmd = dockerCmd(sb, withArgs("image", "inspect", imageID))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+	}
 }
 
 func testBuildMobyFromLocalImage(t *testing.T, sb integration.Sandbox) {

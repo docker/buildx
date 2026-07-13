@@ -92,12 +92,13 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 			c.Close()
 		}
 		d.features.list = map[driver.Feature]bool{
-			driver.OCIExporter:    useContainerdSnapshotter,
-			driver.DockerExporter: useContainerdSnapshotter,
-			driver.CacheExport:    useContainerdSnapshotter,
-			driver.MultiPlatform:  useContainerdSnapshotter,
-			driver.DirectPush:     useContainerdSnapshotter,
-			driver.DefaultLoad:    true,
+			driver.OCIExporter:       useContainerdSnapshotter,
+			driver.DockerExporter:    useContainerdSnapshotter,
+			driver.CacheExport:       useContainerdSnapshotter,
+			driver.MultiPlatform:     useContainerdSnapshotter,
+			driver.DirectPush:        useContainerdSnapshotter,
+			driver.PreferImageDigest: useContainerdSnapshotter,
+			driver.DefaultLoad:       true,
 		}
 	})
 	return d.features.list
