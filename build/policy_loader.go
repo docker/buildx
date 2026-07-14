@@ -152,11 +152,21 @@ func newPolicyPathFS(ctx context.Context, resolver *sourcemeta.Resolver, popt po
 	}
 
 	return func() (fs.StatFS, func() error, error) {
-		return p, p.Close, nil
+		ref := &policyPathFSRef{policyPathFS: p}
+		return ref, ref.Close, nil
 	}
 }
 
-func (p *policyPathFS) Open(name string) (fs.File, error) {
+type policyPathFSRef struct {
+	*policyPathFS
+	mu           sync.Mutex
+	cwdRoot      fs.StatFS
+	cwdClose     func() error
+	contextRoot  fs.StatFS
+	contextClose func() error
+}
+
+func (p *policyPathFSRef) Open(name string) (fs.File, error) {
 	backend, target, err := p.resolve(name)
 	if err != nil {
 		return nil, err
@@ -167,7 +177,7 @@ func (p *policyPathFS) Open(name string) (fs.File, error) {
 	return backend.Open(target)
 }
 
-func (p *policyPathFS) Stat(name string) (fs.FileInfo, error) {
+func (p *policyPathFSRef) Stat(name string) (fs.FileInfo, error) {
 	backend, target, err := p.resolve(name)
 	if err != nil {
 		return nil, err
@@ -178,14 +188,7 @@ func (p *policyPathFS) Stat(name string) (fs.FileInfo, error) {
 	return backend.Stat(target)
 }
 
-func (p *policyPathFS) Close() error {
-	if err := p.cwdFS.close(); err != nil {
-		return err
-	}
-	return p.contextFS.close()
-}
-
-func (p *policyPathFS) resolve(name string) (fs.StatFS, string, error) {
+func (p *policyPathFSRef) resolve(name string) (fs.StatFS, string, error) {
 	if name == "" {
 		return nil, "", errors.New("policy filename is empty")
 	}
@@ -193,14 +196,14 @@ func (p *policyPathFS) resolve(name string) (fs.StatFS, string, error) {
 		if v == "" {
 			return nil, "", errors.Errorf("invalid policy filename %q", name)
 		}
-		cwd, err := p.cwdFS.get()
+		cwd, err := p.getCwdFS()
 		if err != nil {
 			return nil, "", err
 		}
 		return cwd, filepath.Clean(v), nil
 	}
 
-	contextFS, err := p.contextFS.get()
+	contextFS, err := p.getContextFS()
 	if err != nil {
 		return nil, "", err
 	}
@@ -212,6 +215,62 @@ func (p *policyPathFS) resolve(name string) (fs.StatFS, string, error) {
 		return contextFS, target, nil
 	}
 	return contextFS, normalizeLocalPolicyPath(name, p.contextDir), nil
+}
+
+func (p *policyPathFSRef) getCwdFS() (fs.StatFS, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.cwdClose != nil {
+		return p.cwdRoot, nil
+	}
+	cwd, err := p.cwdFS.get()
+	if err != nil {
+		return nil, err
+	}
+	p.cwdRoot = cwd
+	p.cwdClose = p.cwdFS.close
+	return cwd, nil
+}
+
+func (p *policyPathFSRef) getContextFS() (fs.StatFS, error) {
+	p.mu.Lock()
+	defer p.mu.Unlock()
+	if p.contextClose != nil {
+		return p.contextRoot, nil
+	}
+	contextFS, err := p.contextFS.get()
+	if err != nil {
+		return nil, err
+	}
+	p.contextRoot = contextFS
+	p.contextClose = p.contextFS.close
+	return contextFS, nil
+}
+
+func (p *policyPathFSRef) Close() error {
+	p.mu.Lock()
+	cwdClose := p.cwdClose
+	contextClose := p.contextClose
+	p.cwdRoot = nil
+	p.contextRoot = nil
+	p.cwdClose = nil
+	p.contextClose = nil
+	p.mu.Unlock()
+
+	var firstErr error
+	if cwdClose != nil {
+		if err := cwdClose(); err != nil {
+			firstErr = err
+		}
+	}
+	if contextClose != nil {
+		if err := contextClose(); err != nil {
+			if firstErr == nil {
+				firstErr = err
+			}
+		}
+	}
+	return firstErr
 }
 
 func normalizeLocalPolicyPath(name, contextDir string) string {
@@ -405,7 +464,7 @@ func (i policyFileInfo) Sys() any {
 	return &types.Stat{Mode: uint32(i.mode), Size: i.size, ModTime: i.tm.UnixNano()}
 }
 
-var _ fs.StatFS = (*policyPathFS)(nil)
+var _ fs.StatFS = (*policyPathFSRef)(nil)
 var _ fs.StatFS = (*remotePolicyFS)(nil)
 var _ fs.File = (*policyReadFile)(nil)
 var _ io.ReaderAt = (*bytes.Reader)(nil)
