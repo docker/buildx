@@ -89,22 +89,22 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
 	d.clientOnce.Do(func() {
-		opts = append([]client.ClientOpt{
+		defaultOpts := []client.ClientOpt{
 			client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 				return d.Dial(ctx)
 			}),
 			client.WithTracerDelegate(delegated.DefaultExporter),
-		}, opts...)
+		}
 		// The remote driver establishes the connection itself through a custom
 		// dialer (including TLS), so the buildkit client cannot derive the gRPC
 		// ":authority" pseudo-header from the connection and would fall back to
-		// "localhost". Set it explicitly from the configured endpoint so HTTP/2
-		// reverse proxies (e.g. Envoy) can route on it. Passing the endpoint
-		// address also keeps the gRPC dial target meaningful; the actual dial
-		// target is unaffected as it still goes through the dialer above.
+		// "localhost". Set it explicitly so HTTP/2 reverse proxies (e.g. Envoy)
+		// can route on it. It is added as a default option so an authority
+		// explicitly passed by the caller still takes precedence.
 		if authority := d.clientAuthority(); authority != "" {
-			opts = append(opts, client.WithGRPCDialOption(grpc.WithAuthority(authority)))
+			defaultOpts = append(defaultOpts, client.WithGRPCDialOption(grpc.WithAuthority(authority)))
 		}
+		opts = append(defaultOpts, opts...)
 		c, err := client.New(ctx, d.EndpointAddr, opts...)
 		d.client = c
 		d.err = err

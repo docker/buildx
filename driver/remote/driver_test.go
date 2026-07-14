@@ -7,6 +7,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/driver"
+	"github.com/moby/buildkit/client"
 	"github.com/stretchr/testify/require"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
@@ -54,17 +55,59 @@ func TestClientAuthorityValue(t *testing.T) {
 
 // TestClientAuthority verifies end-to-end that the remote driver sends the
 // configured endpoint address as the gRPC ":authority" pseudo-header instead
-// of defaulting to "localhost" (see docker/buildx#3880). It stands up an
-// in-process gRPC server on a loopback listener and asserts the authority of
-// the request it receives matches the endpoint host.
+// of defaulting to "localhost" (see docker/buildx#3880).
 func TestClientAuthority(t *testing.T) {
 	ctx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, context.DeadlineExceeded)
 	defer cancel()
 
+	addr, authorityCh := startAuthorityServer(ctx, t)
+
+	d := &Driver{
+		InitConfig: driver.InitConfig{EndpointAddr: "tcp://" + addr},
+	}
+
+	c, err := d.Client(ctx)
+	require.NoError(t, err)
+	defer c.Close()
+
+	// Any RPC will do: it fails server-side with Unimplemented, but the server
+	// records the ":authority" it received from the client before responding.
+	_, _ = c.ListWorkers(ctx)
+
+	require.Equal(t, addr, waitAuthority(ctx, t, authorityCh))
+}
+
+// TestClientAuthorityCallerOverride verifies that an authority explicitly
+// passed by the caller takes precedence over the driver's default one.
+func TestClientAuthorityCallerOverride(t *testing.T) {
+	ctx, cancel := context.WithTimeoutCause(context.Background(), 10*time.Second, context.DeadlineExceeded)
+	defer cancel()
+
+	addr, authorityCh := startAuthorityServer(ctx, t)
+
+	d := &Driver{
+		InitConfig: driver.InitConfig{EndpointAddr: "tcp://" + addr},
+	}
+
+	c, err := d.Client(ctx, client.WithGRPCDialOption(grpc.WithAuthority("caller.example.com")))
+	require.NoError(t, err)
+	defer c.Close()
+
+	_, _ = c.ListWorkers(ctx)
+
+	require.Equal(t, "caller.example.com", waitAuthority(ctx, t, authorityCh))
+}
+
+// startAuthorityServer stands up an in-process gRPC server on a loopback
+// listener that records the ":authority" pseudo-header of the request it
+// receives. It returns the listener address and a channel delivering that
+// authority.
+func startAuthorityServer(ctx context.Context, t *testing.T) (string, <-chan string) {
+	t.Helper()
+
 	lc := net.ListenConfig{}
 	lis, err := lc.Listen(ctx, "tcp", "127.0.0.1:0")
 	require.NoError(t, err)
-	defer lis.Close()
 
 	authorityCh := make(chan string, 1)
 	srv := grpc.NewServer(grpc.UnknownServiceHandler(func(_ any, stream grpc.ServerStream) error {
@@ -83,26 +126,18 @@ func TestClientAuthority(t *testing.T) {
 	go func() {
 		_ = srv.Serve(lis)
 	}()
-	defer srv.Stop()
+	t.Cleanup(srv.Stop)
 
-	d := &Driver{
-		InitConfig: driver.InitConfig{
-			EndpointAddr: "tcp://" + lis.Addr().String(),
-		},
-	}
+	return lis.Addr().String(), authorityCh
+}
 
-	c, err := d.Client(ctx)
-	require.NoError(t, err)
-	defer c.Close()
-
-	// Any RPC will do: it fails server-side with Unimplemented, but the server
-	// records the ":authority" it received from the client before responding.
-	_, _ = c.ListWorkers(ctx)
-
+func waitAuthority(ctx context.Context, t *testing.T, authorityCh <-chan string) string {
+	t.Helper()
 	select {
 	case authority := <-authorityCh:
-		require.Equal(t, lis.Addr().String(), authority)
+		return authority
 	case <-ctx.Done():
 		t.Fatal("timed out waiting for request to reach the server")
+		return ""
 	}
 }
