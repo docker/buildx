@@ -463,7 +463,7 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 	return nil
 }
 
-// getImageID returns the image ID - the digest of the image config
+// getImageID returns the image identifier selected for the export destination.
 func getImageID(resp map[string]string) string {
 	dgst := resp[exptypes.ExporterImageDigestKey]
 	if v, ok := resp[exptypes.ExporterImageConfigDigestKey]; ok {
