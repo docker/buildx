@@ -437,7 +437,22 @@ func fileRelativePaths(opts []ParseOpt) bool {
 }
 
 func rebaseContextPaths(c *Config) {
+	targets := make(map[string]*Target, len(c.Targets))
 	for _, t := range c.Targets {
+		targets[t.Name] = t
+	}
+
+	for _, t := range c.Targets {
+		if ref := targets[t.contextBaseRef]; ref != nil {
+			switch {
+			case ref.hasContextBase:
+				t.contextBase = ref.contextBase
+				t.hasContextBase = true
+			case ref.hasDefaultContextBase:
+				t.contextBase = ref.defaultContextBase
+				t.hasContextBase = true
+			}
+		}
 		t.rebaseContextPaths()
 	}
 }
@@ -854,6 +869,7 @@ type Target struct {
 	useDefaultContextBase bool
 	contextBase           string
 	hasContextBase        bool
+	contextBaseRef        string
 	contextsBase          map[string]string
 }
 
@@ -922,9 +938,10 @@ func (t *Target) SetBlockSource(block *hcl.Block) {
 	if diags.HasErrors() {
 		return
 	}
-	if _, ok := content.Attributes["context"]; ok {
+	if attr, ok := content.Attributes["context"]; ok {
 		t.contextBase = base
 		t.hasContextBase = true
+		t.contextBaseRef = targetContextRef(attr.Expr)
 	}
 	if _, ok := content.Attributes["contexts"]; ok {
 		t.setContextsBase(base)
@@ -940,6 +957,41 @@ func (t *Target) setContextsBase(base string) {
 	}
 	for k := range t.Contexts {
 		t.contextsBase[k] = base
+	}
+}
+
+func targetContextRef(expr hcl.Expression) string {
+	traversal, diags := hcl.AbsTraversalForExpr(expr)
+	if diags.HasErrors() || len(traversal) != 3 {
+		return ""
+	}
+	root, ok := traversal[0].(hcl.TraverseRoot)
+	if !ok || root.Name != "target" {
+		return ""
+	}
+	target, ok := traversalStepName(traversal[1])
+	if !ok {
+		return ""
+	}
+	field, ok := traversal[2].(hcl.TraverseAttr)
+	if !ok || field.Name != "context" {
+		return ""
+	}
+	return target
+}
+
+func traversalStepName(step hcl.Traverser) (string, bool) {
+	switch step := step.(type) {
+	case hcl.TraverseAttr:
+		return step.Name, true
+	case hcl.TraverseIndex:
+		key, err := convert.Convert(step.Key, cty.String)
+		if err != nil || key.IsNull() || !key.IsKnown() {
+			return "", false
+		}
+		return key.AsString(), true
+	default:
+		return "", false
 	}
 }
 
@@ -982,6 +1034,7 @@ func (t *Target) Merge(t2 *Target) {
 		t.Context = t2.Context
 		t.contextBase = t2.contextBase
 		t.hasContextBase = t2.hasContextBase
+		t.contextBaseRef = t2.contextBaseRef
 	}
 	if t2.Dockerfile != nil {
 		t.Dockerfile = t2.Dockerfile

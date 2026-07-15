@@ -786,6 +786,48 @@ EOT
 		require.FileExists(t, filepath.Join(dirDest, "marker"))
 	})
 
+	t.Run("hcl target reference", func(t *testing.T) {
+		baseBakefile := []byte(`
+target "base" {
+  context = "basectx"
+}
+`)
+		appBakefile := []byte(`
+target "app" {
+  context = target.base.context
+  dockerfile-inline = <<EOT
+FROM scratch
+COPY marker /marker
+EOT
+}
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("one", 0700),
+			fstest.CreateDir("one/basectx", 0700),
+			fstest.CreateDir("two", 0700),
+			fstest.CreateDir("two/basectx", 0700),
+			fstest.CreateFile("one/docker-bake.hcl", baseBakefile, 0600),
+			fstest.CreateFile("one/basectx/marker", []byte("source-file"), 0600),
+			fstest.CreateFile("two/docker-bake.hcl", appBakefile, 0600),
+			fstest.CreateFile("two/basectx/marker", []byte("consumer-file"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "one/docker-bake.hcl", "--file", "two/docker-bake.hcl", "--set", "app.output=type=local,dest="+dirDest, "app"),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+
+		dt, err := os.ReadFile(filepath.Join(dirDest, "marker"))
+		require.NoError(t, err)
+		require.Equal(t, "source-file", string(dt))
+	})
+
 	t.Run("cwd prefix", func(t *testing.T) {
 		bakefile := []byte(`
 target "default" {

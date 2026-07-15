@@ -918,6 +918,30 @@ target "app" {
 	})
 }
 
+func TestTargetReferenceContextRebase(t *testing.T) {
+	fp1 := File{
+		Name: filepath.Join("one", "docker-bake.hcl"),
+		Data: []byte(`
+target "base" {
+  context = "basectx"
+}`),
+	}
+	fp2 := File{
+		Name: filepath.Join("two", "docker-bake.hcl"),
+		Data: []byte(`
+target "app" {
+  context = target.base.context
+}`),
+	}
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp1, fp2}, []string{"app"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, filepath.ToSlash(filepath.Clean("one/basectx")), *m["app"].Context)
+}
+
 func TestOverridesNotRebased(t *testing.T) {
 	fp := File{
 		Name: filepath.Join("subdir", "docker-bake.hcl"),
