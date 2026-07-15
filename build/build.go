@@ -1030,7 +1030,11 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 	m := map[string]map[fsKey]*fsTracker{}
 	for _, reqs := range reqs {
 		for _, req := range reqs {
-			nodeName := req.ResolvedNode.Node().Name
+			nodeName := req.Node().Name
+			// skip shared-session optimisation: targets may connect to different replicas.
+			if req.Node().Driver != nil && req.Node().Driver.RequiresUncachedClient() {
+				continue
+			}
 			if _, ok := m[nodeName]; !ok {
 				m[nodeName] = map[fsKey]*fsTracker{}
 			}

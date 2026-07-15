@@ -162,6 +162,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			StatefulSet: d.statefulSet,
 		}
 	}
+	d.loadbalance = loadbalance
 	return d, nil
 }
 

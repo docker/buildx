@@ -57,6 +57,10 @@ type Info struct {
 	DynamicNodes []store.Node
 }
 
+type UncachedClientDriver interface {
+	RequiresUncachedClient() bool
+}
+
 type Driver interface {
 	Factory() Factory
 	Bootstrap(context.Context, progress.Logger) error
