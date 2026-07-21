@@ -237,6 +237,49 @@ target "webapp" {
 		require.Equal(t, "BAR", m["webapp"].Secrets[1].ID)
 	})
 
+	t.Run("SecretSourceOverrideEnv", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secret.FOO=env=BAR"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "FOO", m["webapp"].Secrets[0].ID)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].Env)
+		require.Empty(t, m["webapp"].Secrets[0].FilePath)
+	})
+
+	t.Run("SecretSourceOverrideFile", func(t *testing.T) {
+		ent := &EntitlementConf{}
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secret.FOO=src=/tmp/foo"}, nil, nil, ent)
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "FOO", m["webapp"].Secrets[0].ID)
+		require.Equal(t, "/tmp/foo", m["webapp"].Secrets[0].FilePath)
+		require.Empty(t, m["webapp"].Secrets[0].Env)
+		require.Equal(t, []string{"/tmp/foo"}, ent.FSRead)
+	})
+
+	t.Run("SecretSourceOverrideUsesFinalSourceForEntitlements", func(t *testing.T) {
+		ent := &EntitlementConf{}
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secrets=id=FOO,src=/tmp/foo", "webapp.secret.FOO=env=BAR"}, nil, nil, ent)
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "FOO", m["webapp"].Secrets[0].ID)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].Env)
+		require.Empty(t, m["webapp"].Secrets[0].FilePath)
+		require.Empty(t, ent.FSRead)
+	})
+
+	t.Run("SecretSourceOverrideUndeclared", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secret.BAR=env=BAR"}, nil, nil, &EntitlementConf{})
+		require.Error(t, err)
+		require.Equal(t, `secret "BAR" must be declared before it can be overridden`, err.Error())
+	})
+
+	t.Run("SecretSourceOverrideMismatchedID", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secret.FOO=id=BAR,env=BAR"}, nil, nil, &EntitlementConf{})
+		require.Error(t, err)
+		require.Equal(t, `secret override id "BAR" does not match declared secret "FOO"`, err.Error())
+	})
+
 	t.Run("ShmSizeOverride", func(t *testing.T) {
 		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.shm-size=256m"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)

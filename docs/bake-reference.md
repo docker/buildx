@@ -1001,6 +1001,14 @@ RUN --mount=type=secret,id=KUBECONFIG,env=KUBECONFIG \
     helm upgrade --install
 ```
 
+You can override the source for an existing secret without changing the target's
+secret IDs. The secret must already be declared by the target.
+
+```console
+$ docker buildx bake --set default.secret.aws=env=AWS_CREDENTIALS
+$ docker buildx bake --set default.secret.KUBECONFIG=src=/path/to/kubeconfig
+```
+
 ### `target.shm-size`
 
 Sets the size of the shared memory allocated for build containers when using
