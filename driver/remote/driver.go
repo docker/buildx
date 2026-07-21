@@ -5,6 +5,7 @@ import (
 	"crypto/tls"
 	"crypto/x509"
 	"net"
+	"net/url"
 	"os"
 	"strings"
 	"sync"
@@ -17,6 +18,7 @@ import (
 	"github.com/moby/buildkit/client/connhelper"
 	"github.com/moby/buildkit/util/tracing/delegated"
 	"github.com/pkg/errors"
+	"google.golang.org/grpc"
 )
 
 type Driver struct {
@@ -87,17 +89,44 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
 	d.clientOnce.Do(func() {
-		opts = append([]client.ClientOpt{
+		defaultOpts := []client.ClientOpt{
 			client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 				return d.Dial(ctx)
 			}),
 			client.WithTracerDelegate(delegated.DefaultExporter),
-		}, opts...)
-		c, err := client.New(ctx, "", opts...)
+		}
+		// The remote driver establishes the connection itself through a custom
+		// dialer (including TLS), so the buildkit client cannot derive the gRPC
+		// ":authority" pseudo-header from the connection and would fall back to
+		// "localhost". Set it explicitly so HTTP/2 reverse proxies (e.g. Envoy)
+		// can route on it. It is added as a default option so an authority
+		// explicitly passed by the caller still takes precedence.
+		if authority := d.clientAuthority(); authority != "" {
+			defaultOpts = append(defaultOpts, client.WithGRPCDialOption(grpc.WithAuthority(authority)))
+		}
+		opts = append(defaultOpts, opts...)
+		c, err := client.New(ctx, d.EndpointAddr, opts...)
 		d.client = c
 		d.err = err
 	})
 	return d.client, d.err
+}
+
+// clientAuthority returns the value to use for the gRPC ":authority"
+// pseudo-header when connecting to the remote endpoint. A configured
+// servername takes precedence, since it is also used for TLS SNI and
+// certificate validation; otherwise the authority is the endpoint host. This
+// mirrors how the buildkit client derives the authority when TLS credentials
+// are supplied. Endpoints without a host (e.g. unix sockets) have no authority.
+func (d *Driver) clientAuthority() string {
+	if d.tlsOpts != nil && d.serverName != "" {
+		return d.serverName
+	}
+	u, err := url.Parse(d.EndpointAddr)
+	if err != nil {
+		return ""
+	}
+	return u.Host
 }
 
 func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
