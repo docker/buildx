@@ -117,6 +117,11 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if err != nil {
 				return nil, err
 			}
+		case k == "allow-untrusted-image":
+			d.allowUntrustedImage, err = strconv.ParseBool(v)
+			if err != nil {
+				return nil, err
+			}
 		default:
 			return nil, errors.Errorf("invalid driver option %s for docker-container driver", k)
 		}

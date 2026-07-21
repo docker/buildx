@@ -13,12 +13,15 @@ import (
 	"time"
 
 	cerrdefs "github.com/containerd/errdefs"
+	"github.com/containerd/platforms"
+	"github.com/distribution/reference"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/ghutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/sourcemeta"
 	"github.com/docker/cli/cli/context/docker"
 	contextstore "github.com/docker/cli/cli/context/store"
 	"github.com/docker/cli/opts"
@@ -29,6 +32,7 @@ import (
 	"github.com/moby/moby/api/types/mount"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/moby/moby/client/pkg/security"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
 
@@ -43,21 +47,22 @@ type Driver struct {
 
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/docker-container.md
-	netMode            string
-	image              string
-	memory             opts.MemBytes
-	memorySwap         opts.MemSwapBytes
-	cpuQuota           int64
-	cpuPeriod          int64
-	cpuShares          int64
-	cpusetCpus         string
-	cpusetMems         string
-	cgroupParent       string
-	restartPolicy      container.RestartPolicy
-	env                []string
-	defaultLoad        bool
-	gpus               []container.DeviceRequest
-	writeProvenanceGHA bool
+	netMode             string
+	image               string
+	allowUntrustedImage bool
+	memory              opts.MemBytes
+	memorySwap          opts.MemSwapBytes
+	cpuQuota            int64
+	cpuPeriod           int64
+	cpuShares           int64
+	cpusetCpus          string
+	cpusetMems          string
+	cgroupParent        string
+	restartPolicy       container.RestartPolicy
+	env                 []string
+	defaultLoad         bool
+	gpus                []container.DeviceRequest
+	writeProvenanceGHA  bool
 }
 
 func (d *Driver) IsMobyDriver() bool {
@@ -92,27 +97,59 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		imageName = d.image
 	}
 
-	if err := l.Wrap("pulling image "+imageName, func() error {
-		ra, err := imagetools.RegistryAuthForRef(imageName, d.Auth)
+	imageRef := imageName
+	pullErr := l.Wrap("pulling image "+imageRef, func() error {
+		ra, err := imagetools.RegistryAuthForRef(imageRef, d.Auth)
 		if err != nil {
 			return err
 		}
-		resp, err := d.DockerAPI.ImagePull(ctx, imageName, dockerclient.ImagePullOptions{
+		resp, err := d.DockerAPI.ImagePull(ctx, imageRef, dockerclient.ImagePullOptions{
 			RegistryAuth: ra,
 		})
 		if err != nil {
 			return err
 		}
 		return resp.Wait(ctx)
-	}); err != nil {
-		// image pulling failed, check if it exists in local image store.
-		// if not, return pulling error. otherwise log it.
-		_, errInspect := d.DockerAPI.ImageInspect(ctx, imageName)
-		found := errInspect == nil
-		if !found {
+	})
+	image, inspectErr := d.DockerAPI.ImageInspect(ctx, imageRef)
+	if inspectErr != nil {
+		if pullErr != nil {
+			return pullErr
+		}
+		return errors.Wrapf(inspectErr, "failed to inspect pulled image %s", imageRef)
+	}
+
+	imageName = imageRef
+	if image.Descriptor != nil && d.ImageVerifier != nil && !d.allowUntrustedImage {
+		named, err := reference.ParseNormalizedNamed(imageRef)
+		if err != nil {
+			return errors.Wrapf(err, "failed to parse image reference %s", imageRef)
+		}
+		if named.Name() == bkimage.TrustedRepo {
+			if _, canonical := named.(reference.Canonical); !canonical {
+				named = reference.TagNameOnly(named)
+			}
+			pinned, err := reference.WithDigest(named, image.Descriptor.Digest)
+			if err != nil {
+				return errors.Wrapf(err, "failed to construct image reference for %s", imageRef)
+			}
+			imageName = pinned.String()
+		}
+	}
+
+	// Policy verification requires the immutable descriptor exposed by the
+	// containerd image store. Classic-store images are allowed without it.
+	if image.Descriptor != nil {
+		var err error
+		imageName, err = d.verifiedImageRef(ctx, l, imageName)
+		if err != nil {
 			return err
 		}
-		l.Wrap("pulling failed, using local image "+imageName, func() error { return nil })
+	}
+	if pullErr != nil {
+		if err := l.Wrap("using local image "+imageName, func() error { return nil }); err != nil {
+			return err
+		}
 	}
 
 	cfg := &container.Config{
@@ -227,6 +264,65 @@ func (d *Driver) create(ctx context.Context, l progress.SubLogger) error {
 		}
 		return d.wait(ctx, l)
 	})
+}
+
+// verifiedImageRef evaluates ref against the builtin default policy and
+// returns the canonical reference carrying the digest that verification
+// resolved. Source metadata is resolved through the BuildKit embedded in the
+// Docker daemon that hosts the builder, so registry access follows the
+// daemon configuration. The reference is returned unchanged when the policy
+// does not apply to it: policy disabled, allow-untrusted-image set, the
+// image pinned by digest without a tag, or an image outside the managed
+// moby/buildkit repository (which the default policy passes through).
+func (d *Driver) verifiedImageRef(ctx context.Context, l progress.SubLogger, ref string) (string, error) {
+	if d.ImageVerifier == nil || d.allowUntrustedImage {
+		return ref, nil
+	}
+
+	c, err := d.buildkitClient(ctx)
+	if err != nil {
+		return "", errors.Wrap(err, "failed to connect to BuildKit for image verification")
+	}
+	defer c.Close()
+	mr := sourcemeta.NewResolver(c)
+	defer mr.Close()
+
+	pinned, applied, err := driver.VerifyImageRef(ctx, l, ref, d.daemonPlatform(ctx), mr, d.ImageVerifier)
+	if err != nil {
+		if !applied {
+			return "", err
+		}
+		return "", errors.Wrapf(err, "failed to verify image %s", ref)
+	}
+	if !applied {
+		return ref, nil
+	}
+	return pinned, nil
+}
+
+// buildkitClient returns a client to the BuildKit embedded in the Docker
+// daemon that hosts the builder container.
+func (d *Driver) buildkitClient(ctx context.Context) (*client.Client, error) {
+	return client.New(ctx, "",
+		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+			return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", d.DialMeta)
+		}),
+		client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
+			return d.DockerAPI.DialHijack(ctx, "/session", proto, meta)
+		}),
+	)
+}
+
+// daemonPlatform returns the platform of the images the daemon pulls,
+// falling back to the client platform when daemon info is unavailable.
+func (d *Driver) daemonPlatform(ctx context.Context) *ocispecs.Platform {
+	if resp, err := d.DockerAPI.Info(ctx, dockerclient.InfoOptions{}); err == nil {
+		if p, err := platforms.Parse(resp.Info.OSType + "/" + resp.Info.Architecture); err == nil {
+			return &p
+		}
+	}
+	p := platforms.Normalize(platforms.DefaultSpec())
+	return &p
 }
 
 func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {

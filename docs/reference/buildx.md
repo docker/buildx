@@ -45,3 +45,11 @@ Extended build capabilities with BuildKit
 ### <a name="builder"></a> Override the configured builder instance (--builder)
 
 You can also use the `BUILDX_BUILDER` environment variable.
+
+### Enable the default policy
+
+Set `BUILDX_DEFAULT_POLICY=1` to enable Buildx's built-in source policy. The
+policy verifies signed tags for images managed by Docker, including BuildKit
+builder images and Dockerfile frontends. Untagged digest references and images
+outside the managed repositories are allowed unchanged. Tagged references
+that also contain a digest still have their release identity verified.

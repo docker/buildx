@@ -8,15 +8,19 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/grpcerrors"
+	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"golang.org/x/sync/errgroup"
 	"google.golang.org/grpc/codes"
 )
@@ -109,6 +113,19 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 		}
 	}
 
+	var imageVerifier driver.ImageVerifier
+	if policy.DefaultPolicyEnabled() {
+		pol := policy.DefaultPolicy(policy.Opt{
+			Log: func(_ logrus.Level, msg string) {
+				logrus.Debug(msg)
+			},
+			VerifierProvider: policy.SignatureVerifier(confutil.NewConfig(b.opts.dockerCli)),
+		})
+		imageVerifier = func(ctx context.Context, ref string, platform *ocispecs.Platform, resolver policy.SourceMetadataResolver) (digest.Digest, error) {
+			return pol.CheckSource(ctx, ref, platform, resolver)
+		}
+	}
+
 	for i, n := range b.NodeGroup.Nodes {
 		func(i int, n store.Node) {
 			eg.Go(func() error {
@@ -137,6 +154,7 @@ func (b *Builder) LoadNodes(ctx context.Context, opts ...LoadNodesOption) (_ []N
 					Files:           n.Files,
 					DriverOpts:      n.DriverOpts,
 					Auth:            imageopt.Auth,
+					ImageVerifier:   imageVerifier,
 					Platforms:       n.Platforms,
 					ContextPathHash: b.opts.contextPathHash,
 					DialMeta:        lno.dialMeta,

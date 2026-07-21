@@ -5,11 +5,13 @@ import (
 	"sort"
 	"sync"
 
+	"github.com/docker/buildx/policy"
 	"github.com/docker/cli/cli/context/store"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/tracing/delegated"
 	dockerclient "github.com/moby/moby/client"
+	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 )
@@ -27,6 +29,15 @@ type BuildkitConfig struct {
 	// Rootless bool
 }
 
+// ImageVerifier validates the builder image ref against the builtin default
+// policy and returns the digest that verification resolved the reference to.
+// Drivers that materialize the builder from an image call it before creating
+// the builder so the verified digest can be used instead of the mutable tag.
+// Source metadata is resolved through the given resolver, which drivers back
+// with a BuildKit instance they have access to so that registry access
+// happens where the image is pulled from.
+type ImageVerifier func(ctx context.Context, ref string, platform *ocispecs.Platform, resolver policy.SourceMetadataResolver) (digest.Digest, error)
+
 type InitConfig struct {
 	Name            string
 	EndpointAddr    string
@@ -36,6 +47,7 @@ type InitConfig struct {
 	Files           map[string][]byte
 	DriverOpts      map[string]string
 	Auth            authprovider.AuthConfigProvider
+	ImageVerifier   ImageVerifier
 	Platforms       []ocispecs.Platform
 	ContextPathHash string
 	DialMeta        map[string][]string
