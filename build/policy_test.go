@@ -9,14 +9,6 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func boolPtr(v bool) *bool {
-	return &v
-}
-
-func levelPtr(v logrus.Level) *logrus.Level {
-	return &v
-}
-
 // TestWithPolicyConfigDefaults ensures default policy is returned when no configs are provided.
 func TestWithPolicyConfigDefaults(t *testing.T) {
 	defaultPolicy := policyOpt{
@@ -46,12 +38,12 @@ func TestWithPolicyConfigDisabled(t *testing.T) {
 	require.Error(t, err)
 
 	_, err = withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
-		{Disabled: true, Strict: boolPtr(true)},
+		{Disabled: true, Strict: new(true)},
 	})
 	require.Error(t, err)
 
 	_, err = withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
-		{Disabled: true, LogLevel: levelPtr(logrus.WarnLevel)},
+		{Disabled: true, LogLevel: new(logrus.WarnLevel)},
 	})
 	require.Error(t, err)
 
@@ -91,7 +83,7 @@ func TestWithPolicyConfigStrictAndLogLevel(t *testing.T) {
 	}
 
 	out, err := withPolicyConfig(defaultPolicy, []buildflags.PolicyConfig{
-		{Strict: boolPtr(true), LogLevel: levelPtr(logrus.WarnLevel)},
+		{Strict: new(true), LogLevel: new(logrus.WarnLevel)},
 	})
 	require.NoError(t, err)
 	require.Len(t, out, 1)
@@ -103,7 +95,7 @@ func TestWithPolicyConfigStrictAndLogLevel(t *testing.T) {
 // TestWithPolicyConfigStrictIgnoredWithoutPolicy ensures strict without any policy produces no entries.
 func TestWithPolicyConfigStrictIgnoredWithoutPolicy(t *testing.T) {
 	out, err := withPolicyConfig(policyOpt{}, []buildflags.PolicyConfig{
-		{Strict: boolPtr(true)},
+		{Strict: new(true)},
 	})
 	require.NoError(t, err)
 	require.Len(t, out, 0)
@@ -117,8 +109,8 @@ func TestWithPolicyConfigMultipleFilesAndOverrides(t *testing.T) {
 
 	out, err := withPolicyConfig(defaultPolicy, []buildflags.PolicyConfig{
 		{Files: []policy.File{{Filename: "a.rego"}}},
-		{Strict: boolPtr(true), LogLevel: levelPtr(logrus.WarnLevel)},
-		{Files: []policy.File{{Filename: "b.rego"}}, Strict: boolPtr(true)},
+		{Strict: new(true), LogLevel: new(logrus.WarnLevel)},
+		{Files: []policy.File{{Filename: "b.rego"}}, Strict: new(true)},
 	})
 	require.NoError(t, err)
 	require.Len(t, out, 3)
