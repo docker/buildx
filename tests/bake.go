@@ -41,6 +41,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrint,
 	testBakePrintSensitive,
 	testBakePrintOverrideEmpty,
+	testBakeSecretSourceOverride,
 	testBakePrintKeepEscaped,
 	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
@@ -473,6 +474,52 @@ target "default" {
 		}
 	}
 }`, stdout.String())
+}
+
+func testBakeSecretSourceOverride(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "build" {
+	secret = [
+		"id=aws,src=aws-default",
+		"id=token,env=TOKEN",
+	]
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", []byte("FROM scratch\n"), 0600),
+		fstest.CreateFile("aws-default", []byte("default"), 0600),
+		fstest.CreateFile("tokenfile", []byte("token"), 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dir), withArgs(
+		"bake", "--print", "build",
+		"--set", "build.secret.aws=env=AWS_CREDENTIALS",
+		"--set", "build.secret.token=src=tokenfile",
+	))
+	stdout := bytes.Buffer{}
+	stderr := bytes.Buffer{}
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(), stdout.String(), stderr.String())
+
+	var def struct {
+		Target map[string]*bake.Target `json:"target"`
+	}
+	require.NoError(t, json.Unmarshal(stdout.Bytes(), &def))
+	require.Contains(t, def.Target, "build")
+	require.Len(t, def.Target["build"].Secrets, 2)
+	require.Equal(t, "aws", def.Target["build"].Secrets[0].ID)
+	require.Equal(t, "AWS_CREDENTIALS", def.Target["build"].Secrets[0].Env)
+	require.Empty(t, def.Target["build"].Secrets[0].FilePath)
+	require.Equal(t, "token", def.Target["build"].Secrets[1].ID)
+	require.Equal(t, "tokenfile", def.Target["build"].Secrets[1].FilePath)
+	require.Empty(t, def.Target["build"].Secrets[1].Env)
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--print", "build", "--set", "build.secret.missing=env=MISSING"))
+	require.Error(t, err)
+	require.Contains(t, out, `secret "missing" must be declared before it can be overridden`)
 }
 
 func testBakePrintKeepEscaped(t *testing.T, sb integration.Sandbox) {

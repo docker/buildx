@@ -441,6 +441,7 @@ $ docker buildx bake --set foo*.no-cache                # bypass caching only fo
 $ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' to the platform list
 $ docker buildx bake --set target.contexts.bar=../bar   # overrides 'bar' named context
 $ docker buildx bake --set target.resources.memory=2g   # overrides memory resource limit
+$ docker buildx bake --set target.secret.aws=env=AWS    # overrides source for an existing secret
 ```
 
 > [!NOTE]
@@ -472,6 +473,7 @@ You can override the following fields:
 * `pull`
 * `push`
 * `resources`
+* `secret.<id>`
 * `secrets`
 * `ssh`
 * `tags`

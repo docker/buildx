@@ -685,9 +685,12 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 					override.Append = appendTo
 					override.ArrValue = append(override.ArrValue, parts[1])
 				}
-			case "resources":
+			case "resources", "secret":
 				if len(keys) != 3 {
-					return nil, errors.Errorf("invalid key %s, resources requires name", parts[0])
+					return nil, errors.Errorf("invalid key %s, %s requires name", parts[0], keys[1])
+				}
+				if appendTo {
+					return nil, errors.Errorf("invalid key %s, %s does not support append", parts[0], keys[1])
 				}
 				override.Value = parts[1]
 			case "args":
@@ -1152,6 +1155,8 @@ func (t *Target) Merge(t2 *Target) {
 func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementConf) error {
 	// IMPORTANT: if you add more fields here, do not forget to update
 	// docs/bake-reference.md and https://docs.docker.com/build/bake/overrides/
+	secretOverrides := map[string]Override{}
+	secretEntitlements := map[string]struct{}{}
 	for key, o := range overrides {
 		value := o.Value
 		keys := strings.SplitN(key, ".", 2)
@@ -1239,20 +1244,23 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 			t.Target = &value
 		case "call":
 			t.Call = &value
+		case "secret":
+			if len(keys) != 2 {
+				return errors.Errorf("invalid format for secret, expecting secret.<id>=<value>")
+			}
+			secretOverrides[keys[1]] = o
 		case "secrets":
 			secrets, err := parseArrValue[buildflags.Secret](o.ArrValue)
 			if err != nil {
 				return errors.Wrap(err, "invalid value for outputs")
 			}
+			for _, s := range secrets {
+				secretEntitlements[s.ID] = struct{}{}
+			}
 			if o.Append {
 				t.Secrets = t.Secrets.Merge(secrets)
 			} else {
 				t.Secrets = secrets
-			}
-			for _, s := range t.Secrets {
-				if s.FilePath != "" {
-					ent.FSRead = append(ent.FSRead, s.FilePath)
-				}
 			}
 		case "ssh":
 			ssh, err := parseArrValue[buildflags.SSH](o.ArrValue)
@@ -1367,7 +1375,44 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 			return errors.Errorf("unknown key: %s", keys[0])
 		}
 	}
+	for id, o := range secretOverrides {
+		if err := t.updateSecret(id, o.Value); err != nil {
+			return err
+		}
+		secretEntitlements[id] = struct{}{}
+	}
+	for _, s := range t.Secrets {
+		if _, ok := secretEntitlements[s.ID]; ok && s.FilePath != "" {
+			ent.FSRead = append(ent.FSRead, s.FilePath)
+		}
+	}
 	return nil
+}
+
+func (t *Target) updateSecret(id, value string) error {
+	if id == "" {
+		return errors.Errorf("invalid format for secret, expecting secret.<id>=<value>")
+	}
+
+	for _, s := range t.Secrets {
+		if s.ID != id {
+			continue
+		}
+
+		var next buildflags.Secret
+		if err := next.UnmarshalText([]byte(value)); err != nil {
+			return err
+		}
+		if next.ID != "" && next.ID != id {
+			return errors.Errorf("secret override id %q does not match declared secret %q", next.ID, id)
+		}
+
+		s.Env = next.Env
+		s.FilePath = next.FilePath
+		return nil
+	}
+
+	return errors.Errorf("secret %q must be declared before it can be overridden", id)
 }
 
 func (g *Group) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) ([]*hcl.EvalContext, error) {
