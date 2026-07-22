@@ -11,6 +11,55 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestLoadPolicyDataLocalPaths(t *testing.T) {
+	dir := t.TempDir()
+	policyData := []byte("package docker\n")
+	policyRelPath := filepath.Join("policy", "allow.rego")
+	require.NoError(t, os.MkdirAll(filepath.Join(dir, "policy"), 0700))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, policyRelPath), policyData, 0600))
+
+	t.Run("context-relative", func(t *testing.T) {
+		provider := newPolicyPathFS(context.Background(), nil, policyOpt{
+			ContextDir: dir,
+		})
+
+		dt, ok, err := loadPolicyData(provider, policyRelPath)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, policyData, dt)
+	})
+
+	t.Run("context-absolute", func(t *testing.T) {
+		provider := newPolicyPathFS(context.Background(), nil, policyOpt{
+			ContextDir: dir,
+		})
+
+		dt, ok, err := loadPolicyData(provider, filepath.Join(dir, policyRelPath))
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, policyData, dt)
+	})
+
+	t.Run("cwd", func(t *testing.T) {
+		cwd, err := os.Getwd()
+		require.NoError(t, err)
+		require.NoError(t, os.Chdir(dir))
+		t.Cleanup(func() {
+			require.NoError(t, os.Chdir(cwd))
+		})
+
+		provider := newPolicyPathFS(context.Background(), nil, policyOpt{})
+		dt, ok, err := loadPolicyData(provider, "cwd://"+policyRelPath)
+		require.NoError(t, err)
+		require.True(t, ok)
+		require.Equal(t, policyData, dt)
+	})
+}
+
+func TestNormalizeLocalPolicyPath(t *testing.T) {
+	require.Equal(t, "policy/allow.rego", normalizeLocalPolicyPath(filepath.Join("policy", "allow.rego"), ""))
+}
+
 func TestMemoizedPolicyFSRefCountedClose(t *testing.T) {
 	var initCalls int
 	var closeCalls int
