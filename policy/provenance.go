@@ -105,11 +105,11 @@ func parseSLSA1Provenance(dt []byte, logf func(logrus.Level, string)) (*ImagePro
 		prv.InvocationID = md.InvocationID
 		prv.StartedOn = formatProvenanceTime(md.StartedOn)
 		prv.FinishedOn = formatProvenanceTime(md.FinishedOn)
-		prv.Reproducible = boolPtr(md.Reproducible)
-		prv.Hermetic = boolPtr(md.Hermetic)
+		prv.Reproducible = new(md.Reproducible)
+		prv.Hermetic = new(md.Hermetic)
 		prv.Completeness = &ImageProvenanceCompleteness{
-			Parameters: boolPtr(md.Completeness.Request),
-			Materials:  boolPtr(md.Completeness.ResolvedDependencies),
+			Parameters: new(md.Completeness.Request),
+			Materials:  new(md.Completeness.ResolvedDependencies),
 		}
 	}
 
@@ -143,12 +143,12 @@ func parseSLSA02Provenance(dt []byte, logf func(logrus.Level, string)) (*ImagePr
 		prv.InvocationID = md.BuildInvocationID
 		prv.StartedOn = formatProvenanceTime(md.BuildStartedOn)
 		prv.FinishedOn = formatProvenanceTime(md.BuildFinishedOn)
-		prv.Reproducible = boolPtr(md.Reproducible)
-		prv.Hermetic = boolPtr(md.Hermetic)
+		prv.Reproducible = new(md.Reproducible)
+		prv.Hermetic = new(md.Hermetic)
 		prv.Completeness = &ImageProvenanceCompleteness{
-			Parameters:  boolPtr(md.Completeness.Parameters),
-			Environment: boolPtr(md.Completeness.Environment),
-			Materials:   boolPtr(md.Completeness.Materials),
+			Parameters:  new(md.Completeness.Parameters),
+			Environment: new(md.Completeness.Environment),
+			Materials:   new(md.Completeness.Materials),
 		}
 	}
 
@@ -195,10 +195,6 @@ func rawMaterialsFromSLSA02(materials []slsa02.ProvenanceMaterial, logf func(log
 		out = append(out, rd)
 	}
 	return out
-}
-
-func boolPtr(v bool) *bool {
-	return &v
 }
 
 func formatProvenanceTime(t *time.Time) string {

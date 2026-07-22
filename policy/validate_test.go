@@ -904,7 +904,7 @@ decision := {
 `),
 		}},
 		Env: Env{
-			Args:     map[string]*string{"MODE": stringPtr("prod")},
+			Args:     map[string]*string{"MODE": new("prod")},
 			Filename: "Dockerfile",
 			Target:   "release",
 		},
@@ -986,10 +986,6 @@ decision := {
 
 	_, err := p.CheckCaps(context.Background())
 	require.ErrorContains(t, err, `unknown policy cap "exec.unknown"`)
-}
-
-func stringPtr(v string) *string {
-	return &v
 }
 
 func mustMarshalImageConfig(t *testing.T, img ocispecs.Image) []byte {
