@@ -194,8 +194,8 @@ func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
 
 // CloudPull pulls an image from the cloud registry.
 // It should be called right after Solve returns.
-func (d *Driver) CloudPull(ctx context.Context, imageDescriptor string, platform string, duc *dockerutil.Client, tags []string, l progress.SubLogger) error {
-	dc, err := duc.API("")
+func (d *Driver) CloudPull(ctx context.Context, imageDescriptor string, platform string, duc *dockerutil.Client, dockerContext string, tags []string, l progress.SubLogger) error {
+	dc, err := duc.API(dockerContext)
 	if err != nil {
 		return err
 	}
@@ -286,7 +286,31 @@ func (d *Driver) CheckCloudPull(ctx context.Context, docker *dockerutil.Client, 
 		return exports
 	}
 
-	supportsRegistryTokenPull, err := daemonSupportsRegistryTokenPull(ctx, docker)
+	dockerContext := ""
+	hasDockerContext := false
+	hasCloudPull := len(exports) == 0
+	for _, e := range exports {
+		pushAttr, _ := strconv.ParseBool(e.Attrs["push"])
+		if e.Type != "docker" && (e.Type != "image" || pushAttr) {
+			continue
+		}
+		if e.Output != nil || e.OutputDir != "" {
+			continue
+		}
+		hasCloudPull = true
+		context := e.Attrs["context"]
+		if !hasDockerContext {
+			dockerContext = context
+			hasDockerContext = true
+		} else if dockerContext != context {
+			return exports
+		}
+	}
+	if !hasCloudPull {
+		return exports
+	}
+
+	supportsRegistryTokenPull, err := daemonSupportsRegistryTokenPull(ctx, docker, dockerContext)
 	if err != nil {
 		logrus.Warnf("failed to detect registry pull token support in daemon: %v", err)
 		return exports
@@ -308,6 +332,9 @@ func (d *Driver) CheckCloudPull(ctx context.Context, docker *dockerutil.Client, 
 
 	for i, e := range exports {
 		pushAttr, _ := strconv.ParseBool(e.Attrs["push"])
+		if e.Output != nil || e.OutputDir != "" {
+			continue
+		}
 		if e.Type == "docker" || (e.Type == "image" && !pushAttr) {
 			exports[i].Type = CloudPullExportType
 			maps.Copy(exports[i].Attrs, CouldPullExportRequiredAttributes)
@@ -424,8 +451,8 @@ func printMagicPull(rc io.Reader, l progress.SubLogger) (err error) {
 	}
 }
 
-func daemonSupportsRegistryTokenPull(ctx context.Context, duc *dockerutil.Client) (bool, error) {
-	dc, err := duc.API("")
+func daemonSupportsRegistryTokenPull(ctx context.Context, duc *dockerutil.Client, dockerContext string) (bool, error) {
+	dc, err := duc.API(dockerContext)
 	if err != nil {
 		return false, err
 	}

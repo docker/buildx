@@ -42,6 +42,7 @@ import (
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/exporter/exporterprovider"
 	"github.com/moby/buildkit/session/secrets/secretsprovider"
 	"github.com/moby/buildkit/session/sshforward/sshprovider"
 	"github.com/moby/buildkit/session/upload/uploadprovider"
@@ -456,6 +457,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	// set up exporters
+	cloudPullConfigured := false
 	for i, e := range opt.Exports {
 		if e.Type == "oci" && !nodeDriver.Features(ctx)[driver.OCIExporter] {
 			return nil, nil, notSupported(driver.OCIExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
@@ -526,25 +528,31 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 				if len(opt.Platforms) > 1 {
 					return nil, nil, errors.Errorf("cloud pull for single node multi-platform builds currently not supported")
 				}
-				cloudDriver := node.Driver.Driver.(*cloud.Driver)
-				targetPlatforms := slices.Clone(opt.Platforms)
-				tags := slices.Clone(opt.Tags)
-				opt.onSolveResponse = func(ctx context.Context, resp *client.SolveResponse) error {
-					pw := progress.ResetTime(pw)
-					return progress.Wrap("cloud pull", pw.Write, func(l progress.SubLogger) error {
-						imgDescriptor := resp.ExporterResponse[exptypes.ExporterImageDescriptorKey]
-						platform := resp.ExporterResponse[exptypes.ExporterPlatformsKey]
-						// Fallback: if platform is not in buildkit response
-						// but --platform was specified, use it
-						if platform == "" && len(targetPlatforms) == 1 {
-							platform = platforms.Format(targetPlatforms[0])
-						}
+				if !cloudPullConfigured {
+					cloudPullConfigured = true
+					cloudDriver := node.Driver.Driver.(*cloud.Driver)
+					targetPlatforms := slices.Clone(opt.Platforms)
+					tags := slices.Clone(opt.Tags)
+					dockerContext := e.Attrs["context"]
+					callback := exporterprovider.New(nil, exporterprovider.WithFinalizeCallback(func(ctx context.Context, exporterResponse map[string]string) error {
+						pw := progress.ResetTime(pw)
+						return progress.Wrap("cloud pull", pw.Write, func(l progress.SubLogger) error {
+							imgDescriptor := exporterResponse[exptypes.ExporterImageDescriptorKey]
+							platform := exporterResponse[exptypes.ExporterPlatformsKey]
+							// Fallback: if platform is not in buildkit response
+							// but --platform was specified, use it
+							if platform == "" && len(targetPlatforms) == 1 {
+								platform = platforms.Format(targetPlatforms[0])
+							}
 
-						if err := cloudDriver.CloudPull(ctx, imgDescriptor, platform, docker, tags, l); err != nil {
-							return errors.Wrap(err, "pulling image from cloud")
-						}
-						return nil
-					})
+							if err := cloudDriver.CloudPull(ctx, imgDescriptor, platform, docker, dockerContext, tags, l); err != nil {
+								return errors.Wrap(err, "pulling image from cloud")
+							}
+							return nil
+						})
+					}))
+					opt.Session = append(opt.Session, callback)
+					so.EnableSessionExporter = true
 				}
 			}
 		}

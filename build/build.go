@@ -98,9 +98,6 @@ type Options struct {
 	GroupRef               string
 	Annotations            map[exptypes.AnnotationKey]string // Not used during build, annotations are already set in Exports. Just used to check for support with drivers.
 	Policy                 []buildflags.PolicyConfig
-	// onSolveResponse runs after BuildKit returns exporter metadata. Cloud pull
-	// uses it to import the image without a private BuildKit session exporter.
-	onSolveResponse func(context.Context, *client.SolveResponse) error
 }
 
 // ResourceLimits holds the cgroup resource constraints applied to individual
@@ -235,8 +232,7 @@ type NamedContext struct {
 
 type reqForNode struct {
 	*noderesolver.ResolvedNode
-	so              *client.SolveOpt
-	onSolveResponse func(context.Context, *client.SolveResponse) error
+	so *client.SolveOpt
 }
 
 func filterAvailableNodes(nodes []builder.Node) ([]builder.Node, error) {
@@ -357,9 +353,8 @@ func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confu
 			}
 			addGitAttrs(so)
 			reqn = append(reqn, &reqForNode{
-				ResolvedNode:    np,
-				so:              so,
-				onSolveResponse: localOpt.onSolveResponse,
+				ResolvedNode: np,
+				so:           so,
 			})
 		}
 		reqForNodes[k] = reqn
@@ -745,11 +740,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					}
 					for k, v := range callRes {
 						rr.ExporterResponse[k] = string(v)
-					}
-					if onSolveResponse := reqForNodes[k][i].onSolveResponse; onSolveResponse != nil {
-						if err := onSolveResponse(ctx, rr); err != nil {
-							return err
-						}
 					}
 					if opt.CallFunc == nil {
 						rr.ExporterResponse["buildx.build.ref"] = buildRef
