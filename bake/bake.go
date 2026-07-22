@@ -23,6 +23,7 @@ import (
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/urlutil"
@@ -44,6 +45,10 @@ var (
 type File struct {
 	Name string
 	Data []byte
+}
+
+type ParseOpt struct {
+	FileRelativePaths bool
 }
 
 type Override struct {
@@ -197,8 +202,8 @@ func ListTargets(files []File) ([]string, error) {
 	return dedupSlice(targets), nil
 }
 
-func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults, vars map[string]string, ent *EntitlementConf) (map[string]*Target, map[string]*Group, error) {
-	c, _, err := ParseFiles(files, defaults, vars)
+func ReadTargets(ctx context.Context, files []File, targets, overrides []string, defaults, vars map[string]string, ent *EntitlementConf, opts ...ParseOpt) (map[string]*Target, map[string]*Group, error) {
+	c, _, err := ParseFiles(files, defaults, vars, opts...)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -337,10 +342,12 @@ func (c Config) matchNames(pattern string) ([]string, error) {
 	return names, nil
 }
 
-func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *hclparser.ParseMeta, err error) {
+func ParseFiles(files []File, defaults, vars map[string]string, opts ...ParseOpt) (_ *Config, _ *hclparser.ParseMeta, err error) {
 	defer func() {
 		err = formatHCLError(err, files)
 	}()
+
+	frel := fileRelativePaths(opts)
 
 	var c Config
 	var composeFiles []File
@@ -372,6 +379,9 @@ func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *h
 		cfg, cmperr := ParseComposeFiles(composeFiles, vars)
 		if cmperr != nil {
 			return nil, nil, errors.Wrap(cmperr, "failed to parse compose file")
+		}
+		if frel {
+			setComposeContextBase(cfg, composeFiles)
 		}
 		c = mergeConfig(c, *cfg)
 		c = dedupeConfig(c)
@@ -413,7 +423,76 @@ func ParseFiles(files []File, defaults, vars map[string]string) (_ *Config, _ *h
 		pm = *res
 	}
 
+	if frel {
+		rebaseContextPaths(&c)
+	}
+
 	return &c, &pm, nil
+}
+
+func fileRelativePaths(opts []ParseOpt) bool {
+	return slices.ContainsFunc(opts, func(opt ParseOpt) bool {
+		return opt.FileRelativePaths
+	})
+}
+
+func rebaseContextPaths(c *Config) {
+	targets := make(map[string]*Target, len(c.Targets))
+	for _, t := range c.Targets {
+		targets[t.Name] = t
+	}
+
+	for _, t := range c.Targets {
+		if ref := targets[t.contextBaseRef]; ref != nil {
+			switch {
+			case ref.hasContextBase:
+				t.contextBase = ref.contextBase
+				t.hasContextBase = true
+			case ref.hasDefaultContextBase:
+				t.contextBase = ref.defaultContextBase
+				t.hasContextBase = true
+			}
+		}
+		t.rebaseContextPaths()
+	}
+}
+
+func (t *Target) rebaseContextPaths() {
+	if t.Context != nil {
+		if t.hasContextBase {
+			contextPath := rebaseContextPath(t.contextBase, *t.Context)
+			t.Context = &contextPath
+		}
+	} else if t.hasDefaultContextBase {
+		t.useDefaultContextBase = true
+	}
+	for k, v := range t.Contexts {
+		if base, ok := t.contextsBase[k]; ok {
+			t.Contexts[k] = rebaseContextPath(base, v)
+		}
+	}
+}
+
+func localFileDir(name string) (string, bool) {
+	if name == "" || name == "-" || urlutil.IsRemoteURL(name) {
+		return "", false
+	}
+	return filepath.Dir(name), true
+}
+
+func rebaseContextPath(base, p string) string {
+	if base == "" || p == "" || isSpecialContextPath(p) || filepath.IsAbs(p) {
+		return p
+	}
+	return osutil.SanitizePath(filepath.Join(base, filepath.FromSlash(p)))
+}
+
+func isSpecialContextPath(p string) bool {
+	return strings.HasPrefix(p, "cwd://") ||
+		strings.HasPrefix(p, "target:") ||
+		strings.HasPrefix(p, "docker-image:") ||
+		strings.HasPrefix(p, "oci-layout://") ||
+		urlutil.IsRemoteURL(p)
 }
 
 func dedupeConfig(c Config) Config {
@@ -690,6 +769,9 @@ func (c Config) ResolveTarget(name string, overrides map[string]map[string]Overr
 	t.Inherits = nil
 	if t.Context == nil {
 		s := "."
+		if t.useDefaultContextBase {
+			s = rebaseContextPath(t.defaultContextBase, ".")
+		}
 		t.Context = &s
 	}
 	if t.Dockerfile == nil || (t.Dockerfile != nil && *t.Dockerfile == "") {
@@ -781,6 +863,14 @@ type Target struct {
 
 	// linked is a private field to mark a target used as a linked one
 	linked bool
+
+	defaultContextBase    string
+	hasDefaultContextBase bool
+	useDefaultContextBase bool
+	contextBase           string
+	hasContextBase        bool
+	contextBaseRef        string
+	contextsBase          map[string]string
 }
 
 func (t *Target) MarshalJSON() ([]byte, error) {
@@ -829,9 +919,81 @@ func (t *Target) MarshalJSON() ([]byte, error) {
 var (
 	_ hclparser.WithEvalContexts = &Target{}
 	_ hclparser.WithGetName      = &Target{}
+	_ hclparser.WithBlockSource  = &Target{}
 	_ hclparser.WithEvalContexts = &Group{}
 	_ hclparser.WithGetName      = &Group{}
 )
+
+func (t *Target) SetBlockSource(block *hcl.Block) {
+	base, _ := localFileDir(block.DefRange.Filename)
+	t.defaultContextBase = base
+	t.hasDefaultContextBase = true
+
+	content, _, diags := block.Body.PartialContent(&hcl.BodySchema{
+		Attributes: []hcl.AttributeSchema{
+			{Name: "context"},
+			{Name: "contexts"},
+		},
+	})
+	if diags.HasErrors() {
+		return
+	}
+	if attr, ok := content.Attributes["context"]; ok {
+		t.contextBase = base
+		t.hasContextBase = true
+		t.contextBaseRef = targetContextRef(attr.Expr)
+	}
+	if _, ok := content.Attributes["contexts"]; ok {
+		t.setContextsBase(base)
+	}
+}
+
+func (t *Target) setContextsBase(base string) {
+	if len(t.Contexts) == 0 {
+		return
+	}
+	if t.contextsBase == nil {
+		t.contextsBase = map[string]string{}
+	}
+	for k := range t.Contexts {
+		t.contextsBase[k] = base
+	}
+}
+
+func targetContextRef(expr hcl.Expression) string {
+	traversal, diags := hcl.AbsTraversalForExpr(expr)
+	if diags.HasErrors() || len(traversal) != 3 {
+		return ""
+	}
+	root, ok := traversal[0].(hcl.TraverseRoot)
+	if !ok || root.Name != "target" {
+		return ""
+	}
+	target, ok := traversalStepName(traversal[1])
+	if !ok {
+		return ""
+	}
+	field, ok := traversal[2].(hcl.TraverseAttr)
+	if !ok || field.Name != "context" {
+		return ""
+	}
+	return target
+}
+
+func traversalStepName(step hcl.Traverser) (string, bool) {
+	switch step := step.(type) {
+	case hcl.TraverseAttr:
+		return step.Name, true
+	case hcl.TraverseIndex:
+		key, err := convert.Convert(step.Key, cty.String)
+		if err != nil || key.IsNull() || !key.IsKnown() {
+			return "", false
+		}
+		return key.AsString(), true
+	default:
+		return "", false
+	}
+}
 
 func (t *Target) normalize() {
 	t.Annotations = removeDupesStr(t.Annotations)
@@ -863,8 +1025,16 @@ func (t *Target) normalize() {
 }
 
 func (t *Target) Merge(t2 *Target) {
+	if t2.hasDefaultContextBase {
+		t.defaultContextBase = t2.defaultContextBase
+		t.hasDefaultContextBase = true
+		t.useDefaultContextBase = t2.useDefaultContextBase
+	}
 	if t2.Context != nil {
 		t.Context = t2.Context
+		t.contextBase = t2.contextBase
+		t.hasContextBase = t2.hasContextBase
+		t.contextBaseRef = t2.contextBaseRef
 	}
 	if t2.Dockerfile != nil {
 		t.Dockerfile = t2.Dockerfile
@@ -886,6 +1056,14 @@ func (t *Target) Merge(t2 *Target) {
 			t.Contexts = map[string]string{}
 		}
 		t.Contexts[k] = v
+		if t.contextsBase == nil {
+			t.contextsBase = map[string]string{}
+		}
+		if base, ok := t2.contextsBase[k]; ok {
+			t.contextsBase[k] = base
+		} else {
+			delete(t.contextsBase, k)
+		}
 	}
 	for k, v := range t2.Labels {
 		if v == nil {

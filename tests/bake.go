@@ -45,6 +45,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
 	testBakeLocalMulti,
+	testBakeFileRelativePaths,
 	testBakeLocalExportDeleteMode,
 	testBakeRemote,
 	testBakeRemoteAuth,
@@ -672,6 +673,189 @@ services:
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest2, "foo"))
+}
+
+func testBakeFileRelativePaths(t *testing.T, sb integration.Sandbox) {
+	t.Run("compose context", func(t *testing.T) {
+		dockerfile := []byte(`
+FROM scratch
+COPY marker /marker
+COPY --from=shared shared-marker /shared-marker
+`)
+		composefile := []byte(`
+services:
+  debian:
+    build:
+      context: ./dockerfiles/debian
+      additional_contexts:
+        shared: ../shared
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("tests", 0700),
+			fstest.CreateDir("tests/dockerfiles", 0700),
+			fstest.CreateDir("tests/dockerfiles/debian", 0700),
+			fstest.CreateDir("shared", 0700),
+			fstest.CreateFile("tests/docker-compose.yml", composefile, 0600),
+			fstest.CreateFile("tests/dockerfiles/debian/Dockerfile", dockerfile, 0600),
+			fstest.CreateFile("tests/dockerfiles/debian/marker", []byte("marker"), 0600),
+			fstest.CreateFile("shared/shared-marker", []byte("shared"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "tests/docker-compose.yml", "--set", "*.output=type=local,dest="+dirDest),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "marker"))
+		require.FileExists(t, filepath.Join(dirDest, "shared-marker"))
+	})
+
+	t.Run("compose project", func(t *testing.T) {
+		composefile := []byte(`
+services:
+  app:
+    build:
+      context: ./app
+      dockerfile_inline: |
+        FROM scratch
+        COPY marker /marker
+        COPY --from=shared shared-marker /shared-marker
+`)
+		overridefile := []byte(`
+services:
+  app:
+    build:
+      additional_contexts:
+        shared: ./shared
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("project", 0700),
+			fstest.CreateDir("project/app", 0700),
+			fstest.CreateDir("project/shared", 0700),
+			fstest.CreateDir("overrides", 0700),
+			fstest.CreateFile("project/compose.yml", composefile, 0600),
+			fstest.CreateFile("project/app/marker", []byte("marker"), 0600),
+			fstest.CreateFile("project/shared/shared-marker", []byte("shared"), 0600),
+			fstest.CreateFile("overrides/compose.yml", overridefile, 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "project/compose.yml", "--file", "overrides/compose.yml", "--set", "app.output=type=local,dest="+dirDest),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "marker"))
+		require.FileExists(t, filepath.Join(dirDest, "shared-marker"))
+	})
+
+	t.Run("default context", func(t *testing.T) {
+		bakefile := []byte(`
+target "default" {
+  dockerfile-inline = <<EOT
+FROM scratch
+COPY marker /marker
+EOT
+}
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("definitions", 0700),
+			fstest.CreateFile("definitions/docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("definitions/marker", []byte("marker"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "definitions/docker-bake.hcl", "--set", "*.output=type=local,dest="+dirDest),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "marker"))
+	})
+
+	t.Run("hcl target reference", func(t *testing.T) {
+		baseBakefile := []byte(`
+target "base" {
+  context = "basectx"
+}
+`)
+		appBakefile := []byte(`
+target "app" {
+  context = target.base.context
+  dockerfile-inline = <<EOT
+FROM scratch
+COPY marker /marker
+EOT
+}
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("one", 0700),
+			fstest.CreateDir("one/basectx", 0700),
+			fstest.CreateDir("two", 0700),
+			fstest.CreateDir("two/basectx", 0700),
+			fstest.CreateFile("one/docker-bake.hcl", baseBakefile, 0600),
+			fstest.CreateFile("one/basectx/marker", []byte("source-file"), 0600),
+			fstest.CreateFile("two/docker-bake.hcl", appBakefile, 0600),
+			fstest.CreateFile("two/basectx/marker", []byte("consumer-file"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "one/docker-bake.hcl", "--file", "two/docker-bake.hcl", "--set", "app.output=type=local,dest="+dirDest, "app"),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+
+		dt, err := os.ReadFile(filepath.Join(dirDest, "marker"))
+		require.NoError(t, err)
+		require.Equal(t, "source-file", string(dt))
+	})
+
+	t.Run("cwd prefix", func(t *testing.T) {
+		bakefile := []byte(`
+target "default" {
+  context = "cwd://."
+  dockerfile-inline = <<EOT
+FROM scratch
+COPY root-marker /root-marker
+EOT
+}
+`)
+
+		dir := tmpdir(
+			t,
+			fstest.CreateDir("definitions", 0700),
+			fstest.CreateFile("definitions/docker-bake.hcl", bakefile, 0600),
+			fstest.CreateFile("root-marker", []byte("root"), 0600),
+		)
+		dirDest := t.TempDir()
+
+		out, err := bakeCmd(
+			sb,
+			withDir(dir),
+			withArgs("--file", "definitions/docker-bake.hcl", "--set", "*.output=type=local,dest="+dirDest),
+			withEnv("BUILDX_BAKE_FILE_RELATIVE_PATHS=1"),
+		)
+		require.NoError(t, err, out)
+		require.FileExists(t, filepath.Join(dirDest, "root-marker"))
+	})
 }
 
 func testBakeLocalExportDeleteMode(t *testing.T, sb integration.Sandbox) {

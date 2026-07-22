@@ -763,6 +763,242 @@ func TestHCLDockerfileCwdPrefix(t *testing.T) {
 	assert.Equal(t, ".", bo["app"].Inputs.ContextPath)
 }
 
+func TestContextPathRebase(t *testing.T) {
+	fp := File{
+		Name: filepath.Join("subdir", "docker-bake.hcl"),
+		Data: []byte(`
+target "base" {
+  context = "base"
+}
+
+target "app" {
+  context = "."
+  dockerfile = "Dockerfile.app"
+  contexts = {
+    shared = "../shared"
+    cwd = "cwd://local"
+    linked = "target:base"
+    image = "docker-image://alpine:latest"
+    layout = "oci-layout://layout"
+  }
+}`),
+	}
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, filepath.ToSlash(filepath.Clean("subdir")), *m["app"].Context)
+	require.Equal(t, "Dockerfile.app", *m["app"].Dockerfile)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("shared")), m["app"].Contexts["shared"])
+	require.Equal(t, "cwd://local", m["app"].Contexts["cwd"])
+	require.Equal(t, "target:base", m["app"].Contexts["linked"])
+	require.Equal(t, "docker-image://alpine:latest", m["app"].Contexts["image"])
+	require.Equal(t, "oci-layout://layout", m["app"].Contexts["layout"])
+	require.Equal(t, filepath.ToSlash(filepath.Clean("subdir/base")), *m["base"].Context)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("subdir")), bo["app"].Inputs.ContextPath)
+	require.Equal(t, filepath.Join("subdir", "Dockerfile.app"), bo["app"].Inputs.DockerfilePath)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("shared")), bo["app"].Inputs.NamedContexts["shared"].Path)
+}
+
+func TestDefaultContextRebase(t *testing.T) {
+	fp := File{
+		Name: filepath.Join("definitions", "docker-bake.hcl"),
+		Data: []byte(`
+target "app" {
+  dockerfile-inline = <<EOT
+FROM scratch
+EOT
+}`),
+	}
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, filepath.ToSlash(filepath.Clean("definitions")), *m["app"].Context)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("definitions")), bo["app"].Inputs.ContextPath)
+}
+
+func TestDefinitionPathBase(t *testing.T) {
+	fp1 := File{
+		Name: filepath.Join("one", "docker-bake.hcl"),
+		Data: []byte(`
+target "app" {
+  context = "."
+  contexts = {
+    shared = "../shared"
+  }
+}
+
+target "implicit" {
+  dockerfile-inline = <<EOT
+FROM scratch
+EOT
+}`),
+	}
+	fp2 := File{
+		Name: filepath.Join("two", "docker-bake.hcl"),
+		Data: []byte(`
+target "app" {
+  tags = ["app:latest"]
+}
+
+target "other" {
+  context = "."
+}`),
+	}
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp1, fp2}, []string{"app", "implicit", "other"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, filepath.ToSlash(filepath.Clean("one")), *m["app"].Context)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("shared")), m["app"].Contexts["shared"])
+	require.Equal(t, []string{"app:latest"}, m["app"].Tags)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("one")), *m["implicit"].Context)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("two")), *m["other"].Context)
+}
+
+func TestInheritedContextRebase(t *testing.T) {
+	t.Run("same file", func(t *testing.T) {
+		fp := File{
+			Name: filepath.Join("subdir", "docker-bake.hcl"),
+			Data: []byte(`
+target "base" {
+  context = "basectx"
+}
+
+target "app" {
+  inherits = ["base"]
+  tags = ["app:latest"]
+}`),
+		}
+
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+			FileRelativePaths: true,
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, filepath.ToSlash(filepath.Clean("subdir/basectx")), *m["app"].Context)
+	})
+
+	t.Run("cross file", func(t *testing.T) {
+		fp1 := File{
+			Name: filepath.Join("one", "docker-bake.hcl"),
+			Data: []byte(`
+target "base" {
+  context = "basectx"
+}`),
+		}
+		fp2 := File{
+			Name: filepath.Join("two", "docker-bake.hcl"),
+			Data: []byte(`
+target "app" {
+  inherits = ["base"]
+  tags = ["app:latest"]
+}`),
+		}
+
+		m, _, err := ReadTargets(context.TODO(), []File{fp1, fp2}, []string{"app"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+			FileRelativePaths: true,
+		})
+		require.NoError(t, err)
+
+		require.Equal(t, filepath.ToSlash(filepath.Clean("one/basectx")), *m["app"].Context)
+	})
+}
+
+func TestTargetReferenceContextRebase(t *testing.T) {
+	fp1 := File{
+		Name: filepath.Join("one", "docker-bake.hcl"),
+		Data: []byte(`
+target "base" {
+  context = "basectx"
+}`),
+	}
+	fp2 := File{
+		Name: filepath.Join("two", "docker-bake.hcl"),
+		Data: []byte(`
+target "app" {
+  context = target.base.context
+}`),
+	}
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp1, fp2}, []string{"app"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, filepath.ToSlash(filepath.Clean("one/basectx")), *m["app"].Context)
+}
+
+func TestOverridesNotRebased(t *testing.T) {
+	fp := File{
+		Name: filepath.Join("subdir", "docker-bake.hcl"),
+		Data: []byte(`
+target "app" {
+  context = "."
+  contexts = {
+    shared = "../shared"
+  }
+}`),
+	}
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"app"}, []string{
+		"app.context=override",
+		"app.contexts.shared=override-shared",
+	}, nil, nil, &EntitlementConf{}, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, "override", *m["app"].Context)
+	require.Equal(t, "override-shared", m["app"].Contexts["shared"])
+}
+
+func TestComposePathRebase(t *testing.T) {
+	fp := File{
+		Name: filepath.Join("tests", "docker-compose.yml"),
+		Data: []byte(`
+services:
+  debian:
+    build:
+      context: ./dockerfiles/debian
+      additional_contexts:
+        shared: ../shared
+  implicit:
+    build:
+      dockerfile_inline: |
+        FROM scratch
+`),
+	}
+
+	m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"debian", "implicit"}, nil, nil, nil, &EntitlementConf{}, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	require.Equal(t, filepath.ToSlash(filepath.Clean("tests/dockerfiles/debian")), *m["debian"].Context)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("shared")), m["debian"].Contexts["shared"])
+	require.Equal(t, filepath.ToSlash(filepath.Clean("tests")), *m["implicit"].Context)
+
+	bo, err := TargetsToBuildOpt(m, &Input{})
+	require.NoError(t, err)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("tests/dockerfiles/debian")), bo["debian"].Inputs.ContextPath)
+	require.Equal(t, filepath.Join("tests", "dockerfiles", "debian", "Dockerfile"), bo["debian"].Inputs.DockerfilePath)
+	require.Equal(t, filepath.ToSlash(filepath.Clean("tests")), bo["implicit"].Inputs.ContextPath)
+}
+
 func TestOverrideMerge(t *testing.T) {
 	fp := File{
 		Name: "docker-bake.hcl",
