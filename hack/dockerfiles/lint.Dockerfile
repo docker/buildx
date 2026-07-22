@@ -5,7 +5,7 @@ ARG ALPINE_VERSION=3.23
 ARG XX_VERSION=1.9.0
 
 ARG GOLANGCI_LINT_VERSION=v2.8.0
-ARG GOLANGCI_FROM_SOURCE=false
+ARG GOLANGCI_FROM_SOURCE=true
 ARG GOPLS_VERSION=v0.40.0
 # GOPLS_ANALYZERS defines gopls analyzers to be run. disabled by default: deprecated simplifyrange unusedfunc unusedvariable
 ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs maprange modernize nonewvars noresultvalues simplifycompositelit simplifyslice unusedparams yield"
@@ -18,7 +18,7 @@ RUN apk add --no-cache git gcc musl-dev binutils-gold
 FROM base AS golangci-build
 WORKDIR /src
 ARG GOLANGCI_LINT_VERSION
-ADD https://github.com/golangci/golangci-lint.git#${GOLANGCI_LINT_VERSION} .
+ADD --keep-git-dir=true https://github.com/golangci/golangci-lint.git#${GOLANGCI_LINT_VERSION} .
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/ go mod download
 RUN --mount=type=cache,target=/go/pkg/mod --mount=type=cache,target=/root/.cache/ mkdir -p out && go build -o /out/golangci-lint ./cmd/golangci-lint
 
