@@ -173,6 +173,18 @@ documentation for the specific driver:
 * [`kubernetes` driver](https://docs.docker.com/build/builders/drivers/kubernetes/)
 * [`remote` driver](https://docs.docker.com/build/builders/drivers/remote/)
 
+With `BUILDX_DEFAULT_POLICY=1`, the `docker-container` driver verifies signed
+`moby/buildkit` builder image tags before creating the builder. To explicitly
+bypass this verification, set `allow-untrusted-image=true`. For example:
+
+```console
+$ BUILDX_DEFAULT_POLICY=1 docker buildx create --driver docker-container \
+    --driver-opt allow-untrusted-image=true
+```
+
+Only use this option for an image that you trust. It disables builder image
+verification for the new builder node.
+
 ### <a name="leave"></a> Remove a node from a builder (--leave)
 
 The `--leave` flag changes the action of the command to remove a node from a

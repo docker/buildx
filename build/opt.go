@@ -65,18 +65,6 @@ var sendGitQueryAsInput = sync.OnceValue(func() bool {
 	return false
 })
 
-// defaultPolicyEnabled reports whether the builtin default source policy is
-// enabled via the BUILDX_DEFAULT_POLICY environment variable. It is opt-in
-// for now; a future release may flip the default to on.
-var defaultPolicyEnabled = sync.OnceValue(func() bool {
-	if v, ok := os.LookupEnv("BUILDX_DEFAULT_POLICY"); ok {
-		if vv, err := strconv.ParseBool(v); err == nil {
-			return vv
-		}
-	}
-	return false
-})
-
 // policyExplicitlyDisabled reports whether the user passed `--policy
 // disabled=true`, which suppresses both user-defined and builtin default
 // policies.
@@ -664,7 +652,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	// (docker/dockerfile, docker/dockerfile-upstream) that may be implicitly
 	// loaded during a build, and passes through any other source so user
 	// policies retain full control.
-	if defaultPolicyEnabled() && !policyExplicitlyDisabled(opt.Policy) {
+	if policy.DefaultPolicyEnabled() && !policyExplicitlyDisabled(opt.Policy) {
 		builtin := policyOpt{
 			Files: []policyFileSpec{{
 				Filename: policy.DefaultPolicyFilename,

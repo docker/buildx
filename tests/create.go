@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/driver/bkimage"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/stretchr/testify/require"
@@ -25,6 +26,7 @@ var createTests = []func(t *testing.T, sb integration.Sandbox){
 	testCreateRestartAlways,
 	testCreateRemoteContainer,
 	testCreateWithProvenanceGHA,
+	testCreateCustomImageWithDefaultPolicy,
 }
 
 func testCreateMemoryLimit(t *testing.T, sb integration.Sandbox) {
@@ -109,6 +111,43 @@ func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
 		}
 	}
 	require.Fail(t, "remote builder is not running")
+}
+
+func testCreateCustomImageWithDefaultPolicy(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
+	}
+
+	customImage := "localhost:1/buildx-test/custom-buildkit:" + identity.NewID()
+	var builderName string
+
+	cmd := dockerCmd(sb, withArgs("image", "tag", bkimage.DefaultImage, customImage))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	t.Cleanup(func() {
+		if builderName != "" {
+			out, err := rmCmd(sb, withArgs(builderName))
+			require.NoError(t, err, out)
+		}
+		cmd := dockerCmd(sb, withArgs("image", "rm", customImage))
+		out, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(out))
+	})
+
+	// images outside the managed moby/buildkit repository pass through the
+	// default policy, so bootstrapping a builder from a custom local image
+	// needs no opt-out or registry access.
+	out, err := createCmd(sb,
+		withArgs("--driver", "docker-container", "--driver-opt", "image="+customImage),
+		withEnv("BUILDX_DEFAULT_POLICY=1"),
+	)
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	out, err = inspectCmd(sb, withArgs(builderName, "--bootstrap"), withEnv("BUILDX_DEFAULT_POLICY=1"))
+	require.NoError(t, err, out)
+	require.Contains(t, out, "using local image "+customImage)
 }
 
 func testCreateWithProvenanceGHA(t *testing.T, sb integration.Sandbox) {

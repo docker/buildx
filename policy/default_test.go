@@ -33,11 +33,7 @@ func makeDefaultPolicy(t *testing.T, sigInfo *policytypes.SignatureInfo) *Policy
 			}, nil
 		}
 	}
-	return NewPolicy(Opt{
-		Files: []File{{
-			Filename: DefaultPolicyFilename,
-			Data:     DefaultPolicyData(),
-		}},
+	return DefaultPolicy(Opt{
 		Log: func(level logrus.Level, msg string) {
 			t.Logf("[%s] %s", level, msg)
 		},
@@ -381,6 +377,153 @@ func TestDefaultPolicySyftScannerImages(t *testing.T) {
 			name:    "syft_scanner_latest_denied_without_signature",
 			ref:     "docker/buildkit-syft-scanner:latest",
 			denyMsg: "signature is required for latest tag",
+		},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			p := makeDefaultPolicy(t, tc.sig)
+			resp := runDefaultPolicyImage(t, p, tc.ref)
+			if tc.allow {
+				require.Equal(t, moby_buildkit_v1_sourcepolicy.PolicyAction_ALLOW, resp.Action)
+				require.Empty(t, resp.DenyMessages)
+				return
+			}
+
+			require.Equal(t, moby_buildkit_v1_sourcepolicy.PolicyAction_DENY, resp.Action)
+			require.Len(t, resp.DenyMessages, 1)
+			require.Contains(t, resp.DenyMessages[0].Message, tc.denyMsg)
+		})
+	}
+}
+
+func TestDefaultPolicyBuildKitImages(t *testing.T) {
+	testCases := []struct {
+		name    string
+		sig     *policytypes.SignatureInfo
+		ref     string
+		allow   bool
+		denyMsg string
+	}{
+		{
+			name:  "buildkit_digest_only_always_allowed",
+			ref:   "moby/buildkit@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			allow: true,
+		},
+		{
+			name:    "buildkit_tagged_digest_denied",
+			ref:     "moby/buildkit:v0.31.2@sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+			denyMsg: "signature is required for v0.31.2 tag",
+		},
+		{
+			name:    "buildkit_floating_denied_without_signature",
+			ref:     "moby/buildkit:buildx-stable-1",
+			denyMsg: "signature is required for buildx-stable-1 tag",
+		},
+		{
+			name:  "buildkit_floating_allowed_with_signature_any_ref",
+			sig:   dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.2"),
+			ref:   "moby/buildkit:buildx-stable-1",
+			allow: true,
+		},
+		{
+			name:  "buildkit_floating_rootless_allowed_with_signature",
+			sig:   dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.2"),
+			ref:   "moby/buildkit:buildx-stable-1-rootless",
+			allow: true,
+		},
+		{
+			name:  "buildkit_floating_gpu_allowed_with_signature",
+			sig:   dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.2"),
+			ref:   "moby/buildkit:buildx-stable-1-gpu",
+			allow: true,
+		},
+		{
+			name:    "buildkit_latest_denied_without_signature",
+			ref:     "moby/buildkit:latest",
+			denyMsg: "signature is required for latest tag",
+		},
+		{
+			name:    "buildkit_floating_denied_with_wrong_signature_repo",
+			sig:     dockerGithubBuilderSig("docker/buildkit-syft-scanner", "refs/tags/v0.31.2"),
+			ref:     "moby/buildkit:buildx-stable-1",
+			denyMsg: "signature is required for buildx-stable-1 tag",
+		},
+		{
+			name:    "buildkit_release_denied_without_signature",
+			ref:     "moby/buildkit:v0.31.2",
+			denyMsg: "signature is required for v0.31.2 tag",
+		},
+		{
+			name:  "buildkit_release_allowed_with_matching_signature",
+			sig:   dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.2"),
+			ref:   "moby/buildkit:v0.31.2",
+			allow: true,
+		},
+		{
+			name:  "buildkit_release_rootless_allowed_with_matching_signature",
+			sig:   dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.2"),
+			ref:   "moby/buildkit:v0.31.2-rootless",
+			allow: true,
+		},
+		{
+			name:  "buildkit_release_ubuntu_allowed_with_matching_signature",
+			sig:   dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.2"),
+			ref:   "moby/buildkit:v0.31.2-ubuntu",
+			allow: true,
+		},
+		{
+			name:  "buildkit_release_rc_allowed_with_matching_signature",
+			sig:   dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.0-rc1"),
+			ref:   "moby/buildkit:v0.31.0-rc1",
+			allow: true,
+		},
+		{
+			name:    "buildkit_release_denied_with_mismatched_ref",
+			sig:     dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.1"),
+			ref:     "moby/buildkit:v0.31.2",
+			denyMsg: "signature is required for v0.31.2 tag",
+		},
+		{
+			name:    "buildkit_release_denied_with_variant_in_signature_ref",
+			sig:     dockerGithubBuilderSig("moby/buildkit", "refs/tags/v0.31.2-rootless"),
+			ref:     "moby/buildkit:v0.31.2-rootless",
+			denyMsg: "signature is required for v0.31.2-rootless tag",
+		},
+		{
+			name:    "buildkit_first_signed_release_requires_signature",
+			ref:     "moby/buildkit:v0.27.0",
+			denyMsg: "signature is required for v0.27.0 tag",
+		},
+		{
+			name:    "buildkit_future_major_denied_without_signature",
+			ref:     "moby/buildkit:v1.0.0",
+			denyMsg: "signature is required for v1.0.0 tag",
+		},
+		{
+			name:  "buildkit_old_release_allowed_unsigned",
+			ref:   "moby/buildkit:v0.26.2",
+			allow: true,
+		},
+		{
+			name:  "buildkit_master_cache_allowed_as_unrecognized",
+			ref:   "moby/buildkit:master-cache",
+			allow: true,
+		},
+		{
+			name:  "buildkit_bare_version_selector_allowed_as_unrecognized",
+			ref:   "moby/buildkit:v0.8",
+			allow: true,
+		},
+		{
+			name:  "buildkit_beta_tag_allowed_as_unrecognized",
+			ref:   "moby/buildkit:v0.13.0-beta1",
+			allow: true,
+		},
+		{
+			name:  "buildkit_docker_tag_allowed_as_unrecognized",
+			ref:   "moby/buildkit:docker-20.10.3",
+			allow: true,
 		},
 	}
 
