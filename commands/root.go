@@ -91,10 +91,16 @@ func NewRootCmd(name string, isPlugin bool, dockerCli *command.DockerCli) *cobra
 
 	logrus.AddHook(logutil.NewFilter([]logrus.Level{
 		logrus.DebugLevel,
+		logrus.WarnLevel,
 	},
 		"serving grpc connection",
 		"stopping session",
 		"using default config store",
+		// containerd's local content store probes fsverity support by trying to
+		// enable it on a temp file, which fails on filesystems without fsverity
+		// (overlayfs, tmpfs, etc.) and logs a warning. This is expected and not
+		// actionable for oci-layout operations, so keep it out of user output.
+		"failed check for fsverity support",
 	))
 
 	addCommands(cmd, &opt, dockerCli)
