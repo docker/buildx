@@ -43,7 +43,7 @@ The following attributes are overridden by the last occurrence:
 - `target.cache-to`
 - `target.dockerfile-inline`
 - `target.dockerfile`
-- `target.outputs`
+- `target.output`
 - `target.platforms`
 - `target.pull`
 - `target.tags`
