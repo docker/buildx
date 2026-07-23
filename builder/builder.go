@@ -12,7 +12,6 @@ import (
 	"time"
 
 	"github.com/docker/buildx/driver"
-	"github.com/docker/buildx/driver/cloud"
 	k8sutil "github.com/docker/buildx/driver/kubernetes/util"
 	remoteutil "github.com/docker/buildx/driver/remote/util"
 	"github.com/docker/buildx/localstate"
@@ -350,6 +349,42 @@ type CreateOpts struct {
 	Timeout             time.Duration
 }
 
+func updateNodeGroup(ctx context.Context, factory driver.Factory, ng *store.NodeGroup, node driver.Node, appendNode bool, buildkitdFlags []string, buildkitdConfigFile string) error {
+	var nodes []driver.Node
+	_, resolvesNodes := factory.(driver.NodeResolver)
+	if resolver, ok := factory.(driver.NodeResolver); ok {
+		var err error
+		nodes, err = resolver.ResolveNodes(ctx, node)
+		if err != nil {
+			return err
+		}
+		if len(nodes) == 0 {
+			return errors.Errorf("driver %q returned no nodes", factory.Name())
+		}
+	} else {
+		nodes = []driver.Node{node}
+	}
+
+	for i, node := range nodes {
+		appendResolvedNode := appendNode || i > 0
+		if resolvesNodes && appendResolvedNode && node.Name != "" {
+			name, err := store.ValidateName(node.Name)
+			if err != nil {
+				return err
+			}
+			for _, existing := range ng.Nodes {
+				if existing.Name == name {
+					return errors.Errorf("node %q already exists", name)
+				}
+			}
+		}
+		if err := ng.Update(node.Name, node.Endpoint, node.Platforms, node.EndpointSet, appendResolvedNode, buildkitdFlags, buildkitdConfigFile, node.DriverOpts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts CreateOpts) (*Builder, error) {
 	var err error
 
@@ -486,6 +521,7 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 
 	var ep string
 	var setEp bool
+	_, resolvesNodes := factory.(driver.NodeResolver)
 	switch {
 	case driverName == "kubernetes":
 		if opts.Endpoint != "" {
@@ -523,12 +559,9 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 			return nil, err
 		}
 		setEp = true
-	case driverName == cloud.DriverName:
-		if opts.Endpoint == "" {
-			return nil, errors.Errorf("no endpoint (builder) provided")
-		}
-		ep = cloud.EndpointPrefix + opts.Endpoint
-		setEp = false
+	case resolvesNodes:
+		// The factory resolves the supplied endpoint into concrete nodes.
+		ep = opts.Endpoint
 	case opts.Endpoint != "":
 		ep, err = validateEndpoint(dockerCli, opts.Endpoint)
 		if err != nil {
@@ -546,30 +579,15 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		setEp = false
 	}
 
-	// support creating cloud builders by passing a builder group
-	// as the endpoint. This will create a node for each builder
-	// in the builder group.
-	// e.g. buildx create --driver cloud <org/builder-group>
-	if driverName == cloud.DriverName {
-		builders, err := cloud.GetBuilderInstances(ctx, opts.Endpoint, driverOpts)
-		if err != nil {
-			return nil, errors.Wrapf(err, "unknown builder")
-		}
-		for i, b := range builders {
-			if i != 0 {
-				opts.Append = true
-			}
-
-			builderInstanceDriverOpts := cloud.GetBuilderInstanceDriverOpts(b, driverOpts)
-			if err := ng.Update(b.Name, b.Endpoint, []string{b.Platform}, false, opts.Append, buildkitdFlags, buildkitdConfigFile, builderInstanceDriverOpts); err != nil {
-				return nil, err
-			}
-		}
-	} else {
-		// default flow
-		if err := ng.Update(opts.NodeName, ep, opts.Platforms, setEp, opts.Append, buildkitdFlags, buildkitdConfigFile, driverOpts); err != nil {
-			return nil, err
-		}
+	node := driver.Node{
+		Name:        opts.NodeName,
+		Endpoint:    ep,
+		Platforms:   opts.Platforms,
+		EndpointSet: setEp,
+		DriverOpts:  driverOpts,
+	}
+	if err := updateNodeGroup(ctx, factory, ng, node, opts.Append, buildkitdFlags, buildkitdConfigFile); err != nil {
+		return nil, err
 	}
 
 	if err := txn.Save(ng); err != nil {

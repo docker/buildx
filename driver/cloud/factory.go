@@ -72,7 +72,10 @@ type factory struct {
 	once    sync.Once
 }
 
-var _ driver.DefaultBuilderNamer = (*factory)(nil)
+var (
+	_ driver.DefaultBuilderNamer = (*factory)(nil)
+	_ driver.NodeResolver        = (*factory)(nil)
+)
 
 func (*factory) Name() string {
 	return DriverName

@@ -29,6 +29,18 @@ type DefaultBuilderNamer interface {
 	DefaultBuilderName(ctx context.Context, endpoint string) (string, error)
 }
 
+type Node struct {
+	Name        string
+	Endpoint    string
+	Platforms   []string
+	EndpointSet bool
+	DriverOpts  map[string]string
+}
+
+type NodeResolver interface {
+	ResolveNodes(context.Context, Node) ([]Node, error)
+}
+
 type BuildkitConfig struct {
 	// Entitlements []string
 	// Rootless bool

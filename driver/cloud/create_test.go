@@ -3,8 +3,17 @@ package cloud
 import (
 	"testing"
 
+	"github.com/docker/buildx/driver"
 	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
+
+func TestResolveNodesRequiresEndpoint(t *testing.T) {
+	t.Parallel()
+
+	_, err := (&factory{}).ResolveNodes(t.Context(), driver.Node{})
+	require.EqualError(t, err, "no endpoint (builder) provided")
+}
 
 func TestGetBuilderInstanceDriverOpts(t *testing.T) {
 	t.Parallel()
@@ -12,7 +21,7 @@ func TestGetBuilderInstanceDriverOpts(t *testing.T) {
 	testCases := []struct {
 		name            string
 		driverOpts      map[string]string
-		builderInstance CloudBuilder
+		builderInstance cloudBuilder
 		expected        map[string]string
 	}{
 		{
@@ -22,8 +31,8 @@ func TestGetBuilderInstanceDriverOpts(t *testing.T) {
 		},
 		{
 			name: "DataPlaneOnly",
-			builderInstance: CloudBuilder{
-				DataPlane: CloudBuilderDataPlane{
+			builderInstance: cloudBuilder{
+				DataPlane: cloudBuilderDataPlane{
 					ProxyEndpoint:    "tcp://endpoint:443",
 					RegistryEndpoint: "https://endpoint:443",
 					HealthEndpoint:   "https://endpoint:443/v2/",
@@ -52,8 +61,8 @@ func TestGetBuilderInstanceDriverOpts(t *testing.T) {
 		},
 		{
 			name: "InternalAddressOverridesDataPlane",
-			builderInstance: CloudBuilder{
-				DataPlane: CloudBuilderDataPlane{
+			builderInstance: cloudBuilder{
+				DataPlane: cloudBuilderDataPlane{
 					ProxyEndpoint:    "tcp://endpoint:443",
 					RegistryEndpoint: "https://endpoint:443",
 					HealthEndpoint:   "https://endpoint:443/v2/",
@@ -70,8 +79,8 @@ func TestGetBuilderInstanceDriverOpts(t *testing.T) {
 		},
 		{
 			name: "PartialDataPlaneOverride",
-			builderInstance: CloudBuilder{
-				DataPlane: CloudBuilderDataPlane{
+			builderInstance: cloudBuilder{
+				DataPlane: cloudBuilderDataPlane{
 					ProxyEndpoint:    "tcp://endpoint:443",
 					RegistryEndpoint: "https://endpoint:443",
 					HealthEndpoint:   "https://endpoint:443/v2/",
@@ -94,7 +103,7 @@ func TestGetBuilderInstanceDriverOpts(t *testing.T) {
 		t.Run(tc.name, func(t *testing.T) {
 			t.Parallel()
 
-			result := GetBuilderInstanceDriverOpts(tc.builderInstance, tc.driverOpts)
+			result := getBuilderInstanceDriverOpts(tc.builderInstance, tc.driverOpts)
 
 			assert.Equal(t, tc.expected, result)
 		})

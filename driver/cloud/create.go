@@ -11,13 +11,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/docker/buildx/driver"
 	"github.com/pkg/errors"
 )
 
 const hubHostDefault = "https://hub.docker.com"
 
-// CloudBuilder represents a builder instance in as returned by Hub Cloud Builds API.
-type CloudBuilder struct {
+// cloudBuilder represents a builder instance returned by the Hub Cloud Builds API.
+type cloudBuilder struct {
 	// Name of the builder e.g. linux-amd64.
 	Name string `json:"name"`
 	// Platform of the builder e.g. linux/amd64.
@@ -25,10 +26,10 @@ type CloudBuilder struct {
 	// Endpoint of the builder e.g. cloud://myorg/mybuilder_linux-amd64
 	Endpoint string `json:"endpoint"`
 	// DataPlane contains data plane info for the builder
-	DataPlane CloudBuilderDataPlane `json:"data_plane"`
+	DataPlane cloudBuilderDataPlane `json:"data_plane"`
 }
 
-type CloudBuilderDataPlane struct {
+type cloudBuilderDataPlane struct {
 	// Name is the logical name of the data plane e.g. us-east-1
 	Name string `json:"name"`
 	// DisplayName is the name to display to users e.g. US East
@@ -43,7 +44,7 @@ type CloudBuilderDataPlane struct {
 
 // Arch returns the architecture of the builder.
 // example: for platform linux/amd64, returns amd64.
-func (b CloudBuilder) Arch() string {
+func (b cloudBuilder) Arch() string {
 	parts := strings.Split(b.Platform, "/")
 	if len(parts) != 2 {
 		return ""
@@ -51,9 +52,9 @@ func (b CloudBuilder) Arch() string {
 	return parts[1]
 }
 
-// GetBuilderInstances calls the Hub Cloud Builds API to get
+// resolveBuilderInstances calls the Hub Cloud Builds API to get
 // a list of builder instances under a builder group.
-func GetBuilderInstances(ctx context.Context, group string, driverOpts map[string]string) ([]CloudBuilder, error) {
+func resolveBuilderInstances(ctx context.Context, group string, driverOpts map[string]string) ([]cloudBuilder, error) {
 	ctx, cancel := context.WithTimeoutCause(ctx, 30*time.Second, errors.WithStack(context.DeadlineExceeded))
 	defer cancel()
 	registryHostname := hubRegistryEntry
@@ -93,9 +94,9 @@ func GetBuilderInstances(ctx context.Context, group string, driverOpts map[strin
 	return builders, nil
 }
 
-// GetBuilderInstanceDriverOpts creates the instance specific driver opts
+// getBuilderInstanceDriverOpts creates the instance specific driver opts
 // from the driver-opt args and the builder instance details
-func GetBuilderInstanceDriverOpts(builderInstance CloudBuilder, driverOpts map[string]string) map[string]string {
+func getBuilderInstanceDriverOpts(builderInstance cloudBuilder, driverOpts map[string]string) map[string]string {
 	opts := maps.Clone(driverOpts)
 	// If builder instance has a data plane endpoint and it has not been overridden by the driver opts then apply it
 	if opts[optKeyInternalAddress] == "" {
@@ -115,9 +116,31 @@ func GetBuilderInstanceDriverOpts(builderInstance CloudBuilder, driverOpts map[s
 	return opts
 }
 
+func (*factory) ResolveNodes(ctx context.Context, node driver.Node) ([]driver.Node, error) {
+	if node.Endpoint == "" {
+		return nil, errors.Errorf("no endpoint (builder) provided")
+	}
+	builders, err := resolveBuilderInstances(ctx, node.Endpoint, node.DriverOpts)
+	if err != nil {
+		return nil, errors.Wrap(err, "unknown builder")
+	}
+
+	nodes := make([]driver.Node, len(builders))
+	for i, builder := range builders {
+		nodes[i] = driver.Node{
+			Name:        builder.Name,
+			Endpoint:    builder.Endpoint,
+			Platforms:   []string{builder.Platform},
+			EndpointSet: false,
+			DriverOpts:  getBuilderInstanceDriverOpts(builder, node.DriverOpts),
+		}
+	}
+	return nodes, nil
+}
+
 // getBuilderInstances calls the Hub Cloud Builds API to get
 // a list of builder instances under a builder group.
-func getBuilderInstances(ctx context.Context, builderGroup, hubHost, token string) ([]CloudBuilder, error) {
+func getBuilderInstances(ctx context.Context, builderGroup, hubHost, token string) ([]cloudBuilder, error) {
 	parts := strings.Split(builderGroup, "/")
 	namespace := parts[0]
 	group := parts[1]
@@ -141,7 +164,7 @@ func getBuilderInstances(ctx context.Context, builderGroup, hubHost, token strin
 
 	// ignoring pagination as the default page size of 10 should include all builders.
 	var respPayload struct {
-		Results []CloudBuilder `json:"results"`
+		Results []cloudBuilder `json:"results"`
 	}
 	if err := json.NewDecoder(resp.Body).Decode(&respPayload); err != nil {
 		return nil, errors.Wrap(err, "decode get instances response")
