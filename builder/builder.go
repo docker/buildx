@@ -360,18 +360,7 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 	}
 
 	name := opts.Name
-	if name == "" {
-		if opts.Driver == cloud.DriverName && opts.Endpoint != "" {
-			name = "cloud-" + strings.ReplaceAll(strings.ToLower(opts.Endpoint), "/", "-")
-		} else {
-			name, err = store.GenerateName(txn)
-			if err != nil {
-				return nil, err
-			}
-		}
-	}
-
-	if !opts.Append {
+	if name != "" && !opts.Append {
 		contexts, err := dockerCli.ContextStore().List()
 		if err != nil {
 			return nil, err
@@ -383,34 +372,75 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		}
 	}
 
-	ng, err := txn.NodeGroupByName(name)
-	if err != nil {
-		if os.IsNotExist(errors.Cause(err)) {
-			if opts.Append && opts.Name != "" {
-				return nil, errors.Errorf("failed to find instance %q for append", opts.Name)
+	var ng *store.NodeGroup
+	if name != "" {
+		ng, err = txn.NodeGroupByName(name)
+		if err != nil {
+			if os.IsNotExist(errors.Cause(err)) {
+				if opts.Append {
+					return nil, errors.Errorf("failed to find instance %q for append", opts.Name)
+				}
+			} else {
+				return nil, err
 			}
-		} else {
-			return nil, err
 		}
 	}
 
 	buildkitHost := os.Getenv("BUILDKIT_HOST")
 
 	driverName := opts.Driver
+	var factory driver.Factory
 	if driverName == "" {
 		if ng != nil {
 			driverName = ng.Driver
 		} else if opts.Endpoint == "" && buildkitHost != "" {
 			driverName = "remote"
 		} else {
-			f, err := driver.GetDefaultFactory(ctx, opts.Endpoint, dockerCli.Client(), true, nil)
+			factory, err = driver.GetDefaultFactory(ctx, opts.Endpoint, dockerCli.Client(), true, nil)
 			if err != nil {
 				return nil, err
 			}
-			if f == nil {
+			if factory == nil {
 				return nil, errors.Errorf("no valid drivers found")
 			}
-			driverName = f.Name()
+			driverName = factory.Name()
+		}
+	}
+
+	if factory == nil {
+		factory, err = driver.GetFactory(driverName, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if name == "" {
+		if namer, ok := factory.(driver.DefaultBuilderNamer); ok && opts.Endpoint != "" {
+			name, err = namer.DefaultBuilderName(ctx, opts.Endpoint)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if name == "" {
+			name, err = store.GenerateName(txn)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		contexts, err := dockerCli.ContextStore().List()
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range contexts {
+			if c.Name == name {
+				return nil, errors.Errorf("instance name %q already exists as context builder", name)
+			}
+		}
+
+		ng, err = txn.NodeGroupByName(name)
+		if err != nil && !os.IsNotExist(errors.Cause(err)) {
+			return nil, err
 		}
 	}
 
@@ -421,10 +451,6 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		if driverName != ng.Driver {
 			return nil, errors.Errorf("existing instance for %q but has mismatched driver %q", name, ng.Driver)
 		}
-	}
-
-	if _, err := driver.GetFactory(driverName, true); err != nil {
-		return nil, err
 	}
 
 	ngOriginal := ng

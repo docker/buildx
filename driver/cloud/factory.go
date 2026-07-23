@@ -72,12 +72,18 @@ type factory struct {
 	once    sync.Once
 }
 
+var _ driver.DefaultBuilderNamer = (*factory)(nil)
+
 func (*factory) Name() string {
 	return DriverName
 }
 
 func (*factory) Usage() string {
 	return DriverName
+}
+
+func (*factory) DefaultBuilderName(_ context.Context, endpoint string) (string, error) {
+	return DriverName + "-" + strings.ReplaceAll(strings.ToLower(endpoint), "/", "-"), nil
 }
 
 func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient, _ map[string][]string) int {

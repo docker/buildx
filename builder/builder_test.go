@@ -1,13 +1,69 @@
 package builder
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path"
 	"testing"
 
+	"github.com/docker/buildx/driver"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type testFactory struct {
+	name string
+}
+
+func (f testFactory) Name() string {
+	return f.name
+}
+
+func (f testFactory) Usage() string {
+	return f.name
+}
+
+func (testFactory) Priority(context.Context, string, dockerclient.APIClient, map[string][]string) int {
+	return 10000
+}
+
+func (testFactory) New(context.Context, driver.InitConfig) (driver.Driver, error) {
+	return nil, errors.New("test factory cannot create drivers")
+}
+
+func (testFactory) AllowsInstances() bool {
+	return true
+}
+
+type defaultBuilderNamerFactory struct {
+	testFactory
+	endpoint string
+	err      error
+}
+
+func (f *defaultBuilderNamerFactory) DefaultBuilderName(_ context.Context, endpoint string) (string, error) {
+	f.endpoint = endpoint
+	return "", f.err
+}
+
+func TestCreateDefaultBuilderNamer(t *testing.T) {
+	const endpoint = "org/builder"
+	expectedErr := errors.New("default builder name")
+	factory := &defaultBuilderNamerFactory{
+		testFactory: testFactory{name: "test-default-builder-namer"},
+		err:         expectedErr,
+	}
+	t.Cleanup(driver.Register(factory))
+
+	_, err := Create(t.Context(), nil, nil, CreateOpts{
+		Driver:   factory.Name(),
+		Endpoint: endpoint,
+	})
+	require.ErrorIs(t, err, expectedErr)
+	assert.Equal(t, endpoint, factory.endpoint)
+}
 
 func TestCsvToMap(t *testing.T) {
 	d := []string{

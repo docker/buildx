@@ -6,9 +6,21 @@ import (
 	"testing"
 	"time"
 
+	"github.com/docker/buildx/driver"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestDefaultBuilderName(t *testing.T) {
+	t.Parallel()
+
+	factory := &factory{}
+	namer, ok := any(factory).(driver.DefaultBuilderNamer)
+	require.True(t, ok)
+	name, err := namer.DefaultBuilderName(t.Context(), "Org/Builder")
+	require.NoError(t, err)
+	assert.Equal(t, "cloud-org-builder", name)
+}
 
 func TestTokenRefresh(t *testing.T) {
 	t.Parallel()
