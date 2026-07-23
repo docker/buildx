@@ -34,6 +34,12 @@ func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.C
 	if err != nil {
 		return nil, err
 	}
+	return newExecConn(ctx, exec), nil
+}
+
+// newExecConn wires a remotecommand.Executor's stdin/stdout streams up as a net.Conn.
+// It is split from ExecConn to ease testing.
+func newExecConn(ctx context.Context, exec remotecommand.Executor) net.Conn {
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	kc := &kubeConn{
@@ -52,8 +58,11 @@ func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.C
 		if serr != nil && serr != context.Canceled {
 			logrus.Error(serr)
 		}
+		// Ensure the pipes are closed to unblock Read/Write on kubeConn and avoid infinite hangs.
+		stdoutW.CloseWithError(serr)
+		stdinR.CloseWithError(serr)
 	}()
-	return kc, nil
+	return kc
 }
 
 type kubeConn struct {
