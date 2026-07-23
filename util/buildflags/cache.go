@@ -114,7 +114,7 @@ func (e *CacheOptionsEntry) UnmarshalText(text []byte) error {
 	}
 
 	if e.Type == "" {
-		return errors.Errorf("type required form> %q", in)
+		return errors.Errorf("type required for %q", in)
 	}
 	return e.validate(text)
 }
@@ -132,7 +132,7 @@ func (e *CacheOptionsEntry) validate(gv any) error {
 		default:
 			text, _ = json.Marshal(gv)
 		}
-		return errors.Errorf("type required form> %q", string(text))
+		return errors.Errorf("type required for %q", string(text))
 	}
 	return nil
 }
