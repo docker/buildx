@@ -86,3 +86,16 @@ func TestCacheOptions_RefOnlyFormat(t *testing.T) {
 		{Type: "registry", Attrs: map[string]string{"ref": "ref2"}},
 	}, opts)
 }
+
+func TestCacheOptions_MissingTypeError(t *testing.T) {
+	t.Run("ParseCacheEntry", func(t *testing.T) {
+		_, err := ParseCacheEntry([]string{"test=test"})
+		require.EqualError(t, err, `type required for "test=test"`)
+	})
+
+	t.Run("UnmarshalJSON", func(t *testing.T) {
+		var actual CacheOptionsEntry
+		err := json.Unmarshal([]byte(`{"ref":"user/app:cache"}`), &actual)
+		require.EqualError(t, err, `type required for "{\"ref\":\"user/app:cache\"}"`)
+	})
+}
