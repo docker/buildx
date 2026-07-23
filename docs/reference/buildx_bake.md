@@ -495,3 +495,39 @@ You can append using `+=` operator for the following fields:
 
 > [!NOTE]
 > ¹ These fields already append by default.
+
+#### Inline values for composable attributes
+
+Some fields, such as `ssh`, `secret`, `output`, `cache-to`, `cache-from`,
+`attest`, and `annotations`, are composable attributes that accept a list of
+object values in a Bake file. When you override these fields with `--set`, you
+provide each value using the same inline string syntax as the corresponding
+build flag, not the HCL object form. The `--set` override replaces or appends
+to the list as a whole; it doesn't address individual sub-fields with a
+sub-selector. Only the map-valued fields `args`, `contexts`, `labels`, and
+`extra-hosts` support targeting a specific entry with a sub-key (for example
+`--set target.args.MYARG=value`).
+
+For example, to set the SSH agent socket or key for a target, use the same
+`id=path` form accepted by [`build --ssh`](buildx_build.md#ssh):
+
+```console
+$ docker buildx bake --set "*.ssh=default=$HOME/.ssh/id_ed25519"
+```
+
+To expose multiple paths for the same `id`, separate them with commas in the
+second part:
+
+```console
+$ docker buildx bake --set "*.ssh=default=$HOME/.ssh/id_ed25519,$HOME/.ssh/id_rsa"
+```
+
+Your shell expands `$HOME` before buildx sees the value. The equivalent Bake
+file definition uses the resolved paths directly (Bake doesn't expand `$HOME`
+in HCL strings):
+
+```hcl
+target "default" {
+  ssh = [{ id = "default", paths = ["/home/user/.ssh/id_ed25519", "/home/user/.ssh/id_rsa"] }]
+}
+```
