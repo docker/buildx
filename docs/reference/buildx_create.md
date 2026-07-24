@@ -9,21 +9,21 @@ Create a new builder instance
 
 ### Options
 
-| Name                                      | Type          | Default | Description                                                           |
-|:------------------------------------------|:--------------|:--------|:----------------------------------------------------------------------|
-| [`--append`](#append)                     | `bool`        |         | Append a node to builder instead of changing it                       |
-| `--bootstrap`                             | `bool`        |         | Boot builder after creation                                           |
-| [`--buildkitd-config`](#buildkitd-config) | `string`      |         | BuildKit daemon config file                                           |
-| [`--buildkitd-flags`](#buildkitd-flags)   | `string`      |         | BuildKit daemon flags                                                 |
-| `-D`, `--debug`                           | `bool`        |         | Enable debug logging                                                  |
-| [`--driver`](#driver)                     | `string`      |         | Driver to use (available: `docker-container`, `kubernetes`, `remote`) |
-| [`--driver-opt`](#driver-opt)             | `stringArray` |         | Options for the driver                                                |
-| [`--leave`](#leave)                       | `bool`        |         | Remove a node from builder instead of changing it                     |
-| [`--name`](#name)                         | `string`      |         | Builder instance name                                                 |
-| [`--node`](#node)                         | `string`      |         | Create/modify node with given name                                    |
-| [`--platform`](#platform)                 | `stringArray` |         | Fixed platforms for current node                                      |
-| `--timeout`                               | `duration`    | `20s`   | Override the default timeout for loading builder status               |
-| [`--use`](#use)                           | `bool`        |         | Set the current builder instance                                      |
+| Name                                      | Type          | Default | Description                                                                    |
+|:------------------------------------------|:--------------|:--------|:-------------------------------------------------------------------------------|
+| [`--append`](#append)                     | `bool`        |         | Append a node to builder instead of changing it                                |
+| `--bootstrap`                             | `bool`        |         | Boot builder after creation                                                    |
+| [`--buildkitd-config`](#buildkitd-config) | `string`      |         | BuildKit daemon config file                                                    |
+| [`--buildkitd-flags`](#buildkitd-flags)   | `string`      |         | BuildKit daemon flags                                                          |
+| `-D`, `--debug`                           | `bool`        |         | Enable debug logging                                                           |
+| [`--driver`](#driver)                     | `string`      |         | Driver to use (available: `cloud`, `docker-container`, `kubernetes`, `remote`) |
+| [`--driver-opt`](#driver-opt)             | `stringArray` |         | Options for the driver                                                         |
+| [`--leave`](#leave)                       | `bool`        |         | Remove a node from builder instead of changing it                              |
+| [`--name`](#name)                         | `string`      |         | Builder instance name                                                          |
+| [`--node`](#node)                         | `string`      |         | Create/modify node with given name                                             |
+| [`--platform`](#platform)                 | `stringArray` |         | Fixed platforms for current node                                               |
+| `--timeout`                               | `duration`    | `20s`   | Override the default timeout for loading builder status                        |
+| [`--use`](#use)                           | `bool`        |         | Set the current builder instance                                               |
 
 
 <!---MARKER_GEN_END-->

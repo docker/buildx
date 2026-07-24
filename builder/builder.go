@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/driver/cloud"
 	k8sutil "github.com/docker/buildx/driver/kubernetes/util"
 	remoteutil "github.com/docker/buildx/driver/remote/util"
 	"github.com/docker/buildx/localstate"
@@ -360,9 +361,13 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 
 	name := opts.Name
 	if name == "" {
-		name, err = store.GenerateName(txn)
-		if err != nil {
-			return nil, err
+		if opts.Driver == cloud.DriverName && opts.Endpoint != "" {
+			name = "cloud-" + strings.ReplaceAll(strings.ToLower(opts.Endpoint), "/", "-")
+		} else {
+			name, err = store.GenerateName(txn)
+			if err != nil {
+				return nil, err
+			}
 		}
 	}
 
@@ -492,6 +497,12 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 			return nil, err
 		}
 		setEp = true
+	case driverName == cloud.DriverName:
+		if opts.Endpoint == "" {
+			return nil, errors.Errorf("no endpoint (builder) provided")
+		}
+		ep = cloud.EndpointPrefix + opts.Endpoint
+		setEp = false
 	case opts.Endpoint != "":
 		ep, err = validateEndpoint(dockerCli, opts.Endpoint)
 		if err != nil {
@@ -509,8 +520,30 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		setEp = false
 	}
 
-	if err := ng.Update(opts.NodeName, ep, opts.Platforms, setEp, opts.Append, buildkitdFlags, buildkitdConfigFile, driverOpts); err != nil {
-		return nil, err
+	// support creating cloud builders by passing a builder group
+	// as the endpoint. This will create a node for each builder
+	// in the builder group.
+	// e.g. buildx create --driver cloud <org/builder-group>
+	if driverName == cloud.DriverName {
+		builders, err := cloud.GetBuilderInstances(ctx, opts.Endpoint, driverOpts)
+		if err != nil {
+			return nil, errors.Wrapf(err, "unknown builder")
+		}
+		for i, b := range builders {
+			if i != 0 {
+				opts.Append = true
+			}
+
+			builderInstanceDriverOpts := cloud.GetBuilderInstanceDriverOpts(b, driverOpts)
+			if err := ng.Update(b.Name, b.Endpoint, []string{b.Platform}, false, opts.Append, buildkitdFlags, buildkitdConfigFile, builderInstanceDriverOpts); err != nil {
+				return nil, err
+			}
+		}
+	} else {
+		// default flow
+		if err := ng.Update(opts.NodeName, ep, opts.Platforms, setEp, opts.Append, buildkitdFlags, buildkitdConfigFile, driverOpts); err != nil {
+			return nil, err
+		}
 	}
 
 	if err := txn.Save(ng); err != nil {

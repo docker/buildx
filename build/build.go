@@ -21,6 +21,7 @@ import (
 	noderesolver "github.com/docker/buildx/build/resolver"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/driver/cloud"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
@@ -97,6 +98,9 @@ type Options struct {
 	GroupRef               string
 	Annotations            map[exptypes.AnnotationKey]string // Not used during build, annotations are already set in Exports. Just used to check for support with drivers.
 	Policy                 []buildflags.PolicyConfig
+	// onSolveResponse runs after BuildKit returns exporter metadata. Cloud pull
+	// uses it to import the image without a private BuildKit session exporter.
+	onSolveResponse func(context.Context, *client.SolveResponse) error
 }
 
 // ResourceLimits holds the cgroup resource constraints applied to individual
@@ -231,7 +235,8 @@ type NamedContext struct {
 
 type reqForNode struct {
 	*noderesolver.ResolvedNode
-	so *client.SolveOpt
+	so              *client.SolveOpt
+	onSolveResponse func(context.Context, *client.SolveResponse) error
 }
 
 func filterAvailableNodes(nodes []builder.Node) ([]builder.Node, error) {
@@ -281,6 +286,12 @@ func warnOnNoOutput(ctx context.Context, nodes []builder.Node, opts map[string]O
 	var noOutputTargets []string
 	for name, opt := range opts {
 		if !opt.Linked && len(opt.Exports) == 0 {
+			// downstream toSolveOpt will force an image exporter if no exports are specified
+			// which, along with > 0 tags, will trigger a cloud pull in the cloud driver
+			implicitCloudPull := noMobyDriver.Factory().Name() == cloud.DriverName && len(opt.Tags) > 0
+			if implicitCloudPull {
+				continue
+			}
 			noOutputTargets = append(noOutputTargets, name)
 		}
 	}
@@ -346,8 +357,9 @@ func newBuildRequests(ctx context.Context, docker *dockerutil.Client, cfg *confu
 			}
 			addGitAttrs(so)
 			reqn = append(reqn, &reqForNode{
-				ResolvedNode: np,
-				so:           so,
+				ResolvedNode:    np,
+				so:              so,
+				onSolveResponse: localOpt.onSolveResponse,
 			})
 		}
 		reqForNodes[k] = reqn
@@ -733,6 +745,11 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					}
 					for k, v := range callRes {
 						rr.ExporterResponse[k] = string(v)
+					}
+					if onSolveResponse := reqForNodes[k][i].onSolveResponse; onSolveResponse != nil {
+						if err := onSolveResponse(ctx, rr); err != nil {
+							return err
+						}
 					}
 					if opt.CallFunc == nil {
 						rr.ExporterResponse["buildx.build.ref"] = buildRef

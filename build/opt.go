@@ -23,6 +23,7 @@ import (
 	"github.com/distribution/reference"
 	noderesolver "github.com/docker/buildx/build/resolver"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/driver/cloud"
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/confutil"
@@ -404,6 +405,12 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 			}
 		}
 	}
+	// modify exports to enable cloud pull. do this before setting up exporters, since
+	// the cloud pull might add or remove exporters.
+	if node.Driver.Factory().Name() == cloud.DriverName {
+		cloudDriver := node.Driver.Driver.(*cloud.Driver)
+		opt.Exports = cloudDriver.CheckCloudPull(ctx, docker, opt.Exports, opt.Tags)
+	}
 
 	// fill in image exporter names from tags
 	if len(opt.Tags) > 0 {
@@ -417,7 +424,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 		for i, e := range opt.Exports {
 			switch e.Type {
-			case "image", "oci", "docker":
+			case "image", "oci", "docker", cloud.CloudPullExportType:
 				opt.Exports[i].Attrs["name"] = strings.Join(tags, ",")
 			}
 		}
@@ -507,6 +514,38 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 			// inline buildinfo attrs from build arg
 			if v, ok := opt.BuildArgs["BUILDKIT_INLINE_BUILDINFO_ATTRS"]; ok {
 				opt.Exports[i].Attrs["buildinfo-attrs"] = v
+			}
+		}
+		if e.Type == cloud.CloudPullExportType {
+			// cloud pull if node is cloud driver
+			opt.Exports[i].Type = "image"
+			if node.Driver.Factory().Name() == cloud.DriverName {
+				if multiDriver {
+					return nil, nil, errors.Errorf("cloud pull for multi-node builds currently not supported")
+				}
+				if len(opt.Platforms) > 1 {
+					return nil, nil, errors.Errorf("cloud pull for single node multi-platform builds currently not supported")
+				}
+				cloudDriver := node.Driver.Driver.(*cloud.Driver)
+				targetPlatforms := slices.Clone(opt.Platforms)
+				tags := slices.Clone(opt.Tags)
+				opt.onSolveResponse = func(ctx context.Context, resp *client.SolveResponse) error {
+					pw := progress.ResetTime(pw)
+					return progress.Wrap("cloud pull", pw.Write, func(l progress.SubLogger) error {
+						imgDescriptor := resp.ExporterResponse[exptypes.ExporterImageDescriptorKey]
+						platform := resp.ExporterResponse[exptypes.ExporterPlatformsKey]
+						// Fallback: if platform is not in buildkit response
+						// but --platform was specified, use it
+						if platform == "" && len(targetPlatforms) == 1 {
+							platform = platforms.Format(targetPlatforms[0])
+						}
+
+						if err := cloudDriver.CloudPull(ctx, imgDescriptor, platform, docker, tags, l); err != nil {
+							return errors.Wrap(err, "pulling image from cloud")
+						}
+						return nil
+					})
+				}
 			}
 		}
 		if noDefaultOCIArtifact && supportAttestations {
