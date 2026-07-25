@@ -508,11 +508,11 @@ $ docker buildx bake --set "*.ssh=default=$HOME/.ssh/id_ed25519,$HOME/.ssh/id_rs
 ```
 
 Your shell expands `$HOME` before buildx sees the value. The equivalent Bake
-file definition uses the resolved paths directly (Bake doesn't expand `$HOME`
-in HCL strings):
+file definition uses the
+[`homedir`](https://docs.docker.com/build/bake/stdlib/#homedir) HCL function:
 
 ```hcl
 target "default" {
-  ssh = [{ id = "default", paths = ["/home/user/.ssh/id_ed25519", "/home/user/.ssh/id_rsa"] }]
+  ssh = [{ id = "default", paths = ["${homedir()}/.ssh/id_ed25519", "${homedir()}/.ssh/id_rsa"] }]
 }
 ```
