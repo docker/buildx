@@ -850,7 +850,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		if p, err := filepath.Abs(sharedKey); err == nil {
 			sharedKey = filepath.Base(p)
 		}
-		target.SharedKey = sharedKey
+		target.SharedKey = sanitizeSharedKey(sharedKey)
 		switch inp.DockerfilePath {
 		case "-":
 			dockerfileReader = inp.InStream.NewReadCloser()
@@ -1032,7 +1032,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		} else {
 			sharedKey = filepath.Base(sharedKey)
 		}
-		target.FrontendAttrs["sharedkey:localdir:"+k] = sharedKey
+		target.FrontendAttrs["sharedkey:localdir:"+k] = sanitizeSharedKey(sharedKey)
 	}
 
 	release := func() {
@@ -1540,6 +1540,16 @@ func isActive(ce *client.CacheOptionsEntry) bool {
 		return true
 	}
 	return ce.Attrs["token"] != "" && (ce.Attrs["url"] != "" || ce.Attrs["url_v2"] != "")
+}
+
+// sanitizeSharedKey hashes non-ASCII keys for gRPC metadata
+func sanitizeSharedKey(key string) string {
+	for i := 0; i < len(key); i++ {
+		if key[i] < 0x20 || key[i] > 0x7E {
+			return digest.FromString(key).Encoded()
+		}
+	}
+	return key
 }
 
 func defaultPlatform(bopts gateway.BuildOpts) *ocispecs.Platform {

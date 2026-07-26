@@ -167,6 +167,31 @@ func TestProxyArgKeyExists(t *testing.T) {
 	}
 }
 
+func TestSanitizeSharedKey(t *testing.T) {
+	tests := []struct {
+		name string
+		key  string
+		want string
+	}{
+		{
+			name: "ascii",
+			key:  "a",
+			want: "a",
+		},
+		{
+			name: "non-ascii",
+			key:  "早",
+			want: "e7c7fb50f3db8408eacd8f1702021a00a7b8cfb549f422fcf4d977f725df4b36",
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			assert.Equal(t, tt.want, sanitizeSharedKey(tt.key))
+		})
+	}
+}
+
 func TestApplyPolicyCapsEnablesProxyNetwork(t *testing.T) {
 	p := policyWithDecision(`
 package docker
