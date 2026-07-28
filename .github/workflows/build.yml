@@ -336,7 +336,7 @@ jobs:
               mv "provenance.json" "${filename}.provenance.json"
               mv "sbom-binaries.spdx.json" "${filename}.sbom.json"
               find . -name 'sbom*.json' -exec rm {} \;
-              if [[ "$binname" == *darwin* ]]; then
+              if [[ "$binname" == *darwin* ]] || [[ "$binname" == *windows* ]]; then
                 rm -f "provenance.sigstore.json"
               elif [ -f "provenance.sigstore.json" ]; then
                 mv "provenance.sigstore.json" "${filename}.sigstore.json"
@@ -350,7 +350,7 @@ jobs:
         working-directory: ${{ env.DESTDIR }}
         run: |
           sha256sum -b buildx-* > ./checksums.txt
-          sed -i '/darwin/d' ./checksums.txt
+          sed -i -e '/darwin/d' -e '/windows/d' ./checksums.txt
           sha256sum -c --strict checksums.txt
       -
         name: List artifacts
