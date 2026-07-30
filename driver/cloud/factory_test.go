@@ -20,6 +20,13 @@ func TestDefaultBuilderName(t *testing.T) {
 	name, err := namer.DefaultBuilderName(t.Context(), "Org/Builder")
 	require.NoError(t, err)
 	assert.Equal(t, "cloud-org-builder", name)
+
+	name, err = namer.DefaultBuilderName(t.Context(), "cloud://Org/Builder")
+	require.NoError(t, err)
+	assert.Equal(t, "cloud-org-builder", name)
+
+	_, err = namer.DefaultBuilderName(t.Context(), "Org")
+	require.EqualError(t, err, "builder should be in the format: <account>/<builder>")
 }
 
 func TestTokenRefresh(t *testing.T) {

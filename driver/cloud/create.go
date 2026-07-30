@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
+	"net/url"
 	"runtime"
 	"sort"
 	"strings"
@@ -52,9 +53,34 @@ func (b cloudBuilder) Arch() string {
 	return parts[1]
 }
 
+func parseBuilderName(builder string) (account, name string, _ error) {
+	builder = strings.TrimPrefix(builder, EndpointPrefix)
+	account, name, ok := strings.Cut(builder, "/")
+	switch {
+	case !ok,
+		strings.Contains(name, "/"),
+		account == "", account == ".", account == "..",
+		name == "", name == ".", name == "..":
+		return "", "", errors.Errorf("builder should be in the format: <account>/<builder>")
+	}
+	return account, name, nil
+}
+
+func normalizeBuilderName(builder string) (string, error) {
+	account, name, err := parseBuilderName(builder)
+	if err != nil {
+		return "", err
+	}
+	return account + "/" + name, nil
+}
+
 // resolveBuilderInstances calls the Hub Cloud Builds API to get
 // a list of builder instances under a builder group.
 func resolveBuilderInstances(ctx context.Context, group string, driverOpts map[string]string) ([]cloudBuilder, error) {
+	group, err := normalizeBuilderName(group)
+	if err != nil {
+		return nil, err
+	}
 	ctx, cancel := context.WithTimeoutCause(ctx, 30*time.Second, errors.WithStack(context.DeadlineExceeded))
 	defer cancel()
 	registryHostname := hubRegistryEntry
@@ -120,7 +146,11 @@ func (*factory) ResolveNodes(ctx context.Context, node driver.Node) ([]driver.No
 	if node.Endpoint == "" {
 		return nil, errors.Errorf("no endpoint (builder) provided")
 	}
-	builders, err := resolveBuilderInstances(ctx, node.Endpoint, node.DriverOpts)
+	group, err := normalizeBuilderName(node.Endpoint)
+	if err != nil {
+		return nil, err
+	}
+	builders, err := resolveBuilderInstances(ctx, group, node.DriverOpts)
 	if err != nil {
 		return nil, errors.Wrap(err, "unknown builder")
 	}
@@ -141,12 +171,13 @@ func (*factory) ResolveNodes(ctx context.Context, node driver.Node) ([]driver.No
 // getBuilderInstances calls the Hub Cloud Builds API to get
 // a list of builder instances under a builder group.
 func getBuilderInstances(ctx context.Context, builderGroup, hubHost, token string) ([]cloudBuilder, error) {
-	parts := strings.Split(builderGroup, "/")
-	namespace := parts[0]
-	group := parts[1]
-	url := fmt.Sprintf("%s/v2/cloud-builds/accounts/%s/builder-groups/%s/instances", hubHost, namespace, group)
+	namespace, group, err := parseBuilderName(builderGroup)
+	if err != nil {
+		return nil, err
+	}
+	endpointURL := fmt.Sprintf("%s/v2/cloud-builds/accounts/%s/builder-groups/%s/instances", hubHost, url.PathEscape(namespace), url.PathEscape(group))
 
-	req, err := http.NewRequestWithContext(ctx, http.MethodGet, url, nil)
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
 	if err != nil {
 		return nil, errors.Wrap(err, "create request")
 	}

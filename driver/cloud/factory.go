@@ -76,7 +76,11 @@ func (*factory) Usage() string {
 }
 
 func (*factory) DefaultBuilderName(_ context.Context, endpoint string) (string, error) {
-	return DriverName + "-" + strings.ReplaceAll(strings.ToLower(endpoint), "/", "-"), nil
+	builder, err := normalizeBuilderName(endpoint)
+	if err != nil {
+		return "", err
+	}
+	return DriverName + "-" + strings.ReplaceAll(strings.ToLower(builder), "/", "-"), nil
 }
 
 func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.APIClient, _ map[string][]string) int {
@@ -97,7 +101,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		proxyAddress:    ProxyAddress,
 		registryAddress: RegistryAddress,
 		healthAddress:   HealthAddress,
-		builder:         strings.TrimPrefix(cfg.EndpointAddr, EndpointPrefix),
+		builder:         cfg.EndpointAddr,
 		headers:         f.headers,
 	}
 
@@ -170,9 +174,11 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 		return nil, errors.Errorf("builder name missing")
 	}
 
-	if len(strings.Split(d.builder, "/")) != 2 {
-		return nil, errors.Errorf("builder should be in the format: <account>/<builder>")
+	builder, err := normalizeBuilderName(d.builder)
+	if err != nil {
+		return nil, err
 	}
+	d.builder = builder
 
 	d.tokenSource = newTokenSource(func(ctx context.Context) (string, error) {
 		return login(ctx, authEntry, authHost, d.builder)

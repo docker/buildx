@@ -8,11 +8,105 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestParseBuilderName(t *testing.T) {
+	t.Parallel()
+
+	tests := []struct {
+		name        string
+		builder     string
+		wantAccount string
+		wantName    string
+		wantErr     bool
+	}{
+		{
+			name:        "Group",
+			builder:     "org/builder",
+			wantAccount: "org",
+			wantName:    "builder",
+		},
+		{
+			name:        "Endpoint",
+			builder:     "cloud://org/builder",
+			wantAccount: "org",
+			wantName:    "builder",
+		},
+		{
+			name:    "MissingName",
+			builder: "org",
+			wantErr: true,
+		},
+		{
+			name:    "EmptyAccount",
+			builder: "/builder",
+			wantErr: true,
+		},
+		{
+			name:    "EmptyName",
+			builder: "org/",
+			wantErr: true,
+		},
+		{
+			name:    "TooManyParts",
+			builder: "org/builder/extra",
+			wantErr: true,
+		},
+		{
+			name:    "DotAccount",
+			builder: "./builder",
+			wantErr: true,
+		},
+		{
+			name:    "DotDotAccount",
+			builder: "../builder",
+			wantErr: true,
+		},
+		{
+			name:    "DotName",
+			builder: "org/.",
+			wantErr: true,
+		},
+		{
+			name:    "DotDotName",
+			builder: "org/..",
+			wantErr: true,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			t.Parallel()
+
+			account, name, err := parseBuilderName(tt.builder)
+			if tt.wantErr {
+				require.EqualError(t, err, "builder should be in the format: <account>/<builder>")
+				return
+			}
+			require.NoError(t, err)
+			assert.Equal(t, tt.wantAccount, account)
+			assert.Equal(t, tt.wantName, name)
+		})
+	}
+}
+
 func TestResolveNodesRequiresEndpoint(t *testing.T) {
 	t.Parallel()
 
 	_, err := (&factory{}).ResolveNodes(t.Context(), driver.Node{})
 	require.EqualError(t, err, "no endpoint (builder) provided")
+}
+
+func TestResolveNodesRejectsMalformedEndpoint(t *testing.T) {
+	t.Parallel()
+
+	_, err := (&factory{}).ResolveNodes(t.Context(), driver.Node{Endpoint: "org"})
+	require.EqualError(t, err, "builder should be in the format: <account>/<builder>")
+}
+
+func TestGetBuilderInstancesRejectsMalformedBuilder(t *testing.T) {
+	t.Parallel()
+
+	_, err := getBuilderInstances(t.Context(), "org", "http://example.com", "token")
+	require.EqualError(t, err, "builder should be in the format: <account>/<builder>")
 }
 
 func TestGetBuilderInstanceDriverOpts(t *testing.T) {
