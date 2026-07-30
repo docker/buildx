@@ -31,7 +31,7 @@ require (
 	github.com/in-toto/in-toto-golang v0.11.0
 	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.32.0
-	github.com/moby/go-archive v0.2.1
+	github.com/moby/go-archive v0.3.0
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
 	github.com/moby/policy-helpers v0.0.0-20260722051018-856be88baec4
