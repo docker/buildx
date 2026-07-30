@@ -13,24 +13,27 @@ import (
 	"net"
 	"net/http"
 	"os"
+	"slices"
 	"strconv"
 	"strings"
 	"time"
 
+	"github.com/Masterminds/semver/v3"
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/progress"
+	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/exporter/containerimage/exptypes"
+	sessionexporter "github.com/moby/buildkit/session/exporter"
+	"github.com/moby/buildkit/session/exporter/exporterprovider"
 	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/api/types/system"
 	dockerclient "github.com/moby/moby/client"
-	"github.com/sirupsen/logrus"
-
-	"github.com/Masterminds/semver/v3"
-	"github.com/moby/buildkit/client"
 	specs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
 	"google.golang.org/grpc"
 	grpcgzip "google.golang.org/grpc/encoding/gzip"
 	"google.golang.org/grpc/keepalive"
@@ -58,8 +61,10 @@ type Driver struct {
 	headers []string
 }
 
-// make sure cloud driver implements Driver interface
-var _ driver.Driver = &Driver{}
+var _ interface {
+	driver.Driver
+	driver.BuildPreparer
+} = (*Driver)(nil)
 
 // tlsOpts allows overriding the default TLS configuration for communicating
 // with the registry. This should only be used for development and testing.
@@ -192,9 +197,7 @@ func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
 	return nil, errors.New("host-gateway is not supported by the cloud driver")
 }
 
-// CloudPull pulls an image from the cloud registry.
-// It should be called right after Solve returns.
-func (d *Driver) CloudPull(ctx context.Context, imageDescriptor string, platform string, duc *dockerutil.Client, dockerContext string, tags []string, l progress.SubLogger) error {
+func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform string, duc *dockerutil.Client, dockerContext string, tags []string, l progress.SubLogger) error {
 	dc, err := duc.API(dockerContext)
 	if err != nil {
 		return err
@@ -275,73 +278,133 @@ func (d *Driver) CloudPull(ctx context.Context, imageDescriptor string, platform
 	return nil
 }
 
-// CheckCloudPull checks if cloud pull should be enabled and returns the updated exports.
-// Enables cloud pull if
-// - cloud driver is used
-// - daemon supports RegistryToken in ImagePullOptions
-// - docker exporter or image exporter (without push) is used
-// - at least one tag is set
-func (d *Driver) CheckCloudPull(ctx context.Context, docker *dockerutil.Client, exports []client.ExportEntry, tags []string) []client.ExportEntry {
-	if len(tags) == 0 {
-		return exports
+func (d *Driver) PrepareBuild(ctx context.Context, opt *driver.PrepareBuildOptions) error {
+	if opt.NoOutput {
+		return nil
+	}
+	if len(opt.Tags) == 0 {
+		return nil
 	}
 
-	dockerContext := ""
-	hasDockerContext := false
-	hasCloudPull := len(exports) == 0
-	for _, e := range exports {
-		pushAttr, _ := strconv.ParseBool(e.Attrs["push"])
-		if e.Type != "docker" && (e.Type != "image" || pushAttr) {
-			continue
-		}
-		if e.Output != nil || e.OutputDir != "" {
-			continue
-		}
-		hasCloudPull = true
-		context := e.Attrs["context"]
-		if !hasDockerContext {
-			dockerContext = context
-			hasDockerContext = true
-		} else if dockerContext != context {
-			return exports
-		}
-	}
-	if !hasCloudPull {
-		return exports
+	exports, requests, dockerContext := resolveCloudPullExporters(opt.SolveOpt.Exports, opt.Tags, opt.BuildInfoAttrs, opt.BuildInfoAttrsSet, opt.NoDefaultOCIArtifact)
+	if len(requests) == 0 {
+		return nil
 	}
 
-	supportsRegistryTokenPull, err := daemonSupportsRegistryTokenPull(ctx, docker, dockerContext)
+	if opt.MultiDriver || len(opt.Platforms) > 1 {
+		return nil
+	}
+
+	supportsRegistryTokenPull, err := daemonSupportsRegistryTokenPull(ctx, opt.Docker, dockerContext)
 	if err != nil {
 		logrus.Warnf("failed to detect registry pull token support in daemon: %v", err)
-		return exports
+		return nil
+	}
+	if !supportsRegistryTokenPull {
+		return nil
 	}
 
-	if !supportsRegistryTokenPull {
-		return exports
+	opt.SolveOpt.Exports = exports
+	opt.SolveOpt.Session = append(opt.SolveOpt.Session, d.newCloudPullSessionExporter(*opt, requests, dockerContext))
+	opt.SolveOpt.EnableSessionExporter = true
+	return nil
+}
+
+func (d *Driver) newCloudPullSessionExporter(opt driver.PrepareBuildOptions, requests []*sessionexporter.ExporterRequest, dockerContext string) *exporterprovider.Exporter {
+	targetPlatform := d.cloudPullPlatform(opt)
+	tags := slices.Clone(opt.Tags)
+	return exporterprovider.New(func(context.Context, map[string][]byte, []string) ([]*sessionexporter.ExporterRequest, error) {
+		return requests, nil
+	}, exporterprovider.WithFinalizeCallback(func(ctx context.Context, exporterResponse map[string]string) error {
+		imgDescriptor := exporterResponse[exptypes.ExporterImageDescriptorKey]
+		if imgDescriptor == "" {
+			return errors.Errorf("missing exporter response %q", exptypes.ExporterImageDescriptorKey)
+		}
+		pw := progress.ResetTime(opt.Progress)
+		return progress.Wrap("cloud pull", pw.Write, func(l progress.SubLogger) error {
+			if err := d.cloudPull(ctx, imgDescriptor, targetPlatform, opt.Docker, dockerContext, tags, l); err != nil {
+				return errors.Wrap(err, "pulling image from cloud")
+			}
+			return nil
+		})
+	}))
+}
+
+func (d *Driver) cloudPullPlatform(opt driver.PrepareBuildOptions) string {
+	targetPlatforms := opt.Platforms
+	if len(targetPlatforms) == 0 {
+		targetPlatforms = d.Config().Platforms
+	}
+	if len(targetPlatforms) != 1 {
+		return ""
+	}
+	return platforms.Format(targetPlatforms[0])
+}
+
+func resolveCloudPullExporters(exports []client.ExportEntry, tags []string, buildInfoAttrs string, buildInfoAttrsSet bool, noDefaultOCIArtifact bool) ([]client.ExportEntry, []*sessionexporter.ExporterRequest, string) {
+	exporterAttrs := func(attrs map[string]string) map[string]string {
+		attrs = maps.Clone(attrs)
+		if attrs == nil {
+			attrs = map[string]string{}
+		}
+		attrs["attestation-inline"] = "false"
+		if attrs["name"] == "" {
+			attrs["name"] = strings.Join(tags, ",")
+		}
+		if buildInfoAttrsSet {
+			attrs["buildinfo-attrs"] = buildInfoAttrs
+		}
+		if noDefaultOCIArtifact {
+			if _, ok := attrs[string(exptypes.OptKeyOCIArtifact)]; !ok {
+				attrs[string(exptypes.OptKeyOCIArtifact)] = "false"
+			}
+		}
+		return attrs
 	}
 
 	if len(exports) == 0 {
-		attrs := maps.Clone(CouldPullExportRequiredAttributes)
-		return []client.ExportEntry{
-			{
-				Type:  CloudPullExportType,
-				Attrs: attrs,
-			},
-		}
+		return nil, []*sessionexporter.ExporterRequest{{
+			Type:  "image",
+			Attrs: exporterAttrs(nil),
+		}}, ""
 	}
 
-	for i, e := range exports {
-		pushAttr, _ := strconv.ParseBool(e.Attrs["push"])
-		if e.Output != nil || e.OutputDir != "" {
+	var remaining []client.ExportEntry
+	var requests []*sessionexporter.ExporterRequest
+	var dockerContext string
+	var hasDockerContext bool
+	for _, export := range exports {
+		push, _ := strconv.ParseBool(export.Attrs["push"])
+		if export.Type != "docker" && (export.Type != "image" || push) {
+			remaining = append(remaining, export)
 			continue
 		}
-		if e.Type == "docker" || (e.Type == "image" && !pushAttr) {
-			exports[i].Type = CloudPullExportType
-			maps.Copy(exports[i].Attrs, CouldPullExportRequiredAttributes)
+		if export.Output != nil || export.OutputDir != "" {
+			remaining = append(remaining, export)
+			continue
 		}
+		dctx := export.Attrs["context"]
+		if !hasDockerContext {
+			dockerContext = dctx
+			hasDockerContext = true
+		} else if dockerContext != dctx {
+			return exports, nil, ""
+		}
+		request := &sessionexporter.ExporterRequest{
+			Type:  "image",
+			Attrs: exporterAttrs(export.Attrs),
+		}
+		if len(requests) > 0 {
+			// FinalizeExport receives one response map, so cloud pull only
+			// supports one distinct converted exporter request.
+			if requests[0].Type == request.Type && maps.Equal(requests[0].Attrs, request.Attrs) {
+				continue
+			}
+			return exports, nil, ""
+		}
+		requests = append(requests, request)
 	}
-
-	return exports
+	return remaining, requests, dockerContext
 }
 
 // tlsConfig returns a TLS configuration for communicating with the registry,

@@ -21,14 +21,11 @@ import (
 const EndpointPrefix = "cloud://"
 
 const (
-	DriverName = "cloud"
-	// CloudPullExportType is the type of export used for enabling
-	// cloud pulls.
-	CloudPullExportType = "cloud"
-	AuthHost            = "https://auth.docker.io"
-	ProxyAddress        = "tcp://build-cloud.docker.com:443"
-	RegistryAddress     = "build-cloud.docker.com:443"
-	HealthAddress       = "https://build-cloud.docker.com:443/v2/"
+	DriverName      = "cloud"
+	AuthHost        = "https://auth.docker.io"
+	ProxyAddress    = "tcp://build-cloud.docker.com:443"
+	RegistryAddress = "build-cloud.docker.com:443"
+	HealthAddress   = "https://build-cloud.docker.com:443/v2/"
 
 	// We want a low priority for the cloud driver for now.
 	lowPriority      = 1000
@@ -55,27 +52,20 @@ const (
 	optKeyInternalHealthAddress = "internal.cloud.health.address"
 )
 
-var (
-	// CouldPullExportRequiredAttributes is the list of required attributes for the Export entry
-	// when doing a cloud pull.
-	CouldPullExportRequiredAttributes = map[string]string{
-		"attestation-inline": "false",
-	}
-)
-
 func init() {
 	driver.Register(&factory{})
 }
+
+var _ interface {
+	driver.Factory
+	driver.DefaultBuilderNamer
+	driver.NodeResolver
+} = (*factory)(nil)
 
 type factory struct {
 	headers []string
 	once    sync.Once
 }
-
-var (
-	_ driver.DefaultBuilderNamer = (*factory)(nil)
-	_ driver.NodeResolver        = (*factory)(nil)
-)
 
 func (*factory) Name() string {
 	return DriverName
