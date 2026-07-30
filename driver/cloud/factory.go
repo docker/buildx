@@ -123,21 +123,31 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 			if err := verifyDomain(v); err != nil {
 				return nil, err
 			}
-			d.proxyAddress = v
-			// registry should not have a protocol, https is implicit
-			d.registryAddress = strings.TrimPrefix(v, "tcp://")
-			registryHTTPAddress := strings.Replace(v, "tcp", "https", 1)
-			d.healthAddress = registryHTTPAddress + "/v2/"
+			registryAddress, err := endpointHost(v)
+			if err != nil {
+				return nil, err
+			}
+			d.proxyAddress = "tcp://" + registryAddress
+			d.registryAddress = registryAddress
+			d.healthAddress = "https://" + registryAddress + "/v2/"
 		case optKeyInternalProxyAddress:
 			if err := verifyDomain(v); err != nil {
 				return nil, err
 			}
-			d.proxyAddress = v
+			proxyAddress, err := endpointHost(v)
+			if err != nil {
+				return nil, err
+			}
+			d.proxyAddress = "tcp://" + proxyAddress
 		case optKeyInternalRegistryAddress:
 			if err := verifyDomain(v); err != nil {
 				return nil, err
 			}
-			d.registryAddress = v
+			registryAddress, err := endpointHost(v)
+			if err != nil {
+				return nil, err
+			}
+			d.registryAddress = registryAddress
 		case optKeyInternalHealthAddress:
 			if err := verifyDomain(v); err != nil {
 				return nil, err
@@ -244,18 +254,54 @@ func getUserContext(env []string) string {
 	}
 }
 
-func verifyDomain(rawURL string) error {
+func parseEndpoint(rawURL string) (*url.URL, error) {
 	u, err := url.Parse(rawURL)
-	if err != nil {
-		return errors.Wrap(err, "could not parse url")
+	if err == nil && u.Host != "" {
+		return u, nil
 	}
+
+	fallback, fallbackErr := url.Parse("//" + rawURL)
+	if fallbackErr == nil && fallback.Host != "" {
+		return fallback, nil
+	}
+
+	if err != nil {
+		return nil, errors.Wrap(err, "could not parse url")
+	}
+	if fallbackErr != nil {
+		return nil, errors.Wrap(fallbackErr, "could not parse url")
+	}
+	return u, nil
+}
+
+func endpointHost(rawURL string) (string, error) {
+	u, err := parseEndpoint(rawURL)
+	if err != nil {
+		return "", err
+	}
+	host := u.Host
+	if host == "" {
+		return "", errors.Errorf("invalid endpoint %s", rawURL)
+	}
+	return strings.ToLower(host), nil
+}
+
+func verifyDomain(rawURL string) error {
+	u, err := parseEndpoint(rawURL)
+	if err != nil {
+		return err
+	}
+	host := u.Hostname()
+	if host == "" {
+		return errors.Errorf("invalid domain %s", rawURL)
+	}
+	host = strings.ToLower(host)
 
 	valid := []string{
 		"localhost",
 		"docker.io",
 		"docker.com",
 	}
-	host := u.Hostname()
 	if !strings.ContainsRune(host, '.') {
 		return nil
 	}
