@@ -391,3 +391,13 @@ func TestCloudPullPlatform(t *testing.T) {
 		})
 	}
 }
+
+func TestCloudPullSessionExporterRequiresDescriptor(t *testing.T) {
+	t.Parallel()
+
+	provider := (&Driver{}).newCloudPullSessionExporter(driver.PrepareBuildOptions{}, nil, "")
+
+	_, err := provider.FinalizeExport(t.Context(), &sessionexporter.FinalizeExportRequest{})
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), exptypes.ExporterImageDescriptorKey)
+}

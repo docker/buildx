@@ -198,6 +198,19 @@ func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
 }
 
 func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform string, duc *dockerutil.Client, dockerContext string, tags []string, l progress.SubLogger) error {
+	if imageDescriptor == "" {
+		return errors.Errorf("missing exporter response %q", exptypes.ExporterImageDescriptorKey)
+	}
+	decodedDescriptor, err := base64.StdEncoding.DecodeString(imageDescriptor)
+	if err != nil {
+		return err
+	}
+	var desc specs.Descriptor
+	if err := json.Unmarshal(decodedDescriptor, &desc); err != nil {
+		return errors.Wrapf(err, "unmarshal descriptor %s", decodedDescriptor)
+	}
+	sha := desc.Digest.String()
+
 	dc, err := duc.API(dockerContext)
 	if err != nil {
 		return err
@@ -232,17 +245,6 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 		RegistryAuth: base64Auth,
 		Platforms:    pullPlatforms,
 	}
-
-	// Find manifest to pull
-	decodedDescriptor, err := base64.StdEncoding.DecodeString(imageDescriptor)
-	if err != nil {
-		return err
-	}
-	var desc specs.Descriptor
-	if err := json.Unmarshal(decodedDescriptor, &desc); err != nil {
-		return errors.Wrapf(err, "unmarshal descriptor %s", decodedDescriptor)
-	}
-	sha := desc.Digest.String()
 
 	// Use builder name as tag (will be replaced with user tags after the pull)
 	ref := fmt.Sprintf("%s/%s@%s", hydroRegistryAddr, d.builder, sha)
