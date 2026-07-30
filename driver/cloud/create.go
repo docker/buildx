@@ -3,7 +3,7 @@ package cloud
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"io"
 	"maps"
 	"net/http"
 	"net/url"
@@ -175,7 +175,10 @@ func getBuilderInstances(ctx context.Context, builderGroup, hubHost, token strin
 	if err != nil {
 		return nil, err
 	}
-	endpointURL := fmt.Sprintf("%s/v2/cloud-builds/accounts/%s/builder-groups/%s/instances", hubHost, url.PathEscape(namespace), url.PathEscape(group))
+	endpointURL, err := url.JoinPath(hubHost, "v2", "cloud-builds", "accounts", namespace, "builder-groups", group, "instances")
+	if err != nil {
+		return nil, errors.Wrap(err, "create get instances URL")
+	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, endpointURL, nil)
 	if err != nil {
@@ -183,14 +186,16 @@ func getBuilderInstances(ctx context.Context, builderGroup, hubHost, token strin
 	}
 	req.Header.Set("Authorization", "Bearer "+token)
 
-	resp, err := http.DefaultClient.Do(req)
+	resp, err := newClient(nil).Do(req)
 	if err != nil {
 		return nil, errors.Wrap(err, "request failed")
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
-		return nil, errors.New("response status code: " + resp.Status)
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 255))
+		return nil, errors.Errorf("failed to get builders, got: %s. Trace ID: %s. Response body: %s", resp.Status,
+			resp.Header.Get("x-trace-id"), string(body))
 	}
 
 	// ignoring pagination as the default page size of 10 should include all builders.

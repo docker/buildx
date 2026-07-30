@@ -1,6 +1,9 @@
 package cloud
 
 import (
+	"encoding/json"
+	"net/http"
+	"net/http/httptest"
 	"testing"
 
 	"github.com/docker/buildx/driver"
@@ -107,6 +110,50 @@ func TestGetBuilderInstancesRejectsMalformedBuilder(t *testing.T) {
 
 	_, err := getBuilderInstances(t.Context(), "org", "http://example.com", "token")
 	require.EqualError(t, err, "builder should be in the format: <account>/<builder>")
+}
+
+func TestGetBuilderInstances(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		assert.Equal(t, "/v2/cloud-builds/accounts/org/builder-groups/builder/instances", r.URL.Path)
+		assert.Equal(t, "Bearer token", r.Header.Get("Authorization"))
+
+		err := json.NewEncoder(w).Encode(struct {
+			Results []cloudBuilder `json:"results"`
+		}{
+			Results: []cloudBuilder{{
+				Name:     "linux-amd64",
+				Platform: "linux/amd64",
+				Endpoint: "cloud://org/builder-linux-amd64",
+			}},
+		})
+		assert.NoError(t, err)
+	}))
+	defer server.Close()
+
+	builders, err := getBuilderInstances(t.Context(), "org/builder", server.URL+"/", "token")
+	require.NoError(t, err)
+	require.Len(t, builders, 1)
+	assert.Equal(t, "linux-amd64", builders[0].Name)
+	assert.Equal(t, "linux/amd64", builders[0].Platform)
+	assert.Equal(t, "cloud://org/builder-linux-amd64", builders[0].Endpoint)
+}
+
+func TestGetBuilderInstancesStatusError(t *testing.T) {
+	t.Parallel()
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("x-trace-id", "trace-123")
+		http.Error(w, "denied", http.StatusForbidden)
+	}))
+	defer server.Close()
+
+	_, err := getBuilderInstances(t.Context(), "org/builder", server.URL, "token")
+	require.Error(t, err)
+	assert.Contains(t, err.Error(), "403 Forbidden")
+	assert.Contains(t, err.Error(), "trace-123")
+	assert.Contains(t, err.Error(), "denied")
 }
 
 func TestGetBuilderInstanceDriverOpts(t *testing.T) {
