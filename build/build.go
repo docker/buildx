@@ -261,18 +261,6 @@ func findNonMobyDriver(nodes []builder.Node) *driver.DriverHandle {
 	return nil
 }
 
-func shouldWarnNoOutput(opt Options, reqs []*reqForNode) bool {
-	if opt.Linked || len(opt.Exports) > 0 {
-		return false
-	}
-	for _, req := range reqs {
-		if len(req.so.Exports) > 0 || req.so.EnableSessionExporter {
-			return false
-		}
-	}
-	return true
-}
-
 // warnOnNoOutput checks if the prepared build requests would result in an
 // output and prints a warning if they would not.
 func warnOnNoOutput(nodes []builder.Node, opts map[string]Options, reqForNodes map[string][]*reqForNode) {
@@ -291,7 +279,17 @@ func warnOnNoOutput(nodes []builder.Node, opts map[string]Options, reqForNodes m
 	// Produce a warning describing the targets affected.
 	var noOutputTargets []string
 	for name, opt := range opts {
-		if shouldWarnNoOutput(opt, reqForNodes[name]) {
+		if opt.Linked || len(opt.Exports) > 0 {
+			continue
+		}
+		hasOutput := false
+		for _, req := range reqForNodes[name] {
+			if len(req.so.Exports) > 0 || req.so.EnableSessionExporter {
+				hasOutput = true
+				break
+			}
+		}
+		if !hasOutput {
 			noOutputTargets = append(noOutputTargets, name)
 		}
 	}
