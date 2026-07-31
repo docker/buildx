@@ -12,6 +12,7 @@ on:
 
 jobs:
   labeler:
+    if: ${{ github.repository == 'docker/buildx' }}
     runs-on: ubuntu-latest
     permissions:
       contents: read # same as global permission
