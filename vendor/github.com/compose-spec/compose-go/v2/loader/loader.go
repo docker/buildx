@@ -66,6 +66,10 @@ type Options struct {
 	SkipInclude bool
 	// SkipResolveEnvironment will ignore computing `environment` for services
 	SkipResolveEnvironment bool
+	// SkipResolveLabels will ignore resolving `label_file` into `labels` for services.
+	// When set, service `labels` may be incomplete: `label_file` entries are left unresolved,
+	// so callers must not treat `labels` as authoritative.
+	SkipResolveLabels bool
 	// SkipDefaultValues will ignore missing required attributes
 	SkipDefaultValues bool
 	// Interpolation options
@@ -403,6 +407,10 @@ func loadYamlModel(ctx context.Context, config types.ConfigDetails, opts *Option
 	)
 	workingDir, environment := config.WorkingDir, config.Environment
 
+	// interpolation options and environment are fixed within this call, so
+	// extends.file bases can be shared by every service loaded from it
+	ctx = withExtendsCache(ctx)
+
 	for _, file := range config.ConfigFiles {
 		dict, _, err = loadYamlFile(ctx, file, opts, workingDir, environment, ct, dict, included)
 		if err != nil {
@@ -565,7 +573,7 @@ func load(ctx context.Context, configDetails types.ConfigDetails, opts *Options,
 		}
 	}
 
-	dict, err := loadYamlModel(ctx, configDetails, opts, &cycleTracker{}, nil)
+	dict, err := loadYamlModel(withIncludeCache(ctx), configDetails, opts, &cycleTracker{}, nil)
 	if err != nil {
 		return nil, err
 	}
@@ -654,9 +662,12 @@ func ModelToProject(dict map[string]interface{}, opts *Options, configDetails ty
 		}
 	}
 
-	project, err = project.WithServicesLabelsResolved(opts.discardEnvFiles)
-	if err != nil {
-		return nil, err
+	if !opts.SkipResolveLabels {
+		// discardEnvFiles only applies to `env_file`: `label_file` entries are never discarded
+		project, err = project.WithServicesLabelsResolved(false)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	return project, nil
