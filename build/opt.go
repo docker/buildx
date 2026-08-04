@@ -65,6 +65,11 @@ var sendGitQueryAsInput = sync.OnceValue(func() bool {
 	return false
 })
 
+const (
+	noDefaultAttestationsEnv = "BUILDX_NO_DEFAULT_ATTESTATIONS"
+	noDefaultOCIArtifactEnv  = "BUILDX_NO_DEFAULT_OCI_ARTIFACT"
+)
+
 // policyExplicitlyDisabled reports whether the user passed `--policy
 // disabled=true`, which suppresses both user-defined and builtin default
 // policies.
@@ -355,12 +360,11 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	if _, ok := opt.Attests["provenance"]; !ok && supportAttestations {
-		const noAttestEnv = "BUILDX_NO_DEFAULT_ATTESTATIONS"
 		var noProv bool
-		if v, ok := os.LookupEnv(noAttestEnv); ok {
+		if v, ok := os.LookupEnv(noDefaultAttestationsEnv); ok {
 			noProv, err = strconv.ParseBool(v)
 			if err != nil {
-				return nil, nil, errors.Wrap(err, "invalid "+noAttestEnv)
+				return nil, nil, errors.Wrap(err, "invalid "+noDefaultAttestationsEnv)
 			}
 		}
 		if !noProv {
@@ -436,6 +440,14 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 	opt.Exports = exports
 
+	var noDefaultOCIArtifact bool
+	if v, ok := os.LookupEnv(noDefaultOCIArtifactEnv); ok {
+		noDefaultOCIArtifact, err = strconv.ParseBool(v)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "invalid "+noDefaultOCIArtifactEnv)
+		}
+	}
+
 	// set up exporters
 	for i, e := range opt.Exports {
 		if e.Type == "oci" && !nodeDriver.Features(ctx)[driver.OCIExporter] {
@@ -495,6 +507,14 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 			// inline buildinfo attrs from build arg
 			if v, ok := opt.BuildArgs["BUILDKIT_INLINE_BUILDINFO_ATTRS"]; ok {
 				opt.Exports[i].Attrs["buildinfo-attrs"] = v
+			}
+		}
+		if noDefaultOCIArtifact && supportAttestations {
+			switch opt.Exports[i].Type {
+			case client.ExporterImage, client.ExporterOCI, "moby":
+				if _, ok := opt.Exports[i].Attrs[string(exptypes.OptKeyOCIArtifact)]; !ok {
+					opt.Exports[i].Attrs[string(exptypes.OptKeyOCIArtifact)] = "false"
+				}
 			}
 		}
 	}
