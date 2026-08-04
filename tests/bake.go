@@ -79,6 +79,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeMetadataWarningsDedup,
 	testBakeMultiExporters,
 	testBakeLoadPush,
+	testBakeNoDefaultOCIArtifact,
 	testBakeListTargets,
 	testBakeListVariables,
 	testBakeListTypedVariables,
@@ -2230,6 +2231,41 @@ target "default" {
 	require.NoError(t, err)
 
 	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
+}
+
+func testBakeNoDefaultOCIArtifact(t *testing.T, sb integration.Sandbox) {
+	if isMobyWorker(sb) {
+		t.Skip("attestations are not supported by the docker worker")
+	}
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/bake-no-default-oci-artifact:latest"
+
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+`)
+	bakefile := fmt.Appendf(nil, `
+target "default" {
+  output = ["type=image,name=%s,push=true"]
+  attest = ["type=provenance"]
+}
+`, target)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	out, err := bakeCmd(sb, withDir(dir), withEnv("BUILDX_NO_DEFAULT_OCI_ARTIFACT=true"))
+	require.NoError(t, err, string(out))
+
+	requireLegacyAttestationStorage(t, sb, target)
 }
 
 func testBakeLoadPush(t *testing.T, sb integration.Sandbox) {
