@@ -66,6 +66,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildLocalExportDeleteMode,
 	testBuildRegistryExport,
 	testBuildRegistryExportAttestations,
+	testBuildRegistryExportNoDefaultOCIArtifact,
 	testBuildTarExport,
 	testBuildMobyFromLocalImage,
 	testBuildDetailsLink,
@@ -631,6 +632,60 @@ func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
 	att := imgs.FindAttestation(pk)
 	require.NotNil(t, att)
 	require.Len(t, att.Layers, 1)
+}
+
+func testBuildRegistryExportNoDefaultOCIArtifact(t *testing.T, sb integration.Sandbox) {
+	if isMobyWorker(sb) {
+		t.Skip("attestations are not supported by the docker worker")
+	}
+
+	dir := createTestProject(t)
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+	target := registry + "/buildx/registry-no-default-oci-artifact:latest"
+
+	out, err := buildCmd(sb,
+		withEnv("BUILDX_NO_DEFAULT_OCI_ARTIFACT=true"),
+		withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), "--provenance=true", dir),
+	)
+	require.NoError(t, err, string(out))
+
+	requireLegacyAttestationStorage(t, sb, target)
+}
+
+func requireLegacyAttestationStorage(t *testing.T, sb integration.Sandbox, ref string) {
+	t.Helper()
+
+	cmd := buildxCmd(sb, withArgs("imagetools", "inspect", ref, "--raw"))
+	dt, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var idx ocispecs.Index
+	err = json.Unmarshal(dt, &idx)
+	require.NoError(t, err)
+
+	var attestation ocispecs.Descriptor
+	for _, desc := range idx.Manifests {
+		if desc.Annotations["vnd.docker.reference.type"] == "attestation-manifest" {
+			attestation = desc
+			break
+		}
+	}
+	require.NotEmpty(t, attestation.Digest)
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", ref+"@"+attestation.Digest.String(), "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+
+	var mfst ocispecs.Manifest
+	err = json.Unmarshal(dt, &mfst)
+	require.NoError(t, err)
+	require.Nil(t, mfst.Subject)
+	require.NotEmpty(t, mfst.Layers)
 }
 
 func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
