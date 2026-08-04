@@ -7,7 +7,7 @@ require (
 	github.com/Microsoft/go-winio v0.6.3-0.20251027160822-ad3df93bed29
 	github.com/ProtonMail/go-crypto v1.4.1
 	github.com/aws/aws-sdk-go-v2/config v1.32.31
-	github.com/compose-spec/compose-go/v2 v2.13.0
+	github.com/compose-spec/compose-go/v2 v2.14.0
 	github.com/containerd/console v1.0.5
 	github.com/containerd/containerd/v2 v2.3.3
 	github.com/containerd/continuity v0.5.0

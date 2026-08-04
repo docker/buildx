@@ -18,9 +18,12 @@ package loader
 
 import (
 	"context"
+	"crypto/sha256"
 	"fmt"
+	"maps"
 	"os"
 	"path/filepath"
+	"slices"
 	"strings"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
@@ -29,6 +32,47 @@ import (
 	"github.com/compose-spec/compose-go/v2/tree"
 	"github.com/compose-spec/compose-go/v2/types"
 )
+
+type includeCacheKey struct{}
+
+// withIncludeCache attaches a fresh include cache to ctx. The cache is scoped
+// to a single load so a file reachable through several include paths (a
+// "diamond" include graph) is parsed and expanded only once per distinct
+// (paths, directories, environment) tuple.
+func withIncludeCache(ctx context.Context) context.Context {
+	return context.WithValue(ctx, includeCacheKey{}, map[string]map[string]any{})
+}
+
+func includeCache(ctx context.Context) map[string]map[string]any {
+	cache, _ := ctx.Value(includeCacheKey{}).(map[string]map[string]any)
+	return cache
+}
+
+// includeModelKey covers every input that determines the model loaded for an
+// include: resolved paths, working directory, project directory and effective
+// environment. Interpolate.Substitute and TypeCastMapping are intentionally
+// excluded: they are invariant across includes within a single load. If a
+// future option allows them to vary per include, they must be folded into the
+// key. Fields are length-prefixed and collections count-prefixed so the byte
+// stream is uniquely decodable.
+func includeModelKey(paths types.StringList, workingDir, projectDir string, env types.Mapping) string {
+	h := sha256.New()
+	write := func(s string) {
+		fmt.Fprintf(h, "%d:%s", len(s), s)
+	}
+	fmt.Fprintf(h, "%d;", len(paths))
+	for _, p := range paths {
+		write(p)
+	}
+	write(workingDir)
+	write(projectDir)
+	fmt.Fprintf(h, "%d;", len(env))
+	for _, k := range slices.Sorted(maps.Keys(env)) {
+		write(k)
+		write(env[k])
+	}
+	return string(h.Sum(nil))
+}
 
 // loadIncludeConfig parse the required config from raw yaml
 func loadIncludeConfig(source any) ([]types.IncludeConfig, error) {
@@ -106,6 +150,9 @@ func ApplyInclude(ctx context.Context, workingDir string, environment types.Mapp
 		loadOptions.ResolvePaths = true
 		loadOptions.SkipNormalization = true
 		loadOptions.SkipConsistencyCheck = true
+		// include and extends events are only reported for declarations in the
+		// config files passed to the loader, not for those in included files
+		loadOptions.Listeners = nil
 		loadOptions.ResourceLoaders = append(loadOptions.RemoteResourceLoaders(), localResourceLoader{
 			WorkingDir: r.ProjectDirectory,
 		})
@@ -151,9 +198,22 @@ func ApplyInclude(ctx context.Context, workingDir string, environment types.Mapp
 			LookupValue:     config.LookupEnv,
 			TypeCastMapping: options.Interpolate.TypeCastMapping,
 		}
-		imported, err := loadYamlModel(ctx, config, loadOptions, &cycleTracker{}, included)
-		if err != nil {
-			return err
+		cache := includeCache(ctx)
+		cacheKey := includeModelKey(r.Path, relworkingdir, r.ProjectDirectory, config.Environment)
+		imported, hit := cache[cacheKey]
+		if hit {
+			// hand out a copy, the cached model must stay pristine
+			imported = deepClone(imported).(map[string]any)
+		} else {
+			imported, err = loadYamlModel(ctx, config, loadOptions, &cycleTracker{}, included)
+			if err != nil {
+				return err
+			}
+			if cache != nil {
+				// store a pristine copy: the model returned to the caller is
+				// merged into the parent and mutated by later loading phases
+				cache[cacheKey] = deepClone(imported).(map[string]any)
+			}
 		}
 		err = importResources(imported, model, processor)
 		if err != nil {

@@ -26,6 +26,7 @@ import (
 	"path/filepath"
 	"slices"
 	"sort"
+	"sync"
 
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/errdefs"
@@ -34,6 +35,7 @@ import (
 	godigest "github.com/opencontainers/go-digest"
 	"go.yaml.in/yaml/v4"
 	"golang.org/x/sync/errgroup"
+	"golang.org/x/sync/singleflight"
 )
 
 // Project is the result of loading a set of compose files
@@ -576,31 +578,103 @@ func (p *Project) WithServicesDisabled(names ...string) *Project {
 }
 
 // WithImagesResolved updates services images to include digest computed by a resolver function
-// It returns a new Project instance with the changes and keep the original Project unchanged
+// It returns a new Project instance with the changes and keep the original Project unchanged.
+// Besides the service image, this also resolves the images services depend on:
+//   - pre_start hook images, which run as ephemeral init containers with their own image
+//   - `type: image` volume sources, unless they reference another service by name (those are
+//     resolved to a locally built image rather than a registry digest)
 func (p *Project) WithImagesResolved(resolver func(named reference.Named) (godigest.Digest, error)) (*Project, error) {
-	return p.WithServicesTransform(func(_ string, service ServiceConfig) (ServiceConfig, error) {
-		if service.Image == "" {
-			return service, nil
+	// Deduplicate resolutions per raw image string across the whole call, on two axes:
+	//   - cache (sync.Map) memoizes results for the whole call, so images resolved at
+	//     different times — e.g. a hook or volume source equal to service.Image, resolved
+	//     sequentially within the same service — are resolved once.
+	//   - singleflight collapses concurrent resolutions of the same image (transforms run
+	//     one goroutine per service) into a single call before it reaches the cache.
+	// Neither alone suffices: the cache lets a concurrent burst miss simultaneously and
+	// all resolve, while singleflight forgets a key as soon as its call returns.
+	var (
+		cache sync.Map // map[string]string
+		group singleflight.Group
+	)
+	resolve := func(image string) (string, error) {
+		if r, ok := cache.Load(image); ok {
+			return r.(string), nil
 		}
-		named, err := reference.ParseDockerRef(service.Image)
+		r, err, _ := group.Do(image, func() (any, error) {
+			if r, ok := cache.Load(image); ok {
+				return r, nil
+			}
+			r, err := resolveImageDigest(image, resolver)
+			if err != nil {
+				return image, err
+			}
+			cache.Store(image, r)
+			return r, nil
+		})
+		if err != nil {
+			return image, err
+		}
+		return r.(string), nil
+	}
+	return p.WithServicesTransform(func(_ string, service ServiceConfig) (ServiceConfig, error) {
+		image, err := resolve(service.Image)
 		if err != nil {
 			return service, err
 		}
+		service.Image = image
 
-		if _, ok := named.(reference.Canonical); !ok {
-			// image is named but not digested reference
-			digest, err := resolver(named)
+		for i, hook := range service.PreStart {
+			image, err := resolve(hook.Image)
 			if err != nil {
 				return service, err
 			}
-			named, err = reference.WithDigest(named, digest)
-			if err != nil {
-				return service, err
-			}
+			service.PreStart[i].Image = image
 		}
-		service.Image = named.String()
+
+		for i, vol := range service.Volumes {
+			if vol.Type != VolumeTypeImage {
+				continue
+			}
+			if _, ok := p.Services[vol.Source]; ok {
+				continue
+			}
+			if _, ok := p.DisabledServices[vol.Source]; ok {
+				continue
+			}
+			image, err := resolve(vol.Source)
+			if err != nil {
+				return service, err
+			}
+			service.Volumes[i].Source = image
+		}
 		return service, nil
 	})
+}
+
+// resolveImageDigest returns image with its digest resolved by resolver, unless
+// it is empty or already a canonical (digested) reference, in which case it is
+// returned unchanged.
+func resolveImageDigest(image string, resolver func(named reference.Named) (godigest.Digest, error)) (string, error) {
+	if image == "" {
+		return image, nil
+	}
+	named, err := reference.ParseDockerRef(image)
+	if err != nil {
+		return image, err
+	}
+
+	if _, ok := named.(reference.Canonical); !ok {
+		// image is named but not digested reference
+		digest, err := resolver(named)
+		if err != nil {
+			return image, err
+		}
+		named, err = reference.WithDigest(named, digest)
+		if err != nil {
+			return image, err
+		}
+	}
+	return named.String(), nil
 }
 
 type marshallOptions struct {

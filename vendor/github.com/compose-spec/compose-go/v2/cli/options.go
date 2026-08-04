@@ -383,6 +383,16 @@ func WithoutEnvironmentResolution(o *ProjectOptions) error {
 	return nil
 }
 
+// WithoutLabelsResolution disable resolution of `label_file` into service labels.
+// When set, service `labels` may be incomplete: `label_file` entries are left
+// unresolved, so callers must not treat `labels` as authoritative.
+func WithoutLabelsResolution(o *ProjectOptions) error {
+	o.loadOptions = append(o.loadOptions, func(options *loader.Options) {
+		options.SkipResolveLabels = true
+	})
+	return nil
+}
+
 // WithSelectedServices restricts the loaded project to the given services and their
 // dependencies. An empty list means "all services". When set, services not in the
 // list are dropped from the project before environment resolution, so their
