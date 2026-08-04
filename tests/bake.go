@@ -83,6 +83,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeListVariables,
 	testBakeListTypedVariables,
 	testBakeCallCheck,
+	testBakeCallCheckLinkedTargets,
 	testBakeCallCheckFlag,
 	testBakeCallMetadata,
 	testBakeMultiPlatform,
@@ -2447,6 +2448,63 @@ target "validate" {
 	require.Error(t, err, out)
 
 	require.Contains(t, out, "validate")
+	require.Contains(t, out, "ConsistentInstructionCasing")
+}
+
+func testBakeCallCheckLinkedTargets(t *testing.T, sb integration.Sandbox) {
+	dockerfileBuilder := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+	dockerfileBase := []byte(`
+FROM builder
+COPY foo /bar
+	`)
+	dockerfileApp := []byte(`
+FROM base
+COPy foo /baz
+	`)
+	bakefile := []byte(`
+target "builder" {
+	dockerfile = "builder.Dockerfile"
+}
+
+target "base" {
+	dockerfile = "base.Dockerfile"
+	contexts = {
+		builder = "target:builder"
+	}
+}
+
+target "app" {
+	dockerfile = "app.Dockerfile"
+	contexts = {
+		base = "target:base"
+	}
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("builder.Dockerfile", dockerfileBuilder, 0600),
+		fstest.CreateFile("base.Dockerfile", dockerfileBase, 0600),
+		fstest.CreateFile("app.Dockerfile", dockerfileApp, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+
+	out, err := bakeCmd(
+		sb,
+		withDir(dir),
+		withArgs("app", "--check"),
+	)
+	require.Error(t, err, out)
+
+	// the "target:" contexts must be resolved for the call method instead of
+	// being forwarded to the frontend
+	require.NotContains(t, out, "unsupported context source target")
+
+	// the requested target and the ones it links to are all checked
+	require.Equal(t, 3, strings.Count(out, "Check complete"), out)
 	require.Contains(t, out, "ConsistentInstructionCasing")
 }
 
