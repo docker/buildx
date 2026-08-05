@@ -416,17 +416,16 @@ jobs:
     permissions:
       contents: read # same as global permission
       security-events: write # required to write sarif report
-      id-token: write # for logging in to Docker Hub with GitHub OIDC
     needs:
       - bin-image
     steps:
       -
+        # FIXME: switch to OIDC once Scout supports it
         name: Login to DockerHub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
-        env:
-          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
-          username: docker
+          username: ${{ vars.DOCKERPUBLICBOT_USERNAME }}
+          password: ${{ secrets.DOCKERPUBLICBOT_READ_PAT }}
       -
         name: Scout
         id: scout
