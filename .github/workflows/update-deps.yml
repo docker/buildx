@@ -1,0 +1,296 @@
+name: update-deps
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '0 9 * * *'
+  push:
+    branches:
+      - 'master'
+
+jobs:
+  update:
+    runs-on: ubuntu-24.04
+    if: ${{ github.repository == 'docker/buildx' }}
+    timeout-minutes: 10
+    permissions:
+      contents: write
+      pull-requests: write
+    strategy:
+      fail-fast: false
+      matrix:
+        dep:
+          - docker
+          - registry
+          - buildkit
+          - compose
+          - scout
+          - undock
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      -
+        name: Install npm deps
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const path = require('path');
+            const installDir = path.join(process.env.RUNNER_TEMP, 'update-deps-node');
+            await core.group(`Install npm deps`, async () => {
+              await exec.exec('npm', [
+                'install',
+                '--prefix',
+                installDir,
+                '--loglevel=error',
+                '--no-save',
+                '--package-lock=false',
+                '--ignore-scripts',
+                '--omit=dev',
+                '--prefer-offline',
+                '--fund=false',
+                '--audit=false',
+                'semver@7.8.3'
+              ]);
+            });
+            core.exportVariable('NODE_PATH', path.join(installDir, 'node_modules'));
+      -
+        name: Update dependency
+        id: update
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        env:
+          INPUT_DEP: ${{ matrix.dep }}
+        with:
+          script: |
+            const fs = require('fs');
+            const path = require('path');
+            const semver = require('semver');
+
+            const dep = core.getInput('dep');
+
+            function escapeRegExp(value) {
+              return value.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+            }
+
+            function dockerfileArgPattern(key) {
+              return new RegExp(`^(ARG\\s+${escapeRegExp(key)}=)(.+)$`, 'm');
+            }
+
+            function workflowEnvPattern(key) {
+              return new RegExp(`^(  ${escapeRegExp(key)}: ")([^"]*)(")$`, 'm');
+            }
+
+            function stripLeadingV(value) {
+              return value.startsWith('v') ? value.slice(1) : value;
+            }
+
+            function stripPrefix(value, prefix = '') {
+              return value.startsWith(prefix) ? value.slice(prefix.length) : value;
+            }
+
+            async function semverReleases({owner, repo, tagPrefix}) {
+              const result = [];
+
+              for (let page = 1; page <= 10; page++) {
+                const releases = await github.rest.repos.listReleases({
+                  owner,
+                  repo,
+                  page,
+                  per_page: 100
+                });
+                for (const release of releases.data) {
+                  const version = semver.parse(stripPrefix(release.tag_name, tagPrefix));
+                  if (!release.draft && version) {
+                    result.push({
+                      tag: release.tag_name,
+                      version,
+                      prerelease: release.prerelease
+                    });
+                  }
+                }
+                if (releases.data.length < 100) {
+                  break;
+                }
+              }
+
+              return result.sort((left, right) => semver.rcompare(left.version, right.version));
+            }
+
+            function latestMinorReleaseTags(releases, count) {
+              const result = [];
+              const seen = new Set();
+              for (const release of releases) {
+                if (release.prerelease || release.version.prerelease.length > 0) {
+                  continue;
+                }
+                const key = `${release.version.major}.${release.version.minor}`;
+                if (seen.has(key)) {
+                  continue;
+                }
+                seen.add(key);
+                result.push(release.tag);
+                if (result.length === count) {
+                  return result;
+                }
+              }
+              throw new Error(`Unable to resolve the latest ${count} minor release tags`);
+            }
+
+            function updateBuildkitMatrix(content, versions) {
+              const marker = '        buildkit:\n';
+              const nextMarker = '        worker:\n';
+              const start = content.indexOf(marker);
+              if (start === -1) {
+                throw new Error('Missing buildkit matrix in .github/workflows/build.yml');
+              }
+              const end = content.indexOf(nextMarker, start + marker.length);
+              if (end === -1) {
+                throw new Error('Unable to find end of buildkit matrix in .github/workflows/build.yml');
+              }
+              const entries = ['master', 'latest', 'buildx-stable-1', ...versions];
+              const block = `${marker}${entries.map(value => `          - ${value}\n`).join('')}`;
+              return `${content.slice(0, start)}${block}${content.slice(end)}`;
+            }
+
+            const dependencyConfigs = {
+              docker: {
+                name: 'Docker version',
+                branch: 'deps/docker-version',
+                owner: 'moby',
+                repo: 'moby',
+                tagPrefix: 'docker-',
+                path: 'Dockerfile',
+                arg: 'DOCKER_VERSION',
+                pattern: dockerfileArgPattern('DOCKER_VERSION'),
+                value: tag => stripLeadingV(stripPrefix(tag, 'docker-'))
+              },
+              registry: {
+                name: 'Registry version',
+                branch: 'deps/registry-version',
+                owner: 'distribution',
+                repo: 'distribution',
+                path: 'Dockerfile',
+                arg: 'REGISTRY_VERSION',
+                pattern: dockerfileArgPattern('REGISTRY_VERSION'),
+                value: stripLeadingV
+              },
+              buildkit: {
+                name: 'BuildKit version',
+                branch: 'deps/buildkit-version',
+                owner: 'moby',
+                repo: 'buildkit',
+                path: 'Dockerfile',
+                arg: 'BUILDKIT_VERSION',
+                pattern: dockerfileArgPattern('BUILDKIT_VERSION'),
+                value: tag => tag,
+                updateBuildkitMatrix: true
+              },
+              compose: {
+                name: 'Compose version',
+                branch: 'deps/compose-version',
+                owner: 'docker',
+                repo: 'compose',
+                path: 'Dockerfile',
+                arg: 'COMPOSE_VERSION',
+                pattern: dockerfileArgPattern('COMPOSE_VERSION'),
+                value: tag => tag
+              },
+              scout: {
+                name: 'Scout version',
+                branch: 'deps/scout-version',
+                owner: 'docker',
+                repo: 'scout-cli',
+                path: '.github/workflows/build.yml',
+                arg: 'SCOUT_VERSION',
+                pattern: workflowEnvPattern('SCOUT_VERSION'),
+                titlePrefix: 'ci',
+                value: stripLeadingV
+              },
+              undock: {
+                name: 'Undock version',
+                branch: 'deps/undock-version',
+                owner: 'crazy-max',
+                repo: 'undock',
+                path: 'Dockerfile',
+                arg: 'UNDOCK_VERSION',
+                pattern: dockerfileArgPattern('UNDOCK_VERSION'),
+                value: stripLeadingV
+              }
+            };
+
+            const config = dependencyConfigs[dep];
+            if (!config) {
+              throw new Error(`Unknown dependency ${dep}`);
+            }
+
+            const releases = await semverReleases(config);
+            if (releases.length === 0) {
+              throw new Error(`Unable to resolve latest semver release or pre-release for ${config.owner}/${config.repo}`);
+            }
+
+            const tag = releases[0].tag;
+            const version = config.value(tag);
+            const absolutePath = path.join(process.env.GITHUB_WORKSPACE, config.path);
+            const content = fs.readFileSync(absolutePath, 'utf8');
+            const pattern = config.pattern;
+            const match = content.match(pattern);
+            if (!match) {
+              throw new Error(`Missing ${config.arg} in ${config.path}`);
+            }
+
+            if (match[2] !== version) {
+              fs.writeFileSync(absolutePath, content.replace(pattern, (...args) => {
+                const groups = args.slice(1, -2);
+                return `${groups[0]}${version}${groups[2] || ''}`;
+              }), 'utf8');
+              core.info(`New ${config.name} ${version} found`);
+            } else {
+              core.info(`No workspace changes needed for ${config.name}`);
+            }
+
+            if (config.updateBuildkitMatrix) {
+              const buildWorkflowPath = path.join(process.env.GITHUB_WORKSPACE, '.github', 'workflows', 'build.yml');
+              const buildWorkflowContent = fs.readFileSync(buildWorkflowPath, 'utf8');
+              const versions = latestMinorReleaseTags(releases, 3);
+              const updatedBuildWorkflowContent = updateBuildkitMatrix(buildWorkflowContent, versions);
+              if (updatedBuildWorkflowContent !== buildWorkflowContent) {
+                fs.writeFileSync(buildWorkflowPath, updatedBuildWorkflowContent, 'utf8');
+                core.info(`Updated BuildKit test matrix to ${versions.join(', ')}`);
+              } else {
+                core.info('No workspace changes needed for BuildKit test matrix');
+              }
+              core.setOutput('buildkit-matrix', versions.join(', '));
+            }
+
+            const sourceUrl = `https://github.com/${config.owner}/${config.repo}/releases/tag/${tag}`;
+            core.info(`Resolved ${config.name} from ${sourceUrl}`);
+            core.setOutput('arg', config.arg);
+            core.setOutput('path', config.path);
+            core.setOutput('branch', config.branch);
+            core.setOutput('title', `${config.titlePrefix || 'dockerfile'}: update ${dep} ${stripLeadingV(version)}`);
+            core.setOutput('before', match[2]);
+            core.setOutput('after', version);
+            core.setOutput('source-url', sourceUrl);
+      -
+        name: Create pull request
+        uses: peter-evans/create-pull-request@5f6978faf089d4d20b00c7766989d076bb2fc7f1 # v8.1.1
+        with:
+          base: master
+          branch: ${{ steps.update.outputs.branch }}
+          token: ${{ secrets.GITHUB_TOKEN }}
+          commit-message: ${{ steps.update.outputs.title }}
+          title: ${{ steps.update.outputs.title }}
+          signoff: true
+          sign-commits: true
+          delete-branch: true
+          body: |
+            This updates `${{ steps.update.outputs.arg }}` in `${{ steps.update.outputs.path }}` from `${{ steps.update.outputs.before }}` to `${{ steps.update.outputs.after }}`.
+
+            The source of truth for this update is ${{ steps.update.outputs.source-url }}.
