@@ -1,10 +1,17 @@
 package policy
 
 import (
+	"context"
 	_ "embed"
 	"os"
 	"strconv"
 	"sync"
+
+	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/sourcemeta"
+	digest "github.com/opencontainers/go-digest"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/sirupsen/logrus"
 )
 
 // DefaultPolicyFilename is the synthetic filename used for the embedded
@@ -43,3 +50,20 @@ var DefaultPolicyEnabled = sync.OnceValue(func() bool {
 	}
 	return false
 })
+
+// DefaultImageVerifier returns an image verifier backed by the builtin default
+// policy, or nil when the default policy is disabled.
+func DefaultImageVerifier(cfg *confutil.Config) func(context.Context, string, *ocispecs.Platform, *sourcemeta.Resolver) (digest.Digest, error) {
+	if !DefaultPolicyEnabled() {
+		return nil
+	}
+	pol := DefaultPolicy(Opt{
+		Log: func(_ logrus.Level, msg string) {
+			logrus.Debug(msg)
+		},
+		VerifierProvider: SignatureVerifier(cfg),
+	})
+	return func(ctx context.Context, ref string, platform *ocispecs.Platform, resolver *sourcemeta.Resolver) (digest.Digest, error) {
+		return pol.CheckSource(ctx, ref, platform, resolver)
+	}
+}

@@ -8,9 +8,11 @@ import (
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/spf13/cobra"
@@ -64,6 +66,7 @@ func runCreate(ctx context.Context, dockerCli command.Cli, in createOptions, arg
 		Endpoint:            ep,
 		Append:              in.actionAppend,
 		Timeout:             in.timeout,
+		ImageVerifier:       policy.DefaultImageVerifier(confutil.NewConfig(dockerCli)),
 	})
 	if err != nil {
 		return err

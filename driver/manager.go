@@ -5,7 +5,7 @@ import (
 	"sort"
 	"sync"
 
-	"github.com/docker/buildx/policy"
+	"github.com/docker/buildx/util/sourcemeta"
 	"github.com/docker/cli/cli/context/store"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
@@ -36,7 +36,7 @@ type BuildkitConfig struct {
 // Source metadata is resolved through the given resolver, which drivers back
 // with a BuildKit instance they have access to so that registry access
 // happens where the image is pulled from.
-type ImageVerifier func(ctx context.Context, ref string, platform *ocispecs.Platform, resolver policy.SourceMetadataResolver) (digest.Digest, error)
+type ImageVerifier func(ctx context.Context, ref string, platform *ocispecs.Platform, resolver *sourcemeta.Resolver) (digest.Digest, error)
 
 type InitConfig struct {
 	Name            string
