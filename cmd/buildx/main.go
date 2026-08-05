@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
+	"strings"
 
 	"github.com/docker/buildx/commands"
 	"github.com/docker/buildx/util/cobrautil"
@@ -41,6 +43,30 @@ func init() {
 func runStandalone(cmd *command.DockerCli) error {
 	defer flushMetrics(cmd)
 	executable := os.Args[0]
+	if runtime.GOOS == "windows" || runtime.GOOS == "darwin" {
+		// Note that we're cutting some corners here. The intent here
+		// is for both "usage" and shell-completion scripts to use the
+		// name of the executable with its actual (lower, upper) case.
+		// However, on case-insensitive platforms, the user can invoke
+		// the executable using any case (e.g., "bUiLdX").
+		//
+		// Unfortunately, neither [os.Executable] nor [os.Stat] provide
+		// this information, and the "correct" solution would be to use
+		// [os.File.Readdirnames], which is a rather heavy hammer to use
+		// just for this.
+		//
+		// So, on macOS and Windows (usually case-insensitive platforms)
+		// we assume the executable is always lower-case, but it's worth
+		// noting that there's a corner-case to this corner-case; both
+		// Windows and macOS can be configured to use a case-sensitive
+		// filesystem (on Windows, this can be configured per-Directory).
+		// If that is the case, and the executable is not lowercase, the
+		// generated shell-completion script will be invalid.
+		//
+		// Let's assume that's not the case, and that the user did not
+		// rename the executable to anything uppercase.
+		executable = strings.ToLower(executable)
+	}
 	rootCmd := commands.NewRootCmd(filepath.Base(executable), false, cmd)
 	return rootCmd.Execute()
 }
