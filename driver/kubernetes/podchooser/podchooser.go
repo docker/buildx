@@ -92,6 +92,12 @@ func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *app
 	var runningPods []*corev1.Pod
 	for i := range podList.Items {
 		pod := &podList.Items[i]
+		// Skip terminating Pods: they may still be Running while buildkitd shuts down,
+		// causing newly scheduled builds to be killed mid-flight.
+		if pod.DeletionTimestamp != nil {
+			logrus.Debugf("pod terminating, skipping: %q", pod.Name)
+			continue
+		}
 		if pod.Status.Phase == corev1.PodRunning {
 			logrus.Debugf("pod running: %q", pod.Name)
 			runningPods = append(runningPods, pod)
