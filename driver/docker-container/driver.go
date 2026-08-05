@@ -26,7 +26,6 @@ import (
 	contextstore "github.com/docker/cli/cli/context/store"
 	"github.com/docker/cli/opts"
 	"github.com/moby/buildkit/client"
-	mobyarchive "github.com/moby/go-archive"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
@@ -376,9 +375,7 @@ func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) e
 	if srcPath != "" {
 		defer os.RemoveAll(srcPath)
 	}
-	srcArchive, err := mobyarchive.TarWithOptions(srcPath, &mobyarchive.TarOptions{
-		ChownOpts: &mobyarchive.ChownOpts{UID: 0, GID: 0},
-	})
+	srcArchive, err := tarDirectory(srcPath)
 	if err != nil {
 		return err
 	}
