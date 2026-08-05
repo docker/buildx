@@ -21,6 +21,8 @@ import (
 	"github.com/moby/buildkit/client"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc"
+	"google.golang.org/grpc/keepalive"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	apierrors "k8s.io/apimachinery/pkg/api/errors"
@@ -394,11 +396,19 @@ func calculateBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Durat
 	return min(time.Duration(1<<uint(attempt))*baseDelay, maxDelay)
 }
 
+// clientKeepaliveParams ensures that if the peer stops responding, the transport
+// will eventually be closed and any reads/writes will be unblocked.
+var clientKeepaliveParams = keepalive.ClientParameters{
+	Time:    20 * time.Second,
+	Timeout: 20 * time.Second,
+}
+
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
 	opts = append([]client.ClientOpt{
 		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
 			return d.Dial(ctx)
 		}),
+		client.WithGRPCDialOption(grpc.WithKeepaliveParams(clientKeepaliveParams)),
 	}, opts...)
 	return client.New(ctx, "", opts...)
 }
