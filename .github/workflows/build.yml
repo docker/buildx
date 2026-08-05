@@ -380,14 +380,14 @@ jobs:
 
   bin-image:
     if: ${{ github.repository == 'docker/buildx' }}
-    uses: docker/github-builder/.github/workflows/bake.yml@27ade872c1e2296e62ef15ab3b10d37665e57cf7 # v1.15.0
+    uses: docker/github-builder/.github/workflows/bake.yml@a492c6d04fd3315f67230809b44d60cc0acd50b3 # v1.16.0
     needs:
       - bin-image-prepare
       - test-integration
       - test-unit
     permissions:
       contents: read # same as global permission
-      id-token: write # for signing attestation(s) with GitHub OIDC Token
+      id-token: write # for signing attestations, cache entries and logging in to Docker Hub with GitHub OIDC
     with:
       runner: amd64
       target: image-cross
@@ -404,29 +404,29 @@ jobs:
         type=ref,event=pr
         type=semver,pattern={{version}}
       meta-bake-target: meta-helper
-    secrets:
-      registry-auths: |
-        - registry: docker.io
-          username: ${{ vars.DOCKERPUBLICBOT_USERNAME }}
-          password: ${{ secrets.DOCKERPUBLICBOT_WRITE_PAT }}
+      registry-identities: |
+        - type: dockerhub
+          registry: docker.io
+          username: docker
+          connection_id: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
 
   scout:
     runs-on: ubuntu-24.04
     if: ${{ github.ref == 'refs/heads/master' && github.repository == 'docker/buildx' }}
     permissions:
-      # same as global permission
-      contents: read
-      # required to write sarif report
-      security-events: write
+      contents: read # same as global permission
+      security-events: write # required to write sarif report
+      id-token: write # for logging in to Docker Hub with GitHub OIDC
     needs:
       - bin-image
     steps:
       -
         name: Login to DockerHub
         uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f # v4.6.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
-          username: ${{ vars.DOCKERPUBLICBOT_USERNAME }}
-          password: ${{ secrets.DOCKERPUBLICBOT_WRITE_PAT }}
+          username: docker
       -
         name: Scout
         id: scout
