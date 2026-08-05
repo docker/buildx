@@ -5,8 +5,8 @@ import (
 
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/driver/bkimage"
-	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/buildx/util/sourcemeta"
 	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -20,7 +20,7 @@ import (
 // moby/buildkit repository (unmanaged images pass through the default policy
 // unchanged). A tagged canonical reference is still verified because its tag
 // carries the release identity checked by the policy.
-func VerifyImageRef(ctx context.Context, l progress.SubLogger, ref string, platform *ocispecs.Platform, resolver policy.SourceMetadataResolver, verify ImageVerifier) (string, bool, error) {
+func VerifyImageRef(ctx context.Context, l progress.SubLogger, ref string, platform *ocispecs.Platform, resolver *sourcemeta.Resolver, verify ImageVerifier) (string, bool, error) {
 	if verify == nil {
 		return ref, false, nil
 	}

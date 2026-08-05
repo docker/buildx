@@ -21,6 +21,7 @@ import (
 	"github.com/containerd/containerd/v2/pkg/epoch"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
@@ -356,7 +357,8 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 	if err != nil {
 		return err
 	}
-	_, err = b.LoadNodes(ctx)
+	imageVerifier := policy.DefaultImageVerifier(confutil.NewConfig(dockerCli))
+	_, err = b.LoadNodes(ctx, builder.WithImageVerifier(imageVerifier))
 	if err != nil {
 		return err
 	}
@@ -1193,7 +1195,8 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 	if err = updateLastActivity(dockerCli, b.NodeGroup); err != nil {
 		return nil, nil, errors.Wrapf(err, "failed to update builder last activity time")
 	}
-	nodes, err := b.LoadNodes(ctx)
+	imageVerifier := policy.DefaultImageVerifier(confutil.NewConfig(dockerCli))
+	nodes, err := b.LoadNodes(ctx, builder.WithImageVerifier(imageVerifier))
 	if err != nil {
 		return nil, nil, err
 	}
