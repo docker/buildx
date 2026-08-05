@@ -1,9 +1,14 @@
 package tests
 
 import (
+	"archive/tar"
+	"bytes"
 	"fmt"
+	"io"
 	"os"
+	"path"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -24,6 +29,7 @@ func createCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 var createTests = []func(t *testing.T, sb integration.Sandbox){
 	testCreateMemoryLimit,
 	testCreateRestartAlways,
+	testCreateCopiesBuildkitdConfigFiles,
 	testCreateRemoteContainer,
 	testCreateWithProvenanceGHA,
 	testCreateCustomImageWithDefaultPolicy,
@@ -65,6 +71,44 @@ func testCreateRestartAlways(t *testing.T, sb integration.Sandbox) {
 	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--driver-opt", "restart-policy=always"))
 	require.NoError(t, err, out)
 	builderName = strings.TrimSpace(out)
+}
+
+func testCreateCopiesBuildkitdConfigFiles(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
+	}
+
+	const caContent = "ca certificate\n"
+
+	var builderName string
+	t.Cleanup(func() {
+		if builderName == "" {
+			return
+		}
+		out, err := rmCmd(sb, withArgs(builderName))
+		require.NoError(t, err, out)
+	})
+
+	dir := t.TempDir()
+	caPath := filepath.Join(dir, "ca.pem")
+	require.NoError(t, os.WriteFile(caPath, []byte(caContent), 0o644))
+
+	buildkitdConfPath := filepath.Join(dir, "buildkitd.toml")
+	buildkitdConf := fmt.Sprintf(`[registry."example.com"]
+ca=[%s]
+`, strconv.Quote(caPath))
+	require.NoError(t, os.WriteFile(buildkitdConfPath, []byte(buildkitdConf), 0o644))
+
+	out, err := createCmd(sb, withArgs("--driver", "docker-container", "--buildkitd-config="+buildkitdConfPath))
+	require.NoError(t, err, out)
+	builderName = strings.TrimSpace(out)
+
+	out, err = inspectCmd(sb, withArgs(builderName, "--bootstrap"))
+	require.NoError(t, err, out)
+
+	container := fmt.Sprintf("%s0", driver.BuilderName(builderName))
+	require.Equal(t, []byte(caContent), dockerCpFile(t, sb, container, "/etc/buildkit/certs/example.com/ca.pem"))
+	require.Contains(t, string(dockerCpFile(t, sb, container, "/etc/buildkit/buildkitd.toml")), "/etc/buildkit/certs/example.com/ca.pem")
 }
 
 func testCreateRemoteContainer(t *testing.T, sb integration.Sandbox) {
@@ -176,4 +220,33 @@ func testCreateWithProvenanceGHA(t *testing.T, sb integration.Sandbox) {
 
 	out, err = inspectCmd(sb, withArgs(builderName, "--bootstrap"))
 	require.NoError(t, err, out)
+}
+
+func dockerCpFile(t *testing.T, sb integration.Sandbox, container, src string) []byte {
+	t.Helper()
+
+	var stdout, stderr bytes.Buffer
+	cmd := dockerCmd(sb, withArgs("cp", container+":"+src, "-"))
+	cmd.Stdout = &stdout
+	cmd.Stderr = &stderr
+	require.NoError(t, cmd.Run(), stderr.String())
+
+	tr := tar.NewReader(&stdout)
+	for {
+		hdr, err := tr.Next()
+		if err == io.EOF {
+			break
+		}
+		require.NoError(t, err)
+		if hdr.FileInfo().IsDir() {
+			continue
+		}
+		body, err := io.ReadAll(tr)
+		require.NoError(t, err)
+		if path.Base(hdr.Name) == path.Base(src) {
+			return body
+		}
+	}
+	require.Failf(t, "file not found in docker cp output", "expected %s", src)
+	return nil
 }
