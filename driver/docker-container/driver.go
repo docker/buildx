@@ -7,7 +7,6 @@ import (
 	"net"
 	"os"
 	"path"
-	"path/filepath"
 	"strings"
 	"sync/atomic"
 	"time"
@@ -26,7 +25,6 @@ import (
 	contextstore "github.com/docker/cli/cli/context/store"
 	"github.com/docker/cli/opts"
 	"github.com/moby/buildkit/client"
-	mobyarchive "github.com/moby/go-archive"
 	"github.com/moby/moby/api/pkg/stdcopy"
 	"github.com/moby/moby/api/types/container"
 	"github.com/moby/moby/api/types/mount"
@@ -369,16 +367,7 @@ func (d *Driver) copyLogs(ctx context.Context, l progress.SubLogger) error {
 }
 
 func (d *Driver) copyToContainer(ctx context.Context, files map[string][]byte) error {
-	srcPath, err := writeConfigFiles(files)
-	if err != nil {
-		return err
-	}
-	if srcPath != "" {
-		defer os.RemoveAll(srcPath)
-	}
-	srcArchive, err := mobyarchive.TarWithOptions(srcPath, &mobyarchive.TarOptions{
-		ChownOpts: &mobyarchive.ChownOpts{UID: 0, GID: 0},
-	})
+	srcArchive, err := tarConfigFiles(files)
 	if err != nil {
 		return err
 	}
@@ -620,30 +609,6 @@ type logWriter struct {
 func (l *logWriter) Write(dt []byte) (int, error) {
 	l.logger.Log(l.stream, dt)
 	return len(dt), nil
-}
-
-func writeConfigFiles(m map[string][]byte) (_ string, err error) {
-	// Temp dir that will be copied to the container
-	tmpDir, err := os.MkdirTemp("", "buildkitd-config")
-	if err != nil {
-		return "", err
-	}
-	defer func() {
-		if err != nil {
-			os.RemoveAll(tmpDir)
-		}
-	}()
-	configDir := filepath.Base(confutil.DefaultBuildKitConfigDir)
-	for f, dt := range m {
-		p := filepath.Join(tmpDir, configDir, f)
-		if err := os.MkdirAll(filepath.Dir(p), 0755); err != nil {
-			return "", err
-		}
-		if err := os.WriteFile(p, dt, 0644); err != nil {
-			return "", err
-		}
-	}
-	return tmpDir, nil
 }
 
 func getBuildkitFlags(initConfig driver.InitConfig) []string {
