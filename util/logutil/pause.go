@@ -8,7 +8,10 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var pauseMu sync.Mutex
+
 func Pause(l *logrus.Logger) func() {
+	pauseMu.Lock()
 	// initialize formatter with original terminal settings
 	l.Formatter.Format(logrus.NewEntry(l))
 
@@ -16,6 +19,7 @@ func Pause(l *logrus.Logger) func() {
 	l.SetOutput(bw)
 	return func() {
 		bw.resume()
+		pauseMu.Unlock()
 	}
 }
 
