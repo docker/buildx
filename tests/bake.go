@@ -78,6 +78,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeDefinitionNotExistingSubdirNoParallel,
 	testBakeDefinitionNotExistingOutsideNoParallel,
 	testBakeDefinitionExistingOutsideNoParallel,
+	testBakeRawJSONEntitlementsNoParallel,
 	testBakeDefinitionSymlinkOutsideNoParallel,
 	testBakeDefinitionSymlinkOutsideGrantedNoParallel,
 	testBakeSSHPathNoParallel,
@@ -2149,6 +2150,48 @@ target "default" {
 			}
 		})
 	}
+}
+
+func testBakeRawJSONEntitlementsNoParallel(t *testing.T, sb integration.Sandbox) {
+	t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "1")
+	dockerfile := []byte(`
+FROM scratch
+COPY foo /foo
+	`)
+	dirSrc := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	dirDest := t.TempDir()
+	bakefile := fmt.Appendf(nil, `
+target "default" {
+	context = %q
+	output = ["type=local,dest=%s"]
+}
+`, dirSrc, dirDest)
+	dirSpec := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+	)
+
+	cmd := buildxCmd(sb, withDir(dirSpec), withArgs("bake", "--progress=rawjson"))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "additional privileges requested")
+	require.Contains(t, string(out), "--allow=fs.read=")
+	require.Contains(t, string(out), "--allow=fs.write=")
+	require.NoFileExists(t, filepath.Join(dirDest, "foo"))
+
+	cmd = buildxCmd(sb, withDir(dirSpec), withArgs(
+		"bake",
+		"--progress=rawjson",
+		"--allow=fs.read="+dirSrc,
+		"--allow=fs.write="+dirDest,
+	))
+	out, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.FileExists(t, filepath.Join(dirDest, "foo"))
 }
 
 func testBakeDefinitionSymlinkOutsideNoParallel(t *testing.T, sb integration.Sandbox) {
