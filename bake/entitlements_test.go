@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/docker/buildx/build"
@@ -439,6 +440,61 @@ func TestPromptLocalOutputDeleteCannotBeDisabledWithFSEntitlements(t *testing.T)
 	require.ErrorContains(t, err, "additional privileges requested")
 	require.Contains(t, out.String(), "Deleting stale files from local output destinations")
 	require.Contains(t, out.String(), "--allow=buildx.local.delete")
+}
+
+func TestCheckEntitlements(t *testing.T) {
+	t.Run("all entitlement types", func(t *testing.T) {
+		t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "1")
+
+		err := EntitlementConf{
+			NetworkHost:      true,
+			SecurityInsecure: true,
+			Devices: &EntitlementsDevicesConf{
+				Devices: map[string]struct{}{"vendor.com/device=foo": {}},
+			},
+			FSRead:            []string{t.TempDir()},
+			FSWrite:           []string{t.TempDir()},
+			SSH:               true,
+			LocalOutputDelete: true,
+		}.Check(false)
+		require.Error(t, err)
+		require.True(t, strings.HasPrefix(err.Error(), `additional privileges requested: pass "`), err.Error())
+		for _, flag := range []string{
+			"--allow=network.host",
+			"--allow=security.insecure",
+			"--allow=device=vendor.com/device=foo",
+			"--allow=fs.read=",
+			"--allow=fs.write=",
+			"--allow=ssh",
+			"--allow=buildx.local.delete",
+		} {
+			require.ErrorContains(t, err, flag)
+		}
+	})
+
+	t.Run("filesystem checks disabled", func(t *testing.T) {
+		t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "0")
+
+		err := EntitlementConf{
+			FSRead:  []string{t.TempDir()},
+			FSWrite: []string{t.TempDir()},
+			SSH:     true,
+		}.Check(false)
+		require.NoError(t, err)
+	})
+
+	t.Run("filesystem setting does not disable other checks", func(t *testing.T) {
+		t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "0")
+
+		err := EntitlementConf{
+			NetworkHost: true,
+			FSRead:      []string{t.TempDir()},
+			SSH:         true,
+		}.Check(false)
+		require.ErrorContains(t, err, "--allow=network.host")
+		require.NotContains(t, err.Error(), "--allow=fs.read=")
+		require.NotContains(t, err.Error(), "--allow=ssh")
+	})
 }
 
 func TestGroupSamePaths(t *testing.T) {
