@@ -78,6 +78,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildCacheExportNotSupported,
 	testBuildOCIExportNotSupported,
 	testBuildMultiPlatform,
+	testBuildTargetPlatformOSVersion,
 	testDockerHostGateway,
 	testBuildNetworkModeBridge,
 	testBuildShmSize,
@@ -1004,6 +1005,23 @@ func testBuildMultiPlatform(t *testing.T, sb integration.Sandbox) {
 		require.Error(t, err, string(out))
 		require.Contains(t, string(out), "Multi-platform build is not supported")
 	}
+}
+
+func testBuildTargetPlatformOSVersion(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.19.0-0", "platform OS version")
+	integration.SkipOnPlatform(t, "windows")
+
+	dockerfile := []byte(`
+FROM --platform=$BUILDPLATFORM busybox:latest
+ARG TARGETPLATFORM
+ARG TARGETOSVERSION
+RUN test "$TARGETPLATFORM" = "windows(10.0.17763)/amd64"
+RUN test "$TARGETOSVERSION" = "10.0.17763"
+`)
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", dockerfile, 0o600))
+
+	out, err := buildCmd(sb, withArgs("--platform=windows(10.0.17763)/amd64", "--output=type=cacheonly", dir))
+	require.NoError(t, err, string(out))
 }
 
 func testDockerHostGateway(t *testing.T, sb integration.Sandbox) {
