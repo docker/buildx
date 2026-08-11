@@ -580,7 +580,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	if len(opt.Platforms) != 0 {
 		pp := make([]string, len(opt.Platforms))
 		for i, p := range opt.Platforms {
-			pp[i] = platforms.Format(p)
+			pp[i] = platforms.FormatAll(p)
 		}
 		if len(pp) > 1 && !nodeDriver.Features(ctx)[driver.MultiPlatform] {
 			return nil, nil, notSupported(driver.MultiPlatform, nodeDriver, "https://docs.docker.com/go/build-multi-platform/")
