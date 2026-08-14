@@ -224,18 +224,21 @@ type tokenSource func(context.Context) (string, error)
 func newTokenSource(fetch func(context.Context) (string, error), now func() time.Time) tokenSource {
 	var mu sync.Mutex
 	var token string
-	var err error
 	var lastRefresh time.Time
 	return tokenSource(func(ctx context.Context) (string, error) {
 		mu.Lock()
 		defer mu.Unlock()
 
 		if lastRefresh.IsZero() || now().Sub(lastRefresh) > tokenRefreshInterval {
-			lastRefresh = now()
 			ctx, cancel := context.WithTimeoutCause(ctx, 30*time.Second, errors.WithStack(context.DeadlineExceeded))
 			defer cancel()
-			token, err = fetch(ctx)
+			next, err := fetch(ctx)
+			if err != nil {
+				return "", err
+			}
+			token = next
+			lastRefresh = now()
 		}
-		return token, err
+		return token, nil
 	})
 }

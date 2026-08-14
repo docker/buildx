@@ -2,6 +2,7 @@ package cloud
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"testing"
 	"time"
@@ -288,6 +289,88 @@ func TestTokenRefresh(t *testing.T) {
 	token, err = nextToken(t.Context())
 	require.NoError(t, err)
 	assert.Equal(t, "token-2", token)
+}
+
+func TestTokenRefreshInitialFailureRetries(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	expectedErr := errors.New("refresh failed")
+	count := 0
+	nextToken := newTokenSource(func(context.Context) (string, error) {
+		count++
+		if count == 1 {
+			return "", expectedErr
+		}
+		return "token", nil
+	}, func() time.Time { return now })
+
+	token, err := nextToken(t.Context())
+	require.ErrorIs(t, err, expectedErr)
+	assert.Empty(t, token)
+
+	token, err = nextToken(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, "token", token)
+	assert.Equal(t, 2, count)
+}
+
+func TestTokenRefreshFailureDoesNotCacheError(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	expectedErr := errors.New("refresh failed")
+	count := 0
+	nextToken := newTokenSource(func(context.Context) (string, error) {
+		count++
+		switch count {
+		case 1:
+			return "token-1", nil
+		case 2:
+			return "", expectedErr
+		default:
+			return "token-3", nil
+		}
+	}, func() time.Time { return now })
+
+	token, err := nextToken(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, "token-1", token)
+
+	now = now.Add(10 * time.Minute)
+	token, err = nextToken(t.Context())
+	require.ErrorIs(t, err, expectedErr)
+	assert.Empty(t, token)
+
+	token, err = nextToken(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, "token-3", token)
+	assert.Equal(t, 3, count)
+}
+
+func TestTokenRefreshCancellationRetries(t *testing.T) {
+	t.Parallel()
+
+	now := time.Now()
+	count := 0
+	nextToken := newTokenSource(func(ctx context.Context) (string, error) {
+		count++
+		if err := context.Cause(ctx); err != nil {
+			return "", err
+		}
+		return "token", nil
+	}, func() time.Time { return now })
+
+	ctx, cancel := context.WithCancelCause(t.Context())
+	cancel(context.Canceled)
+	token, err := nextToken(ctx)
+	require.ErrorIs(t, err, context.Canceled)
+	assert.Empty(t, token)
+
+	token, err = nextToken(t.Context())
+	require.NoError(t, err)
+	assert.Equal(t, "token", token)
+	assert.Equal(t, 2, count)
 }
 
 func TestGetUserContext(t *testing.T) {
