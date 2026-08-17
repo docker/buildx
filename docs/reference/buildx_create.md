@@ -117,6 +117,7 @@ Sets the builder driver to be used. A driver is a configuration of a BuildKit
 backend. Buildx supports the following drivers:
 
 * `docker` (default)
+* `cloud`
 * `docker-container`
 * `kubernetes`
 * `remote`
@@ -129,6 +130,34 @@ Uses the builder that is built into the Docker daemon. With this driver,
 the [`--load`](buildx_build.md#load) flag is implied by default on
 `buildx build`. However, building multi-platform images or exporting cache is
 not currently supported.
+
+#### `cloud` driver
+
+Uses Docker Build Cloud builders. For Docker Build Cloud access and setup, see
+[Docker Build Cloud setup](https://docs.docker.com/build-cloud/setup/). For
+build examples, see [Building with Docker Build Cloud](https://docs.docker.com/build-cloud/usage/).
+
+Connect Buildx to an existing cloud builder with `--driver cloud` and the
+builder name in the form `<account>/<builder>` or
+`cloud://<account>/<builder>`. You must be signed in with `docker login` and
+have access to the builder.
+
+```console
+$ docker buildx create --driver cloud --name cloud-builder --use org/builder
+$ docker buildx create --driver cloud --name cloud-builder --use cloud://org/builder
+```
+
+When you don't specify an output, an untagged result remains in the cloud build
+cache. If you use `--tag`, Buildx automatically loads the image when the build
+targets a single platform and runs on one cloud node. For details about loading
+behavior, Docker contexts, and other output configurations, see
+[Load results from Docker Build Cloud](https://docs.docker.com/build/exporters/).
+
+When `buildx create` resolves a Build Cloud builder group, each service instance
+becomes a Buildx node. `--append` requires the resolved instance names to be
+unique in the Buildx builder. Resolved cloud nodes are a create-time snapshot;
+recreate the Buildx builder to refresh topology after Build Cloud membership or
+placement changes.
 
 #### `docker-container` driver
 
