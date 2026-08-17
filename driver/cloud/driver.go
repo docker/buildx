@@ -92,7 +92,7 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 
 	tlsConfig, err := d.tlsConfig()
 	if err != nil {
-		return nil, errors.Wrapf(err, "failed to create TLS config: %v", err)
+		return nil, errors.Wrap(err, "failed to create TLS config")
 	}
 	client := newClient(&http.Transport{
 		TLSClientConfig: tlsConfig,
@@ -142,7 +142,7 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 		if err != nil {
 			return errors.Wrap(err, "fetching auth token")
 		}
-		headers := append(d.headers, authorizationKey, "Bearer "+token)
+		headers := slices.Concat(d.headers, []string{authorizationKey, "Bearer " + token})
 		ctx = metadata.AppendToOutgoingContext(ctx, headers...)
 		opts = append([]grpc.CallOption{grpc.UseCompressor(grpcgzip.Name)}, opts...)
 		return invoker(ctx, method, req, reply, cc, opts...)
@@ -152,7 +152,7 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 		if err != nil {
 			return nil, errors.Wrap(err, "fetching auth token")
 		}
-		headers := append(d.headers, authorizationKey, "Bearer "+token)
+		headers := slices.Concat(d.headers, []string{authorizationKey, "Bearer " + token})
 		ctx = metadata.AppendToOutgoingContext(ctx, headers...)
 		opts = append([]grpc.CallOption{grpc.UseCompressor(grpcgzip.Name)}, opts...)
 		return streamer(ctx, desc, cc, method, opts...)
@@ -428,7 +428,7 @@ func (d *Driver) tlsConfig() (*tls.Config, error) {
 		}
 		ca, err := os.ReadFile(d.tls.caCert)
 		if err != nil {
-			return nil, errors.Wrapf(err, "could not read CA certificate %s: %v", d.tls.caCert, err)
+			return nil, errors.Wrapf(err, "could not read CA certificate %s", d.tls.caCert)
 		}
 		if ok := rootCAs.AppendCertsFromPEM(ca); !ok {
 			return nil, errors.Errorf("failed to add CA certificate %s to root CAs", d.tls.caCert)
