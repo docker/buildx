@@ -2,7 +2,6 @@ package cloud
 
 import (
 	"fmt"
-	"strings"
 	"testing"
 
 	"github.com/moby/moby/api/types/system"
@@ -15,7 +14,6 @@ type registryTokenSupport struct {
 	version  string
 	driver   string
 	expected bool
-	errCheck func(t *testing.T, err error)
 }
 
 func TestRegistryTokenSupport(t *testing.T) {
@@ -36,20 +34,27 @@ func TestRegistryTokenSupport(t *testing.T) {
 		},
 		{
 			os:       "Linux Mint 21.1",
+			version:  "28.0.0-rc.1",
+			driver:   "io.containerd.snapshotter.v1",
+			expected: true,
+		},
+		{
+			os:       "Linux Mint 21.1",
+			version:  "25.0.0-rc.1",
+			driver:   "io.containerd.snapshotter.v1",
+			expected: false,
+		},
+		{
+			os:       "Linux Mint 21.1",
 			version:  "24.0.6",
 			driver:   "io.containerd.snapshotter.v1",
 			expected: false,
 		},
 		{
-			os:      "Linux Mint 21.1",
-			version: "master",
-			driver:  "io.containerd.snapshotter.v1",
-			errCheck: func(t *testing.T, err error) {
-				require.Error(t, err)
-				// Some versions will return a capitalized error, so we use toLower to normalize the error message
-				assert.Contains(t, strings.ToLower(err.Error()), "invalid semantic version")
-			},
-			expected: false,
+			os:       "Linux Mint 21.1",
+			version:  "master",
+			driver:   "io.containerd.snapshotter.v1",
+			expected: true,
 		},
 		{
 			os:       "Linux Mint 21.1",
@@ -70,11 +75,7 @@ func TestRegistryTokenSupport(t *testing.T) {
 					{"driver-type", c.driver},
 				},
 			})
-			if c.errCheck != nil {
-				c.errCheck(t, err)
-			} else {
-				require.NoError(t, err)
-			}
+			require.NoError(t, err)
 			assert.Equal(t, c.expected, actual)
 		})
 	}

@@ -525,7 +525,6 @@ func daemonSupportsRegistryTokenPull(ctx context.Context, duc *dockerutil.Client
 	if err != nil {
 		return false, err
 	}
-
 	resp, err := dc.Info(ctx, dockerclient.InfoOptions{})
 	if err != nil {
 		return false, err
@@ -534,31 +533,19 @@ func daemonSupportsRegistryTokenPull(ctx context.Context, duc *dockerutil.Client
 }
 
 func daemonInfoSupportsRegistryTokenPull(resp system.Info) (bool, error) {
-	for _, status := range resp.DriverStatus {
-		if len(status) == 2 && status[1] == "io.containerd.snapshotter.v1" {
-			// If we're using the containerd snapshotter, we need
-			// to check for https://github.com/moby/moby/pull/46475.
-			//
-			// Simplest way:
-			// - if we're using docker desktop, assume we have a compatible version
-			// - otherwise, check if the daemon is on 25.0.0 or newer
-			constraint, err := semver.NewConstraint(">= 25.0.0")
-			if err != nil {
-				return false, err
-			}
-
-			if resp.OperatingSystem == "Docker Desktop" {
-				return true, nil
-			}
-
-			version, err := semver.NewVersion(resp.ServerVersion)
-			if err != nil {
-				return false, err
-			}
-
-			return constraint.Check(version), nil
-		}
+	if !dockerutil.HasOCIImporter(resp) {
+		return true, nil
 	}
-
-	return true, nil
+	if resp.OperatingSystem == "Docker Desktop" {
+		return true, nil
+	}
+	// If the Docker daemon uses the containerd image store, it needs
+	// https://github.com/moby/moby/pull/46475 for registry-token pulls.
+	version, err := semver.NewVersion(resp.ServerVersion)
+	if err != nil {
+		// Treat development builds as new enough when the daemon reports the
+		// required image store.
+		return true, nil
+	}
+	return !version.LessThan(semver.MustParse("25.0.0")), nil
 }
