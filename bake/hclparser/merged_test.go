@@ -5,11 +5,11 @@ package hclparser
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/hashicorp/hcl/v2"
+	"github.com/stretchr/testify/assert"
+	"github.com/stretchr/testify/require"
 )
 
 func TestMergedBodiesContent(t *testing.T) {
@@ -348,9 +348,7 @@ func TestMergedBodiesContent(t *testing.T) {
 				}
 			}
 
-			if !reflect.DeepEqual(got, test.Want) {
-				t.Errorf("wrong result\ngot:  %s\nwant: %s", spew.Sdump(got), spew.Sdump(test.Want))
-			}
+			require.Equal(t, test.Want, got, "wrong result")
 		})
 	}
 }
@@ -551,13 +549,8 @@ func TestMergeBodiesPartialContent(t *testing.T) {
 				}
 			}
 
-			if !reflect.DeepEqual(got, test.WantContent) {
-				t.Errorf("wrong content result\ngot:  %s\nwant: %s", spew.Sdump(got), spew.Sdump(test.WantContent))
-			}
-
-			if !reflect.DeepEqual(gotRemain, test.WantRemain) {
-				t.Errorf("wrong remaining result\ngot:  %s\nwant: %s", spew.Sdump(gotRemain), spew.Sdump(test.WantRemain))
-			}
+			assert.Equal(t, test.WantContent, got, "wrong content result")
+			assert.Equal(t, test.WantRemain, gotRemain, "wrong remaining result")
 		})
 	}
 }

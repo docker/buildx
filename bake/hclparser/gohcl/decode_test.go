@@ -9,9 +9,9 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/hashicorp/hcl/v2"
 	hclJSON "github.com/hashicorp/hcl/v2/json"
+	"github.com/stretchr/testify/assert"
 	"github.com/zclconf/go-cty/cty"
 )
 
@@ -699,9 +699,7 @@ func TestDecodeBody(t *testing.T) {
 				}
 			}
 			got := targetVal.Elem().Interface()
-			if !test.Check(got) {
-				t.Errorf("wrong result\ngot:  %s", spew.Sdump(got))
-			}
+			assert.Truef(t, test.Check(got), "wrong result\ngot: %#v", got)
 		})
 	}
 }

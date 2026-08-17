@@ -5,11 +5,10 @@ package gohcl
 
 import (
 	"fmt"
-	"reflect"
 	"testing"
 
-	"github.com/davecgh/go-spew/spew"
 	"github.com/hashicorp/hcl/v2"
+	"github.com/stretchr/testify/assert"
 )
 
 func TestImpliedBodySchema(t *testing.T) {
@@ -215,19 +214,8 @@ func TestImpliedBodySchema(t *testing.T) {
 	for _, test := range tests {
 		t.Run(fmt.Sprintf("%#v", test.val), func(t *testing.T) {
 			schema, partial := ImpliedBodySchema(test.val)
-			if !reflect.DeepEqual(schema, test.wantSchema) {
-				t.Errorf(
-					"wrong schema\ngot:  %s\nwant: %s",
-					spew.Sdump(schema), spew.Sdump(test.wantSchema),
-				)
-			}
-
-			if partial != test.wantPartial {
-				t.Errorf(
-					"wrong partial flag\ngot:  %#v\nwant: %#v",
-					partial, test.wantPartial,
-				)
-			}
+			assert.Equal(t, test.wantSchema, schema, "wrong schema")
+			assert.Equal(t, test.wantPartial, partial, "wrong partial flag")
 		})
 	}
 }
