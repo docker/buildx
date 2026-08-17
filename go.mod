@@ -49,7 +49,7 @@ require (
 	github.com/sirupsen/logrus v1.10.0
 	github.com/spf13/cobra v1.10.2
 	github.com/spf13/pflag v1.0.10
-	github.com/stretchr/testify v1.11.1
+	github.com/stretchr/testify v1.12.0
 	github.com/tonistiigi/fsutil v0.0.0-20260717003753-6d9dc2ebad62
 	github.com/tonistiigi/go-csvvalue v0.0.0-20240814133006-030d3b2625d0
 	github.com/tonistiigi/jaeger-ui-rest v0.0.0-20250408171107-3dd17559e117
@@ -178,7 +178,6 @@ require (
 	github.com/munnerz/goautoneg v0.0.0-20191010083416-a7dc8b61c822 // indirect
 	github.com/oklog/ulid/v2 v2.1.1 // indirect
 	github.com/package-url/packageurl-go v0.1.1 // indirect
-	github.com/pmezard/go-difflib v1.0.1-0.20181226105442-5d4384ee4fb2 // indirect
 	github.com/rcrowley/go-metrics v0.0.0-20250401214520-65e299d6c5c9 // indirect
 	github.com/russross/blackfriday/v2 v2.1.0 // indirect
 	github.com/santhosh-tekuri/jsonschema/v6 v6.0.1 // indirect
