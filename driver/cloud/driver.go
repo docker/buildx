@@ -253,6 +253,17 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 	if err != nil {
 		return err
 	}
+
+	removeOpts := dockerclient.ImageRemoveOptions{PruneChildren: false}
+	defer func() {
+		cleanupCtx, cancel := context.WithTimeoutCause(context.WithoutCancel(ctx), 30*time.Second, errors.WithStack(context.DeadlineExceeded))
+		defer cancel()
+
+		_, err := dc.ImageRemove(cleanupCtx, ref, removeOpts)
+		if err != nil {
+			logrus.Debugf("failed to remove temp tag %s: %v", ref, err)
+		}
+	}()
 	defer pullResp.Close()
 
 	if err := printMagicPull(pullResp, l); err != nil {
@@ -268,13 +279,6 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 		if _, err = dc.ImageTag(ctx, opts); err != nil {
 			return err
 		}
-	}
-
-	// TODO: support case where no tags are provided
-	removeOpts := dockerclient.ImageRemoveOptions{PruneChildren: false}
-	_, err = dc.ImageRemove(ctx, ref, removeOpts)
-	if err != nil {
-		logrus.Debugf("failed to remove temp tag %s: %v", ref, err)
 	}
 
 	return nil
