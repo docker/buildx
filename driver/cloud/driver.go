@@ -172,7 +172,7 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 	)
 	c, err := client.New(ctx, d.proxyAddress, opts...)
 	if err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "connecting to Docker Build Cloud at %s", d.proxyAddress)
 	}
 	return c, nil
 }
@@ -220,7 +220,7 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 
 	dc, err := duc.API(dockerContext)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "resolving Docker context %q", dockerContext)
 	}
 
 	token, err := d.tokenSource(ctx)
@@ -258,7 +258,7 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 
 	pullResp, err := dc.ImagePull(ctx, ref, pullOpts)
 	if err != nil {
-		return err
+		return errors.Wrapf(err, "pulling temporary cloud image %s", ref)
 	}
 
 	removeOpts := dockerclient.ImageRemoveOptions{PruneChildren: false}
@@ -274,7 +274,7 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 	defer pullResp.Close()
 
 	if err := printMagicPull(pullResp, l); err != nil {
-		return err
+		return errors.Wrap(err, "reading cloud pull progress")
 	}
 
 	// Tag image with user tags and remove the builder name tag
@@ -284,7 +284,7 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 			Target: tag,
 		}
 		if _, err = dc.ImageTag(ctx, opts); err != nil {
-			return err
+			return errors.Wrapf(err, "tagging cloud image %s as %s", ref, tag)
 		}
 	}
 
@@ -531,11 +531,11 @@ func printMagicPull(rc io.Reader, l progress.SubLogger) (err error) {
 func daemonSupportsRegistryTokenPull(ctx context.Context, duc *dockerutil.Client, dockerContext string) (bool, error) {
 	dc, err := duc.API(dockerContext)
 	if err != nil {
-		return false, err
+		return false, errors.Wrapf(err, "resolving Docker context %q", dockerContext)
 	}
 	resp, err := dc.Info(ctx, dockerclient.InfoOptions{})
 	if err != nil {
-		return false, err
+		return false, errors.Wrap(err, "querying Docker daemon info")
 	}
 	return daemonInfoSupportsRegistryTokenPull(resp.Info)
 }
