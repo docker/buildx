@@ -1,13 +1,91 @@
 package cloud
 
 import (
+	"encoding/pem"
 	"fmt"
+	"net"
+	"net/http"
+	"net/http/httptest"
+	"net/url"
+	"os"
+	"path/filepath"
 	"testing"
 
+	"github.com/docker/buildx/driver"
 	"github.com/moby/moby/api/types/system"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestInfo(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Running", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		t.Cleanup(server.Close)
+
+		info, err := (&Driver{healthAddress: server.URL}).Info(t.Context())
+
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, driver.Running, info.Status)
+	})
+
+	t.Run("StatusError", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.Header().Set("x-trace-id", "trace-123")
+			http.Error(w, "denied", http.StatusForbidden)
+		}))
+		t.Cleanup(server.Close)
+
+		info, err := (&Driver{healthAddress: server.URL}).Info(t.Context())
+
+		require.Error(t, err)
+		assert.Nil(t, info)
+		assert.Contains(t, err.Error(), "403 Forbidden")
+		assert.Contains(t, err.Error(), "trace-123")
+		assert.Contains(t, err.Error(), "denied")
+	})
+
+	t.Run("TLSServerName", func(t *testing.T) {
+		t.Parallel()
+
+		server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			w.WriteHeader(http.StatusUnauthorized)
+		}))
+		t.Cleanup(server.Close)
+
+		caPath := filepath.Join(t.TempDir(), "ca.pem")
+		certPEM := pem.EncodeToMemory(&pem.Block{
+			Type:  "CERTIFICATE",
+			Bytes: server.Certificate().Raw,
+		})
+		require.NoError(t, os.WriteFile(caPath, certPEM, 0600))
+
+		serverURL, err := url.Parse(server.URL)
+		require.NoError(t, err)
+		_, port, err := net.SplitHostPort(serverURL.Host)
+		require.NoError(t, err)
+
+		info, err := (&Driver{
+			healthAddress: "https://localhost:" + port,
+			tls: tlsOpts{
+				caCert:     caPath,
+				serverName: "example.com",
+			},
+		}).Info(t.Context())
+
+		require.NoError(t, err)
+		require.NotNil(t, info)
+		assert.Equal(t, driver.Running, info.Status)
+	})
+}
 
 type registryTokenSupport struct {
 	os       string

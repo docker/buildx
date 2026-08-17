@@ -94,18 +94,25 @@ func (d *Driver) Info(ctx context.Context) (*driver.Info, error) {
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to create TLS config")
 	}
-	client := newClient(&http.Transport{
+	c := newClient(&http.Transport{
 		TLSClientConfig: tlsConfig,
 	})
 
-	resp, err := client.Do(req)
-	if resp != nil {
-		defer drainResponse(resp)
+	resp, err := c.Do(req)
+	if err != nil {
+		if resp != nil {
+			drainResponse(resp)
+		}
+		return nil, errors.Wrap(err, "cloud registry health check failed")
 	}
-	if err != nil || resp.StatusCode != http.StatusUnauthorized {
-		return &driver.Info{
-			Status: driver.Inactive,
-		}, nil
+	if resp == nil {
+		return nil, errors.New("cloud registry health check failed: empty response")
+	}
+	defer drainResponse(resp)
+	if resp.StatusCode != http.StatusUnauthorized {
+		body, _ := io.ReadAll(io.LimitReader(resp.Body, 255))
+		return nil, errors.Errorf("cloud registry health check failed, got: %s. Trace ID: %s. Response body: %s",
+			resp.Status, resp.Header.Get("x-trace-id"), string(body))
 	}
 
 	return &driver.Info{
@@ -418,6 +425,7 @@ func resolveCloudPullExporters(exports []client.ExportEntry, tags []string, buil
 func (d *Driver) tlsConfig() (*tls.Config, error) {
 	tlsConfig := &tls.Config{
 		InsecureSkipVerify: d.tls.insecure,
+		ServerName:         d.tls.serverName,
 	}
 	if d.tls.caCert != "" {
 		// Prefer the system cert pool if available, but fallback
