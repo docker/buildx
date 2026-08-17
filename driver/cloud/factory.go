@@ -5,7 +5,6 @@ import (
 	"net/url"
 	"os"
 	"runtime"
-	"runtime/debug"
 	"slices"
 	"strconv"
 	"strings"
@@ -13,7 +12,7 @@ import (
 	"time"
 
 	"github.com/docker/buildx/driver"
-	"github.com/docker/buildx/version"
+	"github.com/docker/buildx/util/desktop"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 )
@@ -200,7 +199,7 @@ func (f *factory) New(ctx context.Context, cfg driver.InitConfig) (driver.Driver
 func (f *factory) prepareHeaders() {
 	f.once.Do(func() {
 		f.headers = []string{
-			buildxVersionKey, getBuildxVersion(),
+			buildxVersionKey, desktop.BuildxVersion(),
 			userContextKey, getUserContext(os.Environ()),
 			userPlatformKey, runtime.GOOS + "/" + runtime.GOARCH,
 		}
@@ -209,27 +208,6 @@ func (f *factory) prepareHeaders() {
 
 func (f *factory) AllowsInstances() bool {
 	return true
-}
-
-// When called from desktop build backend, the version.Version is unknown. We try to get the version from the build info.
-func getBuildxVersion() string {
-	if version.Version != "v0.0.0+unknown" {
-		return version.Version
-	}
-	info, ok := debug.ReadBuildInfo()
-	if !ok {
-		return version.Version
-	}
-	for _, dep := range info.Deps {
-		if dep.Path == "github.com/docker/buildx" {
-			if dep.Replace != nil {
-				return dep.Replace.Version
-			}
-			return dep.Version
-		}
-	}
-
-	return version.Version
 }
 
 func getUserContext(env []string) string {
