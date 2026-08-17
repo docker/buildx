@@ -55,3 +55,37 @@ func TestRetryClient(t *testing.T) {
 		assert.Equal(t, wantWait, time.Since(start))
 	})
 }
+
+func TestRetryClientRetryAfter(t *testing.T) {
+	t.Parallel()
+
+	synctest.Test(t, func(t *testing.T) {
+		var attempts int
+		transport := roundTripperFunc(func(req *http.Request) (*http.Response, error) {
+			attempts++
+			if attempts == 1 {
+				return &http.Response{
+					StatusCode: http.StatusTooManyRequests,
+					Header:     http.Header{"Retry-After": []string{"2"}},
+					Body:       http.NoBody,
+				}, nil
+			}
+			return &http.Response{
+				StatusCode: http.StatusOK,
+				Header:     make(http.Header),
+				Body:       http.NoBody,
+			}, nil
+		})
+
+		req, err := http.NewRequestWithContext(t.Context(), http.MethodGet, "http://example.com", nil)
+		require.NoError(t, err)
+
+		start := time.Now()
+		resp, err := newClient(transport).Do(req)
+		require.NoError(t, err)
+		defer resp.Body.Close()
+		assert.Equal(t, http.StatusOK, resp.StatusCode)
+		assert.Equal(t, 2, attempts)
+		assert.Equal(t, 2*time.Second, time.Since(start))
+	})
+}

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"strconv"
 	"sync"
 	"time"
 
@@ -188,6 +189,19 @@ func (c *retryClient) Do(req *http.Request) (*http.Response, error) {
 		}
 
 		wait := min(retryWaitInitial<<attempt, retryWaitMax)
+		if resp != nil {
+			if retryAfter := resp.Header.Get("Retry-After"); retryAfter != "" {
+				if seconds, err := strconv.Atoi(retryAfter); err == nil {
+					if seconds >= 0 {
+						wait = min(time.Duration(seconds)*time.Second, retryWaitMax)
+					}
+				} else if t, err := http.ParseTime(retryAfter); err == nil {
+					if d := time.Until(t); d > 0 {
+						wait = min(d, retryWaitMax)
+					}
+				}
+			}
+		}
 		timer := time.NewTimer(wait)
 		select {
 		case <-req.Context().Done():
