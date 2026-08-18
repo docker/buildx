@@ -428,7 +428,54 @@ type (
 	Handler      struct {
 		Evaluate EvaluateFunc
 	}
+	linkedTargetState struct {
+		results   *waitmap.Map
+		evaluated *waitmap.Map
+		completed *waitmap.Map
+		parents   map[string][]string
+		children  map[string][]string
+	}
 )
+
+func newLinkedTargetState(parents, children map[string][]string) *linkedTargetState {
+	return &linkedTargetState{
+		results:   waitmap.New(),
+		evaluated: waitmap.New(),
+		completed: waitmap.New(),
+		parents:   parents,
+		children:  children,
+	}
+}
+
+func (s *linkedTargetState) isLinked(key string) bool {
+	return len(s.parents[key]) > 0 || len(s.children[key]) > 0
+}
+
+func (s *linkedTargetState) run(ctx context.Context, key string, result any, evaluate func() error) error {
+	// Registration flows from parents to children. Waiting for every direct child
+	// here preserves external-cache lookup before evaluation begins.
+	s.results.Set(key, result)
+	children := s.children[key]
+	if _, err := s.results.Get(ctx, children...); err != nil {
+		return err
+	}
+	// Evaluation follows dependency order so the target's own session is attached
+	// to shared solver vertices before a dependent can evaluate them.
+	if _, err := s.evaluated.Get(ctx, s.parents[key]...); err != nil {
+		return err
+	}
+	if err := evaluate(); err != nil {
+		return err
+	}
+	s.evaluated.Set(key, struct{}{})
+	// Completion flows back from children to parents, retaining each parent job
+	// and its session until every dependent has finished evaluating.
+	if _, err := s.completed.Get(ctx, children...); err != nil {
+		return err
+	}
+	s.completed.Set(key, struct{}{})
+	return nil
+}
 
 func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
 	return BuildWithResultHandler(ctx, nodes, opts, docker, cfg, w, nil)
@@ -476,10 +523,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 	resp = map[string]*client.SolveResponse{}
 	var respMu sync.Mutex
-	results := waitmap.New()
 
 	multiTarget := len(opts) > 1
-	childTargets := calculateChildTargets(reqForNodes, opts)
+	linkedTargets := newLinkedTargetState(calculateTargetLinks(reqForNodes, opts))
+	// linkedClients is only accessed from the synchronous part of the target
+	// loop below, before any goroutines are spawned; no mutex needed.
+	linkedClients := make(map[string]*client.Client)
 
 	for k, opt := range opts {
 		err := func(k string) (err error) {
@@ -538,7 +587,21 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 				pw := progress.WithPrefix(w, k, multiTarget)
 
-				c, err := dp.Client(ctx)
+				rKey := resultKey(dp, k)
+				var c *client.Client
+				if node.Driver != nil && node.Driver.RequiresUncachedClient() && linkedTargets.isLinked(rKey) {
+					// linked targets need to share a client so their sessions and
+					// shared solver vertices land on the same daemon instance
+					c = linkedClients[node.Name]
+					if c == nil {
+						c, err = dp.Client(ctx)
+						if err == nil {
+							linkedClients[node.Name] = c
+						}
+					}
+				} else {
+					c, err = dp.Client(ctx)
+				}
 				if err != nil {
 					return err
 				}
@@ -574,7 +637,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 
 					pw = progress.ResetTime(pw)
 
-					if err := waitContextDeps(ctx, dp, results, so); err != nil {
+					if err := waitContextDeps(ctx, dp, linkedTargets.results, so); err != nil {
 						return err
 					}
 
@@ -625,30 +688,19 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							callRes = res.Metadata
 						}
 
-						rKey := resultKey(dp, k)
-						results.Set(rKey, res)
-
-						forceEval := false
-						if children := childTargets[rKey]; len(children) > 0 {
-							// wait for the child targets to register their LLB before evaluating
-							_, err := results.Get(ctx, children...)
-							if err != nil {
-								return nil, err
+						if err := linkedTargets.run(ctx, rKey, res, func() error {
+							// invoke custom evaluate handler if it is present
+							if bh != nil && bh.Evaluate != nil {
+								return bh.Evaluate(ctx, k, c, res, opt)
 							}
-							forceEval = true
-						}
-
-						// invoke custom evaluate handler if it is present
-						if bh != nil && bh.Evaluate != nil {
-							if err := bh.Evaluate(ctx, k, c, res, opt); err != nil {
-								return nil, err
+							if linkedTargets.isLinked(rKey) {
+								return eachRefParallel(ctx, res, func(ctx context.Context, ref gateway.Reference) error {
+									return ref.Evaluate(ctx)
+								})
 							}
-						} else if forceEval {
-							if err := eachRefParallel(ctx, res, func(ctx context.Context, ref gateway.Reference) error {
-								return ref.Evaluate(ctx)
-							}); err != nil {
-								return nil, err
-							}
+							return nil
+						}); err != nil {
+							return nil, err
 						}
 						return res, nil
 					}
@@ -1137,22 +1189,25 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 	return sessions, nil
 }
 
-// calculateChildTargets returns all the targets that depend on current target for reverse index
-func calculateChildTargets(reqs map[string][]*reqForNode, opt map[string]Options) map[string][]string {
-	out := make(map[string][]string)
+// calculateTargetLinks returns direct dependencies and dependents for every linked target.
+func calculateTargetLinks(reqs map[string][]*reqForNode, opt map[string]Options) (map[string][]string, map[string][]string) {
+	parents := make(map[string][]string)
+	children := make(map[string][]string)
 	for name := range opt {
 		dps := reqs[name]
 		for i, dp := range dps {
 			so := reqs[name][i].so
 			for k, v := range so.FrontendAttrs {
 				if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
-					target := resultKey(dp.ResolvedNode, strings.TrimPrefix(v, "target:"))
-					out[target] = append(out[target], resultKey(dp.ResolvedNode, name))
+					parent := resultKey(dp.ResolvedNode, strings.TrimPrefix(v, "target:"))
+					child := resultKey(dp.ResolvedNode, name)
+					parents[child] = append(parents[child], parent)
+					children[parent] = append(children[parent], child)
 				}
 			}
 		}
 	}
-	return out
+	return parents, children
 }
 
 func waitContextDeps(ctx context.Context, node *noderesolver.ResolvedNode, results *waitmap.Map, so *client.SolveOpt) error {

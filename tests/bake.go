@@ -52,6 +52,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteAuth,
 	testBakeRemoteCmdContext,
 	testBakeRemoteLocalOverride,
+	testBakeRemoteLinkedTargetSecrets,
 	testBakeLocalCwdOverride,
 	testBakeRemoteCmdContextOverride,
 	testBakeRemoteContextSubdir,
@@ -1085,6 +1086,125 @@ EOT
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "bar"))
+}
+
+func testBakeRemoteLinkedTargetSecrets(t *testing.T, sb integration.Sandbox) {
+	// Regression test for https://github.com/docker/buildx/issues/4011.
+	remoteBakefile := []byte(`
+target "base" {
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox
+EOT
+}
+
+target "source-prep" {
+	contexts = {
+		base = "target:base"
+	}
+	secret = ["id=SECRET1"]
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM base
+RUN --mount=type=secret,id=SECRET1,env=SECRET1 [ -n "$SECRET1" ] && echo $SECRET1 > /secret1
+EOT
+}
+
+target "vs" {
+	contexts = {
+		base = "target:base"
+		source-prep = "target:source-prep"
+	}
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM base
+COPY --from=source-prep /secret1 /
+EOT
+}
+`)
+	localBakefile := []byte(`
+target "vs-console" {
+	contexts = {
+		base = "target:vs"
+	}
+	secret = ["id=SECRET2"]
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM base
+RUN --mount=type=secret,id=SECRET2,env=SECRET2 [ -n "$SECRET2" ] && echo $SECRET2 > /secret2
+EOT
+}
+
+target "default" {
+	contexts = {
+		base = "target:vs-console"
+		source-prep = "target:source-prep"
+	}
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM base
+COPY --from=source-prep /secret1 /secret1_copy
+EOT
+}
+`)
+	remoteDir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", remoteBakefile, 0600),
+	)
+	localDir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", localBakefile, 0600),
+	)
+
+	git, err := gitutil.New(bkgitutil.WithDir(remoteDir))
+	require.NoError(t, err)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "docker-bake.hcl")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
+
+	run := func(outputDir string, target ...string) (string, error) {
+		args := []string{
+			"bake",
+			"--no-cache",
+			"--progress=plain",
+			"--file=cwd://docker-bake.hcl",
+		}
+		if outputDir != "" {
+			args = append(args, "--set", "default.output=type=local,dest="+outputDir)
+		}
+		args = append(args, addr)
+		args = append(args, target...)
+		cmd := buildxCmd(
+			sb,
+			withDir(localDir),
+			withEnv("SECRET1=foo", "SECRET2=bar"),
+			withArgs(args...),
+		)
+		out, err := cmd.CombinedOutput()
+		return string(out), err
+	}
+
+	// Directly building the secret-bearing target is the non-racy control.
+	out, err := run("", "source-prep")
+	require.NoError(t, err, out)
+
+	// The linked graph has multiple jobs sharing the same secret-consuming LLB
+	// vertex. Repeat the invocation to exercise session selection timing.
+	const attempts = 5
+	for i := 1; i <= attempts; i++ {
+		outputDir := t.TempDir()
+		out, err := run(outputDir)
+		require.NoErrorf(t, err, "linked target attempt %d/%d failed:\n%s", i, attempts, out)
+		require.FileExists(t, filepath.Join(outputDir, "secret1_copy"))
+		require.FileExists(t, filepath.Join(outputDir, "secret2"))
+		secret1, err := os.ReadFile(filepath.Join(outputDir, "secret1_copy"))
+		require.NoError(t, err)
+		require.Equal(t, "foo\n", string(secret1))
+		secret2, err := os.ReadFile(filepath.Join(outputDir, "secret2"))
+		require.NoError(t, err)
+		require.Equal(t, "bar\n", string(secret2))
+	}
 }
 
 func testBakeLocalCwdOverride(t *testing.T, sb integration.Sandbox) {
