@@ -607,16 +607,45 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						// Capture the error from this build function.
 						defer catchFrontendError(&retErr, &frontendErr)
 
-						if opt.CallFunc != nil {
-							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
-								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
-							} else {
-								req.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
+						rKey := resultKey(dp, k)
+						children := childTargets[rKey]
+
+						// A call method replies with the metadata of the subrequest
+						// instead of a build result, so there would be nothing to link
+						// into the targets using this one as a named context. Solve the
+						// build request on its own in that case and register its result
+						// for them. It is never evaluated, so this only resolves the
+						// definition and does not build anything.
+						linked := false
+						if opt.CallFunc != nil && len(children) > 0 {
+							linkReq := req
+							linkReq.FrontendOpt = maps.Clone(req.FrontendOpt)
+							// checks are reported by the call method below, skip them
+							// here so that this request is not rejected by a Dockerfile
+							// that asks for check violations to be errors
+							linkReq.FrontendOpt["build-arg:BUILDKIT_DOCKERFILE_CHECK"] = "skip=all;error=false"
+							res, err := solve(ctx, c, linkReq)
+							if err != nil {
+								return nil, err
 							}
-							req.FrontendOpt["requestid"] = "frontend." + opt.CallFunc.Name
+							results.Set(rKey, res)
+							linked = true
 						}
 
-						res, err := solve(ctx, c, req)
+						solveReq := req
+						if opt.CallFunc != nil {
+							// keep the initial request untouched, it may have already
+							// been sent for the linked result above
+							solveReq.FrontendOpt = maps.Clone(req.FrontendOpt)
+							if _, ok := solveReq.FrontendOpt["frontend.caps"]; !ok {
+								solveReq.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
+							} else {
+								solveReq.FrontendOpt["frontend.caps"] += ",moby.buildkit.frontend.subrequests+forward"
+							}
+							solveReq.FrontendOpt["requestid"] = "frontend." + opt.CallFunc.Name
+						}
+
+						res, err := solve(ctx, c, solveReq)
 						if err != nil {
 							return nil, err
 						}
@@ -625,11 +654,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							callRes = res.Metadata
 						}
 
-						rKey := resultKey(dp, k)
-						results.Set(rKey, res)
+						if !linked {
+							results.Set(rKey, res)
+						}
 
 						forceEval := false
-						if children := childTargets[rKey]; len(children) > 0 {
+						if len(children) > 0 {
 							// wait for the child targets to register their LLB before evaluating
 							_, err := results.Get(ctx, children...)
 							if err != nil {
