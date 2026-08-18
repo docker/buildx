@@ -517,6 +517,17 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
+	// Boot() skips Bootstrap() (and therefore the readiness wait() it performs)
+	// whenever Info() already reports the container as Running. On a freshly
+	// created builder the container can be Running before buildkitd has bound
+	// its socket, leaving a window where dial-stdio connects but the first RPC
+	// fails with "error reading server preface: EOF". Verify readiness here so
+	// every returned client is backed by a responsive buildkitd; once buildkitd
+	// answers this is a single, cheap "buildctl debug workers" probe.
+	if err := d.wait(ctx, discardSubLogger{}); err != nil {
+		return nil, err
+	}
+
 	conn, err := d.Dial(ctx)
 	if err != nil {
 		return nil, err
@@ -600,6 +611,15 @@ type demux struct {
 func (d *demux) Read(dt []byte) (int, error) {
 	return d.Reader.Read(dt)
 }
+
+// discardSubLogger is a progress.SubLogger that drops all output. It lets
+// Client() reuse the wait() readiness loop when no progress writer is available
+// (wait() only emits to the logger on its terminal failure path).
+type discardSubLogger struct{}
+
+func (discardSubLogger) Wrap(_ string, fn func() error) error { return fn() }
+func (discardSubLogger) Log(int, []byte)                      {}
+func (discardSubLogger) SetStatus(*client.VertexStatus)       {}
 
 type logWriter struct {
 	logger progress.SubLogger
