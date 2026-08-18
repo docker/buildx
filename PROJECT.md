@@ -84,6 +84,7 @@ Area or component of the project affected. Please note that the table below may 
 | `area/dockerfile`              | Any        | `dockerfile`               |
 | `area/docs`                    | Any        | `docs`                     |
 | `area/driver`                  | Any        | `driver`                   |
+| `area/driver/cloud`            | Any        | `driver/cloud`             |
 | `area/driver/docker`           | Any        | `driver/docker`            |
 | `area/driver/docker-container` | Any        | `driver/docker-container`  |
 | `area/driver/kubernetes`       | Any        | `driver/kubernetes`        |
