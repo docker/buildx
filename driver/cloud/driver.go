@@ -27,7 +27,6 @@ import (
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	sessionexporter "github.com/moby/buildkit/session/exporter"
 	"github.com/moby/buildkit/session/exporter/exporterprovider"
-	"github.com/moby/moby/api/types/jsonstream"
 	"github.com/moby/moby/api/types/registry"
 	"github.com/moby/moby/api/types/system"
 	dockerclient "github.com/moby/moby/client"
@@ -273,7 +272,7 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 	}()
 	defer pullResp.Close()
 
-	if err := printMagicPull(pullResp, l); err != nil {
+	if err := dockerutil.PullProgressFromReader(l, pullResp); err != nil {
 		return errors.Wrap(err, "reading cloud pull progress")
 	}
 
@@ -444,88 +443,6 @@ func (d *Driver) tlsConfig() (*tls.Config, error) {
 		tlsConfig.RootCAs = rootCAs
 	}
 	return tlsConfig, nil
-}
-
-func printMagicPull(rc io.Reader, l progress.SubLogger) (err error) {
-	started := map[string]client.VertexStatus{}
-
-	defer func() {
-		if err != nil {
-			return
-		}
-		for _, st := range started {
-			if st.Completed == nil {
-				now := time.Now()
-				st.Completed = &now
-				l.SetStatus(&st)
-			}
-		}
-	}()
-
-	dec := json.NewDecoder(rc)
-
-	var (
-		parsedError error
-		jm          jsonstream.Message
-	)
-
-	for {
-		if err = dec.Decode(&jm); err != nil {
-			if parsedError != nil {
-				err = parsedError
-			} else if err == io.EOF {
-				err = nil
-			}
-			return
-		}
-
-		if jm.Error != nil {
-			parsedError = jm.Error
-		}
-
-		if jm.ID == "" {
-			continue
-		}
-
-		// handle temporary fake registry tags
-		if strings.ContainsRune(jm.ID, '@') {
-			continue
-		}
-		if strings.ContainsRune(jm.Status, ':') {
-			continue
-		}
-
-		id := "pulling layer " + jm.ID
-		st, ok := started[id]
-		if !ok {
-			if jm.Progress != nil || strings.HasPrefix(jm.Status, "Pulling") || strings.HasPrefix(jm.Status, "Already exists") {
-				now := time.Now()
-				st = client.VertexStatus{
-					ID:      id,
-					Started: &now,
-				}
-			} else {
-				continue
-			}
-		}
-		st.Timestamp = time.Now()
-		if jm.Progress != nil && jm.Status == "Downloading" {
-			st.Current = jm.Progress.Current
-			st.Total = jm.Progress.Total
-		}
-		if jm.Error != nil {
-			now := time.Now()
-			st.Completed = &now
-		}
-
-		if jm.Status == "Pull complete" || jm.Status == "Already exists" {
-			now := time.Now()
-			st.Completed = &now
-			st.Current = st.Total
-		}
-		started[id] = st
-		l.SetStatus(&st)
-	}
 }
 
 func daemonSupportsRegistryTokenPull(ctx context.Context, duc *dockerutil.Client, dockerContext string) (bool, error) {
