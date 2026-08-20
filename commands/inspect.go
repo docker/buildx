@@ -11,7 +11,9 @@ import (
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/cobrautil/completion"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
@@ -42,7 +44,8 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 	}
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
-	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData())
+	imageVerifier := policy.DefaultImageVerifier(confutil.NewConfig(dockerCli))
+	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
 	if in.bootstrap {
 		var ok bool
 		ok, err = b.Boot(ctx)
@@ -50,7 +53,7 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 			return err
 		}
 		if ok {
-			nodes, err = b.LoadNodes(timeoutCtx, builder.WithData())
+			nodes, err = b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
 		}
 	}
 

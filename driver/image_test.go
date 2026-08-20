@@ -4,7 +4,7 @@ import (
 	"context"
 	"testing"
 
-	"github.com/docker/buildx/policy"
+	"github.com/docker/buildx/util/sourcemeta"
 	"github.com/moby/buildkit/client"
 	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -22,7 +22,7 @@ func TestVerifyImageRefTaggedCanonical(t *testing.T) {
 	ref := "moby/buildkit:v0.31.2@" + dgst.String()
 	var verifiedRef string
 
-	pinned, applied, err := VerifyImageRef(context.Background(), nopSubLogger{}, ref, nil, nil, func(_ context.Context, ref string, _ *ocispecs.Platform, _ policy.SourceMetadataResolver) (digest.Digest, error) {
+	pinned, applied, err := VerifyImageRef(context.Background(), nopSubLogger{}, ref, nil, nil, func(_ context.Context, ref string, _ *ocispecs.Platform, _ *sourcemeta.Resolver) (digest.Digest, error) {
 		verifiedRef = ref
 		return dgst, nil
 	})
@@ -36,7 +36,7 @@ func TestVerifyImageRefDigestOnly(t *testing.T) {
 	dgst := digest.FromString("buildkit")
 	called := false
 
-	pinned, applied, err := VerifyImageRef(context.Background(), nopSubLogger{}, "moby/buildkit@"+dgst.String(), nil, nil, func(_ context.Context, _ string, _ *ocispecs.Platform, _ policy.SourceMetadataResolver) (digest.Digest, error) {
+	pinned, applied, err := VerifyImageRef(context.Background(), nopSubLogger{}, "moby/buildkit@"+dgst.String(), nil, nil, func(_ context.Context, _ string, _ *ocispecs.Platform, _ *sourcemeta.Resolver) (digest.Digest, error) {
 		called = true
 		return dgst, nil
 	})
