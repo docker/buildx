@@ -14,12 +14,14 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/plugins/content/local"
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/containerd/platforms"
 	"github.com/creack/pty"
+	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/localstate"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/gitutil"
@@ -42,6 +44,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"golang.org/x/sync/errgroup"
 )
 
 func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
@@ -94,6 +97,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildCheckCallOutput,
 	testBuildExtraHosts,
 	testBuildIndexAnnotationsLoadDocker,
+	testBuildDockerContainerConcurrentFirstBuild,
 }
 
 func testBuild(t *testing.T, sb integration.Sandbox) {
@@ -1829,6 +1833,64 @@ func testBuildIndexAnnotationsLoadDocker(t *testing.T, sb integration.Sandbox) {
 	out, err := buildCmd(sb, withArgs("--annotation", "index:foo=bar", "--provenance", "false", "--output", "type=docker", dir))
 	require.Error(t, err, out)
 	require.Contains(t, out, "index annotations not supported for single platform export")
+}
+
+func testBuildDockerContainerConcurrentFirstBuild(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
+	}
+	integration.SkipOnPlatform(t, "windows")
+
+	dir := tmpdir(t,
+		fstest.CreateFile("Dockerfile", []byte("FROM scratch\nCOPY marker /marker\n"), 0o600),
+		fstest.CreateFile("marker", []byte("hi"), 0o600),
+	)
+
+	builderName := "concurrent-" + identity.NewID()
+	out, err := createCmd(sb, withArgs(
+		"--name", builderName,
+		"--driver", "docker-container",
+	))
+	require.NoError(t, err, out)
+	t.Cleanup(func() {
+		out, err := rmCmd(sb, withArgs("-f", builderName))
+		require.NoError(t, err, out)
+	})
+
+	var eg errgroup.Group
+	var waited bool
+	defer func() {
+		if !waited {
+			require.NoError(t, eg.Wait())
+		}
+	}()
+	startBuild := func(name string) {
+		eg.Go(func() error {
+			cmd := buildxCmd(sb, withArgs("build", "--progress=quiet", "--output=type=cacheonly", dir))
+			cmd.Env = append(cmd.Env, "BUILDX_BUILDER="+builderName)
+			out, err := cmd.CombinedOutput()
+			if err != nil {
+				return errors.Errorf("%s failed: %v\n%s", name, err, string(out))
+			}
+			return nil
+		})
+	}
+
+	startBuild("bootstrap")
+	containerName := fmt.Sprintf("%s0", driver.BuilderName(builderName))
+	require.EventuallyWithT(t, func(c *assert.CollectT) {
+		cmd := dockerCmd(sb, withArgs("inspect", "-f", "{{.State.Running}}", containerName))
+		out, err := cmd.CombinedOutput()
+		assert.NoError(c, err, string(out))
+		assert.Equal(c, "true", strings.TrimSpace(string(out)))
+	}, 60*time.Second, 20*time.Millisecond, "container %s did not report running", containerName)
+
+	for i := range 5 {
+		startBuild(fmt.Sprintf("sibling %d", i+1))
+	}
+	err = eg.Wait()
+	waited = true
+	require.NoError(t, err)
 }
 
 func createTestProject(t *testing.T) string {
