@@ -12,46 +12,46 @@ var attestType = sync.OnceValue(func() cty.Type {
 	return cty.Map(cty.String)
 })
 
-func (e *Attests) FromCtyValue(in cty.Value, p cty.Path) error {
+func (a *Attests) FromCtyValue(in cty.Value, p cty.Path) error {
 	got := in.Type()
 	if got.IsTupleType() || got.IsListType() {
-		return e.fromCtyValue(in, p)
+		return a.fromCtyValue(in, p)
 	}
 
 	want := cty.List(attestType())
 	return p.NewErrorf("%s", convert.MismatchMessage(got, want))
 }
 
-func (e *Attests) fromCtyValue(in cty.Value, p cty.Path) (retErr error) {
-	*e = make([]*Attest, 0, in.LengthInt())
+func (a *Attests) fromCtyValue(in cty.Value, p cty.Path) (retErr error) {
+	*a = make([]*Attest, 0, in.LengthInt())
 
 	yield := func(value cty.Value) bool {
 		entry := &Attest{}
 		if retErr = entry.FromCtyValue(value, p); retErr != nil {
 			return false
 		}
-		*e = append(*e, entry)
+		*a = append(*a, entry)
 		return true
 	}
 	eachElement(in)(yield)
 	return retErr
 }
 
-func (e Attests) ToCtyValue() cty.Value {
-	if len(e) == 0 {
+func (a Attests) ToCtyValue() cty.Value {
+	if len(a) == 0 {
 		return cty.ListValEmpty(attestType())
 	}
 
-	vals := make([]cty.Value, len(e))
-	for i, entry := range e {
+	vals := make([]cty.Value, len(a))
+	for i, entry := range a {
 		vals[i] = entry.ToCtyValue()
 	}
 	return cty.ListVal(vals)
 }
 
-func (e *Attest) FromCtyValue(in cty.Value, p cty.Path) error {
+func (a *Attest) FromCtyValue(in cty.Value, p cty.Path) error {
 	if in.Type() == cty.String {
-		if err := e.UnmarshalText([]byte(in.AsString())); err != nil {
+		if err := a.UnmarshalText([]byte(in.AsString())); err != nil {
 			return p.NewError(err)
 		}
 		return nil
@@ -62,7 +62,7 @@ func (e *Attest) FromCtyValue(in cty.Value, p cty.Path) error {
 		return err
 	}
 
-	e.Attrs = map[string]string{}
+	a.Attrs = map[string]string{}
 	for it := conv.ElementIterator(); it.Next(); {
 		k, v := it.Element()
 		if !v.IsKnown() {
@@ -71,31 +71,31 @@ func (e *Attest) FromCtyValue(in cty.Value, p cty.Path) error {
 
 		switch key := k.AsString(); key {
 		case "type":
-			e.Type = v.AsString()
+			a.Type = v.AsString()
 		case "disabled":
 			b, err := strconv.ParseBool(v.AsString())
 			if err != nil {
 				return err
 			}
-			e.Disabled = b
+			a.Disabled = b
 		default:
-			e.Attrs[key] = v.AsString()
+			a.Attrs[key] = v.AsString()
 		}
 	}
 	return nil
 }
 
-func (e *Attest) ToCtyValue() cty.Value {
-	if e == nil {
+func (a *Attest) ToCtyValue() cty.Value {
+	if a == nil {
 		return cty.NullVal(cty.Map(cty.String))
 	}
 
-	vals := make(map[string]cty.Value, len(e.Attrs)+2)
-	for k, v := range e.Attrs {
+	vals := make(map[string]cty.Value, len(a.Attrs)+2)
+	for k, v := range a.Attrs {
 		vals[k] = cty.StringVal(v)
 	}
-	vals["type"] = cty.StringVal(e.Type)
-	if e.Disabled {
+	vals["type"] = cty.StringVal(a.Type)
+	if a.Disabled {
 		vals["disabled"] = cty.StringVal("true")
 	}
 	return cty.MapVal(vals)

@@ -91,7 +91,7 @@ func createCmd(dockerCli command.Cli) *cobra.Command {
 		if len(drivers.String()) > 0 {
 			drivers.WriteString(", ")
 		}
-		drivers.WriteString(fmt.Sprintf(`"%s"`, d.Name()))
+		fmt.Fprintf(&drivers, `"%s"`, d.Name())
 	}
 
 	cmd := &cobra.Command{
