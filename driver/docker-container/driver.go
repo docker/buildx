@@ -330,12 +330,14 @@ func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 		bufStderr := &bytes.Buffer{}
 		if err := d.run(ctx, []string{"buildctl", "debug", "workers"}, bufStdout, bufStderr); err != nil {
 			if try > 15 {
-				d.copyLogs(context.TODO(), l)
-				if bufStdout.Len() != 0 {
-					l.Log(1, bufStdout.Bytes())
-				}
-				if bufStderr.Len() != 0 {
-					l.Log(2, bufStderr.Bytes())
+				if l != nil {
+					d.copyLogs(context.TODO(), l)
+					if bufStdout.Len() != 0 {
+						l.Log(1, bufStdout.Bytes())
+					}
+					if bufStderr.Len() != 0 {
+						l.Log(2, bufStderr.Bytes())
+					}
 				}
 				return err
 			}
@@ -508,6 +510,11 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 }
 
 func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
+	// Docker marks the container running before buildkitd has necessarily
+	// bound its socket, so verify readiness before opening dial-stdio.
+	if err := d.wait(ctx, nil); err != nil {
+		return nil, err
+	}
 	_, conn, err := d.exec(ctx, []string{"buildctl", "dial-stdio"})
 	if err != nil {
 		return nil, err
