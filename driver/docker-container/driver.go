@@ -323,6 +323,12 @@ func (d *Driver) daemonPlatform(ctx context.Context) *ocispecs.Platform {
 	return &p
 }
 
+type nopSubLogger struct{}
+
+func (nopSubLogger) Wrap(_ string, fn func() error) error { return fn() }
+func (nopSubLogger) Log(int, []byte)                      {}
+func (nopSubLogger) SetStatus(*client.VertexStatus)       {}
+
 func (d *Driver) wait(ctx context.Context, l progress.SubLogger) error {
 	try := 1
 	for {
@@ -517,6 +523,12 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
+	// Info() is Running as soon as the container process is up, which can be
+	// before buildkitd has bound its socket. Boot() skips Bootstrap() in that
+	// case and DriverHandle caches the first Client() error, so wait here too.
+	if err := d.wait(ctx, nopSubLogger{}); err != nil {
+		return nil, err
+	}
 	conn, err := d.Dial(ctx)
 	if err != nil {
 		return nil, err
