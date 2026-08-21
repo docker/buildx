@@ -24,6 +24,23 @@ type Factory interface {
 	AllowsInstances() bool
 }
 
+// DefaultBuilderNamer derives a default builder name from an endpoint.
+type DefaultBuilderNamer interface {
+	DefaultBuilderName(ctx context.Context, endpoint string) (string, error)
+}
+
+type Node struct {
+	Name        string
+	Endpoint    string
+	Platforms   []string
+	EndpointSet bool
+	DriverOpts  map[string]string
+}
+
+type NodeResolver interface {
+	ResolveNodes(context.Context, Node) ([]Node, error)
+}
+
 type BuildkitConfig struct {
 	// Entitlements []string
 	// Rootless bool
@@ -55,11 +72,20 @@ type InitConfig struct {
 
 var drivers map[string]Factory
 
-func Register(f Factory) {
+func Register(f Factory) func() {
 	if drivers == nil {
 		drivers = map[string]Factory{}
 	}
-	drivers[f.Name()] = f
+	name := f.Name()
+	previous, ok := drivers[name]
+	drivers[name] = f
+	return func() {
+		if ok {
+			drivers[name] = previous
+		} else {
+			delete(drivers, name)
+		}
+	}
 }
 
 func GetDefaultFactory(ctx context.Context, ep string, c dockerclient.APIClient, instanceRequired bool, dialMeta map[string][]string) (Factory, error) {

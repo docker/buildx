@@ -159,6 +159,7 @@ feature sets.
 
 We currently support the following drivers:
 - The `docker` driver ([manual](https://docs.docker.com/build/builders/drivers/docker/))
+- The `cloud` driver ([manual](https://docs.docker.com/build-cloud/))
 - The `docker-container` driver ([manual](https://docs.docker.com/build/builders/drivers/docker-container/))
 - The `kubernetes` driver ([manual](https://docs.docker.com/build/drivers/kubernetes/))
 - The `remote` driver ([manual](https://docs.docker.com/build/builders/drivers/remote/))
@@ -217,9 +218,11 @@ When you invoke a build, you can set the `--platform` flag to specify the target
 platform for the build output, (for example, `linux/amd64`, `linux/arm64`, or
 `darwin/amd64`).
 
-When the current builder instance is backed by the `docker-container` or
-`kubernetes` driver, you can specify multiple platforms together. In this case,
-it builds a manifest list which contains images for all specified architectures.
+When the current builder instance is backed by the `cloud`, `docker-container`,
+`kubernetes` or `remote` driver, you can specify multiple platforms together.
+In this case, it builds a manifest list which contains images for all specified
+architectures.
+
 When you use this image in [`docker run`](https://docs.docker.com/reference/cli/docker/container/run/)
 or [`docker service`](https://docs.docker.com/reference/cli/docker/service/),
 Docker picks the correct image based on the node's platform.

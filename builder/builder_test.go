@@ -1,13 +1,224 @@
 package builder
 
 import (
+	"context"
+	"errors"
 	"os"
 	"path"
 	"testing"
 
+	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/store"
+	dockerclient "github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type testFactory struct {
+	name string
+}
+
+func (f testFactory) Name() string {
+	return f.name
+}
+
+func (f testFactory) Usage() string {
+	return f.name
+}
+
+func (testFactory) Priority(context.Context, string, dockerclient.APIClient, map[string][]string) int {
+	return 10000
+}
+
+func (testFactory) New(context.Context, driver.InitConfig) (driver.Driver, error) {
+	return nil, errors.New("test factory cannot create drivers")
+}
+
+func (testFactory) AllowsInstances() bool {
+	return true
+}
+
+type nodeResolvingFactory struct {
+	testFactory
+	nodes []driver.Node
+}
+
+func (f nodeResolvingFactory) ResolveNodes(context.Context, driver.Node) ([]driver.Node, error) {
+	return f.nodes, nil
+}
+
+type defaultBuilderNamerFactory struct {
+	testFactory
+	endpoint string
+	err      error
+}
+
+func (f *defaultBuilderNamerFactory) DefaultBuilderName(_ context.Context, endpoint string) (string, error) {
+	f.endpoint = endpoint
+	return "", f.err
+}
+
+func TestCreateDefaultBuilderNamer(t *testing.T) {
+	const endpoint = "org/builder"
+	expectedErr := errors.New("default builder name")
+	factory := &defaultBuilderNamerFactory{
+		testFactory: testFactory{name: "test-default-builder-namer"},
+		err:         expectedErr,
+	}
+	t.Cleanup(driver.Register(factory))
+
+	_, err := Create(t.Context(), nil, nil, CreateOpts{
+		Driver:   factory.Name(),
+		Endpoint: endpoint,
+	})
+	require.ErrorIs(t, err, expectedErr)
+	assert.Equal(t, endpoint, factory.endpoint)
+}
+
+func TestUpdateNodeGroup(t *testing.T) {
+	t.Parallel()
+
+	t.Run("Default", func(t *testing.T) {
+		t.Parallel()
+
+		factory := testFactory{name: "example"}
+		ng := &store.NodeGroup{}
+		node := driver.Node{
+			Name:        "node",
+			Endpoint:    "tcp://example:1234",
+			Platforms:   []string{"linux/amd64"},
+			EndpointSet: true,
+			DriverOpts:  map[string]string{"key": "value"},
+		}
+
+		require.NoError(t, updateNodeGroup(t.Context(), factory, ng, node, false, nil, ""))
+		require.Len(t, ng.Nodes, 1)
+		assert.Equal(t, "node", ng.Nodes[0].Name)
+		assert.Equal(t, "tcp://example:1234", ng.Nodes[0].Endpoint)
+		assert.Equal(t, "amd64", ng.Nodes[0].Platforms[0].Architecture)
+		assert.Equal(t, map[string]string{"key": "value"}, ng.Nodes[0].DriverOpts)
+	})
+
+	t.Run("Expanded", func(t *testing.T) {
+		t.Parallel()
+
+		factory := nodeResolvingFactory{
+			testFactory: testFactory{
+				name: "example",
+			},
+			nodes: []driver.Node{
+				{
+					Name:       "node-amd64",
+					Endpoint:   "tcp://amd64:1234",
+					Platforms:  []string{"linux/amd64"},
+					DriverOpts: map[string]string{"arch": "amd64"},
+				},
+				{
+					Name:       "node-arm64",
+					Endpoint:   "tcp://arm64:1234",
+					Platforms:  []string{"linux/arm64"},
+					DriverOpts: map[string]string{"arch": "arm64"},
+				},
+			},
+		}
+		ng := &store.NodeGroup{
+			Nodes: []store.Node{
+				{
+					Name:     "existing",
+					Endpoint: "tcp://existing:1234",
+				},
+			},
+		}
+
+		require.NoError(t, updateNodeGroup(t.Context(), factory, ng, driver.Node{Endpoint: "org/builder"}, true, nil, ""))
+		require.Len(t, ng.Nodes, 3)
+		assert.Equal(t, "node-amd64", ng.Nodes[1].Name)
+		assert.Equal(t, "tcp://amd64:1234", ng.Nodes[1].Endpoint)
+		assert.Equal(t, "amd64", ng.Nodes[1].Platforms[0].Architecture)
+		assert.Equal(t, map[string]string{"arch": "amd64"}, ng.Nodes[1].DriverOpts)
+		assert.Equal(t, "node-arm64", ng.Nodes[2].Name)
+		assert.Equal(t, "tcp://arm64:1234", ng.Nodes[2].Endpoint)
+		assert.Equal(t, "arm64", ng.Nodes[2].Platforms[0].Architecture)
+		assert.Equal(t, map[string]string{"arch": "arm64"}, ng.Nodes[2].DriverOpts)
+	})
+
+	t.Run("ExpandedUpdatePreservesEndpoint", func(t *testing.T) {
+		t.Parallel()
+
+		factory := nodeResolvingFactory{
+			testFactory: testFactory{
+				name: "example",
+			},
+			nodes: []driver.Node{
+				{
+					Name:        "node",
+					Endpoint:    "tcp://new:1234",
+					Platforms:   []string{"linux/arm64"},
+					EndpointSet: false,
+				},
+			},
+		}
+		ng := &store.NodeGroup{
+			Nodes: []store.Node{
+				{
+					Name:     "node",
+					Endpoint: "tcp://existing:1234",
+				},
+			},
+		}
+
+		require.NoError(t, updateNodeGroup(t.Context(), factory, ng, driver.Node{Endpoint: "org/builder"}, false, nil, ""))
+		require.Len(t, ng.Nodes, 1)
+		assert.Equal(t, "tcp://existing:1234", ng.Nodes[0].Endpoint)
+		assert.Equal(t, "arm64", ng.Nodes[0].Platforms[0].Architecture)
+	})
+
+	t.Run("ExpandedAppendRejectsNameCollision", func(t *testing.T) {
+		t.Parallel()
+
+		factory := nodeResolvingFactory{
+			testFactory: testFactory{
+				name: "example",
+			},
+			nodes: []driver.Node{
+				{
+					Name:       "node",
+					Endpoint:   "tcp://new:1234",
+					Platforms:  []string{"linux/arm64"},
+					DriverOpts: map[string]string{"arch": "arm64"},
+				},
+			},
+		}
+		ng := &store.NodeGroup{
+			Nodes: []store.Node{
+				{
+					Name:       "node",
+					Endpoint:   "tcp://existing:1234",
+					DriverOpts: map[string]string{"arch": "amd64"},
+				},
+			},
+		}
+
+		err := updateNodeGroup(t.Context(), factory, ng, driver.Node{Endpoint: "org/builder"}, true, nil, "")
+		require.EqualError(t, err, `node "node" already exists`)
+		require.Len(t, ng.Nodes, 1)
+		assert.Equal(t, "tcp://existing:1234", ng.Nodes[0].Endpoint)
+		assert.Equal(t, map[string]string{"arch": "amd64"}, ng.Nodes[0].DriverOpts)
+	})
+
+	t.Run("EmptyExpansion", func(t *testing.T) {
+		t.Parallel()
+
+		factory := nodeResolvingFactory{
+			testFactory: testFactory{
+				name: "example",
+			},
+		}
+
+		err := updateNodeGroup(t.Context(), factory, &store.NodeGroup{}, driver.Node{}, false, nil, "")
+		require.EqualError(t, err, `driver "example" returned no nodes`)
+	})
+}
 
 func TestCsvToMap(t *testing.T) {
 	d := []string{

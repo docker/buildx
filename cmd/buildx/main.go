@@ -25,6 +25,7 @@ import (
 
 	_ "k8s.io/client-go/plugin/pkg/client/auth/oidc"
 
+	_ "github.com/docker/buildx/driver/cloud"
 	_ "github.com/docker/buildx/driver/docker"
 	_ "github.com/docker/buildx/driver/docker-container"
 	_ "github.com/docker/buildx/driver/kubernetes"

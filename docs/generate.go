@@ -19,6 +19,7 @@ import (
 
 	// import drivers otherwise factories are empty
 	// for --driver output flag usage
+	_ "github.com/docker/buildx/driver/cloud"
 	_ "github.com/docker/buildx/driver/docker"
 	_ "github.com/docker/buildx/driver/docker-container"
 	_ "github.com/docker/buildx/driver/kubernetes"
