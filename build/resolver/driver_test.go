@@ -255,6 +255,35 @@ func TestSelectNodeAdditionalPlatforms(t *testing.T) {
 	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 }
 
+func TestSelectNodeAdditionalPlatformsWithOSVersion(t *testing.T) {
+	r := makeTestResolver(map[string][]ocispecs.Platform{
+		"builder-ltsc2019": {platforms.MustParse("linux/amd64")},
+		"builder-ltsc2022": {platforms.MustParse("linux/amd64")},
+	})
+	additionalPlatforms := func(idx int, n builder.Node) []ocispecs.Platform {
+		switch n.Builder {
+		case "builder-ltsc2019":
+			return []ocispecs.Platform{platforms.MustParse("windows(10.0.17763)/amd64")}
+		case "builder-ltsc2022":
+			return []ocispecs.Platform{platforms.MustParse("windows(10.0.20348)/amd64")}
+		default:
+			return nil
+		}
+	}
+
+	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("windows(10.0.17763)/amd64")}, nil, platforms.Only, additionalPlatforms)
+	require.NoError(t, err)
+	require.True(t, perfect)
+	require.Len(t, res, 1)
+	require.Equal(t, "builder-ltsc2019", res[0].Node().Builder)
+
+	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("windows(10.0.20348)/amd64")}, nil, platforms.Only, additionalPlatforms)
+	require.NoError(t, err)
+	require.True(t, perfect)
+	require.Len(t, res, 1)
+	require.Equal(t, "builder-ltsc2022", res[0].Node().Builder)
+}
+
 func TestSplitNodeMultiPlatform(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
 		"builder-amd64-arm64": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/arm64")},

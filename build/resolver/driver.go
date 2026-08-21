@@ -3,6 +3,7 @@ package resolver
 import (
 	"context"
 	"fmt"
+	"maps"
 	"slices"
 	"strconv"
 	"sync"
@@ -147,17 +148,14 @@ func (r *nodeResolver) Resolve(ctx context.Context, optPlatforms map[string][]oc
 				if err != nil {
 					return errors.Wrap(err, "listing workers")
 				}
-
-				ps := make(map[string]ocispecs.Platform, len(ww))
+				ps := map[string]ocispecs.Platform{}
 				for _, w := range ww {
 					for _, p := range w.Platforms {
-						pk := platforms.Format(platforms.Normalize(p))
+						pk := platforms.FormatAll(platforms.Normalize(p))
 						ps[pk] = p
 					}
 				}
-				for _, p := range ps {
-					workers[i] = append(workers[i], p)
-				}
+				workers[i] = slices.Collect(maps.Values(ps))
 				return nil
 			})
 		}
