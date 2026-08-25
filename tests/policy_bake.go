@@ -1,15 +1,22 @@
 package tests
 
 import (
+	"os"
+	"path/filepath"
 	"testing"
 
 	"github.com/containerd/continuity/fs/fstest"
+	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
+	"github.com/moby/buildkit/identity"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/stretchr/testify/require"
 )
 
 var policyBakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePolicyConfigFlags,
+	testBakeRemoteGitNoPolicyWithProxyNetwork,
 }
 
 func testBakePolicyConfigFlags(t *testing.T, sb integration.Sandbox) {
@@ -207,4 +214,70 @@ target "disabled-combined" {
 			require.Contains(t, string(out), tc.wantErrContains)
 		})
 	}
+}
+
+func testBakeRemoteGitNoPolicyWithProxyNetwork(t *testing.T, sb integration.Sandbox) {
+	if !isDockerContainerWorker(sb) {
+		t.Skip("only testing with docker-container worker")
+	}
+	skipNoCompatBuildKit(t, sb, ">= 0.31.0-0", "network proxy requires BuildKit v0.31.0+")
+
+	dockerfile := []byte(`
+FROM alpine:latest
+RUN wget -qO- https://checkip.amazonaws.com/ | grep -Eq "^[0-9a-fA-F:.]+$"
+`)
+	bakeFile := []byte(`
+target "default" {
+  output = ["type=cacheonly"]
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("docker-bake.hcl", bakeFile, 0600),
+	)
+
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
+	require.NoError(t, err)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "Dockerfile", "docker-bake.hcl")
+	gittestutil.GitCommit(git, t, "initial commit")
+	addr := gittestutil.GitServeHTTP(git, t)
+
+	buildkitdConfPath := filepath.Join(t.TempDir(), "buildkitd.toml")
+	require.NoError(t, os.WriteFile(buildkitdConfPath, []byte("proxyNetwork = true\n"), 0600))
+
+	builderName := "proxy-network-" + identity.NewID()
+	var created bool
+	t.Cleanup(func() {
+		if !created {
+			return
+		}
+		out, err := rmCmd(sb, withArgs("-f", builderName))
+		require.NoError(t, err, out)
+	})
+
+	out, err := createCmd(sb, withArgs(
+		"--bootstrap",
+		"--name="+builderName,
+		"--driver=docker-container",
+		"--driver-opt", "network=host",
+		"--driver-opt", "image="+buildkitImage,
+		"--buildkitd-config="+buildkitdConfPath,
+	))
+	require.NoError(t, err, out)
+	created = true
+
+	cmd := buildxCmd(sb, withDir(t.TempDir()), withArgs(
+		"bake",
+		"--progress=plain",
+		"--no-cache",
+		"--builder", builderName,
+		addr,
+	))
+	outBytes, err := cmd.CombinedOutput()
+	out = string(outBytes)
+	require.NoError(t, err, out)
+	require.Contains(t, out, "proxy network requests:")
+	require.Contains(t, out, "GET https://checkip.amazonaws.com/ -> 200")
 }

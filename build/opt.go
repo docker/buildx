@@ -712,6 +712,10 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	if err != nil {
 		return nil, err
 	}
+	if len(loadedOpts) == 0 {
+		so.SourcePolicyProvider = nil
+		return defers, nil
+	}
 	var policyFiles []string
 	for _, popt := range loadedOpts {
 		for _, f := range popt.Files {
