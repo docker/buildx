@@ -61,7 +61,7 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 
 			status = progress.ResetTime(status)
 			if err := progress.Wrap("importing to docker", status.Write, func(l progress.SubLogger) error {
-				return fromReader(l, resp)
+				return loadProgressFromReader(l, resp)
 			}); err != nil {
 				handleErr(err)
 			}
@@ -84,13 +84,8 @@ func (c *Client) features(ctx context.Context, name string) map[Feature]bool {
 	features := make(map[Feature]bool)
 	if dapi, err := c.API(name); err == nil {
 		if res, err := dapi.Info(ctx, dockerclient.InfoOptions{}); err == nil {
-			for _, v := range res.Info.DriverStatus {
-				switch v[0] {
-				case "driver-type":
-					if v[1] == "io.containerd.snapshotter.v1" {
-						features[OCIImporter] = true
-					}
-				}
+			if HasOCIImporter(res.Info) {
+				features[OCIImporter] = true
 			}
 		}
 	}

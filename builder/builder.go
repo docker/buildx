@@ -349,6 +349,42 @@ type CreateOpts struct {
 	Timeout             time.Duration
 }
 
+func updateNodeGroup(ctx context.Context, factory driver.Factory, ng *store.NodeGroup, node driver.Node, appendNode bool, buildkitdFlags []string, buildkitdConfigFile string) error {
+	var nodes []driver.Node
+	_, resolvesNodes := factory.(driver.NodeResolver)
+	if resolver, ok := factory.(driver.NodeResolver); ok {
+		var err error
+		nodes, err = resolver.ResolveNodes(ctx, node)
+		if err != nil {
+			return err
+		}
+		if len(nodes) == 0 {
+			return errors.Errorf("driver %q returned no nodes", factory.Name())
+		}
+	} else {
+		nodes = []driver.Node{node}
+	}
+
+	for i, node := range nodes {
+		appendResolvedNode := appendNode || i > 0
+		if resolvesNodes && appendResolvedNode && node.Name != "" {
+			name, err := store.ValidateName(node.Name)
+			if err != nil {
+				return err
+			}
+			for _, existing := range ng.Nodes {
+				if existing.Name == name {
+					return errors.Errorf("node %q already exists", name)
+				}
+			}
+		}
+		if err := ng.Update(node.Name, node.Endpoint, node.Platforms, node.EndpointSet, appendResolvedNode, buildkitdFlags, buildkitdConfigFile, node.DriverOpts); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
 func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts CreateOpts) (*Builder, error) {
 	var err error
 
@@ -359,14 +395,7 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 	}
 
 	name := opts.Name
-	if name == "" {
-		name, err = store.GenerateName(txn)
-		if err != nil {
-			return nil, err
-		}
-	}
-
-	if !opts.Append {
+	if name != "" && !opts.Append {
 		contexts, err := dockerCli.ContextStore().List()
 		if err != nil {
 			return nil, err
@@ -378,34 +407,75 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		}
 	}
 
-	ng, err := txn.NodeGroupByName(name)
-	if err != nil {
-		if os.IsNotExist(errors.Cause(err)) {
-			if opts.Append && opts.Name != "" {
-				return nil, errors.Errorf("failed to find instance %q for append", opts.Name)
+	var ng *store.NodeGroup
+	if name != "" {
+		ng, err = txn.NodeGroupByName(name)
+		if err != nil {
+			if os.IsNotExist(errors.Cause(err)) {
+				if opts.Append {
+					return nil, errors.Errorf("failed to find instance %q for append", opts.Name)
+				}
+			} else {
+				return nil, err
 			}
-		} else {
-			return nil, err
 		}
 	}
 
 	buildkitHost := os.Getenv("BUILDKIT_HOST")
 
 	driverName := opts.Driver
+	var factory driver.Factory
 	if driverName == "" {
 		if ng != nil {
 			driverName = ng.Driver
 		} else if opts.Endpoint == "" && buildkitHost != "" {
 			driverName = "remote"
 		} else {
-			f, err := driver.GetDefaultFactory(ctx, opts.Endpoint, dockerCli.Client(), true, nil)
+			factory, err = driver.GetDefaultFactory(ctx, opts.Endpoint, dockerCli.Client(), true, nil)
 			if err != nil {
 				return nil, err
 			}
-			if f == nil {
+			if factory == nil {
 				return nil, errors.Errorf("no valid drivers found")
 			}
-			driverName = f.Name()
+			driverName = factory.Name()
+		}
+	}
+
+	if factory == nil {
+		factory, err = driver.GetFactory(driverName, true)
+		if err != nil {
+			return nil, err
+		}
+	}
+
+	if name == "" {
+		if namer, ok := factory.(driver.DefaultBuilderNamer); ok && opts.Endpoint != "" {
+			name, err = namer.DefaultBuilderName(ctx, opts.Endpoint)
+			if err != nil {
+				return nil, err
+			}
+		}
+		if name == "" {
+			name, err = store.GenerateName(txn)
+			if err != nil {
+				return nil, err
+			}
+		}
+
+		contexts, err := dockerCli.ContextStore().List()
+		if err != nil {
+			return nil, err
+		}
+		for _, c := range contexts {
+			if c.Name == name {
+				return nil, errors.Errorf("instance name %q already exists as context builder", name)
+			}
+		}
+
+		ng, err = txn.NodeGroupByName(name)
+		if err != nil && !os.IsNotExist(errors.Cause(err)) {
+			return nil, err
 		}
 	}
 
@@ -416,10 +486,6 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		if driverName != ng.Driver {
 			return nil, errors.Errorf("existing instance for %q but has mismatched driver %q", name, ng.Driver)
 		}
-	}
-
-	if _, err := driver.GetFactory(driverName, true); err != nil {
-		return nil, err
 	}
 
 	ngOriginal := ng
@@ -455,6 +521,7 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 
 	var ep string
 	var setEp bool
+	_, resolvesNodes := factory.(driver.NodeResolver)
 	switch {
 	case driverName == "kubernetes":
 		if opts.Endpoint != "" {
@@ -492,6 +559,9 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 			return nil, err
 		}
 		setEp = true
+	case resolvesNodes:
+		// The factory resolves the supplied endpoint into concrete nodes.
+		ep = opts.Endpoint
 	case opts.Endpoint != "":
 		ep, err = validateEndpoint(dockerCli, opts.Endpoint)
 		if err != nil {
@@ -509,7 +579,14 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 		setEp = false
 	}
 
-	if err := ng.Update(opts.NodeName, ep, opts.Platforms, setEp, opts.Append, buildkitdFlags, buildkitdConfigFile, driverOpts); err != nil {
+	node := driver.Node{
+		Name:        opts.NodeName,
+		Endpoint:    ep,
+		Platforms:   opts.Platforms,
+		EndpointSet: setEp,
+		DriverOpts:  driverOpts,
+	}
+	if err := updateNodeGroup(ctx, factory, ng, node, opts.Append, buildkitdFlags, buildkitdConfigFile); err != nil {
 		return nil, err
 	}
 

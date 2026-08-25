@@ -261,26 +261,35 @@ func findNonMobyDriver(nodes []builder.Node) *driver.DriverHandle {
 	return nil
 }
 
-// warnOnNoOutput will check if the given nodes and options would result in an output
-// and prints a warning if it would not.
-func warnOnNoOutput(ctx context.Context, nodes []builder.Node, opts map[string]Options) {
+// warnOnNoOutput checks if the prepared build requests would result in an
+// output and prints a warning if they would not.
+func warnOnNoOutput(nodes []builder.Node, opts map[string]Options, reqForNodes map[string][]*reqForNode) {
 	// Return immediately if default load is explicitly disabled or a call
 	// function is used.
 	if noDefaultLoad() || !noCallFunc(opts) {
 		return
 	}
 
-	// Find the first non-moby driver and return if it either doesn't exist
-	// or if the driver has default load enabled.
+	// Find the first non-moby driver and return if it doesn't exist.
 	noMobyDriver := findNonMobyDriver(nodes)
-	if noMobyDriver == nil || noMobyDriver.Features(ctx)[driver.DefaultLoad] {
+	if noMobyDriver == nil {
 		return
 	}
 
 	// Produce a warning describing the targets affected.
 	var noOutputTargets []string
 	for name, opt := range opts {
-		if !opt.Linked && len(opt.Exports) == 0 {
+		if opt.Linked || len(opt.Exports) > 0 {
+			continue
+		}
+		hasOutput := false
+		for _, req := range reqForNodes[name] {
+			if len(req.so.Exports) > 0 || req.so.EnableSessionExporter {
+				hasOutput = true
+				break
+			}
+		}
+		if !hasOutput {
 			noOutputTargets = append(noOutputTargets, name)
 		}
 	}
@@ -490,8 +499,6 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 	if err != nil {
 		return nil, errors.Wrapf(err, "no valid drivers found")
 	}
-	warnOnNoOutput(ctx, nodes, opts)
-
 	optPlatforms := make(map[string][]ocispecs.Platform, len(opts))
 	for k, opt := range opts {
 		optPlatforms[k] = opt.Platforms
@@ -509,6 +516,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 	defer func() {
 		release(err)
 	}()
+	warnOnNoOutput(nodes, opts, reqForNodes)
 
 	// validate that all links between targets use same drivers
 	if err := validateTargetLinks(reqForNodes, drivers, opts); err != nil {

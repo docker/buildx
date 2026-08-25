@@ -73,6 +73,11 @@ area/driver:
   - changed-files:
     - any-glob-to-any-file: 'driver/**'
 
+# Add 'area/driver/cloud' label to changes in the cloud driver
+area/driver/cloud:
+  - changed-files:
+    - any-glob-to-any-file: 'driver/cloud/**'
+
 # Add 'area/driver/docker' label to changes in the docker driver
 area/driver/docker:
   - changed-files:

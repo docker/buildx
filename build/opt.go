@@ -372,6 +372,16 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 	}
 
+	buildInfoAttrs, buildInfoAttrsSet := opt.BuildArgs["BUILDKIT_INLINE_BUILDINFO_ATTRS"]
+	var noDefaultOCIArtifact bool
+	if v, ok := os.LookupEnv(noDefaultOCIArtifactEnv); ok {
+		noDefaultOCIArtifact, err = strconv.ParseBool(v)
+		if err != nil {
+			return nil, nil, errors.Wrap(err, "invalid "+noDefaultOCIArtifactEnv)
+		}
+	}
+	noDefaultOCIArtifact = noDefaultOCIArtifact && supportAttestations
+
 	switch len(opt.Exports) {
 	case 1:
 		// valid
@@ -404,10 +414,10 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 			}
 		}
 	}
-
 	// fill in image exporter names from tags
+	var tags []string
 	if len(opt.Tags) > 0 {
-		tags := make([]string, len(opt.Tags))
+		tags = make([]string, len(opt.Tags))
 		for i, tag := range opt.Tags {
 			ref, err := reference.Parse(tag)
 			if err != nil {
@@ -431,25 +441,41 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 	}
 
+	so.Exports = slices.Clone(opt.Exports)
+	for i := range so.Exports {
+		so.Exports[i].Attrs = maps.Clone(so.Exports[i].Attrs)
+	}
+	so.Session = slices.Clone(opt.Session)
+
+	if preparer, ok := nodeDriver.Driver.(driver.BuildPreparer); ok {
+		prepareOpt := driver.PrepareBuildOptions{
+			SolveOpt:             &so,
+			Docker:               docker,
+			Tags:                 tags,
+			Platforms:            opt.Platforms,
+			MultiDriver:          multiDriver,
+			NoOutput:             opt.CallFunc != nil,
+			BuildInfoAttrs:       buildInfoAttrs,
+			BuildInfoAttrsSet:    buildInfoAttrsSet,
+			NoDefaultOCIArtifact: noDefaultOCIArtifact,
+			Progress:             pw,
+		}
+		if err := preparer.PrepareBuild(ctx, &prepareOpt); err != nil {
+			return nil, nil, errors.Wrap(err, "preparing build")
+		}
+	}
+
 	// cacheonly is a fake exporter to opt out of default behaviors
-	exports := make([]client.ExportEntry, 0, len(opt.Exports))
-	for _, e := range opt.Exports {
+	exports := make([]client.ExportEntry, 0, len(so.Exports))
+	for _, e := range so.Exports {
 		if e.Type != "cacheonly" {
 			exports = append(exports, e)
 		}
 	}
-	opt.Exports = exports
-
-	var noDefaultOCIArtifact bool
-	if v, ok := os.LookupEnv(noDefaultOCIArtifactEnv); ok {
-		noDefaultOCIArtifact, err = strconv.ParseBool(v)
-		if err != nil {
-			return nil, nil, errors.Wrap(err, "invalid "+noDefaultOCIArtifactEnv)
-		}
-	}
+	so.Exports = exports
 
 	// set up exporters
-	for i, e := range opt.Exports {
+	for i, e := range so.Exports {
 		if e.Type == "oci" && !nodeDriver.Features(ctx)[driver.OCIExporter] {
 			return nil, nil, notSupported(driver.OCIExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
 		}
@@ -458,7 +484,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 			if features[dockerutil.OCIImporter] && e.Output == nil {
 				// rely on oci importer if available (which supports
 				// multi-platform images), otherwise fall back to docker
-				opt.Exports[i].Type = "oci"
+				so.Exports[i].Type = "oci"
 			} else if len(opt.Platforms) > 1 || len(attests) > 0 {
 				if e.Output != nil {
 					return nil, nil, errors.Errorf("docker exporter does not support exporting manifest lists, use the oci exporter instead")
@@ -476,13 +502,13 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 					defers = append(defers, func(error) {
 						cancel()
 					})
-					opt.Exports[i].Output = func(_ map[string]string) (io.WriteCloser, error) {
+					so.Exports[i].Output = func(_ map[string]string) (io.WriteCloser, error) {
 						return w, nil
 					}
 					// if docker is using the containerd snapshotter, prefer to export the image digest
 					// (rather than the image config digest). See https://github.com/moby/moby/issues/45458.
 					if features[dockerutil.OCIImporter] {
-						opt.Exports[i].Attrs["prefer-image-digest"] = "true"
+						so.Exports[i].Attrs["prefer-image-digest"] = "true"
 					}
 				}
 			} else if !nodeDriver.Features(ctx)[driver.DockerExporter] {
@@ -490,10 +516,10 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 			}
 		}
 		if e.Type == "image" && nodeDriver.IsMobyDriver() {
-			opt.Exports[i].Type = "moby"
+			so.Exports[i].Type = "moby"
 			// The containerd image store resolves images by manifest or index digest.
 			if nodeDriver.Features(ctx)[driver.PreferImageDigest] {
-				opt.Exports[i].Attrs["prefer-image-digest"] = "true"
+				so.Exports[i].Attrs["prefer-image-digest"] = "true"
 			}
 			if e.Attrs["push"] != "" {
 				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
@@ -505,22 +531,19 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 		if e.Type == "docker" || e.Type == "image" || e.Type == "oci" {
 			// inline buildinfo attrs from build arg
-			if v, ok := opt.BuildArgs["BUILDKIT_INLINE_BUILDINFO_ATTRS"]; ok {
-				opt.Exports[i].Attrs["buildinfo-attrs"] = v
+			if buildInfoAttrsSet {
+				so.Exports[i].Attrs["buildinfo-attrs"] = buildInfoAttrs
 			}
 		}
-		if noDefaultOCIArtifact && supportAttestations {
-			switch opt.Exports[i].Type {
+		if noDefaultOCIArtifact {
+			switch so.Exports[i].Type {
 			case client.ExporterImage, client.ExporterOCI, "moby":
-				if _, ok := opt.Exports[i].Attrs[string(exptypes.OptKeyOCIArtifact)]; !ok {
-					opt.Exports[i].Attrs[string(exptypes.OptKeyOCIArtifact)] = "false"
+				if _, ok := so.Exports[i].Attrs[string(exptypes.OptKeyOCIArtifact)]; !ok {
+					so.Exports[i].Attrs[string(exptypes.OptKeyOCIArtifact)] = "false"
 				}
 			}
 		}
 	}
-
-	so.Exports = opt.Exports
-	so.Session = slices.Clone(opt.Session)
 
 	for k, v := range opt.BuildArgs {
 		so.FrontendAttrs["build-arg:"+k] = v
