@@ -43,7 +43,7 @@ func Dedupe(in []ocispecs.Platform) []ocispecs.Platform {
 	out := make([]ocispecs.Platform, 0, len(in))
 	for _, p := range in {
 		p := platforms.Normalize(p)
-		key := platforms.Format(p)
+		key := platforms.FormatAll(p)
 		if _, ok := m[key]; ok {
 			continue
 		}

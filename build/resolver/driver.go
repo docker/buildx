@@ -10,6 +10,7 @@ import (
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
+	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
@@ -147,17 +148,11 @@ func (r *nodeResolver) Resolve(ctx context.Context, optPlatforms map[string][]oc
 				if err != nil {
 					return errors.Wrap(err, "listing workers")
 				}
-
-				ps := make(map[string]ocispecs.Platform, len(ww))
+				var ps []ocispecs.Platform
 				for _, w := range ww {
-					for _, p := range w.Platforms {
-						pk := platforms.Format(platforms.Normalize(p))
-						ps[pk] = p
-					}
+					ps = append(ps, w.Platforms...)
 				}
-				for _, p := range ps {
-					workers[i] = append(workers[i], p)
-				}
+				workers[i] = platformutil.Dedupe(ps)
 				return nil
 			})
 		}
