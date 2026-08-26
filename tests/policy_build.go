@@ -285,7 +285,7 @@ func testBuildPolicyImageName(t *testing.T, sb integration.Sandbox) {
 	baseOut, err := baseCmd.CombinedOutput()
 	require.NoError(t, err, string(baseOut))
 
-	baseDesc, provider, err := contentutil.ProviderFromRef(baseRef)
+	baseDesc, provider, err := contentutil.ProviderFromRef(sb.Context(), baseRef)
 	require.NoError(t, err)
 	_, err = testutil.ReadImages(sb.Context(), provider, baseDesc)
 	require.NoError(t, err)
