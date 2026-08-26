@@ -13,6 +13,8 @@ import (
 	"time"
 
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/policy"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/cli/cli/command"
 	"github.com/docker/go-units"
 	controlapi "github.com/moby/buildkit/api/services/control"
@@ -356,14 +358,15 @@ func loadNodes(ctx context.Context, dockerCli command.Cli, builderName string) (
 	if err != nil {
 		return nil, err
 	}
-	nodes, err := b.LoadNodes(ctx, builder.WithData())
+	imageVerifier := policy.DefaultImageVerifier(confutil.NewConfig(dockerCli))
+	nodes, err := b.LoadNodes(ctx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
 	if err != nil {
 		return nil, err
 	}
 	if ok, err := b.Boot(ctx); err != nil {
 		return nil, err
 	} else if ok {
-		nodes, err = b.LoadNodes(ctx, builder.WithData())
+		nodes, err = b.LoadNodes(ctx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
 		if err != nil {
 			return nil, err
 		}

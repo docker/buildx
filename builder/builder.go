@@ -347,6 +347,7 @@ type CreateOpts struct {
 	Endpoint            string
 	Append              bool
 	Timeout             time.Duration
+	ImageVerifier       driver.ImageVerifier
 }
 
 func updateNodeGroup(ctx context.Context, factory driver.Factory, ng *store.NodeGroup, node driver.Node, appendNode bool, buildkitdFlags []string, buildkitdConfigFile string) error {
@@ -609,7 +610,7 @@ func Create(ctx context.Context, txn *store.Txn, dockerCli command.Cli, opts Cre
 	}
 	defer func() { cancel(errors.WithStack(context.Canceled)) }()
 
-	nodes, err := b.LoadNodes(timeoutCtx, WithData())
+	nodes, err := b.LoadNodes(timeoutCtx, WithData(), WithImageVerifier(opts.ImageVerifier))
 	if err != nil {
 		return nil, err
 	}
