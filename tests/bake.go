@@ -2275,7 +2275,7 @@ func testBakeMultiPlatform(t *testing.T, sb integration.Sandbox) {
 	if !isMobyWorker(sb) {
 		require.NoError(t, err, string(out))
 
-		desc, provider, err := contentutil.ProviderFromRef(target)
+		desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 		require.NoError(t, err)
 		imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
 		require.NoError(t, err)
@@ -2336,7 +2336,7 @@ target "default" {
 	require.NoError(t, err, string(outb))
 
 	// test registry
-	desc, provider, err := contentutil.ProviderFromRef(targetReg)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), targetReg)
 	require.NoError(t, err)
 	_, err = testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
@@ -2428,7 +2428,7 @@ target "default" {
 	require.NoError(t, err, string(outb))
 
 	// test registry
-	desc, provider, err := contentutil.ProviderFromRef(target)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 	require.NoError(t, err)
 	_, err = testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)

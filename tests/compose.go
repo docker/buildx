@@ -58,7 +58,7 @@ func testComposeBuildRegistry(t *testing.T, sb integration.Sandbox) {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 
-	desc, provider, err := contentutil.ProviderFromRef(target)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 	require.NoError(t, err)
 	_, err = testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
@@ -101,7 +101,7 @@ services:
 	if !isMobyWorker(sb) {
 		require.NoError(t, err, string(out))
 
-		desc, provider, err := contentutil.ProviderFromRef(target)
+		desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 		require.NoError(t, err)
 		imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
 		require.NoError(t, err)

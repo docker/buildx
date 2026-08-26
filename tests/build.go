@@ -585,7 +585,7 @@ func testBuildRegistryExport(t *testing.T, sb integration.Sandbox) {
 	out, err := buildCmd(sb, withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), dir))
 	require.NoError(t, err, string(out))
 
-	desc, provider, err := contentutil.ProviderFromRef(target)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 	require.NoError(t, err)
 	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
@@ -619,7 +619,7 @@ func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
 	}
 	require.NoError(t, err, string(out))
 
-	desc, provider, err := contentutil.ProviderFromRef(target)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 	require.NoError(t, err)
 	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
@@ -897,7 +897,7 @@ func testBuildAnnotations(t *testing.T, sb integration.Sandbox) {
 	out, err := buildCmd(sb, withArgs(annotations...), withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), dir))
 	require.NoError(t, err, string(out))
 
-	desc, provider, err := contentutil.ProviderFromRef(target)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 	require.NoError(t, err)
 	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
@@ -992,7 +992,7 @@ func testBuildMultiPlatform(t *testing.T, sb integration.Sandbox) {
 	if !isMobyWorker(sb) {
 		require.NoError(t, err, string(out))
 
-		desc, provider, err := contentutil.ProviderFromRef(target)
+		desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 		require.NoError(t, err)
 		imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
 		require.NoError(t, err)
@@ -1249,7 +1249,7 @@ func buildMetadataProvenanceMultiplatform(t *testing.T, sb integration.Sandbox, 
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 
-	desc, provider, err := contentutil.ProviderFromRef(target)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 	require.NoError(t, err)
 	imgs, err := testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
@@ -1378,7 +1378,7 @@ func testBuildMultiExporters(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err, string(outb))
 
 	// test registry
-	desc, provider, err := contentutil.ProviderFromRef(targetReg)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), targetReg)
 	require.NoError(t, err)
 	_, err = testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
@@ -1426,7 +1426,7 @@ func testBuildLoadPush(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err, string(outb))
 
 	// test registry
-	desc, provider, err := contentutil.ProviderFromRef(target)
+	desc, provider, err := contentutil.ProviderFromRef(sb.Context(), target)
 	require.NoError(t, err)
 	_, err = testutil.ReadImages(sb.Context(), provider, desc)
 	require.NoError(t, err)
