@@ -7,6 +7,7 @@ import (
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/util/platformutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
@@ -298,6 +299,62 @@ func TestSplitNodeMultiPlatformNoUnify(t *testing.T) {
 	require.Len(t, res, 2)
 	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 	require.Equal(t, "builder-amd64-riscv64", res[1].Node().Builder)
+}
+
+func TestSelectNodeWindowsOSVersion(t *testing.T) {
+	r := makeTestResolver(map[string][]ocispecs.Platform{
+		"builder-ltsc2019": {platforms.MustParse("windows(10.0.17763)/amd64")},
+		"builder-ltsc2022": {platforms.MustParse("windows(10.0.20348)/amd64")},
+	})
+
+	res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("windows(10.0.17763)/amd64")}, nil, platforms.Only, nil)
+	require.NoError(t, err)
+	require.True(t, perfect)
+	require.Len(t, res, 1)
+	require.Equal(t, "builder-ltsc2019", res[0].Node().Builder)
+
+	res, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("windows(10.0.20348)/amd64")}, nil, platforms.Only, nil)
+	require.NoError(t, err)
+	require.True(t, perfect)
+	require.Len(t, res, 1)
+	require.Equal(t, "builder-ltsc2022", res[0].Node().Builder)
+
+	// no node runs a release new enough for this image
+	_, perfect, err = r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse("windows(10.0.26100)/amd64")}, nil, platforms.Only, nil)
+	require.NoError(t, err)
+	require.False(t, perfect)
+}
+
+func TestSelectNodeAdditionalPlatformsOSVersion(t *testing.T) {
+	// mirrors what Resolve does with the platforms reported by the workers of a
+	// single node: entries that only differ by OS version have to survive the
+	// dedupe, otherwise only one windows release can ever be matched
+	additional := func(int, builder.Node) []ocispecs.Platform {
+		return platformutil.Dedupe([]ocispecs.Platform{
+			platforms.MustParse("windows(10.0.17763)/amd64"),
+			platforms.MustParse("windows(10.0.20348)/amd64"),
+		})
+	}
+
+	for _, tc := range []struct {
+		name     string
+		platform string
+	}{
+		{"ltsc2019", "windows(10.0.17763)/amd64"},
+		{"ltsc2022", "windows(10.0.20348)/amd64"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			r := makeTestResolver(map[string][]ocispecs.Platform{
+				"builder-win": {platforms.MustParse("linux/amd64")},
+			})
+
+			res, perfect, err := r.resolve(context.TODO(), []ocispecs.Platform{platforms.MustParse(tc.platform)}, nil, platforms.Only, additional)
+			require.NoError(t, err)
+			require.True(t, perfect)
+			require.Len(t, res, 1)
+			require.Equal(t, "builder-win", res[0].Node().Builder)
+		})
+	}
 }
 
 func makeTestResolver(nodes map[string][]ocispecs.Platform) *nodeResolver {
