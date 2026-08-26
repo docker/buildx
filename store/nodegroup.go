@@ -176,7 +176,7 @@ func (ng *NodeGroup) validateDuplicates(ep string, idx int) error {
 
 	m := map[string]struct{}{}
 	for _, p := range ng.Nodes[idx].Platforms {
-		m[platforms.Format(p)] = struct{}{}
+		m[platforms.FormatAll(platforms.Normalize(p))] = struct{}{}
 	}
 
 	for i := range ng.Nodes {
@@ -213,7 +213,7 @@ func (ng *NodeGroup) nextNodeName() string {
 func filterPlatforms(in []ocispecs.Platform, m map[string]struct{}) []ocispecs.Platform {
 	out := make([]ocispecs.Platform, 0, len(in))
 	for _, p := range in {
-		if _, ok := m[platforms.Format(p)]; !ok {
+		if _, ok := m[platforms.FormatAll(platforms.Normalize(p))]; !ok {
 			out = append(out, p)
 		}
 	}

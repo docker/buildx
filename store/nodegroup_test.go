@@ -3,7 +3,9 @@ package store
 import (
 	"testing"
 
+	"github.com/containerd/platforms"
 	"github.com/docker/buildx/util/platformutil"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
 )
 
@@ -41,4 +43,26 @@ func TestNodeGroupUpdate(t *testing.T) {
 
 	require.Equal(t, 1, len(ng.Nodes))
 	require.Equal(t, []string{"linux/arm64"}, platformutil.Format(ng.Nodes[0].Platforms))
+}
+
+func TestNodeGroupUpdateFiltersOnlyMatchingPlatforms(t *testing.T) {
+	t.Parallel()
+
+	ng := &NodeGroup{}
+	err := ng.Update("n1", "ctx-a", []string{"windows(10.0.17763)/amd64", "linux/amd64"}, true, false, nil, "", nil)
+	require.NoError(t, err)
+
+	err = ng.Update("n2", "ctx-b", []string{"windows(10.0.20348)/amd64", "linux/x86_64"}, true, true, nil, "", nil)
+	require.NoError(t, err)
+
+	require.Equal(t, []string{"windows(10.0.17763)/amd64"}, formatAll(ng.Nodes[0].Platforms))
+	require.Equal(t, []string{"windows(10.0.20348)/amd64", "linux/amd64"}, formatAll(ng.Nodes[1].Platforms))
+}
+
+func formatAll(pp []ocispecs.Platform) []string {
+	out := make([]string, 0, len(pp))
+	for _, p := range pp {
+		out = append(out, platforms.FormatAll(p))
+	}
+	return out
 }
