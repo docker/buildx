@@ -58,13 +58,11 @@ func FormatInGroups(gg ...[]ocispecs.Platform) []string {
 	out := make([]string, 0, len(gg))
 	for i, g := range gg {
 		for _, p := range g {
-			p := platforms.Normalize(p)
-			key := platforms.Format(p)
-			if _, ok := m[key]; ok {
+			v := platforms.FormatAll(platforms.Normalize(p))
+			if _, ok := m[v]; ok {
 				continue
 			}
-			m[key] = struct{}{}
-			v := platforms.Format(p)
+			m[v] = struct{}{}
 			if i == 0 {
 				v += "*"
 			}
