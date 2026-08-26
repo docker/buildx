@@ -38,12 +38,19 @@ func parse(in string) (ocispecs.Platform, error) {
 	return platforms.Parse(in)
 }
 
+// Key returns the canonical string identifying a platform. Unlike
+// [platforms.Format] it keeps the OS version and OS features so that Windows
+// platforms from different releases do not collapse into each other.
+func Key(p ocispecs.Platform) string {
+	return platforms.FormatAll(platforms.Normalize(p))
+}
+
 func Dedupe(in []ocispecs.Platform) []ocispecs.Platform {
 	m := map[string]struct{}{}
 	out := make([]ocispecs.Platform, 0, len(in))
 	for _, p := range in {
 		p := platforms.Normalize(p)
-		key := platforms.FormatAll(p)
+		key := Key(p)
 		if _, ok := m[key]; ok {
 			continue
 		}
@@ -58,7 +65,7 @@ func FormatInGroups(gg ...[]ocispecs.Platform) []string {
 	out := make([]string, 0, len(gg))
 	for i, g := range gg {
 		for _, p := range g {
-			v := platforms.FormatAll(platforms.Normalize(p))
+			v := Key(p)
 			if _, ok := m[v]; ok {
 				continue
 			}
@@ -78,7 +85,7 @@ func Format(in []ocispecs.Platform) []string {
 	}
 	out := make([]string, 0, len(in))
 	for _, p := range in {
-		out = append(out, platforms.Format(p))
+		out = append(out, Key(p))
 	}
 	return out
 }

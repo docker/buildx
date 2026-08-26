@@ -6,7 +6,6 @@ import (
 	"sort"
 	"strings"
 
-	"github.com/containerd/platforms"
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/store/storeutil"
@@ -218,10 +217,7 @@ func (n *Node) MarshalJSON() ([]byte, error) {
 		status = "error"
 		nerr = strings.TrimSpace(n.Err.Error())
 	}
-	var pp []string
-	for _, p := range n.Platforms {
-		pp = append(pp, platforms.Format(p))
-	}
+	pp := platformutil.Format(n.Platforms)
 	return json.Marshal(struct {
 		Name           string
 		Endpoint       string

@@ -6,7 +6,6 @@ import (
 	"slices"
 	"time"
 
-	"github.com/containerd/platforms"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/platformutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -176,7 +175,7 @@ func (ng *NodeGroup) validateDuplicates(ep string, idx int) error {
 
 	m := map[string]struct{}{}
 	for _, p := range ng.Nodes[idx].Platforms {
-		m[platforms.FormatAll(platforms.Normalize(p))] = struct{}{}
+		m[platformutil.Key(p)] = struct{}{}
 	}
 
 	for i := range ng.Nodes {
@@ -213,7 +212,7 @@ func (ng *NodeGroup) nextNodeName() string {
 func filterPlatforms(in []ocispecs.Platform, m map[string]struct{}) []ocispecs.Platform {
 	out := make([]ocispecs.Platform, 0, len(in))
 	for _, p := range in {
-		if _, ok := m[platforms.FormatAll(platforms.Normalize(p))]; !ok {
+		if _, ok := m[platformutil.Key(p)]; !ok {
 			out = append(out, p)
 		}
 	}

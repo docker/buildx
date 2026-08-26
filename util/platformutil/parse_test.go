@@ -25,7 +25,7 @@ func TestDedupePreservesOSVersionAndFeatures(t *testing.T) {
 		"windows(10.0.20348)/amd64",
 		"windows(10.0.20348+win32k)/amd64",
 		"linux/amd64",
-	}, formatAll(got))
+	}, Format(got))
 }
 
 func TestFormatInGroupsPreservesOSVersionAndFeatures(t *testing.T) {
@@ -52,10 +52,20 @@ func TestFormatInGroupsPreservesOSVersionAndFeatures(t *testing.T) {
 	}, got)
 }
 
-func formatAll(pp []ocispecs.Platform) []string {
-	out := make([]string, 0, len(pp))
-	for _, p := range pp {
-		out = append(out, platforms.FormatAll(p))
-	}
-	return out
+func TestFormatPreservesOSVersionAndFeatures(t *testing.T) {
+	t.Parallel()
+
+	require.Equal(t, []string{
+		"windows(10.0.17763)/amd64",
+		"windows(10.0.20348+win32k)/amd64",
+		"linux/amd64",
+		"linux/arm/v7",
+	}, Format([]ocispecs.Platform{
+		platforms.MustParse("windows(10.0.17763)/amd64"),
+		platforms.MustParse("windows(10.0.20348+win32k)/amd64"),
+		platforms.MustParse("linux/x86_64"),
+		platforms.MustParse("linux/arm/v7"),
+	}))
+
+	require.Nil(t, Format(nil))
 }
