@@ -20,7 +20,7 @@ require (
 	github.com/docker/cli-docs-tool v0.11.0
 	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
-	github.com/gofrs/flock v0.13.0
+	github.com/gofrs/flock v0.13.1
 	github.com/golang/snappy v1.0.0
 	github.com/google/go-dap v0.12.1-0.20250904181021-d7a2259b058b
 	github.com/google/shlex v0.0.0-20191202100458-e7afc7fbc510
