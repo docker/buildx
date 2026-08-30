@@ -26,6 +26,7 @@ import (
 	"github.com/docker/buildx/store/storeutil"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/cobrautil"
+	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/desktop"
 	"github.com/docker/buildx/util/dockerutil"
@@ -585,6 +586,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
+	cmd.RegisterFlagCompletionFunc("platform", completion.Platforms()) //nolint:errcheck
 
 	flags.StringArrayVar(&options.policy, "policy", []string{}, `Policy configuration (format: "filename=path[,filename=path][,reset=true|false][,disabled=true|false][,strict=true|false][,log-level=level]")`)
 
