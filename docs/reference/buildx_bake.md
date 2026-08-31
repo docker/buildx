@@ -22,6 +22,7 @@ Build from a file
 | `-D`, `--debug`                     | `bool`        |             | Enable debug logging                                                                                                  |
 | `--execution`                       | `string`      | `fail-fast` | Set target execution behavior (`fail-fast`, `sync-output`, `defer-error`)                                             |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |             | Build definition file                                                                                                 |
+| `-j`, `--jobs`                     | `int`         | `0`         | Maximum number of concurrent targets (0 for unlimited)                                                                |
 | [`--list`](#list)                   | `string`      |             | List targets or variables                                                                                             |
 | [`--load`](#load)                   | `bool`        |             | Shorthand for `--set=*.output=type=docker`. Conditional.                                                              |
 | [`--metadata-file`](#metadata-file) | `string`      |             | Write build result metadata to a file                                                                                 |

@@ -70,6 +70,7 @@ type bakeOptions struct {
 	exportLoad   bool
 	callFunc     string
 	execution    string
+	jobs         int
 
 	print bool
 	list  string
@@ -363,7 +364,8 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	execution := build.Execution{
-		Mode: build.ExecutionMode(strings.TrimSpace(in.execution)),
+		Mode:     build.ExecutionMode(strings.TrimSpace(in.execution)),
+		Parallel: in.jobs,
 	}
 	switch execution.Mode {
 	case "", build.ExecutionModeFailFast:
@@ -375,7 +377,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 
 	done := timeBuildCommand(mp, attributes)
 	var bh *build.Handler
-	if execution.Mode != build.ExecutionModeFailFast {
+	if execution.Mode != build.ExecutionModeFailFast || execution.Parallel > 0 {
 		bh = &build.Handler{
 			Execution: execution,
 		}
@@ -538,6 +540,9 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Aliases: []string{"f"},
 		Short:   "Build from a file",
 		RunE: func(cmd *cobra.Command, args []string) error {
+			if options.jobs < 0 {
+				return errors.New("jobs must be non-negative")
+			}
 			filesFromEnv := false
 			if len(options.files) == 0 {
 				if envFiles, err := bakeEnvFiles(os.LookupEnv); err != nil {
@@ -582,7 +587,8 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.vars, "var", nil, `Set a variable value (e.g., "name=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
-	flags.StringVar(&options.execution, "execution", "fail-fast", `Set target execution behavior ("fail-fast", "defer-output", "defer-error")`)
+	flags.StringVar(&options.execution, "execution", "fail-fast", `Set target execution mode ("fail-fast", "defer-output", "defer-error")`)
+	flags.IntVarP(&options.jobs, "jobs", "j", 0, "Maximum number of concurrent targets (0 for unlimited)")
 
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
