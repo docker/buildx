@@ -6,6 +6,7 @@ import (
 	_ "crypto/sha256" // ensure digests can be computed
 	"encoding/base64"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"maps"
@@ -433,9 +434,14 @@ func toRepoOnly(in string) (string, error) {
 }
 
 type (
+	ExecutionMode string
+	Execution     struct {
+		Mode ExecutionMode
+	}
 	EvaluateFunc func(ctx context.Context, name string, c gateway.Client, res *gateway.Result, opt Options) error
 	Handler      struct {
-		Evaluate EvaluateFunc
+		Evaluate  EvaluateFunc
+		Execution Execution
 	}
 	linkedTargetState struct {
 		results   *waitmap.Map
@@ -444,6 +450,21 @@ type (
 		parents   map[string][]string
 		children  map[string][]string
 	}
+	linkedTargetHooks struct {
+		preEvaluate  func() error
+		evaluate     func() error
+		postEvaluate func() error
+	}
+	syncTargetState struct {
+		targets   []string
+		results   *waitmap.Map
+		evaluated *waitmap.Map
+	}
+)
+
+const (
+	ExecutionModeFailFast   ExecutionMode = "fail-fast"
+	ExecutionModeSyncOutput ExecutionMode = "sync-output"
 )
 
 func newLinkedTargetState(parents, children map[string][]string) *linkedTargetState {
@@ -460,40 +481,125 @@ func (s *linkedTargetState) isLinked(key string) bool {
 	return len(s.parents[key]) > 0 || len(s.children[key]) > 0
 }
 
-func (s *linkedTargetState) run(ctx context.Context, key string, result any, evaluate func() error) error {
+func (s *linkedTargetState) fail(key string, err error) {
+	s.results.Set(key, err)
+	s.evaluated.Set(key, err)
+	s.completed.Set(key, err)
+}
+
+func (s *linkedTargetState) run(ctx context.Context, key string, result any, hooks linkedTargetHooks) error {
 	// Registration flows from parents to children. Waiting for every direct child
 	// here preserves external-cache lookup before evaluation begins.
 	s.results.Set(key, result)
 	children := s.children[key]
-	if _, err := s.results.Get(ctx, children...); err != nil {
+	if res, err := s.results.Get(ctx, children...); err != nil {
 		return err
+	} else if err := wrapResultError(res, "aborted: dependent target failed"); err != nil {
+		return err
+	}
+	if hooks.preEvaluate != nil {
+		if err := hooks.preEvaluate(); err != nil {
+			return err
+		}
 	}
 	// Evaluation follows dependency order so the target's own session is attached
 	// to shared solver vertices before a dependent can evaluate them.
-	if _, err := s.evaluated.Get(ctx, s.parents[key]...); err != nil {
+	if res, err := s.evaluated.Get(ctx, s.parents[key]...); err != nil {
+		return err
+	} else if err := wrapResultError(res, "aborted: dependency target failed"); err != nil {
 		return err
 	}
-	if err := evaluate(); err != nil {
+	if err := hooks.evaluate(); err != nil {
 		return err
 	}
 	s.evaluated.Set(key, struct{}{})
+	if hooks.postEvaluate != nil {
+		if err := hooks.postEvaluate(); err != nil {
+			return err
+		}
+	}
 	// Completion flows back from children to parents, retaining each parent job
 	// and its session until every dependent has finished evaluating.
-	if _, err := s.completed.Get(ctx, children...); err != nil {
+	if res, err := s.completed.Get(ctx, children...); err != nil {
+		return err
+	} else if err := wrapResultError(res, "aborted: dependent target failed"); err != nil {
 		return err
 	}
 	s.completed.Set(key, struct{}{})
 	return nil
 }
 
-func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer) (resp map[string]*client.SolveResponse, err error) {
-	return BuildWithResultHandler(ctx, nodes, opts, docker, cfg, w, nil)
+func resultError(results map[string]any) error {
+	for _, key := range slices.Sorted(maps.Keys(results)) {
+		result := results[key]
+		if err, ok := result.(error); ok {
+			return err
+		}
+	}
+	return nil
 }
 
-func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, bh *Handler) (resp map[string]*client.SolveResponse, err error) {
+type targetAbortError struct{ error }
+
+func (e targetAbortError) Unwrap() error {
+	return e.error
+}
+
+func wrapResultError(results map[string]any, msg string) error {
+	if err := resultError(results); err != nil {
+		var abortErr targetAbortError
+		if stderrors.As(err, &abortErr) {
+			return err
+		}
+		return targetAbortError{errors.Wrap(err, msg)}
+	}
+	return nil
+}
+
+func newSyncTargetState(opts map[string]Options, drivers map[string][]*noderesolver.ResolvedNode) *syncTargetState {
+	targets := make([]string, 0, len(opts))
+	for k := range opts {
+		for _, dp := range drivers[k] {
+			targets = append(targets, resultKey(dp, k))
+		}
+	}
+	return &syncTargetState{
+		targets:   targets,
+		results:   waitmap.New(),
+		evaluated: waitmap.New(),
+	}
+}
+
+func (s *syncTargetState) fail(key string, err error) {
+	s.results.Set(key, err)
+	s.evaluated.Set(key, err)
+}
+
+func (s *syncTargetState) waitResult(ctx context.Context, key string, result any) error {
+	s.results.Set(key, result)
+	results, err := s.results.Get(ctx, s.targets...)
+	if err != nil {
+		return err
+	}
+	return wrapResultError(results, "aborted: another target failed")
+}
+
+func (s *syncTargetState) waitEvaluated(ctx context.Context, key string, result any) error {
+	s.evaluated.Set(key, result)
+	results, err := s.evaluated.Get(ctx, s.targets...)
+	if err != nil {
+		return err
+	}
+	return wrapResultError(results, "aborted: another target failed")
+}
+
+func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, bh *Handler) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
 	}
+
+	ctx, cancel := context.WithCancelCause(ctx)
+	defer func() { cancel(err) }()
 
 	nodes, err = filterAvailableNodes(nodes)
 	if err != nil {
@@ -538,8 +644,16 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 	// loop below, before any goroutines are spawned; no mutex needed.
 	linkedClients := make(map[string]*client.Client)
 
+	var syncState *syncTargetState
+	if bh != nil && bh.Execution.Mode == ExecutionModeSyncOutput {
+		// Sync waits for every solve result before any ref evaluation starts and
+		// every ref evaluation before exporters can run, so output is only written
+		// after all targets have reached the output boundary successfully.
+		syncState = newSyncTargetState(opts, drivers)
+	}
+
 	for k, opt := range opts {
-		err := func(k string) (err error) {
+		err = func(k string) (err error) {
 			dps := drivers[k]
 			multiDriver := len(drivers[k]) > 1
 
@@ -638,7 +752,15 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					done = wg.Done
 				}
 
-				eg2.Go(func() error {
+				eg2.Go(func() (err error) {
+					defer func() {
+						if err != nil {
+							if syncState != nil {
+								syncState.fail(rKey, err)
+							}
+							linkedTargets.fail(rKey, err)
+						}
+					}()
 					if done != nil {
 						defer done()
 					}
@@ -674,7 +796,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 						callRes     map[string][]byte
 						frontendErr error
 					)
-					buildFunc := func(ctx context.Context, c gateway.Client) (_ *gateway.Result, retErr error) {
+					buildFunc := func(solveCtx context.Context, c gateway.Client) (_ *gateway.Result, retErr error) {
 						// Capture the error from this build function.
 						defer catchFrontendError(&retErr, &frontendErr)
 
@@ -687,7 +809,7 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							req.FrontendOpt["requestid"] = "frontend." + opt.CallFunc.Name
 						}
 
-						res, err := solve(ctx, c, req)
+						res, err := solve(solveCtx, c, req)
 						if err != nil {
 							return nil, err
 						}
@@ -696,17 +818,33 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 							callRes = res.Metadata
 						}
 
-						if err := linkedTargets.run(ctx, rKey, res, func() error {
-							// invoke custom evaluate handler if it is present
-							if bh != nil && bh.Evaluate != nil {
-								return bh.Evaluate(ctx, k, c, res, opt)
+						var preEvaluate func() error
+						if syncState != nil {
+							preEvaluate = func() error {
+								return syncState.waitResult(ctx, rKey, res)
 							}
-							if linkedTargets.isLinked(rKey) {
-								return eachRefParallel(ctx, res, func(ctx context.Context, ref gateway.Reference) error {
-									return ref.Evaluate(ctx)
-								})
+						}
+						var postEvaluate func() error
+						if syncState != nil {
+							postEvaluate = func() error {
+								return syncState.waitEvaluated(ctx, rKey, struct{}{})
 							}
-							return nil
+						}
+						if err := linkedTargets.run(ctx, rKey, res, linkedTargetHooks{
+							preEvaluate: preEvaluate,
+							evaluate: func() error {
+								// invoke custom evaluate handler if it is present
+								if bh != nil && bh.Evaluate != nil {
+									return bh.Evaluate(solveCtx, k, c, res, opt)
+								}
+								if syncState != nil || linkedTargets.isLinked(rKey) {
+									return eachRefParallel(solveCtx, res, func(ctx context.Context, ref gateway.Reference) error {
+										return ref.Evaluate(ctx)
+									})
+								}
+								return nil
+							},
+							postEvaluate: postEvaluate,
 						}); err != nil {
 							return nil, err
 						}
@@ -934,15 +1072,15 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 			return nil
 		}(k)
 		if err != nil {
-			return nil, err
+			cancel(err)
+			break
 		}
 	}
 
-	if err := eg.Wait(); err != nil {
-		return nil, err
+	if waitErr := eg.Wait(); err == nil {
+		err = waitErr
 	}
-
-	return resp, nil
+	return resp, err
 }
 
 func extractIndexAnnotations(exports []client.ExportEntry) (map[exptypes.AnnotationKey]string, error) {

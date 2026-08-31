@@ -46,6 +46,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
 	testBakeLocalMulti,
+	testBakeSyncOutput,
 	testBakeFileRelativePaths,
 	testBakeLocalExportDeleteMode,
 	testBakeRemote,
@@ -722,6 +723,46 @@ services:
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest2, "foo"))
+}
+
+func testBakeSyncOutput(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM scratch
+COPY foo /foo
+`))
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=sync-output"))
+	require.Error(t, err, out)
+	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
+}
+
+func bakeExecutionFailureDir(t *testing.T, dockerfile []byte) string {
+	failureDockerfile := []byte(`
+FROM scratch
+COPY missing /missing
+`)
+	bakefile := []byte(`
+group "default" {
+  targets = ["success", "failure"]
+}
+
+target "success" {
+  dockerfile = "Dockerfile"
+  output = ["type=local,dest=out"]
+}
+
+target "failure" {
+  dockerfile = "failure.Dockerfile"
+  output = ["type=cacheonly"]
+}
+`)
+	return tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("failure.Dockerfile", failureDockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
 }
 
 func testBakeFileRelativePaths(t *testing.T, sb integration.Sandbox) {

@@ -68,6 +68,7 @@ type bakeOptions struct {
 	exportPush   bool
 	exportLoad   bool
 	callFunc     string
+	execution    string
 
 	print bool
 	list  string
@@ -360,8 +361,25 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
+	execution := build.Execution{
+		Mode: build.ExecutionMode(strings.TrimSpace(in.execution)),
+	}
+	switch execution.Mode {
+	case "", build.ExecutionModeFailFast:
+		execution.Mode = build.ExecutionModeFailFast
+	case build.ExecutionModeSyncOutput:
+	default:
+		return errors.Errorf("invalid execution mode %q", in.execution)
+	}
+
 	done := timeBuildCommand(mp, attributes)
-	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), printer)
+	var bh *build.Handler
+	if execution.Mode == build.ExecutionModeSyncOutput {
+		bh = &build.Handler{
+			Execution: execution,
+		}
+	}
+	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), printer, bh)
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
@@ -561,6 +579,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.vars, "var", nil, `Set a variable value (e.g., "name=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
+	flags.StringVar(&options.execution, "execution", "fail-fast", `Set target execution behavior ("fail-fast", "sync-output")`)
 
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
