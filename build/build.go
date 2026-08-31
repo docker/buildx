@@ -465,6 +465,7 @@ type (
 const (
 	ExecutionModeFailFast   ExecutionMode = "fail-fast"
 	ExecutionModeSyncOutput ExecutionMode = "sync-output"
+	ExecutionModeDeferError ExecutionMode = "defer-error"
 )
 
 func newLinkedTargetState(parents, children map[string][]string) *linkedTargetState {
@@ -614,7 +615,12 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 		return nil, err
 	}
 
-	eg, ctx := errgroup.WithContext(ctx)
+	var eg *errgroup.Group
+	if bh != nil && bh.Execution.Mode == ExecutionModeDeferError {
+		eg = &errgroup.Group{}
+	} else {
+		eg, ctx = errgroup.WithContext(ctx)
+	}
 	reqForNodes, release, err := newBuildRequests(ctx, docker, cfg, drivers, w, opts)
 	if err != nil {
 		return nil, err
@@ -1381,9 +1387,12 @@ func waitContextDeps(ctx context.Context, node *noderesolver.ResolvedNode, resul
 		if !ok {
 			continue
 		}
+		if err, ok := r.(error); ok {
+			return err
+		}
 		rr, ok := r.(*gateway.Result)
 		if !ok {
-			return errors.Errorf("invalid result type %T", rr)
+			return errors.Errorf("invalid result type %T", r)
 		}
 		if so.FrontendAttrs == nil {
 			so.FrontendAttrs = map[string]string{}

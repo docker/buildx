@@ -47,6 +47,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeLocal,
 	testBakeLocalMulti,
 	testBakeSyncOutput,
+	testBakeFailFast,
+	testBakeDeferError,
 	testBakeFileRelativePaths,
 	testBakeLocalExportDeleteMode,
 	testBakeRemote,
@@ -734,6 +736,40 @@ COPY foo /foo
 	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=sync-output"))
 	require.Error(t, err, out)
 	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
+}
+
+func testBakeFailFast(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM busybox
+RUN sleep 2
+COPY foo /foo
+`))
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=fail-fast"))
+	require.Error(t, err, out)
+	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
+}
+
+func testBakeDeferError(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM busybox
+RUN sleep 2
+COPY foo /foo
+`))
+
+	metadataFile := filepath.Join(dir, "metadata.json")
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--metadata-file", metadataFile))
+	require.Error(t, err, out)
+	require.FileExists(t, filepath.Join(dir, "out", "foo"))
+	require.FileExists(t, metadataFile)
+
+	dt, err := os.ReadFile(metadataFile)
+	require.NoError(t, err)
+
+	var metadata map[string]any
+	require.NoError(t, json.Unmarshal(dt, &metadata))
+	require.Contains(t, metadata, "a-success")
+	require.NotContains(t, metadata, "b-failure")
 }
 
 func bakeExecutionFailureDir(t *testing.T, dockerfile []byte) string {

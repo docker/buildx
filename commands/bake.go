@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -367,14 +368,14 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	switch execution.Mode {
 	case "", build.ExecutionModeFailFast:
 		execution.Mode = build.ExecutionModeFailFast
-	case build.ExecutionModeSyncOutput:
+	case build.ExecutionModeSyncOutput, build.ExecutionModeDeferError:
 	default:
 		return errors.Errorf("invalid execution mode %q", in.execution)
 	}
 
 	done := timeBuildCommand(mp, attributes)
 	var bh *build.Handler
-	if execution.Mode == build.ExecutionModeSyncOutput {
+	if execution.Mode != build.ExecutionModeFailFast {
 		bh = &build.Handler{
 			Execution: execution,
 		}
@@ -388,14 +389,10 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 	done(err)
 
-	if err != nil {
-		return err
-	}
-
-	if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
+	if err == nil && progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
-	if len(in.metadataFile) > 0 {
+	if len(in.metadataFile) > 0 && (err == nil || execution.Mode == build.ExecutionModeDeferError) {
 		dt := make(map[string]any)
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
@@ -405,9 +402,15 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 				dt["buildx.build.warnings"] = warnings
 			}
 		}
-		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
-			return err
+		if metaErr := writeMetadataFile(in.metadataFile, dt); metaErr != nil {
+			if err != nil {
+				return stderrors.Join(err, metaErr)
+			}
+			return metaErr
 		}
+	}
+	if err != nil {
+		return err
 	}
 
 	var callFormatJSON bool
@@ -579,7 +582,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.vars, "var", nil, `Set a variable value (e.g., "name=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
-	flags.StringVar(&options.execution, "execution", "fail-fast", `Set target execution behavior ("fail-fast", "sync-output")`)
+	flags.StringVar(&options.execution, "execution", "fail-fast", `Set target execution behavior ("fail-fast", "sync-output", "defer-error")`)
 
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
