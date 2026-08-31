@@ -436,7 +436,8 @@ func toRepoOnly(in string) (string, error) {
 type (
 	ExecutionMode string
 	Execution     struct {
-		Mode ExecutionMode
+		Mode     ExecutionMode
+		Parallel int
 	}
 	EvaluateFunc func(ctx context.Context, name string, c gateway.Client, res *gateway.Result, opt Options) error
 	Handler      struct {
@@ -480,6 +481,10 @@ func newLinkedTargetState(parents, children map[string][]string) *linkedTargetSt
 
 func (s *linkedTargetState) isLinked(key string) bool {
 	return len(s.parents[key]) > 0 || len(s.children[key]) > 0
+}
+
+func (s *linkedTargetState) hasLinks() bool {
+	return len(s.parents) > 0 || len(s.children) > 0
 }
 
 func (s *linkedTargetState) fail(key string, err error) {
@@ -640,6 +645,14 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 		return nil, err
 	}
 	sharedSessionsWG := map[string]*sync.WaitGroup{}
+	var sharedSessionHolds []func()
+	releaseSharedSessionHolds := func() {
+		for _, release := range sharedSessionHolds {
+			release()
+		}
+		sharedSessionHolds = nil
+	}
+	defer releaseSharedSessionHolds()
 
 	resp = map[string]*client.SolveResponse{}
 	var respMu sync.Mutex
@@ -652,13 +665,26 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 
 	var syncState *syncTargetState
 	if bh != nil && bh.Execution.Mode == ExecutionModeSyncOutput {
+		if bh.Execution.Parallel > 0 && bh.Execution.Parallel < len(opts) {
+			return nil, errors.Errorf("sync-output execution requires parallelism to be unlimited or at least the number of targets, including targets referenced by target contexts")
+		}
 		// Sync waits for every solve result before any ref evaluation starts and
 		// every ref evaluation before exporters can run, so output is only written
 		// after all targets have reached the output boundary successfully.
 		syncState = newSyncTargetState(opts, drivers)
 	}
 
-	for k, opt := range opts {
+	var targetLimit chan struct{}
+	if bh != nil && bh.Execution.Parallel > 0 {
+		if bh.Execution.Parallel < len(opts) && linkedTargets.hasLinks() {
+			return nil, errors.Errorf("limited parallelism is not supported with linked targets")
+		}
+		targetLimit = make(chan struct{}, bh.Execution.Parallel)
+	}
+
+	targets := slices.Sorted(maps.Keys(opts))
+	for _, k := range targets {
+		opt := opts[k]
 		err = func(k string) (err error) {
 			dps := drivers[k]
 			multiDriver := len(drivers[k]) > 1
@@ -678,6 +704,20 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 
 			res := make([]*client.SolveResponse, len(dps))
 			eg2, ctx := errgroup.WithContext(ctx)
+			var releaseTarget func()
+			if targetLimit != nil {
+				select {
+				case targetLimit <- struct{}{}:
+					releaseTarget = func() { <-targetLimit }
+					defer func() {
+						if err != nil {
+							releaseTarget()
+						}
+					}()
+				case <-ctx.Done():
+					return context.Cause(ctx)
+				}
+			}
 
 			var pushNames string
 			var insecurePush bool
@@ -741,6 +781,8 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 						wg.Add(1)
 					} else {
 						wg = &sync.WaitGroup{}
+						wg.Add(1)
+						sharedSessionHolds = append(sharedSessionHolds, wg.Done)
 						wg.Add(1)
 						sharedSessionsWG[node.Name] = wg
 						for _, s := range sessions {
@@ -824,18 +866,16 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 							callRes = res.Metadata
 						}
 
-						var preEvaluate func() error
+						var preEvaluate, postEvaluate func() error
 						if syncState != nil {
 							preEvaluate = func() error {
 								return syncState.waitResult(ctx, rKey, res)
 							}
-						}
-						var postEvaluate func() error
-						if syncState != nil {
 							postEvaluate = func() error {
 								return syncState.waitEvaluated(ctx, rKey, struct{}{})
 							}
 						}
+
 						if err := linkedTargets.run(ctx, rKey, res, linkedTargetHooks{
 							preEvaluate: preEvaluate,
 							evaluate: func() error {
@@ -943,6 +983,9 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 
 			eg.Go(func() (err error) {
 				ctx := baseCtx
+				if releaseTarget != nil {
+					defer releaseTarget()
+				}
 				defer func() {
 					if span != nil {
 						tracing.FinishWithError(span, err)
@@ -1082,6 +1125,8 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 			break
 		}
 	}
+
+	releaseSharedSessionHolds()
 
 	if waitErr := eg.Wait(); err == nil {
 		err = waitErr

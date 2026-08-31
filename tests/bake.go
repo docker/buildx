@@ -49,6 +49,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeSyncOutput,
 	testBakeFailFast,
 	testBakeDeferError,
+	testBakeParallel,
 	testBakeFileRelativePaths,
 	testBakeLocalExportDeleteMode,
 	testBakeRemote,
@@ -735,7 +736,14 @@ COPY foo /foo
 
 	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=sync-output"))
 	require.Error(t, err, out)
+	require.Contains(t, out, "b-failure")
 	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
+
+	dir = bakeExecutionSuccessDir(t)
+	out, err = bakeCmd(sb, withDir(dir), withArgs("--execution=sync-output"))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dir, "out", "a", "foo"))
+	require.FileExists(t, filepath.Join(dir, "out", "b", "foo"))
 }
 
 func testBakeFailFast(t *testing.T, sb integration.Sandbox) {
@@ -747,6 +755,7 @@ COPY foo /foo
 
 	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=fail-fast"))
 	require.Error(t, err, out)
+	require.Contains(t, out, "b-failure")
 	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
 }
 
@@ -760,6 +769,7 @@ COPY foo /foo
 	metadataFile := filepath.Join(dir, "metadata.json")
 	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--metadata-file", metadataFile))
 	require.Error(t, err, out)
+	require.Contains(t, out, "b-failure")
 	require.FileExists(t, filepath.Join(dir, "out", "foo"))
 	require.FileExists(t, metadataFile)
 
@@ -772,6 +782,50 @@ COPY foo /foo
 	require.NotContains(t, metadata, "b-failure")
 }
 
+func testBakeParallel(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM scratch
+COPY foo /foo
+`))
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error,parallel=1"))
+	require.Error(t, err, out)
+	require.FileExists(t, filepath.Join(dir, "out", "foo"))
+
+	dir = bakeExecutionSuccessDir(t)
+
+	out, err = bakeCmd(sb, withDir(dir), withArgs("--execution=parallel=1"))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dir, "out", "a", "foo"))
+	require.FileExists(t, filepath.Join(dir, "out", "b", "foo"))
+}
+
+func bakeExecutionSuccessDir(t *testing.T) string {
+	return tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", []byte(`
+group "default" {
+  targets = ["a", "b"]
+}
+
+target "a" {
+  dockerfile = "Dockerfile"
+  output = ["type=local,dest=out/a"]
+}
+
+target "b" {
+  dockerfile = "Dockerfile"
+  output = ["type=local,dest=out/b"]
+}
+`), 0600),
+		fstest.CreateFile("Dockerfile", []byte(`
+FROM scratch
+COPY foo /foo
+`), 0600),
+		fstest.CreateFile("foo", []byte("bar"), 0600),
+	)
+}
+
 func bakeExecutionFailureDir(t *testing.T, dockerfile []byte) string {
 	failureDockerfile := []byte(`
 FROM scratch
@@ -779,15 +833,15 @@ COPY missing /missing
 `)
 	bakefile := []byte(`
 group "default" {
-  targets = ["success", "failure"]
+  targets = ["a-success", "b-failure"]
 }
 
-target "success" {
+target "a-success" {
   dockerfile = "Dockerfile"
   output = ["type=local,dest=out"]
 }
 
-target "failure" {
+target "b-failure" {
   dockerfile = "failure.Dockerfile"
   output = ["type=cacheonly"]
 }

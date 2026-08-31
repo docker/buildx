@@ -20,7 +20,7 @@ Build from a file
 | [`--call`](#call)                   | `string`      | `build`     | Set method for evaluating build (`check`, `outline`, `targets`)                                                       |
 | [`--check`](#check)                 | `bool`        |             | Shorthand for `--call=check`                                                                                          |
 | `-D`, `--debug`                     | `bool`        |             | Enable debug logging                                                                                                  |
-| `--execution`                       | `string`      | `fail-fast` | Set target execution behavior (`fail-fast`, `sync-output`, `defer-error`)                                             |
+| `--execution`                       | `string`      | `fail-fast` | Set target execution behavior (format: `mode[,parallel=N]`)                                                           |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |             | Build definition file                                                                                                 |
 | [`--list`](#list)                   | `string`      |             | List targets or variables                                                                                             |
 | [`--load`](#load)                   | `bool`        |             | Shorthand for `--set=*.output=type=docker`. Conditional.                                                              |
