@@ -13,27 +13,28 @@ Build from a file
 
 ### Options
 
-| Name                                | Type          | Default | Description                                                                                                           |
-|:------------------------------------|:--------------|:--------|:----------------------------------------------------------------------------------------------------------------------|
-| [`--allow`](#allow)                 | `stringArray` |         | Allow build to access specified resources                                                                             |
-| [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                                              |
-| [`--call`](#call)                   | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                                       |
-| [`--check`](#check)                 | `bool`        |         | Shorthand for `--call=check`                                                                                          |
-| `-D`, `--debug`                     | `bool`        |         | Enable debug logging                                                                                                  |
-| [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                                                 |
-| [`--list`](#list)                   | `string`      |         | List targets or variables                                                                                             |
-| [`--load`](#load)                   | `bool`        |         | Shorthand for `--set=*.output=type=docker`. Conditional.                                                              |
-| [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                                                 |
-| [`--no-cache`](#no-cache)           | `bool`        |         | Do not use cache when building the image                                                                              |
-| `--policy`                          | `stringArray` |         | Global policy evaluation options (format: `[disabled=true\|false][,strict=true\|false][,log-level=level]`)            |
-| [`--print`](#print)                 | `bool`        |         | Print the options without building                                                                                    |
-| [`--progress`](#progress)           | `string`      | `auto`  | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output |
-| [`--provenance`](#provenance)       | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                                                        |
-| [`--pull`](#pull)                   | `bool`        |         | Always attempt to pull all referenced images                                                                          |
-| [`--push`](#push)                   | `bool`        |         | Shorthand for `--set=*.output=type=registry`. Conditional.                                                            |
-| [`--sbom`](#sbom)                   | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                                              |
-| [`--set`](#set)                     | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                                               |
-| `--var`                             | `stringArray` |         | Set a variable value (e.g., `name=value`)                                                                             |
+| Name                                | Type          | Default     | Description                                                                                                           |
+|:------------------------------------|:--------------|:------------|:----------------------------------------------------------------------------------------------------------------------|
+| [`--allow`](#allow)                 | `stringArray` |             | Allow build to access specified resources                                                                             |
+| [`--builder`](#builder)             | `string`      |             | Override the configured builder instance                                                                              |
+| [`--call`](#call)                   | `string`      | `build`     | Set method for evaluating build (`check`, `outline`, `targets`)                                                       |
+| [`--check`](#check)                 | `bool`        |             | Shorthand for `--call=check`                                                                                          |
+| `-D`, `--debug`                     | `bool`        |             | Enable debug logging                                                                                                  |
+| `--execution`                       | `string`      | `fail-fast` | Set target execution behavior (`fail-fast`, `sync-output`)                                                            |
+| [`-f`](#file), [`--file`](#file)    | `stringArray` |             | Build definition file                                                                                                 |
+| [`--list`](#list)                   | `string`      |             | List targets or variables                                                                                             |
+| [`--load`](#load)                   | `bool`        |             | Shorthand for `--set=*.output=type=docker`. Conditional.                                                              |
+| [`--metadata-file`](#metadata-file) | `string`      |             | Write build result metadata to a file                                                                                 |
+| [`--no-cache`](#no-cache)           | `bool`        |             | Do not use cache when building the image                                                                              |
+| `--policy`                          | `stringArray` |             | Global policy evaluation options (format: `[disabled=true\|false][,strict=true\|false][,log-level=level]`)            |
+| [`--print`](#print)                 | `bool`        |             | Print the options without building                                                                                    |
+| [`--progress`](#progress)           | `string`      | `auto`      | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output |
+| [`--provenance`](#provenance)       | `string`      |             | Shorthand for `--set=*.attest=type=provenance`                                                                        |
+| [`--pull`](#pull)                   | `bool`        |             | Always attempt to pull all referenced images                                                                          |
+| [`--push`](#push)                   | `bool`        |             | Shorthand for `--set=*.output=type=registry`. Conditional.                                                            |
+| [`--sbom`](#sbom)                   | `string`      |             | Shorthand for `--set=*.attest=type=sbom`                                                                              |
+| [`--set`](#set)                     | `stringArray` |             | Override target value (e.g., `targetpattern.key=value`)                                                               |
+| `--var`                             | `stringArray` |             | Set a variable value (e.g., `name=value`)                                                                             |
 
 
 <!---MARKER_GEN_END-->
