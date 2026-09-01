@@ -35,8 +35,9 @@ import (
 )
 
 const (
-	volumeStateSuffix   = "_state"
-	buildkitdConfigFile = "buildkitd.toml"
+	volumeStateSuffix       = "_state"
+	buildkitdConfigFile     = "buildkitd.toml"
+	buildkitdStartupTimeout = 20 * time.Second
 )
 
 type Driver struct {
@@ -517,6 +518,18 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
+	res, err := d.DockerAPI.ContainerInspect(ctx, d.Name, dockerclient.ContainerInspectOptions{})
+	if err != nil {
+		if cerrdefs.IsNotFound(err) {
+			return nil, driver.ErrNotRunning{}
+		}
+		return nil, errors.WithStack(err)
+	}
+	waitDeadline, err := clientWaitDeadline(res.Container.State, time.Now())
+	if err != nil {
+		return nil, err
+	}
+
 	conn, err := d.Dial(ctx)
 	if err != nil {
 		return nil, err
@@ -524,14 +537,47 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 
 	var counter int64
 	opts = append([]client.ClientOpt{
-		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
-			if atomic.AddInt64(&counter, 1) > 1 {
-				return nil, net.ErrClosed
+		client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			if atomic.AddInt64(&counter, 1) == 1 {
+				return conn, nil
 			}
-			return conn, nil
+			return d.Dial(ctx)
 		}),
 	}, opts...)
-	return client.New(ctx, "", opts...)
+	c, err := client.New(ctx, "", opts...)
+	if err != nil {
+		_ = conn.Close()
+		return nil, err
+	}
+	if waitDeadline.IsZero() {
+		return c, nil
+	}
+
+	waitCtx, cancel := context.WithDeadlineCause(ctx, waitDeadline, errors.WithStack(context.DeadlineExceeded))
+	defer cancel()
+	if err := c.Wait(waitCtx); err != nil {
+		_ = c.Close()
+		return nil, errors.Wrap(err, "waiting for BuildKit")
+	}
+	return c, nil
+}
+
+func clientWaitDeadline(state *container.State, now time.Time) (time.Time, error) {
+	if state == nil || !state.Running {
+		return time.Time{}, driver.ErrNotRunning{}
+	}
+	// Docker reports a container as running before buildkitd has bound its
+	// socket. Wait only during that startup window so an established but broken
+	// builder still returns its connection error promptly.
+	startedAt, err := time.Parse(time.RFC3339Nano, state.StartedAt)
+	if err != nil {
+		return time.Time{}, nil
+	}
+	deadline := startedAt.Add(buildkitdStartupTimeout)
+	if !now.Before(deadline) {
+		return time.Time{}, nil
+	}
+	return deadline, nil
 }
 
 func (d *Driver) Factory() driver.Factory {

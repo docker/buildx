@@ -153,17 +153,23 @@ func GetFactories(instanceRequired bool) []Factory {
 type DriverHandle struct {
 	Driver
 	client                  *client.Client
-	err                     error
-	once                    sync.Once
+	clientMu                sync.Mutex
 	historyAPISupportedOnce sync.Once
 	historyAPISupported     bool
 }
 
 func (d *DriverHandle) Client(ctx context.Context, opt ...client.ClientOpt) (*client.Client, error) {
-	d.once.Do(func() {
-		d.client, d.err = d.Driver.Client(ctx, append(d.getClientOptions(), opt...)...)
-	})
-	return d.client, d.err
+	d.clientMu.Lock()
+	defer d.clientMu.Unlock()
+	if d.client != nil {
+		return d.client, nil
+	}
+	c, err := d.Driver.Client(ctx, append(d.getClientOptions(), opt...)...)
+	if err != nil {
+		return nil, err
+	}
+	d.client = c
+	return c, nil
 }
 
 func (d *DriverHandle) UncachedClient(ctx context.Context) (*client.Client, error) {
