@@ -14,9 +14,12 @@ import (
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/dockerutil/dockerconfig"
 	"github.com/docker/buildx/util/sourcemeta"
 	"github.com/docker/cli/cli/command"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/solver/pb"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -204,7 +207,10 @@ func (r *policyTestOptionsProvider) init(ctx context.Context) error {
 			OS:           defaultPlatform.OS,
 			Variant:      defaultPlatform.Variant,
 		}
-		r.metaResolver = sourcemeta.NewResolver(c)
+		authProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+			AuthConfigProvider: dockerconfig.LoadAuthConfig(r.dockerCli),
+		})
+		r.metaResolver = sourcemeta.NewResolver(c, sourcemeta.WithSession([]session.Attachable{authProvider}))
 	})
 	return r.err
 }
