@@ -17,10 +17,13 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/dockerutil/dockerconfig"
 	"github.com/docker/buildx/util/sourcemeta"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/sourcepolicy/policysession"
@@ -107,7 +110,11 @@ func runEval(ctx context.Context, dockerCli command.Cli, source string, opts eva
 
 		p = workers[0].Platforms[0]
 	}
-	metaResolver := sourcemeta.NewResolver(c)
+
+	authProvider := authprovider.NewDockerAuthProvider(authprovider.DockerAuthProviderConfig{
+		AuthConfigProvider: dockerconfig.LoadAuthConfig(dockerCli),
+	})
+	metaResolver := sourcemeta.NewResolver(c, sourcemeta.WithSession([]session.Attachable{authProvider}))
 	defer metaResolver.Close()
 
 	platform := toPBPlatform(p)
