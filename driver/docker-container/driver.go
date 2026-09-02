@@ -573,11 +573,10 @@ func clientWaitDeadline(state *container.State, now time.Time) (time.Time, error
 	if err != nil {
 		return time.Time{}, nil
 	}
-	deadline := startedAt.Add(buildkitdStartupTimeout)
-	if !now.Before(deadline) {
+	if !now.Before(startedAt.Add(buildkitdStartupTimeout)) {
 		return time.Time{}, nil
 	}
-	return deadline, nil
+	return now.Add(buildkitdStartupTimeout), nil
 }
 
 func (d *Driver) Factory() driver.Factory {
