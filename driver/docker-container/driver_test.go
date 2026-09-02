@@ -28,13 +28,21 @@ func TestClientWaitDeadline(t *testing.T) {
 	})
 
 	t.Run("recent-start-builder-waits", func(t *testing.T) {
-		startedAt := now.Add(-time.Second)
 		deadline, err := clientWaitDeadline(&container.State{
 			Running:   true,
-			StartedAt: startedAt.Format(time.RFC3339Nano),
+			StartedAt: now.Add(-time.Second).Format(time.RFC3339Nano),
 		}, now)
 		require.NoError(t, err)
-		require.True(t, deadline.Equal(startedAt.Add(buildkitdStartupTimeout)))
+		require.True(t, deadline.Equal(now.Add(buildkitdStartupTimeout)))
+	})
+
+	t.Run("nearly-expired-startup-window-gets-full-wait", func(t *testing.T) {
+		deadline, err := clientWaitDeadline(&container.State{
+			Running:   true,
+			StartedAt: now.Add(-buildkitdStartupTimeout + time.Nanosecond).Format(time.RFC3339Nano),
+		}, now)
+		require.NoError(t, err)
+		require.True(t, deadline.Equal(now.Add(buildkitdStartupTimeout)))
 	})
 
 	t.Run("invalid-start-time-skips-wait", func(t *testing.T) {
