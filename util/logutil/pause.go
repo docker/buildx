@@ -8,45 +8,63 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
+var (
+	loggerWriters   = map[*logrus.Logger]*loggerWriter{}
+	loggerWritersMu sync.Mutex
+)
+
 func Pause(l *logrus.Logger) func() {
-	// initialize formatter with original terminal settings
+	loggerWritersMu.Lock()
+	writer, found := loggerWriters[l]
+	if !found {
+		writer = newLoggerWriter(l)
+		loggerWriters[l] = writer
+	}
+	loggerWritersMu.Unlock()
+
+	return writer.pause()
+}
+
+type loggerWriter struct {
+	mu     sync.Mutex
+	buffer bytes.Buffer
+	output io.Writer
+	pauses int
+}
+
+func newLoggerWriter(l *logrus.Logger) *loggerWriter {
 	l.Formatter.Format(logrus.NewEntry(l))
+	writer := &loggerWriter{output: l.Out}
+	l.SetOutput(writer)
+	return writer
+}
 
-	bw := newBufferedWriter(l.Out)
-	l.SetOutput(bw)
+func (w *loggerWriter) Write(p []byte) (int, error) {
+	w.mu.Lock()
+	defer w.mu.Unlock()
+
+	if w.pauses > 0 {
+		return w.buffer.Write(p)
+	}
+
+	return w.output.Write(p)
+}
+
+func (w *loggerWriter) pause() func() {
+	w.mu.Lock()
+	w.pauses++
+	w.mu.Unlock()
+
+	var once sync.Once
 	return func() {
-		bw.resume()
-	}
-}
+		once.Do(func() {
+			w.mu.Lock()
+			defer w.mu.Unlock()
 
-type bufferedWriter struct {
-	mu  sync.Mutex
-	buf *bytes.Buffer
-	w   io.Writer
-}
-
-func newBufferedWriter(w io.Writer) *bufferedWriter {
-	return &bufferedWriter{
-		buf: bytes.NewBuffer(nil),
-		w:   w,
+			w.pauses--
+			if w.pauses == 0 {
+				_, _ = w.buffer.WriteTo(w.output)
+			}
+		})
 	}
-}
-
-func (bw *bufferedWriter) Write(p []byte) (int, error) {
-	bw.mu.Lock()
-	defer bw.mu.Unlock()
-	if bw.buf == nil {
-		return bw.w.Write(p)
-	}
-	return bw.buf.Write(p)
-}
-
-func (bw *bufferedWriter) resume() {
-	bw.mu.Lock()
-	defer bw.mu.Unlock()
-	if bw.buf == nil {
-		return
-	}
-	io.Copy(bw.w, bw.buf)
-	bw.buf = nil
 }
