@@ -65,6 +65,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildLocalExport,
 	testBuildLocalExportDeleteMode,
 	testBuildRegistryExport,
+	testBuildMultiNodeMultiTagRegistryExport,
 	testBuildRegistryExportAttestations,
 	testBuildRegistryExportNoDefaultOCIArtifact,
 	testBuildTarExport,
@@ -595,6 +596,64 @@ func testBuildRegistryExport(t *testing.T, sb integration.Sandbox) {
 	require.NotNil(t, img)
 	require.Len(t, img.Layers, 1)
 	require.Equal(t, img.Layers[0]["bar"].Data, []byte("foo"))
+}
+
+func testBuildMultiNodeMultiTagRegistryExport(t *testing.T, sb integration.Sandbox) {
+	if !isRemoteMultiNodeWorker(sb) {
+		t.Skip("only testing with remote multi-node worker")
+	}
+
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", []byte(`
+FROM scratch
+ARG TARGETPLATFORM
+LABEL org.mobyproject.buildkit.test.platform=$TARGETPLATFORM
+`), 0o600))
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	target1 := registry + "/buildx/multinode-multitag:one"
+	target2 := registry + "/buildx/multinode-multitag:two"
+	target3 := registry + "/buildx/multinode-multitag-other:one"
+
+	out, err := buildCmd(sb, withArgs(
+		"--push",
+		"--platform=linux/amd64,linux/arm64",
+		"--provenance=false",
+		"-t", target1,
+		"-t", target2,
+		"-t", target3,
+		dir,
+	))
+	require.NoError(t, err, out)
+
+	inspectDigest := func(ref string) digest.Digest {
+		cmd := buildxCmd(sb, withArgs("imagetools", "inspect", ref, "--raw"))
+		dt, err := cmd.CombinedOutput()
+		require.NoError(t, err, string(dt))
+
+		var idx ocispecs.Index
+		err = json.Unmarshal(dt, &idx)
+		require.NoError(t, err)
+		require.Len(t, idx.Manifests, 2)
+
+		seen := map[string]struct{}{}
+		for _, desc := range idx.Manifests {
+			require.NotNil(t, desc.Platform)
+			seen[platforms.Format(*desc.Platform)] = struct{}{}
+		}
+		require.Contains(t, seen, "linux/amd64")
+		require.Contains(t, seen, "linux/arm64")
+
+		return digest.FromBytes(dt)
+	}
+
+	dgst := inspectDigest(target1)
+	require.Equal(t, dgst, inspectDigest(target2))
+	require.Equal(t, dgst, inspectDigest(target3))
 }
 
 func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
