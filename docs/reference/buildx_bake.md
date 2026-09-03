@@ -13,27 +13,28 @@ Build from a file
 
 ### Options
 
-| Name                                | Type          | Default | Description                                                                                                           |
-|:------------------------------------|:--------------|:--------|:----------------------------------------------------------------------------------------------------------------------|
-| [`--allow`](#allow)                 | `stringArray` |         | Allow build to access specified resources                                                                             |
-| [`--builder`](#builder)             | `string`      |         | Override the configured builder instance                                                                              |
-| [`--call`](#call)                   | `string`      | `build` | Set method for evaluating build (`check`, `outline`, `targets`)                                                       |
-| [`--check`](#check)                 | `bool`        |         | Shorthand for `--call=check`                                                                                          |
-| `-D`, `--debug`                     | `bool`        |         | Enable debug logging                                                                                                  |
-| [`-f`](#file), [`--file`](#file)    | `stringArray` |         | Build definition file                                                                                                 |
-| [`--list`](#list)                   | `string`      |         | List targets or variables                                                                                             |
-| [`--load`](#load)                   | `bool`        |         | Shorthand for `--set=*.output=type=docker`. Conditional.                                                              |
-| [`--metadata-file`](#metadata-file) | `string`      |         | Write build result metadata to a file                                                                                 |
-| [`--no-cache`](#no-cache)           | `bool`        |         | Do not use cache when building the image                                                                              |
-| `--policy`                          | `stringArray` |         | Global policy evaluation options (format: `[disabled=true\|false][,strict=true\|false][,log-level=level]`)            |
-| [`--print`](#print)                 | `bool`        |         | Print the options without building                                                                                    |
-| [`--progress`](#progress)           | `string`      | `auto`  | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output |
-| [`--provenance`](#provenance)       | `string`      |         | Shorthand for `--set=*.attest=type=provenance`                                                                        |
-| [`--pull`](#pull)                   | `bool`        |         | Always attempt to pull all referenced images                                                                          |
-| [`--push`](#push)                   | `bool`        |         | Shorthand for `--set=*.output=type=registry`. Conditional.                                                            |
-| [`--sbom`](#sbom)                   | `string`      |         | Shorthand for `--set=*.attest=type=sbom`                                                                              |
-| [`--set`](#set)                     | `stringArray` |         | Override target value (e.g., `targetpattern.key=value`)                                                               |
-| `--var`                             | `stringArray` |         | Set a variable value (e.g., `name=value`)                                                                             |
+| Name                                | Type          | Default     | Description                                                                                                           |
+|:------------------------------------|:--------------|:------------|:----------------------------------------------------------------------------------------------------------------------|
+| [`--allow`](#allow)                 | `stringArray` |             | Allow build to access specified resources                                                                             |
+| [`--builder`](#builder)             | `string`      |             | Override the configured builder instance                                                                              |
+| [`--call`](#call)                   | `string`      | `build`     | Set method for evaluating build (`check`, `outline`, `targets`)                                                       |
+| [`--check`](#check)                 | `bool`        |             | Shorthand for `--call=check`                                                                                          |
+| `-D`, `--debug`                     | `bool`        |             | Enable debug logging                                                                                                  |
+| [`--execution`](#execution)         | `string`      | `fail-fast` | Set target execution behavior (format: `mode[,parallel=N]`)                                                           |
+| [`-f`](#file), [`--file`](#file)    | `stringArray` |             | Build definition file                                                                                                 |
+| [`--list`](#list)                   | `string`      |             | List targets or variables                                                                                             |
+| [`--load`](#load)                   | `bool`        |             | Shorthand for `--set=*.output=type=docker`. Conditional.                                                              |
+| [`--metadata-file`](#metadata-file) | `string`      |             | Write build result metadata to a file                                                                                 |
+| [`--no-cache`](#no-cache)           | `bool`        |             | Do not use cache when building the image                                                                              |
+| `--policy`                          | `stringArray` |             | Global policy evaluation options (format: `[disabled=true\|false][,strict=true\|false][,log-level=level]`)            |
+| [`--print`](#print)                 | `bool`        |             | Print the options without building                                                                                    |
+| [`--progress`](#progress)           | `string`      | `auto`      | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output |
+| [`--provenance`](#provenance)       | `string`      |             | Shorthand for `--set=*.attest=type=provenance`                                                                        |
+| [`--pull`](#pull)                   | `bool`        |             | Always attempt to pull all referenced images                                                                          |
+| [`--push`](#push)                   | `bool`        |             | Shorthand for `--set=*.output=type=registry`. Conditional.                                                            |
+| [`--sbom`](#sbom)                   | `string`      |             | Shorthand for `--set=*.attest=type=sbom`                                                                              |
+| [`--set`](#set)                     | `stringArray` |             | Override target value (e.g., `targetpattern.key=value`)                                                               |
+| `--var`                             | `stringArray` |             | Set a variable value (e.g., `name=value`)                                                                             |
 
 
 <!---MARKER_GEN_END-->
@@ -141,6 +142,46 @@ Same as [`build --call`](buildx_build.md#call).
 #### <a name="check"></a> Call: check (--check)
 
 Same as [`build --check`](buildx_build.md#check).
+
+### <a name="execution"></a> Configure target execution behavior (--execution)
+
+```text
+--execution=MODE[,parallel=N]
+```
+
+The `--execution` flag controls how Bake schedules targets and handles target
+failures. The default mode is `fail-fast`, which stops the build when a target
+fails and cancels targets that are still running.
+
+The `sync-output` mode waits until every selected target has reached the output
+boundary successfully before any target writes output. This is useful when
+multiple targets export local outputs and you want to avoid writing partial
+results if another target fails.
+
+For multi-node targets, `sync-output` applies to the BuildKit solve and export
+boundary for each target. Any manifest list merge or registry push that Buildx
+performs after the per-node solves complete is not part of this synchronization
+barrier.
+
+The `defer-error` mode allows independent targets to keep running after another
+target fails. Bake still returns an error after all possible targets complete,
+but successful targets can finish and write their outputs.
+
+```console
+$ docker buildx bake --execution=sync-output            # write outputs only after all targets reach the output boundary
+$ docker buildx bake --execution=defer-error            # let independent targets finish before returning an error
+$ docker buildx bake --execution=parallel=2             # run at most two targets at the same time
+$ docker buildx bake --execution=defer-error,parallel=2 # combine deferred errors with a target parallelism limit
+```
+
+Use `parallel=N` to limit how many Bake targets run at the same time. This
+limits target scheduling only; it doesn't change BuildKit's internal parallelism
+for build steps inside a target.
+
+When `parallel` is omitted or set to `0`, Bake doesn't apply a target
+parallelism limit. The `sync-output` mode requires all selected targets to be
+able to reach the output boundary together, so it can't be combined with a
+parallel limit that is smaller than the number of selected targets.
 
 ### <a name="file"></a> Specify a build definition file (-f, --file)
 

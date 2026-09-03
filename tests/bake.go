@@ -46,6 +46,10 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
 	testBakeLocalMulti,
+	testBakeSyncOutput,
+	testBakeFailFast,
+	testBakeDeferError,
+	testBakeParallel,
 	testBakeFileRelativePaths,
 	testBakeLocalExportDeleteMode,
 	testBakeRemote,
@@ -722,6 +726,133 @@ services:
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest2, "foo"))
+}
+
+func testBakeSyncOutput(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM scratch
+COPY foo /foo
+`))
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=sync-output"))
+	require.Error(t, err, out)
+	require.Contains(t, out, "b-failure")
+	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
+
+	dir = bakeExecutionSuccessDir(t)
+	out, err = bakeCmd(sb, withDir(dir), withArgs("--execution=sync-output"))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dir, "out", "a", "foo"))
+	require.FileExists(t, filepath.Join(dir, "out", "b", "foo"))
+}
+
+func testBakeFailFast(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM busybox
+RUN sleep 2
+COPY foo /foo
+`))
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=fail-fast"))
+	require.Error(t, err, out)
+	require.Contains(t, out, "b-failure")
+	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
+}
+
+func testBakeDeferError(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM busybox
+RUN sleep 2
+COPY foo /foo
+`))
+
+	metadataFile := filepath.Join(dir, "metadata.json")
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--metadata-file", metadataFile))
+	require.Error(t, err, out)
+	require.Contains(t, out, "b-failure")
+	require.FileExists(t, filepath.Join(dir, "out", "foo"))
+	require.FileExists(t, metadataFile)
+
+	dt, err := os.ReadFile(metadataFile)
+	require.NoError(t, err)
+
+	var metadata map[string]any
+	require.NoError(t, json.Unmarshal(dt, &metadata))
+	require.Contains(t, metadata, "a-success")
+	require.NotContains(t, metadata, "b-failure")
+}
+
+func testBakeParallel(t *testing.T, sb integration.Sandbox) {
+	dir := bakeExecutionFailureDir(t, []byte(`
+FROM scratch
+COPY foo /foo
+`))
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error,parallel=1"))
+	require.Error(t, err, out)
+	require.FileExists(t, filepath.Join(dir, "out", "foo"))
+
+	dir = bakeExecutionSuccessDir(t)
+
+	out, err = bakeCmd(sb, withDir(dir), withArgs("--execution=parallel=1"))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dir, "out", "a", "foo"))
+	require.FileExists(t, filepath.Join(dir, "out", "b", "foo"))
+}
+
+func bakeExecutionSuccessDir(t *testing.T) string {
+	return tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", []byte(`
+group "default" {
+  targets = ["a", "b"]
+}
+
+target "a" {
+  dockerfile = "Dockerfile"
+  output = ["type=local,dest=out/a"]
+}
+
+target "b" {
+  dockerfile = "Dockerfile"
+  output = ["type=local,dest=out/b"]
+}
+`), 0600),
+		fstest.CreateFile("Dockerfile", []byte(`
+FROM scratch
+COPY foo /foo
+`), 0600),
+		fstest.CreateFile("foo", []byte("bar"), 0600),
+	)
+}
+
+func bakeExecutionFailureDir(t *testing.T, dockerfile []byte) string {
+	failureDockerfile := []byte(`
+FROM scratch
+COPY missing /missing
+`)
+	bakefile := []byte(`
+group "default" {
+  targets = ["a-success", "b-failure"]
+}
+
+target "a-success" {
+  dockerfile = "Dockerfile"
+  output = ["type=local,dest=out"]
+}
+
+target "b-failure" {
+  dockerfile = "failure.Dockerfile"
+  output = ["type=cacheonly"]
+}
+`)
+	return tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("Dockerfile", dockerfile, 0600),
+		fstest.CreateFile("failure.Dockerfile", failureDockerfile, 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
 }
 
 func testBakeFileRelativePaths(t *testing.T, sb integration.Sandbox) {
