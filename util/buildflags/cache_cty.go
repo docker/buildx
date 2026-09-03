@@ -59,29 +59,29 @@ func (o CacheOptions) ToCtyValue() cty.Value {
 	return cty.ListVal(vals)
 }
 
-func (o *CacheOptionsEntry) FromCtyValue(in cty.Value, p cty.Path) error {
+func (e *CacheOptionsEntry) FromCtyValue(in cty.Value, p cty.Path) error {
 	conv, err := convert.Convert(in, cty.Map(cty.String))
 	if err != nil {
 		return err
 	}
 
 	m := conv.AsValueMap()
-	if err := getAndDelete(m, "type", &o.Type); err != nil {
+	if err := getAndDelete(m, "type", &e.Type); err != nil {
 		return err
 	}
-	o.Attrs = asMap(m)
-	return o.validate(in)
+	e.Attrs = asMap(m)
+	return e.validate(in)
 }
 
-func (o *CacheOptionsEntry) ToCtyValue() cty.Value {
-	if o == nil {
+func (e *CacheOptionsEntry) ToCtyValue() cty.Value {
+	if e == nil {
 		return cty.NullVal(cty.Map(cty.String))
 	}
 
-	vals := make(map[string]cty.Value, len(o.Attrs)+1)
-	for k, v := range o.Attrs {
+	vals := make(map[string]cty.Value, len(e.Attrs)+1)
+	for k, v := range e.Attrs {
 		vals[k] = cty.StringVal(v)
 	}
-	vals["type"] = cty.StringVal(o.Type)
+	vals["type"] = cty.StringVal(e.Type)
 	return cty.MapVal(vals)
 }
