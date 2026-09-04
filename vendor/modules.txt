@@ -484,9 +484,6 @@ github.com/goccy/go-json/internal/runtime
 # github.com/gofrs/flock v0.13.0
 ## explicit; go 1.24.0
 github.com/gofrs/flock
-# github.com/golang/snappy v1.0.0
-## explicit
-github.com/golang/snappy
 # github.com/google/certificate-transparency-go v1.3.3
 ## explicit; go 1.24.0
 github.com/google/certificate-transparency-go
@@ -577,7 +574,10 @@ github.com/klauspost/compress/fse
 github.com/klauspost/compress/huff0
 github.com/klauspost/compress/internal/cpuinfo
 github.com/klauspost/compress/internal/le
+github.com/klauspost/compress/internal/race
 github.com/klauspost/compress/internal/snapref
+github.com/klauspost/compress/s2
+github.com/klauspost/compress/snappy
 github.com/klauspost/compress/zstd
 github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/lestrrat-go/blackmagic v1.0.4
