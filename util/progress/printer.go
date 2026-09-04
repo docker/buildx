@@ -86,10 +86,23 @@ func (p *Printer) Resume() {
 }
 
 func (p *Printer) Write(s *client.SolveStatus) {
-	p.status <- s
+	if !p.sendStatus(s) {
+		return
+	}
 	if p.metrics != nil {
 		p.metrics.Write(s)
 	}
+}
+
+// sendStatus is a no-op if Wait already closed the status channel.
+func (p *Printer) sendStatus(s *client.SolveStatus) (sent bool) {
+	defer func() {
+		if recover() != nil {
+			sent = false
+		}
+	}()
+	p.status <- s
+	return true
 }
 
 func (p *Printer) Warnings() []client.VertexWarning {
