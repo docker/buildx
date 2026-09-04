@@ -35,6 +35,48 @@ func (d warnOutputDriver) IsMobyDriver() bool {
 	return d.moby
 }
 
+func TestPrepareMultiDriverExportsForEveryNode(t *testing.T) {
+	const taggedName = "registry.example.com/user/app:latest"
+	const secondaryName = "registry.example.com/user/secondary:latest"
+	newSolveOpt := func() *client.SolveOpt {
+		return &client.SolveOpt{
+			Exports: []client.ExportEntry{
+				{
+					Type: "image",
+					Attrs: map[string]string{
+						"name":              taggedName,
+						"push":              "true",
+						"registry.insecure": "true",
+					},
+				},
+				{
+					Type: "image",
+					Attrs: map[string]string{
+						"name": secondaryName,
+						"push": "true",
+					},
+				},
+			},
+		}
+	}
+	solveOpts := []*client.SolveOpt{newSolveOpt(), newSolveOpt()}
+
+	var pushNames string
+	var insecurePush bool
+	for _, so := range solveOpts {
+		require.NoError(t, prepareMultiDriverExports(so, &pushNames, &insecurePush))
+	}
+
+	require.Equal(t, taggedName, pushNames)
+	require.True(t, insecurePush)
+	for _, so := range solveOpts {
+		require.Equal(t, "registry.example.com/user/app", so.Exports[0].Attrs["name"])
+		require.Equal(t, "true", so.Exports[0].Attrs["push-by-digest"])
+		require.Equal(t, secondaryName, so.Exports[1].Attrs["name"])
+		require.NotContains(t, so.Exports[1].Attrs, "push-by-digest")
+	}
+}
+
 func TestWarnOnNoOutput(t *testing.T) {
 	cloudNodes := []builder.Node{{Driver: newWarnOutputDriver("cloud", false)}}
 	mobyNodes := []builder.Node{{Driver: newWarnOutputDriver("docker", true)}}

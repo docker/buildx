@@ -433,29 +433,35 @@ func toRepoOnly(in string) (string, error) {
 }
 
 func prepareMultiDriverExports(so *client.SolveOpt, pushNames *string, insecurePush *bool) error {
-	for i, e := range so.Exports {
+	var pushPrepared bool
+	for i := range so.Exports {
+		e := &so.Exports[i]
 		switch e.Type {
 		case "oci", "tar":
 			return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
 		case "image":
-			if *pushNames == "" && e.Attrs["push"] != "" {
-				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-					*pushNames = e.Attrs["name"]
-					if *pushNames == "" {
-						return errors.Errorf("tag is needed when pushing to registry")
-					}
-					names, err := toRepoOnly(e.Attrs["name"])
-					if err != nil {
-						return err
-					}
-					if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
-						*insecurePush = true
-					}
-					e.Attrs["name"] = names
-					e.Attrs["push-by-digest"] = "true"
-					so.Exports[i].Attrs = e.Attrs
+			if pushPrepared {
+				continue
+			}
+			if ok, _ := strconv.ParseBool(e.Attrs["push"]); !ok {
+				continue
+			}
+			if *pushNames == "" {
+				*pushNames = e.Attrs["name"]
+				if *pushNames == "" {
+					return errors.Errorf("tag is needed when pushing to registry")
+				}
+				if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
+					*insecurePush = true
 				}
 			}
+			names, err := toRepoOnly(e.Attrs["name"])
+			if err != nil {
+				return err
+			}
+			e.Attrs["name"] = names
+			e.Attrs["push-by-digest"] = "true"
+			pushPrepared = true
 		}
 	}
 	return nil
