@@ -79,17 +79,14 @@ func (rr *roots) collectResources(r *root, sch any, base url, schPtr jsonPointer
 }
 
 func (rr *roots) _collectResources(r *root, sch any, base url, schPtr jsonPointer, fallback dialect) error {
-	if _, ok := sch.(bool); ok {
+	obj, ok := sch.(map[string]any)
+	if !ok {
 		if schPtr.isEmpty() {
 			// root resource
 			res := newResource(schPtr, base)
 			res.dialect = fallback
 			r.resources[schPtr] = res
 		}
-		return nil
-	}
-	obj, ok := sch.(map[string]any)
-	if !ok {
 		return nil
 	}
 

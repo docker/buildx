@@ -137,6 +137,10 @@ type OutputError struct {
 	p    *message.Printer
 }
 
+func (k OutputError) String() string {
+	return k.Kind.LocalizedString(k.p)
+}
+
 func (k OutputError) MarshalJSON() ([]byte, error) {
 	return json.Marshal(k.Kind.LocalizedString(k.p))
 }
