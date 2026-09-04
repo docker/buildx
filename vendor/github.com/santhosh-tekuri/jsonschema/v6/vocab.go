@@ -14,6 +14,10 @@ func (ctx *CompilerContext) Enqueue(schPath []string) *Schema {
 	return ctx.c.enqueuePtr(ptr)
 }
 
+func (ctx *CompilerContext) EnqueueRef(ref string) (*Schema, error) {
+	return ctx.c.enqueueRefVal(ref)
+}
+
 // Vocabulary defines a set of keywords, their syntax and
 // their semantics.
 type Vocabulary struct {
@@ -47,6 +51,11 @@ type SchemaExt interface {
 // validating with [SchemaExt].
 type ValidatorContext struct {
 	vd *validator
+}
+
+// ValueLocation returns location of value as jsonpath token array.
+func (ctx *ValidatorContext) ValueLocation() []string {
+	return ctx.vd.vloc
 }
 
 // Validate validates v with sch. vpath gives path of v from current context value.

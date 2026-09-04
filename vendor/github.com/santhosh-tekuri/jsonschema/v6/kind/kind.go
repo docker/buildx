@@ -57,7 +57,7 @@ func (*Not) KeywordPath() []string {
 }
 
 func (*Not) LocalizedString(p *message.Printer) string {
-	return p.Sprintf("not failed")
+	return p.Sprintf("'not' failed")
 }
 
 // --
@@ -69,7 +69,7 @@ func (*AllOf) KeywordPath() []string {
 }
 
 func (*AllOf) LocalizedString(p *message.Printer) string {
-	return p.Sprintf("allOf failed")
+	return p.Sprintf("'allOf' failed")
 }
 
 // --
@@ -81,7 +81,7 @@ func (*AnyOf) KeywordPath() []string {
 }
 
 func (*AnyOf) LocalizedString(p *message.Printer) string {
-	return p.Sprintf("anyOf failed")
+	return p.Sprintf("'anyOf' failed")
 }
 
 // --
@@ -98,9 +98,9 @@ func (*OneOf) KeywordPath() []string {
 
 func (k *OneOf) LocalizedString(p *message.Printer) string {
 	if len(k.Subschemas) == 0 {
-		return p.Sprintf("oneOf failed, none matched")
+		return p.Sprintf("'oneOf' failed, none matched")
 	}
-	return p.Sprintf("oneOf failed, subschemas %d, %d matched", k.Subschemas[0], k.Subschemas[1])
+	return p.Sprintf("'oneOf' failed, subschemas %d, %d matched", k.Subschemas[0], k.Subschemas[1])
 }
 
 //--
@@ -179,7 +179,7 @@ loop:
 		}
 		return p.Sprintf("value must be one of %s", strings.Join(want, ", "))
 	}
-	return p.Sprintf("enum failed")
+	return p.Sprintf("'enum' failed")
 }
 
 // --
@@ -196,7 +196,7 @@ func (*Const) KeywordPath() []string {
 func (k *Const) LocalizedString(p *message.Printer) string {
 	switch want := k.Want.(type) {
 	case []any, map[string]any:
-		return p.Sprintf("const failed")
+		return p.Sprintf("'const' failed")
 	default:
 		return p.Sprintf("value must be %s", display(want))
 	}
@@ -511,7 +511,7 @@ func (*ContentMediaType) KeywordPath() []string {
 }
 
 func (k *ContentMediaType) LocalizedString(p *message.Printer) string {
-	return p.Sprintf("value if not of mediatype %s: %v", quote(k.Want), k.Err)
+	return p.Sprintf("value is not of mediatype %s: %v", quote(k.Want), k.Err)
 }
 
 // --
@@ -523,7 +523,7 @@ func (*ContentSchema) KeywordPath() []string {
 }
 
 func (*ContentSchema) LocalizedString(p *message.Printer) string {
-	return p.Sprintf("contentSchema failed")
+	return p.Sprintf("'contentSchema' failed")
 }
 
 // --
