@@ -432,6 +432,35 @@ func toRepoOnly(in string) (string, error) {
 	return strings.Join(out, ","), nil
 }
 
+func prepareMultiDriverExports(so *client.SolveOpt, pushNames *string, insecurePush *bool) error {
+	for i, e := range so.Exports {
+		switch e.Type {
+		case "oci", "tar":
+			return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
+		case "image":
+			if *pushNames == "" && e.Attrs["push"] != "" {
+				if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
+					*pushNames = e.Attrs["name"]
+					if *pushNames == "" {
+						return errors.Errorf("tag is needed when pushing to registry")
+					}
+					names, err := toRepoOnly(e.Attrs["name"])
+					if err != nil {
+						return err
+					}
+					if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
+						*insecurePush = true
+					}
+					e.Attrs["name"] = names
+					e.Attrs["push-by-digest"] = "true"
+					so.Exports[i].Attrs = e.Attrs
+				}
+			}
+		}
+	}
+	return nil
+}
+
 type (
 	EvaluateFunc func(ctx context.Context, name string, c gateway.Client, res *gateway.Result, opt Options) error
 	Handler      struct {
@@ -566,30 +595,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 				node := dp.Node()
 				so := reqForNodes[k][i].so
 				if multiDriver {
-					for i, e := range so.Exports {
-						switch e.Type {
-						case "oci", "tar":
-							return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
-						case "image":
-							if pushNames == "" && e.Attrs["push"] != "" {
-								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
-									pushNames = e.Attrs["name"]
-									if pushNames == "" {
-										return errors.Errorf("tag is needed when pushing to registry")
-									}
-									names, err := toRepoOnly(e.Attrs["name"])
-									if err != nil {
-										return err
-									}
-									if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
-										insecurePush = true
-									}
-									e.Attrs["name"] = names
-									e.Attrs["push-by-digest"] = "true"
-									so.Exports[i].Attrs = e.Attrs
-								}
-							}
-						}
+					if err := prepareMultiDriverExports(so, &pushNames, &insecurePush); err != nil {
+						return err
 					}
 				}
 
