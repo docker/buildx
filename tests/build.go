@@ -67,6 +67,7 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildRegistryExport,
 	testBuildRegistryExportAttestations,
 	testBuildRegistryExportNoDefaultOCIArtifact,
+	testBuildMultiNodePushFailureDoesNotPublishTag,
 	testBuildTarExport,
 	testBuildMobyFromLocalImage,
 	testBuildDetailsLink,
@@ -687,6 +688,34 @@ func requireLegacyAttestationStorage(t *testing.T, sb integration.Sandbox, ref s
 	require.NoError(t, err)
 	require.Nil(t, mfst.Subject)
 	require.NotEmpty(t, mfst.Layers)
+}
+
+func testBuildMultiNodePushFailureDoesNotPublishTag(t *testing.T, sb integration.Sandbox) {
+	if !isRemoteMultiNodeWorker(sb) {
+		t.Skip("only testing with remote multi-node worker")
+	}
+
+	dir := createTestProject(t)
+	err := os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(`FROM alpine
+ARG TARGETARCH
+RUN if [ "$TARGETARCH" = arm64 ]; then exit 1; fi
+RUN echo "$TARGETARCH" > /platform
+`), 0644)
+	require.NoError(t, err)
+
+	registry, err := sb.NewRegistry()
+	if errors.Is(err, integration.ErrRequirements) {
+		t.Skip(err.Error())
+	}
+	require.NoError(t, err)
+
+	target := registry + "/buildx/partial-push:" + identity.NewID()
+
+	out, err := buildCmd(sb, withArgs("-t", target, "--push", "--platform=linux/amd64,linux/arm64", "--provenance=false", dir))
+	require.Error(t, err, string(out))
+
+	_, _, err = contentutil.ProviderFromRef(sb.Context(), target)
+	require.Error(t, err)
 }
 
 func testImageIDOutput(t *testing.T, sb integration.Sandbox) {
