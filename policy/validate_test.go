@@ -23,6 +23,27 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
+func TestHTTPHostForPolicy(t *testing.T) {
+	tests := []struct {
+		scheme, host, want string
+	}{
+		{"https", "example.com", "example.com"},
+		{"https", "example.com:443", "example.com"},
+		{"http", "example.com:80", "example.com"},
+		{"https", "example.com:8443", "example.com:8443"},
+		{"http", "example.com:8080", "example.com:8080"},
+		{"https", "[2001:db8::1]", "[2001:db8::1]"},
+		{"https", "[2001:db8::1]:443", "[2001:db8::1]"},
+		{"https", "[2001:db8::1]:8443", "[2001:db8::1]:8443"},
+		{"https", "example.com:443", "example.com"},
+	}
+	for _, tt := range tests {
+		t.Run(tt.scheme+" "+tt.host, func(t *testing.T) {
+			require.Equal(t, tt.want, httpHostForPolicy(tt.scheme, tt.host))
+		})
+	}
+}
+
 func TestSourceToInputSingleSource(t *testing.T) {
 	tm := time.Date(2024, 1, 2, 3, 4, 5, 0, time.UTC)
 
@@ -130,6 +151,90 @@ func TestSourceToInputSingleSource(t *testing.T) {
 					Path:     "/secure.tgz",
 					Query:    map[string][]string{},
 					Checksum: "sha256:eeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeeee",
+				},
+			},
+		},
+		{
+			name: "https-default-port-stripped-from-host",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "https://example.com:443/foo.tar.gz",
+				},
+				HTTP: &gwpb.ResolveSourceHTTPResponse{
+					Checksum: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:      "https://example.com:443/foo.tar.gz",
+					Schema:   "https",
+					Host:     "example.com",
+					Path:     "/foo.tar.gz",
+					Query:    map[string][]string{},
+					Checksum: "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+				},
+			},
+		},
+		{
+			name: "http-default-port-stripped-from-host",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "http://example.com:80/foo.tar.gz",
+				},
+				HTTP: &gwpb.ResolveSourceHTTPResponse{
+					Checksum: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:      "http://example.com:80/foo.tar.gz",
+					Schema:   "http",
+					Host:     "example.com",
+					Path:     "/foo.tar.gz",
+					Query:    map[string][]string{},
+					Checksum: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+				},
+			},
+		},
+		{
+			name: "https-non-default-port-kept-on-host",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "https://example.com:8443/foo.tar.gz",
+				},
+				HTTP: &gwpb.ResolveSourceHTTPResponse{
+					Checksum: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:      "https://example.com:8443/foo.tar.gz",
+					Schema:   "https",
+					Host:     "example.com:8443",
+					Path:     "/foo.tar.gz",
+					Query:    map[string][]string{},
+					Checksum: "sha256:cccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccccc",
+				},
+			},
+		},
+		{
+			name: "https-ipv6-default-port-stripped-from-host",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "https://[2001:db8::1]:443/foo.tar.gz",
+				},
+				HTTP: &gwpb.ResolveSourceHTTPResponse{
+					Checksum: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
+				},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:      "https://[2001:db8::1]:443/foo.tar.gz",
+					Schema:   "https",
+					Host:     "[2001:db8::1]",
+					Path:     "/foo.tar.gz",
+					Query:    map[string][]string{},
+					Checksum: "sha256:dddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddddd",
 				},
 			},
 		},
