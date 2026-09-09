@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"testing"
 	"time"
 
@@ -14,6 +15,8 @@ import (
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/solver/pb"
+	policyaction "github.com/moby/buildkit/sourcepolicy/pb"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	policyverifier "github.com/moby/policy-helpers"
 	policyimage "github.com/moby/policy-helpers/image"
 	policytypes "github.com/moby/policy-helpers/types"
@@ -23,23 +26,34 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestHTTPHostForPolicy(t *testing.T) {
+func TestNormalizeHTTPHost(t *testing.T) {
 	tests := []struct {
 		scheme, host, want string
 	}{
 		{"https", "example.com", "example.com"},
 		{"https", "example.com:443", "example.com"},
 		{"http", "example.com:80", "example.com"},
+		{"https", ":443", ""},
+		{"http", ":80", ""},
+		{"https", "example.com:000443", "example.com"},
+		{"http", "example.com:00080", "example.com"},
+		{"https", "example.com:00080", "example.com:00080"},
+		{"http", "example.com:000443", "example.com:000443"},
+		{"https", "example.com:008443", "example.com:008443"},
+		{"http", "example.com:000", "example.com:000"},
+		{"https", "example.com:80", "example.com:80"},
+		{"http", "example.com:443", "example.com:443"},
 		{"https", "example.com:8443", "example.com:8443"},
 		{"http", "example.com:8080", "example.com:8080"},
 		{"https", "[2001:db8::1]", "[2001:db8::1]"},
 		{"https", "[2001:db8::1]:443", "[2001:db8::1]"},
+		{"https", "[2001:db8::1]:000443", "[2001:db8::1]"},
+		{"http", "[2001:db8::1]:00080", "[2001:db8::1]"},
 		{"https", "[2001:db8::1]:8443", "[2001:db8::1]:8443"},
-		{"https", "example.com:443", "example.com"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.scheme+" "+tt.host, func(t *testing.T) {
-			require.Equal(t, tt.want, httpHostForPolicy(tt.scheme, tt.host))
+			require.Equal(t, tt.want, normalizeHTTPHost(&url.URL{Scheme: tt.scheme, Host: tt.host}))
 		})
 	}
 }
@@ -68,6 +82,20 @@ func TestSourceToInputSingleSource(t *testing.T) {
 				Source: &pb.SourceOp{Identifier: "not-a-source"},
 			},
 			expErrMsg: "invalid source identifier: not-a-source",
+		},
+		{
+			name: "http-ipv6-without-brackets",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "http://::1:443"},
+			},
+			expErrMsg: "failed to parse http source url",
+		},
+		{
+			name: "https-ipv6-without-brackets",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "https://::1:443"},
+			},
+			expErrMsg: "failed to parse http source url",
 		},
 		{
 			name: "http-source-with-checksum-and-auth",
@@ -195,6 +223,36 @@ func TestSourceToInputSingleSource(t *testing.T) {
 					Checksum: "sha256:bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
 				},
 			},
+		},
+		{
+			name: "http-empty-host-with-default-port",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "http://:80"},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:    "http://:80",
+					Schema: "http",
+					Host:   "",
+					Query:  map[string][]string{},
+				},
+			},
+			expUnk: []string{"input.http.checksum"},
+		},
+		{
+			name: "https-empty-host-with-default-port",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "https://:443"},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:    "https://:443",
+					Schema: "https",
+					Host:   "",
+					Query:  map[string][]string{},
+				},
+			},
+			expUnk: []string{"input.http.checksum"},
 		},
 		{
 			name: "https-non-default-port-kept-on-host",
@@ -984,6 +1042,59 @@ func TestSourceToInputSingleSource(t *testing.T) {
 			require.NoError(t, err)
 			require.Equal(t, tc.expInput, inp)
 			require.Equal(t, tc.expUnk, unknowns)
+		})
+	}
+}
+
+func TestCheckPolicyHTTPHost(t *testing.T) {
+	for _, tc := range []struct {
+		url   string
+		allow bool
+	}{
+		{"https://example.com/", true},
+		{"https://example.com:443/", true},
+		{"http://example.com:80/", true},
+		{"https://example.com:000443/", true},
+		{"http://example.com:00080/", true},
+		{"https://example.com:00080/", false},
+		{"http://example.com:000443/", false},
+		{"https://example.com:008443/", false},
+		{"https://example.com:80/", false},
+		{"http://example.com:443/", false},
+		{"https://example.com:8443/", false},
+		{"https://[2001:db8::1]:443/", true},
+		{"https://[2001:db8::1]:000443/", true},
+		{"http://[2001:db8::1]:00080/", true},
+		{"https://[2001:db8::1]:8443/", false},
+	} {
+		t.Run(tc.url, func(t *testing.T) {
+			p := NewPolicy(Opt{
+				Files: []File{{
+					Filename: "policy.rego",
+					Data: []byte(`
+package docker
+
+default allow := false
+allow if input.http.host in ["example.com", "[2001:db8::1]"]
+decision := {"allow": allow}
+`),
+				}},
+			})
+
+			// Exec proxy requests do not include HTTP checksum metadata.
+			decision, next, err := p.CheckPolicy(t.Context(), &policysession.CheckPolicyRequest{
+				Source: &gwpb.ResolveSourceMetaResponse{
+					Source: &pb.SourceOp{Identifier: tc.url},
+				},
+			})
+			require.NoError(t, err)
+			require.Nil(t, next)
+			require.NotNil(t, decision)
+			want := policyaction.PolicyAction_DENY
+			if tc.allow {
+				want = policyaction.PolicyAction_ALLOW
+			}
+			require.Equal(t, want, decision.Action)
 		})
 	}
 }
