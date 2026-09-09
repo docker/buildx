@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
-	"net"
 	"net/url"
 	"path"
 	"slices"
@@ -533,22 +532,13 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 	return nil
 }
 
-// httpHostForPolicy returns the host used in policy input.http.host.
-// Well-known default ports (http/80, https/443) are stripped so curl-style
-// URLs like https://example.com:443 match allow-lists that contain example.com.
-func httpHostForPolicy(scheme, host string) string {
-	h, port, err := net.SplitHostPort(host)
-	if err != nil {
-		return host
-	}
+func normalizeHTTPHost(u *url.URL) string {
+	port := strings.TrimLeft(u.Port(), "0")
 	switch {
-	case scheme == "https" && port == "443", scheme == "http" && port == "80":
-		if strings.Contains(h, ":") {
-			return "[" + h + "]"
-		}
-		return h
+	case u.Scheme == "http" && port == "80", u.Scheme == "https" && port == "443":
+		return strings.TrimSuffix(u.Host, ":"+u.Port())
 	default:
-		return host
+		return u.Host
 	}
 }
 
@@ -574,7 +564,7 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 		inp.HTTP = &HTTP{
 			URL:    src.Source.Identifier,
 			Schema: scheme,
-			Host:   httpHostForPolicy(scheme, u.Host),
+			Host:   normalizeHTTPHost(u),
 			Path:   u.Path,
 			Query:  u.Query(),
 		}
