@@ -35,9 +35,10 @@ import (
 )
 
 const (
-	volumeStateSuffix       = "_state"
-	buildkitdConfigFile     = "buildkitd.toml"
-	buildkitdStartupTimeout = 20 * time.Second
+	volumeStateSuffix      = "_state"
+	buildkitdConfigFile    = "buildkitd.toml"
+	buildkitdStartupWindow = 20 * time.Second
+	buildkitdReadyTimeout  = 20 * time.Second
 )
 
 type Driver struct {
@@ -525,7 +526,7 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 		}
 		return nil, errors.WithStack(err)
 	}
-	waitDeadline, err := clientWaitDeadline(res.Container.State, time.Now())
+	waitReady, err := clientWaitReady(res.Container.State, time.Now())
 	if err != nil {
 		return nil, err
 	}
@@ -549,11 +550,11 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 		_ = conn.Close()
 		return nil, err
 	}
-	if waitDeadline.IsZero() {
+	if !waitReady {
 		return c, nil
 	}
 
-	waitCtx, cancel := context.WithDeadlineCause(ctx, waitDeadline, errors.WithStack(context.DeadlineExceeded))
+	waitCtx, cancel := context.WithTimeoutCause(ctx, buildkitdReadyTimeout, errors.WithStack(context.DeadlineExceeded))
 	defer cancel()
 	if err := c.Wait(waitCtx); err != nil {
 		_ = c.Close()
@@ -562,21 +563,18 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 	return c, nil
 }
 
-func clientWaitDeadline(state *container.State, now time.Time) (time.Time, error) {
+func clientWaitReady(state *container.State, now time.Time) (bool, error) {
 	if state == nil || !state.Running {
-		return time.Time{}, driver.ErrNotRunning{}
+		return false, driver.ErrNotRunning{}
 	}
 	// Docker reports a container as running before buildkitd has bound its
-	// socket. Wait only during that startup window so an established but broken
-	// builder still returns its connection error promptly.
+	// socket. Use the startup window only to decide whether to wait so an
+	// established but broken builder still returns its connection error promptly.
 	startedAt, err := time.Parse(time.RFC3339Nano, state.StartedAt)
 	if err != nil {
-		return time.Time{}, nil
+		return false, nil
 	}
-	if !now.Before(startedAt.Add(buildkitdStartupTimeout)) {
-		return time.Time{}, nil
-	}
-	return now.Add(buildkitdStartupTimeout), nil
+	return now.Before(startedAt.Add(buildkitdStartupWindow)), nil
 }
 
 func (d *Driver) Factory() driver.Factory {
