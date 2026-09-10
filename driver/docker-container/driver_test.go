@@ -9,48 +9,35 @@ import (
 	"github.com/stretchr/testify/require"
 )
 
-func TestClientWaitDeadline(t *testing.T) {
+func TestClientWaitReady(t *testing.T) {
 	now := time.Now()
+	running := func(startedAt string) *container.State {
+		return &container.State{Running: true, StartedAt: startedAt}
+	}
+	tests := []struct {
+		name     string
+		state    *container.State
+		wantWait bool
+		wantErr  error
+	}{
+		{name: "missing-state-fails-fast", wantErr: driver.ErrNotRunning{}},
+		{name: "stopped-builder-fails-fast", state: &container.State{}, wantErr: driver.ErrNotRunning{}},
+		{name: "established-builder-skips-wait", state: running(now.Add(-2 * buildkitdStartupWindow).Format(time.RFC3339Nano))},
+		{name: "recent-start-builder-waits", state: running(now.Add(-time.Second).Format(time.RFC3339Nano)), wantWait: true},
+		{name: "nearly-expired-startup-window-waits", state: running(now.Add(-buildkitdStartupWindow + time.Nanosecond).Format(time.RFC3339Nano)), wantWait: true},
+		{name: "expired-startup-window-skips-wait", state: running(now.Add(-buildkitdStartupWindow).Format(time.RFC3339Nano))},
+		{name: "invalid-start-time-skips-wait", state: running("invalid")},
+	}
 
-	t.Run("stopped-builder-fails-fast", func(t *testing.T) {
-		deadline, err := clientWaitDeadline(&container.State{}, now)
-		require.ErrorIs(t, err, driver.ErrNotRunning{})
-		require.True(t, deadline.IsZero())
-	})
-
-	t.Run("established-builder-skips-wait", func(t *testing.T) {
-		deadline, err := clientWaitDeadline(&container.State{
-			Running:   true,
-			StartedAt: now.Add(-2 * buildkitdStartupTimeout).Format(time.RFC3339Nano),
-		}, now)
-		require.NoError(t, err)
-		require.True(t, deadline.IsZero())
-	})
-
-	t.Run("recent-start-builder-waits", func(t *testing.T) {
-		deadline, err := clientWaitDeadline(&container.State{
-			Running:   true,
-			StartedAt: now.Add(-time.Second).Format(time.RFC3339Nano),
-		}, now)
-		require.NoError(t, err)
-		require.True(t, deadline.Equal(now.Add(buildkitdStartupTimeout)))
-	})
-
-	t.Run("nearly-expired-startup-window-gets-full-wait", func(t *testing.T) {
-		deadline, err := clientWaitDeadline(&container.State{
-			Running:   true,
-			StartedAt: now.Add(-buildkitdStartupTimeout + time.Nanosecond).Format(time.RFC3339Nano),
-		}, now)
-		require.NoError(t, err)
-		require.True(t, deadline.Equal(now.Add(buildkitdStartupTimeout)))
-	})
-
-	t.Run("invalid-start-time-skips-wait", func(t *testing.T) {
-		deadline, err := clientWaitDeadline(&container.State{
-			Running:   true,
-			StartedAt: "invalid",
-		}, now)
-		require.NoError(t, err)
-		require.True(t, deadline.IsZero())
-	})
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			wait, err := clientWaitReady(tt.state, now)
+			if tt.wantErr != nil {
+				require.ErrorIs(t, err, tt.wantErr)
+			} else {
+				require.NoError(t, err)
+			}
+			require.Equal(t, tt.wantWait, wait)
+		})
+	}
 }
