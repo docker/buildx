@@ -31,7 +31,11 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		scheme, host, want string
 	}{
 		{"https", "example.com", "example.com"},
+		{"https", "example.com:", "example.com:"},
 		{"http", "Example.com", "example.com"},
+		{"https", "\u0130.EXAMPLE.COM:443", "\u0130.example.com"},
+		{"https", "\u00c9XAMPLE.COM", "\u00c9xample.com"},
+		{"https", "\x94.EXAMPLE.COM", "\x94.EXAMPLE.COM"},
 		{"https", "EXAMPLE.COM:000443", "example.com"},
 		{"https", "eXaMpLe.CoM:8443", "example.com:8443"},
 		{"https", "example.com:443", "example.com"},
@@ -40,16 +44,27 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		{"http", ":80", ""},
 		{"https", "example.com:000443", "example.com"},
 		{"http", "example.com:00080", "example.com"},
-		{"https", "example.com:00080", "example.com:00080"},
-		{"http", "example.com:000443", "example.com:000443"},
-		{"https", "example.com:008443", "example.com:008443"},
-		{"http", "example.com:000", "example.com:000"},
+		{"https", "example.com:00080", "example.com:80"},
+		{"http", "example.com:000443", "example.com:443"},
+		{"https", "example.com:008443", "example.com:8443"},
+		{"http", "example.com:0", "example.com:0"},
+		{"http", "example.com:000", "example.com:0"},
 		{"https", "example.com:80", "example.com:80"},
 		{"http", "example.com:443", "example.com:443"},
 		{"https", "example.com:8443", "example.com:8443"},
 		{"http", "example.com:8080", "example.com:8080"},
 		{"https", "[2001:db8::1]", "[2001:db8::1]"},
 		{"https", "[2001:DB8::ABCD]:443", "[2001:db8::abcd]"},
+		{"https", "[2001:0DB8:0000:0000:0001:0000:0000:0001]", "[2001:db8::1:0:0:1]"},
+		{"https", "[0000:0000:0000:0000:0000:0000:0000:0001]:000443", "[::1]"},
+		{"https", "[0000:0000:0000:0000:0000:0000:0000:0001]:008443", "[::1]:8443"},
+		{"https", "[::1]:000", "[::1]:0"},
+		{"https", "[::1]:", "[::1]:"},
+		{"https", "[FE80:0000:0000:0000:0000:0000:0000:ABCD%Eth0]:000443", "[fe80::abcd%Eth0]"},
+		{"https", "[FE80:0000:0000:0000:0000:0000:0000:ABCD%Eth0]:8443", "[fe80::abcd%Eth0]:8443"},
+		{"https", "192.0.2.128:443", "192.0.2.128"},
+		{"https", "[::FFFF:192.0.2.128]:443", "[::ffff:192.0.2.128]"},
+		{"https", "[::FFFF:C000:0280]:443", "[::ffff:192.0.2.128]"},
 		{"https", "[FE80::ABCD%Eth0]:000443", "[fe80::abcd%Eth0]"},
 		{"https", "[FE80::ABCD%Eth0]:8443", "[fe80::abcd%Eth0]:8443"},
 		{"https", "[2001:db8::1]:443", "[2001:db8::1]"},
@@ -122,11 +137,11 @@ func TestSourceToInputSingleSource(t *testing.T) {
 		{
 			name: "https-mixed-case-host-with-non-default-port",
 			src: &gwpb.ResolveSourceMetaResponse{
-				Source: &pb.SourceOp{Identifier: "HTTPS://EXAMPLE.COM:8443/Case?Key=Value"},
+				Source: &pb.SourceOp{Identifier: "HTTPS://EXAMPLE.COM:008443/Case?Key=Value"},
 			},
 			expInput: Input{
 				HTTP: &HTTP{
-					URL:    "HTTPS://EXAMPLE.COM:8443/Case?Key=Value",
+					URL:    "HTTPS://EXAMPLE.COM:008443/Case?Key=Value",
 					Schema: "https",
 					Host:   "example.com:8443",
 					Path:   "/Case",
@@ -138,11 +153,11 @@ func TestSourceToInputSingleSource(t *testing.T) {
 		{
 			name: "https-ipv6-zone-case-preserved",
 			src: &gwpb.ResolveSourceMetaResponse{
-				Source: &pb.SourceOp{Identifier: "HTTPS://[FE80::ABCD%25Eth0]:000443/Case"},
+				Source: &pb.SourceOp{Identifier: "HTTPS://[FE80:0000:0000:0000:0000:0000:0000:ABCD%25Eth0]:000443/Case"},
 			},
 			expInput: Input{
 				HTTP: &HTTP{
-					URL:    "HTTPS://[FE80::ABCD%25Eth0]:000443/Case",
+					URL:    "HTTPS://[FE80:0000:0000:0000:0000:0000:0000:ABCD%25Eth0]:000443/Case",
 					Schema: "https",
 					Host:   "[fe80::abcd%Eth0]",
 					Path:   "/Case",
@@ -1106,6 +1121,9 @@ func TestCheckPolicyHTTPHost(t *testing.T) {
 		allow bool
 	}{
 		{"https://example.com/", true},
+		{"https://i.example.com/", true},
+		{"https://\u0130.example.com/", false},
+		{"https://%C4%B0.example.com/", false},
 		{"Http://Example.com/", true},
 		{"hTtP://eXaMpLe.CoM/", true},
 		{"HTTP://EXAMPLE.COM/", true},
@@ -1121,10 +1139,29 @@ func TestCheckPolicyHTTPHost(t *testing.T) {
 		{"https://example.com:80/", false},
 		{"http://example.com:443/", false},
 		{"https://example.com:8443/", false},
+		{"https://example.com:123/", true},
+		{"https://example.com:000123/", true},
+		{"http://example.com:000123/", true},
+		{"https://example.com:000124/", false},
+		{"https://example.com:0/", false},
+		{"https://example.com:000/", false},
 		{"https://[2001:db8::1]:443/", true},
+		{"https://[2001:0DB8:0000:0000:0000:0000:0000:0001]/", true},
+		{"https://[2001:0DB8:0000:0000:0000:0000:0000:0001]:000443/", true},
+		{"https://[2001:0DB8:0000:0000:0000:0000:0000:0001]:8443/", false},
+		{"https://[FE80:0000:0000:0000:0000:0000:0000:ABCD%25Eth0]:000443/", true},
+		{"https://[FE80:0000:0000:0000:0000:0000:0000:ABCD%25eth0]:000443/", false},
+		{"https://192.0.2.128:443/", true},
+		{"https://[::FFFF:192.0.2.128]:443/", false},
+		{"https://[::FFFF:C000:0280]:443/", false},
 		{"https://[2001:db8::1]:000443/", true},
 		{"http://[2001:db8::1]:00080/", true},
 		{"https://[2001:db8::1]:8443/", false},
+		{"https://[2001:db8::1]:123/", true},
+		{"https://[2001:db8::1]:000123/", true},
+		{"https://[2001:db8::1]:000124/", false},
+		{"https://[2001:db8::1]:0/", false},
+		{"https://[2001:db8::1]:000/", false},
 	} {
 		t.Run(tc.url, func(t *testing.T) {
 			p := NewPolicy(Opt{
@@ -1134,7 +1171,7 @@ func TestCheckPolicyHTTPHost(t *testing.T) {
 package docker
 
 default allow := false
-allow if input.http.host in ["example.com", "[2001:db8::1]"]
+allow if input.http.host in ["example.com", "example.com:123", "i.example.com", "[2001:db8::1]", "[2001:db8::1]:123", "[fe80::abcd%Eth0]", "192.0.2.128"]
 decision := {"allow": allow}
 `),
 				}},
