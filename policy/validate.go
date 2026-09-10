@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"net"
+	"net/netip"
 	"net/url"
 	"path"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
@@ -533,16 +536,31 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 }
 
 func normalizeHTTPHost(u *url.URL) string {
-	host := u.Host
-	port := strings.TrimLeft(u.Port(), "0")
-	if u.Scheme == "http" && port == "80" || u.Scheme == "https" && port == "443" {
-		host = strings.TrimSuffix(host, ":"+u.Port())
+	host := u.Hostname()
+	addr, err := netip.ParseAddr(host)
+	if err == nil {
+		host = addr.String()
+	} else if utf8.ValidString(host) {
+		// Unicode case folding can change the IDNA destination (for example, İ to i).
+		host = strings.Map(func(r rune) rune {
+			if 'A' <= r && r <= 'Z' {
+				return r + ('a' - 'A')
+			}
+			return r
+		}, host)
 	}
-	// Preserve IPv6 zone identifiers, which may be case-sensitive interface names.
-	if i := strings.IndexByte(host, '%'); strings.HasPrefix(host, "[") && i >= 0 {
-		return strings.ToLower(host[:i]) + host[i:]
+	port := u.Port()
+	normalizedPort := strings.TrimLeft(port, "0")
+	if u.Scheme == "http" && normalizedPort == "80" || u.Scheme == "https" && normalizedPort == "443" {
+		port = ""
 	}
-	return strings.ToLower(host)
+	if port != "" || strings.HasSuffix(u.Host, ":") {
+		return net.JoinHostPort(host, port)
+	}
+	if addr.Is6() {
+		return "[" + host + "]"
+	}
+	return host
 }
 
 func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform, logf func(logrus.Level, string)) (Input, []string, error) {
