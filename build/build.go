@@ -615,7 +615,8 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					// shared solver vertices land on the same daemon instance
 					c = linkedClients[node.Name]
 					if c == nil {
-						c, err = dp.Client(ctx)
+						// The shared client must outlive this target's errgroup.
+						c, err = dp.Client(baseCtx)
 						if err == nil {
 							linkedClients[node.Name] = c
 						}
