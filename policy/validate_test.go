@@ -31,6 +31,9 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		scheme, host, want string
 	}{
 		{"https", "example.com", "example.com"},
+		{"http", "Example.com", "example.com"},
+		{"https", "EXAMPLE.COM:000443", "example.com"},
+		{"https", "eXaMpLe.CoM:8443", "example.com:8443"},
 		{"https", "example.com:443", "example.com"},
 		{"http", "example.com:80", "example.com"},
 		{"https", ":443", ""},
@@ -46,6 +49,9 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		{"https", "example.com:8443", "example.com:8443"},
 		{"http", "example.com:8080", "example.com:8080"},
 		{"https", "[2001:db8::1]", "[2001:db8::1]"},
+		{"https", "[2001:DB8::ABCD]:443", "[2001:db8::abcd]"},
+		{"https", "[FE80::ABCD%Eth0]:000443", "[fe80::abcd%Eth0]"},
+		{"https", "[FE80::ABCD%Eth0]:8443", "[fe80::abcd%Eth0]:8443"},
 		{"https", "[2001:db8::1]:443", "[2001:db8::1]"},
 		{"https", "[2001:db8::1]:000443", "[2001:db8::1]"},
 		{"http", "[2001:db8::1]:00080", "[2001:db8::1]"},
@@ -96,6 +102,54 @@ func TestSourceToInputSingleSource(t *testing.T) {
 				Source: &pb.SourceOp{Identifier: "https://::1:443"},
 			},
 			expErrMsg: "failed to parse http source url",
+		},
+		{
+			name: "http-mixed-case-scheme-and-host",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag"},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:    "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag",
+					Schema: "http",
+					Host:   "example.com",
+					Path:   "/Case/Path",
+					Query:  map[string][]string{"Key": {"VaLuE"}},
+				},
+			},
+			expUnk: []string{"input.http.checksum"},
+		},
+		{
+			name: "https-mixed-case-host-with-non-default-port",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "HTTPS://EXAMPLE.COM:8443/Case?Key=Value"},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:    "HTTPS://EXAMPLE.COM:8443/Case?Key=Value",
+					Schema: "https",
+					Host:   "example.com:8443",
+					Path:   "/Case",
+					Query:  map[string][]string{"Key": {"Value"}},
+				},
+			},
+			expUnk: []string{"input.http.checksum"},
+		},
+		{
+			name: "https-ipv6-zone-case-preserved",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "HTTPS://[FE80::ABCD%25Eth0]:000443/Case"},
+			},
+			expInput: Input{
+				HTTP: &HTTP{
+					URL:    "HTTPS://[FE80::ABCD%25Eth0]:000443/Case",
+					Schema: "https",
+					Host:   "[fe80::abcd%Eth0]",
+					Path:   "/Case",
+					Query:  map[string][]string{},
+				},
+			},
+			expUnk: []string{"input.http.checksum"},
 		},
 		{
 			name: "http-source-with-checksum-and-auth",
@@ -1052,6 +1106,11 @@ func TestCheckPolicyHTTPHost(t *testing.T) {
 		allow bool
 	}{
 		{"https://example.com/", true},
+		{"Http://Example.com/", true},
+		{"hTtP://eXaMpLe.CoM/", true},
+		{"HTTP://EXAMPLE.COM/", true},
+		{"HTTPS://EXAMPLE.COM:000443/", true},
+		{"HTTPS://EXAMPLE.COM:8443/", false},
 		{"https://example.com:443/", true},
 		{"http://example.com:80/", true},
 		{"https://example.com:000443/", true},

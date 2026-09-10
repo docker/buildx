@@ -533,13 +533,16 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 }
 
 func normalizeHTTPHost(u *url.URL) string {
+	host := u.Host
 	port := strings.TrimLeft(u.Port(), "0")
-	switch {
-	case u.Scheme == "http" && port == "80", u.Scheme == "https" && port == "443":
-		return strings.TrimSuffix(u.Host, ":"+u.Port())
-	default:
-		return u.Host
+	if u.Scheme == "http" && port == "80" || u.Scheme == "https" && port == "443" {
+		host = strings.TrimSuffix(host, ":"+u.Port())
 	}
+	// Preserve IPv6 zone identifiers, which may be case-sensitive interface names.
+	if i := strings.IndexByte(host, '%'); strings.HasPrefix(host, "[") && i >= 0 {
+		return strings.ToLower(host[:i]) + host[i:]
+	}
+	return strings.ToLower(host)
 }
 
 func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform, logf func(logrus.Level, string)) (Input, []string, error) {
@@ -554,6 +557,7 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 	if !ok {
 		return inp, nil, errors.Errorf("invalid source identifier: %s", src.Source.Identifier)
 	}
+	scheme = strings.ToLower(scheme)
 
 	switch scheme {
 	case "http", "https":
