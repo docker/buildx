@@ -91,7 +91,7 @@ func runRm(ctx context.Context, dockerCli command.Cli, in rmOptions) error {
 					return err
 				}
 
-				err1 := rm(timeoutCtx, nodes, in)
+				err1 := rm(ctx, nodes, in)
 				if err := txn.Remove(b.Name); err != nil {
 					return err
 				}
@@ -200,7 +200,7 @@ func rmAllInactive(ctx context.Context, txn *store.Txn, dockerCli command.Cli, i
 					return nil
 				}
 				if b.Inactive() {
-					rmerr := rm(timeoutCtx, nodes, in)
+					rmerr := rm(ctx, nodes, in)
 					if err := txn.Remove(b.Name); err != nil {
 						return err
 					}
