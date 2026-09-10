@@ -46,11 +46,6 @@ as part of the build.
 Read [High-level build options with Bake](https://docs.docker.com/build/bake/)
 guide for introduction to writing bake files.
 
-> [!NOTE]
-> `buildx bake` command may receive backwards incompatible features in the future
-> if needed. We are looking for feedback on improving the command and extending
-> the functionality further.
-
 ## Examples
 
 ### <a name="allow"></a> Allow extra privileged entitlement (--allow)
