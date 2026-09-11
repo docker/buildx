@@ -110,6 +110,9 @@ func (w *waitingWriter) Write(dt []byte) (int, error) {
 
 func (w *waitingWriter) Close() error {
 	err := w.PipeWriter.Close()
+	w.once.Do(func() {
+		close(w.done)
+	})
 	<-w.done
 	if err == nil {
 		w.mu.Lock()
