@@ -15,7 +15,7 @@ import (
 	composeschema "github.com/compose-spec/compose-go/v2/schema"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/buildx/util/buildflags"
-	dockeropts "github.com/docker/cli/opts"
+	dockeropts "github.com/docker/cli/v29/opts"
 	"github.com/docker/go-units"
 	"github.com/pkg/errors"
 	"go.yaml.in/yaml/v3"

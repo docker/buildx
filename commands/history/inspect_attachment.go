@@ -7,7 +7,7 @@ import (
 	"github.com/containerd/containerd/v2/core/content/proxy"
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/util/cobrautil/completion"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	intoto "github.com/in-toto/in-toto-golang/in_toto"
 	slsa02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"

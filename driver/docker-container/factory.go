@@ -7,7 +7,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/driver"
-	dockeropts "github.com/docker/cli/opts"
+	dockeropts "github.com/docker/cli/v29/opts"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 )

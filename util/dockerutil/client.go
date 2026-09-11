@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	dockerclient "github.com/moby/moby/client"
 )
 

@@ -1,8 +1,8 @@
 package dockerutil
 
 import (
-	"github.com/docker/cli/cli/command"
-	"github.com/docker/cli/cli/context/docker"
+	"github.com/docker/cli/v29/cli/command"
+	"github.com/docker/cli/v29/cli/context/docker"
 	"github.com/pkg/errors"
 )
 

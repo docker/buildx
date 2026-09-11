@@ -13,7 +13,7 @@ import (
 	remoteutil "github.com/docker/buildx/driver/remote/util"
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/desktop"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/pkg/browser"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"

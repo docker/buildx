@@ -6,7 +6,7 @@ import (
 	"sync"
 
 	"github.com/docker/buildx/util/sourcemeta"
-	"github.com/docker/cli/cli/context/store"
+	"github.com/docker/cli/v29/cli/context/store"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/tracing/delegated"

@@ -27,7 +27,7 @@ import (
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/urlutil"
-	dockeropts "github.com/docker/cli/opts"
+	dockeropts "github.com/docker/cli/v29/opts"
 	hcl "github.com/hashicorp/hcl/v2"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"

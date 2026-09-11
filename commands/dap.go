@@ -10,8 +10,8 @@ import (
 	"github.com/docker/buildx/dap/common"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/cli/cli"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )

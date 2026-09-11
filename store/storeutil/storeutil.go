@@ -11,7 +11,7 @@ import (
 	"github.com/docker/buildx/util/dockerutil/dockerconfig"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/buildx/util/resolver"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	buildkitdconfig "github.com/moby/buildkit/cmd/buildkitd/config"
 	"github.com/pkg/errors"
 )

@@ -12,7 +12,7 @@ import (
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/moby/buildkit/util/appcontext"
 	"github.com/moby/buildkit/util/progress/progressui"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
