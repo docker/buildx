@@ -47,14 +47,14 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 	imageVerifier := policy.DefaultImageVerifier(confutil.NewConfig(dockerCli))
 	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
 	if in.bootstrap {
-		var ok bool
-		ok, err = b.Boot(ctx)
+		_, err = b.Boot(ctx)
 		if err != nil {
 			return err
 		}
-		if ok {
-			nodes, err = b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
-		}
+		// Always reload. Boot() returns ok=false when it had nothing to start
+		// (already running, or the first LoadNodes never got DriverInfo).
+		// Skipping the reload leaves inspect printing stale "inactive" nodes.
+		nodes, err = b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
 	}
 
 	w := tabwriter.NewWriter(os.Stdout, 0, 0, 1, ' ', 0)
