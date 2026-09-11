@@ -1,4 +1,4 @@
-// Copyright 2016 The Go Authors. All rights reserved.
+// Copyright 2020 The Go Authors. All rights reserved.
 // Use of this source code is governed by a BSD-style
 // license that can be found in the LICENSE file.
 
@@ -8,6 +8,31 @@
 
 #include "textflag.h"
 
+#define R_TMP0 R2
+#define R_TMP1 R3
+#define R_LEN R4
+#define R_OFF R5
+#define R_SRC R6
+#define R_DST R7
+#define R_DBASE R8
+#define R_DLEN R9
+#define R_DEND R10
+#define R_SBASE R11
+#define R_SLEN R12
+#define R_SEND R13
+#define R_TMP2 R14
+#define R_TMP3 R15
+
+// TEST_SRC will check if R_SRC is <= SRC_END
+#define TEST_SRC() \
+	CMP R_SEND, R_SRC \
+	BGT errCorrupt
+
+// MOVD R_SRC, R_TMP1
+// SUB  R_SBASE, R_TMP1, R_TMP1
+// CMP  R_SLEN, R_TMP1
+// BGT  errCorrupt
+
 // The asm code generally follows the pure Go code in decode_other.go, except
 // where marked with a "!!!".
 
@@ -15,52 +40,54 @@
 //
 // All local variables fit into registers. The non-zero stack size is only to
 // spill registers and push args when issuing a CALL. The register allocation:
-//	- AX	scratch
-//	- BX	scratch
-//	- CX	length or x
-//	- DX	offset
-//	- SI	&src[s]
-//	- DI	&dst[d]
-//	+ R8	dst_base
-//	+ R9	dst_len
-//	+ R10	dst_base + dst_len
-//	+ R11	src_base
-//	+ R12	src_len
-//	+ R13	src_base + src_len
-//	- R14	used by doCopy
-//	- R15	used by doCopy
+//	- R_TMP0	scratch
+//	- R_TMP1	scratch
+//	- R_LEN	length or x
+//	- R_OFF	offset
+//	- R_SRC	&src[s]
+//	- R_DST	&dst[d]
+//	+ R_DBASE	dst_base
+//	+ R_DLEN	dst_len
+//	+ R_DEND	dst_base + dst_len
+//	+ R_SBASE	src_base
+//	+ R_SLEN	src_len
+//	+ R_SEND	src_base + src_len
+//	- R_TMP2	used by doCopy
+//	- R_TMP3	used by doCopy
 //
-// The registers R8-R13 (marked with a "+") are set at the start of the
+// The registers R_DBASE-R_SEND (marked with a "+") are set at the start of the
 // function, and after a CALL returns, and are not otherwise modified.
 //
-// The d variable is implicitly DI - R8,  and len(dst)-d is R10 - DI.
-// The s variable is implicitly SI - R11, and len(src)-s is R13 - SI.
-TEXT ·decode(SB), NOSPLIT, $48-56
-	// Initialize SI, DI and R8-R13.
-	MOVQ dst_base+0(FP), R8
-	MOVQ dst_len+8(FP), R9
-	MOVQ R8, DI
-	MOVQ R8, R10
-	ADDQ R9, R10
-	MOVQ src_base+24(FP), R11
-	MOVQ src_len+32(FP), R12
-	MOVQ R11, SI
-	MOVQ R11, R13
-	ADDQ R12, R13
+// The d variable is implicitly R_DST - R_DBASE,  and len(dst)-d is R_DEND - R_DST.
+// The s variable is implicitly R_SRC - R_SBASE, and len(src)-s is R_SEND - R_SRC.
+TEXT ·s2Decode(SB), NOSPLIT, $56-56
+	// Initialize R_SRC, R_DST and R_DBASE-R_SEND.
+	MOVD dst_base+0(FP), R_DBASE
+	MOVD dst_len+8(FP), R_DLEN
+	MOVD R_DBASE, R_DST
+	MOVD R_DBASE, R_DEND
+	ADD  R_DLEN, R_DEND, R_DEND
+	MOVD src_base+24(FP), R_SBASE
+	MOVD src_len+32(FP), R_SLEN
+	MOVD R_SBASE, R_SRC
+	MOVD R_SBASE, R_SEND
+	ADD  R_SLEN, R_SEND, R_SEND
+	MOVD $0, R_OFF
 
 loop:
 	// for s < len(src)
-	CMPQ SI, R13
-	JEQ  end
+	CMP R_SEND, R_SRC
+	BEQ end
 
-	// CX = uint32(src[s])
+	// R_LEN = uint32(src[s])
 	//
 	// switch src[s] & 0x03
-	MOVBLZX (SI), CX
-	MOVL    CX, BX
-	ANDL    $3, BX
-	CMPL    BX, $1
-	JAE     tagCopy
+	MOVBU (R_SRC), R_LEN
+	MOVW  R_LEN, R_TMP1
+	ANDW  $3, R_TMP1
+	MOVW  $1, R1
+	CMPW  R1, R_TMP1
+	BGE   tagCopy
 
 	// ----------------------------------------
 	// The code below handles literal tags.
@@ -68,35 +95,36 @@ loop:
 	// case tagLiteral:
 	// x := uint32(src[s] >> 2)
 	// switch
-	SHRL $2, CX
-	CMPL CX, $60
-	JAE  tagLit60Plus
+	MOVW $60, R1
+	LSRW $2, R_LEN, R_LEN
+	CMPW R_LEN, R1
+	BLS  tagLit60Plus
 
 	// case x < 60:
 	// s++
-	INCQ SI
+	ADD $1, R_SRC, R_SRC
 
 doLit:
 	// This is the end of the inner "switch", when we have a literal tag.
 	//
-	// We assume that CX == x and x fits in a uint32, where x is the variable
+	// We assume that R_LEN == x and x fits in a uint32, where x is the variable
 	// used in the pure Go decode_other.go code.
 
 	// length = int(x) + 1
 	//
 	// Unlike the pure Go code, we don't need to check if length <= 0 because
-	// CX can hold 64 bits, so the increment cannot overflow.
-	INCQ CX
+	// R_LEN can hold 64 bits, so the increment cannot overflow.
+	ADD $1, R_LEN, R_LEN
 
 	// Prepare to check if copying length bytes will run past the end of dst or
 	// src.
 	//
-	// AX = len(dst) - d
-	// BX = len(src) - s
-	MOVQ R10, AX
-	SUBQ DI, AX
-	MOVQ R13, BX
-	SUBQ SI, BX
+	// R_TMP0 = len(dst) - d
+	// R_TMP1 = len(src) - s
+	MOVD R_DEND, R_TMP0
+	SUB  R_DST, R_TMP0, R_TMP0
+	MOVD R_SEND, R_TMP1
+	SUB  R_SRC, R_TMP1, R_TMP1
 
 	// !!! Try a faster technique for short (16 or fewer bytes) copies.
 	//
@@ -109,12 +137,12 @@ doLit:
 	// is contiguous in memory and so it needs to leave enough source bytes to
 	// read the next tag without refilling buffers, but Go's Decode assumes
 	// contiguousness (the src argument is a []byte).
-	CMPQ CX, $16
-	JGT  callMemmove
-	CMPQ AX, $16
-	JLT  callMemmove
-	CMPQ BX, $16
-	JLT  callMemmove
+	CMP $16, R_LEN
+	BGT callMemmove
+	CMP $16, R_TMP0
+	BLT callMemmove
+	CMP $16, R_TMP1
+	BLT callMemmove
 
 	// !!! Implement the copy from src to dst as a 16-byte load and store.
 	// (Decode's documentation says that dst and src must not overlap.)
@@ -124,57 +152,59 @@ doLit:
 	// will fix up the overrun. Otherwise, Decode returns a nil []byte (and a
 	// non-nil error), so the overrun will be ignored.
 	//
-	// Note that on amd64, it is legal and cheap to issue unaligned 8-byte or
+	// Note that on arm64, it is legal and cheap to issue unaligned 8-byte or
 	// 16-byte loads and stores. This technique probably wouldn't be as
 	// effective on architectures that are fussier about alignment.
-	MOVOU 0(SI), X0
-	MOVOU X0, 0(DI)
+	LDP 0(R_SRC), (R_TMP2, R_TMP3)
+	STP (R_TMP2, R_TMP3), 0(R_DST)
 
 	// d += length
 	// s += length
-	ADDQ CX, DI
-	ADDQ CX, SI
-	JMP  loop
+	ADD R_LEN, R_DST, R_DST
+	ADD R_LEN, R_SRC, R_SRC
+	B   loop
 
 callMemmove:
 	// if length > len(dst)-d || length > len(src)-s { etc }
-	CMPQ CX, AX
-	JGT  errCorrupt
-	CMPQ CX, BX
-	JGT  errCorrupt
+	CMP R_TMP0, R_LEN
+	BGT errCorrupt
+	CMP R_TMP1, R_LEN
+	BGT errCorrupt
 
 	// copy(dst[d:], src[s:s+length])
 	//
 	// This means calling runtime·memmove(&dst[d], &src[s], length), so we push
-	// DI, SI and CX as arguments. Coincidentally, we also need to spill those
+	// R_DST, R_SRC and R_LEN as arguments. Coincidentally, we also need to spill those
 	// three registers to the stack, to save local variables across the CALL.
-	MOVQ DI, 0(SP)
-	MOVQ SI, 8(SP)
-	MOVQ CX, 16(SP)
-	MOVQ DI, 24(SP)
-	MOVQ SI, 32(SP)
-	MOVQ CX, 40(SP)
+	MOVD R_DST, 8(RSP)
+	MOVD R_SRC, 16(RSP)
+	MOVD R_LEN, 24(RSP)
+	MOVD R_DST, 32(RSP)
+	MOVD R_SRC, 40(RSP)
+	MOVD R_LEN, 48(RSP)
+	MOVD R_OFF, 56(RSP)
 	CALL runtime·memmove(SB)
 
 	// Restore local variables: unspill registers from the stack and
-	// re-calculate R8-R13.
-	MOVQ 24(SP), DI
-	MOVQ 32(SP), SI
-	MOVQ 40(SP), CX
-	MOVQ dst_base+0(FP), R8
-	MOVQ dst_len+8(FP), R9
-	MOVQ R8, R10
-	ADDQ R9, R10
-	MOVQ src_base+24(FP), R11
-	MOVQ src_len+32(FP), R12
-	MOVQ R11, R13
-	ADDQ R12, R13
+	// re-calculate R_DBASE-R_SEND.
+	MOVD 32(RSP), R_DST
+	MOVD 40(RSP), R_SRC
+	MOVD 48(RSP), R_LEN
+	MOVD 56(RSP), R_OFF
+	MOVD dst_base+0(FP), R_DBASE
+	MOVD dst_len+8(FP), R_DLEN
+	MOVD R_DBASE, R_DEND
+	ADD  R_DLEN, R_DEND, R_DEND
+	MOVD src_base+24(FP), R_SBASE
+	MOVD src_len+32(FP), R_SLEN
+	MOVD R_SBASE, R_SEND
+	ADD  R_SLEN, R_SEND, R_SEND
 
 	// d += length
 	// s += length
-	ADDQ CX, DI
-	ADDQ CX, SI
-	JMP  loop
+	ADD R_LEN, R_DST, R_DST
+	ADD R_LEN, R_SRC, R_SRC
+	B   loop
 
 tagLit60Plus:
 	// !!! This fragment does the
@@ -182,150 +212,199 @@ tagLit60Plus:
 	// s += x - 58; if uint(s) > uint(len(src)) { etc }
 	//
 	// checks. In the asm version, we code it once instead of once per switch case.
-	ADDQ CX, SI
-	SUBQ $58, SI
-	MOVQ SI, BX
-	SUBQ R11, BX
-	CMPQ BX, R12
-	JA   errCorrupt
+	ADD R_LEN, R_SRC, R_SRC
+	SUB $58, R_SRC, R_SRC
+	TEST_SRC()
 
 	// case x == 60:
-	CMPL CX, $61
-	JEQ  tagLit61
-	JA   tagLit62Plus
+	MOVW $61, R1
+	CMPW R1, R_LEN
+	BEQ  tagLit61
+	BGT  tagLit62Plus
 
 	// x = uint32(src[s-1])
-	MOVBLZX -1(SI), CX
-	JMP     doLit
+	MOVBU -1(R_SRC), R_LEN
+	B     doLit
 
 tagLit61:
 	// case x == 61:
 	// x = uint32(src[s-2]) | uint32(src[s-1])<<8
-	MOVWLZX -2(SI), CX
-	JMP     doLit
+	MOVHU -2(R_SRC), R_LEN
+	B     doLit
 
 tagLit62Plus:
-	CMPL CX, $62
-	JA   tagLit63
+	CMPW $62, R_LEN
+	BHI  tagLit63
 
 	// case x == 62:
 	// x = uint32(src[s-3]) | uint32(src[s-2])<<8 | uint32(src[s-1])<<16
-	MOVWLZX -3(SI), CX
-	MOVBLZX -1(SI), BX
-	SHLL    $16, BX
-	ORL     BX, CX
-	JMP     doLit
+	MOVHU -3(R_SRC), R_LEN
+	MOVBU -1(R_SRC), R_TMP1
+	ORR   R_TMP1<<16, R_LEN
+	B     doLit
 
 tagLit63:
 	// case x == 63:
 	// x = uint32(src[s-4]) | uint32(src[s-3])<<8 | uint32(src[s-2])<<16 | uint32(src[s-1])<<24
-	MOVL -4(SI), CX
-	JMP  doLit
+	MOVWU -4(R_SRC), R_LEN
+	B     doLit
 
-// The code above handles literal tags.
-// ----------------------------------------
-// The code below handles copy tags.
+	// The code above handles literal tags.
+	// ----------------------------------------
+	// The code below handles copy tags.
 
 tagCopy4:
 	// case tagCopy4:
 	// s += 5
-	ADDQ $5, SI
+	ADD $5, R_SRC, R_SRC
 
 	// if uint(s) > uint(len(src)) { etc }
-	MOVQ SI, BX
-	SUBQ R11, BX
-	CMPQ BX, R12
-	JA   errCorrupt
+	MOVD R_SRC, R_TMP1
+	SUB  R_SBASE, R_TMP1, R_TMP1
+	CMP  R_SLEN, R_TMP1
+	BGT  errCorrupt
 
 	// length = 1 + int(src[s-5])>>2
-	SHRQ $2, CX
-	INCQ CX
+	MOVD $1, R1
+	ADD  R_LEN>>2, R1, R_LEN
 
 	// offset = int(uint32(src[s-4]) | uint32(src[s-3])<<8 | uint32(src[s-2])<<16 | uint32(src[s-1])<<24)
-	MOVLQZX -4(SI), DX
-	JMP     doCopy
+	MOVWU -4(R_SRC), R_OFF
+	B     doCopy
 
 tagCopy2:
 	// case tagCopy2:
 	// s += 3
-	ADDQ $3, SI
+	ADD $3, R_SRC, R_SRC
 
 	// if uint(s) > uint(len(src)) { etc }
-	MOVQ SI, BX
-	SUBQ R11, BX
-	CMPQ BX, R12
-	JA   errCorrupt
+	TEST_SRC()
 
 	// length = 1 + int(src[s-3])>>2
-	SHRQ $2, CX
-	INCQ CX
+	MOVD $1, R1
+	ADD  R_LEN>>2, R1, R_LEN
 
 	// offset = int(uint32(src[s-2]) | uint32(src[s-1])<<8)
-	MOVWQZX -2(SI), DX
-	JMP     doCopy
+	MOVHU -2(R_SRC), R_OFF
+	B     doCopy
 
 tagCopy:
 	// We have a copy tag. We assume that:
-	//	- BX == src[s] & 0x03
-	//	- CX == src[s]
-	CMPQ BX, $2
-	JEQ  tagCopy2
-	JA   tagCopy4
+	//	- R_TMP1 == src[s] & 0x03
+	//	- R_LEN == src[s]
+	CMP $2, R_TMP1
+	BEQ tagCopy2
+	BGT tagCopy4
 
 	// case tagCopy1:
 	// s += 2
-	ADDQ $2, SI
+	ADD $2, R_SRC, R_SRC
 
 	// if uint(s) > uint(len(src)) { etc }
-	MOVQ SI, BX
-	SUBQ R11, BX
-	CMPQ BX, R12
-	JA   errCorrupt
+	TEST_SRC()
 
 	// offset = int(uint32(src[s-2])&0xe0<<3 | uint32(src[s-1]))
-	MOVQ    CX, DX
-	ANDQ    $0xe0, DX
-	SHLQ    $3, DX
-	MOVBQZX -1(SI), BX
-	ORQ     BX, DX
+	// Calculate offset in R_TMP0 in case it is a repeat.
+	MOVD  R_LEN, R_TMP0
+	AND   $0xe0, R_TMP0
+	MOVBU -1(R_SRC), R_TMP1
+	ORR   R_TMP0<<3, R_TMP1, R_TMP0
 
 	// length = 4 + int(src[s-2])>>2&0x7
-	SHRQ $2, CX
-	ANDQ $7, CX
-	ADDQ $4, CX
+	MOVD $7, R1
+	AND  R_LEN>>2, R1, R_LEN
+	ADD  $4, R_LEN, R_LEN
+
+	// check if repeat code with offset 0.
+	CMP $0, R_TMP0
+	BEQ repeatCode
+
+	// This is a regular copy, transfer our temporary value to R_OFF (offset)
+	MOVD R_TMP0, R_OFF
+	B    doCopy
+
+	// This is a repeat code.
+repeatCode:
+	// If length < 9, reuse last offset, with the length already calculated.
+	CMP $9, R_LEN
+	BLT doCopyRepeat
+	BEQ repeatLen1
+	CMP $10, R_LEN
+	BEQ repeatLen2
+
+repeatLen3:
+	// s +=3
+	ADD $3, R_SRC, R_SRC
+
+	// if uint(s) > uint(len(src)) { etc }
+	TEST_SRC()
+
+	// length = uint32(src[s-3]) | (uint32(src[s-2])<<8) | (uint32(src[s-1])<<16) + 65540
+	MOVBU -1(R_SRC), R_TMP0
+	MOVHU -3(R_SRC), R_LEN
+	ORR   R_TMP0<<16, R_LEN, R_LEN
+	ADD   $65540, R_LEN, R_LEN
+	B     doCopyRepeat
+
+repeatLen2:
+	// s +=2
+	ADD $2, R_SRC, R_SRC
+
+	// if uint(s) > uint(len(src)) { etc }
+	TEST_SRC()
+
+	// length = uint32(src[s-2]) | (uint32(src[s-1])<<8) + 260
+	MOVHU -2(R_SRC), R_LEN
+	ADD   $260, R_LEN, R_LEN
+	B     doCopyRepeat
+
+repeatLen1:
+	// s +=1
+	ADD $1, R_SRC, R_SRC
+
+	// if uint(s) > uint(len(src)) { etc }
+	TEST_SRC()
+
+	// length = src[s-1] + 8
+	MOVBU -1(R_SRC), R_LEN
+	ADD   $8, R_LEN, R_LEN
+	B     doCopyRepeat
 
 doCopy:
 	// This is the end of the outer "switch", when we have a copy tag.
 	//
 	// We assume that:
-	//	- CX == length && CX > 0
-	//	- DX == offset
-
-	// if offset <= 0 { etc }
-	CMPQ DX, $0
-	JLE  errCorrupt
+	//	- R_LEN == length && R_LEN > 0
+	//	- R_OFF == offset
 
 	// if d < offset { etc }
-	MOVQ DI, BX
-	SUBQ R8, BX
-	CMPQ BX, DX
-	JLT  errCorrupt
+	MOVD R_DST, R_TMP1
+	SUB  R_DBASE, R_TMP1, R_TMP1
+	CMP  R_OFF, R_TMP1
+	BLT  errCorrupt
+
+	// Repeat values can skip the test above, since any offset > 0 will be in dst.
+doCopyRepeat:
+
+	// if offset <= 0 { etc }
+	CMP $0, R_OFF
+	BLE errCorrupt
 
 	// if length > len(dst)-d { etc }
-	MOVQ R10, BX
-	SUBQ DI, BX
-	CMPQ CX, BX
-	JGT  errCorrupt
+	MOVD R_DEND, R_TMP1
+	SUB  R_DST, R_TMP1, R_TMP1
+	CMP  R_TMP1, R_LEN
+	BGT  errCorrupt
 
 	// forwardCopy(dst[d:d+length], dst[d-offset:]); d += length
 	//
 	// Set:
-	//	- R14 = len(dst)-d
-	//	- R15 = &dst[d-offset]
-	MOVQ R10, R14
-	SUBQ DI, R14
-	MOVQ DI, R15
-	SUBQ DX, R15
+	//	- R_TMP2 = len(dst)-d
+	//	- R_TMP3 = &dst[d-offset]
+	MOVD R_DEND, R_TMP2
+	SUB  R_DST, R_TMP2, R_TMP2
+	MOVD R_DST, R_TMP3
+	SUB  R_OFF, R_TMP3, R_TMP3
 
 	// !!! Try a faster technique for short (16 or fewer bytes) forward copies.
 	//
@@ -340,18 +419,18 @@ doCopy:
 	// }
 	// copy 16 bytes
 	// d += length
-	CMPQ CX, $16
-	JGT  slowForwardCopy
-	CMPQ DX, $8
-	JLT  slowForwardCopy
-	CMPQ R14, $16
-	JLT  slowForwardCopy
-	MOVQ 0(R15), AX
-	MOVQ AX, 0(DI)
-	MOVQ 8(R15), BX
-	MOVQ BX, 8(DI)
-	ADDQ CX, DI
-	JMP  loop
+	CMP  $16, R_LEN
+	BGT  slowForwardCopy
+	CMP  $8, R_OFF
+	BLT  slowForwardCopy
+	CMP  $16, R_TMP2
+	BLT  slowForwardCopy
+	MOVD 0(R_TMP3), R_TMP0
+	MOVD R_TMP0, 0(R_DST)
+	MOVD 8(R_TMP3), R_TMP1
+	MOVD R_TMP1, 8(R_DST)
+	ADD  R_LEN, R_DST, R_DST
+	B    loop
 
 slowForwardCopy:
 	// !!! If the forward copy is longer than 16 bytes, or if offset < 8, we
@@ -402,9 +481,12 @@ slowForwardCopy:
 	// if length > len(dst)-d-10 {
 	//   goto verySlowForwardCopy
 	// }
-	SUBQ $10, R14
-	CMPQ CX, R14
-	JGT  verySlowForwardCopy
+	SUB $10, R_TMP2, R_TMP2
+	CMP R_TMP2, R_LEN
+	BGT verySlowForwardCopy
+
+	// We want to keep the offset, so we use R_TMP2 from here.
+	MOVD R_OFF, R_TMP2
 
 makeOffsetAtLeast8:
 	// !!! As above, expand the pattern so that offset >= 8 and we can use
@@ -416,38 +498,39 @@ makeOffsetAtLeast8:
 	//   d      += offset
 	//   offset += offset
 	//   // The two previous lines together means that d-offset, and therefore
-	//   // R15, is unchanged.
+	//   // R_TMP3, is unchanged.
 	// }
-	CMPQ DX, $8
-	JGE  fixUpSlowForwardCopy
-	MOVQ (R15), BX
-	MOVQ BX, (DI)
-	SUBQ DX, CX
-	ADDQ DX, DI
-	ADDQ DX, DX
-	JMP  makeOffsetAtLeast8
+	CMP  $8, R_TMP2
+	BGE  fixUpSlowForwardCopy
+	MOVD (R_TMP3), R_TMP1
+	MOVD R_TMP1, (R_DST)
+	SUB  R_TMP2, R_LEN, R_LEN
+	ADD  R_TMP2, R_DST, R_DST
+	ADD  R_TMP2, R_TMP2, R_TMP2
+	B    makeOffsetAtLeast8
 
 fixUpSlowForwardCopy:
-	// !!! Add length (which might be negative now) to d (implied by DI being
+	// !!! Add length (which might be negative now) to d (implied by R_DST being
 	// &dst[d]) so that d ends up at the right place when we jump back to the
-	// top of the loop. Before we do that, though, we save DI to AX so that, if
+	// top of the loop. Before we do that, though, we save R_DST to R_TMP0 so that, if
 	// length is positive, copying the remaining length bytes will write to the
 	// right place.
-	MOVQ DI, AX
-	ADDQ CX, DI
+	MOVD R_DST, R_TMP0
+	ADD  R_LEN, R_DST, R_DST
 
 finishSlowForwardCopy:
 	// !!! Repeat 8-byte load/stores until length <= 0. Ending with a negative
 	// length means that we overrun, but as above, that will be fixed up by
 	// subsequent iterations of the outermost loop.
-	CMPQ CX, $0
-	JLE  loop
-	MOVQ (R15), BX
-	MOVQ BX, (AX)
-	ADDQ $8, R15
-	ADDQ $8, AX
-	SUBQ $8, CX
-	JMP  finishSlowForwardCopy
+	MOVD $0, R1
+	CMP  R1, R_LEN
+	BLE  loop
+	MOVD (R_TMP3), R_TMP1
+	MOVD R_TMP1, (R_TMP0)
+	ADD  $8, R_TMP3, R_TMP3
+	ADD  $8, R_TMP0, R_TMP0
+	SUB  $8, R_LEN, R_LEN
+	B    finishSlowForwardCopy
 
 verySlowForwardCopy:
 	// verySlowForwardCopy is a simple implementation of forward copy. In C
@@ -462,29 +545,30 @@ verySlowForwardCopy:
 	//     break
 	//   }
 	// }
-	MOVB (R15), BX
-	MOVB BX, (DI)
-	INCQ R15
-	INCQ DI
-	DECQ CX
-	JNZ  verySlowForwardCopy
-	JMP  loop
+	MOVB (R_TMP3), R_TMP1
+	MOVB R_TMP1, (R_DST)
+	ADD  $1, R_TMP3, R_TMP3
+	ADD  $1, R_DST, R_DST
+	SUB  $1, R_LEN, R_LEN
+	CBNZ R_LEN, verySlowForwardCopy
+	B    loop
 
-// The code above handles copy tags.
-// ----------------------------------------
+	// The code above handles copy tags.
+	// ----------------------------------------
 
 end:
 	// This is the end of the "for s < len(src)".
 	//
 	// if d != len(dst) { etc }
-	CMPQ DI, R10
-	JNE  errCorrupt
+	CMP R_DEND, R_DST
+	BNE errCorrupt
 
 	// return 0
-	MOVQ $0, ret+48(FP)
+	MOVD $0, ret+48(FP)
 	RET
 
 errCorrupt:
 	// return decodeErrCodeCorrupt
-	MOVQ $1, ret+48(FP)
+	MOVD $1, R_TMP0
+	MOVD R_TMP0, ret+48(FP)
 	RET
