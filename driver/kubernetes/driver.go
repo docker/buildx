@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"math/rand"
 	"net"
 	"strings"
 	"syscall"
@@ -389,9 +390,37 @@ func isTransientConnectionError(err error) bool {
 	return false
 }
 
-// calculateBackoff calculates the delay for the given attempt with exponential backoff.
+// calculateBackoff calculates the delay for the given attempt with exponential
+// backoff and additive jitter, drawing from [d, 2d] capped by maxDelay, where d
+// is the exponential value for the attempt. The exponential value is the floor
+// rather than the midpoint, so a retry is never issued sooner than the schedule
+// would have on its own.
+//
+// The exponential component alone is a pure function of the attempt number, so
+// every builder retrying the same condition waits for exactly the same durations.
+// That matters for the case this backoff exists to handle: CSR approval lagging
+// node readiness is a cluster-wide event, so concurrent builds scheduled onto
+// newly-ready nodes hit the transient TLS error at the same moment and would
+// then retry in unison, concentrating load on the API server while it is already
+// working through the approval backlog.
+//
+// The jitter is added to the interval rather than centred on it, so a retry is
+// never issued sooner than the exponential schedule intended. Centring it would
+// let the first retry fire after baseDelay/2, undercutting a configured minimum
+// while the API server is still working through the CSR backlog. The extra is
+// bounded by the remaining headroom so the result never exceeds maxDelay.
 func calculateBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
-	return min(time.Duration(1<<uint(attempt))*baseDelay, maxDelay)
+	d := min(time.Duration(1<<uint(attempt))*baseDelay, maxDelay)
+
+	extra := d
+	if headroom := maxDelay - d; headroom < extra {
+		extra = headroom
+	}
+	if extra <= 0 {
+		return d
+	}
+
+	return d + time.Duration(rand.Int63n(int64(extra)+1)) // #nosec G404 -- no strong randomness required for retry jitter
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
