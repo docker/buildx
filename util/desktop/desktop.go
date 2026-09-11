@@ -41,7 +41,7 @@ func BuildDetailsOutput(refs map[string]string, term bool) string {
 	multiTargets := len(refs) > 1
 	for target, ref := range refs {
 		if multiTargets {
-			out.WriteString(fmt.Sprintf("\n  %s: ", target))
+			fmt.Fprintf(&out, "\n  %s: ", target)
 		}
 		if term {
 			url := BuildURL(ref)

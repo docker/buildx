@@ -34,7 +34,7 @@ func RegistryAuthForRef(ref string, auth authprovider.AuthConfigProvider) (strin
 	if err != nil {
 		return "", err
 	}
-	buf, err := json.Marshal(ac)
+	buf, err := json.Marshal(ac) // #nosec G117 -- Ignore "JSON key "password" matches secret pattern"
 	if err != nil {
 		return "", err
 	}
