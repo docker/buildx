@@ -14,7 +14,7 @@ import (
 	"github.com/containerd/containerd/v2/core/remotes/docker/auth"
 	remoteerrors "github.com/containerd/containerd/v2/core/remotes/errors"
 	"github.com/containerd/errdefs"
-	"github.com/docker/cli/cli/config/types"
+	"github.com/docker/cli/v29/cli/config/types"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/bklog"
 	"github.com/pkg/errors"

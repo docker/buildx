@@ -4,8 +4,8 @@ import (
 	"os"
 	"testing"
 
-	"github.com/docker/cli/cli/context"
-	"github.com/docker/cli/cli/context/store"
+	"github.com/docker/cli/v29/cli/context"
+	"github.com/docker/cli/v29/cli/context/store"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 	"k8s.io/client-go/tools/clientcmd"

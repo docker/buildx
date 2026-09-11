@@ -11,10 +11,10 @@ import (
 	"time"
 
 	"github.com/docker/buildx/util/confutil"
-	"github.com/docker/cli/cli/command"
-	"github.com/docker/cli/cli/config"
-	"github.com/docker/cli/cli/config/configfile"
-	"github.com/docker/cli/cli/config/types"
+	"github.com/docker/cli/v29/cli/command"
+	"github.com/docker/cli/v29/cli/config"
+	"github.com/docker/cli/v29/cli/config/configfile"
+	"github.com/docker/cli/v29/cli/config/types"
 	"github.com/moby/buildkit/session/auth/authprovider"
 )
 

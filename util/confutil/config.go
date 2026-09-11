@@ -7,7 +7,7 @@ import (
 	"path/filepath"
 	"sync"
 
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/moby/sys/atomicwriter"
 	fs "github.com/tonistiigi/fsutil/copy"
 )

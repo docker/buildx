@@ -15,7 +15,7 @@ import (
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/confutil"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/docker/go-units"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
