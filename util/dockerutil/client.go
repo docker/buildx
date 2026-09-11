@@ -110,6 +110,11 @@ func (w *waitingWriter) Write(dt []byte) (int, error) {
 
 func (w *waitingWriter) Close() error {
 	err := w.PipeWriter.Close()
+	// If Write never ran, the loader goroutine was never started and
+	// done would otherwise block forever. Unblock that path here.
+	w.once.Do(func() {
+		close(w.done)
+	})
 	<-w.done
 	if err == nil {
 		w.mu.Lock()

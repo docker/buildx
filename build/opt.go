@@ -501,6 +501,9 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 					}
 					defers = append(defers, func(error) {
 						cancel()
+						// Close waits for the "importing to docker" progress
+						// goroutine so it cannot Write after printer.Wait.
+						_ = w.Close()
 					})
 					so.Exports[i].Output = func(_ map[string]string) (io.WriteCloser, error) {
 						return w, nil
