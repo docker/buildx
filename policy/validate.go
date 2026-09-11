@@ -6,12 +6,15 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"net"
+	"net/netip"
 	"net/url"
 	"path"
 	"slices"
 	"strings"
 	"sync"
 	"time"
+	"unicode/utf8"
 
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
@@ -532,6 +535,34 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 	return nil
 }
 
+func normalizeHTTPHost(u *url.URL) string {
+	host := u.Hostname()
+	addr, err := netip.ParseAddr(host)
+	if err == nil {
+		host = addr.String()
+	} else if utf8.ValidString(host) {
+		// Unicode case folding can change the IDNA destination (for example, İ to i).
+		host = strings.Map(func(r rune) rune {
+			if 'A' <= r && r <= 'Z' {
+				return r + ('a' - 'A')
+			}
+			return r
+		}, host)
+	}
+	port := u.Port()
+	normalizedPort := strings.TrimLeft(port, "0")
+	if u.Scheme == "http" && normalizedPort == "80" || u.Scheme == "https" && normalizedPort == "443" {
+		port = ""
+	}
+	if port != "" || strings.HasSuffix(u.Host, ":") {
+		return net.JoinHostPort(host, port)
+	}
+	if addr.Is6() {
+		return "[" + host + "]"
+	}
+	return host
+}
+
 func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform, logf func(logrus.Level, string)) (Input, []string, error) {
 	var inp Input
 	var unknowns []string
@@ -544,6 +575,7 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 	if !ok {
 		return inp, nil, errors.Errorf("invalid source identifier: %s", src.Source.Identifier)
 	}
+	scheme = strings.ToLower(scheme)
 
 	switch scheme {
 	case "http", "https":
@@ -554,7 +586,7 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 		inp.HTTP = &HTTP{
 			URL:    src.Source.Identifier,
 			Schema: scheme,
-			Host:   u.Host,
+			Host:   normalizeHTTPHost(u),
 			Path:   u.Path,
 			Query:  u.Query(),
 		}
