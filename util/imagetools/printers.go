@@ -99,7 +99,6 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 	}
 
 	imageconfigs := res.Configs()
-	format := tpl.Root.String()
 
 	var mfst any
 	switch p.manifest.MediaType {
@@ -123,43 +122,52 @@ func (p *Printer) Print(raw bool, out io.Writer) error {
 		}
 	}
 
-	switch {
-	// TODO: print formatted config
-	case isWholeManifestTemplate(format):
+	// Exact "{{.Manifest}}" keeps the human-readable multi-line layout.
+	// Any other template (including "{{.Manifest.Digest}}") is executed as-is.
+	if isWholeManifestTemplate(p.format) {
 		w := tabwriter.NewWriter(out, 0, 0, 1, ' ', 0)
 		_, _ = fmt.Fprintf(w, "Name:\t%s\n", p.ref.String())
-		switch {
-		case isWholeManifestTemplate(format):
-			_, _ = fmt.Fprintf(w, "MediaType:\t%s\n", p.manifest.MediaType)
-			_, _ = fmt.Fprintf(w, "Digest:\t%s\n", p.manifest.Digest)
-			_ = w.Flush()
-			switch p.manifest.MediaType {
-			case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
-				_ = p.printManifestList(out)
-			}
+		_, _ = fmt.Fprintf(w, "MediaType:\t%s\n", p.manifest.MediaType)
+		_, _ = fmt.Fprintf(w, "Digest:\t%s\n", p.manifest.Digest)
+		_ = w.Flush()
+		switch p.manifest.MediaType {
+		case images.MediaTypeDockerSchema2ManifestList, ocispecs.MediaTypeImageIndex:
+			return p.printManifestList(out)
 		}
-	default:
-		if len(res.platforms) > 1 {
-			return tpl.Execute(out, tplInputs{
-				Name:     p.name,
-				Manifest: mfst,
-				Image:    imageconfigs,
-				result:   res,
-			})
+		return nil
+	}
+
+	var data any
+	if len(res.platforms) > 1 {
+		data = tplInputs{
+			Name:     p.name,
+			Manifest: mfst,
+			Image:    imageconfigs,
+			result:   res,
 		}
+	} else {
 		var ic *ocispecs.Image
 		for _, v := range imageconfigs {
 			ic = v
 		}
-		return tpl.Execute(out, tplInput{
+		data = tplInput{
 			Name:     p.name,
 			Manifest: mfst,
 			Image:    ic,
 			result:   res,
-		})
+		}
 	}
 
-	return nil
+	var buf strings.Builder
+	if err := tpl.Execute(&buf, data); err != nil {
+		return err
+	}
+	outStr := buf.String()
+	if outStr != "" && !strings.HasSuffix(outStr, "\n") {
+		outStr += "\n"
+	}
+	_, err = io.WriteString(out, outStr)
+	return err
 }
 
 func isWholeManifestTemplate(format string) bool {
