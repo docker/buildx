@@ -42,6 +42,8 @@ var (
 	targetNamePattern    = regexp.MustCompile(`^` + validTargetNameChars + `$`)
 )
 
+const targetsCurrentPlaceholder = "\x00buildx.targets.current\x00"
+
 type File struct {
 	Name string
 	Data []byte
@@ -765,7 +767,7 @@ func (c Config) group(name string, visited map[string]visit) ([]string, []string
 }
 
 func (c Config) ResolveTarget(name string, overrides map[string]map[string]Override, ent *EntitlementConf) (*Target, error) {
-	t, err := c.target(name, map[string]*Target{}, overrides, ent)
+	t, err := c.target(name, map[string]*Target{}, overrides, ent, name)
 	if err != nil {
 		return nil, err
 	}
@@ -784,7 +786,7 @@ func (c Config) ResolveTarget(name string, overrides map[string]map[string]Overr
 	return t, nil
 }
 
-func (c Config) target(name string, visited map[string]*Target, overrides map[string]map[string]Override, ent *EntitlementConf) (*Target, error) {
+func (c Config) target(name string, visited map[string]*Target, overrides map[string]map[string]Override, ent *EntitlementConf, currentName string) (*Target, error) {
 	if t, ok := visited[name]; ok {
 		return t, nil
 	}
@@ -800,8 +802,9 @@ func (c Config) target(name string, visited map[string]*Target, overrides map[st
 		return nil, errors.Errorf("failed to find target %s", name)
 	}
 	tt := &Target{}
+	var err error
 	for _, name := range t.Inherits {
-		t, err := c.target(name, visited, overrides, ent)
+		t, err := c.target(name, visited, overrides, ent, currentName)
 		if err != nil {
 			return nil, err
 		}
@@ -814,6 +817,10 @@ func (c Config) target(name string, visited map[string]*Target, overrides map[st
 	m.Merge(t)
 	tt = m
 	if err := tt.AddOverrides(overrides[name], ent); err != nil {
+		return nil, err
+	}
+	tt, err = resolveTargetsCurrent(tt, currentName)
+	if err != nil {
 		return nil, err
 	}
 	tt.normalize()
@@ -1438,7 +1445,7 @@ func (t *Target) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDe
 
 	attr, ok := content.Attributes["matrix"]
 	if !ok {
-		return []*hcl.EvalContext{ectx}, nil
+		return []*hcl.EvalContext{targetEvalContext(ectx)}, nil
 	}
 	if diags := loadDeps(attr.Expr); diags.HasErrors() {
 		return nil, diags
@@ -1453,7 +1460,7 @@ func (t *Target) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDe
 	}
 	matrix := value.AsValueMap()
 
-	ectxs := []*hcl.EvalContext{ectx}
+	ectxs := []*hcl.EvalContext{targetEvalContext(ectx)}
 	for k, expr := range matrix {
 		if !expr.CanIterateElements() {
 			return nil, errors.Errorf("matrix values must be a list")
@@ -1474,6 +1481,35 @@ func (t *Target) GetEvalContexts(ectx *hcl.EvalContext, block *hcl.Block, loadDe
 		ectxs = ectxs2
 	}
 	return ectxs, nil
+}
+
+func resolveTargetsCurrent(t *Target, name string) (*Target, error) {
+	type targetClone Target
+	dt, err := json.Marshal((*targetClone)(t))
+	if err != nil {
+		return nil, err
+	}
+	encodedPlaceholder, err := json.Marshal(targetsCurrentPlaceholder)
+	if err != nil {
+		return nil, err
+	}
+	dt = []byte(strings.ReplaceAll(string(dt), strings.Trim(string(encodedPlaceholder), `"`), name))
+
+	var tt targetClone
+	if err := json.Unmarshal(dt, &tt); err != nil {
+		return nil, err
+	}
+	return (*Target)(&tt), nil
+}
+
+func targetEvalContext(parent *hcl.EvalContext) *hcl.EvalContext {
+	ectx := parent.NewChild()
+	ectx.Variables = map[string]cty.Value{
+		"targets": cty.ObjectVal(map[string]cty.Value{
+			"current": cty.StringVal(targetsCurrentPlaceholder),
+		}),
+	}
+	return ectx
 }
 
 func (g *Group) GetName(ectx *hcl.EvalContext, block *hcl.Block, loadDeps func(hcl.Expression) hcl.Diagnostics) (string, error) {

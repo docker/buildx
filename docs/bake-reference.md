@@ -611,6 +611,29 @@ target "default" {
 A target can inherit attributes from other targets.
 Use `inherits` to reference from one target to another.
 
+Inherited attributes can refer to the name of the target currently being
+resolved with `targets.current`. This is useful when multiple targets share
+common configuration, but image names, tags, cache references, or other values
+must still include the final target name.
+
+```hcl
+target "_common" {
+  tags = ["docker.io/username/${targets.current}:latest"]
+  cache-from = ["type=registry,ref=cache/${targets.current}"]
+}
+
+target "app-dev" {
+  inherits = ["_common"]
+}
+
+target "app-release" {
+  inherits = ["_common"]
+}
+```
+
+In this example, `targets.current` resolves to `app-dev` while resolving the
+`app-dev` target and to `app-release` while resolving the `app-release` target.
+
 In the following example,
 the `app-dev` target specifies an image name and tag.
 The `app-release` target uses `inherits` to reuse the tag name.
