@@ -28,7 +28,6 @@ require (
 	github.com/hashicorp/go-cty-funcs v0.0.0-20250818135842-6aab67130928
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/in-toto/in-toto-golang v0.11.0
-	github.com/mitchellh/hashstructure/v2 v2.0.2
 	github.com/moby/buildkit v0.33.0
 	github.com/moby/moby/api v1.55.0
 	github.com/moby/moby/client v0.5.0
