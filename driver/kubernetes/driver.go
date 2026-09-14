@@ -4,6 +4,7 @@ import (
 	"context"
 	stderrors "errors"
 	"fmt"
+	"math/rand/v2"
 	"net"
 	"strings"
 	"syscall"
@@ -389,9 +390,17 @@ func isTransientConnectionError(err error) bool {
 	return false
 }
 
-// calculateBackoff calculates the delay for the given attempt with exponential backoff.
+// calculateBackoff returns a randomized exponential backoff delay for attempt,
+// never exceeding maxDelay.
 func calculateBackoff(attempt int, baseDelay, maxDelay time.Duration) time.Duration {
-	return min(time.Duration(1<<uint(attempt))*baseDelay, maxDelay)
+	delay := min(baseDelay<<attempt, maxDelay)
+	// Jitter is additive and clipped to the headroom left under maxDelay, so a
+	// retry never fires sooner than the exponential schedule alone would allow.
+	jitter := min(delay, maxDelay-delay)
+	if jitter <= 0 {
+		return delay
+	}
+	return delay + rand.N(jitter) // #nosec G404 -- no strong randomness required for retry jitter
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
