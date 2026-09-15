@@ -1,6 +1,8 @@
 package build
 
 import (
+	"archive/tar"
+	"bytes"
 	"context"
 	"strings"
 	"testing"
@@ -256,4 +258,64 @@ func TestParseResourceLimits(t *testing.T) {
 		_, err := ParseResourceLimits([]string{"cpu-shares=notanumber"})
 		require.Error(t, err)
 	})
+}
+
+func TestIsArchive(t *testing.T) {
+	tarHeader := func() []byte {
+		var buf bytes.Buffer
+		tw := tar.NewWriter(&buf)
+		require.NoError(t, tw.WriteHeader(&tar.Header{Name: "Dockerfile", Mode: 0o644, Size: 13}))
+		_, err := tw.Write([]byte("FROM scratch\n"))
+		require.NoError(t, err)
+		require.NoError(t, tw.Close())
+		return buf.Bytes()
+	}
+
+	tests := []struct {
+		doc      string
+		header   []byte
+		expected bool
+	}{
+		{
+			doc:      "plain tar",
+			header:   tarHeader(),
+			expected: true,
+		},
+		{
+			doc:      "gzip",
+			header:   []byte{0x1F, 0x8B, 0x08, 0x00},
+			expected: true,
+		},
+		{
+			doc:      "bzip2",
+			header:   []byte{0x42, 0x5A, 0x68, 0x31},
+			expected: true,
+		},
+		{
+			doc:      "xz",
+			header:   []byte{0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00},
+			expected: true,
+		},
+		{
+			doc:      "zstd",
+			header:   []byte{0x28, 0xB5, 0x2F, 0xFD, 0x00},
+			expected: true,
+		},
+		{
+			doc:      "dockerfile",
+			header:   []byte("FROM scratch\n"),
+			expected: false,
+		},
+		{
+			doc:      "truncated zstd magic",
+			header:   []byte{0x28, 0xB5},
+			expected: false,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.doc, func(t *testing.T) {
+			require.Equal(t, tt.expected, isArchive(tt.header))
+		})
+	}
 }
