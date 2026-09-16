@@ -377,14 +377,16 @@ func toRootless(p *corev1.PodTemplateSpec, buildKitRootVolumeMemory string) erro
 		"--oci-worker-no-process-sandbox",
 	)
 	p.Spec.Containers[0].SecurityContext = &corev1.SecurityContext{
+		AppArmorProfile: &corev1.AppArmorProfile{
+			Type: corev1.AppArmorProfileTypeUnconfined,
+		},
 		SeccompProfile: &corev1.SeccompProfile{
 			Type: corev1.SeccompProfileTypeUnconfined,
 		},
 	}
-	if p.Annotations == nil {
-		p.Annotations = make(map[string]string, 1)
-	}
-	p.Annotations["container.apparmor.security.beta.kubernetes.io/"+containerName] = "unconfined"
+
+	// Remove any custom legacy annotation that could conflict with the profile.
+	delete(p.Annotations, "container.apparmor.security.beta.kubernetes.io/"+containerName)
 
 	// Dockerfile has `VOLUME /home/user/.local/share/buildkit` by default too,
 	// but the default VOLUME does not work with rootless on Google's Container-Optimized OS
