@@ -1,6 +1,8 @@
 package kubernetes
 
 import (
+	"context"
+	stderrors "errors"
 	"testing"
 	"time"
 
@@ -38,4 +40,40 @@ func TestCalculateBackoff(t *testing.T) {
 			require.Greater(t, len(seen), 1, "attempt %d must vary so concurrent builders do not retry in lockstep", tt.attempt)
 		}
 	}
+}
+
+func TestTryWithBackoffRetriesTransient(t *testing.T) {
+	var calls int
+	err := tryWithBackoff(context.Background(), "test-pod", func() error {
+		calls++
+		if calls == 1 {
+			return stderrors.New("unable to upgrade connection: remote error: tls: internal error")
+		}
+		return nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, 2, calls, "second attempt should succeed after a transient failure")
+}
+
+func TestTryWithBackoffPermanentError(t *testing.T) {
+	permErr := stderrors.New("pods is forbidden")
+	var calls int
+	err := tryWithBackoff(context.Background(), "test-pod", func() error {
+		calls++
+		return permErr
+	})
+	require.ErrorIs(t, err, permErr)
+	require.Equal(t, 1, calls, "a permanent error must not be retried")
+}
+
+func TestTryWithBackoffContextCancelled(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	var calls int
+	err := tryWithBackoff(ctx, "test-pod", func() error {
+		calls++
+		cancel(context.Canceled)
+		return stderrors.New("tls: internal error")
+	})
+	require.ErrorIs(t, err, context.Canceled)
+	require.Equal(t, 1, calls, "retry loop must stop once the context is cancelled")
 }

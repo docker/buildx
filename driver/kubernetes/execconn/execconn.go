@@ -9,11 +9,14 @@ import (
 	"time"
 
 	"github.com/docker/buildx/driver/kubernetes/kubeclient"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/remotecommand"
 )
+
+var errStreamEndedBeforeReady = errors.New("exec stream ended before the connection was established")
 
 func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.Config, namespace, pod, container string, cmd []string) (net.Conn, error) {
 	req := restClient.
@@ -34,12 +37,19 @@ func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.C
 	if err != nil {
 		return nil, err
 	}
-	return newExecConn(ctx, exec), nil
+	return newExecConn(ctx, exec)
 }
 
 // newExecConn wires a remotecommand.Executor's stdin/stdout streams up as a net.Conn.
 // It is split from ExecConn to ease testing.
-func newExecConn(ctx context.Context, exec remotecommand.Executor) net.Conn {
+//
+// StreamWithContext sets up the exec stream synchronously and then blocks for its
+// whole lifetime, so it runs in a goroutine. newExecConn waits for the stream to be
+// established before returning, otherwise a failed setup (e.g. "tls: internal error"
+// on a not-yet-ready node) would only show up on the first Read/Write, after Dial has
+// already reported success and past its retry. The executor reads stdin only once the
+// stream is established, so the first stdin read is used as the readiness signal.
+func newExecConn(ctx context.Context, exec remotecommand.Executor) (net.Conn, error) {
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	kc := &kubeConn{
@@ -48,9 +58,14 @@ func newExecConn(ctx context.Context, exec remotecommand.Executor) net.Conn {
 		localAddr:  dummyAddr{network: "dummy", s: "dummy-0"},
 		remoteAddr: dummyAddr{network: "dummy", s: "dummy-1"},
 	}
+
+	ready := make(chan struct{})
+	stdin := &readyReader{r: stdinR, ready: ready}
+
+	streamErr := make(chan error, 1)
 	go func() {
 		serr := exec.StreamWithContext(ctx, remotecommand.StreamOptions{
-			Stdin:  stdinR,
+			Stdin:  stdin,
 			Stdout: stdoutW,
 			Stderr: os.Stderr,
 			Tty:    false,
@@ -61,8 +76,35 @@ func newExecConn(ctx context.Context, exec remotecommand.Executor) net.Conn {
 		// Ensure the pipes are closed to unblock Read/Write on kubeConn and avoid infinite hangs.
 		stdoutW.CloseWithError(serr)
 		stdinR.CloseWithError(serr)
+		streamErr <- serr
 	}()
-	return kc
+
+	select {
+	case <-ready:
+		return kc, nil
+	case serr := <-streamErr:
+		_ = kc.Close()
+		if serr == nil {
+			serr = errStreamEndedBeforeReady
+		}
+		return nil, serr
+	case <-ctx.Done():
+		_ = kc.Close()
+		return nil, context.Cause(ctx)
+	}
+}
+
+// readyReader closes ready on the first Read. The exec stream reads stdin only once its
+// streams have been created, so the first read marks the connection as established.
+type readyReader struct {
+	r     io.Reader
+	once  sync.Once
+	ready chan struct{}
+}
+
+func (r *readyReader) Read(p []byte) (int, error) {
+	r.once.Do(func() { close(r.ready) })
+	return r.r.Read(p)
 }
 
 type kubeConn struct {
