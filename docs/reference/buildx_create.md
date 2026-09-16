@@ -173,6 +173,9 @@ to achieve that.
 Uses Kubernetes pods. With this driver, you can spin up pods with defined
 BuildKit container image to build your images.
 
+Rootless mode (`--driver-opt rootless=true`) requires Kubernetes v1.30 or later
+with support for `securityContext.appArmorProfile`, which is stable in v1.31.
+
 Unlike `docker` driver, built images will not automatically appear in
 `docker images` and [`build --load`](buildx_build.md#load) needs to be used
 to achieve that.

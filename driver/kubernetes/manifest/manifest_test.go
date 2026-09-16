@@ -34,6 +34,44 @@ func findVolume(volumes []corev1.Volume, name string) *corev1.Volume {
 	return nil
 }
 
+func TestRootlessSecurityContext(t *testing.T) {
+	for _, persistent := range []bool{false, true} {
+		name := "deployment"
+		if persistent {
+			name = "statefulset"
+		}
+		t.Run(name, func(t *testing.T) {
+			opt := newBaseOpt()
+			opt.Rootless = true
+			opt.CustomAnnotations = map[string]string{
+				"example.com/custom": "value",
+				"container.apparmor.security.beta.kubernetes.io/" + containerName: "runtime/default",
+			}
+			if persistent {
+				opt.RequestsPersistentStorage = "1Gi"
+			}
+
+			d, s, _, err := NewDeployment(opt)
+			require.NoError(t, err)
+			var pod corev1.PodTemplateSpec
+			if persistent {
+				require.NotNil(t, s)
+				pod = s.Spec.Template
+			} else {
+				require.NotNil(t, d)
+				pod = d.Spec.Template
+			}
+
+			require.Equal(t, &corev1.SecurityContext{
+				AppArmorProfile: &corev1.AppArmorProfile{Type: corev1.AppArmorProfileTypeUnconfined},
+				SeccompProfile:  &corev1.SeccompProfile{Type: corev1.SeccompProfileTypeUnconfined},
+			}, pod.Spec.Containers[0].SecurityContext)
+			require.Equal(t, "value", pod.Annotations["example.com/custom"])
+			require.NotContains(t, pod.Annotations, "container.apparmor.security.beta.kubernetes.io/"+containerName)
+		})
+	}
+}
+
 func TestRootlessMemoryVolume(t *testing.T) {
 	opt := newBaseOpt()
 	opt.Rootless = true
@@ -93,6 +131,9 @@ func TestRootlessNoMemoryVolume(t *testing.T) {
 func TestNonRootlessMemoryVolume(t *testing.T) {
 	opt := newBaseOpt()
 	opt.BuildKitRootVolumeMemory = "2Gi"
+	opt.CustomAnnotations = map[string]string{
+		"container.apparmor.security.beta.kubernetes.io/" + containerName: "runtime/default",
+	}
 
 	d, _, _, err := NewDeployment(opt)
 	require.NoError(t, err)
@@ -100,6 +141,10 @@ func TestNonRootlessMemoryVolume(t *testing.T) {
 
 	podSpec := d.Spec.Template.Spec
 	container := podSpec.Containers[0]
+	require.NotNil(t, container.SecurityContext.Privileged)
+	require.True(t, *container.SecurityContext.Privileged)
+	require.Nil(t, container.SecurityContext.AppArmorProfile)
+	require.Equal(t, opt.CustomAnnotations, d.Spec.Template.Annotations)
 
 	vm := findVolumeMount(container.VolumeMounts, rootVolumePath)
 	require.NotNil(t, vm, "expected volume mount at %s", rootVolumePath)
