@@ -36,7 +36,8 @@ import (
 
 type exporterTestDriver struct {
 	driver.Driver
-	moby bool
+	moby     bool
+	features func(context.Context) (map[driver.Feature]bool, error)
 }
 
 func (d exporterTestDriver) Info(context.Context) (*driver.Info, error) {
@@ -51,8 +52,11 @@ func (d exporterTestDriver) IsMobyDriver() bool {
 	return d.moby
 }
 
-func (d exporterTestDriver) Features(context.Context) map[driver.Feature]bool {
-	return map[driver.Feature]bool{driver.DockerExporter: true}
+func (d exporterTestDriver) Features(ctx context.Context) (map[driver.Feature]bool, error) {
+	if d.features != nil {
+		return d.features(ctx)
+	}
+	return map[driver.Feature]bool{driver.DockerExporter: true}, nil
 }
 
 type exporterTestCLI struct {
@@ -157,6 +161,47 @@ func TestDockerExporterFeatureProbe(t *testing.T) {
 			}
 		})
 	}
+}
+
+func TestDriverFeatureFailurePreservesProvenance(t *testing.T) {
+	t.Setenv(noDefaultAttestationsEnv, "false")
+	probeErr := errors.New("worker is starting")
+	calls := 0
+	d := exporterTestDriver{
+		moby: true,
+		features: func(context.Context) (map[driver.Feature]bool, error) {
+			calls++
+			if calls == 1 {
+				return nil, probeErr
+			}
+			return map[driver.Feature]bool{driver.MultiPlatform: true}, nil
+		},
+	}
+	nodes, err := noderesolver.Resolve(t.Context(), []builder.Node{{
+		Driver: &driver.DriverHandle{Driver: d},
+	}}, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+	opt := &Options{
+		Inputs:    Inputs{ContextPath: "https://example.com/context.tar.gz"},
+		Exports:   []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}},
+		Platforms: []ocispecs.Platform{{OS: "linux", Architecture: "amd64"}, {OS: "linux", Architecture: "arm64"}},
+		Policy:    []buildflags.PolicyConfig{{Disabled: true}},
+	}
+	cfg := confutil.NewConfig(nil, confutil.WithDir(t.TempDir()))
+	bopts := buildOptsWithCaps(apicaps.CapID("exporter.image.attestations"))
+	so, release, err := toSolveOpt(t.Context(), nodes[0], false, opt, bopts, cfg, testProgressWriter{}, nil)
+	require.ErrorIs(t, err, probeErr)
+	require.ErrorContains(t, err, "failed to detect driver features")
+	require.Nil(t, so)
+	require.Nil(t, release)
+	require.Equal(t, 1, calls)
+
+	so, release, err = toSolveOpt(t.Context(), nodes[0], false, opt, bopts, cfg, testProgressWriter{}, nil)
+	require.NoError(t, err)
+	defer release(nil)
+	require.Equal(t, "mode=min,inline-only=true", so.FrontendAttrs["attest:provenance"])
+	require.Equal(t, 2, calls)
 }
 
 func TestCacheOptions_DerivedVars(t *testing.T) {

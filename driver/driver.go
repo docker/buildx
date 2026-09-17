@@ -70,7 +70,7 @@ type Driver interface {
 	Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error
 	Dial(ctx context.Context) (net.Conn, error)
 	Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error)
-	Features(ctx context.Context) map[Feature]bool
+	Features(ctx context.Context) (map[Feature]bool, error)
 	HostGatewayIP(ctx context.Context) (net.IP, error)
 	IsMobyDriver() bool
 	Config() InitConfig
