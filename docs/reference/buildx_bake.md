@@ -463,16 +463,20 @@ You can override the following fields:
 * `load`
 * `no-cache`
 * `no-cache-filter`
+* `network`
 * `output`
 * `platform`
+* `policy`
 * `pull`
 * `push`
 * `resources`
 * `secret.<id>`
 * `secrets`
+* `shm-size`
 * `ssh`
 * `tags`
 * `target`
+* `ulimits`
 
 You can append using `+=` operator for the following fields:
 
@@ -484,9 +488,11 @@ You can append using `+=` operator for the following fields:
 * `no-cache-filter`
 * `output`
 * `platform`
+* `policy`
 * `secrets`
 * `ssh`
 * `tags`
+* `ulimits`
 
 > [!NOTE]
 > ¹ These fields already append by default.
