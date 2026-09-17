@@ -246,6 +246,10 @@ func isPolicyEvaluationError(policies []*policy.Policy, err error) bool {
 func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver bool, opt *Options, bopts gateway.BuildOpts, cfg *confutil.Config, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(error), err error) {
 	node := np.Node()
 	nodeDriver := node.Driver
+	driverFeatures, err := nodeDriver.Features(ctx)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to detect driver features")
+	}
 	defers := make([]func(error), 0, 2)
 	releaseF := func(inErr error) {
 		for _, f := range defers {
@@ -270,7 +274,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	for _, e := range opt.CacheTo {
-		if e.Type != "inline" && !nodeDriver.Features(ctx)[driver.CacheExport] {
+		if e.Type != "inline" && !driverFeatures[driver.CacheExport] {
 			return nil, nil, notSupported(driver.CacheExport, nodeDriver, "https://docs.docker.com/go/build-cache-backends/")
 		}
 	}
@@ -347,10 +351,10 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 	}
 
-	supportAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) && nodeDriver.Features(ctx)[driver.MultiPlatform]
+	supportAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) && driverFeatures[driver.MultiPlatform]
 	if len(attests) > 0 {
 		if !supportAttestations {
-			if !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+			if !driverFeatures[driver.MultiPlatform] {
 				return nil, nil, notSupported("Attestation", nodeDriver, "https://docs.docker.com/go/attestations/")
 			}
 			return nil, nil, errors.Errorf("Attestations are not supported by the current BuildKit daemon")
@@ -392,7 +396,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 				// backwards compat for docker driver only:
 				// this ensures the build results in a docker image.
 				opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
-			} else if nodeDriver.Features(ctx)[driver.DefaultLoad] {
+			} else if driverFeatures[driver.DefaultLoad] {
 				opt.Exports = []client.ExportEntry{{Type: "docker", Attrs: map[string]string{}}}
 			}
 		}
@@ -403,7 +407,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	// check if index annotations are supported by docker driver
-	if len(opt.Exports) > 0 && opt.CallFunc == nil && len(opt.Annotations) > 0 && nodeDriver.IsMobyDriver() && !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+	if len(opt.Exports) > 0 && opt.CallFunc == nil && len(opt.Annotations) > 0 && nodeDriver.IsMobyDriver() && !driverFeatures[driver.MultiPlatform] {
 		for _, exp := range opt.Exports {
 			if exp.Type == "image" || exp.Type == "docker" {
 				for ak := range opt.Annotations {
@@ -477,7 +481,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 
 	// set up exporters
 	for i, e := range so.Exports {
-		if e.Type == "oci" && !nodeDriver.Features(ctx)[driver.OCIExporter] {
+		if e.Type == "oci" && !driverFeatures[driver.OCIExporter] {
 			return nil, nil, notSupported(driver.OCIExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
 		}
 		if e.Type == "docker" {
@@ -525,14 +529,14 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 						so.Exports[i].Attrs["prefer-image-digest"] = "true"
 					}
 				}
-			} else if !nodeDriver.Features(ctx)[driver.DockerExporter] {
+			} else if !driverFeatures[driver.DockerExporter] {
 				return nil, nil, notSupported(driver.DockerExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
 			}
 		}
 		if e.Type == "image" && nodeDriver.IsMobyDriver() {
 			so.Exports[i].Type = "moby"
 			// The containerd image store resolves images by manifest or index digest.
-			if nodeDriver.Features(ctx)[driver.PreferImageDigest] {
+			if driverFeatures[driver.PreferImageDigest] {
 				so.Exports[i].Attrs["prefer-image-digest"] = "true"
 			}
 			if e.Attrs["push"] != "" {
@@ -619,7 +623,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		for i, p := range opt.Platforms {
 			pp[i] = platforms.FormatAll(p)
 		}
-		if len(pp) > 1 && !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+		if len(pp) > 1 && !driverFeatures[driver.MultiPlatform] {
 			return nil, nil, notSupported(driver.MultiPlatform, nodeDriver, "https://docs.docker.com/go/build-multi-platform/")
 		}
 		so.FrontendAttrs["platform"] = strings.Join(pp, ",")
