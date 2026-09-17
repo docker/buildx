@@ -428,38 +428,38 @@ Override target configurations from command line. The pattern matching syntax
 is defined in https://golang.org/pkg/path/#Match.
 
 ```console
-$ docker buildx bake --set target.args.mybuildarg=value
+$ docker buildx bake --set target.arg.mybuildarg=value
 $ docker buildx bake --set target.platform=linux/arm64
-$ docker buildx bake --set foo*.args.mybuildarg=value   # overrides build arg for all targets starting with 'foo'
-$ docker buildx bake --set *.platform=linux/arm64       # overrides platform for all targets
+$ docker buildx bake --set foo*.arg.mybuildarg=value    # overrides build arg for all targets starting with 'foo'
+$ docker buildx bake --set *.platform=linux/arm64       # overrides platforms for all targets
 $ docker buildx bake --set foo*.no-cache                # bypass caching only for targets starting with 'foo'
 $ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' to the platform list
 $ docker buildx bake --set target.contexts.bar=../bar   # overrides 'bar' named context
-$ docker buildx bake --set target.resources.memory=2g   # overrides memory resource limit
+$ docker buildx bake --set target.resource.memory=2g    # overrides memory resource limit
 $ docker buildx bake --set target.secret.aws=env=AWS    # overrides source for an existing secret
 ```
 
 > [!NOTE]
 >
-> `--set` is a repeatable flag. For array fields such as `tags`, repeat `--set`
+> `--set` is a repeatable flag. For array fields such as `tag`, repeat `--set`
 > to provide multiple values or use the `+=` operator to append without
-> replacing. Array literal syntax like `--set target.tags=[a,b]` is not
+> replacing. Array literal syntax like `--set target.tag=[a,b]` is not
 > supported.
 
 You can override the following fields:
 
-* `annotations`
+* `annotation`
 * `attest`
-* `args`
+* `arg.<name>`
 * `cache-from`
 * `cache-to`
 * `call`
 * `context`
-* `contexts`
+* `contexts.<name>`
 * `dockerfile`
-* `entitlements`
-* `extra-hosts`
-* `labels`
+* `entitlement`
+* `extra-host.<hostname>`
+* `label.<name>`
 * `load`
 * `no-cache`
 * `no-cache-filter`
@@ -469,45 +469,70 @@ You can override the following fields:
 * `policy`
 * `pull`
 * `push`
-* `resources`
+* `resource.<field>`
+* `secret`
 * `secret.<id>`
-* `secrets`
 * `shm-size`
 * `ssh`
-* `tags`
+* `tag`
 * `target`
-* `ulimits`
+* `ulimit`
 
 You can append using `+=` operator for the following fields:
 
-* `annotations`¹
+* `annotation`¹
 * `attest`¹
 * `cache-from`
 * `cache-to`
-* `entitlements`¹
+* `entitlement`¹
 * `no-cache-filter`
 * `output`
 * `platform`
 * `policy`
-* `secrets`
+* `secret`
 * `ssh`
-* `tags`
-* `ulimits`
+* `tag`
+* `ulimit`
 
 > [!NOTE]
 > ¹ These fields already append by default.
 
+Override keys use singular names. Existing plural Bake field names and
+historical `--set` spellings remain supported as aliases:
+
+| Alias          | Canonical key |
+|----------------|---------------|
+| `annotations`  | `annotation`  |
+| `args`         | `arg`         |
+| `entitlements` | `entitlement` |
+| `extra-hosts`  | `extra-host`  |
+| `labels`       | `label`       |
+| `platforms`    | `platform`    |
+| `resources`    | `resource`    |
+| `secrets`      | `secret`      |
+| `tags`         | `tag`         |
+| `ulimits`      | `ulimit`      |
+
+Aliases are normalized before overrides are applied, so they can be mixed
+with canonical keys in repeated `--set` options. `context` and `contexts` are
+not aliases: `context` sets the build context, while `contexts.<name>` sets a
+named context. `secret.<id>` also has separate semantics: it changes the
+source of a secret that is already declared by the target. The plural alias
+does not support this form; `secrets.<id>` is invalid.
+
 #### Inline values for composable attributes
 
-Some fields, such as `ssh`, `secret`, `output`, `cache-to`, `cache-from`,
-`attest`, and `annotations`, are composable attributes that accept a list of
-object values in a Bake file. When you override these fields with `--set`, you
-provide each value using the same inline string syntax as the corresponding
-build flag, not the HCL object form. The `--set` override replaces or appends
-to the list as a whole; it doesn't address individual sub-fields with a
-sub-selector. Only the map-valued fields `args`, `contexts`, `labels`, and
-`extra-hosts` support targeting a specific entry with a sub-key (for example
-`--set target.args.MYARG=value`).
+Composable fields such as `ssh`, `secret`, `output`, `cache-to`, `cache-from`,
+`attest`, and `annotation` accept a list of object values in a Bake file. When
+you override these fields with `--set`, provide each value using the same
+inline string syntax as the corresponding build flag, not the HCL object
+form. The override replaces or appends to the list as a whole and does not
+address individual object fields with a subkey.
+
+Only `arg`, `contexts`, `extra-host`, `label`, `resource`, and `secret` support
+entry-addressed subkeys. For example, use `--set target.arg.MYARG=value` to
+override one build argument. As described above, `secret.<id>` changes the
+source of an existing secret rather than an object field.
 
 For example, to set the SSH agent socket or key for a target, use the same
 `id=path` form accepted by [`build --ssh`](buildx_build.md#ssh):
