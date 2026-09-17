@@ -1,6 +1,7 @@
 package ocilayout
 
 import (
+	"regexp"
 	"strings"
 
 	"github.com/distribution/reference"
@@ -15,6 +16,11 @@ type Ref struct {
 
 const prefix = "oci-layout://"
 
+var (
+	tagRegexp    = regexp.MustCompile("^" + reference.TagRegexp.String() + "$")
+	digestRegexp = regexp.MustCompile("^" + reference.DigestRegexp.String() + "$")
+)
+
 func Parse(s string) (Ref, bool, error) {
 	if !strings.HasPrefix(s, prefix) {
 		return Ref{}, false, nil
@@ -25,7 +31,7 @@ func Parse(s string) (Ref, bool, error) {
 
 	if i := strings.LastIndex(localPath, "@"); i >= 0 {
 		after := localPath[i+1:]
-		if reference.DigestRegexp.MatchString(after) {
+		if digestRegexp.MatchString(after) {
 			dgst, err := digest.Parse(after)
 			if err != nil {
 				return Ref{}, true, err
@@ -36,7 +42,7 @@ func Parse(s string) (Ref, bool, error) {
 
 	if i := strings.LastIndex(localPath, ":"); i >= 0 && !isWindowsDrivePath(localPath, i) {
 		after := localPath[i+1:]
-		if reference.TagRegexp.MatchString(after) {
+		if tagRegexp.MatchString(after) {
 			localPath, out.Tag = localPath[:i], after
 		}
 	}
