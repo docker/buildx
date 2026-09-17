@@ -1667,10 +1667,14 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 		dockerfilePath = path.Clean(dockerfilePath)
 	}
 
+	namedContexts, err := toNamedContexts(t.Contexts)
+	if err != nil {
+		return nil, err
+	}
 	bi := build.Inputs{
 		ContextPath:    contextPath,
 		DockerfilePath: dockerfilePath,
-		NamedContexts:  toNamedContexts(t.Contexts),
+		NamedContexts:  namedContexts,
 	}
 	if t.DockerfileInline != nil {
 		bi.DockerfileInline = *t.DockerfileInline
@@ -1982,12 +1986,21 @@ func isSubset(s1, s2 []string) bool {
 	return true
 }
 
-func toNamedContexts(m map[string]string) map[string]build.NamedContext {
+func toNamedContexts(m map[string]string) (map[string]build.NamedContext, error) {
 	m2 := make(map[string]build.NamedContext, len(m))
-	for k, v := range m {
-		m2[k] = build.NamedContext{Path: v}
+	rawNames := make(map[string]string, len(m))
+	for _, k := range slices.Sorted(maps.Keys(m)) {
+		name, err := buildflags.NormalizeContextName(k)
+		if err != nil {
+			return nil, err
+		}
+		if prev, ok := rawNames[name]; ok {
+			return nil, errors.Errorf("context names %q and %q normalize to the same name %q", prev, k, name)
+		}
+		rawNames[name] = k
+		m2[name] = build.NamedContext{Path: m[k]}
 	}
-	return m2
+	return m2, nil
 }
 
 type arrValue[B any] interface {
