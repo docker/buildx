@@ -7,6 +7,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
 	"os"
@@ -68,6 +69,7 @@ type bakeOptions struct {
 	exportPush   bool
 	exportLoad   bool
 	callFunc     string
+	execution    string
 
 	print bool
 	list  string
@@ -360,8 +362,19 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
+	execution, err := parseExecution(in.execution)
+	if err != nil {
+		return err
+	}
+
 	done := timeBuildCommand(mp, attributes)
-	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), printer)
+	var bh *build.Handler
+	if execution.Mode != build.ExecutionModeFailFast || execution.Parallel > 0 {
+		bh = &build.Handler{
+			Execution: execution,
+		}
+	}
+	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), printer, bh)
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
@@ -370,14 +383,10 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 	done(err)
 
-	if err != nil {
-		return err
-	}
-
-	if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
+	if err == nil && progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
-	if len(in.metadataFile) > 0 {
+	if len(in.metadataFile) > 0 && (err == nil || execution.Mode == build.ExecutionModeDeferError) {
 		dt := make(map[string]any)
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
@@ -387,9 +396,15 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 				dt["buildx.build.warnings"] = warnings
 			}
 		}
-		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
-			return err
+		if metaErr := writeMetadataFile(in.metadataFile, dt); metaErr != nil {
+			if err != nil {
+				return stderrors.Join(err, metaErr)
+			}
+			return metaErr
 		}
+	}
+	if err != nil {
+		return err
 	}
 
 	var callFormatJSON bool
@@ -561,6 +576,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.vars, "var", nil, `Set a variable value (e.g., "name=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
+	flags.StringVar(&options.execution, "execution", "fail-fast", `Set target execution behavior (format: "mode[,parallel=N]")`)
 
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
@@ -746,6 +762,69 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 type listEntry struct {
 	Type   string
 	Format string
+}
+
+func parseExecution(input string) (build.Execution, error) {
+	res := build.Execution{Mode: build.ExecutionModeFailFast}
+	if strings.TrimSpace(input) == "" {
+		return res, nil
+	}
+	fields, err := csvvalue.Fields(input, nil)
+	if err != nil {
+		return res, err
+	}
+	var modeSet bool
+	var parallelSet bool
+	for _, field := range fields {
+		field = strings.TrimSpace(field)
+		if field == "" {
+			continue
+		}
+		key, value, ok := strings.Cut(field, "=")
+		if !ok {
+			if modeSet {
+				return res, errors.Errorf("multiple execution modes specified")
+			}
+			mode := build.ExecutionMode(field)
+			switch mode {
+			case build.ExecutionModeFailFast, build.ExecutionModeSyncOutput, build.ExecutionModeDeferError:
+				res.Mode = mode
+				modeSet = true
+			default:
+				return res, errors.Errorf("invalid execution mode %q", field)
+			}
+			continue
+		}
+		key = strings.TrimSpace(strings.ToLower(key))
+		value = strings.TrimSpace(value)
+		switch key {
+		case "mode":
+			if modeSet {
+				return res, errors.Errorf("multiple execution modes specified")
+			}
+			mode := build.ExecutionMode(value)
+			switch mode {
+			case build.ExecutionModeFailFast, build.ExecutionModeSyncOutput, build.ExecutionModeDeferError:
+				res.Mode = mode
+				modeSet = true
+			default:
+				return res, errors.Errorf("invalid execution mode %q", value)
+			}
+		case "parallel":
+			if parallelSet {
+				return res, errors.Errorf("multiple execution parallelism values specified")
+			}
+			parallel, err := strconv.Atoi(value)
+			if err != nil || parallel < 0 {
+				return res, errors.Errorf("invalid execution parallelism %q", value)
+			}
+			res.Parallel = parallel
+			parallelSet = true
+		default:
+			return res, errors.Errorf("unexpected key %q in execution option %q", key, field)
+		}
+	}
+	return res, nil
 }
 
 func parseList(input string) (listEntry, error) {
