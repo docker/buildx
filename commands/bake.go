@@ -188,6 +188,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	progressMode := progressui.DisplayMode(cFlags.progress)
 
 	var printer *progress.Printer
+	printWarningsOnClose := true
 	defer func() {
 		if printer != nil {
 			printer.Wait()
@@ -200,7 +201,9 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			progress.WithDesc(progressTextDesc, progressConsoleDesc),
 			progress.WithMetrics(mp, attributes),
 			progress.WithOnClose(func() {
-				printWarnings(os.Stderr, printer.Warnings(), progressMode)
+				if printWarningsOnClose {
+					printWarnings(os.Stderr, printer.Warnings(), progressMode)
+				}
 			}),
 		)
 		return err
@@ -333,6 +336,13 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			} else {
 				opt.CallFunc.Name = cf.Name
 			}
+		}
+	}
+
+	for _, opt := range bo {
+		if opt.CallFunc != nil {
+			printWarningsOnClose = false
+			break
 		}
 	}
 
@@ -499,6 +509,10 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 				fmt.Fprintf(dockerCli.Out(), "\n# %s\n%s\n", name, v)
 			}
 		}
+	}
+
+	if !printWarningsOnClose {
+		printWarnings(os.Stderr, printer.Warnings(), progressMode)
 	}
 
 	if exitCode != 0 {
