@@ -9,7 +9,7 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/docker/cli/cli/streams"
+	"github.com/docker/cli/v29/cli/streams"
 )
 
 func prompt(ctx context.Context, ins io.Reader, out io.Writer, msg string) (bool, error) {

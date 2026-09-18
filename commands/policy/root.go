@@ -1,7 +1,7 @@
 package policy
 
 import (
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/spf13/cobra"
 )
 

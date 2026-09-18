@@ -8,9 +8,9 @@ import (
 	"runtime"
 	"strings"
 
-	"github.com/docker/cli/cli/command"
-	"github.com/docker/cli/cli/context"
-	"github.com/docker/cli/cli/context/store"
+	"github.com/docker/cli/v29/cli/command"
+	"github.com/docker/cli/v29/cli/context"
+	"github.com/docker/cli/v29/cli/context/store"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )

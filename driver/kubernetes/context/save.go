@@ -3,7 +3,7 @@ package context
 import (
 	"os"
 
-	"github.com/docker/cli/cli/context"
+	"github.com/docker/cli/v29/cli/context"
 	"k8s.io/client-go/tools/clientcmd"
 	clientcmdapi "k8s.io/client-go/tools/clientcmd/api"
 )

@@ -29,7 +29,7 @@ import (
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/buildx/util/resolver"
 	"github.com/docker/buildx/util/waitmap"
-	"github.com/docker/cli/opts"
+	"github.com/docker/cli/v29/opts"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
