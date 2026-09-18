@@ -128,9 +128,8 @@ func (c AesContentCipher) Encrypt(cek, plaintext, aad []byte) (iv, ciphertxt, ta
 		panic(fmt.Sprintf("tag offset is less than 0 (combined len = %d, tagsize = %d)", len(combined), c.TagSize()))
 	}
 
+	ciphertxt = combined[:tagoffset:tagoffset]
 	tag = combined[tagoffset:]
-	ciphertxt = make([]byte, tagoffset)
-	copy(ciphertxt, combined[:tagoffset])
 
 	return
 }

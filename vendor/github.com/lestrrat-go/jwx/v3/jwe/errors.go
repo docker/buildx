@@ -1,6 +1,9 @@
 package jwe
 
-import "errors"
+import (
+	"errors"
+	"fmt"
+)
 
 type encryptError struct {
 	error
@@ -22,6 +25,10 @@ func EncryptError() error {
 	return errDefaultEncryptError
 }
 
+func makeEncryptError(prefix string, f string, args ...any) error {
+	return encryptError{fmt.Errorf(prefix+": "+f, args...)}
+}
+
 type decryptError struct {
 	error
 }
@@ -40,6 +47,10 @@ var errDefaultDecryptError = decryptError{errors.New(`decrypt error`)}
 // DecryptError returns an error that can be passed to `errors.Is` to check if the error is an error returned by `jwe.Decrypt`.
 func DecryptError() error {
 	return errDefaultDecryptError
+}
+
+func makeDecryptError(f string, args ...any) error {
+	return decryptError{fmt.Errorf("jwe.Decrypt: "+f, args...)}
 }
 
 type recipientError struct {
@@ -68,6 +79,10 @@ func RecipientError() error {
 	return errDefaultRecipientError
 }
 
+func makeRecipientError(err error) error {
+	return recipientError{err}
+}
+
 type parseError struct {
 	error
 }
@@ -87,4 +102,8 @@ var errDefaultParseError = parseError{errors.New(`parse error`)}
 // is an error returned by `jwe.Parse` and related functions.
 func ParseError() error {
 	return errDefaultParseError
+}
+
+func makeParseError(prefix string, f string, args ...any) error {
+	return parseError{fmt.Errorf(prefix+": "+f, args...)}
 }

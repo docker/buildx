@@ -18,6 +18,7 @@ go_library(
         "signer.go",
         "sign_context.go",
         "signature_builder.go",
+        "streaming_detached.go",
         "verifier.go",
         "verify_context.go",
     ],
@@ -28,7 +29,6 @@ go_library(
         "//internal/base64",
         "//internal/ecutil",
         "//internal/json",
-        "//internal/jwxio",
         "//internal/tokens",
         "//internal/keyconv",
         "//internal/pool",
@@ -39,6 +39,7 @@ go_library(
         "//jws/legacy",
         "//transform",
         "@com_github_lestrrat_go_blackmagic//:blackmagic",
+        "@com_github_lestrrat_go_dsig//:dsig",
         "@com_github_lestrrat_go_option_v2//:option",
     ],
 )
@@ -53,6 +54,7 @@ go_test(
         "message_test.go",
         "options_gen_test.go",
         "signer_test.go",
+        "streaming_detached_test.go",
     ],
     embed = [":jws"],
     deps = [

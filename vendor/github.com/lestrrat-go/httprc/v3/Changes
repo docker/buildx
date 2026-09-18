@@ -1,6 +1,22 @@
 Changes
 =======
 
+v3.0.5 30 Mar 2026
+  * Fix periodic check deadlock when number of ready resources exceeds
+    outgoing channel buffer, which caused circular wait between controller
+    and worker goroutines (#113, #116)
+  * Fix proxysink self-deadlock caused by missing mutex unlock on context
+    cancellation path
+
+v3.0.4 08 Feb 2026
+  * Fix worker goroutine dying on sync refresh failure, which could cause
+    deadlocks after repeated failures (lestrrat-go/jwx#1551)
+  * Move ErrNotReady example functions out of client_example_test.go into
+    separate files to avoid triggering autodoc workflow
+
+v3.0.3 23 Dec 2025
+  * Add ErrNotReady error state to avoid waiting for unstable URLs
+
 v3.0.2 05 Dev 2025
 * Code changes mainly due to upgraded linter.
 * github.com/lestrrat-go/option upgraded to v2

@@ -30,6 +30,14 @@ func SignHMAC(key, payload []byte, hfunc func() hash.Hash) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 
+// VerifyHMACDigest verifies an HMAC signature given a pre-computed MAC.
+func VerifyHMACDigest(computedMAC, signature []byte) error {
+	if !hmac.Equal(computedMAC, signature) {
+		return NewVerificationError("invalid HMAC signature")
+	}
+	return nil
+}
+
 // VerifyHMAC verifies an HMAC signature for the given payload.
 // This function verifies the signature using the specified key and hash function.
 // The payload parameter should be the pre-computed signing input (typically header.payload).

@@ -72,6 +72,31 @@ func sparseerr(f string, args ...any) error {
 	return bparseerr(`jwk.ParseString`, f, args...)
 }
 
+func kparseerr(f string, args ...any) error {
+	return bparseerr(`jwk.ParseKey`, f, args...)
+}
+
+type whitelistError struct {
+	error
+}
+
+func (e whitelistError) Unwrap() error {
+	return e.error
+}
+
+func (whitelistError) Is(err error) bool {
+	_, ok := err.(whitelistError)
+	return ok
+}
+
+var errDefaultWhitelistError = whitelistError{errors.New(`rejected by whitelist`)}
+
+// WhitelistError returns an error that can be passed to `errors.Is` to check
+// if the error is caused by a URL being rejected by a whitelist.
+func WhitelistError() error {
+	return errDefaultWhitelistError
+}
+
 var errDefaultParseError = parseError{errors.New(`parse error`)}
 
 func ParseError() error {

@@ -39,6 +39,25 @@ type KeyIDer interface {
 // expose the secret key in memory, for example, when you want to use
 // hardware security modules (HSMs) to decrypt the key.
 //
+// Library contract for implementers (read carefully):
+//
+//   - The library has already verified that the wire-level `alg` is
+//     consistent across the protected header and per-recipient header
+//     (RFC 7516 §7.2.1 disjointness). Your DecryptKey is invoked with
+//     the alg the library has decided to use for this attempt.
+//   - The library has NOT validated key-shape-vs-alg compatibility for
+//     your custom decrypter. You receive the raw recipient and message;
+//     headers are split between protected (signed/integrity-protected)
+//     and per-recipient (unprotected). If you read a value from the
+//     unprotected per-recipient header for a security decision, you
+//     must enforce its consistency with the protected header yourself.
+//   - Returning a non-nil error short-circuits this recipient. Returning
+//     nil bytes with nil error is treated as "decryption failed" by the
+//     dispatcher (use a non-nil error for clarity).
+//   - You are responsible for any constant-time considerations relevant
+//     to your decryption primitive (e.g. RFC 3218 random-CEK fallback
+//     for RSA-PKCS1v1.5; the library does this for the built-in path).
+//
 // This API is experimental and may change without notice, even
 // in minor releases.
 type KeyDecrypter interface {

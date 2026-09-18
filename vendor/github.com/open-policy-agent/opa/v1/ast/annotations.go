@@ -7,12 +7,12 @@ package ast
 import (
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/url"
 	"slices"
 	"strings"
 
 	"github.com/open-policy-agent/opa/internal/deepcopy"
-	astJSON "github.com/open-policy-agent/opa/v1/ast/json"
 	"github.com/open-policy-agent/opa/v1/util"
 )
 
@@ -36,10 +36,11 @@ type (
 		Schemas          []*SchemaAnnotation          `json:"schemas,omitempty"`
 		Compile          *CompileAnnotation           `json:"compile,omitempty"`
 		Custom           map[string]any               `json:"custom,omitempty"`
+		Labels           map[string]any               `json:"labels,omitempty"`
 		Location         *Location                    `json:"location,omitempty"`
 
-		comments []*Comment
-		node     Node
+		endLoc *Location
+		node   Node
 	}
 
 	// SchemaAnnotation contains a schema declaration for the document identified by the path.
@@ -106,11 +107,10 @@ func (a *Annotations) SetLoc(l *Location) {
 
 // EndLoc returns the location of this annotation's last comment line.
 func (a *Annotations) EndLoc() *Location {
-	count := len(a.comments)
-	if count == 0 {
+	if a.endLoc == nil {
 		return a.Location
 	}
-	return a.comments[count-1].Location
+	return a.endLoc
 }
 
 // Compare returns an integer indicating if a is less than, equal to, or greater
@@ -172,6 +172,10 @@ func (a *Annotations) Compare(other *Annotations) int {
 		return cmp
 	}
 
+	if cmp := util.Compare(a.Labels, other.Labels); cmp != 0 {
+		return cmp
+	}
+
 	return 0
 }
 
@@ -185,56 +189,6 @@ func (a *Annotations) GetTargetPath() Ref {
 	default:
 		return nil
 	}
-}
-
-func (a *Annotations) MarshalJSON() ([]byte, error) {
-	if a == nil {
-		return []byte(`{"scope":""}`), nil
-	}
-
-	data := map[string]any{
-		"scope": a.Scope,
-	}
-
-	if a.Title != "" {
-		data["title"] = a.Title
-	}
-
-	if a.Description != "" {
-		data["description"] = a.Description
-	}
-
-	if a.Entrypoint {
-		data["entrypoint"] = a.Entrypoint
-	}
-
-	if len(a.Organizations) > 0 {
-		data["organizations"] = a.Organizations
-	}
-
-	if len(a.RelatedResources) > 0 {
-		data["related_resources"] = a.RelatedResources
-	}
-
-	if len(a.Authors) > 0 {
-		data["authors"] = a.Authors
-	}
-
-	if len(a.Schemas) > 0 {
-		data["schemas"] = a.Schemas
-	}
-
-	if len(a.Custom) > 0 {
-		data["custom"] = a.Custom
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.Annotations {
-		if a.Location != nil {
-			data["location"] = a.Location
-		}
-	}
-
-	return json.Marshal(data)
 }
 
 func NewAnnotationsRef(a *Annotations) *AnnotationsRef {
@@ -269,34 +223,6 @@ func (ar *AnnotationsRef) GetRule() *Rule {
 	default:
 		return nil
 	}
-}
-
-func (ar *AnnotationsRef) MarshalJSON() ([]byte, error) {
-	data := map[string]any{
-		"path": ar.Path,
-	}
-
-	if ar.Annotations != nil {
-		data["annotations"] = ar.Annotations
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.AnnotationsRef {
-		if ar.Location != nil {
-			data["location"] = ar.Location
-		}
-
-		// The location set for the schema ref terms is wrong (always set to
-		// row 1) and not really useful anyway.. so strip it out before marshalling
-		for _, schema := range ar.Annotations.Schemas {
-			if schema.Path != nil {
-				for _, term := range schema.Path {
-					term.Location = nil
-				}
-			}
-		}
-	}
-
-	return json.Marshal(data)
 }
 
 func scopeCompare(s1, s2 string) int {
@@ -419,6 +345,10 @@ func (a *Annotations) Copy(node Node) *Annotations {
 		cpy.Custom = deepcopy.Map(a.Custom)
 	}
 
+	if a.Labels != nil {
+		cpy.Labels = deepcopy.Map(a.Labels)
+	}
+
 	cpy.node = node
 
 	return &cpy
@@ -511,6 +441,14 @@ func (a *Annotations) toObject() (*Object, *Error) {
 			return nil, NewError(CompileErr, a.Location, "invalid custom annotation %s", err.Error())
 		}
 		obj.Insert(InternedTerm("custom"), NewTerm(c))
+	}
+
+	if len(a.Labels) > 0 {
+		l, err := InterfaceToValue(a.Labels)
+		if err != nil {
+			return nil, NewError(CompileErr, a.Location, "invalid labels annotation %s", err.Error())
+		}
+		obj.Insert(InternedTerm("labels"), NewTerm(l))
 	}
 
 	return &obj, nil
@@ -670,18 +608,6 @@ func (rr *RelatedResourceAnnotation) Compare(other *RelatedResourceAnnotation) i
 func (rr *RelatedResourceAnnotation) String() string {
 	bs, _ := json.Marshal(rr)
 	return string(bs)
-}
-
-func (rr *RelatedResourceAnnotation) MarshalJSON() ([]byte, error) {
-	d := map[string]any{
-		"ref": rr.Ref.String(),
-	}
-
-	if len(rr.Description) > 0 {
-		d["description"] = rr.Description
-	}
-
-	return json.Marshal(d)
 }
 
 // Copy returns a deep copy of s.
@@ -882,6 +808,17 @@ func (as *AnnotationSet) Chain(rule *Rule) AnnotationsRefSet {
 
 	ruleAnnots := as.GetRuleScope(rule)
 
+	// Fall back to the rule's own attached annotations when the rule's source
+	// module isn't tracked by this AnnotationSet. This happens for rules
+	// supplied by an ExternalRuleSource that returns []*Rule directly: their
+	// source module is never compiled by the outer Compiler, so the set has no
+	// entries for them at any scope. attachRuleAnnotations (run at parse time)
+	// populates rule.Annotations with rule-scope and document-scope entries,
+	// which is the upper bound of what's reachable for such rules anyway.
+	if len(ruleAnnots) == 0 && len(rule.Annotations) > 0 && !slices.Contains(as.modules, rule.Module) {
+		ruleAnnots = rule.Annotations
+	}
+
 	if len(ruleAnnots) >= 1 {
 		for _, a := range ruleAnnots {
 			refs = append(refs, NewAnnotationsRef(a))
@@ -921,6 +858,39 @@ func (as *AnnotationSet) Chain(rule *Rule) AnnotationsRefSet {
 	}
 
 	return refs
+}
+
+// MergedLabels returns the inner-scope-wins merged labels for the given rule
+// along with a stable JSON string suitable for content-based deduplication.
+// labels is nil when the rule has no labels anywhere in its annotation chain.
+func (as *AnnotationSet) MergedLabels(rule *Rule) (labels map[string]any, key string) {
+	if as == nil {
+		return nil, ""
+	}
+	labels = mergeChainLabels(as.Chain(rule))
+	if len(labels) > 0 {
+		b, _ := json.Marshal(labels)
+		key = string(b)
+	}
+	return labels, key
+}
+
+// mergeChainLabels folds labels from a rule's annotation chain with inner-wins
+// precedence. AnnotationSet.Chain returns entries in inner-to-outer order, so
+// we iterate in reverse to fold outer-to-inner.
+func mergeChainLabels(chain AnnotationsRefSet) map[string]any {
+	var merged map[string]any
+	for i := len(chain) - 1; i >= 0; i-- {
+		a := chain[i].Annotations
+		if a == nil || len(a.Labels) == 0 {
+			continue
+		}
+		if merged == nil {
+			merged = make(map[string]any, len(a.Labels))
+		}
+		maps.Copy(merged, a.Labels)
+	}
+	return merged
 }
 
 func (ars FlatAnnotationsRefSet) Insert(ar *AnnotationsRef) FlatAnnotationsRefSet {

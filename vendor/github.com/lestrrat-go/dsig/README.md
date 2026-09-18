@@ -11,7 +11,7 @@ While there are many standards for generating and verifying digital signatures, 
 * EdDSA signatures (Ed25519, Ed448)
 * HMAC signatures (SHA-256, SHA-384, SHA-512)
 * Support for crypto.Signer interface
-* Allows for dynamic additions of algorithms in limited cases.
+* Custom algorithm registration via `Signer`/`Verifier` interfaces
 
 # SYNOPSIS
 

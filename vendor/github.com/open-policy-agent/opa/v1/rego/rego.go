@@ -42,10 +42,7 @@ import (
 const (
 	defaultPartialNamespace = "partial"
 	wasmVarPrefix           = "^"
-)
 
-// nolint:varcheck
-const (
 	targetWasm = "wasm"
 	targetRego = "rego"
 )
@@ -103,6 +100,7 @@ type EvalContext struct {
 	parsedInput                 ast.Value
 	metrics                     metrics.Metrics
 	txn                         storage.Transaction
+	generateJSON                func(*ast.Term, *EvalContext) (any, error)
 	instrument                  bool
 	instrumentation             *topdown.Instrumentation
 	partialNamespace            string
@@ -128,6 +126,9 @@ type EvalContext struct {
 	baseCache                   topdown.BaseCache
 	tracing                     tracing.Options
 	externalCancel              topdown.Cancel // Note(philip): If non-nil, the cancellation is handled outside of this package.
+	requestMetadata             map[string]any
+	responseMetadata            map[string]any
+	evaluated                   *topdown.EvaluatedRuleTracker
 }
 
 func (e *EvalContext) RawInput() *any {
@@ -224,6 +225,15 @@ func EvalMetrics(metric metrics.Metrics) EvalOption {
 func EvalTransaction(txn storage.Transaction) EvalOption {
 	return func(e *EvalContext) {
 		e.txn = txn
+	}
+}
+
+// EvalGenerateJSON sets the AST to JSON converter for an evaluation. When set, this
+// option takes precedence over [GenerateJSON] set on the Rego object from e.g. a prepared
+// query, allowing individual evaluations to customize how the result is transformed.
+func EvalGenerateJSON(f func(*ast.Term, *EvalContext) (any, error)) EvalOption {
+	return func(e *EvalContext) {
+		e.generateJSON = f
 	}
 }
 
@@ -408,6 +418,31 @@ func EvalNondeterministicBuiltins(yes bool) EvalOption {
 func EvalExternalCancel(ec topdown.Cancel) EvalOption {
 	return func(e *EvalContext) {
 		e.externalCancel = ec
+	}
+}
+
+// EvalRequestMetadata sets arbitrary metadata from the caller that can be
+// passed through to the evaluation. This allows wrapping projects to attach
+// custom metadata to queries.
+func EvalRequestMetadata(m map[string]any) EvalOption {
+	return func(e *EvalContext) {
+		e.requestMetadata = m
+	}
+}
+
+// EvalResponseMetadata sets a map that wrapping projects can populate during
+// evaluation to include additional fields in the API response.
+func EvalResponseMetadata(m map[string]any) EvalOption {
+	return func(e *EvalContext) {
+		e.responseMetadata = m
+	}
+}
+
+// EvalEvaluatedRuleTracker sets a tracker to record rule identifiers that
+// were successfully evaluated during query evaluation.
+func EvalEvaluatedRuleTracker(t *topdown.EvaluatedRuleTracker) EvalOption {
+	return func(e *EvalContext) {
+		e.evaluated = t
 	}
 }
 
@@ -657,6 +692,7 @@ type Rego struct {
 	strictBuiltinErrors         bool
 	builtinErrorList            *[]topdown.Error
 	resolvers                   []refResolver
+	externalSources             []ast.ExternalRuleSource
 	schemaSet                   *ast.SchemaSet
 	target                      string // target type (wasm, rego, etc.)
 	opa                         opa.EvalEngine
@@ -670,6 +706,7 @@ type Rego struct {
 	compilerHook                func(*ast.Compiler)
 	evalMode                    *ast.CompilerEvalMode
 	filter                      filter.LoaderFilter
+	evaluated                   *topdown.EvaluatedRuleTracker
 }
 
 func (r *Rego) RegoVersion() ast.RegoVersion {
@@ -1271,6 +1308,15 @@ func Resolver(ref ast.Ref, r resolver.Resolver) func(r *Rego) {
 	}
 }
 
+// ExternalSource adds an external rule source that provides rules dynamically.
+// The source declares which package refs it handles via its Refs() method.
+// A single source can provide rules for multiple packages.
+func ExternalSource(source ast.ExternalRuleSource) func(r *Rego) {
+	return func(rego *Rego) {
+		rego.externalSources = append(rego.externalSources, source)
+	}
+}
+
 // Schemas sets the schemaSet
 func Schemas(x *ast.SchemaSet) func(r *Rego) {
 	return func(r *Rego) {
@@ -1294,7 +1340,10 @@ func Target(t string) func(r *Rego) {
 	}
 }
 
-// GenerateJSON sets the AST to JSON converter for the results.
+// GenerateJSON sets the AST to JSON converter to use for results. This will have any evaluationn on a Rego
+// object use the provided function for conversion. Use [EvalGenerateJSON] if you want to set a converter
+// function for individual evaluations, which will take precedence over GenerateJSON set on the Rego object,
+// (i.e. by this function) for the scope of that evaluation.
 func GenerateJSON(f func(*ast.Term, *EvalContext) (any, error)) func(r *Rego) {
 	return func(r *Rego) {
 		r.generateJSON = f
@@ -1353,6 +1402,14 @@ func EvalMode(mode ast.CompilerEvalMode) func(r *Rego) {
 	}
 }
 
+// EvaluatedRuleTracker returns an option that sets a tracker to record rule
+// identifiers that were successfully evaluated during query evaluation.
+func EvaluatedRuleTracker(t *topdown.EvaluatedRuleTracker) func(r *Rego) {
+	return func(r *Rego) {
+		r.evaluated = t
+	}
+}
+
 // New returns a new Rego object.
 func New(options ...func(r *Rego)) *Rego {
 	r := &Rego{
@@ -1371,6 +1428,7 @@ func New(options ...func(r *Rego)) *Rego {
 	callHook := r.compiler == nil // call hook only if we created the compiler here
 
 	if r.compiler == nil {
+		//nolint:staticcheck
 		r.compiler = ast.NewCompiler().
 			WithUnsafeBuiltins(r.unsafeBuiltins).
 			WithBuiltins(r.builtinDecls).
@@ -2115,8 +2173,7 @@ func (r *Rego) parseQuery(queryImports []*ast.Import, m metrics.Metrics) (ast.Bo
 
 func parserOptionsFromRegoVersionImport(imports []*ast.Import, popts ast.ParserOptions) (ast.ParserOptions, error) {
 	for _, imp := range imports {
-		path := imp.Path.Value.(ast.Ref)
-		if ast.Compare(path, ast.RegoV1CompatibleRef) == 0 {
+		if ast.RegoV1CompatibleRef.Compare(imp.Path.Value) == 0 {
 			popts.RegoVersion = ast.RegoV1
 			return popts, nil
 		}
@@ -2125,6 +2182,18 @@ func parserOptionsFromRegoVersionImport(imports []*ast.Import, popts ast.ParserO
 }
 
 func (r *Rego) compileModules(ctx context.Context, txn storage.Transaction, m metrics.Metrics) error {
+	if len(r.externalSources) > 0 && r.target != "" && r.target != targetRego {
+		return fmt.Errorf("external rule sources are not supported with target %q: only the default (rego) target is supported", r.target)
+	}
+
+	// Apply external sources to the compiler before compilation
+	for i := range r.externalSources {
+		source := r.externalSources[i]
+		for _, ref := range source.Refs() {
+			r.compiler.WithExternalSource(ref, source)
+		}
+	}
+
 	// Only compile again if there are new modules.
 	if len(r.bundles) > 0 || len(r.parsedModules) > 0 {
 
@@ -2273,7 +2342,15 @@ func (r *Rego) eval(ctx context.Context, ectx *EvalContext) (ResultSet, error) {
 		WithPrintHook(ectx.printHook).
 		WithDistributedTracingOpts(r.distributedTracingOpts).
 		WithVirtualCache(ectx.virtualCache).
-		WithBaseCache(ectx.baseCache)
+		WithBaseCache(ectx.baseCache).
+		WithRequestMetadata(ectx.requestMetadata).
+		WithResponseMetadata(ectx.responseMetadata)
+
+	if ectx.evaluated != nil {
+		q = q.WithEvaluatedRuleTracker(ectx.evaluated)
+	} else {
+		q = q.WithEvaluatedRuleTracker(r.evaluated)
+	}
 
 	if !ectx.time.IsZero() {
 		q = q.WithTime(ectx.time)
@@ -2397,6 +2474,11 @@ func (r *Rego) valueToQueryResult(res ast.Value, ectx *EvalContext) (ResultSet, 
 func (r *Rego) generateResult(qr topdown.QueryResult, ectx *EvalContext) (Result, error) {
 	rewritten := ectx.compiledQuery.compiler.RewrittenVars()
 
+	generateJSON := r.generateJSON
+	if ectx.generateJSON != nil {
+		generateJSON = ectx.generateJSON
+	}
+
 	result := newResult()
 	for k, term := range qr {
 		if rw, ok := rewritten[k]; ok {
@@ -2406,7 +2488,7 @@ func (r *Rego) generateResult(qr topdown.QueryResult, ectx *EvalContext) (Result
 			continue
 		}
 
-		v, err := r.generateJSON(term, ectx)
+		v, err := generateJSON(term, ectx)
 		if err != nil {
 			return result, err
 		}
@@ -2420,7 +2502,7 @@ func (r *Rego) generateResult(qr topdown.QueryResult, ectx *EvalContext) (Result
 		}
 
 		if k, ok := r.capture[expr]; ok {
-			v, err := r.generateJSON(qr[k], ectx)
+			v, err := generateJSON(qr[k], ectx)
 			if err != nil {
 				return result, err
 			}
@@ -2496,7 +2578,7 @@ func (r *Rego) partialResult(ctx context.Context, pCfg *PrepareConfig) (PartialR
 			Module: module,
 		}
 		module.Rules[i] = rule
-		if checkPartialResultForRecursiveRefs(body, rule.Path()) {
+		if checkPartialResultForRecursiveRefs(body, module.Package.Path.Extend(rule.Head.Reference.GroundPrefix())) {
 			return PartialResult{}, Errors{errPartialEvaluationNotEffective}
 		}
 	}
@@ -2567,7 +2649,9 @@ func (r *Rego) partial(ctx context.Context, ectx *EvalContext) (*PartialQueries,
 		WithInterQueryBuiltinValueCache(ectx.interQueryBuiltinValueCache).
 		WithStrictBuiltinErrors(ectx.strictBuiltinErrors).
 		WithSeed(ectx.seed).
-		WithPrintHook(ectx.printHook)
+		WithPrintHook(ectx.printHook).
+		WithRequestMetadata(ectx.requestMetadata).
+		WithResponseMetadata(ectx.responseMetadata)
 
 	if !ectx.time.IsZero() {
 		q = q.WithTime(ectx.time)
@@ -2618,31 +2702,31 @@ func (r *Rego) partial(ctx context.Context, ectx *EvalContext) (*PartialQueries,
 		for i, mod := range support {
 			// We can't apply the RegoV0CompatV1 version to the support module if it contains rules or vars that
 			// conflict with future keywords.
-			applyRegoVersion := true
+			applyCompatRegoVersion := true
 
 			ast.WalkRules(mod, func(r *ast.Rule) bool {
 				name := r.Head.Name
 				if name == "" && len(r.Head.Reference) > 0 {
 					name = r.Head.Reference[0].Value.(ast.Var)
 				}
-				if ast.IsFutureKeywordForRegoVersion(name.String(), ast.RegoV0) {
-					applyRegoVersion = false
+				if ast.IsFutureKeywordForRegoVersion(name.String(), ast.RegoV0) && !ast.IsFutureKeywordForRegoVersion(name.String(), ast.RegoV1) {
+					applyCompatRegoVersion = false
 					return true
 				}
 				return false
 			})
 
-			if applyRegoVersion {
+			if applyCompatRegoVersion {
 				ast.WalkVars(mod, func(v ast.Var) bool {
-					if ast.IsFutureKeywordForRegoVersion(v.String(), ast.RegoV0) {
-						applyRegoVersion = false
+					if ast.IsFutureKeywordForRegoVersion(v.String(), ast.RegoV0) && !ast.IsFutureKeywordForRegoVersion(v.String(), ast.RegoV1) {
+						applyCompatRegoVersion = false
 						return true
 					}
 					return false
 				})
 			}
 
-			if applyRegoVersion {
+			if applyCompatRegoVersion {
 				support[i].SetRegoVersion(ast.RegoV0CompatV1)
 			} else {
 				support[i].SetRegoVersion(r.regoVersion)
@@ -2687,7 +2771,7 @@ func (r *Rego) rewriteQueryToCaptureValue(_ ast.QueryCompiler, query ast.Body) (
 			expr.Terms = ast.Equality.Expr(terms, capture).Terms
 			r.capture[expr] = capture.Value.(ast.Var)
 		case []*ast.Term:
-			tpe := r.compiler.TypeEnv.Get(terms[0])
+			tpe := r.compiler.TypeEnv.GetByValue(terms[0].Value)
 			if !types.Void(tpe) && types.Arity(tpe) == len(terms)-1 {
 				capture = r.generateTermVar()
 				expr.Terms = append(terms, capture)
@@ -2997,9 +3081,11 @@ func generateJSON(term *ast.Term, ectx *EvalContext) (any, error) {
 }
 
 func (r *Rego) planQuery(queries []ast.Body, evalQueryType queryType) (*ir.Policy, error) {
+	// We sort the list of module names here to ensure a deterministic
+	// output ordering for the planner.
 	modules := make([]*ast.Module, 0, len(r.compiler.Modules))
-	for _, module := range r.compiler.Modules {
-		modules = append(modules, module)
+	for _, name := range util.KeysSorted(r.compiler.Modules) {
+		modules = append(modules, r.compiler.Modules[name])
 	}
 
 	decls := make(map[string]*ast.Builtin, len(r.builtinDecls)+len(ast.BuiltinMap))

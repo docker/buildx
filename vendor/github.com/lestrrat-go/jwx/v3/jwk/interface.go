@@ -41,15 +41,17 @@ const (
 
 // Set represents JWKS object, a collection of jwk.Key objects.
 //
-// Sets can be safely converted to and from JSON using the standard
-// `"encoding/json".Marshal` and `"encoding/json".Unmarshal`. However,
-// if you do not know if the payload contains a single JWK or a JWK set,
-// consider using `jwk.Parse()` to always get a `jwk.Set` out of it.
+// Sets can be marshaled and unmarshaled with the standard
+// `"encoding/json".Marshal` and `"encoding/json".Unmarshal`. The
+// unmarshal path requires JWKS shape (an object with a "keys" field).
+// For input that may be either a single bare JWK or a JWKS, use
+// [Parse], which dispatches between the two shapes and always returns
+// a `jwk.Set`.
 //
-// Since v1.2.12, JWK sets with private parameters can be parsed as well.
-// Such private parameters can be accessed via the `Field()` method.
-// If a resource contains a single JWK instead of a JWK set, private parameters
-// are stored in _both_ the resulting `jwk.Set` object and the `jwk.Key` object .
+// JWKS-level extension members (any top-level field other than "keys")
+// are preserved as set-level private parameters and are accessible via
+// the `Field()` method. Per-key extension members live on the
+// individual `jwk.Key` objects, accessible via that key's `Field()`.
 //
 //nolint:interfacebloat
 type Set interface {
@@ -119,10 +121,12 @@ type Set interface {
 }
 
 type set struct {
-	keys          []Key
-	mu            sync.RWMutex
-	dc            DecodeCtx
-	privateParams map[string]any
+	keys               []Key
+	mu                 sync.RWMutex
+	dc                 DecodeCtx
+	privateParams      map[string]any
+	maxKeys            int  // scratch cap consumed by UnmarshalJSON; 0 means use global default
+	rejectDuplicateKID bool // scratch flag consumed by UnmarshalJSON; false falls back to global
 }
 
 type PublicKeyer interface {

@@ -27,6 +27,9 @@ func init() {
 	algorithms[6] = NewEllipticCurveAlgorithm("X448")
 
 	RegisterEllipticCurveAlgorithm(algorithms...)
+	for _, alg := range algorithms {
+		builtinEllipticCurveAlgorithm[alg.String()] = struct{}{}
+	}
 }
 
 // Ed25519 returns an object representing Ed25519 algorithm for EdDSA operations.
@@ -125,36 +128,44 @@ func LookupEllipticCurveAlgorithm(name string) (EllipticCurveAlgorithm, bool) {
 
 // RegisterEllipticCurveAlgorithm registers a new EllipticCurveAlgorithm. The signature value must be immutable
 // and safe to be used by multiple goroutines, as it is going to be shared with all other users of this library.
+//
+// Registration is process-global. Built-in identifiers such as RS256 are
+// reserved and cannot be replaced by callers after init has completed; use a
+// distinct name for third-party algorithms.
 func RegisterEllipticCurveAlgorithm(algorithms ...EllipticCurveAlgorithm) {
 	muAllEllipticCurveAlgorithm.Lock()
+	defer muAllEllipticCurveAlgorithm.Unlock()
 	for _, alg := range algorithms {
+		if _, ok := builtinEllipticCurveAlgorithm[alg.String()]; ok {
+			if existing, ok := allEllipticCurveAlgorithm[alg.String()]; ok && existing != alg {
+				continue
+			}
+			continue
+		}
 		allEllipticCurveAlgorithm[alg.String()] = alg
 	}
-	muAllEllipticCurveAlgorithm.Unlock()
-	rebuildEllipticCurveAlgorithm()
+	rebuildEllipticCurveAlgorithmLocked()
 }
 
 // UnregisterEllipticCurveAlgorithm unregisters a EllipticCurveAlgorithm from its known database.
 // Non-existent entries, as well as built-in algorithms will silently be ignored.
 func UnregisterEllipticCurveAlgorithm(algorithms ...EllipticCurveAlgorithm) {
 	muAllEllipticCurveAlgorithm.Lock()
+	defer muAllEllipticCurveAlgorithm.Unlock()
 	for _, alg := range algorithms {
 		if _, ok := builtinEllipticCurveAlgorithm[alg.String()]; ok {
 			continue
 		}
 		delete(allEllipticCurveAlgorithm, alg.String())
 	}
-	muAllEllipticCurveAlgorithm.Unlock()
-	rebuildEllipticCurveAlgorithm()
+	rebuildEllipticCurveAlgorithmLocked()
 }
 
-func rebuildEllipticCurveAlgorithm() {
+func rebuildEllipticCurveAlgorithmLocked() {
 	list := make([]EllipticCurveAlgorithm, 0, len(allEllipticCurveAlgorithm))
-	muAllEllipticCurveAlgorithm.RLock()
 	for _, v := range allEllipticCurveAlgorithm {
 		list = append(list, v)
 	}
-	muAllEllipticCurveAlgorithm.RUnlock()
 	sort.Slice(list, func(i, j int) bool {
 		return list[i].String() < list[j].String()
 	})

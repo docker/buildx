@@ -3,6 +3,7 @@ package jws
 import (
 	"bytes"
 	"fmt"
+	"slices"
 
 	"github.com/lestrrat-go/jwx/v3/internal/json"
 	"github.com/lestrrat-go/jwx/v3/internal/pool"
@@ -52,26 +53,51 @@ func freeSignatureBuilder(sb *signatureBuilder) *signatureBuilder {
 }
 
 func (sb *signatureBuilder) Build(sc *signContext, payload []byte) (*Signature, error) {
-	protected := sb.protected
-	if protected == nil {
+	// Clone caller-provided headers before mutating so that re-using the
+	// same Headers instance across multiple Sign calls does not cause
+	// cross-contamination of alg/kid.
+	var protected Headers
+	if sb.protected != nil {
+		cloned, err := sb.protected.Clone()
+		if err != nil {
+			return nil, makeSignError(prefixJwsSign, `failed to clone protected headers: %w`, err)
+		}
+		protected = cloned
+	} else {
 		protected = NewHeaders()
 	}
 
 	if err := protected.Set(AlgorithmKey, sb.alg); err != nil {
-		return nil, signerr(`failed to set "alg" header: %w`, err)
+		return nil, makeSignError(prefixJwsSign, `failed to set "alg" header: %w`, err)
 	}
 
 	if key, ok := sb.key.(jwk.Key); ok {
 		if kid, ok := key.KeyID(); ok && kid != "" {
 			if err := protected.Set(KeyIDKey, kid); err != nil {
-				return nil, signerr(`failed to set "kid" header: %w`, err)
+				return nil, makeSignError(prefixJwsSign, `failed to set "kid" header: %w`, err)
+			}
+		}
+	}
+
+	// RFC 7797 §3 requires producers that set "b64":false to also list
+	// "b64" in "crit". Auto-declare it in the protected header so a
+	// caller who set b64=false but forgot the crit declaration does not
+	// emit a non-conformant stream that strict verifiers refuse.
+	// Idempotent: if "b64" is already in crit, the list is unchanged.
+	// If crit is unset, it is created with just "b64".
+	if !getB64Value(protected) {
+		crit, _ := protected.Critical()
+		if !slices.Contains(crit, "b64") {
+			crit = append(crit, "b64")
+			if err := protected.Set(CriticalKey, crit); err != nil {
+				return nil, makeSignError(prefixJwsSign, `failed to set "crit" header: %w`, err)
 			}
 		}
 	}
 
 	hdrs, err := mergeHeaders(sb.public, protected)
 	if err != nil {
-		return nil, signerr(`failed to merge headers: %w`, err)
+		return nil, makeSignError(prefixJwsSign, `failed to merge headers: %w`, err)
 	}
 
 	// raw, json format headers
@@ -84,7 +110,7 @@ func (sb *signatureBuilder) Build(sc *signContext, payload []byte) (*Signature, 
 	b64 := getB64Value(hdrs)
 	if !b64 && !sc.detached {
 		if bytes.IndexByte(payload, tokens.Period) != -1 {
-			return nil, fmt.Errorf(`payload must not contain a "."`)
+			return nil, fmt.Errorf(`compact serialization with b64=false requires payload to contain no "." characters per RFC 7797 §5.2; use jws.WithDetachedPayload to keep the payload out of the wire format`)
 		}
 	}
 

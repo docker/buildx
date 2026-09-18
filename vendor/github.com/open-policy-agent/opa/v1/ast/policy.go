@@ -6,7 +6,6 @@ package ast
 
 import (
 	"bytes"
-	"encoding/json"
 	"fmt"
 	"slices"
 	"strings"
@@ -273,6 +272,11 @@ type (
 
 		generatedFrom *Expr
 		generates     []*Expr
+
+		// fromAssignment marks an equality expression that was rewritten from
+		// `:=`, so the safety checker can keep the RHS from being made safe
+		// through the LHS. See reorderBodyForSafety.
+		fromAssignment bool
 	}
 
 	// SomeDecl represents a variable declaration statement. The symbols are variables.
@@ -287,6 +291,24 @@ type (
 		Domain   *Term     `json:"domain"`
 		Body     Body      `json:"body"`
 		Location *Location `json:"location,omitempty"`
+	}
+
+	// LogicalAnd represents a logical conjunction (`lhs and rhs`).
+	LogicalAnd struct {
+		Lhs         Body      `json:"lhs"`
+		Rhs         Body      `json:"rhs"`
+		ExplicitLhs bool      `json:"explicit_lhs,omitempty"`
+		ExplicitRhs bool      `json:"explicit_rhs,omitempty"`
+		Location    *Location `json:"location,omitempty"`
+	}
+
+	// LogicalOr represents a logical disjunction (`lhs or rhs`).
+	LogicalOr struct {
+		Lhs         Body      `json:"lhs"`
+		Rhs         Body      `json:"rhs"`
+		ExplicitLhs bool      `json:"explicit_lhs,omitempty"`
+		ExplicitRhs bool      `json:"explicit_rhs,omitempty"`
+		Location    *Location `json:"location,omitempty"`
 	}
 
 	// With represents a modifier on an expression.
@@ -379,31 +401,11 @@ func (mod *Module) String() string {
 func (mod *Module) RuleSet(name Var) RuleSet {
 	rs := NewRuleSet()
 	for _, rule := range mod.Rules {
-		if rule.Head.Name.Equal(name) {
+		if rule.Head.Name == name {
 			rs.Add(rule)
 		}
 	}
 	return rs
-}
-
-// UnmarshalJSON parses bs and stores the result in mod. The rules in the module
-// will have their module pointer set to mod.
-func (mod *Module) UnmarshalJSON(bs []byte) error {
-
-	// Declare a new type and use a type conversion to avoid recursively calling
-	// Module#UnmarshalJSON.
-	type module Module
-
-	if err := util.UnmarshalJSON(bs, (*module)(mod)); err != nil {
-		return err
-	}
-
-	WalkRules(mod, func(rule *Rule) bool {
-		rule.Module = mod
-		return false
-	})
-
-	return nil
 }
 
 func (mod *Module) regoV1Compatible() bool {
@@ -496,20 +498,6 @@ func (pkg *Package) String() string {
 	return util.ByteSliceToString(buf)
 }
 
-func (pkg *Package) MarshalJSON() ([]byte, error) {
-	data := map[string]any{
-		"path": pkg.Path,
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.Package {
-		if pkg.Location != nil {
-			data["location"] = pkg.Location
-		}
-	}
-
-	return json.Marshal(data)
-}
-
 // IsValidImportPath returns an error indicating if the import path is invalid.
 // If the import path is valid, err is nil.
 func IsValidImportPath(v Value) (err error) {
@@ -544,7 +532,7 @@ func (imp *Import) Compare(other *Import) int {
 	} else if other == nil {
 		return 1
 	}
-	if cmp := Compare(imp.Path, other.Path); cmp != 0 {
+	if cmp := imp.Path.Value.Compare(other.Path.Value); cmp != 0 {
 		return cmp
 	}
 
@@ -598,24 +586,6 @@ func (imp *Import) Name() Var {
 func (imp *Import) String() string {
 	buf, _ := imp.AppendText(make([]byte, 0, imp.StringLength()))
 	return util.ByteSliceToString(buf)
-}
-
-func (imp *Import) MarshalJSON() ([]byte, error) {
-	data := map[string]any{
-		"path": imp.Path,
-	}
-
-	if len(imp.Alias) != 0 {
-		data["alias"] = imp.Alias
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.Import {
-		if imp.Location != nil {
-			data["location"] = imp.Location
-		}
-	}
-
-	return json.Marshal(data)
 }
 
 // Compare returns an integer indicating whether rule is less than, equal to,
@@ -729,42 +699,6 @@ func (o toStringOpts) RegoVersion() RegoVersion {
 
 func (rule *Rule) isFunction() bool {
 	return len(rule.Head.Args) > 0
-}
-
-// ruleJSON is used for JSON serialization of Rule to avoid map allocation overhead.
-// Field order is alphabetical to match previous map-based output.
-type ruleJSON struct {
-	Annotations []*Annotations `json:"annotations,omitempty"`
-	Body        Body           `json:"body"`
-	Default     bool           `json:"default,omitempty"`
-	Else        *Rule          `json:"else,omitempty"`
-	Head        *Head          `json:"head"`
-	Location    *Location      `json:"location,omitempty"`
-}
-
-func (rule *Rule) MarshalJSON() ([]byte, error) {
-	data := ruleJSON{
-		Head: rule.Head,
-		Body: rule.Body,
-	}
-
-	if rule.Default {
-		data.Default = true
-	}
-
-	if rule.Else != nil {
-		data.Else = rule.Else
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.Rule {
-		data.Location = rule.Location
-	}
-
-	if len(rule.Annotations) != 0 {
-		data.Annotations = rule.Annotations
-	}
-
-	return json.Marshal(data)
 }
 
 // NewHead returns a new Head object. If args are provided, the first will be
@@ -888,10 +822,10 @@ func (head *Head) Compare(other *Head) int {
 	} else if !head.Assign && other.Assign {
 		return 1
 	}
-	if cmp := Compare(head.Args, other.Args); cmp != 0 {
+	if cmp := termSliceCompare(head.Args, other.Args); cmp != 0 {
 		return cmp
 	}
-	if cmp := Compare(head.Reference, other.Reference); cmp != 0 {
+	if cmp := termSliceCompare(head.Reference, other.Reference); cmp != 0 {
 		return cmp
 	}
 	if cmp := VarCompare(head.Name, other.Name); cmp != 0 {
@@ -927,27 +861,6 @@ func (head *Head) String() string {
 func (head *Head) stringWithOpts(opts toStringOpts) string {
 	buf, _ := head.appendWithOpts(opts, make([]byte, 0, head.stringLengthWithOpts(opts)))
 	return util.ByteSliceToString(buf)
-}
-
-func (head *Head) MarshalJSON() ([]byte, error) {
-	var loc *Location
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.Head && head.Location != nil {
-		loc = head.Location
-	}
-
-	// NOTE(sr): we do this to override the rendering of `head.Reference`.
-	// It's still what'll be used via the default means of encoding/json
-	// for unmarshaling a json object into a Head struct!
-	type h Head
-	return json.Marshal(struct {
-		h
-		Ref      Ref       `json:"ref"`
-		Location *Location `json:"location,omitempty"`
-	}{
-		h:        h(*head),
-		Ref:      head.Ref(),
-		Location: loc,
-	})
 }
 
 // Vars returns a set of vars found in the head.
@@ -989,11 +902,7 @@ func (head *Head) HasDynamicRef() bool {
 
 // Copy returns a deep copy of a.
 func (a Args) Copy() Args {
-	cpy := make(Args, 0, len(a))
-	for _, t := range a {
-		cpy = append(cpy, t.Copy())
-	}
-	return cpy
+	return termSliceCopy(a)
 }
 
 func (a Args) String() string {
@@ -1032,17 +941,6 @@ func NewBody(exprs ...*Expr) Body {
 	return Body(exprs)
 }
 
-// MarshalJSON returns JSON encoded bytes representing body.
-func (body Body) MarshalJSON() ([]byte, error) {
-	// Serialize empty Body to empty array. This handles both the empty case and the
-	// nil case (whereas by default the result would be null if body was nil.)
-	if len(body) == 0 {
-		return []byte(`[]`), nil
-	}
-	ret, err := json.Marshal([]*Expr(body))
-	return ret, err
-}
-
 // Append adds the expr to the body and updates the expr's index accordingly.
 func (body *Body) Append(expr *Expr) {
 	n := len(*body)
@@ -1062,19 +960,7 @@ func (body Body) Set(expr *Expr, pos int) {
 //
 // If body is a subset of other, it is considered less than (and vice versa).
 func (body Body) Compare(other Body) int {
-	minLen := min(len(other), len(body))
-	for i := range minLen {
-		if cmp := body[i].Compare(other[i]); cmp != 0 {
-			return cmp
-		}
-	}
-	if len(body) < len(other) {
-		return -1
-	}
-	if len(other) < len(body) {
-		return 1
-	}
-	return 0
+	return slices.CompareFunc(body, other, (*Expr).Compare)
 }
 
 // Copy returns a deep copy of body.
@@ -1135,10 +1021,6 @@ func (body Body) String() string {
 	return util.ByteSliceToString(buf)
 }
 
-func (body Body) AppendText(buf []byte) ([]byte, error) {
-	return AppendDelimeted(buf, body, "; ")
-}
-
 // Vars returns a VarSet containing variables in body. The params can be set to
 // control which vars are included.
 func (body Body) Vars(params VarVisitorParams) VarSet {
@@ -1150,7 +1032,7 @@ func (body Body) Vars(params VarVisitorParams) VarSet {
 // NewExpr returns a new Expr object.
 func NewExpr(terms any) *Expr {
 	switch terms.(type) {
-	case *SomeDecl, *Every, *Term, []*Term: // ok
+	case *SomeDecl, *Every, *Not, *LogicalAnd, *LogicalOr, *Term, []*Term: // ok
 	default:
 		panic("unreachable")
 	}
@@ -1163,7 +1045,14 @@ func NewExpr(terms any) *Expr {
 }
 
 // Complement returns a copy of this expression with the negation flag flipped.
+// Note: complementing an expression containing an ast.Not term is invalid, as this will create a double negation;
+// ast.Not terms may contain multiple expressions, and can therefore not be un-negated to a single *ast.Expr; use ast.Complement() instead.
+// Passing an expression containing an ast.Not with multiple expressions in its body will cause a panic.
 func (expr *Expr) Complement() *Expr {
+	if n, ok := expr.Terms.(*Not); ok && len(n.Body) > 1 {
+		panic(fmt.Errorf("cannot complement %T containing multiple expressions (%s)", n, n))
+	}
+
 	cpy := *expr
 	cpy.Negated = !cpy.Negated
 	return &cpy
@@ -1197,7 +1086,6 @@ func (expr *Expr) Equal(other *Expr) bool {
 // Otherwise, the expression terms are compared normally. If both expressions
 // have the same terms, the modifiers are compared.
 func (expr *Expr) Compare(other *Expr) int {
-
 	if expr == nil {
 		if other == nil {
 			return 0
@@ -1231,7 +1119,7 @@ func (expr *Expr) Compare(other *Expr) int {
 
 	switch t := expr.Terms.(type) {
 	case *Term:
-		if cmp := Compare(t.Value, other.Terms.(*Term).Value); cmp != 0 {
+		if cmp := t.Value.Compare(other.Terms.(*Term).Value); cmp != 0 {
 			return cmp
 		}
 	case []*Term:
@@ -1244,6 +1132,18 @@ func (expr *Expr) Compare(other *Expr) int {
 		}
 	case *Every:
 		if cmp := Compare(t, other.Terms.(*Every)); cmp != 0 {
+			return cmp
+		}
+	case *Not:
+		if cmp := t.Compare(other.Terms.(*Not)); cmp != 0 {
+			return cmp
+		}
+	case *LogicalAnd:
+		if cmp := Compare(t, other.Terms.(*LogicalAnd)); cmp != 0 {
+			return cmp
+		}
+	case *LogicalOr:
+		if cmp := Compare(t, other.Terms.(*LogicalOr)); cmp != 0 {
 			return cmp
 		}
 	}
@@ -1261,6 +1161,12 @@ func (expr *Expr) sortOrder() int {
 		return 2
 	case *Every:
 		return 3
+	case *Not:
+		return 4
+	case *LogicalAnd:
+		return 5
+	case *LogicalOr:
+		return 6
 	}
 	return -1
 }
@@ -1293,6 +1199,12 @@ func (expr *Expr) Copy() *Expr {
 		cpy.Terms = ts.Copy()
 	case *Every:
 		cpy.Terms = ts.Copy()
+	case *Not:
+		cpy.Terms = ts.Copy()
+	case *LogicalAnd:
+		cpy.Terms = ts.Copy()
+	case *LogicalOr:
+		cpy.Terms = ts.Copy()
 	}
 
 	return cpy
@@ -1310,6 +1222,10 @@ func (expr *Expr) Hash() int {
 		}
 	case *Term:
 		s += ts.Value.Hash()
+	case *LogicalAnd:
+		s += ts.Hash()
+	case *LogicalOr:
+		s += ts.Hash()
 	}
 	if expr.Negated {
 		s++
@@ -1356,9 +1272,32 @@ func (expr *Expr) IsEvery() bool {
 	return ok
 }
 
+// IsNot returns true if this expression is a 'not' expression.
+func (expr *Expr) IsNot() bool {
+	_, ok := expr.Terms.(*Not)
+	return ok
+}
+
+// IsNegated returns true if Negated or IsNot() returns true for this expression
+func (expr *Expr) IsNegated() bool {
+	return expr.Negated || expr.IsNot()
+}
+
 // IsSome returns true if this expression is a 'some' expression.
 func (expr *Expr) IsSome() bool {
 	_, ok := expr.Terms.(*SomeDecl)
+	return ok
+}
+
+// IsAnd returns true if this expression is a logical 'and' expression.
+func (expr *Expr) IsAnd() bool {
+	_, ok := expr.Terms.(*LogicalAnd)
+	return ok
+}
+
+// IsOr returns true if this expression is a logical 'or' expression.
+func (expr *Expr) IsOr() bool {
+	_, ok := expr.Terms.(*LogicalOr)
 	return ok
 }
 
@@ -1416,6 +1355,12 @@ func (expr *Expr) IsGround() bool {
 		}
 	case *Term:
 		return ts.IsGround()
+	case *Not:
+		return ts.IsGround()
+	case *LogicalAnd:
+		return ts.Lhs.IsGround() && ts.Rhs.IsGround()
+	case *LogicalOr:
+		return ts.Lhs.IsGround() && ts.Rhs.IsGround()
 	}
 	return true
 }
@@ -1451,51 +1396,6 @@ func (expr *Expr) String() string {
 	return util.ByteSliceToString(buf)
 }
 
-// exprJSON is used for JSON serialization of Expr to avoid map allocation overhead.
-// Field order is alphabetical to match previous map-based output.
-type exprJSON struct {
-	Generated bool      `json:"generated,omitempty"`
-	Index     int       `json:"index"`
-	Location  *Location `json:"location,omitempty"`
-	Negated   bool      `json:"negated,omitempty"`
-	Terms     any       `json:"terms"`
-	With      []*With   `json:"with,omitempty"`
-}
-
-func (expr *Expr) MarshalJSON() ([]byte, error) {
-	data := exprJSON{
-		Index: expr.Index,
-		Terms: expr.Terms,
-	}
-
-	if len(expr.With) > 0 {
-		data.With = expr.With
-	}
-
-	if expr.Generated {
-		data.Generated = true
-	}
-
-	if expr.Negated {
-		data.Negated = true
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.Expr {
-		data.Location = expr.Location
-	}
-
-	return json.Marshal(data)
-}
-
-// UnmarshalJSON parses the byte array and stores the result in expr.
-func (expr *Expr) UnmarshalJSON(bs []byte) error {
-	v := map[string]any{}
-	if err := util.UnmarshalJSON(bs, &v); err != nil {
-		return err
-	}
-	return unmarshalExpr(expr, v)
-}
-
 // Vars returns a VarSet containing variables in expr. The params can be set to
 // control which vars are included.
 func (expr *Expr) Vars(params VarVisitorParams) VarSet {
@@ -1512,6 +1412,7 @@ func NewBuiltinExpr(terms ...*Term) *Expr {
 
 func (expr *Expr) CogeneratedExprs() []*Expr {
 	visited := map[*Expr]struct{}{}
+	var result []*Expr
 	visitCogeneratedExprs(expr, func(e *Expr) bool {
 		if expr.Equal(e) {
 			return true
@@ -1520,13 +1421,13 @@ func (expr *Expr) CogeneratedExprs() []*Expr {
 			return true
 		}
 		visited[e] = struct{}{}
+		// Append during visitation so the result order is deterministic; iterating
+		// the 'visited' map here would randomize the order and, in turn, make
+		// dependent output (e.g. PrettyEvent's --var-values) nondeterministic.
+		result = append(result, e)
 		return false
 	})
 
-	result := make([]*Expr, 0, len(visited))
-	for e := range visited {
-		result = append(result, e)
-	}
 	return result
 }
 
@@ -1581,20 +1482,6 @@ func (d *SomeDecl) Compare(other *SomeDecl) int {
 // Hash returns a hash code of d.
 func (d *SomeDecl) Hash() int {
 	return termSliceHash(d.Symbols)
-}
-
-func (d *SomeDecl) MarshalJSON() ([]byte, error) {
-	data := map[string]any{
-		"symbols": d.Symbols,
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.SomeDecl {
-		if d.Location != nil {
-			data["location"] = d.Location
-		}
-	}
-
-	return json.Marshal(data)
 }
 
 func (q *Every) String() string {
@@ -1653,21 +1540,128 @@ func (q *Every) KeyValueVars() VarSet {
 	return vis.vars
 }
 
-func (q *Every) MarshalJSON() ([]byte, error) {
-	data := map[string]any{
-		"key":    q.Key,
-		"value":  q.Value,
-		"domain": q.Domain,
-		"body":   q.Body,
+func (a *LogicalAnd) String() string {
+	return formatBinaryLogical("and", a.Lhs, a.Rhs, a.ExplicitLhs, a.ExplicitRhs)
+}
+
+func (a *LogicalAnd) Loc() *Location {
+	return a.Location
+}
+
+func (a *LogicalAnd) SetLoc(l *Location) {
+	a.Location = l
+}
+
+func (a *LogicalAnd) Copy() *LogicalAnd {
+	cpy := *a
+	cpy.Lhs = a.Lhs.Copy()
+	cpy.Rhs = a.Rhs.Copy()
+	return &cpy
+}
+
+// Compare returns an integer indicating whether a is less than, equal to, or
+// greater than other. The ExplicitLhs/ExplicitRhs fields are ignored, as they
+// describe surface syntax rather than semantic content.
+func (a *LogicalAnd) Compare(other *LogicalAnd) int {
+	if cmp := a.Lhs.Compare(other.Lhs); cmp != 0 {
+		return cmp
+	}
+	return a.Rhs.Compare(other.Rhs)
+}
+
+func (a *LogicalAnd) Hash() int {
+	return a.Lhs.Hash() + a.Rhs.Hash()
+}
+
+func (o *LogicalOr) String() string {
+	return formatBinaryLogical("or", o.Lhs, o.Rhs, o.ExplicitLhs, o.ExplicitRhs)
+}
+
+func (o *LogicalOr) Loc() *Location {
+	return o.Location
+}
+
+func (o *LogicalOr) SetLoc(l *Location) {
+	o.Location = l
+}
+
+func (o *LogicalOr) Copy() *LogicalOr {
+	cpy := *o
+	cpy.Lhs = o.Lhs.Copy()
+	cpy.Rhs = o.Rhs.Copy()
+	return &cpy
+}
+
+// Compare returns an integer indicating whether o is less than, equal to, or
+// greater than other. The ExplicitLhs/ExplicitRhs fields are ignored, as they
+// describe surface syntax rather than semantic content.
+func (o *LogicalOr) Compare(other *LogicalOr) int {
+	if cmp := o.Lhs.Compare(other.Lhs); cmp != 0 {
+		return cmp
+	}
+	return o.Rhs.Compare(other.Rhs)
+}
+
+func (o *LogicalOr) Hash() int {
+	return o.Lhs.Hash() + o.Rhs.Hash()
+}
+
+func formatBinaryLogical(op string, lhs, rhs Body, explicitLhs, explicitRhs bool) string {
+	return formatLogicalOperand(lhs, explicitLhs, op, false) + " " + op + " " + formatLogicalOperand(rhs, explicitRhs, op, true)
+}
+
+func formatLogicalOperand(b Body, explicit bool, parentOp string, rhs bool) string {
+	if explicit || len(b) != 1 {
+		return "{ " + b.String() + " }"
 	}
 
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.Every {
-		if q.Location != nil {
-			data["location"] = q.Location
-		}
+	if logicalOperandNeedsParens(b, parentOp, rhs) {
+		return "(" + b.String() + ")"
 	}
 
-	return json.Marshal(data)
+	return b.String()
+}
+
+func logicalOperandNeedsParens(b Body, parentOp string, rhs bool) bool {
+	if len(b) != 1 {
+		return false
+	}
+
+	e := b[0]
+	if len(e.With) > 0 {
+		return true
+	}
+
+	switch e.Terms.(type) {
+	case *LogicalOr:
+		// `or` binds looser than `and`: always parenthesize under `and`; under
+		// `or`, parenthesize only the rhs to preserve right-nesting.
+		return parentOp == "and" || rhs
+	case *LogicalAnd:
+		// `and` binds tighter: no parens under `or`; under `and`, parenthesize
+		// only the rhs to preserve right-nesting.
+		return parentOp == "and" && rhs
+	}
+	return false
+}
+
+func notBodyNeedsParens(b Body) bool {
+	if len(b) != 1 {
+		return false
+	}
+
+	e := b[0]
+	if len(e.With) > 0 {
+		return true
+	}
+
+	switch e.Terms.(type) {
+	case *LogicalOr, *LogicalAnd:
+		// `not` binds tighter than `and`/`or`
+		return true
+	}
+
+	return false
 }
 
 func (w *With) String() string {
@@ -1729,27 +1723,6 @@ func (w *With) SetLoc(loc *Location) {
 	w.Location = loc
 }
 
-// withJSON is used for JSON serialization of With to avoid map allocation overhead.
-// Field order is alphabetical to match previous map-based output.
-type withJSON struct {
-	Location *Location `json:"location,omitempty"`
-	Target   *Term     `json:"target"`
-	Value    *Term     `json:"value"`
-}
-
-func (w *With) MarshalJSON() ([]byte, error) {
-	data := withJSON{
-		Target: w.Target,
-		Value:  w.Value,
-	}
-
-	if astJSON.GetOptions().MarshalOptions.IncludeLocation.With {
-		data.Location = w.Location
-	}
-
-	return json.Marshal(data)
-}
-
 // Copy returns a deep copy of the AST node x. If x is not an AST node, x is returned unmodified.
 func Copy(x any) any {
 	switch x := x.(type) {
@@ -1774,6 +1747,8 @@ func Copy(x any) any {
 	case *SomeDecl:
 		return x.Copy()
 	case *Every:
+		return x.Copy()
+	case *Not:
 		return x.Copy()
 	case *Term:
 		return x.Copy()
@@ -1881,14 +1856,6 @@ func isGlobalBuiltin(expr *Expr, name Var) bool {
 		return false
 	}
 
-	// NOTE(tsandall): do not use Term#Equal or Value#Compare to avoid
-	// allocation here.
 	ref, ok := terms[0].Value.(Ref)
-	if !ok || len(ref) != 1 {
-		return false
-	}
-	if head, ok := ref[0].Value.(Var); ok {
-		return head.Equal(name)
-	}
-	return false
+	return ok && len(ref) == 1 && name.Equal(ref[0].Value)
 }

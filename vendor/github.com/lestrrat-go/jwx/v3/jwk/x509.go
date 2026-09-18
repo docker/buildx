@@ -154,8 +154,15 @@ func (f X509DecodeFunc) DecodeX509(dst any, block *pem.Block) error {
 	return f(dst, block)
 }
 
-var muX509Decoders sync.Mutex
-var x509Decoders = map[any]int{}
+// x509Decoders holds every registered decoder keyed by its caller-supplied
+// ident. x509DecoderIdents keeps the registration order so decodeX509 tries
+// decoders in a stable, deterministic sequence. x509DecoderList is the
+// read-optimized snapshot handed out to readers; every mutation replaces it
+// with a freshly allocated slice so readers can iterate their captured
+// header without any further synchronization.
+var muX509Decoders sync.RWMutex
+var x509Decoders = map[any]X509Decoder{}
+var x509DecoderIdents = []any{}
 var x509DecoderList = []X509Decoder{}
 
 type identDefaultX509Decoder struct{}
@@ -180,8 +187,14 @@ func RegisterX509Decoder(ident any, decoder X509Decoder) {
 		return // already registered
 	}
 
-	x509Decoders[ident] = len(x509DecoderList)
-	x509DecoderList = append(x509DecoderList, decoder)
+	x509Decoders[ident] = decoder
+	x509DecoderIdents = append(x509DecoderIdents, ident)
+	// Publish a fresh slice so any reader that snapshotted the previous
+	// one keeps iterating its own immutable copy.
+	next := make([]X509Decoder, len(x509DecoderList)+1)
+	copy(next, x509DecoderList)
+	next[len(x509DecoderList)] = decoder
+	x509DecoderList = next
 }
 
 // UnregisterX509Decoder unregisters the X509Decoder identified by the given identifier.
@@ -191,26 +204,27 @@ func RegisterX509Decoder(ident any, decoder X509Decoder) {
 func UnregisterX509Decoder(ident any) {
 	muX509Decoders.Lock()
 	defer muX509Decoders.Unlock()
-	idx, ok := x509Decoders[ident]
-	if !ok {
+	if _, ok := x509Decoders[ident]; !ok {
 		return // not registered
 	}
 
 	delete(x509Decoders, ident)
 
-	l := len(x509DecoderList)
-	switch idx {
-	case l - 1:
-		// if the last element, just truncate the slice
-		x509DecoderList = x509DecoderList[:l-1]
-	case 0:
-		// if the first element, just shift the slice
-		x509DecoderList = x509DecoderList[1:]
-	default:
-		// if the element is in the middle, remove it by slicing
-		// and appending the two slices together
-		x509DecoderList = append(x509DecoderList[:idx], x509DecoderList[idx+1:]...)
+	// Rebuild idents and the reader-facing slice as fresh allocations,
+	// preserving registration order and filtering the removed ident.
+	// Mutating the old slices in place would race with readers in
+	// decodeX509 that iterate a captured snapshot without holding RLock.
+	nextIdents := make([]any, 0, len(x509DecoderIdents)-1)
+	nextList := make([]X509Decoder, 0, len(x509DecoderList)-1)
+	for _, id := range x509DecoderIdents {
+		if id == ident {
+			continue
+		}
+		nextIdents = append(nextIdents, id)
+		nextList = append(nextList, x509Decoders[id])
 	}
+	x509DecoderIdents = nextIdents
+	x509DecoderList = nextList
 }
 
 // decodeX509 decodes a PEM encoded ASN.1 DER format into the given destination.
@@ -222,8 +236,12 @@ func decodeX509(dst any, src []byte) error {
 		return fmt.Errorf(`failed to decode PEM data`)
 	}
 
+	muX509Decoders.RLock()
+	decoders := x509DecoderList
+	muX509Decoders.RUnlock()
+
 	var errs []error
-	for _, d := range x509DecoderList {
+	for _, d := range decoders {
 		if err := d.DecodeX509(dst, block); err != nil {
 			errs = append(errs, err)
 			continue

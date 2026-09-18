@@ -45,16 +45,22 @@ func rebuildCurves() {
 	}
 }
 
-// Algorithms returns the list of registered jwa.EllipticCurveAlgorithms
-// that ca be used for ECDSA keys.
+// Algorithms returns a snapshot of the registered
+// jwa.EllipticCurveAlgorithms that can be used for ECDSA keys.
+//
+// The returned slice is caller-owned. Modifying it does not affect the
+// package registry, and ordering is unspecified.
 func Algorithms() []jwa.EllipticCurveAlgorithm {
 	muCurves.RLock()
 	defer muCurves.RUnlock()
 
-	return algList
+	return append([]jwa.EllipticCurveAlgorithm(nil), algList...)
 }
 
 func AlgorithmFromCurve(crv elliptic.Curve) (jwa.EllipticCurveAlgorithm, error) {
+	muCurves.RLock()
+	defer muCurves.RUnlock()
+
 	alg, ok := curveToAlgMap[crv]
 	if !ok {
 		return jwa.InvalidEllipticCurve(), fmt.Errorf(`unknown elliptic curve: %q`, crv)
@@ -63,6 +69,9 @@ func AlgorithmFromCurve(crv elliptic.Curve) (jwa.EllipticCurveAlgorithm, error) 
 }
 
 func CurveFromAlgorithm(alg jwa.EllipticCurveAlgorithm) (elliptic.Curve, error) {
+	muCurves.RLock()
+	defer muCurves.RUnlock()
+
 	crv, ok := algToCurveMap[alg]
 	if !ok {
 		return nil, fmt.Errorf(`unknown elliptic curve algorithm: %q`, alg)
@@ -71,6 +80,9 @@ func CurveFromAlgorithm(alg jwa.EllipticCurveAlgorithm) (elliptic.Curve, error) 
 }
 
 func IsCurveAvailable(alg jwa.EllipticCurveAlgorithm) bool {
+	muCurves.RLock()
+	defer muCurves.RUnlock()
+
 	_, ok := algToCurveMap[alg]
 	return ok
 }
