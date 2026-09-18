@@ -268,6 +268,13 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	if _, ok := ectx.Variables[name]; ok {
 		return nil
 	}
+	if _, ok := p.opt.Vars[name]; !ok {
+		if _, ok := p.attrs[name]; !ok {
+			if _, ok := p.vars[name]; !ok {
+				return errors.Wrapf(errUndefined{}, "variable %q does not exist", name)
+			}
+		}
+	}
 	if _, ok := p.progressV[key(ectx, name)]; ok {
 		return errors.Errorf("variable cycle not allowed for %s", name)
 	}
@@ -292,10 +299,7 @@ func (p *parser) resolveValue(ectx *hcl.EvalContext, name string) (err error) {
 	varType, typeSpecified := cty.DynamicPseudoType, false
 	def, ok := p.attrs[name]
 	if !ok {
-		vr, ok := p.vars[name]
-		if !ok {
-			return errors.Wrapf(errUndefined{}, "variable %q does not exist", name)
-		}
+		vr := p.vars[name]
 		def = vr.Default
 		ectx = p.ectx
 		varType, diags = typeConstraint(vr.Type)
