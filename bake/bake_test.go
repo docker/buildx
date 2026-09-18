@@ -194,6 +194,12 @@ target "webapp" {
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
 	})
 
+	t.Run("NoCacheFilterOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache-filter=stage"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"stage"}, m["webapp"].NoCacheFilter)
+	})
+
 	t.Run("PlatformOverride", func(t *testing.T) {
 		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform=linux/arm64"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
@@ -284,6 +290,18 @@ target "webapp" {
 		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.shm-size=256m"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
 		require.Equal(t, "256m", *m["webapp"].ShmSize)
+	})
+
+	t.Run("NetworkOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.network=host"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, "host", *m["webapp"].NetworkMode)
+	})
+
+	t.Run("UlimitsOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.ulimits=nofile=2048:2048"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"nofile=2048:2048"}, m["webapp"].Ulimits)
 	})
 
 	t.Run("ResourceLimitsOverride", func(t *testing.T) {
