@@ -66,6 +66,22 @@ Docker Engine package repositories contain Docker Buildx packages when installed
 
 You can also download the latest binary from the [GitHub releases page](https://github.com/docker/buildx/releases/latest).
 
+Release checksums are split by platform. Use `checksums.txt` for Linux and
+other release artifacts, and `checksums-signed.txt` for the final macOS and
+Windows binaries. The latter contains checksums of the signed binaries; the
+checksum file itself is not cryptographically signed.
+
+macOS and Windows binaries are signed after the public build workflow and
+replace the original release assets. Signing modifies the binaries and changes
+their checksums. As a result, the subject checksum in a macOS or Windows
+`.provenance.json` file describes the binary before signing and does not match
+the final downloadable binary. SLSA provenance for the final signed binaries
+is not currently published.
+
+Use the checksums to verify the downloaded bytes. To verify the publisher and
+authenticity of a macOS or Windows binary, also verify its Apple code signature
+and notarization or its Windows Authenticode signature, respectively.
+
 Rename the relevant binary and copy it to the destination matching your OS:
 
 | OS      | Binary name         | Destination folder                  |
