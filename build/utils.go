@@ -1,8 +1,6 @@
 package build
 
 import (
-	"archive/tar"
-	"bytes"
 	"context"
 	"net"
 	"os"
@@ -23,25 +21,6 @@ const (
 	// host.docker.internal to the host IP
 	mobyHostGatewayName = "host-gateway"
 )
-
-func isArchive(header []byte) bool {
-	for _, m := range [][]byte{
-		{0x42, 0x5A, 0x68},                   // bzip2
-		{0x1F, 0x8B, 0x08},                   // gzip
-		{0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00}, // xz
-	} {
-		if len(header) < len(m) {
-			continue
-		}
-		if bytes.Equal(m, header[:len(m)]) {
-			return true
-		}
-	}
-
-	r := tar.NewReader(bytes.NewBuffer(header))
-	_, err := r.Next()
-	return err == nil
-}
 
 // toBuildkitExtraHosts converts hosts from docker key:value format to buildkit's csv format
 func toBuildkitExtraHosts(ctx context.Context, inp []string, nodeDriver *driver.DriverHandle) (string, error) {

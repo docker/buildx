@@ -1,8 +1,6 @@
 package bake
 
 import (
-	"archive/tar"
-	"bytes"
 	"context"
 	"os"
 	"strings"
@@ -18,6 +16,7 @@ import (
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwclient "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/session"
+	"github.com/moby/buildkit/util/compression"
 	"github.com/pkg/errors"
 )
 
@@ -108,25 +107,6 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 	return files, inp, nil
 }
 
-func isArchive(header []byte) bool {
-	for _, m := range [][]byte{
-		{0x42, 0x5A, 0x68},                   // bzip2
-		{0x1F, 0x8B, 0x08},                   // gzip
-		{0xFD, 0x37, 0x7A, 0x58, 0x5A, 0x00}, // xz
-	} {
-		if len(header) < len(m) {
-			continue
-		}
-		if bytes.Equal(m, header[:len(m)]) {
-			return true
-		}
-	}
-
-	r := tar.NewReader(bytes.NewBuffer(header))
-	_, err := r.Next()
-	return err == nil
-}
-
 func filesFromURLRef(ctx context.Context, c gwclient.Client, ref gwclient.Reference, inp *Input, filename string, names []string) ([]File, error) {
 	stat, err := ref.StatFile(ctx, gwclient.StatRequest{Path: filename})
 	if err != nil {
@@ -143,7 +123,7 @@ func filesFromURLRef(ctx context.Context, c gwclient.Client, ref gwclient.Refere
 		return nil, err
 	}
 
-	if isArchive(dt) {
+	if compression.IsArchive(dt) {
 		bc := llb.Scratch().File(llb.Copy(inp.State, filename, "/", &llb.CopyInfo{
 			AttemptUnpack: true,
 		}))
