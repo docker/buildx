@@ -53,7 +53,7 @@ func (r *root) resolveFragment(frag fragment) (urlPtr, error) {
 	return r.resolveFragmentIn(frag, r.rootResource())
 }
 
-// resovles urlFrag to urlPtr from root.
+// resolves urlFrag to urlPtr from root.
 // returns nil if it is external.
 func (r *root) resolve(uf urlFrag) (*urlPtr, error) {
 	var res *resource
