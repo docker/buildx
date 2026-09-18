@@ -1107,7 +1107,11 @@ func resolveRemotePolicyContextState(contextPath string, target *client.SolveOpt
 	}
 
 	keepGitDir := false
-	if st, ok, _ := dockerui.DetectGitContext(contextPath, &keepGitDir); ok {
+	var gitAdvice bool
+	if target != nil {
+		gitAdvice, _ = strconv.ParseBool(target.FrontendAttrs["build-arg:BUILDKIT_GIT_ADVICE"])
+	}
+	if st, ok, _ := dockerui.DetectGitContext(contextPath, &keepGitDir, llb.GitAdvice(gitAdvice)); ok {
 		return st
 	}
 
@@ -1213,7 +1217,8 @@ func processGitURL(url string, name string, target *client.SolveOpt, caps map[st
 		}
 	}
 
-	st, ok, err := dockerui.DetectGitContext(url, keepGitDir)
+	gitAdvice, _ := strconv.ParseBool(target.FrontendAttrs["build-arg:BUILDKIT_GIT_ADVICE"])
+	st, ok, err := dockerui.DetectGitContext(url, keepGitDir, llb.GitAdvice(gitAdvice))
 	if err != nil {
 		return err
 	}
