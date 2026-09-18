@@ -37,3 +37,7 @@ out
 cmd/jwx/jwx
 
 bazel-*
+
+# Go workspace files (local development only)
+go.work
+go.work.sum

@@ -1,12 +1,11 @@
 package jwt
 
-import "sync"
+import "sync/atomic"
 
 // TokenOptionSet is a bit flag containing per-token options.
 type TokenOptionSet uint64
 
-var defaultOptions TokenOptionSet
-var defaultOptionsMu sync.RWMutex
+var defaultOptions atomic.Uint64
 
 // TokenOption describes a single token option that can be set on
 // the per-token option set (TokenOptionSet)
@@ -45,7 +44,7 @@ func (o TokenOptionSet) Value() uint64 {
 // option set. This may differ depending on if/when functions that
 // change the global state has been called, such as `jwt.Settings`
 func DefaultOptionSet() TokenOptionSet {
-	return TokenOptionSet(defaultOptions.Value())
+	return TokenOptionSet(defaultOptions.Load())
 }
 
 // Clear sets all bits to zero, effectively disabling all options

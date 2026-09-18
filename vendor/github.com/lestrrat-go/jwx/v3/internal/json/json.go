@@ -3,16 +3,16 @@ package json
 import (
 	"bytes"
 	"fmt"
-	"os"
+
 	"sync/atomic"
 
 	"github.com/lestrrat-go/jwx/v3/internal/base64"
 )
 
-var useNumber uint32 // TODO: at some point, change to atomic.Bool
+var useNumber atomic.Uint32
 
 func UseNumber() bool {
-	return atomic.LoadUint32(&useNumber) == 1
+	return useNumber.Load() == 1
 }
 
 // Sets the global configuration for json decoding
@@ -21,7 +21,7 @@ func DecoderSettings(inUseNumber bool) {
 	if inUseNumber {
 		val = 1
 	}
-	atomic.StoreUint32(&useNumber, val)
+	useNumber.Store(val)
 }
 
 // Unmarshal respects the values specified in DecoderSettings,
@@ -45,7 +45,35 @@ func AssignNextBytesToken(dst *[]byte, dec *Decoder) error {
 	return nil
 }
 
-func ReadNextStringToken(dec *Decoder) (string, error) {
+func shouldRejectNullStrings(dc DecodeCtx) bool {
+	if dc != nil {
+		if sdc, ok := dc.(StrictStringDecodeCtx); ok {
+			return sdc.StrictStrings()
+		}
+	}
+	return false
+}
+
+// ReadNextStringToken reads the next JSON token from the decoder and
+// returns it as a string. By default, JSON null is silently accepted as "".
+// When the given DecodeCtx implements StrictStringDecodeCtx and StrictStrings()
+// returns true, null values are rejected.
+func ReadNextStringToken(dec *Decoder, dc DecodeCtx) (string, error) {
+	if shouldRejectNullStrings(dc) {
+		var val any
+		if err := dec.Decode(&val); err != nil {
+			return "", fmt.Errorf(`error reading next value: %w`, err)
+		}
+		if val == nil {
+			return "", fmt.Errorf(`error reading next value: expected string, got null`)
+		}
+		s, ok := val.(string)
+		if !ok {
+			return "", fmt.Errorf(`error reading next value: expected string, got %T`, val)
+		}
+		return s, nil
+	}
+
 	var val string
 	if err := dec.Decode(&val); err != nil {
 		return "", fmt.Errorf(`error reading next value: %w`, err)
@@ -53,8 +81,8 @@ func ReadNextStringToken(dec *Decoder) (string, error) {
 	return val, nil
 }
 
-func AssignNextStringToken(dst **string, dec *Decoder) error {
-	val, err := ReadNextStringToken(dec)
+func AssignNextStringToken(dst **string, dec *Decoder, dc DecodeCtx) error {
+	val, err := ReadNextStringToken(dec, dc)
 	if err != nil {
 		return err
 	}
@@ -106,22 +134,33 @@ type DecodeCtxContainer interface {
 	SetDecodeCtx(DecodeCtx)
 }
 
-// stock decodeCtx. should cover 80% of the cases
-type decodeCtx struct {
-	registry *Registry
+// StrictStringDecodeCtx is an optional interface that DecodeCtx implementations
+// can satisfy to control per-call null string rejection.
+type StrictStringDecodeCtx interface {
+	StrictStrings() bool
 }
 
+// stock decodeCtx. should cover 80% of the cases
+type decodeCtx struct {
+	registry      *Registry
+	strictStrings bool
+}
+
+// NewDecodeCtx creates a new DecodeCtx with the given registry.
 func NewDecodeCtx(r *Registry) DecodeCtx {
 	return &decodeCtx{registry: r}
+}
+
+// NewDecodeCtxStrictStrings creates a new DecodeCtx with the given registry
+// and strict string rejection flag.
+func NewDecodeCtxStrictStrings(r *Registry, strict bool) DecodeCtx {
+	return &decodeCtx{registry: r, strictStrings: strict}
 }
 
 func (dc *decodeCtx) Registry() *Registry {
 	return dc.registry
 }
 
-func Dump(v any) {
-	enc := NewEncoder(os.Stdout)
-	enc.SetIndent("", "  ")
-	//nolint:errchkjson
-	_ = enc.Encode(v)
+func (dc *decodeCtx) StrictStrings() bool {
+	return dc.strictStrings
 }

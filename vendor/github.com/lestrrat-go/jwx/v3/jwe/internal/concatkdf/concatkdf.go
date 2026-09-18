@@ -13,22 +13,25 @@ type KDF struct {
 	hash      crypto.Hash
 }
 
-func ndata(src []byte) []byte {
-	buf := make([]byte, 4+len(src))
-	binary.BigEndian.PutUint32(buf, uint32(len(src)))
-	copy(buf[4:], src)
-	return buf
-}
-
 func New(hash crypto.Hash, alg, Z, apu, apv, pubinfo, privinfo []byte) *KDF {
-	algbuf := ndata(alg)
-	apubuf := ndata(apu)
-	apvbuf := ndata(apv)
+	// Write length-prefixed fields directly into a single buffer,
+	// avoiding intermediate allocations from ndata().
+	totalSize := (4 + len(alg)) + (4 + len(apu)) + (4 + len(apv)) + len(pubinfo) + len(privinfo)
+	concat := make([]byte, totalSize)
 
-	concat := make([]byte, len(algbuf)+len(apubuf)+len(apvbuf)+len(pubinfo)+len(privinfo))
-	n := copy(concat, algbuf)
-	n += copy(concat[n:], apubuf)
-	n += copy(concat[n:], apvbuf)
+	n := 0
+	binary.BigEndian.PutUint32(concat[n:], uint32(len(alg)))
+	n += 4
+	n += copy(concat[n:], alg)
+
+	binary.BigEndian.PutUint32(concat[n:], uint32(len(apu)))
+	n += 4
+	n += copy(concat[n:], apu)
+
+	binary.BigEndian.PutUint32(concat[n:], uint32(len(apv)))
+	n += 4
+	n += copy(concat[n:], apv)
+
 	n += copy(concat[n:], pubinfo)
 	copy(concat[n:], privinfo)
 
@@ -42,11 +45,13 @@ func New(hash crypto.Hash, alg, Z, apu, apv, pubinfo, privinfo []byte) *KDF {
 func (k *KDF) Read(out []byte) (int, error) {
 	var round uint32 = 1
 	h := k.hash.New()
+	var roundBuf [4]byte
 
 	for len(out) > len(k.buf) {
 		h.Reset()
 
-		if err := binary.Write(h, binary.BigEndian, round); err != nil {
+		binary.BigEndian.PutUint32(roundBuf[:], round)
+		if _, err := h.Write(roundBuf[:]); err != nil {
 			return 0, fmt.Errorf(`failed to write round using kdf: %w`, err)
 		}
 		if _, err := h.Write(k.z); err != nil {
@@ -56,7 +61,7 @@ func (k *KDF) Read(out []byte) (int, error) {
 			return 0, fmt.Errorf(`failed to write other info using kdf: %w`, err)
 		}
 
-		k.buf = append(k.buf, h.Sum(nil)...)
+		k.buf = h.Sum(k.buf)
 		round++
 	}
 

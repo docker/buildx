@@ -206,9 +206,6 @@ type withKeySet struct {
 // and you do not mind the verification process having to possibly
 // attempt using multiple times before succeeding to verify. See
 // `jws.InferAlgorithmFromKey` option
-//
-// If you have only one key in the set, and are sure you want to
-// use that key, you can use the `jwt.WithDefaultKey` option.
 func WithKeySet(set jwk.Set, options ...any) ParseOption {
 	return &parseOption{option.New(identKeySet{}, &withKeySet{
 		set:     set,
@@ -242,7 +239,10 @@ func WithAudience(s string) ValidateOption {
 	return WithValidator(audienceClaimContainsString(s))
 }
 
-// WithClaimValue specifies the expected value for a given claim
+// WithClaimValue specifies the expected value for a given claim.
+// The stored and expected values are compared with reflect.DeepEqual,
+// so slice-, map-, and struct-valued claims are supported in addition
+// to scalars. See [ClaimValueIs] for edge-case semantics.
 func WithClaimValue(name string, v any) ValidateOption {
 	return WithValidator(ClaimValueIs(name, v))
 }

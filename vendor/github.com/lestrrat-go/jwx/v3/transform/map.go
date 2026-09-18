@@ -23,6 +23,11 @@ type Mappable interface {
 // Many objects in jwe, jwk, jws, and jwt packages including
 // `jwt.Token`, `jwk.Key`, `jws.Header`, etc.
 //
+// The values stored in `dst` are the exact values returned by `m.Get()`.
+// Mutable values such as slices, maps, and pointers may therefore be live
+// aliases to the original object's backing storage. AsMap is not a deep-copy
+// or snapshot helper.
+//
 // EXPERIMENTAL: This API is experimental and its interface and behavior is
 // subject to change in future releases. This API is not subject to semver
 // compatibility guarantees.
