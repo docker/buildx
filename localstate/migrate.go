@@ -29,6 +29,7 @@ func (ls *LocalState) MigrateIfNeeded() error {
 }
 
 func (ls *LocalState) migration2() error {
+	// #nosec G122 -- TODO: consider using os.Root to prevent TOCTOU
 	return filepath.Walk(ls.GroupDir(), func(path string, info os.FileInfo, err error) error {
 		if err != nil {
 			return err
