@@ -480,8 +480,20 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 			return nil, nil, notSupported(driver.OCIExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
 		}
 		if e.Type == "docker" {
-			features := docker.Features(ctx, e.Attrs["context"])
-			if features[dockerutil.OCIImporter] && e.Output == nil {
+			var features map[dockerutil.Feature]bool
+			if e.Output == nil {
+				contextName := e.Attrs["context"]
+				if nodeDriver.IsMobyDriver() {
+					// The docker driver loads into its own daemon.
+					contextName = node.Endpoint
+				}
+				var err error
+				features, err = docker.Features(ctx, contextName)
+				if err != nil {
+					return nil, nil, errors.Wrap(err, "failed to detect docker features")
+				}
+			}
+			if features[dockerutil.OCIImporter] {
 				// rely on oci importer if available (which supports
 				// multi-platform images), otherwise fall back to docker
 				so.Exports[i].Type = "oci"
