@@ -174,7 +174,12 @@ func Build(ctx context.Context, dockerCli command.Cli, builderName string, req *
 	if progressMode == "" {
 		progressMode = progressui.AutoMode
 	}
-	printer, err := progress.NewPrinter(ctx, os.Stderr, progressMode,
+	// Keep the printer alive while cancellation propagates through BuildKit.
+	// If it shares the solve context, Ctrl-C stops its reader before producers
+	// finish and a late progress write can block solve cleanup indefinitely.
+	printerCtx, cancelPrinter := context.WithCancelCause(context.TODO())
+	defer func() { cancelPrinter(errors.WithStack(context.Canceled)) }()
+	printer, err := progress.NewPrinter(printerCtx, os.Stderr, progressMode,
 		progress.WithDesc(
 			fmt.Sprintf("rebuilding %d subject(s) with %q instance using %s driver", len(req.Targets), b.Name, b.Driver),
 			fmt.Sprintf("%s:%s", b.Driver, b.Name),

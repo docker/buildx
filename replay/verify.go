@@ -240,7 +240,11 @@ func runVerifyBuild(ctx context.Context, dockerCli command.Cli, builderName stri
 	if err != nil {
 		return err
 	}
-	printer, err := progress.NewPrinter(ctx, dockerCli.Err(), "auto",
+	// Keep draining progress while cancellation propagates through the solve.
+	// Sharing the solve context can deadlock a late producer after Ctrl-C.
+	printerCtx, cancelPrinter := context.WithCancelCause(context.TODO())
+	defer func() { cancelPrinter(errors.WithStack(context.Canceled)) }()
+	printer, err := progress.NewPrinter(printerCtx, dockerCli.Err(), "auto",
 		progress.WithDesc(
 			fmt.Sprintf("verifying %d subject(s) with %q instance using %s driver", len(req.Targets), b.Name, b.Driver),
 			fmt.Sprintf("%s:%s", b.Driver, b.Name),

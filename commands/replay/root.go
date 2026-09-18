@@ -33,7 +33,7 @@ func installCommonFlags(cmd *cobra.Command, opts *commonOptions) {
 	flags.StringVar(&opts.network, "network", "default", `Network mode for RUN instructions ("default" | "none")`)
 	flags.StringArrayVar(&opts.secrets, "secret", nil, `Secret to expose to the replayed build (format: "id=mysecret[,src=/local/secret]")`)
 	flags.StringArrayVar(&opts.ssh, "ssh", nil, `SSH agent socket or keys to expose (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
-	flags.StringArrayVar(&opts.platforms, "platform", nil, `Subjects to replay (defaults to the current host platform; "all" keeps every platform)`)
+	flags.StringArrayVar(&opts.platforms, "platform", nil, `Subjects to replay (comma-separated or repeated; defaults to the current host platform; "all" keeps every platform)`)
 	flags.StringVar(&opts.progress, "progress", "auto", `Set type of progress output ("auto" | "plain" | "tty" | "quiet" | "rawjson")`)
 }
 

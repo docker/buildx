@@ -197,6 +197,34 @@ func TestPinIndexUsesRequestPlatformToDisambiguateImage(t *testing.T) {
 	require.Equal(t, "docker-image://docker.io/library/alpine@"+imageSHA, resp.Update.Identifier)
 }
 
+func TestPinIndexUniqueDigestIgnoresRequestPlatform(t *testing.T) {
+	mat := imageMaterial("pkg:docker/alpine?digest="+imageSHA+"&platform=linux%2Famd64", imageSHA)
+	cb := ReplayPinCallback(NewPinIndex(predicateWithMaterials(mat)))
+	req := imageCheckRequest("docker-image://docker.io/library/alpine", "")
+	req.Platform = &solverpb.Platform{OS: "linux", Architecture: "arm64"}
+
+	resp, _, err := cb(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_CONVERT, resp.Action)
+	require.Equal(t, "docker-image://docker.io/library/alpine@"+imageSHA, resp.Update.Identifier)
+}
+
+func TestPinIndexAmbiguousDigestsRejectUnknownRequestPlatform(t *testing.T) {
+	matAMD64 := imageMaterial("pkg:docker/alpine?digest="+imageSHA+"&platform=linux%2Famd64", imageSHA)
+	matARM64 := imageMaterial("pkg:docker/alpine?digest="+imageSHAOther+"&platform=linux%2Farm64", imageSHAOther)
+	cb := ReplayPinCallback(NewPinIndex(predicateWithMaterials(matAMD64, matARM64)))
+	req := imageCheckRequest("docker-image://docker.io/library/alpine", "")
+	req.Platform = &solverpb.Platform{OS: "linux", Architecture: "s390x"}
+
+	resp, _, err := cb(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_DENY, resp.Action)
+	require.Contains(t, resp.DenyMessages[0].Message, "no recorded pin")
+	require.Contains(t, resp.DenyMessages[0].Message, "linux/s390x")
+}
+
 func TestPinIndexUnknownSourceDenied(t *testing.T) {
 	idx := NewPinIndex(predicateWithMaterials(imageMaterial(imageURIAlpine, imageSHA)))
 	cb := ReplayPinCallback(idx)

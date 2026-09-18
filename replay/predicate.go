@@ -136,6 +136,44 @@ func (p *Predicate) DefaultPlatform() (*ocispecs.Platform, bool) {
 	return nil, false
 }
 
+// FallbackTargetPlatform infers the target platform from the build's LLB when
+// the provenance subject has no platform metadata. BuildKit injects
+// TARGETPLATFORM into Dockerfile exec environments. A single provenance
+// statement must agree on that value; mixed or malformed values are not safe
+// to use as an implicit replay target.
+//
+// This is a compatibility fallback, not an authoritative provenance field.
+// TODO: Prefer an explicit target platform once BuildKit records one in the
+// provenance build parameters or subject metadata.
+func (p *Predicate) FallbackTargetPlatform() (*ocispecs.Platform, bool) {
+	buildConfig := p.BuildDefinition.InternalParameters.BuildConfig
+	if buildConfig == nil {
+		return nil, false
+	}
+	var target *ocispecs.Platform
+	for _, step := range buildConfig.Definition {
+		if step.Op == nil || step.Op.GetExec() == nil || step.Op.GetExec().Meta == nil {
+			continue
+		}
+		for _, env := range step.Op.GetExec().Meta.Env {
+			value, ok := strings.CutPrefix(env, "TARGETPLATFORM=")
+			if !ok || value == "" {
+				continue
+			}
+			platform, err := platforms.Parse(value)
+			if err != nil {
+				return nil, false
+			}
+			norm := platforms.Normalize(platform)
+			if target != nil && platforms.Format(*target) != platforms.Format(norm) {
+				return nil, false
+			}
+			target = &norm
+		}
+	}
+	return target, target != nil
+}
+
 // ResolvedDependencies returns every material recorded on the predicate.
 // Classification by URI scheme is left to the caller (see MaterialsResolver).
 func (p *Predicate) ResolvedDependencies() []slsa1.ResourceDescriptor {

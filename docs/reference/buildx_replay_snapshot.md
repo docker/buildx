@@ -14,7 +14,7 @@ Export replay inputs for a subject as a reusable materials store
 | `--materials`         | `stringArray` |           | Materials store (repeatable; format: `provenance` \| `registry://<ref>` \| `oci-layout://<path>[:<tag>]` \| `<absolute-path>` \| `<key>=<value>`) |
 | `--network`           | `string`      | `default` | Network mode for RUN instructions (`default` \| `none`)                                                                                           |
 | `-o`, `--output`      | `stringArray` |           | Output destination (default: `-` — oci tar to stdout; bare `<path>` writes an oci-layout directory; `type=oci,dest=X[,tar=true\|false]`)          |
-| `--platform`          | `stringArray` |           | Subjects to replay (defaults to the current host platform; `all` keeps every platform)                                                            |
+| `--platform`          | `stringArray` |           | Subjects to replay (comma-separated or repeated; defaults to the current host platform; `all` keeps every platform)                               |
 | `--progress`          | `string`      | `auto`    | Set type of progress output (`auto` \| `plain` \| `tty` \| `quiet` \| `rawjson`)                                                                  |
 | `--secret`            | `stringArray` |           | Secret to expose to the replayed build (format: `id=mysecret[,src=/local/secret]`)                                                                |
 | `--ssh`               | `stringArray` |           | SSH agent socket or keys to expose (format: `default\|<id>[=<socket>\|<key>[,<key>]]`)                                                            |

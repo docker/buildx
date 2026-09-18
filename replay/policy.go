@@ -232,6 +232,18 @@ func (p *PinIndex) resolve(req *policysession.CheckPolicyRequest, uri string, ob
 }
 
 func selectPin(pins []sourcePin, platform *ocispecs.Platform, observed digest.Digest, source string) (digest.Digest, bool, string) {
+	// A platform-qualified material still pins the same immutable image index.
+	// If every matching provenance entry agrees on that digest, the request
+	// platform cannot make the pin ambiguous and must not exclude it. This is
+	// important when replaying on a builder whose BUILDPLATFORM differs from
+	// the builder that produced the provenance.
+	if pinned, ok := uniquePinDigest(pins); ok {
+		return pinned, true, ""
+	}
+
+	// Platform is only a tie-breaker when the source name has multiple recorded
+	// digests. In that case it prevents silently selecting another platform's
+	// pin while retaining the fail-closed behavior for unknown platforms.
 	candidates := pins
 	if platform != nil {
 		candidates = nil

@@ -107,6 +107,7 @@ func runVerify(cmd *cobra.Command, dockerCli command.Cli, opts *verifyOptions, i
 		if err != nil {
 			return err
 		}
+		s = applyPredicateTargetPlatformFallback(s, pred, opts.platforms)
 		req := &replay.VerifyRequest{
 			Subject:   s,
 			Predicate: pred,

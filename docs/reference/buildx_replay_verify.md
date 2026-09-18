@@ -13,7 +13,7 @@ Replay a subject and compare the result against the original artifact
 | `--materials`    | `stringArray` |           | Materials store (repeatable; format: `provenance` \| `registry://<ref>` \| `oci-layout://<path>[:<tag>]` \| `<absolute-path>` \| `<key>=<value>`) |
 | `--network`      | `string`      | `default` | Network mode for RUN instructions (`default` \| `none`)                                                                                           |
 | `-o`, `--output` | `stringArray` |           | Output destination for the verification result (VSA) (format: `type=local,dest=path` \| `type=oci,dest=file` \| `type=attest`)                    |
-| `--platform`     | `stringArray` |           | Subjects to replay (defaults to the current host platform; `all` keeps every platform)                                                            |
+| `--platform`     | `stringArray` |           | Subjects to replay (comma-separated or repeated; defaults to the current host platform; `all` keeps every platform)                               |
 | `--progress`     | `string`      | `auto`    | Set type of progress output (`auto` \| `plain` \| `tty` \| `quiet` \| `rawjson`)                                                                  |
 | `--secret`       | `stringArray` |           | Secret to expose to the replayed build (format: `id=mysecret[,src=/local/secret]`)                                                                |
 | `--ssh`          | `stringArray` |           | SSH agent socket or keys to expose (format: `default\|<id>[=<socket>\|<key>[,<key>]]`)                                                            |

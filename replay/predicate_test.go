@@ -3,9 +3,11 @@ package replay
 import (
 	"testing"
 
+	"github.com/containerd/platforms"
 	slsa "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/common"
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
+	solverpb "github.com/moby/buildkit/solver/pb"
 	"github.com/stretchr/testify/require"
 )
 
@@ -120,4 +122,31 @@ func TestPredicateMethods(t *testing.T) {
 		p.BuildDefinition.InternalParameters.BuildConfig = &provenancetypes.BuildConfig{}
 		require.False(t, p.HasBuildDefinition())
 	})
+}
+
+func TestPredicateFallbackTargetPlatform(t *testing.T) {
+	execStep := func(env ...string) provenancetypes.BuildStep {
+		return provenancetypes.BuildStep{
+			Op: &solverpb.Op{Op: &solverpb.Op_Exec{Exec: &solverpb.ExecOp{Meta: &solverpb.Meta{Env: env}}}},
+		}
+	}
+
+	pred := &Predicate{}
+	pred.BuildDefinition.InternalParameters.BuilderPlatform = "linux/amd64"
+	pred.BuildDefinition.InternalParameters.BuildConfig = &provenancetypes.BuildConfig{
+		Definition: []provenancetypes.BuildStep{
+			execStep("BUILDPLATFORM=linux/amd64", "TARGETPLATFORM=linux/arm64"),
+			execStep("TARGETPLATFORM=linux/arm64"),
+		},
+	}
+	platform, ok := pred.FallbackTargetPlatform()
+	require.True(t, ok)
+	require.Equal(t, "linux/arm64", platforms.Format(*platform))
+
+	pred.BuildDefinition.InternalParameters.BuildConfig.Definition = append(
+		pred.BuildDefinition.InternalParameters.BuildConfig.Definition,
+		execStep("TARGETPLATFORM=linux/amd64"),
+	)
+	_, ok = pred.FallbackTargetPlatform()
+	require.False(t, ok, "conflicting target platforms must not be guessed")
 }

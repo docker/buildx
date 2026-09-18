@@ -9,12 +9,13 @@ Rebuild an image from provenance and pinned materials
 |:-----------------|:--------------|:------------|:--------------------------------------------------------------------------------------------------------------------------------------------------|
 | `--builder`      | `string`      |             | Override the configured builder instance                                                                                                          |
 | `-D`, `--debug`  | `bool`        |             | Enable debug logging                                                                                                                              |
-| `--dry-run`      | `bool`        |             | Print a JSON plan of the replay without solving or exporting                                                                                      |
+| `--dry-run`      | `bool`        |             | Print a plan of the replay without solving or exporting                                                                                           |
+| `--format`       | `string`      | `pretty`    | Format dry-run output (`pretty` \| `json`)                                                                                                        |
 | `--load`         | `bool`        |             | Shorthand for `--output=type=docker`                                                                                                              |
 | `--materials`    | `stringArray` |             | Materials store (repeatable; format: `provenance` \| `registry://<ref>` \| `oci-layout://<path>[:<tag>]` \| `<absolute-path>` \| `<key>=<value>`) |
 | `--network`      | `string`      | `default`   | Network mode for RUN instructions (`default` \| `none`)                                                                                           |
 | `-o`, `--output` | `stringArray` |             | Output destination (format: `type=local,dest=path`)                                                                                               |
-| `--platform`     | `stringArray` |             | Subjects to replay (defaults to the current host platform; `all` keeps every platform)                                                            |
+| `--platform`     | `stringArray` |             | Subjects to replay (comma-separated or repeated; defaults to the current host platform; `all` keeps every platform)                               |
 | `--progress`     | `string`      | `auto`      | Set type of progress output (`auto` \| `plain` \| `tty` \| `quiet` \| `rawjson`)                                                                  |
 | `--push`         | `bool`        |             | Shorthand for `--output=type=registry,unpack=false`                                                                                               |
 | `--replay-mode`  | `string`      | `materials` | Replay mode (`materials` \| `frontend` \| `llb`)                                                                                                  |

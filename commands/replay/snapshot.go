@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"context"
 	"encoding/json"
 	"os"
 
@@ -90,6 +91,7 @@ func runSnapshot(cmd *cobra.Command, dockerCli command.Cli, opts *snapshotOption
 		if err != nil {
 			return err
 		}
+		s = applyPredicateTargetPlatformFallback(s, pred, opts.platforms)
 		targets = append(targets, replay.Target{Subject: s, Predicate: pred})
 	}
 
@@ -102,7 +104,11 @@ func runSnapshot(cmd *cobra.Command, dockerCli command.Cli, opts *snapshotOption
 
 	// Both real-run and dry-run do the same staging work (dry-run just
 	// skips the final output), so both get a progress printer.
-	printer, err := progress.NewPrinter(ctx, os.Stderr, progressui.DisplayMode(opts.progress))
+	// Keep draining progress while cancellation propagates through material
+	// staging. Sharing ctx can strand a late writer after Ctrl-C.
+	printerCtx, cancelPrinter := context.WithCancelCause(context.TODO())
+	defer func() { cancelPrinter(errors.WithStack(context.Canceled)) }()
+	printer, err := progress.NewPrinter(printerCtx, os.Stderr, progressui.DisplayMode(opts.progress))
 	if err != nil {
 		return err
 	}
