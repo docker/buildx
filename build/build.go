@@ -66,6 +66,8 @@ type Options struct {
 	Inputs Inputs
 
 	Ref                        string
+	Frontend                   string
+	FrontendAttrs              map[string]string
 	Allow                      []string
 	Attests                    map[string]*string
 	BuildArgs                  map[string]string

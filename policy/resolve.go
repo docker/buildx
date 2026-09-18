@@ -62,7 +62,7 @@ func resolveNodeUnknowns(ctx context.Context, node *Input, source *pb.SourceOp, 
 			continue
 		}
 		raw := node.Image.Provenance.materialsRaw[idx]
-		childSource, childNodePlatform, err := parseSLSAMaterial(raw)
+		childSource, childNodePlatform, err := ParseSLSAMaterial(raw)
 		if err != nil {
 			continue
 		}
