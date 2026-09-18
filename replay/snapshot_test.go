@@ -11,6 +11,7 @@ import (
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/imagetools"
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	"github.com/moby/buildkit/client/ociindex"
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
@@ -18,6 +19,7 @@ import (
 	digest "github.com/opencontainers/go-digest"
 	ocispecsgo "github.com/opencontainers/image-spec/specs-go"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
 
@@ -38,6 +40,22 @@ type snapshotFixture struct {
 	subjectDesc  ocispecs.Descriptor
 	attestDesc   ocispecs.Descriptor
 	provider     contentutil.Buffer
+}
+
+type descriptorRecordingIngester struct {
+	content.Ingester
+	descriptors []ocispecs.Descriptor
+}
+
+func (i *descriptorRecordingIngester) Writer(ctx context.Context, opts ...content.WriterOpt) (content.Writer, error) {
+	var wopts content.WriterOpts
+	for _, opt := range opts {
+		if err := opt(&wopts); err != nil {
+			return nil, err
+		}
+	}
+	i.descriptors = append(i.descriptors, wopts.Desc)
+	return i.Ingester.Writer(ctx, opts...)
 }
 
 func makeSnapshotFixture(t *testing.T) *snapshotFixture {
@@ -259,6 +277,43 @@ func TestSnapshotWritesOCILayout(t *testing.T) {
 	gotBytes, err := content.ReadBlob(context.Background(), provider, desc)
 	require.NoError(t, err)
 	require.Equal(t, fx.httpBytes, gotBytes)
+}
+
+func TestFlushStagePreservesDescriptorMediaType(t *testing.T) {
+	ctx := context.Background()
+	stage := newStagingStore()
+	dt := []byte(`{"schemaVersion":2}`)
+	desc := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Digest:    digest.FromBytes(dt),
+		Size:      int64(len(dt)),
+	}
+	require.NoError(t, stage.writeRaw(ctx, desc, dt))
+
+	dest := &descriptorRecordingIngester{Ingester: contentutil.NewBuffer()}
+	require.NoError(t, flushStage(ctx, dest, stage))
+	require.Equal(t, []ocispecs.Descriptor{desc}, dest.descriptors)
+}
+
+func TestResolveImageMaterialDoesNotFallbackWithoutProvenanceSentinel(t *testing.T) {
+	resolver, err := NewMaterialsResolver([]string{t.TempDir()})
+	require.NoError(t, err)
+
+	registryCalled := false
+	_, _, err = resolveImageMaterial(
+		context.Background(),
+		resolver,
+		func() (*imagetools.Resolver, error) {
+			registryCalled = true
+			return nil, errors.New("unexpected registry fallback")
+		},
+		slsa1.ResourceDescriptor{URI: imageURIAlpine},
+		digest.Digest(imageSHA),
+	)
+	require.Error(t, err)
+	var notFound *MaterialNotFoundError
+	require.ErrorAs(t, err, &notFound)
+	require.False(t, registryCalled)
 }
 
 func TestSnapshotRejectsAttestationFileSubject(t *testing.T) {

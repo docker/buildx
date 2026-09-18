@@ -111,6 +111,9 @@ func Build(ctx context.Context, dockerCli command.Cli, builderName string, req *
 	if req.Mode == BuildModeLLB {
 		return ErrNotImplemented("llb replay mode")
 	}
+	if len(req.Targets) > 1 {
+		return ErrNotImplemented("multi-subject replay build output aggregation")
+	}
 
 	// Pre-solve: local-context + secret/ssh cross-check.
 	for _, t := range req.Targets {
@@ -273,6 +276,17 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 	if pred == nil {
 		return build.Options{}, errors.New("nil predicate")
 	}
+	if req == nil {
+		return build.Options{}, errors.New("nil build request")
+	}
+	if req.Materials.HasExplicitSources() {
+		return build.Options{}, ErrNotImplemented("replay build with explicit --materials sources")
+	}
+
+	networkMode, err := networkModeForReplay(req.NetworkMode)
+	if err != nil {
+		return build.Options{}, err
+	}
 
 	attrs := pred.FrontendAttrs()
 	cfgSrc := pred.ConfigSource()
@@ -329,9 +343,28 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 		return build.Options{}, errors.Errorf("predicate has no recorded build context; replay requires a remote-source build (git / https)")
 	}
 
+	frontend := pred.Frontend()
+	frontendAttrs := map[string]string{}
+	if frontend == "gateway.v0" {
+		if source := attrs["source"]; source != "" {
+			frontendAttrs["source"] = source
+		}
+		if cmdline := strings.TrimSpace(attrs["cmdline"]); cmdline != "" {
+			frontendAttrs["cmdline"] = cmdline
+			if frontendAttrs["source"] == "" {
+				frontendAttrs["source"] = strings.Fields(cmdline)[0]
+			}
+		}
+		if frontendAttrs["source"] == "" {
+			return build.Options{}, errors.New("gateway.v0 predicate has no recorded frontend source")
+		}
+	}
+
 	opt := build.Options{
-		Ref:    identity.NewID(),
-		Target: target,
+		Ref:           identity.NewID(),
+		Frontend:      frontend,
+		FrontendAttrs: frontendAttrs,
+		Target:        target,
 		Inputs: build.Inputs{
 			ContextPath:    contextPath,
 			DockerfilePath: dockerfilePath,
@@ -343,13 +376,13 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 		NoCacheFilter: nocacheFilter,
 		ExtraHosts:    extraHosts,
 		CgroupParent:  cgroupParent,
-		NetworkMode:   networkModeForReplay(req.NetworkMode),
+		NetworkMode:   networkMode,
 		SecretSpecs:   req.Secrets,
 		SSHSpecs:      req.SSH,
 		Tags:          req.Tags,
-		// Reproduce the recorded attestation attrs so the replay output
-		// carries the same attestation shape as the original build.
-		Attests: pred.Attests(),
+		// A replay provenance attestation would describe the replay operation,
+		// not the original build. Disable default provenance/SBOM attachment.
+		Attests: map[string]*string{"provenance": nil, "sbom": nil},
 	}
 
 	if s.Descriptor.Platform != nil {
@@ -368,17 +401,15 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 	return opt, nil
 }
 
-func networkModeForReplay(mode string) string {
+func networkModeForReplay(mode string) (string, error) {
 	switch mode {
 	case "", "default":
-		return ""
+		return "", nil
 	case "none":
-		return "none"
+		return "none", nil
+	default:
+		return "", errors.Errorf("unsupported replay network mode %q (want default or none)", mode)
 	}
-	// Replay refuses network modes beyond default/none to keep the replay
-	// sandbox at least as restrictive as the default. host-network mode
-	// requires explicit opt-in that replay does not yet plumb through.
-	return mode
 }
 
 // CheckSecrets enforces the provenance vs. user-supplied secret-ID cross

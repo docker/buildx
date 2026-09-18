@@ -23,7 +23,7 @@ type PolicyConfig struct {
 	// enforce pinning without loading a policy file. Configs with
 	// Callback set are composed into the policy callback chain alongside
 	// file-based policies.
-	Callback policysession.PolicyCallback
+	Callback policysession.PolicyCallback `json:"-"`
 }
 
 func ParsePolicyConfigs(in []string) ([]PolicyConfig, error) {

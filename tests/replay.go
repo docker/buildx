@@ -9,6 +9,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 
 	"github.com/moby/buildkit/util/testutil/integration"
@@ -22,7 +23,8 @@ import (
 // that need a writable registry skip when `sb.RegistryAddress()` is empty.
 var replayTests = []func(t *testing.T, sb integration.Sandbox){
 	testReplayBuildRoundTrip,
-	testReplaySnapshotRoundTrip,
+	testReplayRejectsChangedHTTPContext,
+	testReplaySnapshotExportAndRejectsOfflineReplay,
 	testReplayVerifyDigest,
 	testReplayVerifyArtifactDivergence,
 	testReplayRejectsLocalContext,
@@ -52,21 +54,27 @@ COPY --from=ctx /etc/hosts /hosts
 
 func buildReplayContext(t *testing.T, dockerfile string) (string, string) {
 	t.Helper()
+	dt := replayContextArchive(t, dockerfile)
+	contextPath := filepath.Join(t.TempDir(), "context.tar")
+	require.NoError(t, os.WriteFile(contextPath, dt, 0o600))
+
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		w.Header().Set("Content-Type", "application/x-tar")
+		_, _ = w.Write(dt)
+	}))
+	t.Cleanup(server.Close)
+	return server.URL + "/context.tar", contextPath
+}
+
+func replayContextArchive(t *testing.T, dockerfile string) []byte {
+	t.Helper()
 	var buf bytes.Buffer
 	tw := tar.NewWriter(&buf)
 	require.NoError(t, tw.WriteHeader(&tar.Header{Name: "Dockerfile", Mode: 0o600, Size: int64(len(dockerfile))}))
 	_, err := tw.Write([]byte(dockerfile))
 	require.NoError(t, err)
 	require.NoError(t, tw.Close())
-	contextPath := filepath.Join(t.TempDir(), "context.tar")
-	require.NoError(t, os.WriteFile(contextPath, buf.Bytes(), 0o600))
-
-	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
-		w.Header().Set("Content-Type", "application/x-tar")
-		_, _ = w.Write(buf.Bytes())
-	}))
-	t.Cleanup(server.Close)
-	return server.URL + "/context.tar", contextPath
+	return buf.Bytes()
 }
 
 // buildReplayableImage does a `buildx build` against a registry using a
@@ -108,13 +116,59 @@ func testReplayBuildRoundTrip(t *testing.T, sb integration.Sandbox) {
 	require.FileExists(t, filepath.Join(dest, "replay.oci.tar"))
 }
 
-func testReplaySnapshotRoundTrip(t *testing.T, sb integration.Sandbox) {
+func testReplayRejectsChangedHTTPContext(t *testing.T, sb integration.Sandbox) {
+	registry, err := sb.NewRegistry()
+	if err != nil {
+		t.Skipf("skipping: registry not available: %v", err)
+	}
+	ref := registry + "/buildx-replay:" + replayTestTag(t)
+
+	var mu sync.RWMutex
+	contextBytes := replayContextArchive(t, replayTestDockerfile)
+	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		mu.RLock()
+		dt := bytes.Clone(contextBytes)
+		mu.RUnlock()
+		w.Header().Set("Content-Type", "application/x-tar")
+		_, _ = w.Write(dt)
+	}))
+	t.Cleanup(server.Close)
+	contextRef := server.URL + "/context.tar"
+
+	out, err := buildCmd(sb, withArgs(
+		"--output=type=registry,name="+ref,
+		"--build-context=ctx=docker-image://alpine:latest",
+		"--attest=type=provenance,mode=max",
+		contextRef,
+	))
+	require.NoError(t, err, out)
+	prune := buildxCmd(sb, withArgs("prune", "--all", "--force"))
+	pruneOut, err := prune.CombinedOutput()
+	require.NoError(t, err, string(pruneOut))
+
+	changedContext := replayContextArchive(t, replayTestDockerfile+"# changed after provenance was recorded\n")
+	mu.Lock()
+	contextBytes = changedContext
+	mu.Unlock()
+
+	cmd := buildxCmd(sb, withArgs(
+		"replay", "build",
+		"docker-image://"+ref,
+		"--output=type=oci,dest="+filepath.Join(t.TempDir(), "replay.oci.tar"),
+	))
+	outBytes, err := cmd.CombinedOutput()
+	require.Error(t, err, string(outBytes))
+	require.Contains(t, string(outBytes), "digest mismatch")
+}
+
+func testReplaySnapshotExportAndRejectsOfflineReplay(t *testing.T, sb integration.Sandbox) {
 	ref, contextRef, contextPath := buildReplayableImage(t, sb)
 
 	dest := filepath.Join(t.TempDir(), "snap")
 	cmd := buildxCmd(sb, withArgs(
 		"replay", "snapshot",
 		"docker-image://"+ref,
+		"--materials=provenance",
 		"--materials="+contextRef+"="+contextPath,
 		"--output=type=local,dest="+dest,
 	))
@@ -122,7 +176,8 @@ func testReplaySnapshotRoundTrip(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err, string(out))
 	require.FileExists(t, filepath.Join(dest, "oci-layout"))
 
-	// Round-trip: use the snapshot as a materials store and replay the build.
+	// Snapshot-backed input injection is not implemented yet. Reject the
+	// explicit store rather than silently replaying from the network.
 	outDir := filepath.Join(t.TempDir(), "replay-from-snapshot")
 	cmd = buildxCmd(sb, withArgs(
 		"replay", "build",
@@ -131,7 +186,8 @@ func testReplaySnapshotRoundTrip(t *testing.T, sb integration.Sandbox) {
 		"--output=type=oci,dest="+filepath.Join(outDir, "replay.oci.tar"),
 	))
 	out, err = cmd.CombinedOutput()
-	require.NoError(t, err, string(out))
+	require.Error(t, err, string(out))
+	require.Contains(t, string(out), "not implemented")
 }
 
 func testReplayVerifyDigest(t *testing.T, sb integration.Sandbox) {
@@ -209,7 +265,7 @@ func testReplaySecretRoundTrip(t *testing.T, sb integration.Sandbox) {
 
 	dockerfile := `# syntax=docker/dockerfile:1
 FROM alpine:latest
-RUN --mount=type=secret,id=api cp /run/secrets/api /secret
+RUN --mount=type=secret,id=api,required=true cp /run/secrets/api /secret
 `
 	contextRef, _ := buildReplayContext(t, dockerfile)
 
@@ -228,11 +284,7 @@ RUN --mount=type=secret,id=api cp /run/secrets/api /secret
 		"--output=type=oci,dest="+filepath.Join(t.TempDir(), "out.oci.tar"),
 	))
 	bout, err := cmd.CombinedOutput()
-	if err == nil {
-		// Provenance may not have recorded the secret. Skip rather than
-		// fail — this is environment-dependent.
-		t.Skipf("secret was not recorded in provenance; cannot exercise missing-secret path:\n%s", bout)
-	}
+	require.Error(t, err, string(bout))
 	require.Contains(t, string(bout), "missing required secrets", string(bout))
 
 	// With --secret: succeed.

@@ -106,6 +106,8 @@ func TestCompareArtifactMismatch(t *testing.T) {
 	require.NoError(t, err)
 	require.NotNil(t, report)
 	require.False(t, ReportMatched(report), "mismatching stores should produce divergence events")
+	require.True(t, reportHasEvent(report, EventTypeDescriptorMismatch))
+	require.True(t, reportHasEvent(report, EventTypeLayerBlobMismatch), "artifact comparison should descend into changed manifests")
 
 	// JSON should round-trip.
 	raw, err := ReportJSON(report)
@@ -113,6 +115,38 @@ func TestCompareArtifactMismatch(t *testing.T) {
 	require.NotEmpty(t, raw)
 	var parsed CompareReport
 	require.NoError(t, json.Unmarshal(raw, &parsed))
+}
+
+func TestCompareArtifactConfigMismatch(t *testing.T) {
+	bufA := contentutil.NewBuffer()
+	bufB := contentutil.NewBuffer()
+
+	descA := writeManifestTree(t, bufA, []byte(`{"os":"linux","architecture":"amd64"}`), []byte("same"))
+	descB := writeManifestTree(t, bufB, []byte(`{"os":"linux","architecture":"arm64"}`), []byte("same"))
+
+	report, err := CompareArtifact(context.Background(),
+		&Subject{Descriptor: descA, Provider: bufA},
+		&Subject{Descriptor: descB, Provider: bufB},
+	)
+	require.NoError(t, err)
+	require.False(t, ReportMatched(report))
+	require.True(t, reportHasEvent(report, EventTypeConfigBlobMismatch), "artifact comparison should identify the changed config")
+	require.False(t, reportHasEvent(report, EventTypeLayerBlobMismatch), "identical layers should not be reported")
+}
+
+func reportHasEvent(report *CompareReport, eventType string) bool {
+	if report == nil {
+		return false
+	}
+	if report.Type == eventType {
+		return true
+	}
+	for _, child := range report.Children {
+		if reportHasEvent(child, eventType) {
+			return true
+		}
+	}
+	return false
 }
 
 func TestCompareSemanticNotImplemented(t *testing.T) {

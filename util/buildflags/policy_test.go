@@ -1,15 +1,32 @@
 package buildflags
 
 import (
+	"context"
+	"encoding/json"
 	"os"
 	"path/filepath"
 	"testing"
 
 	"github.com/docker/buildx/policy"
+	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 	"github.com/zclconf/go-cty/cty"
 )
+
+func TestPolicyConfigMarshalJSON(t *testing.T) {
+	for _, cfg := range []PolicyConfig{
+		{},
+		{Callback: policysession.PolicyCallback(func(_ context.Context, _ *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
+			return nil, nil, nil
+		})},
+	} {
+		dt, err := json.Marshal(cfg)
+		require.NoError(t, err)
+		require.NotContains(t, string(dt), "Callback")
+	}
+}
 
 func TestPolicyConfigs_FromCtyValue(t *testing.T) {
 	policyDir := t.TempDir()

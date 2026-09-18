@@ -10,6 +10,7 @@ import (
 	"github.com/docker/cli/cli"
 	"github.com/docker/cli/cli/command"
 	"github.com/moby/buildkit/util/progress/progressui"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )
@@ -188,13 +189,13 @@ func applyExportShorthands(exports []*buildflags.ExportEntry, push, load bool) [
 //   - platformFilter == ["all"] keeps every subject.
 //   - platformFilter empty defaults to the host's current platform
 //     (platforms.DefaultSpec) — replay is single-platform by default.
-//   - Otherwise each entry is matched through platforms.Only so that a
-//     request for "linux/arm64/v8" accepts a subject tagged "linux/arm64"
-//     with an unspecified variant, and vice versa.
+//   - Otherwise each entry is matched strictly after normalization. Platform
+//     selection identifies an artifact; it is not an execution-compatibility
+//     check.
 //
 // An explicit --platform that does not match any subject is an error.
-// Subjects with a nil Descriptor.Platform (single-platform images that
-// have no per-platform index) are kept unconditionally.
+// A sole subject with no descriptor platform inherits each explicit platform
+// because there is no index metadata to select from.
 func filterSubjectsByPlatform(subjects []*replay.Subject, platformFilter []string) ([]*replay.Subject, error) {
 	if len(platformFilter) == 1 && platformFilter[0] == "all" {
 		return subjects, nil
@@ -205,20 +206,32 @@ func filterSubjectsByPlatform(subjects []*replay.Subject, platformFilter []strin
 	}
 
 	wantNames := make([]string, 0, len(platformFilter))
+	wantPlatforms := make([]ocispecs.Platform, 0, len(platformFilter))
 	matchers := make([]platforms.MatchComparer, 0, len(platformFilter))
 	for _, p := range platformFilter {
 		pp, err := platforms.Parse(p)
 		if err != nil {
 			return nil, errors.Wrapf(err, "invalid --platform %q", p)
 		}
-		matchers = append(matchers, platforms.Only(pp))
+		pp = platforms.Normalize(pp)
+		matchers = append(matchers, platforms.OnlyStrict(pp))
+		wantPlatforms = append(wantPlatforms, pp)
 		wantNames = append(wantNames, platforms.Format(pp))
+	}
+	if explicit && len(subjects) == 1 && subjects[0].Descriptor.Platform == nil {
+		out := make([]*replay.Subject, 0, len(wantPlatforms))
+		for _, platform := range wantPlatforms {
+			subject := *subjects[0]
+			subject.Descriptor = subjects[0].Descriptor
+			p := platform
+			subject.Descriptor.Platform = &p
+			out = append(out, &subject)
+		}
+		return out, nil
 	}
 
 	// For each requested platform pick the single best-matching subject —
-	// Only() is intentionally permissive (e.g. arm64/v8 matches arm/v5–v7
-	// because an arm64 host can run arm32) and we want just the closest
-	// platform for the replay.
+	// duplicate descriptors are collapsed to one target.
 	matchedAny := make([]bool, len(matchers))
 	chosen := map[int]struct{}{}
 	for i, m := range matchers {

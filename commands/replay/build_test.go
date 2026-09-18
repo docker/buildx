@@ -41,4 +41,19 @@ func TestFilterSubjectsByPlatform(t *testing.T) {
 	_, err = filterSubjectsByPlatform([]*replay.Subject{amd}, []string{"linux/arm64"})
 	require.Error(t, err)
 	require.Contains(t, err.Error(), "not present")
+
+	// Artifact selection is strict: execution compatibility must not select
+	// a different architecture or variant.
+	armv7 := &replay.Subject{Descriptor: ocispecs.Descriptor{Platform: &ocispecs.Platform{OS: "linux", Architecture: "arm", Variant: "v7"}}}
+	_, err = filterSubjectsByPlatform([]*replay.Subject{armv7}, []string{"linux/arm64"})
+	require.Error(t, err)
+
+	// A single manifest or attestation without platform metadata inherits an
+	// explicit requested platform so the solve itself is constrained.
+	platformless := &replay.Subject{}
+	out, err = filterSubjectsByPlatform([]*replay.Subject{platformless}, []string{"linux/arm64"})
+	require.NoError(t, err)
+	require.Len(t, out, 1)
+	require.Equal(t, "linux/arm64", platforms.Format(*out[0].Descriptor.Platform))
+	require.Nil(t, platformless.Descriptor.Platform, "filtering must not mutate the loaded subject")
 }

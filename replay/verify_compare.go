@@ -86,27 +86,31 @@ func CompareSemantic(ctx context.Context, subject, replay *Subject) (*CompareRep
 }
 
 // compareDescriptor does a recursive content compare between two descriptors.
-// When any level diverges, an Event node is attached to parent and recursion
-// stops at that level.
+// A changed container descriptor is reported and then inspected further when
+// both sides have the same index or manifest media type. Leaf changes and
+// incompatible media types stop at the descriptor event.
 func compareDescriptor(ctx context.Context, parent *CompareReport, pa content.Provider, da ocispecs.Descriptor, pb content.Provider, db ocispecs.Descriptor) error {
-	// Descriptor-level mismatch (digest).
-	if da.Digest != db.Digest {
-		descA, descB := da, db
-		parent.Children = append(parent.Children, &CompareReport{
-			Context: fmt.Sprintf("descriptor %s", displayMediaType(da.MediaType)),
-			CompareEvent: CompareEvent{
-				Type: EventTypeDescriptorMismatch,
-				Inputs: [2]CompareEventInput{
-					{Descriptor: &descA},
-					{Descriptor: &descB},
-				},
-				Diff: fmt.Sprintf("digest mismatch: %s vs %s", da.Digest, db.Digest),
-			},
-		})
+	if da.Digest == db.Digest {
 		return nil
 	}
 
-	// Same digest at this level — walk descendants when available.
+	descA, descB := da, db
+	parent.Children = append(parent.Children, &CompareReport{
+		Context: fmt.Sprintf("descriptor %s", displayMediaType(da.MediaType)),
+		CompareEvent: CompareEvent{
+			Type: EventTypeDescriptorMismatch,
+			Inputs: [2]CompareEventInput{
+				{Descriptor: &descA},
+				{Descriptor: &descB},
+			},
+			Diff: fmt.Sprintf("digest mismatch: %s vs %s", da.Digest, db.Digest),
+		},
+	})
+
+	if da.MediaType != db.MediaType {
+		return nil
+	}
+
 	switch da.MediaType {
 	case ocispecs.MediaTypeImageIndex, images.MediaTypeDockerSchema2ManifestList:
 		return compareIndex(ctx, parent, pa, da, pb, db)

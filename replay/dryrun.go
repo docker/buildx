@@ -318,6 +318,7 @@ func subjectBuildPlan(s *Subject, pred *Predicate, req *BuildRequest) SubjectBui
 	if dockerfilePath == "" {
 		dockerfilePath = attrs["filename"]
 	}
+	networkMode, _ := networkModeForReplay(req.NetworkMode)
 
 	cfg := BuildPlanConfig{
 		Frontend:      pred.Frontend(),
@@ -329,7 +330,7 @@ func subjectBuildPlan(s *Subject, pred *Predicate, req *BuildRequest) SubjectBui
 		Labels:        collectPrefixed(attrs, "label:"),
 		Secrets:       planSecrets(pred.Secrets()),
 		SSH:           sshIDs(pred.SSH()),
-		NetworkMode:   networkModeForReplay(req.NetworkMode),
+		NetworkMode:   networkMode,
 		Exports:       exportSummaries(req.Exports),
 	}
 	if v, ok := attrs["no-cache"]; ok {

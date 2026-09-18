@@ -39,8 +39,10 @@ Subjects are accepted in three forms:
 - `oci-layout://<path>[:<tag>]` — read from a local OCI layout.
 - A local in-toto attestation file (`.intoto.jsonl` or a DSSE envelope).
 
-Multi-platform inputs expand into N subjects, one per child manifest. Each
-subject is replayed independently.
+Multi-platform inputs expand into one subject per child manifest for inspection
+and snapshot creation. Build and verify currently reject a selection containing
+multiple subjects until their outputs can be aggregated safely; select one
+platform with `--platform`.
 
 ## Related
 

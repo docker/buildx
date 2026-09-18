@@ -11,6 +11,7 @@ import (
 	"github.com/docker/buildx/policy"
 	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	solverpb "github.com/moby/buildkit/solver/pb"
 	spb "github.com/moby/buildkit/sourcepolicy/pb"
 	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/purl"
@@ -22,16 +23,19 @@ import (
 // PinIndex is a resolved, URI/digest-keyed view of the predicate's
 // ResolvedDependencies suitable for fast policy-callback lookup.
 //
-// Two lookup tables are maintained: byURI maps the material's URI (e.g.
-// "docker-image://alpine:3.18" or "https://example.com/foo.tar") to the pinned
-// digest, and byDigest maps an already-pinned digest to the URI it belongs to.
-// Either side of a pin index entry is sufficient to match a source-policy
-// request; when both are present on the request they must refer to the same
-// pin entry.
+// Exact material identifiers and lossy aliases are kept separate. An alias can
+// name more than one pin (for example the same image tag at two digests), so it
+// must never use last-write-wins selection.
 type PinIndex struct {
-	byURI     map[string]digest.Digest
-	byDigest  map[digest.Digest]string
+	byURI     map[string][]sourcePin
+	byAlias   map[string][]sourcePin
+	byDigest  map[digest.Digest]struct{}
 	materials []string
+}
+
+type sourcePin struct {
+	digest   digest.Digest
+	platform *ocispecs.Platform
 }
 
 // NewPinIndex builds a PinIndex from the predicate's ResolvedDependencies.
@@ -40,14 +44,22 @@ type PinIndex struct {
 // a usable digest are skipped.
 func NewPinIndex(p *Predicate) *PinIndex {
 	idx := &PinIndex{
-		byURI:    map[string]digest.Digest{},
-		byDigest: map[digest.Digest]string{},
+		byURI:    map[string][]sourcePin{},
+		byAlias:  map[string][]sourcePin{},
+		byDigest: map[digest.Digest]struct{}{},
 	}
 	if p == nil {
 		return idx
 	}
+	materials := p.ResolvedDependencies()
+	if cfg := p.ConfigSource(); cfg.URI != "" && len(cfg.Digest) > 0 {
+		materials = append(materials, slsa1.ResourceDescriptor{
+			URI:    cfg.URI,
+			Digest: cfg.Digest,
+		})
+	}
 	seenMaterials := map[string]struct{}{}
-	for _, m := range p.ResolvedDependencies() {
+	for _, m := range materials {
 		if disp := formatPinMaterial(m); disp != "" {
 			if _, ok := seenMaterials[disp]; !ok {
 				seenMaterials[disp] = struct{}{}
@@ -58,16 +70,18 @@ func NewPinIndex(p *Predicate) *PinIndex {
 		if d == "" {
 			continue
 		}
+		pin := sourcePin{digest: d}
 		if m.URI != "" {
-			idx.byURI[m.URI] = d
-			if canon, ok := canonicalMaterialIdentifier(m); ok {
-				idx.byURI[canon] = d
+			if canon, platform, ok := canonicalMaterialIdentifier(m); ok {
+				pin.platform = platform
+				idx.byURI[canon] = appendPin(idx.byURI[canon], pin)
 				for _, alias := range canonicalIdentifierAliases(canon) {
-					idx.byURI[alias] = d
+					idx.byAlias[alias] = appendPin(idx.byAlias[alias], pin)
 				}
 			}
+			idx.byURI[m.URI] = appendPin(idx.byURI[m.URI], pin)
 		}
-		idx.byDigest[d] = m.URI
+		idx.byDigest[d] = struct{}{}
 	}
 	sort.Strings(idx.materials)
 	return idx
@@ -106,8 +120,40 @@ func (p *PinIndex) Lookup(uri string) (digest.Digest, bool) {
 	if p == nil {
 		return "", false
 	}
-	d, ok := p.byURI[uri]
-	return d, ok
+	if pins, ok := p.byURI[uri]; ok {
+		return uniquePinDigest(pins)
+	}
+	return uniquePinDigest(p.byAlias[uri])
+}
+
+func appendPin(pins []sourcePin, pin sourcePin) []sourcePin {
+	for _, existing := range pins {
+		if existing.digest == pin.digest && platformEqual(existing.platform, pin.platform) {
+			return pins
+		}
+	}
+	return append(pins, pin)
+}
+
+func platformEqual(a, b *ocispecs.Platform) bool {
+	if a == nil || b == nil {
+		return a == nil && b == nil
+	}
+	return platforms.OnlyStrict(platforms.Normalize(*a)).Match(platforms.Normalize(*b))
+}
+
+func uniquePinDigest(pins []sourcePin) (digest.Digest, bool) {
+	var found digest.Digest
+	for _, pin := range pins {
+		if found == "" {
+			found = pin.digest
+			continue
+		}
+		if found != pin.digest {
+			return "", false
+		}
+	}
+	return found, found != ""
 }
 
 // ReplayPinCallback returns a policysession.PolicyCallback that enforces the
@@ -121,16 +167,26 @@ func ReplayPinCallback(idx *PinIndex) policysession.PolicyCallback {
 			return denyResponse("replay pin: request carried no source identifier"), nil, nil
 		}
 
-		// URI-matched: compare observed digest against the pinned digest.
+		// URI-matched: rewrite the source operation so BuildKit's source
+		// implementation enforces the recorded pin. Metadata is not present on
+		// BuildKit's initial policy request, so allowing a covered URI before
+		// adding these attributes would leave HTTP and Git sources unpinned.
 		if idx != nil && uri != "" {
-			if pinned, ok := idx.byURI[uri]; ok {
-				if decision, handled, err := convertPinnedImage(req, pinned); err != nil {
+			if pinned, covered, reason := idx.resolve(req, uri, observed); covered {
+				if reason != "" {
+					return denyResponse(reason), nil, nil
+				}
+				decision, supported, err := convertPinnedSource(req, pinned)
+				if err != nil {
 					return nil, nil, err
-				} else if handled {
+				} else if decision != nil {
 					return decision, nil, nil
 				}
 				if observed == "" {
-					return allowResponse(), nil, nil
+					if supported {
+						return allowResponse(), nil, nil
+					}
+					return denyResponse(fmt.Sprintf("replay pin: cannot enforce recorded digest for %s", uri)), nil, nil
 				}
 				if pinned == observed {
 					return allowResponse(), nil, nil
@@ -154,30 +210,100 @@ func ReplayPinCallback(idx *PinIndex) policysession.PolicyCallback {
 	}
 }
 
-func convertPinnedImage(req *policysession.CheckPolicyRequest, pinned digest.Digest) (*policysession.DecisionResponse, bool, error) {
+func (p *PinIndex) resolve(req *policysession.CheckPolicyRequest, uri string, observed digest.Digest) (digest.Digest, bool, string) {
+	keys := []string{uri}
+	if canon := canonicalRequestSource(req); canon != "" && canon != uri {
+		keys = append(keys, canon)
+	}
+	for _, key := range keys {
+		if pins, ok := p.byURI[key]; ok {
+			return selectPin(pins, requestPlatform(req), observed, key)
+		}
+	}
+	for _, key := range keys {
+		aliases := append([]string{key}, canonicalIdentifierAliases(key)...)
+		for _, alias := range aliases {
+			if pins, ok := p.byAlias[alias]; ok {
+				return selectPin(pins, requestPlatform(req), observed, alias)
+			}
+		}
+	}
+	return "", false, ""
+}
+
+func selectPin(pins []sourcePin, platform *ocispecs.Platform, observed digest.Digest, source string) (digest.Digest, bool, string) {
+	candidates := pins
+	if platform != nil {
+		candidates = nil
+		matcher := platforms.OnlyStrict(platforms.Normalize(*platform))
+		for _, pin := range pins {
+			if pin.platform == nil || matcher.Match(platforms.Normalize(*pin.platform)) {
+				candidates = append(candidates, pin)
+			}
+		}
+		if len(candidates) == 0 {
+			return "", true, fmt.Sprintf("replay pin: no recorded pin for %s on platform %s", source, platforms.Format(*platform))
+		}
+	}
+	if pinned, ok := uniquePinDigest(candidates); ok {
+		return pinned, true, ""
+	}
+	if observed != "" {
+		for _, pin := range candidates {
+			if pin.digest == observed {
+				return observed, true, ""
+			}
+		}
+	}
+	return "", true, fmt.Sprintf("replay pin: ambiguous provenance pins for %s", source)
+}
+
+func convertPinnedSource(req *policysession.CheckPolicyRequest, pinned digest.Digest) (*policysession.DecisionResponse, bool, error) {
 	if req == nil || req.Source == nil || req.Source.GetSource() == nil {
 		return nil, false, nil
 	}
 	src := req.Source.GetSource()
 	if canon := canonicalRequestSource(req); canon != "" && canon != src.Identifier {
-		clone := *src
+		clone := src.CloneVT()
 		clone.Identifier = canon
-		src = &clone
+		src = clone
 	}
-	if !strings.HasPrefix(src.Identifier, "docker-image://") {
+	switch {
+	case strings.HasPrefix(src.Identifier, "docker-image://"):
+		newSrc, err := policy.AddPinToImage(src, pinned)
+		if err != nil {
+			return nil, false, errors.Wrap(err, "failed to pin covered image source")
+		}
+		if newSrc.Identifier == src.Identifier {
+			return nil, true, nil
+		}
+		return convertResponse(newSrc), true, nil
+	case strings.HasPrefix(src.Identifier, "http://"), strings.HasPrefix(src.Identifier, "https://"):
+		return convertPinnedAttr(src, solverpb.AttrHTTPChecksum, pinned.String()), true, nil
+	case strings.HasPrefix(src.Identifier, "git://"):
+		return convertPinnedAttr(src, solverpb.AttrGitChecksum, pinned.Encoded()), true, nil
+	default:
 		return nil, false, nil
 	}
-	newSrc, err := policy.AddPinToImage(src, pinned)
-	if err != nil {
-		return nil, false, errors.Wrap(err, "failed to pin covered image source")
+}
+
+func convertPinnedAttr(src *solverpb.SourceOp, key, value string) *policysession.DecisionResponse {
+	if src.Attrs[key] == value {
+		return nil
 	}
-	if newSrc.Identifier == src.Identifier {
-		return allowResponse(), true, nil
+	newSrc := src.CloneVT()
+	if newSrc.Attrs == nil {
+		newSrc.Attrs = map[string]string{}
 	}
+	newSrc.Attrs[key] = value
+	return convertResponse(newSrc)
+}
+
+func convertResponse(src *solverpb.SourceOp) *policysession.DecisionResponse {
 	return &policysession.DecisionResponse{
 		Action: spb.PolicyAction_CONVERT,
-		Update: newSrc,
-	}, true, nil
+		Update: src,
+	}
 }
 
 // extractSourceIdentity pulls the URI and the digest (if known on this call)
@@ -206,17 +332,28 @@ func extractSourceIdentity(req *policysession.CheckPolicyRequest) (uri string, d
 		}
 	}
 	if g := req.Source.GetGit(); g != nil {
-		// Git materials do not carry a sha256 content digest. Treat the
-		// commit checksum as a placeholder — the URI match is the real
-		// enforcement point for git.
 		if v := g.GetCommitChecksum(); v != "" && dgst == "" {
-			dgst = digest.Digest(v)
+			dgst = gitDigest(v)
 		}
 	}
 	if uri != "" {
 		uri, dgst = normalizeRequestSourceIdentity(uri, dgst)
 	}
 	return uri, dgst
+}
+
+func gitDigest(v string) digest.Digest {
+	if _, err := digest.Parse(v); err == nil {
+		return digest.Digest(v)
+	}
+	switch len(v) {
+	case 40:
+		return digest.NewDigestFromEncoded(digest.Algorithm("sha1"), v)
+	case 64:
+		return digest.NewDigestFromEncoded(digest.SHA256, v)
+	default:
+		return digest.Digest(v)
+	}
 }
 
 func displaySource(uri string, dgst digest.Digest) string {
@@ -232,12 +369,12 @@ func displaySource(uri string, dgst digest.Digest) string {
 	}
 }
 
-func canonicalMaterialIdentifier(m slsa1.ResourceDescriptor) (string, bool) {
-	src, _, err := policy.ParseSLSAMaterial(m)
+func canonicalMaterialIdentifier(m slsa1.ResourceDescriptor) (string, *ocispecs.Platform, bool) {
+	src, platform, err := policy.ParseSLSAMaterial(m)
 	if err != nil || src == nil || src.Identifier == "" {
-		return "", false
+		return "", nil, false
 	}
-	return src.Identifier, true
+	return src.Identifier, platform, true
 }
 
 func canonicalIdentifierAliases(id string) []string {
@@ -259,13 +396,13 @@ func normalizeRequestSourceIdentity(uri string, dgst digest.Digest) (string, dig
 	if !ok {
 		return uri, dgst
 	}
-	if refBase, refDigest, ok := strings.Cut(refStr, "@"); ok {
+	if _, refDigest, ok := strings.Cut(refStr, "@"); ok {
 		if dgst == "" {
 			if parsed, err := digest.Parse(refDigest); err == nil {
 				dgst = parsed
 			}
 		}
-		return "docker-image://" + refBase, dgst
+		return uri, dgst
 	}
 	return uri, dgst
 }

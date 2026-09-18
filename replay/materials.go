@@ -146,11 +146,22 @@ func isOverrideSpec(spec string) bool {
 }
 
 func splitOverride(spec string) (key, val string, ok bool) {
-	i := strings.IndexByte(spec, '=')
-	if i <= 0 || i >= len(spec)-1 {
-		return "", "", false
+	for offset := 0; offset < len(spec); {
+		rel := strings.IndexByte(spec[offset:], '=')
+		if rel < 0 {
+			break
+		}
+		i := offset + rel
+		if i > 0 && i < len(spec)-1 && isOverrideValue(spec[i+1:]) {
+			return spec[:i], spec[i+1:], true
+		}
+		offset = i + 1
 	}
-	return spec[:i], spec[i+1:], true
+	return "", "", false
+}
+
+func isOverrideValue(spec string) bool {
+	return strings.HasPrefix(spec, "oci-layout://") || filepath.IsAbs(spec)
 }
 
 // Sentinel reports whether the `provenance` sentinel is enabled. The sentinel
@@ -176,6 +187,13 @@ func (r *MaterialsResolver) Overrides() map[string]string {
 // use is driving behavior when the resolver has only a sentinel.
 func (r *MaterialsResolver) HasStores() bool {
 	return r != nil && len(r.stores) > 0
+}
+
+// HasExplicitSources reports whether replay would need to inject locally
+// resolved material content into a solve. The provenance sentinel alone does
+// not require injection because BuildKit fetches those sources normally.
+func (r *MaterialsResolver) HasExplicitSources() bool {
+	return r != nil && (len(r.stores) > 0 || len(r.overrides) > 0)
 }
 
 // ResolveOption customises a Resolve call.
@@ -223,8 +241,8 @@ func WithBuilderPlatform(p ocispecs.Platform) ResolveOption {
 // resolution path.
 //
 // Snapshot-backed stores are detected at lookup time. When `dgst` matches a
-// snapshot's materials-manifest layer AND the layer's media type is an OCI
-// image index (an image-material root index stashed by `replay snapshot`),
+// snapshot's materials-manifest layer AND the layer is an image-material root
+// manifest/index stashed as opaque bytes by `replay snapshot`,
 // Resolve returns the platform-specific child manifest descriptor reachable
 // through the snapshot index's `manifests[]`. The caller should pass
 // WithPlatform so the correct child can be picked.

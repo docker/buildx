@@ -43,7 +43,7 @@ func snapshotCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
 
 	flags := cmd.Flags()
 	flags.BoolVar(&opts.includeMaterials, "include-materials", true, "Include material content in the snapshot")
-	flags.StringArrayVarP(&opts.outputs, "output", "o", nil, `Output destination (default: "-" — oci tar to stdout; bare "<path>" writes an oci-layout directory; "type=oci,dest=X[,tar=true|false]"; "type=registry,name=<ref>")`)
+	flags.StringArrayVarP(&opts.outputs, "output", "o", nil, `Output destination (default: "-" — oci tar to stdout; bare "<path>" writes an oci-layout directory; "type=oci,dest=X[,tar=true|false]")`)
 	flags.BoolVar(&opts.dryRun, "dry-run", false, "Print a JSON plan of the snapshot without writing output")
 
 	return cmd
@@ -133,13 +133,12 @@ func runSnapshot(cmd *cobra.Command, dockerCli command.Cli, opts *snapshotOption
 }
 
 // resolveSnapshotOutput turns raw --output values into a normalized
-// ExportEntry with Type ∈ {"oci", "registry"}. The command surface is:
+// ExportEntry with Type "oci". The command surface is:
 //
 //	(unset)                            → type=oci, dest=-       (stdout tar)
 //	-o -                               → type=oci, dest=-       (stdout tar)
 //	-o <path>                          → type=oci, dest=<path>, tar=false (layout dir)
 //	-o type=oci,dest=<file>[,tar=...]  → oci, defaults to tar=true
-//	-o type=registry,name=<ref>        → registry push
 //
 // A TTY on stdout with no --output (or -o -) is refused: writing a
 // multi-megabyte binary tar to a terminal is never what the user wants.
@@ -182,8 +181,11 @@ func resolveSnapshotOutput(outputs []string) (*buildflags.ExportEntry, error) {
 		}
 	}
 
-	if out.Type != "oci" && out.Type != "registry" {
-		return nil, errors.Errorf("snapshot: unsupported --output type %q (want oci | registry)", out.Type)
+	if out.Type == "registry" {
+		return nil, replay.ErrNotImplemented("snapshot registry output")
+	}
+	if out.Type != "oci" {
+		return nil, errors.Errorf("snapshot: unsupported --output type %q (want oci)", out.Type)
 	}
 	return &out, nil
 }

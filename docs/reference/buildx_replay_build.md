@@ -47,13 +47,9 @@ docker buildx replay build docker-image://example.com/app@sha256:deadbeef \
 docker buildx replay build docker-image://example.com/app@sha256:deadbeef --dry-run | jq
 ```
 
-### Use a pre-pinned snapshot as the materials store
-
-```console
-docker buildx replay build docker-image://example.com/app@sha256:deadbeef \
-  --materials=oci-layout:///path/to/snapshot \
-  --output=type=oci,dest=replay.oci.tar
-```
+Snapshot-backed `--materials` injection is not implemented yet. Explicit
+material stores and overrides are rejected instead of silently falling back to
+network sources.
 
 ## Exit codes
 

@@ -98,6 +98,9 @@ func runVerify(cmd *cobra.Command, dockerCli command.Cli, opts *verifyOptions, i
 	if len(subjects) == 0 {
 		return errors.New("no subjects matched the --platform filter")
 	}
+	if len(subjects) > 1 {
+		return replay.ErrNotImplemented("multi-subject replay verify output aggregation")
+	}
 
 	for _, s := range subjects {
 		pred, err := s.Predicate(ctx)

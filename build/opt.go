@@ -302,15 +302,22 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		cacheFrom = append(cacheFrom, e)
 	}
 
+	frontend := opt.Frontend
+	if frontend == "" {
+		frontend = "dockerfile.v0"
+	}
 	so := client.SolveOpt{
 		Ref:                 opt.Ref,
-		Frontend:            "dockerfile.v0",
-		FrontendAttrs:       map[string]string{},
+		Frontend:            frontend,
+		FrontendAttrs:       maps.Clone(opt.FrontendAttrs),
 		LocalMounts:         map[string]fsutil.FS{},
 		CacheExports:        cacheTo,
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
 		SourcePolicy:        opt.SourcePolicy,
+	}
+	if so.FrontendAttrs == nil {
+		so.FrontendAttrs = map[string]string{}
 	}
 
 	if opt.CgroupParent != "" {

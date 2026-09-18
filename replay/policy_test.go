@@ -18,6 +18,7 @@ import (
 const (
 	imageURIAlpine = "pkg:docker/alpine@3.18?platform=linux%2Famd64"
 	imageSHA       = "sha256:abcdef0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
+	imageSHAOther  = "sha256:bbbbbb0123456789abcdef0123456789abcdef0123456789abcdef0123456789"
 
 	httpURI = "https://example.com/payload.tar"
 	httpSHA = "sha256:1111111111111111111111111111111111111111111111111111111111111111"
@@ -74,6 +75,14 @@ func gitCheckRequest(uri, observed string) *policysession.CheckPolicyRequest {
 		Source: &gwpb.ResolveSourceMetaResponse{
 			Source: &solverpb.SourceOp{Identifier: uri},
 			Git:    &gwpb.ResolveSourceGitResponse{CommitChecksum: observed},
+		},
+	}
+}
+
+func sourceCheckRequest(uri string, attrs map[string]string) *policysession.CheckPolicyRequest {
+	return &policysession.CheckPolicyRequest{
+		Source: &gwpb.ResolveSourceMetaResponse{
+			Source: &solverpb.SourceOp{Identifier: uri, Attrs: attrs},
 		},
 	}
 }
@@ -155,6 +164,39 @@ func TestPinIndexImageCanonicalIdentifierCarriesDigestInSource(t *testing.T) {
 	require.Equal(t, "docker-image://docker.io/docker/dockerfile-upstream:master@sha256:02bce6c486f5bbd7b2eb6b9a16e3734110face1c70a6bacd827dcdb80c3f9a24", resp.Update.Identifier)
 }
 
+func TestPinIndexDigestQualifiedImagesDoNotCollide(t *testing.T) {
+	matA := imageMaterial("pkg:docker/alpine?digest="+imageSHA+"&platform=linux%2Famd64", imageSHA)
+	matB := imageMaterial("pkg:docker/alpine?digest="+imageSHAOther+"&platform=linux%2Famd64", imageSHAOther)
+	cb := ReplayPinCallback(NewPinIndex(predicateWithMaterials(matA, matB)))
+
+	for _, pinned := range []string{imageSHA, imageSHAOther} {
+		resp, _, err := cb(context.Background(), imageCheckRequest("docker-image://docker.io/library/alpine@"+pinned, ""))
+		require.NoError(t, err)
+		require.NotNil(t, resp)
+		require.Equal(t, spb.PolicyAction_ALLOW, resp.Action)
+	}
+
+	resp, _, err := cb(context.Background(), imageCheckRequest("docker-image://docker.io/library/alpine", ""))
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_DENY, resp.Action)
+	require.Contains(t, resp.DenyMessages[0].Message, "ambiguous provenance pins")
+}
+
+func TestPinIndexUsesRequestPlatformToDisambiguateImage(t *testing.T) {
+	matAMD64 := imageMaterial("pkg:docker/alpine?digest="+imageSHA+"&platform=linux%2Famd64", imageSHA)
+	matARM64 := imageMaterial("pkg:docker/alpine?digest="+imageSHAOther+"&platform=linux%2Farm64", imageSHAOther)
+	cb := ReplayPinCallback(NewPinIndex(predicateWithMaterials(matAMD64, matARM64)))
+	req := imageCheckRequest("docker-image://docker.io/library/alpine", "")
+	req.Platform = &solverpb.Platform{OS: "linux", Architecture: "amd64"}
+
+	resp, _, err := cb(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_CONVERT, resp.Action)
+	require.Equal(t, "docker-image://docker.io/library/alpine@"+imageSHA, resp.Update.Identifier)
+}
+
 func TestPinIndexUnknownSourceDenied(t *testing.T) {
 	idx := NewPinIndex(predicateWithMaterials(imageMaterial(imageURIAlpine, imageSHA)))
 	cb := ReplayPinCallback(idx)
@@ -174,7 +216,7 @@ func TestPinIndexUnknownSourceDenied(t *testing.T) {
 	require.Contains(t, resp.DenyMessages[0].Message, "platform=linux/amd64")
 }
 
-func TestPinIndexHTTPAllowed(t *testing.T) {
+func TestPinIndexHTTPConvertedToRecordedChecksum(t *testing.T) {
 	pred := predicateWithMaterials(slsa1.ResourceDescriptor{
 		URI:    httpURI,
 		Digest: slsacommon.DigestSet{"sha256": stripSHA256(httpSHA)},
@@ -182,13 +224,35 @@ func TestPinIndexHTTPAllowed(t *testing.T) {
 	idx := NewPinIndex(pred)
 	cb := ReplayPinCallback(idx)
 
-	resp, _, err := cb(context.Background(), httpCheckRequest(httpURI, httpSHA))
+	resp, _, err := cb(context.Background(), sourceCheckRequest(httpURI, nil))
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_CONVERT, resp.Action)
+	require.NotNil(t, resp.Update)
+	require.Equal(t, httpSHA, resp.Update.Attrs[solverpb.AttrHTTPChecksum])
+
+	resp, _, err = cb(context.Background(), sourceCheckRequest(httpURI, resp.Update.Attrs))
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, spb.PolicyAction_ALLOW, resp.Action)
 }
 
-func TestPinIndexGitSchemeNormalizationAllowed(t *testing.T) {
+func TestPinIndexIncludesRecordedConfigSource(t *testing.T) {
+	pred := predicateWithMaterials()
+	pred.BuildDefinition.ExternalParameters.ConfigSource.URI = httpURI
+	pred.BuildDefinition.ExternalParameters.ConfigSource.Digest = slsacommon.DigestSet{
+		"sha256": stripSHA256(httpSHA),
+	}
+	cb := ReplayPinCallback(NewPinIndex(pred))
+
+	resp, _, err := cb(context.Background(), sourceCheckRequest(httpURI, nil))
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_CONVERT, resp.Action)
+	require.Equal(t, httpSHA, resp.Update.Attrs[solverpb.AttrHTTPChecksum])
+}
+
+func TestPinIndexGitSchemeNormalizationConvertedToRecordedCommit(t *testing.T) {
 	pred := predicateWithMaterials(slsa1.ResourceDescriptor{
 		URI:    gitURIHTTPS,
 		Digest: slsacommon.DigestSet{"sha1": stripSHA256(gitCommit)},
@@ -196,10 +260,49 @@ func TestPinIndexGitSchemeNormalizationAllowed(t *testing.T) {
 	idx := NewPinIndex(pred)
 	cb := ReplayPinCallback(idx)
 
-	resp, _, err := cb(context.Background(), gitCheckRequest(gitURIGit, gitCommit))
+	resp, _, err := cb(context.Background(), sourceCheckRequest(gitURIGit, nil))
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_CONVERT, resp.Action)
+	require.NotNil(t, resp.Update)
+	require.Equal(t, stripSHA256(gitCommit), resp.Update.Attrs[solverpb.AttrGitChecksum])
+
+	resp, _, err = cb(context.Background(), sourceCheckRequest(gitURIGit, resp.Update.Attrs))
 	require.NoError(t, err)
 	require.NotNil(t, resp)
 	require.Equal(t, spb.PolicyAction_ALLOW, resp.Action)
+}
+
+func TestPinIndexHTTPResolvedDigestMismatchDenied(t *testing.T) {
+	pred := predicateWithMaterials(slsa1.ResourceDescriptor{
+		URI:    httpURI,
+		Digest: slsacommon.DigestSet{"sha256": stripSHA256(httpSHA)},
+	})
+	cb := ReplayPinCallback(NewPinIndex(pred))
+	req := httpCheckRequest(httpURI, "sha256:2222222222222222222222222222222222222222222222222222222222222222")
+	req.Source.Source.Attrs = map[string]string{solverpb.AttrHTTPChecksum: httpSHA}
+
+	resp, _, err := cb(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_DENY, resp.Action)
+	require.Contains(t, resp.DenyMessages[0].Message, "replay pin mismatch")
+}
+
+func TestPinIndexGitResolvedCommitMismatchDenied(t *testing.T) {
+	pred := predicateWithMaterials(slsa1.ResourceDescriptor{
+		URI:    gitURIHTTPS,
+		Digest: slsacommon.DigestSet{"sha1": stripSHA256(gitCommit)},
+	})
+	cb := ReplayPinCallback(NewPinIndex(pred))
+	req := gitCheckRequest(gitURIGit, "1111111111111111111111111111111111111111")
+	req.Source.Source.Attrs = map[string]string{solverpb.AttrGitChecksum: stripSHA256(gitCommit)}
+
+	resp, _, err := cb(context.Background(), req)
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_DENY, resp.Action)
+	require.Contains(t, resp.DenyMessages[0].Message, "replay pin mismatch")
 }
 
 func TestPinIndexAllowPending(t *testing.T) {

@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"io"
 	"io/fs"
+	"maps"
 	"net/url"
 	"os"
 	"path/filepath"
@@ -86,7 +87,7 @@ func Snapshot(ctx context.Context, dockerCli command.Cli, builderName string, re
 	if err != nil {
 		return err
 	}
-	return writeSnapshotOutput(ctx, stage, root, req.Output, dockerCli, builderName)
+	return writeSnapshotOutput(ctx, stage, root, req.Output)
 }
 
 // assembleSnapshot runs the staging phase shared by real-run and dry-run:
@@ -226,9 +227,11 @@ func assembleSnapshot(ctx context.Context, dockerCli command.Cli, builderName st
 func mergeStage(ctx context.Context, dst, src *stagingStore) error {
 	src.mu.Lock()
 	order := slices.Clone(src.order)
+	descs := make(map[digest.Digest]ocispecs.Descriptor, len(src.descs))
+	maps.Copy(descs, src.descs)
 	src.mu.Unlock()
 	for _, dgst := range order {
-		desc := src.descs[dgst]
+		desc := descs[dgst]
 		ra, err := src.ReaderAt(ctx, desc)
 		if err != nil {
 			return errors.Wrapf(err, "read %s", dgst)
@@ -573,7 +576,9 @@ func resolveImageMaterial(
 			if !errors.As(err, &mnf) {
 				return ocispecs.Descriptor{}, nil, err
 			}
-			// Fall through to registry fetch for MaterialNotFoundError.
+			if !resolver.Sentinel() {
+				return ocispecs.Descriptor{}, nil, err
+			}
 		}
 	}
 
@@ -794,8 +799,6 @@ func writeSnapshotOutput(
 	stage *stagingStore,
 	root ocispecs.Descriptor,
 	exp *buildflags.ExportEntry,
-	dockerCli command.Cli,
-	builderName string,
 ) error {
 	switch exp.Type {
 	case "oci":
@@ -810,11 +813,7 @@ func writeSnapshotOutput(
 		}
 		return writeOCILayoutTar(ctx, stage, root, exp.Destination)
 	case "registry":
-		ref := exp.Attrs["name"]
-		if ref == "" {
-			return errors.New("snapshot: type=registry requires name=<ref>")
-		}
-		return pushSnapshotToRegistry(ctx, stage, root, ref, dockerCli, builderName)
+		return ErrNotImplemented("snapshot registry output")
 	}
 	return errors.Errorf("snapshot: unsupported --output type %q (want oci | registry)", exp.Type)
 }
@@ -841,21 +840,35 @@ func writeOCILayoutDir(ctx context.Context, stage *stagingStore, root ocispecs.D
 	return nil
 }
 
-// flushStage copies every tracked blob from stage into ingester by reading
-// bytes directly from the staging buffer and writing them through the
-// ingester. Doing it at the byte level avoids containerd's remotes-layer
-// ref-key lookup (which warns on the empty mediaType we'd otherwise need
-// to plumb through for every blob).
+// flushStage copies every tracked blob from stage into ingester using the
+// complete descriptor recorded when the blob was staged. Registry pushers
+// require the media type to distinguish manifests from ordinary blobs.
 func flushStage(ctx context.Context, ingester content.Ingester, stage *stagingStore) error {
 	stage.mu.Lock()
 	order := slices.Clone(stage.order)
+	descs := make(map[digest.Digest]ocispecs.Descriptor, len(stage.descs))
+	maps.Copy(descs, stage.descs)
 	stage.mu.Unlock()
-	for _, dgst := range order {
+
+	// Registries validate references when manifests and indexes are uploaded.
+	// Preserve staging order within each tier, but always send blobs first,
+	// manifests second, and indexes last.
+	ordered := make([]digest.Digest, 0, len(order))
+	for priority := range 3 {
+		for _, dgst := range order {
+			if descriptorPushPriority(descs[dgst]) == priority {
+				ordered = append(ordered, dgst)
+			}
+		}
+	}
+	for _, dgst := range ordered {
 		info, err := stage.buffer.Info(ctx, dgst)
 		if err != nil {
 			return errors.Wrapf(err, "lookup %s", dgst)
 		}
-		desc := ocispecs.Descriptor{Digest: info.Digest, Size: info.Size}
+		desc := descs[dgst]
+		desc.Digest = info.Digest
+		desc.Size = info.Size
 		ra, err := stage.ReaderAt(ctx, desc)
 		if err != nil {
 			return errors.Wrapf(err, "read %s", dgst)
@@ -863,10 +876,20 @@ func flushStage(ctx context.Context, ingester content.Ingester, stage *stagingSt
 		err = content.WriteBlob(ctx, ingester, "snapshot-"+dgst.String(), content.NewReader(ra), desc)
 		ra.Close()
 		if err != nil && !errdefs.IsAlreadyExists(err) {
-			return errors.Wrapf(err, "write %s", dgst)
+			return errors.Wrapf(err, "write %s (%s)", dgst, desc.MediaType)
 		}
 	}
 	return nil
+}
+
+func descriptorPushPriority(desc ocispecs.Descriptor) int {
+	if images.IsManifestType(desc.MediaType) {
+		return 1
+	}
+	if images.IsIndexType(desc.MediaType) {
+		return 2
+	}
+	return 0
 }
 
 // writeOCILayoutTar writes the snapshot as an OCI layout tar at dest.
@@ -955,44 +978,4 @@ func tarDirectory(srcDir string, w io.Writer) error {
 		}
 		return nil
 	})
-}
-
-// pushSnapshotToRegistry pushes the snapshot to a registry through the buildx
-// imagetools.Resolver.
-func pushSnapshotToRegistry(ctx context.Context, stage *stagingStore, root ocispecs.Descriptor, ref string, dockerCli command.Cli, builderName string) error {
-	loc, err := imagetools.ParseLocation(ref)
-	if err != nil {
-		return errors.Wrapf(err, "parse registry ref %q", ref)
-	}
-	if !loc.IsRegistry() {
-		return errors.Errorf("snapshot: --output type=registry expects a registry ref, got %q", ref)
-	}
-
-	var resolver *imagetools.Resolver
-	if dockerCli == nil {
-		resolver = imagetools.New(imagetools.Opt{})
-	} else {
-		b, err := builder.New(dockerCli, builder.WithName(builderName))
-		if err != nil {
-			return err
-		}
-		imgOpt, err := b.ImageOpt()
-		if err != nil {
-			return err
-		}
-		resolver = imagetools.New(imgOpt)
-	}
-
-	ingester, err := resolver.IngesterForLocation(ctx, loc)
-	if err != nil {
-		return err
-	}
-	if err := flushStage(ctx, ingester, stage); err != nil {
-		return errors.Wrap(err, "copy snapshot to registry")
-	}
-	rootData, err := content.ReadBlob(ctx, stage, root)
-	if err != nil {
-		return errors.Wrap(err, "read snapshot root")
-	}
-	return resolver.Push(ctx, loc, root, rootData)
 }

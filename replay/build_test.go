@@ -1,6 +1,7 @@
 package replay
 
 import (
+	"context"
 	"testing"
 
 	"github.com/docker/buildx/builder"
@@ -121,13 +122,12 @@ func TestBuildOptionsFromPredicate(t *testing.T) {
 	require.Contains(t, opt.Inputs.NamedContexts, "app")
 	require.Equal(t, "docker-image://alpine:3.18", opt.Inputs.NamedContexts["app"].Path)
 
-	// Recorded attest:* attrs flow through to opt.Attests unchanged so the
-	// replay output carries the same attestation shape as the original.
+	// Replay must not attach fresh attestations that describe the replay
+	// operation rather than the original build.
 	require.Contains(t, opt.Attests, "provenance")
-	require.NotNil(t, opt.Attests["provenance"])
-	require.Equal(t, "mode=max", *opt.Attests["provenance"])
+	require.Nil(t, opt.Attests["provenance"])
 	require.Contains(t, opt.Attests, "sbom")
-	require.Equal(t, "true", *opt.Attests["sbom"])
+	require.Nil(t, opt.Attests["sbom"])
 
 	// Platform should mirror the subject descriptor.
 	require.Len(t, opt.Platforms, 1)
@@ -135,6 +135,44 @@ func TestBuildOptionsFromPredicate(t *testing.T) {
 
 	// In frontend mode, no pin callback is attached.
 	require.Empty(t, opt.Policy)
+}
+
+func TestBuildOptionsFromPredicateRejectsUnsupportedNetworkMode(t *testing.T) {
+	_, err := BuildOptionsFromPredicate(subjectWithPlatform("amd64"), predicateWithAttrs(nil), &BuildRequest{
+		Mode:        BuildModeFrontend,
+		NetworkMode: "host",
+	})
+	require.ErrorContains(t, err, `unsupported replay network mode "host"`)
+}
+
+func TestBuildOptionsFromPredicateRejectsUnwiredExplicitMaterials(t *testing.T) {
+	resolver, err := NewMaterialsResolver([]string{t.TempDir()})
+	require.NoError(t, err)
+
+	for _, mode := range []BuildMode{BuildModeMaterials, BuildModeFrontend} {
+		t.Run(string(mode), func(t *testing.T) {
+			_, err := BuildOptionsFromPredicate(subjectWithPlatform("amd64"), predicateWithAttrs(nil), &BuildRequest{
+				Mode:      mode,
+				Materials: resolver,
+			})
+			require.Error(t, err)
+			var notImplemented *NotImplementedError
+			require.ErrorAs(t, err, &notImplemented)
+		})
+	}
+}
+
+func TestBuildRejectsMultipleSubjectsUntilOutputsAreAggregated(t *testing.T) {
+	req := &BuildRequest{Targets: []Target{
+		{Subject: subjectWithPlatform("amd64"), Predicate: predicateWithAttrs(nil)},
+		{Subject: subjectWithPlatform("arm64"), Predicate: predicateWithAttrs(nil)},
+	}}
+
+	err := Build(context.Background(), nil, "", req)
+	require.Error(t, err)
+	var notImplemented *NotImplementedError
+	require.ErrorAs(t, err, &notImplemented)
+	require.ErrorContains(t, err, "multi-subject replay build output aggregation")
 }
 
 func TestBuildOptionsFromPredicateNoCacheAll(t *testing.T) {
@@ -184,6 +222,11 @@ func TestBuildOptionsFromPredicateUsesConfigSourcePathForGatewayFrontend(t *test
 	require.NoError(t, err)
 	require.Equal(t, "https://github.com/moby/buildkit.git#refs/tags/dockerfile/1.23.0", opt.Inputs.ContextPath)
 	require.Equal(t, "frontend/dockerfile/cmd/dockerfile-frontend/Dockerfile", opt.Inputs.DockerfilePath)
+	require.Equal(t, "gateway.v0", opt.Frontend)
+	require.Equal(t, map[string]string{
+		"source":  "docker/dockerfile-upstream:master",
+		"cmdline": "docker/dockerfile-upstream:master",
+	}, opt.FrontendAttrs)
 }
 
 func TestMaterialsModePlatformWarningMismatch(t *testing.T) {

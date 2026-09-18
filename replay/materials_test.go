@@ -101,6 +101,18 @@ func TestMaterialsResolverOverridesByURI(t *testing.T) {
 	require.NotNil(t, provider)
 }
 
+func TestMaterialsResolverOverrideURIContainingEquals(t *testing.T) {
+	dir := t.TempDir()
+	for _, uri := range []string{
+		"pkg:docker/alpine@3.18?platform=linux%2Famd64",
+		"https://example.com/archive.tgz?token=abc",
+	} {
+		r, err := NewMaterialsResolver([]string{uri + "=" + dir})
+		require.NoError(t, err)
+		require.Equal(t, map[string]string{uri: dir}, r.Overrides())
+	}
+}
+
 func TestMaterialsResolverOverridesByDigest(t *testing.T) {
 	dir := t.TempDir()
 	seedOCILayout(t, dir)
