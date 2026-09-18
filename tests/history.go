@@ -12,6 +12,7 @@ import (
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/util/gitutil"
 	"github.com/docker/buildx/util/gitutil/gittestutil"
+	"github.com/moby/buildkit/identity"
 	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	"github.com/stretchr/testify/require"
@@ -23,6 +24,7 @@ var historyTests = []func(t *testing.T, sb integration.Sandbox){
 	testHistoryExportFinalizeMultiNodeRef,
 	testHistoryExportFinalizeMultiNodeAll,
 	testHistoryInspect,
+	testHistoryLogsError,
 	testHistoryLs,
 	testHistoryRm,
 	testHistoryLsStoppedBuilder,
@@ -111,6 +113,50 @@ func testHistoryInspect(t *testing.T, sb integration.Sandbox) {
 	require.NoError(t, err)
 	require.Equal(t, ref.Ref, rec.Ref)
 	require.NotEmpty(t, rec.Name)
+}
+
+func testHistoryLogsError(t *testing.T, sb integration.Sandbox) {
+	buildName := "history-logs-error-" + identity.NewID()
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", []byte(`FROM scratch
+COPY missing /
+`), 0o600))
+
+	cmd := buildxCmd(sb, withArgs(
+		"build",
+		"--progress=quiet",
+		"--build-arg=BUILDKIT_BUILD_NAME="+buildName,
+		"--output=type=cacheonly",
+		dir,
+	))
+	out, err := cmd.CombinedOutput()
+	require.Error(t, err, string(out))
+
+	cmd = buildxCmd(sb, withArgs("history", "ls", "--filter=status=error", "--format=json"))
+	out, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+
+	var ref string
+	for line := range strings.SplitSeq(strings.TrimSpace(string(out)), "\n") {
+		line = strings.TrimSpace(line)
+		if !strings.HasPrefix(line, "{") {
+			continue
+		}
+		var rec historyLsRecord
+		require.NoError(t, json.Unmarshal([]byte(line), &rec))
+		if rec.Name == buildName {
+			ref = rec.Ref
+			break
+		}
+	}
+	require.NotEmpty(t, ref, "failed build not found in history:\n%s", string(out))
+
+	refParts := strings.Split(ref, "/")
+	require.Len(t, refParts, 3)
+	cmd = buildxCmd(sb, withArgs("history", "logs", refParts[2], "--progress=plain"))
+	out, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(out))
+	require.Contains(t, string(out), "Error: ")
+	require.Contains(t, string(out), "Dockerfile:2")
 }
 
 func testHistoryLs(t *testing.T, sb integration.Sandbox) {
