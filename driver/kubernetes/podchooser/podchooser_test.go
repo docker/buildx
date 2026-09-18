@@ -5,6 +5,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -19,9 +20,13 @@ import (
 type fakePodClient struct {
 	pods []corev1.Pod
 	err  error
+	list func() (*corev1.PodList, error)
 }
 
 func (f *fakePodClient) List(_ context.Context, _ metav1.ListOptions) (*corev1.PodList, error) {
+	if f.list != nil {
+		return f.list()
+	}
 	if f.err != nil {
 		return nil, f.err
 	}
@@ -198,4 +203,100 @@ func TestStickyPodChooserSkipsTerminatingPods(t *testing.T) {
 		_, err := pc.ChoosePod(context.Background())
 		require.EqualError(t, err, "no running buildkit pods found")
 	})
+}
+
+func TestStickyPodChooserAssignments(t *testing.T) {
+	// Expected assignments were generated with serialx/hashring at 22c0c7ab6b1b.
+	// Keys matching pod ring positions also cover strict successors and wraparound.
+	keys := []string{"", "some-context-path-hash", "/workspace/project", "pod-a-0", "pod-b-0", "pod-c-0", "buildkit-0-0", "buildkit-3-0"}
+	for _, tc := range []struct {
+		name string
+		pods []string
+		want []string
+	}{
+		{
+			name: "single pod",
+			pods: []string{"pod-a"},
+			want: []string{"pod-a", "pod-a", "pod-a", "pod-a", "pod-a", "pod-a", "pod-a", "pod-a"},
+		},
+		{
+			name: "multiple pods",
+			pods: []string{"pod-c", "pod-a", "pod-b"},
+			want: []string{"pod-a", "pod-a", "pod-a", "pod-b", "pod-c", "pod-a", "pod-a", "pod-a"},
+		},
+		{
+			name: "removed pod",
+			pods: []string{"pod-a", "pod-c"},
+			want: []string{"pod-a", "pod-a", "pod-a", "pod-c", "pod-c", "pod-a", "pod-a", "pod-a"},
+		},
+		{
+			name: "statefulset pods",
+			pods: []string{"buildkit-0", "buildkit-1", "buildkit-2", "buildkit-3"},
+			want: []string{"buildkit-2", "buildkit-1", "buildkit-0", "buildkit-2", "buildkit-2", "buildkit-0", "buildkit-1", "buildkit-2"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			client := &fakePodClient{}
+			for _, name := range tc.pods {
+				client.pods = append(client.pods, newPod(name, corev1.PodRunning))
+			}
+			pc := &StickyPodChooser{PodClient: client, Deployment: newDeployment()}
+			for i, key := range keys {
+				pc.Key = key
+				pod, err := pc.ChoosePod(context.Background())
+				require.NoError(t, err)
+				require.Equal(t, tc.want[i], pod.Name, "key=%q", key)
+			}
+		})
+	}
+}
+
+func TestStickyPodChooserErrors(t *testing.T) {
+	t.Run("no pods", func(t *testing.T) {
+		pc := &StickyPodChooser{PodClient: &fakePodClient{}, Deployment: newDeployment()}
+		_, err := pc.ChoosePod(context.Background())
+		require.EqualError(t, err, "no running buildkit pods found")
+	})
+	t.Run("list error", func(t *testing.T) {
+		want := errors.New("list failed")
+		pc := &StickyPodChooser{PodClient: &fakePodClient{err: want}, Deployment: newDeployment()}
+		_, err := pc.ChoosePod(context.Background())
+		require.ErrorIs(t, err, want)
+	})
+}
+
+func TestStickyPodChooserRetriesEmptyList(t *testing.T) {
+	listErr := errors.New("retry list failed")
+	for _, tc := range []struct {
+		name string
+		pods []corev1.Pod
+		err  error
+	}{
+		{name: "pod becomes available", pods: []corev1.Pod{newPod("pod-a", corev1.PodRunning)}},
+		{name: "still empty"},
+		{name: "retry fails", err: listErr},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			calls := 0
+			client := &fakePodClient{list: func() (*corev1.PodList, error) {
+				calls++
+				if calls == 1 {
+					return &corev1.PodList{}, nil
+				}
+				return &corev1.PodList{Items: tc.pods}, tc.err
+			}}
+			pc := &StickyPodChooser{PodClient: client, Deployment: newDeployment()}
+			pod, err := pc.ChoosePod(context.Background())
+			require.Equal(t, 2, calls)
+			switch {
+			case tc.err != nil:
+				require.ErrorIs(t, err, tc.err)
+			case len(tc.pods) == 0:
+				require.EqualError(t, err, "no running buildkit pods found")
+			default:
+				require.NoError(t, err)
+				require.Equal(t, "pod-a", pod.Name)
+			}
+		})
+	}
 }
