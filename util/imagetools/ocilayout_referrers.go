@@ -8,7 +8,6 @@ import (
 
 	"github.com/containerd/containerd/v2/core/images"
 	"github.com/containerd/containerd/v2/core/remotes"
-	"github.com/containerd/errdefs"
 	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/util/attestation"
 	"github.com/opencontainers/go-digest"
@@ -79,7 +78,10 @@ func fetchOCILayoutReferrers(ctx context.Context, getDescriptor func(context.Con
 	}
 
 	if len(out) == 0 {
-		return nil, errors.WithStack(errdefs.ErrNotFound)
+		// ReferrersFetcher treats an absent referrer set as a successful empty
+		// result. Match registry behavior so callers can distinguish an
+		// unsigned subject from a failure to read the OCI layout itself.
+		return nil, nil
 	}
 
 	refs := make([]ocispecs.Descriptor, 0, len(out))

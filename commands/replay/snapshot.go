@@ -84,6 +84,9 @@ func runSnapshot(cmd *cobra.Command, dockerCli command.Cli, opts *snapshotOption
 	if len(subjects) == 0 {
 		return errors.New("no subjects matched the --platform filter")
 	}
+	if err := replay.VerifySignatures(ctx, dockerCli, subjects); err != nil {
+		return err
+	}
 
 	targets := make([]replay.Target, 0, len(subjects))
 	for _, s := range subjects {

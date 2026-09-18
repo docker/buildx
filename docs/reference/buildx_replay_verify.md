@@ -36,11 +36,19 @@ the result against the original. Three comparison modes are supported:
 still requires older containerd plumbing and private `linkname`-based linking.
 TODO: experiment with `diffoci` again once those constraints are gone.
 
-On mismatch the command exits with code 8 (`CompareMismatchError`).
+On mismatch the command exits non-zero and reports a `CompareMismatchError`.
+Replay currently uses Buildx's standard command error path rather than mapping
+individual error types to distinct process exit codes.
 
 When `--output` is set, verify emits a SLSA Verification Summary Attestation
 (predicate type `https://slsa.dev/verification_summary/v1`) and — in
 artifact mode — a sidecar diff report.
+
+Before replaying an image, the command verifies any Sigstore signature
+attached to the selected platform's provenance attestation. Unsigned
+provenance remains accepted, while a discovered invalid signature fails the
+command. Signer authorization and a strict signature requirement are not yet
+implemented.
 
 ## Output formats
 

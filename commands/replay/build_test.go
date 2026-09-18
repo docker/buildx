@@ -3,6 +3,7 @@ package replay
 import (
 	"bytes"
 	"testing"
+	"time"
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/replay"
@@ -110,6 +111,27 @@ func TestPrintBuildPlan(t *testing.T) {
 			Digest:   "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
 			Platform: &ocispecs.Platform{OS: "linux", Architecture: "arm64"},
 		},
+		Signature: &replay.SignatureVerification{
+			Verified:               true,
+			Type:                   "Sigstore Bundle",
+			Identity:               "Docker GitHub Builder (docker/buildx@v0.37.1)",
+			CertificateIssuer:      "CN=sigstore-intermediate,O=sigstore.dev",
+			SubjectAlternativeName: "https://github.com/docker/github-builder/.github/workflows/build.yml@refs/heads/main",
+			Issuer:                 "https://token.actions.githubusercontent.com",
+			RunnerEnvironment:      "github-hosted",
+			SourceRepositoryURI:    "https://github.com/docker/buildx",
+			SourceRepositoryRef:    "refs/tags/v0.37.1",
+			BuildSignerURI:         "https://github.com/docker/github-builder/.github/workflows/build.yml@refs/heads/main",
+			Timestamps: []replay.SignatureTimestamp{{
+				Type:      "Tlog",
+				URI:       "https://rekor.sigstore.dev",
+				Timestamp: time.Date(2026, time.September, 18, 12, 0, 0, 0, time.UTC),
+			}, {
+				Type:      "TimestampAuthority",
+				URI:       "https://timestamp.sigstore.dev/api/v1/timestamp",
+				Timestamp: time.Date(2026, time.September, 18, 12, 0, 1, 0, time.UTC),
+			}},
+		},
 		BuildConfig: replay.BuildPlanConfig{
 			Frontend:  "gateway.v0",
 			Context:   "https://github.com/docker/buildx.git#refs/tags/v0.37.1",
@@ -131,8 +153,10 @@ func TestPrintBuildPlan(t *testing.T) {
 	require.Equal(t, `Replay plan
 
 Subject 1/1
-  Platform:    linux/arm64
-  Digest:      sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+  Platform:  linux/arm64
+  Digest:    sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa
+
+Build configuration
   Frontend:    gateway.v0
   Context:     https://github.com/docker/buildx.git#refs/tags/v0.37.1
   Dockerfile:  Dockerfile
@@ -140,6 +164,18 @@ Subject 1/1
   Build args:  ALPHA=first
                ZED=last
   Secrets:     [GIT_AUTH_TOKEN (optional)]
+
+Sigstore Bundle
+  Verified signer:       Docker GitHub Builder (docker/buildx@v0.37.1)
+  Signer identity:       https://github.com/docker/github-builder/.github/workflows/build.yml@refs/heads/main
+  Certificate issuer:    CN=sigstore-intermediate,O=sigstore.dev
+  OIDC issuer:           https://token.actions.githubusercontent.com
+  Runner environment:    github-hosted
+  Source repository:     https://github.com/docker/buildx
+  Source ref:            refs/tags/v0.37.1
+    TYPE                 TIME                  SOURCE
+    Transparency log     2026-09-18T12:00:00Z  https://rekor.sigstore.dev
+    Timestamp authority  2026-09-18T12:00:01Z  https://timestamp.sigstore.dev/api/v1/timestamp
 
 Materials (1)
   image [linux/amd64]  pkg:docker/golang@1.26-alpine3.23

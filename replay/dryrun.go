@@ -34,6 +34,9 @@ type BuildPlan struct {
 type SubjectBuildPlan struct {
 	// Descriptor is the subject descriptor (digest + mediaType + size).
 	Descriptor ocispecs.Descriptor `json:"descriptor"`
+	// Signature describes the verified signer of a standalone Sigstore bundle
+	// or image-attached provenance. It is absent for unsigned provenance.
+	Signature *SignatureVerification `json:"signature,omitempty"`
 	// BuildConfig summarises the solve parameters replay would use.
 	BuildConfig BuildPlanConfig `json:"buildConfig"`
 	// Materials lists the resolved provenance materials.
@@ -349,6 +352,7 @@ func subjectBuildPlan(s *Subject, pred *Predicate, req *BuildRequest) SubjectBui
 
 	plan := SubjectBuildPlan{
 		Descriptor:  s.Descriptor,
+		Signature:   s.Signature(),
 		BuildConfig: cfg,
 		Materials:   mats,
 	}

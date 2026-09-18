@@ -9,13 +9,20 @@ import (
 	"path/filepath"
 	"sort"
 	"testing"
+	"time"
 
 	"github.com/containerd/containerd/v2/core/content"
 	contentlocal "github.com/containerd/containerd/v2/plugins/content/local"
 	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/util/attestation"
+	"github.com/moby/buildkit/util/contentutil"
+	policyverifier "github.com/moby/policy-helpers"
+	policyimage "github.com/moby/policy-helpers/image"
+	policytypes "github.com/moby/policy-helpers/types"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
+	"github.com/sigstore/sigstore-go/pkg/fulcio/certificate"
 	"github.com/stretchr/testify/require"
 )
 
@@ -173,6 +180,190 @@ func TestSubjectPredicateRejectsSigstoreBundle(t *testing.T) {
 	require.Equal(t, "sigstore-bundle", sig.Envelope)
 }
 
+func TestVerifySigstoreBundle(t *testing.T) {
+	artifactDigest := digest.FromString("signed artifact")
+	statement := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject": []any{map[string]any{
+			"name": "buildx",
+			"digest": map[string]string{
+				artifactDigest.Algorithm().String(): artifactDigest.Encoded(),
+			},
+		}},
+		"predicate": map[string]any{},
+	}
+	statementBytes, err := json.Marshal(statement)
+	require.NoError(t, err)
+	bundle := map[string]any{
+		"mediaType":            "application/vnd.dev.sigstore.bundle.v0.3+json",
+		"verificationMaterial": map[string]any{"tlogEntries": []any{}},
+		"dsseEnvelope": map[string]any{
+			"payload":     base64.StdEncoding.EncodeToString(statementBytes),
+			"payloadType": "application/vnd.in-toto+json",
+			"signatures":  []any{map[string]string{"sig": "verified-by-test-double"}},
+		},
+	}
+	bundleBytes, err := json.Marshal(bundle)
+	require.NoError(t, err)
+
+	verifiedAt := time.Date(2026, time.September, 18, 12, 0, 0, 0, time.UTC)
+	trustRootUpdatedAt := verifiedAt.Add(-time.Hour)
+	var verifierCalled bool
+	payload, signature, isBundle, err := verifySigstoreBundle(context.Background(), bundleBytes, "buildx.sigstore.json", func(ctx context.Context, gotDigest digest.Digest, gotBundle []byte) (*policytypes.SignatureInfo, error) {
+		verifierCalled = true
+		require.Equal(t, artifactDigest, gotDigest)
+		require.Equal(t, bundleBytes, gotBundle)
+		return &policytypes.SignatureInfo{
+			Kind:          policytypes.KindSelfSignedGithubRepo,
+			SignatureType: policytypes.SignatureBundleV03,
+			Signer: &certificate.Summary{
+				CertificateIssuer:      "CN=sigstore-intermediate,O=sigstore.dev",
+				SubjectAlternativeName: "https://github.com/docker/buildx/.github/workflows/release.yml@refs/tags/v0.37.1",
+				Extensions: certificate.Extensions{
+					Issuer:              "https://token.actions.githubusercontent.com",
+					SourceRepositoryURI: "https://github.com/docker/buildx",
+					SourceRepositoryRef: "refs/tags/v0.37.1",
+					BuildSignerURI:      "https://github.com/docker/buildx/.github/workflows/release.yml",
+					RunnerEnvironment:   "github-hosted",
+				},
+			},
+			Timestamps: []policytypes.TimestampVerificationResult{{
+				Type:      "Tlog",
+				URI:       "https://rekor.sigstore.dev",
+				Timestamp: verifiedAt,
+			}},
+			TrustRootStatus: policytypes.TrustRootStatus{LastUpdated: &trustRootUpdatedAt},
+		}, nil
+	})
+	require.NoError(t, err)
+	require.True(t, verifierCalled)
+	require.True(t, isBundle)
+	require.JSONEq(t, string(statementBytes), string(payload))
+	require.NotNil(t, signature)
+	require.True(t, signature.Verified)
+	require.Equal(t, "Sigstore Bundle", signature.Type)
+	require.Equal(t, "GitHub Self-Signed (docker/buildx)", signature.Identity)
+	require.Equal(t, "refs/tags/v0.37.1", signature.SourceRepositoryRef)
+	require.Equal(t, verifiedAt, signature.Timestamps[0].Timestamp)
+	require.Equal(t, trustRootUpdatedAt, *signature.TrustRootLastUpdated)
+
+	payload, signature, isBundle, err = verifySigstoreBundle(context.Background(), bundleBytes, "buildx.sigstore.json", func(context.Context, digest.Digest, []byte) (*policytypes.SignatureInfo, error) {
+		return nil, errors.New("invalid signature")
+	})
+	require.ErrorContains(t, err, "verify sigstore bundle")
+	require.ErrorContains(t, err, "invalid signature")
+	require.True(t, isBundle)
+	require.Nil(t, payload)
+	require.Nil(t, signature)
+
+	payload, signature, isBundle, err = verifySigstoreBundle(context.Background(), bundleBytes, "buildx.sigstore.json", func(context.Context, digest.Digest, []byte) (*policytypes.SignatureInfo, error) {
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "signature verifier returned no verification result")
+	require.True(t, isBundle)
+	require.Nil(t, payload)
+	require.Nil(t, signature)
+
+	missingSubjectStatement, err := json.Marshal(map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	})
+	require.NoError(t, err)
+	bundle["dsseEnvelope"].(map[string]any)["payload"] = base64.StdEncoding.EncodeToString(missingSubjectStatement)
+	missingSubjectBundle, err := json.Marshal(bundle)
+	require.NoError(t, err)
+	payload, signature, isBundle, err = verifySigstoreBundle(context.Background(), missingSubjectBundle, "buildx.sigstore.json", func(context.Context, digest.Digest, []byte) (*policytypes.SignatureInfo, error) {
+		require.Fail(t, "verifier must not be called without a subject digest")
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "no verifiable subject digest")
+	require.True(t, isBundle)
+	require.Nil(t, payload)
+	require.Nil(t, signature)
+}
+
+func TestVerifyImageSignature(t *testing.T) {
+	platform := &ocispecs.Platform{OS: "linux", Architecture: "amd64"}
+	root := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Digest:    digest.FromString("image index"),
+	}
+	subject := &Subject{
+		Descriptor: ocispecs.Descriptor{
+			MediaType: ocispecs.MediaTypeImageManifest,
+			Digest:    digest.FromString("image manifest"),
+			Platform:  platform,
+		},
+		Provider: &imageSubjectProvider{Provider: contentutil.NewBuffer()},
+		inputRef: "docker/buildx-bin:0.37.1",
+		kind:     subjectKindImage,
+		attestManifest: ocispecs.Descriptor{
+			Digest: digest.FromString("attestation manifest"),
+		},
+		rootDescriptor: root,
+	}
+	verifiedAt := time.Date(2026, time.September, 18, 12, 0, 0, 0, time.UTC)
+	err := subject.verifyImageSignature(context.Background(), func(_ context.Context, provider policyimage.ReferrersProvider, gotRoot ocispecs.Descriptor, gotPlatform *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		require.Same(t, subject.Provider, provider)
+		require.Equal(t, root, gotRoot)
+		require.Equal(t, platform, gotPlatform)
+		return &policytypes.SignatureInfo{
+			Kind:          policytypes.KindDockerGithubBuilder,
+			SignatureType: policytypes.SignatureBundleV03,
+			Signer: &certificate.Summary{
+				CertificateIssuer: "CN=sigstore-intermediate,O=sigstore.dev",
+				Extensions: certificate.Extensions{
+					SourceRepositoryURI: "https://github.com/docker/buildx",
+					SourceRepositoryRef: "refs/tags/v0.37.1",
+				},
+			},
+			Timestamps: []policytypes.TimestampVerificationResult{{
+				Type:      "Tlog",
+				Timestamp: verifiedAt,
+			}},
+		}, nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, subject.Signature())
+	require.True(t, subject.Signature().Verified)
+	require.Equal(t, "Sigstore Bundle", subject.Signature().Type)
+	require.Equal(t, "refs/tags/v0.37.1", subject.Signature().SourceRepositoryRef)
+	require.Equal(t, verifiedAt, subject.Signature().Timestamps[0].Timestamp)
+
+	unsigned := *subject
+	unsigned.signature = nil
+	err = unsigned.verifyImageSignature(context.Background(), func(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		return nil, errors.WithStack(&policyverifier.NoSigChainError{Target: root.Digest, HasAttestation: true})
+	})
+	require.NoError(t, err)
+	require.Nil(t, unsigned.Signature())
+
+	invalid := *subject
+	invalid.signature = nil
+	err = invalid.verifyImageSignature(context.Background(), func(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		return nil, errors.New("invalid image signature")
+	})
+	require.ErrorContains(t, err, "verify image signature")
+	require.ErrorContains(t, err, "invalid image signature")
+	require.Nil(t, invalid.Signature())
+
+	second := *subject
+	second.signature = nil
+	second.Descriptor = subject.Descriptor
+	second.Descriptor.Platform = &ocispecs.Platform{OS: "linux", Architecture: "arm64"}
+	var verifiedPlatforms []string
+	err = verifySubjectSignatures(context.Background(), []*Subject{subject, &second}, func(_ context.Context, _ policyimage.ReferrersProvider, _ ocispecs.Descriptor, platform *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		verifiedPlatforms = append(verifiedPlatforms, platform.Architecture)
+		return &policytypes.SignatureInfo{Kind: policytypes.KindUntrusted, SignatureType: policytypes.SignatureBundleV03}, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"amd64", "arm64"}, verifiedPlatforms)
+	require.NotNil(t, second.Signature())
+}
+
 // TestSubjectPredicateAcceptsUnsignedDSSE asserts that a DSSE envelope with
 // an empty (or missing) signatures array is still accepted — the rejection
 // is gated on actual signatures being present.
@@ -306,13 +497,17 @@ func TestLoadSubjectsFanoutSkipsAttestation(t *testing.T) {
 		Digest:    attestDgst,
 		Size:      attestSize,
 		Annotations: map[string]string{
+			attestation.DockerAnnotationReferenceType:   attestation.DockerAnnotationReferenceTypeDefault,
 			attestation.DockerAnnotationReferenceDigest: imgDesc.Digest.String(),
 		},
 	}
+	duplicateAttestDesc := attestDesc
+	duplicateAttestDesc.Digest = digest.FromString("later duplicate attestation")
+	duplicateAttestDesc.Size = 1
 
 	idx := ocispecs.Index{
 		MediaType: ocispecs.MediaTypeImageIndex,
-		Manifests: []ocispecs.Descriptor{imgDesc, attestDesc},
+		Manifests: []ocispecs.Descriptor{imgDesc, attestDesc, duplicateAttestDesc},
 	}
 	idx.SchemaVersion = 2
 	idxDt, err := json.Marshal(idx)
@@ -331,6 +526,12 @@ func TestLoadSubjectsFanoutSkipsAttestation(t *testing.T) {
 	require.Len(t, subjects, 1, "attestation manifest should not expand to a subject")
 	require.Equal(t, imgDesc.Digest, subjects[0].Descriptor.Digest)
 	require.Equal(t, attestDgst, subjects[0].AttestationManifest().Digest, "subject should record its attestation manifest")
+
+	untyped := attestDesc
+	untyped.Annotations = map[string]string{
+		attestation.DockerAnnotationReferenceDigest: imgDesc.Digest.String(),
+	}
+	require.Empty(t, attestationReferenceDigest(untyped), "a digest annotation alone must not select an attestation manifest")
 }
 
 // putBlob writes raw bytes to the content store and returns the digest/size.

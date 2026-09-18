@@ -7,6 +7,7 @@ import (
 	"sort"
 	"strings"
 	"text/tabwriter"
+	"time"
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/replay"
@@ -111,6 +112,9 @@ func runBuild(cmd *cobra.Command, dockerCli command.Cli, opts *buildOptions, inp
 	if len(subjects) == 0 {
 		return errors.New("no subjects matched the --platform filter")
 	}
+	if err := replay.VerifySignatures(ctx, dockerCli, subjects); err != nil {
+		return err
+	}
 
 	targets := make([]replay.Target, 0, len(subjects))
 	for _, s := range subjects {
@@ -171,6 +175,9 @@ func printBuildPlan(out io.Writer, plan *replay.BuildPlan) error {
 		if err := writePlanField(tw, "Digest", subject.Descriptor.Digest.String()); err != nil {
 			return err
 		}
+		if _, err := fmt.Fprintln(tw, "\nBuild configuration"); err != nil {
+			return errors.WithStack(err)
+		}
 		cfg := subject.BuildConfig
 		for _, field := range []struct{ name, value string }{
 			{"Frontend", cfg.Frontend},
@@ -199,6 +206,9 @@ func printBuildPlan(out io.Writer, plan *replay.BuildPlan) error {
 				return err
 			}
 		}
+		if err := writePlanSignature(tw, subject.Signature); err != nil {
+			return err
+		}
 		if _, err := fmt.Fprintf(tw, "\nMaterials (%d)\n", len(subject.Materials)); err != nil {
 			return errors.WithStack(err)
 		}
@@ -218,6 +228,57 @@ func printBuildPlan(out io.Writer, plan *replay.BuildPlan) error {
 		}
 	}
 	return errors.WithStack(tw.Flush())
+}
+
+func writePlanSignature(w io.Writer, signature *replay.SignatureVerification) error {
+	if signature == nil {
+		return nil
+	}
+	if _, err := fmt.Fprintf(w, "\n%s\n", signature.Type); err != nil {
+		return errors.WithStack(err)
+	}
+	for _, field := range []struct{ name, value string }{
+		{"Verified signer", signature.Identity},
+		{"Signer identity", signature.SubjectAlternativeName},
+		{"Certificate issuer", signature.CertificateIssuer},
+		{"OIDC issuer", signature.Issuer},
+		{"Runner environment", signature.RunnerEnvironment},
+		{"Source repository", signature.SourceRepositoryURI},
+		{"Source ref", signature.SourceRepositoryRef},
+	} {
+		if err := writePlanField(w, field.name, field.value); err != nil {
+			return err
+		}
+	}
+	if signature.BuildSignerURI != signature.SubjectAlternativeName {
+		if err := writePlanField(w, "Build signer", signature.BuildSignerURI); err != nil {
+			return err
+		}
+	}
+	if len(signature.Timestamps) > 0 {
+		if _, err := fmt.Fprintln(w, "    TYPE\tTIME\tSOURCE"); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	for _, timestamp := range signature.Timestamps {
+		typeName := timestamp.Type
+		switch timestamp.Type {
+		case "Tlog":
+			typeName = "Transparency log"
+		case "TimestampAuthority":
+			typeName = "Timestamp authority"
+		}
+		value := timestamp.Timestamp.Format(time.RFC3339)
+		if _, err := fmt.Fprintf(w, "    %s\t%s\t%s\n", typeName, value, timestamp.URI); err != nil {
+			return errors.WithStack(err)
+		}
+	}
+	if signature.TrustRootWarning != "" {
+		if err := writePlanField(w, "Trust root warning", signature.TrustRootWarning); err != nil {
+			return err
+		}
+	}
+	return nil
 }
 
 func writePlanField(w io.Writer, name, value string) error {

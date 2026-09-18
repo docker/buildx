@@ -7,11 +7,15 @@ import (
 	"encoding/json"
 	"os"
 	"strings"
+	"time"
 
 	"github.com/containerd/containerd/v2/core/content"
 	"github.com/containerd/containerd/v2/core/images"
+	"github.com/containerd/containerd/v2/core/remotes"
 	"github.com/distribution/reference"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/policy"
+	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli/cli/command"
 	slsa02 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v0.2"
@@ -19,6 +23,9 @@ import (
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/attestation"
 	"github.com/moby/buildkit/util/contentutil"
+	policyverifier "github.com/moby/policy-helpers"
+	policyimage "github.com/moby/policy-helpers/image"
+	policytypes "github.com/moby/policy-helpers/types"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -64,11 +71,114 @@ type Subject struct {
 	// predicateType caches the predicate type URI for attestation-file
 	// subjects so Predicate() can reject non-SLSA-v1 without re-reading.
 	predicateType string
+	// rootDescriptor is the image index from which this manifest subject was
+	// selected. Image signature verification binds the index, selected
+	// platform, attestation manifest, and its signature referrer together.
+	rootDescriptor ocispecs.Descriptor
+	// signature is populated only after a Sigstore bundle has passed
+	// certificate, transparency-log, timestamp, and payload verification.
+	signature *SignatureVerification
+}
+
+// SignatureVerification describes a cryptographically verified Sigstore
+// bundle. Identity is informational: replay accepts unsigned provenance too,
+// so verification does not imply that a separate authorization policy has
+// approved this signer.
+type SignatureVerification struct {
+	Verified               bool                 `json:"verified"`
+	Type                   string               `json:"type"`
+	Identity               string               `json:"identity"`
+	CertificateIssuer      string               `json:"certificateIssuer,omitempty"`
+	SubjectAlternativeName string               `json:"subjectAlternativeName,omitempty"`
+	Issuer                 string               `json:"issuer,omitempty"`
+	SourceRepositoryURI    string               `json:"sourceRepositoryURI,omitempty"`
+	SourceRepositoryRef    string               `json:"sourceRepositoryRef,omitempty"`
+	BuildSignerURI         string               `json:"buildSignerURI,omitempty"`
+	RunnerEnvironment      string               `json:"runnerEnvironment,omitempty"`
+	Timestamps             []SignatureTimestamp `json:"timestamps,omitempty"`
+	TrustRootLastUpdated   *time.Time           `json:"trustRootLastUpdated,omitempty"`
+	TrustRootWarning       string               `json:"trustRootWarning,omitempty"`
+}
+
+// SignatureTimestamp is one verified observer timestamp from a Sigstore
+// bundle, typically a transparency-log or timestamp-authority observation.
+type SignatureTimestamp struct {
+	Type      string    `json:"type"`
+	URI       string    `json:"uri,omitempty"`
+	Timestamp time.Time `json:"timestamp"`
 }
 
 // IsAttestationFile reports whether this subject was loaded from a local
 // attestation file (no produced artifact is available).
 func (s *Subject) IsAttestationFile() bool { return s != nil && s.kind == subjectKindAttestationFile }
+
+// Signature returns verified signature metadata, or nil for unsigned
+// provenance and images.
+func (s *Subject) Signature() *SignatureVerification {
+	if s == nil {
+		return nil
+	}
+	return s.signature
+}
+
+// VerifySignatures verifies signatures attached to the selected image
+// subjects' provenance attestations. One verifier provider is shared across
+// all platforms so its trust-root state is initialized only once. Unsigned
+// images remain valid replay inputs; a published but invalid signature fails
+// closed. Standalone Sigstore bundles are already verified while loading.
+func VerifySignatures(ctx context.Context, dockerCli command.Cli, subjects []*Subject) error {
+	var candidates []*Subject
+	for _, s := range subjects {
+		if s != nil && s.kind == subjectKindImage && s.rootDescriptor.MediaType == ocispecs.MediaTypeImageIndex && s.attestManifest.Digest != "" {
+			candidates = append(candidates, s)
+		}
+	}
+	if len(candidates) == 0 {
+		return nil
+	}
+	if dockerCli == nil {
+		return errors.New("docker CLI is required to verify image signatures")
+	}
+	getVerifier := policy.SignatureVerifier(confutil.NewConfig(dockerCli))
+	return verifySubjectSignatures(ctx, candidates, func(ctx context.Context, provider policyimage.ReferrersProvider, root ocispecs.Descriptor, platform *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		verifier, err := getVerifier()
+		if err != nil {
+			return nil, err
+		}
+		return verifier.VerifyImage(ctx, provider, root, platform)
+	})
+}
+
+type imageSignatureVerifier func(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error)
+
+func verifySubjectSignatures(ctx context.Context, subjects []*Subject, verify imageSignatureVerifier) error {
+	for _, s := range subjects {
+		if err := s.verifyImageSignature(ctx, verify); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func (s *Subject) verifyImageSignature(ctx context.Context, verify imageSignatureVerifier) error {
+	provider, ok := s.Provider.(policyimage.ReferrersProvider)
+	if !ok {
+		return errors.Errorf("image provider for %s does not support referrers", s.inputRef)
+	}
+	si, err := verify(ctx, provider, s.rootDescriptor, s.Descriptor.Platform)
+	if err != nil {
+		var noSignature *policyverifier.NoSigChainError
+		if errors.As(err, &noSignature) {
+			return nil
+		}
+		return errors.Wrapf(err, "verify image signature for %s", s.inputRef)
+	}
+	if si == nil {
+		return errors.Errorf("signature verifier returned no verification result for %s", s.inputRef)
+	}
+	s.signature = signatureVerification(si)
+	return nil
+}
 
 // InputRef returns the user-supplied input string that produced this
 // subject. Used for diagnostics.
@@ -116,7 +226,7 @@ func LoadSubjects(ctx context.Context, dockerCli command.Cli, builderName, input
 		if fi.IsDir() {
 			return loadImageSubjects(ctx, dockerCli, builderName, ociLayoutPrefix+trimmed)
 		}
-		return loadAttestationFileSubject(trimmed)
+		return loadAttestationFileSubject(ctx, dockerCli, trimmed)
 	}
 
 	// Fall through: treat as a remote image reference. Validation happens
@@ -128,7 +238,7 @@ func LoadSubjects(ctx context.Context, dockerCli command.Cli, builderName, input
 // Statement JSON, DSSE envelope, or an intoto.jsonl line-per-envelope file)
 // and synthesizes a Subject whose Descriptor points at the predicate blob
 // inside an in-memory content.Provider.
-func loadAttestationFileSubject(path string) ([]*Subject, error) {
+func loadAttestationFileSubject(ctx context.Context, dockerCli command.Cli, path string) ([]*Subject, error) {
 	dt, err := os.ReadFile(path)
 	if err != nil {
 		return nil, errors.WithStack(err)
@@ -136,6 +246,22 @@ func loadAttestationFileSubject(path string) ([]*Subject, error) {
 	dt = bytes.TrimSpace(dt)
 	if len(dt) == 0 {
 		return nil, errors.Errorf("attestation file %s is empty", path)
+	}
+
+	var verify artifactBundleVerifier
+	if dockerCli != nil {
+		getVerifier := policy.SignatureVerifier(confutil.NewConfig(dockerCli))
+		verify = func(ctx context.Context, dgst digest.Digest, bundle []byte) (*policytypes.SignatureInfo, error) {
+			verifier, err := getVerifier()
+			if err != nil {
+				return nil, err
+			}
+			return verifier.VerifyArtifact(ctx, dgst, bundle)
+		}
+	}
+	dt, signature, isBundle, err := verifySigstoreBundle(ctx, dt, path, verify)
+	if err != nil {
+		return nil, err
 	}
 
 	// Heuristic: .intoto.jsonl is line-delimited JSON Statements. Pick the
@@ -148,6 +274,7 @@ func loadAttestationFileSubject(path string) ([]*Subject, error) {
 			}
 			s, err := subjectFromAttestationBytes(line, path)
 			if err == nil {
+				s.signature = signature
 				return []*Subject{s}, nil
 			}
 		}
@@ -158,7 +285,104 @@ func loadAttestationFileSubject(path string) ([]*Subject, error) {
 	if err != nil {
 		return nil, err
 	}
+	if isBundle {
+		s.signature = signature
+	}
 	return []*Subject{s}, nil
+}
+
+type artifactBundleVerifier func(context.Context, digest.Digest, []byte) (*policytypes.SignatureInfo, error)
+
+func verifySigstoreBundle(ctx context.Context, dt []byte, inputRef string, verify artifactBundleVerifier) ([]byte, *SignatureVerification, bool, error) {
+	var bundle struct {
+		MediaType            string          `json:"mediaType"`
+		VerificationMaterial json.RawMessage `json:"verificationMaterial,omitempty"`
+		DSSEEnvelope         struct {
+			Payload string `json:"payload"`
+		} `json:"dsseEnvelope"`
+		MessageSignature json.RawMessage `json:"messageSignature,omitempty"`
+	}
+	if err := json.Unmarshal(dt, &bundle); err != nil {
+		return dt, nil, false, nil
+	}
+	isBundle := strings.HasPrefix(bundle.MediaType, "application/vnd.dev.sigstore.bundle.") ||
+		(len(bundle.VerificationMaterial) > 0 && (bundle.DSSEEnvelope.Payload != "" || len(bundle.MessageSignature) > 0))
+	if !isBundle {
+		return dt, nil, false, nil
+	}
+	if verify == nil {
+		return nil, nil, true, ErrSignatureVerificationRequired(inputRef, "sigstore-bundle")
+	}
+	if bundle.DSSEEnvelope.Payload == "" {
+		return nil, nil, true, errors.Errorf("sigstore bundle %s does not contain a DSSE provenance envelope", inputRef)
+	}
+	payload, err := decodeDSSEPayload(bundle.DSSEEnvelope.Payload)
+	if err != nil {
+		return nil, nil, true, errors.Wrap(err, "decode sigstore DSSE payload")
+	}
+	var stmt struct {
+		Subject []struct {
+			Digest map[string]string `json:"digest"`
+		} `json:"subject"`
+	}
+	if err := json.Unmarshal(payload, &stmt); err != nil {
+		return nil, nil, true, errors.Wrap(err, "parse sigstore in-toto statement")
+	}
+	var lastErr error
+	for _, subject := range stmt.Subject {
+		dgst := preferredDigest(subject.Digest)
+		if dgst == "" {
+			continue
+		}
+		if err := dgst.Validate(); err != nil {
+			lastErr = errors.WithStack(err)
+			continue
+		}
+		si, err := verify(ctx, dgst, dt)
+		if err != nil {
+			lastErr = err
+			continue
+		}
+		if si == nil {
+			lastErr = errors.New("signature verifier returned no verification result")
+			continue
+		}
+		return payload, signatureVerification(si), true, nil
+	}
+	if lastErr != nil {
+		return nil, nil, true, errors.Wrap(lastErr, "verify sigstore bundle")
+	}
+	return nil, nil, true, errors.Errorf("sigstore bundle %s has no verifiable subject digest", inputRef)
+}
+
+func signatureVerification(si *policytypes.SignatureInfo) *SignatureVerification {
+	if si == nil {
+		return nil
+	}
+	out := &SignatureVerification{
+		Verified:             true,
+		Type:                 si.SignatureType.String(),
+		Identity:             si.Name(),
+		TrustRootLastUpdated: si.TrustRootStatus.LastUpdated,
+		TrustRootWarning:     si.TrustRootStatus.Error,
+	}
+	if si.Signer != nil {
+		out.CertificateIssuer = si.Signer.CertificateIssuer
+		out.SubjectAlternativeName = si.Signer.SubjectAlternativeName
+		out.Issuer = si.Signer.Issuer
+		out.SourceRepositoryURI = si.Signer.SourceRepositoryURI
+		out.SourceRepositoryRef = si.Signer.SourceRepositoryRef
+		out.BuildSignerURI = si.Signer.BuildSignerURI
+		out.RunnerEnvironment = si.Signer.RunnerEnvironment
+	}
+	for _, ts := range si.Timestamps {
+		out.Timestamps = append(out.Timestamps, SignatureTimestamp{
+			Type:      ts.Type,
+			URI:       ts.URI,
+			Timestamp: ts.Timestamp,
+		})
+	}
+	return out
 }
 
 // subjectFromAttestationBytes parses a single in-toto Statement (or DSSE
@@ -166,8 +390,8 @@ func loadAttestationFileSubject(path string) ([]*Subject, error) {
 // predicate bytes inside an in-memory content.Provider. Signed DSSE
 // envelopes or Sigstore bundles are rejected with
 // SignatureVerificationRequiredError — replay never silently accepts a
-// signed attestation without a trust anchor. Full sigstore/cosign
-// verification is tracked as a follow-up.
+// signed attestation without a trust anchor. Standalone Sigstore bundles are
+// verified and unwrapped by loadAttestationFileSubject before reaching here.
 func subjectFromAttestationBytes(dt []byte, inputRef string) (*Subject, error) {
 	// Sigstore bundle detection: a bundle carries mediaType
 	// "application/vnd.dev.sigstore.bundle.v0.3+json" (or a v0.X variant)
@@ -199,8 +423,8 @@ func subjectFromAttestationBytes(dt []byte, inputRef string) (*Subject, error) {
 	}
 	if err := json.Unmarshal(dt, &env); err == nil && env.Payload != "" {
 		// A signed DSSE envelope carries at least one non-empty signature.
-		// Reject it — replay has no trust anchor. Full sigstore/cosign
-		// signature verification is not implemented.
+		// Reject a bare signed envelope: unlike a Sigstore bundle, it carries
+		// no verification material from which replay can establish trust.
 		for _, sig := range env.Signatures {
 			if sig.Sig != "" {
 				return nil, ErrSignatureVerificationRequired(inputRef, "dsse")
@@ -304,9 +528,31 @@ func loadImageSubjects(ctx context.Context, dockerCli command.Cli, builderName, 
 	if err != nil {
 		return nil, err
 	}
-	provider := contentutil.FromFetcher(fetcher)
+	loc, err := imagetools.ParseLocation(input)
+	if err != nil {
+		return nil, err
+	}
+	provider := &imageSubjectProvider{
+		Provider: contentutil.FromFetcher(fetcher),
+		resolver: resolver,
+		location: loc,
+	}
 
 	return fanOutSubjects(ctx, provider, desc, input)
+}
+
+// imageSubjectProvider combines the ordinary content provider used to read
+// manifests and blobs with imagetools' registry/OCI-layout referrer lookup.
+// policy-helpers can therefore verify the exact signature chain without a
+// second resolver implementation in replay.
+type imageSubjectProvider struct {
+	content.Provider
+	resolver *imagetools.Resolver
+	location *imagetools.Location
+}
+
+func (p *imageSubjectProvider) FetchReferrers(ctx context.Context, dgst digest.Digest, opts ...remotes.FetchReferrersOpt) ([]ocispecs.Descriptor, error) {
+	return p.resolver.FetchReferrers(ctx, p.location, dgst, opts...)
 }
 
 // fanOutSubjects walks an OCI index (if the root descriptor is an index) and
@@ -341,7 +587,9 @@ func fanOutSubjects(ctx context.Context, provider content.Provider, root ocispec
 		for _, m := range idx.Manifests {
 			if ref := attestationReferenceDigest(m); ref != "" {
 				if d, err := digest.Parse(ref); err == nil {
-					attestFor[d] = m
+					if _, ok := attestFor[d]; !ok {
+						attestFor[d] = m
+					}
 					continue
 				}
 			}
@@ -351,10 +599,11 @@ func fanOutSubjects(ctx context.Context, provider content.Provider, root ocispec
 		out := make([]*Subject, 0, len(imageManifests))
 		for _, m := range imageManifests {
 			s := &Subject{
-				Descriptor: m,
-				Provider:   provider,
-				inputRef:   inputRef,
-				kind:       subjectKindImage,
+				Descriptor:     m,
+				Provider:       provider,
+				inputRef:       inputRef,
+				kind:           subjectKindImage,
+				rootDescriptor: root,
 			}
 			if att, ok := attestFor[m.Digest]; ok {
 				s.attestManifest = att
@@ -367,32 +616,26 @@ func fanOutSubjects(ctx context.Context, provider content.Provider, root ocispec
 		return out, nil
 	case ocispecs.MediaTypeImageManifest, images.MediaTypeDockerSchema2Manifest:
 		return []*Subject{{
-			Descriptor: root,
-			Provider:   provider,
-			inputRef:   inputRef,
-			kind:       subjectKindImage,
+			Descriptor:     root,
+			Provider:       provider,
+			inputRef:       inputRef,
+			kind:           subjectKindImage,
+			rootDescriptor: root,
 		}}, nil
 	default:
 		return nil, errors.Errorf("unsupported root media type %q", root.MediaType)
 	}
 }
 
-// attestationReferenceDigest returns the subject digest recorded on an
-// attestation manifest's descriptor annotations, or "" if not present.
-// Keep in sync with util/imagetools/loader.go annotationReferences list.
+// attestationReferenceDigest returns the subject digest recorded on a BuildKit
+// attestation manifest, or "" for an unrelated descriptor. Selection exactly
+// matches policy-helpers' signature-chain resolver: correct reference type,
+// correct digest, and first matching descriptor wins in index order.
 func attestationReferenceDigest(d ocispecs.Descriptor) string {
-	if d.Annotations == nil {
+	if d.Annotations == nil || d.Annotations[attestation.DockerAnnotationReferenceType] != attestation.DockerAnnotationReferenceTypeDefault {
 		return ""
 	}
-	for _, k := range []string{
-		attestation.DockerAnnotationReferenceDigest,
-		"vnd.docker.reference.digest",
-	} {
-		if v, ok := d.Annotations[k]; ok && v != "" {
-			return v
-		}
-	}
-	return ""
+	return d.Annotations[attestation.DockerAnnotationReferenceDigest]
 }
 
 // Predicate locates and parses the SLSA v1 provenance predicate attached to

@@ -52,7 +52,17 @@ Snapshot-backed `--materials` injection is not implemented yet. Explicit
 material stores and overrides are rejected instead of silently falling back to
 network sources.
 
-## Exit codes
+## Signature verification
 
-`replay build` maps typed errors to stable exit codes so CI tooling can
-react deterministically. See `replay` documentation for the full list.
+For image subjects, replay discovers Sigstore signatures attached to the
+selected platform's provenance attestation through OCI referrers. Standalone
+Sigstore bundle files are also accepted. Replay verifies the certificate,
+transparency-log inclusion, observer timestamp, and signed payload before using
+the provenance. Pretty and JSON dry-run output report the verified identity.
+
+Unsigned provenance remains accepted. If a published signature is discovered
+but is invalid, replay fails instead of silently treating it as unsigned.
+There is not yet a `--require-signature` option or signer-authorization policy.
+For a standalone bundle, verification authenticates the signed statement and
+its claimed subject digest; it does not compare that digest with a separately
+supplied artifact.

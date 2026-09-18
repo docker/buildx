@@ -48,6 +48,12 @@ The snapshot is an OCI image-spec 1.1 index:
 For multi-platform subjects, `replay snapshot` emits an outer OCI index that
 wraps one per-platform snapshot per architecture.
 
+Before packaging an image subject, the command verifies any Sigstore signature
+attached to the selected platform's provenance attestation. Unsigned
+provenance remains accepted, while a discovered invalid signature fails the
+command. Standalone provenance files cannot currently be snapshotted because
+they do not carry the original OCI attestation-manifest chain.
+
 ## Examples
 
 ### Local OCI layout

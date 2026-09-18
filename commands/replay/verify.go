@@ -101,6 +101,9 @@ func runVerify(cmd *cobra.Command, dockerCli command.Cli, opts *verifyOptions, i
 	if len(subjects) > 1 {
 		return replay.ErrNotImplemented("multi-subject replay verify output aggregation")
 	}
+	if err := replay.VerifySignatures(ctx, dockerCli, subjects); err != nil {
+		return err
+	}
 
 	for _, s := range subjects {
 		pred, err := s.Predicate(ctx)

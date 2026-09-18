@@ -2,6 +2,7 @@ package replay
 
 import (
 	"context"
+	"strings"
 	"testing"
 
 	buildxpolicy "github.com/docker/buildx/policy"
@@ -14,6 +15,17 @@ import (
 	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPreferredDigestDeterministicFallback(t *testing.T) {
+	set := map[string]string{
+		"sha512": strings.Repeat("5", 128),
+		"sha384": strings.Repeat("3", 96),
+	}
+	require.Equal(t, "sha384:"+strings.Repeat("3", 96), preferredDigest(set).String())
+
+	set["sha256"] = strings.Repeat("2", 64)
+	require.Equal(t, "sha256:"+strings.Repeat("2", 64), preferredDigest(set).String())
+}
 
 const (
 	imageURIAlpine = "pkg:docker/alpine@3.18?platform=linux%2Famd64"

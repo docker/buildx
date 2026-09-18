@@ -89,7 +89,8 @@ func NewPinIndex(p *Predicate) *PinIndex {
 
 // preferredDigest picks a single digest from an in-toto DigestSet. sha256 is
 // preferred so it aligns with how BuildKit's source-meta responses return
-// image and http digests. Any other algorithm is accepted as a fallback.
+// image and http digests. Other algorithms are considered in lexical order
+// so provenance with multiple non-sha256 entries is deterministic.
 func preferredDigest(set map[string]string) digest.Digest {
 	if set == nil {
 		return ""
@@ -97,11 +98,16 @@ func preferredDigest(set map[string]string) digest.Digest {
 	if v, ok := set["sha256"]; ok && v != "" {
 		return digest.NewDigestFromEncoded(digest.SHA256, v)
 	}
+	algorithms := make([]string, 0, len(set))
 	for alg, v := range set {
 		if v == "" {
 			continue
 		}
-		return digest.NewDigestFromEncoded(digest.Algorithm(alg), v)
+		algorithms = append(algorithms, alg)
+	}
+	sort.Strings(algorithms)
+	for _, alg := range algorithms {
+		return digest.NewDigestFromEncoded(digest.Algorithm(alg), set[alg])
 	}
 	return ""
 }

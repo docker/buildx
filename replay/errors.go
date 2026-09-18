@@ -211,10 +211,9 @@ func ErrBuildKitCapMissing(capability string) error {
 	return errors.WithStack(&BuildKitCapMissingError{Capability: capability})
 }
 
-// SignatureVerificationRequiredError is returned when a signed DSSE envelope
-// or Sigstore bundle is encountered but no trust anchor is available. Replay
-// never silently accepts a signed attestation; full sigstore/cosign
-// verification is not yet implemented.
+// SignatureVerificationRequiredError is returned when a signed envelope
+// cannot be verified from the available trust material. Replay never silently
+// unwraps such an attestation.
 type SignatureVerificationRequiredError struct {
 	// Source is the user-visible input that carries the signed envelope
 	// (file path for attestation-file inputs).
@@ -233,7 +232,7 @@ func (e *SignatureVerificationRequiredError) Error() string {
 	if env == "" {
 		env = "signed envelope"
 	}
-	return fmt.Sprintf("%s for %s carries signatures but signature verification is not yet implemented; refusing to accept unverified signed attestation", env, src)
+	return fmt.Sprintf("%s for %s carries signatures but cannot be verified from the available trust material; refusing to accept unverified signed attestation", env, src)
 }
 
 // ErrSignatureVerificationRequired constructs a
