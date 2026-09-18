@@ -7,6 +7,7 @@ import (
 
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/util/flightcontrol"
 	dockerclient "github.com/moby/moby/client"
 )
 
@@ -14,8 +15,7 @@ import (
 type Client struct {
 	cli command.Cli
 
-	featuresOnce  sync.Once
-	featuresCache map[Feature]bool
+	features flightcontrol.CachedGroup[map[Feature]bool]
 }
 
 // NewClient initializes a new docker client.
@@ -73,23 +73,22 @@ func (c *Client) LoadImage(ctx context.Context, name string, status progress.Wri
 	}, nil
 }
 
-func (c *Client) Features(ctx context.Context, name string) map[Feature]bool {
-	c.featuresOnce.Do(func() {
-		c.featuresCache = c.features(ctx, name)
-	})
-	return c.featuresCache
-}
-
-func (c *Client) features(ctx context.Context, name string) map[Feature]bool {
-	features := make(map[Feature]bool)
-	if dapi, err := c.API(name); err == nil {
-		if res, err := dapi.Info(ctx, dockerclient.InfoOptions{}); err == nil {
-			if HasOCIImporter(res.Info) {
-				features[OCIImporter] = true
-			}
-		}
+func (c *Client) Features(ctx context.Context, name string) (map[Feature]bool, error) {
+	if name == "" {
+		name = c.cli.CurrentContext()
 	}
-	return features
+	return c.features.Do(ctx, name, func(ctx context.Context) (map[Feature]bool, error) {
+		dapi, err := c.API(name)
+		if err != nil {
+			return nil, err
+		}
+		defer dapi.Close()
+		res, err := dapi.Info(ctx, dockerclient.InfoOptions{})
+		if err != nil {
+			return nil, err
+		}
+		return map[Feature]bool{OCIImporter: HasOCIImporter(res.Info)}, nil
+	})
 }
 
 type waitingWriter struct {

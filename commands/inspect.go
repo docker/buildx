@@ -104,14 +104,18 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 				}
 				if debug.IsEnabled() {
 					fmt.Fprintf(w, "Features:\n")
-					features := nodes[i].Driver.Features(ctx)
-					featKeys := make([]string, 0, len(features))
-					for k := range features {
-						featKeys = append(featKeys, string(k))
-					}
-					sort.Strings(featKeys)
-					for _, k := range featKeys {
-						fmt.Fprintf(w, "\t%s:\t%t\n", k, features[driver.Feature(k)])
+					features, err := nodes[i].Driver.Features(timeoutCtx)
+					if err != nil {
+						fmt.Fprintf(w, "\tError:\t%s\n", err.Error())
+					} else {
+						featKeys := make([]string, 0, len(features))
+						for k := range features {
+							featKeys = append(featKeys, string(k))
+						}
+						sort.Strings(featKeys)
+						for _, k := range featKeys {
+							fmt.Fprintf(w, "\t%s:\t%t\n", k, features[driver.Feature(k)])
+						}
 					}
 				}
 				if len(nodes[i].Labels) > 0 {

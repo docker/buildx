@@ -9,6 +9,7 @@ import (
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/flightcontrol"
 	dockerclient "github.com/moby/moby/client"
 	"github.com/pkg/errors"
 )
@@ -19,7 +20,7 @@ type Driver struct {
 
 	// if you add fields, remember to update docs:
 	// https://github.com/docker/docs/blob/main/content/build/drivers/docker.md
-	features    features
+	features    flightcontrol.CachedGroup[map[driver.Feature]bool]
 	hostGateway hostGateway
 }
 
@@ -74,24 +75,24 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 	return client.New(ctx, "", opts...)
 }
 
-type features struct {
-	once sync.Once
-	list map[driver.Feature]bool
-}
-
-func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
-	d.features.once.Do(func() {
-		var useContainerdSnapshotter bool
-		if c, err := d.Client(ctx); err == nil {
-			workers, _ := c.ListWorkers(ctx)
-			for _, w := range workers {
-				if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
-					useContainerdSnapshotter = true
-				}
-			}
-			c.Close()
+func (d *Driver) Features(ctx context.Context) (map[driver.Feature]bool, error) {
+	return d.features.Do(ctx, "", func(ctx context.Context) (map[driver.Feature]bool, error) {
+		c, err := d.Client(ctx)
+		if err != nil {
+			return nil, err
 		}
-		d.features.list = map[driver.Feature]bool{
+		defer c.Close()
+		workers, err := c.ListWorkers(ctx)
+		if err != nil {
+			return nil, errors.Wrap(err, "listing workers")
+		}
+		var useContainerdSnapshotter bool
+		for _, w := range workers {
+			if _, ok := w.Labels["org.mobyproject.buildkit.worker.snapshotter"]; ok {
+				useContainerdSnapshotter = true
+			}
+		}
+		return map[driver.Feature]bool{
 			driver.OCIExporter:       useContainerdSnapshotter,
 			driver.DockerExporter:    useContainerdSnapshotter,
 			driver.CacheExport:       useContainerdSnapshotter,
@@ -99,9 +100,8 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 			driver.DirectPush:        useContainerdSnapshotter,
 			driver.PreferImageDigest: useContainerdSnapshotter,
 			driver.DefaultLoad:       true,
-		}
+		}, nil
 	})
-	return d.features.list
 }
 
 type hostGateway struct {

@@ -2,13 +2,26 @@ package build
 
 import (
 	"context"
+	"io"
+	"net/http"
+	"net/http/httptest"
+	"strings"
 	"sync"
+	"sync/atomic"
 	"testing"
 
+	noderesolver "github.com/docker/buildx/build/resolver"
+	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/policy"
+	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/confutil"
+	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/ocilayout"
 	"github.com/docker/buildx/util/progress"
+	"github.com/docker/cli/cli/command"
+	contextstore "github.com/docker/cli/cli/context/store"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/client/ociindex"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
@@ -20,6 +33,176 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+type exporterTestDriver struct {
+	driver.Driver
+	moby     bool
+	features func(context.Context) (map[driver.Feature]bool, error)
+}
+
+func (d exporterTestDriver) Info(context.Context) (*driver.Info, error) {
+	return &driver.Info{Status: driver.Running}, nil
+}
+
+func (d exporterTestDriver) Client(context.Context, ...client.ClientOpt) (*client.Client, error) {
+	return nil, nil
+}
+
+func (d exporterTestDriver) IsMobyDriver() bool {
+	return d.moby
+}
+
+func (d exporterTestDriver) Features(ctx context.Context) (map[driver.Feature]bool, error) {
+	if d.features != nil {
+		return d.features(ctx)
+	}
+	return map[driver.Feature]bool{driver.DockerExporter: true}, nil
+}
+
+type exporterTestCLI struct {
+	command.Cli
+	store          contextstore.Store
+	currentContext string
+}
+
+func (c exporterTestCLI) ContextStore() contextstore.Store {
+	return c.store
+}
+
+func (c exporterTestCLI) CurrentContext() string {
+	return c.currentContext
+}
+
+func TestDockerExporterFeatureProbe(t *testing.T) {
+	var goodCalls, badCalls atomic.Int32
+	newServer := func(available bool, calls *atomic.Int32) *httptest.Server {
+		server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if strings.HasSuffix(r.URL.Path, "/_ping") {
+				w.Header().Set("API-Version", "1.55")
+				return
+			}
+			if !strings.HasSuffix(r.URL.Path, "/info") {
+				http.NotFound(w, r)
+				return
+			}
+			calls.Add(1)
+			w.Header().Set("Content-Type", "application/json")
+			if !available {
+				w.WriteHeader(http.StatusServiceUnavailable)
+				_, _ = io.WriteString(w, `{"message":"daemon unavailable"}`)
+				return
+			}
+			_, _ = io.WriteString(w, `{}`)
+		}))
+		t.Cleanup(server.Close)
+		return server
+	}
+	good := newServer(true, &goodCalls)
+	bad := newServer(false, &badCalls)
+	for _, tt := range []struct {
+		name           string
+		moby           bool
+		endpoint       string
+		currentContext string
+		exportContext  string
+		tarball        bool
+		wantError      bool
+	}{
+		{name: "docker uses builder", moby: true, endpoint: good.URL, currentContext: bad.URL},
+		{name: "docker ignores output context", moby: true, endpoint: good.URL, currentContext: bad.URL, exportContext: bad.URL},
+		{name: "docker reports builder failure", moby: true, endpoint: bad.URL, currentContext: good.URL, wantError: true},
+		{name: "remote uses output context", endpoint: bad.URL, currentContext: bad.URL, exportContext: good.URL},
+		{name: "remote reports current context failure", endpoint: good.URL, currentContext: bad.URL, wantError: true},
+		{name: "tarball skips daemon probe", endpoint: bad.URL, currentContext: bad.URL, tarball: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			goodCalls.Store(0)
+			badCalls.Store(0)
+			nodes, err := noderesolver.Resolve(t.Context(), []builder.Node{{
+				Node:   store.Node{Endpoint: tt.endpoint},
+				Driver: &driver.DriverHandle{Driver: exporterTestDriver{moby: tt.moby}},
+			}}, nil, nil)
+			require.NoError(t, err)
+			require.Len(t, nodes, 1)
+			cli := exporterTestCLI{
+				store:          contextstore.New(t.TempDir(), command.DefaultContextStoreConfig()),
+				currentContext: tt.currentContext,
+			}
+			export := client.ExportEntry{Type: "docker", Attrs: map[string]string{"context": tt.exportContext}}
+			if tt.tarball {
+				export.Output = func(map[string]string) (io.WriteCloser, error) { return nil, nil }
+			}
+			opt := &Options{
+				Inputs:  Inputs{ContextPath: "https://example.com/context.tar.gz"},
+				Exports: []client.ExportEntry{export},
+				Policy:  []buildflags.PolicyConfig{{Disabled: true}},
+			}
+			cfg := confutil.NewConfig(nil, confutil.WithDir(t.TempDir()))
+			so, release, err := toSolveOpt(t.Context(), nodes[0], false, opt, gateway.BuildOpts{}, cfg, testProgressWriter{}, dockerutil.NewClient(cli))
+			if tt.wantError {
+				require.ErrorContains(t, err, "failed to detect docker features")
+				require.ErrorContains(t, err, "daemon unavailable")
+				require.EqualValues(t, 1, badCalls.Load())
+				require.Zero(t, goodCalls.Load())
+				return
+			}
+			require.NoError(t, err)
+			defer release(nil)
+			require.Zero(t, badCalls.Load())
+			if tt.tarball {
+				require.Zero(t, goodCalls.Load())
+			} else {
+				require.EqualValues(t, 1, goodCalls.Load())
+			}
+			if tt.moby {
+				require.Equal(t, "moby", so.Exports[0].Type)
+			} else {
+				require.Equal(t, "docker", so.Exports[0].Type)
+			}
+		})
+	}
+}
+
+func TestDriverFeatureFailurePreservesProvenance(t *testing.T) {
+	t.Setenv(noDefaultAttestationsEnv, "false")
+	probeErr := errors.New("worker is starting")
+	calls := 0
+	d := exporterTestDriver{
+		moby: true,
+		features: func(context.Context) (map[driver.Feature]bool, error) {
+			calls++
+			if calls == 1 {
+				return nil, probeErr
+			}
+			return map[driver.Feature]bool{driver.MultiPlatform: true}, nil
+		},
+	}
+	nodes, err := noderesolver.Resolve(t.Context(), []builder.Node{{
+		Driver: &driver.DriverHandle{Driver: d},
+	}}, nil, nil)
+	require.NoError(t, err)
+	require.Len(t, nodes, 1)
+	opt := &Options{
+		Inputs:    Inputs{ContextPath: "https://example.com/context.tar.gz"},
+		Exports:   []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}},
+		Platforms: []ocispecs.Platform{{OS: "linux", Architecture: "amd64"}, {OS: "linux", Architecture: "arm64"}},
+		Policy:    []buildflags.PolicyConfig{{Disabled: true}},
+	}
+	cfg := confutil.NewConfig(nil, confutil.WithDir(t.TempDir()))
+	bopts := buildOptsWithCaps(apicaps.CapID("exporter.image.attestations"))
+	so, release, err := toSolveOpt(t.Context(), nodes[0], false, opt, bopts, cfg, testProgressWriter{}, nil)
+	require.ErrorIs(t, err, probeErr)
+	require.ErrorContains(t, err, "failed to detect driver features")
+	require.Nil(t, so)
+	require.Nil(t, release)
+	require.Equal(t, 1, calls)
+
+	so, release, err = toSolveOpt(t.Context(), nodes[0], false, opt, bopts, cfg, testProgressWriter{}, nil)
+	require.NoError(t, err)
+	defer release(nil)
+	require.Equal(t, "mode=min,inline-only=true", so.FrontendAttrs["attest:provenance"])
+	require.Equal(t, 2, calls)
+}
 
 func TestCacheOptions_DerivedVars(t *testing.T) {
 	t.Setenv("ACTIONS_RUNTIME_TOKEN", "sensitive_token")
