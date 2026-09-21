@@ -478,6 +478,11 @@ type (
 	Handler      struct {
 		Evaluate  EvaluateFunc
 		Execution Execution
+		Completed func(name string, result TargetResult)
+	}
+	TargetResult struct {
+		Err     error
+		Aborted bool
 	}
 	linkedTargetState struct {
 		results   *waitmap.Map
@@ -634,6 +639,17 @@ func (s *syncTargetState) waitEvaluated(ctx context.Context, key string, result 
 	return wrapResultError(results, "aborted: another target failed")
 }
 
+func (h *Handler) completed(ctx context.Context, name string, err error) {
+	if h == nil || h.Completed == nil {
+		return
+	}
+	var abortErr targetAbortError
+	h.Completed(name, TargetResult{
+		Err:     err,
+		Aborted: err != nil && (context.Cause(ctx) != nil || stderrors.As(err, &abortErr) || errors.Is(err, context.Canceled) || errors.Is(err, context.DeadlineExceeded)),
+	})
+}
+
 func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, docker *dockerutil.Client, cfg *confutil.Config, w progress.Writer, bh *Handler) (resp map[string]*client.SolveResponse, err error) {
 	if len(nodes) == 0 {
 		return nil, errors.Errorf("driver required for build")
@@ -731,12 +747,6 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 			}
 			baseCtx := ctx
 
-			if multiTarget {
-				defer func() {
-					err = errors.Wrapf(err, "target %s", k)
-				}()
-			}
-
 			res := make([]*client.SolveResponse, len(dps))
 			eg2, ctx := errgroup.WithContext(ctx)
 			var releaseTarget func()
@@ -753,6 +763,17 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 					return context.Cause(ctx)
 				}
 			}
+
+			if multiTarget {
+				defer func() {
+					err = errors.Wrapf(err, "target %s", k)
+				}()
+			}
+			defer func() {
+				if err != nil {
+					bh.completed(baseCtx, k, err)
+				}
+			}()
 
 			var pushNames string
 			var insecurePush bool
@@ -918,6 +939,13 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 					if errors.Is(frontendErr, ErrRestart) {
 						err = ErrRestart
 					}
+
+					// Preserve abort classification across the gateway's RPC boundary.
+					var abortErr targetAbortError
+					if err != nil && stderrors.As(frontendErr, &abortErr) {
+						err = targetAbortError{err}
+					}
+
 					tracing.FinishWithError(span, err)
 
 					if !so.Internal && desktop.BuildBackendEnabled() && node.Driver.HistoryAPISupported(ctx) {
@@ -996,6 +1024,9 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 			}
 
 			eg.Go(func() (err error) {
+				defer func() {
+					bh.completed(baseCtx, k, err)
+				}()
 				ctx := baseCtx
 				if releaseTarget != nil {
 					defer releaseTarget()
@@ -1440,14 +1471,14 @@ func waitContextDeps(ctx context.Context, node *noderesolver.ResolvedNode, resul
 	if err != nil {
 		return err
 	}
+	if err := resultError(res); err != nil {
+		return targetAbortError{err}
+	}
 
 	for k, contexts := range m {
 		r, ok := res[k]
 		if !ok {
 			continue
-		}
-		if err, ok := r.(error); ok {
-			return err
 		}
 		rr, ok := r.(*gateway.Result)
 		if !ok {

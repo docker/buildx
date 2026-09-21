@@ -10,6 +10,7 @@ import (
 	stderrors "errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"slices"
 	"sort"
@@ -17,6 +18,7 @@ import (
 	"strings"
 	"sync"
 	"text/tabwriter"
+	"time"
 
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/v2/pkg/epoch"
@@ -39,6 +41,7 @@ import (
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/buildx/util/urlutil"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
@@ -382,7 +385,20 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 			Execution: execution,
 		}
 	}
+	var targetResults map[string]build.TargetResult
+	if execution.Mode == build.ExecutionModeDeferError && len(bo) > 1 {
+		targetResults = make(map[string]build.TargetResult, len(bo))
+		var resultsMu sync.Mutex
+		bh.Completed = func(name string, result build.TargetResult) {
+			resultsMu.Lock()
+			defer resultsMu.Unlock()
+			targetResults[name] = result
+		}
+	}
 	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), printer, bh)
+	if retErr != nil && len(targetResults) > 0 {
+		writeBakeTargetSummary(printer.Write, slices.Sorted(maps.Keys(bo)), targetResults)
+	}
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
@@ -529,6 +545,33 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	return nil
+}
+
+func writeBakeTargetSummary(log progress.Logger, names []string, results map[string]build.TargetResult) {
+	progress.Wrap("[internal] target results", log, func(sub progress.SubLogger) error {
+		for _, name := range names {
+			status := "not started"
+			if result, ok := results[name]; ok {
+				switch {
+				case result.Aborted:
+					status = "aborted"
+				case result.Err != nil:
+					status = "failed"
+				default:
+					status = "succeeded"
+				}
+			}
+			now := time.Now()
+			sub.SetStatus(&client.VertexStatus{
+				ID:        name + ": " + status,
+				Name:      status,
+				Timestamp: now,
+				Started:   &now,
+				Completed: &now,
+			})
+		}
+		return nil
+	})
 }
 
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {

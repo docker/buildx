@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bufio"
 	"bytes"
 	"crypto/rand"
 	"crypto/rsa"
@@ -10,9 +11,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strconv"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/containerd/continuity/fs/fstest"
 	"github.com/docker/buildx/bake"
@@ -49,6 +52,8 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeDeferOutput,
 	testBakeFailFast,
 	testBakeDeferError,
+	testBakeDeferErrorSummary,
+	testBakeDeferErrorCancel,
 	testBakeParallel,
 	testBakeFileRelativePaths,
 	testBakeLocalExportDeleteMode,
@@ -780,6 +785,165 @@ COPY foo /foo
 	require.NoError(t, json.Unmarshal(dt, &metadata))
 	require.Contains(t, metadata, "a-success")
 	require.NotContains(t, metadata, "b-failure")
+}
+
+func testBakeDeferErrorSummary(t *testing.T, sb integration.Sandbox) {
+	for _, tt := range []struct {
+		name     string
+		mode     string
+		progress string
+		env      string
+		target   string
+		summary  bool
+	}{
+		{name: "plain", mode: "defer-error", progress: "plain", summary: true},
+		{name: "auto", mode: "defer-error", progress: "auto", summary: true},
+		{name: "quiet", mode: "defer-error", progress: "quiet"},
+		{name: "rawjson", mode: "defer-error", progress: "rawjson", summary: true},
+		{name: "env quiet", mode: "defer-error", progress: "auto", env: "quiet"},
+		{name: "env rawjson", mode: "defer-error", progress: "auto", env: "rawjson", summary: true},
+		{name: "fail fast", mode: "fail-fast", progress: "plain"},
+		{name: "defer output", mode: "defer-output", progress: "plain"},
+		{name: "single target", mode: "defer-error", progress: "plain", target: "b-failure"},
+		{name: "single target rawjson", mode: "defer-error", progress: "rawjson", target: "b-failure"},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			dir := bakeExecutionFailureDir(t, []byte("FROM scratch\nCOPY foo /foo\n"))
+			var stdout, stderr bytes.Buffer
+			args := []string{"bake", "--execution=" + tt.mode, "--progress=" + tt.progress}
+			if tt.target != "" {
+				args = append(args, tt.target)
+			}
+			cmd := buildxCmd(sb, withDir(dir), withArgs(args...), withEnv("BUILDKIT_PROGRESS="+tt.env))
+			cmd.Stdout = &stdout
+			cmd.Stderr = &stderr
+			require.Error(t, cmd.Run(), stderr.String())
+			require.NotContains(t, stdout.String(), "target results")
+			if tt.summary && (tt.progress == "rawjson" || tt.env == "rawjson") {
+				var summary *client.Vertex
+				var statuses []*client.VertexStatus
+				for line := range strings.SplitSeq(stderr.String(), "\n") {
+					if !strings.HasPrefix(line, "{") {
+						continue // The final CLI error is not a progress event.
+					}
+					var event client.SolveStatus
+					require.NoError(t, json.Unmarshal([]byte(line), &event))
+					for _, v := range event.Vertexes {
+						if v.Name == "[internal] target results" {
+							summary = v
+						}
+					}
+					statuses = append(statuses, event.Statuses...)
+				}
+				require.NotNil(t, summary, stderr.String())
+				require.NotNil(t, summary.Completed)
+				require.Empty(t, summary.Error)
+				outcomes := map[string]string{}
+				for _, status := range statuses {
+					if status.Vertex == summary.Digest {
+						outcomes[status.ID] = status.Name
+					}
+				}
+				require.Equal(t, map[string]string{"a-success: succeeded": "succeeded", "b-failure: failed": "failed"}, outcomes)
+			} else if tt.summary {
+				require.Regexp(t, `(?m)^#[0-9]+ \[internal\] target results$`, stderr.String())
+				require.Regexp(t, `(?m)^#[0-9]+ a-success: succeeded done$`, stderr.String())
+				require.Regexp(t, `(?m)^#[0-9]+ b-failure: failed done$`, stderr.String())
+			} else {
+				require.NotContains(t, stderr.String(), "target results")
+			}
+		})
+	}
+	t.Run("all succeed", func(t *testing.T) {
+		dir := bakeExecutionSuccessDir(t)
+		out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--progress=plain"))
+		require.NoError(t, err, out)
+		require.NotContains(t, out, "target results")
+	})
+	t.Run("linked failure", func(t *testing.T) {
+		dir := tmpdir(t,
+			fstest.CreateFile("docker-bake.hcl", []byte(`
+group "default" {
+  targets = ["a-success", "c-dependent"]
+}
+target "a-success" {
+  dockerfile-inline = "FROM scratch\nCOPY foo /foo"
+  output = ["type=local,dest=out"]
+}
+target "b-failure" {
+  dockerfile-inline = "FROM scratch\nCOPY missing /missing"
+}
+target "c-dependent" {
+  dockerfile-inline = "FROM base"
+  contexts = { base = "target:b-failure" }
+}
+`), 0600),
+			fstest.CreateFile("foo", []byte("foo"), 0600),
+		)
+		out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--progress=plain"))
+		require.Error(t, err, out)
+		require.Regexp(t, `(?m)^#[0-9]+ \[internal\] target results$`, out)
+		require.Contains(t, out, "a-success: succeeded done")
+		require.Contains(t, out, "b-failure: failed done")
+		require.Contains(t, out, "c-dependent: aborted done")
+		require.FileExists(t, filepath.Join(dir, "out", "foo"))
+	})
+}
+
+func testBakeDeferErrorCancel(t *testing.T, sb integration.Sandbox) {
+	if runtime.GOOS == "windows" {
+		t.Skip("sending os.Interrupt is not supported on Windows")
+	}
+	dir := tmpdir(t,
+		fstest.CreateFile("docker-bake.hcl", []byte(`
+group "default" {
+  targets = ["a-success", "b-waiting", "c-queued"]
+}
+target "a-success" {
+  dockerfile-inline = "FROM scratch\nCOPY foo /foo"
+}
+target "b-waiting" {
+  dockerfile-inline = "FROM busybox\nRUN echo b-waiting-ready && sleep 300"
+}
+target "c-queued" {
+  dockerfile-inline = "FROM scratch\nCOPY foo /foo"
+}
+`), 0600),
+		fstest.CreateFile("foo", []byte("foo"), 0600),
+	)
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--execution=defer-error", "-j=1", "--progress=plain"))
+	stderr, err := cmd.StderrPipe()
+	require.NoError(t, err)
+	require.NoError(t, cmd.Start())
+	defer func() {
+		if cmd.ProcessState == nil {
+			cmd.Process.Kill()
+			cmd.Wait()
+		}
+	}()
+	timer := time.AfterFunc(2*time.Minute, func() { cmd.Process.Kill() })
+	defer timer.Stop()
+
+	var out strings.Builder
+	interrupted := false
+	scanner := bufio.NewScanner(stderr)
+	for scanner.Scan() {
+		line := scanner.Text()
+		fmt.Fprintln(&out, line)
+		if !interrupted && strings.HasSuffix(line, " b-waiting-ready") {
+			require.NoError(t, cmd.Process.Signal(os.Interrupt))
+			interrupted = true
+		}
+	}
+	require.NoError(t, scanner.Err())
+	require.Error(t, cmd.Wait(), out.String())
+	require.True(t, interrupted, out.String())
+	require.Contains(t, out.String(), "[internal] target results")
+	require.Contains(t, out.String(), "a-success: succeeded done")
+	require.Contains(t, out.String(), "b-waiting: aborted done")
+	require.Contains(t, out.String(), "c-queued: not started done")
+	require.Contains(t, out.String(), "ERROR: got SIGTERM/SIGINT, forcing shutdown")
+	require.NotContains(t, out.String(), "ERROR: target c-queued:")
 }
 
 func testBakeParallel(t *testing.T, sb integration.Sandbox) {
