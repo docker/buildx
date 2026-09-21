@@ -641,9 +641,6 @@ github.com/mattn/go-shellwords
 # github.com/mitchellh/go-wordwrap v1.0.1
 ## explicit; go 1.14
 github.com/mitchellh/go-wordwrap
-# github.com/mitchellh/hashstructure/v2 v2.0.2
-## explicit; go 1.14
-github.com/mitchellh/hashstructure/v2
 # github.com/moby/buildkit v0.33.0
 ## explicit; go 1.26.3
 github.com/moby/buildkit/api/services/control
