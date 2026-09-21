@@ -19,7 +19,7 @@ import (
 	"github.com/docker/buildx/util/confutil"
 	"github.com/docker/buildx/util/dockerutil/dockerconfig"
 	"github.com/docker/buildx/util/sourcemeta"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/moby/buildkit/frontend/dockerui"
 	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
 	"github.com/moby/buildkit/session"

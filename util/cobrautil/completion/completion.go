@@ -6,7 +6,7 @@ import (
 	"github.com/docker/buildx/bake"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/store/storeutil"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/spf13/cobra"
 )
 

@@ -12,7 +12,7 @@ import (
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/commands"
 	clidocstool "github.com/docker/cli-docs-tool"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/spf13/pflag"

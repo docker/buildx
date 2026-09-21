@@ -12,7 +12,7 @@ import (
 	"github.com/docker/buildx/util/cobrautil"
 	"github.com/docker/buildx/util/ioset"
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/tonistiigi/go-csvvalue"

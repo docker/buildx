@@ -7,8 +7,8 @@ import (
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/imagetools"
 	"github.com/docker/cli-docs-tool/annotation"
-	"github.com/docker/cli/cli"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 )

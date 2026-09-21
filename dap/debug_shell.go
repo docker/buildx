@@ -12,7 +12,7 @@ import (
 
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/ioset"
-	"github.com/docker/cli/cli-plugins/metadata"
+	"github.com/docker/cli/v29/cli-plugins/metadata"
 	"github.com/google/go-dap"
 	"github.com/pkg/errors"
 	"golang.org/x/sync/errgroup"

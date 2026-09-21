@@ -4,7 +4,7 @@ import (
 	stderrors "errors"
 	"testing"
 
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
 	"github.com/stretchr/testify/require"

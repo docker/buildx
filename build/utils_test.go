@@ -5,7 +5,7 @@ import (
 	"strings"
 	"testing"
 
-	dockeropts "github.com/docker/cli/opts"
+	dockeropts "github.com/docker/cli/v29/opts"
 	"github.com/stretchr/testify/require"
 )
 

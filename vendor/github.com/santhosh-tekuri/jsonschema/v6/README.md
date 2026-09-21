@@ -1,4 +1,4 @@
-# jsonschema v6.0.0
+# jsonschema v6.0.2
 
 [![License](https://img.shields.io/badge/License-Apache%202.0-blue.svg)](https://opensource.org/licenses/Apache-2.0)
 [![GoDoc](https://godoc.org/github.com/santhosh-tekuri/jsonschema?status.svg)](https://pkg.go.dev/github.com/santhosh-tekuri/jsonschema/v6)
@@ -56,9 +56,11 @@ see [godoc](https://pkg.go.dev/github.com/santhosh-tekuri/jsonschema/v6) for exa
     - enable via flag for draft <= 7
 - [x] mixed dialect support
 
-## CLI
+## CLI v0.7.0
 
 to install: `go install github.com/santhosh-tekuri/jsonschema/cmd/jv@latest`
+
+Note that the cli is versioned independently. you can see it in git tags `cmd/jv/v0.7.0`
 
 ```
 Usage: jv [OPTIONS] SCHEMA [INSTANCE...]
@@ -75,7 +77,7 @@ Options:
   -v, --version           Print build information
 ```
 
-- [x] exit code `1` for validation erros, `2` for usage errors
+- [x] exit code `1` for validation errors, `2` for usage errors
 - [x] validate both schema and multiple instances
 - [x] support both json and yaml files
 - [x] support standard input, use `-`

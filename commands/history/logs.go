@@ -7,7 +7,7 @@ import (
 
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/progress"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	controlapi "github.com/moby/buildkit/api/services/control"
 	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/util/progress/progressui"

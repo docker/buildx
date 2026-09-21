@@ -16,7 +16,7 @@ import (
 	"github.com/docker/buildx/util/cobrautil/completion"
 	"github.com/docker/buildx/util/otelutil"
 	"github.com/docker/buildx/util/otelutil/jaeger"
-	"github.com/docker/cli/cli/command"
+	"github.com/docker/cli/v29/cli/command"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/browser"

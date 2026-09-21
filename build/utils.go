@@ -10,7 +10,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/driver"
-	"github.com/docker/cli/opts"
+	"github.com/docker/cli/v29/opts"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 )
