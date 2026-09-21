@@ -464,7 +464,7 @@ You can override the following fields:
 * `no-cache`
 * `no-cache-filter`
 * `output`
-* `platform`
+* `platform` (also accepted as `platforms`)
 * `pull`
 * `push`
 * `resources`
@@ -483,7 +483,7 @@ You can append using `+=` operator for the following fields:
 * `entitlements`¹
 * `no-cache-filter`
 * `output`
-* `platform`
+* `platform` (also accepted as `platforms`)
 * `secrets`
 * `ssh`
 * `tags`
