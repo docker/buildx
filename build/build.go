@@ -766,8 +766,12 @@ func BuildWithResultHandler(ctx context.Context, nodes []builder.Node, opts map[
 					}
 					node := dp.Node().Driver
 					if node.IsMobyDriver() {
+						features, err := node.Features(ctx)
+						if err != nil {
+							return errors.Wrap(err, "failed to detect driver features")
+						}
 						for _, e := range so.Exports {
-							if e.Type == "moby" && e.Attrs["push"] != "" && !node.Features(ctx)[driver.DirectPush] {
+							if e.Type == "moby" && e.Attrs["push"] != "" && !features[driver.DirectPush] {
 								if ok, _ := strconv.ParseBool(e.Attrs["push"]); ok {
 									pushNames = e.Attrs["name"]
 									if pushNames == "" {

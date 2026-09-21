@@ -176,7 +176,7 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 	return c, nil
 }
 
-func (d *Driver) Features(_ context.Context) map[driver.Feature]bool {
+func (d *Driver) Features(_ context.Context) (map[driver.Feature]bool, error) {
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    true,
 		driver.DockerExporter: false,
@@ -184,7 +184,7 @@ func (d *Driver) Features(_ context.Context) map[driver.Feature]bool {
 		driver.MultiPlatform:  true,
 		driver.DirectPush:     true,
 		driver.DefaultLoad:    d.defaultLoad,
-	}
+	}, nil
 }
 
 func (d *Driver) Factory() driver.Factory {
