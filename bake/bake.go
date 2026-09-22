@@ -55,6 +55,7 @@ type Override struct {
 	Value    string
 	ArrValue []string
 	Append   bool
+	Clear    bool
 }
 
 func defaultFilenames() []string {
@@ -681,9 +682,17 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			// docs/reference/buildx_bake.md (--set) and https://docs.docker.com/build/bake/overrides/
 			switch keys[1] {
 			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "network", "annotations", "policy":
+				if len(keys) != 2 {
+					return nil, errors.Errorf("invalid key %s, %s does not support subkeys", parts[0], keys[1])
+				}
 				if len(parts) == 2 {
 					override.Append = appendTo
-					override.ArrValue = append(override.ArrValue, parts[1])
+					override.Clear = !appendTo && parts[1] == ""
+					if override.Clear {
+						override.ArrValue = nil
+					} else {
+						override.ArrValue = append(override.ArrValue, parts[1])
+					}
 				}
 			case "resources", "secret":
 				if len(keys) != 3 {
@@ -1297,6 +1306,9 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				}
 			}
 		case "entitlements":
+			if o.Clear {
+				t.Entitlements = nil
+			}
 			t.Entitlements = append(t.Entitlements, o.ArrValue...)
 			for _, v := range o.ArrValue {
 				if v == string(EntitlementKeyNetworkHost) {
@@ -1306,11 +1318,17 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				}
 			}
 		case "annotations":
+			if o.Clear {
+				t.Annotations = nil
+			}
 			t.Annotations = append(t.Annotations, o.ArrValue...)
 		case "attest":
 			attest, err := parseArrValue[buildflags.Attest](o.ArrValue)
 			if err != nil {
 				return errors.Wrap(err, "invalid value for attest")
+			}
+			if o.Clear {
+				t.Attest = nil
 			}
 			t.Attest = t.Attest.Merge(attest)
 		case "no-cache":
