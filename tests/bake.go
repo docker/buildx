@@ -739,13 +739,13 @@ FROM scratch
 COPY foo /foo
 `))
 
-	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-output"))
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--jobs=defer-output"))
 	require.Error(t, err, out)
 	require.Contains(t, out, "b-failure")
 	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
 
 	dir = bakeExecutionSuccessDir(t)
-	out, err = bakeCmd(sb, withDir(dir), withArgs("--execution=defer-output"))
+	out, err = bakeCmd(sb, withDir(dir), withArgs("--jobs=defer-output"))
 	require.NoError(t, err, out)
 	require.FileExists(t, filepath.Join(dir, "out", "a", "foo"))
 	require.FileExists(t, filepath.Join(dir, "out", "b", "foo"))
@@ -758,7 +758,7 @@ RUN sleep 2
 COPY foo /foo
 `))
 
-	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=fail-fast"))
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--jobs=fail-fast"))
 	require.Error(t, err, out)
 	require.Contains(t, out, "b-failure")
 	require.NoFileExists(t, filepath.Join(dir, "out", "foo"))
@@ -772,7 +772,7 @@ COPY foo /foo
 `))
 
 	metadataFile := filepath.Join(dir, "metadata.json")
-	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--metadata-file", metadataFile))
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--jobs=defer-error", "--metadata-file", metadataFile))
 	require.Error(t, err, out)
 	require.Contains(t, out, "b-failure")
 	require.FileExists(t, filepath.Join(dir, "out", "foo"))
@@ -810,7 +810,7 @@ func testBakeDeferErrorSummary(t *testing.T, sb integration.Sandbox) {
 		t.Run(tt.name, func(t *testing.T) {
 			dir := bakeExecutionFailureDir(t, []byte("FROM scratch\nCOPY foo /foo\n"))
 			var stdout, stderr bytes.Buffer
-			args := []string{"bake", "--execution=" + tt.mode, "--progress=" + tt.progress}
+			args := []string{"bake", "--jobs=" + tt.mode, "--progress=" + tt.progress}
 			if tt.target != "" {
 				args = append(args, tt.target)
 			}
@@ -856,7 +856,7 @@ func testBakeDeferErrorSummary(t *testing.T, sb integration.Sandbox) {
 	}
 	t.Run("all succeed", func(t *testing.T) {
 		dir := bakeExecutionSuccessDir(t)
-		out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--progress=plain"))
+		out, err := bakeCmd(sb, withDir(dir), withArgs("--jobs=defer-error", "--progress=plain"))
 		require.NoError(t, err, out)
 		require.NotContains(t, out, "target results")
 	})
@@ -880,7 +880,7 @@ target "c-dependent" {
 `), 0600),
 			fstest.CreateFile("foo", []byte("foo"), 0600),
 		)
-		out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "--progress=plain"))
+		out, err := bakeCmd(sb, withDir(dir), withArgs("--jobs=defer-error", "--progress=plain"))
 		require.Error(t, err, out)
 		require.Regexp(t, `(?m)^#[0-9]+ \[internal\] target results$`, out)
 		require.Contains(t, out, "a-success: succeeded done")
@@ -911,7 +911,7 @@ target "c-queued" {
 `), 0600),
 		fstest.CreateFile("foo", []byte("foo"), 0600),
 	)
-	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--execution=defer-error", "-j=1", "--progress=plain"))
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--jobs=defer-error,parallel=1", "--progress=plain"))
 	stderr, err := cmd.StderrPipe()
 	require.NoError(t, err)
 	require.NoError(t, cmd.Start())
@@ -952,16 +952,19 @@ FROM scratch
 COPY foo /foo
 `))
 
-	out, err := bakeCmd(sb, withDir(dir), withArgs("--execution=defer-error", "-j=1"))
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--jobs=defer-error,parallel=1"))
 	require.Error(t, err, out)
 	require.FileExists(t, filepath.Join(dir, "out", "foo"))
 
-	dir = bakeExecutionSuccessDir(t)
-
-	out, err = bakeCmd(sb, withDir(dir), withArgs("--jobs=1"))
-	require.NoError(t, err, out)
-	require.FileExists(t, filepath.Join(dir, "out", "a", "foo"))
-	require.FileExists(t, filepath.Join(dir, "out", "b", "foo"))
+	for _, flag := range []string{"-j=1", "--jobs=parallel=1"} {
+		t.Run(flag, func(t *testing.T) {
+			dir := bakeExecutionSuccessDir(t)
+			out, err := bakeCmd(sb, withDir(dir), withArgs(flag))
+			require.NoError(t, err, out)
+			require.FileExists(t, filepath.Join(dir, "out", "a", "foo"))
+			require.FileExists(t, filepath.Join(dir, "out", "b", "foo"))
+		})
+	}
 }
 
 func bakeExecutionSuccessDir(t *testing.T) string {

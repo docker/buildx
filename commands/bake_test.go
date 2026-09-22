@@ -72,14 +72,16 @@ func TestBakeJobsFlag(t *testing.T) {
 	tests := []struct {
 		name string
 		args []string
-		jobs int
+		jobs string
 	}{
-		{name: "default"},
-		{name: "long", args: []string{"--jobs=2"}, jobs: 2},
-		{name: "short", args: []string{"-j=2"}, jobs: 2},
-		{name: "attached", args: []string{"-j2"}, jobs: 2},
-		{name: "unlimited", args: []string{"-j=0"}},
-		{name: "with mode", args: []string{"--execution=defer-error", "-j=2"}, jobs: 2},
+		{name: "default", jobs: "fail-fast"},
+		{name: "long", args: []string{"--jobs=2"}, jobs: "2"},
+		{name: "short", args: []string{"-j=2"}, jobs: "2"},
+		{name: "attached", args: []string{"-j2"}, jobs: "2"},
+		{name: "unlimited", args: []string{"-j=0"}, jobs: "0"},
+		{name: "parallel", args: []string{"--jobs=parallel=2"}, jobs: "parallel=2"},
+		{name: "with mode", args: []string{"--jobs=defer-error,parallel=2"}, jobs: "defer-error,parallel=2"},
+		{name: "short with mode", args: []string{"-j=defer-output"}, jobs: "defer-output"},
 	}
 	for _, tt := range tests {
 		t.Run(tt.name, func(t *testing.T) {
@@ -87,7 +89,7 @@ func TestBakeJobsFlag(t *testing.T) {
 			require.NoError(t, err)
 			cmd := bakeCmd(dockerCli, &rootOptions{})
 			require.NoError(t, cmd.ParseFlags(tt.args))
-			jobs, err := cmd.Flags().GetInt("jobs")
+			jobs, err := cmd.Flags().GetString("jobs")
 			require.NoError(t, err)
 			require.Equal(t, tt.jobs, jobs)
 		})
@@ -99,5 +101,49 @@ func TestBakeJobsNegative(t *testing.T) {
 	require.NoError(t, err)
 	cmd := bakeCmd(dockerCli, &rootOptions{})
 	require.NoError(t, cmd.ParseFlags([]string{"-j=-1"}))
-	require.EqualError(t, cmd.RunE(cmd, nil), "jobs must be non-negative")
+	require.EqualError(t, cmd.RunE(cmd, nil), `invalid jobs parallel value "-1": must be a non-negative integer`)
+}
+
+func TestParseBakeJobs(t *testing.T) {
+	for _, tt := range []struct {
+		value    string
+		mode     build.ExecutionMode
+		parallel int
+	}{
+		{value: "", mode: build.ExecutionModeFailFast},
+		{value: "fail-fast", mode: build.ExecutionModeFailFast},
+		{value: "defer-output", mode: build.ExecutionModeDeferOutput},
+		{value: "defer-error", mode: build.ExecutionModeDeferError},
+		{value: "0", mode: build.ExecutionModeFailFast},
+		{value: "2", mode: build.ExecutionModeFailFast, parallel: 2},
+		{value: "parallel=0", mode: build.ExecutionModeFailFast},
+		{value: "parallel=2", mode: build.ExecutionModeFailFast, parallel: 2},
+		{value: "defer-error,parallel=2", mode: build.ExecutionModeDeferError, parallel: 2},
+		{value: "parallel=2,defer-output", mode: build.ExecutionModeDeferOutput, parallel: 2},
+		{value: "mode=defer-error,parallel=2", mode: build.ExecutionModeDeferError, parallel: 2},
+		{value: " 2 ", mode: build.ExecutionModeFailFast, parallel: 2},
+		{value: " mode = defer-error , PARALLEL = 2 ", mode: build.ExecutionModeDeferError, parallel: 2},
+		{value: `"defer-error","parallel=2"`, mode: build.ExecutionModeDeferError, parallel: 2},
+	} {
+		t.Run(tt.value, func(t *testing.T) {
+			got, err := parseBakeJobs(tt.value)
+			require.NoError(t, err)
+			require.Equal(t, build.Execution{Mode: tt.mode, Parallel: tt.parallel}, got)
+		})
+	}
+}
+
+func TestParseBakeJobsInvalid(t *testing.T) {
+	for _, value := range []string{
+		"-1", "parallel=-1", "parallel=", "parallel=abc", "parallel=1.5",
+		"parallel=999999999999999999999999999999", "999999999999999999999999999999",
+		"unknown", "mode=", "mode=unknown", "Defer-Error", "jobs=2",
+		"defer-error,defer-output", "fail-fast,mode=fail-fast", "parallel=1,parallel=2",
+		"parallel=1,PARALLEL=2", "defer-error,", ",defer-error", `"defer-error`,
+	} {
+		t.Run(value, func(t *testing.T) {
+			_, err := parseBakeJobs(value)
+			require.Error(t, err)
+		})
+	}
 }

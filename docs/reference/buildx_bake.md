@@ -20,9 +20,8 @@ Build from a file
 | [`--call`](#call)                   | `string`      | `build`     | Set method for evaluating build (`check`, `outline`, `targets`)                                                       |
 | [`--check`](#check)                 | `bool`        |             | Shorthand for `--call=check`                                                                                          |
 | `-D`, `--debug`                     | `bool`        |             | Enable debug logging                                                                                                  |
-| [`--execution`](#execution)         | `string`      | `fail-fast` | Set target execution mode (`fail-fast`, `defer-output`, `defer-error`)                                                |
 | [`-f`](#file), [`--file`](#file)    | `stringArray` |             | Build definition file                                                                                                 |
-| [`-j`](#jobs), [`--jobs`](#jobs)    | `int`         | `0`         | Maximum number of concurrent targets (0 for unlimited)                                                                |
+| [`-j`](#jobs), [`--jobs`](#jobs)    | `string`      | `fail-fast` | Set target execution behavior (format: `N` or `mode[,parallel=N]`)                                                    |
 | [`--list`](#list)                   | `string`      |             | List targets or variables                                                                                             |
 | [`--load`](#load)                   | `bool`        |             | Shorthand for `--set=*.output=type=docker`. Conditional.                                                              |
 | [`--metadata-file`](#metadata-file) | `string`      |             | Write build result metadata to a file                                                                                 |
@@ -139,14 +138,22 @@ Same as [`build --call`](buildx_build.md#call).
 
 Same as [`build --check`](buildx_build.md#check).
 
-### <a name="execution"></a> Configure target execution behavior (--execution)
+### <a name="jobs"></a> Configure target execution behavior (--jobs, -j)
 
 ```text
---execution=MODE
+--jobs=N
+--jobs=[mode,]parallel=N
+--jobs=mode
 ```
 
-The `--execution` flag controls output synchronization and how Bake handles target
-failures. The default mode is `fail-fast`, which stops the build when a target
+The `--jobs` flag (shorthand `-j`) controls target concurrency, output
+synchronization, and how Bake handles target failures. It accepts an integer
+as shorthand for `parallel=N`, or comma-separated mode and parallel options.
+For example, `-j=2` is equivalent to `--jobs=parallel=2`, and
+`--jobs=defer-error,parallel=2` combines a mode with a concurrency limit.
+The mode can also be written as `mode=defer-error`.
+
+The default mode is `fail-fast`, which stops the build when a target
 fails and cancels targets that are still running. Outputs already written by
 successful targets are not removed.
 
@@ -168,24 +175,20 @@ on a failed target cannot complete successfully. When `--metadata-file` is set,
 Bake writes metadata for successful targets even if another target fails.
 
 ```console
-$ docker buildx bake --execution=defer-output # wait for all build results before exporting
-$ docker buildx bake --execution=defer-error  # let independent targets finish before returning an error
+$ docker buildx bake --jobs=defer-output # wait for all build results before exporting
+$ docker buildx bake --jobs=defer-error  # let independent targets finish before returning an error
 ```
 
-Use [`--jobs`](#jobs) to configure target concurrency independently of the
-execution mode.
-
-### <a name="jobs"></a> Limit concurrent targets (--jobs, -j)
-
-The `--jobs` flag (shorthand `-j`) limits how many Bake targets run at the same
-time. It requires a non-negative integer. When omitted or set to `0`, Bake
-doesn't apply a target concurrency limit. This controls target scheduling, not
-BuildKit's internal parallelism for build steps within a target.
+The `parallel` option limits how many Bake targets run at the same time. It
+requires a non-negative integer. When omitted or set to `0`, Bake doesn't apply
+a target concurrency limit. This controls target scheduling, not BuildKit's
+internal parallelism for build steps within a target. Specify the mode and limit
+in the same flag value; repeating `--jobs` replaces the previous value.
 
 ```console
-$ docker buildx bake -j=2                         # run at most two targets at the same time
-$ docker buildx bake --jobs=1                     # run targets sequentially
-$ docker buildx bake --execution=defer-error -j=2 # limit concurrency and let independent targets finish after a failure
+$ docker buildx bake -j=2                          # run at most two targets at the same time
+$ docker buildx bake --jobs=parallel=1             # run targets sequentially
+$ docker buildx bake --jobs=defer-error,parallel=2 # limit concurrency and let independent targets finish after a failure
 ```
 
 With `defer-output`, every participating target must be able to reach the output

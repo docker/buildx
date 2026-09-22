@@ -72,8 +72,7 @@ type bakeOptions struct {
 	exportPush   bool
 	exportLoad   bool
 	callFunc     string
-	execution    string
-	jobs         int
+	jobs         string
 
 	print bool
 	list  string
@@ -101,6 +100,11 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	url, cmdContext, targets := bakeArgs(targets)
 	if len(targets) == 0 {
 		targets = []string{"default"}
+	}
+
+	execution, err := parseBakeJobs(in.jobs)
+	if err != nil {
+		return err
 	}
 
 	callFunc, err := buildflags.ParseCallFunc(in.callFunc)
@@ -366,18 +370,6 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	execution := build.Execution{
-		Mode:     build.ExecutionMode(strings.TrimSpace(in.execution)),
-		Parallel: in.jobs,
-	}
-	switch execution.Mode {
-	case "", build.ExecutionModeFailFast:
-		execution.Mode = build.ExecutionModeFailFast
-	case build.ExecutionModeDeferOutput, build.ExecutionModeDeferError:
-	default:
-		return errors.Errorf("invalid execution mode %q", in.execution)
-	}
-
 	done := timeBuildCommand(mp, attributes)
 	var bh *build.Handler
 	if execution.Mode != build.ExecutionModeFailFast || execution.Parallel > 0 {
@@ -574,6 +566,54 @@ func writeBakeTargetSummary(log progress.Logger, names []string, results map[str
 	})
 }
 
+func parseBakeJobs(value string) (build.Execution, error) {
+	execution := build.Execution{Mode: build.ExecutionModeFailFast}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return execution, nil
+	}
+	if _, err := strconv.Atoi(value); err == nil {
+		value = "parallel=" + value
+	}
+
+	fields, err := csvvalue.Fields(value, nil)
+	if err != nil {
+		return execution, errors.Wrap(err, "invalid jobs option")
+	}
+
+	seen := map[string]bool{}
+	for _, field := range fields {
+		key, val, ok := strings.Cut(strings.TrimSpace(field), "=")
+		if !ok {
+			key, val = "mode", key
+		}
+		key = strings.ToLower(strings.TrimSpace(key))
+		val = strings.TrimSpace(val)
+		if seen[key] {
+			return execution, errors.Errorf("duplicate jobs option %q", key)
+		}
+		seen[key] = true
+		switch key {
+		case "mode":
+			switch mode := build.ExecutionMode(val); mode {
+			case build.ExecutionModeFailFast, build.ExecutionModeDeferOutput, build.ExecutionModeDeferError:
+				execution.Mode = mode
+			default:
+				return execution, errors.Errorf("invalid jobs mode %q", val)
+			}
+		case "parallel":
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 0 {
+				return execution, errors.Errorf("invalid jobs parallel value %q: must be a non-negative integer", val)
+			}
+			execution.Parallel = n
+		default:
+			return execution, errors.Errorf("unknown jobs option %q", key)
+		}
+	}
+	return execution, nil
+}
+
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options bakeOptions
 	var cFlags commonFlags
@@ -583,9 +623,6 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 		Aliases: []string{"f"},
 		Short:   "Build from a file",
 		RunE: func(cmd *cobra.Command, args []string) error {
-			if options.jobs < 0 {
-				return errors.New("jobs must be non-negative")
-			}
 			filesFromEnv := false
 			if len(options.files) == 0 {
 				if envFiles, err := bakeEnvFiles(os.LookupEnv); err != nil {
@@ -630,8 +667,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.vars, "var", nil, `Set a variable value (e.g., "name=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
-	flags.StringVar(&options.execution, "execution", "fail-fast", `Set target execution mode ("fail-fast", "defer-output", "defer-error")`)
-	flags.IntVarP(&options.jobs, "jobs", "j", 0, "Maximum number of concurrent targets (0 for unlimited)")
+	flags.StringVarP(&options.jobs, "jobs", "j", "fail-fast", `Set target execution behavior (format: "N" or "mode[,parallel=N]")`)
 
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"
