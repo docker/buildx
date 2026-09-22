@@ -42,7 +42,7 @@ func (w worker) Run(ctx context.Context, readywg *sync.WaitGroup, donewg *sync.W
 				w.traceSink.Put(ctx, fmt.Sprintf("httprc worker: FAILED to sync %q (synchronous): %s", sr.resource.URL(), err))
 				sendReply(ctx, sr.reply, struct{}{}, err)
 				sr.resource.SetBusy(false)
-				return
+				continue
 			}
 			w.traceSink.Put(ctx, fmt.Sprintf("httprc worker: SUCCESS syncing %q (synchronous)", sr.resource.URL()))
 			sr.resource.SetBusy(false)

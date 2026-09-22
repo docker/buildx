@@ -176,6 +176,21 @@ func VerifyECDSA(key *ecdsa.PublicKey, payload, signature []byte, h crypto.Hash)
 	return ecdsaVerify(key, payload, h, &r, &s)
 }
 
+// VerifyECDSADigest verifies an ECDSA signature given a pre-computed digest.
+// The caller is responsible for hashing the signing input with the correct
+// hash function for the algorithm (e.g. SHA-256 for ES256). This function
+// does not validate the digest length.
+func VerifyECDSADigest(key *ecdsa.PublicKey, digest, signature []byte) error {
+	var r, s big.Int
+	if err := UnpackECDSASignature(signature, key, &r, &s); err != nil {
+		return fmt.Errorf("dsig.VerifyECDSADigest: %w", err)
+	}
+	if !ecdsa.Verify(key, digest, &r, &s) {
+		return NewVerificationError("invalid ECDSA signature")
+	}
+	return nil
+}
+
 // VerifyECDSACryptoSigner verifies an ECDSA signature for crypto.Signer implementations.
 // This function is useful for verifying signatures created by hardware security modules
 // or other implementations of the crypto.Signer interface.

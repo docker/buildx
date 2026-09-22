@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"io"
 
-	"github.com/lestrrat-go/jwx/v3/internal/ecutil"
 	"github.com/lestrrat-go/jwx/v3/internal/tokens"
 	"github.com/lestrrat-go/jwx/v3/jwe/internal/concatkdf"
 	"github.com/lestrrat-go/jwx/v3/jwk"
@@ -28,9 +27,27 @@ func Random(n int) (ByteSource, error) {
 	return ByteKey(buf), nil
 }
 
-// Ecdhes generates a new key using ECDH-ES
+// Ecdhes generates a new key using ECDH-ES.
+//
+// The recipient pubkey is converted to *ecdh.PublicKey via stdlib
+// (*ecdsa.PublicKey).ECDH() before any cryptographic operation. That
+// conversion uses identity matching against the named NIST curves
+// (elliptic.P256/P384/P521) and rejects anything else — including a
+// caller-controlled or tampered elliptic.Curve and the generic big-int
+// CurveParams path. This closes the invalid-curve attack surface that
+// the previous deprecated crypto/elliptic.Curve.ScalarMult code path
+// exposed when the recipient's *ecdsa.PublicKey.Curve field was
+// attacker-influenced.
 func Ecdhes(alg string, enc string, keysize int, pubkey *ecdsa.PublicKey, apu, apv []byte) (ByteSource, error) {
-	priv, err := ecdsa.GenerateKey(pubkey.Curve, rand.Reader)
+	if pubkey == nil || pubkey.X == nil || pubkey.Y == nil {
+		return nil, fmt.Errorf(`invalid ECDH-ES public key: nil X or Y`)
+	}
+	ecdhPub, err := pubkey.ECDH()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to convert ECDH-ES public key to *ecdh.PublicKey: %w`, err)
+	}
+
+	priv, err := ecdhPub.Curve().GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf(`failed to generate key for ECDH-ES: %w`, err)
 	}
@@ -45,12 +62,11 @@ func Ecdhes(alg string, enc string, keysize int, pubkey *ecdsa.PublicKey, apu, a
 	pubinfo := make([]byte, 4)
 	binary.BigEndian.PutUint32(pubinfo, uint32(keysize)*8)
 
-	if !priv.PublicKey.Curve.IsOnCurve(pubkey.X, pubkey.Y) {
-		return nil, fmt.Errorf(`public key used does not contain a point (X,Y) on the curve`)
+	zBytes, err := priv.ECDH(ecdhPub)
+	if err != nil {
+		return nil, fmt.Errorf(`failed to compute Z: %w`, err)
 	}
-	z, _ := priv.PublicKey.Curve.ScalarMult(pubkey.X, pubkey.Y, priv.D.Bytes())
-	zBytes := ecutil.AllocECPointBuffer(z, priv.PublicKey.Curve)
-	defer ecutil.ReleaseECPointBuffer(zBytes)
+
 	kdf := concatkdf.New(crypto.SHA256, []byte(algorithm), zBytes, apu, apv, pubinfo, []byte{})
 	kek := make([]byte, keysize)
 	if _, err := kdf.Read(kek); err != nil {
@@ -58,13 +74,13 @@ func Ecdhes(alg string, enc string, keysize int, pubkey *ecdsa.PublicKey, apu, a
 	}
 
 	return ByteWithECPublicKey{
-		PublicKey: &priv.PublicKey,
+		PublicKey: priv.PublicKey(),
 		ByteKey:   ByteKey(kek),
 	}, nil
 }
 
 // X25519 generates a new key using ECDH-ES with X25519
-func X25519(alg string, enc string, keysize int, pubkey *ecdh.PublicKey) (ByteSource, error) {
+func X25519(alg string, enc string, keysize int, pubkey *ecdh.PublicKey, apu, apv []byte) (ByteSource, error) {
 	priv, err := ecdh.X25519().GenerateKey(rand.Reader)
 	if err != nil {
 		return nil, fmt.Errorf(`failed to generate key for X25519: %w`, err)
@@ -84,7 +100,7 @@ func X25519(alg string, enc string, keysize int, pubkey *ecdh.PublicKey) (ByteSo
 	if err != nil {
 		return nil, fmt.Errorf(`failed to compute Z: %w`, err)
 	}
-	kdf := concatkdf.New(crypto.SHA256, []byte(algorithm), zBytes, []byte{}, []byte{}, pubinfo, []byte{})
+	kdf := concatkdf.New(crypto.SHA256, []byte(algorithm), zBytes, apu, apv, pubinfo, []byte{})
 	kek := make([]byte, keysize)
 	if _, err := kdf.Read(kek); err != nil {
 		return nil, fmt.Errorf(`failed to read kdf: %w`, err)

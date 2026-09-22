@@ -78,8 +78,11 @@ func KeyDecryptAESGCMKW(recipientKey, _ []byte, _ string, sharedkey []byte, iv [
 		return nil, fmt.Errorf(`failed to create new GCM wrap: %w`, err)
 	}
 
-	// Combine recipient key and tag for GCM decryption
-	ciphertext := recipientKey[:]
+	// Combine recipient key and tag for GCM decryption. Allocate a fresh
+	// buffer so we never alias into recipientKey's backing array, which
+	// is owned by the parsed message.
+	ciphertext := make([]byte, 0, len(recipientKey)+len(tag))
+	ciphertext = append(ciphertext, recipientKey...)
 	ciphertext = append(ciphertext, tag...)
 
 	jek, err := aesgcm.Open(nil, iv, ciphertext, nil)

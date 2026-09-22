@@ -61,3 +61,17 @@ func VerifyRSA(key *rsa.PublicKey, payload, signature []byte, h crypto.Hash, pss
 	}
 	return rsa.VerifyPKCS1v15(key, h, digest, signature)
 }
+
+// VerifyRSADigest verifies an RSA signature given a pre-computed digest.
+// If pss is true, RSA-PSS verification is used; otherwise, PKCS#1 v1.5 is used.
+func VerifyRSADigest(key *rsa.PublicKey, digest, signature []byte, h crypto.Hash, pss bool) error {
+	// isValidRSAKey only rejects non-RSA private key types, so this check is
+	// a no-op for *rsa.PublicKey. Kept for consistency with VerifyRSA.
+	if !isValidRSAKey(key) {
+		return fmt.Errorf(`invalid key type %T for RSA algorithm`, key)
+	}
+	if pss {
+		return rsa.VerifyPSS(key, h, digest, signature, &rsa.PSSOptions{Hash: h, SaltLength: rsa.PSSSaltLengthEqualsHash})
+	}
+	return rsa.VerifyPKCS1v15(key, h, digest, signature)
+}

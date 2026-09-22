@@ -845,6 +845,11 @@
       "Minor": 36,
       "Patch": 0
     },
+    "strings.split_n": {
+      "Major": 1,
+      "Minor": 19,
+      "Patch": 0
+    },
     "substring": {
       "Major": 0,
       "Minor": 17,
@@ -970,6 +975,16 @@
       "Minor": 17,
       "Patch": 0
     },
+    "uri.is_valid": {
+      "Major": 1,
+      "Minor": 16,
+      "Patch": 0
+    },
+    "uri.parse": {
+      "Major": 1,
+      "Minor": 16,
+      "Patch": 0
+    },
     "urlquery.decode": {
       "Major": 0,
       "Minor": 17,
@@ -1073,6 +1088,11 @@
     "in": {
       "Major": 0,
       "Minor": 34,
+      "Patch": 0
+    },
+    "not": {
+      "Major": 1,
+      "Minor": 17,
       "Patch": 0
     }
   }

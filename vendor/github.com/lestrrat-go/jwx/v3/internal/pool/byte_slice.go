@@ -9,9 +9,14 @@ func allocByteSlice() []byte {
 }
 
 func freeByteSlice(b []byte) []byte {
+	// Defensive: scrub the entire backing array, not just b[:len(b)]. No
+	// current caller is known to reslice past len(b) and observe stale
+	// bytes, but a defer Put(buf) that captures buf at len=0 (before a
+	// subsequent buf = buf[:n]) would otherwise leave plaintext resident
+	// in the pool's backing storage.
+	b = b[:cap(b)]
 	clear(b)
-	b = b[:0] // Reset the slice to zero length
-	return b
+	return b[:0]
 }
 
 func ByteSlice() SlicePool[byte] {

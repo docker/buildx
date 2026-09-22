@@ -113,8 +113,10 @@ func KeyDecryptRSA15(_, enckey []byte, privkeyif any, keysize int) ([]byte, erro
 		return nil, fmt.Errorf(`jwebb.KeyDecryptRSA15: %w`, err)
 	}
 
-	// Perform some input validation.
-	expectedlen := privkey.PublicKey.N.BitLen() / tokens.BitsPerByte
+	// Perform some input validation. Use privkey.Size() which applies
+	// ceiling division on the modulus bit length, avoiding silent truncation
+	// if N.BitLen() is not a multiple of 8.
+	expectedlen := privkey.Size()
 	if expectedlen != len(enckey) {
 		// Input size is incorrect, the encrypted payload should always match
 		// the size of the public modulus (e.g. using a 2048 bit key will

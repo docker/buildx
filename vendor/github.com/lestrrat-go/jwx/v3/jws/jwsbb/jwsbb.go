@@ -17,6 +17,10 @@
 package jwsbb
 
 import (
+	"crypto"
+	"crypto/ed25519"
+	"fmt"
+
 	"github.com/lestrrat-go/dsig"
 )
 
@@ -44,21 +48,10 @@ const (
 
 	// EdDSA algorithm
 	edDSA = "EdDSA"
+
+	// Fully-specified EdDSA algorithms (RFC 9864)
+	edDSAEd25519 = "Ed25519"
 )
-
-// Signer is a generic interface that defines the method for signing payloads.
-// The type parameter K represents the key type (e.g., []byte for HMAC keys,
-// *rsa.PrivateKey for RSA keys, *ecdsa.PrivateKey for ECDSA keys).
-type Signer[K any] interface {
-	Sign(key K, payload []byte) ([]byte, error)
-}
-
-// Verifier is a generic interface that defines the method for verifying signatures.
-// The type parameter K represents the key type (e.g., []byte for HMAC keys,
-// *rsa.PublicKey for RSA keys, *ecdsa.PublicKey for ECDSA keys).
-type Verifier[K any] interface {
-	Verify(key K, buf []byte, signature []byte) error
-}
 
 // JWS to dsig algorithm mapping
 var jwsToDsigAlgorithm = map[string]string{
@@ -85,10 +78,31 @@ var jwsToDsigAlgorithm = map[string]string{
 
 	// EdDSA algorithm
 	edDSA: dsig.EdDSA,
+
+	// Fully-specified EdDSA algorithms (RFC 9864)
+	edDSAEd25519: dsig.EdDSA,
 }
 
-// getDsigAlgorithm returns the dsig algorithm name for a JWS algorithm
-func getDsigAlgorithm(jwsAlg string) (string, bool) {
+// GetDsigAlgorithm returns the dsig algorithm name for a JWS algorithm.
+func GetDsigAlgorithm(jwsAlg string) (string, bool) {
 	dsigAlg, ok := jwsToDsigAlgorithm[jwsAlg]
 	return dsigAlg, ok
+}
+
+// validateEdDSACurve enforces that fully-specified EdDSA algorithms (RFC 9864)
+// are only used with the correct key curve. The polymorphic "EdDSA" algorithm
+// accepts any EdDSA key without curve checks. The pub argument must be the
+// already-extracted public key (after jwk.Key unwrapping / keyconv).
+func validateEdDSACurve(jwsAlg string, pub crypto.PublicKey) error {
+	switch jwsAlg {
+	case edDSAEd25519:
+		if _, ok := pub.(ed25519.PublicKey); !ok {
+			return fmt.Errorf(`algorithm %q requires an Ed25519 key, got %T`, jwsAlg, pub)
+		}
+	case edDSA:
+		// Polymorphic EdDSA: no curve restriction
+	default:
+		return fmt.Errorf(`unsupported fully-specified EdDSA algorithm %q`, jwsAlg)
+	}
+	return nil
 }

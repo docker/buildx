@@ -141,6 +141,7 @@ var DefaultBuiltins = [...]*Builtin{
 	StartsWith,
 	EndsWith,
 	Split,
+	SplitN,
 	Replace,
 	ReplaceN,
 	Trim,
@@ -174,6 +175,8 @@ var DefaultBuiltins = [...]*Builtin{
 	URLQueryEncode,
 	URLQueryEncodeObject,
 	URLQueryDecodeObject,
+	URIParse,
+	URIIsValid,
 	YAMLMarshal,
 	YAMLUnmarshal,
 	YAMLIsValid,
@@ -1279,6 +1282,21 @@ var Split = &Builtin{
 	CanSkipBctx: true,
 }
 
+var SplitN = &Builtin{
+	Name:        "strings.split_n",
+	Description: "Returns an array of at most `n` parts of `x` split on `delimiter`. If `n` is positive, returns the first `n` parts. If `n` is negative, returns the last `abs(n)` parts. If `n` is zero, returns an empty array. If `abs(n)` exceeds the number of parts, all parts are returned.",
+	Decl: types.NewFunction(
+		types.Args(
+			types.Named("x", types.S).Description("string that is split"),
+			types.Named("delimiter", types.S).Description("delimiter used for splitting"),
+			types.Named("n", types.N).Description("number of parts to return; positive selects from the left, negative from the right, zero returns an empty array"),
+		),
+		types.Named("ys", types.NewArray(nil, types.S)).Description("split parts"),
+	),
+	Categories:  stringsCat,
+	CanSkipBctx: true,
+}
+
 var Replace = &Builtin{
 	Name:        "replace",
 	Description: "Replace replaces all instances of a sub-string.",
@@ -1622,7 +1640,10 @@ var JSONFilter = &Builtin{
 				),
 			)).Description("JSON string paths"),
 		),
-		types.Named("filtered", types.A).Description("remaining data from `object` with only keys specified in `paths`"),
+		types.Named("filtered", types.NewObject(
+			nil,
+			types.NewDynamicProperty(types.A, types.A),
+		)).Description("remaining data from `object` with only keys specified in `paths`"),
 	),
 	Categories:  objectCat,
 	CanSkipBctx: true,
@@ -1661,7 +1682,10 @@ var JSONRemove = &Builtin{
 				),
 			)).Description("JSON string paths"),
 		),
-		types.Named("output", types.A).Description("result of removing all keys specified in `paths`"),
+		types.Named("output", types.NewObject(
+			nil,
+			types.NewDynamicProperty(types.A, types.A),
+		)).Description("result of removing all keys specified in `paths`"),
 	),
 	Categories:  objectCat,
 	CanSkipBctx: true,
@@ -1722,7 +1746,7 @@ var ObjectSubset = &Builtin{
 				types.NewArray(nil, types.A),
 			)).Description("object to test if super is a superset of"),
 		),
-		types.Named("result", types.A).Description("`true` if `sub` is a subset of `super`"),
+		types.Named("result", types.B).Description("`true` if `sub` is a subset of `super`, otherwise undefined"),
 	),
 	CanSkipBctx: true,
 }
@@ -1742,8 +1766,11 @@ var ObjectUnion = &Builtin{
 				types.NewDynamicProperty(types.A, types.A),
 			)).Description("right-hand object"),
 		),
-		types.Named("output", types.A).Description("a new object which is the result of an asymmetric recursive union of two objects where conflicts are resolved by choosing the key from the right-hand object `b`"),
-	), // TODO(sr): types.A?  ^^^^^^^ (also below)
+		types.Named("output", types.NewObject(
+			nil,
+			types.NewDynamicProperty(types.A, types.A),
+		)).Description("a new object which is the result of an asymmetric recursive union of two objects where conflicts are resolved by choosing the key from the right-hand object `b`"),
+	),
 	CanSkipBctx: true,
 }
 
@@ -1758,7 +1785,10 @@ var ObjectUnionN = &Builtin{
 				types.NewObject(nil, types.NewDynamicProperty(types.A, types.A)),
 			)).Description("list of objects to merge"),
 		),
-		types.Named("output", types.A).Description("asymmetric recursive union of all objects in `objects`, merged from left to right, where conflicts are resolved by choosing the key from the right-hand object"),
+		types.Named("output", types.NewObject(
+			nil,
+			types.NewDynamicProperty(types.A, types.A),
+		)).Description("asymmetric recursive union of all objects in `objects`, merged from left to right, where conflicts are resolved by choosing the key from the right-hand object"),
 	),
 	CanSkipBctx: true,
 }
@@ -1778,7 +1808,10 @@ var ObjectRemove = &Builtin{
 				types.NewObject(nil, types.NewDynamicProperty(types.A, types.A)),
 			)).Description("keys to remove from x"),
 		),
-		types.Named("output", types.A).Description("result of removing the specified `keys` from `object`"),
+		types.Named("output", types.NewObject(
+			nil,
+			types.NewDynamicProperty(types.A, types.A),
+		)).Description("result of removing the specified `keys` from `object`"),
 	),
 	CanSkipBctx: true,
 }
@@ -1799,7 +1832,10 @@ var ObjectFilter = &Builtin{
 				types.NewObject(nil, types.NewDynamicProperty(types.A, types.A)),
 			)).Description("keys to keep in `object`"),
 		),
-		types.Named("filtered", types.A).Description("remaining data from `object` with only keys specified in `keys`"),
+		types.Named("filtered", types.NewObject(
+			nil,
+			types.NewDynamicProperty(types.A, types.A),
+		)).Description("remaining data from `object` with only keys specified in `keys`"),
 	),
 	CanSkipBctx: true,
 }
@@ -2040,6 +2076,33 @@ var URLQueryDecodeObject = &Builtin{
 			types.NewArray(nil, types.S)))).Description("the resulting object"),
 	),
 	Categories:  catEncoding,
+	CanSkipBctx: true,
+}
+
+var URIParse = &Builtin{
+	Name: "uri.parse",
+	Description: "Parses a URI and returns an object containing its components according to RFC 3986. " +
+		"Empty components are omitted. " +
+		"In addition to the standard components, `raw_query` is returned for use with `urlquery` builtins, " +
+		"and `raw_path` is returned to allow detection of path-based exploits using percent-encoded characters.",
+	Decl: types.NewFunction(
+		types.Args(
+			types.Named("uri", types.S).Description("the URI string to parse"),
+		),
+		types.Named("output", types.NewObject(nil, types.NewDynamicProperty(types.S, types.S))).Description("object containing URI components"),
+	),
+	CanSkipBctx: true,
+}
+
+var URIIsValid = &Builtin{
+	Name:        "uri.is_valid",
+	Description: "Returns true if the input can be parsed as a URI.",
+	Decl: types.NewFunction(
+		types.Args(
+			types.Named("uri", types.S).Description("the URI string to validate"),
+		),
+		types.Named("result", types.B).Description("true if `uri` is a valid URI, false otherwise"),
+	),
 	CanSkipBctx: true,
 }
 
@@ -2416,7 +2479,7 @@ var ParseDurationNanos = &Builtin{
 	Description: "Returns the duration in nanoseconds represented by a string.",
 	Decl: types.NewFunction(
 		types.Args(
-			types.Named("duration", types.S).Description("a duration like \"3m\"; see the [Go `time` package documentation](https://golang.org/pkg/time/#ParseDuration) for more details"),
+			types.Named("duration", types.S).Description("a duration like \"3m\"; see the [OPA `Duration Parsing` documentation](https://www.openpolicyagent.org/docs/latest/policy-reference/builtins/time#duration-parsing) for more details"),
 		),
 		types.Named("ns", types.N).Description("the `duration` in nanoseconds"),
 	),
@@ -3048,7 +3111,7 @@ var GraphQLSchemaIsValid = &Builtin{
 // and returns error string for all other inputs.
 var JSONSchemaVerify = &Builtin{
 	Name:        "json.verify_schema",
-	Description: "Checks that the input is a valid JSON schema object. The schema can be either a JSON string or an JSON object.",
+	Description: "Checks that the input is a valid JSON schema object. The schema can be either a JSON string or an JSON object. The `pattern` keyword, if present, is compiled using Go's RE2 regex dialect; schemas relying on ECMA-262 features that RE2 does not support (e.g. negative lookahead) will be rejected.",
 	Decl: types.NewFunction(
 		types.Args(
 			types.Named("schema", types.NewAny(types.S, types.NewObject(nil, types.NewDynamicProperty(types.A, types.A)))).
@@ -3068,7 +3131,7 @@ var JSONSchemaVerify = &Builtin{
 // and returns non-empty array with error objects otherwise.
 var JSONMatchSchema = &Builtin{
 	Name:        "json.match_schema",
-	Description: "Checks that the document matches the JSON schema.",
+	Description: "Checks that the document matches the JSON schema. The `pattern` keyword is enforced using Go's RE2 regex dialect; schemas relying on ECMA-262 features that RE2 does not support (e.g. negative lookahead) will be rejected.",
 	Decl: types.NewFunction(
 		types.Args(
 			types.Named("document", types.NewAny(types.S, types.NewObject(nil, types.NewDynamicProperty(types.A, types.A)))).
@@ -3633,11 +3696,12 @@ func (b *Builtin) Call(operands ...*Term) *Term {
 
 // Ref returns a Ref that refers to the built-in function.
 func (b *Builtin) Ref() Ref {
-	parts := strings.Split(b.Name, ".")
-	ref := make(Ref, len(parts))
-	ref[0] = VarTerm(parts[0])
-	for i := 1; i < len(parts); i++ {
-		ref[i] = InternedTerm(parts[i])
+	numParts := strings.Count(b.Name, ".") + 1
+	curr, remaining, ok := strings.Cut(b.Name, ".")
+	ref := append(make(Ref, 0, numParts), VarTerm(curr))
+	for ok {
+		curr, remaining, ok = strings.Cut(remaining, ".")
+		ref = append(ref, InternedTerm(curr))
 	}
 	return ref
 }

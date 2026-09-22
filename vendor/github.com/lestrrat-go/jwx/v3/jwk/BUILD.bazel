@@ -41,6 +41,7 @@ go_library(
 	"//internal/tokens",
         "//jwa",
         "//jwk/ecdsa",
+        "//jwk/internal/registry",
         "//jwk/jwkbb",
         "@com_github_lestrrat_go_blackmagic//:blackmagic",
         "@com_github_lestrrat_go_httprc_v3//:httprc",
