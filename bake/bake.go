@@ -56,6 +56,7 @@ type Override struct {
 	Value    string
 	ArrValue []string
 	Append   bool
+	Clear    bool
 }
 
 func defaultFilenames() []string {
@@ -713,14 +714,24 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 					return nil, errors.Errorf("invalid key %s, %s does not support subkeys", parts[0], keys[1])
 				}
 				if len(parts) == 2 {
-					override.Append = appendTo
-					override.ArrValue = append(override.ArrValue, parts[1])
+					if !appendTo && parts[1] == "" {
+						override.Clear = true
+						override.ArrValue = nil
+					} else {
+						override.ArrValue = append(override.ArrValue, parts[1])
+					}
+					override.Append = appendTo && !override.Clear
 				}
 			case "secret":
 				if len(keys) == 2 {
 					if len(parts) == 2 {
-						override.Append = appendTo
-						override.ArrValue = append(override.ArrValue, parts[1])
+						if !appendTo && parts[1] == "" {
+							override.Clear = true
+							override.ArrValue = nil
+						} else {
+							override.ArrValue = append(override.ArrValue, parts[1])
+						}
+						override.Append = appendTo && !override.Clear
 					}
 					break
 				}
@@ -1355,6 +1366,9 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				}
 			}
 		case "entitlement", "entitlements":
+			if o.Clear {
+				t.Entitlements = nil
+			}
 			t.Entitlements = append(t.Entitlements, o.ArrValue...)
 			for _, v := range o.ArrValue {
 				if v == string(EntitlementKeyNetworkHost) {
@@ -1364,11 +1378,17 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				}
 			}
 		case "annotation", "annotations":
+			if o.Clear {
+				t.Annotations = nil
+			}
 			t.Annotations = append(t.Annotations, o.ArrValue...)
 		case "attest":
 			attest, err := parseArrValue[buildflags.Attest](o.ArrValue)
 			if err != nil {
 				return errors.Wrap(err, "invalid value for attest")
+			}
+			if o.Clear {
+				t.Attest = nil
 			}
 			t.Attest = t.Attest.Merge(attest)
 		case "no-cache":
