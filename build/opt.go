@@ -501,6 +501,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 					}
 					defers = append(defers, func(error) {
 						cancel()
+						_ = w.Close()
 					})
 					so.Exports[i].Output = func(_ map[string]string) (io.WriteCloser, error) {
 						return w, nil
