@@ -4,6 +4,7 @@
 [![PkgGoDev](https://img.shields.io/badge/go.dev-docs-007d9c?style=flat-square&logo=go&logoColor=white)](https://pkg.go.dev/github.com/docker/buildx)
 [![Build Status](https://img.shields.io/github/actions/workflow/status/docker/buildx/build.yml?branch=master&label=build&logo=github&style=flat-square)](https://github.com/docker/buildx/actions?query=workflow%3Abuild)
 [![codecov](https://img.shields.io/codecov/c/github/docker/buildx?logo=codecov&style=flat-square)](https://codecov.io/gh/docker/buildx)
+[![Protected by Tracebit Community Edition](https://github.com/tracebit-com/tracebit-community-action/blob/main/assets/badges/tracebit-badge-compact.svg?raw=1)](https://community.tracebit.com/supplychainattacks)
 
 Buildx is a Docker CLI plugin for extended build capabilities with
 [BuildKit](https://github.com/moby/buildkit).
