@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"path"
 	"slices"
 	"sort"
 	"strconv"
@@ -38,6 +39,7 @@ import (
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/buildx/util/urlutil"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/progress/progressui"
@@ -158,7 +160,8 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 
 	// instance only needed for reading remote bake files or building
 	var driverType string
-	if url != "" || (!in.print && in.list == "") {
+	remoteRefFiles := slices.ContainsFunc(in.files, urlutil.IsRemoteURL)
+	if url != "" || remoteRefFiles || (!in.print && in.list == "") {
 		b, err := builder.New(dockerCli,
 			builder.WithName(in.builder),
 			builder.WithContextPathHash(contextPathHash),
@@ -210,9 +213,46 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 
-	files, inp, err := readBakeFiles(ctx, nodes, url, in.files, dockerCli.In(), printer, filesFromEnv)
-	if err != nil {
-		return err
+	// A -f value that is itself a remote git/http reference is read from
+	// its own URL instead of being treated as a filename inside the
+	// positional URL (or as a local path). This composes with the
+	// positional-URL form: the positional URL's own -f names and per-file
+	// remote refs can be mixed freely; definition merge order follows the
+	// -f order on the command line (later files override earlier ones).
+	refs, hasRefs := partitionRemoteRefFiles(in.files)
+	var files []bake.File
+	var inp *bake.Input
+	if hasRefs {
+		refFiles, _, err := readRemoteRefFiles(ctx, nodes, refs, printer)
+		if err != nil {
+			return err
+		}
+		var plain []string
+		for _, f := range in.files {
+			if _, ok := refs[f]; !ok {
+				plain = append(plain, f)
+			}
+		}
+		// Only read the remaining (plain) files when there are some, or
+		// when a positional URL is present (its default filenames are
+		// then read). readBakeFiles with empty names default-discovers
+		// local docker-bake.hcl, which would silently override the
+		// remote definitions with the working directory's copy.
+		if len(plain) > 0 || url != "" {
+			plainFiles, plainInp, err := readBakeFiles(ctx, nodes, url, plain, dockerCli.In(), printer, filesFromEnv)
+			if err != nil {
+				return err
+			}
+			inp = plainInp
+			files = mergeFilesInOrder(in.files, plainFiles, refFiles)
+		} else {
+			files = mergeFilesInOrder(in.files, nil, refFiles)
+		}
+	} else {
+		files, inp, err = readBakeFiles(ctx, nodes, url, in.files, dockerCli.In(), printer, filesFromEnv)
+		if err != nil {
+			return err
+		}
 	}
 
 	if len(files) == 0 {
@@ -741,6 +781,109 @@ func readBakeFiles(ctx context.Context, nodes []builder.Node, url string, names 
 	}
 
 	return
+}
+
+// partitionRemoteRefFiles splits the -f values into those that are themselves
+// remote references (git refs like https://host/repo.git#ref:path or plain
+// http(s) file URLs) and everything else. The returned map keys are the
+// original -f values; the values are deduplicated indices so repeated refs
+// are fetched once while still being mergeable at their original positions.
+func partitionRemoteRefFiles(files []string) (map[string]int, bool) {
+	refs := make(map[string]int)
+	for i, f := range files {
+		if urlutil.IsRemoteURL(f) {
+			refs[f] = i
+		}
+	}
+	return refs, len(refs) > 0
+}
+
+// readRemoteRefFiles fetches each referenced file from its own URL via the
+// builder (git/HTTP context read), reusing ReadRemoteFiles per distinct URL.
+// It returns the fetched files keyed by their ref value along with the refs
+// in a deterministic (sorted) order for callers that need one.
+func readRemoteRefFiles(ctx context.Context, nodes []builder.Node, refs map[string]int, pw progress.Writer) (map[string]bake.File, []string, error) {
+	ordered := make([]string, 0, len(refs))
+	for ref := range refs {
+		ordered = append(ordered, ref)
+	}
+	sort.Strings(ordered)
+
+	out := make(map[string]bake.File, len(ordered))
+	seen := make(map[string]struct{}, len(ordered))
+	for _, ref := range ordered {
+		if _, ok := seen[ref]; ok {
+			continue
+		}
+		seen[ref] = struct{}{}
+		remoteURL, fileName := remoteRefFileTarget(ref)
+		// nil names → filesFromRef's default-filename discovery
+		// (docker-bake.hcl, compose files, …) inside the ref.
+		names := []string(nil)
+		if fileName != "" {
+			names = []string{fileName}
+		}
+		rf, _, err := bake.ReadRemoteFiles(ctx, nodes, remoteURL, names, pw)
+		if err != nil {
+			return nil, nil, err
+		}
+		if len(rf) == 0 {
+			return nil, nil, errors.Errorf("no bake definition file found at %s", ref)
+		}
+		// keep the original ref as the File name so downstream merge
+		// order and provenance attribute it to what the user passed
+		rf[0].Name = ref
+		out[ref] = rf[0]
+	}
+	return out, ordered, nil
+}
+
+// remoteRefFileTarget splits a per-file remote reference into the remote
+// context URL to fetch and the file name to read from it. Git refs use the
+// "#ref:subdir" grammar where the trailing segment is a DIRECTORY; when it
+// names a file, the URL is rewritten so the file's parent becomes the
+// context subdir and the file itself is the requested name. HTTP(S) refs
+// keep their full URL as-is (the URL *is* the file).
+func remoteRefFileTarget(ref string) (remoteURL, fileName string) {
+	if urlutil.IsHTTPURL(ref) && !strings.Contains(ref, ".git") {
+		return ref, ""
+	}
+	g, ok, err := dfgitutil.ParseGitRef(ref)
+	if err != nil || !ok {
+		// plain http(s) file URL
+		return ref, ""
+	}
+	if g.SubDir == "" {
+		return ref, ""
+	}
+	// git ref with a path: treat the path as a FILE (this is the per-file
+	// -f form), rooting the context at its parent directory.
+	remoteURL = strings.TrimSuffix(ref, ":"+g.SubDir)
+	if dir := path.Dir(g.SubDir); dir != "." && dir != "/" {
+		remoteURL += ":" + dir
+	}
+	return remoteURL, path.Base(g.SubDir)
+}
+
+// mergeFilesInOrder reassembles the parsed files so the bake definition
+// merge order matches the -f order: every remote-ref file lands at its
+// original command-line position relative to the files read by
+// readBakeFiles (which arrive in the order their names were given).
+func mergeFilesInOrder(refsInOrder []string, plainFiles []bake.File, refFiles map[string]bake.File) []bake.File {
+	var out []bake.File
+	pi := 0
+	for _, f := range refsInOrder {
+		if fl, ok := refFiles[f]; ok {
+			out = append(out, fl)
+			continue
+		}
+		if pi < len(plainFiles) {
+			out = append(out, plainFiles[pi])
+			pi++
+		}
+	}
+	out = append(out, plainFiles[pi:]...)
+	return out
 }
 
 type listEntry struct {
