@@ -680,7 +680,7 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			// IMPORTANT: if you add more fields here, do not forget to update
 			// docs/reference/buildx_bake.md (--set) and https://docs.docker.com/build/bake/overrides/
 			switch keys[1] {
-			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "network", "annotations", "policy":
+			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "annotations", "policy", "ulimits", "no-cache-filter":
 				if len(parts) == 2 {
 					override.Append = appendTo
 					override.ArrValue = append(override.ArrValue, parts[1])
