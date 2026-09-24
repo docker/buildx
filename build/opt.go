@@ -47,6 +47,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/apicaps"
+	"github.com/moby/buildkit/util/archiveutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/opencontainers/go-digest"
@@ -870,7 +871,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
 		}
 		if err != io.EOF || len(magic) != 0 {
-			if isArchive(magic) {
+			if archiveutil.IsArchive(magic) {
 				// stdin is context
 				up := uploadprovider.New()
 				target.FrontendAttrs["context"] = up.Add(rc)

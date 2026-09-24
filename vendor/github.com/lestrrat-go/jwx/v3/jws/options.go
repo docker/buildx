@@ -7,6 +7,42 @@ import (
 )
 
 type identInsecureNoSignature struct{}
+type identCritExtension struct{}
+
+// WithCritExtension declares that the caller understands and will process
+// the named "crit" (Critical) header parameter extension(s) per RFC 7515
+// Section 4.1.11. The option is variadic and accumulating: a single call
+// may register any number of extension names, and the option may be
+// passed multiple times to add more.
+//
+// This option only takes effect when jws.WithCritValidation(true) is
+// also passed. With validation enabled, jws.Verify() rejects any JWS
+// whose protected header lists a "crit" extension that has not been
+// declared via this option, satisfying the RFC's requirement that
+// recipients MUST reject any "crit" extension they do not understand.
+//
+// IMPORTANT: declaring an extension here is a promise to the library
+// that the caller knows what the extension means and will perform any
+// validation, side effect, or policy enforcement the extension requires
+// AFTER jws.Verify() returns successfully. The library cannot inspect
+// or enforce the semantics of an extension; it only checks that every
+// "crit" entry in the message has been declared. If you register an
+// extension and then forget to act on its value, you have effectively
+// disabled the protection the producer was trying to obtain by listing
+// the extension as critical.
+//
+// Concretely, the post-verify code path for a declared extension must:
+//
+//  1. Read the value of the named header from the verified message.
+//  2. Apply whatever check or transformation the extension specifies
+//     (e.g. for an "x-tenant-binding" extension, refuse to act on the
+//     payload unless the binding matches the current tenant).
+//  3. Treat any failure of that check as a verification failure for
+//     the application's purposes, even though jws.Verify() returned
+//     no error.
+func WithCritExtension(names ...string) VerifyOption {
+	return &verifyOption{option.New(identCritExtension{}, names)}
+}
 
 // WithJSON specifies that the result of `jws.Sign()` is serialized in
 // JSON format.
@@ -38,7 +74,10 @@ type withKey struct {
 	public    Headers
 }
 
-// Protected exists as an escape hatch to modify the header values after the fact
+// Protected returns the protected headers. If w.protected is nil and v is
+// non-nil, v is stored as the protected headers before returning. This allows
+// callers to provide a default Headers that is used only when none was
+// explicitly configured via WithProtectedHeaders.
 func (w *withKey) Protected(v Headers) Headers {
 	if w.protected == nil && v != nil {
 		w.protected = v
@@ -48,11 +87,15 @@ func (w *withKey) Protected(v Headers) Headers {
 
 // WithKey is used to pass a static algorithm/key pair to either `jws.Sign()` or `jws.Verify()`.
 //
+// IMPORTANT: Although `alg` is typed as `jwa.KeyAlgorithm` for compatibility
+// with `(jwk.Key).Algorithm()`, JWS only accepts `jwa.SignatureAlgorithm`
+// values here. Passing a key-encryption algorithm such as `jwa.A128KW()` to
+// `jws.WithKey()` compiles, but `jws.Sign()` / `jws.Verify()` reject it at runtime.
+//
 // The `alg` parameter is the identifier for the signature algorithm that should be used.
-// It is of type `jwa.KeyAlgorithm` but in reality you can only pass `jwa.SignatureAlgorithm`
-// types. It is this way so that the value in `(jwk.Key).Algorithm()` can be directly
-// passed to the option. If you specify other algorithm types such as `jwa.KeyEncryptionAlgorithm`,
-// then you will get an error when `jws.Sign()` or `jws.Verify()` is executed.
+// It is of type `jwa.KeyAlgorithm` so that the value in `(jwk.Key).Algorithm()` can be
+// directly passed to the option, but that is only valid when the JWK is already known to
+// be intended for JWS and its `alg` value is a `jwa.SignatureAlgorithm`.
 //
 // The `alg` parameter cannot be "none" (jwa.NoSignature) for security reasons.
 // You will have to use a separate, more explicit option to allow the use of "none"
@@ -221,7 +264,10 @@ type withInsecureNoSignature struct {
 	protected Headers
 }
 
-// Protected exists as an escape hatch to modify the header values after the fact
+// Protected returns the protected headers. If w.protected is nil and v is
+// non-nil, v is stored as the protected headers before returning. This allows
+// callers to provide a default Headers that is used only when none was
+// explicitly configured via WithProtectedHeaders.
 func (w *withInsecureNoSignature) Protected(v Headers) Headers {
 	if w.protected == nil && v != nil {
 		w.protected = v

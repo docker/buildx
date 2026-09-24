@@ -17,10 +17,7 @@ func (v defaultVerifier) Algorithm() jwa.SignatureAlgorithm {
 }
 
 func (v defaultVerifier) Verify(key any, payload, signature []byte) error {
-	if err := jwsbb.Verify(key, v.alg.String(), payload, signature); err != nil {
-		return verifyError{verificationError{err}}
-	}
-	return nil
+	return jwsbb.Verify(key, v.alg.String(), payload, signature)
 }
 
 type Verifier2 interface {
@@ -35,10 +32,7 @@ type verifierAdapter struct {
 }
 
 func (v verifierAdapter) Verify(key any, payload, signature []byte) error {
-	if err := v.v.Verify(payload, signature, key); err != nil {
-		return verifyError{verificationError{err}}
-	}
-	return nil
+	return v.v.Verify(payload, signature, key)
 }
 
 // VerifierFor returns a Verifier2 for the given signature algorithm.

@@ -78,6 +78,21 @@ func (*globalDecryptOption) globalOption() {}
 
 func (*globalDecryptOption) decryptOption() {}
 
+// GlobalEncryptOption describes options that changes global settings and for each call of the `jwe.Encrypt` function
+type GlobalEncryptOption interface {
+	Option
+	globalOption()
+	encryptOption()
+}
+
+type globalEncryptOption struct {
+	Option
+}
+
+func (*globalEncryptOption) globalOption() {}
+
+func (*globalEncryptOption) encryptOption() {}
+
 // GlobalOption describes options that changes global settings for this package
 type GlobalOption interface {
 	Option
@@ -89,6 +104,22 @@ type globalOption struct {
 }
 
 func (*globalOption) globalOption() {}
+
+// GlobalParseOption describes an Option that can be passed to `jwe.Settings()`
+// and `jwe.ReadFile()`.
+type GlobalParseOption interface {
+	Option
+	globalOption()
+	readFileOption()
+}
+
+type globalParseOption struct {
+	Option
+}
+
+func (*globalParseOption) globalOption() {}
+
+func (*globalParseOption) readFileOption() {}
 
 // ReadFileOption is a type of `Option` that can be passed to `jwe.Parse`
 type ParseOption interface {
@@ -143,6 +174,7 @@ type identCEK struct{}
 type identCompress struct{}
 type identContentEncryptionAlgorithm struct{}
 type identContext struct{}
+type identCritValidation struct{}
 type identFS struct{}
 type identKey struct{}
 type identKeyProvider struct{}
@@ -150,8 +182,11 @@ type identKeyUsed struct{}
 type identLegacyHeaderMerging struct{}
 type identMaxDecompressBufferSize struct{}
 type identMaxPBES2Count struct{}
+type identMaxRecipients struct{}
 type identMergeProtectedHeaders struct{}
 type identMessage struct{}
+type identMinPBES2Count struct{}
+type identPBES2Count struct{}
 type identPerRecipientHeaders struct{}
 type identPretty struct{}
 type identProtectedHeaders struct{}
@@ -176,6 +211,10 @@ func (identContentEncryptionAlgorithm) String() string {
 
 func (identContext) String() string {
 	return "WithContext"
+}
+
+func (identCritValidation) String() string {
+	return "WithCritValidation"
 }
 
 func (identFS) String() string {
@@ -206,12 +245,24 @@ func (identMaxPBES2Count) String() string {
 	return "WithMaxPBES2Count"
 }
 
+func (identMaxRecipients) String() string {
+	return "WithMaxRecipients"
+}
+
 func (identMergeProtectedHeaders) String() string {
 	return "WithMergeProtectedHeaders"
 }
 
 func (identMessage) String() string {
 	return "WithMessage"
+}
+
+func (identMinPBES2Count) String() string {
+	return "WithMinPBES2Count"
+}
+
+func (identPBES2Count) String() string {
+	return "WithPBES2Count"
 }
 
 func (identPerRecipientHeaders) String() string {
@@ -258,6 +309,17 @@ func WithCEK(v *[]byte) DecryptOption {
 // a payload using `jwe.Encrypt` (Yes, we know it can only be "" or "DEF",
 // but the way the specification is written it could allow for more options,
 // and therefore this option takes an argument)
+//
+// Compression can leak information about the plaintext through message
+// length, so enable it only when you understand that tradeoff.
+//
+// This library does not enforce an encrypt-side plaintext size limit before
+// compression. Callers that accept untrusted or arbitrarily large payloads
+// must bound the input size before calling `jwe.Encrypt` with this option.
+//
+// Recipients may independently reject compressed messages whose
+// decompressed payload exceeds their `jwe.WithMaxDecompressBufferSize`
+// setting.
 func WithCompress(v jwa.CompressionAlgorithm) EncryptOption {
 	return &encryptOption{option.New(identCompress{}, v)}
 }
@@ -272,6 +334,39 @@ func WithContentEncryption(v jwa.ContentEncryptionAlgorithm) EncryptOption {
 // If not provided, context.Background() will be used.
 func WithContext(v context.Context) DecryptOption {
 	return &decryptOption{option.New(identContext{}, v)}
+}
+
+// WithCritValidation enables RFC 7516 Section 4.1.13 (via RFC 7515
+// Section 4.1.11) validation of the "crit" (Critical) header parameter
+// during decryption. The default is false, matching the behavior of
+// v3.0.13 and earlier (the "crit" header is silently ignored).
+//
+// When enabled, jwe.Decrypt() will reject any JWE whose protected
+// header lists "crit" entries that the recipient has not declared
+// support for via jwe.WithCritExtension(). It will also reject
+// structurally invalid "crit" lists: empty arrays, duplicate names,
+// empty extension names, names of standard JOSE/JWE header parameters,
+// and names that do not appear as header parameters in the protected
+// header.
+//
+// Per RFC 7516 Section 4.1.13 (referencing RFC 7515 Section 4.1.11),
+// recipients MUST reject a JWE whose "crit" list names extensions
+// they do not understand. Enabling this option together with one or
+// more jwe.WithCritExtension() calls is the only way to satisfy that
+// requirement with this library.
+//
+// IMPORTANT: enabling this option makes the library check that every
+// "crit" entry has been declared via jwe.WithCritExtension(), but the
+// library cannot perform the actual extension-specific processing on
+// your behalf. After jwe.Decrypt() returns successfully, your code
+// MUST read each declared extension header and apply whatever check
+// or side effect the extension semantics demand. If you declare an
+// extension and then forget to act on its value, you have defeated
+// the protection the producer was trying to obtain by marking that
+// extension critical. See the documentation on jwe.WithCritExtension
+// for details.
+func WithCritValidation(v bool) DecryptOption {
+	return &decryptOption{option.New(identCritValidation{}, v)}
 }
 
 // WithFS specifies the source `fs.FS` object to read the file from.
@@ -339,6 +434,12 @@ func WithLegacyHeaderMerging(v bool) EncryptOption {
 // exceeds this amount when decompressed, jwe.Decrypt will return an error.
 // The default value is 10MB.
 //
+// A non-positive value rejects every compressed JWE: the cap fires on
+// the first byte of inflated output, so any "zip"-compressed message
+// fails with an exceeds-cap error before any payload is delivered. Use
+// this when the deployment refuses to accept compressed JWEs at all.
+// Pass an explicit positive cap when compressed payloads are expected.
+//
 // This option can be used for `jwe.Settings()`, which changes the behavior
 // globally, or for `jwe.Decrypt()`, which changes the behavior for that
 // specific call.
@@ -350,9 +451,31 @@ func WithMaxDecompressBufferSize(v int64) GlobalDecryptOption {
 // to use when decrypting a message. If not specified, the default
 // value of 10,000 is used.
 //
-// This option has a global effect.
-func WithMaxPBES2Count(v int) GlobalOption {
-	return &globalOption{option.New(identMaxPBES2Count{}, v)}
+// The cap is applied per recipient. RFC 7516 §5.3 allows each
+// recipient of a JSON-serialized JWE to carry its own "p2c" iteration
+// count in its per-recipient unprotected header, and jwe.Decrypt
+// honors that. For a JWE with N recipients, the worst-case PBKDF2
+// cost is therefore on the order of N * MaxPBES2Count iterations per
+// decrypt attempt. When accepting multi-recipient JSON JWEs from
+// untrusted senders, also clamp jwe.WithMaxRecipients.
+//
+// This option can be used for `jwe.Settings()`, which changes the behavior
+// globally, or for `jwe.Decrypt()`, which changes the behavior for that
+// specific call.
+func WithMaxPBES2Count(v int) GlobalDecryptOption {
+	return &globalDecryptOption{option.New(identMaxPBES2Count{}, v)}
+}
+
+// WithMaxRecipients specifies the maximum number of recipients allowed
+// in a JWE message. If a JWE message contains more recipients than this
+// value, parsing or decryption will return an error. The default value
+// is 100.
+//
+// This option can be used for `jwe.Settings()`, which changes the behavior
+// globally, or for `jwe.Decrypt()`, which changes the behavior for that
+// specific call.
+func WithMaxRecipients(v int) GlobalDecryptOption {
+	return &globalDecryptOption{option.New(identMaxRecipients{}, v)}
 }
 
 // WithMergeProtectedHeaders specify that when given multiple headers
@@ -367,6 +490,47 @@ func WithMergeProtectedHeaders(v bool) EncryptOption {
 // in one go.
 func WithMessage(v *Message) DecryptOption {
 	return &decryptOption{option.New(identMessage{}, v)}
+}
+
+// WithMinPBES2Count specifies the minimum number of PBES2 iterations
+// to accept when decrypting a message. If not specified, the default
+// value of 1,000 is used (RFC 7518 §4.8.1.2 floor). Set to 0 to
+// disable the minimum check (NOT RECOMMENDED for untrusted issuers
+// — without a floor, recipients accept arbitrarily-weak password-
+// derived keys and silently spend the producer-chosen amount of
+// crypto work to verify them).
+//
+// Threat model: a malicious or careless issuer signs a PBES2-wrapped
+// JWE with a very low p2c (e.g. 100) so they spend almost no CPU on
+// their side, while the recipient happily derives the wrap key with
+// the same low iteration count. The result is an authenticated
+// message whose key-derivation strength is well below industry
+// practice (OWASP 2023 recommends ≥600,000 PBKDF2-SHA256 iterations
+// for password-derived keys; the RFC floor of 1,000 is far below
+// that). For receiver-side hardening against under-iteration, raise
+// WithMinPBES2Count above 1,000.
+//
+// This option can be used for `jwe.Settings()`, which changes the behavior
+// globally, or for `jwe.Decrypt()`, which changes the behavior for that
+// specific call.
+func WithMinPBES2Count(v int) GlobalDecryptOption {
+	return &globalDecryptOption{option.New(identMinPBES2Count{}, v)}
+}
+
+// WithPBES2Count specifies the number of PBKDF2 iterations to use when
+// encrypting a key with the PBES2 family of algorithms. If not specified,
+// the default value of 10,000 is used. Modern guidance (OWASP 2023)
+// recommends 600,000 or more for PBKDF2-HMAC-SHA256.
+//
+// This option only affects encryption. Iteration counts on incoming
+// messages are validated separately on decrypt via WithMinPBES2Count
+// and WithMaxPBES2Count.
+//
+// This option can be used for `jwe.Settings()`, which changes the behavior
+// globally, or for `jwe.Encrypt()`, which changes the behavior for that
+// specific call.
+func WithPBES2Count(v int) GlobalEncryptOption {
+	return &globalEncryptOption{option.New(identPBES2Count{}, v)}
 }
 
 // WithPretty specifies whether the JSON output should be formatted and

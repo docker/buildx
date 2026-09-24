@@ -108,12 +108,11 @@ type stdHeaders struct {
 	x509CertThumbprintS256 *string
 	x509URL                *string
 	privateParams          map[string]any
-	mu                     *sync.RWMutex
+	mu                     sync.RWMutex
 }
 
 func NewHeaders() Headers {
 	return &stdHeaders{
-		mu:            &sync.RWMutex{},
 		privateParams: map[string]any{},
 	}
 }
@@ -430,13 +429,23 @@ func (h *stdHeaders) setNoLock(name string, value any) error {
 	switch name {
 	case AgreementPartyUInfoKey:
 		if v, ok := value.([]byte); ok {
-			h.agreementPartyUInfo = v
+			if v == nil {
+				h.agreementPartyUInfo = nil
+			} else {
+				h.agreementPartyUInfo = make([]byte, len(v))
+				copy(h.agreementPartyUInfo, v)
+			}
 			return nil
 		}
 		return fmt.Errorf(`invalid value for %s key: %T`, AgreementPartyUInfoKey, value)
 	case AgreementPartyVInfoKey:
 		if v, ok := value.([]byte); ok {
-			h.agreementPartyVInfo = v
+			if v == nil {
+				h.agreementPartyVInfo = nil
+			} else {
+				h.agreementPartyVInfo = make([]byte, len(v))
+				copy(h.agreementPartyVInfo, v)
+			}
 			return nil
 		}
 		return fmt.Errorf(`invalid value for %s key: %T`, AgreementPartyVInfoKey, value)
@@ -469,7 +478,12 @@ func (h *stdHeaders) setNoLock(name string, value any) error {
 		return fmt.Errorf(`invalid value for %s key: %T`, ContentTypeKey, value)
 	case CriticalKey:
 		if v, ok := value.([]string); ok {
-			h.critical = v
+			if v == nil {
+				h.critical = nil
+			} else {
+				h.critical = make([]string, len(v))
+				copy(h.critical, v)
+			}
 			return nil
 		}
 		return fmt.Errorf(`invalid value for %s key: %T`, CriticalKey, value)
@@ -579,6 +593,8 @@ func (h *stdHeaders) Remove(key string) error {
 }
 
 func (h *stdHeaders) UnmarshalJSON(buf []byte) error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
 	h.agreementPartyUInfo = nil
 	h.agreementPartyVInfo = nil
 	h.algorithm = nil
@@ -640,7 +656,7 @@ LOOP:
 				}
 				h.contentEncryption = &decoded
 			case ContentTypeKey:
-				if err := json.AssignNextStringToken(&h.contentType, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.contentType, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, ContentTypeKey, err)
 				}
 			case CriticalKey:
@@ -670,15 +686,15 @@ LOOP:
 				}
 				h.jwk = key
 			case JWKSetURLKey:
-				if err := json.AssignNextStringToken(&h.jwkSetURL, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.jwkSetURL, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, JWKSetURLKey, err)
 				}
 			case KeyIDKey:
-				if err := json.AssignNextStringToken(&h.keyID, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.keyID, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, KeyIDKey, err)
 				}
 			case TypeKey:
-				if err := json.AssignNextStringToken(&h.typ, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.typ, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, TypeKey, err)
 				}
 			case X509CertChainKey:
@@ -688,15 +704,15 @@ LOOP:
 				}
 				h.x509CertChain = &decoded
 			case X509CertThumbprintKey:
-				if err := json.AssignNextStringToken(&h.x509CertThumbprint, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.x509CertThumbprint, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, X509CertThumbprintKey, err)
 				}
 			case X509CertThumbprintS256Key:
-				if err := json.AssignNextStringToken(&h.x509CertThumbprintS256, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.x509CertThumbprintS256, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, X509CertThumbprintS256Key, err)
 				}
 			case X509URLKey:
-				if err := json.AssignNextStringToken(&h.x509URL, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.x509URL, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, X509URLKey, err)
 				}
 			default:
@@ -771,108 +787,190 @@ func (h *stdHeaders) Keys() []string {
 	return keys
 }
 
-func (h stdHeaders) MarshalJSON() ([]byte, error) {
-	data := make(map[string]any)
-	keys := make([]string, 0, 16+len(h.privateParams))
+type headerPair struct {
+	Name  string
+	Value any
+}
+
+var headerPairPool = sync.Pool{
+	New: func() any {
+		return make([]headerPair, 0, 16)
+	},
+}
+
+func getHeaderPairList() []headerPair {
+	return headerPairPool.Get().([]headerPair)
+}
+
+func putHeaderPairList(list []headerPair) {
+	list = list[:0]
+	headerPairPool.Put(list)
+}
+
+func (h *stdHeaders) makePairs() ([]headerPair, error) {
+	pairs := getHeaderPairList()
 	h.mu.RLock()
+	defer h.mu.RUnlock()
 	if h.agreementPartyUInfo != nil {
-		data[AgreementPartyUInfoKey] = h.agreementPartyUInfo
-		keys = append(keys, AgreementPartyUInfoKey)
+		v, err := json.Marshal(base64.EncodeToString(h.agreementPartyUInfo))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, AgreementPartyUInfoKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: AgreementPartyUInfoKey, Value: v})
 	}
 	if h.agreementPartyVInfo != nil {
-		data[AgreementPartyVInfoKey] = h.agreementPartyVInfo
-		keys = append(keys, AgreementPartyVInfoKey)
+		v, err := json.Marshal(base64.EncodeToString(h.agreementPartyVInfo))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, AgreementPartyVInfoKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: AgreementPartyVInfoKey, Value: v})
 	}
 	if h.algorithm != nil {
-		data[AlgorithmKey] = *(h.algorithm)
-		keys = append(keys, AlgorithmKey)
+		v, err := json.Marshal(*(h.algorithm))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, AlgorithmKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: AlgorithmKey, Value: v})
 	}
 	if h.compression != nil {
-		data[CompressionKey] = *(h.compression)
-		keys = append(keys, CompressionKey)
+		v, err := json.Marshal(*(h.compression))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, CompressionKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: CompressionKey, Value: v})
 	}
 	if h.contentEncryption != nil {
-		data[ContentEncryptionKey] = *(h.contentEncryption)
-		keys = append(keys, ContentEncryptionKey)
+		v, err := json.Marshal(*(h.contentEncryption))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, ContentEncryptionKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: ContentEncryptionKey, Value: v})
 	}
 	if h.contentType != nil {
-		data[ContentTypeKey] = *(h.contentType)
-		keys = append(keys, ContentTypeKey)
+		v, err := json.Marshal(*(h.contentType))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, ContentTypeKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: ContentTypeKey, Value: v})
 	}
 	if h.critical != nil {
-		data[CriticalKey] = h.critical
-		keys = append(keys, CriticalKey)
+		v, err := json.Marshal(h.critical)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, CriticalKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: CriticalKey, Value: v})
 	}
 	if h.ephemeralPublicKey != nil {
-		data[EphemeralPublicKeyKey] = h.ephemeralPublicKey
-		keys = append(keys, EphemeralPublicKeyKey)
+		v, err := json.Marshal(h.ephemeralPublicKey)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, EphemeralPublicKeyKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: EphemeralPublicKeyKey, Value: v})
 	}
 	if h.jwk != nil {
-		data[JWKKey] = h.jwk
-		keys = append(keys, JWKKey)
+		v, err := json.Marshal(h.jwk)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, JWKKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: JWKKey, Value: v})
 	}
 	if h.jwkSetURL != nil {
-		data[JWKSetURLKey] = *(h.jwkSetURL)
-		keys = append(keys, JWKSetURLKey)
+		v, err := json.Marshal(*(h.jwkSetURL))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, JWKSetURLKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: JWKSetURLKey, Value: v})
 	}
 	if h.keyID != nil {
-		data[KeyIDKey] = *(h.keyID)
-		keys = append(keys, KeyIDKey)
+		v, err := json.Marshal(*(h.keyID))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, KeyIDKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: KeyIDKey, Value: v})
 	}
 	if h.typ != nil {
-		data[TypeKey] = *(h.typ)
-		keys = append(keys, TypeKey)
+		v, err := json.Marshal(*(h.typ))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, TypeKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: TypeKey, Value: v})
 	}
 	if h.x509CertChain != nil {
-		data[X509CertChainKey] = h.x509CertChain
-		keys = append(keys, X509CertChainKey)
+		v, err := json.Marshal(h.x509CertChain)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509CertChainKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509CertChainKey, Value: v})
 	}
 	if h.x509CertThumbprint != nil {
-		data[X509CertThumbprintKey] = *(h.x509CertThumbprint)
-		keys = append(keys, X509CertThumbprintKey)
+		v, err := json.Marshal(*(h.x509CertThumbprint))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509CertThumbprintKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509CertThumbprintKey, Value: v})
 	}
 	if h.x509CertThumbprintS256 != nil {
-		data[X509CertThumbprintS256Key] = *(h.x509CertThumbprintS256)
-		keys = append(keys, X509CertThumbprintS256Key)
+		v, err := json.Marshal(*(h.x509CertThumbprintS256))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509CertThumbprintS256Key, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509CertThumbprintS256Key, Value: v})
 	}
 	if h.x509URL != nil {
-		data[X509URLKey] = *(h.x509URL)
-		keys = append(keys, X509URLKey)
+		v, err := json.Marshal(*(h.x509URL))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509URLKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509URLKey, Value: v})
 	}
 	for k, v := range h.privateParams {
-		data[k] = v
-		keys = append(keys, k)
-	}
-	h.mu.RUnlock()
-
-	sort.Strings(keys)
-	buf := pool.BytesBuffer().Get()
-	defer pool.BytesBuffer().Put(buf)
-	enc := json.NewEncoder(buf)
-	buf.WriteByte(tokens.OpenCurlyBracket)
-	for i, k := range keys {
-		if i > 0 {
-			buf.WriteRune(tokens.Comma)
-		}
-		buf.WriteRune(tokens.DoubleQuote)
-		buf.WriteString(k)
-		buf.WriteString(`":`)
-		v := data[k]
+		var encoded []byte
 		switch v := v.(type) {
 		case []byte:
-			buf.WriteRune(tokens.DoubleQuote)
-			buf.WriteString(base64.EncodeToString(v))
-			buf.WriteRune(tokens.DoubleQuote)
-		default:
-			if err := enc.Encode(v); err != nil {
-				return nil, fmt.Errorf(`failed to encode value for field %s`, k)
+			var err error
+			encoded, err = json.Marshal(base64.EncodeToString(v))
+			if err != nil {
+				return nil, fmt.Errorf(`failed to marshal field %q: %w`, k, err)
 			}
-			buf.Truncate(buf.Len() - 1)
+		default:
+			var err error
+			encoded, err = json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf(`failed to marshal field %q: %w`, k, err)
+			}
 		}
+		pairs = append(pairs, headerPair{Name: k, Value: encoded})
+	}
+
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].Name < pairs[j].Name
+	})
+
+	return pairs, nil
+}
+
+func (h *stdHeaders) MarshalJSON() ([]byte, error) {
+	buf := pool.BytesBuffer().Get()
+	defer pool.BytesBuffer().Put(buf)
+	pairs, err := h.makePairs()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to make pairs: %w`, err)
+	}
+	buf.WriteByte(tokens.OpenCurlyBracket)
+
+	for i, pair := range pairs {
+		if i > 0 {
+			buf.WriteByte(tokens.Comma)
+		}
+		buf.WriteByte('"')
+		buf.WriteString(pair.Name)
+		buf.WriteString(`": `)
+		buf.Write(pair.Value.([]byte))
 	}
 	buf.WriteByte(tokens.CloseCurlyBracket)
 	ret := make([]byte, buf.Len())
 	copy(ret, buf.Bytes())
+	putHeaderPairList(pairs)
 	return ret, nil
 }
 
@@ -894,6 +992,6 @@ func (h *stdHeaders) clear() {
 	h.x509CertThumbprint = nil
 	h.x509CertThumbprintS256 = nil
 	h.x509URL = nil
-	h.privateParams = map[string]any{}
+	clear(h.privateParams)
 	h.mu.Unlock()
 }

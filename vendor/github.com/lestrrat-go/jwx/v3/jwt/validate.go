@@ -3,6 +3,7 @@ package jwt
 import (
 	"context"
 	"fmt"
+	"reflect"
 	"slices"
 	"strconv"
 	"time"
@@ -24,7 +25,7 @@ func isSupportedTimeClaim(c string) error {
 	case ExpirationKey, IssuedAtKey, NotBeforeKey:
 		return nil
 	}
-	return fmt.Errorf(`unsupported time claim %s`, strconv.Quote(c))
+	return jwterrs.ValidateErrorf(`unsupported time claim %s in jwt.WithMaxDelta/jwt.WithMinDelta`, strconv.Quote(c))
 }
 
 func timeClaim(t Token, clock Clock, c string) time.Time {
@@ -51,6 +52,10 @@ func timeClaim(t Token, clock Clock, c string) time.Time {
 // See the various `WithXXX` functions for optional parameters
 // that can control the behavior of this method.
 func Validate(t Token, options ...ValidateOption) error {
+	if t == nil {
+		return jwterrs.ValidateErrorf(`jwt.Validate: token is nil`)
+	}
+
 	ctx := context.Background()
 	trunc := getDefaultTruncation()
 
@@ -72,6 +77,9 @@ func Validate(t Token, options ...ValidateOption) error {
 		case identAcceptableSkew{}:
 			if err := o.Value(&skew); err != nil {
 				return fmt.Errorf(`jwt.Validate: value for WithAcceptableSkew() option must be time.Duration: %w`, err)
+			}
+			if skew < 0 {
+				return fmt.Errorf(`jwt.Validate: WithAcceptableSkew() must not be negative`)
 			}
 		case identTruncation{}:
 			if err := o.Value(&trunc); err != nil {
@@ -162,10 +170,21 @@ func MinDeltaIs(c1, c2 string, dur time.Duration) Validator {
 func (iitr *isInTimeRange) Validate(ctx context.Context, t Token) error {
 	clock := ValidationCtxClock(ctx) // MUST be populated
 	skew := ValidationCtxSkew(ctx)   // MUST be populated
-	// We don't check if the claims already exist, because we already did that
-	// by piggybacking on `required` check.
 	t1 := timeClaim(t, clock, iitr.c1)
 	t2 := timeClaim(t, clock, iitr.c2)
+	// Defensive: reject zero-value claims before computing delta. The
+	// auto-IsRequired piggyback in WithValidator type-switches on the
+	// concrete *isInTimeRange — wrapping this validator (e.g., in
+	// ValidatorFunc) skips that piggyback, and a missing time claim
+	// would silently produce a hugely-negative delta that trivially
+	// satisfies the upper-bound check. Reject the missing claim
+	// regardless of how the validator was wrapped.
+	if t1.IsZero() {
+		return jwterrs.MissingRequiredClaimErrorf(iitr.c1)
+	}
+	if t2.IsZero() {
+		return jwterrs.MissingRequiredClaimErrorf(iitr.c2)
+	}
 	if iitr.less { // t1 - t2 <= iitr.dur
 		// t1 - t2 < iitr.dur + skew
 		if t1.Sub(t2) > iitr.dur+skew {
@@ -210,21 +229,36 @@ func SetValidationCtxSkew(ctx context.Context, dur time.Duration) context.Contex
 }
 
 // ValidationCtxClock returns the Clock object associated with
-// the current validation context. This value will always be available
-// during validation of tokens.
+// the current validation context. When called from within a Validator
+// invoked by [Validate], the value is always populated. If the context
+// was not initialized by [Validate] (for example, a custom validator
+// was invoked with a bare context), a default clock backed by
+// [time.Now] is returned instead of panicking.
 func ValidationCtxClock(ctx context.Context) Clock {
-	//nolint:forcetypeassert
-	return ctx.Value(identValidationCtxClock{}).(Clock)
+	if cl, ok := ctx.Value(identValidationCtxClock{}).(Clock); ok {
+		return cl
+	}
+	return ClockFunc(time.Now)
 }
 
+// ValidationCtxSkew returns the clock skew associated with the current
+// validation context. If the context was not initialized by [Validate],
+// zero is returned instead of panicking.
 func ValidationCtxSkew(ctx context.Context) time.Duration {
-	//nolint:forcetypeassert
-	return ctx.Value(identValidationCtxSkew{}).(time.Duration)
+	if dur, ok := ctx.Value(identValidationCtxSkew{}).(time.Duration); ok {
+		return dur
+	}
+	return 0
 }
 
+// ValidationCtxTruncation returns the truncation granularity associated
+// with the current validation context. If the context was not initialized
+// by [Validate], zero is returned instead of panicking.
 func ValidationCtxTruncation(ctx context.Context) time.Duration {
-	//nolint:forcetypeassert
-	return ctx.Value(identValidationCtxTruncation{}).(time.Duration)
+	if dur, ok := ctx.Value(identValidationCtxTruncation{}).(time.Duration); ok {
+		return dur
+	}
+	return 0
 }
 
 // IsExpirationValid is one of the default validators that will be executed.
@@ -368,9 +402,11 @@ type claimValueIs struct {
 }
 
 // ClaimValueIs creates a Validator that checks if the value of claim `name`
-// matches `value`. The comparison is done using a simple `==` comparison,
-// and therefore complex comparisons may fail using this code. If you
-// need to do more, use a custom Validator.
+// matches `value`. The comparison is done with reflect.DeepEqual, so
+// slice-, map-, and struct-valued claims are supported in addition to
+// scalars. Function-valued claims follow reflect.DeepEqual semantics
+// (equal only when both sides are nil). If you need finer-grained
+// matching than DeepEqual provides, use a custom Validator.
 func ClaimValueIs(name string, value any) Validator {
 	return &claimValueIs{
 		name:    name,
@@ -384,7 +420,7 @@ func (cv *claimValueIs) Validate(_ context.Context, t Token) error {
 	if err := t.Get(cv.name, &v); err != nil {
 		return cv.makeErr(`claim %[1]q does not exist or is not a []string: %[2]w`, cv.name, err)
 	}
-	if v != cv.value {
+	if !reflect.DeepEqual(v, cv.value) {
 		return cv.makeErr(`claim %[1]q does not have the expected value`, cv.name)
 	}
 	return nil

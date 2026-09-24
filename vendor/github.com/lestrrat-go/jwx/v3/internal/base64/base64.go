@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/binary"
 	"fmt"
+	"io"
 	"sync"
 )
 
@@ -17,6 +18,55 @@ type Encoder interface {
 	EncodedLen(int) int
 	EncodeToString([]byte) string
 	AppendEncode([]byte, []byte) []byte
+}
+
+// StreamEncoder is an [Encoder] that can also produce an incremental
+// [io.WriteCloser] for encoding a byte stream directly into a downstream
+// writer. This is the shape the jws streaming detached-payload path
+// needs to avoid materializing the payload in memory.
+//
+// The stdlib *[encoding/base64.Encoding] satisfies this interface
+// automatically via [AsStreamEncoder] (the stdlib exposes NewEncoder as
+// a package-level function rather than a method, so a small wrapper is
+// applied on lookup). Extension modules providing custom encoders
+// should implement [io.WriteCloser]-returning NewEncoder if they want
+// their encoder honored by the streaming path.
+type StreamEncoder interface {
+	Encoder
+	// NewEncoder returns a new [io.WriteCloser] that encodes bytes
+	// written to it and forwards the encoded output to w. Close must
+	// be called to flush any partial final block.
+	NewEncoder(w io.Writer) io.WriteCloser
+}
+
+// AsStreamEncoder reports whether e can be used as a [StreamEncoder]
+// and returns the stream-capable view. Callers should error out when
+// the second return value is false rather than silently falling back
+// to a different encoder, to avoid mixing encodings within a single
+// signing operation.
+//
+// The stdlib [*encoding/base64.Encoding] is supported as a special
+// case (its streaming form is a top-level function rather than a
+// method, so it does not directly satisfy the interface).
+func AsStreamEncoder(e Encoder) (StreamEncoder, bool) {
+	if s, ok := e.(StreamEncoder); ok {
+		return s, true
+	}
+	if enc, ok := e.(*base64.Encoding); ok {
+		return stdStreamEncoder{Encoding: enc}, true
+	}
+	return nil, false
+}
+
+// stdStreamEncoder wraps the stdlib [*base64.Encoding] so it satisfies
+// [StreamEncoder]. It is used as the fallback in [AsStreamEncoder]
+// when a caller passes a raw [*base64.Encoding].
+type stdStreamEncoder struct {
+	*base64.Encoding
+}
+
+func (e stdStreamEncoder) NewEncoder(w io.Writer) io.WriteCloser {
+	return base64.NewEncoder(e.Encoding, w)
 }
 
 var muEncoder sync.RWMutex
@@ -57,6 +107,14 @@ func Encode(src []byte) []byte {
 	dst := make([]byte, encoder.EncodedLen(len(src)))
 	encoder.Encode(dst, src)
 	return dst
+}
+
+func AppendEncode(dst, src []byte) []byte {
+	return getEncoder().AppendEncode(dst, src)
+}
+
+func EncodedLen(n int) int {
+	return getEncoder().EncodedLen(n)
 }
 
 func EncodeToString(src []byte) string {

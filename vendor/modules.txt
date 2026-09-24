@@ -169,10 +169,9 @@ github.com/cenkalti/backoff/v5
 # github.com/cespare/xxhash/v2 v2.3.0
 ## explicit; go 1.11
 github.com/cespare/xxhash/v2
-# github.com/clipperhouse/uax29/v2 v2.2.0
+# github.com/clipperhouse/uax29/v2 v2.6.0
 ## explicit; go 1.18
 github.com/clipperhouse/uax29/v2/graphemes
-github.com/clipperhouse/uax29/v2/internal/iterators
 # github.com/cloudflare/circl v1.6.3
 ## explicit; go 1.22.0
 github.com/cloudflare/circl/dh/x25519
@@ -287,7 +286,7 @@ github.com/cyberphone/json-canonicalization/go/src/webpki.org/jsoncanonicalizer
 # github.com/davecgh/go-spew v1.1.2-0.20180830191138-d8f796af33cc
 ## explicit
 github.com/davecgh/go-spew/spew
-# github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.0
+# github.com/decred/dcrd/dcrec/secp256k1/v4 v4.4.1
 ## explicit; go 1.17
 github.com/decred/dcrd/dcrec/secp256k1/v4
 # github.com/digitorus/pkcs7 v0.0.0-20230818184609-3a137a874352
@@ -470,7 +469,7 @@ github.com/gobwas/glob/syntax/ast
 github.com/gobwas/glob/syntax/lexer
 github.com/gobwas/glob/util/runes
 github.com/gobwas/glob/util/strings
-# github.com/goccy/go-json v0.10.5
+# github.com/goccy/go-json v0.10.6
 ## explicit; go 1.19
 github.com/goccy/go-json
 github.com/goccy/go-json/internal/decoder
@@ -583,7 +582,7 @@ github.com/klauspost/compress/zstd/internal/xxhash
 # github.com/lestrrat-go/blackmagic v1.0.4
 ## explicit; go 1.23
 github.com/lestrrat-go/blackmagic
-# github.com/lestrrat-go/dsig v1.0.0
+# github.com/lestrrat-go/dsig v1.2.1
 ## explicit; go 1.23.0
 github.com/lestrrat-go/dsig
 github.com/lestrrat-go/dsig/internal/ecutil
@@ -593,20 +592,19 @@ github.com/lestrrat-go/dsig-secp256k1
 # github.com/lestrrat-go/httpcc v1.0.1
 ## explicit; go 1.16
 github.com/lestrrat-go/httpcc
-# github.com/lestrrat-go/httprc/v3 v3.0.2
+# github.com/lestrrat-go/httprc/v3 v3.0.5
 ## explicit; go 1.23.0
 github.com/lestrrat-go/httprc/v3
 github.com/lestrrat-go/httprc/v3/errsink
 github.com/lestrrat-go/httprc/v3/proxysink
 github.com/lestrrat-go/httprc/v3/tracesink
-# github.com/lestrrat-go/jwx/v3 v3.0.13
-## explicit; go 1.24.0
+# github.com/lestrrat-go/jwx/v3 v3.1.1
+## explicit; go 1.25.0
 github.com/lestrrat-go/jwx/v3
 github.com/lestrrat-go/jwx/v3/cert
 github.com/lestrrat-go/jwx/v3/internal/base64
 github.com/lestrrat-go/jwx/v3/internal/ecutil
 github.com/lestrrat-go/jwx/v3/internal/json
-github.com/lestrrat-go/jwx/v3/internal/jwxio
 github.com/lestrrat-go/jwx/v3/internal/keyconv
 github.com/lestrrat-go/jwx/v3/internal/pool
 github.com/lestrrat-go/jwx/v3/internal/tokens
@@ -620,6 +618,7 @@ github.com/lestrrat-go/jwx/v3/jwe/internal/keygen
 github.com/lestrrat-go/jwx/v3/jwe/jwebb
 github.com/lestrrat-go/jwx/v3/jwk
 github.com/lestrrat-go/jwx/v3/jwk/ecdsa
+github.com/lestrrat-go/jwx/v3/jwk/internal/registry
 github.com/lestrrat-go/jwx/v3/jwk/jwkbb
 github.com/lestrrat-go/jwx/v3/jws
 github.com/lestrrat-go/jwx/v3/jws/internal/keytype
@@ -635,7 +634,7 @@ github.com/lestrrat-go/option/v2
 # github.com/mattn/go-runewidth v0.0.29
 ## explicit; go 1.23
 github.com/mattn/go-runewidth
-# github.com/mattn/go-shellwords v1.0.12
+# github.com/mattn/go-shellwords v1.0.13
 ## explicit; go 1.13
 github.com/mattn/go-shellwords
 # github.com/mitchellh/go-wordwrap v1.0.1
@@ -644,7 +643,7 @@ github.com/mitchellh/go-wordwrap
 # github.com/mitchellh/hashstructure/v2 v2.0.2
 ## explicit; go 1.14
 github.com/mitchellh/hashstructure/v2
-# github.com/moby/buildkit v0.33.0
+# github.com/moby/buildkit v0.33.0-rc1.0.20260922140836-5427d61296f2
 ## explicit; go 1.26.3
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -705,6 +704,7 @@ github.com/moby/buildkit/util/apicaps
 github.com/moby/buildkit/util/apicaps/pb
 github.com/moby/buildkit/util/appcontext
 github.com/moby/buildkit/util/appdefaults
+github.com/moby/buildkit/util/archiveutil
 github.com/moby/buildkit/util/attestation
 github.com/moby/buildkit/util/bklog
 github.com/moby/buildkit/util/bkmaps
@@ -831,7 +831,7 @@ github.com/munnerz/goautoneg
 # github.com/oklog/ulid/v2 v2.1.1
 ## explicit; go 1.15
 github.com/oklog/ulid/v2
-# github.com/open-policy-agent/opa v1.14.1
+# github.com/open-policy-agent/opa v1.19.0
 ## explicit; go 1.25.0
 github.com/open-policy-agent/opa/capabilities
 github.com/open-policy-agent/opa/internal/bundle
@@ -848,14 +848,16 @@ github.com/open-policy-agent/opa/internal/file/url
 github.com/open-policy-agent/opa/internal/future
 github.com/open-policy-agent/opa/internal/gojsonschema
 github.com/open-policy-agent/opa/internal/json/patch
+github.com/open-policy-agent/opa/internal/jsonv2
 github.com/open-policy-agent/opa/internal/lcss
 github.com/open-policy-agent/opa/internal/leb128
 github.com/open-policy-agent/opa/internal/merge
+github.com/open-policy-agent/opa/internal/methodlesstemplate
+github.com/open-policy-agent/opa/internal/methodlesstemplate/internal/fmtsort
 github.com/open-policy-agent/opa/internal/planner
 github.com/open-policy-agent/opa/internal/providers/aws
 github.com/open-policy-agent/opa/internal/providers/aws/crypto
 github.com/open-policy-agent/opa/internal/providers/aws/v4
-github.com/open-policy-agent/opa/internal/ref
 github.com/open-policy-agent/opa/internal/rego/opa
 github.com/open-policy-agent/opa/internal/semver
 github.com/open-policy-agent/opa/internal/strings
@@ -875,9 +877,11 @@ github.com/open-policy-agent/opa/v1/ast/internal/tokens
 github.com/open-policy-agent/opa/v1/ast/json
 github.com/open-policy-agent/opa/v1/ast/location
 github.com/open-policy-agent/opa/v1/bundle
+github.com/open-policy-agent/opa/v1/bundle/v1pb
 github.com/open-policy-agent/opa/v1/capabilities
 github.com/open-policy-agent/opa/v1/format
 github.com/open-policy-agent/opa/v1/ir
+github.com/open-policy-agent/opa/v1/ir/v1pb
 github.com/open-policy-agent/opa/v1/keys
 github.com/open-policy-agent/opa/v1/loader
 github.com/open-policy-agent/opa/v1/loader/extension
@@ -896,6 +900,7 @@ github.com/open-policy-agent/opa/v1/topdown
 github.com/open-policy-agent/opa/v1/topdown/builtins
 github.com/open-policy-agent/opa/v1/topdown/cache
 github.com/open-policy-agent/opa/v1/topdown/copypropagation
+github.com/open-policy-agent/opa/v1/topdown/durationparser
 github.com/open-policy-agent/opa/v1/topdown/print
 github.com/open-policy-agent/opa/v1/tracing
 github.com/open-policy-agent/opa/v1/types
@@ -1089,11 +1094,11 @@ github.com/transparency-dev/merkle
 github.com/transparency-dev/merkle/compact
 github.com/transparency-dev/merkle/proof
 github.com/transparency-dev/merkle/rfc6962
-# github.com/valyala/fastjson v1.6.7
-## explicit; go 1.12
+# github.com/valyala/fastjson v1.6.10
+## explicit; go 1.24
 github.com/valyala/fastjson
 github.com/valyala/fastjson/fastfloat
-# github.com/vektah/gqlparser/v2 v2.5.32
+# github.com/vektah/gqlparser/v2 v2.5.36
 ## explicit; go 1.22
 github.com/vektah/gqlparser/v2/ast
 github.com/vektah/gqlparser/v2/gqlerror

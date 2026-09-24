@@ -5,12 +5,15 @@ go_library(
     srcs = [
         "cert.go",
         "chain.go",
+        "options.go",
+        "settings.go",
     ],
     importpath = "github.com/lestrrat-go/jwx/v3/cert",
     visibility = ["//visibility:public"],
     deps = [
-    	"//internal/base64",
-    	"//internal/tokens",
+        "//internal/base64",
+        "//internal/tokens",
+        "@com_github_lestrrat_go_option_v2//:option",
     ],
 )
 

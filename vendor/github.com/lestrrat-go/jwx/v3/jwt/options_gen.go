@@ -39,6 +39,25 @@ type globalOption struct {
 
 func (*globalOption) globalOption() {}
 
+// GlobalParseOption describes an Option that can be passed to `jwt.Settings()`,
+// `jwt.Parse()`, and `jwt.ReadFile()`.
+type GlobalParseOption interface {
+	Option
+	globalOption()
+	parseOption()
+	readFileOption()
+}
+
+type globalParseOption struct {
+	Option
+}
+
+func (*globalParseOption) globalOption() {}
+
+func (*globalParseOption) parseOption() {}
+
+func (*globalParseOption) readFileOption() {}
+
 // GlobalValidateOption describes an Option that can be passed to `jwt.Settings()` and `jwt.Validate()`
 type GlobalValidateOption interface {
 	Option
@@ -181,6 +200,7 @@ type identNumericDateParsePrecision struct{}
 type identPedantic struct{}
 type identResetValidators struct{}
 type identSignOption struct{}
+type identStrictStringClaims struct{}
 type identToken struct{}
 type identTruncation struct{}
 type identValidate struct{}
@@ -257,6 +277,10 @@ func (identResetValidators) String() string {
 
 func (identSignOption) String() string {
 	return "WithSignOption"
+}
+
+func (identStrictStringClaims) String() string {
+	return "WithStrictStringClaims"
 }
 
 func (identToken) String() string {
@@ -430,6 +454,18 @@ func WithResetValidators(v bool) ValidateOption {
 // need to use this.
 func WithSignOption(v jws.SignOption) SignOption {
 	return &signOption{option.New(identSignOption{}, v)}
+}
+
+// WithStrictStringClaims controls whether JSON null values for string
+// claims (such as "iss", "sub", "jti") cause a parse error. By default,
+// null is silently accepted as an empty string (matching Go's standard
+// JSON decoding behavior). When set to true, null values are rejected
+// per the RFC type definitions (e.g. StringOrURI).
+//
+// This option only affects JWT claims. JWK, JWE, and JWS fields are
+// not subject to this check and will always accept null as an empty string.
+func WithStrictStringClaims(v bool) ParseOption {
+	return &parseOption{option.New(identStrictStringClaims{}, v)}
 }
 
 // WithToken specifies the token instance in which the resulting JWT is stored

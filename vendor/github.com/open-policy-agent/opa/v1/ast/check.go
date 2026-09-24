@@ -308,6 +308,17 @@ func (tc *typeChecker) checkRule(env *TypeEnv, as *AnnotationSet, rule *Rule) {
 			typeK := cpy.GetByValue(rule.Head.Key.Value)
 			if typeK != nil {
 				tpe = types.NewSet(typeK)
+				if !path.IsGround() {
+					objPath := path.DynamicSuffix()
+					path = path.GroundPrefix()
+
+					var err error
+					tpe, err = nestedObject(cpy, objPath, tpe)
+					if err != nil {
+						tc.err(NewError(TypeErr, rule.Head.Location, "%s", err.Error()))
+						tpe = nil
+					}
+				}
 			}
 		}
 	}
@@ -419,7 +430,18 @@ func (tc *typeChecker) checkExprBuiltin(env *TypeEnv, expr *Expr) *Error {
 		return newArgError(expr.Location, name, "too few arguments", getArgTypes(env, args), namedFargs)
 	}
 
+	pre := getArgTypes(env, args)
+
 	for i := range args {
+		// Check that pre-existing argument types are compatible with the expected types.
+		// Catching that case here avoids false negatives for builtins like sum([1, a]) where a is known to be a string.
+		if pre[i] != nil && !types.Nil(pre[i]) && !unifies(pre[i], fargs.Arg(i)) {
+			return newArgError(expr.Location, name, "invalid argument(s)", pre, namedFargs)
+		}
+
+		// unify1 infers types for untyped variables and checks resolved parts (constants, refs) inside partially-typed composites.
+		// The unifies pre-check above is skipped when the argument contains untyped variables,
+		// so unify1 is still needed to catch those errors.
 		if !unify1(env, args[i], fargs.Arg(i), false) {
 			post := make([]types.Type, len(args))
 			for i := range args {
@@ -509,6 +531,16 @@ func unify2(env *TypeEnv, a *Term, typeA types.Type, b *Term, typeB types.Type) 
 		}
 	}
 
+	// When one side is a Var with no type and the other has partial type
+	// info (e.g. a comprehension with some undetermined components),
+	// assign the known structure to the Var.
+	if _, ok := a.Value.(Var); ok && typeA == nil && typeB != nil {
+		return unify1(env, a, typeB, false)
+	}
+	if _, ok := b.Value.(Var); ok && typeB == nil && typeA != nil {
+		return unify1(env, b, typeA, false)
+	}
+
 	return false
 }
 
@@ -549,12 +581,20 @@ func unify2Object(env *TypeEnv, a *Term, b *Term) bool {
 	return false
 }
 
+// unify1 walks into a term's structure (arrays, objects, sets, vars), checks
+// compatibility against the expected type, and infers types for variables by
+// assigning them in env. It uses unifies internally for leaf checks.
 func unify1(env *TypeEnv, term *Term, tpe types.Type, union bool) bool {
 	switch v := term.Value.(type) {
 	case *Array:
 		switch tpe := tpe.(type) {
 		case *types.Array:
 			return unify1Array(env, v, tpe, union)
+		case *types.Recursive:
+			if arr, ok := tpe.Unwrap().(*types.Array); ok {
+				return unify1Array(env, v, arr, union)
+			}
+			return false
 		case types.Any:
 			if types.Compare(tpe, types.A) == 0 {
 				for i := range v.Len() {
@@ -573,6 +613,11 @@ func unify1(env *TypeEnv, term *Term, tpe types.Type, union bool) bool {
 		switch tpe := tpe.(type) {
 		case *types.Object:
 			return unify1Object(env, v, tpe, union)
+		case *types.Recursive:
+			if obj, ok := tpe.Unwrap().(*types.Object); ok {
+				return unify1Object(env, v, obj, union)
+			}
+			return false
 		case types.Any:
 			if types.Compare(tpe, types.A) == 0 {
 				v.Foreach(func(key, value *Term) {
@@ -710,6 +755,9 @@ func (rc *refChecker) Visit(x any) bool {
 		case *Term:
 			NewGenericVisitor(rc.Visit).Walk(terms)
 			return true
+		case *Not:
+			NewGenericVisitor(rc.Visit).Walk(terms.Body)
+			return true
 		}
 	case Ref:
 		if err := rc.checkApply(rc.env, x); err != nil {
@@ -839,10 +887,19 @@ func (rc *refChecker) checkRefLeaf(tpe types.Type, ref Ref, idx int) *Error {
 	return rc.checkRefLeaf(types.Values(tpe), ref, idx+1)
 }
 
+// unifies checks whether two types are compatible with each other.
 func unifies(a, b types.Type) bool {
 
 	if a == nil || b == nil {
 		return false
+	}
+
+	// Unwrap recursive types so they compare as their underlying type.
+	if r, ok := a.(*types.Recursive); ok {
+		a = r.Unwrap()
+	}
+	if r, ok := b.(*types.Recursive); ok {
+		b = r.Unwrap()
 	}
 
 	anyA, ok1 := a.(types.Any)
@@ -962,7 +1019,14 @@ func unifiesObjects(a, b *types.Object) bool {
 
 func unifiesObjectsStatic(a, b *types.Object) bool {
 	for _, k := range a.Keys() {
-		if !unifies(a.Select(k), b.Select(k)) {
+		tpeB := b.Select(k)
+		if tpeB == nil {
+			if a.DynamicValue() != nil || b.DynamicValue() != nil {
+				continue
+			}
+			return false
+		}
+		if !unifies(a.Select(k), tpeB) {
 			return false
 		}
 	}
@@ -1147,6 +1211,9 @@ func getOneOfForType(tpe types.Type) (result []Value) {
 			result = append(result, v)
 		}
 
+	case *types.Recursive:
+		return getOneOfForType(tpe.Unwrap())
+
 	case types.Any:
 		for _, object := range tpe {
 			objRes := getOneOfForType(object)
@@ -1171,10 +1238,10 @@ func removeDuplicate(list []Value) []Value {
 	return newResult
 }
 
-func getArgTypes(env *TypeEnv, args []*Term) []types.Type {
-	pre := make([]types.Type, len(args))
+func getArgTypes(env *TypeEnv, args []*Term) (pre []types.Type) {
+	pre = make([]types.Type, len(args))
 	for i := range args {
-		pre[i] = env.Get(args[i])
+		pre[i] = env.GetByValue(args[i].Value)
 	}
 	return pre
 }
@@ -1201,6 +1268,9 @@ var dynamicAnyAny = types.NewDynamicProperty(types.A, types.A)
 // override takes a type t and returns a type obtained from t where the path represented by ref within it has type o (overriding the original type of that path)
 func override(ref Ref, t types.Type, o types.Type, rule *Rule) (types.Type, *Error) {
 	var newStaticProps []*types.StaticProperty
+	if r, ok := t.(*types.Recursive); ok {
+		t = r.Unwrap()
+	}
 	obj, ok := t.(*types.Object)
 	if !ok {
 		newType, err := getObjectType(ref, o, rule, dynamicAnyAny)

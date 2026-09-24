@@ -56,6 +56,28 @@ func (*fetchOption) parseOption() {}
 
 func (*fetchOption) registerOption() {}
 
+// GlobalFetchOption describes an Option that can be passed to `jwk.Configure()`,
+// `jwk.Fetch()`, and `(*jwk.Cache).Register()`.
+type GlobalFetchOption interface {
+	Option
+	globalOption()
+	fetchOption()
+	registerOption()
+	parseOption()
+}
+
+type globalFetchOption struct {
+	Option
+}
+
+func (*globalFetchOption) globalOption() {}
+
+func (*globalFetchOption) fetchOption() {}
+
+func (*globalFetchOption) registerOption() {}
+
+func (*globalFetchOption) parseOption() {}
+
 // GlobalOption is a type of Option that can be passed to the `jwk.Configure()` to
 // change the global configuration of the jwk package.
 type GlobalOption interface {
@@ -68,6 +90,30 @@ type globalOption struct {
 }
 
 func (*globalOption) globalOption() {}
+
+// GlobalParseOption describes an Option that can be passed to both
+// `jwk.Configure()` (to change the default globally) and
+// `jwk.Parse()` / `jwk.ParseReader()` / `jwk.ParseString()` (to
+// override per call).
+type GlobalParseOption interface {
+	Option
+	globalOption()
+	fetchOption()
+	registerOption()
+	readFileOption()
+}
+
+type globalParseOption struct {
+	Option
+}
+
+func (*globalParseOption) globalOption() {}
+
+func (*globalParseOption) fetchOption() {}
+
+func (*globalParseOption) registerOption() {}
+
+func (*globalParseOption) readFileOption() {}
 
 // ParseOption is a type of Option that can be passed to `jwk.Parse()`
 // ParseOption also implements the `ReadFileOption` and `NewCacheOption`,
@@ -88,6 +134,18 @@ func (*parseOption) fetchOption() {}
 func (*parseOption) registerOption() {}
 
 func (*parseOption) readFileOption() {}
+
+// PublicSetOption is a type of Option that can be passed to `jwk.PublicSetOf()`
+type PublicSetOption interface {
+	Option
+	publicSetOption()
+}
+
+type publicSetOption struct {
+	Option
+}
+
+func (*publicSetOption) publicSetOption() {}
 
 // ReadFileOption is a type of `Option` that can be passed to `jwk.ReadFile`
 type ReadFileOption interface {
@@ -144,17 +202,28 @@ type resourceOption struct {
 
 func (*resourceOption) resourceOption() {}
 
+type identAllowSymmetric struct{}
 type identFS struct{}
 type identFetchWhitelist struct{}
+type identForceAssign struct{}
 type identHTTPClient struct{}
 type identIgnoreParseError struct{}
 type identLocalRegistry struct{}
+type identMaxFetchBodySize struct{}
+type identMaxKeys struct{}
+type identMinRSAModulusBits struct{}
+type identMinRSAPublicExponent struct{}
 type identPEM struct{}
 type identPEMDecoder struct{}
+type identRejectDuplicateKID struct{}
 type identStrictKeyUsage struct{}
 type identThumbprintHash struct{}
 type identWaitReady struct{}
 type identX509 struct{}
+
+func (identAllowSymmetric) String() string {
+	return "WithAllowSymmetric"
+}
 
 func (identFS) String() string {
 	return "WithFS"
@@ -162,6 +231,10 @@ func (identFS) String() string {
 
 func (identFetchWhitelist) String() string {
 	return "WithFetchWhitelist"
+}
+
+func (identForceAssign) String() string {
+	return "WithForceAssign"
 }
 
 func (identHTTPClient) String() string {
@@ -176,12 +249,32 @@ func (identLocalRegistry) String() string {
 	return "withLocalRegistry"
 }
 
+func (identMaxFetchBodySize) String() string {
+	return "WithMaxFetchBodySize"
+}
+
+func (identMaxKeys) String() string {
+	return "WithMaxKeys"
+}
+
+func (identMinRSAModulusBits) String() string {
+	return "WithMinRSAModulusBits"
+}
+
+func (identMinRSAPublicExponent) String() string {
+	return "WithMinRSAPublicExponent"
+}
+
 func (identPEM) String() string {
 	return "WithPEM"
 }
 
 func (identPEMDecoder) String() string {
 	return "WithPEMDecoder"
+}
+
+func (identRejectDuplicateKID) String() string {
+	return "WithRejectDuplicateKID"
 }
 
 func (identStrictKeyUsage) String() string {
@@ -200,22 +293,83 @@ func (identX509) String() string {
 	return "WithX509"
 }
 
+// WithAllowSymmetric controls whether `jwk.PublicSetOf` tolerates
+// symmetric (oct) keys in the input set.
+//
+// By default this option is false: a symmetric key in the input is
+// an error, because a symmetric key has no public form — its
+// "public" representation is the secret itself. Passing such a set
+// through `PublicSetOf` silently and then publishing the result
+// (e.g. as `/.well-known/jwks.json`) would leak HMAC secret material.
+//
+// Pass `WithAllowSymmetric(true)` only if you are certain the
+// resulting set will not be published. When true, symmetric keys
+// are passed through unchanged, matching the legacy behavior.
+func WithAllowSymmetric(v bool) PublicSetOption {
+	return &publicSetOption{option.New(identAllowSymmetric{}, v)}
+}
+
 // WithFS specifies the source `fs.FS` object to read the file from.
 func WithFS(v fs.FS) ReadFileOption {
 	return &readFileOption{option.New(identFS{}, v)}
 }
 
-// WithFetchWhitelist specifies the Whitelist object to use when
-// fetching JWKs from a remote source. This option can be passed
-// to both `jwk.Fetch()`
+// WithFetchWhitelist specifies the Whitelist applied to the URL passed
+// to `jwk.Fetch()` (and `(*jwk.Cache).Register()`).
+//
+// The default when this option is not supplied is `jwk.InsecureWhitelist{}`,
+// which allows every URL. That is the right default for URLs that are
+// hard-coded in your program or loaded from trusted configuration, and
+// keeps first-time usage free of boilerplate.
+//
+// It is NOT safe when the URL comes from an untrusted source — most
+// commonly the `jku` header of a JWS handed to you by a peer. For those
+// call sites you MUST supply a restrictive Whitelist: use
+// `jwk.NewMapWhitelist()` for a fixed allow-list, `jwk.RegexpWhitelist`
+// for pattern-based allow-lists, or implement the `jwk.Whitelist`
+// interface yourself.
+//
+// Note that a whitelist only constrains the initial URL. For defense
+// against redirect-to-private-IP and DNS-rebinding attacks, also supply
+// a custom `http.Client` via `jwk.WithHTTPClient` whose
+// `Transport.DialContext` validates resolved addresses.
 func WithFetchWhitelist(v Whitelist) FetchOption {
 	return &fetchOption{option.New(identFetchWhitelist{}, v)}
 }
 
+// WithForceAssign forces `jwk.AssignKeyID` to recompute and overwrite
+// the `kid` header even when the key already has one. The default
+// behavior preserves any existing `kid`; use this option to upgrade
+// the thumbprint hash (e.g. with `jwk.WithThumbprintHash`) or to
+// refresh a `kid` after mutating a key field that invalidates the
+// cached thumbprint.
+func WithForceAssign(v bool) AssignKeyIDOption {
+	return &assignKeyIDOption{option.New(identForceAssign{}, v)}
+}
+
 // WithHTTPClient allows users to specify the "net/http".Client object that
 // is used when fetching jwk.Set objects.
-func WithHTTPClient(v HTTPClient) RegisterFetchOption {
-	return &registerFetchOption{option.New(identHTTPClient{}, v)}
+//
+// When passed to `jwk.Configure()`, it sets the global default HTTP client
+// used by `jwk.Fetch()`. By default, `jwk.Fetch()` uses an HTTP client with
+// a 30-second timeout and a redirect policy that blocks HTTPS-to-HTTP
+// scheme downgrades (with a maximum of 5 redirects) instead of
+// `http.DefaultClient` (which has no timeout and allows up to 10 redirects).
+//
+// The client is used as-is: the library does NOT automatically apply its
+// default timeout or redirect policy to a user-supplied client. If you want
+// to bring your own client (e.g. for custom TLS or proxy settings) while
+// retaining the library's defaults, wrap it with `jwk.WrapHTTPClientDefaults()`
+// before passing it to this option.
+//
+// For full SSRF protection (blocking redirects to private IPs, DNS
+// rebinding prevention), provide a custom http.Client with an appropriate
+// Transport.DialContext that validates resolved IP addresses.
+//
+// Users can override the client per-call via `jwk.Fetch()` or per-resource
+// via `(*jwk.Cache).Register()`.
+func WithHTTPClient(v HTTPClient) GlobalFetchOption {
+	return &globalFetchOption{option.New(identHTTPClient{}, v)}
 }
 
 // WithIgnoreParseError is only applicable when used with `jwk.Parse()`
@@ -246,6 +400,54 @@ func withLocalRegistry(v *json.Registry) ParseOption {
 	return &parseOption{option.New(identLocalRegistry{}, v)}
 }
 
+// WithMaxFetchBodySize specifies the maximum number of bytes to read from
+// an HTTP response body when fetching a JWKS. If the response body exceeds
+// this size, the fetch returns an error. The default value is 10MB (10485760).
+//
+// This option can be passed to `jwk.Configure()` to change the default
+// globally, or to `jwk.Fetch()` / `(*jwk.Cache).Register()` for a per-call
+// override.
+func WithMaxFetchBodySize(v int64) GlobalFetchOption {
+	return &globalFetchOption{option.New(identMaxFetchBodySize{}, v)}
+}
+
+// WithMaxKeys specifies the maximum number of keys allowed in a JWK
+// set passed to `jwk.Parse()` / `jwk.ParseReader()` / `jwk.ParseString()`.
+// If the "keys" array of a JSON-encoded JWKS, or the number of PEM
+// blocks in a PEM/X.509-encoded input, exceeds this value, parsing
+// returns an error. The default is 1000.
+//
+// This option can be passed to `jwk.Configure()` to change the
+// default globally, or to `jwk.Parse()` / `jwk.ParseReader()` /
+// `jwk.ParseString()` for a per-call override. A non-positive
+// value is rejected.
+//
+// The cap defends against amplification: each entry triggers a
+// probe + unmarshal + validation, each of which allocates.
+// Bounding raw input bytes remains the caller's responsibility.
+func WithMaxKeys(v int) GlobalParseOption {
+	return &globalParseOption{option.New(identMaxKeys{}, v)}
+}
+
+// WithMinRSAModulusBits specifies the minimum RSA modulus size, in bits,
+// accepted by JWK validation and raw/PEM/X.509 import.
+//
+// The default is 2048. Lower this only for legacy interoperability with
+// older key material. A value of 0 disables the modulus-size floor.
+func WithMinRSAModulusBits(v int) GlobalOption {
+	return &globalOption{option.New(identMinRSAModulusBits{}, v)}
+}
+
+// WithMinRSAPublicExponent specifies the minimum RSA public exponent
+// accepted by JWK validation and raw/PEM/X.509 import.
+//
+// The default is 3. The exponent must still be odd and fit in a Go `int`.
+// Lower this only for legacy interoperability. A value of 0 disables the
+// minimum-exponent floor.
+func WithMinRSAPublicExponent(v int) GlobalOption {
+	return &globalOption{option.New(identMinRSAPublicExponent{}, v)}
+}
+
 // WithPEM specifies that the input to `Parse()` is a PEM encoded key.
 //
 // This option is planned to be deprecated in the future. The plan is to
@@ -261,6 +463,29 @@ func WithPEM(v bool) ParseOption {
 // use `jwk.RegisterX509Decoder()` to register a custom X.509 decoder globally.
 func WithPEMDecoder(v PEMDecoder) ParseOption {
 	return &parseOption{option.New(identPEMDecoder{}, v)}
+}
+
+// WithRejectDuplicateKID instructs `jwk.Parse()` /
+// `jwk.ParseReader()` / `jwk.ParseString()` and
+// `Set.UnmarshalJSON()` to return an error when the JWKS contains
+// two or more keys with the same non-empty `kid`. Keys without a
+// kid are not considered.
+//
+// Default is false — first-match-wins is retained for
+// compatibility with RFC 7517 (which permits, but does not
+// mandate, unique kids) and with existing callers that rely on
+// `(jwk.Set).LookupKeyID` returning the first entry. Use this
+// option when your issuer should guarantee kid uniqueness and a
+// duplicate is a sign of misconfiguration worth surfacing at
+// parse time rather than at verify time.
+//
+// Can be set globally via `jwk.Configure()` or per-call on
+// `jwk.Parse()` / `jwk.ParseReader()` / `jwk.ParseString()`.
+//
+// This does not affect `(*Set).AddKey` — programmatic additions
+// remain permissive (AddKey dedupes only by pointer identity).
+func WithRejectDuplicateKID(v bool) GlobalParseOption {
+	return &globalParseOption{option.New(identRejectDuplicateKID{}, v)}
 }
 
 // WithStrictKeyUsage specifies if during JWK parsing, the "use" field

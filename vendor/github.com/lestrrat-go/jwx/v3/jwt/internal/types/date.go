@@ -4,6 +4,7 @@ import (
 	"fmt"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"time"
 
 	"github.com/lestrrat-go/jwx/v3/internal/json"
@@ -15,9 +16,9 @@ const (
 	MaxPrecision     uint32 = 9 // nanosecond level
 )
 
-var Pedantic uint32
-var ParsePrecision = DefaultPrecision
-var FormatPrecision = DefaultPrecision
+var Pedantic atomic.Uint32
+var ParsePrecision atomic.Uint32
+var FormatPrecision atomic.Uint32
 
 // NumericDate represents the date format used in the 'nbf' claim
 type NumericDate struct {
@@ -57,7 +58,7 @@ func parseNumericString(x string) (time.Time, error) {
 
 	// Only check for the escape hatch if it's the pedantic
 	// flag is off
-	if Pedantic != 1 {
+	if Pedantic.Load() != 1 {
 		// This is an escape hatch for non-conformant providers
 		// that gives us RFC3339 instead of epoch time
 		for _, r := range x {
@@ -77,12 +78,13 @@ func parseNumericString(x string) (time.Time, error) {
 
 	var fractional string
 	whole := x
+	parsePrecision := ParsePrecision.Load()
 	if i := strings.IndexRune(x, tokens.Period); i > 0 {
-		if ParsePrecision > 0 && len(x) > i+1 {
+		if parsePrecision > 0 && len(x) > i+1 {
 			fractional = x[i+1:] // everything after the tokens.Period
-			if int(ParsePrecision) < len(fractional) {
+			if int(parsePrecision) < len(fractional) {
 				// Remove insignificant digits
-				fractional = fractional[:int(ParsePrecision)]
+				fractional = fractional[:int(parsePrecision)]
 			}
 			// Replace missing fractional diits with zeros
 			for len(fractional) < int(MaxPrecision) {
@@ -146,7 +148,8 @@ func (n *NumericDate) Accept(v any) error {
 }
 
 func (n NumericDate) String() string {
-	if FormatPrecision == 0 {
+	formatPrecision := FormatPrecision.Load()
+	if formatPrecision == 0 {
 		return strconv.FormatInt(n.Unix(), 10)
 	}
 
@@ -159,7 +162,7 @@ func (n NumericDate) String() string {
 	}
 
 	slwhole := len(s) - int(MaxPrecision)
-	s = s[:slwhole] + "." + s[slwhole:slwhole+int(FormatPrecision)]
+	s = s[:slwhole] + "." + s[slwhole:slwhole+int(formatPrecision)]
 	if s[0] == tokens.Period {
 		s = "0" + s
 	}

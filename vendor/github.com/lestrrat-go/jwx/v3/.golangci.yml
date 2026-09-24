@@ -107,6 +107,18 @@ linters:
         path: jwt/internal/types/
         text: "var-naming: avoid meaningless package names"
       - linters:
+          - revive
+        path: internal/json/
+        text: "var-naming: avoid package names"
+      - linters:
+          - revive
+        path: jwe/internal/cipher/
+        text: "var-naming: avoid package names that conflict with Go standard library package names"
+      - linters:
+          - revive
+        path: jwk/ecdsa/
+        text: "var-naming: avoid package names that conflict with Go standard library package names"
+      - linters:
           - godoclint
         path: (^|/)internal/
     paths:
