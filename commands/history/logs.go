@@ -2,6 +2,7 @@ package history
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 
@@ -13,6 +14,7 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/pkg/errors"
 	"github.com/spf13/cobra"
+	"google.golang.org/grpc/codes"
 )
 
 type logsOptions struct {
@@ -51,21 +53,22 @@ func runLogs(ctx context.Context, dockerCli command.Cli, opts logsOptions) error
 	if err != nil {
 		return err
 	}
+	defer cl.CloseSend()
 
 	mode := progressui.DisplayMode(opts.progress)
 	if mode == progressui.AutoMode {
 		mode = progressui.PlainMode
 	}
-	printer, err := progress.NewPrinter(context.TODO(), os.Stderr, mode)
+	printer, err := progress.NewPrinter(context.WithoutCancel(ctx), os.Stderr, mode)
 	if err != nil {
 		return err
 	}
+	defer printer.Wait()
 
 loop0:
 	for {
 		select {
 		case <-ctx.Done():
-			cl.CloseSend()
 			return context.Cause(ctx)
 		default:
 			ev, err := cl.Recv()
@@ -79,7 +82,29 @@ loop0:
 		}
 	}
 
-	return printer.Wait()
+	printerErr := printer.Wait()
+
+	errOut, err := loadErrorOutput(ctx, c, rec)
+	if err != nil {
+		return err
+	}
+	printLogError(os.Stderr, mode, errOut)
+
+	return printerErr
+}
+
+func printLogError(w io.Writer, mode progressui.DisplayMode, out *errorOutput) {
+	if out == nil || mode == progressui.RawJSONMode {
+		return
+	}
+
+	fmt.Fprintln(w)
+	if codes.Code(out.Code) == codes.Canceled {
+		fmt.Fprintln(w, "Build canceled")
+	} else if out.Message != "" {
+		fmt.Fprintf(w, "Error: %s %s\n", codes.Code(out.Code), out.Message)
+	}
+	printErrorDetails(w, out)
 }
 
 func logsCmd(dockerCli command.Cli, rootOpts RootOptions) *cobra.Command {
