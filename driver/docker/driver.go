@@ -5,12 +5,18 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/util/flightcontrol"
+	"github.com/moby/buildkit/util/grpcerrors"
 	dockerclient "github.com/moby/moby/client"
+	"github.com/moby/moby/client/pkg/versions"
 	"github.com/pkg/errors"
+	"github.com/sirupsen/logrus"
+	"google.golang.org/grpc/codes"
 )
 
 type Driver struct {
@@ -21,6 +27,7 @@ type Driver struct {
 	// https://github.com/docker/docs/blob/main/content/build/drivers/docker.md
 	features    features
 	hostGateway hostGateway
+	nativeGRPC  flightcontrol.CachedGroup[bool]
 }
 
 func (d *Driver) Bootstrap(ctx context.Context, l progress.Logger) error {
@@ -64,14 +71,79 @@ func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
+	// TODO: Support native gRPC with Desktop Resource Saver metadata. Keep /grpc
+	//  so Desktop's proxy can identify background connections and let the VM sleep.
+	//  See https://github.com/docker/desktop-build/pull/312.
+	if len(d.DialMeta) == 0 {
+		if err := context.Cause(ctx); err != nil {
+			return nil, err
+		}
+		native, err := d.nativeGRPC.Do(ctx, "", d.probeNativeGRPC)
+		if cause := context.Cause(ctx); cause != nil {
+			return nil, cause
+		}
+		if err == nil && native {
+			return client.New(ctx, d.DockerAPI.DaemonHost(), append(d.nativeClientOpts(), opts...)...)
+		}
+		if err != nil {
+			switch grpcerrors.Code(err) {
+			case codes.PermissionDenied, codes.Unauthenticated:
+				return nil, err
+			}
+			logrus.Debugf("docker driver: native gRPC unavailable, using /grpc: %v", err)
+		}
+	}
+
+	// Legacy transport for daemons and proxies without native gRPC:
+	// https://github.com/moby/moby/pull/50744
 	opts = append([]client.ClientOpt{
-		client.WithContextDialer(func(context.Context, string) (net.Conn, error) {
+		client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
 			return d.Dial(ctx)
-		}), client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
+		}),
+		client.WithSessionDialer(func(ctx context.Context, proto string, meta map[string][]string) (net.Conn, error) {
 			return d.DockerAPI.DialHijack(ctx, "/session", proto, meta)
 		}),
 	}, opts...)
 	return client.New(ctx, "", opts...)
+}
+
+func (d *Driver) probeNativeGRPC(ctx context.Context) (bool, error) {
+	// Remote endpoints keep Docker's configured transport, including TLS and SSH.
+	scheme, _, _ := strings.Cut(d.DockerAPI.DaemonHost(), "://")
+	if scheme != "unix" && scheme != "npipe" {
+		return false, nil
+	}
+
+	ctx, cancel := context.WithTimeoutCause(ctx, 10*time.Second, errors.New("native gRPC probe timed out"))
+	defer cancel()
+
+	ping, err := d.DockerAPI.Ping(ctx, dockerclient.PingOptions{})
+	if err != nil {
+		return false, err
+	}
+	// Engine 29.2 (API 1.53) introduced native gRPC; proxies may still reject it.
+	if ping.APIVersion == "" || versions.LessThan(ping.APIVersion, "1.53") {
+		return false, nil
+	}
+	c, err := client.New(ctx, d.DockerAPI.DaemonHost(), d.nativeClientOpts()...)
+	if err != nil {
+		return false, err
+	}
+	defer c.Close()
+	if _, err := c.ListWorkers(ctx); err != nil {
+		return false, err
+	}
+	logrus.Debug("docker driver: using native gRPC")
+	return true, nil
+}
+
+func (d *Driver) nativeClientOpts() []client.ClientOpt {
+	dial := d.DockerAPI.Dialer()
+	return []client.ClientOpt{
+		client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
+			return dial(ctx)
+		}),
+	}
 }
 
 type features struct {
