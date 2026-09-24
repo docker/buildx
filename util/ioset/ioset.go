@@ -191,10 +191,10 @@ func (f *SingleForwarder) doForward() {
 					readerInvalidMu.Lock()
 					ri := readerInvalid
 					readerInvalidMu.Unlock()
-					if ri || readerClosed {
+					if ri || (readerClosed && !errors.Is(readErr, io.EOF)) {
 						return
 					}
-					if readErr != io.EOF {
+					if !errors.Is(readErr, io.EOF) {
 						logrus.Debugf("unknown error: %v\n", readErr)
 						continue
 					}
