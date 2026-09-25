@@ -143,70 +143,39 @@ func TestLinkedTargetStateCancellation(t *testing.T) {
 	require.ErrorIs(t, <-done, cause)
 }
 
-func TestLinkedTargetStatePropagatesDependencyErrors(t *testing.T) {
-	state := newLinkedTargetState(
-		map[string][]string{"child": {"parent"}},
-		map[string][]string{"parent": {"child"}},
-	)
-	cause := errors.New("parent failed")
-	state.fail("parent", cause)
-
-	err := state.run(t.Context(), "child", struct{}{}, linkedTargetHooks{
-		evaluate: func() error { return nil },
-	})
-	require.ErrorIs(t, err, cause)
-}
-
-func TestSyncEvaluateWaitsForAllTargets(t *testing.T) {
-	targets := []string{"foo", "bar"}
-	results := waitmap.New()
-
-	fooStarted := make(chan struct{})
-	done := map[string]chan error{
-		"foo": make(chan error, 1),
-		"bar": make(chan error, 1),
+func TestLinkedTargetStateErrorDirection(t *testing.T) {
+	links := func() *linkedTargetState {
+		return newLinkedTargetState(
+			map[string][]string{"child": {"parent"}},
+			map[string][]string{"parent": {"child"}},
+		)
 	}
+	t.Run("failed-parent", func(t *testing.T) {
+		state := links()
+		cause := errors.New("parent failed")
+		state.fail("parent", cause)
 
-	go func() {
-		results.Set("foo", struct{}{})
-		if _, err := results.Get(t.Context(), targets...); err != nil {
-			done["foo"] <- err
-			return
-		}
-		close(fooStarted)
-		done["foo"] <- nil
-	}()
-
-	assertNotSignaled(t, fooStarted)
-	assertNotCompleted(t, done["foo"])
-
-	go func() {
-		results.Set("bar", struct{}{})
-		if _, err := results.Get(t.Context(), targets...); err != nil {
-			done["bar"] <- err
-			return
-		}
-		done["bar"] <- nil
-	}()
-
-	require.NoError(t, <-done["foo"])
-	require.NoError(t, <-done["bar"])
-}
-
-func TestSyncEvaluateCancellation(t *testing.T) {
-	results := waitmap.New()
-	ctx, cancel := context.WithCancelCause(t.Context())
-	cause := errors.New("target failed")
-
-	done := make(chan error, 1)
-	go func() {
-		results.Set("foo", struct{}{})
-		_, err := results.Get(ctx, "foo", "bar")
-		done <- err
-	}()
-
-	cancel(cause)
-	require.ErrorIs(t, <-done, cause)
+		err := state.run(t.Context(), "child", struct{}{}, linkedTargetHooks{
+			evaluate: func() error { return nil },
+		})
+		require.ErrorIs(t, err, cause)
+	})
+	t.Run("failed-child", func(t *testing.T) {
+		state := links()
+		cause := errors.New("child failed")
+		parentDone := make(chan error, 1)
+		go func() {
+			parentDone <- state.run(t.Context(), "parent", struct{}{}, linkedTargetHooks{
+				evaluate: func() error { return nil },
+			})
+		}()
+		err := state.run(t.Context(), "child", struct{}{}, linkedTargetHooks{
+			evaluate: func() error { return cause },
+		})
+		state.fail("child", err)
+		require.ErrorIs(t, err, cause)
+		require.NoError(t, <-parentDone)
+	})
 }
 
 func TestSyncEvaluateDoesNotDeadlockLinkedTargets(t *testing.T) {
@@ -214,8 +183,11 @@ func TestSyncEvaluateDoesNotDeadlockLinkedTargets(t *testing.T) {
 		map[string][]string{"child": {"parent"}},
 		map[string][]string{"parent": {"child"}},
 	)
-	results := waitmap.New()
-	evaluated := waitmap.New()
+	state := &syncTargetState{
+		targets:   []string{"parent", "child"},
+		results:   waitmap.New(),
+		evaluated: waitmap.New(),
+	}
 
 	done := map[string]chan error{
 		"parent": make(chan error, 1),
@@ -226,17 +198,13 @@ func TestSyncEvaluateDoesNotDeadlockLinkedTargets(t *testing.T) {
 		go func() {
 			done[key] <- linked.run(t.Context(), key, struct{}{}, linkedTargetHooks{
 				preEvaluate: func() error {
-					results.Set(key, struct{}{})
-					_, err := results.Get(t.Context(), "parent", "child")
-					return err
+					return state.waitResult(t.Context(), key, struct{}{})
 				},
 				evaluate: func() error {
 					return nil
 				},
 				postEvaluate: func() error {
-					evaluated.Set(key, struct{}{})
-					_, err := evaluated.Get(t.Context(), "parent", "child")
-					return err
+					return state.waitEvaluated(t.Context(), key, struct{}{})
 				},
 			})
 		}()
@@ -248,7 +216,11 @@ func TestSyncEvaluateDoesNotDeadlockLinkedTargets(t *testing.T) {
 
 func TestSyncEvaluatePropagatesEvaluationErrors(t *testing.T) {
 	linked := newLinkedTargetState(map[string][]string{}, map[string][]string{})
-	evaluated := waitmap.New()
+	state := &syncTargetState{
+		targets:   []string{"success", "failure"},
+		results:   waitmap.New(),
+		evaluated: waitmap.New(),
+	}
 	cause := errors.New("target failed")
 	done := map[string]chan error{
 		"success": make(chan error, 1),
@@ -257,16 +229,9 @@ func TestSyncEvaluatePropagatesEvaluationErrors(t *testing.T) {
 
 	go func() {
 		done["success"] <- linked.run(t.Context(), "success", struct{}{}, linkedTargetHooks{
-			evaluate: func() error {
-				return nil
-			},
+			evaluate: func() error { return nil },
 			postEvaluate: func() error {
-				evaluated.Set("success", struct{}{})
-				results, err := evaluated.Get(t.Context(), "success", "failure")
-				if err != nil {
-					return err
-				}
-				return wrapResultError(results, "aborted: another target failed")
+				return state.waitEvaluated(t.Context(), "success", struct{}{})
 			},
 		})
 	}()
@@ -279,7 +244,7 @@ func TestSyncEvaluatePropagatesEvaluationErrors(t *testing.T) {
 				return cause
 			},
 		})
-		evaluated.Set("failure", err)
+		state.fail("failure", err)
 		done["failure"] <- err
 	}()
 

@@ -538,9 +538,8 @@ func (s *linkedTargetState) run(ctx context.Context, key string, result any, hoo
 	// here preserves external-cache lookup before evaluation begins.
 	s.results.Set(key, result)
 	children := s.children[key]
-	if res, err := s.results.Get(ctx, children...); err != nil {
-		return err
-	} else if err := wrapResultError(res, "aborted: dependent target failed"); err != nil {
+	// A failed dependent still signals arrival and completion; it does not fail this target.
+	if _, err := s.results.Get(ctx, children...); err != nil {
 		return err
 	}
 	if hooks.preEvaluate != nil {
@@ -566,9 +565,7 @@ func (s *linkedTargetState) run(ctx context.Context, key string, result any, hoo
 	}
 	// Completion flows back from children to parents, retaining each parent job
 	// and its session until every dependent has finished evaluating.
-	if res, err := s.completed.Get(ctx, children...); err != nil {
-		return err
-	} else if err := wrapResultError(res, "aborted: dependent target failed"); err != nil {
+	if _, err := s.completed.Get(ctx, children...); err != nil {
 		return err
 	}
 	s.completed.Set(key, struct{}{})
@@ -734,6 +731,7 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 	}
 
 	targets := slices.Sorted(maps.Keys(opts))
+	var setupErr error
 	for _, k := range targets {
 		opt := opts[k]
 		err = func(k string) (err error) {
@@ -748,7 +746,6 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 			baseCtx := ctx
 
 			res := make([]*client.SolveResponse, len(dps))
-			eg2, ctx := errgroup.WithContext(ctx)
 			var releaseTarget func()
 			if targetLimit != nil {
 				select {
@@ -777,7 +774,8 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 
 			var pushNames string
 			var insecurePush bool
-
+			// Finish setup for every node before starting any build for this target.
+			clients := make([]*client.Client, len(dps))
 			for i, dp := range dps {
 				node := dp.Node()
 				so := reqForNodes[k][i].so
@@ -786,8 +784,6 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 						return err
 					}
 				}
-
-				pw := progress.WithPrefix(w, k, multiTarget)
 
 				rKey := resultKey(dp, k)
 				var c *client.Client
@@ -808,6 +804,16 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 				if err != nil {
 					return err
 				}
+				clients[i] = c
+			}
+
+			eg2, ctx := errgroup.WithContext(ctx)
+			for i, dp := range dps {
+				node := dp.Node()
+				so := reqForNodes[k][i].so
+				pw := progress.WithPrefix(w, k, multiTarget)
+				rKey := resultKey(dp, k)
+				c := clients[i]
 
 				var done func()
 				if sessions, ok := sharedSessions[node.Name]; ok {
@@ -1048,10 +1054,11 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 					return err
 				}
 
-				respMu.Lock()
-				resp[k] = res[0]
-				respMu.Unlock()
+				response := res[0]
 				if len(res) == 1 {
+					respMu.Lock()
+					resp[k] = response
+					respMu.Unlock()
 					return nil
 				}
 
@@ -1146,13 +1153,11 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 								}
 							}
 
-							respMu.Lock()
-							resp[k] = &client.SolveResponse{
+							response = &client.SolveResponse{
 								ExporterResponse: map[string]string{
 									exptypes.ExporterImageDigestKey: desc.Digest.String(),
 								},
 							}
-							respMu.Unlock()
 						}
 						return nil
 					})
@@ -1160,12 +1165,30 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 						return err
 					}
 				}
+				respMu.Lock()
+				resp[k] = response
+				respMu.Unlock()
 				return nil
 			})
 
 			return nil
 		}(k)
 		if err != nil {
+			for _, dp := range drivers[k] {
+				key := resultKey(dp, k)
+				if syncState != nil {
+					syncState.fail(key, err)
+				}
+				linkedTargets.fail(key, err)
+			}
+			if bh != nil && bh.Execution.Mode == ExecutionModeDeferError && context.Cause(ctx) == nil {
+				// Keep other targets running, but return a setup error after they finish.
+				if setupErr == nil {
+					setupErr = err
+				}
+				err = nil
+				continue
+			}
 			cancel(err)
 			break
 		}
@@ -1175,6 +1198,9 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 
 	if waitErr := eg.Wait(); err == nil {
 		err = waitErr
+	}
+	if err == nil {
+		err = setupErr
 	}
 	return resp, err
 }
