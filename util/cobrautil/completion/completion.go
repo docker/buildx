@@ -60,3 +60,25 @@ func BuilderNames(dockerCli command.Cli) ValidArgsFn {
 		return filtered, cobra.ShellCompDirectiveNoFileComp
 	}
 }
+
+var commonPlatforms = []string{
+	"linux/386",
+	"linux/amd64",
+	"linux/arm",
+	"linux/arm/v5",
+	"linux/arm/v6",
+	"linux/arm/v7",
+	"linux/arm64",
+	"linux/arm64/v8",
+	"linux/ppc64le",
+	"linux/s390x",
+	"linux/riscv64",
+	"windows/amd64",
+	"wasip1/wasm",
+}
+
+func Platforms() ValidArgsFn {
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return commonPlatforms, cobra.ShellCompDirectiveNoFileComp
+	}
+}
