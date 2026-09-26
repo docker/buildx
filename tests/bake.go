@@ -58,6 +58,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeFileRelativePaths,
 	testBakeLocalExportDeleteMode,
 	testBakeRemote,
+	testBakeRemoteGitAdvice,
 	testBakeRemoteAuth,
 	testBakeRemoteCmdContext,
 	testBakeRemoteLocalOverride,
@@ -1307,6 +1308,46 @@ EOT
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+func testBakeRemoteGitAdvice(t *testing.T, sb integration.Sandbox) {
+	skipNoCompatBuildKit(t, sb, ">= 0.33.0-0", "Git advice control requires BuildKit v0.33")
+
+	for _, tc := range []struct {
+		name       string
+		value      string
+		wantAdvice bool
+	}{
+		{name: "default"},
+		{name: "enabled", value: "1", wantAdvice: true},
+		{name: "true", value: "true", wantAdvice: true},
+		{name: "disabled", value: "0"},
+		{name: "false", value: "false"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			// Use distinct commits so cached checkouts cannot hide advice output.
+			bakefile := "# " + tc.name + "\ntarget \"default\" {}"
+			dir := tmpdir(t, fstest.CreateFile("docker-bake.hcl", []byte(bakefile), 0600))
+			git, err := gitutil.New(bkgitutil.WithDir(dir))
+			require.NoError(t, err)
+			gittestutil.GitInit(git, t)
+			gittestutil.GitAdd(git, t, "docker-bake.hcl")
+			gittestutil.GitCommit(git, t, "initial commit")
+			gittestutil.GitTag(git, t, "v1")
+			addr := gittestutil.GitServeHTTP(git, t)
+
+			out, err := bakeCmd(sb,
+				withEnv("BUILDX_BAKE_GIT_ADVICE="+tc.value),
+				withArgs(addr+"?tag=v1&keep-git-dir=true", "--print", "--progress=plain"),
+			)
+			require.NoError(t, err, out)
+			if tc.wantAdvice {
+				require.Contains(t, out, "detached HEAD")
+			} else {
+				require.NotContains(t, out, "detached HEAD")
+			}
+		})
+	}
 }
 
 func testBakeRemoteAuth(t *testing.T, sb integration.Sandbox) {
