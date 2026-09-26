@@ -303,15 +303,22 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		cacheFrom = append(cacheFrom, e)
 	}
 
+	frontend := opt.Frontend
+	if frontend == "" {
+		frontend = "dockerfile.v0"
+	}
 	so := client.SolveOpt{
 		Ref:                 opt.Ref,
-		Frontend:            "dockerfile.v0",
-		FrontendAttrs:       map[string]string{},
+		Frontend:            frontend,
+		FrontendAttrs:       maps.Clone(opt.FrontendAttrs),
 		LocalMounts:         map[string]fsutil.FS{},
 		CacheExports:        cacheTo,
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
 		SourcePolicy:        opt.SourcePolicy,
+	}
+	if so.FrontendAttrs == nil {
+		so.FrontendAttrs = map[string]string{}
 	}
 
 	if opt.CgroupParent != "" {
@@ -668,9 +675,30 @@ func proxyArgKeyExists(buildArgs map[string]string, key string) bool {
 }
 
 func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, opt *Options, cfg *confutil.Config, bopts gateway.BuildOpts, so *client.SolveOpt, pw progress.Writer) (_ []func(error), err error) {
+	var callbackOnly []policysession.PolicyCallback
+	var fileConfigs []buildflags.PolicyConfig
+	for _, p := range opt.Policy {
+		if p.Callback != nil && len(p.Files) == 0 {
+			callbackOnly = append(callbackOnly, p.Callback)
+			continue
+		}
+		fileConfigs = append(fileConfigs, p)
+	}
+
+	// Any callback-only entry requires the session policy capability, the
+	// same way a Strict declarative policy does.
+	if len(callbackOnly) > 0 {
+		if bopts.LLBCaps.Supports(pb.CapSourcePolicySession) != nil {
+			return nil, errors.New("session source policy is not supported by the current BuildKit daemon, please upgrade to version v0.27+")
+		}
+	}
 	if opt.Inputs.policy == nil {
-		if len(opt.Policy) > 0 {
+		if len(fileConfigs) > 0 {
 			return nil, errors.New("policy file specified but no policy FS in build context")
+		}
+		if len(callbackOnly) > 0 {
+			so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(callbackOnly...))
+			return nil, nil
 		}
 		so.SourcePolicyProvider = nil
 		return nil, nil
@@ -687,7 +715,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	env.Target = opt.Target
 	env.Labels = opt.Labels
 
-	popts, err := withPolicyConfig(*opt.Inputs.policy, opt.Policy)
+	popts, err := withPolicyConfig(*opt.Inputs.policy, fileConfigs)
 	if err != nil {
 		return nil, err
 	}
@@ -697,7 +725,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	// (docker/dockerfile, docker/dockerfile-upstream) that may be implicitly
 	// loaded during a build, and passes through any other source so user
 	// policies retain full control.
-	if policy.DefaultPolicyEnabled() && !policyExplicitlyDisabled(opt.Policy) {
+	if policy.DefaultPolicyEnabled() && !policyExplicitlyDisabled(fileConfigs) {
 		builtin := policyOpt{
 			Files: []policyFileSpec{{
 				Filename: policy.DefaultPolicyFilename,
@@ -709,6 +737,10 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	}
 
 	if len(popts) == 0 {
+		if len(callbackOnly) > 0 {
+			so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(callbackOnly...))
+			return nil, nil
+		}
 		so.SourcePolicyProvider = nil
 		return nil, nil
 	}
@@ -738,6 +770,10 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 		return nil, err
 	}
 	if len(loadedOpts) == 0 {
+		if len(callbackOnly) > 0 {
+			so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(callbackOnly...))
+			return defers, nil
+		}
 		so.SourcePolicyProvider = nil
 		return defers, nil
 	}
@@ -802,6 +838,9 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 			policyLogger.Log("policy enabled network proxy")
 		}
 	}
+	// Callback-only policy entries compose as the last (most-strict)
+	// entries, allowing file-based policies to still run first.
+	cbs = append(cbs, callbackOnly...)
 	so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(cbs...))
 	return defers, nil
 }
