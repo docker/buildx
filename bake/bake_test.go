@@ -483,6 +483,51 @@ func TestPushOverride(t *testing.T) {
 		require.Equal(t, 1, len(m["bar"].Outputs))
 		require.Equal(t, []string{"type=image,push=true"}, stringify(m["bar"].Outputs))
 	})
+
+	t.Run("inherited outputs", func(t *testing.T) {
+		fp := File{
+			Name: "docker-bake.hcl",
+			Data: []byte(
+				`target "_common" {
+				output = ["type=registry", "type=image,name=foo"]
+			}
+			target "api" {
+				inherits = ["_common"]
+			}
+			target "app" {
+				inherits = ["_common"]
+			}`),
+		}
+		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"api", "app"}, []string{"app.push=true"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"type=image,name=foo", "type=registry"}, stringify(m["api"].Outputs))
+		require.Equal(t, []string{"type=image,name=foo,push=true", "type=registry"}, stringify(m["app"].Outputs))
+
+		m, _, err = ReadTargets(context.TODO(), []File{fp}, []string{"api", "app"}, []string{"app.push=false"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"type=image,name=foo", "type=registry"}, stringify(m["api"].Outputs))
+		require.Equal(t, []string{"type=image,name=foo,push=false"}, stringify(m["app"].Outputs))
+	})
+}
+
+func TestSecretSourceOverrideInherited(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(
+			`target "_common" {
+			secret = ["id=token,env=COMMON_TOKEN"]
+		}
+		target "api" {
+			inherits = ["_common"]
+		}
+		target "app" {
+			inherits = ["_common"]
+		}`),
+	}
+	m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"api", "app"}, []string{"app.secret.token=env=APP_TOKEN"}, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Equal(t, []string{"id=token,env=COMMON_TOKEN"}, stringify(m["api"].Secrets))
+	require.Equal(t, []string{"id=token,env=APP_TOKEN"}, stringify(m["app"].Secrets))
 }
 
 func TestLoadOverride(t *testing.T) {
