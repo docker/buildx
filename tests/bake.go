@@ -2629,7 +2629,7 @@ target "default" {
 		"--set", fmt.Sprintf("*.output=type=docker,name=%s", targetStore),
 		"--set", fmt.Sprintf("*.output=type=oci,dest=%s/result", dir),
 	}
-	cmd := buildxCmd(sb, withDir(dir), withArgs("bake"), withArgs(outputs...))
+	cmd := buildxCmd(sb, withDir(dir), withArgs("bake", "--metadata-file", filepath.Join(dir, "md.json")), withArgs(outputs...))
 	outb, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(outb))
 
@@ -2648,7 +2648,23 @@ target "default" {
 	_, err = os.ReadFile(fmt.Sprintf("%s/result", dir))
 	require.NoError(t, err)
 
-	// TODO: test metadata file when supported by multi exporters https://github.com/docker/buildx/issues/2181
+	// test metadata file
+	dt, err := os.ReadFile(filepath.Join(dir, "md.json"))
+	require.NoError(t, err)
+
+	type mdT struct {
+		Default struct {
+			BuildRef string `json:"buildx.build.ref"`
+			Digest   string `json:"containerimage.digest"`
+		} `json:"default"`
+	}
+	var md mdT
+	require.NoError(t, json.Unmarshal(dt, &md))
+	require.NotEmpty(t, md.Default.BuildRef)
+	require.NotEmpty(t, md.Default.Digest)
+
+	// TODO: image.name only carries the name of one exporter, so the names of
+	// the others cannot be asserted yet https://github.com/docker/buildx/issues/2181
 }
 
 func testBakeNoDefaultOCIArtifact(t *testing.T, sb integration.Sandbox) {
