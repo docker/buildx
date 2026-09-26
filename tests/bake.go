@@ -48,6 +48,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrintKeepEscaped,
 	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
+	testBakeNamedContextNormalizedName,
 	testBakeLocalMulti,
 	testBakeDeferOutput,
 	testBakeFailFast,
@@ -690,6 +691,38 @@ target "default" {
 	require.Contains(t, string(out), `#1 reading docker-bake.hcl`)
 
 	require.FileExists(t, filepath.Join(dirDest, "foo"))
+}
+
+// https://github.com/docker/buildx/issues/2328
+func testBakeNamedContextNormalizedName(t *testing.T, sb integration.Sandbox) {
+	bakefile := []byte(`
+target "source" {
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY marker /marker
+EOT
+}
+
+target "default" {
+	contexts = {
+		"library/source" = "target:source"
+	}
+	dockerfile-inline = <<EOT
+FROM scratch
+COPY --from=library/source /marker /marker
+EOT
+}
+`)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("marker", []byte("marker"), 0600),
+	)
+	dirDest := t.TempDir()
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--set", "default.output=type=local,dest="+dirDest))
+	require.NoError(t, err, out)
+	require.FileExists(t, filepath.Join(dirDest, "marker"))
 }
 
 func testBakeLocalMulti(t *testing.T, sb integration.Sandbox) {

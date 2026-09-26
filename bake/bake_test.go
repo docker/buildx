@@ -1158,6 +1158,53 @@ func TestReadContexts(t *testing.T) {
 	require.Equal(t, "def", ctxs["abc"].Path)
 }
 
+func TestReadContextsNormalizedNames(t *testing.T) {
+	for _, name := range []string{"library/golang", "docker.io/library/golang"} {
+		t.Run(name, func(t *testing.T) {
+			fp := File{
+				Name: "docker-bake.hcl",
+				Data: fmt.Appendf(nil, `
+				target "app" {
+					contexts = {
+						%q = "docker-image://library/golang:1.22"
+					}
+				}
+				`, name),
+			}
+
+			ctx := context.TODO()
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+
+			bo, err := TargetsToBuildOpt(m, &Input{})
+			require.NoError(t, err)
+			require.Len(t, bo["app"].Inputs.NamedContexts, 1)
+			require.Equal(t, "docker-image://library/golang:1.22", bo["app"].Inputs.NamedContexts["golang"].Path)
+		})
+	}
+}
+
+func TestReadContextsDuplicateNormalizedNames(t *testing.T) {
+	fp := File{
+		Name: "docker-bake.hcl",
+		Data: []byte(`
+		target "app" {
+			contexts = {
+				"golang" = "docker-image://library/golang:1.21"
+				"library/golang" = "docker-image://library/golang:1.22"
+			}
+		}
+		`),
+	}
+
+	ctx := context.TODO()
+	m, _, err := ReadTargets(ctx, []File{fp}, []string{"app"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+
+	_, err = TargetsToBuildOpt(m, &Input{})
+	require.EqualError(t, err, `context names "golang" and "library/golang" normalize to the same name "golang"`)
+}
+
 func TestReadContextFromTargetUnknown(t *testing.T) {
 	fp := File{
 		Name: "docker-bake.hcl",
