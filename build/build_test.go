@@ -2,15 +2,57 @@ package build
 
 import (
 	"bytes"
+	"context"
+	stderrors "errors"
 	"testing"
 
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/driver"
 	"github.com/moby/buildkit/client"
+	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"google.golang.org/grpc/codes"
+	"google.golang.org/grpc/status"
 )
+
+func TestHandlerCompleted(t *testing.T) {
+	failure := stderrors.New("failed")
+	for _, tt := range []struct {
+		name     string
+		err      error
+		canceled bool
+		aborted  bool
+	}{
+		{name: "success"},
+		{name: "failure", err: failure},
+		{name: "dependency", err: targetAbortError{failure}, aborted: true},
+		{name: "wrapped dependency", err: errors.Wrap(targetAbortError{failure}, "target"), aborted: true},
+		{name: "canceled", err: context.Canceled, aborted: true},
+		{name: "deadline", err: context.DeadlineExceeded, aborted: true},
+		{name: "canceled with cause", err: failure, canceled: true, aborted: true},
+		{name: "canceled RPC", err: status.Error(codes.Canceled, "canceled"), canceled: true, aborted: true},
+		{name: "success before cancellation", canceled: true},
+	} {
+		t.Run(tt.name, func(t *testing.T) {
+			ctx, cancel := context.WithCancelCause(t.Context())
+			defer cancel(nil)
+			if tt.canceled {
+				cancel(failure)
+			}
+			calls := 0
+			h := &Handler{Completed: func(name string, result TargetResult) {
+				calls++
+				require.Equal(t, "target", name)
+				require.Equal(t, tt.err, result.Err)
+				require.Equal(t, tt.aborted, result.Aborted)
+			}}
+			h.completed(ctx, "target", tt.err)
+			require.Equal(t, 1, calls)
+		})
+	}
+}
 
 type warnOutputFactory struct {
 	driver.Factory
