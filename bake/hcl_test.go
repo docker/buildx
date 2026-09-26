@@ -2455,6 +2455,71 @@ func TestJSONOverridePriority(t *testing.T) {
 	})
 }
 
+func TestHCLOverrideFileKeepsReferencedAttrs(t *testing.T) {
+	t.Parallel()
+	base := []byte(`
+		group "default" {
+			targets = ["tgt2"]
+		}
+		target "tgt1" {
+			dockerfile-inline = "FROM alpine\n"
+			tags = ["main:latest", "primary-image:latest"]
+			args = {
+				FROM_BASE = "1"
+			}
+		}
+		target "tgt2" {
+			dockerfile-inline = "FROM primary\n"
+			contexts = { primary = "target:tgt1" }
+			tags = [target.tgt1.tags[0], "secondary-image:latest"]
+			args = {
+				TAKEN = target.tgt1.args.FROM_BASE
+			}
+		}
+	`)
+	override := []byte(`
+		target "tgt1" {
+			args = {
+				SOME_ARG = "3"
+			}
+		}
+	`)
+
+	c, _, err := ParseFiles([]File{
+		{Data: base, Name: "docker-bake.hcl"},
+		{Data: override, Name: "override.bake.hcl"},
+	}, nil, nil)
+	require.NoError(t, err)
+
+	byName := map[string]*Target{}
+	for _, tgt := range c.Targets {
+		byName[tgt.Name] = tgt
+	}
+	require.Equal(t, []string{"main:latest", "primary-image:latest"}, byName["tgt1"].Tags)
+	require.Equal(t, []string{"main:latest", "secondary-image:latest"}, byName["tgt2"].Tags)
+	require.Equal(t, "1", *byName["tgt1"].Args["FROM_BASE"])
+	require.Equal(t, "3", *byName["tgt1"].Args["SOME_ARG"])
+	require.Equal(t, "1", *byName["tgt2"].Args["TAKEN"])
+
+	// an override that does set tags still replaces the list
+	overrideTags := []byte(`
+		target "tgt1" {
+			tags = ["replaced:latest"]
+		}
+	`)
+	c, _, err = ParseFiles([]File{
+		{Data: base, Name: "docker-bake.hcl"},
+		{Data: overrideTags, Name: "override.bake.hcl"},
+	}, nil, nil)
+	require.NoError(t, err)
+	byName = map[string]*Target{}
+	for _, tgt := range c.Targets {
+		byName[tgt.Name] = tgt
+	}
+	require.Equal(t, []string{"replaced:latest"}, byName["tgt1"].Tags)
+	require.Equal(t, []string{"replaced:latest", "secondary-image:latest"}, byName["tgt2"].Tags)
+}
+
 func ptrstr(s any) *string {
 	var n *string
 	if reflect.ValueOf(s).Kind() == reflect.String {

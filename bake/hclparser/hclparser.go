@@ -400,6 +400,55 @@ func (p *parser) valueHasOverride(name string, favorJSON bool) (string, bool, bo
 	return envv, hasEnv, jsonEnv
 }
 
+// mergeCtyOverride overlays next onto prev. Null attributes in next are
+// treated as "not set in this block" and do not replace prev. Map and object
+// attributes are merged by key, matching Target.Merge for args/labels/contexts.
+func mergeCtyOverride(prev, next cty.Value) cty.Value {
+	if !prev.IsKnown() || prev.IsNull() {
+		return next
+	}
+	if !next.IsKnown() || next.IsNull() {
+		return prev
+	}
+	if prev.Type().IsObjectType() && next.Type().IsObjectType() {
+		merged := prev.AsValueMap()
+		for k, nv := range next.AsValueMap() {
+			if !nv.IsKnown() || nv.IsNull() {
+				continue
+			}
+			pv, ok := merged[k]
+			if ok && pv.IsKnown() && !pv.IsNull() && ctyMapLike(pv) && ctyMapLike(nv) {
+				merged[k] = mergeCtyMap(pv, nv)
+				continue
+			}
+			merged[k] = nv
+		}
+		return cty.ObjectVal(merged)
+	}
+	return next
+}
+
+func ctyMapLike(v cty.Value) bool {
+	return v.Type().IsMapType() || v.Type().IsObjectType()
+}
+
+func mergeCtyMap(prev, next cty.Value) cty.Value {
+	merged := prev.AsValueMap()
+	for k, v := range next.AsValueMap() {
+		if !v.IsKnown() || v.IsNull() {
+			continue
+		}
+		merged[k] = v
+	}
+	if prev.Type().IsMapType() {
+		if len(merged) == 0 {
+			return cty.MapValEmpty(prev.Type().ElementType())
+		}
+		return cty.MapVal(merged)
+	}
+	return cty.ObjectVal(merged)
+}
+
 // resolveBlock force evaluates a block, storing the result in the parser. If a
 // target schema is provided, only the attributes and blocks present in the
 // schema will be evaluated.
@@ -566,6 +615,17 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		}
 		if m == nil {
 			m = map[string]cty.Value{}
+		}
+		// A later block for the same target only sets the attributes it
+		// contains. Decoding that block (or a single attribute of it, when
+		// something references target.<name>.<attr>) produces nulls for
+		// everything it omitted. Those nulls must not wipe values already
+		// contributed by an earlier block, or target.tgt1.tags inside another
+		// target goes null as soon as an override file touches tgt1.
+		if block.Type == "target" {
+			if prev, ok := m[name]; ok {
+				outputValue = mergeCtyOverride(prev, outputValue)
+			}
 		}
 		m[name] = outputValue
 
