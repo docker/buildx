@@ -176,28 +176,9 @@ func (r *Resolver) combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		mt = ocispecs.MediaTypeImageIndex
 	}
 
-	// annotations are only allowed on OCI indexes
-	indexAnnotation := make(map[string]string)
-	if mt == ocispecs.MediaTypeImageIndex {
-		for k, v := range ann {
-			switch k.Type {
-			case exptypes.AnnotationIndex:
-				indexAnnotation[k.Key] = v
-			case exptypes.AnnotationManifestDescriptor:
-				for i := range descs {
-					if descs[i].Annotations == nil {
-						descs[i].Annotations = map[string]string{}
-					}
-					if k.Platform == nil || k.PlatformString() == platforms.Format(*descs[i].Platform) {
-						descs[i].Annotations[k.Key] = v
-					}
-				}
-			case exptypes.AnnotationManifest, "":
-				return nil, ocispecs.Descriptor{}, nil, errors.Errorf("%q annotations are not supported yet", k.Type)
-			case exptypes.AnnotationIndexDescriptor:
-				return nil, ocispecs.Descriptor{}, nil, errors.Errorf("%q annotations are invalid while creating an image", k.Type)
-			}
-		}
+	indexAnnotation, err := applyAnnotations(descs, ann, mt)
+	if err != nil {
+		return nil, ocispecs.Descriptor{}, nil, err
 	}
 
 	idxBytes, err := json.MarshalIndent(ocispecs.Index{
@@ -217,6 +198,40 @@ func (r *Resolver) combine(ctx context.Context, srcs []*Source, ann map[exptypes
 		Size:      int64(len(idxBytes)),
 		Digest:    digest.FromBytes(idxBytes),
 	}, sources, nil
+}
+
+func applyAnnotations(descs []ocispecs.Descriptor, ann map[exptypes.AnnotationKey]string, mt string) (map[string]string, error) {
+	for k := range ann {
+		switch k.Type {
+		case "", exptypes.AnnotationIndex, exptypes.AnnotationManifestDescriptor:
+		case exptypes.AnnotationManifest:
+			return nil, errors.New(`manifest annotations are not supported by imagetools create because it does not modify manifests; use "index:" or "manifest-descriptor:" instead`)
+		case exptypes.AnnotationIndexDescriptor:
+			return nil, errors.Errorf("%q annotations are invalid while creating an image", k.Type)
+		}
+	}
+
+	if len(ann) > 0 && mt != ocispecs.MediaTypeImageIndex {
+		return nil, errors.New(`annotations are not supported for Docker manifest lists; use "oci-mediatypes=true" when building the source images`)
+	}
+
+	indexAnnotation := make(map[string]string)
+	for k, v := range ann {
+		switch k.Type {
+		case "", exptypes.AnnotationIndex:
+			indexAnnotation[k.Key] = v
+		case exptypes.AnnotationManifestDescriptor:
+			for i := range descs {
+				if descs[i].Annotations == nil {
+					descs[i].Annotations = map[string]string{}
+				}
+				if k.Platform == nil || k.PlatformString() == platforms.Format(*descs[i].Platform) {
+					descs[i].Annotations[k.Key] = v
+				}
+			}
+		}
+	}
+	return indexAnnotation, nil
 }
 
 func (r *Resolver) Push(ctx context.Context, ref *Location, desc ocispecs.Descriptor, dt []byte) error {

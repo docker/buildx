@@ -42,8 +42,9 @@ format in the output.
 
 ### <a name="annotation"></a> Add annotations to an image (--annotation)
 
-The `--annotation` flag lets you add annotations the image index, manifest,
-and descriptors when creating a new image.
+The `--annotation` flag lets you add annotations to the image index and
+manifest descriptors when creating a new image. An annotation without a type
+prefix is added to the image index.
 
 The following command creates a `foo/bar:latest` image with the
 `org.opencontainers.image.authors` annotation on the image index.
@@ -62,7 +63,11 @@ $ docker buildx imagetools create \
 > - `index:`
 > - `manifest-descriptor:`
 >
-> It doesn't support annotating manifests or OCI layouts.
+> It doesn't support annotating manifests or OCI layouts. Annotations also
+> require the output to use the OCI image index media type; they aren't
+> supported when the sources produce a Docker manifest list. When building
+> source images with Buildx, use the `oci-mediatypes=true` output option to
+> produce OCI media types.
 
 For more information about annotations, see
 [Annotations](https://docs.docker.com/build/building/annotations/).
