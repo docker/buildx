@@ -1345,7 +1345,7 @@ func resultKey(node *noderesolver.ResolvedNode, name string) string {
 // and creates a separate session that will be used by all detected requests.
 func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ map[string][]*session.Session, err error) {
 	type fsTracker struct {
-		fs fsutil.FS
+		fs *fsMount
 		so []*client.SolveOpt
 	}
 	type fsKey struct {
@@ -1353,7 +1353,7 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 		dir  string
 	}
 
-	m := map[string]map[fsKey]*fsTracker{}
+	m := map[string]map[fsKey][]*fsTracker{}
 	for _, reqs := range reqs {
 		for _, req := range reqs {
 			nodeName := req.Node().Name
@@ -1362,26 +1362,30 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 				continue
 			}
 			if _, ok := m[nodeName]; !ok {
-				m[nodeName] = map[fsKey]*fsTracker{}
+				m[nodeName] = map[fsKey][]*fsTracker{}
 			}
 			fsMap := m[nodeName]
-			for name, m := range req.so.LocalMounts {
-				fs, ok := m.(*fsMount)
+			for name, mount := range req.so.LocalMounts {
+				fs, ok := mount.(*fsMount)
 				if !ok {
 					continue
 				}
 				key := fsKey{name: name, dir: fs.dir}
-				if _, ok := fsMap[key]; !ok {
-					fsMap[key] = &fsTracker{fs: fs.FS}
+				idx := slices.IndexFunc(fsMap[key], func(t *fsTracker) bool {
+					return slices.Equal(t.fs.patterns, fs.patterns)
+				})
+				if idx == -1 {
+					fsMap[key] = append(fsMap[key], &fsTracker{fs: fs})
+					idx = len(fsMap[key]) - 1
 				}
-				fsMap[key].so = append(fsMap[key].so, req.so)
+				fsMap[key][idx].so = append(fsMap[key][idx].so, req.so)
 			}
 		}
 	}
 
 	type sharedSession struct {
 		*session.Session
-		fsMap map[string]fsutil.FS
+		fsMap map[string]*fsMount
 	}
 
 	sessionMap := map[string][]*sharedSession{}
@@ -1397,38 +1401,40 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 	}()
 
 	for node, fsMap := range m {
-		for key, fs := range fsMap {
-			if len(fs.so) <= 1 {
-				continue
-			}
-
-			sessions := sessionMap[node]
-
-			// find session that doesn't have the fs name reserved
-			idx := slices.IndexFunc(sessions, func(s *sharedSession) bool {
-				_, ok := s.fsMap[key.name]
-				return !ok
-			})
-
-			var ss *sharedSession
-			if idx == -1 {
-				s, err := session.NewSession(ctx, fs.so[0].SharedKey)
-				if err != nil {
-					return nil, err
+		for key, trackers := range fsMap {
+			for _, fs := range trackers {
+				if len(fs.so) <= 1 {
+					continue
 				}
-				ss = &sharedSession{Session: s, fsMap: map[string]fsutil.FS{}}
-				sessions = append(sessions, ss)
-				sessionMap[node] = sessions
-			} else {
-				ss = sessions[idx]
-			}
 
-			ss.fsMap[key.name] = fs.fs
-			for _, so := range fs.so {
-				if so.FrontendAttrs == nil {
-					so.FrontendAttrs = map[string]string{}
+				sessions := sessionMap[node]
+
+				// find session that doesn't have the fs name reserved
+				idx := slices.IndexFunc(sessions, func(s *sharedSession) bool {
+					_, ok := s.fsMap[key.name]
+					return !ok
+				})
+
+				var ss *sharedSession
+				if idx == -1 {
+					s, err := session.NewSession(ctx, fs.so[0].SharedKey)
+					if err != nil {
+						return nil, err
+					}
+					ss = &sharedSession{Session: s, fsMap: map[string]*fsMount{}}
+					sessions = append(sessions, ss)
+					sessionMap[node] = sessions
+				} else {
+					ss = sessions[idx]
 				}
-				so.FrontendAttrs["local-sessionid:"+key.name] = ss.ID()
+
+				ss.fsMap[key.name] = fs.fs
+				for _, so := range fs.so {
+					if so.FrontendAttrs == nil {
+						so.FrontendAttrs = map[string]string{}
+					}
+					so.FrontendAttrs["local-sessionid:"+key.name] = ss.ID()
+				}
 			}
 		}
 	}
@@ -1447,8 +1453,8 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 			arr = append(arr, s.Session)
 
 			src := make(filesync.StaticDirSource, len(s.fsMap))
-			for name, fs := range s.fsMap {
-				fs, err := fsutil.NewFilterFS(fs, &fsutil.FilterOpt{
+			for name, mount := range s.fsMap {
+				fs, err := fsutil.NewFilterFS(mount.FS, &fsutil.FilterOpt{
 					Map: resetUIDAndGID,
 				})
 				if err != nil {
@@ -1456,7 +1462,12 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 				}
 				src[name] = fs
 			}
-			s.Allow(filesync.NewFSSyncProvider(src))
+			s.Allow(filesync.NewFSSyncProvider(src, func(name string, opt *fsutil.FilterOpt) error {
+				if mount, ok := s.fsMap[name]; ok && len(mount.patterns) > 0 {
+					opt.ExcludePatterns = append(slices.Clone(mount.patterns), opt.ExcludePatterns...)
+				}
+				return nil
+			}))
 		}
 		sessions[n] = arr
 	}

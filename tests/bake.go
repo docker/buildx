@@ -49,6 +49,7 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrintRemoteContextSubdir,
 	testBakeLocal,
 	testBakeLocalMulti,
+	testBakeGlobalDockerignoreSharedContext,
 	testBakeDeferOutput,
 	testBakeFailFast,
 	testBakeDeferError,
@@ -732,6 +733,46 @@ services:
 	require.NoError(t, err, out)
 
 	require.FileExists(t, filepath.Join(dirDest2, "foo"))
+}
+
+func testBakeGlobalDockerignoreSharedContext(t *testing.T, sb integration.Sandbox) {
+	dir := tmpdir(t,
+		fstest.CreateFile("docker-bake.hcl", []byte(`
+group "default" {
+  targets = ["a", "b"]
+}
+target "a" {
+  dockerfile = "Dockerfile.a"
+}
+target "b" {
+  dockerfile = "Dockerfile.b"
+}
+`), 0o600),
+		fstest.CreateFile("Dockerfile.a", []byte("FROM scratch\nCOPY . /a/\n"), 0o600),
+		fstest.CreateFile("Dockerfile.b", []byte("FROM scratch\nCOPY . /b/\n"), 0o600),
+		fstest.CreateFile("keep.txt", []byte(identity.NewID()), 0o600),
+		fstest.CreateFile("drop.txt", []byte("ignored"), 0o600),
+	)
+	configDir := buildxConfig(sb)
+	require.NotEmpty(t, configDir)
+	require.NoError(t, os.MkdirAll(configDir, 0o700))
+	globalIgnore := filepath.Join(configDir, ".dockerignore")
+	require.NoError(t, os.WriteFile(globalIgnore, []byte("drop.txt\n"), 0o600))
+	t.Cleanup(func() { _ = os.Remove(globalIgnore) })
+
+	destA, destB := t.TempDir(), t.TempDir()
+	out, err := bakeCmd(sb, withDir(dir), withArgs(
+		"--progress=plain",
+		"--set", "a.output=type=local,dest="+destA,
+		"--set", "b.output=type=local,dest="+destB,
+	))
+	require.NoError(t, err, out)
+	require.Equal(t, 1, strings.Count(out, "internal] load build context"), out)
+	for _, output := range []struct{ dir, prefix string }{{destA, "a"}, {destB, "b"}} {
+		require.FileExists(t, filepath.Join(output.dir, output.prefix, "keep.txt"))
+		_, err := os.Stat(filepath.Join(output.dir, output.prefix, "drop.txt"))
+		require.ErrorIs(t, err, os.ErrNotExist)
+	}
 }
 
 func testBakeDeferOutput(t *testing.T, sb integration.Sandbox) {
