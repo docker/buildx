@@ -26,57 +26,87 @@ import (
 	"github.com/sirupsen/logrus"
 )
 
-var interpolateTypeCastMapping = map[tree.Path]interp.Cast{
-	servicePath("cpu_count"):                                       toInt64,
-	servicePath("cpu_percent"):                                     toFloat,
-	servicePath("cpu_period"):                                      toInt64,
-	servicePath("cpu_quota"):                                       toInt64,
-	servicePath("cpu_rt_period"):                                   toInt64,
-	servicePath("cpu_rt_runtime"):                                  toInt64,
-	servicePath("cpus"):                                            toFloat32,
-	servicePath("cpu_shares"):                                      toInt64,
-	servicePath("init"):                                            toBoolean,
-	servicePath("depends_on", tree.PathMatchAll, "required"):       toBoolean,
-	servicePath("depends_on", tree.PathMatchAll, "restart"):        toBoolean,
-	servicePath("deploy", "replicas"):                              toInt,
-	servicePath("deploy", "update_config", "parallelism"):          toInt,
-	servicePath("deploy", "update_config", "max_failure_ratio"):    toFloat,
-	servicePath("deploy", "rollback_config", "parallelism"):        toInt,
-	servicePath("deploy", "rollback_config", "max_failure_ratio"):  toFloat,
-	servicePath("deploy", "restart_policy", "max_attempts"):        toInt,
-	servicePath("deploy", "placement", "max_replicas_per_node"):    toInt,
-	servicePath("healthcheck", "retries"):                          toInt,
-	servicePath("healthcheck", "disable"):                          toBoolean,
-	servicePath("oom_kill_disable"):                                toBoolean,
-	servicePath("oom_score_adj"):                                   toInt64,
-	servicePath("pids_limit"):                                      toInt64,
-	servicePath("ports", tree.PathMatchList, "target"):             toInt,
-	servicePath("privileged"):                                      toBoolean,
-	servicePath("read_only"):                                       toBoolean,
-	servicePath("scale"):                                           toInt,
-	servicePath("stdin_open"):                                      toBoolean,
-	servicePath("tty"):                                             toBoolean,
-	servicePath("ulimits", tree.PathMatchAll):                      toInt,
-	servicePath("ulimits", tree.PathMatchAll, "hard"):              toInt,
-	servicePath("ulimits", tree.PathMatchAll, "soft"):              toInt,
-	servicePath("volumes", tree.PathMatchList, "read_only"):        toBoolean,
-	servicePath("volumes", tree.PathMatchList, "volume", "nocopy"): toBoolean,
-	iPath("networks", tree.PathMatchAll, "external"):               toBoolean,
-	iPath("networks", tree.PathMatchAll, "internal"):               toBoolean,
-	iPath("networks", tree.PathMatchAll, "attachable"):             toBoolean,
-	iPath("networks", tree.PathMatchAll, "enable_ipv4"):            toBoolean,
-	iPath("networks", tree.PathMatchAll, "enable_ipv6"):            toBoolean,
-	iPath("volumes", tree.PathMatchAll, "external"):                toBoolean,
-	iPath("secrets", tree.PathMatchAll, "external"):                toBoolean,
-	iPath("configs", tree.PathMatchAll, "external"):                toBoolean,
+var interpolateTypeCastMapping = buildInterpolateTypeCastMapping()
+
+// buildInterpolateTypeCastMapping registers numeric/boolean casts per layer of
+// the specification: container_spec attributes apply wherever a container is
+// declared (services, jobs, pre_start init containers), workload_spec
+// attributes to services and jobs, service-only attributes to services.
+func buildInterpolateTypeCastMapping() map[tree.Path]interp.Cast {
+	casts := map[tree.Path]interp.Cast{
+		iPath("networks", tree.PathMatchAll, "external"):    toBoolean,
+		iPath("networks", tree.PathMatchAll, "internal"):    toBoolean,
+		iPath("networks", tree.PathMatchAll, "attachable"):  toBoolean,
+		iPath("networks", tree.PathMatchAll, "enable_ipv4"): toBoolean,
+		iPath("networks", tree.PathMatchAll, "enable_ipv6"): toBoolean,
+		iPath("volumes", tree.PathMatchAll, "external"):     toBoolean,
+		iPath("secrets", tree.PathMatchAll, "external"):     toBoolean,
+		iPath("configs", tree.PathMatchAll, "external"):     toBoolean,
+	}
+	containerSpec := []tree.Path{
+		iPath("services", tree.PathMatchAll),
+		iPath("jobs", tree.PathMatchAll),
+		iPath("services", tree.PathMatchAll, "pre_start", tree.PathMatchAll),
+	}
+	workloadSpec := []tree.Path{
+		iPath("services", tree.PathMatchAll),
+		iPath("jobs", tree.PathMatchAll),
+	}
+	serviceOnly := []tree.Path{
+		iPath("services", tree.PathMatchAll),
+	}
+	add := func(prefixes []tree.Path, cast interp.Cast, parts ...string) {
+		for _, prefix := range prefixes {
+			p := prefix
+			for _, part := range parts {
+				p = p.Next(part)
+			}
+			casts[p] = cast
+		}
+	}
+
+	add(containerSpec, toInt64, "cpu_count")
+	add(containerSpec, toFloat, "cpu_percent")
+	add(containerSpec, toInt64, "cpu_period")
+	add(containerSpec, toInt64, "cpu_quota")
+	add(containerSpec, toInt64, "cpu_rt_period")
+	add(containerSpec, toInt64, "cpu_rt_runtime")
+	add(containerSpec, toFloat32, "cpus")
+	add(containerSpec, toInt64, "cpu_shares")
+	add(containerSpec, toBoolean, "init")
+	add(containerSpec, toBoolean, "oom_kill_disable")
+	add(containerSpec, toInt64, "oom_score_adj")
+	add(containerSpec, toInt64, "pids_limit")
+	add(containerSpec, toBoolean, "privileged")
+	add(containerSpec, toBoolean, "read_only")
+	add(containerSpec, toInt, "ulimits", tree.PathMatchAll)
+	add(containerSpec, toInt, "ulimits", tree.PathMatchAll, "hard")
+	add(containerSpec, toInt, "ulimits", tree.PathMatchAll, "soft")
+	add(containerSpec, toBoolean, "volumes", tree.PathMatchList, "read_only")
+	add(containerSpec, toBoolean, "volumes", tree.PathMatchList, "volume", "nocopy")
+
+	add(workloadSpec, toBoolean, "depends_on", tree.PathMatchAll, "required")
+	add(workloadSpec, toBoolean, "depends_on", tree.PathMatchAll, "restart")
+	add(workloadSpec, toInt, "healthcheck", "retries")
+	add(workloadSpec, toBoolean, "healthcheck", "disable")
+	add(workloadSpec, toInt, "ports", tree.PathMatchList, "target")
+	add(workloadSpec, toBoolean, "stdin_open")
+	add(workloadSpec, toBoolean, "tty")
+
+	add(serviceOnly, toInt, "deploy", "replicas")
+	add(serviceOnly, toInt, "deploy", "update_config", "parallelism")
+	add(serviceOnly, toFloat, "deploy", "update_config", "max_failure_ratio")
+	add(serviceOnly, toInt, "deploy", "rollback_config", "parallelism")
+	add(serviceOnly, toFloat, "deploy", "rollback_config", "max_failure_ratio")
+	add(serviceOnly, toInt, "deploy", "restart_policy", "max_attempts")
+	add(serviceOnly, toInt, "deploy", "placement", "max_replicas_per_node")
+	add(serviceOnly, toInt, "scale")
+
+	return casts
 }
 
 func iPath(parts ...string) tree.Path {
 	return tree.NewPath(parts...)
-}
-
-func servicePath(parts ...string) tree.Path {
-	return iPath(append([]string{"services", tree.PathMatchAll}, parts...)...)
 }
 
 func toInt(value string) (interface{}, error) {

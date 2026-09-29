@@ -20,6 +20,7 @@ import "github.com/compose-spec/compose-go/v2/tree"
 
 var omitempty = []tree.Path{
 	"services.*.dns",
+	"jobs.*.dns",
 }
 
 // OmitEmpty removes empty attributes which are irrelevant when unset

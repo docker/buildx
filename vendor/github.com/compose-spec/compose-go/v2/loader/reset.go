@@ -60,7 +60,19 @@ func (p *ResetProcessor) UnmarshalYAML(value *yaml.Node) error {
 	if err != nil {
 		return err
 	}
+	p.addAliasPaths()
 	return resolved.Decode(p.target)
+}
+
+// addAliasPaths records, next to each path going through an extension declared
+// in extensionAliases, the path of the attribute it stands for: earlier files
+// hold that attribute under its own name once their extensions are promoted.
+func (p *ResetProcessor) addAliasPaths() {
+	for _, path := range p.paths {
+		if resolved := resolveAliasPath(path); resolved != path {
+			p.paths = append(p.paths, resolved)
+		}
+	}
 }
 
 // resolveReset detects `!reset` tag being set on yaml nodes and record position in the yaml tree

@@ -25,27 +25,32 @@ import (
 // ResolveEnvironment update the environment variables for the format {- VAR} (without interpolation)
 func ResolveEnvironment(dict map[string]any, environment types.Mapping) {
 	resolveServicesEnvironment(dict, environment)
+	resolveContainerEnvironment(dict, "jobs", environment)
 	resolveSecretsEnvironment(dict, environment)
 	resolveConfigsEnvironment(dict, environment)
 }
 
 func resolveServicesEnvironment(dict map[string]any, environment types.Mapping) {
-	services, ok := dict["services"].(map[string]any)
+	resolveContainerEnvironment(dict, "services", environment)
+}
+
+func resolveContainerEnvironment(dict map[string]any, key string, environment types.Mapping) {
+	containers, ok := dict[key].(map[string]any)
 	if !ok {
 		return
 	}
 
-	for service, cfg := range services {
-		serviceConfig, ok := cfg.(map[string]any)
+	for name, cfg := range containers {
+		config, ok := cfg.(map[string]any)
 		if !ok {
 			continue
 		}
-		serviceEnv, ok := serviceConfig["environment"].([]any)
+		envList, ok := config["environment"].([]any)
 		if !ok {
 			continue
 		}
 		envs := []any{}
-		for _, env := range serviceEnv {
+		for _, env := range envList {
 			varEnv, ok := env.(string)
 			if !ok {
 				continue
@@ -57,10 +62,10 @@ func resolveServicesEnvironment(dict map[string]any, environment types.Mapping) 
 				envs = append(envs, varEnv)
 			}
 		}
-		serviceConfig["environment"] = envs
-		services[service] = serviceConfig
+		config["environment"] = envs
+		containers[name] = config
 	}
-	dict["services"] = services
+	dict[key] = containers
 }
 
 func resolveSecretsEnvironment(dict map[string]any, environment types.Mapping) {
