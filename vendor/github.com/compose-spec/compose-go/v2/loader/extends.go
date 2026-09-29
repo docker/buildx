@@ -28,22 +28,24 @@ import (
 )
 
 func ApplyExtends(ctx context.Context, dict map[string]any, opts *Options, tracker *cycleTracker, post PostProcessor) error {
-	a, ok := dict["services"]
-	if !ok {
-		return nil
-	}
-	services, ok := a.(map[string]any)
-	if !ok {
-		return fmt.Errorf("services must be a mapping")
-	}
-	for name := range services {
-		merged, err := applyServiceExtends(ctx, name, services, opts, tracker, post)
-		if err != nil {
-			return err
+	for _, key := range []string{"services", "jobs"} {
+		a, ok := dict[key]
+		if !ok {
+			continue
 		}
-		services[name] = merged
+		entries, ok := a.(map[string]any)
+		if !ok {
+			return fmt.Errorf("%s must be a mapping", key)
+		}
+		for name := range entries {
+			merged, err := applyServiceExtends(ctx, name, entries, opts, tracker, post)
+			if err != nil {
+				return err
+			}
+			entries[name] = merged
+		}
+		dict[key] = entries
 	}
-	dict["services"] = services
 	return nil
 }
 

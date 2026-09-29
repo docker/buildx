@@ -45,6 +45,7 @@ type Project struct {
 	Name       string     `yaml:"name,omitempty" json:"name,omitempty"`
 	WorkingDir string     `yaml:"-" json:"-"`
 	Services   Services   `yaml:"services" json:"services"`
+	Jobs       Jobs       `yaml:"jobs,omitempty" json:"jobs,omitempty"`
 	Networks   Networks   `yaml:"networks,omitempty" json:"networks,omitempty"`
 	Volumes    Volumes    `yaml:"volumes,omitempty" json:"volumes,omitempty"`
 	Secrets    Secrets    `yaml:"secrets,omitempty" json:"secrets,omitempty"`
@@ -57,7 +58,9 @@ type Project struct {
 
 	// DisabledServices track services which have been disable as profile is not active
 	DisabledServices Services `yaml:"-" json:"-"`
-	Profiles         []string `yaml:"-" json:"-"`
+	// DisabledJobs track jobs which have been disabled as profile is not active
+	DisabledJobs Jobs     `yaml:"-" json:"-"`
+	Profiles     []string `yaml:"-" json:"-"`
 }
 
 // ServiceNames return names for all services in this Compose config
@@ -263,6 +266,18 @@ func (p *Project) AllServices() Services {
 	return all
 }
 
+// AllJobs returns all the project jobs, enabled or not
+func (p *Project) AllJobs() Jobs {
+	all := Jobs{}
+	for name, job := range p.Jobs {
+		all[name] = job
+	}
+	for name, job := range p.DisabledJobs {
+		all[name] = job
+	}
+	return all
+}
+
 type ServiceFunc func(name string, service *ServiceConfig) error
 
 // ForEachService runs ServiceFunc on each service and dependencies according to DependencyPolicy
@@ -366,14 +381,23 @@ func (p *Project) RelativePath(path string) string {
 
 // HasProfile return true if service has no profile declared or has at least one profile matching
 func (s ServiceConfig) HasProfile(profiles []string) bool {
-	if len(s.Profiles) == 0 {
+	return matchesProfiles(s.Profiles, profiles)
+}
+
+// HasProfile return true if job has no profile declared or has at least one profile matching
+func (j JobConfig) HasProfile(profiles []string) bool {
+	return matchesProfiles(j.Profiles, profiles)
+}
+
+func matchesProfiles(declared, active []string) bool {
+	if len(declared) == 0 {
 		return true
 	}
-	for _, p := range profiles {
+	for _, p := range active {
 		if p == "*" {
 			return true
 		}
-		for _, sp := range s.Profiles {
+		for _, sp := range declared {
 			if sp == p {
 				return true
 			}
@@ -397,6 +421,21 @@ func (p *Project) WithProfiles(profiles []string) (*Project, error) {
 	}
 	newProject.Services = enabled
 	newProject.DisabledServices = disabled
+
+	if newProject.Jobs != nil || newProject.DisabledJobs != nil {
+		enabledJobs := Jobs{}
+		disabledJobs := Jobs{}
+		for name, job := range newProject.AllJobs() {
+			if job.HasProfile(profiles) {
+				enabledJobs[name] = job
+			} else {
+				disabledJobs[name] = job
+			}
+		}
+		newProject.Jobs = enabledJobs
+		newProject.DisabledJobs = disabledJobs
+	}
+
 	newProject.Profiles = profiles
 	return newProject, nil
 }
@@ -551,6 +590,84 @@ func (p *Project) WithSelectedServices(names []string, options ...DependencyOpti
 	return newProject, nil
 }
 
+// WithoutUnresolvedOptionalDependencies removes from services any optional (required: false)
+// depends_on reference to a service absent from the model — typically disabled by an inactive
+// profile or dropped by service selection. Required references are deliberately kept, so
+// consumers can detect them and report a meaningful error.
+// It returns a new Project instance with the changes and keep the original Project unchanged
+func (p *Project) WithoutUnresolvedOptionalDependencies() *Project {
+	newProject := p.deepCopy()
+	for name, s := range newProject.Services {
+		for dep, cfg := range s.DependsOn {
+			if _, ok := newProject.Services[dep]; !ok && !cfg.Required {
+				delete(s.DependsOn, dep)
+			}
+		}
+		newProject.Services[name] = s
+	}
+	return newProject
+}
+
+// WithSelectedJob returns a new Project containing only the services required
+// by the named job's DependsOn. The job itself is NOT added to Services.
+func (p *Project) WithSelectedJob(name string, options ...DependencyOption) (*Project, error) {
+	job, ok := p.Jobs[name]
+	if !ok {
+		if disabled, exists := p.DisabledJobs[name]; exists {
+			// a profile-disabled job is enabled when explicitly selected,
+			// and its profiles are added to the set of active profiles
+			enabled, err := p.WithProfiles(append(append([]string{}, p.Profiles...), disabled.Profiles...))
+			if err != nil {
+				return nil, err
+			}
+			return enabled.WithSelectedJob(name, options...)
+		}
+		return nil, fmt.Errorf("no such job: %s", name)
+	}
+
+	// a job may depend on another job: walk depends_on transitively to
+	// collect the actual services required to run the selected job. Jobs are
+	// looked up enabled or not — a profile-disabled dependency is still a
+	// job, and treating its name as a service would fail the selection.
+	deps := resolveJobServiceDeps(p.AllJobs(), job, map[string]bool{name: true})
+	sort.Strings(deps)
+
+	if len(deps) == 0 {
+		// Job has no service dependencies: return project with all services disabled
+		newProject := p.deepCopy()
+		for name := range newProject.Services {
+			newProject = newProject.WithServicesDisabled(name)
+		}
+		return newProject, nil
+	}
+
+	return p.WithSelectedServices(deps, options...)
+}
+
+// resolveJobServiceDeps walks a job's DependsOn, following job-typed
+// dependencies transitively, and returns the names of the actual services
+// required to run it. jobs is the full job set (see AllJobs), so a
+// profile-disabled job in the chain is followed like an enabled one. A
+// dependency name matching a job takes precedence over a same-named service
+// — jobs and services share the depends_on namespace, and a job reference is
+// resolved first. seen guards against dependency cycles between jobs and
+// must contain the starting job's name.
+func resolveJobServiceDeps(jobs Jobs, job JobConfig, seen map[string]bool) []string {
+	var services []string
+	for dep := range job.DependsOn {
+		if seen[dep] {
+			continue
+		}
+		seen[dep] = true
+		if depJob, ok := jobs[dep]; ok {
+			services = append(services, resolveJobServiceDeps(jobs, depJob, seen)...)
+			continue
+		}
+		services = append(services, dep)
+	}
+	return services
+}
+
 // WithServicesDisabled removes from the project model the given services and their references in all dependencies
 // It returns a new Project instance with the changes and keep the original Project unchanged
 func (p *Project) WithServicesDisabled(names ...string) *Project {
@@ -581,8 +698,8 @@ func (p *Project) WithServicesDisabled(names ...string) *Project {
 // It returns a new Project instance with the changes and keep the original Project unchanged.
 // Besides the service image, this also resolves the images services depend on:
 //   - pre_start hook images, which run as ephemeral init containers with their own image
-//   - `type: image` volume sources, unless they reference another service by name (those are
-//     resolved to a locally built image rather than a registry digest)
+//   - `type: image` volume sources — source is always a docker image reference, not
+//     a reference to another service (there is no such thing in the Compose Spec)
 func (p *Project) WithImagesResolved(resolver func(named reference.Named) (godigest.Digest, error)) (*Project, error) {
 	// Deduplicate resolutions per raw image string across the whole call, on two axes:
 	//   - cache (sync.Map) memoizes results for the whole call, so images resolved at
@@ -633,12 +750,6 @@ func (p *Project) WithImagesResolved(resolver func(named reference.Named) (godig
 
 		for i, vol := range service.Volumes {
 			if vol.Type != VolumeTypeImage {
-				continue
-			}
-			if _, ok := p.Services[vol.Source]; ok {
-				continue
-			}
-			if _, ok := p.DisabledServices[vol.Source]; ok {
 				continue
 			}
 			image, err := resolve(vol.Source)
@@ -738,6 +849,9 @@ func (p *Project) MarshalJSON(options ...func(*marshallOptions)) ([]byte, error)
 	}
 	if len(src.Configs) > 0 {
 		m["configs"] = src.Configs
+	}
+	if len(src.Jobs) > 0 {
+		m["jobs"] = src.Jobs
 	}
 	for k, v := range src.Extensions {
 		m[k] = v
@@ -868,6 +982,7 @@ func (p *Project) WithServicesTransform(fn func(name string, s ServiceConfig) (S
 	expect := len(p.Services)
 	resultCh := make(chan result, expect)
 	newProject := p.deepCopy()
+	services := newProject.Services
 
 	eg, ctx := errgroup.WithContext(context.Background())
 	eg.Go(func() error {
@@ -885,7 +1000,7 @@ func (p *Project) WithServicesTransform(fn func(name string, s ServiceConfig) (S
 		newProject.Services = s
 		return nil
 	})
-	for n, s := range newProject.Services {
+	for n, s := range services {
 		name := n
 		service := s
 		eg.Go(func() error {

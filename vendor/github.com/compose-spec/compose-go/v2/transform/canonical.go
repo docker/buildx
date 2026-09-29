@@ -28,28 +28,36 @@ type Func func(data any, p tree.Path, ignoreParseError bool) (any, error)
 var transformers = map[tree.Path]Func{}
 
 func init() {
-	transformers["services.*"] = transformService
-	transformers["services.*.build.secrets.*"] = transformFileMount
-	transformers["services.*.build.provenance"] = transformStringOrX
-	transformers["services.*.build.sbom"] = transformStringOrX
-	transformers["services.*.build.additional_contexts"] = transformKeyValue
-	transformers["services.*.depends_on"] = transformDependsOn
-	transformers["services.*.env_file"] = transformEnvFile
-	transformers["services.*.label_file"] = transformStringOrList
-	transformers["services.*.extends"] = transformExtends
-	transformers["services.*.gpus"] = transformGpus
-	transformers["services.*.networks"] = transformStringSliceToMap
-	transformers["services.*.models"] = transformStringSliceToMap
-	transformers["services.*.volumes.*"] = transformVolumeMount
-	transformers["services.*.dns"] = transformStringOrList
-	transformers["services.*.devices.*"] = transformDeviceMapping
-	transformers["services.*.secrets.*"] = transformFileMount
-	transformers["services.*.configs.*"] = transformFileMount
-	transformers["services.*.ports"] = transformPorts
-	transformers["services.*.build"] = transformBuild
-	transformers["services.*.build.ssh"] = transformSSH
-	transformers["services.*.ulimits.*"] = transformUlimits
-	transformers["services.*.build.ulimits.*"] = transformUlimits
+	// container_spec-level canonicalizations: shared by anything declaring a
+	// container — services, jobs, and pre_start init containers
+	for _, prefix := range []tree.Path{"services.*", "jobs.*", "services.*.pre_start.*"} {
+		transformers[prefix+".env_file"] = transformEnvFile
+		transformers[prefix+".label_file"] = transformStringOrList
+		transformers[prefix+".gpus"] = transformGpus
+		transformers[prefix+".networks"] = transformStringSliceToMap
+		transformers[prefix+".models"] = transformStringSliceToMap
+		transformers[prefix+".volumes.*"] = transformVolumeMount
+		transformers[prefix+".dns"] = transformStringOrList
+		transformers[prefix+".devices.*"] = transformDeviceMapping
+		transformers[prefix+".secrets.*"] = transformFileMount
+		transformers[prefix+".configs.*"] = transformFileMount
+		transformers[prefix+".ulimits.*"] = transformUlimits
+	}
+	// workload_spec and service-level canonicalizations
+	for _, prefix := range []tree.Path{"services", "jobs"} {
+		transformers[prefix+".*"] = transformService
+		transformers[prefix+".*.build.secrets.*"] = transformFileMount
+		transformers[prefix+".*.build.provenance"] = transformStringOrX
+		transformers[prefix+".*.build.sbom"] = transformStringOrX
+		transformers[prefix+".*.build.additional_contexts"] = transformKeyValue
+		transformers[prefix+".*.depends_on"] = transformDependsOn
+		transformers[prefix+".*.extends"] = transformExtends
+		transformers[prefix+".*.ports"] = transformPorts
+		transformers[prefix+".*.build"] = transformBuild
+		transformers[prefix+".*.build.ssh"] = transformSSH
+		transformers[prefix+".*.build.ulimits.*"] = transformUlimits
+	}
+	transformers["jobs.*.triggers.schedule.*"] = transformSchedule
 	transformers["services.*.develop.watch.*.ignore"] = transformStringOrList
 	transformers["services.*.develop.watch.*.include"] = transformStringOrList
 	transformers["volumes.*"] = transformMaybeExternal

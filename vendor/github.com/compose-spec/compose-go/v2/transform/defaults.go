@@ -24,12 +24,16 @@ import (
 var DefaultValues = map[tree.Path]Func{}
 
 func init() {
-	DefaultValues["services.*.build"] = defaultBuildContext
-	DefaultValues["services.*.secrets.*"] = defaultSecretMount
-	DefaultValues["services.*.ports.*"] = portDefaults
+	// container_spec-level defaults, applied wherever a container is declared
+	for _, prefix := range []tree.Path{"services", "jobs"} {
+		DefaultValues[prefix+".*.build"] = defaultBuildContext
+		DefaultValues[prefix+".*.secrets.*"] = defaultSecretMount
+		DefaultValues[prefix+".*.ports.*"] = portDefaults
+		DefaultValues[prefix+".*.gpus.*"] = deviceRequestDefaults
+		DefaultValues[prefix+".*.volumes.*.bind"] = defaultVolumeBind
+	}
+	// deploy is service-only
 	DefaultValues["services.*.deploy.resources.reservations.devices.*"] = deviceRequestDefaults
-	DefaultValues["services.*.gpus.*"] = deviceRequestDefaults
-	DefaultValues["services.*.volumes.*.bind"] = defaultVolumeBind
 }
 
 // RegisterDefaultValue registers a custom transformer for the given path pattern

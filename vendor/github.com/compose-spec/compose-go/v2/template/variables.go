@@ -44,27 +44,50 @@ func recurseExtract(value interface{}, pattern *regexp.Regexp) map[string]Variab
 	case string:
 		if values, is := extractVariable(value, pattern); is {
 			for _, v := range values {
-				m[v.Name] = v
+				combineVariable(m, v)
 			}
 		}
 	case map[string]interface{}:
 		for _, elem := range value {
 			submap := recurseExtract(elem, pattern)
-			for key, value := range submap {
-				m[key] = value
+			for _, value := range submap {
+				combineVariable(m, value)
 			}
 		}
 
 	case []interface{}:
 		for _, elem := range value {
 			submap := recurseExtract(elem, pattern)
-			for key, value := range submap {
-				m[key] = value
+			for _, value := range submap {
+				combineVariable(m, value)
 			}
 		}
 	}
 
 	return m
+}
+
+// combineVariable merges a new occurrence of a variable into m: a variable
+// used several times in the configuration is required as soon as one of its
+// occurrences is (interpolation of that occurrence fails when the variable is
+// unset, whatever the other occurrences declare), and keeps the default and
+// presence values of the first occurrence defining one, so a plain `${VAR}`
+// occurrence doesn't erase the attributes of a `${VAR:?}` or `${VAR:-value}`
+// one.
+func combineVariable(m map[string]Variable, v Variable) {
+	existing, ok := m[v.Name]
+	if !ok {
+		m[v.Name] = v
+		return
+	}
+	existing.Required = existing.Required || v.Required
+	if existing.DefaultValue == "" {
+		existing.DefaultValue = v.DefaultValue
+	}
+	if existing.PresenceValue == "" {
+		existing.PresenceValue = v.PresenceValue
+	}
+	m[v.Name] = existing
 }
 
 func extractVariable(value interface{}, pattern *regexp.Regexp) ([]Variable, bool) {

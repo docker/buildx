@@ -18,6 +18,7 @@ package cli
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"os"
 	"path/filepath"
@@ -83,6 +84,12 @@ type ProjectOptions struct {
 	Listeners []loader.Listener
 	// ResourceLoaders manages support for remote resources
 	ResourceLoaders []loader.ResourceLoader
+
+	// configOrigin describes how ConfigPaths entries were selected when they
+	// don't result from an explicit user selection (COMPOSE_FILE environment
+	// variable, default file discovery), keyed by the value stored in
+	// ConfigPaths. Used to give context in configuration load errors.
+	configOrigin map[string]string
 }
 
 type ProjectOptionsFn func(*ProjectOptions) error
@@ -144,11 +151,62 @@ func WithConfigFileEnv(o *ProjectOptions) error {
 	}
 	f, ok := o.Environment[consts.ComposeFilePath]
 	if ok {
-		paths, err := absolutePaths(strings.Split(f, sep))
-		o.ConfigPaths = paths
-		return err
+		const origin = "set by COMPOSE_FILE environment variable"
+		for _, entry := range strings.Split(f, sep) {
+			path, err := o.acceptComposeFile(entry)
+			if err != nil {
+				return fmt.Errorf("compose file %q %s is invalid: %w", entry, origin, err)
+			}
+			o.ConfigPaths = append(o.ConfigPaths, path)
+			o.setConfigOrigin(path, origin)
+		}
 	}
 	return nil
+}
+
+// acceptComposeFile checks a compose file reference is usable: either stdin
+// ("-"), a remote resource supported by a registered ResourceLoader, or a
+// local path pointing to a regular file. Local paths are resolved to absolute.
+func (o *ProjectOptions) acceptComposeFile(path string) (string, error) {
+	if path == "-" {
+		return path, nil
+	}
+	for _, r := range o.ResourceLoaders {
+		if r.Accept(path) {
+			return path, nil
+		}
+	}
+	abs, err := filepath.Abs(path)
+	if err != nil {
+		return "", err
+	}
+	fi, err := os.Stat(abs)
+	if err != nil {
+		return "", err
+	}
+	if fi.IsDir() {
+		return "", fmt.Errorf("%s is a directory", abs)
+	}
+	if !fi.Mode().IsRegular() {
+		return "", fmt.Errorf("%s is not a regular file", abs)
+	}
+	return abs, nil
+}
+
+func (o *ProjectOptions) setConfigOrigin(path, origin string) {
+	if o.configOrigin == nil {
+		o.configOrigin = map[string]string{}
+	}
+	o.configOrigin[path] = origin
+}
+
+// configFileError decorates a compose file load error with the way the file
+// was selected, when this selection wasn't an explicit user choice.
+func (o *ProjectOptions) configFileError(filename string, err error) error {
+	if origin, ok := o.configOrigin[filename]; ok {
+		return fmt.Errorf("compose file %q %s is invalid: %w", filename, origin, err)
+	}
+	return fmt.Errorf("compose file %q is invalid: %w", filename, err)
 }
 
 // WithDefaultConfigPath searches for default config files from working directory
@@ -168,7 +226,9 @@ func WithDefaultConfigPath(o *ProjectOptions) error {
 				logrus.Warnf("Found multiple config files with supported names: %s", strings.Join(candidates, ", "))
 				logrus.Warnf("Using %s", winner)
 			}
+			const origin = "found by default file discovery"
 			o.ConfigPaths = append(o.ConfigPaths, winner)
+			o.setConfigOrigin(winner, origin)
 
 			overrides := findFiles(DefaultOverrideFileNames, pwd)
 			if len(overrides) > 0 {
@@ -177,6 +237,7 @@ func WithDefaultConfigPath(o *ProjectOptions) error {
 					logrus.Warnf("Using %s", overrides[0])
 				}
 				o.ConfigPaths = append(o.ConfigPaths, overrides[0])
+				o.setConfigOrigin(overrides[0], origin)
 			}
 			return nil
 		}
@@ -284,6 +345,15 @@ func WithEnvFiles(file ...string) ProjectOptionsFn {
 
 		s, err := os.Stat(defaultDotEnv)
 		if os.IsNotExist(err) {
+			return nil
+		}
+		if os.IsPermission(err) {
+			// The default .env is an implicit convenience, not something the
+			// user asked for: when permissions prevent even probing for it
+			// (say, running with a working directory owned by another user),
+			// warn and move on instead of failing the whole command. An
+			// explicit --env-file still fails hard in WithDotEnv.
+			logrus.Warnf("cannot access %s, ignoring default env file: %v", defaultDotEnv, err)
 			return nil
 		}
 		if err != nil {
@@ -441,7 +511,15 @@ PATH:
 
 // ReadConfigFiles reads ConfigFiles and populates the content field
 func (o *ProjectOptions) ReadConfigFiles(ctx context.Context, workingDir string, options *ProjectOptions) (*types.ConfigDetails, error) {
-	config, err := loader.LoadConfigFiles(ctx, options.ConfigPaths, workingDir, options.loadOptions...)
+	// workingDir already resolved options.WorkingDir with precedence over any
+	// default (see GetWorkingDir): pass that precedence down explicitly, so a
+	// remote resource loader (git, oci) does not override it with the
+	// directory of its own downloaded copy.
+	explicit := options.WorkingDir != ""
+	loadOptions := append(append([]func(*loader.Options){}, options.loadOptions...), func(o *loader.Options) {
+		o.SetWorkingDirExplicit(explicit)
+	})
+	config, err := loader.LoadConfigFiles(ctx, options.ConfigPaths, workingDir, loadOptions...)
 	if err != nil {
 		return nil, err
 	}
@@ -462,7 +540,12 @@ func (o *ProjectOptions) ReadConfigFiles(ctx context.Context, workingDir string,
 			}
 			b, err = os.ReadFile(f)
 			if err != nil {
-				return nil, err
+				// the raw read error on a directory is OS-specific and cryptic
+				// ("is a directory", "Incorrect function.", ...)
+				if fi, statErr := os.Stat(f); statErr == nil && fi.IsDir() {
+					err = fmt.Errorf("%s is a directory", f)
+				}
+				return nil, options.configFileError(c.Filename, err)
 			}
 		}
 		configs[i] = b
@@ -595,24 +678,4 @@ func findFiles(names []string, pwd string) []string {
 		}
 	}
 	return candidates
-}
-
-func absolutePaths(p []string) ([]string, error) {
-	var paths []string
-	for _, f := range p {
-		if f == "-" {
-			paths = append(paths, f)
-			continue
-		}
-		abs, err := filepath.Abs(f)
-		if err != nil {
-			return nil, err
-		}
-		f = abs
-		if _, err := os.Stat(f); err != nil {
-			return nil, err
-		}
-		paths = append(paths, f)
-	}
-	return paths, nil
 }

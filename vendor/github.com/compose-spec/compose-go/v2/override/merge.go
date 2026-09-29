@@ -19,6 +19,7 @@ package override
 import (
 	"cmp"
 	"fmt"
+	"reflect"
 	"slices"
 
 	"github.com/compose-spec/compose-go/v2/tree"
@@ -42,32 +43,34 @@ func init() {
 	mergeSpecials["networks.*.ipam.config"] = mergeIPAMConfig
 	mergeSpecials["networks.*.labels"] = mergeToSequence
 	mergeSpecials["volumes.*.labels"] = mergeToSequence
-	mergeSpecials["services.*.annotations"] = mergeToSequence
-	mergeSpecials["services.*.build"] = mergeBuild
-	mergeSpecials["services.*.build.args"] = mergeToSequence
-	mergeSpecials["services.*.build.additional_contexts"] = mergeToSequence
-	mergeSpecials["services.*.build.extra_hosts"] = mergeExtraHosts
-	mergeSpecials["services.*.build.labels"] = mergeToSequence
-	mergeSpecials["services.*.command"] = override
-	mergeSpecials["services.*.depends_on"] = mergeDependsOn
+	for _, prefix := range []tree.Path{"services", "jobs"} {
+		mergeSpecials[prefix+".*.annotations"] = mergeToSequence
+		mergeSpecials[prefix+".*.build"] = mergeBuild
+		mergeSpecials[prefix+".*.build.args"] = mergeToSequence
+		mergeSpecials[prefix+".*.build.additional_contexts"] = mergeToSequence
+		mergeSpecials[prefix+".*.build.extra_hosts"] = mergeToSequence
+		mergeSpecials[prefix+".*.build.labels"] = mergeToSequence
+		mergeSpecials[prefix+".*.command"] = override
+		mergeSpecials[prefix+".*.depends_on"] = mergeDependsOn
+		mergeSpecials[prefix+".*.dns"] = mergeToSequence
+		mergeSpecials[prefix+".*.dns_opt"] = mergeToSequence
+		mergeSpecials[prefix+".*.dns_search"] = mergeToSequence
+		mergeSpecials[prefix+".*.entrypoint"] = override
+		mergeSpecials[prefix+".*.env_file"] = mergeToSequence
+		mergeSpecials[prefix+".*.label_file"] = mergeToSequence
+		mergeSpecials[prefix+".*.environment"] = mergeToSequence
+		mergeSpecials[prefix+".*.extra_hosts"] = mergeToSequence
+		mergeSpecials[prefix+".*.healthcheck.test"] = override
+		mergeSpecials[prefix+".*.labels"] = mergeToSequence
+		mergeSpecials[prefix+".*.volumes.*.volume.labels"] = mergeToSequence
+		mergeSpecials[prefix+".*.logging"] = mergeLogging
+		mergeSpecials[prefix+".*.models"] = mergeModels
+		mergeSpecials[prefix+".*.networks"] = mergeNetworks
+		mergeSpecials[prefix+".*.sysctls"] = mergeToSequence
+		mergeSpecials[prefix+".*.tmpfs"] = mergeToSequence
+		mergeSpecials[prefix+".*.ulimits.*"] = mergeUlimit
+	}
 	mergeSpecials["services.*.deploy.labels"] = mergeToSequence
-	mergeSpecials["services.*.dns"] = mergeToSequence
-	mergeSpecials["services.*.dns_opt"] = mergeToSequence
-	mergeSpecials["services.*.dns_search"] = mergeToSequence
-	mergeSpecials["services.*.entrypoint"] = override
-	mergeSpecials["services.*.env_file"] = mergeToSequence
-	mergeSpecials["services.*.label_file"] = mergeToSequence
-	mergeSpecials["services.*.environment"] = mergeToSequence
-	mergeSpecials["services.*.extra_hosts"] = mergeExtraHosts
-	mergeSpecials["services.*.healthcheck.test"] = override
-	mergeSpecials["services.*.labels"] = mergeToSequence
-	mergeSpecials["services.*.volumes.*.volume.labels"] = mergeToSequence
-	mergeSpecials["services.*.logging"] = mergeLogging
-	mergeSpecials["services.*.models"] = mergeModels
-	mergeSpecials["services.*.networks"] = mergeNetworks
-	mergeSpecials["services.*.sysctls"] = mergeToSequence
-	mergeSpecials["services.*.tmpfs"] = mergeToSequence
-	mergeSpecials["services.*.ulimits.*"] = mergeUlimit
 }
 
 // MergeYaml merges map[string]any yaml trees handling special rules
@@ -96,7 +99,7 @@ func MergeYaml(e any, o any, p tree.Path) (any, error) {
 		if !ok {
 			return nil, fmt.Errorf("cannot override %s", p)
 		}
-		return append(value, other...), nil
+		return appendWithoutDuplicates(value, other), nil
 	default:
 		return o, nil
 	}
@@ -120,19 +123,25 @@ func mergeMappings(mapping map[string]any, other map[string]any, p tree.Path) (m
 }
 
 // logging driver options are merged only when both compose file define the same driver
-func mergeLogging(c any, o any, p tree.Path) (any, error) {
-	config := c.(map[string]any)
-	other := o.(map[string]any)
-	// we override logging config if source and override have the same driver set, or none
-	d, ok1 := other["driver"]
-	o, ok2 := config["driver"]
-	if d == o || !ok1 || !ok2 {
-		return mergeMappings(config, other, p)
+func mergeLogging(config any, other any, p tree.Path) (any, error) {
+	base, ok := config.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: cannot merge logging: expected a mapping, got %T", p, config)
 	}
-	return other, nil
+	override, ok := other.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: cannot merge logging: expected a mapping, got %T", p, other)
+	}
+	// we override logging config if source and override have the same driver set, or none
+	d, ok1 := override["driver"]
+	baseDriver, ok2 := base["driver"]
+	if d == baseDriver || !ok1 || !ok2 {
+		return mergeMappings(base, override, p)
+	}
+	return override, nil
 }
 
-func mergeBuild(c any, o any, path tree.Path) (any, error) {
+func mergeBuild(config any, other any, path tree.Path) (any, error) {
 	toBuild := func(c any) map[string]any {
 		switch v := c.(type) {
 		case string:
@@ -144,53 +153,58 @@ func mergeBuild(c any, o any, path tree.Path) (any, error) {
 		}
 		return nil
 	}
-	return mergeMappings(toBuild(c), toBuild(o), path)
+	return mergeMappings(toBuild(config), toBuild(other), path)
 }
 
-func mergeDependsOn(c any, o any, path tree.Path) (any, error) {
-	right := convertIntoMapping(c, map[string]any{
+func mergeDependsOn(config any, other any, path tree.Path) (any, error) {
+	return mergeAsMapping(config, other, map[string]any{
 		"condition": "service_started",
 		"required":  true,
-	})
-	left := convertIntoMapping(o, map[string]any{
-		"condition": "service_started",
-		"required":  true,
-	})
+	}, path)
+}
+
+func mergeModels(config any, other any, path tree.Path) (any, error) {
+	return mergeAsMapping(config, other, nil, path)
+}
+
+func mergeNetworks(config any, other any, path tree.Path) (any, error) {
+	return mergeAsMapping(config, other, nil, path)
+}
+
+func mergeAsMapping(config, other any, defaults map[string]any, path tree.Path) (any, error) {
+	right, err := convertIntoMapping(config, defaults, path)
+	if err != nil {
+		return nil, err
+	}
+	left, err := convertIntoMapping(other, defaults, path)
+	if err != nil {
+		return nil, err
+	}
 	return mergeMappings(right, left, path)
 }
 
-func mergeModels(c any, o any, path tree.Path) (any, error) {
-	right := convertIntoMapping(c, nil)
-	left := convertIntoMapping(o, nil)
-	return mergeMappings(right, left, path)
+func mergeToSequence(config any, other any, _ tree.Path) (any, error) {
+	right := convertIntoSequence(config)
+	left := convertIntoSequence(other)
+	return appendWithoutDuplicates(right, left), nil
 }
 
-func mergeNetworks(c any, o any, path tree.Path) (any, error) {
-	right := convertIntoMapping(c, nil)
-	left := convertIntoMapping(o, nil)
-	return mergeMappings(right, left, path)
-}
-
-func mergeExtraHosts(c any, o any, _ tree.Path) (any, error) {
-	right := convertIntoSequence(c)
-	left := convertIntoSequence(o)
-	// Rewrite content of left slice to remove duplicate elements
-	i := 0
-	for _, v := range left {
-		if !slices.Contains(right, v) {
-			left[i] = v
-			i++
+// appendWithoutDuplicates appends override entries to the base sequence,
+// ignoring entries strictly identical (deep equality) to one already
+// present. Two identical entries never carry more meaning than one, while
+// they routinely break things — the same env_file applied twice, a
+// duplicate mount rejected by the engine — and dropping them makes merging
+// a value over an already-merged result idempotent. Entries that differ in
+// form (short vs long syntax of the same thing) are not equal and are kept:
+// the rule is strict identity, not equivalence.
+func appendWithoutDuplicates(base []any, override []any) []any {
+	merged := base
+	for _, v := range override {
+		if !slices.ContainsFunc(merged, func(existing any) bool { return reflect.DeepEqual(existing, v) }) {
+			merged = append(merged, v)
 		}
 	}
-	// keep only not duplicated elements from left slice
-	left = left[:i]
-	return append(right, left...), nil
-}
-
-func mergeToSequence(c any, o any, _ tree.Path) (any, error) {
-	right := convertIntoSequence(c)
-	left := convertIntoSequence(o)
-	return append(right, left...), nil
+	return merged
 }
 
 func convertIntoSequence(value any) []any {
@@ -224,28 +238,34 @@ func convertIntoSequence(value any) []any {
 	return nil
 }
 
-func mergeUlimit(_ any, o any, p tree.Path) (any, error) {
-	over, ismapping := o.(map[string]any)
-	if base, ok := o.(map[string]any); ok && ismapping {
-		return mergeMappings(base, over, p)
+func mergeUlimit(config any, other any, path tree.Path) (any, error) {
+	over, ismapping := other.(map[string]any)
+	if base, ok := config.(map[string]any); ok && ismapping {
+		return mergeMappings(base, over, path)
 	}
-	return o, nil
+	return other, nil
 }
 
-func mergeIPAMConfig(c any, o any, path tree.Path) (any, error) {
+func mergeIPAMConfig(config any, other any, path tree.Path) (any, error) {
 	var ipamConfigs []any
-	configs, ok := c.([]any)
+	configs, ok := config.([]any)
 	if !ok {
-		return o, fmt.Errorf("%s: unexpected type %T", path, c)
+		return other, fmt.Errorf("%s: unexpected type %T", path, config)
 	}
-	overrides, ok := o.([]any)
+	overrides, ok := other.([]any)
 	if !ok {
-		return o, fmt.Errorf("%s: unexpected type %T", path, c)
+		return other, fmt.Errorf("%s: unexpected type %T", path, other)
 	}
 	for _, original := range configs {
-		right := convertIntoMapping(original, nil)
+		right, err := convertIntoMapping(original, nil, path)
+		if err != nil {
+			return nil, err
+		}
 		for _, override := range overrides {
-			left := convertIntoMapping(override, nil)
+			left, err := convertIntoMapping(override, nil, path)
+			if err != nil {
+				return nil, err
+			}
 			if left["subnet"] != right["subnet"] {
 				// check if left is already in ipamConfigs, add it if not and continue with the next config
 				if !slices.ContainsFunc(ipamConfigs, func(a any) bool {
@@ -275,27 +295,35 @@ func mergeIPAMConfig(c any, o any, path tree.Path) (any, error) {
 	return ipamConfigs, nil
 }
 
-func convertIntoMapping(a any, defaultValue map[string]any) map[string]any {
+func convertIntoMapping(a any, defaultValue map[string]any, path tree.Path) (map[string]any, error) {
 	switch v := a.(type) {
 	case map[string]any:
-		return v
+		return v, nil
+	case string:
+		if defaultValue == nil {
+			return map[string]any{v: nil}, nil
+		}
+		return map[string]any{v: copyMap(defaultValue)}, nil
 	case []any:
 		converted := map[string]any{}
 		for _, s := range v {
+			key, ok := s.(string)
+			if !ok {
+				return nil, fmt.Errorf("%s: cannot use %T as a mapping key", path, s)
+			}
 			if defaultValue == nil {
-				converted[s.(string)] = nil
+				converted[key] = nil
 			} else {
-				// Create a new map for each key
-				converted[s.(string)] = copyMap(defaultValue)
+				converted[key] = copyMap(defaultValue)
 			}
 		}
-		return converted
+		return converted, nil
 	}
-	return nil
+	return nil, fmt.Errorf("%s: cannot convert %T into a mapping", path, a)
 }
 
 func copyMap(m map[string]any) map[string]any {
-	c := make(map[string]any)
+	c := make(map[string]any, len(m))
 	for k, v := range m {
 		c[k] = v
 	}
