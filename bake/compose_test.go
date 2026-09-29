@@ -1,6 +1,7 @@
 package bake
 
 import (
+	"fmt"
 	"os"
 	"path/filepath"
 	"sort"
@@ -91,6 +92,55 @@ secrets:
 	require.Equal(t, "webapp2", c.Targets[2].Name)
 	require.Equal(t, "dir", *c.Targets[2].Context)
 	require.Equal(t, "FROM alpine\n", *c.Targets[2].DockerfileInline)
+}
+
+func TestParseComposeOverrideArgs(t *testing.T) {
+	base := []byte(`
+services:
+  app:
+    build:
+      context: .
+      args:
+        - MODE=release
+`)
+	override := []byte(`
+services:
+  app:
+    build:
+      args:
+        - MODE=debug
+        - MODE=release
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: base}, {Content: override}}, nil)
+	require.NoError(t, err)
+	require.Len(t, c.Targets, 1)
+	// The last override wins even when it repeats a value from the base file.
+	require.Equal(t, ptrstr("release"), c.Targets[0].Args["MODE"])
+}
+
+func TestParseComposeNullRuntimeOverride(t *testing.T) {
+	for _, field := range []string{"networks", "depends_on", "models"} {
+		t.Run(field, func(t *testing.T) {
+			base := fmt.Appendf(nil, `
+services:
+  app:
+    build: .
+    %s: [runtime]
+`, field)
+			override := fmt.Appendf(nil, `
+services:
+  app:
+    %s: null
+`, field)
+
+			c, err := ParseCompose([]composetypes.ConfigFile{{Content: base}, {Content: override}}, nil)
+			require.NoError(t, err)
+			require.Len(t, c.Targets, 1)
+			require.Equal(t, "app", c.Targets[0].Name)
+			require.Equal(t, ptrstr("."), c.Targets[0].Context)
+		})
+	}
 }
 
 func TestParseComposeEmptyCacheLists(t *testing.T) {
