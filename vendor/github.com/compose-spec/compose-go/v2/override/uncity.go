@@ -86,25 +86,31 @@ func enforceUnicity(value any, p tree.Path) (any, error) {
 	case []any:
 		for pattern, indexer := range unique {
 			if p.Matches(pattern) {
-				seq := []any{}
-				keys := map[string]int{}
-				for i, entry := range v {
-					key, err := indexer(entry, p.Next(fmt.Sprintf("[%d]", i)))
-					if err != nil {
-						return nil, err
-					}
-					if j, ok := keys[key]; ok {
-						seq[j] = entry
-					} else {
-						seq = append(seq, entry)
-						keys[key] = len(seq) - 1
-					}
-				}
-				return seq, nil
+				return uniqueEntries(v, indexer, p)
 			}
 		}
 	}
 	return value, nil
+}
+
+// uniqueEntries keeps one entry per key: the last entry for a key takes effect,
+// at the position of the first one.
+func uniqueEntries(entries []any, indexer indexer, p tree.Path) ([]any, error) {
+	seq := []any{}
+	keys := map[string]int{}
+	for i, entry := range entries {
+		key, err := indexer(entry, p.Next(fmt.Sprintf("[%d]", i)))
+		if err != nil {
+			return nil, err
+		}
+		if j, ok := keys[key]; ok {
+			seq[j] = entry
+		} else {
+			seq = append(seq, entry)
+			keys[key] = len(seq) - 1
+		}
+	}
+	return seq, nil
 }
 
 func keyValueIndexer(v any, p tree.Path) (string, error) {

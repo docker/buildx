@@ -44,7 +44,7 @@ func decoderHook(from reflect.Value, to reflect.Value) (interface{}, error) {
 		}
 	}
 	// If it is nil and a pointer, create and assign the target value first
-	if to.Type().Kind() == reflect.Ptr && to.IsNil() {
+	if to.Type().Kind() == reflect.Pointer && to.IsNil() {
 		to.Set(reflect.New(to.Type().Elem()))
 		u = to.Interface().(decoder)
 	}

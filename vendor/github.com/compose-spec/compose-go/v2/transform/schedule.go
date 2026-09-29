@@ -18,37 +18,22 @@ package transform
 
 import (
 	"fmt"
-	"strings"
 
 	"github.com/compose-spec/compose-go/v2/tree"
 )
 
-func transformSSH(data any, p tree.Path, ignoreParseError bool) (any, error) {
+// transformSchedule canonicalizes a job trigger schedule entry: a plain
+// crontab expression (short syntax) becomes a schedule object declaring only
+// `cron`, following the same short/long syntax model as `volumes`.
+func transformSchedule(data any, p tree.Path, _ bool) (any, error) {
 	switch v := data.(type) {
+	case string:
+		return map[string]any{
+			"cron": v,
+		}, nil
 	case map[string]any:
 		return v, nil
-	case []any:
-		result := make(map[string]any, len(v))
-		for _, e := range v {
-			s, ok := e.(string)
-			if !ok {
-				return nil, fmt.Errorf("invalid ssh key type %T", e)
-			}
-			id, path, ok := strings.Cut(s, "=")
-			if !ok {
-				if id != "default" {
-					if ignoreParseError {
-						return data, nil
-					}
-					return nil, fmt.Errorf("invalid ssh key %q", s)
-				}
-				result[id] = nil
-				continue
-			}
-			result[id] = path
-		}
-		return result, nil
 	default:
-		return data, fmt.Errorf("%s: invalid type %T for ssh", p, v)
+		return nil, fmt.Errorf("%s: invalid type %T for schedule entry", p, v)
 	}
 }
