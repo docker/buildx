@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"slices"
+	"strings"
 	"testing"
 
 	"github.com/docker/buildx/build"
@@ -107,6 +108,13 @@ func TestValidateEntitlements(t *testing.T) {
 	require.NoError(t, err)
 	expWd, err := filepath.EvalSymlinks(wd)
 	require.NoError(t, err)
+	credentialPath := filepath.Join(dir1, "credential")
+	require.NoError(t, os.WriteFile(credentialPath, []byte("test credential"), 0600))
+	expCredentialPath, err := filepath.EvalSymlinks(credentialPath)
+	require.NoError(t, err)
+	layoutLink := filepath.Join(dir1, "layout-link")
+	require.NoError(t, os.Symlink(dir2, layoutLink))
+	t.Setenv("BUILDX_TEST_SECRET_SOURCE", "test credential")
 
 	tcases := []struct {
 		name     string
@@ -221,6 +229,70 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			conf: EntitlementConf{
 				FSRead: []string{wd, dir1},
+			},
+		},
+		{
+			name: "secret-id-file-fallback-requires-read",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: credentialPath}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+			expected: EntitlementConf{
+				FSRead: []string{expCredentialPath},
+			},
+		},
+		{
+			name: "secret-id-file-fallback-allowed",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: credentialPath}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd, dir1}},
+		},
+		{
+			name: "secret-id-env-fallback-needs-no-read",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: "BUILDX_TEST_SECRET_SOURCE"}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+		},
+		{
+			name: "explicit-secret-env-needs-no-read",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: credentialPath, Env: "BUILDX_TEST_SECRET_SOURCE"}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+		},
+		{
+			name: "oci-layout-named-context-requires-read",
+			opt: build.Options{
+				Inputs: build.Inputs{NamedContexts: map[string]build.NamedContext{
+					"layout": {Path: "oci-layout://" + dir1 + ":latest"},
+				}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+			expected: EntitlementConf{
+				FSRead: []string{expDir1},
+			},
+		},
+		{
+			name: "oci-layout-named-context-allowed",
+			opt: build.Options{
+				Inputs: build.Inputs{NamedContexts: map[string]build.NamedContext{
+					"layout": {Path: "oci-layout://" + dir1 + ":latest"},
+				}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd, dir1}},
+		},
+		{
+			name: "oci-layout-named-context-symlink-requires-destination",
+			opt: build.Options{
+				Inputs: build.Inputs{NamedContexts: map[string]build.NamedContext{
+					"layout": {Path: "oci-layout://" + layoutLink + ":latest"},
+				}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd, dir1}},
+			expected: EntitlementConf{
+				FSRead: []string{expDir2},
 			},
 		},
 		{
@@ -439,6 +511,61 @@ func TestPromptLocalOutputDeleteCannotBeDisabledWithFSEntitlements(t *testing.T)
 	require.ErrorContains(t, err, "additional privileges requested")
 	require.Contains(t, out.String(), "Deleting stale files from local output destinations")
 	require.Contains(t, out.String(), "--allow=buildx.local.delete")
+}
+
+func TestCheckEntitlements(t *testing.T) {
+	t.Run("all entitlement types", func(t *testing.T) {
+		t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "1")
+
+		err := EntitlementConf{
+			NetworkHost:      true,
+			SecurityInsecure: true,
+			Devices: &EntitlementsDevicesConf{
+				Devices: map[string]struct{}{"vendor.com/device=foo": {}},
+			},
+			FSRead:            []string{t.TempDir()},
+			FSWrite:           []string{t.TempDir()},
+			SSH:               true,
+			LocalOutputDelete: true,
+		}.Check(false)
+		require.Error(t, err)
+		require.True(t, strings.HasPrefix(err.Error(), `additional privileges requested: pass "`), err.Error())
+		for _, flag := range []string{
+			"--allow=network.host",
+			"--allow=security.insecure",
+			"--allow=device=vendor.com/device=foo",
+			"--allow=fs.read=",
+			"--allow=fs.write=",
+			"--allow=ssh",
+			"--allow=buildx.local.delete",
+		} {
+			require.ErrorContains(t, err, flag)
+		}
+	})
+
+	t.Run("filesystem checks disabled", func(t *testing.T) {
+		t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "0")
+
+		err := EntitlementConf{
+			FSRead:  []string{t.TempDir()},
+			FSWrite: []string{t.TempDir()},
+			SSH:     true,
+		}.Check(false)
+		require.NoError(t, err)
+	})
+
+	t.Run("filesystem setting does not disable other checks", func(t *testing.T) {
+		t.Setenv("BUILDX_BAKE_ENTITLEMENTS_FS", "0")
+
+		err := EntitlementConf{
+			NetworkHost: true,
+			FSRead:      []string{t.TempDir()},
+			SSH:         true,
+		}.Check(false)
+		require.ErrorContains(t, err, "--allow=network.host")
+		require.NotContains(t, err.Error(), "--allow=fs.read=")
+		require.NotContains(t, err.Error(), "--allow=ssh")
+	})
 }
 
 func TestGroupSamePaths(t *testing.T) {
