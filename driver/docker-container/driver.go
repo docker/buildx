@@ -581,7 +581,7 @@ func (d *Driver) Factory() driver.Factory {
 	return d.factory
 }
 
-func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
+func (d *Driver) Features(ctx context.Context) (map[driver.Feature]bool, error) {
 	return map[driver.Feature]bool{
 		driver.OCIExporter:    true,
 		driver.DockerExporter: true,
@@ -589,7 +589,7 @@ func (d *Driver) Features(ctx context.Context) map[driver.Feature]bool {
 		driver.MultiPlatform:  true,
 		driver.DirectPush:     true,
 		driver.DefaultLoad:    d.defaultLoad,
-	}
+	}, nil
 }
 
 func (d *Driver) HostGatewayIP(ctx context.Context) (net.IP, error) {
