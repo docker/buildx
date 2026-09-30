@@ -126,6 +126,10 @@ func TestApplyPredicateTargetPlatformFallback(t *testing.T) {
 	require.Equal(t, "linux/arm64", platforms.Format(*got.Descriptor.Platform))
 	require.Nil(t, subject.Descriptor.Platform, "defaulting must not mutate the loaded subject")
 
+	pred.BuildDefinition.InternalParameters.TargetPlatform = "linux/amd64"
+	got = applyPredicateTargetPlatformFallback(subject, pred, nil)
+	require.Equal(t, "linux/amd64", platforms.Format(*got.Descriptor.Platform))
+
 	explicit, err := filterSubjectsByPlatform([]*replay.Subject{subject}, []string{"linux/amd64"}, func() (ocispecs.Platform, error) {
 		t.Fatal("builder default platform must not be looked up")
 		return ocispecs.Platform{}, nil
