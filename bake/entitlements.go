@@ -162,7 +162,11 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 	rwPaths := map[string]struct{}{}
 	roPaths := map[string]struct{}{}
 
-	for _, p := range collectLocalPaths(bo.Inputs) {
+	localPaths, err := collectLocalPaths(bo.Inputs)
+	if err != nil {
+		return err
+	}
+	for _, p := range localPaths {
 		roPaths[p] = struct{}{}
 	}
 
@@ -200,8 +204,8 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 	}
 
 	for _, secret := range bo.SecretSpecs {
-		if secret.FilePath != "" {
-			roPaths[secret.FilePath] = struct{}{}
+		if filePath := secret.ResolveSource().FilePath; filePath != "" {
+			roPaths[filePath] = struct{}{}
 		}
 	}
 
@@ -216,7 +220,6 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 		}
 	}
 
-	var err error
 	expected.FSRead, err = findMissingPaths(c.FSRead, roPaths)
 	if err != nil {
 		return err
