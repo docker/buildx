@@ -29,7 +29,7 @@ docker_github_builder_bundle(http, filename, repo) if {
 
 github_release_attestation(http) := sig if {
 	http.schema == "https"
-	lower(http.host) == "github.com"
+	http.host == "github.com"
 
 	m := regex.find_all_string_submatch_n(`^/([^/]+)/([^/]+)/releases/download/[^/]+/.+$`, http.path, 1)[0]
 	owner := m[1]
