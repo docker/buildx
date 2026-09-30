@@ -31,11 +31,11 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		scheme, host, want string
 	}{
 		{"https", "example.com", "example.com"},
-		{"https", "example.com:", "example.com:"},
+		{"https", "example.com:", "example.com"},
 		{"http", "Example.com", "example.com"},
-		{"https", "\u0130.EXAMPLE.COM:443", "\u0130.example.com"},
-		{"https", "\u00c9XAMPLE.COM", "\u00c9xample.com"},
-		{"https", "\x94.EXAMPLE.COM", "\x94.EXAMPLE.COM"},
+		{"https", "\u0130.EXAMPLE.COM:443", "xn--i-9bb.example.com"},
+		{"https", "\u00c9XAMPLE.COM", "xn--xample-9ua.com"},
+		{"https", "\x94.EXAMPLE.COM", "xn--zn7c.example.com"},
 		{"https", "EXAMPLE.COM:000443", "example.com"},
 		{"https", "eXaMpLe.CoM:8443", "example.com:8443"},
 		{"https", "example.com:443", "example.com"},
@@ -59,7 +59,7 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		{"https", "[0000:0000:0000:0000:0000:0000:0000:0001]:000443", "[::1]"},
 		{"https", "[0000:0000:0000:0000:0000:0000:0000:0001]:008443", "[::1]:8443"},
 		{"https", "[::1]:000", "[::1]:0"},
-		{"https", "[::1]:", "[::1]:"},
+		{"https", "[::1]:", "[::1]"},
 		{"https", "[FE80:0000:0000:0000:0000:0000:0000:ABCD%Eth0]:000443", "[fe80::abcd%Eth0]"},
 		{"https", "[FE80:0000:0000:0000:0000:0000:0000:ABCD%Eth0]:8443", "[fe80::abcd%Eth0]:8443"},
 		{"https", "192.0.2.128:443", "192.0.2.128"},
@@ -74,7 +74,9 @@ func TestNormalizeHTTPHost(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.scheme+" "+tt.host, func(t *testing.T) {
-			require.Equal(t, tt.want, normalizeHTTPHost(&url.URL{Scheme: tt.scheme, Host: tt.host}))
+			host, err := normalizeHTTPHost(&url.URL{Scheme: tt.scheme, Host: tt.host})
+			require.NoError(t, err)
+			require.Equal(t, tt.want, host)
 		})
 	}
 }
@@ -117,6 +119,27 @@ func TestSourceToInputSingleSource(t *testing.T) {
 				Source: &pb.SourceOp{Identifier: "https://::1:443"},
 			},
 			expErrMsg: "failed to parse http source url",
+		},
+		{
+			name: "https-port-overflow-to-default-port",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "https://example.com:4294967739/"},
+			},
+			expErrMsg: "invalid http port",
+		},
+		{
+			name: "https-port-above-maximum",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "https://example.com:65536/"},
+			},
+			expErrMsg: "invalid http port",
+		},
+		{
+			name: "https-invalid-idna-host",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{Identifier: "https://a\u200cb.example.com/"},
+			},
+			expErrMsg: "invalid http host",
 		},
 		{
 			name: "http-mixed-case-scheme-and-host",
@@ -1191,6 +1214,41 @@ decision := {"allow": allow}
 				want = policyaction.PolicyAction_ALLOW
 			}
 			require.Equal(t, want, decision.Action)
+		})
+	}
+}
+
+func TestCheckPolicyHTTPHostDenyList(t *testing.T) {
+	for _, tc := range []struct {
+		name, url string
+		want      policyaction.PolicyAction
+	}{
+		{"ascii-host", "https://example.com/", policyaction.PolicyAction_DENY},
+		{"absolute-host", "https://example.com./", policyaction.PolicyAction_DENY},
+		{"fullwidth-host", "https://ｅｘａｍｐｌｅ.com/", policyaction.PolicyAction_DENY},
+		{"fullwidth-absolute-host", "https://ｅｘａｍｐｌｅ.com./", policyaction.PolicyAction_DENY},
+		{"ideographic-dot", "https://example。com/", policyaction.PolicyAction_DENY},
+		{"soft-hyphen", "https://exa\u00admple.com/", policyaction.PolicyAction_DENY},
+		{"empty-port", "https://example.com:/", policyaction.PolicyAction_DENY},
+		{"distinct-idna-host", "https://\u0130.example.com/", policyaction.PolicyAction_ALLOW},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := NewPolicy(Opt{Files: []File{{Filename: "policy.rego", Data: []byte(`
+package docker
+
+default allow := true
+allow := false if input.http.host == "example.com"
+decision := {"allow": allow}
+`)}}})
+			decision, next, err := p.CheckPolicy(t.Context(), &policysession.CheckPolicyRequest{
+				Source: &gwpb.ResolveSourceMetaResponse{
+					Source: &pb.SourceOp{Identifier: tc.url},
+				},
+			})
+			require.NoError(t, err)
+			require.Nil(t, next)
+			require.NotNil(t, decision)
+			require.Equal(t, tc.want, decision.Action)
 		})
 	}
 }

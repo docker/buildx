@@ -11,10 +11,10 @@ import (
 	"net/url"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
-	"unicode/utf8"
 
 	"github.com/containerd/platforms"
 	"github.com/distribution/reference"
@@ -32,6 +32,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/idna"
 )
 
 type Policy struct {
@@ -535,39 +536,50 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 	return nil
 }
 
-func normalizeHTTPHost(u *url.URL) string {
+func normalizeHTTPHost(u *url.URL) (string, error) {
 	host := u.Hostname()
-	addr, err := netip.ParseAddr(host)
-	if err == nil {
+	if addr, err := netip.ParseAddr(host); err == nil {
 		host = addr.String()
-	} else if utf8.ValidString(host) {
-		// Leave invalid UTF-8 hosts accepted by url.Parse unchanged, since
-		// strings.Map would replace invalid bytes with U+FFFD.
-		// Unicode case folding can change the IDNA destination (for example, İ to i).
-		host = strings.Map(func(r rune) rune {
-			if 'A' <= r && r <= 'Z' {
-				return r + ('a' - 'A')
+	} else {
+		if isASCIIHost(host) {
+			host = strings.ToLower(host)
+		} else {
+			// Match the IDNA lookup mapping used by Go's HTTP transport.
+			host, err = idna.Lookup.ToASCII(host)
+			if err != nil {
+				return "", errors.Wrapf(err, "invalid http host %q", u.Hostname())
 			}
-			return r
-		}, host)
+		}
+		// Match an absolute DNS name to the corresponding policy hostname.
+		host = strings.TrimSuffix(host, ".")
 	}
 	port := u.Port()
 	if port != "" {
-		port = strings.TrimLeft(port, "0")
-		if port == "" {
-			port = "0"
+		p, err := strconv.ParseUint(port, 10, 16)
+		if err != nil {
+			return "", errors.Wrapf(err, "invalid http port %q", port)
 		}
+		port = strconv.FormatUint(p, 10)
 	}
-	if u.Scheme == "http" && port == "80" || u.Scheme == "https" && port == "443" {
+	if (u.Scheme == "http" && port == "80") || (u.Scheme == "https" && port == "443") {
 		port = ""
 	}
-	if port != "" || strings.HasSuffix(u.Host, ":") {
-		return net.JoinHostPort(host, port)
+	if port != "" {
+		return net.JoinHostPort(host, port), nil
 	}
-	if addr.Is6() {
-		return "[" + host + "]"
+	if strings.Contains(host, ":") {
+		return "[" + host + "]", nil
 	}
-	return host
+	return host, nil
+}
+
+func isASCIIHost(host string) bool {
+	for i := 0; i < len(host); i++ {
+		if host[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
 }
 
 func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform, logf func(logrus.Level, string)) (Input, []string, error) {
@@ -590,10 +602,14 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 		if err != nil {
 			return inp, nil, errors.Wrapf(err, "failed to parse http source url")
 		}
+		host, err := normalizeHTTPHost(u)
+		if err != nil {
+			return inp, nil, errors.Wrap(err, "failed to normalize http source host")
+		}
 		inp.HTTP = &HTTP{
 			URL:    src.Source.Identifier,
 			Schema: scheme,
-			Host:   normalizeHTTPHost(u),
+			Host:   host,
 			Path:   u.Path,
 			Query:  u.Query(),
 		}
