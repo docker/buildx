@@ -657,8 +657,35 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			return nil, errors.Errorf("invalid override key %s, expected target.name", skey)
 		}
 
+		// Normalize aliases so they share replacement and append semantics.
+		switch keys[1] {
+		case "annotations":
+			keys[1] = "annotation"
+		case "args":
+			keys[1] = "arg"
+		case "entitlements":
+			keys[1] = "entitlement"
+		case "extra-hosts":
+			keys[1] = "extra-host"
+		case "labels":
+			keys[1] = "label"
+		case "platforms":
+			keys[1] = "platform"
+		case "resources":
+			keys[1] = "resource"
+		case "tags":
+			keys[1] = "tag"
+		case "ulimits":
+			keys[1] = "ulimit"
+		case "secrets":
+			if len(keys) != 2 {
+				return nil, errors.Errorf("invalid key %s, secret does not support subkeys", parts[0])
+			}
+			keys[1] = "secret"
+		}
+
 		pattern := keys[0]
-		if len(parts) != 2 && keys[1] != "args" {
+		if len(parts) != 2 && keys[1] != "arg" {
 			return nil, errors.Errorf("invalid override %s, expected target.name=value", v)
 		}
 
@@ -680,12 +707,27 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 			// IMPORTANT: if you add more fields here, do not forget to update
 			// docs/reference/buildx_bake.md (--set) and https://docs.docker.com/build/bake/overrides/
 			switch keys[1] {
-			case "output", "cache-to", "cache-from", "tags", "platform", "secrets", "ssh", "attest", "entitlements", "annotations", "policy", "ulimits", "no-cache-filter":
+			case "output", "cache-to", "cache-from", "tag", "platform", "ssh", "attest", "entitlement", "annotation", "policy", "ulimit", "no-cache-filter":
+				if len(keys) != 2 {
+					return nil, errors.Errorf("invalid key %s, %s does not support subkeys", parts[0], keys[1])
+				}
 				if len(parts) == 2 {
 					override.Append = appendTo
 					override.ArrValue = append(override.ArrValue, parts[1])
 				}
-			case "resources", "secret":
+			case "secret":
+				if len(keys) == 2 {
+					if len(parts) == 2 {
+						override.Append = appendTo
+						override.ArrValue = append(override.ArrValue, parts[1])
+					}
+					break
+				}
+				if appendTo {
+					return nil, errors.Errorf("invalid key %s, secret does not support append", parts[0])
+				}
+				override.Value = parts[1]
+			case "resource":
 				if len(keys) != 3 {
 					return nil, errors.Errorf("invalid key %s, %s requires name", parts[0], keys[1])
 				}
@@ -693,9 +735,9 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 					return nil, errors.Errorf("invalid key %s, %s does not support append", parts[0], keys[1])
 				}
 				override.Value = parts[1]
-			case "args":
+			case "arg":
 				if len(keys) != 3 {
-					return nil, errors.Errorf("invalid key %s, args requires name", parts[0])
+					return nil, errors.Errorf("invalid key %s, arg requires name", parts[0])
 				}
 				if len(parts) < 2 && envLookupAllowed() {
 					v, ok := os.LookupEnv(keys[2])
@@ -704,12 +746,23 @@ func (c Config) newOverrides(v []string) (map[string]map[string]Override, error)
 					}
 					override.Value = v
 				}
-				fallthrough
-			case "contexts":
-				if len(keys) != 3 {
-					return nil, errors.Errorf("invalid key %s, contexts requires name", parts[0])
+				if len(parts) == 2 {
+					override.Value = parts[1]
 				}
-				fallthrough
+			case "contexts", "label", "extra-host":
+				if len(keys) != 3 {
+					return nil, errors.Errorf("invalid key %s, %s requires name", parts[0], keys[1])
+				}
+				if len(parts) == 2 {
+					override.Value = parts[1]
+				}
+			case "context", "dockerfile", "target", "call", "no-cache", "shm-size", "network", "pull", "push", "load":
+				if len(keys) != 2 {
+					return nil, errors.Errorf("invalid key %s, %s does not support subkeys", parts[0], keys[1])
+				}
+				if len(parts) == 2 {
+					override.Value = parts[1]
+				}
 			default:
 				if len(parts) == 2 {
 					override.Value = parts[1]
@@ -1165,9 +1218,9 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 			t.Context = &value
 		case "dockerfile":
 			t.Dockerfile = &value
-		case "args":
+		case "arg", "args":
 			if len(keys) != 2 {
-				return errors.Errorf("invalid format for args, expecting args.<name>=<value>")
+				return errors.Errorf("invalid format for arg, expecting arg.<name>=<value>")
 			}
 			if t.Args == nil {
 				t.Args = map[string]*string{}
@@ -1181,15 +1234,15 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				t.Contexts = map[string]string{}
 			}
 			t.Contexts[keys[1]] = value
-		case "labels":
+		case "label", "labels":
 			if len(keys) != 2 {
-				return errors.Errorf("invalid format for labels, expecting labels.<name>=<value>")
+				return errors.Errorf("invalid format for label, expecting label.<name>=<value>")
 			}
 			if t.Labels == nil {
 				t.Labels = map[string]*string{}
 			}
 			t.Labels[keys[1]] = &value
-		case "tags":
+		case "tag", "tags":
 			if o.Append {
 				t.Tags = append(t.Tags, o.ArrValue...)
 			} else {
@@ -1245,11 +1298,15 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 		case "call":
 			t.Call = &value
 		case "secret":
-			if len(keys) != 2 {
+			if len(keys) == 2 {
+				secretOverrides[keys[1]] = o
+				break
+			}
+			fallthrough
+		case "secrets":
+			if len(keys) != 1 {
 				return errors.Errorf("invalid format for secret, expecting secret.<id>=<value>")
 			}
-			secretOverrides[keys[1]] = o
-		case "secrets":
 			secrets, err := parseArrValue[buildflags.Secret](o.ArrValue)
 			if err != nil {
 				return errors.Wrap(err, "invalid value for outputs")
@@ -1296,7 +1353,7 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 					ent.FSWrite = append(ent.FSWrite, o.Destination)
 				}
 			}
-		case "entitlements":
+		case "entitlement", "entitlements":
 			t.Entitlements = append(t.Entitlements, o.ArrValue...)
 			for _, v := range o.ArrValue {
 				if v == string(EntitlementKeyNetworkHost) {
@@ -1305,7 +1362,7 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 					ent.SecurityInsecure = true
 				}
 			}
-		case "annotations":
+		case "annotation", "annotations":
 			t.Annotations = append(t.Annotations, o.ArrValue...)
 		case "attest":
 			attest, err := parseArrValue[buildflags.Attest](o.ArrValue)
@@ -1327,15 +1384,15 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 			}
 		case "shm-size":
 			t.ShmSize = &value
-		case "ulimits":
+		case "ulimit", "ulimits":
 			if o.Append {
 				t.Ulimits = append(t.Ulimits, o.ArrValue...)
 			} else {
 				t.Ulimits = o.ArrValue
 			}
-		case "resources":
+		case "resource", "resources":
 			if len(keys) != 2 {
-				return errors.Errorf("invalid format for resources, expecting resources.<name>=<value>")
+				return errors.Errorf("invalid format for resource, expecting resource.<name>=<value>")
 			}
 			if t.Resources == nil {
 				t.Resources = &buildflags.ResourcesConfig{}
@@ -1363,9 +1420,9 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 				return errors.Errorf("invalid value %s for boolean key load", value)
 			}
 			t.Outputs = setLoadOverride(t.Outputs, load)
-		case "extra-hosts":
+		case "extra-host", "extra-hosts":
 			if len(keys) != 2 {
-				return errors.Errorf("invalid format for extra-hosts, expecting extra-hosts.<hostname>=<ip>")
+				return errors.Errorf("invalid format for extra-host, expecting extra-host.<hostname>=<ip>")
 			}
 			if t.ExtraHosts == nil {
 				t.ExtraHosts = map[string]*string{}
