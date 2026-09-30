@@ -1,6 +1,6 @@
 module github.com/docker/buildx
 
-go 1.26.3
+go 1.26.8
 
 require (
 	github.com/Masterminds/semver/v3 v3.4.0
@@ -9,7 +9,7 @@ require (
 	github.com/aws/aws-sdk-go-v2/config v1.32.39
 	github.com/compose-spec/compose-go/v2 v2.16.1
 	github.com/containerd/console v1.0.5
-	github.com/containerd/containerd/v2 v2.3.5
+	github.com/containerd/containerd/v2 v2.3.6
 	github.com/containerd/continuity v0.5.0
 	github.com/containerd/errdefs v1.0.0
 	github.com/containerd/log v0.1.0
