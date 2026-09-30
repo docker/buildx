@@ -55,9 +55,9 @@ func (s Secrets) ToCtyValue() cty.Value {
 	return cty.ListVal(vals)
 }
 
-func (e *Secret) FromCtyValue(in cty.Value, p cty.Path) error {
+func (s *Secret) FromCtyValue(in cty.Value, p cty.Path) error {
 	if in.Type() == cty.String {
-		if err := e.UnmarshalText([]byte(in.AsString())); err != nil {
+		if err := s.UnmarshalText([]byte(in.AsString())); err != nil {
 			return p.NewError(err)
 		}
 		return nil
@@ -69,25 +69,25 @@ func (e *Secret) FromCtyValue(in cty.Value, p cty.Path) error {
 	}
 
 	if id := conv.GetAttr("id"); !id.IsNull() && id.IsKnown() {
-		e.ID = id.AsString()
+		s.ID = id.AsString()
 	}
 	if src := conv.GetAttr("src"); !src.IsNull() && src.IsKnown() {
-		e.FilePath = src.AsString()
+		s.FilePath = src.AsString()
 	}
 	if env := conv.GetAttr("env"); !env.IsNull() && env.IsKnown() {
-		e.Env = env.AsString()
+		s.Env = env.AsString()
 	}
 	return nil
 }
 
-func (e *Secret) ToCtyValue() cty.Value {
-	if e == nil {
+func (s *Secret) ToCtyValue() cty.Value {
+	if s == nil {
 		return cty.NullVal(secretType())
 	}
 
 	return cty.ObjectVal(map[string]cty.Value{
-		"id":  cty.StringVal(e.ID),
-		"src": cty.StringVal(e.FilePath),
-		"env": cty.StringVal(e.Env),
+		"id":  cty.StringVal(s.ID),
+		"src": cty.StringVal(s.FilePath),
+		"env": cty.StringVal(s.Env),
 	})
 }

@@ -84,7 +84,7 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	dt, err := os.ReadFile(filepath.Join(t.s.cfg.Dir(), instanceDir, name))
+	dt, err := os.ReadFile(filepath.Join(t.s.cfg.Dir(), instanceDir, name)) // #nosec G703 -- name is validated and using user-controlled path by design
 	if err != nil {
 		return nil, err
 	}
