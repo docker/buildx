@@ -343,14 +343,15 @@ func formatPlanPlatform(platform *ocispecs.Platform) string {
 
 // applyPredicateTargetPlatformFallback fills the platform metadata that a raw
 // provenance file cannot carry on its subject descriptor. Image subjects get
-// this metadata from their manifest index; attestation files can fall back to
-// TARGETPLATFORM inferred from the recorded LLB. An explicit --platform
-// has already been applied by filterSubjectsByPlatform and takes precedence.
+// this metadata from their manifest index; attestation files can use the
+// recorded targetPlatform or infer TARGETPLATFORM from older LLBs. An explicit
+// --platform has already been applied by filterSubjectsByPlatform and takes
+// precedence.
 func applyPredicateTargetPlatformFallback(subject *replay.Subject, pred *replay.Predicate, platformFilter []string) *replay.Subject {
 	if subject == nil || pred == nil || subject.Descriptor.Platform != nil || len(platformFilter) != 0 {
 		return subject
 	}
-	platform, ok := pred.FallbackTargetPlatform()
+	platform, ok := pred.TargetPlatform()
 	if !ok {
 		return subject
 	}

@@ -150,3 +150,48 @@ func TestPredicateFallbackTargetPlatform(t *testing.T) {
 	_, ok = pred.FallbackTargetPlatform()
 	require.False(t, ok, "conflicting target platforms must not be guessed")
 }
+
+func TestPredicateTargetPlatform(t *testing.T) {
+	pred := &Predicate{}
+	pred.BuildDefinition.InternalParameters.TargetPlatform = "linux/arm64"
+	platform, ok := pred.TargetPlatform()
+	require.True(t, ok)
+	require.Equal(t, "linux/arm64", platforms.Format(*platform), "recorded target platform works without build config")
+
+	pred.BuildDefinition.InternalParameters.TargetPlatform = "invalid"
+	_, ok = pred.TargetPlatform()
+	require.False(t, ok, "invalid recorded target platform must not be guessed")
+
+	pred.BuildDefinition.InternalParameters.TargetPlatform = ""
+	pred.BuildDefinition.InternalParameters.BuildConfig = &provenancetypes.BuildConfig{
+		Definition: []provenancetypes.BuildStep{{
+			Op: &solverpb.Op{Op: &solverpb.Op_Exec{Exec: &solverpb.ExecOp{Meta: &solverpb.Meta{
+				Env: []string{"TARGETPLATFORM=linux/amd64"},
+			}}}},
+		}},
+	}
+	platform, ok = pred.TargetPlatform()
+	require.True(t, ok)
+	require.Equal(t, "linux/amd64", platforms.Format(*platform), "older attestations use LLB fallback")
+
+	pred.BuildDefinition.InternalParameters.TargetPlatform = "linux/arm64"
+	platform, ok = pred.TargetPlatform()
+	require.True(t, ok)
+	require.Equal(t, "linux/arm64", platforms.Format(*platform), "recorded target platform takes precedence")
+}
+
+func TestPredicateTargetPlatformFromJSON(t *testing.T) {
+	pred, err := decodeProvenancePredicate([]byte(`{
+		"buildDefinition": {
+			"internalParameters": {
+				"builderPlatform": "linux/amd64",
+				"targetPlatform": "linux/arm64"
+			}
+		}
+	}`), slsa1.PredicateSLSAProvenance)
+	require.NoError(t, err)
+
+	platform, ok := pred.TargetPlatform()
+	require.True(t, ok)
+	require.Equal(t, "linux/arm64", platforms.Format(*platform))
+}

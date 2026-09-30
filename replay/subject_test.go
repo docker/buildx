@@ -558,13 +558,27 @@ func TestFanOutSubjectsVerifiesIndexDigest(t *testing.T) {
 	// Same size, different content.
 	tampered := bytes.Replace(idxDt, []byte("amd64"), []byte("arm64"), 1)
 	require.Len(t, tampered, len(idxDt))
-	blobPath := filepath.Join(dir, "blobs", idxDgst.Algorithm().String(), idxDgst.Encoded())
-	require.NoError(t, os.Chmod(blobPath, 0o644))
-	require.NoError(t, os.WriteFile(blobPath, tampered, 0o644))
-
-	_, err = fanOutSubjects(ctx, store, root, "test")
+	provider := &corruptIndexProvider{Provider: store, digest: idxDgst, data: tampered}
+	_, err = fanOutSubjects(ctx, provider, root, "test")
 	require.ErrorContains(t, err, "digest mismatch")
 }
+
+type corruptIndexProvider struct {
+	content.Provider
+	digest digest.Digest
+	data   []byte
+}
+
+func (p *corruptIndexProvider) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) (content.ReaderAt, error) {
+	if desc.Digest == p.digest {
+		return &memoryReaderAt{Reader: bytes.NewReader(p.data)}, nil
+	}
+	return p.Provider.ReaderAt(ctx, desc)
+}
+
+type memoryReaderAt struct{ *bytes.Reader }
+
+func (r *memoryReaderAt) Close() error { return nil }
 
 // TestSubjectPredicateManifestHint asserts that a platform manifest
 // referenced directly gets a hint to use the image index reference.
