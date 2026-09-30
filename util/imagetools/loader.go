@@ -467,18 +467,38 @@ func withIntotoMediaTypes(ctx context.Context) context.Context {
 	return ctx
 }
 
+// ReadBlobVerified reads a blob and checks that its content matches the size
+// and digest of the descriptor. Providers backed by a registry fetcher or an
+// OCI layout do not verify the content they return.
+func ReadBlobVerified(ctx context.Context, provider content.Provider, desc ocispecs.Descriptor) ([]byte, error) {
+	if err := desc.Digest.Validate(); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	dt, err := content.ReadBlob(ctx, provider, desc)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if int64(len(dt)) != desc.Size {
+		return nil, errors.Errorf("blob %s size mismatch: expected %d, got %d", desc.Digest, desc.Size, len(dt))
+	}
+	if got := desc.Digest.Algorithm().FromBytes(dt); got != desc.Digest {
+		return nil, errors.Errorf("blob digest mismatch: expected %s, got %s", desc.Digest, got)
+	}
+	return dt, nil
+}
+
 // ReadProvenancePredicate loads the SLSA provenance predicate payload from the
 // attestation manifest referenced by attestManifest, reading blobs through the
-// supplied content provider. Returns the raw predicate JSON bytes and the
-// predicate type URI. When the manifest has no provenance layer both return
-// values are empty without error so callers can distinguish "no provenance"
-// from a hard failure.
+// supplied content provider and verifying them against their digests. Returns
+// the raw predicate JSON bytes and the predicate type URI. When the manifest
+// has no provenance layer both return values are empty without error so
+// callers can distinguish "no provenance" from a hard failure.
 //
 // This exposes the provenance scan + DSSE unwrap logic used internally by
 // scanProvenance for reuse by `buildx replay`.
 func ReadProvenancePredicate(ctx context.Context, provider content.Provider, attestManifest ocispecs.Descriptor) ([]byte, string, error) {
 	ctx = withIntotoMediaTypes(ctx)
-	dt, err := content.ReadBlob(ctx, provider, attestManifest)
+	dt, err := ReadBlobVerified(ctx, provider, attestManifest)
 	if err != nil {
 		return nil, "", errors.Wrap(err, "failed to read attestation manifest")
 	}
@@ -502,7 +522,7 @@ func ReadProvenancePredicate(ctx context.Context, provider content.Provider, att
 	if predType == "" {
 		return nil, "", nil
 	}
-	layerDt, err := content.ReadBlob(ctx, provider, layer)
+	layerDt, err := ReadBlobVerified(ctx, provider, layer)
 	if err != nil {
 		return nil, "", errors.Wrapf(err, "failed to read provenance layer %s", layer.Digest)
 	}

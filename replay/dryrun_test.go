@@ -3,6 +3,7 @@ package replay
 import (
 	"context"
 	"encoding/json"
+	"strings"
 	"testing"
 
 	"github.com/docker/buildx/util/buildflags"
@@ -64,6 +65,83 @@ func testPredicate(secretSpecs []struct {
 		Definition: []provenancetypes.BuildStep{{ID: "step0"}},
 	}
 	return p
+}
+
+func TestMakeBuildPlanGatewayFrontend(t *testing.T) {
+	pred := testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.Request.Frontend = "gateway.v0"
+	plan, err := MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	require.NoError(t, err)
+	require.Equal(t, "gateway.v0", plan.Subjects[0].BuildConfig.Frontend)
+	require.Equal(t, map[string]string{
+		"cmdline": "docker/dockerfile:1.8",
+		"source":  "docker/dockerfile:1.8",
+	}, plan.Subjects[0].BuildConfig.FrontendAttrs)
+}
+
+func TestMakeBuildPlanRecordedNetworkMode(t *testing.T) {
+	pred := testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.Request.Args["force-network-mode"] = "none"
+	target := []Target{{Subject: testSubject(t), Predicate: pred}}
+
+	plan, err := MakeBuildPlan(&BuildRequest{Targets: target})
+	require.NoError(t, err)
+	require.Equal(t, "none", plan.Subjects[0].BuildConfig.NetworkMode)
+
+	// An explicit --network takes precedence over the recorded mode.
+	plan, err = MakeBuildPlan(&BuildRequest{Targets: target, NetworkMode: "default"})
+	require.NoError(t, err)
+	require.Equal(t, "default", plan.Subjects[0].BuildConfig.NetworkMode)
+
+	// A recorded host network cannot be replayed without an explicit mode.
+	pred.BuildDefinition.ExternalParameters.Request.Args["force-network-mode"] = "host"
+	_, err = MakeBuildPlan(&BuildRequest{Targets: target})
+	require.ErrorContains(t, err, "--network=host")
+	plan, err = MakeBuildPlan(&BuildRequest{Targets: target, NetworkMode: "none"})
+	require.NoError(t, err)
+	require.Equal(t, "none", plan.Subjects[0].BuildConfig.NetworkMode)
+}
+
+func TestMakeBuildPlanRejectsLocalInputs(t *testing.T) {
+	for _, value := range []string{"oci-layout://abc123@sha256:" + strings.Repeat("a", 64), "input:foo", "target:foo", "local:foo"} {
+		t.Run(strings.SplitN(value, ":", 2)[0], func(t *testing.T) {
+			pred := testPredicate(nil, nil)
+			pred.BuildDefinition.ExternalParameters.Request.Args["context:foo"] = value
+			_, err := MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+			var local *UnreplayableLocalContextError
+			require.ErrorAs(t, err, &local)
+			require.Equal(t, []string{"foo"}, local.LocalSources)
+		})
+	}
+
+	// A context read from stdin is uploaded through the client session.
+	pred := testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.ConfigSource.URI = "http://buildkit-session/7ljrjpb29qglz425jejnuhlnx"
+	pred.BuildDefinition.ExternalParameters.Request.Args["context"] = "http://buildkit-session/7ljrjpb29qglz425jejnuhlnx"
+	_, err := MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	var local *UnreplayableLocalContextError
+	require.ErrorAs(t, err, &local)
+	require.Equal(t, []string{"context (stdin)"}, local.LocalSources)
+
+	// Remote named contexts are replayable.
+	pred = testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.Request.Args["context:foo"] = "docker-image://alpine:3.20"
+	_, err = MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	require.NoError(t, err)
+}
+
+func TestMakeBuildPlanValidatesOutputs(t *testing.T) {
+	target := []Target{{Subject: testSubject(t), Predicate: testPredicate(nil, nil)}}
+
+	_, err := MakeBuildPlan(&BuildRequest{Targets: target, Exports: []*buildflags.ExportEntry{{Type: "local", Attrs: map[string]string{}}}})
+	require.ErrorContains(t, err, "dest is required")
+
+	_, err = MakeBuildPlan(&BuildRequest{Targets: target, Exports: []*buildflags.ExportEntry{{
+		Type:        "local",
+		Destination: t.TempDir(),
+		Attrs:       map[string]string{"mode": "delete"},
+	}}})
+	require.ErrorContains(t, err, "does not support local output mode=delete")
 }
 
 func TestMakeBuildPlanMinModeRejected(t *testing.T) {
@@ -156,10 +234,10 @@ func TestMakeBuildPlanHappyPath(t *testing.T) {
 	require.Len(t, plan.Subjects[0].Materials, 2)
 	require.Equal(t, "https://github.com/example/repo.git", plan.Subjects[0].BuildConfig.Context)
 	require.Equal(t, "Dockerfile", plan.Subjects[0].BuildConfig.Filename)
-	require.Equal(t, map[string]string{
-		"cmdline": "docker/dockerfile:1.8",
-		"source":  "docker/dockerfile:1.8",
-	}, plan.Subjects[0].BuildConfig.FrontendAttrs)
+	// dockerfile.v0 does not use the recorded gateway source.
+	require.Equal(t, "dockerfile.v0", plan.Subjects[0].BuildConfig.Frontend)
+	require.Nil(t, plan.Subjects[0].BuildConfig.FrontendAttrs)
+	require.Equal(t, "default", plan.Subjects[0].BuildConfig.NetworkMode)
 	require.Equal(t, []PlanSecret{
 		{ID: "optional", Optional: true},
 		{ID: "required"},

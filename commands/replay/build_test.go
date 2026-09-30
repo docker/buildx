@@ -145,6 +145,9 @@ func TestBuildRejectsInvalidFlagsBeforeLoadingSubject(t *testing.T) {
 		{name: "format-without-dry-run", args: []string{"--format=json"}, err: "--format requires --dry-run"},
 		{name: "unknown-format", args: []string{"--dry-run", "--format=yaml"}, err: `unknown --format "yaml"`},
 		{name: "unknown-replay-mode", args: []string{"--replay-mode=llb"}, err: `unknown --replay-mode "llb"`},
+		{name: "unknown-network", args: []string{"--network=host"}, err: `unsupported --network "host" (want default or none)`},
+		{name: "platform-all", args: []string{"--platform=all"}, err: `--platform "all" is not supported by replay build; select a single platform`},
+		{name: "invalid-platform", args: []string{"--platform=linux/amd64,"}, err: "invalid empty --platform value"},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			builderName := ""

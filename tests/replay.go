@@ -3,17 +3,23 @@ package tests
 import (
 	"archive/tar"
 	"bytes"
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
 	"os"
+	"os/exec"
 	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
 
+	"github.com/containerd/continuity/fs/fstest"
 	"github.com/containerd/platforms"
+	"github.com/docker/buildx/util/gitutil"
+	"github.com/docker/buildx/util/gitutil/gittestutil"
 	"github.com/moby/buildkit/identity"
+	bkgitutil "github.com/moby/buildkit/util/gitutil"
 	"github.com/moby/buildkit/util/testutil/integration"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -26,6 +32,7 @@ import (
 // that need a writable registry skip when `sb.RegistryAddress()` is empty.
 var replayTests = []func(t *testing.T, sb integration.Sandbox){
 	testReplayBuildRoundTrip,
+	testReplayGitContextRoundTrip,
 	testReplayRejectsChangedHTTPContext,
 	testReplaySnapshotExportAndRejectsOfflineReplay,
 	testReplayVerifyDigest,
@@ -130,6 +137,62 @@ func testReplayBuildRoundTrip(t *testing.T, sb integration.Sandbox) {
 	out, err := cmd.CombinedOutput()
 	require.NoError(t, err, string(out))
 	require.FileExists(t, filepath.Join(dest, "replay.oci.tar"))
+}
+
+// testReplayGitContextRoundTrip replays a build from a Git context and checks
+// that the replay stays pinned to the recorded commit after the branch moves.
+func testReplayGitContextRoundTrip(t *testing.T, sb integration.Sandbox) {
+	registry := replayRegistry(t, sb)
+	ref := registry + "/buildx-replay-git:" + replayTestTag(t)
+
+	dir := tmpdir(t,
+		fstest.CreateFile("Dockerfile", []byte("FROM scratch\nCOPY foo /foo\n"), 0o600),
+		fstest.CreateFile("foo", []byte("recorded"), 0o600),
+	)
+	git, err := gitutil.New(bkgitutil.WithDir(dir))
+	require.NoError(t, err)
+	gittestutil.GitInit(git, t)
+	gittestutil.GitAdd(git, t, "Dockerfile", "foo")
+	gittestutil.GitCommit(git, t, "initial commit")
+	contextRef := gittestutil.GitServeHTTP(git, t) + "#main"
+
+	out, err := buildCmd(sb, withArgs(
+		"--output=type=registry,name="+ref,
+		"--attest=type=provenance,mode=max",
+		contextRef,
+	))
+	require.NoError(t, err, out)
+	prune := buildxCmd(sb, withArgs("prune", "--all", "--force"))
+	pruneOut, err := prune.CombinedOutput()
+	require.NoError(t, err, string(pruneOut))
+
+	dest := filepath.Join(t.TempDir(), "replay.oci.tar")
+	cmd := buildxCmd(sb, withArgs(
+		"replay", "build",
+		"docker-image://"+ref,
+		"--output=type=oci,dest="+dest,
+	))
+	bout, err := cmd.CombinedOutput()
+	require.NoError(t, err, string(bout))
+	require.FileExists(t, dest)
+
+	// Move the branch. The replay must not build the new commit.
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "foo"), []byte("changed"), 0o600))
+	gittestutil.GitAdd(git, t, "foo")
+	gittestutil.GitCommit(git, t, "move branch")
+	updateInfo := exec.CommandContext(context.TODO(), "git", "update-server-info")
+	updateInfo.Dir = dir
+	infoOut, err := updateInfo.CombinedOutput()
+	require.NoError(t, err, string(infoOut))
+
+	cmd = buildxCmd(sb, withArgs(
+		"replay", "build",
+		"docker-image://"+ref,
+		"--output=type=oci,dest="+filepath.Join(t.TempDir(), "replay.oci.tar"),
+	))
+	bout, err = cmd.CombinedOutput()
+	require.Error(t, err, string(bout))
+	require.Contains(t, string(bout), "expected checksum to match")
 }
 
 func testReplayRejectsChangedHTTPContext(t *testing.T, sb integration.Sandbox) {
@@ -239,7 +302,30 @@ func testReplayRejectsLocalContext(t *testing.T, sb integration.Sandbox) {
 	))
 	bout, err := cmd.CombinedOutput()
 	require.Error(t, err, string(bout))
-	require.Contains(t, string(bout), "image was built from local files")
+	require.Contains(t, string(bout), "image was built from local inputs that replay cannot fetch")
+
+	// A context read from stdin is uploaded through the client session and
+	// cannot be fetched again. Dry-run must reject it too.
+	stdinRef := registry + "/buildx-replay-stdin:" + replayTestTag(t)
+	build := buildxCmd(sb, withArgs(
+		"build", "--progress=quiet",
+		"--output=type=registry,name="+stdinRef,
+		"--build-context=ctx=docker-image://alpine:latest",
+		"--attest=type=provenance,mode=max",
+		"-",
+	))
+	build.Stdin = bytes.NewReader(replayContextArchive(t, replayTestDockerfile))
+	bout, err = build.CombinedOutput()
+	require.NoError(t, err, string(bout))
+
+	cmd = buildxCmd(sb, withArgs(
+		"replay", "build",
+		"docker-image://"+stdinRef,
+		"--dry-run",
+	))
+	bout, err = cmd.CombinedOutput()
+	require.Error(t, err, string(bout))
+	require.Contains(t, string(bout), "context (stdin)")
 }
 
 // testReplayRejectsIncompleteProvenance checks that images without provenance
@@ -361,6 +447,18 @@ func testReplayMultiPlatformRoundTrip(t *testing.T, sb integration.Sandbox) {
 		require.Equal(t, platform, platforms.Format(*plan.Subjects[0].Descriptor.Platform))
 	}
 
+	// A selected platform replays.
+	dest := filepath.Join(t.TempDir(), "replay.oci.tar")
+	replay := buildxCmd(sb, withArgs(
+		"replay", "build",
+		"docker-image://"+ref,
+		"--platform=linux/arm64",
+		"--output=type=oci,dest="+dest,
+	))
+	rout, err := replay.CombinedOutput()
+	require.NoError(t, err, string(rout))
+	require.FileExists(t, dest)
+
 	// Replaying every platform at once is rejected up front, including in
 	// dry-run.
 	cmd := buildxCmd(sb, withArgs(
@@ -371,7 +469,7 @@ func testReplayMultiPlatformRoundTrip(t *testing.T, sb integration.Sandbox) {
 	))
 	bout, err := cmd.CombinedOutput()
 	require.Error(t, err, string(bout))
-	require.Contains(t, string(bout), "select a single platform with --platform")
+	require.Contains(t, string(bout), `--platform "all" is not supported by replay build`)
 }
 
 // testReplayDefaultPlatformUsesWorkerDefault checks that replay without

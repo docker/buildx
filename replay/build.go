@@ -3,6 +3,9 @@ package replay
 import (
 	"context"
 	"fmt"
+	"maps"
+	"net/url"
+	"slices"
 	"sort"
 	"strings"
 
@@ -14,6 +17,7 @@ import (
 	"github.com/docker/buildx/util/dockerutil"
 	"github.com/docker/buildx/util/progress"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/identity"
 	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
 	"github.com/moby/buildkit/util/progress/progressui"
@@ -54,7 +58,8 @@ type BuildRequest struct {
 	Materials *MaterialsResolver
 
 	// NetworkMode controls the network mode for RUN instructions in the
-	// replayed build (default | none). Material resolution is NOT affected.
+	// replayed build (default | none). Empty uses the recorded mode.
+	// Material resolution is NOT affected.
 	NetworkMode string
 
 	// Secrets / SSH hold the user-supplied specs for the replayed solve.
@@ -95,14 +100,33 @@ func checkBuildRequest(req *BuildRequest) error {
 	return nil
 }
 
+// createExports parses the export specs. Local exports with mode=delete are
+// rejected: `buildx build` requires --allow=buildx.local.delete for most
+// destinations, and replay has no --allow flag.
+func createExports(specs []*buildflags.ExportEntry) ([]client.ExportEntry, error) {
+	exports, _, err := build.CreateExports(specs)
+	if err != nil {
+		return nil, errors.Wrap(err, "parse --output")
+	}
+	for _, e := range exports {
+		if e.Type != client.ExporterLocal {
+			continue
+		}
+		mode, err := client.ParseLocalExporterMode(e.Attrs["mode"])
+		if err != nil {
+			return nil, err
+		}
+		if mode == client.LocalExporterModeDelete {
+			return nil, errors.New("replay does not support local output mode=delete")
+		}
+	}
+	return exports, nil
+}
+
 // checkReplayable rejects provenance that cannot be replayed faithfully and
 // cross-checks the user-supplied secrets and SSH against the recorded ones.
 func checkReplayable(pred *Predicate, mode BuildMode, secrets buildflags.Secrets, ssh []*buildflags.SSH) error {
-	if locals := pred.Locals(); len(locals) > 0 {
-		names := make([]string, 0, len(locals))
-		for _, l := range locals {
-			names = append(names, l.Name)
-		}
+	if names := localInputs(pred); len(names) > 0 {
 		return ErrUnreplayableLocalContext(names)
 	}
 	if pred.IsMinMode() {
@@ -117,6 +141,37 @@ func checkReplayable(pred *Predicate, mode BuildMode, secrets buildflags.Secrets
 		return err
 	}
 	return CheckSSH(pred.SSH(), ssh)
+}
+
+// localInputs returns the names of recorded inputs that only existed on the
+// original client: local directories, a context read from stdin, and named
+// contexts that referenced an OCI layout store or another bake target.
+func localInputs(pred *Predicate) []string {
+	seen := map[string]struct{}{}
+	for _, l := range pred.Locals() {
+		seen[l.Name] = struct{}{}
+	}
+	attrs := pred.FrontendAttrs()
+	// A context read from stdin is uploaded through the client session and
+	// recorded as http://buildkit-session/<id>.
+	for _, uri := range []string{pred.ConfigSource().URI, attrs["context"]} {
+		if u, err := url.Parse(uri); err == nil && u.Host == "buildkit-session" {
+			seen["context (stdin)"] = struct{}{}
+		}
+	}
+	for k, v := range attrs {
+		name, ok := strings.CutPrefix(k, "context:")
+		if !ok {
+			continue
+		}
+		for _, prefix := range []string{"oci-layout://", "local:", "input:", "target:"} {
+			if strings.HasPrefix(v, prefix) {
+				seen[name] = struct{}{}
+				break
+			}
+		}
+	}
+	return slices.Sorted(maps.Keys(seen))
 }
 
 // checkContextPinned rejects a Git subdirectory context whose commit is not
@@ -170,9 +225,9 @@ func Build(ctx context.Context, dockerCli command.Cli, builderName string, req *
 	}
 
 	// Parse exports once; shared across all targets.
-	exports, _, err := build.CreateExports(req.Exports)
+	exports, err := createExports(req.Exports)
 	if err != nil {
-		return errors.Wrap(err, "parse --output")
+		return err
 	}
 
 	// Build the map[string]build.Options keyed by subject key.
@@ -322,12 +377,12 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 		return build.Options{}, ErrNotImplemented("replay build with explicit --materials sources")
 	}
 
-	networkMode, err := networkModeForReplay(req.NetworkMode)
+	attrs := pred.FrontendAttrs()
+	networkMode, err := networkModeForReplay(req.NetworkMode, attrs["force-network-mode"])
 	if err != nil {
 		return build.Options{}, err
 	}
 
-	attrs := pred.FrontendAttrs()
 	cfgSrc := pred.ConfigSource()
 
 	labels := collectPrefixed(attrs, "label:")
@@ -359,7 +414,6 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 			extraHosts = fields
 		}
 	}
-	cgroupParent := attrs["cgroup-parent"]
 
 	// Dockerfile path comes from configSource.path when present — that is the
 	// canonical provenance field for the build definition. The recorded
@@ -414,7 +468,6 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 		NoCache:       noCache,
 		NoCacheFilter: nocacheFilter,
 		ExtraHosts:    extraHosts,
-		CgroupParent:  cgroupParent,
 		NetworkMode:   networkMode,
 		SecretSpecs:   req.Secrets,
 		SSHSpecs:      req.SSH,
@@ -440,9 +493,23 @@ func BuildOptionsFromPredicate(s *Subject, pred *Predicate, req *BuildRequest) (
 	return opt, nil
 }
 
-func networkModeForReplay(mode string) (string, error) {
+// networkModeForReplay returns the network mode for RUN instructions. An
+// explicit mode takes precedence. Otherwise the recorded mode is kept. A
+// recorded host network needs an entitlement that replay cannot grant, so it
+// requires an explicit mode.
+func networkModeForReplay(mode, recorded string) (string, error) {
 	switch mode {
-	case "", "default":
+	case "":
+		switch recorded {
+		case "", "default":
+			return "", nil
+		case "none":
+			return "none", nil
+		case "host":
+			return "", errors.New("the original build used --network=host, which replay does not support; pass --network=default or --network=none to replay with a different network mode")
+		}
+		return "", errors.Errorf("unsupported recorded network mode %q; pass --network=default or --network=none", recorded)
+	case "default":
 		return "", nil
 	case "none":
 		return "none", nil

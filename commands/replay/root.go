@@ -31,7 +31,7 @@ func installCommonFlags(cmd *cobra.Command, opts *commonOptions) {
 	flags := cmd.Flags()
 
 	flags.StringArrayVar(&opts.materials, "materials", nil, `Materials store (repeatable; format: "provenance" | "oci-layout://<path>[:<tag>]" | "<absolute-path>" | "<key>=<value>")`)
-	flags.StringVar(&opts.network, "network", "default", `Network mode for RUN instructions ("default" | "none")`)
+	flags.StringVar(&opts.network, "network", "", `Network mode for RUN instructions ("default" | "none"; defaults to the mode of the original build)`)
 	flags.StringArrayVar(&opts.secrets, "secret", nil, `Secret to expose to the replayed build (format: "id=mysecret[,src=/local/secret]")`)
 	flags.StringArrayVar(&opts.ssh, "ssh", nil, `SSH agent socket or keys to expose (format: "default|<id>[=<socket>|<key>[,<key>]]")`)
 	flags.StringArrayVar(&opts.platforms, "platform", nil, `Platform of the subject to replay (defaults to the only platform of the subject or the builder default platform)`)

@@ -1,10 +1,13 @@
 package build
 
 import (
+	"context"
 	"testing"
 
 	"github.com/docker/buildx/policy"
 	"github.com/docker/buildx/util/buildflags"
+	gwpb "github.com/moby/buildkit/frontend/gateway/pb"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/sirupsen/logrus"
 	"github.com/stretchr/testify/require"
 )
@@ -124,4 +127,19 @@ func TestWithPolicyConfigMultipleFilesAndOverrides(t *testing.T) {
 	require.Equal(t, "b.rego", out[2].Files[0].Filename)
 	require.False(t, out[2].Files[0].Optional)
 	require.True(t, out[2].Strict)
+}
+
+func TestSplitPolicyConfigs(t *testing.T) {
+	cb := func(context.Context, *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
+		return nil, nil, nil
+	}
+	file := buildflags.PolicyConfig{Files: []policy.File{{Filename: "policy.rego"}}}
+
+	callbacks, files, err := splitPolicyConfigs([]buildflags.PolicyConfig{file, {Callback: cb}})
+	require.NoError(t, err)
+	require.Len(t, callbacks, 1)
+	require.Equal(t, []buildflags.PolicyConfig{file}, files)
+
+	_, _, err = splitPolicyConfigs([]buildflags.PolicyConfig{{Files: file.Files, Callback: cb}})
+	require.ErrorContains(t, err, "cannot set both a callback and policy files")
 }

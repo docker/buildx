@@ -20,9 +20,9 @@ type PolicyConfig struct {
 
 	// Callback, when non-nil, is a programmatic policy evaluator. Set in
 	// code (not from CLI flags) for cases like `buildx replay` that
-	// enforce pinning without loading a policy file. Configs with
-	// Callback set are composed into the policy callback chain alongside
-	// file-based policies.
+	// enforce pinning without loading a policy file. A config with a
+	// Callback must not set Files; callbacks run after the file-based
+	// policies of other configs.
 	Callback policysession.PolicyCallback `json:"-"`
 }
 

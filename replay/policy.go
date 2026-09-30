@@ -29,7 +29,6 @@ import (
 type PinIndex struct {
 	byURI     map[string][]sourcePin
 	byAlias   map[string][]sourcePin
-	byDigest  map[digest.Digest]struct{}
 	materials []string
 }
 
@@ -44,9 +43,8 @@ type sourcePin struct {
 // a usable digest are skipped.
 func NewPinIndex(p *Predicate) *PinIndex {
 	idx := &PinIndex{
-		byURI:    map[string][]sourcePin{},
-		byAlias:  map[string][]sourcePin{},
-		byDigest: map[digest.Digest]struct{}{},
+		byURI:   map[string][]sourcePin{},
+		byAlias: map[string][]sourcePin{},
 	}
 	if p == nil {
 		return idx
@@ -81,7 +79,6 @@ func NewPinIndex(p *Predicate) *PinIndex {
 			}
 			idx.byURI[m.URI] = appendPin(idx.byURI[m.URI], pin)
 		}
-		idx.byDigest[d] = struct{}{}
 	}
 	sort.Strings(idx.materials)
 	return idx
@@ -110,14 +107,6 @@ func preferredDigest(set map[string]string) digest.Digest {
 		return digest.NewDigestFromEncoded(digest.Algorithm(alg), set[alg])
 	}
 	return ""
-}
-
-// Len reports the number of pin entries. Used by `--dry-run`.
-func (p *PinIndex) Len() int {
-	if p == nil {
-		return 0
-	}
-	return len(p.byDigest)
 }
 
 // Lookup resolves a URI to its pinned digest. Returns ("", false) when the
@@ -169,7 +158,7 @@ func uniquePinDigest(pins []sourcePin) (digest.Digest, bool) {
 func ReplayPinCallback(idx *PinIndex) policysession.PolicyCallback {
 	return func(ctx context.Context, req *policysession.CheckPolicyRequest) (*policysession.DecisionResponse, *gwpb.ResolveSourceMetaRequest, error) {
 		uri, observed := extractSourceIdentity(req)
-		if uri == "" && observed == "" {
+		if uri == "" {
 			return denyResponse("replay pin: request carried no source identifier"), nil, nil
 		}
 
@@ -177,7 +166,7 @@ func ReplayPinCallback(idx *PinIndex) policysession.PolicyCallback {
 		// implementation enforces the recorded pin. Metadata is not present on
 		// BuildKit's initial policy request, so allowing a covered URI before
 		// adding these attributes would leave HTTP and Git sources unpinned.
-		if idx != nil && uri != "" {
+		if idx != nil {
 			if pinned, covered, reason := idx.resolve(req, uri, observed); covered {
 				if reason != "" {
 					return denyResponse(reason), nil, nil
@@ -198,16 +187,6 @@ func ReplayPinCallback(idx *PinIndex) policysession.PolicyCallback {
 					return allowResponse(), nil, nil
 				}
 				return denyResponse(fmt.Sprintf("replay pin mismatch for %s: expected %s, got %s", uri, pinned, observed)), nil, nil
-			}
-		}
-
-		// Digest-only match: the observed digest matches a pinned material
-		// whose URI was not available on the request. Accept this — the
-		// content is the pinned bytes regardless of how the frontend named
-		// them.
-		if idx != nil && observed != "" {
-			if _, ok := idx.byDigest[observed]; ok {
-				return allowResponse(), nil, nil
 			}
 		}
 

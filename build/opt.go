@@ -674,15 +674,28 @@ func proxyArgKeyExists(buildArgs map[string]string, key string) bool {
 	return false
 }
 
-func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, opt *Options, cfg *confutil.Config, bopts gateway.BuildOpts, so *client.SolveOpt, pw progress.Writer) (_ []func(error), err error) {
-	var callbackOnly []policysession.PolicyCallback
+// splitPolicyConfigs separates programmatic policy callbacks from file-based
+// policy configs. A config carries either a callback or policy files.
+func splitPolicyConfigs(configs []buildflags.PolicyConfig) ([]policysession.PolicyCallback, []buildflags.PolicyConfig, error) {
+	var callbacks []policysession.PolicyCallback
 	var fileConfigs []buildflags.PolicyConfig
-	for _, p := range opt.Policy {
-		if p.Callback != nil && len(p.Files) == 0 {
-			callbackOnly = append(callbackOnly, p.Callback)
+	for _, p := range configs {
+		if p.Callback == nil {
+			fileConfigs = append(fileConfigs, p)
 			continue
 		}
-		fileConfigs = append(fileConfigs, p)
+		if len(p.Files) > 0 {
+			return nil, nil, errors.New("policy config cannot set both a callback and policy files")
+		}
+		callbacks = append(callbacks, p.Callback)
+	}
+	return callbacks, fileConfigs, nil
+}
+
+func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, opt *Options, cfg *confutil.Config, bopts gateway.BuildOpts, so *client.SolveOpt, pw progress.Writer) (_ []func(error), err error) {
+	callbackOnly, fileConfigs, err := splitPolicyConfigs(opt.Policy)
+	if err != nil {
+		return nil, err
 	}
 
 	// Any callback-only entry requires the session policy capability, the

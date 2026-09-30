@@ -90,6 +90,17 @@ func runBuild(cmd *cobra.Command, dockerCli command.Cli, opts *buildOptions, inp
 	if cmd.Flags().Changed("format") && !opts.dryRun {
 		return errors.New("--format requires --dry-run")
 	}
+	switch opts.network {
+	case "", "default", "none":
+	default:
+		return errors.Errorf("unsupported --network %q (want default or none)", opts.network)
+	}
+	// Replay builds one platform at a time, so "all" is not accepted.
+	if _, all, err := parsePlatformFilter(opts.platforms); err != nil {
+		return err
+	} else if all {
+		return errors.New(`--platform "all" is not supported by replay build; select a single platform`)
+	}
 
 	// Materials resolver.
 	resolver, err := replay.NewMaterialsResolver(opts.materials)
@@ -438,7 +449,7 @@ func filterSubjectsByPlatform(subjects []*replay.Subject, platformFilter []strin
 		}
 		p, err := defaultPlatform()
 		if err != nil {
-			return nil, errors.Wrapf(err, "select default platform from %v — pass --platform <p> or --platform all", available)
+			return nil, errors.Wrapf(err, "select default platform from %v — pass --platform <p>", available)
 		}
 		wantPlatforms = []ocispecs.Platform{p}
 	}
@@ -511,7 +522,7 @@ func filterSubjectsByPlatform(subjects []*replay.Subject, platformFilter []strin
 		}
 	}
 	if len(out) == 0 {
-		return nil, errors.Errorf("no subject for builder default platform %v (available: %v) — pass --platform <p> or --platform all", wantNames, available)
+		return nil, errors.Errorf("no subject for builder default platform %v (available: %v) — pass --platform <p>", wantNames, available)
 	}
 	return out, nil
 }

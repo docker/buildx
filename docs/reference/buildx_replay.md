@@ -43,8 +43,11 @@ A build can be replayed when:
 - its provenance was recorded with `mode=max`
   (`--provenance=mode=max` or `--attest=type=provenance,mode=max`). `mode=min`
   provenance omits the build arguments, secrets, and SSH needed for replay;
-- its build context was a Git repository or an HTTP(S) URL. Builds from local
-  directories cannot be replayed;
+- its build context was a Git repository or an HTTP(S) URL. Builds that used
+  local directories, stdin, OCI layouts, or other Bake targets as build
+  contexts cannot be replayed;
+- it did not use `--network=host`, unless a different `--network` is passed
+  to replay;
 - the recorded sources are still available.
 
 Replay rebuilds one platform at a time. For a multi-platform image, select the

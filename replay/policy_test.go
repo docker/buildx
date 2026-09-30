@@ -277,6 +277,25 @@ func TestPinIndexHTTPConvertedToRecordedChecksum(t *testing.T) {
 	require.Equal(t, spb.PolicyAction_ALLOW, resp.Action)
 }
 
+func TestPinIndexUnrecordedURIWithRecordedDigestDenied(t *testing.T) {
+	pred := predicateWithMaterials(slsa1.ResourceDescriptor{
+		URI:    httpURI,
+		Digest: slsacommon.DigestSet{"sha256": stripSHA256(httpSHA)},
+	})
+	cb := ReplayPinCallback(NewPinIndex(pred))
+
+	resp, _, err := cb(context.Background(), httpCheckRequest("https://unrecorded.example.com/file.tar", httpSHA))
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_DENY, resp.Action)
+
+	// A request without a source identifier is denied.
+	resp, _, err = cb(context.Background(), httpCheckRequest("", httpSHA))
+	require.NoError(t, err)
+	require.NotNil(t, resp)
+	require.Equal(t, spb.PolicyAction_DENY, resp.Action)
+}
+
 func TestPinIndexIncludesRecordedConfigSource(t *testing.T) {
 	pred := predicateWithMaterials()
 	pred.BuildDefinition.ExternalParameters.ConfigSource.URI = httpURI

@@ -269,21 +269,32 @@ func loadAttestationFileSubject(ctx context.Context, dockerCli command.Cli, path
 		return nil, err
 	}
 
-	// Heuristic: .intoto.jsonl is line-delimited JSON Statements. Pick the
-	// first line that carries a provenance predicateType.
+	// .intoto.jsonl is line-delimited JSON statements. Every line is
+	// validated before the first provenance statement is picked, so a signed
+	// entry that cannot be verified is never skipped in favor of another
+	// entry.
 	if strings.HasSuffix(path, ".intoto.jsonl") {
+		var provenance *Subject
+		lineNum := 0
 		for line := range bytes.SplitSeq(dt, []byte("\n")) {
+			lineNum++
 			line = bytes.TrimSpace(line)
 			if len(line) == 0 {
 				continue
 			}
 			s, err := subjectFromAttestationBytes(line, path)
-			if err == nil {
-				s.signature = signature
-				return []*Subject{s}, nil
+			if err != nil {
+				return nil, errors.Wrapf(err, "line %d", lineNum)
+			}
+			if provenance == nil && isProvenancePredicateType(s.predicateType) {
+				provenance = s
 			}
 		}
-		return nil, errors.Errorf("no SLSA provenance statement found in %s", path)
+		if provenance == nil {
+			return nil, errors.Errorf("no SLSA provenance statement found in %s", path)
+		}
+		provenance.signature = signature
+		return []*Subject{provenance}, nil
 	}
 
 	s, err := subjectFromAttestationBytes(dt, path)
@@ -443,10 +454,14 @@ func subjectFromAttestationBytes(dt []byte, inputRef string) (*Subject, error) {
 	}
 
 	var stmt struct {
+		Type          string          `json:"_type"`
 		PredicateType string          `json:"predicateType"`
 		Predicate     json.RawMessage `json:"predicate"`
 	}
 	if err := json.Unmarshal(dt, &stmt); err != nil {
+		return nil, errors.Errorf("%s is not an in-toto statement, DSSE envelope or Sigstore bundle", inputRef)
+	}
+	if stmt.PredicateType != "" && !strings.HasPrefix(stmt.Type, "https://in-toto.io/Statement/") {
 		return nil, errors.Errorf("%s is not an in-toto statement, DSSE envelope or Sigstore bundle", inputRef)
 	}
 	if stmt.PredicateType == "" {
@@ -573,9 +588,9 @@ func (p *imageSubjectProvider) FetchReferrers(ctx context.Context, dgst digest.D
 func fanOutSubjects(ctx context.Context, provider content.Provider, root ocispecs.Descriptor, inputRef string) ([]*Subject, error) {
 	switch root.MediaType {
 	case ocispecs.MediaTypeImageIndex, images.MediaTypeDockerSchema2ManifestList:
-		dt, err := content.ReadBlob(ctx, provider, root)
+		dt, err := imagetools.ReadBlobVerified(ctx, provider, root)
 		if err != nil {
-			return nil, errors.WithStack(err)
+			return nil, err
 		}
 		var idx ocispecs.Index
 		if err := json.Unmarshal(dt, &idx); err != nil {
@@ -697,6 +712,11 @@ func (s *Subject) Predicate(ctx context.Context) (*Predicate, error) {
 
 	case subjectKindImage:
 		if s.attestManifest.Digest == "" {
+			if s.rootDescriptor.Digest == s.Descriptor.Digest {
+				// BuildKit attaches provenance through the image index, so a
+				// platform manifest referenced directly has none.
+				return nil, ErrNoProvenanceForManifest(s.inputRef)
+			}
 			return nil, ErrNoProvenance(s.inputRef)
 		}
 		predDt, predType, err := imagetools.ReadProvenancePredicate(ctx, s.Provider, s.attestManifest)
@@ -710,6 +730,10 @@ func (s *Subject) Predicate(ctx context.Context) (*Predicate, error) {
 	}
 
 	return nil, ErrUnsupportedSubject("unknown")
+}
+
+func isProvenancePredicateType(predType string) bool {
+	return predType == slsa1.PredicateSLSAProvenance || predType == slsa02.PredicateSLSAProvenance
 }
 
 // decodeProvenancePredicate unmarshals a provenance predicate in its

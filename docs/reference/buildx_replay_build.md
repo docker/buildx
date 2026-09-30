@@ -12,7 +12,7 @@ Rebuild an image from provenance and pinned materials
 | `--dry-run`      | `bool`        |             | Print a plan of the replay without solving or exporting                                                          |
 | `--format`       | `string`      | `pretty`    | Format dry-run output (`pretty` \| `json`)                                                                       |
 | `--load`         | `bool`        |             | Shorthand for `--output=type=docker`                                                                             |
-| `--network`      | `string`      | `default`   | Network mode for RUN instructions (`default` \| `none`)                                                          |
+| `--network`      | `string`      |             | Network mode for RUN instructions (`default` \| `none`; defaults to the mode of the original build)              |
 | `-o`, `--output` | `stringArray` |             | Output destination (format: `type=local,dest=path`)                                                              |
 | `--platform`     | `stringArray` |             | Platform of the subject to replay (defaults to the only platform of the subject or the builder default platform) |
 | `--progress`     | `string`      | `auto`      | Set type of progress output (`auto` \| `plain` \| `tty` \| `quiet` \| `rawjson`)                                 |
@@ -38,7 +38,8 @@ The replay mode controls how sources are resolved:
 - `frontend` replays the recorded frontend and options, but resolves sources
   again, so the result can differ from the original build.
 
-Replayed builds do not add new provenance or SBOM attestations.
+Replayed builds do not add new provenance or SBOM attestations. Local outputs
+with `mode=delete` are not supported.
 
 ## Examples
 

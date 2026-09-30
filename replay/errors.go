@@ -17,9 +17,9 @@ type UnreplayableLocalContextError struct {
 func (e *UnreplayableLocalContextError) Error() string {
 	const hint = "only builds from a Git repository or HTTP(S) URL context can be replayed"
 	if len(e.LocalSources) == 0 {
-		return "image was built from local files; " + hint
+		return "image was built from local inputs that replay cannot fetch; " + hint
 	}
-	return fmt.Sprintf("image was built from local files (%s); %s", strings.Join(e.LocalSources, ", "), hint)
+	return fmt.Sprintf("image was built from local inputs that replay cannot fetch (%s); %s", strings.Join(e.LocalSources, ", "), hint)
 }
 
 // ErrUnreplayableLocalContext constructs an UnreplayableLocalContextError.
@@ -168,10 +168,16 @@ func ErrUnsupportedSubject(kind string) error {
 // found for a subject.
 type NoProvenanceError struct {
 	Subject string
+	// Manifest is set when the subject is an image manifest referenced
+	// directly rather than through its image index.
+	Manifest bool
 }
 
 func (e *NoProvenanceError) Error() string {
-	const hint = "build the image with --provenance=mode=max to make it replayable"
+	hint := "build the image with --provenance=mode=max to make it replayable"
+	if e.Manifest {
+		hint = "if this is a platform manifest of a multi-platform image, use the image index reference instead; otherwise " + hint
+	}
 	if e.Subject == "" {
 		return "no SLSA provenance attestation found; " + hint
 	}
@@ -181,6 +187,12 @@ func (e *NoProvenanceError) Error() string {
 // ErrNoProvenance constructs a NoProvenanceError.
 func ErrNoProvenance(subject string) error {
 	return errors.WithStack(&NoProvenanceError{Subject: subject})
+}
+
+// ErrNoProvenanceForManifest constructs a NoProvenanceError for an image
+// manifest referenced directly.
+func ErrNoProvenanceForManifest(subject string) error {
+	return errors.WithStack(&NoProvenanceError{Subject: subject, Manifest: true})
 }
 
 // UnsupportedPredicateError signals that the attached predicate is not SLSA

@@ -7,6 +7,7 @@ import (
 	"sort"
 
 	"github.com/containerd/containerd/v2/core/content"
+	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/imagetools"
@@ -20,7 +21,6 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/package-url/packageurl-go"
 	"github.com/pkg/errors"
-	"github.com/tonistiigi/go-csvvalue"
 )
 
 // BuildPlan is the JSON-serializable dry-run payload for `replay build`.
@@ -114,15 +114,18 @@ func MakeBuildPlan(req *BuildRequest) (*BuildPlan, error) {
 	if err := checkBuildRequest(req); err != nil {
 		return nil, err
 	}
+	if _, err := createExports(req.Exports); err != nil {
+		return nil, err
+	}
 
 	plan := &BuildPlan{Subjects: make([]SubjectBuildPlan, 0, len(req.Targets))}
 
 	for _, t := range req.Targets {
-		if _, err := BuildOptionsFromPredicate(t.Subject, t.Predicate, req); err != nil {
+		opt, err := BuildOptionsFromPredicate(t.Subject, t.Predicate, req)
+		if err != nil {
 			return nil, err
 		}
-
-		plan.Subjects = append(plan.Subjects, subjectBuildPlan(t.Subject, t.Predicate, req))
+		plan.Subjects = append(plan.Subjects, subjectBuildPlan(t.Subject, t.Predicate, opt, req))
 	}
 	return plan, nil
 }
@@ -289,38 +292,28 @@ func stripImagePurlQualifiers(uri string) string {
 	return p.ToString()
 }
 
-func subjectBuildPlan(s *Subject, pred *Predicate, req *BuildRequest) SubjectBuildPlan {
-	attrs := pred.FrontendAttrs()
-	cfgSrc := pred.ConfigSource()
-	contextPath := cfgSrc.URI
-	if contextPath == "" {
-		contextPath = attrs["context"]
+func subjectBuildPlan(s *Subject, pred *Predicate, opt build.Options, req *BuildRequest) SubjectBuildPlan {
+	networkMode := opt.NetworkMode
+	if networkMode == "" {
+		networkMode = "default"
 	}
-	dockerfilePath := cfgSrc.Path
-	if dockerfilePath == "" {
-		dockerfilePath = attrs["filename"]
-	}
-	networkMode, _ := networkModeForReplay(req.NetworkMode)
-
 	cfg := BuildPlanConfig{
-		Frontend:      pred.Frontend(),
-		FrontendAttrs: frontendAttrSummary(attrs),
-		Context:       contextPath,
-		Filename:      dockerfilePath,
-		Target:        attrs["target"],
-		BuildArgs:     collectPrefixed(attrs, "build-arg:"),
-		Labels:        collectPrefixed(attrs, "label:"),
+		Frontend:      opt.Frontend,
+		FrontendAttrs: opt.FrontendAttrs,
+		Context:       opt.Inputs.ContextPath,
+		Filename:      opt.Inputs.DockerfilePath,
+		Target:        opt.Target,
+		BuildArgs:     opt.BuildArgs,
+		Labels:        opt.Labels,
+		NoCache:       opt.NoCache,
+		NoCacheFilter: opt.NoCacheFilter,
 		Secrets:       planSecrets(pred.Secrets()),
 		SSH:           sshIDs(pred.SSH()),
 		NetworkMode:   networkMode,
 		Exports:       exportSummaries(req.Exports),
 	}
-	if v, ok := attrs["no-cache"]; ok {
-		if v == "" {
-			cfg.NoCache = true
-		} else if fields, err := csvvalue.Fields(v, nil); err == nil {
-			cfg.NoCacheFilter = fields
-		}
+	if len(cfg.FrontendAttrs) == 0 {
+		cfg.FrontendAttrs = nil
 	}
 
 	// Materials summary.
@@ -329,29 +322,12 @@ func subjectBuildPlan(s *Subject, pred *Predicate, req *BuildRequest) SubjectBui
 		mats = append(mats, materialPlan(m, pred.BuilderPlatform()))
 	}
 
-	plan := SubjectBuildPlan{
+	return SubjectBuildPlan{
 		Descriptor:  s.Descriptor,
 		Signature:   s.Signature(),
 		BuildConfig: cfg,
 		Materials:   mats,
 	}
-	return plan
-}
-
-func frontendAttrSummary(attrs map[string]string) map[string]string {
-	if len(attrs) == 0 {
-		return nil
-	}
-	out := make(map[string]string, 2)
-	for _, key := range []string{"source", "cmdline"} {
-		if v, ok := attrs[key]; ok && v != "" {
-			out[key] = v
-		}
-	}
-	if len(out) == 0 {
-		return nil
-	}
-	return out
 }
 
 // materialPlan builds the shared dry-run material summary shape.

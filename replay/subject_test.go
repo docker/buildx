@@ -106,6 +106,72 @@ func TestSubjectPredicateAcceptsBarePredicate(t *testing.T) {
 	}
 }
 
+func TestLoadSubjectsJSONL(t *testing.T) {
+	provenance, err := json.Marshal(map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject":       []any{},
+		"predicate": map[string]any{
+			"buildDefinition": map[string]any{
+				"externalParameters": map[string]any{"configSource": map[string]any{"uri": "https://example.com/repo.git"}},
+			},
+		},
+	})
+	require.NoError(t, err)
+	sbom, err := json.Marshal(map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://spdx.dev/Document",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	})
+	require.NoError(t, err)
+	signed, err := json.Marshal(map[string]any{
+		"payloadType": "application/vnd.in-toto+json",
+		"payload":     base64.StdEncoding.EncodeToString(provenance),
+		"signatures":  []map[string]string{{"sig": "MEUCIQDinvalid==", "keyid": "test-key"}},
+	})
+	require.NoError(t, err)
+
+	write := func(t *testing.T, lines ...[]byte) string {
+		path := filepath.Join(t.TempDir(), "attestations.intoto.jsonl")
+		require.NoError(t, os.WriteFile(path, bytes.Join(lines, []byte("\n")), 0o644))
+		return path
+	}
+
+	t.Run("skips-other-predicates", func(t *testing.T) {
+		subjects, err := LoadSubjects(context.Background(), nil, "", write(t, sbom, provenance))
+		require.NoError(t, err)
+		require.Len(t, subjects, 1)
+		pred, err := subjects[0].Predicate(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, "https://example.com/repo.git", pred.ConfigSource().URI)
+	})
+
+	t.Run("signed-entry-does-not-fall-back", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, signed, provenance))
+		var sigErr *SignatureVerificationRequiredError
+		require.ErrorAs(t, err, &sigErr)
+	})
+
+	t.Run("signed-entry-after-unsigned", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, provenance, signed))
+		var sigErr *SignatureVerificationRequiredError
+		require.ErrorAs(t, err, &sigErr)
+		require.ErrorContains(t, err, "line 2")
+	})
+
+	t.Run("invalid-line-after-provenance", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, provenance, []byte("not json")))
+		require.ErrorContains(t, err, "line 2")
+	})
+
+	t.Run("signed-only", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, signed))
+		var sigErr *SignatureVerificationRequiredError
+		require.ErrorAs(t, err, &sigErr)
+	})
+}
+
 func TestLoadSubjectsInputErrors(t *testing.T) {
 	dir := t.TempDir()
 
@@ -116,6 +182,13 @@ func TestLoadSubjectsInputErrors(t *testing.T) {
 	require.NoError(t, os.WriteFile(notStatement, []byte(`[1, 2]`), 0o644))
 	_, err = LoadSubjects(context.Background(), nil, "", notStatement)
 	require.EqualError(t, err, notStatement+" is not an in-toto statement, DSSE envelope or Sigstore bundle")
+
+	// An object with a predicate but without the in-toto statement type is
+	// not a statement.
+	untyped := filepath.Join(dir, "untyped.json")
+	require.NoError(t, os.WriteFile(untyped, []byte(`{"predicateType":"https://slsa.dev/provenance/v1","predicate":{}}`), 0o644))
+	_, err = LoadSubjects(context.Background(), nil, "", untyped)
+	require.EqualError(t, err, untyped+" is not an in-toto statement, DSSE envelope or Sigstore bundle")
 
 	noType := filepath.Join(dir, "object.json")
 	require.NoError(t, os.WriteFile(noType, []byte(`{"foo": "bar"}`), 0o644))
@@ -456,6 +529,59 @@ func TestSubjectPredicateAcceptsUnsignedDSSE(t *testing.T) {
 	require.NoError(t, err)
 	require.Len(t, subjects, 1)
 	require.True(t, subjects[0].IsAttestationFile())
+}
+
+// TestFanOutSubjectsVerifiesIndexDigest asserts that an image index whose
+// stored content does not match its digest is rejected, so the attestation
+// manifest is never selected from unverified content.
+func TestFanOutSubjectsVerifiesIndexDigest(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := contentlocal.NewStore(dir)
+	require.NoError(t, err)
+
+	mfst := putManifest(ctx, t, store, ocispecs.Manifest{MediaType: ocispecs.MediaTypeImageManifest}, &ocispecs.Platform{Architecture: "amd64", OS: "linux"})
+	idx := ocispecs.Index{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Manifests: []ocispecs.Descriptor{mfst},
+	}
+	idx.SchemaVersion = 2
+	idxDt, err := json.Marshal(idx)
+	require.NoError(t, err)
+	idxDgst, idxSize := putBlob(ctx, t, store, idxDt, ocispecs.MediaTypeImageIndex)
+	root := ocispecs.Descriptor{MediaType: ocispecs.MediaTypeImageIndex, Digest: idxDgst, Size: idxSize}
+
+	subjects, err := fanOutSubjects(ctx, store, root, "test")
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+
+	// Same size, different content.
+	tampered := bytes.Replace(idxDt, []byte("amd64"), []byte("arm64"), 1)
+	require.Len(t, tampered, len(idxDt))
+	blobPath := filepath.Join(dir, "blobs", idxDgst.Algorithm().String(), idxDgst.Encoded())
+	require.NoError(t, os.Chmod(blobPath, 0o644))
+	require.NoError(t, os.WriteFile(blobPath, tampered, 0o644))
+
+	_, err = fanOutSubjects(ctx, store, root, "test")
+	require.ErrorContains(t, err, "digest mismatch")
+}
+
+// TestSubjectPredicateManifestHint asserts that a platform manifest
+// referenced directly gets a hint to use the image index reference.
+func TestSubjectPredicateManifestHint(t *testing.T) {
+	ctx := context.Background()
+	store, err := contentlocal.NewStore(t.TempDir())
+	require.NoError(t, err)
+	mfst := putManifest(ctx, t, store, ocispecs.Manifest{MediaType: ocispecs.MediaTypeImageManifest}, nil)
+
+	subjects, err := fanOutSubjects(ctx, store, mfst, "example.com/app@"+mfst.Digest.String())
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+	_, err = subjects[0].Predicate(ctx)
+	var noProv *NoProvenanceError
+	require.ErrorAs(t, err, &noProv)
+	require.True(t, noProv.Manifest)
+	require.ErrorContains(t, err, "use the image index reference")
 }
 
 // TestLoadSubjectsIndexFanout builds an OCI layout with a two-platform

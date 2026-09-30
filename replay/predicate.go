@@ -15,8 +15,8 @@ import (
 // callers must have obtained a non-nil *Predicate from Subject.Predicate.
 type Predicate provenancetypes.ProvenancePredicateSLSA1
 
-// defaultFrontend matches BuildKit's default when no frontend is recorded on
-// the request (see build/opt.go:309 — dockerfile.v0).
+// defaultFrontend matches the frontend buildx uses when none is recorded on
+// the request.
 const defaultFrontend = "dockerfile.v0"
 
 // Frontend returns the frontend id recorded on the predicate, falling back
@@ -29,8 +29,7 @@ func (p *Predicate) Frontend() string {
 }
 
 // FrontendAttrs returns the recorded frontend attrs with attestation-related
-// keys stripped (see Attests for those). Returns a fresh map so callers can
-// mutate it.
+// keys stripped. Returns a fresh map so callers can mutate it.
 func (p *Predicate) FrontendAttrs() map[string]string {
 	src := p.BuildDefinition.ExternalParameters.Request.Args
 	out := make(map[string]string, len(src))
@@ -39,23 +38,6 @@ func (p *Predicate) FrontendAttrs() map[string]string {
 			continue
 		}
 		out[k] = v
-	}
-	return out
-}
-
-// Attests returns the recorded attestation-related frontend attrs as the
-// map shape consumed by build.Options.Attests: key is the attestation type
-// (the text after "attest:"), value is the recorded attr payload.
-func (p *Predicate) Attests() map[string]*string {
-	src := p.BuildDefinition.ExternalParameters.Request.Args
-	out := map[string]*string{}
-	for k, v := range src {
-		name, ok := strings.CutPrefix(k, "attest:")
-		if !ok {
-			continue
-		}
-		vv := v
-		out[name] = &vv
 	}
 	return out
 }
