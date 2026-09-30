@@ -598,6 +598,18 @@ func TestHCLVariableCycle(t *testing.T) {
 	require.Contains(t, err.Error(), "variable cycle not allowed")
 }
 
+func TestHCLUndefinedVariable(t *testing.T) {
+	dt := []byte(`
+		target "app" {
+			dockerfile = "${FOO}${FOO}"
+		}
+		`)
+
+	_, err := ParseFile(dt, "docker-bake.hcl")
+	require.ErrorContains(t, err, "Unknown variable")
+	require.NotContains(t, err.Error(), "variable cycle not allowed")
+}
+
 func TestHCLAttrs(t *testing.T) {
 	dt := []byte(`
 		FOO="abc"
