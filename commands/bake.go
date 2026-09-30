@@ -351,8 +351,8 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 	if progressMode == progressui.RawJSONMode {
-		if exp.LocalOutputDelete {
-			return errors.Errorf("additional privileges requested: pass %q to grant requested privileges", "--allow="+string(bake.EntitlementKeyBuildxLocalDelete))
+		if err := exp.Check(url != ""); err != nil {
+			return err
 		}
 	} else {
 		if err := exp.Prompt(ctx, url != "", &syncWriter{w: dockerCli.Err(), wait: printer.Wait}); err != nil {

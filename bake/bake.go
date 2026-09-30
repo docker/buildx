@@ -23,6 +23,7 @@ import (
 	"github.com/docker/buildx/bake/hclparser"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/util/buildflags"
+	"github.com/docker/buildx/util/ocilayout"
 	"github.com/docker/buildx/util/osutil"
 	"github.com/docker/buildx/util/platformutil"
 	"github.com/docker/buildx/util/progress"
@@ -1671,7 +1672,7 @@ func remoteURLWithSubdir(remoteURL, subdir string) string {
 	return base + "#" + ref + ":" + subdir
 }
 
-func collectLocalPaths(t build.Inputs) []string {
+func collectLocalPaths(t build.Inputs) ([]string, error) {
 	var out []string
 	if t.ContextState == nil {
 		if v, ok := isLocalPath(t.ContextPath); ok {
@@ -1687,11 +1688,18 @@ func collectLocalPaths(t build.Inputs) []string {
 		if v.State != nil {
 			continue
 		}
+		if ref, ok, err := ocilayout.Parse(v.Path); ok {
+			if err != nil {
+				return nil, errors.Wrapf(err, "invalid OCI layout context %q", v.Path)
+			}
+			out = append(out, ref.Path)
+			continue
+		}
 		if v, ok := isLocalPath(v.Path); ok {
 			out = append(out, v)
 		}
 	}
-	return out
+	return out, nil
 }
 
 func isLocalPath(p string) (string, bool) {
