@@ -108,6 +108,13 @@ func TestValidateEntitlements(t *testing.T) {
 	require.NoError(t, err)
 	expWd, err := filepath.EvalSymlinks(wd)
 	require.NoError(t, err)
+	credentialPath := filepath.Join(dir1, "credential")
+	require.NoError(t, os.WriteFile(credentialPath, []byte("test credential"), 0600))
+	expCredentialPath, err := filepath.EvalSymlinks(credentialPath)
+	require.NoError(t, err)
+	layoutLink := filepath.Join(dir1, "layout-link")
+	require.NoError(t, os.Symlink(dir2, layoutLink))
+	t.Setenv("BUILDX_TEST_SECRET_SOURCE", "test credential")
 
 	tcases := []struct {
 		name     string
@@ -222,6 +229,70 @@ func TestValidateEntitlements(t *testing.T) {
 			},
 			conf: EntitlementConf{
 				FSRead: []string{wd, dir1},
+			},
+		},
+		{
+			name: "secret-id-file-fallback-requires-read",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: credentialPath}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+			expected: EntitlementConf{
+				FSRead: []string{expCredentialPath},
+			},
+		},
+		{
+			name: "secret-id-file-fallback-allowed",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: credentialPath}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd, dir1}},
+		},
+		{
+			name: "secret-id-env-fallback-needs-no-read",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: "BUILDX_TEST_SECRET_SOURCE"}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+		},
+		{
+			name: "explicit-secret-env-needs-no-read",
+			opt: build.Options{
+				SecretSpecs: []*buildflags.Secret{{ID: credentialPath, Env: "BUILDX_TEST_SECRET_SOURCE"}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+		},
+		{
+			name: "oci-layout-named-context-requires-read",
+			opt: build.Options{
+				Inputs: build.Inputs{NamedContexts: map[string]build.NamedContext{
+					"layout": {Path: "oci-layout://" + dir1 + ":latest"},
+				}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd}},
+			expected: EntitlementConf{
+				FSRead: []string{expDir1},
+			},
+		},
+		{
+			name: "oci-layout-named-context-allowed",
+			opt: build.Options{
+				Inputs: build.Inputs{NamedContexts: map[string]build.NamedContext{
+					"layout": {Path: "oci-layout://" + dir1 + ":latest"},
+				}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd, dir1}},
+		},
+		{
+			name: "oci-layout-named-context-symlink-requires-destination",
+			opt: build.Options{
+				Inputs: build.Inputs{NamedContexts: map[string]build.NamedContext{
+					"layout": {Path: "oci-layout://" + layoutLink + ":latest"},
+				}},
+			},
+			conf: EntitlementConf{FSRead: []string{wd, dir1}},
+			expected: EntitlementConf{
+				FSRead: []string{expDir2},
 			},
 		},
 		{

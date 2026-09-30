@@ -2,6 +2,7 @@ package buildflags
 
 import (
 	"encoding/json"
+	"os"
 	"strings"
 
 	"github.com/pkg/errors"
@@ -33,6 +34,20 @@ type Secret struct {
 	ID       string `json:"id,omitempty"`
 	FilePath string `json:"src,omitempty"`
 	Env      string `json:"env,omitempty"`
+}
+
+// ResolveSource returns a copy with the source selected using BuildKit's
+// default secret source rules.
+func (s *Secret) ResolveSource() *Secret {
+	resolved := *s
+	if resolved.Env == "" && resolved.FilePath == "" {
+		if _, ok := os.LookupEnv(resolved.ID); ok {
+			resolved.Env = resolved.ID
+		} else {
+			resolved.FilePath = resolved.ID
+		}
+	}
+	return &resolved
 }
 
 func (s *Secret) Equal(other *Secret) bool {
