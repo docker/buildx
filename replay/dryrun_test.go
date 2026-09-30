@@ -1,0 +1,333 @@
+package replay
+
+import (
+	"context"
+	"encoding/json"
+	"strings"
+	"testing"
+
+	"github.com/docker/buildx/util/buildflags"
+	slsa1 "github.com/in-toto/in-toto-golang/in_toto/slsa_provenance/v1"
+	provenancetypes "github.com/moby/buildkit/solver/llbsolver/provenance/types"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/stretchr/testify/require"
+)
+
+func testSubject(t *testing.T) *Subject {
+	t.Helper()
+	return &Subject{
+		Descriptor: ocispecs.Descriptor{
+			MediaType: ocispecs.MediaTypeImageManifest,
+			Digest:    "sha256:aaaa",
+			Platform:  &ocispecs.Platform{OS: "linux", Architecture: "amd64"},
+		},
+		attestManifest: ocispecs.Descriptor{
+			MediaType: ocispecs.MediaTypeImageManifest,
+			Digest:    "sha256:bbbb",
+		},
+	}
+}
+
+func testPredicate(secretSpecs []struct {
+	id       string
+	optional bool
+}, locals []string) *Predicate {
+	p := &Predicate{}
+	for _, spec := range secretSpecs {
+		p.BuildDefinition.ExternalParameters.Request.Secrets = append(
+			p.BuildDefinition.ExternalParameters.Request.Secrets,
+			&provenancetypes.Secret{ID: spec.id, Optional: spec.optional},
+		)
+	}
+	for _, name := range locals {
+		p.BuildDefinition.ExternalParameters.Request.Locals = append(
+			p.BuildDefinition.ExternalParameters.Request.Locals,
+			&provenancetypes.LocalSource{Name: name},
+		)
+	}
+	p.BuildDefinition.ExternalParameters.Request.Frontend = "dockerfile.v0"
+	p.BuildDefinition.ExternalParameters.Request.Args = map[string]string{
+		"context":                "https://github.com/example/repo.git",
+		"source":                 "docker/dockerfile:1.8",
+		"cmdline":                "docker/dockerfile:1.8",
+		"target":                 "default",
+		"build-arg:EXAMPLE":      "1",
+		"label:org.example.test": "yes",
+	}
+	p.BuildDefinition.ExternalParameters.ConfigSource.URI = "https://github.com/example/repo.git"
+	p.BuildDefinition.ExternalParameters.ConfigSource.Path = "Dockerfile"
+	p.BuildDefinition.ResolvedDependencies = []slsa1.ResourceDescriptor{
+		{URI: "pkg:docker/alpine@3.20", Digest: map[string]string{"sha256": "deadbeef"}},
+		{URI: "https://example.com/foo.tar", Digest: map[string]string{"sha256": "feed"}},
+	}
+	// mode=max provenance records the build definition.
+	p.BuildDefinition.InternalParameters.BuildConfig = &provenancetypes.BuildConfig{
+		Definition: []provenancetypes.BuildStep{{ID: "step0"}},
+	}
+	return p
+}
+
+func TestMakeBuildPlanGatewayFrontend(t *testing.T) {
+	pred := testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.Request.Frontend = "gateway.v0"
+	plan, err := MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	require.NoError(t, err)
+	require.Equal(t, "gateway.v0", plan.Subjects[0].BuildConfig.Frontend)
+	require.Equal(t, map[string]string{
+		"cmdline": "docker/dockerfile:1.8",
+		"source":  "docker/dockerfile:1.8",
+	}, plan.Subjects[0].BuildConfig.FrontendAttrs)
+}
+
+func TestMakeBuildPlanRecordedNetworkMode(t *testing.T) {
+	pred := testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.Request.Args["force-network-mode"] = "none"
+	target := []Target{{Subject: testSubject(t), Predicate: pred}}
+
+	plan, err := MakeBuildPlan(&BuildRequest{Targets: target})
+	require.NoError(t, err)
+	require.Equal(t, "none", plan.Subjects[0].BuildConfig.NetworkMode)
+
+	// An explicit --network takes precedence over the recorded mode.
+	plan, err = MakeBuildPlan(&BuildRequest{Targets: target, NetworkMode: "default"})
+	require.NoError(t, err)
+	require.Equal(t, "default", plan.Subjects[0].BuildConfig.NetworkMode)
+
+	// A recorded host network cannot be replayed without an explicit mode.
+	pred.BuildDefinition.ExternalParameters.Request.Args["force-network-mode"] = "host"
+	_, err = MakeBuildPlan(&BuildRequest{Targets: target})
+	require.ErrorContains(t, err, "--network=host")
+	plan, err = MakeBuildPlan(&BuildRequest{Targets: target, NetworkMode: "none"})
+	require.NoError(t, err)
+	require.Equal(t, "none", plan.Subjects[0].BuildConfig.NetworkMode)
+}
+
+func TestMakeBuildPlanRejectsLocalInputs(t *testing.T) {
+	for _, value := range []string{"oci-layout://abc123@sha256:" + strings.Repeat("a", 64), "input:foo", "target:foo", "local:foo"} {
+		t.Run(strings.SplitN(value, ":", 2)[0], func(t *testing.T) {
+			pred := testPredicate(nil, nil)
+			pred.BuildDefinition.ExternalParameters.Request.Args["context:foo"] = value
+			_, err := MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+			var local *UnreplayableLocalContextError
+			require.ErrorAs(t, err, &local)
+			require.Equal(t, []string{"foo"}, local.LocalSources)
+		})
+	}
+
+	// A context read from stdin is uploaded through the client session.
+	pred := testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.ConfigSource.URI = "http://buildkit-session/7ljrjpb29qglz425jejnuhlnx"
+	pred.BuildDefinition.ExternalParameters.Request.Args["context"] = "http://buildkit-session/7ljrjpb29qglz425jejnuhlnx"
+	_, err := MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	var local *UnreplayableLocalContextError
+	require.ErrorAs(t, err, &local)
+	require.Equal(t, []string{"context (stdin)"}, local.LocalSources)
+
+	// Remote named contexts are replayable.
+	pred = testPredicate(nil, nil)
+	pred.BuildDefinition.ExternalParameters.Request.Args["context:foo"] = "docker-image://alpine:3.20"
+	_, err = MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	require.NoError(t, err)
+}
+
+func TestMakeBuildPlanValidatesOutputs(t *testing.T) {
+	target := []Target{{Subject: testSubject(t), Predicate: testPredicate(nil, nil)}}
+
+	_, err := MakeBuildPlan(&BuildRequest{Targets: target, Exports: []*buildflags.ExportEntry{{Type: "local", Attrs: map[string]string{}}}})
+	require.ErrorContains(t, err, "dest is required")
+
+	_, err = MakeBuildPlan(&BuildRequest{Targets: target, Exports: []*buildflags.ExportEntry{{
+		Type:        "local",
+		Destination: t.TempDir(),
+		Attrs:       map[string]string{"mode": "delete"},
+	}}})
+	require.ErrorContains(t, err, "does not support local output mode=delete")
+}
+
+func TestMakeBuildPlanMinModeRejected(t *testing.T) {
+	pred := testPredicate(nil, nil)
+	pred.BuildDefinition.InternalParameters.BuildConfig = nil
+	// mode=min drops recorded secrets, so a user-supplied secret must not be
+	// reported as an extra secret.
+	_, err := MakeBuildPlan(&BuildRequest{
+		Targets: []Target{{Subject: testSubject(t), Predicate: pred}},
+		Secrets: buildflags.Secrets{&buildflags.Secret{ID: "mysecret"}},
+	})
+	var minMode *MinModeProvenanceError
+	require.ErrorAs(t, err, &minMode)
+	require.ErrorContains(t, err, "--provenance=mode=max")
+}
+
+func TestMakeBuildPlanRejectsMultipleSubjects(t *testing.T) {
+	_, err := MakeBuildPlan(&BuildRequest{Targets: []Target{
+		{Subject: testSubject(t), Predicate: testPredicate(nil, nil)},
+		{Subject: testSubject(t), Predicate: testPredicate(nil, nil)},
+	}})
+	var notImplemented *NotImplementedError
+	require.ErrorAs(t, err, &notImplemented)
+	require.ErrorContains(t, err, "--platform")
+}
+
+func TestMakeBuildPlanUnpinnedGitSubdirContext(t *testing.T) {
+	// BuildKit before v0.25 recorded no digest for a Git subdirectory
+	// context and recorded the Git material without the subdirectory.
+	gitSubdirPredicate := func() *Predicate {
+		pred := testPredicate(nil, nil)
+		pred.BuildDefinition.ExternalParameters.ConfigSource.URI = "https://github.com/example/repo.git#main:sub"
+		pred.BuildDefinition.ExternalParameters.Request.Args["context"] = "https://github.com/example/repo.git#main:sub"
+		pred.BuildDefinition.ResolvedDependencies = append(pred.BuildDefinition.ResolvedDependencies, slsa1.ResourceDescriptor{
+			URI:    "https://github.com/example/repo.git#main",
+			Digest: map[string]string{"sha1": "0123456789abcdef0123456789abcdef01234567"},
+		})
+		return pred
+	}
+
+	_, err := MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: gitSubdirPredicate()}}})
+	var unpinned *UnpinnedContextError
+	require.ErrorAs(t, err, &unpinned)
+	require.Equal(t, "https://github.com/example/repo.git#main:sub", unpinned.URI)
+
+	// Frontend mode does not pin sources, so the context is replayable.
+	_, err = MakeBuildPlan(&BuildRequest{
+		Targets: []Target{{Subject: testSubject(t), Predicate: gitSubdirPredicate()}},
+		Mode:    BuildModeFrontend,
+	})
+	require.NoError(t, err)
+
+	// A recorded context digest pins the context.
+	pred := gitSubdirPredicate()
+	pred.BuildDefinition.ExternalParameters.ConfigSource.Digest = map[string]string{"sha1": "0123456789abcdef0123456789abcdef01234567"}
+	_, err = MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	require.NoError(t, err)
+
+	// A root context is requested with the same identifier as its Git
+	// material, so a missing context digest is not a problem.
+	pred = gitSubdirPredicate()
+	pred.BuildDefinition.ExternalParameters.ConfigSource.URI = "https://github.com/example/repo.git#main"
+	pred.BuildDefinition.ExternalParameters.Request.Args["context"] = "https://github.com/example/repo.git#main"
+	_, err = MakeBuildPlan(&BuildRequest{Targets: []Target{{Subject: testSubject(t), Predicate: pred}}})
+	require.NoError(t, err)
+}
+
+func TestMakeBuildPlanHappyPath(t *testing.T) {
+	s := testSubject(t)
+	pred := testPredicate([]struct {
+		id       string
+		optional bool
+	}{
+		{id: "required"},
+		{id: "optional", optional: true},
+	}, nil)
+	resolver, err := NewMaterialsResolver(nil)
+	require.NoError(t, err)
+
+	req := &BuildRequest{
+		Targets:   []Target{{Subject: s, Predicate: pred}},
+		Mode:      BuildModeMaterials,
+		Materials: resolver,
+		Secrets:   buildflags.Secrets{{ID: "required"}},
+	}
+	plan, err := MakeBuildPlan(req)
+	require.NoError(t, err)
+	require.Len(t, plan.Subjects, 1)
+	require.Equal(t, s.Descriptor.Digest, plan.Subjects[0].Descriptor.Digest)
+	require.Len(t, plan.Subjects[0].Materials, 2)
+	require.Equal(t, "https://github.com/example/repo.git", plan.Subjects[0].BuildConfig.Context)
+	require.Equal(t, "Dockerfile", plan.Subjects[0].BuildConfig.Filename)
+	// dockerfile.v0 does not use the recorded gateway source.
+	require.Equal(t, "dockerfile.v0", plan.Subjects[0].BuildConfig.Frontend)
+	require.Nil(t, plan.Subjects[0].BuildConfig.FrontendAttrs)
+	require.Equal(t, "default", plan.Subjects[0].BuildConfig.NetworkMode)
+	require.Equal(t, []PlanSecret{
+		{ID: "optional", Optional: true},
+		{ID: "required"},
+	}, plan.Subjects[0].BuildConfig.Secrets)
+	// First material is image-kind.
+	require.Equal(t, "image", plan.Subjects[0].Materials[0].Kind)
+	// Second material is http.
+	require.Equal(t, "http", plan.Subjects[0].Materials[1].Kind)
+	// JSON shape is stable.
+	dt, err := json.Marshal(plan)
+	require.NoError(t, err)
+	require.NotContains(t, string(dt), `"inputRef":`)
+	require.NotContains(t, string(dt), `"platform":"linux/amd64"`)
+	require.NotContains(t, string(dt), `"predicateType":`)
+	require.NotContains(t, string(dt), `"pins":`)
+	require.NotContains(t, string(dt), `"replayMode":`)
+	require.NotContains(t, string(dt), `"warnings":`)
+	require.NotContains(t, string(dt), `"build-arg:`)
+	require.NotContains(t, string(dt), `"label:`)
+}
+
+func TestMakeBuildPlanLocalContextRejected(t *testing.T) {
+	s := testSubject(t)
+	pred := testPredicate(nil, []string{"ctx"})
+	req := &BuildRequest{
+		Targets: []Target{{Subject: s, Predicate: pred}},
+	}
+	_, err := MakeBuildPlan(req)
+	require.Error(t, err)
+	var ulc *UnreplayableLocalContextError
+	require.ErrorAs(t, err, &ulc)
+}
+
+func TestMakeBuildPlanExtraSecretRejected(t *testing.T) {
+	s := testSubject(t)
+	pred := testPredicate(nil, nil)
+	req := &BuildRequest{
+		Targets: []Target{{Subject: s, Predicate: pred}},
+		Secrets: buildflags.Secrets{{ID: "rogue"}},
+	}
+	_, err := MakeBuildPlan(req)
+	require.Error(t, err)
+	var es *ExtraSecretError
+	require.ErrorAs(t, err, &es)
+	require.Equal(t, []string{"rogue"}, es.IDs)
+}
+
+func TestMakeBuildPlanMissingRecordedContextRejected(t *testing.T) {
+	s := testSubject(t)
+	pred := testPredicate(nil, nil)
+	delete(pred.BuildDefinition.ExternalParameters.Request.Args, "context")
+	pred.BuildDefinition.ExternalParameters.ConfigSource.URI = ""
+	req := &BuildRequest{
+		Targets: []Target{{Subject: s, Predicate: pred}},
+	}
+	_, err := MakeBuildPlan(req)
+	require.EqualError(t, err, "predicate has no recorded build context; replay requires a remote-source build (git / https)")
+}
+
+func TestMakeSnapshotPlanHappyPath(t *testing.T) {
+	fx := makeSnapshotFixture(t)
+
+	req := &SnapshotRequest{
+		Targets:          []Target{{Subject: fx.subject, Predicate: fx.predicate}},
+		IncludeMaterials: true,
+		Materials:        snapshotOverrideResolver(t, fx.httpURI, fx.httpBytes),
+	}
+	plan, err := MakeSnapshotPlan(context.Background(), nil, "", req)
+	require.NoError(t, err)
+	require.Len(t, plan, 1)
+	require.Equal(t, fx.subject.Descriptor.Digest, plan[0].Subject.Digest)
+	require.NotEmpty(t, plan[0].Materials)
+	// Fixture has an http material only; non-image entries must not
+	// carry a manifest-derived size.
+	for _, m := range plan[0].Materials {
+		if m.Kind != "image" {
+			require.Zero(t, m.Size, "non-image materials must not report a size")
+		}
+	}
+}
+
+func TestMakeSnapshotPlanAttestationFileRejected(t *testing.T) {
+	s := testSubject(t)
+	s.kind = subjectKindAttestationFile
+	pred := testPredicate(nil, nil)
+	req := &SnapshotRequest{
+		Targets: []Target{{Subject: s, Predicate: pred}},
+	}
+	_, err := MakeSnapshotPlan(context.Background(), nil, "", req)
+	require.Error(t, err)
+	var us *UnsupportedSubjectError
+	require.ErrorAs(t, err, &us)
+}

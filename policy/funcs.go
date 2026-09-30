@@ -665,7 +665,7 @@ func (p *Policy) builtinLoadJSONImpl(bctx rego.BuiltinContext, a *ast.Term) (*as
 	return ast.NewTerm(astVal), nil
 }
 
-func addPinToImage(src *pb.SourceOp, dgst digest.Digest) (*pb.SourceOp, error) {
+func AddPinToImage(src *pb.SourceOp, dgst digest.Digest) (*pb.SourceOp, error) {
 	id, ok := strings.CutPrefix(src.Identifier, "docker-image://")
 	if !ok {
 		return nil, errors.Errorf("cannot pin non-image source: %q", src.Identifier)

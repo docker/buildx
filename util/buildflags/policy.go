@@ -5,6 +5,7 @@ import (
 	"strings"
 
 	"github.com/docker/buildx/policy"
+	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	"github.com/tonistiigi/go-csvvalue"
@@ -16,6 +17,13 @@ type PolicyConfig struct {
 	Disabled bool
 	Strict   *bool
 	LogLevel *logrus.Level
+
+	// Callback, when non-nil, is a programmatic policy evaluator. Set in
+	// code (not from CLI flags) for cases like `buildx replay` that
+	// enforce pinning without loading a policy file. A config with a
+	// Callback must not set Files; callbacks run after the file-based
+	// policies of other configs.
+	Callback policysession.PolicyCallback `json:"-"`
 }
 
 func ParsePolicyConfigs(in []string) ([]PolicyConfig, error) {

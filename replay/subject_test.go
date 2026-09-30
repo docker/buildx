@@ -1,0 +1,750 @@
+package replay
+
+import (
+	"bytes"
+	"context"
+	"encoding/base64"
+	"encoding/json"
+	"os"
+	"path/filepath"
+	"sort"
+	"testing"
+	"time"
+
+	"github.com/containerd/containerd/v2/core/content"
+	contentlocal "github.com/containerd/containerd/v2/plugins/content/local"
+	"github.com/moby/buildkit/client/ociindex"
+	"github.com/moby/buildkit/util/attestation"
+	"github.com/moby/buildkit/util/contentutil"
+	policyverifier "github.com/moby/policy-helpers"
+	policyimage "github.com/moby/policy-helpers/image"
+	policytypes "github.com/moby/policy-helpers/types"
+	"github.com/opencontainers/go-digest"
+	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
+	"github.com/pkg/errors"
+	"github.com/sigstore/sigstore-go/pkg/fulcio/certificate"
+	"github.com/stretchr/testify/require"
+)
+
+// TestSubjectPredicateAcceptsSLSA02 asserts that a SLSA v0.2 attestation
+// file is accepted and converted to the v1 shape used internally.
+func TestSubjectPredicateAcceptsSLSA02(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "provenance.intoto.json")
+
+	stmt := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": "https://slsa.dev/provenance/v0.2",
+		"subject":       []any{},
+		"predicate": map[string]any{
+			"builder":   map[string]string{"id": "buildkit"},
+			"buildType": "https://mobyproject.org/buildkit@v1",
+			"invocation": map[string]any{
+				"configSource": map[string]any{"uri": "https://example.com/dockerfile"},
+				"parameters":   map[string]any{},
+				"environment":  map[string]any{"platform": "linux/amd64"},
+			},
+		},
+	}
+	dt, err := json.Marshal(stmt)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, dt, 0644))
+
+	subjects, err := LoadSubjects(context.Background(), nil, "", path)
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+	require.True(t, subjects[0].IsAttestationFile())
+
+	_, err = subjects[0].Predicate(context.Background())
+	require.NoError(t, err)
+}
+
+// TestSubjectPredicateRejectsUnknown asserts that a predicateType outside
+// the SLSA v1 / v0.2 set is rejected with UnsupportedPredicateError.
+// TestSubjectPredicateAcceptsBarePredicate asserts that a provenance
+// predicate that is not wrapped in an in-toto statement, as printed by
+// `imagetools inspect --format '{{json .Provenance.SLSA}}'`, is accepted.
+func TestSubjectPredicateAcceptsBarePredicate(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		pred map[string]any
+	}{
+		{
+			name: "slsa-v1",
+			pred: map[string]any{
+				"buildDefinition": map[string]any{
+					"buildType":          "https://github.com/moby/buildkit/blob/master/docs/attestations/slsa-definitions.md",
+					"externalParameters": map[string]any{"configSource": map[string]any{"uri": "https://example.com/repo.git"}},
+				},
+				"runDetails": map[string]any{"builder": map[string]any{"id": ""}},
+			},
+		},
+		{
+			name: "slsa-v0.2",
+			pred: map[string]any{
+				"builder":   map[string]string{"id": "buildkit"},
+				"buildType": "https://mobyproject.org/buildkit@v1",
+				"invocation": map[string]any{
+					"configSource": map[string]any{"uri": "https://example.com/repo.git"},
+				},
+			},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			path := filepath.Join(t.TempDir(), "provenance.json")
+			dt, err := json.Marshal(tc.pred)
+			require.NoError(t, err)
+			require.NoError(t, os.WriteFile(path, dt, 0o644))
+
+			subjects, err := LoadSubjects(context.Background(), nil, "", path)
+			require.NoError(t, err)
+			require.Len(t, subjects, 1)
+			pred, err := subjects[0].Predicate(context.Background())
+			require.NoError(t, err)
+			require.Equal(t, "https://example.com/repo.git", pred.ConfigSource().URI)
+		})
+	}
+}
+
+func TestLoadSubjectsJSONL(t *testing.T) {
+	provenance, err := json.Marshal(map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject":       []any{},
+		"predicate": map[string]any{
+			"buildDefinition": map[string]any{
+				"externalParameters": map[string]any{"configSource": map[string]any{"uri": "https://example.com/repo.git"}},
+			},
+		},
+	})
+	require.NoError(t, err)
+	sbom, err := json.Marshal(map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://spdx.dev/Document",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	})
+	require.NoError(t, err)
+	signed, err := json.Marshal(map[string]any{
+		"payloadType": "application/vnd.in-toto+json",
+		"payload":     base64.StdEncoding.EncodeToString(provenance),
+		"signatures":  []map[string]string{{"sig": "MEUCIQDinvalid==", "keyid": "test-key"}},
+	})
+	require.NoError(t, err)
+
+	write := func(t *testing.T, lines ...[]byte) string {
+		path := filepath.Join(t.TempDir(), "attestations.intoto.jsonl")
+		require.NoError(t, os.WriteFile(path, bytes.Join(lines, []byte("\n")), 0o644))
+		return path
+	}
+
+	t.Run("skips-other-predicates", func(t *testing.T) {
+		subjects, err := LoadSubjects(context.Background(), nil, "", write(t, sbom, provenance))
+		require.NoError(t, err)
+		require.Len(t, subjects, 1)
+		pred, err := subjects[0].Predicate(context.Background())
+		require.NoError(t, err)
+		require.Equal(t, "https://example.com/repo.git", pred.ConfigSource().URI)
+	})
+
+	t.Run("signed-entry-does-not-fall-back", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, signed, provenance))
+		var sigErr *SignatureVerificationRequiredError
+		require.ErrorAs(t, err, &sigErr)
+	})
+
+	t.Run("signed-entry-after-unsigned", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, provenance, signed))
+		var sigErr *SignatureVerificationRequiredError
+		require.ErrorAs(t, err, &sigErr)
+		require.ErrorContains(t, err, "line 2")
+	})
+
+	t.Run("invalid-line-after-provenance", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, provenance, []byte("not json")))
+		require.ErrorContains(t, err, "line 2")
+	})
+
+	t.Run("signed-only", func(t *testing.T) {
+		_, err := LoadSubjects(context.Background(), nil, "", write(t, signed))
+		var sigErr *SignatureVerificationRequiredError
+		require.ErrorAs(t, err, &sigErr)
+	})
+}
+
+func TestLoadSubjectsInputErrors(t *testing.T) {
+	dir := t.TempDir()
+
+	_, err := LoadSubjects(context.Background(), nil, "", filepath.Join(dir, "missing.json"))
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	notStatement := filepath.Join(dir, "array.json")
+	require.NoError(t, os.WriteFile(notStatement, []byte(`[1, 2]`), 0o644))
+	_, err = LoadSubjects(context.Background(), nil, "", notStatement)
+	require.EqualError(t, err, notStatement+" is not an in-toto statement, DSSE envelope or Sigstore bundle")
+
+	// An object with a predicate but without the in-toto statement type is
+	// not a statement.
+	untyped := filepath.Join(dir, "untyped.json")
+	require.NoError(t, os.WriteFile(untyped, []byte(`{"predicateType":"https://slsa.dev/provenance/v1","predicate":{}}`), 0o644))
+	_, err = LoadSubjects(context.Background(), nil, "", untyped)
+	require.EqualError(t, err, untyped+" is not an in-toto statement, DSSE envelope or Sigstore bundle")
+
+	noType := filepath.Join(dir, "object.json")
+	require.NoError(t, os.WriteFile(noType, []byte(`{"foo": "bar"}`), 0o644))
+	_, err = LoadSubjects(context.Background(), nil, "", noType)
+	require.ErrorContains(t, err, "has no predicateType")
+}
+
+func TestSubjectPredicateRejectsUnknown(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "provenance.intoto.json")
+
+	stmt := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": "https://example.com/custom/v1",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	}
+	dt, err := json.Marshal(stmt)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, dt, 0644))
+
+	subjects, err := LoadSubjects(context.Background(), nil, "", path)
+	require.NoError(t, err)
+	_, err = subjects[0].Predicate(context.Background())
+	require.Error(t, err)
+	var unsup *UnsupportedPredicateError
+	require.ErrorAs(t, err, &unsup)
+	require.Equal(t, "https://example.com/custom/v1", unsup.PredicateType)
+}
+
+// TestSubjectPredicateAttestationFileSLSA1 asserts that an unsigned DSSE-less
+// in-toto Statement carrying a SLSA v1 predicate round-trips through
+// LoadSubjects + Predicate without error.
+func TestSubjectPredicateAttestationFileSLSA1(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "provenance.intoto.json")
+	stmt := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject":       []any{},
+		"predicate": map[string]any{
+			"buildDefinition": map[string]any{
+				"externalParameters": map[string]any{
+					"request": map[string]any{
+						"frontend": "dockerfile.v0",
+					},
+				},
+			},
+		},
+	}
+	dt, err := json.Marshal(stmt)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, dt, 0644))
+
+	subjects, err := LoadSubjects(context.Background(), nil, "", path)
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+
+	pred, err := subjects[0].Predicate(context.Background())
+	require.NoError(t, err)
+	require.Equal(t, "dockerfile.v0", pred.Frontend())
+}
+
+// TestSubjectPredicateRejectsSignedDSSE asserts that a DSSE envelope with
+// non-empty signatures is rejected with SignatureVerificationRequiredError —
+// a bare DSSE envelope carries no verification material, so replay never
+// silently accepts it.
+func TestSubjectPredicateRejectsSignedDSSE(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "signed.dsse.json")
+
+	inner := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	}
+	innerDt, err := json.Marshal(inner)
+	require.NoError(t, err)
+
+	env := map[string]any{
+		"payload":     base64.StdEncoding.EncodeToString(innerDt),
+		"payloadType": "application/vnd.in-toto+json",
+		"signatures": []map[string]string{
+			{"sig": "MEUCIQDstubbedsignaturebytes==", "keyid": "test-key"},
+		},
+	}
+	dt, err := json.Marshal(env)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, dt, 0644))
+
+	_, err = LoadSubjects(context.Background(), nil, "", path)
+	require.Error(t, err)
+	var sig *SignatureVerificationRequiredError
+	require.ErrorAs(t, err, &sig)
+	require.Equal(t, path, sig.Source)
+	require.Equal(t, "dsse", sig.Envelope)
+}
+
+// TestSubjectPredicateRejectsSigstoreBundle asserts that a Sigstore bundle
+// shape is rejected without signature verification support.
+func TestSubjectPredicateRejectsSigstoreBundle(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "bundle.sigstore.json")
+
+	bundle := map[string]any{
+		"mediaType": "application/vnd.dev.sigstore.bundle.v0.3+json",
+		"verificationMaterial": map[string]any{
+			"tlogEntries": []any{},
+		},
+		"dsseEnvelope": map[string]any{
+			"payload":     base64.StdEncoding.EncodeToString([]byte(`{}`)),
+			"payloadType": "application/vnd.in-toto+json",
+			"signatures":  []any{},
+		},
+	}
+	dt, err := json.Marshal(bundle)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, dt, 0644))
+
+	_, err = LoadSubjects(context.Background(), nil, "", path)
+	require.Error(t, err)
+	var sig *SignatureVerificationRequiredError
+	require.ErrorAs(t, err, &sig)
+	require.Equal(t, "sigstore-bundle", sig.Envelope)
+}
+
+func TestVerifySigstoreBundle(t *testing.T) {
+	artifactDigest := digest.FromString("signed artifact")
+	statement := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject": []any{map[string]any{
+			"name": "buildx",
+			"digest": map[string]string{
+				artifactDigest.Algorithm().String(): artifactDigest.Encoded(),
+			},
+		}},
+		"predicate": map[string]any{},
+	}
+	statementBytes, err := json.Marshal(statement)
+	require.NoError(t, err)
+	bundle := map[string]any{
+		"mediaType":            "application/vnd.dev.sigstore.bundle.v0.3+json",
+		"verificationMaterial": map[string]any{"tlogEntries": []any{}},
+		"dsseEnvelope": map[string]any{
+			"payload":     base64.StdEncoding.EncodeToString(statementBytes),
+			"payloadType": "application/vnd.in-toto+json",
+			"signatures":  []any{map[string]string{"sig": "verified-by-test-double"}},
+		},
+	}
+	bundleBytes, err := json.Marshal(bundle)
+	require.NoError(t, err)
+
+	verifiedAt := time.Date(2026, time.September, 18, 12, 0, 0, 0, time.UTC)
+	trustRootUpdatedAt := verifiedAt.Add(-time.Hour)
+	var verifierCalled bool
+	payload, signature, isBundle, err := verifySigstoreBundle(context.Background(), bundleBytes, "buildx.sigstore.json", func(ctx context.Context, gotDigest digest.Digest, gotBundle []byte) (*policytypes.SignatureInfo, error) {
+		verifierCalled = true
+		require.Equal(t, artifactDigest, gotDigest)
+		require.Equal(t, bundleBytes, gotBundle)
+		return &policytypes.SignatureInfo{
+			Kind:          policytypes.KindSelfSignedGithubRepo,
+			SignatureType: policytypes.SignatureBundleV03,
+			Signer: &certificate.Summary{
+				CertificateIssuer:      "CN=sigstore-intermediate,O=sigstore.dev",
+				SubjectAlternativeName: "https://github.com/docker/buildx/.github/workflows/release.yml@refs/tags/v0.37.1",
+				Extensions: certificate.Extensions{
+					Issuer:              "https://token.actions.githubusercontent.com",
+					SourceRepositoryURI: "https://github.com/docker/buildx",
+					SourceRepositoryRef: "refs/tags/v0.37.1",
+					BuildSignerURI:      "https://github.com/docker/buildx/.github/workflows/release.yml",
+					RunnerEnvironment:   "github-hosted",
+				},
+			},
+			Timestamps: []policytypes.TimestampVerificationResult{{
+				Type:      "Tlog",
+				URI:       "https://rekor.sigstore.dev",
+				Timestamp: verifiedAt,
+			}},
+			TrustRootStatus: policytypes.TrustRootStatus{LastUpdated: &trustRootUpdatedAt},
+		}, nil
+	})
+	require.NoError(t, err)
+	require.True(t, verifierCalled)
+	require.True(t, isBundle)
+	require.JSONEq(t, string(statementBytes), string(payload))
+	require.NotNil(t, signature)
+	require.True(t, signature.Verified)
+	require.Equal(t, "Sigstore Bundle", signature.Type)
+	require.Equal(t, "GitHub Self-Signed (docker/buildx)", signature.Identity)
+	require.Equal(t, "refs/tags/v0.37.1", signature.SourceRepositoryRef)
+	require.Equal(t, verifiedAt, signature.Timestamps[0].Timestamp)
+	require.Equal(t, trustRootUpdatedAt, *signature.TrustRootLastUpdated)
+
+	payload, signature, isBundle, err = verifySigstoreBundle(context.Background(), bundleBytes, "buildx.sigstore.json", func(context.Context, digest.Digest, []byte) (*policytypes.SignatureInfo, error) {
+		return nil, errors.New("invalid signature")
+	})
+	require.ErrorContains(t, err, "verify sigstore bundle")
+	require.ErrorContains(t, err, "invalid signature")
+	require.True(t, isBundle)
+	require.Nil(t, payload)
+	require.Nil(t, signature)
+
+	payload, signature, isBundle, err = verifySigstoreBundle(context.Background(), bundleBytes, "buildx.sigstore.json", func(context.Context, digest.Digest, []byte) (*policytypes.SignatureInfo, error) {
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "signature verifier returned no verification result")
+	require.True(t, isBundle)
+	require.Nil(t, payload)
+	require.Nil(t, signature)
+
+	missingSubjectStatement, err := json.Marshal(map[string]any{
+		"_type":         "https://in-toto.io/Statement/v1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	})
+	require.NoError(t, err)
+	bundle["dsseEnvelope"].(map[string]any)["payload"] = base64.StdEncoding.EncodeToString(missingSubjectStatement)
+	missingSubjectBundle, err := json.Marshal(bundle)
+	require.NoError(t, err)
+	payload, signature, isBundle, err = verifySigstoreBundle(context.Background(), missingSubjectBundle, "buildx.sigstore.json", func(context.Context, digest.Digest, []byte) (*policytypes.SignatureInfo, error) {
+		require.Fail(t, "verifier must not be called without a subject digest")
+		return nil, nil
+	})
+	require.ErrorContains(t, err, "no verifiable subject digest")
+	require.True(t, isBundle)
+	require.Nil(t, payload)
+	require.Nil(t, signature)
+}
+
+func TestVerifyImageSignature(t *testing.T) {
+	platform := &ocispecs.Platform{OS: "linux", Architecture: "amd64"}
+	root := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Digest:    digest.FromString("image index"),
+	}
+	subject := &Subject{
+		Descriptor: ocispecs.Descriptor{
+			MediaType: ocispecs.MediaTypeImageManifest,
+			Digest:    digest.FromString("image manifest"),
+			Platform:  platform,
+		},
+		Provider: &imageSubjectProvider{Provider: contentutil.NewBuffer()},
+		inputRef: "docker/buildx-bin:0.37.1",
+		kind:     subjectKindImage,
+		attestManifest: ocispecs.Descriptor{
+			Digest: digest.FromString("attestation manifest"),
+		},
+		rootDescriptor: root,
+	}
+	verifiedAt := time.Date(2026, time.September, 18, 12, 0, 0, 0, time.UTC)
+	err := subject.verifyImageSignature(context.Background(), func(_ context.Context, provider policyimage.ReferrersProvider, gotRoot ocispecs.Descriptor, gotPlatform *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		require.Same(t, subject.Provider, provider)
+		require.Equal(t, root, gotRoot)
+		require.Equal(t, platform, gotPlatform)
+		return &policytypes.SignatureInfo{
+			Kind:          policytypes.KindDockerGithubBuilder,
+			SignatureType: policytypes.SignatureBundleV03,
+			Signer: &certificate.Summary{
+				CertificateIssuer: "CN=sigstore-intermediate,O=sigstore.dev",
+				Extensions: certificate.Extensions{
+					SourceRepositoryURI: "https://github.com/docker/buildx",
+					SourceRepositoryRef: "refs/tags/v0.37.1",
+				},
+			},
+			Timestamps: []policytypes.TimestampVerificationResult{{
+				Type:      "Tlog",
+				Timestamp: verifiedAt,
+			}},
+		}, nil
+	})
+	require.NoError(t, err)
+	require.NotNil(t, subject.Signature())
+	require.True(t, subject.Signature().Verified)
+	require.Equal(t, "Sigstore Bundle", subject.Signature().Type)
+	require.Equal(t, "refs/tags/v0.37.1", subject.Signature().SourceRepositoryRef)
+	require.Equal(t, verifiedAt, subject.Signature().Timestamps[0].Timestamp)
+
+	unsigned := *subject
+	unsigned.signature = nil
+	err = unsigned.verifyImageSignature(context.Background(), func(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		return nil, errors.WithStack(&policyverifier.NoSigChainError{Target: root.Digest, HasAttestation: true})
+	})
+	require.NoError(t, err)
+	require.Nil(t, unsigned.Signature())
+
+	invalid := *subject
+	invalid.signature = nil
+	err = invalid.verifyImageSignature(context.Background(), func(context.Context, policyimage.ReferrersProvider, ocispecs.Descriptor, *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		return nil, errors.New("invalid image signature")
+	})
+	require.ErrorContains(t, err, "verify image signature")
+	require.ErrorContains(t, err, "invalid image signature")
+	require.Nil(t, invalid.Signature())
+
+	second := *subject
+	second.signature = nil
+	second.Descriptor = subject.Descriptor
+	second.Descriptor.Platform = &ocispecs.Platform{OS: "linux", Architecture: "arm64"}
+	var verifiedPlatforms []string
+	err = verifySubjectSignatures(context.Background(), []*Subject{subject, &second}, func(_ context.Context, _ policyimage.ReferrersProvider, _ ocispecs.Descriptor, platform *ocispecs.Platform) (*policytypes.SignatureInfo, error) {
+		verifiedPlatforms = append(verifiedPlatforms, platform.Architecture)
+		return &policytypes.SignatureInfo{Kind: policytypes.KindUntrusted, SignatureType: policytypes.SignatureBundleV03}, nil
+	})
+	require.NoError(t, err)
+	require.Equal(t, []string{"amd64", "arm64"}, verifiedPlatforms)
+	require.NotNil(t, second.Signature())
+}
+
+// TestSubjectPredicateAcceptsUnsignedDSSE asserts that a DSSE envelope with
+// an empty (or missing) signatures array is still accepted — the rejection
+// is gated on actual signatures being present.
+func TestSubjectPredicateAcceptsUnsignedDSSE(t *testing.T) {
+	dir := t.TempDir()
+	path := filepath.Join(dir, "unsigned.dsse.json")
+
+	inner := map[string]any{
+		"_type":         "https://in-toto.io/Statement/v0.1",
+		"predicateType": "https://slsa.dev/provenance/v1",
+		"subject":       []any{},
+		"predicate":     map[string]any{},
+	}
+	innerDt, err := json.Marshal(inner)
+	require.NoError(t, err)
+
+	env := map[string]any{
+		"payload":     base64.StdEncoding.EncodeToString(innerDt),
+		"payloadType": "application/vnd.in-toto+json",
+		"signatures":  []any{},
+	}
+	dt, err := json.Marshal(env)
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(path, dt, 0644))
+
+	subjects, err := LoadSubjects(context.Background(), nil, "", path)
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+	require.True(t, subjects[0].IsAttestationFile())
+}
+
+// TestFanOutSubjectsVerifiesIndexDigest asserts that an image index whose
+// stored content does not match its digest is rejected, so the attestation
+// manifest is never selected from unverified content.
+func TestFanOutSubjectsVerifiesIndexDigest(t *testing.T) {
+	ctx := context.Background()
+	dir := t.TempDir()
+	store, err := contentlocal.NewStore(dir)
+	require.NoError(t, err)
+
+	mfst := putManifest(ctx, t, store, ocispecs.Manifest{MediaType: ocispecs.MediaTypeImageManifest}, &ocispecs.Platform{Architecture: "amd64", OS: "linux"})
+	idx := ocispecs.Index{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Manifests: []ocispecs.Descriptor{mfst},
+	}
+	idx.SchemaVersion = 2
+	idxDt, err := json.Marshal(idx)
+	require.NoError(t, err)
+	idxDgst, idxSize := putBlob(ctx, t, store, idxDt, ocispecs.MediaTypeImageIndex)
+	root := ocispecs.Descriptor{MediaType: ocispecs.MediaTypeImageIndex, Digest: idxDgst, Size: idxSize}
+
+	subjects, err := fanOutSubjects(ctx, store, root, "test")
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+
+	// Same size, different content.
+	tampered := bytes.Replace(idxDt, []byte("amd64"), []byte("arm64"), 1)
+	require.Len(t, tampered, len(idxDt))
+	blobPath := filepath.Join(dir, "blobs", idxDgst.Algorithm().String(), idxDgst.Encoded())
+	require.NoError(t, os.Chmod(blobPath, 0o644))
+	require.NoError(t, os.WriteFile(blobPath, tampered, 0o644))
+
+	_, err = fanOutSubjects(ctx, store, root, "test")
+	require.ErrorContains(t, err, "digest mismatch")
+}
+
+// TestSubjectPredicateManifestHint asserts that a platform manifest
+// referenced directly gets a hint to use the image index reference.
+func TestSubjectPredicateManifestHint(t *testing.T) {
+	ctx := context.Background()
+	store, err := contentlocal.NewStore(t.TempDir())
+	require.NoError(t, err)
+	mfst := putManifest(ctx, t, store, ocispecs.Manifest{MediaType: ocispecs.MediaTypeImageManifest}, nil)
+
+	subjects, err := fanOutSubjects(ctx, store, mfst, "example.com/app@"+mfst.Digest.String())
+	require.NoError(t, err)
+	require.Len(t, subjects, 1)
+	_, err = subjects[0].Predicate(ctx)
+	var noProv *NoProvenanceError
+	require.ErrorAs(t, err, &noProv)
+	require.True(t, noProv.Manifest)
+	require.ErrorContains(t, err, "use the image index reference")
+}
+
+// TestLoadSubjectsIndexFanout builds an OCI layout with a two-platform
+// image index (amd64 + arm64) and asserts LoadSubjects returns two subjects
+// with distinct Descriptor.Platform.
+func TestLoadSubjectsIndexFanout(t *testing.T) {
+	dir := t.TempDir()
+
+	store, err := contentlocal.NewStore(dir)
+	require.NoError(t, err)
+
+	ctx := context.Background()
+
+	cfgAmd64 := []byte(`{"architecture":"amd64","os":"linux"}`)
+	cfgAmd64Dgst, cfgAmd64Sz := putBlob(ctx, t, store, cfgAmd64, "application/vnd.oci.image.config.v1+json")
+	cfgArm64 := []byte(`{"architecture":"arm64","os":"linux"}`)
+	cfgArm64Dgst, cfgArm64Sz := putBlob(ctx, t, store, cfgArm64, "application/vnd.oci.image.config.v1+json")
+
+	amd64Desc := putManifest(ctx, t, store, ocispecs.Manifest{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Config: ocispecs.Descriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    cfgAmd64Dgst,
+			Size:      cfgAmd64Sz,
+		},
+	}, &ocispecs.Platform{Architecture: "amd64", OS: "linux"})
+
+	arm64Desc := putManifest(ctx, t, store, ocispecs.Manifest{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Config: ocispecs.Descriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    cfgArm64Dgst,
+			Size:      cfgArm64Sz,
+		},
+	}, &ocispecs.Platform{Architecture: "arm64", OS: "linux"})
+
+	idx := ocispecs.Index{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Manifests: []ocispecs.Descriptor{amd64Desc, arm64Desc},
+	}
+	idx.SchemaVersion = 2
+
+	idxDt, err := json.Marshal(idx)
+	require.NoError(t, err)
+	idxDgst, idxSize := putBlob(ctx, t, store, idxDt, ocispecs.MediaTypeImageIndex)
+
+	storeIdx := ociindex.NewStoreIndex(dir)
+	require.NoError(t, storeIdx.Put(ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Digest:    idxDgst,
+		Size:      idxSize,
+	}, ociindex.Tag("latest")))
+
+	subjects, err := LoadSubjects(ctx, nil, "", "oci-layout://"+dir+":latest")
+	require.NoError(t, err)
+	require.Len(t, subjects, 2, "expected two fan-out subjects")
+
+	sort.Slice(subjects, func(i, j int) bool {
+		return subjects[i].Descriptor.Platform.Architecture < subjects[j].Descriptor.Platform.Architecture
+	})
+	require.Equal(t, "amd64", subjects[0].Descriptor.Platform.Architecture)
+	require.Equal(t, "arm64", subjects[1].Descriptor.Platform.Architecture)
+	require.NotEqual(t, subjects[0].Descriptor.Digest, subjects[1].Descriptor.Digest)
+}
+
+// TestLoadSubjectsFanoutSkipsAttestation exercises the attestation-manifest
+// filtering path: an index with an attestation manifest annotated via
+// vnd.docker.reference.digest must not produce a bonus subject for the
+// attestation.
+func TestLoadSubjectsFanoutSkipsAttestation(t *testing.T) {
+	dir := t.TempDir()
+	store, err := contentlocal.NewStore(dir)
+	require.NoError(t, err)
+	ctx := context.Background()
+
+	cfgDt := []byte(`{"architecture":"amd64","os":"linux"}`)
+	cfgDgst, cfgSize := putBlob(ctx, t, store, cfgDt, "application/vnd.oci.image.config.v1+json")
+	imgDesc := putManifest(ctx, t, store, ocispecs.Manifest{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Config: ocispecs.Descriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    cfgDgst,
+			Size:      cfgSize,
+		},
+	}, &ocispecs.Platform{Architecture: "amd64", OS: "linux"})
+
+	// Synthesize a bare "attestation manifest" that references imgDesc.
+	attestManifest := ocispecs.Manifest{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Config: ocispecs.Descriptor{
+			MediaType: "application/vnd.oci.image.config.v1+json",
+			Digest:    cfgDgst,
+			Size:      cfgSize,
+		},
+	}
+	attestDt, err := json.Marshal(attestManifest)
+	require.NoError(t, err)
+	attestDgst, attestSize := putBlob(ctx, t, store, attestDt, ocispecs.MediaTypeImageManifest)
+
+	attestDesc := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Digest:    attestDgst,
+		Size:      attestSize,
+		Annotations: map[string]string{
+			attestation.DockerAnnotationReferenceType:   attestation.DockerAnnotationReferenceTypeDefault,
+			attestation.DockerAnnotationReferenceDigest: imgDesc.Digest.String(),
+		},
+	}
+	duplicateAttestDesc := attestDesc
+	duplicateAttestDesc.Digest = digest.FromString("later duplicate attestation")
+	duplicateAttestDesc.Size = 1
+
+	idx := ocispecs.Index{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Manifests: []ocispecs.Descriptor{imgDesc, attestDesc, duplicateAttestDesc},
+	}
+	idx.SchemaVersion = 2
+	idxDt, err := json.Marshal(idx)
+	require.NoError(t, err)
+	idxDgst, idxSize := putBlob(ctx, t, store, idxDt, ocispecs.MediaTypeImageIndex)
+
+	storeIdx := ociindex.NewStoreIndex(dir)
+	require.NoError(t, storeIdx.Put(ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageIndex,
+		Digest:    idxDgst,
+		Size:      idxSize,
+	}, ociindex.Tag("latest")))
+
+	subjects, err := LoadSubjects(ctx, nil, "", "oci-layout://"+dir+":latest")
+	require.NoError(t, err)
+	require.Len(t, subjects, 1, "attestation manifest should not expand to a subject")
+	require.Equal(t, imgDesc.Digest, subjects[0].Descriptor.Digest)
+	require.Equal(t, attestDgst, subjects[0].AttestationManifest().Digest, "subject should record its attestation manifest")
+
+	untyped := attestDesc
+	untyped.Annotations = map[string]string{
+		attestation.DockerAnnotationReferenceDigest: imgDesc.Digest.String(),
+	}
+	require.Empty(t, attestationReferenceDigest(untyped), "a digest annotation alone must not select an attestation manifest")
+}
+
+// putBlob writes raw bytes to the content store and returns the digest/size.
+func putBlob(ctx context.Context, t *testing.T, store content.Ingester, dt []byte, mediaType string) (digest.Digest, int64) {
+	t.Helper()
+	dgst := digest.FromBytes(dt)
+	desc := ocispecs.Descriptor{MediaType: mediaType, Digest: dgst, Size: int64(len(dt))}
+	err := content.WriteBlob(ctx, store, dgst.String(), bytes.NewReader(dt), desc)
+	require.NoError(t, err)
+	return dgst, int64(len(dt))
+}
+
+// putManifest marshals an OCI manifest and writes it to the store. Returns
+// the descriptor (with optional platform).
+func putManifest(ctx context.Context, t *testing.T, store content.Ingester, mfst ocispecs.Manifest, plat *ocispecs.Platform) ocispecs.Descriptor {
+	t.Helper()
+	mfst.SchemaVersion = 2
+	dt, err := json.Marshal(mfst)
+	require.NoError(t, err)
+	dgst, sz := putBlob(ctx, t, store, dt, ocispecs.MediaTypeImageManifest)
+	return ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Digest:    dgst,
+		Size:      sz,
+		Platform:  plat,
+	}
+}

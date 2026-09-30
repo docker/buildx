@@ -51,3 +51,27 @@ func TestFetchReferrersOCILayoutArtifactTypeFilter(t *testing.T) {
 	require.Equal(t, attestation.Digest, refs[0].Digest)
 	require.Equal(t, attestation.ArtifactType, refs[0].ArtifactType)
 }
+
+func TestFetchReferrersOCILayoutEmpty(t *testing.T) {
+	t.Parallel()
+
+	dir := t.TempDir()
+	idx := ociindex.NewStoreIndex(dir)
+	reachable := ocispecs.Descriptor{
+		MediaType: ocispecs.MediaTypeImageManifest,
+		Digest:    digest.FromString("reachable manifest"),
+		Size:      123,
+		Annotations: map[string]string{
+			images.AnnotationManifestSubject: digest.FromString("different subject").String(),
+		},
+	}
+	require.NoError(t, idx.Put(reachable, ociindex.Tag("latest")))
+
+	loc, err := ParseLocation("oci-layout://" + dir + ":latest")
+	require.NoError(t, err)
+
+	r := New(Opt{})
+	refs, err := r.FetchReferrers(context.Background(), loc, digest.FromString("unsigned subject"))
+	require.NoError(t, err)
+	require.Empty(t, refs)
+}

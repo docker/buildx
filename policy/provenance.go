@@ -165,7 +165,7 @@ func rawMaterialsFromSLSA1(materials []slsa1.ResourceDescriptor, logf func(logru
 			URI:    m.URI,
 			Digest: maps.Clone(m.Digest),
 		}
-		if _, _, err := parseSLSAMaterial(rd); err != nil {
+		if _, _, err := ParseSLSAMaterial(rd); err != nil {
 			if logf != nil {
 				logf(logrus.WarnLevel, fmt.Sprintf("skipping unsupported provenance material %q: %v", m.URI, err))
 			}
@@ -186,7 +186,7 @@ func rawMaterialsFromSLSA02(materials []slsa02.ProvenanceMaterial, logf func(log
 			URI:    m.URI,
 			Digest: maps.Clone(m.Digest),
 		}
-		if _, _, err := parseSLSAMaterial(rd); err != nil {
+		if _, _, err := ParseSLSAMaterial(rd); err != nil {
 			if logf != nil {
 				logf(logrus.WarnLevel, fmt.Sprintf("skipping unsupported provenance material %q: %v", m.URI, err))
 			}
