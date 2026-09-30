@@ -10,6 +10,7 @@ import (
 	"github.com/docker/buildx/util/ocilayout"
 	"github.com/docker/buildx/util/progress"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/client/ociindex"
 	gateway "github.com/moby/buildkit/frontend/gateway/client"
 	"github.com/moby/buildkit/solver/pb"
@@ -20,6 +21,62 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestGitAdviceContexts(t *testing.T) {
+	previous := sendGitQueryAsInput
+	sendGitQueryAsInput = func() bool { return true }
+	t.Cleanup(func() { sendGitQueryAsInput = previous })
+
+	const url = "https://example.com/repo.git?branch=main"
+	for _, name := range []string{"context", "context:src", "policy"} {
+		t.Run(name, func(t *testing.T) {
+			for _, tc := range []struct {
+				name string
+				arg  string
+				want string
+			}{
+				{name: "unset"},
+				{name: "enabled", arg: "1", want: "true"},
+				{name: "true", arg: "true", want: "true"},
+				{name: "disabled", arg: "0"},
+				{name: "false", arg: "false"},
+			} {
+				t.Run(tc.name, func(t *testing.T) {
+					target := &client.SolveOpt{FrontendAttrs: map[string]string{}}
+					if tc.arg != "" {
+						target.FrontendAttrs["build-arg:BUILDKIT_GIT_ADVICE"] = tc.arg
+					}
+					var st *llb.State
+					if name == "policy" {
+						st = resolveRemotePolicyContextState(url, target)
+					} else {
+						require.NoError(t, processGitURL(url, name, target, map[string]struct{}{}))
+						inputName := "context"
+						if name != "context" {
+							inputName = "git_state_" + name
+						}
+						input, ok := target.FrontendInputs[inputName]
+						require.True(t, ok)
+						st = &input
+					}
+					require.NotNil(t, st)
+					def, err := st.Marshal(t.Context())
+					require.NoError(t, err)
+					require.NotEmpty(t, def.Def)
+					var op pb.Op
+					require.NoError(t, op.UnmarshalVT(def.Def[0]))
+					source := op.GetSource()
+					require.NotNil(t, source)
+					if tc.want == "" {
+						require.NotContains(t, source.Attrs, pb.AttrGitAdvice)
+					} else {
+						require.Equal(t, tc.want, source.Attrs[pb.AttrGitAdvice])
+					}
+				})
+			}
+		})
+	}
+}
 
 func TestCacheOptions_DerivedVars(t *testing.T) {
 	t.Setenv("ACTIONS_RUNTIME_TOKEN", "sensitive_token")

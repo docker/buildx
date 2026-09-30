@@ -3,6 +3,7 @@ package bake
 import (
 	"context"
 	"os"
+	"strconv"
 	"strings"
 
 	"github.com/docker/buildx/build"
@@ -32,7 +33,8 @@ func ReadRemoteFiles(ctx context.Context, nodes []builder.Node, url string, name
 	var filename string
 
 	keepGitDir := false
-	st, ok, err := dockerui.DetectGitContext(url, &keepGitDir)
+	gitAdvice, _ := strconv.ParseBool(os.Getenv("BUILDX_BAKE_GIT_ADVICE"))
+	st, ok, err := dockerui.DetectGitContext(url, &keepGitDir, llb.GitAdvice(gitAdvice))
 	if ok {
 		if err != nil {
 			return nil, nil, err
