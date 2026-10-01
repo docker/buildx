@@ -1452,7 +1452,7 @@ func (t *Target) updateSecret(id, value string) error {
 		return errors.Errorf("invalid format for secret, expecting secret.<id>=<value>")
 	}
 
-	for _, s := range t.Secrets {
+	for i, s := range t.Secrets {
 		if s.ID != id {
 			continue
 		}
@@ -1465,8 +1465,11 @@ func (t *Target) updateSecret(id, value string) error {
 			return errors.Errorf("secret override id %q does not match declared secret %q", next.ID, id)
 		}
 
-		s.Env = next.Env
-		s.FilePath = next.FilePath
+		// t.Secrets can share entries with other targets through inherits,
+		// so the entry is replaced instead of changed in place.
+		secrets := slices.Clone(t.Secrets)
+		secrets[i] = &buildflags.Secret{ID: s.ID, FilePath: next.FilePath, Env: next.Env}
+		t.Secrets = secrets
 		return nil
 	}
 
@@ -1952,28 +1955,29 @@ func removeDupesStr(s []string) []string {
 }
 
 func setPushOverride(outputs []*buildflags.ExportEntry, push bool) []*buildflags.ExportEntry {
+	// outputs can be shared with other targets through inherits, so they
+	// are copied before being changed.
 	if !push {
 		// Disable push for any relevant export types
-		for i := 0; i < len(outputs); {
-			output := outputs[i]
+		res := make([]*buildflags.ExportEntry, 0, len(outputs))
+		for _, output := range outputs {
 			switch output.Type {
 			case "registry":
 				// Filter out registry output type
-				outputs[i], outputs[len(outputs)-1] = outputs[len(outputs)-1], outputs[i]
-				outputs = outputs[:len(outputs)-1]
 				continue
 			case "image":
 				// Override push attribute
-				output.Attrs["push"] = "false"
+				output = withExportAttr(output, "push", "false")
 			}
-			i++
+			res = append(res, output)
 		}
-		return outputs
+		return res
 	}
 
 	// Force push to be enabled
 	setPush := true
-	for _, output := range outputs {
+	outputs = slices.Clone(outputs)
+	for i, output := range outputs {
 		if output.Type != "docker" {
 			// If there is an output type that is not docker, don't set "push"
 			setPush = false
@@ -1981,7 +1985,7 @@ func setPushOverride(outputs []*buildflags.ExportEntry, push bool) []*buildflags
 
 		// Set push attribute for image
 		if output.Type == "image" {
-			output.Attrs["push"] = "true"
+			outputs[i] = withExportAttr(output, "push", "true")
 		}
 	}
 
@@ -1995,6 +1999,17 @@ func setPushOverride(outputs []*buildflags.ExportEntry, push bool) []*buildflags
 		})
 	}
 	return outputs
+}
+
+// withExportAttr returns a copy of e with the attribute key set to value.
+func withExportAttr(e *buildflags.ExportEntry, key, value string) *buildflags.ExportEntry {
+	out := *e
+	out.Attrs = maps.Clone(e.Attrs)
+	if out.Attrs == nil {
+		out.Attrs = map[string]string{}
+	}
+	out.Attrs[key] = value
+	return &out
 }
 
 func setLoadOverride(outputs []*buildflags.ExportEntry, load bool) []*buildflags.ExportEntry {
