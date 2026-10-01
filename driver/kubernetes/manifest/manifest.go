@@ -57,11 +57,14 @@ const (
 	rootVolumePath            = "/var/lib/buildkit"
 	persistentVolumeClaimName = "buildkitd"
 
-	probeFailureThreshold    = 3
-	probeInitialDelaySeconds = 5
-	probePeriodSeconds       = 30
-	probeSuccessThreshold    = 1
-	probeTimeoutSeconds      = 60
+	probeFailureThreshold = 3
+	probePeriodSeconds    = 30
+	probeSuccessThreshold = 1
+	probeTimeoutSeconds   = 60
+
+	startupProbeFailureThreshold = 24
+	startupProbePeriodSeconds    = 5
+	startupProbeTimeoutSeconds   = 5
 )
 
 type ErrReservedAnnotationPlatform struct{}
@@ -120,17 +123,27 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 					SecurityContext: &corev1.SecurityContext{
 						Privileged: &privileged,
 					},
+					StartupProbe: &corev1.Probe{
+						ProbeHandler: corev1.ProbeHandler{
+							Exec: &corev1.ExecAction{
+								Command: probeHandlerCommand,
+							},
+						},
+						FailureThreshold: startupProbeFailureThreshold,
+						PeriodSeconds:    startupProbePeriodSeconds,
+						SuccessThreshold: probeSuccessThreshold,
+						TimeoutSeconds:   startupProbeTimeoutSeconds,
+					},
 					ReadinessProbe: &corev1.Probe{
 						ProbeHandler: corev1.ProbeHandler{
 							Exec: &corev1.ExecAction{
 								Command: probeHandlerCommand,
 							},
 						},
-						FailureThreshold:    probeFailureThreshold,
-						InitialDelaySeconds: probeInitialDelaySeconds,
-						PeriodSeconds:       probePeriodSeconds,
-						SuccessThreshold:    probeSuccessThreshold,
-						TimeoutSeconds:      probeTimeoutSeconds,
+						FailureThreshold: probeFailureThreshold,
+						PeriodSeconds:    probePeriodSeconds,
+						SuccessThreshold: probeSuccessThreshold,
+						TimeoutSeconds:   probeTimeoutSeconds,
 					},
 					LivenessProbe: &corev1.Probe{
 						ProbeHandler: corev1.ProbeHandler{
@@ -138,11 +151,10 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 								Command: probeHandlerCommand,
 							},
 						},
-						FailureThreshold:    probeFailureThreshold,
-						InitialDelaySeconds: probeInitialDelaySeconds,
-						PeriodSeconds:       probePeriodSeconds,
-						SuccessThreshold:    probeSuccessThreshold,
-						TimeoutSeconds:      probeTimeoutSeconds,
+						FailureThreshold: probeFailureThreshold,
+						PeriodSeconds:    probePeriodSeconds,
+						SuccessThreshold: probeSuccessThreshold,
+						TimeoutSeconds:   probeTimeoutSeconds,
 					},
 					Resources: corev1.ResourceRequirements{
 						Requests: corev1.ResourceList{},
