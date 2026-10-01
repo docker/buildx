@@ -50,7 +50,6 @@ import (
 	"github.com/moby/buildkit/util/archiveutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
-	"github.com/moby/patternmatcher"
 	"github.com/moby/patternmatcher/ignorefile"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
@@ -1257,24 +1256,15 @@ func setLocalContextMount(name, dir string, cfg *confutil.Config, so *client.Sol
 	}
 	// BuildKit reads the context's ignore file through this mount before
 	// applying its repository-specific rules.
-	patterns = append(patterns, "!.dockerignore")
-
-	if _, err := patternmatcher.New(patterns); err != nil {
+	mount := so.LocalMounts[name].(*fsMount)
+	filtered, err := fsutil.NewFilterFS(mount.FS, &fsutil.FilterOpt{
+		ExcludePatterns: append(slices.Clone(patterns), "!.dockerignore"),
+	})
+	if err != nil {
 		return errors.Wrapf(err, "failed to parse global ignore file %s", filename)
 	}
-	so.LocalMounts[name].(*fsMount).patterns = patterns
-	previous := so.LocalFilterOpt
-	so.LocalFilterOpt = func(dirName string, opt *fsutil.FilterOpt) error {
-		if previous != nil {
-			if err := previous(dirName, opt); err != nil {
-				return err
-			}
-		}
-		if dirName == name {
-			opt.ExcludePatterns = append(slices.Clone(patterns), opt.ExcludePatterns...)
-		}
-		return nil
-	}
+	mount.FS = filtered
+	mount.patterns = patterns
 	return nil
 }
 

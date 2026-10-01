@@ -750,14 +750,18 @@ target "b" {
 `), 0o600),
 		fstest.CreateFile("Dockerfile.a", []byte("FROM scratch\nCOPY . /a/\n"), 0o600),
 		fstest.CreateFile("Dockerfile.b", []byte("FROM scratch\nCOPY . /b/\n"), 0o600),
-		fstest.CreateFile("keep.txt", []byte(identity.NewID()), 0o600),
-		fstest.CreateFile("drop.txt", []byte("ignored"), 0o600),
+		fstest.CreateFile(".dockerignore", []byte("*\n!src\n"), 0o600),
+		fstest.CreateDir("src", 0o700),
+		fstest.CreateFile("src/keep.txt", []byte(identity.NewID()), 0o600),
+		fstest.CreateFile("src/.DS_Store", []byte("ignored"), 0o600),
+		fstest.CreateDir("src/.idea", 0o700),
+		fstest.CreateFile("src/.idea/ws.xml", []byte("ignored"), 0o600),
 	)
 	configDir := buildxConfig(sb)
 	require.NotEmpty(t, configDir)
 	require.NoError(t, os.MkdirAll(configDir, 0o700))
 	globalIgnore := filepath.Join(configDir, ".dockerignore")
-	require.NoError(t, os.WriteFile(globalIgnore, []byte("drop.txt\n"), 0o600))
+	require.NoError(t, os.WriteFile(globalIgnore, []byte("**/.idea\n**/.DS_Store\n"), 0o600))
 	t.Cleanup(func() { _ = os.Remove(globalIgnore) })
 
 	destA, destB := t.TempDir(), t.TempDir()
@@ -769,9 +773,11 @@ target "b" {
 	require.NoError(t, err, out)
 	require.Equal(t, 1, strings.Count(out, "internal] load build context"), out)
 	for _, output := range []struct{ dir, prefix string }{{destA, "a"}, {destB, "b"}} {
-		require.FileExists(t, filepath.Join(output.dir, output.prefix, "keep.txt"))
-		_, err := os.Stat(filepath.Join(output.dir, output.prefix, "drop.txt"))
-		require.ErrorIs(t, err, os.ErrNotExist)
+		require.FileExists(t, filepath.Join(output.dir, output.prefix, "src", "keep.txt"))
+		for _, path := range []string{".dockerignore", "src/.DS_Store", "src/.idea/ws.xml"} {
+			_, err := os.Stat(filepath.Join(output.dir, output.prefix, path))
+			require.ErrorIs(t, err, os.ErrNotExist)
+		}
 	}
 }
 

@@ -1462,12 +1462,7 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 				}
 				src[name] = fs
 			}
-			s.Allow(filesync.NewFSSyncProvider(src, func(name string, opt *fsutil.FilterOpt) error {
-				if mount, ok := s.fsMap[name]; ok && len(mount.patterns) > 0 {
-					opt.ExcludePatterns = append(slices.Clone(mount.patterns), opt.ExcludePatterns...)
-				}
-				return nil
-			}))
+			s.Allow(filesync.NewFSSyncProvider(src))
 		}
 		sessions[n] = arr
 	}
