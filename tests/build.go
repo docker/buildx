@@ -921,7 +921,7 @@ func testBuildAnnotations(t *testing.T, sb integration.Sandbox) {
 		"--annotation", "example1=www",
 		"--annotation", "index:example2=xxx",
 		"--annotation", "manifest:example3=yyy",
-		"--annotation", "manifest-descriptor[" + platforms.Format(platforms.DefaultSpec()) + "]:example4=zzz",
+		"--annotation", "manifest-descriptor[" + platforms.Format(platforms.Normalize(platforms.DefaultSpec())) + "]:example4=zzz",
 	}
 	out, err := buildCmd(sb, withArgs(annotations...), withArgs(fmt.Sprintf("--output=type=image,name=%s,push=true", target), dir))
 	require.NoError(t, err, string(out))
