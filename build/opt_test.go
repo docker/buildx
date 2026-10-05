@@ -5,6 +5,8 @@ import (
 	"io"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"path/filepath"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -32,6 +34,7 @@ import (
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
+	"github.com/tonistiigi/fsutil"
 )
 
 type exporterTestDriver struct {
@@ -202,6 +205,92 @@ func TestDriverFeatureFailurePreservesProvenance(t *testing.T) {
 	defer release(nil)
 	require.Equal(t, "mode=min,inline-only=true", so.FrontendAttrs["attest:provenance"])
 	require.Equal(t, 2, calls)
+}
+
+func TestGlobalDockerignore(t *testing.T) {
+	contextDir := t.TempDir()
+	configDir := t.TempDir()
+	for name, content := range map[string]string{
+		"keep.txt":      "keep",
+		"keep.bin":      "keep",
+		"drop.txt":      "drop",
+		"secret.pem":    "secret",
+		".dockerignore": "*.log\n",
+		"debug.log":     "log",
+		".idea/state":   "editor",
+		".idea/keep":    "editor",
+	} {
+		path := filepath.Join(contextDir, name)
+		require.NoError(t, os.MkdirAll(filepath.Dir(path), 0o755))
+		require.NoError(t, os.WriteFile(path, []byte(content), 0o644))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, ".dockerignore"), []byte(".idea/*\n!.idea/keep\n.dockerignore\n*.txt\n*.pem\n!secret.pem\n"), 0o644))
+
+	so := &client.SolveOpt{}
+	require.NoError(t, setLocalContextMount("context", contextDir, confutil.NewConfig(nil, confutil.WithDir(configDir)), so))
+	// The global filter keeps the ignore file available for the frontend.
+	f, err := so.LocalMounts["context"].Open(".dockerignore")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+	opt := &fsutil.FilterOpt{ExcludePatterns: []string{"!keep.txt", "secret.pem", ".dockerignore"}}
+	filtered, err := fsutil.NewFilterFS(so.LocalMounts["context"], opt)
+	require.NoError(t, err)
+	for _, name := range []string{"keep.bin", "debug.log", ".idea/keep"} {
+		f, err := filtered.Open(name)
+		require.NoError(t, err, name)
+		_, err = io.ReadAll(f)
+		require.NoError(t, err)
+		require.NoError(t, f.Close())
+	}
+	_, err = filtered.Open(".idea/state")
+	require.ErrorIs(t, err, os.ErrNotExist)
+	_, err = filtered.Open("drop.txt")
+	require.ErrorIs(t, err, os.ErrNotExist)
+	_, err = filtered.Open("keep.txt")
+	require.ErrorIs(t, err, os.ErrNotExist)
+	_, err = filtered.Open("secret.pem")
+	require.ErrorIs(t, err, os.ErrNotExist)
+	_, err = filtered.Open(".dockerignore")
+	require.ErrorIs(t, err, os.ErrNotExist)
+
+	// A missing global file leaves local mounts unchanged.
+	require.NoError(t, setLocalContextMount("other", contextDir, confutil.NewConfig(nil, confutil.WithDir(t.TempDir())), so))
+	f, err = so.LocalMounts["other"].Open(".idea/state")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
+}
+
+func TestGlobalDockerignoreInvalidPattern(t *testing.T) {
+	configDir := t.TempDir()
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, ".dockerignore"), []byte("[\n"), 0o644))
+	err := setLocalContextMount("context", t.TempDir(), confutil.NewConfig(nil, confutil.WithDir(configDir)), &client.SolveOpt{})
+	require.ErrorContains(t, err, "failed to parse global ignore file")
+}
+
+func TestLoadInputsGlobalDockerignore(t *testing.T) {
+	contextDir := t.TempDir()
+	namedDir := t.TempDir()
+	configDir := t.TempDir()
+	for _, dir := range []string{contextDir, namedDir} {
+		require.NoError(t, os.WriteFile(filepath.Join(dir, "local.txt"), []byte("local"), 0o644))
+	}
+	require.NoError(t, os.WriteFile(filepath.Join(contextDir, "Containerfile"), []byte("FROM scratch\n"), 0o644))
+	require.NoError(t, os.WriteFile(filepath.Join(configDir, ".dockerignore"), []byte("local.txt\n"), 0o644))
+
+	so := &client.SolveOpt{FrontendAttrs: map[string]string{}}
+	inp := &Inputs{ContextPath: contextDir, DockerfilePath: filepath.Join(contextDir, "Containerfile"), NamedContexts: map[string]NamedContext{
+		"source": {Path: namedDir},
+	}}
+	release, err := loadInputs(context.Background(), nil, inp, confutil.NewConfig(nil, confutil.WithDir(configDir)), testProgressWriter{}, so)
+	require.NoError(t, err)
+	t.Cleanup(release)
+	for _, name := range []string{"context", "source"} {
+		_, err = so.LocalMounts[name].Open("local.txt")
+		require.ErrorIs(t, err, os.ErrNotExist)
+	}
+	f, err := so.LocalMounts["dockerfile"].Open("local.txt")
+	require.NoError(t, err)
+	require.NoError(t, f.Close())
 }
 
 func TestCacheOptions_DerivedVars(t *testing.T) {
@@ -467,7 +556,7 @@ func TestLoadInputsOCILayoutNamedContext(t *testing.T) {
 				},
 			}
 
-			release, err := loadInputs(context.Background(), nil, inp, testProgressWriter{}, target)
+			release, err := loadInputs(context.Background(), nil, inp, nil, testProgressWriter{}, target)
 			require.NoError(t, err)
 			require.NotNil(t, release)
 			t.Cleanup(release)

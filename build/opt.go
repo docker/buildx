@@ -50,6 +50,7 @@ import (
 	"github.com/moby/buildkit/util/archiveutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
+	"github.com/moby/patternmatcher/ignorefile"
 	"github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -577,7 +578,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		so.FrontendAttrs["label:"+k] = v
 	}
 
-	releaseLoad, err := loadInputs(ctx, nodeDriver, &opt.Inputs, pw, &so)
+	releaseLoad, err := loadInputs(ctx, nodeDriver, &opt.Inputs, cfg, pw, &so)
 	if err != nil {
 		return nil, nil, err
 	}
@@ -897,7 +898,7 @@ func policyEnvFilename(inp Inputs) string {
 	return "Dockerfile"
 }
 
-func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw progress.Writer, target *client.SolveOpt) (func(), error) {
+func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, cfg *confutil.Config, pw progress.Writer, target *client.SolveOpt) (func(), error) {
 	if inp.ContextPath == "" {
 		return nil, errors.New("please specify build context (e.g. \".\" for the current directory)")
 	}
@@ -959,7 +960,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			}
 		}
 	case osutil.IsLocalDir(inp.ContextPath):
-		if err := setLocalMount("context", inp.ContextPath, target); err != nil {
+		if err := setLocalContextMount("context", inp.ContextPath, cfg, target); err != nil {
 			return nil, err
 		}
 		contextDir = inp.ContextPath
@@ -1139,7 +1140,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 		if k == "context" || k == "dockerfile" {
 			localName = "_" + k // underscore to avoid collisions
 		}
-		if err := setLocalMount(localName, v.Path, target); err != nil {
+		if err := setLocalContextMount(localName, v.Path, cfg, target); err != nil {
 			return nil, err
 		}
 		target.FrontendAttrs["context:"+k] = "local:" + localName
@@ -1228,6 +1229,42 @@ func setLocalMount(name, dir string, so *client.SolveOpt) error {
 		so.LocalMounts = map[string]fsutil.FS{}
 	}
 	so.LocalMounts[name] = &fsMount{FS: lm, dir: dir}
+	return nil
+}
+
+func setLocalContextMount(name, dir string, cfg *confutil.Config, so *client.SolveOpt) error {
+	if err := setLocalMount(name, dir, so); err != nil {
+		return err
+	}
+
+	filename := filepath.Join(cfg.Dir(), ".dockerignore")
+	f, err := os.Open(filename)
+	if errors.Is(err, os.ErrNotExist) {
+		return nil
+	}
+	if err != nil {
+		return errors.Wrapf(err, "failed to open global ignore file %s", filename)
+	}
+	defer f.Close()
+
+	patterns, err := ignorefile.ReadAll(f)
+	if err != nil {
+		return errors.Wrapf(err, "failed to read global ignore file %s", filename)
+	}
+	if len(patterns) == 0 {
+		return nil
+	}
+	// BuildKit reads the context's ignore file through this mount before
+	// applying its repository-specific rules.
+	mount := so.LocalMounts[name].(*fsMount)
+	filtered, err := fsutil.NewFilterFS(mount.FS, &fsutil.FilterOpt{
+		ExcludePatterns: append(slices.Clone(patterns), "!.dockerignore"),
+	})
+	if err != nil {
+		return errors.Wrapf(err, "failed to parse global ignore file %s", filename)
+	}
+	mount.FS = filtered
+	mount.patterns = patterns
 	return nil
 }
 
@@ -1341,7 +1378,8 @@ func handleLowercaseDockerfile(dir, p string) string {
 
 type fsMount struct {
 	fsutil.FS
-	dir string
+	dir      string
+	patterns []string
 }
 
 var _ fsutil.FS = &fsMount{}

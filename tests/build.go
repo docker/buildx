@@ -53,6 +53,7 @@ func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 
 var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuild,
+	testBuildGlobalDockerignore,
 	testBuildAlias,
 	testBuildStdin,
 	testBuildRemote,
@@ -101,6 +102,51 @@ func testBuild(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
 	out, err := buildCmd(sb, withArgs(dir))
 	require.NoError(t, err, string(out))
+}
+
+func testBuildGlobalDockerignore(t *testing.T, sb integration.Sandbox) {
+	contextDir := tmpdir(t,
+		fstest.CreateFile("Dockerfile", []byte("FROM scratch\nCOPY . /main/\nCOPY --from=extra . /named/\n"), 0o600),
+		fstest.CreateFile(".dockerignore", []byte(".dockerignore\nrepo-only.bin\n!keep.txt\n"), 0o600),
+		fstest.CreateFile("keep.txt", []byte("main"), 0o600),
+		fstest.CreateFile("keep.bin", []byte("main"), 0o600),
+		fstest.CreateFile("drop.txt", []byte("global"), 0o600),
+		fstest.CreateFile("repo-only.bin", []byte("repo"), 0o600),
+		fstest.CreateDir(".idea", 0o700),
+		fstest.CreateFile(".idea/state", []byte("editor"), 0o600),
+	)
+	namedDir := tmpdir(t,
+		fstest.CreateFile("keep.bin", []byte("named"), 0o600),
+		fstest.CreateFile("drop.txt", []byte("global"), 0o600),
+		fstest.CreateDir(".idea", 0o700),
+		fstest.CreateFile(".idea/state", []byte("editor"), 0o600),
+	)
+	configDir := buildxConfig(sb)
+	require.NotEmpty(t, configDir)
+	require.NoError(t, os.MkdirAll(configDir, 0o700))
+	globalIgnore := filepath.Join(configDir, ".dockerignore")
+	require.NoError(t, os.WriteFile(globalIgnore, []byte(".idea\n*.txt\n.dockerignore\n"), 0o600))
+	t.Cleanup(func() { _ = os.Remove(globalIgnore) })
+
+	dest := t.TempDir()
+	out, err := buildCmd(sb, withArgs(
+		"--build-context", "extra="+namedDir,
+		"--output=type=local,dest="+dest,
+		contextDir,
+	))
+	require.NoError(t, err, out)
+	for path, want := range map[string]string{
+		"main/keep.bin":  "main",
+		"named/keep.bin": "named",
+	} {
+		data, err := os.ReadFile(filepath.Join(dest, path))
+		require.NoError(t, err)
+		require.Equal(t, want, string(data))
+	}
+	for _, path := range []string{"main/.dockerignore", "main/.idea/state", "named/.idea/state", "main/repo-only.bin", "main/keep.txt", "main/drop.txt", "named/drop.txt"} {
+		_, err := os.Stat(filepath.Join(dest, path))
+		require.ErrorIs(t, err, os.ErrNotExist)
+	}
 }
 
 func testBuildAlias(t *testing.T, sb integration.Sandbox) {
