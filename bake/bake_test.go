@@ -296,6 +296,97 @@ target "webapp" {
 		require.EqualError(t, err, "invalid key webapp.tag.foo, tag does not support subkeys")
 	})
 
+	t.Run("TagAliasClear", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.tags=example.com/foo", "webapp.tag="}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].Tags)
+	})
+
+	t.Run("PlatformOverrideThenAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform=linux/arm64", "webapp.platform+=linux/riscv64"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/amd64", "linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("PlatformOverrideClear", func(t *testing.T) {
+		t.Run("empty", func(t *testing.T) {
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform="}, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+			require.Empty(t, m["webapp"].Platforms)
+		})
+
+		t.Run("append then clear", func(t *testing.T) {
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform+=linux/arm64", "webapp.platform="}, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+			require.Empty(t, m["webapp"].Platforms)
+		})
+
+		t.Run("clear then append", func(t *testing.T) {
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform=", "webapp.platform+=linux/riscv64"}, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+			require.Equal(t, []string{"linux/riscv64"}, m["webapp"].Platforms)
+		})
+	})
+
+	t.Run("ArrayOverrideSubkey", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.cache-from.x=type=registry,ref=example.com/cache"}, nil, nil, &EntitlementConf{})
+		require.EqualError(t, err, "invalid key webapp.cache-from.x, cache-from does not support subkeys")
+	})
+
+	t.Run("CacheOverrideClear", func(t *testing.T) {
+		cacheFile := File{
+			Name: "cache.hcl",
+			Data: []byte(`
+target "webapp" {
+	cache-from = ["type=registry,ref=example.com/original-cache"]
+	cache-to = ["type=registry,ref=example.com/original-cache"]
+}`),
+		}
+		m, _, err := ReadTargets(ctx, []File{cacheFile}, []string{"webapp"}, []string{
+			"webapp.cache-from=type=registry,ref=example.com/cache",
+			"webapp.cache-from=",
+			"webapp.cache-to=type=registry,ref=example.com/cache",
+			"webapp.cache-to=",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].CacheFrom)
+		require.Empty(t, m["webapp"].CacheTo)
+	})
+
+	t.Run("AppendByDefaultOverrideClear", func(t *testing.T) {
+		appendFile := File{
+			Name: "append.hcl",
+			Data: []byte(`
+target "webapp" {
+	annotations = ["index,manifest:org.opencontainers.image.authors=dvdksn"]
+	attest = ["type=provenance,mode=max"]
+	entitlements = ["network.host"]
+}`),
+		}
+		m, _, err := ReadTargets(ctx, []File{appendFile}, []string{"webapp"}, []string{
+			"webapp.annotations=",
+			"webapp.attest=",
+			"webapp.entitlements=",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].Annotations)
+		require.Empty(t, m["webapp"].Attest)
+		require.Empty(t, m["webapp"].Entitlements)
+	})
+
+	t.Run("AppendByDefaultOverrideClearThenAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			"webapp.annotations=",
+			"webapp.annotations+=index:org.opencontainers.image.vendor=docker",
+			"webapp.attest=",
+			"webapp.attest+=type=sbom",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"index:org.opencontainers.image.vendor=docker"}, m["webapp"].Annotations)
+		require.Len(t, m["webapp"].Attest, 1)
+		require.Equal(t, "sbom", m["webapp"].Attest[0].Type)
+	})
+
 	t.Run("SecretsOverride", func(t *testing.T) {
 		t.Setenv("FOO", "foo")
 		t.Setenv("BAR", "bar")
@@ -313,6 +404,22 @@ target "webapp" {
 		require.Len(t, m["webapp"].Secrets, 2)
 		require.Equal(t, "FOO", m["webapp"].Secrets[0].ID)
 		require.Equal(t, "BAR", m["webapp"].Secrets[1].ID)
+	})
+
+	t.Run("SecretsOverrideClear", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secrets=id=BAR,env=BAR", "webapp.secret="}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].Secrets)
+	})
+
+	t.Run("SecretsOverrideClearThenAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			"webapp.secret=",
+			"webapp.secrets+=id=BAR,env=BAR",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].ID)
 	})
 
 	t.Run("SecretAliasOverride", func(t *testing.T) {

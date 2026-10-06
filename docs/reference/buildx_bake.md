@@ -498,6 +498,7 @@ $ docker buildx bake --set target.platform+=linux/arm64 # appends 'linux/arm64' 
 $ docker buildx bake --set target.contexts.bar=../bar   # overrides 'bar' named context
 $ docker buildx bake --set target.resource.memory=2g    # overrides memory resource limit
 $ docker buildx bake --set target.secret.aws=env=AWS    # overrides source for an existing secret
+$ docker buildx bake --set target.tag=                  # clears all tag values
 ```
 
 > [!NOTE]
@@ -505,7 +506,9 @@ $ docker buildx bake --set target.secret.aws=env=AWS    # overrides source for a
 > `--set` is a repeatable flag. For array fields such as `tag`, repeat `--set`
 > to provide multiple values or use the `+=` operator to append without
 > replacing. Array literal syntax like `--set target.tag=[a,b]` is not
-> supported.
+> supported. For array fields, a non-append assignment with an empty value
+> clears values from the Bake definition and earlier `--set` flags. Subsequent
+> assignments or appends add values to the cleared array.
 
 You can override the following fields:
 
