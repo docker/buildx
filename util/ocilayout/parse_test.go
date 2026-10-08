@@ -16,6 +16,21 @@ func TestParse(t *testing.T) {
 		tag  string
 	}{
 		{
+			s:    "oci-layout:///tmp/cache@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/layout",
+			path: "/tmp/cache@sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa/layout",
+			tag:  "latest",
+		},
+		{
+			s:    "oci-layout:///tmp/build:cache/layout",
+			path: "/tmp/build:cache/layout",
+			tag:  "latest",
+		},
+		{
+			s:    "oci-layout:///tmp/build:cache/layout:1.3",
+			path: "/tmp/build:cache/layout",
+			tag:  "1.3",
+		},
+		{
 			s:    "oci-layout:///path/to/oci/layout",
 			path: "/path/to/oci/layout",
 			tag:  "latest",
