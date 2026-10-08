@@ -410,7 +410,9 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 		),
 		progress.WithMetrics(mp, attributes),
 		progress.WithOnClose(func() {
-			printWarnings(os.Stderr, printer.Warnings(), progressMode)
+			if opts.CallFunc == nil {
+				printWarnings(os.Stderr, printer.Warnings(), progressMode)
+			}
 		}),
 	)
 	if err != nil {
@@ -452,7 +454,9 @@ func runBuild(ctx context.Context, dockerCli command.Cli, debugOpts debuggerOpti
 		}
 	}
 	if opts.CallFunc != nil {
-		if exitCode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse, options.target, inputs); err != nil {
+		exitCode, err := printResult(dockerCli.Out(), opts.CallFunc, resp.ExporterResponse, options.target, inputs)
+		printWarnings(os.Stderr, printer.Warnings(), progressMode)
+		if err != nil {
 			return err
 		} else if exitCode != 0 {
 			return cobrautil.ExitCodeError(exitCode)
