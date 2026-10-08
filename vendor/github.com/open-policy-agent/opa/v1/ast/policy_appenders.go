@@ -3,6 +3,8 @@ package ast
 import (
 	"encoding"
 	"fmt"
+
+	"github.com/open-policy-agent/opa/v1/util"
 )
 
 func (m *Module) AppendText(buf []byte) ([]byte, error) {
@@ -221,6 +223,10 @@ func (a Args) AppendText(buf []byte) ([]byte, error) {
 	return append(buf, ')'), nil
 }
 
+func (body Body) AppendText(buf []byte) ([]byte, error) {
+	return AppendDelimeted(buf, body, "; ")
+}
+
 func (expr *Expr) AppendText(buf []byte) ([]byte, error) {
 	if expr.Negated {
 		buf = append(buf, "not "...)
@@ -321,4 +327,60 @@ func (d *SomeDecl) AppendText(buf []byte) ([]byte, error) {
 
 func (c *Comment) AppendText(buf []byte) ([]byte, error) {
 	return append(append(buf, '#'), c.Text...), nil
+}
+
+func (a *LogicalAnd) AppendText(buf []byte) ([]byte, error) {
+	return appendLogical(buf, "and", a.Lhs, a.Rhs, a.ExplicitLhs, a.ExplicitRhs)
+}
+
+func (o *LogicalOr) AppendText(buf []byte) ([]byte, error) {
+	return appendLogical(buf, "or", o.Lhs, o.Rhs, o.ExplicitLhs, o.ExplicitRhs)
+}
+
+func appendLogical(buf []byte, op string, lhs, rhs Body, explicitLhs, explicitRhs bool) ([]byte, error) {
+	var err error
+	if buf, err = appendLogicalOperand(buf, lhs, explicitLhs, op, false); err != nil {
+		return nil, err
+	}
+	buf = append(buf, ' ')
+	buf = append(buf, op...)
+	buf = append(buf, ' ')
+	return appendLogicalOperand(buf, rhs, explicitRhs, op, true)
+}
+
+func appendLogicalOperand(buf []byte, b Body, explicit bool, parentOp string, rhs bool) ([]byte, error) {
+	if !explicit && len(b) == 1 {
+		if logicalOperandNeedsParens(b, parentOp, rhs) {
+			buf = append(buf, '(')
+			var err error
+			if buf, err = b.AppendText(buf); err != nil {
+				return nil, err
+			}
+			return append(buf, ')'), nil
+		}
+		return b.AppendText(buf)
+	}
+
+	buf = append(buf, "{ "...)
+	var err error
+	if buf, err = b.AppendText(buf); err != nil {
+		return nil, err
+	}
+	return append(buf, " }"...), nil
+}
+
+// RulePath returns the string representation of the rule's path, i.e. its package path followed by the rule head ref.
+func RulePath(r *Rule) string {
+	if r == nil {
+		return "<nil rule>"
+	}
+	if r.Module == nil {
+		return "<rule " + r.Head.Reference.String() + " without module>"
+	}
+	buf := make([]byte, 0, r.Module.Package.Path.StringLength()+r.Head.Ref().StringLength()+1)
+	buf, _ = r.Module.Package.Path.AppendText(buf)
+	buf = append(buf, '.')
+	buf, _ = r.Head.Ref().AppendText(buf)
+
+	return util.ByteSliceToString(buf)
 }

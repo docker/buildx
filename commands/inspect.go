@@ -38,22 +38,24 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 		return err
 	}
 
-	timeoutCtx, cancel := context.WithCancelCause(ctx)
-	if in.timeout > 0 {
-		timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, in.timeout, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
-	}
-	defer func() { cancel(errors.WithStack(context.Canceled)) }()
-
 	imageVerifier := policy.DefaultImageVerifier(confutil.NewConfig(dockerCli))
-	nodes, err := b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
+	loadNodes := func() ([]builder.Node, error) {
+		timeoutCtx, cancel := context.WithCancelCause(ctx)
+		if in.timeout > 0 {
+			timeoutCtx, _ = context.WithTimeoutCause(timeoutCtx, in.timeout, errors.WithStack(context.DeadlineExceeded)) //nolint:govet // no need to manually cancel this context as we already rely on parent
+		}
+		defer func() { cancel(errors.WithStack(context.Canceled)) }()
+		return b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
+	}
+
+	nodes, err := loadNodes()
 	if in.bootstrap {
 		var ok bool
-		ok, err = b.Boot(ctx)
-		if err != nil {
+		if ok, err = b.Boot(ctx); err != nil {
 			return err
 		}
 		if ok {
-			nodes, err = b.LoadNodes(timeoutCtx, builder.WithData(), builder.WithImageVerifier(imageVerifier))
+			nodes, err = loadNodes()
 		}
 	}
 
@@ -104,14 +106,18 @@ func runInspect(ctx context.Context, dockerCli command.Cli, in inspectOptions) e
 				}
 				if debug.IsEnabled() {
 					fmt.Fprintf(w, "Features:\n")
-					features := nodes[i].Driver.Features(ctx)
-					featKeys := make([]string, 0, len(features))
-					for k := range features {
-						featKeys = append(featKeys, string(k))
-					}
-					sort.Strings(featKeys)
-					for _, k := range featKeys {
-						fmt.Fprintf(w, "\t%s:\t%t\n", k, features[driver.Feature(k)])
+					features, err := nodes[i].Driver.Features(ctx)
+					if err != nil {
+						fmt.Fprintf(w, "\tError:\t%s\n", err.Error())
+					} else {
+						featKeys := make([]string, 0, len(features))
+						for k := range features {
+							featKeys = append(featKeys, string(k))
+						}
+						sort.Strings(featKeys)
+						for _, k := range featKeys {
+							fmt.Fprintf(w, "\t%s:\t%t\n", k, features[driver.Feature(k)])
+						}
 					}
 				}
 				if len(nodes[i].Labels) > 0 {

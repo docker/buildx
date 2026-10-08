@@ -127,7 +127,6 @@ func NewOperandErr(pos int, f string, a ...any) error {
 
 // NewOperandTypeErr returns an operand error indicating the operand's type was wrong.
 func NewOperandTypeErr(pos int, got ast.Value, expected ...string) error {
-
 	if len(expected) == 1 {
 		return NewOperandErr(pos, "must be %v but got %v", expected[0], ast.ValueName(got))
 	}
@@ -138,7 +137,6 @@ func NewOperandTypeErr(pos int, got ast.Value, expected ...string) error {
 // NewOperandElementErr returns an operand error indicating an element in the
 // composite operand was wrong.
 func NewOperandElementErr(pos int, composite ast.Value, got ast.Value, expected ...string) error {
-
 	tpe := ast.ValueName(composite)
 
 	if len(expected) == 1 {
@@ -150,7 +148,6 @@ func NewOperandElementErr(pos int, composite ast.Value, got ast.Value, expected 
 
 // NewOperandEnumErr returns an operand error indicating a value was wrong.
 func NewOperandEnumErr(pos int, expected ...string) error {
-
 	if len(expected) == 1 {
 		return NewOperandErr(pos, "must be %v", expected[0])
 	}
@@ -192,30 +189,27 @@ func BigIntOperand(x ast.Value, pos int) (*big.Int, error) {
 // NumberOperand converts x to a number. If the cast fails, a descriptive error is
 // returned.
 func NumberOperand(x ast.Value, pos int) (ast.Number, error) {
-	n, ok := x.(ast.Number)
-	if !ok {
-		return ast.Number(""), NewOperandTypeErr(pos, x, "number")
+	if n, ok := x.(ast.Number); ok {
+		return n, nil
 	}
-	return n, nil
+	return ast.Number(""), NewOperandTypeErr(pos, x, "number")
 }
 
 // SetOperand converts x to a set. If the cast fails, a descriptive error is
 // returned.
 func SetOperand(x ast.Value, pos int) (ast.Set, error) {
-	s, ok := x.(ast.Set)
-	if !ok {
-		return nil, NewOperandTypeErr(pos, x, "set")
+	if s, ok := x.(ast.Set); ok {
+		return s, nil
 	}
-	return s, nil
+	return nil, NewOperandTypeErr(pos, x, "set")
 }
 
 // StringOperand returns x as [ast.String], or a descriptive error if the conversion fails.
 func StringOperand(x ast.Value, pos int) (ast.String, error) {
-	s, ok := x.(ast.String)
-	if !ok {
-		return ast.String(""), NewOperandTypeErr(pos, x, "string")
+	if s, ok := x.(ast.String); ok {
+		return s, nil
 	}
-	return s, nil
+	return ast.String(""), NewOperandTypeErr(pos, x, "string")
 }
 
 // StringOperandByteSlice returns x a []byte, assuming x is [ast.String], or a descriptive error
@@ -229,24 +223,22 @@ func StringOperandByteSlice(x ast.Value, pos int) ([]byte, error) {
 	return util.StringToByteSlice(string(s)), nil
 }
 
-// ObjectOperand converts x to an object. If the cast fails, a descriptive
+// ObjectOperand converts x to an object. If the conversion fails, a descriptive
 // error is returned.
-func ObjectOperand(x ast.Value, pos int) (ast.Object, error) {
-	o, ok := x.(ast.Object)
-	if !ok {
-		return nil, NewOperandTypeErr(pos, x, "object")
+func ObjectOperand(x ast.Value, pos int) (o ast.Object, err error) {
+	if o, ok := x.(ast.Object); ok {
+		return o, nil
 	}
-	return o, nil
+	return nil, NewOperandTypeErr(pos, x, "object")
 }
 
-// ArrayOperand converts x to an array. If the cast fails, a descriptive
+// ArrayOperand converts x to an array. If the conversion fails, a descriptive
 // error is returned.
 func ArrayOperand(x ast.Value, pos int) (*ast.Array, error) {
-	a, ok := x.(*ast.Array)
-	if !ok {
-		return nil, NewOperandTypeErr(pos, x, "array")
+	if a, ok := x.(*ast.Array); ok {
+		return a, nil
 	}
-	return a, nil
+	return nil, NewOperandTypeErr(pos, x, "array")
 }
 
 // NumberToFloat converts n to a big float.
@@ -277,12 +269,19 @@ func FloatToNumber(f *big.Float) ast.Number {
 // NumberToInt converts n to a big int.
 // If n cannot be converted to an big int, an error is returned.
 func NumberToInt(n ast.Number) (*big.Int, error) {
-	f := NumberToFloat(n)
-	r, accuracy := f.Int(nil)
-	if accuracy != big.Exact {
+	// Integer literals are parsed exactly. Going through NumberToFloat first would round any
+	// value needing more than the big.Float default mantissa, and because the rounded value is
+	// itself an integer, the accuracy check below cannot detect that it happened.
+	if i, ok := new(big.Int).SetString(string(n), 10); ok {
+		return i, nil
+	}
+	// Fractional and exponent forms. big.Rat parses both exactly, so a value such as 1e30 stays
+	// exact, and a genuinely fractional value is rejected rather than silently truncated.
+	r, ok := new(big.Rat).SetString(string(n))
+	if !ok || !r.IsInt() {
 		return nil, errors.New("illegal value")
 	}
-	return r, nil
+	return new(big.Int).Set(r.Num()), nil
 }
 
 // IntToNumber converts i to a number.

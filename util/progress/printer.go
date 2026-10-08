@@ -1,19 +1,22 @@
 package progress
 
 import (
+	"bytes"
 	"context"
 	"io"
 	"os"
+	"slices"
 	"sync"
 
 	"github.com/docker/buildx/util/logutil"
-	"github.com/mitchellh/hashstructure/v2"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/opencontainers/go-digest"
 	"github.com/sirupsen/logrus"
 	"go.opentelemetry.io/otel/attribute"
 	"go.opentelemetry.io/otel/metric"
+	"google.golang.org/protobuf/proto"
 )
 
 type printerState int
@@ -295,26 +298,34 @@ func WithOnClose(onclose func()) PrinterOpt {
 }
 
 func dedupWarnings(inp []client.VertexWarning) []client.VertexWarning {
-	m := make(map[uint64]client.VertexWarning)
+	res := make([]client.VertexWarning, 0, len(inp))
 	for _, w := range inp {
-		wcp := w
-		wcp.Vertex = ""
-		if wcp.SourceInfo != nil {
-			wcp.SourceInfo.Definition = nil
+		if !slices.ContainsFunc(res, func(prev client.VertexWarning) bool {
+			return equalWarnings(prev, w)
+		}) {
+			res = append(res, w)
 		}
-		h, err := hashstructure.Hash(wcp, hashstructure.FormatV2, nil)
-		if err != nil {
-			continue
-		}
-		if _, ok := m[h]; !ok {
-			m[h] = w
-		}
-	}
-	res := make([]client.VertexWarning, 0, len(m))
-	for _, w := range m {
-		res = append(res, w)
 	}
 	return res
+}
+
+// equalWarnings ignores the vertex and source definition, which can differ
+// between otherwise identical warnings from separate builds.
+func equalWarnings(a, b client.VertexWarning) bool {
+	if a.Level != b.Level || a.URL != b.URL || !bytes.Equal(a.Short, b.Short) ||
+		!slices.EqualFunc(a.Detail, b.Detail, bytes.Equal) {
+		return false
+	}
+	if (a.SourceInfo == nil) != (b.SourceInfo == nil) {
+		return false
+	}
+	if a.SourceInfo != nil && (a.SourceInfo.Filename != b.SourceInfo.Filename ||
+		a.SourceInfo.Language != b.SourceInfo.Language || !bytes.Equal(a.SourceInfo.Data, b.SourceInfo.Data)) {
+		return false
+	}
+	return slices.EqualFunc(a.Range, b.Range, func(a, b *pb.Range) bool {
+		return proto.Equal(a, b)
+	})
 }
 
 type interruptRequest struct {

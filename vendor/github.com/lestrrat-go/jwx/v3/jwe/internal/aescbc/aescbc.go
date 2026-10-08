@@ -10,6 +10,7 @@ import (
 	"errors"
 	"fmt"
 	"hash"
+	"slices"
 	"sync/atomic"
 
 	"github.com/lestrrat-go/jwx/v3/internal/pool"
@@ -22,6 +23,12 @@ const (
 const defaultBufSize int64 = 256 * 1024 * 1024
 
 var maxBufSize atomic.Int64
+
+// errInvalidCiphertext is the single opaque error returned by Hmac.Open for
+// every failure mode (pre-MAC structural checks and post-MAC tag mismatch).
+// Keeping one value across all paths prevents a structural-vs-cryptographic
+// oracle on remote decrypt endpoints.
+var errInvalidCiphertext = errors.New("invalid ciphertext")
 
 func init() {
 	SetMaxBufferSize(defaultBufSize)
@@ -108,7 +115,7 @@ type Hmac struct {
 	blockCipher  cipher.Block
 	hash         func() hash.Hash
 	keysize      int
-	tagsize      int
+	tlen         int
 	integrityKey []byte
 }
 
@@ -125,14 +132,23 @@ func New(key []byte, f BlockCipherFunc) (hmac *Hmac, err error) {
 		return
 	}
 
+	// Per RFC 7518 §5.2.2.1, T_LEN is the authentication tag length. For the
+	// three defined AES-CBC-HMAC variants (A128CBC-HS256, A192CBC-HS384,
+	// A256CBC-HS512) T_LEN happens to equal MAC_KEY_LEN (== keysize here),
+	// but we track it independently so a future variant with a different
+	// T_LEN won't silently mis-truncate the HMAC output.
 	var hfunc func() hash.Hash
+	var tlen int
 	switch keysize {
-	case 16:
+	case 16: // A128CBC-HS256
 		hfunc = sha256.New
-	case 24:
+		tlen = 16
+	case 24: // A192CBC-HS384
 		hfunc = sha512.New384
-	case 32:
+		tlen = 24
+	case 32: // A256CBC-HS512
 		hfunc = sha512.New
+		tlen = 32
 	default:
 		return nil, fmt.Errorf("unsupported key size %d", keysize)
 	}
@@ -142,11 +158,7 @@ func New(key []byte, f BlockCipherFunc) (hmac *Hmac, err error) {
 		hash:         hfunc,
 		integrityKey: ikey,
 		keysize:      keysize,
-		tagsize:      keysize, // NonceSize,
-		// While investigating GH #207, I stumbled upon another problem where
-		// the computed tags don't match on decrypt. After poking through the
-		// code using a bunch of debug statements, I've finally found out that
-		// tagsize = keysize makes the whole thing work.
+		tlen:         tlen,
 	}, nil
 }
 
@@ -157,7 +169,7 @@ func (c Hmac) NonceSize() int {
 
 // Overhead fulfills the crypto.AEAD interface
 func (c Hmac) Overhead() int {
-	return c.blockCipher.BlockSize() + c.tagsize
+	return c.blockCipher.BlockSize() + c.tlen
 }
 
 func (c Hmac) ComputeAuthTag(aad, nonce, ciphertext []byte) ([]byte, error) {
@@ -176,20 +188,26 @@ func (c Hmac) ComputeAuthTag(aad, nonce, ciphertext []byte) ([]byte, error) {
 	h.Write(ciphertext)
 	h.Write(buf[:])
 	s := h.Sum(nil)
-	return s[:c.tagsize], nil
+	return s[:c.tlen], nil
 }
 
 func ensureSize(dst []byte, n int) []byte {
-	// if the dst buffer has enough length just copy the relevant parts to it.
-	// Otherwise create a new slice that's big enough, and operate on that
-	// Note: I think go-jose has a bug in that it checks for cap(), but not len().
-	ret := dst
-	if diff := n - len(dst); diff > 0 {
-		// dst is not big enough
-		ret = make([]byte, n)
-		copy(ret, dst)
+	// Grow dst by n bytes, preserving its current contents as the prefix.
+	// This matches the crypto.AEAD append contract used by Seal/Open.
+	if n < 0 {
+		panic(fmt.Errorf("failed to allocate buffer"))
 	}
-	return ret
+
+	const maxInt = int64(^uint(0) >> 1)
+	maxAlloc := min(maxBufSize.Load(), maxInt)
+
+	if int64(len(dst)) > maxAlloc-int64(n) {
+		panic(fmt.Errorf("failed to allocate buffer"))
+	}
+
+	retlen := len(dst) + n
+	dst = slices.Grow(dst, n)
+	return dst[:retlen]
 }
 
 // Seal fulfills the crypto.AEAD interface
@@ -215,9 +233,7 @@ func (c Hmac) Seal(dst, nonce, plaintext, data []byte) []byte {
 		panic(fmt.Errorf("failed to seal on hmac: %v", err))
 	}
 
-	retlen := len(dst) + len(ciphertext) + len(authtag)
-
-	ret := ensureSize(dst, retlen)
+	ret := ensureSize(dst, len(ciphertext)+len(authtag))
 	out := ret[len(dst):]
 	n := copy(out, ciphertext)
 	copy(out[n:], authtag)
@@ -227,17 +243,32 @@ func (c Hmac) Seal(dst, nonce, plaintext, data []byte) []byte {
 
 // Open fulfills the crypto.AEAD interface
 func (c Hmac) Open(dst, nonce, ciphertext, data []byte) ([]byte, error) {
-	if len(ciphertext) < c.keysize {
-		return nil, fmt.Errorf(`invalid ciphertext (too short)`)
+	// Validate the IV length explicitly instead of letting
+	// cipher.NewCBCDecrypter panic on a mismatched nonce. The caller in
+	// jwe/internal/cipher also wraps Open in a defer/recover, and we
+	// intentionally keep BOTH layers: the explicit check turns a malformed
+	// IV into a normal error on the happy path (reviewable, testable, no
+	// stack unwind), while the recover stays as a belt-and-braces guard
+	// against other panics inside the stdlib CBC path (e.g. future
+	// invariants we don't currently enforce). Removing either layer would
+	// mean relying on the other — this way a regression in one is still
+	// caught by the other. See JWE-005 in the v4 security review.
+	// All pre-MAC structural failures return the exact same error value
+	// as the post-MAC failure below. Distinguishing "malformed nonce",
+	// "ciphertext too short", "ciphertext length not block-aligned", and
+	// "MAC mismatch" at the caller would leak whether an attacker probe
+	// is block-aligned vs cryptographically invalid — a structural-vs-MAC
+	// oracle that composes with other leaks. Keep all four paths opaque.
+	if len(nonce) != c.blockCipher.BlockSize() {
+		return nil, errInvalidCiphertext
+	}
+	if len(ciphertext) < c.tlen {
+		return nil, errInvalidCiphertext
 	}
 
-	tagOffset := len(ciphertext) - c.tagsize
+	tagOffset := len(ciphertext) - c.tlen
 	if tagOffset%c.blockCipher.BlockSize() != 0 {
-		return nil, fmt.Errorf(
-			"invalid ciphertext (invalid length: %d %% %d != 0)",
-			tagOffset,
-			c.blockCipher.BlockSize(),
-		)
+		return nil, errInvalidCiphertext
 	}
 	tag := ciphertext[tagOffset:]
 	ciphertext = ciphertext[:tagOffset]
@@ -248,16 +279,15 @@ func (c Hmac) Open(dst, nonce, ciphertext, data []byte) ([]byte, error) {
 	}
 
 	cbc := cipher.NewCBCDecrypter(c.blockCipher, nonce)
-	buf := pool.ByteSlice().GetCapacity(tagOffset)
+	buf := pool.ByteSlice().GetCapacity(tagOffset)[:tagOffset]
 	defer pool.ByteSlice().Put(buf)
-	buf = buf[:tagOffset]
 
 	cbc.CryptBlocks(buf, ciphertext)
 
 	toRemove, good := extractPadding(buf)
 	cmp := subtle.ConstantTimeCompare(expectedTag, tag) & int(good)
 	if cmp != 1 {
-		return nil, errors.New(`invalid ciphertext`)
+		return nil, errInvalidCiphertext
 	}
 
 	plaintext := buf[:len(buf)-toRemove]

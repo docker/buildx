@@ -65,9 +65,9 @@ func generateECDHESKeyECDSA(alg string, calg string, keysize uint32, pubkey *ecd
 }
 
 // generateECDHESKeyX25519 generates the key material for X25519 keys using ECDH-ES
-func generateECDHESKeyX25519(alg string, calg string, keysize uint32, pubkey *ecdh.PublicKey) (keygen.ByteWithECPublicKey, error) {
+func generateECDHESKeyX25519(alg string, calg string, keysize uint32, pubkey *ecdh.PublicKey, apu, apv []byte) (keygen.ByteWithECPublicKey, error) {
 	// Generate the key directly
-	kg, err := keygen.X25519(alg, calg, int(keysize), pubkey)
+	kg, err := keygen.X25519(alg, calg, int(keysize), pubkey, apu, apv)
 	if err != nil {
 		return keygen.ByteWithECPublicKey{}, fmt.Errorf(`failed to generate X25519 key: %w`, err)
 	}
@@ -103,8 +103,8 @@ func KeyEncryptECDHESKeyWrapECDSA(cek []byte, alg string, apu, apv []byte, pubke
 }
 
 // KeyEncryptECDHESKeyWrapX25519 encrypts the CEK using ECDH-ES with key wrapping for X25519 keys
-func KeyEncryptECDHESKeyWrapX25519(cek []byte, alg string, _ []byte, _ []byte, pubkey *ecdh.PublicKey, keysize uint32, calg string) (keygen.ByteSource, error) {
-	bwpk, err := generateECDHESKeyX25519(alg, calg, keysize, pubkey)
+func KeyEncryptECDHESKeyWrapX25519(cek []byte, alg string, apu []byte, apv []byte, pubkey *ecdh.PublicKey, keysize uint32, calg string) (keygen.ByteSource, error) {
+	bwpk, err := generateECDHESKeyX25519(alg, calg, keysize, pubkey, apu, apv)
 	if err != nil {
 		return nil, err
 	}
@@ -136,8 +136,8 @@ func KeyEncryptECDHESECDSA(_ []byte, alg string, apu, apv []byte, pubkey *ecdsa.
 }
 
 // KeyEncryptECDHESX25519 encrypts using ECDH-ES direct (no key wrapping) for X25519 keys
-func KeyEncryptECDHESX25519(_ []byte, alg string, _, _ []byte, pubkey *ecdh.PublicKey, keysize uint32, calg string) (keygen.ByteSource, error) {
-	bwpk, err := generateECDHESKeyX25519(alg, calg, keysize, pubkey)
+func KeyEncryptECDHESX25519(_ []byte, alg string, apu, apv []byte, pubkey *ecdh.PublicKey, keysize uint32, calg string) (keygen.ByteSource, error) {
+	bwpk, err := generateECDHESKeyX25519(alg, calg, keysize, pubkey, apu, apv)
 	if err != nil {
 		return nil, err
 	}

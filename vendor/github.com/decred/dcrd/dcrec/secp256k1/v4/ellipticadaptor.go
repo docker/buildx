@@ -1,4 +1,4 @@
-// Copyright 2020-2022 The Decred developers
+// Copyright 2020-2026 The Decred developers
 // Use of this source code is governed by an ISC
 // license that can be found in the LICENSE file.
 
@@ -63,8 +63,8 @@ type KoblitzCurve struct {
 // bigAffineToJacobian takes an affine point (x, y) as big integers and converts
 // it to Jacobian point with Z=1.
 func bigAffineToJacobian(x, y *big.Int, result *JacobianPoint) {
-	result.X.SetByteSlice(x.Bytes())
-	result.Y.SetByteSlice(y.Bytes())
+	result.X.SetByteSlice(new(big.Int).Mod(x, curveParams.P).Bytes())
+	result.Y.SetByteSlice(new(big.Int).Mod(y, curveParams.P).Bytes())
 	result.Z.SetInt(1)
 }
 
@@ -91,6 +91,15 @@ func (curve *KoblitzCurve) Params() *elliptic.CurveParams {
 //
 // This is part of the elliptic.Curve interface implementation.  This function
 // differs from the crypto/elliptic algorithm since a = 0 not -3.
+//
+// NOTE: Unfortunately, the Go stdlib elliptic.Curve interface requires that the
+// conventional point at infinity (0, 0) is not considered on the curve which is
+// contrary to what is typically expected since the point at infinity is in fact
+// is a valid curve point.
+//
+// Deprecated: The standard library elliptic.Curve interface is now deprecated
+// and callers should interact with the safer, and much faster, specialized
+// methods instead.
 func (curve *KoblitzCurve) IsOnCurve(x, y *big.Int) bool {
 	// Convert big ints to a Jacobian point for faster arithmetic.
 	var point JacobianPoint
@@ -101,6 +110,14 @@ func (curve *KoblitzCurve) IsOnCurve(x, y *big.Int) bool {
 // Add returns the sum of (x1,y1) and (x2,y2).
 //
 // This is part of the elliptic.Curve interface implementation.
+//
+// NOTE: Per the documentation of the elliptic.Curve interface, the behavior
+// when the input is not a point on the curve is undefined.  Callers must ensure
+// they are calling this method with valid points.
+//
+// Deprecated: The standard library elliptic.Curve interface is now deprecated
+// and callers should interact with the safer, and much faster, specialized
+// methods instead.
 func (curve *KoblitzCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
 	// The point at infinity is the identity according to the group law for
 	// elliptic curve cryptography.  Thus, ∞ + P = P and P + ∞ = P.
@@ -124,6 +141,14 @@ func (curve *KoblitzCurve) Add(x1, y1, x2, y2 *big.Int) (*big.Int, *big.Int) {
 // Double returns 2*(x1,y1).
 //
 // This is part of the elliptic.Curve interface implementation.
+//
+// NOTE: Per the documentation of the elliptic.Curve interface, the behavior
+// when the input is not a point on the curve is undefined.  Callers must ensure
+// they are calling this method with valid points.
+//
+// Deprecated: The standard library elliptic.Curve interface is now deprecated
+// and callers should interact with the safer, and much faster, specialized
+// methods instead.
 func (curve *KoblitzCurve) Double(x1, y1 *big.Int) (*big.Int, *big.Int) {
 	if y1.Sign() == 0 {
 		return new(big.Int), new(big.Int)
@@ -156,6 +181,14 @@ func moduloReduce(k []byte) []byte {
 // ScalarMult returns k*(bx, by) where k is a big endian integer.
 //
 // This is part of the elliptic.Curve interface implementation.
+//
+// NOTE: Per the documentation of the elliptic.Curve interface, the behavior
+// when the input is not a point on the curve is undefined.  Callers must ensure
+// they are calling this method with valid points.
+//
+// Deprecated: The standard library elliptic.Curve interface is now deprecated
+// and callers should interact with the safer, and much faster, specialized
+// methods instead.
 func (curve *KoblitzCurve) ScalarMult(bx, by *big.Int, k []byte) (*big.Int, *big.Int) {
 	// Convert the affine coordinates from big integers to Jacobian points,
 	// do the multiplication in Jacobian projective space, and convert the
@@ -172,6 +205,10 @@ func (curve *KoblitzCurve) ScalarMult(bx, by *big.Int, k []byte) (*big.Int, *big
 // big endian integer.
 //
 // This is part of the elliptic.Curve interface implementation.
+//
+// Deprecated: The standard library elliptic.Curve interface is now deprecated
+// and callers should interact with the safer, and much faster, specialized
+// methods instead.
 func (curve *KoblitzCurve) ScalarBaseMult(k []byte) (*big.Int, *big.Int) {
 	// Perform the multiplication and convert the Jacobian point back to affine
 	// big.Ints.
@@ -250,6 +287,10 @@ var secp256k1 = &KoblitzCurve{
 }
 
 // S256 returns an elliptic.Curve which implements secp256k1.
+//
+// Deprecated: The standard library elliptic.Curve interface is now deprecated
+// and callers should interact with the safer, and much faster, specialized
+// methods instead.
 func S256() *KoblitzCurve {
 	return secp256k1
 }

@@ -4,13 +4,14 @@ import (
 	"crypto"
 	"fmt"
 	"reflect"
+	"slices"
 
 	"github.com/lestrrat-go/jwx/v3/internal/base64"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 )
 
 func init() {
-	RegisterKeyExporter(jwa.OctetSeq(), KeyExportFunc(octetSeqToRaw))
+	RegisterKeyExporter(KeyKind(jwa.OctetSeq().String()), KeyExportFunc(octetSeqToRaw))
 }
 
 func (k *symmetricKey) Import(rawKey []byte) error {
@@ -21,7 +22,7 @@ func (k *symmetricKey) Import(rawKey []byte) error {
 		return fmt.Errorf(`non-empty []byte key required`)
 	}
 
-	k.octets = rawKey
+	k.octets = slices.Clone(rawKey)
 
 	return nil
 }
@@ -44,14 +45,27 @@ func octetSeqToRaw(key Key, hint any) (any, error) {
 			return nil, fmt.Errorf(`invalid destination object type %T for symmetric key: %w`, hint, ContinueError())
 		}
 
-		locker, ok := key.(rlocker)
-		if ok {
+		// rlocker is unexported with unexported methods, so only our
+		// concrete types implement it. A successful assertion lets us
+		// type-assert to the concrete struct and read fields directly
+		// under a single batch lock. This avoids nested RLock (which
+		// deadlocks when a writer is pending) while preserving an
+		// atomic snapshot of all fields.
+		var ooctets []byte
+		if locker, ok := key.(rlocker); ok {
 			locker.rlock()
-			defer locker.runlock()
+			concrete := key.(*symmetricKey) //nolint:forcetypeassert // rlocker is unexported; only our concrete types implement it
+			ooctets = concrete.octets
+			locker.runlock()
+		} else {
+			// External implementation — use self-locking interface getters.
+			var ok bool
+			if ooctets, ok = key.Octets(); !ok {
+				return nil, fmt.Errorf(`jwk.SymmetricKey: missing "k" field`)
+			}
 		}
 
-		ooctets, ok := key.Octets()
-		if !ok {
+		if ooctets == nil {
 			return nil, fmt.Errorf(`jwk.SymmetricKey: missing "k" field`)
 		}
 

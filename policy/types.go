@@ -42,8 +42,12 @@ type Env struct {
 }
 
 type HTTP struct {
-	URL     string              `json:"url,omitempty"`
-	Schema  string              `json:"schema,omitempty"`
+	URL    string `json:"url,omitempty"`
+	Schema string `json:"schema,omitempty"`
+
+	// Host is the lowercase ASCII hostname (IDNA encoded when needed) with a
+	// non-default port, or a canonical IP literal. IPv4-mapped IPv6 addresses
+	// remain IPv6 literals. Default and empty ports are omitted.
 	Host    string              `json:"host,omitempty"`
 	Path    string              `json:"path,omitempty"`
 	Query   map[string][]string `json:"query,omitempty"`

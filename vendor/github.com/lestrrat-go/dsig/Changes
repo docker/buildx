@@ -1,5 +1,28 @@
 Changes
 =======
 
+v1.2.1 7 Apr 2026
+  * Add `SignDigest()` for signing pre-computed digests. Supported for HMAC,
+    RSA (PKCS1v15 and PSS), and ECDSA families. EdDSA and Custom return an error.
+
+v1.2.0 6 Apr 2026
+  * Add `VerifyDigest()` for verifying signatures against pre-computed digests.
+    Supported for HMAC, RSA, and ECDSA families. EdDSA and Custom return an error.
+
+  * Add low-level digest verification functions: `VerifyHMACDigest()`,
+    `VerifyRSADigest()`, `VerifyECDSADigest()`.
+
+v1.1.0 2 Apr 2026
+  * Add `Custom` algorithm family for registering user-defined sign/verify
+    implementations. For the `Custom` family, `AlgorithmInfo.Meta` must implement
+    the `Signer` and/or `Verifier` interfaces. The implementation struct can
+    carry any additional metadata it needs (hash functions, curves, etc.).
+
+  * Add `UnregisterAlgorithm()` for removing previously registered custom
+    algorithms. Built-in algorithms are protected and cannot be unregistered.
+
+  * `RegisterAlgorithm()` now rejects re-registration of an already-registered
+    algorithm name. Use `UnregisterAlgorithm()` first if you need to replace it.
+
 v1.0.0 - 18 Aug 2025
-* Initial release
+  * Initial release

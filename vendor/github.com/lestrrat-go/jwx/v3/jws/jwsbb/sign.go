@@ -21,9 +21,10 @@ import (
 // Not all algorithms require this parameter, but it is included for consistency.
 // 99% of the time, you can pass nil for rr, and it will work fine.
 func Sign(key any, alg string, payload []byte, rr io.Reader) ([]byte, error) {
-	dsigAlg, ok := getDsigAlgorithm(alg)
+	dsigAlg, ok := GetDsigAlgorithm(alg)
 	if !ok {
-		return nil, fmt.Errorf(`jwsbb.Sign: unsupported signature algorithm %q`, alg)
+		// For custom algorithms registered with dsig, JWS name = dsig name
+		dsigAlg = alg
 	}
 
 	// Get dsig algorithm info to determine key conversion strategy
@@ -40,7 +41,9 @@ func Sign(key any, alg string, payload []byte, rr io.Reader) ([]byte, error) {
 	case dsig.ECDSA:
 		return dispatchECDSASign(key, dsigAlg, payload, rr)
 	case dsig.EdDSAFamily:
-		return dispatchEdDSASign(key, dsigAlg, payload, rr)
+		return dispatchEdDSASign(key, alg, dsigAlg, payload, rr)
+	case dsig.Custom:
+		return dsig.Sign(key, dsigAlg, payload, rr)
 	default:
 		return nil, fmt.Errorf(`jwsbb.Sign: unsupported dsig algorithm family %q`, dsigInfo.Family)
 	}
@@ -91,11 +94,17 @@ func dispatchECDSASign(key any, dsigAlg string, payload []byte, rr io.Reader) ([
 	return dsig.Sign(privkey, dsigAlg, payload, rr)
 }
 
-func dispatchEdDSASign(key any, dsigAlg string, payload []byte, rr io.Reader) ([]byte, error) {
+func dispatchEdDSASign(key any, jwsAlg, dsigAlg string, payload []byte, rr io.Reader) ([]byte, error) {
+	// Note: Extension algorithms (e.g. Ed448) are registered as dsig.Custom family,
+	// so they take the dsig.Custom branch in Sign() and never reach this function.
+
 	// Try crypto.Signer first (dsig can handle it directly)
 	if signer, ok := key.(crypto.Signer); ok {
 		// Verify it's an EdDSA key
-		if _, ok := signer.Public().(ed25519.PublicKey); ok {
+		if pub, ok := signer.Public().(ed25519.PublicKey); ok {
+			if err := validateEdDSACurve(jwsAlg, pub); err != nil {
+				return nil, fmt.Errorf(`jwsbb.Sign: %w`, err)
+			}
 			return dsig.Sign(signer, dsigAlg, payload, rr)
 		}
 	}
@@ -104,6 +113,10 @@ func dispatchEdDSASign(key any, dsigAlg string, payload []byte, rr io.Reader) ([
 	var privkey ed25519.PrivateKey
 	if err := keyconv.Ed25519PrivateKey(&privkey, key); err != nil {
 		return nil, fmt.Errorf(`jwsbb.Sign: invalid key type %T. ed25519.PrivateKey is required: %w`, key, err)
+	}
+
+	if err := validateEdDSACurve(jwsAlg, privkey.Public()); err != nil {
+		return nil, fmt.Errorf(`jwsbb.Sign: %w`, err)
 	}
 
 	return dsig.Sign(privkey, dsigAlg, payload, rr)

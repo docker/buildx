@@ -9,9 +9,6 @@ import (
 )
 
 // Verify verifies a digital signature using the specified key and algorithm.
-//
-// This function loads the verifier registered in the dsig package _ONLY_.
-// It does not support custom verifiers that the user might have registered.
 func Verify(key any, alg string, payload, signature []byte) error {
 	info, ok := GetAlgorithmInfo(alg)
 	if !ok {
@@ -27,9 +24,98 @@ func Verify(key any, alg string, payload, signature []byte) error {
 		return dispatchECDSAVerify(key, info, payload, signature)
 	case EdDSAFamily:
 		return dispatchEdDSAVerify(key, info, payload, signature)
+	case Custom:
+		return dispatchCustomVerify(key, info, payload, signature)
 	default:
 		return fmt.Errorf(`dsig.Verify: unsupported signature family %q`, info.Family)
 	}
+}
+
+// VerifyDigest verifies a signature given a pre-computed digest.
+//
+// For RSA/ECDSA, digest is the hash of the signing input and key is the
+// public key used for verification.
+//
+// For HMAC, digest must be the pre-computed MAC (i.e. the output of
+// hmac.New(hashFunc, key) after writing the signing input). The key
+// parameter is not used because it is already incorporated into the MAC.
+//
+// EdDSA and Custom families are not supported and return an error.
+func VerifyDigest(key any, alg string, digest, signature []byte) error {
+	info, ok := GetAlgorithmInfo(alg)
+	if !ok {
+		return fmt.Errorf(`dsig.VerifyDigest: unsupported signature algorithm %q`, alg)
+	}
+
+	switch info.Family {
+	case HMAC:
+		// key is not used here: the caller has already computed the HMAC
+		// (which incorporates the key) and passed it as digest.
+		return VerifyHMACDigest(digest, signature)
+	case RSA:
+		return dispatchRSAVerifyDigest(key, info, digest, signature)
+	case ECDSA:
+		return dispatchECDSAVerifyDigest(key, info, digest, signature)
+	case EdDSAFamily:
+		return fmt.Errorf(`dsig.VerifyDigest: EdDSA does not support digest-based verification`)
+	case Custom:
+		// TODO: a DigestVerifier interface (optional, checked here) would let
+		// custom algorithms opt in to digest-based verification.
+		return fmt.Errorf(`dsig.VerifyDigest: custom algorithms do not support digest-based verification`)
+	default:
+		return fmt.Errorf(`dsig.VerifyDigest: unsupported signature family %q`, info.Family)
+	}
+}
+
+func dispatchRSAVerifyDigest(key any, info AlgorithmInfo, digest, signature []byte) error {
+	meta, ok := info.Meta.(RSAFamilyMeta)
+	if !ok {
+		return fmt.Errorf(`dsig.VerifyDigest: invalid RSA metadata`)
+	}
+
+	var pubkey *rsa.PublicKey
+
+	if cs, ok := key.(crypto.Signer); ok {
+		cpub := cs.Public()
+		switch cpub := cpub.(type) {
+		case rsa.PublicKey:
+			pubkey = &cpub
+		case *rsa.PublicKey:
+			pubkey = cpub
+		default:
+			return fmt.Errorf(`dsig.VerifyDigest: failed to retrieve rsa.PublicKey out of crypto.Signer %T`, key)
+		}
+	} else {
+		var ok bool
+		pubkey, ok = key.(*rsa.PublicKey)
+		if !ok {
+			return fmt.Errorf(`dsig.VerifyDigest: failed to retrieve *rsa.PublicKey out of %T`, key)
+		}
+	}
+
+	return VerifyRSADigest(pubkey, digest, signature, meta.Hash, meta.PSS)
+}
+
+// Note: the crypto.Signer → *ecdsa.PublicKey extraction below duplicates
+// logic in VerifyECDSACryptoSigner. We can't call that function because it
+// hashes the payload internally. If the extraction logic changes, update both.
+func dispatchECDSAVerifyDigest(key any, info AlgorithmInfo, digest, signature []byte) error {
+	pubkey, cs, isCryptoSigner, err := ecdsaGetVerifierKey(key)
+	if err != nil {
+		return fmt.Errorf(`dsig.VerifyDigest: %w`, err)
+	}
+	if isCryptoSigner {
+		cpub := cs.Public()
+		switch cpub := cpub.(type) {
+		case ecdsa.PublicKey:
+			pubkey = &cpub
+		case *ecdsa.PublicKey:
+			pubkey = cpub
+		default:
+			return fmt.Errorf(`dsig.VerifyDigest: expected *ecdsa.PublicKey from crypto.Signer, got %T`, cpub)
+		}
+	}
+	return VerifyECDSADigest(pubkey, digest, signature)
 }
 
 func dispatchHMACVerify(key any, info AlgorithmInfo, payload, signature []byte) error {
@@ -108,6 +194,14 @@ func dispatchEdDSAVerify(key any, _ AlgorithmInfo, payload, signature []byte) er
 	}
 
 	return VerifyEdDSA(pubkey, payload, signature)
+}
+
+func dispatchCustomVerify(key any, info AlgorithmInfo, payload, signature []byte) error {
+	verifier, ok := info.Meta.(Verifier)
+	if !ok {
+		return fmt.Errorf(`dsig.Verify: algorithm has no verifier registered`)
+	}
+	return verifier.Verify(key, payload, signature)
 }
 
 func ecdsaGetVerifierKey(key any) (*ecdsa.PublicKey, crypto.Signer, bool, error) {

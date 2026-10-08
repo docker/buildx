@@ -27,8 +27,8 @@ func NewSet() Set {
 }
 
 func (s *set) Set(n string, v any) error {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
+	s.mu.Lock()
+	defer s.mu.Unlock()
 
 	if n == keysKey {
 		vl, ok := v.([]Key)
@@ -95,8 +95,15 @@ func (s *set) AddKey(key Key) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 
-	if reflect.ValueOf(key).IsNil() {
-		panic("nil key")
+	rv := reflect.ValueOf(key)
+	if !rv.IsValid() {
+		return fmt.Errorf(`(jwk.Set).AddKey: nil key`)
+	}
+	switch rv.Kind() {
+	case reflect.Ptr, reflect.Interface, reflect.Chan, reflect.Func, reflect.Map, reflect.Slice:
+		if rv.IsNil() {
+			return fmt.Errorf(`(jwk.Set).AddKey: nil key`)
+		}
 	}
 
 	if i := s.indexNL(key); i > -1 {
@@ -144,6 +151,8 @@ func (s *set) Clear() error {
 }
 
 func (s *set) Keys() []string {
+	s.mu.RLock()
+	defer s.mu.RUnlock()
 	ret := make([]string, len(s.privateParams))
 	var i int
 	for k := range s.privateParams {
@@ -161,7 +170,8 @@ func (s *set) MarshalJSON() ([]byte, error) {
 	defer pool.BytesBuffer().Put(buf)
 	enc := json.NewEncoder(buf)
 
-	fields := []string{keysKey}
+	fields := make([]string, 0, 1+len(s.privateParams))
+	fields = append(fields, keysKey)
 	for k := range s.privateParams {
 		fields = append(fields, k)
 	}
@@ -197,6 +207,20 @@ func (s *set) MarshalJSON() ([]byte, error) {
 	return ret, nil
 }
 
+func (s *set) setMaxKeys(n int) {
+	s.maxKeys = n
+}
+
+func (s *set) setRejectDuplicateKID(v bool) {
+	s.rejectDuplicateKID = v
+}
+
+// UnmarshalJSON streams a JWKS document. The "keys" array is read
+// element-by-element with the configured cap enforced BEFORE the
+// (cap+1)-th element is decoded — an attacker-controlled input length
+// cannot force allocation past the cap. This entry point requires
+// JWKS shape; bare JWK input is rejected here. Callers that don't
+// know the shape ahead of time should use [Parse], which dispatches.
 func (s *set) UnmarshalJSON(data []byte) error {
 	s.mu.Lock()
 	defer s.mu.Unlock()
@@ -213,7 +237,12 @@ func (s *set) UnmarshalJSON(data []byte) error {
 		ignoreParseError = dc.IgnoreParseError()
 	}
 
-	var sawKeysField bool
+	maxK := s.maxKeys
+	if maxK <= 0 {
+		maxK = int(maxKeys.Load())
+	}
+	rejectDupKid := s.rejectDuplicateKID || rejectDuplicateKID.Load()
+
 	dec := json.NewDecoder(bytes.NewReader(data))
 LOOP:
 	for {
@@ -224,9 +253,7 @@ LOOP:
 
 		switch tok := tok.(type) {
 		case json.Delim:
-			// Assuming we're doing everything correctly, we should ONLY
-			// get either tokens.OpenCurlyBracket or tokens.CloseCurlyBracket here.
-			if tok == tokens.CloseCurlyBracket { // End of object
+			if tok == tokens.CloseCurlyBracket {
 				break LOOP
 			} else if tok != tokens.OpenCurlyBracket {
 				return fmt.Errorf(`expected '%c' but got '%c'`, tokens.OpenCurlyBracket, tok)
@@ -234,21 +261,54 @@ LOOP:
 		case string:
 			switch tok {
 			case "keys":
-				sawKeysField = true
-				var list []json.RawMessage
-				if err := dec.Decode(&list); err != nil {
+				openTok, err := dec.Token()
+				if err != nil {
 					return fmt.Errorf(`failed to decode "keys": %w`, err)
 				}
+				openDelim, ok := openTok.(json.Delim)
+				if !ok || openDelim != tokens.OpenSquareBracket {
+					return fmt.Errorf(`failed to decode "keys": expected '%c' but got %v`, tokens.OpenSquareBracket, openTok)
+				}
 
-				for i, keysrc := range list {
-					key, err := ParseKey(keysrc, options...)
+				var seenKIDs map[string]struct{}
+				if rejectDupKid {
+					seenKIDs = make(map[string]struct{})
+				}
+				var i int
+				for dec.More() {
+					if i >= maxK {
+						return fmt.Errorf(`too many keys in "keys" array: max %d`, maxK)
+					}
+					var raw json.RawMessage
+					if err := dec.Decode(&raw); err != nil {
+						return fmt.Errorf(`failed to decode "keys": %w`, err)
+					}
+					key, err := ParseKey(raw, options...)
 					if err != nil {
 						if !ignoreParseError {
 							return fmt.Errorf(`failed to decode key #%d in "keys": %w`, i, err)
 						}
+						i++
 						continue
 					}
+					if seenKIDs != nil {
+						if kid, ok := key.KeyID(); ok && kid != "" {
+							if _, dup := seenKIDs[kid]; dup {
+								return fmt.Errorf(`duplicate "kid" %q in "keys" array`, kid)
+							}
+							seenKIDs[kid] = struct{}{}
+						}
+					}
 					s.keys = append(s.keys, key)
+					i++
+				}
+				closeTok, err := dec.Token()
+				if err != nil {
+					return fmt.Errorf(`failed to decode "keys": %w`, err)
+				}
+				closeDelim, ok := closeTok.(json.Delim)
+				if !ok || closeDelim != tokens.CloseSquareBracket {
+					return fmt.Errorf(`failed to decode "keys": expected '%c' but got %v`, tokens.CloseSquareBracket, closeTok)
 				}
 			default:
 				var v any
@@ -259,19 +319,6 @@ LOOP:
 			}
 		}
 	}
-
-	// This is really silly, but we can only detect the
-	// lack of the "keys" field after going through the
-	// entire object once
-	// Not checking for len(s.keys) == 0, because it could be
-	// an empty key set
-	if !sawKeysField {
-		key, err := ParseKey(data, options...)
-		if err != nil {
-			return fmt.Errorf(`failed to parse sole key in key set`)
-		}
-		s.keys = append(s.keys, key)
-	}
 	return nil
 }
 
@@ -279,11 +326,7 @@ func (s *set) LookupKeyID(kid string) (Key, bool) {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 
-	for i := range s.Len() {
-		key, ok := s.Key(i)
-		if !ok {
-			return nil, false
-		}
+	for _, key := range s.keys {
 		gotkid, ok := key.KeyID()
 		if ok && gotkid == kid {
 			return key, true

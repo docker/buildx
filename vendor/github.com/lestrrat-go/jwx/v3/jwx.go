@@ -28,6 +28,12 @@ import (
 
 // DecoderSettings gives you a access to configure the "encoding/json".Decoder
 // used to decode JSON objects within the jwx framework.
+//
+// All options accepted here have process-global effect and are intended
+// to be applied exactly once at program startup, before any goroutine
+// begins parsing JWx payloads. See the godoc on individual JSONOption
+// constructors (e.g. [WithUseNumber]) for the concurrency contract of
+// each setting.
 func DecoderSettings(options ...JSONOption) {
 	// XXX We're using this format instead of just passing a single boolean
 	// in case a new option is to be added some time later

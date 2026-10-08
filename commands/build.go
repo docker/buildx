@@ -1203,7 +1203,7 @@ func RunBuild(ctx context.Context, dockerCli command.Cli, in *BuildOptions, inSt
 
 	var inputs *build.Inputs
 	buildOptions := map[string]build.Options{defaultTargetName: opts}
-	resp, err := build.BuildWithResultHandler(ctx, nodes, buildOptions, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), progress, bh)
+	resp, err := build.Build(ctx, nodes, buildOptions, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), progress, bh)
 	err = wrapBuildError(err, false)
 	if err != nil {
 		return nil, nil, err

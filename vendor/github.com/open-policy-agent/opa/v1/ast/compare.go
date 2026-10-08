@@ -38,7 +38,6 @@ import (
 // is empty.
 // Other comparisons are consistent but not defined.
 func Compare(a, b any) int {
-
 	if t, ok := a.(*Term); ok {
 		if t == nil {
 			a = nil
@@ -75,6 +74,9 @@ func Compare(a, b any) int {
 	}
 
 	switch a := a.(type) {
+	case *Not:
+		b := b.(*Not)
+		return a.Compare(b)
 	case Null:
 		return 0
 	case Boolean:
@@ -117,25 +119,13 @@ func Compare(a, b any) int {
 		return a.Compare(b.(Set))
 	case *ArrayComprehension:
 		b := b.(*ArrayComprehension)
-		if cmp := Compare(a.Term, b.Term); cmp != 0 {
-			return cmp
-		}
-		return a.Body.Compare(b.Body)
+		return a.Compare(b)
 	case *ObjectComprehension:
 		b := b.(*ObjectComprehension)
-		if cmp := Compare(a.Key, b.Key); cmp != 0 {
-			return cmp
-		}
-		if cmp := Compare(a.Value, b.Value); cmp != 0 {
-			return cmp
-		}
-		return a.Body.Compare(b.Body)
+		return a.Compare(b)
 	case *SetComprehension:
 		b := b.(*SetComprehension)
-		if cmp := Compare(a.Term, b.Term); cmp != 0 {
-			return cmp
-		}
-		return a.Body.Compare(b.Body)
+		return a.Compare(b)
 	case Call:
 		return termSliceCompare(a, b.(Call))
 	case *Expr:
@@ -144,6 +134,10 @@ func Compare(a, b any) int {
 		return a.Compare(b.(*SomeDecl))
 	case *Every:
 		return a.Compare(b.(*Every))
+	case *LogicalAnd:
+		return a.Compare(b.(*LogicalAnd))
+	case *LogicalOr:
+		return a.Compare(b.(*LogicalOr))
 	case *With:
 		return a.Compare(b.(*With))
 	case Body:
@@ -166,14 +160,8 @@ func Compare(a, b any) int {
 	panic(fmt.Sprintf("illegal value: %T", a))
 }
 
-type termSlice []*Term
-
-func (s termSlice) Less(i, j int) bool { return Compare(s[i].Value, s[j].Value) < 0 }
-func (s termSlice) Swap(i, j int)      { s[i], s[j] = s[j], s[i] }
-func (s termSlice) Len() int           { return len(s) }
-
-func sortOrder(x any) int {
-	switch x.(type) {
+func valueSortOrder(v Value) int {
+	switch v.(type) {
 	case Null:
 		return 0
 	case Boolean:
@@ -202,6 +190,28 @@ func sortOrder(x any) int {
 		return 12
 	case Call:
 		return 13
+	case *Not:
+		return 111
+	}
+	return 10000000
+}
+
+func valueTypeCompare[A, B Value](a A, b B) int {
+	sortA := valueSortOrder(a)
+	sortB := valueSortOrder(b)
+
+	if sortA < sortB {
+		return -1
+	} else if sortB < sortA {
+		return 1
+	}
+	return 0
+}
+
+func sortOrder(x any) int {
+	switch v := x.(type) {
+	case Value:
+		return valueSortOrder(v)
 	case Args:
 		return 14
 	case *Expr:
@@ -210,6 +220,10 @@ func sortOrder(x any) int {
 		return 101
 	case *Every:
 		return 102
+	case *LogicalAnd:
+		return 103
+	case *LogicalOr:
+		return 104
 	case *With:
 		return 110
 	case *Head:
@@ -281,7 +295,7 @@ func rulesCompare(a, b []*Rule) int {
 func termSliceCompare(a, b []*Term) int {
 	minLen := min(len(b), len(a))
 	for i := range minLen {
-		if cmp := Compare(a[i], b[i]); cmp != 0 {
+		if cmp := a[i].Value.Compare(b[i].Value); cmp != 0 {
 			return cmp
 		}
 	}
@@ -296,7 +310,7 @@ func termSliceCompare(a, b []*Term) int {
 func withSliceCompare(a, b []*With) int {
 	minLen := min(len(b), len(a))
 	for i := range minLen {
-		if cmp := Compare(a[i], b[i]); cmp != 0 {
+		if cmp := a[i].Compare(b[i]); cmp != 0 {
 			return cmp
 		}
 	}
@@ -322,25 +336,17 @@ func TermValueCompare(a, b *Term) int {
 	return a.Value.Compare(b.Value)
 }
 
-func TermValueEqual(a, b *Term) bool {
-	return ValueEqual(a.Value, b.Value)
-}
-
 func ValueEqual(a, b Value) bool {
 	switch v := a.(type) {
-	case Null:
-		return v.Equal(b)
-	case Boolean:
-		return v.Equal(b)
+	case Null, Boolean, String, Var:
+		return v == b
 	case Number:
-		return v.Equal(b)
-	case String:
-		return v.Equal(b)
-	case Var:
 		return v.Equal(b)
 	case Ref:
 		return v.Equal(b)
 	case *Array:
+		return v.Equal(b)
+	case *Not:
 		return v.Equal(b)
 	case *TemplateString:
 		return v.Equal(b)

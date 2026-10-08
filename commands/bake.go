@@ -7,8 +7,10 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	stderrors "errors"
 	"fmt"
 	"io"
+	"maps"
 	"os"
 	"path"
 	"slices"
@@ -17,6 +19,7 @@ import (
 	"strings"
 	"sync"
 	"text/tabwriter"
+	"time"
 
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/v2/pkg/epoch"
@@ -39,6 +42,7 @@ import (
 	"github.com/docker/buildx/util/tracing"
 	"github.com/docker/buildx/util/urlutil"
 	"github.com/docker/cli/cli/command"
+	"github.com/moby/buildkit/client"
 	"github.com/moby/buildkit/frontend/dockerfile/dfgitutil"
 	"github.com/moby/buildkit/identity"
 	"github.com/moby/buildkit/session/auth/authprovider"
@@ -70,6 +74,7 @@ type bakeOptions struct {
 	exportPush   bool
 	exportLoad   bool
 	callFunc     string
+	jobs         string
 
 	print bool
 	list  string
@@ -97,6 +102,11 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	url, cmdContext, targets := bakeArgs(targets)
 	if len(targets) == 0 {
 		targets = []string{"default"}
+	}
+
+	execution, err := parseBakeJobs(in.jobs)
+	if err != nil {
+		return err
 	}
 
 	callFunc, err := buildflags.ParseCallFunc(in.callFunc)
@@ -381,8 +391,8 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		return err
 	}
 	if progressMode == progressui.RawJSONMode {
-		if exp.LocalOutputDelete {
-			return errors.Errorf("additional privileges requested: pass %q to grant requested privileges", "--allow="+string(bake.EntitlementKeyBuildxLocalDelete))
+		if err := exp.Check(url != ""); err != nil {
+			return err
 		}
 	} else {
 		if err := exp.Prompt(ctx, url != "", &syncWriter{w: dockerCli.Err(), wait: printer.Wait}); err != nil {
@@ -401,7 +411,26 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 
 	done := timeBuildCommand(mp, attributes)
-	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), printer)
+	var bh *build.Handler
+	if execution.Mode != build.ExecutionModeFailFast || execution.Parallel > 0 {
+		bh = &build.Handler{
+			Execution: execution,
+		}
+	}
+	var targetResults map[string]build.TargetResult
+	if execution.Mode == build.ExecutionModeDeferError && len(bo) > 1 {
+		targetResults = make(map[string]build.TargetResult, len(bo))
+		var resultsMu sync.Mutex
+		bh.Completed = func(name string, result build.TargetResult) {
+			resultsMu.Lock()
+			defer resultsMu.Unlock()
+			targetResults[name] = result
+		}
+	}
+	resp, retErr := build.Build(ctx, nodes, bo, dockerutil.NewClient(dockerCli), confutil.NewConfig(dockerCli), printer, bh)
+	if retErr != nil && len(targetResults) > 0 {
+		writeBakeTargetSummary(printer.Write, slices.Sorted(maps.Keys(bo)), targetResults)
+	}
 	if err := printer.Wait(); retErr == nil {
 		retErr = err
 	}
@@ -410,14 +439,10 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	}
 	done(err)
 
-	if err != nil {
-		return err
-	}
-
-	if progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
+	if err == nil && progressMode != progressui.QuietMode && progressMode != progressui.RawJSONMode {
 		desktop.PrintBuildDetails(os.Stderr, printer.BuildRefs(), term)
 	}
-	if len(in.metadataFile) > 0 {
+	if len(in.metadataFile) > 0 && (err == nil || execution.Mode == build.ExecutionModeDeferError) {
 		dt := make(map[string]any)
 		for t, r := range resp {
 			dt[t] = decodeExporterResponse(r.ExporterResponse)
@@ -427,9 +452,15 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 				dt["buildx.build.warnings"] = warnings
 			}
 		}
-		if err := writeMetadataFile(in.metadataFile, dt); err != nil {
-			return err
+		if metaErr := writeMetadataFile(in.metadataFile, dt); metaErr != nil {
+			if err != nil {
+				return stderrors.Join(err, metaErr)
+			}
+			return metaErr
 		}
+	}
+	if err != nil {
+		return err
 	}
 
 	var callFormatJSON bool
@@ -548,6 +579,81 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 	return nil
 }
 
+func writeBakeTargetSummary(log progress.Logger, names []string, results map[string]build.TargetResult) {
+	progress.Wrap("[internal] target results", log, func(sub progress.SubLogger) error {
+		for _, name := range names {
+			status := "not started"
+			if result, ok := results[name]; ok {
+				switch {
+				case result.Aborted:
+					status = "aborted"
+				case result.Err != nil:
+					status = "failed"
+				default:
+					status = "succeeded"
+				}
+			}
+			now := time.Now()
+			sub.SetStatus(&client.VertexStatus{
+				ID:        name + ": " + status,
+				Name:      status,
+				Timestamp: now,
+				Started:   &now,
+				Completed: &now,
+			})
+		}
+		return nil
+	})
+}
+
+func parseBakeJobs(value string) (build.Execution, error) {
+	execution := build.Execution{Mode: build.ExecutionModeFailFast}
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return execution, nil
+	}
+	if _, err := strconv.Atoi(value); err == nil {
+		value = "parallel=" + value
+	}
+
+	fields, err := csvvalue.Fields(value, nil)
+	if err != nil {
+		return execution, errors.Wrap(err, "invalid jobs option")
+	}
+
+	seen := map[string]bool{}
+	for _, field := range fields {
+		key, val, ok := strings.Cut(strings.TrimSpace(field), "=")
+		if !ok {
+			key, val = "mode", key
+		}
+		key = strings.ToLower(strings.TrimSpace(key))
+		val = strings.TrimSpace(val)
+		if seen[key] {
+			return execution, errors.Errorf("duplicate jobs option %q", key)
+		}
+		seen[key] = true
+		switch key {
+		case "mode":
+			switch mode := build.ExecutionMode(val); mode {
+			case build.ExecutionModeFailFast, build.ExecutionModeDeferOutput, build.ExecutionModeDeferError:
+				execution.Mode = mode
+			default:
+				return execution, errors.Errorf("invalid jobs mode %q", val)
+			}
+		case "parallel":
+			n, err := strconv.Atoi(val)
+			if err != nil || n < 0 {
+				return execution, errors.Errorf("invalid jobs parallel value %q: must be a non-negative integer", val)
+			}
+			execution.Parallel = n
+		default:
+			return execution, errors.Errorf("unknown jobs option %q", key)
+		}
+	}
+	return execution, nil
+}
+
 func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	var options bakeOptions
 	var cFlags commonFlags
@@ -601,6 +707,7 @@ func bakeCmd(dockerCli command.Cli, rootOpts *rootOptions) *cobra.Command {
 	flags.StringArrayVar(&options.vars, "var", nil, `Set a variable value (e.g., "name=value")`)
 	flags.StringVar(&options.callFunc, "call", "build", `Set method for evaluating build ("check", "outline", "targets")`)
 	flags.StringArrayVar(&options.allow, "allow", nil, "Allow build to access specified resources")
+	flags.StringVarP(&options.jobs, "jobs", "j", "fail-fast", `Set target execution behavior (format: "N" or "mode[,parallel=N]")`)
 
 	flags.VarPF(callAlias(&options.callFunc, "check"), "check", "", `Shorthand for "--call=check"`)
 	flags.Lookup("check").NoOptDefVal = "true"

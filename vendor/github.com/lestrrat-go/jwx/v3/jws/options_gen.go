@@ -4,6 +4,7 @@ package jws
 
 import (
 	"context"
+	"io"
 	"io/fs"
 
 	"github.com/lestrrat-go/option/v2"
@@ -34,6 +35,25 @@ type globalOption struct {
 }
 
 func (*globalOption) globalOption() {}
+
+// GlobalParseOption describes an Option that can be passed to `jws.Settings()`,
+// `jws.Parse()`, and `jws.ReadFile()`.
+type GlobalParseOption interface {
+	Option
+	globalOption()
+	parseOption()
+	readFileOption()
+}
+
+type globalParseOption struct {
+	Option
+}
+
+func (*globalParseOption) globalOption() {}
+
+func (*globalParseOption) parseOption() {}
+
+func (*globalParseOption) readFileOption() {}
 
 // ReadFileOption is a type of `Option` that can be passed to `jwe.Parse`
 type ParseOption interface {
@@ -185,14 +205,17 @@ func (*withKeySuboption) withKeySuboption() {}
 
 type identBase64Encoder struct{}
 type identContext struct{}
+type identCritValidation struct{}
 type identDetached struct{}
 type identDetachedPayload struct{}
+type identDetachedPayloadReader struct{}
 type identFS struct{}
 type identInferAlgorithmFromKey struct{}
 type identKey struct{}
 type identKeyProvider struct{}
 type identKeyUsed struct{}
 type identLegacySigners struct{}
+type identMaxSignatures struct{}
 type identMessage struct{}
 type identMultipleKeysPerKeyID struct{}
 type identPretty struct{}
@@ -211,12 +234,20 @@ func (identContext) String() string {
 	return "WithContext"
 }
 
+func (identCritValidation) String() string {
+	return "WithCritValidation"
+}
+
 func (identDetached) String() string {
 	return "WithDetached"
 }
 
 func (identDetachedPayload) String() string {
 	return "WithDetachedPayload"
+}
+
+func (identDetachedPayloadReader) String() string {
+	return "WithDetachedPayloadReader"
 }
 
 func (identFS) String() string {
@@ -241,6 +272,10 @@ func (identKeyUsed) String() string {
 
 func (identLegacySigners) String() string {
 	return "WithLegacySigners"
+}
+
+func (identMaxSignatures) String() string {
+	return "WithMaxSignatures"
 }
 
 func (identMessage) String() string {
@@ -286,8 +321,55 @@ func WithBase64Encoder(v Base64Encoder) SignVerifyCompactOption {
 	return &signVerifyCompactOption{option.New(identBase64Encoder{}, v)}
 }
 
+// WithContext attaches a context.Context to the verify call. The
+// context is observed at three layers:
+//
+//   - jws.Verify (slow path) checks ctx.Err() between each signature,
+//     each key provider, and each (alg, key) attempt — a deadline
+//     fired between iterations short-circuits the loop with the
+//     context error.
+//   - jkuProvider.FetchKeys passes ctx to jwk.Fetcher.Fetch.
+//   - The streaming detached-payload path checks ctx between Reads
+//     of the caller's payload reader.
+//
+// staticKeyProvider and keySetProvider do not themselves consult
+// ctx inside FetchKeys (the backing data is already in memory);
+// cancellation observation between key candidates is handled by
+// Verify's loop checks above.
 func WithContext(v context.Context) VerifyOption {
 	return &verifyOption{option.New(identContext{}, v)}
+}
+
+// WithCritValidation enables RFC 7515 Section 4.1.11 validation of the
+// "crit" (Critical) header parameter during verification. The default
+// is false, matching the behavior of v3.0.13 and earlier (the "crit"
+// header is silently ignored).
+//
+// When enabled, jws.Verify() will reject any JWS whose protected
+// header lists "crit" entries that the recipient has not declared
+// support for via jws.WithCritExtension(). It will also reject
+// structurally invalid "crit" lists: empty arrays, duplicate names,
+// empty extension names, names of standard JOSE header parameters,
+// and names that do not appear as header parameters in the protected
+// header.
+//
+// Per RFC 7515 Section 4.1.11, recipients MUST reject a JWS whose
+// "crit" list names extensions they do not understand. Enabling this
+// option together with one or more jws.WithCritExtension() calls is
+// the only way to satisfy that requirement with this library.
+//
+// IMPORTANT: enabling this option makes the library check that every
+// "crit" entry has been declared via jws.WithCritExtension(), but the
+// library cannot perform the actual extension-specific processing on
+// your behalf. After jws.Verify() returns successfully, your code
+// MUST read each declared extension header and apply whatever check
+// or side effect the extension semantics demand. If you declare an
+// extension and then forget to act on its value, you have defeated
+// the protection the producer was trying to obtain by marking that
+// extension critical. See the documentation on jws.WithCritExtension
+// for details.
+func WithCritValidation(v bool) VerifyOption {
+	return &verifyOption{option.New(identCritValidation{}, v)}
 }
 
 // WithDetached specifies that the `jws.Message` should be serialized in
@@ -305,9 +387,86 @@ func WithDetached(v bool) CompactOption {
 // When this option is used for `jws.Sign()`, the first parameter (normally the payload)
 // must be set to `nil`.
 //
+// When passed to `jws.Verify()` together with `jws.WithCritValidation(true)`,
+// the RFC 7797 `"b64"` extension is automatically added to the
+// caller's allowlist as if `jws.WithCritExtension("b64")` had also
+// been passed. Detached-payload verification is the canonical
+// pairing for `b64=false`, and the jws package implements `b64=false`
+// handling natively, so there is no need to declare it explicitly.
+// Other crit extensions still require explicit declaration.
+//
 // If you have to verify using this option, you should know exactly how and why this works.
 func WithDetachedPayload(v []byte) SignVerifyOption {
 	return &signVerifyOption{option.New(identDetachedPayload{}, v)}
+}
+
+// WithDetachedPayloadReader is the streaming variant of
+// `jws.WithDetachedPayload()`: the detached payload is consumed from an
+// `io.Reader` instead of a `[]byte`. Use this when the detached payload
+// is too large to comfortably materialize in memory.
+//
+// For detached payloads that already fit in memory, prefer
+// `jws.WithDetachedPayload()`; the byte-slice path supports the full
+// option and algorithm surface, while the Reader path is a narrow
+// specialist.
+//
+// The Reader is consumed exactly once. On signing or verification
+// failure the Reader cannot be rewound; callers that need retry
+// semantics must buffer the payload themselves.
+//
+// The Reader is accessed from the calling goroutine only; do not share
+// a single Reader between concurrent `jws.Sign` / `jws.Verify` calls
+// unless the Reader is itself goroutine-safe and positioned
+// independently for each call.
+//
+// Only the HMAC, RSA (PKCS#1 v1.5 and PSS), and ECDSA algorithm
+// families are supported by this option; EdDSA and custom-family
+// algorithms require the full payload in memory and will be rejected
+// with a clear error. The option is mutually exclusive with
+// `jws.WithDetachedPayload()` and `jws.WithInsecureNoSignature()`.
+// Algorithms registered via `jws.RegisterSigner()` /
+// `jws.RegisterVerifier()` are likewise unreachable through this
+// path (the streaming code dispatches directly against the dsig
+// algorithm registry).
+//
+// On sign, multiple `jws.WithKey()` options may be combined with
+// `jws.WithJSON()` to produce a general-form multi-signature JWS;
+// the payload is streamed once and fanned out to each signer. All
+// signers must agree on the RFC 7797 `"b64"` flag, since the
+// produced JWS has a single payload segment on the wire. Compact
+// serialization still allows exactly one signature.
+//
+// On verify, this option supports only single-signature JWS input
+// (compact or flattened/general-single-signature JSON). To verify
+// one signature out of a multi-signature JWS, use `jws.Verify()`
+// with `jws.WithDetachedPayload()` and a buffered copy of the
+// payload.
+//
+// On verify, `jws.Verify()` returns a non-nil zero-length `[]byte` on
+// success when this option is used, because the payload was streamed
+// from the caller rather than extracted from the JWS envelope. Do not
+// read that slice as "the payload is empty" — the verified bytes are
+// whatever the caller read from the Reader, and callers that need
+// them must retain their own copy.
+//
+// `jws.WithBase64Encoder()` is honored as long as the supplied
+// encoder implements `jws.Base64StreamEncoder` (i.e. provides a
+// stream-capable `NewEncoder(io.Writer) io.WriteCloser`). The
+// default encoder (`encoding/base64.RawURLEncoding`) satisfies
+// this automatically. Custom encoders that only implement the
+// basic `jws.Base64Encoder` interface cause `jws.Sign()` /
+// `jws.Verify()` to return an error when combined with this
+// option, rather than silently falling back to a different encoder
+// for the payload.
+//
+// Like `jws.WithDetachedPayload()`, on verify this option
+// implicitly declares RFC 7797 `"b64"` as a recognized `crit`
+// extension.
+//
+// When this option is used with `jws.Sign()`, the first parameter
+// (normally the payload) must be set to `nil`.
+func WithDetachedPayloadReader(v io.Reader) SignVerifyOption {
+	return &signVerifyOption{option.New(identDetachedPayloadReader{}, v)}
 }
 
 // WithFS specifies the source `fs.FS` object to read the file from.
@@ -334,6 +493,17 @@ func WithFS(v fs.FS) ReadFileOption {
 // It is highly recommended that you fix your key to contain a proper `alg`
 // header field instead of resorting to using this option, but sometimes
 // it just needs to happen.
+//
+// Fan-out and DoS considerations: when combined with `WithRequireKid(false)`
+// against a large JWKS, verification attempts scale with the number of
+// keys in the set. If the JWS protected header advertises an `alg` (as
+// required by RFC 7515 §4.1.1), only keys whose type is compatible with
+// that algorithm are tried, so the cost is bounded by the number of
+// type-compatible keys. If the header has no `alg`, every inferred
+// algorithm is tried against every candidate key, and the cost becomes
+// `N_keys × N_algs_per_keytype`. Operators exposing verification to
+// untrusted input should pair this option with `WithMaxSignatures` and
+// keep their JWKS bounded.
 func WithInferAlgorithmFromKey(v bool) WithKeySetSuboption {
 	return &withKeySetSuboption{option.New(identInferAlgorithmFromKey{}, v)}
 }
@@ -361,6 +531,18 @@ func WithLegacySigners() GlobalOption {
 	return &globalOption{option.New(identLegacySigners{}, true)}
 }
 
+// WithMaxSignatures specifies the maximum number of signatures allowed
+// in a JWS message using JSON serialization. If a JWS message contains
+// more signatures than this value, parsing will return an error.
+// The default value is 100.
+//
+// This option can be passed to `jws.Settings()` to change the default
+// globally, or to `jws.Parse()` / `jws.ReadFile()` for a per-call
+// override.
+func WithMaxSignatures(v int) GlobalParseOption {
+	return &globalParseOption{option.New(identMaxSignatures{}, v)}
+}
+
 // WithMessage can be passed to Verify() to obtain the jws.Message upon
 // a successful verification.
 func WithMessage(v *Message) VerifyOption {
@@ -385,7 +567,13 @@ func WithPretty(v bool) WithJSONSuboption {
 // WithProtected is used with `jws.WithKey()` option when used with `jws.Sign()`
 // to specify a protected header to be attached to the JWS signature.
 //
-// It has no effect if used when `jws.WithKey()` is passed to `jws.Verify()`
+// It has no effect if used when `jws.WithKey()` is passed to `jws.Verify()`.
+//
+// kid precedence: if the supplied headers include a "kid" and the
+// `jwk.Key` passed to `jws.WithKey()` also carries one, the
+// `jwk.Key`'s kid wins and the header kid is silently overwritten.
+// Callers that want to keep the header kid must strip it from the
+// key first (e.g. `key.Remove(jwk.KeyIDKey)`).
 func WithProtectedHeaders(v Headers) WithKeySuboption {
 	return &withKeySuboption{option.New(identProtectedHeaders{}, v)}
 }

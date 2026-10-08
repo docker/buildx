@@ -27,7 +27,11 @@ func transformMaybeExternal(data any, p tree.Path, ignoreParseError bool) (any, 
 	if data == nil {
 		return nil, nil
 	}
-	resource, err := transformMapping(data.(map[string]any), p, ignoreParseError)
+	m, ok := data.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("%s: must be a mapping", p)
+	}
+	resource, err := transformMapping(m, p, ignoreParseError)
 	if err != nil {
 		return nil, err
 	}

@@ -6,7 +6,6 @@ import (
 	"io"
 
 	"github.com/lestrrat-go/jwx/v3/internal/base64"
-	"github.com/lestrrat-go/jwx/v3/internal/jwxio"
 	"github.com/lestrrat-go/jwx/v3/internal/tokens"
 )
 
@@ -36,6 +35,26 @@ func SignBuffer(buf, hdr, payload []byte, encoder base64.Encoder, encodePayload 
 		buf = append(buf, payload...)
 	}
 
+	return buf
+}
+
+// SigningPrefix returns base64url(hdr) + "." — the portion of the signing
+// input that precedes the (possibly base64-encoded) payload.
+//
+// Parameters:
+//   - buf: Reusable scratch buffer (can be nil for automatic allocation);
+//     any prior contents are discarded, matching [SignBuffer]. This is not
+//     an append-style API.
+//   - hdr: Raw header bytes (will be base64-encoded)
+//   - encoder: Base64 encoder to use for encoding the header
+func SigningPrefix(buf, hdr []byte, encoder base64.Encoder) []byte {
+	l := encoder.EncodedLen(len(hdr)) + 1
+	if cap(buf) < l {
+		buf = make([]byte, 0, l)
+	}
+	buf = buf[:0]
+	buf = encoder.AppendEncode(buf, hdr)
+	buf = append(buf, tokens.Period)
 	return buf
 }
 
@@ -150,9 +169,11 @@ func SplitCompactString(src string) (protected, payload, signature []byte, err e
 }
 
 // SplitCompactReader parses a compact JWS serialization from an io.Reader.
-// This function handles both finite and streaming sources efficiently.
-// For finite sources, it reads all data at once. For streaming sources,
-// it uses a buffer-based approach to find segment boundaries.
+// It reads the entire input from rdr and dispatches to [SplitCompact].
+//
+// Bounding the input size is the caller's responsibility: wrap rdr with
+// [io.LimitReader] or [net/http.MaxBytesReader] before passing it in. See
+// docs/13-input-size.md for the rationale.
 //
 // Parameters:
 //   - rdr: Reader containing the compact JWS data
@@ -165,71 +186,9 @@ func SplitCompactString(src string) (protected, payload, signature []byte, err e
 //
 // The function validates that exactly 3 segments are present, separated by periods.
 func SplitCompactReader(rdr io.Reader) (protected, payload, signature []byte, err error) {
-	data, err := jwxio.ReadAllFromFiniteSource(rdr)
-	if err == nil {
-		return SplitCompact(data)
-	}
-
-	if !errors.Is(err, jwxio.NonFiniteSourceError()) {
+	data, err := io.ReadAll(rdr)
+	if err != nil {
 		return nil, nil, nil, err
 	}
-
-	var periods int
-	var state int
-
-	buf := make([]byte, 4096)
-	var sofar []byte
-
-	for {
-		// read next bytes
-		n, err := rdr.Read(buf)
-		// return on unexpected read error
-		if err != nil && err != io.EOF {
-			return nil, nil, nil, io.ErrUnexpectedEOF
-		}
-
-		// append to current buffer
-		sofar = append(sofar, buf[:n]...)
-		// loop to capture multiple tokens.Period in current buffer
-		for loop := true; loop; {
-			var i = bytes.IndexByte(sofar, tokens.Period)
-			if i == -1 && err != io.EOF {
-				// no tokens.Period found -> exit and read next bytes (outer loop)
-				loop = false
-				continue
-			} else if i == -1 && err == io.EOF {
-				// no tokens.Period found -> process rest and exit
-				i = len(sofar)
-				loop = false
-			} else {
-				// tokens.Period found
-				periods++
-			}
-
-			// Reaching this point means we have found a tokens.Period or EOF and process the rest of the buffer
-			switch state {
-			case 0:
-				protected = sofar[:i]
-				state++
-			case 1:
-				payload = sofar[:i]
-				state++
-			case 2:
-				signature = sofar[:i]
-			}
-			// Shorten current buffer
-			if len(sofar) > i {
-				sofar = sofar[i+1:]
-			}
-		}
-		// Exit on EOF
-		if err == io.EOF {
-			break
-		}
-	}
-	if periods != 2 {
-		return nil, nil, nil, InvalidNumberOfSegmentsError()
-	}
-
-	return protected, payload, signature, nil
+	return SplitCompact(data)
 }

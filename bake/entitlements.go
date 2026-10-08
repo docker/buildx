@@ -162,7 +162,11 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 	rwPaths := map[string]struct{}{}
 	roPaths := map[string]struct{}{}
 
-	for _, p := range collectLocalPaths(bo.Inputs) {
+	localPaths, err := collectLocalPaths(bo.Inputs)
+	if err != nil {
+		return err
+	}
+	for _, p := range localPaths {
 		roPaths[p] = struct{}{}
 	}
 
@@ -200,8 +204,8 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 	}
 
 	for _, secret := range bo.SecretSpecs {
-		if secret.FilePath != "" {
-			roPaths[secret.FilePath] = struct{}{}
+		if filePath := secret.ResolveSource().FilePath; filePath != "" {
+			roPaths[filePath] = struct{}{}
 		}
 	}
 
@@ -216,7 +220,6 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 		}
 	}
 
-	var err error
 	expected.FSRead, err = findMissingPaths(c.FSRead, roPaths)
 	if err != nil {
 		return err
@@ -231,9 +234,19 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 }
 
 func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Writer) error {
+	return c.prompt(ctx, isRemote, out, true)
+}
+
+func (c EntitlementConf) Check(isRemote bool) error {
+	return c.prompt(context.Background(), isRemote, io.Discard, false)
+}
+
+func (c EntitlementConf) prompt(ctx context.Context, isRemote bool, out io.Writer, interactive bool) error {
 	var term bool
-	if _, err := console.ConsoleFromFile(os.Stdin); err == nil {
-		term = true
+	if interactive {
+		if _, err := console.ConsoleFromFile(os.Stdin); err == nil {
+			term = true
+		}
 	}
 
 	var msgs []string
@@ -364,6 +377,13 @@ func (c EntitlementConf) Prompt(ctx context.Context, isRemote bool, out io.Write
 	}
 	if fsEntitlementsEnabled && !fsEntitlementsSet && len(msgsFS) != 0 {
 		fmt.Fprintf(out, "To disable filesystem entitlements checks, you can set BUILDX_BAKE_ENTITLEMENTS_FS=0 .\n\n")
+	}
+	if !interactive {
+		requiredFlags := flags
+		if fsEntitlementsEnabled {
+			requiredFlags = slices.Concat(requiredFlags, flagsFS)
+		}
+		return errors.Errorf("additional privileges requested: pass %q to grant requested privileges", strings.Join(requiredFlags, " "))
 	}
 
 	if term {

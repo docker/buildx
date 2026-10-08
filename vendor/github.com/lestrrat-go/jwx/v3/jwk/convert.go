@@ -14,7 +14,6 @@ import (
 
 	"github.com/lestrrat-go/blackmagic"
 	"github.com/lestrrat-go/jwx/v3/internal/ecutil"
-	"github.com/lestrrat-go/jwx/v3/jwa"
 )
 
 // # Converting between Raw Keys and `jwk.Key`s
@@ -23,33 +22,72 @@ import (
 // A converter that converts from a `jwk.Key` to a raw key is called a KeyExporter.
 
 var keyImporters = make(map[reflect.Type]KeyImporter)
-var keyExporters = make(map[jwa.KeyType][]KeyExporter)
+
+// KeyKind identifies a key for exporter dispatch. Built-in key types
+// use the key type string (e.g. "RSA", "EC", "OKP", "oct"). Keys that
+// implement KeyKinder can return a more specific identity
+// (e.g. "OKP:Ed448") to select a curve-specific exporter.
+type KeyKind string
+
+// KeyKinder is implemented by keys that need exporter dispatch
+// beyond just their key type. For example, OKP keys return
+// "OKP:<curve>" so that curve-specific exporters can be registered
+// by external modules.
+//
+// Keys that do not implement this interface are dispatched by
+// KeyType().String() alone.
+type KeyKinder interface {
+	KeyKind() KeyKind
+}
+
+var keyExporters = make(map[KeyKind][]KeyExporter)
 
 var muKeyImporters sync.RWMutex
 var muKeyExporters sync.RWMutex
 
-// RegisterKeyImporter registers a KeyImporter for the given raw key. When `jwk.Import()` is called,
-// the library will look up the appropriate KeyImporter for the given raw key type (via `reflect`)
-// and execute the KeyImporters in succession until either one of them succeeds, or all of them fail.
+// RegisterKeyImporter registers a KeyImporter for the given raw key.
+// When `jwk.Import()` is called, the library looks up the importer for
+// the given raw key type (via `reflect`) and executes it.
+//
+// Importer dispatch is single-valued per Go type: there is exactly
+// one importer registered per `reflect.TypeOf(from)`. Registering a
+// second importer for the same raw-key type silently replaces the
+// previous entry — including built-in importers for
+// `*rsa.PrivateKey`, `*ecdsa.PrivateKey`, and so on. Callers that
+// need to guard against accidental overwrites should keep track of
+// registrations themselves and avoid double-registration at init()
+// time.
+//
+// This deliberately differs from the stacking behavior of
+// [RegisterKeyExporter] (keyed by [KeyKind] strings) and
+// [RegisterKeyParser] (an untyped-JSON fallback chain); importer
+// dispatch is a single-value map keyed by Go type, with no
+// equivalent dimension to try next. v4 turns the overwrite into
+// an error; v3 keeps the frozen silent-overwrite behavior for
+// backward compatibility.
 func RegisterKeyImporter(from any, conv KeyImporter) {
 	muKeyImporters.Lock()
 	defer muKeyImporters.Unlock()
 	keyImporters[reflect.TypeOf(from)] = conv
 }
 
-// RegisterKeyExporter registers a KeyExporter for the given key type. When `key.Raw()` is called,
-// the library will look up the appropriate KeyExporter for the given key type and execute the
-// KeyExporters in succession until either one of them succeeds, or all of them fail.
-func RegisterKeyExporter(kty jwa.KeyType, conv KeyExporter) {
+// RegisterKeyExporter registers a KeyExporter for the given key identity.
+// When `jwk.Export()` is called, the library first tries exporters registered
+// for the key's specific identity (via [KeyKinder]), then falls back to
+// exporters registered for the key type alone.
+//
+// For most key types, pass `KeyKind(kty.String())` (e.g. `KeyKind("RSA")`).
+// For curve-specific exporters, use a compound identity like `KeyKind("OKP:Ed448")`.
+func RegisterKeyExporter(ident KeyKind, conv KeyExporter) {
 	muKeyExporters.Lock()
 	defer muKeyExporters.Unlock()
-	convs, ok := keyExporters[kty]
+	convs, ok := keyExporters[ident]
 	if !ok {
 		convs = []KeyExporter{conv}
 	} else {
 		convs = append([]KeyExporter{conv}, convs...)
 	}
-	keyExporters[kty] = convs
+	keyExporters[ident] = convs
 }
 
 // KeyImporter is used to convert from a raw key to a `jwk.Key`. mneumonic: from the PoV of the `jwk.Key`,
@@ -376,10 +414,12 @@ func Export(key Key, dst any) error {
 	if rv.Kind() != reflect.Ptr {
 		return fmt.Errorf(`jwk.Export: destination object must be a pointer`)
 	}
+
 	muKeyExporters.RLock()
-	exporters, ok := keyExporters[key.KeyType()]
+	exporters := findExporters(key)
 	muKeyExporters.RUnlock()
-	if !ok {
+
+	if len(exporters) == 0 {
 		return fmt.Errorf(`jwk.Export: no exporters registered for key type '%T'`, key)
 	}
 	for _, conv := range exporters {
@@ -396,4 +436,17 @@ func Export(key Key, dst any) error {
 		return nil
 	}
 	return fmt.Errorf(`jwk.Export: no suitable exporter found for key type '%T'`, key)
+}
+
+// findExporters returns exporters for the key, trying the specific
+// KeyKind first, then falling back to the key type. Caller must
+// hold muKeyExporters.RLock.
+func findExporters(key Key) []KeyExporter {
+	if ki, ok := key.(KeyKinder); ok {
+		ident := ki.KeyKind()
+		if exporters, ok := keyExporters[ident]; ok {
+			return exporters
+		}
+	}
+	return keyExporters[KeyKind(key.KeyType().String())]
 }

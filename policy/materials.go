@@ -34,7 +34,7 @@ func isMaterialKey(key string) (idx int, rest string, ok bool) {
 	return n, rest, true
 }
 
-func parseSLSAMaterial(m slsa1.ResourceDescriptor) (*pb.SourceOp, *ocispecs.Platform, error) {
+func ParseSLSAMaterial(m slsa1.ResourceDescriptor) (*pb.SourceOp, *ocispecs.Platform, error) {
 	uri := m.URI
 	dgst := m.Digest
 	if strings.HasPrefix(uri, "pkg:docker/") {

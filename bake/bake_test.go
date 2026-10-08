@@ -157,6 +157,51 @@ target "webapp" {
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
 	})
 
+	t.Run("AnnotationAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.annotation=index,manifest:org.opencontainers.image.vendor=docker"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"index,manifest:org.opencontainers.image.authors=dvdksn", "index,manifest:org.opencontainers.image.vendor=docker"}, m["webapp"].Annotations)
+	})
+
+	t.Run("ArgAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.arg.MY_VAR=value"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, ptrstr("value"), m["webapp"].Args["MY_VAR"])
+	})
+
+	t.Run("ArgAliasFromEnv", func(t *testing.T) {
+		key := "VAR_FROM_ENV" + t.Name()
+		t.Setenv(key, "value")
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.arg." + key}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, ptrstr("value"), m["webapp"].Args[key])
+	})
+
+	t.Run("ArgNameRequired", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.arg=value"}, nil, nil, &EntitlementConf{})
+		require.EqualError(t, err, "invalid key webapp.arg, arg requires name")
+	})
+
+	t.Run("EntitlementAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.entitlements=security.insecure", "webapp.entitlement=network.host"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"security.insecure", "network.host"}, m["webapp"].Entitlements)
+	})
+
+	t.Run("ExtraHostAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.extra-hosts.legacy.example.com=127.0.0.2", "webapp.extra-host.example.com=127.0.0.1"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, ptrstr("127.0.0.2"), m["webapp"].ExtraHosts["legacy.example.com"])
+		require.Equal(t, ptrstr("127.0.0.1"), m["webapp"].ExtraHosts["example.com"])
+	})
+
+	t.Run("LabelAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.labels.com.example.legacy=old", "webapp.label.com.example.foo=bar"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, ptrstr("old"), m["webapp"].Labels["com.example.legacy"])
+		require.Equal(t, ptrstr("bar"), m["webapp"].Labels["com.example.foo"])
+	})
+
 	t.Run("AttestOverride", func(t *testing.T) {
 		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.attest=type=sbom"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
@@ -185,6 +230,16 @@ target "webapp" {
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
 	})
 
+	t.Run("ContextSubkeyInvalid", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.context.foo=bar"}, nil, nil, &EntitlementConf{})
+		require.EqualError(t, err, "invalid key webapp.context.foo, context does not support subkeys")
+	})
+
+	t.Run("UnknownSubkey", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.bogus.foo=bar"}, nil, nil, &EntitlementConf{})
+		require.EqualError(t, err, "unknown key: bogus")
+	})
+
 	t.Run("NoCacheOverride", func(t *testing.T) {
 		t.Parallel()
 		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache=false"}, nil, nil, &EntitlementConf{})
@@ -192,6 +247,12 @@ target "webapp" {
 		require.Equal(t, false, *m["webapp"].NoCache)
 		require.Equal(t, 1, len(g))
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
+	})
+
+	t.Run("NoCacheFilterOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.no-cache-filter=stage"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"stage"}, m["webapp"].NoCacheFilter)
 	})
 
 	t.Run("PlatformOverride", func(t *testing.T) {
@@ -218,6 +279,114 @@ target "webapp" {
 		require.Equal(t, []string{"linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
 	})
 
+	t.Run("PlatformsAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platforms=linux/arm64", "webapp.platform=linux/riscv64"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("TagAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.tags=example.com/foo", "webapp.tag+=example.com/bar"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"example.com/foo", "example.com/bar"}, m["webapp"].Tags)
+	})
+
+	t.Run("TagSubkeyInvalid", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.tag.foo=bar"}, nil, nil, &EntitlementConf{})
+		require.EqualError(t, err, "invalid key webapp.tag.foo, tag does not support subkeys")
+	})
+
+	t.Run("TagAliasClear", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.tags=example.com/foo", "webapp.tag="}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].Tags)
+	})
+
+	t.Run("PlatformOverrideThenAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform=linux/arm64", "webapp.platform+=linux/riscv64"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"linux/amd64", "linux/arm64", "linux/riscv64"}, m["webapp"].Platforms)
+	})
+
+	t.Run("PlatformOverrideClear", func(t *testing.T) {
+		t.Run("empty", func(t *testing.T) {
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform="}, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+			require.Empty(t, m["webapp"].Platforms)
+		})
+
+		t.Run("append then clear", func(t *testing.T) {
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform+=linux/arm64", "webapp.platform="}, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+			require.Empty(t, m["webapp"].Platforms)
+		})
+
+		t.Run("clear then append", func(t *testing.T) {
+			m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.platform=", "webapp.platform+=linux/riscv64"}, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+			require.Equal(t, []string{"linux/riscv64"}, m["webapp"].Platforms)
+		})
+	})
+
+	t.Run("ArrayOverrideSubkey", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.cache-from.x=type=registry,ref=example.com/cache"}, nil, nil, &EntitlementConf{})
+		require.EqualError(t, err, "invalid key webapp.cache-from.x, cache-from does not support subkeys")
+	})
+
+	t.Run("CacheOverrideClear", func(t *testing.T) {
+		cacheFile := File{
+			Name: "cache.hcl",
+			Data: []byte(`
+target "webapp" {
+	cache-from = ["type=registry,ref=example.com/original-cache"]
+	cache-to = ["type=registry,ref=example.com/original-cache"]
+}`),
+		}
+		m, _, err := ReadTargets(ctx, []File{cacheFile}, []string{"webapp"}, []string{
+			"webapp.cache-from=type=registry,ref=example.com/cache",
+			"webapp.cache-from=",
+			"webapp.cache-to=type=registry,ref=example.com/cache",
+			"webapp.cache-to=",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].CacheFrom)
+		require.Empty(t, m["webapp"].CacheTo)
+	})
+
+	t.Run("AppendByDefaultOverrideClear", func(t *testing.T) {
+		appendFile := File{
+			Name: "append.hcl",
+			Data: []byte(`
+target "webapp" {
+	annotations = ["index,manifest:org.opencontainers.image.authors=dvdksn"]
+	attest = ["type=provenance,mode=max"]
+	entitlements = ["network.host"]
+}`),
+		}
+		m, _, err := ReadTargets(ctx, []File{appendFile}, []string{"webapp"}, []string{
+			"webapp.annotations=",
+			"webapp.attest=",
+			"webapp.entitlements=",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].Annotations)
+		require.Empty(t, m["webapp"].Attest)
+		require.Empty(t, m["webapp"].Entitlements)
+	})
+
+	t.Run("AppendByDefaultOverrideClearThenAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			"webapp.annotations=",
+			"webapp.annotations+=index:org.opencontainers.image.vendor=docker",
+			"webapp.attest=",
+			"webapp.attest+=type=sbom",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"index:org.opencontainers.image.vendor=docker"}, m["webapp"].Annotations)
+		require.Len(t, m["webapp"].Attest, 1)
+		require.Equal(t, "sbom", m["webapp"].Attest[0].Type)
+	})
+
 	t.Run("SecretsOverride", func(t *testing.T) {
 		t.Setenv("FOO", "foo")
 		t.Setenv("BAR", "bar")
@@ -235,6 +404,52 @@ target "webapp" {
 		require.Len(t, m["webapp"].Secrets, 2)
 		require.Equal(t, "FOO", m["webapp"].Secrets[0].ID)
 		require.Equal(t, "BAR", m["webapp"].Secrets[1].ID)
+	})
+
+	t.Run("SecretsOverrideClear", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secrets=id=BAR,env=BAR", "webapp.secret="}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Empty(t, m["webapp"].Secrets)
+	})
+
+	t.Run("SecretsOverrideClearThenAppend", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
+			"webapp.secret=",
+			"webapp.secrets+=id=BAR,env=BAR",
+		}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].ID)
+	})
+
+	t.Run("SecretAliasOverride", func(t *testing.T) {
+		t.Setenv("BAR", "bar")
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secret=id=BAR,env=BAR"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].ID)
+	})
+
+	t.Run("SecretAliasAppend", func(t *testing.T) {
+		t.Setenv("BAR", "bar")
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secret+=id=BAR,env=BAR"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 2)
+		require.Equal(t, "FOO", m["webapp"].Secrets[0].ID)
+		require.Equal(t, "BAR", m["webapp"].Secrets[1].ID)
+	})
+
+	t.Run("SecretAliasWithSourceOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secret=id=BAR,env=BAR", "webapp.secret.BAR=env=BAZ"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Len(t, m["webapp"].Secrets, 1)
+		require.Equal(t, "BAR", m["webapp"].Secrets[0].ID)
+		require.Equal(t, "BAZ", m["webapp"].Secrets[0].Env)
+	})
+
+	t.Run("SecretsSubkeyInvalid", func(t *testing.T) {
+		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.secrets.FOO=env=BAR"}, nil, nil, &EntitlementConf{})
+		require.EqualError(t, err, "invalid key webapp.secrets.FOO, secret does not support subkeys")
 	})
 
 	t.Run("SecretSourceOverrideEnv", func(t *testing.T) {
@@ -286,6 +501,18 @@ target "webapp" {
 		require.Equal(t, "256m", *m["webapp"].ShmSize)
 	})
 
+	t.Run("NetworkOverride", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.network=host"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, "host", *m["webapp"].NetworkMode)
+	})
+
+	t.Run("UlimitAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.ulimits=nofile=2048:2048", "webapp.ulimit=nproc=1024:1024"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, []string{"nofile=2048:2048", "nproc=1024:1024"}, m["webapp"].Ulimits)
+	})
+
 	t.Run("ResourceLimitsOverride", func(t *testing.T) {
 		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{
 			"webapp.resources.memory=512m",
@@ -299,6 +526,12 @@ target "webapp" {
 	t.Run("ResourceLimitsInvalidOverride", func(t *testing.T) {
 		_, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.resources.cpu-quota=notanumber"}, nil, nil, &EntitlementConf{})
 		require.Error(t, err)
+	})
+
+	t.Run("ResourceAlias", func(t *testing.T) {
+		m, _, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.resource.memory=512m"}, nil, nil, &EntitlementConf{})
+		require.NoError(t, err)
+		require.Equal(t, ptrstr("512m"), m["webapp"].Resources.Memory)
 	})
 
 	t.Run("PullOverride", func(t *testing.T) {

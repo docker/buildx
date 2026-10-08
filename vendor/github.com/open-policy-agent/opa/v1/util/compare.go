@@ -10,6 +10,44 @@ import (
 	"math/big"
 )
 
+const (
+	nilSort = iota
+	boolSort
+	numberSort
+	stringSort
+	arraySort
+	objectSort
+)
+
+// Or works like [cmp.Or] but allows supplier functions to be tried rather than
+// alternative values. This allows deferring computation of the alternatives to
+// only when needed.
+func Or[T comparable](val T, suppliers ...func() T) T {
+	var zero T
+	if val == zero {
+		for _, f := range suppliers {
+			if alt := f(); alt != zero {
+				return alt
+			}
+		}
+	}
+
+	return val
+}
+
+// SliceLenCompare is a convenience function for comparing / sorting
+// slices by their length using the various slices.SortX functions.
+func SliceLenCompare[T any, S ~[]T](a, b S) int {
+	aLen, bLen := len(a), len(b)
+	if aLen == bLen {
+		return 0
+	} else if aLen < bLen {
+		return -1
+	}
+
+	return 1
+}
+
 // Compare returns 0 if a equals b, -1 if a is less than b, and 1 if b is than a.
 //
 // For comparison between values of different types, the following ordering is used:
@@ -124,15 +162,6 @@ func Compare(a, b any) int {
 
 	panic(fmt.Sprintf("illegal arguments of type %T and type %T", a, b))
 }
-
-const (
-	nilSort    = iota
-	boolSort   = iota
-	numberSort = iota
-	stringSort = iota
-	arraySort  = iota
-	objectSort = iota
-)
 
 func compareJSONNumber(a, b json.Number) int {
 	bigA, ok := new(big.Float).SetString(string(a))

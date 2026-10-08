@@ -1,0 +1,7 @@
+version: 2
+
+builds:
+  - skip: true
+
+changelog:
+  use: github-native

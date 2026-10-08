@@ -48,6 +48,14 @@ interfaces:
   - name: ReadFileOption
     comment: |
       ReadFileOption is a type of `Option` that can be passed to `jws.ReadFile`
+  - name: GlobalParseOption
+    methods:
+      - globalOption
+      - parseOption
+      - readFileOption
+    comment: |
+      GlobalParseOption describes an Option that can be passed to `jwt.Settings()`,
+      `jwt.Parse()`, and `jwt.ReadFile()`.
   - name: GlobalValidateOption
     methods:
       - globalOption
@@ -125,6 +133,18 @@ options:
 
       See the documentation for `jwt.TokenOptionSet`, `(jwt.Token).Options`, and
       `jwt.FlattenAudience` for more details
+  - ident: StrictStringClaims
+    interface: ParseOption
+    argument_type: bool
+    comment: |
+      WithStrictStringClaims controls whether JSON null values for string
+      claims (such as "iss", "sub", "jti") cause a parse error. By default,
+      null is silently accepted as an empty string (matching Go's standard
+      JSON decoding behavior). When set to true, null values are rejected
+      per the RFC type definitions (e.g. StringOrURI).
+
+      This option only affects JWT claims. JWK, JWE, and JWS fields are
+      not subject to this check and will always accept null as an empty string.
   - ident: FormKey
     interface: ParseOption
     argument_type: string

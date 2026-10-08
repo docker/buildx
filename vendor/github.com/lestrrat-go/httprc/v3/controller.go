@@ -142,14 +142,23 @@ func (c *controller) Add(ctx context.Context, r Resource, options ...AddOption) 
 		resource: r,
 	}
 	c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: sending add request for %q to backend", r.URL()))
+	// Send to backend and wait for registration confirmation.
+	// If this succeeds, the resource is in the backend.
 	if _, err := sendBackend[addRequest, struct{}](ctx, c.incoming, req, reply); err != nil {
 		return err
 	}
+	// IMPORTANT: At this point, the resource has been successfully registered
+	// in the backend (stored in c.items map). The backend worker will fetch
+	// this resource periodically.
 
 	if waitReady {
 		c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: waiting for resource %q to be ready", r.URL()))
 		if err := r.Ready(ctx); err != nil {
-			return err
+			// CHANGE: Wrap Ready() errors with errNotReady to indicate that
+			// registration succeeded but the first fetch hasn't completed.
+			// Using %w twice creates a multi-error chain (Go 1.20+), allowing
+			// errors.Is() to check both errNotReady and the underlying error.
+			return fmt.Errorf("%w: %w", errNotReady, err)
 		}
 	}
 	return nil

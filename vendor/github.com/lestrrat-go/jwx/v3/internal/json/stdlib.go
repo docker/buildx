@@ -1,6 +1,5 @@
 //go:build !jwx_goccy
 
-//nolint:revive
 package json
 
 import (

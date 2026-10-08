@@ -8,5 +8,5 @@ import (
 
 func init() {
 	// Register ES256K to EC algorithm family
-	addAlgorithmForKeyType(jwa.EC(), jwa.ES256K())
+	RegisterAlgorithmForKeyType(jwa.EC(), jwa.ES256K())
 }

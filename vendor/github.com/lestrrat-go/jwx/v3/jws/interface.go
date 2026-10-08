@@ -5,9 +5,16 @@ import (
 	"github.com/lestrrat-go/jwx/v3/jws/legacy"
 )
 
+// Deprecated: Use the legacy package directly. These type aliases will be removed in v4.
 type Signer = legacy.Signer
+
+// Deprecated: Use the legacy package directly. These type aliases will be removed in v4.
 type Verifier = legacy.Verifier
+
+// Deprecated: Use the legacy package directly. These type aliases will be removed in v4.
 type HMACSigner = legacy.HMACSigner
+
+// Deprecated: Use the legacy package directly. These type aliases will be removed in v4.
 type HMACVerifier = legacy.HMACVerifier
 
 // Base64Encoder is an interface that can be used when encoding JWS message
@@ -19,6 +26,15 @@ type HMACVerifier = legacy.HMACVerifier
 // For example, apparently AWS ALB User Claims is provided in JWT format,
 // but it uses a base64 encoding with padding.
 type Base64Encoder = base64.Encoder
+
+// Base64StreamEncoder is the stream-capable extension of
+// [Base64Encoder]. Encoders that satisfy this interface can be used
+// with the streaming detached-payload path
+// ([jws.WithDetachedPayloadReader]). The default encoder
+// (`encoding/base64.RawURLEncoding`) satisfies it. Custom encoders
+// that do not satisfy it cause [jws.Sign] / [jws.Verify] with
+// [jws.WithDetachedPayloadReader] to return an error.
+type Base64StreamEncoder = base64.StreamEncoder
 
 type DecodeCtx interface {
 	CollectRaw() bool
@@ -63,11 +79,21 @@ type DecodeCtx interface {
 // headers and the signatures don't match.
 //
 // To sign and verify, use the appropriate `Sign()` and `Verify()` functions.
+//
+// JSON round-trip note: Message.MarshalJSON collapses any single-signature
+// general-form input (one with a top-level "signatures" array of length 1)
+// into the flattened form (with top-level "protected"/"signature" fields)
+// on output. The conversion is cryptographically lossless — the protected,
+// signature, and payload bytes survive — but byte-level identity changes,
+// so callers that hash or dedup JWS messages by their JSON encoding will
+// not recognize a round-tripped message as equal to its input.
 type Message struct {
-	dc         DecodeCtx
-	payload    []byte
-	signatures []*Signature
-	b64        bool // true if payload should be base64 encoded
+	dc            DecodeCtx
+	payload       []byte
+	signatures    []*Signature
+	b64           bool // true if payload should be base64 encoded
+	detached      bool // true if the JWS is a detached-payload form: JSON output omits the "payload" member per RFC 7515 Appendix F
+	maxSignatures int  // scratch cap enforced during UnmarshalJSON; 0 means use global default
 }
 
 type Signature struct {

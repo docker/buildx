@@ -20,6 +20,7 @@ import (
 
 const (
 	AlgorithmKey              = "alg"
+	B64Key                    = "b64"
 	ContentTypeKey            = "cty"
 	CriticalKey               = "crit"
 	JWKKey                    = "jwk"
@@ -41,6 +42,7 @@ const (
 // In most cases, you likely want to use the protected headers, as this is part of the signed content.
 type Headers interface {
 	Algorithm() (jwa.SignatureAlgorithm, bool)
+	B64() (bool, bool)
 	ContentType() (string, bool)
 	Critical() ([]string, bool)
 	JWK() (jwk.Key, bool)
@@ -72,10 +74,11 @@ type Headers interface {
 }
 
 // stdHeaderNames is a list of all standard header names defined in the JWS specification.
-var stdHeaderNames = []string{AlgorithmKey, ContentTypeKey, CriticalKey, JWKKey, JWKSetURLKey, KeyIDKey, TypeKey, X509CertChainKey, X509CertThumbprintKey, X509CertThumbprintS256Key, X509URLKey}
+var stdHeaderNames = []string{AlgorithmKey, B64Key, ContentTypeKey, CriticalKey, JWKKey, JWKSetURLKey, KeyIDKey, TypeKey, X509CertChainKey, X509CertThumbprintKey, X509CertThumbprintS256Key, X509URLKey}
 
 type stdHeaders struct {
 	algorithm              *jwa.SignatureAlgorithm // https://tools.ietf.org/html/rfc7515#section-4.1.1
+	b64                    *bool                   // https://tools.ietf.org/html/rfc7797#section-3
 	contentType            *string                 // https://tools.ietf.org/html/rfc7515#section-4.1.10
 	critical               []string                // https://tools.ietf.org/html/rfc7515#section-4.1.11
 	jwk                    jwk.Key                 // https://tools.ietf.org/html/rfc7515#section-4.1.3
@@ -87,15 +90,13 @@ type stdHeaders struct {
 	x509CertThumbprintS256 *string                 // https://tools.ietf.org/html/rfc7515#section-4.1.8
 	x509URL                *string                 // https://tools.ietf.org/html/rfc7515#section-4.1.5
 	privateParams          map[string]any
-	mu                     *sync.RWMutex
+	mu                     sync.RWMutex
 	dc                     DecodeCtx
 	raw                    []byte // stores the raw version of the header so it can be used later
 }
 
 func NewHeaders() Headers {
-	return &stdHeaders{
-		mu: &sync.RWMutex{},
-	}
+	return &stdHeaders{}
 }
 
 func (h *stdHeaders) Algorithm() (jwa.SignatureAlgorithm, bool) {
@@ -105,6 +106,15 @@ func (h *stdHeaders) Algorithm() (jwa.SignatureAlgorithm, bool) {
 		return jwa.EmptySignatureAlgorithm(), false
 	}
 	return *(h.algorithm), true
+}
+
+func (h *stdHeaders) B64() (bool, bool) {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	if h.b64 == nil {
+		return false, false
+	}
+	return *(h.b64), true
 }
 
 func (h *stdHeaders) ContentType() (string, bool) {
@@ -119,13 +129,13 @@ func (h *stdHeaders) ContentType() (string, bool) {
 func (h *stdHeaders) Critical() ([]string, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.critical, true
+	return h.critical, h.critical != nil
 }
 
 func (h *stdHeaders) JWK() (jwk.Key, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.jwk, true
+	return h.jwk, h.jwk != nil
 }
 
 func (h *stdHeaders) JWKSetURL() (string, bool) {
@@ -158,7 +168,7 @@ func (h *stdHeaders) Type() (string, bool) {
 func (h *stdHeaders) X509CertChain() (*cert.Chain, bool) {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	return h.x509CertChain, true
+	return h.x509CertChain, h.x509CertChain != nil
 }
 
 func (h *stdHeaders) X509CertThumbprint() (string, bool) {
@@ -190,6 +200,7 @@ func (h *stdHeaders) X509URL() (string, bool) {
 
 func (h *stdHeaders) clear() {
 	h.algorithm = nil
+	h.b64 = nil
 	h.contentType = nil
 	h.critical = nil
 	h.jwk = nil
@@ -217,6 +228,8 @@ func (h *stdHeaders) SetDecodeCtx(dc DecodeCtx) {
 }
 
 func (h *stdHeaders) rawBuffer() []byte {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
 	return h.raw
 }
 
@@ -232,6 +245,8 @@ func (h *stdHeaders) Has(name string) bool {
 	switch name {
 	case AlgorithmKey:
 		return h.algorithm != nil
+	case B64Key:
+		return h.b64 != nil
 	case ContentTypeKey:
 		return h.contentType != nil
 	case CriticalKey:
@@ -267,6 +282,14 @@ func (h *stdHeaders) Get(name string, dst any) error {
 			return fmt.Errorf(`field %q not found`, name)
 		}
 		if err := blackmagic.AssignIfCompatible(dst, *(h.algorithm)); err != nil {
+			return fmt.Errorf(`failed to assign value for field %q: %w`, name, err)
+		}
+		return nil
+	case B64Key:
+		if h.b64 == nil {
+			return fmt.Errorf(`field %q not found`, name)
+		}
+		if err := blackmagic.AssignIfCompatible(dst, *(h.b64)); err != nil {
 			return fmt.Errorf(`failed to assign value for field %q: %w`, name, err)
 		}
 		return nil
@@ -383,6 +406,12 @@ func (h *stdHeaders) setNoLock(name string, value any) error {
 			return nil
 		}
 		return fmt.Errorf("expecte jwa.SignatureAlgorithm, received %T", alg)
+	case B64Key:
+		if v, ok := value.(bool); ok {
+			h.b64 = &v
+			return nil
+		}
+		return fmt.Errorf(`invalid value for %s key: %T`, B64Key, value)
 	case ContentTypeKey:
 		if v, ok := value.(string); ok {
 			h.contentType = &v
@@ -391,7 +420,12 @@ func (h *stdHeaders) setNoLock(name string, value any) error {
 		return fmt.Errorf(`invalid value for %s key: %T`, ContentTypeKey, value)
 	case CriticalKey:
 		if v, ok := value.([]string); ok {
-			h.critical = v
+			if v == nil {
+				h.critical = nil
+			} else {
+				h.critical = make([]string, len(v))
+				copy(h.critical, v)
+			}
 			return nil
 		}
 		return fmt.Errorf(`invalid value for %s key: %T`, CriticalKey, value)
@@ -458,6 +492,8 @@ func (h *stdHeaders) Remove(key string) error {
 	switch key {
 	case AlgorithmKey:
 		h.algorithm = nil
+	case B64Key:
+		h.b64 = nil
 	case ContentTypeKey:
 		h.contentType = nil
 	case CriticalKey:
@@ -512,8 +548,14 @@ LOOP:
 					return fmt.Errorf(`failed to decode value for key %s: %w`, AlgorithmKey, err)
 				}
 				h.algorithm = &decoded
+			case B64Key:
+				var decoded bool
+				if err := dec.Decode(&decoded); err != nil {
+					return fmt.Errorf(`failed to decode value for key %s: %w`, B64Key, err)
+				}
+				h.b64 = &decoded
 			case ContentTypeKey:
-				if err := json.AssignNextStringToken(&h.contentType, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.contentType, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, ContentTypeKey, err)
 				}
 			case CriticalKey:
@@ -533,15 +575,15 @@ LOOP:
 				}
 				h.jwk = key
 			case JWKSetURLKey:
-				if err := json.AssignNextStringToken(&h.jwkSetURL, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.jwkSetURL, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, JWKSetURLKey, err)
 				}
 			case KeyIDKey:
-				if err := json.AssignNextStringToken(&h.keyID, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.keyID, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, KeyIDKey, err)
 				}
 			case TypeKey:
-				if err := json.AssignNextStringToken(&h.typ, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.typ, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, TypeKey, err)
 				}
 			case X509CertChainKey:
@@ -551,15 +593,15 @@ LOOP:
 				}
 				h.x509CertChain = &decoded
 			case X509CertThumbprintKey:
-				if err := json.AssignNextStringToken(&h.x509CertThumbprint, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.x509CertThumbprint, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, X509CertThumbprintKey, err)
 				}
 			case X509CertThumbprintS256Key:
-				if err := json.AssignNextStringToken(&h.x509CertThumbprintS256, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.x509CertThumbprintS256, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, X509CertThumbprintS256Key, err)
 				}
 			case X509URLKey:
-				if err := json.AssignNextStringToken(&h.x509URL, dec); err != nil {
+				if err := json.AssignNextStringToken(&h.x509URL, dec, nil); err != nil {
 					return fmt.Errorf(`failed to decode value for key %s: %w`, X509URLKey, err)
 				}
 			default:
@@ -580,9 +622,12 @@ LOOP:
 func (h *stdHeaders) Keys() []string {
 	h.mu.RLock()
 	defer h.mu.RUnlock()
-	keys := make([]string, 0, 11+len(h.privateParams))
+	keys := make([]string, 0, 12+len(h.privateParams))
 	if h.algorithm != nil {
 		keys = append(keys, AlgorithmKey)
+	}
+	if h.b64 != nil {
+		keys = append(keys, B64Key)
 	}
 	if h.contentType != nil {
 		keys = append(keys, ContentTypeKey)
@@ -620,85 +665,161 @@ func (h *stdHeaders) Keys() []string {
 	return keys
 }
 
-func (h stdHeaders) MarshalJSON() ([]byte, error) {
+type headerPair struct {
+	Name  string
+	Value any
+}
+
+var headerPairPool = sync.Pool{
+	New: func() any {
+		return make([]headerPair, 0, 12)
+	},
+}
+
+func getHeaderPairList() []headerPair {
+	return headerPairPool.Get().([]headerPair)
+}
+
+func putHeaderPairList(list []headerPair) {
+	list = list[:0]
+	headerPairPool.Put(list)
+}
+
+func (h *stdHeaders) makePairs() ([]headerPair, error) {
+	pairs := getHeaderPairList()
 	h.mu.RLock()
-	data := make(map[string]any)
-	keys := make([]string, 0, 11+len(h.privateParams))
+	defer h.mu.RUnlock()
 	if h.algorithm != nil {
-		data[AlgorithmKey] = *(h.algorithm)
-		keys = append(keys, AlgorithmKey)
+		v, err := json.Marshal(*(h.algorithm))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, AlgorithmKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: AlgorithmKey, Value: v})
+	}
+	if h.b64 != nil {
+		v, err := json.Marshal(*(h.b64))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, B64Key, err)
+		}
+		pairs = append(pairs, headerPair{Name: B64Key, Value: v})
 	}
 	if h.contentType != nil {
-		data[ContentTypeKey] = *(h.contentType)
-		keys = append(keys, ContentTypeKey)
+		v, err := json.Marshal(*(h.contentType))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, ContentTypeKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: ContentTypeKey, Value: v})
 	}
 	if h.critical != nil {
-		data[CriticalKey] = h.critical
-		keys = append(keys, CriticalKey)
+		v, err := json.Marshal(h.critical)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, CriticalKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: CriticalKey, Value: v})
 	}
 	if h.jwk != nil {
-		data[JWKKey] = h.jwk
-		keys = append(keys, JWKKey)
+		v, err := json.Marshal(h.jwk)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, JWKKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: JWKKey, Value: v})
 	}
 	if h.jwkSetURL != nil {
-		data[JWKSetURLKey] = *(h.jwkSetURL)
-		keys = append(keys, JWKSetURLKey)
+		v, err := json.Marshal(*(h.jwkSetURL))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, JWKSetURLKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: JWKSetURLKey, Value: v})
 	}
 	if h.keyID != nil {
-		data[KeyIDKey] = *(h.keyID)
-		keys = append(keys, KeyIDKey)
+		v, err := json.Marshal(*(h.keyID))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, KeyIDKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: KeyIDKey, Value: v})
 	}
 	if h.typ != nil {
-		data[TypeKey] = *(h.typ)
-		keys = append(keys, TypeKey)
+		v, err := json.Marshal(*(h.typ))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, TypeKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: TypeKey, Value: v})
 	}
 	if h.x509CertChain != nil {
-		data[X509CertChainKey] = h.x509CertChain
-		keys = append(keys, X509CertChainKey)
+		v, err := json.Marshal(h.x509CertChain)
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509CertChainKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509CertChainKey, Value: v})
 	}
 	if h.x509CertThumbprint != nil {
-		data[X509CertThumbprintKey] = *(h.x509CertThumbprint)
-		keys = append(keys, X509CertThumbprintKey)
+		v, err := json.Marshal(*(h.x509CertThumbprint))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509CertThumbprintKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509CertThumbprintKey, Value: v})
 	}
 	if h.x509CertThumbprintS256 != nil {
-		data[X509CertThumbprintS256Key] = *(h.x509CertThumbprintS256)
-		keys = append(keys, X509CertThumbprintS256Key)
+		v, err := json.Marshal(*(h.x509CertThumbprintS256))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509CertThumbprintS256Key, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509CertThumbprintS256Key, Value: v})
 	}
 	if h.x509URL != nil {
-		data[X509URLKey] = *(h.x509URL)
-		keys = append(keys, X509URLKey)
+		v, err := json.Marshal(*(h.x509URL))
+		if err != nil {
+			return nil, fmt.Errorf(`failed to marshal field %q: %w`, X509URLKey, err)
+		}
+		pairs = append(pairs, headerPair{Name: X509URLKey, Value: v})
 	}
 	for k, v := range h.privateParams {
-		data[k] = v
-		keys = append(keys, k)
+		var encoded []byte
+		switch v := v.(type) {
+		case []byte:
+			var err error
+			encoded, err = json.Marshal(base64.EncodeToString(v))
+			if err != nil {
+				return nil, fmt.Errorf(`failed to marshal field %q: %w`, k, err)
+			}
+		default:
+			var err error
+			encoded, err = json.Marshal(v)
+			if err != nil {
+				return nil, fmt.Errorf(`failed to marshal field %q: %w`, k, err)
+			}
+		}
+		pairs = append(pairs, headerPair{Name: k, Value: encoded})
 	}
-	h.mu.RUnlock()
-	sort.Strings(keys)
+
+	sort.Slice(pairs, func(i, j int) bool {
+		return pairs[i].Name < pairs[j].Name
+	})
+
+	return pairs, nil
+}
+
+func (h *stdHeaders) MarshalJSON() ([]byte, error) {
 	buf := pool.BytesBuffer().Get()
 	defer pool.BytesBuffer().Put(buf)
-	enc := json.NewEncoder(buf)
+	pairs, err := h.makePairs()
+	if err != nil {
+		return nil, fmt.Errorf(`failed to make pairs: %w`, err)
+	}
 	buf.WriteByte(tokens.OpenCurlyBracket)
-	for i, k := range keys {
+
+	for i, pair := range pairs {
 		if i > 0 {
-			buf.WriteRune(tokens.Comma)
+			buf.WriteByte(tokens.Comma)
 		}
-		buf.WriteRune(tokens.DoubleQuote)
-		buf.WriteString(k)
-		buf.WriteString(`":`)
-		switch v := data[k].(type) {
-		case []byte:
-			buf.WriteRune(tokens.DoubleQuote)
-			buf.WriteString(base64.EncodeToString(v))
-			buf.WriteRune(tokens.DoubleQuote)
-		default:
-			if err := enc.Encode(v); err != nil {
-				return nil, fmt.Errorf(`failed to encode value for field %s: %w`, k, err)
-			}
-			buf.Truncate(buf.Len() - 1)
-		}
+		buf.WriteByte('"')
+		buf.WriteString(pair.Name)
+		buf.WriteString(`": `)
+		buf.Write(pair.Value.([]byte))
 	}
 	buf.WriteByte(tokens.CloseCurlyBracket)
 	ret := make([]byte, buf.Len())
 	copy(ret, buf.Bytes())
+	putHeaderPairList(pairs)
 	return ret, nil
 }

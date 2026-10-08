@@ -118,14 +118,6 @@ func (c *ctrlBackend) handleRequest(ctx context.Context, req any) {
 	}
 }
 
-func sendWorker(ctx context.Context, ch chan Resource, r Resource) {
-	r.SetBusy(true)
-	select {
-	case <-ctx.Done():
-	case ch <- r:
-	}
-}
-
 func sendWorkerSynchronous(ctx context.Context, ch chan synchronousRequest, r synchronousRequest) {
 	r.resource.SetBusy(true)
 	select {
@@ -159,26 +151,67 @@ func (c *ctrlBackend) loop(ctx context.Context, readywg, donewg *sync.WaitGroup)
 	readywg.Done()
 	defer c.traceSink.Put(ctx, "httprc controller: stopping main controller loop")
 	defer donewg.Done()
+
+	var pending []Resource
 	for {
-		c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: waiting for request or tick (tick interval=%s)", c.tickInterval))
-		select {
-		case req := <-c.incoming:
-			c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: got request %T", req))
-			c.handleRequest(ctx, req)
-		case t := <-c.check.C:
-			c.periodicCheck(ctx, t)
-		case <-ctx.Done():
-			return
+		if len(pending) > 0 {
+			// Dispatch pending items while remaining responsive to incoming
+			// requests. This prevents a deadlock where periodicCheck blocks
+			// on c.outgoing while a worker blocks on c.incoming (issue #113).
+
+			// Skip resources that were removed (or replaced) after periodicCheck
+			// queued them. Without this check, a stale resource could be sent to
+			// a worker, causing an unnecessary fetch and a subsequent
+			// adjustIntervalRequest for a resource that is no longer registered.
+			r := pending[0]
+			// Compare interface values directly. This is safe because all
+			// Resource implementations are pointer types (*ResourceBase[T]),
+			// so the comparison is a pointer identity check.
+			if cur, ok := c.items[r.URL()]; !ok || cur != r {
+				c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: skipping pending resource %q (no longer registered or replaced)", r.URL()))
+				r.SetBusy(false)
+				pending = pending[1:]
+				continue
+			}
+
+			c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: dispatching pending resource %q to worker pool (%d remaining)", pending[0].URL(), len(pending)))
+			select {
+			case req := <-c.incoming:
+				c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: got request %T (while dispatching)", req))
+				c.handleRequest(ctx, req)
+			case c.outgoing <- pending[0]:
+				pending = pending[1:]
+			case t := <-c.check.C:
+				pending = append(pending, c.periodicCheck(ctx, t)...)
+			case <-ctx.Done():
+				return
+			}
+		} else {
+			c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: waiting for request or tick (tick interval=%s)", c.tickInterval))
+			select {
+			case req := <-c.incoming:
+				c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: got request %T", req))
+				c.handleRequest(ctx, req)
+			case t := <-c.check.C:
+				pending = c.periodicCheck(ctx, t)
+			case <-ctx.Done():
+				return
+			}
 		}
 	}
 }
 
-func (c *ctrlBackend) periodicCheck(ctx context.Context, t time.Time) {
+// periodicCheck examines all registered resources and returns those that are
+// due for refresh. Items are marked busy here so they won't be selected again
+// on the next tick. The caller (loop) is responsible for dispatching them to
+// the worker pool, interleaved with incoming request handling, to avoid the
+// deadlock described in https://github.com/lestrrat-go/httprc/issues/113.
+func (c *ctrlBackend) periodicCheck(ctx context.Context, t time.Time) []Resource {
 	c.traceSink.Put(ctx, "httprc controller: START periodic check")
 	defer c.traceSink.Put(ctx, "httprc controller: END periodic check")
 	var minNext time.Time
-	var dispatched int
 	minInterval := -1 * time.Second
+	var toDispatch []Resource
 	for _, item := range c.items {
 		c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: checking resource %q", item.URL()))
 
@@ -196,14 +229,13 @@ func (c *ctrlBackend) periodicCheck(ctx context.Context, t time.Time) {
 			c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: resource %q is busy or not ready yet, skipping", item.URL()))
 			continue
 		}
-		c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: resource %q is ready, dispatching to worker pool", item.URL()))
+		c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: resource %q is ready, queuing for dispatch", item.URL()))
 
-		dispatched++
-		c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: dispatching resource %q to worker pool", item.URL()))
-		sendWorker(ctx, c.outgoing, item)
+		item.SetBusy(true)
+		toDispatch = append(toDispatch, item)
 	}
 
-	c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: dispatched %d resources", dispatched))
+	c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: queued %d resources for dispatch", len(toDispatch)))
 
 	// Next check is always at the earliest next check + 1 second.
 	// The extra second makes sure that we are _past_ the actual next check time
@@ -223,6 +255,7 @@ func (c *ctrlBackend) periodicCheck(ctx context.Context, t time.Time) {
 	}
 
 	c.traceSink.Put(ctx, fmt.Sprintf("httprc controller: next check in %s", c.tickInterval))
+	return toDispatch
 }
 
 func (c *ctrlBackend) SetTickInterval(d time.Duration) {

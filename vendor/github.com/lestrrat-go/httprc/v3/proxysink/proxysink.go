@@ -72,6 +72,7 @@ func (p *Proxy[T]) flushloop(ctx context.Context) {
 				p.mu.Unlock()
 				return
 			}
+			p.mu.Unlock()
 		default:
 		}
 

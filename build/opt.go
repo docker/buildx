@@ -47,6 +47,7 @@ import (
 	"github.com/moby/buildkit/solver/pb"
 	"github.com/moby/buildkit/sourcepolicy/policysession"
 	"github.com/moby/buildkit/util/apicaps"
+	"github.com/moby/buildkit/util/archiveutil"
 	"github.com/moby/buildkit/util/entitlements"
 	"github.com/moby/buildkit/util/gitutil"
 	"github.com/opencontainers/go-digest"
@@ -245,6 +246,10 @@ func isPolicyEvaluationError(policies []*policy.Policy, err error) bool {
 func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver bool, opt *Options, bopts gateway.BuildOpts, cfg *confutil.Config, pw progress.Writer, docker *dockerutil.Client) (_ *client.SolveOpt, release func(error), err error) {
 	node := np.Node()
 	nodeDriver := node.Driver
+	driverFeatures, err := nodeDriver.Features(ctx)
+	if err != nil {
+		return nil, nil, errors.Wrap(err, "failed to detect driver features")
+	}
 	defers := make([]func(error), 0, 2)
 	releaseF := func(inErr error) {
 		for _, f := range defers {
@@ -269,7 +274,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	for _, e := range opt.CacheTo {
-		if e.Type != "inline" && !nodeDriver.Features(ctx)[driver.CacheExport] {
+		if e.Type != "inline" && !driverFeatures[driver.CacheExport] {
 			return nil, nil, notSupported(driver.CacheExport, nodeDriver, "https://docs.docker.com/go/build-cache-backends/")
 		}
 	}
@@ -302,15 +307,22 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		cacheFrom = append(cacheFrom, e)
 	}
 
+	frontend := opt.Frontend
+	if frontend == "" {
+		frontend = "dockerfile.v0"
+	}
 	so := client.SolveOpt{
 		Ref:                 opt.Ref,
-		Frontend:            "dockerfile.v0",
-		FrontendAttrs:       map[string]string{},
+		Frontend:            frontend,
+		FrontendAttrs:       maps.Clone(opt.FrontendAttrs),
 		LocalMounts:         map[string]fsutil.FS{},
 		CacheExports:        cacheTo,
 		CacheImports:        cacheFrom,
 		AllowedEntitlements: opt.Allow,
 		SourcePolicy:        opt.SourcePolicy,
+	}
+	if so.FrontendAttrs == nil {
+		so.FrontendAttrs = map[string]string{}
 	}
 
 	if opt.CgroupParent != "" {
@@ -346,10 +358,10 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 	}
 
-	supportAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) && nodeDriver.Features(ctx)[driver.MultiPlatform]
+	supportAttestations := bopts.LLBCaps.Contains(apicaps.CapID("exporter.image.attestations")) && driverFeatures[driver.MultiPlatform]
 	if len(attests) > 0 {
 		if !supportAttestations {
-			if !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+			if !driverFeatures[driver.MultiPlatform] {
 				return nil, nil, notSupported("Attestation", nodeDriver, "https://docs.docker.com/go/attestations/")
 			}
 			return nil, nil, errors.Errorf("Attestations are not supported by the current BuildKit daemon")
@@ -391,7 +403,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 				// backwards compat for docker driver only:
 				// this ensures the build results in a docker image.
 				opt.Exports = []client.ExportEntry{{Type: "image", Attrs: map[string]string{}}}
-			} else if nodeDriver.Features(ctx)[driver.DefaultLoad] {
+			} else if driverFeatures[driver.DefaultLoad] {
 				opt.Exports = []client.ExportEntry{{Type: "docker", Attrs: map[string]string{}}}
 			}
 		}
@@ -402,7 +414,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 	}
 
 	// check if index annotations are supported by docker driver
-	if len(opt.Exports) > 0 && opt.CallFunc == nil && len(opt.Annotations) > 0 && nodeDriver.IsMobyDriver() && !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+	if len(opt.Exports) > 0 && opt.CallFunc == nil && len(opt.Annotations) > 0 && nodeDriver.IsMobyDriver() && !driverFeatures[driver.MultiPlatform] {
 		for _, exp := range opt.Exports {
 			if exp.Type == "image" || exp.Type == "docker" {
 				for ak := range opt.Annotations {
@@ -476,12 +488,24 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 
 	// set up exporters
 	for i, e := range so.Exports {
-		if e.Type == "oci" && !nodeDriver.Features(ctx)[driver.OCIExporter] {
+		if e.Type == "oci" && !driverFeatures[driver.OCIExporter] {
 			return nil, nil, notSupported(driver.OCIExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
 		}
 		if e.Type == "docker" {
-			features := docker.Features(ctx, e.Attrs["context"])
-			if features[dockerutil.OCIImporter] && e.Output == nil {
+			var features map[dockerutil.Feature]bool
+			if e.Output == nil {
+				contextName := e.Attrs["context"]
+				if nodeDriver.IsMobyDriver() {
+					// The docker driver loads into its own daemon.
+					contextName = node.Endpoint
+				}
+				var err error
+				features, err = docker.Features(ctx, contextName)
+				if err != nil {
+					return nil, nil, errors.Wrap(err, "failed to detect docker features")
+				}
+			}
+			if features[dockerutil.OCIImporter] {
 				// rely on oci importer if available (which supports
 				// multi-platform images), otherwise fall back to docker
 				so.Exports[i].Type = "oci"
@@ -501,6 +525,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 					}
 					defers = append(defers, func(error) {
 						cancel()
+						_ = w.Close()
 					})
 					so.Exports[i].Output = func(_ map[string]string) (io.WriteCloser, error) {
 						return w, nil
@@ -511,14 +536,14 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 						so.Exports[i].Attrs["prefer-image-digest"] = "true"
 					}
 				}
-			} else if !nodeDriver.Features(ctx)[driver.DockerExporter] {
+			} else if !driverFeatures[driver.DockerExporter] {
 				return nil, nil, notSupported(driver.DockerExporter, nodeDriver, "https://docs.docker.com/go/build-exporters/")
 			}
 		}
 		if e.Type == "image" && nodeDriver.IsMobyDriver() {
 			so.Exports[i].Type = "moby"
 			// The containerd image store resolves images by manifest or index digest.
-			if nodeDriver.Features(ctx)[driver.PreferImageDigest] {
+			if driverFeatures[driver.PreferImageDigest] {
 				so.Exports[i].Attrs["prefer-image-digest"] = "true"
 			}
 			if e.Attrs["push"] != "" {
@@ -605,7 +630,7 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		for i, p := range opt.Platforms {
 			pp[i] = platforms.FormatAll(p)
 		}
-		if len(pp) > 1 && !nodeDriver.Features(ctx)[driver.MultiPlatform] {
+		if len(pp) > 1 && !driverFeatures[driver.MultiPlatform] {
 			return nil, nil, notSupported(driver.MultiPlatform, nodeDriver, "https://docs.docker.com/go/build-multi-platform/")
 		}
 		so.FrontendAttrs["platform"] = strings.Join(pp, ",")
@@ -665,10 +690,44 @@ func proxyArgKeyExists(buildArgs map[string]string, key string) bool {
 	return false
 }
 
+// splitPolicyConfigs separates programmatic policy callbacks from file-based
+// policy configs. A config carries either a callback or policy files.
+func splitPolicyConfigs(configs []buildflags.PolicyConfig) ([]policysession.PolicyCallback, []buildflags.PolicyConfig, error) {
+	var callbacks []policysession.PolicyCallback
+	var fileConfigs []buildflags.PolicyConfig
+	for _, p := range configs {
+		if p.Callback == nil {
+			fileConfigs = append(fileConfigs, p)
+			continue
+		}
+		if len(p.Files) > 0 {
+			return nil, nil, errors.New("policy config cannot set both a callback and policy files")
+		}
+		callbacks = append(callbacks, p.Callback)
+	}
+	return callbacks, fileConfigs, nil
+}
+
 func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, opt *Options, cfg *confutil.Config, bopts gateway.BuildOpts, so *client.SolveOpt, pw progress.Writer) (_ []func(error), err error) {
+	callbackOnly, fileConfigs, err := splitPolicyConfigs(opt.Policy)
+	if err != nil {
+		return nil, err
+	}
+
+	// Any callback-only entry requires the session policy capability, the
+	// same way a Strict declarative policy does.
+	if len(callbackOnly) > 0 {
+		if bopts.LLBCaps.Supports(pb.CapSourcePolicySession) != nil {
+			return nil, errors.New("session source policy is not supported by the current BuildKit daemon, please upgrade to version v0.27+")
+		}
+	}
 	if opt.Inputs.policy == nil {
-		if len(opt.Policy) > 0 {
+		if len(fileConfigs) > 0 {
 			return nil, errors.New("policy file specified but no policy FS in build context")
+		}
+		if len(callbackOnly) > 0 {
+			so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(callbackOnly...))
+			return nil, nil
 		}
 		so.SourcePolicyProvider = nil
 		return nil, nil
@@ -685,7 +744,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	env.Target = opt.Target
 	env.Labels = opt.Labels
 
-	popts, err := withPolicyConfig(*opt.Inputs.policy, opt.Policy)
+	popts, err := withPolicyConfig(*opt.Inputs.policy, fileConfigs)
 	if err != nil {
 		return nil, err
 	}
@@ -695,7 +754,7 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	// (docker/dockerfile, docker/dockerfile-upstream) that may be implicitly
 	// loaded during a build, and passes through any other source so user
 	// policies retain full control.
-	if policy.DefaultPolicyEnabled() && !policyExplicitlyDisabled(opt.Policy) {
+	if policy.DefaultPolicyEnabled() && !policyExplicitlyDisabled(fileConfigs) {
 		builtin := policyOpt{
 			Files: []policyFileSpec{{
 				Filename: policy.DefaultPolicyFilename,
@@ -707,6 +766,10 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 	}
 
 	if len(popts) == 0 {
+		if len(callbackOnly) > 0 {
+			so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(callbackOnly...))
+			return nil, nil
+		}
 		so.SourcePolicyProvider = nil
 		return nil, nil
 	}
@@ -736,6 +799,10 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 		return nil, err
 	}
 	if len(loadedOpts) == 0 {
+		if len(callbackOnly) > 0 {
+			so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(callbackOnly...))
+			return defers, nil
+		}
 		so.SourcePolicyProvider = nil
 		return defers, nil
 	}
@@ -800,6 +867,9 @@ func configureSourcePolicy(ctx context.Context, np *noderesolver.ResolvedNode, o
 			policyLogger.Log("policy enabled network proxy")
 		}
 	}
+	// Callback-only policy entries compose as the last (most-strict)
+	// entries, allowing file-based policies to still run first.
+	cbs = append(cbs, callbackOnly...)
 	so.SourcePolicyProvider = policysession.NewPolicyProvider(policy.MultiPolicyCallback(cbs...))
 	return defers, nil
 }
@@ -869,7 +939,7 @@ func loadInputs(ctx context.Context, d *driver.DriverHandle, inp *Inputs, pw pro
 			return nil, errors.Wrap(err, "failed to peek context header from STDIN")
 		}
 		if err != io.EOF || len(magic) != 0 {
-			if isArchive(magic) {
+			if archiveutil.IsArchive(magic) {
 				// stdin is context
 				up := uploadprovider.New()
 				target.FrontendAttrs["context"] = up.Add(rc)
@@ -1107,7 +1177,11 @@ func resolveRemotePolicyContextState(contextPath string, target *client.SolveOpt
 	}
 
 	keepGitDir := false
-	if st, ok, _ := dockerui.DetectGitContext(contextPath, &keepGitDir); ok {
+	var gitAdvice bool
+	if target != nil {
+		gitAdvice, _ = strconv.ParseBool(target.FrontendAttrs["build-arg:BUILDKIT_GIT_ADVICE"])
+	}
+	if st, ok, _ := dockerui.DetectGitContext(contextPath, &keepGitDir, llb.GitAdvice(gitAdvice)); ok {
 		return st
 	}
 
@@ -1213,7 +1287,8 @@ func processGitURL(url string, name string, target *client.SolveOpt, caps map[st
 		}
 	}
 
-	st, ok, err := dockerui.DetectGitContext(url, keepGitDir)
+	gitAdvice, _ := strconv.ParseBool(target.FrontendAttrs["build-arg:BUILDKIT_GIT_ADVICE"])
+	st, ok, err := dockerui.DetectGitContext(url, keepGitDir, llb.GitAdvice(gitAdvice))
 	if err != nil {
 		return err
 	}

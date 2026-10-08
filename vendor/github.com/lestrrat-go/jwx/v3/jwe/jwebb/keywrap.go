@@ -13,6 +13,9 @@ import (
 var keywrapDefaultIV = []byte{0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6, 0xa6}
 
 func Wrap(kek cipher.Block, cek []byte) ([]byte, error) {
+	if len(cek) < tokens.KeywrapChunkLen {
+		return nil, fmt.Errorf(`keywrap input must be at least %d bytes`, tokens.KeywrapChunkLen)
+	}
 	if len(cek)%tokens.KeywrapBlockSize != 0 {
 		return nil, fmt.Errorf(`keywrap input must be %d byte blocks`, tokens.KeywrapBlockSize)
 	}
@@ -25,15 +28,11 @@ func Wrap(kek cipher.Block, cek []byte) ([]byte, error) {
 		copy(r[i], cek[i*tokens.KeywrapChunkLen:])
 	}
 
-	buffer := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen * 2)
+	buffer := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen * 2)[:tokens.KeywrapChunkLen*2]
 	defer pool.ByteSlice().Put(buffer)
-	// the byte slice has the capacity, but len is 0
-	buffer = buffer[:tokens.KeywrapChunkLen*2]
 
-	tBytes := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen)
+	tBytes := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen)[:tokens.KeywrapChunkLen]
 	defer pool.ByteSlice().Put(tBytes)
-	// the byte slice has the capacity, but len is 0
-	tBytes = tBytes[:tokens.KeywrapChunkLen]
 
 	copy(buffer, keywrapDefaultIV)
 
@@ -60,6 +59,9 @@ func Wrap(kek cipher.Block, cek []byte) ([]byte, error) {
 }
 
 func Unwrap(block cipher.Block, ciphertxt []byte) ([]byte, error) {
+	if len(ciphertxt) < 2*tokens.KeywrapChunkLen {
+		return nil, fmt.Errorf(`keyunwrap input must be at least %d bytes`, 2*tokens.KeywrapChunkLen)
+	}
 	if len(ciphertxt)%tokens.KeywrapChunkLen != 0 {
 		return nil, fmt.Errorf(`keyunwrap input must be %d byte blocks`, tokens.KeywrapChunkLen)
 	}
@@ -72,15 +74,11 @@ func Unwrap(block cipher.Block, ciphertxt []byte) ([]byte, error) {
 		copy(r[i], ciphertxt[(i+1)*tokens.KeywrapChunkLen:])
 	}
 
-	buffer := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen * 2)
+	buffer := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen * 2)[:tokens.KeywrapChunkLen*2]
 	defer pool.ByteSlice().Put(buffer)
-	// the byte slice has the capacity, but len is 0
-	buffer = buffer[:tokens.KeywrapChunkLen*2]
 
-	tBytes := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen)
+	tBytes := pool.ByteSlice().GetCapacity(tokens.KeywrapChunkLen)[:tokens.KeywrapChunkLen]
 	defer pool.ByteSlice().Put(tBytes)
-	// the byte slice has the capacity, but len is 0
-	tBytes = tBytes[:tokens.KeywrapChunkLen]
 
 	copy(buffer[:tokens.KeywrapChunkLen], ciphertxt[:tokens.KeywrapChunkLen])
 

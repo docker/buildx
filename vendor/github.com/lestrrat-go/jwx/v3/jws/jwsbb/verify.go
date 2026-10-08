@@ -16,9 +16,10 @@ import (
 // This function loads the verifier registered in the jwsbb package _ONLY_.
 // It does not support custom verifiers that the user might have registered.
 func Verify(key any, alg string, payload, signature []byte) error {
-	dsigAlg, ok := getDsigAlgorithm(alg)
+	dsigAlg, ok := GetDsigAlgorithm(alg)
 	if !ok {
-		return fmt.Errorf(`jwsbb.Verify: unsupported signature algorithm %q`, alg)
+		// For custom algorithms registered with dsig, JWS name = dsig name
+		dsigAlg = alg
 	}
 
 	// Get dsig algorithm info to determine key conversion strategy
@@ -35,7 +36,9 @@ func Verify(key any, alg string, payload, signature []byte) error {
 	case dsig.ECDSA:
 		return dispatchECDSAVerify(key, dsigAlg, payload, signature)
 	case dsig.EdDSAFamily:
-		return dispatchEdDSAVerify(key, dsigAlg, payload, signature)
+		return dispatchEdDSAVerify(key, alg, dsigAlg, payload, signature)
+	case dsig.Custom:
+		return dsig.Verify(key, dsigAlg, payload, signature)
 	default:
 		return fmt.Errorf(`jwsbb.Verify: unsupported dsig algorithm family %q`, dsigInfo.Family)
 	}
@@ -86,11 +89,17 @@ func dispatchECDSAVerify(key any, dsigAlg string, payload, signature []byte) err
 	return dsig.Verify(pubkey, dsigAlg, payload, signature)
 }
 
-func dispatchEdDSAVerify(key any, dsigAlg string, payload, signature []byte) error {
+func dispatchEdDSAVerify(key any, jwsAlg, dsigAlg string, payload, signature []byte) error {
+	// Note: Extension algorithms (e.g. Ed448) are registered as dsig.Custom family,
+	// so they take the dsig.Custom branch in Verify() and never reach this function.
+
 	// Try crypto.Signer first (dsig can handle it directly)
 	if signer, ok := key.(crypto.Signer); ok {
 		// Verify it's an EdDSA key
-		if _, ok := signer.Public().(ed25519.PublicKey); ok {
+		if pub, ok := signer.Public().(ed25519.PublicKey); ok {
+			if err := validateEdDSACurve(jwsAlg, pub); err != nil {
+				return fmt.Errorf(`jwsbb.Verify: %w`, err)
+			}
 			return dsig.Verify(signer, dsigAlg, payload, signature)
 		}
 	}
@@ -99,6 +108,10 @@ func dispatchEdDSAVerify(key any, dsigAlg string, payload, signature []byte) err
 	var pubkey ed25519.PublicKey
 	if err := keyconv.Ed25519PublicKey(&pubkey, key); err != nil {
 		return fmt.Errorf(`jwsbb.Verify: invalid key type %T. ed25519.PublicKey is required: %w`, key, err)
+	}
+
+	if err := validateEdDSACurve(jwsAlg, pubkey); err != nil {
+		return fmt.Errorf(`jwsbb.Verify: %w`, err)
 	}
 
 	return dsig.Verify(pubkey, dsigAlg, payload, signature)

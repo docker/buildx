@@ -10,7 +10,6 @@ import (
 
 	"github.com/lestrrat-go/jwx/v3/internal/ecutil"
 	"github.com/lestrrat-go/jwx/v3/internal/keyconv"
-	"github.com/lestrrat-go/jwx/v3/internal/pool"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jws/internal/keytype"
 )
@@ -179,18 +178,13 @@ func (v *ecdsaVerifier) Verify(payload []byte, signature []byte, key any) error 
 		return fmt.Errorf(`public key used does not contain a point (X,Y) on the curve`)
 	}
 
-	r := pool.BigInt().Get()
-	s := pool.BigInt().Get()
-	defer pool.BigInt().Put(r)
-	defer pool.BigInt().Put(s)
-
 	keySize := ecutil.CalculateKeySize(pubkey.Curve)
 	if len(signature) != keySize*2 {
 		return fmt.Errorf(`invalid signature length for curve %q`, pubkey.Curve.Params().Name)
 	}
 
-	r.SetBytes(signature[:keySize])
-	s.SetBytes(signature[keySize:])
+	r := new(big.Int).SetBytes(signature[:keySize])
+	s := new(big.Int).SetBytes(signature[keySize:])
 
 	h := v.hash.New()
 	if _, err := h.Write(payload); err != nil {

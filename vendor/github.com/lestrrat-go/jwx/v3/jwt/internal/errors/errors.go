@@ -173,11 +173,8 @@ type MissingRequiredClaimError struct {
 }
 
 func (err *MissingRequiredClaimError) Is(target error) bool {
-	err1, ok := target.(*MissingRequiredClaimError)
-	if !ok {
-		return false
-	}
-	return err1 == ErrMissingRequiredClaimDefault || err1.claim == err.claim
+	_, ok := target.(*MissingRequiredClaimError)
+	return ok
 }
 
 func MissingRequiredClaimErrorf(name string) error {

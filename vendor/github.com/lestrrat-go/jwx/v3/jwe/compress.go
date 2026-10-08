@@ -19,7 +19,7 @@ func uncompress(src []byte, maxBufferSize int64) ([]byte, error) {
 		n, readErr := r.Read(buf[:])
 		sofar += int64(n)
 		if sofar > maxBufferSize {
-			return nil, fmt.Errorf(`compressed payload exceeds maximum allowed size`)
+			return nil, fmt.Errorf(`decompressed payload exceeds WithMaxDecompressBufferSize=%d (saw %d bytes after a %d-byte read)`, maxBufferSize, sofar, n)
 		}
 		if readErr != nil {
 			// if we have a read error, and it's not EOF, then we need to stop
@@ -56,7 +56,6 @@ func compress(plaintext []byte) ([]byte, error) {
 		return nil, fmt.Errorf(`failed to close compression writer: %w`, err)
 	}
 
-	ret := make([]byte, buf.Len())
-	copy(ret, buf.Bytes())
+	ret := bytes.Clone(buf.Bytes())
 	return ret, nil
 }

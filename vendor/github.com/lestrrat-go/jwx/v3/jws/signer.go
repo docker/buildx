@@ -145,10 +145,9 @@ func UnregisterSigner(alg jwa.SignatureAlgorithm) {
 }
 
 // NewSigner creates a signer that signs payloads using the given signature algorithm.
-// This function is deprecated, and will either be removed to re-purposed using
-// a different signature.
 //
-// When you want to load a Signer object, you should use `SignerFor()` instead.
+// Deprecated: Use [SignerFor] instead. This function will be removed or
+// repurposed with a different signature in v4.
 func NewSigner(alg jwa.SignatureAlgorithm) (Signer, error) {
 	s, err := newLegacySigner(alg)
 	if err == nil {

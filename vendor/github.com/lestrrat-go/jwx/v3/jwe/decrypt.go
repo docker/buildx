@@ -3,7 +3,6 @@ package jwe
 import (
 	"fmt"
 
-	"github.com/lestrrat-go/jwx/v3/internal/tokens"
 	"github.com/lestrrat-go/jwx/v3/jwa"
 	"github.com/lestrrat-go/jwx/v3/jwe/internal/content_crypt"
 	"github.com/lestrrat-go/jwx/v3/jwe/jwebb"
@@ -140,10 +139,11 @@ func (d *decrypter) Decrypt(recipient Recipient, ciphertext []byte, msg *Message
 		return
 	}
 
-	computedAad := d.computedAad
-	if d.aad != nil {
-		computedAad = append(append(computedAad, tokens.Period), d.aad...)
-	}
+	// When an external aad is present we must NOT append into
+	// d.computedAad's backing array: it aliases msg.rawProtectedHeaders
+	// in the caller, and appending would mutate bytes past its length
+	// in storage still referenced by the Message.
+	computedAad := concatAAD(d.computedAad, d.aad)
 
 	plaintext, err = cipher.Decrypt(cek, d.iv, ciphertext, d.tag, computedAad)
 	if err != nil {
@@ -158,40 +158,43 @@ func (d *decrypter) Decrypt(recipient Recipient, ciphertext []byte, msg *Message
 }
 
 func (d *decrypter) DecryptKey(recipient Recipient, msg *Message) (cek []byte, err error) {
+	keyalgStr := d.keyalg.String()
+	ctalgStr := d.ctalg.String()
+
 	recipientKey := recipient.EncryptedKey()
 	if kd, ok := d.privkey.(KeyDecrypter); ok {
 		return kd.DecryptKey(d.keyalg, recipientKey, recipient, msg)
 	}
 
-	if jwebb.IsDirect(d.keyalg.String()) {
+	if jwebb.IsDirect(keyalgStr) {
 		cek, ok := d.privkey.([]byte)
 		if !ok {
-			return nil, fmt.Errorf("decrypt key: []byte is required as the key for %s (got %T)", d.keyalg, d.privkey)
+			return nil, fmt.Errorf("decrypt key: []byte is required as the key for %s (got %T)", keyalgStr, d.privkey)
 		}
-		return jwebb.KeyDecryptDirect(recipientKey, recipientKey, d.keyalg.String(), cek)
+		return jwebb.KeyDecryptDirect(recipientKey, recipientKey, keyalgStr, cek)
 	}
 
-	if jwebb.IsPBES2(d.keyalg.String()) {
+	if jwebb.IsPBES2(keyalgStr) {
 		password, ok := d.privkey.([]byte)
 		if !ok {
-			return nil, fmt.Errorf("decrypt key: []byte is required as the password for %s (got %T)", d.keyalg, d.privkey)
+			return nil, fmt.Errorf("decrypt key: []byte is required as the password for %s (got %T)", keyalgStr, d.privkey)
 		}
-		salt := []byte(d.keyalg.String())
+		salt := []byte(keyalgStr)
 		salt = append(salt, byte(0))
 		salt = append(salt, d.keysalt...)
-		return jwebb.KeyDecryptPBES2(recipientKey, recipientKey, d.keyalg.String(), password, salt, d.keycount)
+		return jwebb.KeyDecryptPBES2(recipientKey, recipientKey, keyalgStr, password, salt, d.keycount)
 	}
 
-	if jwebb.IsAESGCMKW(d.keyalg.String()) {
+	if jwebb.IsAESGCMKW(keyalgStr) {
 		sharedkey, ok := d.privkey.([]byte)
 		if !ok {
-			return nil, fmt.Errorf("decrypt key: []byte is required as the key for %s (got %T)", d.keyalg, d.privkey)
+			return nil, fmt.Errorf("decrypt key: []byte is required as the key for %s (got %T)", keyalgStr, d.privkey)
 		}
-		return jwebb.KeyDecryptAESGCMKW(recipientKey, recipientKey, d.keyalg.String(), sharedkey, d.keyiv, d.keytag)
+		return jwebb.KeyDecryptAESGCMKW(recipientKey, recipientKey, keyalgStr, sharedkey, d.keyiv, d.keytag)
 	}
 
-	if jwebb.IsECDHES(d.keyalg.String()) {
-		alg, keysize, keywrap, err := jwebb.KeyEncryptionECDHESKeySize(d.keyalg.String(), d.ctalg.String())
+	if jwebb.IsECDHES(keyalgStr) {
+		alg, keysize, keywrap, err := jwebb.KeyEncryptionECDHESKeySize(keyalgStr, ctalgStr)
 		if err != nil {
 			return nil, fmt.Errorf(`failed to determine ECDH-ES key size: %w`, err)
 		}
@@ -199,10 +202,10 @@ func (d *decrypter) DecryptKey(recipient Recipient, msg *Message) (cek []byte, e
 		if !keywrap {
 			return jwebb.KeyDecryptECDHES(recipientKey, cek, alg, d.apu, d.apv, d.privkey, d.pubkey, keysize)
 		}
-		return jwebb.KeyDecryptECDHESKeyWrap(recipientKey, recipientKey, d.keyalg.String(), d.apu, d.apv, d.privkey, d.pubkey, keysize)
+		return jwebb.KeyDecryptECDHESKeyWrap(recipientKey, recipientKey, keyalgStr, d.apu, d.apv, d.privkey, d.pubkey, keysize)
 	}
 
-	if jwebb.IsRSA15(d.keyalg.String()) {
+	if jwebb.IsRSA15(keyalgStr) {
 		cipher, err := d.ContentCipher()
 		if err != nil {
 			return nil, fmt.Errorf(`failed to fetch content crypt cipher: %w`, err)
@@ -211,17 +214,17 @@ func (d *decrypter) DecryptKey(recipient Recipient, msg *Message) (cek []byte, e
 		return jwebb.KeyDecryptRSA15(recipientKey, recipientKey, d.privkey, keysize)
 	}
 
-	if jwebb.IsRSAOAEP(d.keyalg.String()) {
-		return jwebb.KeyDecryptRSAOAEP(recipientKey, recipientKey, d.keyalg.String(), d.privkey)
+	if jwebb.IsRSAOAEP(keyalgStr) {
+		return jwebb.KeyDecryptRSAOAEP(recipientKey, recipientKey, keyalgStr, d.privkey)
 	}
 
-	if jwebb.IsAESKW(d.keyalg.String()) {
+	if jwebb.IsAESKW(keyalgStr) {
 		sharedkey, ok := d.privkey.([]byte)
 		if !ok {
-			return nil, fmt.Errorf("[]byte is required as the key to decrypt %s", d.keyalg.String())
+			return nil, fmt.Errorf("[]byte is required as the key to decrypt %s", keyalgStr)
 		}
-		return jwebb.KeyDecryptAESKW(recipientKey, recipientKey, d.keyalg.String(), sharedkey)
+		return jwebb.KeyDecryptAESKW(recipientKey, recipientKey, keyalgStr, sharedkey)
 	}
 
-	return nil, fmt.Errorf(`unsupported algorithm for key decryption (%s)`, d.keyalg)
+	return nil, fmt.Errorf(`unsupported algorithm for key decryption (%s)`, keyalgStr)
 }

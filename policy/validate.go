@@ -6,9 +6,12 @@ import (
 	"fmt"
 	"io/fs"
 	"maps"
+	"net"
+	"net/netip"
 	"net/url"
 	"path"
 	"slices"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -29,6 +32,7 @@ import (
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
+	"golang.org/x/net/idna"
 )
 
 type Policy struct {
@@ -339,7 +343,7 @@ func (p *Policy) CheckPolicy(ctx context.Context, req *policysession.CheckPolicy
 				return nil, nil, errors.Errorf("multiple image pins set to %s: %v", sourceName(req), st.ImagePins)
 			}
 			if len(st.ImagePins) == 1 {
-				newSrc, err := addPinToImage(req.Source.Source, slices.Collect(maps.Keys(st.ImagePins))[0])
+				newSrc, err := AddPinToImage(req.Source.Source, slices.Collect(maps.Keys(st.ImagePins))[0])
 				if err != nil {
 					return nil, nil, errors.Wrapf(err, "failed to add image pin to source")
 				}
@@ -532,6 +536,52 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 	return nil
 }
 
+func normalizeHTTPHost(u *url.URL) (string, error) {
+	host := u.Hostname()
+	if addr, err := netip.ParseAddr(host); err == nil {
+		host = addr.String()
+	} else {
+		if isASCIIHost(host) {
+			host = strings.ToLower(host)
+		} else {
+			// Match the IDNA lookup mapping used by Go's HTTP transport.
+			host, err = idna.Lookup.ToASCII(host)
+			if err != nil {
+				return "", errors.Wrapf(err, "invalid http host %q", u.Hostname())
+			}
+		}
+		// Match an absolute DNS name to the corresponding policy hostname.
+		host = strings.TrimSuffix(host, ".")
+	}
+	port := u.Port()
+	if port != "" {
+		p, err := strconv.ParseUint(port, 10, 16)
+		if err != nil {
+			return "", errors.Wrapf(err, "invalid http port %q", port)
+		}
+		port = strconv.FormatUint(p, 10)
+	}
+	if (u.Scheme == "http" && port == "80") || (u.Scheme == "https" && port == "443") {
+		port = ""
+	}
+	if port != "" {
+		return net.JoinHostPort(host, port), nil
+	}
+	if strings.Contains(host, ":") {
+		return "[" + host + "]", nil
+	}
+	return host, nil
+}
+
+func isASCIIHost(host string) bool {
+	for i := 0; i < len(host); i++ {
+		if host[i] >= 0x80 {
+			return false
+		}
+	}
+	return true
+}
+
 func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src *gwpb.ResolveSourceMetaResponse, platform *ocispecs.Platform, logf func(logrus.Level, string)) (Input, []string, error) {
 	var inp Input
 	var unknowns []string
@@ -544,6 +594,7 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 	if !ok {
 		return inp, nil, errors.Errorf("invalid source identifier: %s", src.Source.Identifier)
 	}
+	scheme = strings.ToLower(scheme)
 
 	switch scheme {
 	case "http", "https":
@@ -551,10 +602,14 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 		if err != nil {
 			return inp, nil, errors.Wrapf(err, "failed to parse http source url")
 		}
+		host, err := normalizeHTTPHost(u)
+		if err != nil {
+			return inp, nil, errors.Wrap(err, "failed to normalize http source host")
+		}
 		inp.HTTP = &HTTP{
 			URL:    src.Source.Identifier,
 			Schema: scheme,
-			Host:   u.Host,
+			Host:   host,
 			Path:   u.Path,
 			Query:  u.Query(),
 		}

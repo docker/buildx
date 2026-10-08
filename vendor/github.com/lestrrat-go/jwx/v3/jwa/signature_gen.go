@@ -5,36 +5,32 @@ package jwa
 import (
 	"encoding/json"
 	"fmt"
-	"sort"
-	"sync"
 )
-
-var muAllSignatureAlgorithm sync.RWMutex
-var allSignatureAlgorithm = map[string]SignatureAlgorithm{}
-var muListSignatureAlgorithm sync.RWMutex
-var listSignatureAlgorithm []SignatureAlgorithm
-var builtinSignatureAlgorithm = map[string]struct{}{}
 
 func init() {
 	// builtin values for SignatureAlgorithm
-	algorithms := make([]SignatureAlgorithm, 15)
+	algorithms := make([]SignatureAlgorithm, 16)
 	algorithms[0] = NewSignatureAlgorithm("ES256")
 	algorithms[1] = NewSignatureAlgorithm("ES256K")
 	algorithms[2] = NewSignatureAlgorithm("ES384")
 	algorithms[3] = NewSignatureAlgorithm("ES512")
-	algorithms[4] = NewSignatureAlgorithm("EdDSA")
-	algorithms[5] = NewSignatureAlgorithm("HS256", WithIsSymmetric(true))
-	algorithms[6] = NewSignatureAlgorithm("HS384", WithIsSymmetric(true))
-	algorithms[7] = NewSignatureAlgorithm("HS512", WithIsSymmetric(true))
-	algorithms[8] = NewSignatureAlgorithm("none")
-	algorithms[9] = NewSignatureAlgorithm("PS256")
-	algorithms[10] = NewSignatureAlgorithm("PS384")
-	algorithms[11] = NewSignatureAlgorithm("PS512")
-	algorithms[12] = NewSignatureAlgorithm("RS256")
-	algorithms[13] = NewSignatureAlgorithm("RS384")
-	algorithms[14] = NewSignatureAlgorithm("RS512")
+	algorithms[4] = NewSignatureAlgorithm("EdDSA", WithDeprecated(true))
+	algorithms[5] = NewSignatureAlgorithm("Ed25519")
+	algorithms[6] = NewSignatureAlgorithm("HS256", WithIsSymmetric(true))
+	algorithms[7] = NewSignatureAlgorithm("HS384", WithIsSymmetric(true))
+	algorithms[8] = NewSignatureAlgorithm("HS512", WithIsSymmetric(true))
+	algorithms[9] = NewSignatureAlgorithm("none")
+	algorithms[10] = NewSignatureAlgorithm("PS256")
+	algorithms[11] = NewSignatureAlgorithm("PS384")
+	algorithms[12] = NewSignatureAlgorithm("PS512")
+	algorithms[13] = NewSignatureAlgorithm("RS256")
+	algorithms[14] = NewSignatureAlgorithm("RS384")
+	algorithms[15] = NewSignatureAlgorithm("RS512")
 
 	RegisterSignatureAlgorithm(algorithms...)
+	for _, alg := range algorithms {
+		markBuiltin(alg.String())
+	}
 }
 
 // ES256 returns an object representing ECDSA signature algorithm using P-256 curve and SHA-256.
@@ -57,9 +53,14 @@ func ES512() SignatureAlgorithm {
 	return lookupBuiltinSignatureAlgorithm("ES512")
 }
 
-// EdDSA returns an object representing EdDSA signature algorithms.
+// EdDSA returns an object representing EdDSA signature algorithms (deprecated by RFC 9864, use EdDSAEd25519 or EdDSAEd448).
 func EdDSA() SignatureAlgorithm {
 	return lookupBuiltinSignatureAlgorithm("EdDSA")
+}
+
+// EdDSAEd25519 returns an object representing EdDSA signature algorithm using Ed25519 (RFC 9864). The function name is tentative and may change in future releases.
+func EdDSAEd25519() SignatureAlgorithm {
+	return lookupBuiltinSignatureAlgorithm("Ed25519")
 }
 
 // HS256 returns an object representing HMAC signature algorithm using SHA-256.
@@ -113,13 +114,11 @@ func RS512() SignatureAlgorithm {
 }
 
 func lookupBuiltinSignatureAlgorithm(name string) SignatureAlgorithm {
-	muAllSignatureAlgorithm.RLock()
-	v, ok := allSignatureAlgorithm[name]
-	muAllSignatureAlgorithm.RUnlock()
+	v, ok := lookupAlgorithm(algKindSignature, name)
 	if !ok {
 		panic(fmt.Sprintf(`jwa: SignatureAlgorithm %q not registered`, name))
 	}
-	return v
+	return v.(SignatureAlgorithm)
 }
 
 // SignatureAlgorithm represents the various signature algorithms as described in https://tools.ietf.org/html/rfc7518#section-3.1
@@ -169,57 +168,46 @@ func NewSignatureAlgorithm(name string, options ...NewSignatureAlgorithmOption) 
 
 // LookupSignatureAlgorithm returns the SignatureAlgorithm object for the given name.
 func LookupSignatureAlgorithm(name string) (SignatureAlgorithm, bool) {
-	muAllSignatureAlgorithm.RLock()
-	v, ok := allSignatureAlgorithm[name]
-	muAllSignatureAlgorithm.RUnlock()
-	return v, ok
+	if v, ok := lookupAlgorithm(algKindSignature, name); ok {
+		return v.(SignatureAlgorithm), true
+	}
+	var zero SignatureAlgorithm
+	return zero, false
 }
 
 // RegisterSignatureAlgorithm registers a new SignatureAlgorithm. The signature value must be immutable
 // and safe to be used by multiple goroutines, as it is going to be shared with all other users of this library.
+//
+// Registration is process-global. Built-in identifiers such as RS256 are
+// reserved and cannot be replaced by callers after init has completed; use a
+// distinct name for third-party algorithms.
+//
+// SignatureAlgorithm, KeyEncryptionAlgorithm, and ContentEncryptionAlgorithm
+// share a single algorithm-name namespace so that KeyAlgorithmFrom can
+// resolve unambiguously. Registering a name that is already registered as a
+// different kind is a silent no-op (the first Register* call wins).
 func RegisterSignatureAlgorithm(algorithms ...SignatureAlgorithm) {
-	muAllSignatureAlgorithm.Lock()
 	for _, alg := range algorithms {
-		allSignatureAlgorithm[alg.String()] = alg
+		registerAlgorithm(algKindSignature, alg)
 	}
-	muAllSignatureAlgorithm.Unlock()
-	rebuildSignatureAlgorithm()
 }
 
 // UnregisterSignatureAlgorithm unregisters a SignatureAlgorithm from its known database.
 // Non-existent entries, as well as built-in algorithms will silently be ignored.
 func UnregisterSignatureAlgorithm(algorithms ...SignatureAlgorithm) {
-	muAllSignatureAlgorithm.Lock()
 	for _, alg := range algorithms {
-		if _, ok := builtinSignatureAlgorithm[alg.String()]; ok {
-			continue
-		}
-		delete(allSignatureAlgorithm, alg.String())
+		unregisterAlgorithm(algKindSignature, alg.String())
 	}
-	muAllSignatureAlgorithm.Unlock()
-	rebuildSignatureAlgorithm()
-}
-
-func rebuildSignatureAlgorithm() {
-	list := make([]SignatureAlgorithm, 0, len(allSignatureAlgorithm))
-	muAllSignatureAlgorithm.RLock()
-	for _, v := range allSignatureAlgorithm {
-		list = append(list, v)
-	}
-	muAllSignatureAlgorithm.RUnlock()
-	sort.Slice(list, func(i, j int) bool {
-		return list[i].String() < list[j].String()
-	})
-	muListSignatureAlgorithm.Lock()
-	listSignatureAlgorithm = list
-	muListSignatureAlgorithm.Unlock()
 }
 
 // SignatureAlgorithms returns a list of all available values for SignatureAlgorithm.
 func SignatureAlgorithms() []SignatureAlgorithm {
-	muListSignatureAlgorithm.RLock()
-	defer muListSignatureAlgorithm.RUnlock()
-	return listSignatureAlgorithm
+	raw := listAlgorithmsByKind(algKindSignature)
+	out := make([]SignatureAlgorithm, len(raw))
+	for i, alg := range raw {
+		out[i] = alg.(SignatureAlgorithm)
+	}
+	return out
 }
 
 // MarshalJSON serializes the SignatureAlgorithm object to a JSON string.

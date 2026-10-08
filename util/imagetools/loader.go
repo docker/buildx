@@ -466,3 +466,81 @@ func withIntotoMediaTypes(ctx context.Context) context.Context {
 	}
 	return ctx
 }
+
+// ReadBlobVerified reads a blob and checks that its content matches the size
+// and digest of the descriptor. Providers backed by a registry fetcher or an
+// OCI layout do not verify the content they return.
+func ReadBlobVerified(ctx context.Context, provider content.Provider, desc ocispecs.Descriptor) ([]byte, error) {
+	if err := desc.Digest.Validate(); err != nil {
+		return nil, errors.WithStack(err)
+	}
+	dt, err := content.ReadBlob(ctx, provider, desc)
+	if err != nil {
+		return nil, errors.WithStack(err)
+	}
+	if int64(len(dt)) != desc.Size {
+		return nil, errors.Errorf("blob %s size mismatch: expected %d, got %d", desc.Digest, desc.Size, len(dt))
+	}
+	if got := desc.Digest.Algorithm().FromBytes(dt); got != desc.Digest {
+		return nil, errors.Errorf("blob digest mismatch: expected %s, got %s", desc.Digest, got)
+	}
+	return dt, nil
+}
+
+// ReadProvenancePredicate loads the SLSA provenance predicate payload from the
+// attestation manifest referenced by attestManifest, reading blobs through the
+// supplied content provider and verifying them against their digests. Returns
+// the raw predicate JSON bytes and the predicate type URI. When the manifest
+// has no provenance layer both return values are empty without error so
+// callers can distinguish "no provenance" from a hard failure.
+//
+// This exposes the provenance scan + DSSE unwrap logic used internally by
+// scanProvenance for reuse by `buildx replay`.
+func ReadProvenancePredicate(ctx context.Context, provider content.Provider, attestManifest ocispecs.Descriptor) ([]byte, string, error) {
+	ctx = withIntotoMediaTypes(ctx)
+	dt, err := ReadBlobVerified(ctx, provider, attestManifest)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to read attestation manifest")
+	}
+	var mfst ocispecs.Manifest
+	if err := json.Unmarshal(dt, &mfst); err != nil {
+		return nil, "", errors.Wrap(err, "failed to unmarshal attestation manifest")
+	}
+	var (
+		layer    ocispecs.Descriptor
+		predType string
+	)
+	for _, l := range mfst.Layers {
+		annot := l.Annotations["in-toto.io/predicate-type"]
+		if (l.MediaType == inTotoGenericMime || isInTotoDSSE(l.MediaType)) &&
+			strings.HasPrefix(annot, "https://slsa.dev/provenance/") {
+			layer = l
+			predType = annot
+			break
+		}
+	}
+	if predType == "" {
+		return nil, "", nil
+	}
+	layerDt, err := ReadBlobVerified(ctx, provider, layer)
+	if err != nil {
+		return nil, "", errors.Wrapf(err, "failed to read provenance layer %s", layer.Digest)
+	}
+	layerDt, err = decodeDSSE(layerDt, layer.MediaType)
+	if err != nil {
+		return nil, "", errors.Wrap(err, "failed to decode DSSE envelope")
+	}
+	var stmt struct {
+		Predicate     json.RawMessage `json:"predicate"`
+		PredicateType string          `json:"predicateType"`
+	}
+	if err := json.Unmarshal(layerDt, &stmt); err != nil {
+		return nil, "", errors.Wrap(err, "failed to unmarshal in-toto statement")
+	}
+	// Prefer the in-toto Statement's predicateType over the annotation when
+	// both are set — the annotation is a hint; the payload is canonical.
+	if stmt.PredicateType != "" {
+		predType = stmt.PredicateType
+	}
+	return stmt.Predicate, predType, nil
+}

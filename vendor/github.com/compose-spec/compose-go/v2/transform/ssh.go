@@ -23,7 +23,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/tree"
 )
 
-func transformSSH(data any, p tree.Path, _ bool) (any, error) {
+func transformSSH(data any, p tree.Path, ignoreParseError bool) (any, error) {
 	switch v := data.(type) {
 	case map[string]any:
 		return v, nil
@@ -37,6 +37,9 @@ func transformSSH(data any, p tree.Path, _ bool) (any, error) {
 			id, path, ok := strings.Cut(s, "=")
 			if !ok {
 				if id != "default" {
+					if ignoreParseError {
+						return data, nil
+					}
 					return nil, fmt.Errorf("invalid ssh key %q", s)
 				}
 				result[id] = nil

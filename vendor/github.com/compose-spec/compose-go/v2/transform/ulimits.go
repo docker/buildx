@@ -22,13 +22,18 @@ import (
 	"github.com/compose-spec/compose-go/v2/tree"
 )
 
-func transformUlimits(data any, p tree.Path, _ bool) (any, error) {
+func transformUlimits(data any, p tree.Path, ignoreParseError bool) (any, error) {
 	switch v := data.(type) {
 	case map[string]any:
 		return v, nil
 	case int:
 		return v, nil
+	case string:
+		if ignoreParseError {
+			return v, nil
+		}
+		return data, fmt.Errorf("%s: invalid type %T for ulimits", p, v)
 	default:
-		return data, fmt.Errorf("%s: invalid type %T for external", p, v)
+		return data, fmt.Errorf("%s: invalid type %T for ulimits", p, v)
 	}
 }

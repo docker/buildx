@@ -14,12 +14,15 @@ import (
 	"math/big"
 	"reflect"
 	"slices"
+	"sync/atomic"
 
 	"github.com/lestrrat-go/jwx/v3/internal/base64"
 	"github.com/lestrrat-go/jwx/v3/internal/json"
+	"github.com/lestrrat-go/jwx/v3/jwa"
+	"github.com/lestrrat-go/jwx/v3/jwk/jwkbb"
 )
 
-var registry = json.NewRegistry()
+var fieldRegistry = json.NewRegistry()
 
 func bigIntToBytes(n *big.Int) ([]byte, error) {
 	if n == nil {
@@ -28,7 +31,22 @@ func bigIntToBytes(n *big.Int) ([]byte, error) {
 	return n.Bytes(), nil
 }
 
+// maxKeys bounds the number of keys accepted by Parse() from a single
+// input. It applies to both the JSON `keys` array and the PEM/X.509
+// block stream: each entry triggers a probe + unmarshal + validation,
+// and callers cannot predict that amplification from the raw input
+// size alone. Tunable via WithMaxKeys / Configure(WithMaxKeys(...)).
+var maxKeys atomic.Int64
+
+// rejectDuplicateKID makes Parse/UnmarshalJSON fail when the JWKS
+// carries two or more keys with the same non-empty "kid". Default is
+// false (RFC 7517 allows duplicates; LookupKeyID returns the first).
+// Tunable via WithRejectDuplicateKID / Configure(WithRejectDuplicateKID(...)).
+var rejectDuplicateKID atomic.Bool
+
 func init() {
+	maxKeys.Store(1000)
+
 	if err := RegisterProbeField(reflect.StructField{
 		Name: "Kty",
 		Type: reflect.TypeFor[string](),
@@ -41,7 +59,7 @@ func init() {
 		Type: reflect.TypeFor[json.RawMessage](),
 		Tag:  `json:"d,omitempty"`,
 	}); err != nil {
-		panic(fmt.Errorf("failed to register mandatory probe for 'kty' field: %w", err))
+		panic(fmt.Errorf("failed to register mandatory probe for 'd' field: %w", err))
 	}
 }
 
@@ -67,7 +85,16 @@ func Import(raw any) (Key, error) {
 		return nil, importerr(`failed to convert %T to jwk.Key: no converters were able to convert`, raw)
 	}
 
-	return conv.Import(raw)
+	key, err := conv.Import(raw)
+	if err != nil {
+		return nil, err
+	}
+	if v, ok := key.(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return nil, importerr(`key validation failed: %w`, err)
+		}
+	}
+	return key, nil
 }
 
 // PublicSetOf returns a new jwk.Set consisting of
@@ -77,9 +104,29 @@ func Import(raw any) (Key, error) {
 // you want to generate the corresponding public versions for the
 // users to verify with.
 //
-// Be aware that all fields will be copied onto the new public key. It is the caller's
-// responsibility to remove any fields, if necessary.
-func PublicSetOf(v Set) (Set, error) {
+// By default, if the input set contains a symmetric (oct) key, this
+// function returns an error: a symmetric key has no public form, and
+// its "public" representation would be the secret itself. Publishing
+// such a set (e.g. as `/.well-known/jwks.json`) would leak secret
+// material. This is a behavior change from earlier v3.0.x releases,
+// where symmetric keys were silently passed through. Callers who
+// explicitly want the legacy pass-through behavior can opt in with
+// `jwk.WithAllowSymmetric(true)`.
+//
+// Be aware that for asymmetric private keys, all fields will be
+// copied onto the new public key. It is the caller's responsibility
+// to remove any fields, if necessary.
+func PublicSetOf(v Set, options ...PublicSetOption) (Set, error) {
+	var allowSymmetric bool
+	for _, option := range options {
+		switch option.Ident() {
+		case identAllowSymmetric{}:
+			if err := option.Value(&allowSymmetric); err != nil {
+				return nil, fmt.Errorf(`failed to retrieve AllowSymmetric option value: %w`, err)
+			}
+		}
+	}
+
 	newSet := NewSet()
 
 	n := v.Len()
@@ -87,6 +134,10 @@ func PublicSetOf(v Set) (Set, error) {
 		k, ok := v.Key(i)
 		if !ok {
 			return nil, fmt.Errorf(`key not found`)
+		}
+		if k.KeyType() == jwa.OctetSeq() && !allowSymmetric {
+			kid, _ := k.KeyID()
+			return nil, fmt.Errorf(`jwk.PublicSetOf: input set contains a symmetric key (kid=%q, index=%d); symmetric keys have no public form and would leak secret material if published. Remove symmetric keys from the set before calling PublicSetOf, or pass jwk.WithAllowSymmetric(true) to opt into legacy pass-through behavior`, kid, i)
 		}
 		pubKey, err := PublicKeyOf(k)
 		if err != nil {
@@ -198,6 +249,14 @@ func (ctx *setDecodeCtx) IgnoreParseError() bool {
 // are performed for certificate expiration, no checks against missing
 // parameters are performed, etc.
 func ParseKey(data []byte, options ...ParseOption) (Key, error) {
+	key, err := doParseKey(data, options...)
+	if err != nil {
+		return nil, kparseerr(`%w`, err)
+	}
+	return key, nil
+}
+
+func doParseKey(data []byte, options ...ParseOption) (Key, error) {
 	var parsePEM bool
 	var localReg *json.Registry
 	var pemDecoder PEMDecoder
@@ -263,6 +322,13 @@ func ParseKey(data []byte, options ...ParseOption) (Key, error) {
 		parser := parsers[i]
 		key, err := parser.ParseKey(probe, &unmarshaler, data)
 		if err == nil {
+			// A buggy custom parser may return (nil, nil); treat
+			// that as if it had returned ContinueError so the next
+			// parser runs instead of handing the caller a nil Key
+			// they will dereference.
+			if key == nil {
+				continue
+			}
 			return key, nil
 		}
 
@@ -295,6 +361,8 @@ func Parse(src []byte, options ...ParseOption) (Set, error) {
 	var localReg *json.Registry
 	var ignoreParseError bool
 	var pemDecoder PEMDecoder
+	maxK := int(maxKeys.Load())
+	rejectDupKid := rejectDuplicateKID.Load()
 	for _, option := range options {
 		switch option.Ident() {
 		case identPEM{}:
@@ -312,6 +380,19 @@ func Parse(src []byte, options ...ParseOption) (Set, error) {
 		case identIgnoreParseError{}:
 			if err := option.Value(&ignoreParseError); err != nil {
 				return nil, parseerr(`failed to retrieve IgnoreParseError option value: %w`, err)
+			}
+		case identMaxKeys{}:
+			var v int
+			if err := option.Value(&v); err != nil {
+				return nil, parseerr(`failed to retrieve MaxKeys option value: %w`, err)
+			}
+			if v <= 0 {
+				return nil, parseerr(`WithMaxKeys must be greater than zero, got %d`, v)
+			}
+			maxK = v
+		case identRejectDuplicateKID{}:
+			if err := option.Value(&rejectDupKid); err != nil {
+				return nil, parseerr(`failed to retrieve RejectDuplicateKID option value: %w`, err)
 			}
 		case identTypedField{}:
 			var pair typedFieldPair // temporary var needed for typed field
@@ -332,6 +413,7 @@ func Parse(src []byte, options ...ParseOption) (Set, error) {
 			pemDecoder = NewPEMDecoder()
 		}
 		src = bytes.TrimSpace(src)
+		var keyCount int
 		for len(src) > 0 {
 			raw, rest, err := pemDecoder.Decode(src)
 			if err != nil {
@@ -344,7 +426,16 @@ func Parse(src []byte, options ...ParseOption) (Set, error) {
 			if err := s.AddKey(key); err != nil {
 				return nil, parseerr(`failed to add jwk.Key to set: %w`, err)
 			}
+			keyCount++
+			if keyCount > maxK {
+				return nil, parseerr(`too many keys in PEM input: max %d`, maxK)
+			}
 			src = bytes.TrimSpace(rest)
+		}
+		if rejectDupKid {
+			if kid, dup := firstDuplicateKID(s); dup {
+				return nil, parseerr(`duplicate "kid" %q in PEM input`, kid)
+			}
 		}
 		return s, nil
 	}
@@ -362,11 +453,58 @@ func Parse(src []byte, options ...ParseOption) (Set, error) {
 		defer func() { dcKs.SetDecodeCtx(nil) }()
 	}
 
-	if err := json.Unmarshal(src, s); err != nil {
-		return nil, parseerr(`failed to unmarshal JWK set: %w`, err)
+	// Propagate the resolved cap to Set.UnmarshalJSON. A scratch field
+	// rather than a ParseOption thread-through keeps json.Unmarshal happy.
+	if setter, ok := s.(interface{ setMaxKeys(int) }); ok {
+		setter.setMaxKeys(maxK)
+		defer setter.setMaxKeys(0)
+	}
+	if setter, ok := s.(interface{ setRejectDuplicateKID(bool) }); ok && rejectDupKid {
+		setter.setRejectDuplicateKID(true)
+		defer setter.setRejectDuplicateKID(false)
+	}
+
+	// Dispatch JWK-vs-JWKS up front. Set.UnmarshalJSON requires JWKS
+	// shape; the bare-JWK convenience lives here.
+	if jwkbb.HeaderHas(jwkbb.HeaderParse(src), "keys") {
+		if err := json.Unmarshal(src, s); err != nil {
+			return nil, parseerr(`failed to unmarshal JWK set: %w`, err)
+		}
+	} else {
+		key, err := ParseKey(src, options...)
+		if err != nil {
+			return nil, parseerr(`failed to parse sole key: %w`, err)
+		}
+		if err := s.AddKey(key); err != nil {
+			return nil, parseerr(`failed to add jwk.Key to set: %w`, err)
+		}
+	}
+
+	if rejectDupKid {
+		if kid, dup := firstDuplicateKID(s); dup {
+			return nil, parseerr(`duplicate "kid" %q`, kid)
+		}
 	}
 
 	return s, nil
+}
+
+// firstDuplicateKID returns the first non-empty kid that appears more
+// than once in s, or ("", false) if every non-empty kid is unique.
+func firstDuplicateKID(s Set) (string, bool) {
+	seen := make(map[string]struct{}, s.Len())
+	for i := range s.Len() {
+		key, _ := s.Key(i)
+		kid, ok := key.KeyID()
+		if !ok || kid == "" {
+			continue
+		}
+		if _, dup := seen[kid]; dup {
+			return kid, true
+		}
+		seen[kid] = struct{}{}
+	}
+	return "", false
 }
 
 // ParseReader parses a JWK set from the incoming byte buffer.
@@ -396,20 +534,30 @@ func ParseString(s string, options ...ParseOption) (Set, error) {
 
 // AssignKeyID is a convenience function to automatically assign the "kid"
 // section of the key, if it already doesn't have one. It uses Key.Thumbprint
-// method with crypto.SHA256 as the default hashing algorithm
+// method with crypto.SHA256 as the default hashing algorithm.
+//
+// By default, if the key already carries a `kid`, `AssignKeyID` leaves it
+// alone and returns nil. Pass `jwk.WithForceAssign(true)` to force
+// recomputation (for example, when upgrading to a stronger thumbprint hash
+// via `jwk.WithThumbprintHash`).
 func AssignKeyID(key Key, options ...AssignKeyIDOption) error {
-	if key.Has(KeyIDKey) {
-		return nil
-	}
-
 	hash := crypto.SHA256
+	var force bool
 	for _, option := range options {
 		switch option.Ident() {
 		case identThumbprintHash{}:
 			if err := option.Value(&hash); err != nil {
 				return fmt.Errorf(`failed to retrieve thumbprint hash option value: %w`, err)
 			}
+		case identForceAssign{}:
+			if err := option.Value(&force); err != nil {
+				return fmt.Errorf(`failed to retrieve force assign option value: %w`, err)
+			}
 		}
+	}
+
+	if !force && key.Has(KeyIDKey) {
+		return nil
 	}
 
 	h, err := key.Thumbprint(hash)
@@ -574,7 +722,7 @@ type CustomDecodeFunc = json.CustomDecodeFunc
 // that wraps your desired type (in this case `time.Time`) and implement
 // MarshalJSON and UnmashalJSON.
 func RegisterCustomField(name string, object any) {
-	registry.Register(name, object)
+	fieldRegistry.Register(name, object)
 }
 
 // Equal compares two keys and returns true if they are equal. The comparison
@@ -639,6 +787,11 @@ func IsKeyValidationError(err error) bool {
 // Configure is used to configure global behavior of the jwk package.
 func Configure(options ...GlobalOption) {
 	var strictKeyUsagePtr *bool
+	var maxFetchBodySizePtr *int64
+	var maxKeysPtr *int64
+	var httpClientPtr *HTTPClient
+	var minRSAModulusBitsPtr *int64
+	var minRSAPublicExponentPtr *int64
 	for _, option := range options {
 		switch option.Ident() {
 		case identStrictKeyUsage{}:
@@ -647,11 +800,76 @@ func Configure(options ...GlobalOption) {
 				continue
 			}
 			strictKeyUsagePtr = &v
+		case identMaxFetchBodySize{}:
+			var v int64
+			if err := option.Value(&v); err != nil {
+				continue
+			}
+			if v <= 0 {
+				continue
+			}
+			maxFetchBodySizePtr = &v
+		case identMaxKeys{}:
+			var v int
+			if err := option.Value(&v); err != nil {
+				continue
+			}
+			if v <= 0 {
+				continue
+			}
+			v64 := int64(v)
+			maxKeysPtr = &v64
+		case identHTTPClient{}:
+			var v HTTPClient
+			if err := option.Value(&v); err != nil {
+				continue
+			}
+			httpClientPtr = &v
+		case identMinRSAModulusBits{}:
+			var v int
+			if err := option.Value(&v); err != nil {
+				continue
+			}
+			v64 := int64(v)
+			minRSAModulusBitsPtr = &v64
+		case identMinRSAPublicExponent{}:
+			var v int
+			if err := option.Value(&v); err != nil {
+				continue
+			}
+			v64 := int64(v)
+			minRSAPublicExponentPtr = &v64
+		case identRejectDuplicateKID{}:
+			var v bool
+			if err := option.Value(&v); err != nil {
+				continue
+			}
+			rejectDuplicateKID.Store(v)
 		}
 	}
 
 	if strictKeyUsagePtr != nil {
 		strictKeyUsage.Store(*strictKeyUsagePtr)
+	}
+
+	if maxFetchBodySizePtr != nil {
+		maxFetchBodySize.Store(*maxFetchBodySizePtr)
+	}
+
+	if maxKeysPtr != nil {
+		maxKeys.Store(*maxKeysPtr)
+	}
+
+	if httpClientPtr != nil {
+		setFetchHTTPClient(*httpClientPtr)
+	}
+
+	if minRSAModulusBitsPtr != nil {
+		rsaMinModulusBits.Store(*minRSAModulusBitsPtr)
+	}
+
+	if minRSAPublicExponentPtr != nil {
+		setMinRSAPublicExponent(int(*minRSAPublicExponentPtr))
 	}
 }
 

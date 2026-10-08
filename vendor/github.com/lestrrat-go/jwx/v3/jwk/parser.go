@@ -21,7 +21,7 @@ type KeyParser interface {
 	// If your KeyParser decides that the payload is not something
 	// you can parse, and you would like to continue parsing with
 	// the remaining KeyParser instances that are registered,
-	// return a `jwk.ContinueParseError`. Any other errors will immediately
+	// return a `jwk.ContinueError()`. Any other errors will immediately
 	// halt the parsing process.
 	//
 	// When unmarshaling JSON, use the unmarshaler object supplied as
@@ -88,6 +88,15 @@ func defaultParseKey(probe *KeyProbe, unmarshaler KeyUnmarshaler, data []byte) (
 
 	if err := unmarshaler.UnmarshalKey(data, key); err != nil {
 		return nil, fmt.Errorf(`failed to unmarshal JSON into key (%T): %w`, key, err)
+	}
+	// Enforce the trust boundary: a key that fails its own Validate() must
+	// never escape Parse/ParseKey. All built-in key types implement this
+	// interface via NewKeyValidationError, so callers can still use
+	// jwk.IsKeyValidationError on the wrapped error.
+	if v, ok := key.(interface{ Validate() error }); ok {
+		if err := v.Validate(); err != nil {
+			return nil, fmt.Errorf(`jwk.Parse: key validation failed: %w`, err)
+		}
 	}
 	return key, nil
 }

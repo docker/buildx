@@ -100,6 +100,9 @@ func DecodeX509(dst any, block *pem.Block) error {
 		}
 		return blackmagic.AssignIfCompatible(dst, key)
 	case CertificateBlockType:
+		// Only the public key is extracted. Certificate validation (chain,
+		// expiration, CN/SAN, EKU, etc.) is intentionally not performed here;
+		// it is an application-level concern. See jwk.ParseKey documentation.
 		cert, err := x509.ParseCertificate(block.Bytes)
 		if err != nil {
 			return fmt.Errorf(`failed to parse certificate: %w`, err)

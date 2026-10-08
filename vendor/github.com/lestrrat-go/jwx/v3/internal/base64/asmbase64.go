@@ -3,7 +3,9 @@
 package base64
 
 import (
+	stdbase64 "encoding/base64"
 	"fmt"
+	"io"
 	"slices"
 
 	asmbase64 "github.com/segmentio/asm/base64"
@@ -23,6 +25,15 @@ func (e asmEncoder) AppendEncode(dst, src []byte) []byte {
 	dst = slices.Grow(dst, n)
 	e.Encoding.Encode(dst[len(dst):][:n], src)
 	return dst[:len(dst)+n]
+}
+
+// NewEncoder satisfies [StreamEncoder]. segmentio/asm's base64 package
+// does not provide a streaming encoder, so this falls back to the
+// stdlib's RawURLEncoding streaming encoder — output is byte-identical
+// for RFC 4648 raw URL encoding, so the signing prefix (produced via
+// asm) and the streamed payload remain consistent.
+func (e asmEncoder) NewEncoder(w io.Writer) io.WriteCloser {
+	return stdbase64.NewEncoder(stdbase64.RawURLEncoding, w)
 }
 
 type asmDecoder struct{}

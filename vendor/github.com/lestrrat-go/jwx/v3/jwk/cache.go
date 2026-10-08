@@ -81,13 +81,22 @@ type Cache struct {
 // conjection with `httprc.NewResource` to create a `httprc.Resource` object
 // to auto-update `jwk.Set` objects.
 type Transformer struct {
-	parseOptions []ParseOption
+	parseOptions     []ParseOption
+	maxFetchBodySize int64
 }
 
 func (t Transformer) Transform(_ context.Context, res *http.Response) (Set, error) {
-	buf, err := io.ReadAll(res.Body)
+	maxBodySize := t.maxFetchBodySize
+	if maxBodySize <= 0 {
+		maxBodySize = maxFetchBodySize.Load()
+	}
+
+	buf, err := io.ReadAll(io.LimitReader(res.Body, maxBodySize+1))
 	if err != nil {
 		return nil, fmt.Errorf(`failed to read response body status: %w`, err)
+	}
+	if int64(len(buf)) > maxBodySize {
+		return nil, fmt.Errorf(`response body at %q exceeded max size of %d bytes`, res.Request.URL.String(), maxBodySize)
 	}
 
 	set, err := Parse(buf, t.parseOptions...)
@@ -121,10 +130,17 @@ func NewCache(ctx context.Context, client *httprc.Client) (*Cache, error) {
 // Register registers a URL to be managed by the cache. URLs must
 // be registered before issuing `Get`
 //
-// The `Register` method is a thin wrapper around `(httprc.Controller).Add`
+// The `Register` method is a thin wrapper around `(httprc.Controller).Add`.
+//
+// As with `jwk.Fetch`, the default whitelist is `jwk.InsecureWhitelist{}`
+// — every URL is allowed. Supply `jwk.WithFetchWhitelist()` when the URL
+// originates from untrusted input. See `jwk.Fetch` for the full security
+// rationale.
 func (c *Cache) Register(ctx context.Context, u string, options ...RegisterOption) error {
 	var parseOptions []ParseOption
 	var resourceOptions []httprc.NewResourceOption
+	var maxFetchBodySize int64
+	var hasHTTPClient bool
 	waitReady := true
 	for _, option := range options {
 		switch option := option.(type) {
@@ -144,16 +160,29 @@ func (c *Cache) Register(ctx context.Context, u string, options ...RegisterOptio
 					return fmt.Errorf(`failed to retrieve HTTPClient option value: %w`, err)
 				}
 				resourceOptions = append(resourceOptions, httprc.WithHTTPClient(cli))
+				hasHTTPClient = true
 			case identWaitReady{}:
 				if err := option.Value(&waitReady); err != nil {
 					return fmt.Errorf(`failed to retrieve WaitReady option value: %w`, err)
+				}
+			case identMaxFetchBodySize{}:
+				if err := option.Value(&maxFetchBodySize); err != nil {
+					return fmt.Errorf(`failed to retrieve MaxFetchBodySize option value: %w`, err)
 				}
 			}
 		}
 	}
 
+	// If no HTTP client was explicitly provided, use the library's default
+	// client which includes timeout and redirect protections. Without this,
+	// httprc would fall back to http.DefaultClient which has no such protections.
+	if !hasHTTPClient {
+		resourceOptions = append(resourceOptions, httprc.WithHTTPClient(getFetchHTTPClient()))
+	}
+
 	r, err := httprc.NewResource[Set](u, &Transformer{
-		parseOptions: parseOptions,
+		parseOptions:     parseOptions,
+		maxFetchBodySize: maxFetchBodySize,
 	}, resourceOptions...)
 	if err != nil {
 		return fmt.Errorf(`failed to create httprc.Resource: %w`, err)
