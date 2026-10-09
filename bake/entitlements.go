@@ -113,17 +113,30 @@ func ParseEntitlements(in []string) (EntitlementConf, error) {
 
 func (c EntitlementConf) Validate(m map[string]build.Options) (EntitlementConf, error) {
 	var expected EntitlementConf
+	rwPaths := map[string]struct{}{}
+	roPaths := map[string]struct{}{}
 
 	for _, v := range m {
-		if err := c.check(v, &expected); err != nil {
+		if err := c.check(v, &expected, roPaths, rwPaths); err != nil {
 			return EntitlementConf{}, err
 		}
+	}
+
+	var err error
+	expected.FSRead, err = findMissingPaths(c.FSRead, roPaths)
+	if err != nil {
+		return EntitlementConf{}, err
+	}
+
+	expected.FSWrite, err = findMissingPaths(c.FSWrite, rwPaths)
+	if err != nil {
+		return EntitlementConf{}, err
 	}
 
 	return expected, nil
 }
 
-func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) error {
+func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf, roPaths, rwPaths map[string]struct{}) error {
 	for _, e := range bo.Allow {
 		k, rest, _ := strings.Cut(e, "=")
 		switch k {
@@ -158,9 +171,6 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 			}
 		}
 	}
-
-	rwPaths := map[string]struct{}{}
-	roPaths := map[string]struct{}{}
 
 	localPaths, err := collectLocalPaths(bo.Inputs)
 	if err != nil {
@@ -218,16 +228,6 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 				expected.SSH = true
 			}
 		}
-	}
-
-	expected.FSRead, err = findMissingPaths(c.FSRead, roPaths)
-	if err != nil {
-		return err
-	}
-
-	expected.FSWrite, err = findMissingPaths(c.FSWrite, rwPaths)
-	if err != nil {
-		return err
 	}
 
 	return nil
