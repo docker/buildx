@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -719,6 +720,102 @@ func TestGroupSamePaths(t *testing.T) {
 			require.Equal(t, tt.expected1, out1, "in1 should match expected1")
 			require.Equal(t, tt.expected2, out2, "in2 should match expected2")
 			require.Equal(t, tt.expectedC, common, "common should match expectedC")
+		})
+	}
+}
+
+func TestValidateEntitlementsPrefixSibling(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "app")
+	sibling := filepath.Join(root, "app-secrets")
+	require.NoError(t, os.MkdirAll(filepath.Join(allowed, "sub"), 0755))
+	require.NoError(t, os.MkdirAll(sibling, 0755))
+
+	expSibling, err := filepath.EvalSymlinks(sibling)
+	require.NoError(t, err)
+
+	conf := EntitlementConf{
+		FSRead:  []string{allowed},
+		FSWrite: []string{allowed},
+	}
+
+	tcases := []struct {
+		name     string
+		opt      build.Options
+		expected EntitlementConf
+	}{
+		{
+			name: "ReadSibling",
+			opt: build.Options{
+				Inputs: build.Inputs{ContextPath: sibling, DockerfilePath: filepath.Join(sibling, "Dockerfile")},
+			},
+			expected: EntitlementConf{
+				FSRead: []string{expSibling},
+			},
+		},
+		{
+			name: "WriteSibling",
+			opt: build.Options{
+				Inputs:                     build.Inputs{ContextPath: allowed, DockerfilePath: filepath.Join(allowed, "Dockerfile")},
+				ExportsLocalPathsTemporary: []string{sibling},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expSibling},
+			},
+		},
+		{
+			name: "ReadWriteSubdir",
+			opt: build.Options{
+				Inputs:                     build.Inputs{ContextPath: filepath.Join(allowed, "sub"), DockerfilePath: filepath.Join(allowed, "sub", "Dockerfile")},
+				ExportsLocalPathsTemporary: []string{filepath.Join(allowed, "sub")},
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			expected, err := conf.Validate(map[string]build.Options{"test": tc.opt})
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, expected)
+		})
+	}
+}
+
+func TestIsParentOrEqualPath(t *testing.T) {
+	sep := string(filepath.Separator)
+	root := sep
+	if runtime.GOOS == "windows" {
+		root = `C:\`
+	}
+	parent := filepath.Join(root, "a", "b")
+
+	tcases := []struct {
+		p      string
+		parent string
+		ok     bool
+	}{
+		{p: parent, parent: parent, ok: true},
+		{p: filepath.Join(parent, "c"), parent: parent, ok: true},
+		{p: filepath.Join(parent, "c", "d"), parent: parent, ok: true},
+		{p: filepath.Join(parent, "c"), parent: parent + sep, ok: true},
+		{p: parent + "c", parent: parent, ok: false},
+		{p: parent + "-c", parent: parent, ok: false},
+		{p: parent + ".bak", parent: parent, ok: false},
+		{p: filepath.Join(root, "a"), parent: parent, ok: false},
+		{p: filepath.Join(root, "a", "bc", "d"), parent: parent, ok: false},
+		{p: parent, parent: root, ok: true},
+	}
+	if runtime.GOOS == "windows" {
+		tcases = append(tcases, struct {
+			p      string
+			parent string
+			ok     bool
+		}{p: `D:\a`, parent: `C:\`, ok: false})
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.p+"_"+tc.parent, func(t *testing.T) {
+			require.Equal(t, tc.ok, isParentOrEqualPath(tc.p, tc.parent))
 		})
 	}
 }
