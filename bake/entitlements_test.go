@@ -472,6 +472,92 @@ func TestValidateEntitlements(t *testing.T) {
 	}
 }
 
+func TestValidateEntitlementsMultiTarget(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	// the paths returned by entitlements validation will have symlinks resolved
+	expDir2, err := filepath.EvalSymlinks(dir2)
+	require.NoError(t, err)
+
+	credentialPath := filepath.Join(dir1, "credential")
+	require.NoError(t, os.WriteFile(credentialPath, []byte("test credential"), 0600))
+	expCredentialPath, err := filepath.EvalSymlinks(credentialPath)
+	require.NoError(t, err)
+
+	tmpDir := t.TempDir()
+	conf := EntitlementConf{
+		FSRead:  []string{tmpDir},
+		FSWrite: []string{tmpDir},
+	}
+
+	tcases := []struct {
+		name     string
+		targets  map[string]build.Options
+		expected EntitlementConf
+	}{
+		{
+			name: "Read",
+			targets: map[string]build.Options{
+				"secret": {
+					SecretSpecs: []*buildflags.Secret{{FilePath: credentialPath}},
+				},
+			},
+			expected: EntitlementConf{
+				FSRead: []string{expCredentialPath},
+			},
+		},
+		{
+			name: "Write",
+			targets: map[string]build.Options{
+				"cache": {
+					CacheTo: []client.CacheOptionsEntry{
+						{Type: "local", Attrs: map[string]string{"dest": dir2}},
+					},
+				},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expDir2},
+			},
+		},
+		{
+			name: "DifferentPaths",
+			targets: map[string]build.Options{
+				"secret": {
+					SecretSpecs: []*buildflags.Secret{{FilePath: credentialPath}},
+				},
+				"cache": {
+					CacheFrom: []client.CacheOptionsEntry{
+						{Type: "local", Attrs: map[string]string{"src": dir2}},
+					},
+				},
+			},
+			expected: EntitlementConf{
+				FSRead: slices.Sorted(slices.Values([]string{expCredentialPath, expDir2})),
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			// targets without missing paths must not mask the ones from other
+			// targets, regardless of map iteration order
+			for i := range 10 {
+				tc.targets[fmt.Sprintf("clean%d", i)] = build.Options{}
+			}
+			for name, opt := range tc.targets {
+				opt.Inputs = build.Inputs{ContextPath: tmpDir, DockerfilePath: filepath.Join(tmpDir, "Dockerfile")}
+				tc.targets[name] = opt
+			}
+			for range 50 {
+				expected, err := conf.Validate(tc.targets)
+				require.NoError(t, err)
+				require.Equal(t, tc.expected, expected)
+			}
+		})
+	}
+}
+
 func TestValidateEntitlementsInvalidLocalOutputMode(t *testing.T) {
 	_, err := EntitlementConf{}.Validate(map[string]build.Options{
 		"test": {
