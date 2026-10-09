@@ -156,3 +156,20 @@ func TestNonRootlessMemoryVolume(t *testing.T) {
 	require.NotNil(t, vol.EmptyDir.SizeLimit)
 	require.Equal(t, "2Gi", vol.EmptyDir.SizeLimit.String())
 }
+
+func TestProbes(t *testing.T) {
+	d, _, _, err := NewDeployment(newBaseOpt())
+	require.NoError(t, err)
+	require.NotNil(t, d)
+
+	container := d.Spec.Template.Spec.Containers[0]
+	require.NotNil(t, container.StartupProbe)
+	require.Equal(t, int32(startupProbePeriodSeconds), container.StartupProbe.PeriodSeconds)
+	require.Equal(t, int32(startupProbeFailureThreshold), container.StartupProbe.FailureThreshold)
+	require.Equal(t, int32(startupProbeTimeoutSeconds), container.StartupProbe.TimeoutSeconds)
+
+	// An initial delay would make kubelet skip the readiness check it
+	// triggers right after the startup probe succeeds.
+	require.Zero(t, container.ReadinessProbe.InitialDelaySeconds)
+	require.Zero(t, container.LivenessProbe.InitialDelaySeconds)
+}
