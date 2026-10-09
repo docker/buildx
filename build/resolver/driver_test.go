@@ -256,6 +256,44 @@ func TestSelectNodeAdditionalPlatforms(t *testing.T) {
 	require.Equal(t, "builder-amd64", res[0].Node().Builder)
 }
 
+func TestSelectNodeConfiguredPlatforms(t *testing.T) {
+	amd64 := platforms.MustParse("linux/amd64")
+	armv6 := platforms.MustParse("linux/arm/v6")
+	armv7 := platforms.MustParse("linux/arm/v7")
+	arm64 := platforms.MustParse("linux/arm64")
+
+	for _, requested := range [][]ocispecs.Platform{
+		{amd64, armv7, arm64},
+		{arm64}, // Another target can trigger discovery for an already matched target.
+	} {
+		t.Run(platforms.Format(requested[0]), func(t *testing.T) {
+			r := makeTestResolver(map[string][]ocispecs.Platform{
+				"builder-0": nil,
+				"builder-1": {armv6, armv7},
+				"builder-2": {arm64},
+			})
+			res, perfect, err := r.resolve(t.Context(), requested, nil, platforms.Only, func(idx int, _ builder.Node) []ocispecs.Platform {
+				if idx == 0 {
+					return []ocispecs.Platform{amd64}
+				}
+				return []ocispecs.Platform{arm64, armv7, armv6}
+			})
+			require.NoError(t, err)
+			require.True(t, perfect)
+			require.Len(t, res, len(requested))
+			want := map[string]string{
+				"linux/amd64":  "builder-0",
+				"linux/arm/v7": "builder-1",
+				"linux/arm64":  "builder-2",
+			}
+			for i, node := range res {
+				require.Equal(t, []ocispecs.Platform{requested[i]}, node.Platforms())
+				require.Equal(t, want[platforms.Format(requested[i])], node.Node().Builder)
+			}
+		})
+	}
+}
+
 func TestSplitNodeMultiPlatform(t *testing.T) {
 	r := makeTestResolver(map[string][]ocispecs.Platform{
 		"builder-amd64-arm64": {platforms.MustParse("linux/amd64"), platforms.MustParse("linux/arm64")},
