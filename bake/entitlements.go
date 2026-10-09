@@ -412,10 +412,13 @@ func isParentOrEqualPath(p, parent string) bool {
 	if p == parent || parent == "/" {
 		return true
 	}
-	if strings.HasPrefix(p, filepath.Clean(parent+string(filepath.Separator))) {
-		return true
+	// keep the trailing separator so that sibling paths sharing a textual
+	// prefix (e.g. /a/b-c for parent /a/b) are not treated as descendants.
+	// Roots like C:\ already end with a separator.
+	if !strings.HasSuffix(parent, string(filepath.Separator)) {
+		parent += string(filepath.Separator)
 	}
-	return false
+	return strings.HasPrefix(p, parent)
 }
 
 func findMissingPaths(set []string, paths map[string]struct{}) ([]string, error) {
