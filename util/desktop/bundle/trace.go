@@ -45,7 +45,7 @@ func sanitizeTrace(ctx context.Context, mp *contentutil.MultiProvider, desc ocis
 	defer ra.Close()
 
 	buf := &bytes.Buffer{}
-	dec := json.NewDecoder(io.NewSectionReader(ra, 0, ra.Size()))
+	dec := json.NewDecoder(newChunkedReader(ra))
 	enc := json.NewEncoder(buf)
 	enc.SetIndent("", "  ")
 	for {
