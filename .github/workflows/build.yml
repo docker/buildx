@@ -269,6 +269,105 @@ jobs:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ${{ env.TESTREPORTS_BASEDIR }}
 
+  test-bsd-unit:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - freebsd
+          - netbsd
+          - openbsd
+    steps:
+      -
+        name: Prepare
+        run: |
+          goVersion=$(curl --fail --silent --show-error "https://go.dev/dl/?mode=json&include=all" | jq -er --arg version "go${GO_VERSION}." '[.[] | select(.stable and (.version | startswith($version)))][0].version')
+          echo "GO_VERSION=${goVersion#go}" >> "$GITHUB_ENV"
+      -
+        name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      -
+        name: Set up FreeBSD
+        if: matrix.os == 'freebsd'
+        uses: vmactions/freebsd-vm@c46abacb49f09938ca4e1702d15d836285d694cc # v1.5.9
+        with:
+          release: "14.5"
+          envs: GO_VERSION
+          custom-shell-name: bsd
+          prepare: |
+            set -ex
+            pkg bootstrap -y
+            pkg install -y git
+            mkdir -p /var/tmp
+            chmod 1777 /var/tmp
+            archive="go${GO_VERSION}.freebsd-amd64.tar.gz"
+            fetch -o "/var/tmp/$archive" "https://go.dev/dl/$archive"
+            tar -C /var/tmp -xzf "/var/tmp/$archive"
+            pw useradd -n buildx -m -s /bin/sh
+      -
+        name: Set up NetBSD
+        if: matrix.os == 'netbsd'
+        uses: vmactions/netbsd-vm@c8a0d7ddb84619a7a8cc4e652efa7950b3fd9f92 # v1.5.2
+        with:
+          release: "10.2"
+          envs: GO_VERSION
+          custom-shell-name: bsd
+          prepare: |
+            set -ex
+            pkg_add git
+            mkdir -p /var/tmp
+            chmod 1777 /var/tmp
+            archive="go${GO_VERSION}.netbsd-amd64.tar.gz"
+            ftp -o "/var/tmp/$archive" "https://go.dev/dl/$archive"
+            tar -C /var/tmp -xzf "/var/tmp/$archive"
+            useradd -m -s /bin/sh buildx
+      -
+        name: Set up OpenBSD
+        if: matrix.os == 'openbsd'
+        uses: vmactions/openbsd-vm@5f7b2c933b8846a138361d6843c52af4bef5d945 # v1.4.8
+        with:
+          release: "7.9"
+          envs: GO_VERSION
+          custom-shell-name: bsd
+          prepare: |
+            set -ex
+            pkg_add git
+            mkdir -p /var/tmp
+            chmod 1777 /var/tmp
+            archive="go${GO_VERSION}.openbsd-amd64.tar.gz"
+            ftp -o "/var/tmp/$archive" "https://go.dev/dl/$archive"
+            tar -C /var/tmp -xzf "/var/tmp/$archive"
+            useradd -m -s /bin/sh buildx
+      -
+        name: Test
+        run: |
+          bsd /dev/stdin <<'EOF'
+          set -ex
+          chown -R buildx "$GITHUB_WORKSPACE"
+          su - buildx -c '
+            set -ex
+            cd "$1"
+            export TMPDIR=/var/tmp
+            export PATH="/var/tmp/go/bin:/usr/local/bin:/usr/pkg/bin:$PATH"
+            export SKIP_INTEGRATION_TESTS=1
+            go test -mod=vendor -coverprofile=coverage.txt -covermode=atomic ${{ env.TESTFLAGS }} ./...
+          ' sh "$GITHUB_WORKSPACE"
+          EOF
+      -
+        name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: ./coverage.txt
+          env_vars: RUNNER_OS
+          flags: unit,${{ matrix.os }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+        env:
+          RUNNER_OS: ${{ matrix.os }}
+
   govulncheck:
     runs-on: ubuntu-24.04
     permissions:
