@@ -59,7 +59,7 @@ func Export(ctx context.Context, c []*client.Client, w io.Writer, records []*Rec
 	gz := gzip.NewWriter(w)
 	defer gz.Close()
 
-	if err := imgarchive.Export(ctx, mp, gz, imgarchive.WithManifest(desc), imgarchive.WithSkipDockerManifest()); err != nil {
+	if err := imgarchive.Export(ctx, &chunkedProvider{mp}, gz, imgarchive.WithManifest(desc), imgarchive.WithSkipDockerManifest()); err != nil {
 		return errors.Wrap(err, "failed to create dockerbuild archive")
 	}
 
