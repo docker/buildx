@@ -13,7 +13,7 @@ on:
 jobs:
   labeler:
     if: ${{ github.repository == 'docker/buildx' }}
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-26.04
     permissions:
       contents: read # same as global permission
       pull-requests: write # required for writing labels

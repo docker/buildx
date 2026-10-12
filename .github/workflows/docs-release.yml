@@ -19,7 +19,7 @@ env:
 
 jobs:
   open-pr:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: ${{ (github.event.release.prerelease != true || github.event.inputs.tag != '') && github.repository == 'docker/buildx' }}
     permissions:
       contents: write

@@ -16,7 +16,7 @@ env:
 jobs:
   codeql:
     if: ${{ github.repository == 'docker/buildx' }}
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       contents: read
       actions: read
