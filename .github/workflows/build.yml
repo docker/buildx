@@ -34,7 +34,7 @@ env:
 
 jobs:
   test-integration:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     env:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       TEST_IMAGE_BUILD: "0"
@@ -186,7 +186,7 @@ jobs:
       fail-fast: false
       matrix:
         os:
-          - ubuntu-24.04
+          - ubuntu-26.04
           - macos-15
           - windows-2025
     env:
@@ -270,7 +270,7 @@ jobs:
           path: ${{ env.TESTREPORTS_BASEDIR }}
 
   govulncheck:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       # same as global permission
       contents: read
@@ -315,7 +315,7 @@ jobs:
       sign: ${{ github.event_name != 'pull_request' }}
 
   binaries-finalize:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     needs:
       - binaries
     steps:
@@ -371,7 +371,7 @@ jobs:
           if-no-files-found: error
 
   bin-image-prepare:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     outputs:
       repo-slug: ${{ env.REPO_SLUG }}
     steps:
@@ -411,7 +411,7 @@ jobs:
           connection_id: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
 
   scout:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     if: ${{ github.ref == 'refs/heads/master' && github.repository == 'docker/buildx' }}
     permissions:
       contents: read # same as global permission
@@ -441,7 +441,7 @@ jobs:
           sarif_file: ${{ steps.scout.outputs.result-file }}
 
   release:
-    runs-on: ubuntu-24.04
+    runs-on: ubuntu-26.04
     permissions:
       # required to create GitHub release
       contents: write
