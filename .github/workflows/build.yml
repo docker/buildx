@@ -187,7 +187,8 @@ jobs:
       matrix:
         os:
           - ubuntu-26.04
-          - macos-15
+          - macos-26
+          - macos-26-intel
           - windows-2025
     env:
       SKIP_INTEGRATION_TESTS: 1
@@ -205,6 +206,7 @@ jobs:
         uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e # v7.0.0
         with:
           go-version: "${{ env.GO_VERSION }}"
+          check-latest: true
       -
         name: Prepare
         run: |
