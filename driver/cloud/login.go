@@ -81,7 +81,7 @@ func fetchHubToken(ctx context.Context, registryHostname, hubHost string) (strin
 	}
 	payload.Identifier = username
 	payload.Secret = secret
-	body, err := json.Marshal(payload)
+	body, err := json.Marshal(payload) // #nosec G117 -- the token endpoint requires credentials in the request body
 	if err != nil {
 		return "", errors.Wrap(err, "failed to marshal request body")
 	}

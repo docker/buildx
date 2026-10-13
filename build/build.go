@@ -304,9 +304,9 @@ func warnOnNoOutput(nodes []builder.Node, opts map[string]Options, reqForNodes m
 	var warnNoOutputBuf bytes.Buffer
 	warnNoOutputBuf.WriteString("No output specified ")
 	if len(noOutputTargets) == 1 && noOutputTargets[0] == "default" {
-		warnNoOutputBuf.WriteString(fmt.Sprintf("with %s driver", noMobyDriver.Factory().Name()))
+		fmt.Fprintf(&warnNoOutputBuf, "with %s driver", noMobyDriver.Factory().Name())
 	} else {
-		warnNoOutputBuf.WriteString(fmt.Sprintf("for %s target(s) with %s driver", strings.Join(noOutputTargets, ", "), noMobyDriver.Factory().Name()))
+		fmt.Fprintf(&warnNoOutputBuf, "for %s target(s) with %s driver", strings.Join(noOutputTargets, ", "), noMobyDriver.Factory().Name())
 	}
 	logrus.Warnf("%s. Build result will only remain in the build cache. To push result image into registry use --push or to load image into docker use --load", warnNoOutputBuf.String())
 }
@@ -592,8 +592,7 @@ func (e targetAbortError) Unwrap() error {
 
 func wrapResultError(results map[string]any, msg string) error {
 	if err := resultError(results); err != nil {
-		var abortErr targetAbortError
-		if stderrors.As(err, &abortErr) {
+		if _, ok := stderrors.AsType[targetAbortError](err); ok {
 			return err
 		}
 		return targetAbortError{errors.Wrap(err, msg)}
@@ -1637,7 +1636,7 @@ func ReadSourcePolicy() (*spb.Policy, error) {
 		return nil, nil
 	}
 
-	data, err := os.ReadFile(p)
+	data, err := os.ReadFile(p) // #nosec G703 -- the caller intentionally selects the local policy file
 	if err != nil {
 		return nil, errors.Wrap(err, "failed to read policy file")
 	}

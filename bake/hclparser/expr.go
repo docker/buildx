@@ -52,7 +52,7 @@ func jsonFuncCallsRecursive(exp hcl.Expression) ([]string, error) {
 
 func appendJSONFuncCalls(exp hcl.Expression, m map[string]struct{}) error {
 	v := reflect.ValueOf(exp)
-	if v.Kind() != reflect.Ptr || v.IsNil() {
+	if v.Kind() != reflect.Pointer || v.IsNil() {
 		return errors.Errorf("invalid json expression kind %T %v", exp, v.Kind())
 	}
 	src := v.Elem().FieldByName("src")
@@ -66,7 +66,7 @@ func appendJSONFuncCalls(exp hcl.Expression, m map[string]struct{}) error {
 	if src.IsNil() {
 		return nil
 	}
-	if src.Kind() == reflect.Ptr {
+	if src.Kind() == reflect.Pointer {
 		src = src.Elem()
 	}
 	if src.Kind() != reflect.Struct {

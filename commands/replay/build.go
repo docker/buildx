@@ -488,7 +488,7 @@ func filterSubjectsByPlatform(subjects []*replay.Subject, platformFilter []strin
 			if !m.Match(sp) {
 				continue
 			}
-			if best < 0 || m.Less(sp, *subjects[best].Descriptor.Platform) {
+			if best < 0 || m.Less(sp, *subjects[best].Descriptor.Platform) { // #nosec G602 -- best is -1 (short-circuited) or an index from range subjects
 				best = j
 			}
 		}

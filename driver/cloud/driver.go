@@ -234,7 +234,7 @@ func (d *Driver) cloudPull(ctx context.Context, imageDescriptor string, platform
 		RegistryToken: token,
 		ServerAddress: hydroRegistryAddr,
 	}
-	authJSON, err := json.Marshal(authConfig)
+	authJSON, err := json.Marshal(authConfig) // #nosec G117 -- the registry authentication API requires serialized credentials
 	if err != nil {
 		return err
 	}

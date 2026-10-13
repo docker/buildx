@@ -143,11 +143,11 @@ func TestSourceToInputSingleSource(t *testing.T) {
 		{
 			name: "http-mixed-case-scheme-and-host",
 			src: &gwpb.ResolveSourceMetaResponse{
-				Source: &pb.SourceOp{Identifier: "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag"},
+				Source: &pb.SourceOp{Identifier: "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag"}, // #nosec G101 -- dummy credentials exercise URL normalization
 			},
 			expInput: Input{
 				HTTP: &HTTP{
-					URL:    "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag",
+					URL:    "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag", // #nosec G101 -- expected normalized URL retains the dummy credentials
 					Schema: "http",
 					Host:   "example.com",
 					Path:   "/Case/Path",
