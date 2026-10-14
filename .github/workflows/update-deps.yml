@@ -137,25 +137,27 @@ jobs:
               return value.startsWith(prefix) ? value.slice(prefix.length) : undefined;
             }
 
-            async function semverReleases({owner, repo, tagPrefix, stableOnly}) {
+            async function semverReleases({owner, repo, tagPrefix, stableOnly, useTags}) {
               const result = [];
 
               for (let page = 1; page <= 10; page++) {
-                const releases = await github.rest.repos.listReleases({
+                const list = useTags ? github.rest.repos.listTags : github.rest.repos.listReleases;
+                const releases = await list({
                   owner,
                   repo,
                   page,
                   per_page: 100
                 });
                 for (const release of releases.data) {
-                  const tag = stripPrefix(release.tag_name, tagPrefix);
+                  const tagName = useTags ? release.name : release.tag_name;
+                  const tag = stripPrefix(tagName, tagPrefix);
                   const version = tag ? semver.parse(tag) : undefined;
                   if (!release.draft && version) {
                     if (stableOnly && (release.prerelease || version.prerelease.length > 0)) {
                       continue;
                     }
                     result.push({
-                      tag: release.tag_name,
+                      tag: tagName,
                       version,
                       prerelease: release.prerelease
                     });
@@ -363,6 +365,7 @@ jobs:
                 branch: 'deps/govulncheck-version',
                 owner: 'golang',
                 repo: 'vuln',
+                useTags: true,
                 stableOnly: true,
                 path: 'hack/dockerfiles/govulncheck.Dockerfile',
                 arg: 'GOVULNCHECK_VERSION',
@@ -445,7 +448,7 @@ jobs:
               core.setOutput('buildkit-matrix', matrixUpdate.after.join(', '));
             }
 
-            const sourceUrl = `https://github.com/${config.owner}/${config.repo}/releases/tag/${tag}`;
+            const sourceUrl = `https://github.com/${config.owner}/${config.repo}/${config.useTags ? 'tree' : 'releases/tag'}/${tag}`;
             const primaryChange = changes[0] || {
               kind: 'version',
               arg: config.arg,
