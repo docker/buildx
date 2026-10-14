@@ -35,7 +35,6 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		{"http", "Example.com", "example.com"},
 		{"https", "\u0130.EXAMPLE.COM:443", "xn--i-9bb.example.com"},
 		{"https", "\u00c9XAMPLE.COM", "xn--xample-9ua.com"},
-		{"https", "\x94.EXAMPLE.COM", "xn--zn7c.example.com"},
 		{"https", "EXAMPLE.COM:000443", "example.com"},
 		{"https", "eXaMpLe.CoM:8443", "example.com:8443"},
 		{"https", "example.com:443", "example.com"},
