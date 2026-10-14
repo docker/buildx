@@ -43,10 +43,10 @@ func (s *Store) Txn() (*Txn, func(), error) {
 		return nil, nil, err
 	}
 	return &Txn{
-			s: s,
-		}, func() {
-			l.Close()
-		}, nil
+		s: s,
+	}, func() {
+		l.Close()
+	}, nil
 }
 
 type Txn struct {
@@ -84,7 +84,7 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 	if err != nil {
 		return nil, err
 	}
-	dt, err := os.ReadFile(filepath.Join(t.s.cfg.Dir(), instanceDir, name))
+	dt, err := os.ReadFile(filepath.Join(t.s.cfg.Dir(), instanceDir, name)) // #nosec G703 -- ValidateName rejects path separators before this read
 	if err != nil {
 		return nil, err
 	}

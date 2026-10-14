@@ -36,7 +36,7 @@ func (ls *LocalState) migration2() error {
 		if info.IsDir() {
 			return nil
 		}
-		dt, err := os.ReadFile(path)
+		dt, err := os.ReadFile(path) // #nosec G122 -- migration reads the user's private Buildx state directory
 		if err != nil {
 			return err
 		}
@@ -48,7 +48,7 @@ func (ls *LocalState) migration2() error {
 		if err != nil {
 			return err
 		}
-		if err := os.WriteFile(path, mdt, 0600); err != nil {
+		if err := os.WriteFile(path, mdt, 0600); err != nil { // #nosec G122 -- migration updates the user's private Buildx state directory
 			return err
 		}
 		return nil

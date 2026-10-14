@@ -280,7 +280,7 @@ func TestCacheOptions_DerivedVars(t *testing.T) {
 		},
 		{
 			Type: "s3",
-			Attrs: map[string]string{
+			Attrs: map[string]string{ // #nosec G101 -- dummy credentials for the cache option test
 				"region":            "us-west-2",
 				"bucket":            "my_bucket",
 				"name":              "my_image",

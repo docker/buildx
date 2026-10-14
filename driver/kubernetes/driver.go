@@ -375,8 +375,7 @@ func isTransientConnectionError(err error) bool {
 	}
 
 	// Check for syscall errors (connection refused, connection reset)
-	var syscallErr syscall.Errno
-	if stderrors.As(err, &syscallErr) {
+	if syscallErr, ok := stderrors.AsType[syscall.Errno](err); ok {
 		if syscallErr == syscall.ECONNREFUSED || syscallErr == syscall.ECONNRESET {
 			return true
 		}
