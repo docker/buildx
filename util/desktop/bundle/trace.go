@@ -63,7 +63,7 @@ func sanitizeTrace(ctx context.Context, mp *contentutil.MultiProvider, desc ocis
 			}
 		}
 
-		if err := enc.Encode(obj); err != nil {
+		if err := enc.Encode(&obj); err != nil {
 			return nil, err
 		}
 	}
