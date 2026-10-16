@@ -65,9 +65,10 @@ $ docker buildx imagetools create \
 >
 > It doesn't support annotating manifests or OCI layouts. Annotations also
 > require the output to use the OCI image index media type; they aren't
-> supported when the sources produce a Docker manifest list. When building
-> source images with Buildx, use the `oci-mediatypes=true` output option to
-> produce OCI media types.
+> supported when the sources produce a Docker manifest list. BuildKit v0.31
+> and later use OCI media types by default. Earlier versions use OCI media
+> types when exporting attestations and Docker media types otherwise. Use the
+> `oci-mediatypes=true` output option to produce OCI media types explicitly.
 
 For more information about annotations, see
 [Annotations](https://docs.docker.com/build/building/annotations/).
