@@ -1,12 +1,10 @@
 package otelutil
 
 import (
-	"bytes"
 	"encoding/hex"
 	"encoding/json"
-	"fmt"
 	"io"
-	"reflect"
+	"strconv"
 	"time"
 
 	"github.com/pkg/errors"
@@ -112,7 +110,16 @@ type spanData struct {
 	ChildSpanCount    int
 	Resource          []keyValue // change this type from the otel type to make this struct marshallable
 
-	InstrumentationLibrary instrumentation.Scope
+	InstrumentationLibrary scope
+	InstrumentationScope   *scope
+}
+
+// scope decodes the attribute set that instrumentation.Scope cannot unmarshal.
+type scope struct {
+	Name       string
+	Version    string
+	SchemaURL  string
+	Attributes json.RawMessage
 }
 
 // spanContext is a custom type used to unmarshal otel SpanContext correctly.
@@ -120,7 +127,7 @@ type spanContext struct {
 	TraceID    string
 	SpanID     string
 	TraceFlags string
-	TraceState string // TODO: implement, currently dropped
+	TraceState string
 	Remote     bool
 }
 
@@ -148,14 +155,14 @@ type keyValue struct {
 // value is a custom type used to unmarshal otel Value correctly.
 type value struct {
 	Type  string
-	Value any
+	Value json.RawMessage
 }
 
 // UnmarshalJSON implements json.Unmarshaler for Span which allows correctly
 // retrieving attribute.KeyValue values.
 func (s *Span) UnmarshalJSON(data []byte) error {
 	var sd spanData
-	if err := json.NewDecoder(bytes.NewReader(data)).Decode(&sd); err != nil {
+	if err := json.Unmarshal(data, &sd); err != nil {
 		return errors.Wrap(err, "unable to decode to spanData")
 	}
 
@@ -168,7 +175,34 @@ func (s *Span) UnmarshalJSON(data []byte) error {
 	s.DroppedEvents = sd.DroppedEvents
 	s.DroppedLinks = sd.DroppedLinks
 	s.ChildSpanCount = sd.ChildSpanCount
-	s.InstrumentationLibrary = sd.InstrumentationLibrary
+	is := sd.InstrumentationScope
+	if is == nil {
+		is = &sd.InstrumentationLibrary
+	}
+	var scopeData []keyValue
+	// Older bundle exports encoded attribute.Set by value, producing an empty
+	// object because its JSON marshaler has a pointer receiver.
+	if len(is.Attributes) > 0 && is.Attributes[0] != '{' {
+		if err := json.Unmarshal(is.Attributes, &scopeData); err != nil {
+			return errors.Wrap(err, "unable to decode scope attributes")
+		}
+	}
+	var scopeAttributes []attribute.KeyValue
+	for _, a := range scopeData {
+		kv, err := a.asAttributeKeyValue()
+		if err != nil {
+			return errors.Wrapf(err, "unable to decode scope attribute (%s)", a.Key)
+		}
+		scopeAttributes = append(scopeAttributes, kv)
+	}
+	s.InstrumentationLibrary = instrumentation.Scope{
+		Name:      is.Name,
+		Version:   is.Version,
+		SchemaURL: is.SchemaURL,
+	}
+	if len(scopeAttributes) > 0 {
+		s.InstrumentationLibrary.Attributes = attribute.NewSet(scopeAttributes...)
+	}
 
 	spanCtx, err := sd.SpanContext.asTraceSpanContext()
 	if err != nil {
@@ -257,14 +291,19 @@ func (sc *spanContext) asTraceSpanContext() (trace.SpanContext, error) {
 	if err != nil {
 		return trace.SpanContext{}, errors.Wrap(err, "unable to parse span id")
 	}
-	traceFlags := trace.TraceFlags(0x00)
-	if sc.TraceFlags == "01" {
-		traceFlags = trace.TraceFlags(0x01)
+	flags, err := strconv.ParseUint(sc.TraceFlags, 16, 8)
+	if err != nil {
+		return trace.SpanContext{}, errors.Wrap(err, "unable to parse trace flags")
+	}
+	state, err := trace.ParseTraceState(sc.TraceState)
+	if err != nil {
+		return trace.SpanContext{}, errors.Wrap(err, "unable to parse trace state")
 	}
 	config := trace.SpanContextConfig{
 		TraceID:    traceID,
 		SpanID:     spanID,
-		TraceFlags: traceFlags,
+		TraceFlags: trace.TraceFlags(flags),
+		TraceState: state,
 		Remote:     sc.Remote,
 	}
 	return trace.NewSpanContext(config), nil
@@ -273,70 +312,80 @@ func (sc *spanContext) asTraceSpanContext() (trace.SpanContext, error) {
 // asAttributeKeyValue converts the internal keyValue representation to an
 // otel one.
 func (kv *keyValue) asAttributeKeyValue() (attribute.KeyValue, error) {
-	// value types get encoded as string
-	switch kv.Value.Type {
-	case attribute.EMPTY.String():
-		return attribute.KeyValue{}, errors.New("invalid value type")
-	case attribute.BOOL.String():
-		return attribute.Bool(kv.Key, kv.Value.Value.(bool)), nil
-	case attribute.INT64.String():
-		// value could be int64 or float64, so handle both cases (float64 comes
-		// from json unmarshal)
-		var v int64
-		switch i := kv.Value.Value.(type) {
-		case int64:
-			v = i
-		case float64:
-			v = int64(i)
-		}
-		return attribute.Int64(kv.Key, v), nil
-	case attribute.FLOAT64.String():
-		return attribute.Float64(kv.Key, kv.Value.Value.(float64)), nil
-	case attribute.STRING.String():
-		return attribute.String(kv.Key, kv.Value.Value.(string)), nil
-	case attribute.BOOLSLICE.String():
-		return attribute.BoolSlice(kv.Key, kv.Value.Value.([]bool)), nil
-	case attribute.INT64SLICE.String():
-		// handle both float64 and int64 (float64 comes from json unmarshal)
-		var v []int64
-		switch sli := kv.Value.Value.(type) {
-		case []int64:
-			v = sli
-		case []float64:
-			for i := range sli {
-				v = append(v, int64(sli[i]))
-			}
-		}
-		return attribute.Int64Slice(kv.Key, v), nil
-	case attribute.FLOAT64SLICE.String():
-		return attribute.Float64Slice(kv.Key, kv.Value.Value.([]float64)), nil
-	case attribute.STRINGSLICE.String():
-		var strSli []string
-		// sometimes we can get an []interface{} instead of a []string, so
-		// always cast to []string if that happens.
-		switch sli := kv.Value.Value.(type) {
-		case []string:
-			strSli = sli
-		case []any:
-			for i := range sli {
-				var v string
-				// best case we have a string, otherwise, cast it using
-				// fmt.Sprintf
-				if str, ok := sli[i].(string); ok {
-					v = str
-				} else {
-					v = fmt.Sprintf("%v", sli[i])
-				}
-				// add the string to the slice
-				strSli = append(strSli, v)
-			}
-		default:
-			return attribute.KeyValue{}, errors.Errorf("got unsupported type %q for %s", reflect.ValueOf(kv.Value.Value).Kind(), attribute.STRINGSLICE.String())
-		}
-		return attribute.StringSlice(kv.Key, strSli), nil
-	default:
-		return attribute.KeyValue{}, errors.Errorf("unknown value type %s", kv.Value.Type)
+	v, err := kv.Value.asAttributeValue()
+	if err != nil {
+		return attribute.KeyValue{}, err
 	}
+	return attribute.KeyValue{Key: attribute.Key(kv.Key), Value: v}, nil
+}
+
+// asAttributeValue decodes each value using its declared type, including nested
+// values, without converting integers through float64.
+func (v *value) asAttributeValue() (attribute.Value, error) {
+	switch v.Type {
+	case attribute.EMPTY.String():
+		return attribute.Value{}, nil
+	case attribute.BOOL.String():
+		return decodeAttributeValue(v.Value, attribute.BoolValue)
+	case attribute.INT64.String():
+		return decodeAttributeValue(v.Value, attribute.Int64Value)
+	case attribute.FLOAT64.String():
+		return decodeAttributeValue(v.Value, attribute.Float64Value)
+	case attribute.STRING.String():
+		return decodeAttributeValue(v.Value, attribute.StringValue)
+	case attribute.BOOLSLICE.String():
+		return decodeAttributeValue(v.Value, attribute.BoolSliceValue)
+	case attribute.INT64SLICE.String():
+		return decodeAttributeValue(v.Value, attribute.Int64SliceValue)
+	case attribute.FLOAT64SLICE.String():
+		return decodeAttributeValue(v.Value, attribute.Float64SliceValue)
+	case attribute.STRINGSLICE.String():
+		return decodeAttributeValue(v.Value, attribute.StringSliceValue)
+	case attribute.BYTESLICE.String():
+		return decodeAttributeValue(v.Value, attribute.ByteSliceValue)
+	case attribute.SLICE.String():
+		var values []value
+		if err := json.Unmarshal(v.Value, &values); err != nil {
+			return attribute.Value{}, err
+		}
+		attrs := make([]attribute.Value, len(values))
+		for i := range values {
+			a, err := values[i].asAttributeValue()
+			if err != nil {
+				return attribute.Value{}, err
+			}
+			attrs[i] = a
+		}
+		return attribute.SliceValue(attrs...), nil
+	case attribute.MAP.String():
+		var values []keyValue
+		if err := json.Unmarshal(v.Value, &values); err != nil {
+			return attribute.Value{}, err
+		}
+		attrs := make([]attribute.KeyValue, len(values))
+		for i := range values {
+			a, err := values[i].asAttributeKeyValue()
+			if err != nil {
+				return attribute.Value{}, err
+			}
+			attrs[i] = a
+		}
+		return attribute.MapValue(attrs...), nil
+	default:
+		return attribute.Value{}, errors.Errorf("unknown value type %s", v.Type)
+	}
+}
+
+// decodeAttributeValue unmarshals a JSON value before constructing its OTel value.
+func decodeAttributeValue[T any](data json.RawMessage, makeValue func(T) attribute.Value) (attribute.Value, error) {
+	var v *T
+	if err := json.Unmarshal(data, &v); err != nil {
+		return attribute.Value{}, err
+	}
+	if v == nil {
+		return attribute.Value{}, errors.New("unexpected null attribute value")
+	}
+	return makeValue(*v), nil
 }
 
 // traceIDFromHex returns a TraceID from a hex string if it is compliant with

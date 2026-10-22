@@ -128,10 +128,11 @@ func ConvertSpan(ss tracesdk.ReadOnlySpan) Span {
 		SpanID:  SpanID(ss.Parent().SpanID().String()),
 	})
 
+	// Jaeger shares the sampled bit, but its other flags have different meanings.
 	return Span{
 		TraceID:       TraceID(ss.SpanContext().TraceID().String()),
 		SpanID:        SpanID(ss.SpanContext().SpanID().String()),
-		Flags:         uint32(ss.SpanContext().TraceFlags()),
+		Flags:         uint32(ss.SpanContext().TraceFlags() & trace.FlagsSampled),
 		OperationName: ss.Name(),
 		References:    refs,
 		StartTime:     timeAsEpochMicroseconds(ss.StartTime()),
@@ -171,6 +172,18 @@ func keyValueToJaegerTag(keyValue attribute.KeyValue) *KeyValue {
 			Key:   string(keyValue.Key),
 			Type:  Float64Type,
 			Value: f,
+		}
+	case attribute.BYTESLICE:
+		tag = &KeyValue{
+			Key:   string(keyValue.Key),
+			Type:  BinaryType,
+			Value: keyValue.Value.AsByteSlice(),
+		}
+	case attribute.EMPTY, attribute.SLICE, attribute.MAP:
+		tag = &KeyValue{
+			Key:   string(keyValue.Key),
+			Type:  StringType,
+			Value: keyValue.Value.String(),
 		}
 	case attribute.BOOLSLICE,
 		attribute.INT64SLICE,
