@@ -24,7 +24,19 @@ const (
 	prioritySupported   = 40
 	priorityUnsupported = 80
 	defaultTimeout      = 120 * time.Second
+	buildkitdConfigFile = "buildkitd.toml"
 )
+
+// buildkitFlags points buildkitd at the mounted config. The rootless image
+// does not read /etc/buildkit by default, so without --config the file is
+// ignored. User flags come after and can override this.
+func buildkitFlags(cfg driver.InitConfig) []string {
+	flags := cfg.BuildkitdFlags
+	if _, ok := cfg.Files[buildkitdConfigFile]; !ok {
+		return flags
+	}
+	return append([]string{"--config", "/etc/buildkit/" + buildkitdConfigFile}, flags...)
+}
 
 type ClientConfig interface {
 	ClientConfig() (*rest.Config, error)
@@ -171,7 +183,7 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		Name:          deploymentName,
 		Image:         bkimage.DefaultImage,
 		Replicas:      1,
-		BuildkitFlags: cfg.BuildkitdFlags,
+		BuildkitFlags: buildkitFlags(cfg),
 		Rootless:      false,
 		Platforms:     cfg.Platforms,
 		ConfigFiles:   cfg.Files,
