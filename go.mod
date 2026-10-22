@@ -18,8 +18,8 @@ require (
 	github.com/distribution/reference v0.6.0
 	github.com/docker/cli v29.8.2+incompatible
 	github.com/docker/cli-docs-tool v0.11.0
-	github.com/docker/docker v28.5.2+incompatible
 	github.com/docker/go-units v0.5.0
+	github.com/dustinkirkland/golang-petname v0.0.0-20261016130451-be8536a0e189
 	github.com/gofrs/flock v0.13.1
 	github.com/golang/snappy v1.0.0
 	github.com/google/go-dap v0.12.1-0.20250904181021-d7a2259b058b

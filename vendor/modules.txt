@@ -340,9 +340,6 @@ github.com/docker/cli-docs-tool
 github.com/docker/cli-docs-tool/annotation
 # github.com/docker/distribution v2.8.3+incompatible
 ## explicit
-# github.com/docker/docker v28.5.2+incompatible
-## explicit
-github.com/docker/docker/pkg/namesgenerator
 # github.com/docker/docker-credential-helpers v0.9.9
 ## explicit; go 1.21
 github.com/docker/docker-credential-helpers/client
@@ -355,6 +352,9 @@ github.com/docker/go-connections/tlsconfig
 # github.com/docker/go-units v0.5.0
 ## explicit
 github.com/docker/go-units
+# github.com/dustinkirkland/golang-petname v0.0.0-20261016130451-be8536a0e189
+## explicit; go 1.20
+github.com/dustinkirkland/golang-petname
 # github.com/felixge/httpsnoop v1.1.0
 ## explicit; go 1.25
 github.com/felixge/httpsnoop
