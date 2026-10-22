@@ -43,7 +43,6 @@ require (
 	github.com/pkg/browser v0.0.0-20240102092130-5ac0b6a4141c
 	github.com/pkg/errors v0.9.1
 	github.com/planetscale/vtprotobuf v0.6.1-0.20240319094008-0393e58bdf10
-	github.com/serialx/hashring v0.0.0-20200727003509-22c0c7ab6b1b
 	github.com/sigstore/sigstore-go v1.2.2
 	github.com/sirupsen/logrus v1.10.2
 	github.com/spf13/cobra v1.10.2
