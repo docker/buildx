@@ -127,7 +127,12 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			var ulimits []string
 			if s.Build.Ulimits != nil {
 				for n, u := range s.Build.Ulimits {
-					ulimit, err := units.ParseUlimit(fmt.Sprintf("%s=%d:%d", n, u.Soft, u.Hard))
+					soft, hard := u.Soft, u.Hard
+					if u.Single != 0 {
+						// short syntax (e.g. "nproc: 65535") sets both limits
+						soft, hard = u.Single, u.Single
+					}
+					ulimit, err := units.ParseUlimit(fmt.Sprintf("%s=%d:%d", n, soft, hard))
 					if err != nil {
 						return nil, err
 					}
