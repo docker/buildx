@@ -5,7 +5,7 @@ import (
 	"regexp"
 	"strings"
 
-	"github.com/docker/docker/pkg/namesgenerator"
+	petname "github.com/dustinkirkland/golang-petname"
 	"github.com/pkg/errors"
 )
 
@@ -38,9 +38,8 @@ func ValidateName(s string) (string, error) {
 }
 
 func GenerateName(txn *Txn) (string, error) {
-	var name string
-	for i := range 6 {
-		name = namesgenerator.GetRandomName(i)
+	for range 6 {
+		name := petname.Generate(2, "_")
 		if _, err := txn.NodeGroupByName(name); err != nil {
 			if !os.IsNotExist(errors.Cause(err)) {
 				return "", err
