@@ -74,7 +74,7 @@ func TestNormalizeHTTPHost(t *testing.T) {
 	}
 	for _, tt := range tests {
 		t.Run(tt.scheme+" "+tt.host, func(t *testing.T) {
-			host, err := normalizeHTTPHost(&url.URL{Scheme: tt.scheme, Host: tt.host})
+			host, err := normalizeHost("http", &url.URL{Scheme: tt.scheme, Host: tt.host})
 			require.NoError(t, err)
 			require.Equal(t, tt.want, host)
 		})
@@ -855,6 +855,41 @@ func TestSourceToInputSingleSource(t *testing.T) {
 			},
 		},
 		{
+			name: "git-source-normalizes-host",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "git://GitHub.com.:443/docker/buildx.git",
+				},
+			},
+			expInput: Input{
+				Git: &Git{
+					Schema: "https",
+					Host:   "github.com",
+					Remote: "https://GitHub.com.:443/docker/buildx.git",
+				},
+			},
+			expUnk: []string{
+				"input.git.tagName",
+				"input.git.branch",
+				"input.git.ref",
+				"input.git.checksum",
+				"input.git.isAnnotatedTag",
+				"input.git.commitChecksum",
+				"input.git.isSHA256",
+				"input.git.tag",
+				"input.git.commit",
+			},
+		},
+		{
+			name: "git-source-port-above-maximum",
+			src: &gwpb.ResolveSourceMetaResponse{
+				Source: &pb.SourceOp{
+					Identifier: "git://github.com:65536/docker/buildx.git",
+				},
+			},
+			expErrMsg: "invalid git port",
+		},
+		{
 			name: "git-source-with-full-remote-url-attr-ssh-uses-attr",
 			src: &gwpb.ResolveSourceMetaResponse{
 				Source: &pb.SourceOp{
@@ -1244,6 +1279,49 @@ decision := {"allow": allow}
 				Source: &gwpb.ResolveSourceMetaResponse{
 					Source: &pb.SourceOp{Identifier: tc.url},
 				},
+			})
+			require.NoError(t, err)
+			require.Nil(t, next)
+			require.NotNil(t, decision)
+			require.Equal(t, tc.want, decision.Action)
+		})
+	}
+}
+
+func TestCheckPolicyGitHostDenyList(t *testing.T) {
+	for _, tc := range []struct {
+		name, identifier, fullURL string
+		want                      policyaction.PolicyAction
+	}{
+		{"ascii-host", "git://github.com/docker/buildx.git", "", policyaction.PolicyAction_DENY},
+		{"mixed-case-host", "git://GitHub.com/docker/buildx.git#v0.38.1:skip", "", policyaction.PolicyAction_DENY},
+		{"absolute-host", "git://github.com./docker/buildx.git", "", policyaction.PolicyAction_DENY},
+		{"default-https-port", "git://github.com:443/docker/buildx.git", "", policyaction.PolicyAction_DENY},
+		{"fullwidth-host", "git://ｇｉｔｈｕｂ.com/docker/buildx.git", "", policyaction.PolicyAction_DENY},
+		{"full-url-mixed-case-host", "git://github.com/docker/buildx.git", "https://GitHub.com/docker/buildx.git", policyaction.PolicyAction_DENY},
+		{"full-url-default-https-port", "git://github.com/docker/buildx.git", "https://github.com:443/docker/buildx.git", policyaction.PolicyAction_DENY},
+		{"full-url-default-http-port", "git://github.com/docker/buildx.git", "http://github.com:80/docker/buildx.git", policyaction.PolicyAction_DENY},
+		{"full-url-default-ssh-port", "git://github.com/docker/buildx.git", "ssh://git@GitHub.com:22/docker/buildx.git", policyaction.PolicyAction_DENY},
+		{"full-url-default-git-port", "git://github.com/docker/buildx.git", "git://GitHub.com:9418/docker/buildx.git", policyaction.PolicyAction_DENY},
+		{"full-url-scp-style", "git://github.com/docker/buildx.git", "git@GitHub.com:docker/buildx.git", policyaction.PolicyAction_DENY},
+		{"non-default-port", "git://github.com:8443/docker/buildx.git", "", policyaction.PolicyAction_ALLOW},
+		{"full-url-non-default-ssh-port", "git://github.com/docker/buildx.git", "ssh://git@github.com:2222/docker/buildx.git", policyaction.PolicyAction_ALLOW},
+		{"other-host", "git://gitlab.com/docker/buildx.git", "", policyaction.PolicyAction_ALLOW},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			p := NewPolicy(Opt{Files: []File{{Filename: "policy.rego", Data: []byte(`
+package docker
+
+default allow := true
+allow := false if input.git.host == "github.com"
+decision := {"allow": allow}
+`)}}})
+			src := &pb.SourceOp{Identifier: tc.identifier}
+			if tc.fullURL != "" {
+				src.Attrs = map[string]string{pb.AttrFullRemoteURL: tc.fullURL}
+			}
+			decision, next, err := p.CheckPolicy(t.Context(), &policysession.CheckPolicyRequest{
+				Source: &gwpb.ResolveSourceMetaResponse{Source: src},
 			})
 			require.NoError(t, err)
 			require.Nil(t, next)
