@@ -23,7 +23,7 @@ on:
 env:
   SETUP_BUILDX_VERSION: "edge"
   SETUP_BUILDKIT_IMAGE: "moby/buildkit:latest"
-  SCOUT_VERSION: "1.27.0"
+  SCOUT_VERSION: "1.28.0"
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
   TEST_CACHE_SCOPE: "test"
