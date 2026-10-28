@@ -42,12 +42,14 @@ type authConfigProvider struct {
 	alternativeConfigs []*alternativeConfig
 }
 
+func defaultCacheExpireCheck(created time.Time, _ string) bool {
+	// Tokens for Google Artifact Registry via Workload Identity expire after 5 minutes.
+	return time.Since(created) > 4*time.Minute+50*time.Second
+}
+
 func (ap *authConfigProvider) load(ctx context.Context, host string, scopes []string, cacheExpireCheck authprovider.ExpireCachedAuthCheck) (types.AuthConfig, error) {
 	if cacheExpireCheck == nil {
-		cacheExpireCheck = func(created time.Time, _ string) bool {
-			// Tokens for Google Artifact Registry via Workload Identity expire after 5 minutes.
-			return time.Since(created) > 4*time.Minute+50*time.Second
-		}
+		cacheExpireCheck = defaultCacheExpireCheck
 	}
 
 	ac, err := ap.loadHost(ctx, host, scopes, cacheExpireCheck)
@@ -77,6 +79,10 @@ func (ap *authConfigProvider) loadHost(_ context.Context, host string, scopes []
 
 	ap.mu.Lock()
 	defer ap.mu.Unlock()
+
+	if cacheExpireCheck == nil {
+		cacheExpireCheck = defaultCacheExpireCheck
+	}
 
 	candidates := []*alternativeConfig{}
 	parsedScopes := parseScopes(scopes)
@@ -115,8 +121,11 @@ func (ap *authConfigProvider) loadHost(_ context.Context, host string, scopes []
 	}
 
 	entry, exists := ap.authConfigCache[key]
-	if exists && (cacheExpireCheck == nil || !cacheExpireCheck(entry.Created, key)) {
-		return *entry.Auth, nil
+	if exists {
+		if !cacheExpireCheck(entry.Created, key) {
+			return *entry.Auth, nil
+		}
+		delete(ap.authConfigCache, key)
 	}
 
 	hostKey := host

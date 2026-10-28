@@ -3,6 +3,11 @@ package dockerconfig
 import (
 	"testing"
 
+	"context"
+	"time"
+
+	"github.com/docker/cli/cli/config/configfile"
+	"github.com/docker/cli/cli/config/types"
 	"github.com/stretchr/testify/require"
 )
 
@@ -197,4 +202,146 @@ func TestMatchesScopes(t *testing.T) {
 			require.Equal(t, tc.matches, got)
 		})
 	}
+}
+
+func TestAuthConfigCache_Hit(t *testing.T) {
+	cfg := configfile.New("test")
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-1",
+	}
+
+	ap := &authConfigProvider{
+		defaultConfig:   cfg,
+		authConfigCache: map[string]authConfigCacheEntry{},
+	}
+	ap.initOnce.Do(func() {})
+
+	ctx := context.Background()
+	ac, err := ap.load(ctx, "europe-west1-docker.pkg.dev", nil, func(created time.Time, serverURL string) bool {
+		return false
+	})
+	require.NoError(t, err)
+	require.Equal(t, "token-1", ac.Password)
+
+	// Update config in underlying store
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-2",
+	}
+
+	// Should still hit cache and return token-1
+	ac, err = ap.load(ctx, "europe-west1-docker.pkg.dev", nil, func(created time.Time, serverURL string) bool {
+		return false
+	})
+	require.NoError(t, err)
+	require.Equal(t, "token-1", ac.Password)
+}
+
+func TestAuthConfigCache_Expired(t *testing.T) {
+	cfg := configfile.New("test")
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-1",
+	}
+
+	ap := &authConfigProvider{
+		defaultConfig:   cfg,
+		authConfigCache: map[string]authConfigCacheEntry{},
+	}
+	ap.initOnce.Do(func() {})
+
+	ctx := context.Background()
+	ac, err := ap.load(ctx, "europe-west1-docker.pkg.dev", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "token-1", ac.Password)
+
+	// Update config in underlying store
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-2",
+	}
+
+	// Force expire check to return true
+	ac, err = ap.load(ctx, "europe-west1-docker.pkg.dev", nil, func(created time.Time, serverURL string) bool {
+		return true
+	})
+	require.NoError(t, err)
+	require.Equal(t, "token-2", ac.Password)
+}
+
+func TestAuthConfigCache_DefaultExpireCheck_Nil(t *testing.T) {
+	cfg := configfile.New("test")
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-1",
+	}
+
+	ap := &authConfigProvider{
+		defaultConfig:   cfg,
+		authConfigCache: map[string]authConfigCacheEntry{},
+	}
+	ap.initOnce.Do(func() {})
+
+	ctx := context.Background()
+	// Initial load
+	ac, err := ap.load(ctx, "europe-west1-docker.pkg.dev", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "token-1", ac.Password)
+
+	// Change underlying config
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-2",
+	}
+
+	// Recent cache entry should not expire with nil check
+	ac, err = ap.load(ctx, "europe-west1-docker.pkg.dev", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "token-1", ac.Password)
+
+	// Age the cached entry past 4m50s
+	entry := ap.authConfigCache["europe-west1-docker.pkg.dev"]
+	entry.Created = time.Now().Add(-5 * time.Minute)
+	ap.authConfigCache["europe-west1-docker.pkg.dev"] = entry
+
+	// Should expire with default check and reload token-2
+	ac, err = ap.load(ctx, "europe-west1-docker.pkg.dev", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "token-2", ac.Password)
+}
+
+func TestAuthConfigCache_LoadHost_DirectNilCheck(t *testing.T) {
+	cfg := configfile.New("test")
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-1",
+	}
+
+	ap := &authConfigProvider{
+		defaultConfig:   cfg,
+		authConfigCache: map[string]authConfigCacheEntry{},
+	}
+	ap.initOnce.Do(func() {})
+
+	ctx := context.Background()
+	// Direct call to loadHost with nil cacheExpireCheck
+	ac, err := ap.loadHost(ctx, "europe-west1-docker.pkg.dev", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "token-1", ac.Password)
+
+	cfg.AuthConfigs["europe-west1-docker.pkg.dev"] = types.AuthConfig{
+		Username: "_dcgcloud_token",
+		Password: "token-2",
+	}
+
+	// Age the entry
+	entry := ap.authConfigCache["europe-west1-docker.pkg.dev"]
+	entry.Created = time.Now().Add(-5 * time.Minute)
+	ap.authConfigCache["europe-west1-docker.pkg.dev"] = entry
+
+	// loadHost directly with nil should expire and reload
+	ac, err = ap.loadHost(ctx, "europe-west1-docker.pkg.dev", nil, nil)
+	require.NoError(t, err)
+	require.Equal(t, "token-2", ac.Password)
 }
