@@ -122,11 +122,13 @@ func ConvertSpan(ss tracesdk.ReadOnlySpan) Span {
 			SpanID:  SpanID(link.SpanContext.SpanID().String()),
 		})
 	}
-	refs = append(refs, Reference{
-		RefType: ChildOf,
-		TraceID: TraceID(ss.Parent().TraceID().String()),
-		SpanID:  SpanID(ss.Parent().SpanID().String()),
-	})
+	if parent := ss.Parent(); parent.IsValid() {
+		refs = append(refs, Reference{
+			RefType: ChildOf,
+			TraceID: TraceID(parent.TraceID().String()),
+			SpanID:  SpanID(parent.SpanID().String()),
+		})
+	}
 
 	return Span{
 		TraceID:       TraceID(ss.SpanContext().TraceID().String()),
