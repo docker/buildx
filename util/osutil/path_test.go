@@ -11,6 +11,8 @@ import (
 func TestEvaluateToExistingPath(t *testing.T) {
 	tempDir, err := GetLongPathName(t.TempDir())
 	require.NoError(t, err)
+	tempDir, err = filepath.EvalSymlinks(tempDir)
+	require.NoError(t, err)
 
 	existingFile := filepath.Join(tempDir, "existing_file")
 	require.NoError(t, os.WriteFile(existingFile, []byte("test"), 0644))

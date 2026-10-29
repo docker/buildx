@@ -271,6 +271,56 @@ jobs:
           name: test-reports-${{ env.TESTREPORTS_NAME }}
           path: ${{ env.TESTREPORTS_BASEDIR }}
 
+  test-bsd-unit:
+    runs-on: ubuntu-24.04
+    continue-on-error: true
+    timeout-minutes: 15
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - os: freebsd
+            version: "14.5"
+          - os: netbsd
+            version: "10.1"
+          - os: openbsd
+            version: "7.9"
+    steps:
+      -
+        name: Prepare
+        run: |
+          goVersion=$(curl --fail --silent --show-error "https://go.dev/dl/?mode=json&include=all" | jq -er --arg version "go${GO_VERSION}." '[.[] | select(.stable and (.version | startswith($version)))][0].version')
+          echo "GO_VERSION=${goVersion#go}" >> "$GITHUB_ENV"
+      -
+        name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      -
+        name: Set up QEMU
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends qemu-system-x86 qemu-utils ovmf dosfstools mtools zstd rsync acl
+          sudo setfacl -m "u:$(id -u):rw" /dev/kvm
+      -
+        name: Test
+        env:
+          BSD_OS: ${{ matrix.os }}
+          BSD_VERSION: ${{ matrix.version }}
+        run: bash .github/scripts/test-bsd.sh "$BSD_OS" "$BSD_VERSION" ${{ env.TESTFLAGS }} ./...
+      -
+        name: Upload coverage
+        if: always()
+        uses: codecov/codecov-action@303a32d7a59b442fa8d48b6a1cc6825c09c847a5 # v7.1.1
+        with:
+          files: ./coverage.txt
+          env_vars: RUNNER_OS
+          flags: unit,${{ matrix.os }}
+          token: ${{ secrets.CODECOV_TOKEN }}
+          disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
+        env:
+          RUNNER_OS: ${{ matrix.os }}
+
   govulncheck:
     runs-on: ubuntu-26.04
     permissions:
