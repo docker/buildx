@@ -867,7 +867,7 @@ func testImagetoolsFile(t *testing.T, sb integration.Sandbox) {
 	require.Equal(t, len(sourceManifest.Layers), len(copiedManifest.Layers))
 }
 
-// testImagetoolsAnnotation verifies index and manifest annotations added by imagetools create.
+// testImagetoolsAnnotation verifies index and manifest descriptor annotations added by imagetools create.
 func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
 	if !isDockerContainerWorker(sb) {
 		t.Skip("only testing with docker-container worker, imagetools only runs on docker-container")
@@ -895,7 +895,8 @@ func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
 
 	imagetoolsCmd := func(source []string) *exec.Cmd {
 		args := []string{"imagetools", "create", "-t", target, "--annotation", "index:foo=bar", "--annotation", "index:bar=baz",
-			"--annotation", "manifest-descriptor:foo=bar", "--annotation", "manifest-descriptor[linux/amd64]:bar=baz"}
+			"--annotation", "untyped=value", "--annotation", "manifest-descriptor:foo=bar",
+			"--annotation", "manifest-descriptor[linux/amd64]:bar=baz"}
 		args = append(args, source...)
 		return buildxCmd(sb, withArgs(args...))
 	}
@@ -924,9 +925,10 @@ func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
 
 		err = json.Unmarshal(dt, &idx)
 		require.NoError(t, err)
-		require.Len(t, idx.Annotations, 2)
+		require.Len(t, idx.Annotations, 3)
 		require.Equal(t, "bar", idx.Annotations["foo"])
 		require.Equal(t, "baz", idx.Annotations["bar"])
+		require.Equal(t, "value", idx.Annotations["untyped"])
 		require.Len(t, idx.Manifests, 2)
 		for _, mfst := range idx.Manifests {
 			require.Equal(t, "bar", mfst.Annotations["foo"])
@@ -937,6 +939,28 @@ func testImagetoolsAnnotation(t *testing.T, sb integration.Sandbox) {
 			}
 		}
 	}
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--dry-run", "--annotation", "manifest:foo=bar", target))
+	dt, err = cmd.CombinedOutput()
+	require.Error(t, err, string(dt))
+	require.Contains(t, string(dt), `manifest annotations are not supported by imagetools create because it does not modify manifests; use "index:" or "manifest-descriptor:" instead`)
+
+	dockerTarget := registry + "/buildx/imtools:docker"
+	out, err = buildCmd(sb, withArgs("--output", "type=registry,oci-mediatypes=false,name="+dockerTarget, "--platform=linux/amd64,linux/arm64", "--provenance=false", dir))
+	require.NoError(t, err, string(out))
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "inspect", dockerTarget, "--raw"))
+	dt, err = cmd.CombinedOutput()
+	require.NoError(t, err, string(dt))
+	var dockerIdx ocispecs.Index
+	err = json.Unmarshal(dt, &dockerIdx)
+	require.NoError(t, err)
+	require.Equal(t, images.MediaTypeDockerSchema2ManifestList, dockerIdx.MediaType)
+
+	cmd = buildxCmd(sb, withArgs("imagetools", "create", "--dry-run", "--annotation", "index:foo=bar", dockerTarget))
+	dt, err = cmd.CombinedOutput()
+	require.Error(t, err, string(dt))
+	require.Contains(t, string(dt), `annotations are not supported for Docker manifest lists; use "oci-mediatypes=true" when building the source images`)
 }
 
 // testImagetoolsMergeSources verifies create merges manifests from distinct source registries.
