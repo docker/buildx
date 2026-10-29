@@ -19,6 +19,7 @@ import (
 
 	"github.com/containerd/console"
 	"github.com/containerd/containerd/v2/pkg/epoch"
+	"github.com/containerd/platforms"
 	"github.com/docker/buildx/build"
 	"github.com/docker/buildx/builder"
 	"github.com/docker/buildx/policy"
@@ -40,6 +41,7 @@ import (
 	"github.com/docker/cli/cli/command"
 	dockeropts "github.com/docker/cli/opts"
 	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/client/llb"
 	"github.com/moby/buildkit/exporter/containerimage/exptypes"
 	"github.com/moby/buildkit/frontend/subrequests"
 	"github.com/moby/buildkit/frontend/subrequests/lint"
@@ -585,6 +587,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 	flags.StringArrayVarP(&options.outputs, "output", "o", []string{}, `Output destination (format: "type=local,dest=path")`)
 
 	flags.StringArrayVar(&options.platforms, "platform", platformsDefault, "Set target platform for build")
+	cmd.RegisterFlagCompletionFunc("platform", completionPlatforms()) //nolint:errcheck
 
 	flags.StringArrayVar(&options.policy, "policy", []string{}, `Policy configuration (format: "filename=path[,filename=path][,reset=true|false][,disabled=true|false][,strict=true|false][,log-level=level]")`)
 
@@ -1220,4 +1223,31 @@ type nopCloser struct {
 
 func (nopCloser) Close() error {
 	return nil
+}
+
+func completionPlatforms() cobra.CompletionFunc {
+	opts := []llb.ConstraintsOpt{
+		llb.LinuxAmd64,
+		llb.LinuxArmhf,
+		llb.LinuxArmel,
+		llb.LinuxArm64,
+		llb.LinuxS390x,
+		llb.LinuxPpc64,
+		llb.LinuxPpc64le,
+		llb.LinuxRiscv64,
+		llb.Darwin,
+		llb.Windows,
+	}
+	values := make([]string, 0, len(opts))
+	for _, opt := range opts {
+		var c llb.Constraints
+		opt.SetConstraintsOption(&c)
+		if c.Platform == nil {
+			continue
+		}
+		values = append(values, platforms.Format(*c.Platform))
+	}
+	return func(cmd *cobra.Command, args []string, toComplete string) ([]string, cobra.ShellCompDirective) {
+		return values, cobra.ShellCompDirectiveNoFileComp
+	}
 }
