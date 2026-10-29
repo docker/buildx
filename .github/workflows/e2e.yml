@@ -41,21 +41,116 @@ jobs:
         with:
           targets: binaries
           set: |
+            *.platform=linux/amd64,windows/amd64
             *.cache-from=type=gha,scope=release
             *.cache-from=type=gha,scope=binaries
             *.cache-to=type=gha,scope=binaries
       -
-        name: Rename binary
+        name: Rename binaries
         run: |
-          mv ${{ env.DESTDIR }}/build/buildx ${{ env.DESTDIR }}/build/docker-buildx
+          mv ${{ env.DESTDIR }}/build/linux_amd64/buildx ${{ env.DESTDIR }}/build/linux_amd64/docker-buildx
+          mv ${{ env.DESTDIR }}/build/windows_amd64/buildx.exe ${{ env.DESTDIR }}/build/windows_amd64/docker-buildx.exe
       -
-        name: Upload artifacts
+        name: Upload Linux artifact
         uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
         with:
           name: binary
-          path: ${{ env.DESTDIR }}/build
+          path: ${{ env.DESTDIR }}/build/linux_amd64
           if-no-files-found: error
           retention-days: 7
+      -
+        name: Upload Windows artifact
+        uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: binary-windows
+          path: ${{ env.DESTDIR }}/build/windows_amd64
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-docker:
+    runs-on: windows-2025
+    needs:
+      - build
+    timeout-minutes: 30
+    steps:
+      -
+        name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      -
+        name: Install buildx
+        uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: binary-windows
+          path: ~/.docker/cli-plugins
+      -
+        name: Set up Windows Docker daemon
+        uses: docker/setup-docker-action@3f1ab1ab0e29231562e4db4ca600c1a49653bac6 # v5.7.0
+        with:
+          version: type=image,tag=master # TODO: Replace master with 29.10+ for the Windows runtime binaries added in https://github.com/moby/moby/pull/54069.
+          context: windows-smoke
+          daemon-config: |
+            {
+              "debug": true,
+              "features": {
+                "embedded-containerd": true,
+                "containerd-snapshotter": true,
+                "buildkit": true
+              }
+            }
+      -
+        name: Test Windows Docker builder
+        uses: actions/github-script@3a2844b7e9c422d3c10d287c895573f7108da1b3 # v9.0.0
+        with:
+          script: |
+            const assert = require('node:assert/strict');
+            const fs = require('node:fs/promises');
+            const path = require('node:path');
+            const {randomUUID} = require('node:crypto');
+
+            const dockerContext = 'windows-smoke';
+            const testDir = path.join(process.env.GITHUB_WORKSPACE, '.dev', 'windows-docker-' + randomUUID());
+            const image = 'buildx-windows-smoke:' + randomUUID();
+            const docker = async (...args) => {
+              const {stdout} = await exec.getExecOutput('docker', ['--context', dockerContext, ...args]);
+              return stdout.trim();
+            };
+            await fs.mkdir(testDir, {recursive: true});
+
+            try {
+              const version = await docker('buildx', 'version');
+              assert.equal(version.split(/\s+/)[2], process.env.GITHUB_SHA, 'Unexpected Buildx revision');
+              assert.equal(await docker('info', '--format', '{{.OSType}}'), 'windows', 'Expected a Windows Docker daemon');
+
+              // Context builders must be discovered without buildx create.
+              const builders = (await docker('buildx', 'ls', '--format', 'json')).split(/\r?\n/).map(line => JSON.parse(line));
+              const matches = builders.filter(builder => builder.Name === dockerContext);
+              assert.equal(matches.length, 1, 'Expected the Windows context builder');
+              assert.equal(matches[0].Driver, 'docker', 'Expected the docker driver');
+              const node = matches[0].Nodes[0];
+              assert.equal(node.Status, 'running', 'Expected a running Windows worker');
+              assert.ok(node.Platforms.some(platform => /^windows(\([^)]*\))?\/amd64/.test(platform)), 'Expected a Windows platform');
+              await docker('buildx', 'inspect', dockerContext);
+
+              await fs.writeFile(path.join(testDir, 'Dockerfile'), [
+                'FROM mcr.microsoft.com/windows/nanoserver:ltsc2025',
+                'USER ContainerAdministrator',
+                'WORKDIR C:/smoke',
+                'COPY message.txt .',
+                'RUN type message.txt > result.txt',
+                'CMD ' + JSON.stringify(['cmd', '/S', '/C', 'type C:\\smoke\\result.txt']),
+                '',
+              ].join('\n'));
+              await fs.writeFile(path.join(testDir, 'message.txt'), 'buildx-windows-ok\n');
+
+              // No --load: the docker driver must load into this daemon automatically.
+              await docker('buildx', 'build', '--builder', dockerContext, '--progress', 'plain', '-t', image, testDir);
+              assert.equal(await docker('image', 'inspect', '--format', '{{.Os}}', image), 'windows', 'Expected a Windows image in the daemon image store');
+              assert.equal(await docker('run', '--rm', image), 'buildx-windows-ok', 'Unexpected container output');
+            } finally {
+              // Keep the test inputs and daemon build cache for diagnosing failures.
+              await exec.exec('docker', ['--context', dockerContext, 'image', 'rm', '-f', image], {ignoreReturnCode: true})
+                .catch(error => core.warning('Image cleanup failed: ' + error.message));
+            }
 
   driver:
     runs-on: ubuntu-26.04
