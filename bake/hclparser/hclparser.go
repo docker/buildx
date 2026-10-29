@@ -424,7 +424,7 @@ func (p *parser) resolveBlock(block *hcl.Block, target *hcl.BodySchema) (err err
 		outputs = prev
 		ectxs = p.blockEvalCtx[block]
 	} else {
-		if v, ok := reflect.New(t).Interface().(WithEvalContexts); ok {
+		if v, ok := reflect.TypeAssert[WithEvalContexts](reflect.New(t)); ok {
 			ectxs, err = v.GetEvalContexts(p.ectx, block, func(expr hcl.Expression) hcl.Diagnostics {
 				return p.loadDeps(p.ectx, expr, nil, true)
 			})
@@ -603,7 +603,7 @@ func (p *parser) resolveBlockNames(block *hcl.Block) ([]string, error) {
 			return nil, err
 		}
 
-		if v, ok := val.Interface().(WithGetName); ok {
+		if v, ok := reflect.TypeAssert[WithGetName](val); ok {
 			var err error
 			name, err = v.GetName(ectx, block, func(expr hcl.Expression) hcl.Diagnostics {
 				return p.loadDeps(ectx, expr, nil, true)
@@ -952,7 +952,7 @@ func Parse(b hcl.Body, opt Opt, val any) (*ParseMeta, hcl.Diagnostics) {
 
 		vvs := p.blockValues[b]
 		for _, vv := range vvs {
-			if v, ok := vv.Interface().(WithBlockSource); ok {
+			if v, ok := reflect.TypeAssert[WithBlockSource](vv); ok {
 				v.SetBlockSource(b)
 			}
 

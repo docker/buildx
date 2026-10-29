@@ -23,7 +23,7 @@ func (o DecodeOptions) DecodeBody(body hcl.Body, ctx *hcl.EvalContext, val any) 
 	o = o.withDefaults()
 
 	rv := reflect.ValueOf(val)
-	if rv.Kind() != reflect.Ptr {
+	if rv.Kind() != reflect.Pointer {
 		panic(fmt.Sprintf("target value must be a pointer, not %s", rv.Type().String()))
 	}
 
@@ -154,7 +154,7 @@ func (o DecodeOptions) decodeBodyToStruct(body hcl.Body, ctx *hcl.EvalContext, v
 			isSlice = true
 			ty = ty.Elem()
 		}
-		if ty.Kind() == reflect.Ptr {
+		if ty.Kind() == reflect.Pointer {
 			isPtr = true
 			ty = ty.Elem()
 		}
