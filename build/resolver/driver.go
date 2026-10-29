@@ -236,6 +236,12 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []ocispecs.Platform, pw p
 }
 
 func (r *nodeResolver) get(p ocispecs.Platform, matcher matchMaker, additionalPlatforms func(int, builder.Node) []ocispecs.Platform) int {
+	if additionalPlatforms != nil {
+		// Preserve explicit matches when worker discovery adds overlapping platforms.
+		if idx := r.get(p, platforms.OnlyStrict, nil); idx != -1 {
+			return idx
+		}
+	}
 	best := -1
 	bestPlatform := ocispecs.Platform{}
 	for i, node := range r.nodes {
