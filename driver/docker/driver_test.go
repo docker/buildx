@@ -2,12 +2,14 @@ package docker
 
 import (
 	"context"
+	"errors"
 	"net"
 	"sync/atomic"
 	"testing"
 	"time"
 
 	"github.com/docker/buildx/driver"
+	_ "github.com/docker/buildx/driver/docker-container"
 	control "github.com/moby/buildkit/api/services/control"
 	types "github.com/moby/buildkit/api/types"
 	dockerclient "github.com/moby/moby/client"
@@ -16,6 +18,117 @@ import (
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
 )
+
+type dialTestAPI struct {
+	dockerclient.APIClient
+	osType  string
+	dialErr error
+	pingErr error
+	conn    net.Conn
+}
+
+func (a dialTestAPI) DialHijack(context.Context, string, string, map[string][]string) (net.Conn, error) {
+	return a.conn, a.dialErr
+}
+
+func (a dialTestAPI) Ping(context.Context, dockerclient.PingOptions) (dockerclient.PingResult, error) {
+	return dockerclient.PingResult{OSType: a.osType}, a.pingErr
+}
+
+func TestDefaultDriver(t *testing.T) {
+	for _, tc := range []struct {
+		name    string
+		osType  string
+		dialErr error
+		pingErr error
+		want    string
+	}{
+		{
+			name:   "Windows with BuildKit",
+			osType: "windows",
+			want:   "docker",
+		},
+		{
+			name:    "Windows without BuildKit",
+			osType:  "windows",
+			dialErr: errors.New("BuildKit unavailable"),
+			want:    "docker",
+		},
+		{
+			name:   "Linux with BuildKit",
+			osType: "linux",
+			want:   "docker",
+		},
+		{
+			name:    "Linux without BuildKit",
+			osType:  "linux",
+			dialErr: errors.New("BuildKit unavailable"),
+			want:    "docker-container",
+		},
+		{
+			name:    "Unknown server OS",
+			dialErr: errors.New("BuildKit unavailable"),
+			pingErr: errors.New("ping failed"),
+			want:    "docker-container",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			api := dialTestAPI{osType: tc.osType, dialErr: tc.dialErr, pingErr: tc.pingErr}
+			if tc.dialErr == nil {
+				conn, peer := net.Pipe()
+				t.Cleanup(func() {
+					conn.Close()
+					peer.Close()
+				})
+				api.conn = conn
+			}
+			f, err := driver.GetDefaultFactory(t.Context(), "test-context", api, false, nil)
+			require.NoError(t, err)
+			require.Equal(t, tc.want, f.Name())
+		})
+	}
+}
+
+func TestDialError(t *testing.T) {
+	dialErr := errors.New("access denied")
+	for _, tc := range []struct {
+		name     string
+		osType   string
+		pingErr  error
+		wantHint bool
+	}{
+		{
+			name:     "Windows",
+			osType:   "windows",
+			wantHint: true,
+		},
+		{
+			name:   "Linux",
+			osType: "linux",
+		},
+		{
+			name:    "Ping failure",
+			pingErr: errors.New("ping failed"),
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			d := &Driver{InitConfig: driver.InitConfig{DockerAPI: dialTestAPI{
+				osType:  tc.osType,
+				dialErr: dialErr,
+				pingErr: tc.pingErr,
+			}}}
+			conn, err := d.Dial(t.Context())
+			require.Nil(t, conn)
+			require.ErrorIs(t, err, dialErr)
+			if tc.wantHint {
+				require.ErrorContains(t, err, "containerd image store and BuildKit enabled")
+				require.ErrorContains(t, err, "remote Windows BuildKit builder")
+			} else {
+				require.Equal(t, dialErr, err)
+			}
+		})
+	}
+}
 
 type featureTestAPI struct {
 	dockerclient.APIClient
