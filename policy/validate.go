@@ -536,7 +536,14 @@ func (p *Policy) Print(ctx print.Context, msg string) error {
 	return nil
 }
 
-func normalizeHTTPHost(u *url.URL) (string, error) {
+var defaultPorts = map[string]string{
+	"http":  "80",
+	"https": "443",
+	"ssh":   "22",
+	"git":   "9418",
+}
+
+func normalizeHost(kind string, u *url.URL) (string, error) {
 	host := u.Hostname()
 	if addr, err := netip.ParseAddr(host); err == nil {
 		host = addr.String()
@@ -547,7 +554,7 @@ func normalizeHTTPHost(u *url.URL) (string, error) {
 			// Match the IDNA lookup mapping used by Go's HTTP transport.
 			host, err = idna.Lookup.ToASCII(host)
 			if err != nil {
-				return "", errors.Wrapf(err, "invalid http host %q", u.Hostname())
+				return "", errors.Wrapf(err, "invalid %s host %q", kind, u.Hostname())
 			}
 		}
 		// Match an absolute DNS name to the corresponding policy hostname.
@@ -557,11 +564,11 @@ func normalizeHTTPHost(u *url.URL) (string, error) {
 	if port != "" {
 		p, err := strconv.ParseUint(port, 10, 16)
 		if err != nil {
-			return "", errors.Wrapf(err, "invalid http port %q", port)
+			return "", errors.Wrapf(err, "invalid %s port %q", kind, port)
 		}
 		port = strconv.FormatUint(p, 10)
 	}
-	if (u.Scheme == "http" && port == "80") || (u.Scheme == "https" && port == "443") {
+	if port == defaultPorts[u.Scheme] {
 		port = ""
 	}
 	if port != "" {
@@ -569,6 +576,14 @@ func normalizeHTTPHost(u *url.URL) (string, error) {
 	}
 	if strings.Contains(host, ":") {
 		return "[" + host + "]", nil
+	}
+	return host, nil
+}
+
+func normalizeGitHost(u *gitutil.GitURL) (string, error) {
+	host, err := normalizeHost("git", &url.URL{Scheme: u.Scheme, Host: u.Host})
+	if err != nil {
+		return "", errors.Wrap(err, "failed to normalize git source host")
 	}
 	return host, nil
 }
@@ -602,7 +617,7 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 		if err != nil {
 			return inp, nil, errors.Wrapf(err, "failed to parse http source url")
 		}
-		host, err := normalizeHTTPHost(u)
+		host, err := normalizeHost("http", u)
 		if err != nil {
 			return inp, nil, errors.Wrap(err, "failed to normalize http source host")
 		}
@@ -636,10 +651,14 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 		if err != nil {
 			return inp, nil, err
 		}
+		host, err := normalizeGitHost(u)
+		if err != nil {
+			return inp, nil, err
+		}
 		g := &Git{
 			Schema: u.Scheme,
 			Remote: u.Remote,
-			Host:   u.Host,
+			Host:   host,
 		}
 		var ref string
 		var isFullRef bool
@@ -660,7 +679,10 @@ func sourceToInput(ctx context.Context, getVerifier PolicyVerifierProvider, src 
 			}
 			g.Schema = u.Scheme
 			g.Remote = u.Remote
-			g.Host = u.Host
+			g.Host, err = normalizeGitHost(u)
+			if err != nil {
+				return inp, nil, err
+			}
 			g.FullURL = v
 		}
 		if tag, ok := strings.CutPrefix(ref, "refs/tags/"); ok {
