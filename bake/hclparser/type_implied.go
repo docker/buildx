@@ -55,7 +55,7 @@ func impliedType(rt reflect.Type, path cty.Path) (cty.Type, error) {
 	}
 
 	switch rt.Kind() {
-	case reflect.Ptr:
+	case reflect.Pointer:
 		return impliedType(rt.Elem(), path)
 
 	// Primitive types

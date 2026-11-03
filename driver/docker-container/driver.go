@@ -536,10 +536,10 @@ func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.
 		return nil, err
 	}
 
-	var counter int64
+	var counter atomic.Int64
 	opts = append([]client.ClientOpt{
 		client.WithContextDialer(func(ctx context.Context, _ string) (net.Conn, error) {
-			if atomic.AddInt64(&counter, 1) == 1 {
+			if counter.Add(1) == 1 {
 				return conn, nil
 			}
 			return d.Dial(ctx)

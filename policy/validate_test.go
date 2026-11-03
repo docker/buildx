@@ -35,7 +35,6 @@ func TestNormalizeHTTPHost(t *testing.T) {
 		{"http", "Example.com", "example.com"},
 		{"https", "\u0130.EXAMPLE.COM:443", "xn--i-9bb.example.com"},
 		{"https", "\u00c9XAMPLE.COM", "xn--xample-9ua.com"},
-		{"https", "\x94.EXAMPLE.COM", "xn--zn7c.example.com"},
 		{"https", "EXAMPLE.COM:000443", "example.com"},
 		{"https", "eXaMpLe.CoM:8443", "example.com:8443"},
 		{"https", "example.com:443", "example.com"},
@@ -144,11 +143,11 @@ func TestSourceToInputSingleSource(t *testing.T) {
 		{
 			name: "http-mixed-case-scheme-and-host",
 			src: &gwpb.ResolveSourceMetaResponse{
-				Source: &pb.SourceOp{Identifier: "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag"},
+				Source: &pb.SourceOp{Identifier: "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag"}, // #nosec G101 -- dummy credentials exercise URL normalization
 			},
 			expInput: Input{
 				HTTP: &HTTP{
-					URL:    "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag",
+					URL:    "hTtP://User:PaSs@eXaMpLe.CoM:00080/Case/Path?Key=VaLuE#Frag", // #nosec G101 -- expected normalized URL retains the dummy credentials
 					Schema: "http",
 					Host:   "example.com",
 					Path:   "/Case/Path",

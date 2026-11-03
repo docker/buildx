@@ -166,7 +166,7 @@ func generateBakeStdlibDocs(filename string) error {
 	}
 
 	newContent := before + "<!---MARKER_STDLIB_START-->\n\n" + table.String() + "\n" + currentContent[end:]
-	return os.WriteFile(filename, []byte(newContent), 0644)
+	return os.WriteFile(filename, []byte(newContent), 0644) // #nosec G703 -- the caller selects the documentation output file
 }
 
 type mdTable struct {

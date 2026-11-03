@@ -1,12 +1,12 @@
 # syntax=docker/dockerfile:1
 
-ARG GO_VERSION=1.26
+ARG GO_VERSION=1.27
 ARG ALPINE_VERSION=3.23
 ARG XX_VERSION=1.10.0
 
-ARG GOLANGCI_LINT_VERSION=v2.8.0
+ARG GOLANGCI_LINT_VERSION=v2.14.0
 ARG GOLANGCI_FROM_SOURCE=true
-ARG GOPLS_VERSION=v0.40.0
+ARG GOPLS_VERSION=v0.50.0
 # GOPLS_ANALYZERS defines gopls analyzers to be run. disabled by default: deprecated simplifyrange unusedfunc unusedvariable
 ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs maprange modernize nonewvars noresultvalues simplifycompositelit simplifyslice unusedparams yield"
 
