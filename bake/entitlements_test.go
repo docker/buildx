@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"runtime"
 	"slices"
 	"strings"
 	"testing"
@@ -472,6 +473,92 @@ func TestValidateEntitlements(t *testing.T) {
 	}
 }
 
+func TestValidateEntitlementsMultiTarget(t *testing.T) {
+	dir1 := t.TempDir()
+	dir2 := t.TempDir()
+
+	// the paths returned by entitlements validation will have symlinks resolved
+	expDir2, err := filepath.EvalSymlinks(dir2)
+	require.NoError(t, err)
+
+	credentialPath := filepath.Join(dir1, "credential")
+	require.NoError(t, os.WriteFile(credentialPath, []byte("test credential"), 0600))
+	expCredentialPath, err := filepath.EvalSymlinks(credentialPath)
+	require.NoError(t, err)
+
+	tmpDir := t.TempDir()
+	conf := EntitlementConf{
+		FSRead:  []string{tmpDir},
+		FSWrite: []string{tmpDir},
+	}
+
+	tcases := []struct {
+		name     string
+		targets  map[string]build.Options
+		expected EntitlementConf
+	}{
+		{
+			name: "Read",
+			targets: map[string]build.Options{
+				"secret": {
+					SecretSpecs: []*buildflags.Secret{{FilePath: credentialPath}},
+				},
+			},
+			expected: EntitlementConf{
+				FSRead: []string{expCredentialPath},
+			},
+		},
+		{
+			name: "Write",
+			targets: map[string]build.Options{
+				"cache": {
+					CacheTo: []client.CacheOptionsEntry{
+						{Type: "local", Attrs: map[string]string{"dest": dir2}},
+					},
+				},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expDir2},
+			},
+		},
+		{
+			name: "DifferentPaths",
+			targets: map[string]build.Options{
+				"secret": {
+					SecretSpecs: []*buildflags.Secret{{FilePath: credentialPath}},
+				},
+				"cache": {
+					CacheFrom: []client.CacheOptionsEntry{
+						{Type: "local", Attrs: map[string]string{"src": dir2}},
+					},
+				},
+			},
+			expected: EntitlementConf{
+				FSRead: slices.Sorted(slices.Values([]string{expCredentialPath, expDir2})),
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			// targets without missing paths must not mask the ones from other
+			// targets, regardless of map iteration order
+			for i := range 10 {
+				tc.targets[fmt.Sprintf("clean%d", i)] = build.Options{}
+			}
+			for name, opt := range tc.targets {
+				opt.Inputs = build.Inputs{ContextPath: tmpDir, DockerfilePath: filepath.Join(tmpDir, "Dockerfile")}
+				tc.targets[name] = opt
+			}
+			for range 50 {
+				expected, err := conf.Validate(tc.targets)
+				require.NoError(t, err)
+				require.Equal(t, tc.expected, expected)
+			}
+		})
+	}
+}
+
 func TestValidateEntitlementsInvalidLocalOutputMode(t *testing.T) {
 	_, err := EntitlementConf{}.Validate(map[string]build.Options{
 		"test": {
@@ -633,6 +720,102 @@ func TestGroupSamePaths(t *testing.T) {
 			require.Equal(t, tt.expected1, out1, "in1 should match expected1")
 			require.Equal(t, tt.expected2, out2, "in2 should match expected2")
 			require.Equal(t, tt.expectedC, common, "common should match expectedC")
+		})
+	}
+}
+
+func TestValidateEntitlementsPrefixSibling(t *testing.T) {
+	root := t.TempDir()
+	allowed := filepath.Join(root, "app")
+	sibling := filepath.Join(root, "app-secrets")
+	require.NoError(t, os.MkdirAll(filepath.Join(allowed, "sub"), 0755))
+	require.NoError(t, os.MkdirAll(sibling, 0755))
+
+	expSibling, err := filepath.EvalSymlinks(sibling)
+	require.NoError(t, err)
+
+	conf := EntitlementConf{
+		FSRead:  []string{allowed},
+		FSWrite: []string{allowed},
+	}
+
+	tcases := []struct {
+		name     string
+		opt      build.Options
+		expected EntitlementConf
+	}{
+		{
+			name: "ReadSibling",
+			opt: build.Options{
+				Inputs: build.Inputs{ContextPath: sibling, DockerfilePath: filepath.Join(sibling, "Dockerfile")},
+			},
+			expected: EntitlementConf{
+				FSRead: []string{expSibling},
+			},
+		},
+		{
+			name: "WriteSibling",
+			opt: build.Options{
+				Inputs:                     build.Inputs{ContextPath: allowed, DockerfilePath: filepath.Join(allowed, "Dockerfile")},
+				ExportsLocalPathsTemporary: []string{sibling},
+			},
+			expected: EntitlementConf{
+				FSWrite: []string{expSibling},
+			},
+		},
+		{
+			name: "ReadWriteSubdir",
+			opt: build.Options{
+				Inputs:                     build.Inputs{ContextPath: filepath.Join(allowed, "sub"), DockerfilePath: filepath.Join(allowed, "sub", "Dockerfile")},
+				ExportsLocalPathsTemporary: []string{filepath.Join(allowed, "sub")},
+			},
+		},
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.name, func(t *testing.T) {
+			expected, err := conf.Validate(map[string]build.Options{"test": tc.opt})
+			require.NoError(t, err)
+			require.Equal(t, tc.expected, expected)
+		})
+	}
+}
+
+func TestIsParentOrEqualPath(t *testing.T) {
+	sep := string(filepath.Separator)
+	root := sep
+	if runtime.GOOS == "windows" {
+		root = `C:\`
+	}
+	parent := filepath.Join(root, "a", "b")
+
+	tcases := []struct {
+		p      string
+		parent string
+		ok     bool
+	}{
+		{p: parent, parent: parent, ok: true},
+		{p: filepath.Join(parent, "c"), parent: parent, ok: true},
+		{p: filepath.Join(parent, "c", "d"), parent: parent, ok: true},
+		{p: filepath.Join(parent, "c"), parent: parent + sep, ok: true},
+		{p: parent + "c", parent: parent, ok: false},
+		{p: parent + "-c", parent: parent, ok: false},
+		{p: parent + ".bak", parent: parent, ok: false},
+		{p: filepath.Join(root, "a"), parent: parent, ok: false},
+		{p: filepath.Join(root, "a", "bc", "d"), parent: parent, ok: false},
+		{p: parent, parent: root, ok: true},
+	}
+	if runtime.GOOS == "windows" {
+		tcases = append(tcases, struct {
+			p      string
+			parent string
+			ok     bool
+		}{p: `D:\a`, parent: `C:\`, ok: false})
+	}
+
+	for _, tc := range tcases {
+		t.Run(tc.p+"_"+tc.parent, func(t *testing.T) {
+			require.Equal(t, tc.ok, isParentOrEqualPath(tc.p, tc.parent))
 		})
 	}
 }
