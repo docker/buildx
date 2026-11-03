@@ -113,17 +113,30 @@ func ParseEntitlements(in []string) (EntitlementConf, error) {
 
 func (c EntitlementConf) Validate(m map[string]build.Options) (EntitlementConf, error) {
 	var expected EntitlementConf
+	rwPaths := map[string]struct{}{}
+	roPaths := map[string]struct{}{}
 
 	for _, v := range m {
-		if err := c.check(v, &expected); err != nil {
+		if err := c.check(v, &expected, roPaths, rwPaths); err != nil {
 			return EntitlementConf{}, err
 		}
+	}
+
+	var err error
+	expected.FSRead, err = findMissingPaths(c.FSRead, roPaths)
+	if err != nil {
+		return EntitlementConf{}, err
+	}
+
+	expected.FSWrite, err = findMissingPaths(c.FSWrite, rwPaths)
+	if err != nil {
+		return EntitlementConf{}, err
 	}
 
 	return expected, nil
 }
 
-func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) error {
+func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf, roPaths, rwPaths map[string]struct{}) error {
 	for _, e := range bo.Allow {
 		k, rest, _ := strings.Cut(e, "=")
 		switch k {
@@ -158,9 +171,6 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 			}
 		}
 	}
-
-	rwPaths := map[string]struct{}{}
-	roPaths := map[string]struct{}{}
 
 	localPaths, err := collectLocalPaths(bo.Inputs)
 	if err != nil {
@@ -218,16 +228,6 @@ func (c EntitlementConf) check(bo build.Options, expected *EntitlementConf) erro
 				expected.SSH = true
 			}
 		}
-	}
-
-	expected.FSRead, err = findMissingPaths(c.FSRead, roPaths)
-	if err != nil {
-		return err
-	}
-
-	expected.FSWrite, err = findMissingPaths(c.FSWrite, rwPaths)
-	if err != nil {
-		return err
 	}
 
 	return nil
@@ -412,10 +412,13 @@ func isParentOrEqualPath(p, parent string) bool {
 	if p == parent || parent == "/" {
 		return true
 	}
-	if strings.HasPrefix(p, filepath.Clean(parent+string(filepath.Separator))) {
-		return true
+	// keep the trailing separator so that sibling paths sharing a textual
+	// prefix (e.g. /a/b-c for parent /a/b) are not treated as descendants.
+	// Roots like C:\ already end with a separator.
+	if !strings.HasSuffix(parent, string(filepath.Separator)) {
+		parent += string(filepath.Separator)
 	}
-	return false
+	return strings.HasPrefix(p, parent)
 }
 
 func findMissingPaths(set []string, paths map[string]struct{}) ([]string, error) {
