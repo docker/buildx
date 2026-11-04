@@ -5,7 +5,7 @@ ARG ALPINE_VERSION=3.23
 ARG XX_VERSION=1.10.0
 
 ARG GOLANGCI_LINT_VERSION=v2.14.0
-ARG GOLANGCI_FROM_SOURCE=true
+ARG GOLANGCI_FROM_SOURCE=false
 ARG GOPLS_VERSION=v0.50.0
 # GOPLS_ANALYZERS defines gopls analyzers to be run. disabled by default: deprecated simplifyrange unusedfunc unusedvariable
 ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs maprange modernize nonewvars noresultvalues simplifycompositelit simplifyslice unusedparams yield"
@@ -32,7 +32,7 @@ ENV GOFLAGS="-buildvcs=false"
 ARG GOLANGCI_LINT_VERSION
 ARG GOLANGCI_FROM_SOURCE
 COPY --link --from=golangci-binary / /usr/bin/
-RUN [ "${GOLANGCI_FROM_SOURCE}" = "true" ] && exit 0; wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s ${GOLANGCI_LINT_VERSION}
+RUN [ "${GOLANGCI_FROM_SOURCE}" = "true" ] && exit 0; wget -O- -nv https://raw.githubusercontent.com/golangci/golangci-lint/${GOLANGCI_LINT_VERSION}/install.sh | sh -s ${GOLANGCI_LINT_VERSION}
 COPY --link --from=xx / /
 WORKDIR /go/src/github.com/docker/buildx
 ARG TARGETPLATFORM
