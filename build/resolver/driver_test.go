@@ -2,11 +2,13 @@ package resolver
 
 import (
 	"context"
+	stderrors "errors"
 	"sort"
 	"testing"
 
 	"github.com/containerd/platforms"
 	"github.com/docker/buildx/builder"
+	"github.com/docker/buildx/store"
 	"github.com/docker/buildx/util/platformutil"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/stretchr/testify/require"
@@ -407,4 +409,88 @@ func makeTestResolver(nodes map[string][]ocispecs.Platform) *nodeResolver {
 		return ns[i].Builder < ns[j].Builder
 	})
 	return newDriverResolver(ns)
+}
+
+// A node configured for a platform that fails to initialize must not hand the
+// build to an unrelated node. The fallback is another active node configured
+// for the same platform.
+func TestSelectNodeUnavailableManualPlatformFallsBackToSameManualPlatform(t *testing.T) {
+	amd64 := platforms.MustParse("linux/amd64")
+	arm64 := platforms.MustParse("linux/arm64")
+	r := newDriverResolver([]builder.Node{
+		{
+			Node:      store.Node{Name: "remote0", Platforms: []ocispecs.Platform{amd64}},
+			Builder:   "remote0",
+			Platforms: []ocispecs.Platform{amd64},
+			Err:       stderrors.New("node is down"),
+		},
+		{
+			Node:      store.Node{Name: "remote1", Platforms: []ocispecs.Platform{amd64}},
+			Builder:   "remote1",
+			Platforms: []ocispecs.Platform{amd64, arm64},
+		},
+		{
+			Node:      store.Node{Name: "remote2"},
+			Builder:   "remote2",
+			Platforms: []ocispecs.Platform{arm64},
+		},
+	})
+
+	res, perfect, err := r.resolve(t.Context(), []ocispecs.Platform{amd64}, nil, platforms.OnlyStrict, nil)
+	require.NoError(t, err)
+	require.True(t, perfect)
+	require.Len(t, res, 1)
+	require.Equal(t, "remote1", res[0].Node().Builder)
+}
+
+// Worker discovery can report a platform the node is not configured for (for
+// example through emulation). That is not a valid fallback when the requested
+// platform is explicitly configured on an unavailable node.
+func TestSelectNodeUnavailableManualPlatformDoesNotUseDetectedPlatform(t *testing.T) {
+	amd64 := platforms.MustParse("linux/amd64")
+	r := newDriverResolver([]builder.Node{
+		{
+			Node:      store.Node{Name: "remote0", Platforms: []ocispecs.Platform{amd64}},
+			Builder:   "remote0",
+			Platforms: []ocispecs.Platform{amd64},
+			Err:       stderrors.New("node is down"),
+		},
+		{
+			Node:      store.Node{Name: "remote1"},
+			Builder:   "remote1",
+			Platforms: []ocispecs.Platform{amd64},
+		},
+	})
+
+	_, _, err := r.resolve(t.Context(), []ocispecs.Platform{amd64}, nil, platforms.Only, nil)
+	require.ErrorContains(t, err, "no active node found for platform")
+	require.ErrorContains(t, err, "remote0")
+}
+
+// Without --platform the default comes from the first node. If that node is
+// unavailable, its configured platform still decides the default instead of
+// silently using the next healthy node.
+func TestSelectNodeNoPlatformUsesConfiguredPlatformOfUnavailableFirstNode(t *testing.T) {
+	amd64 := platforms.MustParse("linux/amd64")
+	arm64 := platforms.MustParse("linux/arm64")
+	r := newDriverResolver([]builder.Node{
+		{
+			Node:      store.Node{Name: "remote0", Platforms: []ocispecs.Platform{amd64}},
+			Builder:   "remote0",
+			Platforms: []ocispecs.Platform{amd64},
+			Err:       stderrors.New("node is down"),
+		},
+		{
+			Node:      store.Node{Name: "remote1", Platforms: []ocispecs.Platform{amd64}},
+			Builder:   "remote1",
+			Platforms: []ocispecs.Platform{amd64, arm64},
+		},
+	})
+
+	res, perfect, err := r.resolve(t.Context(), nil, nil, platforms.OnlyStrict, nil)
+	require.NoError(t, err)
+	require.True(t, perfect)
+	require.Len(t, res, 1)
+	require.Equal(t, "remote1", res[0].Node().Builder)
+	require.Equal(t, []ocispecs.Platform{amd64}, res[0].Platforms())
 }
