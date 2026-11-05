@@ -1,13 +1,44 @@
 package bundle
 
 import (
+	"bufio"
 	"context"
+	"io"
 
 	"github.com/containerd/containerd/v2/core/content"
 	cerrdefs "github.com/containerd/errdefs"
 	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 )
+
+// readChunkSize is the buffer size for blob reads. Each ReadAt on a remote
+// content store starts a separate Content/Read RPC.
+const readChunkSize = 4 * 1024 * 1024 // 4 MiB
+
+func newChunkedReader(ra content.ReaderAt) io.Reader {
+	return bufio.NewReaderSize(io.NewSectionReader(ra, 0, ra.Size()), int(min(ra.Size(), readChunkSize)))
+}
+
+// chunkedProvider exposes buffered readers through content.NewReader's Reader hook.
+type chunkedProvider struct {
+	content.InfoReaderProvider
+}
+
+func (p *chunkedProvider) ReaderAt(ctx context.Context, desc ocispecs.Descriptor) (content.ReaderAt, error) {
+	ra, err := p.InfoReaderProvider.ReaderAt(ctx, desc)
+	if err != nil {
+		return nil, err
+	}
+	return &chunkedReaderAt{ReaderAt: ra}, nil
+}
+
+type chunkedReaderAt struct {
+	content.ReaderAt
+}
+
+func (r *chunkedReaderAt) Reader() io.Reader {
+	return newChunkedReader(r.ReaderAt)
+}
 
 type nsFallbackStore struct {
 	main content.Store
