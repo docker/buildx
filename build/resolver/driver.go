@@ -127,10 +127,15 @@ func (r *nodeResolver) Resolve(ctx context.Context, optPlatforms map[string][]oc
 		nodes[k] = node
 	}
 	if len(nodes) != len(optPlatforms) {
-		// if we didn't get a perfect match, we need to boot all drivers
-		allIndexes := make([]int, len(r.nodes))
-		for i := range allIndexes {
-			allIndexes[i] = i
+		// if we didn't get a perfect match, we need to boot all available
+		// drivers. A node that failed to initialize has nothing to discover,
+		// but it stays in r.nodes so platform resolution can still see its
+		// configured platforms.
+		allIndexes := make([]int, 0, len(r.nodes))
+		for i := range r.nodes {
+			if r.available(i) {
+				allIndexes = append(allIndexes, i)
+			}
 		}
 
 		clients, err := r.boot(ctx, allIndexes, pw)
@@ -138,11 +143,12 @@ func (r *nodeResolver) Resolve(ctx context.Context, optPlatforms map[string][]oc
 			return nil, err
 		}
 		eg, egCtx := errgroup.WithContext(ctx)
-		workers := make([][]ocispecs.Platform, len(clients))
+		workers := make(map[int][]ocispecs.Platform, len(clients))
 		for i, c := range clients {
 			if c == nil {
 				continue
 			}
+			nodeIdx := allIndexes[i]
 			eg.Go(func() error {
 				ww, err := c.ListWorkers(egCtx)
 				if err != nil {
@@ -152,7 +158,7 @@ func (r *nodeResolver) Resolve(ctx context.Context, optPlatforms map[string][]oc
 				for _, w := range ww {
 					ps = append(ps, w.Platforms...)
 				}
-				workers[i] = platformutil.Dedupe(ps)
+				workers[nodeIdx] = platformutil.Dedupe(ps)
 				return nil
 			})
 		}
@@ -197,12 +203,25 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []ocispecs.Platform, pw p
 		return nil, true, nil
 	}
 
+	// With no requested platform the first node defines the default. If that
+	// node is unavailable, its configured platform still defines the default:
+	// falling through to the next healthy node would silently build for a
+	// different platform than the builder was configured for.
+	if len(ps) == 0 && !r.available(0) {
+		if mp := r.manualPlatforms(0); len(mp) > 0 {
+			ps = mp[:1]
+		}
+	}
+
 	perfect := true
 	nodeIdxs := make([]int, 0)
 	for _, p := range ps {
-		idx := r.get(p, matcher, additional)
+		idx := r.getForPlatform(p, matcher, additional)
 		if idx == -1 {
-			idx = 0
+			if node, ok := r.unavailableManualMatch(p, matcher); ok {
+				return nil, false, errors.Errorf("no active node found for platform %q: node %q with the same configured platform is unavailable: %v", platforms.Format(p), node.Name, node.Err)
+			}
+			idx = r.firstAvailable()
 			perfect = false
 		}
 		nodeIdxs = append(nodeIdxs, idx)
@@ -235,6 +254,91 @@ func (r *nodeResolver) resolve(ctx context.Context, ps []ocispecs.Platform, pw p
 	return nodes, perfect, nil
 }
 
+// available reports whether the node initialized successfully. A node that
+// failed to initialize keeps its configured platforms, which platform
+// resolution still has to account for.
+func (r *nodeResolver) available(i int) bool {
+	return r.nodes[i].Err == nil
+}
+
+func (r *nodeResolver) firstAvailable() int {
+	for i := range r.nodes {
+		if r.available(i) {
+			return i
+		}
+	}
+	return 0
+}
+
+// manualPlatforms returns the platforms configured on the node, without the
+// platforms discovered from its workers.
+func (r *nodeResolver) manualPlatforms(i int) []ocispecs.Platform {
+	return r.nodes[i].Node.Platforms
+}
+
+// getForPlatform resolves one requested platform. A platform that is
+// explicitly configured on a node is matched only against configured
+// platforms: once a node is configured for a platform, an unavailable node
+// must not silently hand the build to a different node that merely reports
+// that platform through worker discovery.
+func (r *nodeResolver) getForPlatform(p ocispecs.Platform, matcher matchMaker, additionalPlatforms func(int, builder.Node) []ocispecs.Platform) int {
+	if r.isManualPlatform(p, matcher) {
+		return r.getManual(p, matcher)
+	}
+	return r.get(p, matcher, additionalPlatforms)
+}
+
+func (r *nodeResolver) isManualPlatform(p ocispecs.Platform, matcher matchMaker) bool {
+	for i := range r.nodes {
+		for _, p2 := range r.manualPlatforms(i) {
+			if matcher(p2).Match(p) {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+func (r *nodeResolver) getManual(p ocispecs.Platform, matcher matchMaker) int {
+	best := -1
+	bestPlatform := ocispecs.Platform{}
+	for i := range r.nodes {
+		if !r.available(i) {
+			continue
+		}
+		for _, p2 := range r.manualPlatforms(i) {
+			m := matcher(p2)
+			if !m.Match(p) {
+				continue
+			}
+			if best == -1 {
+				best = i
+				bestPlatform = p2
+				continue
+			}
+			if matcher(p2).Less(p, bestPlatform) {
+				best = i
+				bestPlatform = p2
+			}
+		}
+	}
+	return best
+}
+
+func (r *nodeResolver) unavailableManualMatch(p ocispecs.Platform, matcher matchMaker) (builder.Node, bool) {
+	for i := range r.nodes {
+		if r.available(i) {
+			continue
+		}
+		for _, p2 := range r.manualPlatforms(i) {
+			if matcher(p2).Match(p) {
+				return r.nodes[i], true
+			}
+		}
+	}
+	return builder.Node{}, false
+}
+
 func (r *nodeResolver) get(p ocispecs.Platform, matcher matchMaker, additionalPlatforms func(int, builder.Node) []ocispecs.Platform) int {
 	if additionalPlatforms != nil {
 		// Preserve explicit matches when worker discovery adds overlapping platforms.
@@ -245,6 +349,9 @@ func (r *nodeResolver) get(p ocispecs.Platform, matcher matchMaker, additionalPl
 	best := -1
 	bestPlatform := ocispecs.Platform{}
 	for i, node := range r.nodes {
+		if !r.available(i) {
+			continue
+		}
 		platforms := node.Platforms
 		if additionalPlatforms != nil {
 			platforms = slices.Clone(platforms)
@@ -279,6 +386,9 @@ func (r *nodeResolver) boot(ctx context.Context, idxs []int, pw progress.Writer)
 	for i, idx := range idxs {
 		eg.Go(func() error {
 			c, err := r.clients.g.Do(ctx, fmt.Sprint(idx), func(ctx context.Context) (*client.Client, error) {
+				if err := r.nodes[idx].Err; err != nil {
+					return nil, err
+				}
 				if r.nodes[idx].Driver == nil {
 					return nil, nil
 				}
