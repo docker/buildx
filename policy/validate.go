@@ -135,17 +135,10 @@ func (p *Policy) IsPolicyError(err error) bool {
 }
 
 func (p *Policy) capabilities() *ast.Capabilities {
-	caps := &ast.Capabilities{
-		Builtins: builtins(),
+	return &ast.Capabilities{
+		Builtins: builtins(p.funcs),
 		Features: slices.Clone(ast.Features),
 	}
-	for _, f := range p.funcs {
-		caps.Builtins = append(caps.Builtins, &ast.Builtin{
-			Name: f.decl.Name,
-			Decl: f.decl.Decl,
-		})
-	}
-	return caps
 }
 
 func (p *Policy) regoBaseOpts() ([]func(*rego.Rego), func(), error) {

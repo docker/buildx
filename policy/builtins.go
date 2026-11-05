@@ -2,8 +2,8 @@ package policy
 
 import "github.com/open-policy-agent/opa/v1/ast"
 
-func builtins() []*ast.Builtin {
-	b := []*ast.Builtin{
+func builtins(funcs []fun) []*ast.Builtin {
+	defaultBuiltins := []*ast.Builtin{
 		ast.Equality,
 
 		// Assignment (":=")
@@ -200,6 +200,15 @@ func builtins() []*ast.Builtin {
 
 		// Internal implementation for template strings.
 		ast.InternalTemplateString,
+	}
+
+	b := make([]*ast.Builtin, 0, len(defaultBuiltins)+len(funcs))
+	b = append(b, defaultBuiltins...)
+	for _, f := range funcs {
+		b = append(b, &ast.Builtin{
+			Name: f.decl.Name,
+			Decl: f.decl.Decl,
+		})
 	}
 	return b
 }
