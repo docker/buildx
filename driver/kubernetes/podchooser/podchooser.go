@@ -1,13 +1,15 @@
 package podchooser
 
 import (
+	"cmp"
 	"context"
+	"crypto/md5" // #nosec G501 -- required for compatibility with existing sticky pod assignments
+	"encoding/binary"
 	"math/rand"
-	"sort"
+	"slices"
 
 	"github.com/docker/buildx/driver/kubernetes/kubeclient"
 	"github.com/pkg/errors"
-	"github.com/serialx/hashring"
 	"github.com/sirupsen/logrus"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
@@ -49,16 +51,7 @@ func (pc *StickyPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 	if err != nil {
 		return nil, err
 	}
-	var podNames []string
-	podMap := make(map[string]*corev1.Pod, len(pods))
-	for _, pod := range pods {
-		podNames = append(podNames, pod.Name)
-		podMap[pod.Name] = pod
-	}
-	ring := hashring.New(podNames)
-	chosen, ok := ring.GetNode(pc.Key)
-	if !ok {
-		// NOTREACHED
+	if len(pods) == 0 {
 		logrus.Errorf("no pod found for key %q", pc.Key)
 		rpc := &RandomPodChooser{
 			PodClient:   pc.PodClient,
@@ -67,7 +60,32 @@ func (pc *StickyPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 		}
 		return rpc.ChoosePod(ctx)
 	}
-	return podMap[chosen], nil
+	key := stickyHash(pc.Key)
+	var first, chosen *corev1.Pod
+	var firstHash, chosenHash [2]int64
+	for _, pod := range pods {
+		h := stickyHash(pod.Name + "-0")
+		if first == nil || slices.Compare(h[:], firstHash[:]) < 0 {
+			first, firstHash = pod, h
+		}
+		// Select the first ring position strictly after the key, wrapping to
+		// the smallest position if there is no successor.
+		if slices.Compare(key[:], h[:]) < 0 && (chosen == nil || slices.Compare(h[:], chosenHash[:]) < 0) {
+			chosen, chosenHash = pod, h
+		}
+	}
+	if chosen == nil {
+		chosen = first
+	}
+	return chosen, nil
+}
+
+// stickyHash preserves serialx/hashring's default ordering: an MD5 digest
+// interpreted as a pair of signed, little-endian integers. Each unweighted
+// pod occupies one ring position, hashing its name with the suffix "-0".
+func stickyHash(key string) [2]int64 {
+	h := md5.Sum([]byte(key)) // #nosec G401 -- used for consistent hashing, not security
+	return [2]int64{int64(binary.LittleEndian.Uint64(h[:8])), int64(binary.LittleEndian.Uint64(h[8:]))}
 }
 
 func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *appsv1.Deployment, stat *appsv1.StatefulSet) ([]*corev1.Pod, error) {
@@ -103,8 +121,8 @@ func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *app
 			runningPods = append(runningPods, pod)
 		}
 	}
-	sort.Slice(runningPods, func(i, j int) bool {
-		return runningPods[i].Name < runningPods[j].Name
+	slices.SortFunc(runningPods, func(a, b *corev1.Pod) int {
+		return cmp.Compare(a.Name, b.Name)
 	})
 	return runningPods, nil
 }
