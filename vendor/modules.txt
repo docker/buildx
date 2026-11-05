@@ -1,5 +1,5 @@
-# github.com/Azure/go-ansiterm v0.0.0-20250102033503-faa5f7b0171c
-## explicit; go 1.16
+# github.com/Azure/go-ansiterm v0.0.0-20261006220739-8c912ac31dd4
+## explicit; go 1.17
 github.com/Azure/go-ansiterm
 github.com/Azure/go-ansiterm/winterm
 # github.com/Masterminds/semver/v3 v3.4.0
