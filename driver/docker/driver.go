@@ -61,7 +61,13 @@ func (d *Driver) Rm(ctx context.Context, force, rmVolume, rmDaemon bool) error {
 }
 
 func (d *Driver) Dial(ctx context.Context) (net.Conn, error) {
-	return d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", d.DialMeta)
+	c, err := d.DockerAPI.DialHijack(ctx, "/grpc", "h2c", d.DialMeta)
+	if err != nil {
+		if ping, pingErr := d.DockerAPI.Ping(ctx, dockerclient.PingOptions{}); pingErr == nil && ping.OSType == "windows" {
+			return nil, errors.Wrap(err, "connecting to BuildKit in the Windows Docker daemon; ensure the daemon supports BuildKit and has the containerd image store and BuildKit enabled, or use a remote Windows BuildKit builder")
+		}
+	}
+	return c, err
 }
 
 func (d *Driver) Client(ctx context.Context, opts ...client.ClientOpt) (*client.Client, error) {
