@@ -425,17 +425,18 @@ jobs:
     if: ${{ github.ref == 'refs/heads/master' && github.repository == 'docker/buildx' }}
     permissions:
       contents: read # same as global permission
+      id-token: write # for logging in to Docker Hub with GitHub OIDC
       security-events: write # required to write sarif report
     needs:
       - bin-image
     steps:
       -
-        # FIXME: switch to OIDC once Scout supports it
         name: Login to DockerHub
         uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        env:
+          DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
-          username: ${{ vars.DOCKERPUBLICBOT_USERNAME }}
-          password: ${{ secrets.DOCKERPUBLICBOT_READ_PAT }}
+          username: docker
       -
         name: Scout
         id: scout
