@@ -33,7 +33,7 @@ func TestMain(m *testing.M) {
 			os.Exit(1)
 		}
 		dir := os.Getenv("BUILDX_TEST_CREDENTIAL_HELPER")
-		calls, err := os.OpenFile(filepath.Join(dir, "calls"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600)
+		calls, err := os.OpenFile(filepath.Join(dir, "calls"), os.O_CREATE|os.O_APPEND|os.O_WRONLY, 0o600) // #nosec G703 -- the test sets the helper state directory
 		if err != nil {
 			os.Exit(1)
 		}
@@ -42,7 +42,7 @@ func TestMain(m *testing.M) {
 		if err != nil || closeErr != nil {
 			os.Exit(1)
 		}
-		response, err := os.ReadFile(filepath.Join(dir, "response"))
+		response, err := os.ReadFile(filepath.Join(dir, "response")) // #nosec G703 -- the test sets the helper state directory
 		if err != nil {
 			fmt.Fprintln(os.Stdout, "test credential helper unavailable")
 			os.Exit(1)
