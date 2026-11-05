@@ -35,6 +35,9 @@ env:
 jobs:
   test-integration:
     runs-on: ubuntu-26.04
+    permissions:
+      contents: read
+      id-token: write # for Codecov authentication
     env:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
       TEST_IMAGE_BUILD: "0"
@@ -154,7 +157,7 @@ jobs:
         with:
           directory: ./bin/testreports
           flags: integration
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
       -
         name: Upload test results to Codecov
@@ -164,7 +167,7 @@ jobs:
           report_type: test_results
           directory: ./bin/testreports
           flags: integration
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
       -
         name: Generate annotations
@@ -182,6 +185,9 @@ jobs:
 
   test-unit:
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write # for Codecov authentication
     strategy:
       fail-fast: false
       matrix:
@@ -244,7 +250,7 @@ jobs:
           directory: ${{ env.TESTREPORTS_DIR }}
           env_vars: RUNNER_OS
           flags: unit
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
       -
         name: Upload test results to Codecov
@@ -255,7 +261,7 @@ jobs:
           directory: ${{ env.TESTREPORTS_DIR }}
           env_vars: RUNNER_OS
           flags: unit
-          token: ${{ secrets.CODECOV_TOKEN }}
+          use_oidc: true
           disable_file_fixes: true # needed for Go language https://docs.codecov.com/docs/fixing-reports
       -
         name: Generate annotations
