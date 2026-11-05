@@ -1,13 +1,11 @@
-//
-// Copyright (c) 2025 The go-yaml Project Contributors
+// Copyright 2025 The go-yaml Project Contributors
 // SPDX-License-Identifier: Apache-2.0
-//
 
 // Package yaml implements YAML 1.1/1.2 encoding and decoding for Go programs.
 //
 // # Quick Start
 //
-// For simple encoding and decoding, use [Unmarshal] and [Marshal]:
+// For new code, use [Load] and [Dump]:
 //
 //	type Config struct {
 //	    Name    string `yaml:"name"`
@@ -16,12 +14,12 @@
 //
 //	// Decode YAML to Go struct
 //	var config Config
-//	err := yaml.Unmarshal(yamlData, &config)
+//	err := yaml.Load(yamlData, &config)
 //
 //	// Encode Go struct to YAML
-//	data, err := yaml.Marshal(&config)
+//	data, err := yaml.Dump(&config)
 //
-// For encoding/decoding with options, use [Load] and [Dump]:
+// Add options to configure loading and dumping:
 //
 //	// Decode with strict field checking
 //	err := yaml.Load(data, &config, yaml.WithKnownFields())
@@ -74,27 +72,37 @@
 //	    yaml.WithCompactSeqIndent(),     // Compact sequences (defaults to true)
 //	    yaml.WithLineWidth(80),          // Line wrapping width
 //	    yaml.WithUnicode(false),         // Escape non-ASCII (override default true)
-//	    yaml.WithKnownFields(),          // Strict field checking (defaults to true)
-//	    yaml.WithUniqueKeys(),           // Prevent duplicate keys (defaults to true)
-//	    yaml.WithSingleDocument(),       // Single document mode
+//	)
+//
+// Loading options configure construction rather than output formatting:
+//
+//	yaml.NewLoader(r,
+//	    yaml.WithKnownFields(), // Reject unknown fields (off by default)
+//	    yaml.WithUniqueKeys(),  // Reject duplicate keys (on by default)
 //	)
 //
 // Or use version-specific option presets for consistent formatting:
 //
-//	yaml.NewDumper(w, yaml.V3)
+//	yaml.NewDumper(w, yaml.WithV3Defaults())
 //
 // Options can be combined and later options override earlier ones:
 //
 //	// Start with v3 defaults, then override indent
 //	yaml.NewDumper(w,
-//	    yaml.V3,
-//	    yaml.WithIndent(4),
+//	    yaml.WithV3Defaults(),
+//	    yaml.WithIndent(2),
 //	)
 //
 // Load options from YAML configuration files:
 //
 //	opts, err := yaml.OptsYAML(configYAML)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 //	dumper, err := yaml.NewDumper(w, opts)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
 //
 // # YAML Compatibility
 //
@@ -110,6 +118,8 @@
 //
 // [NewLoader] and [NewDumper] use v4 defaults (2-space indentation, compact
 // sequences). The older [Marshal] and [Unmarshal] functions use v3 defaults
-// for backward compatibility. Use the options system to select different
-// version defaults if needed.
+// for backward compatibility; Marshal also disables line wrapping.
+// [NewEncoder] uses v3 output settings with v4 error formatting.
+// Classic APIs remain supported.
+// Use the options system to select different version defaults if needed.
 package yaml
