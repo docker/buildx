@@ -15,6 +15,9 @@ type JaegerData struct {
 // JaegerData return Jaeger data compatible with ui import feature.
 // https://github.com/jaegertracing/jaeger-ui/issues/381#issuecomment-494150826
 func (s Spans) JaegerData() JaegerData {
+	if len(s) == 0 {
+		return JaegerData{}
+	}
 	roSpans := s.ReadOnlySpans()
 
 	// fetch default service.name from default resource for backup

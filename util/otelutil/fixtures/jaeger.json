@@ -7802,13 +7802,7 @@
           "traceID": "0555ce1903feb85770d102846273073b",
           "spanID": "d30eea87f2f0241d",
           "operationName": "bake",
-          "references": [
-            {
-              "refType": "CHILD_OF",
-              "traceID": "00000000000000000000000000000000",
-              "spanID": "0000000000000000"
-            }
-          ],
+          "references": null,
           "startTime": 1705071459717700,
           "duration": 89626460,
           "tags": [
