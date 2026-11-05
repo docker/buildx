@@ -128,6 +128,36 @@ $ docker buildx bake --print webapp
 }
 ```
 
+## Remote Bake files
+
+A `--file` value that is itself a remote reference is read from that reference
+instead of being treated as a filename inside the positional context URL (or
+as a local path). The remote reference can be a Git reference or an HTTP(S)
+URL, following the same syntax as remote build contexts:
+
+```console
+$ docker buildx bake --file https://github.com/user/repo.git#main:docker-bake.hcl
+```
+
+For Git references, the part after `#` is `ref:path` where `path` points to
+the Bake file inside the repository. Multiple files can be combined, including
+files from different repositories and references, and local files can be mixed
+in freely:
+
+```console
+$ docker buildx bake --print \
+    --file docker-bake.hcl \
+    --file https://github.com/user/repo.git#v1.2.3:docker-bake.hcl \
+    --file https://github.com/user/repo.git#v1.2.3:profiles/production.hcl
+```
+
+When several files are passed, definition merge order follows the `--file`
+order on the command line: later files override earlier ones, matching the
+merge behavior of local files. Private repositories are authenticated with
+the `BUILDX_BAKE_GIT_AUTH_TOKEN` and `BUILDX_BAKE_GIT_AUTH_HEADER`
+environment variables (host-matched), or with an SSH agent via
+`BUILDX_BAKE_GIT_SSH`.
+
 ## Syntax
 
 The Bake file supports the following property types:
