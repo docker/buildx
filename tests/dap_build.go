@@ -1,6 +1,7 @@
 package tests
 
 import (
+	"bytes"
 	"encoding/json"
 	"os"
 	"os/exec"
@@ -28,6 +29,8 @@ func dapBuildCmd(t *testing.T, sb integration.Sandbox, opts ...cmdOpt) (*daptest
 	opts = append([]cmdOpt{withArgs("dap", "build")}, opts...)
 
 	cmd := buildxCmd(sb, opts...)
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
 	pr, err := cmd.StdinPipe()
 	require.NoError(t, err)
 
@@ -69,6 +72,14 @@ func dapBuildCmd(t *testing.T, sb integration.Sandbox, opts ...cmdOpt) (*daptest
 
 		return cmd.Wait()
 	}
+	t.Cleanup(func() {
+		if cmd.ProcessState == nil {
+			_ = done(true)
+		}
+		if t.Failed() {
+			t.Logf("dap build stderr:\n%s", stderr.String())
+		}
+	})
 	return client, done, nil
 }
 
@@ -1154,9 +1165,10 @@ func pollInterruptEvents(client *daptest.Client) <-chan dap.EventMessage {
 func waitForInterrupt[E dap.EventMessage](t *testing.T, interruptCh <-chan dap.EventMessage) (e E) {
 	t.Helper()
 
+	// Reaching a breakpoint can require pulling and unpacking build inputs.
 	select {
-	case <-time.After(10 * time.Second):
-		require.Fail(t, "timeout reached")
+	case <-time.After(time.Minute):
+		require.Fail(t, "timed out waiting for DAP stop or termination event")
 	case em := <-interruptCh:
 		require.IsType(t, e, em)
 		e, _ = em.(E)
