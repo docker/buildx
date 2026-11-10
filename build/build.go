@@ -890,6 +890,27 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 						// Capture the error from this build function.
 						defer catchFrontendError(&retErr, &frontendErr)
 
+						// A call method replies with the metadata of the subrequest
+						// instead of a build result, so there would be nothing to link
+						// into the targets using this one as a named context. Solve the
+						// build request on its own in that case and register its result
+						// for them. It is never evaluated, so this only resolves the
+						// definition and does not build anything.
+						var linkRes *gateway.Result
+						if opt.CallFunc != nil && len(linkedTargets.children[rKey]) > 0 {
+							linkReq := req
+							linkReq.FrontendOpt = maps.Clone(req.FrontendOpt)
+							// checks are reported by the call method below, skip them
+							// here so that this request is not rejected by a Dockerfile
+							// that asks for check violations to be errors
+							linkReq.FrontendOpt["build-arg:BUILDKIT_DOCKERFILE_CHECK"] = "skip=all;error=false"
+							res, err := solve(solveCtx, c, linkReq)
+							if err != nil {
+								return nil, err
+							}
+							linkRes = res
+						}
+
 						if opt.CallFunc != nil {
 							if _, ok := req.FrontendOpt["frontend.caps"]; !ok {
 								req.FrontendOpt["frontend.caps"] = "moby.buildkit.frontend.subrequests+forward"
@@ -918,7 +939,14 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 							}
 						}
 
-						if err := linkedTargets.run(ctx, rKey, res, linkedTargetHooks{
+						// register the separately solved result for the targets linking to
+						// this one when the call method did not produce a linkable one
+						linkedRes := any(res)
+						if linkRes != nil {
+							linkedRes = linkRes
+						}
+
+						if err := linkedTargets.run(ctx, rKey, linkedRes, linkedTargetHooks{
 							preEvaluate: preEvaluate,
 							evaluate: func() error {
 								// invoke custom evaluate handler if it is present
