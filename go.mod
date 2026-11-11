@@ -28,10 +28,10 @@ require (
 	github.com/hashicorp/go-cty-funcs v0.0.0-20250818135842-6aab67130928
 	github.com/hashicorp/hcl/v2 v2.24.0
 	github.com/in-toto/in-toto-golang v0.11.0
-	github.com/moby/buildkit v0.35.0-rc1
+	github.com/moby/buildkit v0.35.0
 	github.com/moby/moby/api v1.56.0
 	github.com/moby/moby/client v0.6.0
-	github.com/moby/policy-helpers v0.0.0-20261022152518-485a1bec29f6
+	github.com/moby/policy-helpers v0.0.0-20261111163703-6acab594b423
 	github.com/moby/sys/atomicwriter v0.1.0
 	github.com/moby/sys/mountinfo v0.7.3
 	github.com/morikuni/aec v1.1.0
@@ -63,7 +63,7 @@ require (
 	golang.org/x/mod v0.42.0
 	golang.org/x/net v0.62.0
 	golang.org/x/sync v0.24.0
-	golang.org/x/sys v0.49.0
+	golang.org/x/sys v0.50.0
 	golang.org/x/term v0.47.0
 	golang.org/x/text v0.43.0
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20261012220534-4341edf3f941

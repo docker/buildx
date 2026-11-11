@@ -661,7 +661,7 @@ github.com/mattn/go-shellwords
 # github.com/mitchellh/go-wordwrap v1.0.1
 ## explicit; go 1.14
 github.com/mitchellh/go-wordwrap
-# github.com/moby/buildkit v0.35.0-rc1
+# github.com/moby/buildkit v0.35.0
 ## explicit; go 1.26.8
 github.com/moby/buildkit/api/services/control
 github.com/moby/buildkit/api/types
@@ -809,7 +809,7 @@ github.com/moby/moby/client/pkg/versions
 ## explicit; go 1.19
 github.com/moby/patternmatcher
 github.com/moby/patternmatcher/ignorefile
-# github.com/moby/policy-helpers v0.0.0-20261022152518-485a1bec29f6
+# github.com/moby/policy-helpers v0.0.0-20261111163703-6acab594b423
 ## explicit; go 1.25.8
 github.com/moby/policy-helpers
 github.com/moby/policy-helpers/image
@@ -1365,7 +1365,7 @@ golang.org/x/oauth2/internal
 golang.org/x/sync/errgroup
 golang.org/x/sync/semaphore
 golang.org/x/sync/singleflight
-# golang.org/x/sys v0.49.0
+# golang.org/x/sys v0.50.0
 ## explicit; go 1.26.0
 golang.org/x/sys/cpu
 golang.org/x/sys/plan9
