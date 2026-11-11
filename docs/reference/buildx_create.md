@@ -128,8 +128,34 @@ For more information about build drivers, see [here](https://docs.docker.com/bui
 
 Uses the builder that is built into the Docker daemon. With this driver,
 the [`--load`](buildx_build.md#load) flag is implied by default on
-`buildx build`. However, building multi-platform images or exporting cache is
-not currently supported.
+`buildx build`. Building multi-platform images and exporting cache require the
+containerd image store.
+
+Docker contexts already have a builder for their daemon. Use that builder
+directly instead of running `buildx create --driver docker`, which cannot create
+additional instances of the daemon's built-in builder.
+
+For Windows containers, the Windows daemon must support BuildKit and have both
+BuildKit and the containerd image store enabled. On Docker Desktop versions
+supporting this configuration, switch to Windows containers and enable the
+containerd image store. To explicitly use the Windows daemon's builder:
+
+```console
+$ docker --context desktop-windows buildx inspect desktop-windows
+$ docker --context desktop-windows buildx build --builder desktop-windows -t my-windows-image .
+```
+
+Replace `desktop-windows` with your Docker context name when using another
+Windows daemon. The explicit `--builder` selects the context's builder even if
+you previously selected a custom builder. Check that `inspect` reports the
+`docker` driver, a running node, and a `windows/amd64` platform (possibly with
+an OS version). The Dockerfile must use a Windows base image compatible with
+the daemon's host and isolation mode.
+
+If connecting to embedded BuildKit fails, check the underlying connection error
+and the daemon configuration. Buildx cannot enable BuildKit in the daemon. As an
+alternative, connect to a separately managed Windows BuildKit daemon with the
+[`remote` driver](https://docs.docker.com/build/builders/drivers/remote/).
 
 #### `cloud` driver
 
