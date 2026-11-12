@@ -307,7 +307,7 @@ jobs:
           sarif_file: ${{ env.DESTDIR }}/govulncheck.out
 
   binaries:
-    uses: docker/github-builder/.github/workflows/bake.yml@cbc9d42f8c89a55623392aadd03600965b80e963 # v1.18.1
+    uses: docker/github-builder/.github/workflows/bake.yml@a31d2311da4d55e21b978c1c52bab82ba97d51ee # v1.19.0
     permissions:
       contents: read # same as global permission
       id-token: write # for signing attestation(s) with GitHub OIDC Token
@@ -389,7 +389,7 @@ jobs:
 
   bin-image:
     if: ${{ github.repository == 'docker/buildx' }}
-    uses: docker/github-builder/.github/workflows/bake.yml@cbc9d42f8c89a55623392aadd03600965b80e963 # v1.18.1
+    uses: docker/github-builder/.github/workflows/bake.yml@a31d2311da4d55e21b978c1c52bab82ba97d51ee # v1.19.0
     needs:
       - bin-image-prepare
       - test-integration
@@ -432,7 +432,7 @@ jobs:
     steps:
       -
         name: Login to DockerHub
-        uses: docker/login-action@81c6f93d4bc991e510b342a00b419b3bb4efc5c6 # v4.7.0
+        uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
         env:
           DOCKERHUB_OIDC_CONNECTIONID: ${{ vars.DOCKERHUB_OIDC_CONNECTIONID }}
         with:
