@@ -74,7 +74,7 @@ jobs:
           VENDOR_MODULE: github.com/docker/buildx@${{ env.RELEASE_NAME }}
       -
         name: Create PR on docs repo
-        uses: peter-evans/create-pull-request@15733dbdfeedb4f7fdb73d13c6f5ac83b710fab8  # v8.1.2
+        uses: peter-evans/create-pull-request@3ffccacd46053766916f087ce41d627c0b8cf2d1  # v8.1.3
         with:
           token: ${{ secrets.GHPAT_DOCS_DISPATCH }}
           push-to-fork: docker-tools-robot/docker.github.io
