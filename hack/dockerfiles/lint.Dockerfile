@@ -6,9 +6,7 @@ ARG XX_VERSION=1.10.0
 
 ARG GOLANGCI_LINT_VERSION=v2.14.0
 ARG GOLANGCI_FROM_SOURCE=true
-ARG GOPLS_VERSION=v0.50.0
-# GOPLS_ANALYZERS defines gopls analyzers to be run. disabled by default: deprecated simplifyrange unusedfunc unusedvariable
-ARG GOPLS_ANALYZERS="embeddirective fillreturns infertypeargs maprange modernize nonewvars noresultvalues simplifycompositelit simplifyslice unusedparams yield"
+ARG GOPLS_ANALYZERS_VERSION=v0.3.0
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
 
@@ -47,83 +45,45 @@ FROM lint-base AS validate-golangci
 RUN --mount=target=/go/src/github.com/docker/buildx \
   golangci-lint config verify
 
-FROM base AS gopls
-RUN apk add --no-cache git
-ARG GOPLS_VERSION
-WORKDIR /src
-RUN git clone https://github.com/golang/tools.git && \
-  cd tools && git checkout ${GOPLS_VERSION}
-WORKDIR tools/gopls
-ARG GOPLS_ANALYZERS
-RUN <<'EOF'
-  set -ex
-  mkdir -p /out
-  for analyzer in ${GOPLS_ANALYZERS}; do
-    mkdir -p internal/cmd/$analyzer
-    if [ "$analyzer" = "modernize" ]; then
-      cat <<'eot' > internal/cmd/$analyzer/main.go
-package main
-
-import (
-	"golang.org/x/tools/go/analysis/multichecker"
-	"golang.org/x/tools/go/analysis/passes/modernize"
-)
-
-func main() { multichecker.Main(modernize.Suite...) }
-eot
-    else
-      pkg="golang.org/x/tools/gopls/internal/analysis/$analyzer"
-      cat <<eot > internal/cmd/$analyzer/main.go
-package main
-
-import (
-	"golang.org/x/tools/go/analysis/singlechecker"
-	analyzer "${pkg}"
-)
-
-func main() { singlechecker.Main(analyzer.Analyzer) }
-eot
-    fi
-    echo "Analyzing with ${analyzer}..."
-    go build -o /out/$analyzer ./internal/cmd/$analyzer
-  done
-EOF
+FROM base AS gopls-analyzers
+ARG GOPLS_ANALYZERS_VERSION
+RUN --mount=type=cache,target=/go/pkg/mod \
+    --mount=type=cache,target=/root/.cache/ \
+  GOBIN=/out go install github.com/crazy-max/gopls-analyzers/cmd/gopls-analyzers@${GOPLS_ANALYZERS_VERSION}
 
 FROM base AS gopls-analyze
 COPY --link --from=xx / /
-ARG GOPLS_ANALYZERS
 ARG TARGETNAME
 ARG TARGETPLATFORM
 WORKDIR /go/src/github.com/docker/buildx
 RUN --mount=target=. \
   --mount=target=/root/.cache,type=cache,id=lint-cache-${TARGETNAME}-${TARGETPLATFORM} \
-  --mount=target=/gopls-analyzers,from=gopls,source=/out <<EOF
+  --mount=target=/usr/bin/gopls-analyzers,from=gopls-analyzers,source=/out/gopls-analyzers <<EOF
   set -ex
   xx-go --wrap
-  for analyzer in ${GOPLS_ANALYZERS}; do
-    go vet -vettool=/gopls-analyzers/$analyzer ./...
-  done
+  gopls-analyzers -list-analyzers
+  go vet -vettool=/usr/bin/gopls-analyzers -exclude-generated ./...
 EOF
 
-FROM base AS modernize-fix-run
+FROM base AS gopls-fix-run
 COPY --link --from=xx / /
 ARG TARGETNAME
 ARG TARGETPLATFORM
 WORKDIR /go/src/github.com/docker/buildx
 RUN --mount=target=.,rw \
   --mount=target=/root/.cache,type=cache,id=lint-cache-${TARGETNAME}-${TARGETPLATFORM} \
-  --mount=target=/gopls-analyzers,from=gopls,source=/out <<EOF
+  --mount=target=/usr/bin/gopls-analyzers,from=gopls-analyzers,source=/out/gopls-analyzers <<EOF
   set -ex
   xx-go --wrap
   mkdir /out
-  /gopls-analyzers/modernize -fix ./...
+  /usr/bin/gopls-analyzers -fix -exclude-generated ./...
   for file in $(git status --porcelain | awk '/^ M/ {print $2}'); do
     mkdir -p /out/$(dirname $file)
     cp $file /out/$file
   done
 EOF
 
-FROM scratch AS modernize-fix
-COPY --link --from=modernize-fix-run /out /
+FROM scratch AS gopls-fix
+COPY --link --from=gopls-fix-run /out /
 
 FROM lint
