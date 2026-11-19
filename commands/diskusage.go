@@ -120,8 +120,7 @@ func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) er
 					if err != nil {
 						return err
 					}
-					duOpts := toDiskUsageOptions(pi)
-					du, err := c.DiskUsage(ctx, duOpts...)
+					du, err := c.DiskUsage(ctx, client.WithFilter(pi.Filter), client.WithAgeLimit(pi.KeepDuration))
 					if err != nil {
 						return err
 					}
@@ -302,12 +301,4 @@ func printSummary(w io.Writer, dus [][]*client.UsageInfo) {
 	fmt.Fprintf(tw, "Reclaimable:\t%s\n", units.HumanSize(float64(reclaimable)))
 	fmt.Fprintf(tw, "Total:\t%s\n", units.HumanSize(float64(total)))
 	tw.Flush()
-}
-
-func toDiskUsageOptions(pi *client.PruneInfo) []client.DiskUsageOption {
-	duOpts := []client.DiskUsageOption{client.WithFilter(pi.Filter)}
-	if pi.KeepDuration > 0 {
-		duOpts = append(duOpts, client.WithAgeLimit(pi.KeepDuration))
-	}
-	return duOpts
 }

@@ -4,40 +4,10 @@ import (
 	"testing"
 	"time"
 
-	"github.com/moby/buildkit/client"
 	dclient "github.com/moby/moby/client"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
-
-func TestToDiskUsageOptions(t *testing.T) {
-	t.Run("without keep duration", func(t *testing.T) {
-		pi := &client.PruneInfo{
-			Filter: []string{"type==regular"},
-		}
-		opts := toDiskUsageOptions(pi)
-		info := &client.DiskUsageInfo{}
-		for _, o := range opts {
-			o.SetDiskUsageOption(info)
-		}
-		assert.Equal(t, []string{"type==regular"}, info.Filter)
-		assert.Equal(t, time.Duration(0), info.AgeLimit)
-	})
-
-	t.Run("with keep duration", func(t *testing.T) {
-		pi := &client.PruneInfo{
-			KeepDuration: 168 * time.Hour,
-			Filter:       []string{"type==source.local"},
-		}
-		opts := toDiskUsageOptions(pi)
-		info := &client.DiskUsageInfo{}
-		for _, o := range opts {
-			o.SetDiskUsageOption(info)
-		}
-		assert.Equal(t, []string{"type==source.local"}, info.Filter)
-		assert.Equal(t, 168*time.Hour, info.AgeLimit)
-	})
-}
 
 func TestToBuildkitPruneInfoUntilFilter(t *testing.T) {
 	t.Run("until filter duration parsed", func(t *testing.T) {
