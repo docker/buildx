@@ -9,6 +9,7 @@ import (
 
 var diskusageTests = []func(t *testing.T, sb integration.Sandbox){
 	testDiskusage,
+	testDiskusageFilterUntil,
 	testDiskusageVerbose,
 	testDiskusageVerboseFormatError,
 	testDiskusageFormatJSON,
@@ -18,6 +19,13 @@ var diskusageTests = []func(t *testing.T, sb integration.Sandbox){
 func testDiskusage(t *testing.T, sb integration.Sandbox) {
 	buildTestProject(t, sb)
 	cmd := buildxCmd(sb, withArgs("du"))
+	out, err := cmd.Output()
+	require.NoError(t, err, string(out))
+}
+
+func testDiskusageFilterUntil(t *testing.T, sb integration.Sandbox) {
+	buildTestProject(t, sb)
+	cmd := buildxCmd(sb, withArgs("du", "--filter=until=24h"))
 	out, err := cmd.Output()
 	require.NoError(t, err, string(out))
 }
