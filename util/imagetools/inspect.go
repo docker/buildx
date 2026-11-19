@@ -19,7 +19,6 @@ import (
 	"github.com/moby/buildkit/client/ociindex"
 	"github.com/moby/buildkit/session/auth/authprovider"
 	"github.com/moby/buildkit/util/contentutil"
-	"github.com/moby/buildkit/util/tracing"
 	digest "github.com/opencontainers/go-digest"
 	ocispecs "github.com/opencontainers/image-spec/specs-go/v1"
 	"github.com/pkg/errors"
@@ -63,7 +62,6 @@ func (r *Resolver) registryResolver() remotes.Resolver {
 			}
 			for i := range res {
 				res[i].Authorizer = r.auth
-				res[i].Client = tracing.DefaultClient
 			}
 			return res, nil
 		},
