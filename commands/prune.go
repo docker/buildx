@@ -149,9 +149,7 @@ func runPrune(ctx context.Context, dockerCli command.Cli, opts pruneOptions) err
 	close(ch)
 	<-printed
 
-	tw = tabwriter.NewWriter(os.Stdout, 1, 8, 1, '\t', 0)
-	fmt.Fprintf(tw, "Total:\t%s\n", units.HumanSize(float64(total)))
-	tw.Flush()
+	fmt.Fprintf(dockerCli.Out(), "Total reclaimed space: %s\n", units.HumanSize(float64(total)))
 	return nil
 }
 
