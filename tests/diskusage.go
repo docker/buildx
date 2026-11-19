@@ -8,11 +8,25 @@ import (
 )
 
 var diskusageTests = []func(t *testing.T, sb integration.Sandbox){
+	testPruneSummary,
 	testDiskusage,
 	testDiskusageVerbose,
 	testDiskusageVerboseFormatError,
 	testDiskusageFormatJSON,
 	testDiskusageFormatGoTemplate,
+}
+
+func testPruneSummary(t *testing.T, sb integration.Sandbox) {
+	for _, verbose := range []bool{false, true} {
+		args := []string{"prune", "--force", "--filter=until=24h"}
+		if verbose {
+			args = append(args, "--verbose")
+		}
+		cmd := buildxCmd(sb, withArgs(args...))
+		out, err := cmd.Output()
+		require.NoError(t, err, string(out))
+		require.Equal(t, "Total reclaimed space: 0B\n", string(out))
+	}
 }
 
 func testDiskusage(t *testing.T, sb integration.Sandbox) {
