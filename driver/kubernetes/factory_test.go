@@ -1,11 +1,13 @@
 package kubernetes
 
 import (
+	"fmt"
 	"testing"
 	"time"
 
 	"github.com/docker/buildx/driver"
 	"github.com/docker/buildx/driver/bkimage"
+	"github.com/docker/buildx/driver/kubernetes/manifest"
 	"github.com/stretchr/testify/require"
 	v1 "k8s.io/api/core/v1"
 	"k8s.io/client-go/rest"
@@ -304,5 +306,125 @@ func TestRequiresUncachedClient(t *testing.T) {
 		require.NoError(t, err)
 		require.False(t, d.(*Driver).RequiresUncachedClient(),
 			"expected RequiresUncachedClient=false for default (sticky) loadbalance")
+	})
+}
+
+func TestTopologySpread(t *testing.T) {
+	for _, persistent := range []bool{false, true} {
+		for _, name := range []string{"builder-a", "builder-b"} {
+			t.Run(fmt.Sprintf("%s/persistent=%t", name, persistent), func(t *testing.T) {
+				opts := map[string]string{
+					"topology-spread.topologyKey":   "kubernetes.io/hostname",
+					"topology-spread.labelSelector": "build-pool=shared",
+					"labels":                        "build-pool=shared",
+				}
+				if persistent {
+					opts["persistent-volume-claim.requests.storage"] = "1Gi"
+				}
+				opt, _, _, _, _, err := (&factory{}).processDriverOpts(name, "default", driver.InitConfig{DriverOpts: opts})
+				require.NoError(t, err)
+				d, s, _, err := manifest.NewDeployment(opt)
+				require.NoError(t, err)
+				var pod v1.PodTemplateSpec
+				if persistent {
+					pod = s.Spec.Template
+				} else {
+					pod = d.Spec.Template
+				}
+				require.Equal(t, name, pod.Labels["app"])
+				require.Equal(t, "shared", pod.Labels["build-pool"])
+				require.Len(t, pod.Spec.TopologySpreadConstraints, 1)
+				spread := pod.Spec.TopologySpreadConstraints[0]
+				require.Equal(t, int32(1), spread.MaxSkew)
+				require.Equal(t, v1.ScheduleAnyway, spread.WhenUnsatisfiable)
+				require.Equal(t, map[string]string{"build-pool": "shared"}, spread.LabelSelector.MatchLabels)
+			})
+		}
+	}
+	for _, tc := range []struct {
+		name      string
+		opts      map[string]string
+		wantError string
+	}{
+		{
+			name:      "missing key",
+			opts:      map[string]string{"topology-spread.maxSkew": "1"},
+			wantError: "topologyKey is required",
+		},
+		{
+			name:      "invalid key",
+			opts:      map[string]string{"topology-spread.topologyKey": "bad key"},
+			wantError: "invalid topology-spread.topologyKey",
+		},
+		{
+			name:      "zero skew",
+			opts:      map[string]string{"topology-spread.maxSkew": "0"},
+			wantError: "positive 32-bit integer",
+		},
+		{
+			name:      "overflow",
+			opts:      map[string]string{"topology-spread.maxSkew": "2147483648"},
+			wantError: "positive 32-bit integer",
+		},
+		{
+			name:      "invalid action",
+			opts:      map[string]string{"topology-spread.whenUnsatisfiable": "never"},
+			wantError: "expected ScheduleAnyway or DoNotSchedule",
+		},
+		{
+			name:      "empty selector",
+			opts:      map[string]string{"topology-spread.labelSelector": ""},
+			wantError: "must not be empty",
+		},
+		{
+			name:      "malformed selector",
+			opts:      map[string]string{"topology-spread.labelSelector": "a in ("},
+			wantError: "invalid topology-spread.labelSelector",
+		},
+		{
+			name:      "nonmatching selector",
+			opts:      map[string]string{"topology-spread.topologyKey": "kubernetes.io/hostname", "topology-spread.labelSelector": "pool=other"},
+			wantError: "must match",
+		},
+		{
+			name:      "unknown option",
+			opts:      map[string]string{"topology-spread.unknown": "x"},
+			wantError: "invalid driver option",
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			_, _, _, _, _, err := (&factory{}).processDriverOpts("builder", "default", driver.InitConfig{DriverOpts: tc.opts})
+			require.ErrorContains(t, err, tc.wantError)
+		})
+	}
+	t.Run("default selector and hard constraint", func(t *testing.T) {
+		opt, _, _, _, _, err := (&factory{}).processDriverOpts("builder", "default", driver.InitConfig{DriverOpts: map[string]string{
+			"topology-spread.topologyKey":       "kubernetes.io/hostname",
+			"topology-spread.maxSkew":           "2",
+			"topology-spread.whenUnsatisfiable": "DoNotSchedule",
+		}})
+		require.NoError(t, err)
+		spread := opt.TopologySpreadConstraints[0]
+		require.Equal(t, int32(2), spread.MaxSkew)
+		require.Equal(t, v1.DoNotSchedule, spread.WhenUnsatisfiable)
+		require.Equal(t, map[string]string{"app": "builder"}, spread.LabelSelector.MatchLabels)
+	})
+	t.Run("set selector", func(t *testing.T) {
+		opt, _, _, _, _, err := (&factory{}).processDriverOpts("builder", "default", driver.InitConfig{DriverOpts: map[string]string{
+			"topology-spread.topologyKey":   "kubernetes.io/hostname",
+			"topology-spread.labelSelector": "pool in (a,b)",
+			"labels":                        "pool=a",
+		}})
+		require.NoError(t, err)
+		expressions := opt.TopologySpreadConstraints[0].LabelSelector.MatchExpressions
+		require.Len(t, expressions, 1)
+		require.Equal(t, "pool", expressions[0].Key)
+		require.EqualValues(t, "In", expressions[0].Operator)
+		require.Equal(t, []string{"a", "b"}, expressions[0].Values)
+	})
+	t.Run("disabled", func(t *testing.T) {
+		opt, _, _, _, _, err := (&factory{}).processDriverOpts("builder", "default", driver.InitConfig{})
+		require.NoError(t, err)
+		require.Nil(t, opt.TopologySpreadConstraints)
 	})
 }

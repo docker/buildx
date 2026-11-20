@@ -2,6 +2,7 @@ package kubernetes
 
 import (
 	"context"
+	"maps"
 	"os"
 	"strconv"
 	"strings"
@@ -17,6 +18,9 @@ import (
 	"github.com/pkg/errors"
 	"github.com/sirupsen/logrus"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/validate/content"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/labels"
 	"k8s.io/client-go/rest"
 )
 
@@ -182,9 +186,45 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 	deploymentOpt.Qemu.Image = bkimage.QemuImage
 	loadbalance := LoadbalanceSticky
 	var err error
+	spread := corev1.TopologySpreadConstraint{
+		MaxSkew:           1,
+		WhenUnsatisfiable: corev1.ScheduleAnyway,
+		LabelSelector:     &metav1.LabelSelector{MatchLabels: map[string]string{manifest.LabelApp: deploymentName}},
+	}
+	spreadEnabled := false
 
 	for k, v := range cfg.DriverOpts {
 		switch {
+		case strings.HasPrefix(k, "topology-spread."):
+			spreadEnabled = true
+			switch k {
+			case "topology-spread.topologyKey":
+				if problems := content.IsLabelKey(v); len(problems) > 0 {
+					return nil, "", "", false, 0, errors.Errorf("invalid %s: %s", k, strings.Join(problems, "; "))
+				}
+				spread.TopologyKey = v
+			case "topology-spread.maxSkew":
+				n, err := strconv.ParseInt(v, 10, 32)
+				if err != nil || n <= 0 {
+					return nil, "", "", false, 0, errors.Errorf("invalid %s %q: expected a positive 32-bit integer", k, v)
+				}
+				spread.MaxSkew = int32(n)
+			case "topology-spread.whenUnsatisfiable":
+				if v != string(corev1.ScheduleAnyway) && v != string(corev1.DoNotSchedule) {
+					return nil, "", "", false, 0, errors.Errorf("invalid %s %q: expected ScheduleAnyway or DoNotSchedule", k, v)
+				}
+				spread.WhenUnsatisfiable = corev1.UnsatisfiableConstraintAction(v)
+			case "topology-spread.labelSelector":
+				if strings.TrimSpace(v) == "" {
+					return nil, "", "", false, 0, errors.Errorf("%s must not be empty", k)
+				}
+				spread.LabelSelector, err = metav1.ParseToLabelSelector(v)
+				if err != nil {
+					return nil, "", "", false, 0, errors.Wrapf(err, "invalid %s", k)
+				}
+			default:
+				return nil, "", "", false, 0, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
+			}
 		case k == "image":
 			if v != "" {
 				deploymentOpt.Image = v
@@ -312,6 +352,21 @@ func (f *factory) processDriverOpts(deploymentName string, namespace string, cfg
 		default:
 			return nil, "", "", false, 0, errors.Errorf("invalid driver option %s for driver %s", k, DriverName)
 		}
+	}
+	if spreadEnabled {
+		if spread.TopologyKey == "" {
+			return nil, "", "", false, 0, errors.New("topology-spread.topologyKey is required")
+		}
+		selector, err := metav1.LabelSelectorAsSelector(spread.LabelSelector)
+		if err != nil {
+			return nil, "", "", false, 0, err
+		}
+		podLabels := labels.Set{manifest.LabelApp: deploymentName}
+		maps.Copy(podLabels, deploymentOpt.CustomLabels)
+		if !selector.Matches(podLabels) {
+			return nil, "", "", false, 0, errors.New("topology-spread.labelSelector must match the builder pod labels")
+		}
+		deploymentOpt.TopologySpreadConstraints = []corev1.TopologySpreadConstraint{spread}
 	}
 	return deploymentOpt, loadbalance, namespace, defaultLoad, timeout, nil
 }
