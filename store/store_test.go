@@ -260,3 +260,28 @@ func TestNodeInvalidName(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, IsErrInvalidName(err))
 }
+
+func TestGenerateName(t *testing.T) {
+	t.Parallel()
+
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(t.TempDir())))
+	require.NoError(t, err)
+
+	txn, release, err := s.Txn()
+	require.NoError(t, err)
+	defer release()
+
+	for range 100 {
+		name, err := GenerateName(txn)
+		require.NoError(t, err)
+		require.Regexp(t, `^[a-z]+_[a-z]+$`, name)
+
+		validated, err := ValidateName(name)
+		require.NoError(t, err)
+		require.Equal(t, name, validated)
+
+		_, err = txn.NodeGroupByName(name)
+		require.True(t, os.IsNotExist(errors.Cause(err)))
+		require.NoError(t, txn.Save(&NodeGroup{Name: name}))
+	}
+}
