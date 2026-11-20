@@ -656,6 +656,11 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 	ctx, cancel := context.WithCancelCause(ctx)
 	defer func() { cancel(err) }()
 
+	// Keep the nodes that failed to initialize in the resolver input: their
+	// configured platforms still decide which platform a build may target, even
+	// though they cannot run it. filterAvailableNodes only decides whether any
+	// node is usable at all.
+	allNodes := nodes
 	nodes, err = filterAvailableNodes(nodes)
 	if err != nil {
 		return nil, errors.Wrapf(err, "no valid drivers found")
@@ -664,7 +669,7 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 	for k, opt := range opts {
 		optPlatforms[k] = opt.Platforms
 	}
-	drivers, err := noderesolver.ResolveAll(ctx, nodes, optPlatforms, w)
+	drivers, err := noderesolver.ResolveAll(ctx, allNodes, optPlatforms, w)
 	if err != nil {
 		return nil, err
 	}
