@@ -33,6 +33,11 @@ func (*factory) Priority(ctx context.Context, endpoint string, api dockerclient.
 
 	c, err := api.DialHijack(ctx, "/grpc", "h2c", dialMeta)
 	if err != nil {
+		// A container builder cannot replace unavailable embedded BuildKit on
+		// Windows. Keep the docker driver so it reports the connection failure.
+		if ping, pingErr := api.Ping(ctx, dockerclient.PingOptions{}); pingErr == nil && ping.OSType == "windows" {
+			return prioritySupported
+		}
 		return priorityUnsupported
 	}
 	c.Close()
