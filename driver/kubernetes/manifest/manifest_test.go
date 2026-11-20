@@ -1,11 +1,72 @@
 package manifest
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/stretchr/testify/require"
 	corev1 "k8s.io/api/core/v1"
 )
+
+func TestConfigFile(t *testing.T) {
+	for _, rootless := range []bool{false, true} {
+		for _, tc := range []struct {
+			name  string
+			files map[string][]byte
+			flags []string
+			want  []string
+		}{
+			{
+				name:  "no config",
+				flags: []string{"--debug"},
+				want:  []string{"--debug"},
+			},
+			{
+				name:  "certificate only",
+				files: map[string][]byte{"certs/registry/ca.pem": []byte("certificate")},
+				flags: []string{"--debug"},
+				want:  []string{"--debug"},
+			},
+			{
+				name:  "config",
+				files: map[string][]byte{"buildkitd.toml": []byte("debug = true")},
+				flags: []string{"--debug"},
+				want:  []string{"--config", "/etc/buildkit/buildkitd.toml", "--debug"},
+			},
+			{
+				name:  "explicit config",
+				files: map[string][]byte{"buildkitd.toml": []byte("debug = true")},
+				flags: []string{"--config", "/custom/buildkitd.toml"},
+				want:  []string{"--config", "/etc/buildkit/buildkitd.toml", "--config", "/custom/buildkitd.toml"},
+			},
+		} {
+			t.Run(fmt.Sprintf("rootless=%t/%s", rootless, tc.name), func(t *testing.T) {
+				opt := newBaseOpt()
+				opt.Rootless = rootless
+				opt.ConfigFiles = tc.files
+				opt.BuildkitFlags = tc.flags
+				d, _, configs, err := NewDeployment(opt)
+				require.NoError(t, err)
+				container := d.Spec.Template.Spec.Containers[0]
+				want := tc.want
+				if rootless {
+					want = append(want, "--oci-worker-no-process-sandbox")
+				}
+				require.Equal(t, want, container.Args)
+				if data, ok := tc.files["buildkitd.toml"]; ok {
+					mount := findVolumeMount(container.VolumeMounts, "/etc/buildkit")
+					require.NotNil(t, mount)
+					volume := findVolume(d.Spec.Template.Spec.Volumes, mount.Name)
+					require.NotNil(t, volume)
+					require.NotNil(t, volume.ConfigMap)
+					require.Len(t, configs, 1)
+					require.Equal(t, configs[0].Name, volume.ConfigMap.Name)
+					require.Equal(t, string(data), configs[0].Data["buildkitd.toml"])
+				}
+			})
+		}
+	}
+}
 
 func newBaseOpt() *DeploymentOpt {
 	return &DeploymentOpt{
