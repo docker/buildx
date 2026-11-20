@@ -29,7 +29,7 @@ type DeploymentOpt struct {
 	}
 
 	BuildkitFlags []string
-	// files mounted at /etc/buildkitd
+	// files mounted at /etc/buildkit
 	ConfigFiles map[string][]byte
 
 	BuildKitRootVolumeMemory  string
@@ -87,6 +87,11 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 	replicas := opt.Replicas
 	privileged := true
 	args := opt.BuildkitFlags
+	if _, ok := opt.ConfigFiles["buildkitd.toml"]; ok {
+		// Rootless BuildKit uses a different default config directory.
+		// Keep user flags last so an explicit --config takes precedence.
+		args = append([]string{"--config", "/etc/buildkit/buildkitd.toml"}, args...)
+	}
 
 	if len(opt.Platforms) > 0 {
 		annotations[AnnotationPlatform] = strings.Join(platformutil.Format(opt.Platforms), ",")
