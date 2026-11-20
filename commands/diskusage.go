@@ -120,7 +120,7 @@ func runDiskUsage(ctx context.Context, dockerCli command.Cli, opts duOptions) er
 					if err != nil {
 						return err
 					}
-					du, err := c.DiskUsage(ctx, client.WithFilter(pi.Filter))
+					du, err := c.DiskUsage(ctx, client.WithFilter(pi.Filter), client.WithAgeLimit(pi.KeepDuration))
 					if err != nil {
 						return err
 					}
