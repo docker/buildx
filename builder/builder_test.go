@@ -224,6 +224,7 @@ func TestCsvToMap(t *testing.T) {
 	d := []string{
 		"\"tolerations=key=foo,value=bar;key=foo2,value=bar2\",replicas=1",
 		"namespace=default",
+		`"topology-spread.labelSelector=pool in (a,b)"`,
 	}
 	r, err := csvToMap(d)
 
@@ -237,6 +238,7 @@ func TestCsvToMap(t *testing.T) {
 
 	require.Contains(t, r, "namespace")
 	require.Equal(t, "default", r["namespace"])
+	require.Equal(t, "pool in (a,b)", r["topology-spread.labelSelector"])
 }
 
 func TestParseBuildkitdFlags(t *testing.T) {

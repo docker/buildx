@@ -38,6 +38,7 @@ type DeploymentOpt struct {
 	CustomAnnotations         map[string]string
 	CustomLabels              map[string]string
 	Tolerations               []corev1.Toleration
+	TopologySpreadConstraints []corev1.TopologySpreadConstraint
 	RequestsCPU               string
 	RequestsMemory            string
 	RequestsEphemeralStorage  string
@@ -113,8 +114,9 @@ func NewDeployment(opt *DeploymentOpt) (d *appsv1.Deployment, s *appsv1.Stateful
 			Annotations: annotations,
 		},
 		Spec: corev1.PodSpec{
-			ServiceAccountName: opt.ServiceAccountName,
-			SchedulerName:      opt.SchedulerName,
+			ServiceAccountName:        opt.ServiceAccountName,
+			SchedulerName:             opt.SchedulerName,
+			TopologySpreadConstraints: opt.TopologySpreadConstraints,
 			Containers: []corev1.Container{
 				{
 					Name:  containerName,
