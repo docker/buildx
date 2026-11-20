@@ -169,6 +169,23 @@ func TestFactory_processDriverOpts(t *testing.T) {
 	)
 
 	t.Run(
+		"ConfigFileFlag", func(t *testing.T) {
+			cfg.Files = map[string][]byte{
+				"buildkitd.toml": []byte("debug = true\n"),
+			}
+			cfg.BuildkitdFlags = []string{"--debug"}
+			cfg.DriverOpts = map[string]string{}
+
+			r, _, _, _, _, err := f.processDriverOpts(cfg.Name, "test", cfg)
+			require.NoError(t, err)
+			require.Equal(t, []string{"--config", "/etc/buildkit/buildkitd.toml", "--debug"}, r.BuildkitFlags)
+
+			cfg.Files = nil
+			cfg.BuildkitdFlags = nil
+		},
+	)
+
+	t.Run(
 		"InvalidReplicas", func(t *testing.T) {
 			cfg.DriverOpts = map[string]string{
 				"replicas": "invalid",
