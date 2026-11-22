@@ -12,6 +12,7 @@ import (
 	"github.com/compose-spec/compose-go/v2/consts"
 	"github.com/compose-spec/compose-go/v2/dotenv"
 	"github.com/compose-spec/compose-go/v2/loader"
+	"github.com/compose-spec/compose-go/v2/paths"
 	composeschema "github.com/compose-spec/compose-go/v2/schema"
 	composetypes "github.com/compose-spec/compose-go/v2/types"
 	"github.com/docker/buildx/util/buildflags"
@@ -92,7 +93,7 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 
 			var contextPathP *string
 			if s.Build.Context != "" {
-				contextPath := s.Build.Context
+				contextPath := expandComposePath(s.Build.Context)
 				contextPathP = &contextPath
 			}
 			var dockerfilePathP *string
@@ -109,6 +110,9 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 			var additionalContexts map[string]string
 			if s.Build.AdditionalContexts != nil {
 				additionalContexts = composeToBuildkitNamedContexts(s.Build.AdditionalContexts)
+				for k, v := range additionalContexts {
+					additionalContexts[k] = expandComposePath(v)
+				}
 			}
 
 			var shmSize *string
@@ -255,6 +259,19 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 		ConfigFiles: cfgs,
 		Environment: envs,
 	}
+	// The loader resolves the project directory of a nested include entry
+	// incorrectly when the working directory is relative: "../" segments are
+	// lost, and paths from the included file end up resolved against the
+	// directory of the file including it (docker/buildx#3099). Use an
+	// absolute working directory for file resolution but keep the paths of
+	// the model relative like they are with an empty working directory.
+	if len(cfgs) > 0 {
+		if dir, ok := localFileDir(cfgs[0].Filename); ok {
+			if abs, err := filepath.Abs(dir); err == nil {
+				cfgDetails.WorkingDir = abs
+			}
+		}
+	}
 
 	raw, err := loader.LoadModelWithContext(context.Background(), cfgDetails, append([]func(*loader.Options){func(opts *loader.Options) {
 		projectName := "bake"
@@ -264,6 +281,9 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 		opts.SetProjectName(projectName, false)
 		opts.SkipNormalization = true
 		opts.SkipValidation = true
+		if cfgDetails.WorkingDir != "" {
+			opts.ResolvePaths = false
+		}
 	}}, options...)...)
 	if err != nil {
 		return nil, err
@@ -308,6 +328,16 @@ func loadComposeFiles(cfgs []composetypes.ConfigFile, envs map[string]string, op
 		ConfigFiles: cfgs,
 		Environment: envs,
 	})
+}
+
+// expandComposePath normalizes a filesystem path from a compose file the same
+// way the loader's path resolution does: expanding the home directory and
+// cleaning the path.
+func expandComposePath(s string) string {
+	if s == "" || strings.Contains(s, "://") {
+		return s
+	}
+	return filepath.Clean(paths.ExpandUser(s))
 }
 
 func validateComposeFile(dt []byte, fn string, envOverrides map[string]string) (bool, error) {
@@ -532,7 +562,7 @@ func composeToBuildkitSecret(inp composetypes.ServiceSecretConfig, psecret compo
 		secret.ID = inp.Source
 	}
 	if psecret.File != "" {
-		secret.FilePath = psecret.File
+		secret.FilePath = expandComposePath(psecret.File)
 	}
 	if psecret.Environment != "" {
 		secret.Env = psecret.Environment
@@ -545,7 +575,7 @@ func composeToBuildkitSecret(inp composetypes.ServiceSecretConfig, psecret compo
 func composeToBuildkitSSH(sshKey composetypes.SSHKey) *buildflags.SSH {
 	bkssh := &buildflags.SSH{ID: sshKey.ID}
 	if sshKey.Path != "" {
-		bkssh.Paths = []string{sshKey.Path}
+		bkssh.Paths = []string{expandComposePath(sshKey.Path)}
 	}
 	return bkssh
 }
