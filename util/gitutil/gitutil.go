@@ -77,11 +77,11 @@ func (cli *GitCLI) RemoteURL(ctx context.Context) (string, error) {
 }
 
 func (cli *GitCLI) FullCommit(ctx context.Context) (string, error) {
-	return cli.clean(cli.Run(ctx, "show", "--format=%H", "HEAD", "--quiet", "--"))
+	return cli.clean(cli.Run(ctx, "rev-parse", "--verify", "HEAD"))
 }
 
 func (cli *GitCLI) ShortCommit(ctx context.Context) (string, error) {
-	return cli.clean(cli.Run(ctx, "show", "--format=%h", "HEAD", "--quiet", "--"))
+	return cli.clean(cli.Run(ctx, "rev-parse", "--short", "HEAD"))
 }
 
 func (cli *GitCLI) Tag(ctx context.Context) (string, error) {
@@ -131,7 +131,11 @@ func IsUnknownRevision(err error) bool {
 	if err == nil {
 		return false
 	}
-	// https://github.com/git/git/blob/a6a323b31e2bcbac2518bddec71ea7ad558870eb/setup.c#L204
+	// https://github.com/git/git/blob/02e533c440544ed279b326338c5d91234cc6b9ca/setup.c#L219-L221
+	// https://github.com/git/git/blob/02e533c440544ed279b326338c5d91234cc6b9ca/builtin/rev-parse.c#L1185-L1186
+	// https://github.com/git/git/blob/02e533c440544ed279b326338c5d91234cc6b9ca/builtin/rev-parse.c#L582-L588
 	errMsg := strings.ToLower(err.Error())
-	return strings.Contains(errMsg, "unknown revision or path not in the working tree") || strings.Contains(errMsg, "bad revision")
+	return strings.Contains(errMsg, "unknown revision or path not in the working tree") ||
+		strings.Contains(errMsg, "bad revision") ||
+		strings.Contains(errMsg, "needed a single revision")
 }

@@ -44,6 +44,25 @@ func TestGetGitAttributesBadGitRepo(t *testing.T) {
 	assert.Error(t, err)
 }
 
+func TestGetGitAttributesNoCommits(t *testing.T) {
+	gittestutil.Mktmp(t)
+	c, err := gitutil.New()
+	require.NoError(t, err)
+	gittestutil.GitInit(c, t)
+	gittestutil.GitSetRemote(c, t, "origin", "git@github.com:docker/buildx.git")
+	t.Setenv("BUILDX_GIT_LABELS", "true")
+	t.Setenv("BUILDX_GIT_INFO", "true")
+
+	addGitAttrs, err := getGitAttributes(context.Background(), ".", "Dockerfile")
+	require.NoError(t, err)
+	var so client.SolveOpt
+	addGitAttrs(&so)
+	assert.NotContains(t, so.FrontendAttrs, "vcs:revision")
+	assert.NotContains(t, so.FrontendAttrs, "label:"+ocispecs.AnnotationRevision)
+	assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs["vcs:source"])
+	assert.Equal(t, "git@github.com:docker/buildx.git", so.FrontendAttrs["label:"+ocispecs.AnnotationSource])
+}
+
 func TestGetGitAttributesNoContext(t *testing.T) {
 	setupTest(t)
 
