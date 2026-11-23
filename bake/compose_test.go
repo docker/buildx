@@ -471,6 +471,8 @@ services:
       context: .
       ulimits:
         nproc: 65535
+        core: 0
+        memlock: -1
         nofile:
           soft: 20000
           hard: 40000
@@ -479,7 +481,12 @@ services:
 	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
 	require.NoError(t, err)
 	require.Len(t, c.Targets, 1)
-	require.ElementsMatch(t, []string{"nproc=65535:65535", "nofile=20000:40000"}, c.Targets[0].Ulimits)
+	require.ElementsMatch(t, []string{
+		"nproc=65535:65535",
+		"core=0:0",
+		"memlock=-1:-1",
+		"nofile=20000:40000",
+	}, c.Targets[0].Ulimits)
 }
 
 func TestComposeExtDedup(t *testing.T) {
