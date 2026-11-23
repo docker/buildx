@@ -713,15 +713,28 @@ func TestPushOverride(t *testing.T) {
 				inherits = ["_common"]
 			}`),
 		}
-		m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"api", "app"}, []string{"app.push=true"}, nil, nil, &EntitlementConf{})
-		require.NoError(t, err)
-		require.Equal(t, []string{"type=image,name=foo", "type=registry"}, stringify(m["api"].Outputs))
-		require.Equal(t, []string{"type=image,name=foo,push=true", "type=registry"}, stringify(m["app"].Outputs))
+		for _, targets := range [][]string{
+			{
+				"api",
+				"app",
+			},
+			{
+				"app",
+				"api",
+			},
+		} {
+			t.Run(strings.Join(targets, ","), func(t *testing.T) {
+				m, _, err := ReadTargets(context.TODO(), []File{fp}, targets, []string{"app.push=true"}, nil, nil, &EntitlementConf{})
+				require.NoError(t, err)
+				require.Equal(t, []string{"type=image,name=foo", "type=registry"}, stringify(m["api"].Outputs))
+				require.Equal(t, []string{"type=image,name=foo,push=true", "type=registry"}, stringify(m["app"].Outputs))
 
-		m, _, err = ReadTargets(context.TODO(), []File{fp}, []string{"api", "app"}, []string{"app.push=false"}, nil, nil, &EntitlementConf{})
-		require.NoError(t, err)
-		require.Equal(t, []string{"type=image,name=foo", "type=registry"}, stringify(m["api"].Outputs))
-		require.Equal(t, []string{"type=image,name=foo,push=false"}, stringify(m["app"].Outputs))
+				m, _, err = ReadTargets(context.TODO(), []File{fp}, targets, []string{"app.push=false"}, nil, nil, &EntitlementConf{})
+				require.NoError(t, err)
+				require.Equal(t, []string{"type=image,name=foo", "type=registry"}, stringify(m["api"].Outputs))
+				require.Equal(t, []string{"type=image,name=foo,push=false"}, stringify(m["app"].Outputs))
+			})
+		}
 	})
 }
 
@@ -739,10 +752,23 @@ func TestSecretSourceOverrideInherited(t *testing.T) {
 			inherits = ["_common"]
 		}`),
 	}
-	m, _, err := ReadTargets(context.TODO(), []File{fp}, []string{"api", "app"}, []string{"app.secret.token=env=APP_TOKEN"}, nil, nil, &EntitlementConf{})
-	require.NoError(t, err)
-	require.Equal(t, []string{"id=token,env=COMMON_TOKEN"}, stringify(m["api"].Secrets))
-	require.Equal(t, []string{"id=token,env=APP_TOKEN"}, stringify(m["app"].Secrets))
+	for _, targets := range [][]string{
+		{
+			"api",
+			"app",
+		},
+		{
+			"app",
+			"api",
+		},
+	} {
+		t.Run(strings.Join(targets, ","), func(t *testing.T) {
+			m, _, err := ReadTargets(context.TODO(), []File{fp}, targets, []string{"app.secret.token=env=APP_TOKEN"}, nil, nil, &EntitlementConf{})
+			require.NoError(t, err)
+			require.Equal(t, []string{"id=token,env=COMMON_TOKEN"}, stringify(m["api"].Secrets))
+			require.Equal(t, []string{"id=token,env=APP_TOKEN"}, stringify(m["app"].Secrets))
+		})
+	}
 }
 
 func TestLoadOverride(t *testing.T) {
