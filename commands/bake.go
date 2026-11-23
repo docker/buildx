@@ -126,7 +126,7 @@ func runBake(ctx context.Context, dockerCli command.Cli, targets []string, in ba
 		overrides = append(overrides, fmt.Sprintf("*.no-cache=%t", *cFlags.noCache))
 	}
 	if cFlags.pull != nil {
-		overrides = append(overrides, fmt.Sprintf("*.pull=%t", *cFlags.pull))
+		overrides = append(overrides, "*.pull="+cFlags.pull.String())
 	}
 	if in.sbom != "" {
 		overrides = append(overrides, fmt.Sprintf("*.attest=%s", buildflags.CanonicalizeAttest("sbom", in.sbom)))

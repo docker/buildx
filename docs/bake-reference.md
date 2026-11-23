@@ -214,38 +214,38 @@ target "webapp" {
 
 The following table shows the complete list of attributes that you can assign to a target:
 
-| Name                                            | Type    | Description                                                          |
-|-------------------------------------------------|---------|----------------------------------------------------------------------|
-| [`args`](#targetargs)                           | Map     | Build arguments                                                      |
-| [`annotations`](#targetannotations)             | List    | Exporter annotations                                                 |
-| [`attest`](#targetattest)                       | List    | Build attestations                                                   |
-| [`cache-from`](#targetcache-from)               | List    | External cache sources                                               |
-| [`cache-to`](#targetcache-to)                   | List    | External cache destinations                                          |
-| [`call`](#targetcall)                           | String  | Specify the frontend method to call for the target.                  |
-| [`context`](#targetcontext)                     | String  | Set of files located in the specified path or URL                    |
-| [`contexts`](#targetcontexts)                   | Map     | Additional build contexts                                            |
-| [`description`](#targetdescription)             | String  | Description of a target                                              |
-| [`dockerfile-inline`](#targetdockerfile-inline) | String  | Inline Dockerfile string                                             |
-| [`dockerfile`](#targetdockerfile)               | String  | Dockerfile location                                                  |
-| [`entitlements`](#targetentitlements)           | List    | Permissions that the build process requires to run                   |
-| [`extra-hosts`](#targetextra-hosts)             | List    | Custom host-to-IP mapping                                           |
-| [`inherits`](#targetinherits)                   | List    | Inherit attributes from other targets                                |
-| [`labels`](#targetlabels)                       | Map     | Metadata for images                                                  |
-| [`matrix`](#targetmatrix)                       | Map     | Define a set of variables that forks a target into multiple targets. |
-| [`name`](#targetname)                           | String  | Override the target name when using a matrix.                        |
-| [`no-cache-filter`](#targetno-cache-filter)     | List    | Disable build cache for specific stages                              |
-| [`no-cache`](#targetno-cache)                   | Boolean | Disable build cache completely                                       |
-| [`output`](#targetoutput)                       | List    | Output destinations                                                  |
-| [`policy`](#targetpolicy)                       | List    | Policies to validate build sources and metadata                      |
-| [`platforms`](#targetplatforms)                 | List    | Target platforms                                                     |
-| [`pull`](#targetpull)                           | Boolean | Always pull images                                                   |
-| [`resources`](#targetresources)                 | Map     | Resource limits for build containers                                 |
-| [`secret`](#targetsecret)                       | List    | Secrets to expose to the build                                       |
-| [`shm-size`](#targetshm-size)                   | List    | Size of `/dev/shm`                                                   |
-| [`ssh`](#targetssh)                             | List    | SSH agent sockets or keys to expose to the build                     |
-| [`tags`](#targettags)                           | List    | Image names and tags                                                 |
-| [`target`](#targettarget)                       | String  | Target build stage                                                   |
-| [`ulimits`](#targetulimits)                     | List    | Ulimit options                                                       |
+| Name                                            | Type           | Description                                                          |
+| ----------------------------------------------- | -------------- | -------------------------------------------------------------------- |
+| [`args`](#targetargs)                           | Map            | Build arguments                                                      |
+| [`annotations`](#targetannotations)             | List           | Exporter annotations                                                 |
+| [`attest`](#targetattest)                       | List           | Build attestations                                                   |
+| [`cache-from`](#targetcache-from)               | List           | External cache sources                                               |
+| [`cache-to`](#targetcache-to)                   | List           | External cache destinations                                          |
+| [`call`](#targetcall)                           | String         | Specify the frontend method to call for the target.                  |
+| [`context`](#targetcontext)                     | String         | Set of files located in the specified path or URL                    |
+| [`contexts`](#targetcontexts)                   | Map            | Additional build contexts                                            |
+| [`description`](#targetdescription)             | String         | Description of a target                                              |
+| [`dockerfile-inline`](#targetdockerfile-inline) | String         | Inline Dockerfile string                                             |
+| [`dockerfile`](#targetdockerfile)               | String         | Dockerfile location                                                  |
+| [`entitlements`](#targetentitlements)           | List           | Permissions that the build process requires to run                   |
+| [`extra-hosts`](#targetextra-hosts)             | List           | Custom host-to-IP mapping                                            |
+| [`inherits`](#targetinherits)                   | List           | Inherit attributes from other targets                                |
+| [`labels`](#targetlabels)                       | Map            | Metadata for images                                                  |
+| [`matrix`](#targetmatrix)                       | Map            | Define a set of variables that forks a target into multiple targets. |
+| [`name`](#targetname)                           | String         | Override the target name when using a matrix.                        |
+| [`no-cache-filter`](#targetno-cache-filter)     | List           | Disable build cache for specific stages                              |
+| [`no-cache`](#targetno-cache)                   | Boolean        | Disable build cache completely                                       |
+| [`output`](#targetoutput)                       | List           | Output destinations                                                  |
+| [`policy`](#targetpolicy)                       | List           | Policies to validate build sources and metadata                      |
+| [`platforms`](#targetplatforms)                 | List           | Target platforms                                                     |
+| [`pull`](#targetpull)                           | Boolean/String | Image pull policy                                                    |
+| [`resources`](#targetresources)                 | Map            | Resource limits for build containers                                 |
+| [`secret`](#targetsecret)                       | List           | Secrets to expose to the build                                       |
+| [`shm-size`](#targetshm-size)                   | List           | Size of `/dev/shm`                                                   |
+| [`ssh`](#targetssh)                             | List           | SSH agent sockets or keys to expose to the build                     |
+| [`tags`](#targettags)                           | List           | Image names and tags                                                 |
+| [`target`](#targettarget)                       | String         | Target build stage                                                   |
+| [`ulimits`](#targetulimits)                     | List           | Ulimit options                                                       |
 
 ### `target.args`
 
@@ -939,13 +939,14 @@ target "default" {
 
 ### `target.pull`
 
-Configures whether the builder should attempt to pull images when building the target.
-This is the same as the `--pull` flag for `docker build`.
-The following example forces the builder to always pull all images referenced in the build target.
+Sets the image pull policy, using `"always"`, `"missing"`, or `"never"`. Existing
+boolean values remain supported: `true` means `"always"`, while `false` preserves
+the builder's default resolution behavior. See
+[`build --pull`](reference/buildx_build.md#pull) for policy details.
 
 ```hcl
 target "default" {
-  pull = true
+  pull = "missing"
 }
 ```
 

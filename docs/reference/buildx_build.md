@@ -41,7 +41,7 @@ Start a build
 | `--policy`                              | `stringArray` |           | Policy configuration (format: `filename=path[,filename=path][,reset=true\|false][,disabled=true\|false][,strict=true\|false][,log-level=level]`) |
 | [`--progress`](#progress)               | `string`      | `auto`    | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output                            |
 | [`--provenance`](#provenance)           | `string`      |           | Shorthand for `--attest=type=provenance`                                                                                                         |
-| `--pull`                                | `bool`        |           | Always attempt to pull all referenced images                                                                                                     |
+| [`--pull`](#pull)                       | `string`      | `false`   | Image pull policy (`always`, `missing`, `never`)                                                                                                 |
 | [`--push`](#push)                       | `bool`        |           | Shorthand for `--output=type=registry,unpack=false`                                                                                              |
 | `-q`, `--quiet`                         | `bool`        |           | Suppress the build output and print image ID on success                                                                                          |
 | [`--resource`](#resource)               | `stringArray` |           | Resource limits for build containers (format: `memory=2g`, `cpu-quota=50000`)                                                                    |
@@ -932,6 +932,29 @@ to using the containerd image store.
 
 For more information about provenance attestations, see
 [here](https://docs.docker.com/build/metadata/attestations/slsa-provenance/).
+
+### <a name="pull"></a> Set the image pull policy (--pull)
+
+Use `--pull=always`, `--pull=missing`, or `--pull=never` to control image
+resolution. `always` resolves images from the registry, `missing` prefers local
+images and falls back to the registry, and `never` fails when required image
+content is unavailable locally. Local images belong to the selected builder,
+which may have a different image store from your Docker daemon.
+
+Bare `--pull` and `--pull=true` retain their existing behavior and are equivalent
+to `--pull=always`. Omitted `--pull` and `--pull=false` preserve the builder's
+existing default: the `docker` driver prefers local images, while other drivers
+use BuildKit's default resolution. Explicit `--pull=missing` selects local-first
+resolution regardless of the driver.
+
+The `never` policy requires support in both BuildKit and the Dockerfile frontend.
+It also applies to the frontend image selected by `#syntax`, but does not disable
+networking for `RUN` instructions or remote build contexts.
+
+```console
+$ docker buildx build --pull=missing .
+$ docker buildx build --pull=never .
+```
 
 ### <a name="push"></a> Push the build result to a registry (--push)
 

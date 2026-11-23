@@ -105,7 +105,7 @@ type buildOptions struct {
 	builder      string
 	metadataFile string
 	noCache      bool
-	pull         bool
+	pull         buildflags.PullPolicy
 	exportPush   bool
 	exportLoad   bool
 }
@@ -532,7 +532,7 @@ func buildCmd(dockerCli command.Cli, rootOpts *rootOptions, debugger debuggerOpt
 			if cFlags.noCache != nil {
 				options.noCache = *cFlags.noCache
 			}
-			options.pull = false
+			options.pull = ""
 			if cFlags.pull != nil {
 				options.pull = *cFlags.pull
 			}
@@ -677,13 +677,15 @@ type commonFlags struct {
 	metadataFile string
 	progress     string
 	noCache      *bool
-	pull         *bool
+	pull         *buildflags.PullPolicy
 }
 
 func commonBuildFlags(options *commonFlags, flags *pflag.FlagSet) {
 	options.noCache = flags.Bool("no-cache", false, "Do not use cache when building the image")
 	flags.StringVar(&options.progress, "progress", "auto", `Set type of progress output ("auto", "none",  "plain", "quiet", "rawjson", "tty"). Use plain to show container output`)
-	options.pull = flags.Bool("pull", false, "Always attempt to pull all referenced images")
+	options.pull = new(buildflags.PullPolicy)
+	flags.Var(options.pull, "pull", `Image pull policy ("always", "missing", "never")`)
+	flags.Lookup("pull").NoOptDefVal = "true"
 	flags.StringVar(&options.metadataFile, "metadata-file", "", "Write build result metadata to a file")
 }
 
@@ -1017,7 +1019,7 @@ type BuildOptions struct {
 	Resources              []string
 	Builder                string
 	NoCache                bool
-	Pull                   bool
+	Pull                   buildflags.PullPolicy
 	ExportPush             bool
 	ExportLoad             bool
 	SourcePolicy           *sourcepolicy.Policy

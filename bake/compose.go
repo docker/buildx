@@ -194,9 +194,10 @@ func ParseCompose(cfgs []composetypes.ConfigFile, envs map[string]string) (*Conf
 				noCache = &s.Build.NoCache
 			}
 
-			var pull *bool
+			var pull *buildflags.PullPolicy
 			if s.Build.Pull {
-				pull = &s.Build.Pull
+				value := buildflags.PullPolicy("true")
+				pull = &value
 			}
 
 			g.Targets = append(g.Targets, targetName)
@@ -410,17 +411,17 @@ func flatten(in composetypes.MappingWithEquals) map[string]*string {
 // xbake Compose build extension provides fields not (yet) available in
 // Compose build specification: https://github.com/compose-spec/compose-spec/blob/master/build.md
 type xbake struct {
-	Tags          stringArray `yaml:"tags,omitempty"`
-	CacheFrom     stringArray `yaml:"cache-from,omitempty"`
-	CacheTo       stringArray `yaml:"cache-to,omitempty"`
-	Secrets       stringArray `yaml:"secret,omitempty"`
-	SSH           stringArray `yaml:"ssh,omitempty"`
-	Platforms     stringArray `yaml:"platforms,omitempty"`
-	Outputs       stringArray `yaml:"output,omitempty"`
-	Pull          *bool       `yaml:"pull,omitempty"`
-	NoCache       *bool       `yaml:"no-cache,omitempty"`
-	NoCacheFilter stringArray `yaml:"no-cache-filter,omitempty"`
-	Contexts      stringMap   `yaml:"contexts,omitempty"`
+	Tags          stringArray            `yaml:"tags,omitempty"`
+	CacheFrom     stringArray            `yaml:"cache-from,omitempty"`
+	CacheTo       stringArray            `yaml:"cache-to,omitempty"`
+	Secrets       stringArray            `yaml:"secret,omitempty"`
+	SSH           stringArray            `yaml:"ssh,omitempty"`
+	Platforms     stringArray            `yaml:"platforms,omitempty"`
+	Outputs       stringArray            `yaml:"output,omitempty"`
+	Pull          *buildflags.PullPolicy `yaml:"pull,omitempty"`
+	NoCache       *bool                  `yaml:"no-cache,omitempty"`
+	NoCacheFilter stringArray            `yaml:"no-cache-filter,omitempty"`
+	Contexts      stringMap              `yaml:"contexts,omitempty"`
 	// don't forget to update documentation if you add a new field:
 	// https://github.com/docker/docs/blob/main/content/build/bake/compose-file.md#extension-field-with-x-bake
 }

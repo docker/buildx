@@ -916,7 +916,7 @@ type Target struct {
 	SSH              buildflags.SSHKeys          `json:"ssh,omitempty" hcl:"ssh,optional" cty:"ssh"`
 	Platforms        []string                    `json:"platforms,omitempty" hcl:"platforms,optional" cty:"platforms"`
 	Outputs          buildflags.Exports          `json:"output,omitempty" hcl:"output,optional" cty:"output"`
-	Pull             *bool                       `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
+	Pull             *buildflags.PullPolicy      `json:"pull,omitempty" hcl:"pull,optional" cty:"pull"`
 	NoCache          *bool                       `json:"no-cache,omitempty" hcl:"no-cache,optional" cty:"no-cache"`
 	NetworkMode      *string                     `json:"network,omitempty" hcl:"network,optional" cty:"network"`
 	NoCacheFilter    []string                    `json:"no-cache-filter,omitempty" hcl:"no-cache-filter,optional" cty:"no-cache-filter"`
@@ -1424,9 +1424,9 @@ func (t *Target) AddOverrides(overrides map[string]Override, ent *EntitlementCon
 		case "network":
 			t.NetworkMode = &value
 		case "pull":
-			pull, err := strconv.ParseBool(value)
-			if err != nil {
-				return errors.Errorf("invalid value %s for boolean key pull", value)
+			var pull buildflags.PullPolicy
+			if err := pull.Set(value); err != nil {
+				return err
 			}
 			t.Pull = &pull
 		case "push":
@@ -1824,7 +1824,7 @@ func toBuildOpt(t *Target, inp *Input) (*build.Options, error) {
 	if t.NoCache != nil {
 		noCache = *t.NoCache
 	}
-	pull := false
+	var pull buildflags.PullPolicy
 	if t.Pull != nil {
 		pull = *t.Pull
 	}

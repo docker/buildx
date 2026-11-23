@@ -8,6 +8,7 @@ import (
 	"testing"
 
 	composetypes "github.com/compose-spec/compose-go/v2/types"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
@@ -451,7 +452,7 @@ services:
 	require.Equal(t, []string{"type=local,src=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheFrom))
 	require.Equal(t, []string{"type=local,dest=path/to/cache", "user/app:cache"}, stringify(c.Targets[0].CacheTo))
 	require.Equal(t, []string{"default", "key=/path/to/key", "other=path/to/otherkey"}, stringify(c.Targets[0].SSH))
-	require.Equal(t, newBool(true), c.Targets[0].Pull)
+	require.Equal(t, buildflags.PullPolicy("true"), *c.Targets[0].Pull)
 	require.Equal(t, map[string]string{"alpine": "docker-image://alpine:3.13"}, c.Targets[0].Contexts)
 	require.Equal(t, []string{"ct-fake-aws:bar"}, c.Targets[1].Tags)
 	require.Equal(t, []string{"id=mysecret,src=/local/secret", "id=mysecret2,src=/local/secret2"}, stringify(c.Targets[1].Secrets))
@@ -1194,7 +1195,23 @@ services:
 
 	target := c.Targets[0]
 	require.Equal(t, "app", target.Name)
-	require.Equal(t, true, *target.Pull)
+	require.Equal(t, buildflags.PullPolicy("true"), *target.Pull)
+}
+
+func TestComposePullPolicy(t *testing.T) {
+	for _, value := range []string{"true", "false", "always", "missing", "never"} {
+		dt := fmt.Appendf(nil, `services:
+  app:
+    build:
+      context: .
+      pull: true
+      x-bake:
+        pull: %s
+`, value)
+		c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+		require.NoError(t, err)
+		require.Equal(t, buildflags.PullPolicy(value), *c.Targets[0].Pull)
+	}
 }
 
 func TestParseComposeNoCache(t *testing.T) {

@@ -40,8 +40,39 @@ func bakeCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 	return string(out), err
 }
 
+func testBakePullPolicy(t *testing.T, sb integration.Sandbox) {
+	dir := tmpdir(t,
+		fstest.CreateFile("Dockerfile", []byte("FROM scratch\n"), 0o600),
+		fstest.CreateFile("docker-bake.hcl", []byte(`target "default" {
+  pull = "never"
+}`), 0o600),
+	)
+	out, err := bakeCmd(sb, withDir(dir))
+	if err != nil && strings.Contains(out, "pull policy never is not supported by the builder") {
+		t.Log("builder correctly rejected unsupported never policy")
+		return
+	}
+	require.NoError(t, err, out)
+	registry, err := sb.NewRegistry()
+	require.NoError(t, err)
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM "+registry+"/absent:latest\n"), 0o600))
+	for _, args := range [][]string{nil, {"--pull=never"}, {"--set=*.pull=never"}} {
+		out, err := bakeCmd(sb, withDir(dir), withArgs(args...))
+		require.Error(t, err, out)
+		require.Contains(t, out, "pulling is disabled")
+	}
+	// A command-line policy must override the target's never policy.
+	for _, args := range [][]string{{"--pull"}, {"--pull=always"}, {"--set=*.pull=missing"}} {
+		out, err := bakeCmd(sb, withDir(dir), withArgs(args...))
+		require.Error(t, err, out)
+		require.NotContains(t, out, "pulling is disabled")
+		require.Contains(t, out, "not found")
+	}
+}
+
 var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakePrint,
+	testBakePullPolicy,
 	testBakePrintSensitive,
 	testBakePrintOverrideEmpty,
 	testBakeSecretSourceOverride,

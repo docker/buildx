@@ -33,7 +33,7 @@ Start a build
 | `--policy`          | `stringArray` |           | Policy configuration (format: `filename=path[,filename=path][,reset=true\|false][,disabled=true\|false][,strict=true\|false][,log-level=level]`) |
 | `--progress`        | `string`      | `auto`    | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output                            |
 | `--provenance`      | `string`      |           | Shorthand for `--attest=type=provenance`                                                                                                         |
-| `--pull`            | `bool`        |           | Always attempt to pull all referenced images                                                                                                     |
+| `--pull`            | `string`      | `false`   | Image pull policy (`always`, `missing`, `never`)                                                                                                 |
 | `--push`            | `bool`        |           | Shorthand for `--output=type=registry,unpack=false`                                                                                              |
 | `-q`, `--quiet`     | `bool`        |           | Suppress the build output and print image ID on success                                                                                          |
 | `--resource`        | `stringArray` |           | Resource limits for build containers (format: `memory=2g`, `cpu-quota=50000`)                                                                    |

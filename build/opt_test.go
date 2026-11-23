@@ -2,6 +2,7 @@ package build
 
 import (
 	"context"
+	"fmt"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -34,6 +35,54 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPullPolicyResolveMode(t *testing.T) {
+	t.Setenv(noDefaultAttestationsEnv, "true")
+	for _, moby := range []bool{false, true} {
+		for _, policy := range []buildflags.PullPolicy{"", "false", "true", buildflags.PullAlways, buildflags.PullMissing, buildflags.PullNever, "invalid"} {
+			t.Run(fmt.Sprintf("moby=%t/%s", moby, policy), func(t *testing.T) {
+				nodes, err := noderesolver.Resolve(t.Context(), []builder.Node{{
+					Driver: &driver.DriverHandle{Driver: exporterTestDriver{moby: moby}},
+				}}, nil, nil)
+				require.NoError(t, err)
+				cfg := confutil.NewConfig(nil, confutil.WithDir(t.TempDir()))
+				cli := exporterTestCLI{store: contextstore.New(t.TempDir(), command.DefaultContextStoreConfig())}
+				opt := &Options{
+					Inputs: Inputs{ContextPath: "https://example.com/context.tar.gz"},
+					Pull:   policy,
+					Policy: []buildflags.PolicyConfig{{Disabled: true}},
+				}
+				bopts := gateway.BuildOpts{LLBCaps: pb.Caps.CapSet(pb.Caps.All())}
+				so, release, err := toSolveOpt(t.Context(), nodes[0], false, opt, bopts, cfg, testProgressWriter{}, dockerutil.NewClient(cli))
+				if policy == "invalid" {
+					require.ErrorContains(t, err, "invalid pull policy")
+					return
+				}
+				require.NoError(t, err)
+				defer release(nil)
+				want := ""
+				switch policy {
+				case "true", buildflags.PullAlways:
+					want = pb.AttrImageResolveModeForcePull
+				case buildflags.PullMissing:
+					want = pb.AttrImageResolveModePreferLocal
+				case buildflags.PullNever:
+					want = pb.AttrImageResolveModeNever
+				default:
+					if moby {
+						want = pb.AttrImageResolveModePreferLocal
+					}
+				}
+				require.Equal(t, want, so.FrontendAttrs["image-resolve-mode"])
+				if policy == buildflags.PullNever {
+					bopts.LLBCaps = pb.Caps.CapSet(nil)
+					_, _, err := toSolveOpt(t.Context(), nodes[0], false, opt, bopts, cfg, testProgressWriter{}, dockerutil.NewClient(cli))
+					require.ErrorContains(t, err, "pull policy never is not supported by the builder")
+				}
+			})
+		}
+	}
+}
 
 type exporterTestDriver struct {
 	driver.Driver
