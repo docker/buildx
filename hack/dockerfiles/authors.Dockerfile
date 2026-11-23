@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
 
+# renovate: datasource=docker depName=alpine
 ARG ALPINE_VERSION=3.24
 
 FROM alpine:${ALPINE_VERSION} AS gen

@@ -23,6 +23,7 @@ on:
 env:
   SETUP_BUILDX_VERSION: "edge"
   SETUP_BUILDKIT_IMAGE: "moby/buildkit:latest"
+  # renovate: datasource=github-releases depName=docker/scout-cli
   SCOUT_VERSION: "1.30.0"
   REPO_SLUG: "docker/buildx-bin"
   DESTDIR: "./bin"
@@ -30,13 +31,14 @@ env:
   TESTFLAGS: "-v --parallel=6 --timeout=30m"
   GOTESTSUM_FORMAT: "standard-verbose"
   GO_VERSION: "1.27"
-  GOTESTSUM_VERSION: "v1.13.0"  # same as one in Dockerfile
+  # renovate: datasource=github-releases depName=gotestyourself/gotestsum
+  GOTESTSUM_VERSION: "v1.13.0"
 
 jobs:
   test-integration:
     runs-on: ubuntu-26.04
     permissions:
-      contents: read
+      contents: read # same as global permission
       id-token: write # for Codecov authentication
     env:
       TESTFLAGS_DOCKER: "-v --parallel=1 --timeout=30m"
@@ -50,9 +52,10 @@ jobs:
           - master
           - latest
           - buildx-stable-1
-          - v0.35.1
-          - v0.34.2
-          - v0.33.1
+          # Latest patches of the three newest stable minors, ranked newest first.
+          - v0.35.1 # renovate: buildkit-matrix=0
+          - v0.34.2 # renovate: buildkit-matrix=1
+          - v0.33.1 # renovate: buildkit-matrix=2
         worker:
           - docker-container
           - remote
@@ -350,10 +353,8 @@ jobs:
   govulncheck:
     runs-on: ubuntu-26.04
     permissions:
-      # same as global permission
-      contents: read
-      # required to write sarif report
-      security-events: write
+      contents: read # same as global permission
+      security-events: write # required to write sarif report
     steps:
       -
         name: Set up Docker Buildx
@@ -524,8 +525,7 @@ jobs:
   release:
     runs-on: ubuntu-26.04
     permissions:
-      # required to create GitHub release
-      contents: write
+      contents: write # required to create GitHub release
     needs:
       - test-integration
       - test-unit

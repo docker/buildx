@@ -23,6 +23,7 @@ env:
   SETUP_BUILDKIT_IMAGE: "moby/buildkit:latest"
   DESTDIR: "./bin"
   K3S_VERSION: "v1.32.2+k3s1"
+  # renovate: datasource=docker depName=moby/moby-bin
   MOBY_VERSION: "29.10"
 
 jobs:

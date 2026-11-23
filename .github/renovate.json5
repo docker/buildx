@@ -1,0 +1,251 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": [
+    "config:recommended",
+    "helpers:pinGitHubActionDigestsToSemver",
+    "helpers:githubDigestChangelogs",
+    ":gitSignOff"
+  ],
+  "enabledManagers": [
+    "gomod",
+    "github-actions",
+    "custom.regex"
+  ],
+  "ignorePaths": [
+    "vendor/**"
+  ],
+  "postUpdateOptions": [
+    "gomodTidy",
+    "gomodUpdateImportPaths",
+    "gomodVendor"
+  ],
+  "env": {
+    // Major import rewrites must bypass stale vendor metadata before vendoring.
+    "GOFLAGS": "-mod=mod -modcacherw"
+  },
+  "prHourlyLimit": 0,
+  "minimumReleaseAge": "2 days",
+  "internalChecksFilter": "strict",
+  "vulnerabilityAlerts": {
+    "enabled": true,
+    "commitMessageSuffix": ""
+  },
+  "labels": [
+    "area/dependencies",
+    "bot"
+  ],
+  "semanticCommits": "disabled",
+  "commitMessagePrefix": "deps{{#if isVulnerabilityAlert}}(security){{/if}}:",
+  "customManagers": [
+    {
+      "customType": "regex",
+      "managerFilePatterns": [".github/workflows/build.yml"],
+      "matchStrings": [
+        "- (?<currentValue>v[0-9]+\\.[0-9]+\\.[0-9]+) # renovate: buildkit-matrix=(?<packageName>[012])"
+      ],
+      "depNameTemplate": "moby/buildkit/matrix-{{packageName}}",
+      "datasourceTemplate": "custom.buildkit-matrix",
+      "versioningTemplate": "semver"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": ["/^\\.github/workflows/.*\\.ya?ml$/"],
+      "matchStrings": [
+        "(?:^|\\r?\\n)[ \\t]*(?:-[ \\t]+|runner:[ \\t]+)(?<depName>ubuntu|macos|windows)-(?<currentValue>[0-9][a-zA-Z0-9.-]*)"
+      ],
+      "datasourceTemplate": "github-runners",
+      "versioningTemplate": "docker"
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        "**/*Dockerfile*"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)(?: versioning=(?<versioning>\\S+))?[ \\t]*\\r?\\n[ \\t]*ARG[ \\t]+\\w+=\"?(?<currentValue>[^\\s\"]+)\"?"
+      ]
+    },
+    {
+      "customType": "regex",
+      "managerFilePatterns": [
+        ".github/workflows/*.yml"
+      ],
+      "matchStrings": [
+        "# renovate: datasource=(?<datasource>\\S+) depName=(?<depName>\\S+)[ \\t]*\\r?\\n[ \\t]+\\w+: \"(?<currentValue>[^\"]+)\""
+      ]
+    }
+  ],
+  "customDatasources": {
+    "buildkit-matrix": {
+      // Custom datasources do not paginate; inspect the 100 most recent releases.
+      "defaultRegistryUrlTemplate": "https://api.github.com/repos/moby/buildkit/releases?per_page=100",
+      // Select the latest patch of the stable minor ranked by packageName (0-2).
+      // Ignore drafts, prereleases, and Dockerfile frontend tags; require three minors.
+      "transformTemplates": [
+        "( \
+          $stable := $[draft = false and prerelease = false and $exists($match(tag_name, /^v[0-9]+\\.[0-9]+\\.[0-9]+$/))]; \
+          $sorted := $stable^(>$number($split($substring(tag_name, 1), '.')[0]), >$number($split(tag_name, '.')[1]), >$number($split(tag_name, '.')[2])); \
+          $minors := $distinct($sorted.$replace(tag_name, /\\.[0-9]+$/, '')); \
+          $minor := $minors[{{packageName}}]; \
+          $target := $sorted[$replace(tag_name, /\\.[0-9]+$/, '') = $minor][0]; \
+          $assert($count($minors) >= 3, 'Need at least three stable minor releases'); \
+          {'releases': [{'version': $target.tag_name, 'releaseTimestamp': $target.published_at}], 'sourceUrl': 'https://github.com/moby/buildkit'} \
+        )"
+      ]
+    }
+  },
+  "packageRules": [
+    {
+      // Keep Go version updates manual.
+      "matchDepNames": [
+        "go"
+      ],
+      "enabled": false
+    },
+    {
+      "matchManagers": ["gomod"],
+      "commitMessagePrefix": "deps(go{{#if isVulnerabilityAlert}},security{{/if}}):",
+      "constraintsFiltering": "strict",
+      // Require manual review for dependencies that need the next Go version.
+      "constraints": {"%goMod": "<=1.26.x"},
+      "constraintsVersioning": {"%goMod": "semver-coerced"}
+    },
+    {
+      // The Moby client requires the corresponding API module.
+      "matchManagers": ["gomod"],
+      "matchDepNames": [
+        "github.com/moby/moby/api",
+        "github.com/moby/moby/client"
+      ],
+      "groupName": "moby client and API"
+    },
+    {
+      // Update Bake's HCL parser, value types, and functions together.
+      "matchManagers": ["gomod"],
+      "matchDepNames": [
+        "github.com/hashicorp/hcl/**",
+        "github.com/hashicorp/go-cty-funcs",
+        "github.com/zclconf/go-cty"
+      ],
+      "groupName": "hcl dependencies"
+    },
+    {
+      "matchManagers": ["gomod"],
+      "matchDepNames": [
+        "github.com/Microsoft/go-winio", // Keep Windows I/O support aligned with BuildKit.
+        "github.com/aws/aws-sdk-go-v2/config", // Follow BuildKit's AWS SDK configuration updates.
+        "github.com/containerd/**", // Follow BuildKit's containerd updates.
+        "github.com/docker/docker", // Keep the legacy module on v28 until remaining imports are migrated (#3792).
+        "github.com/moby/buildkit", // Update BuildKit and its shared dependencies manually.
+        "github.com/tonistiigi/fsutil", // Keep aligned with BuildKit's fsutil version.
+        "google.golang.org/grpc", // Follow gRPC updates through BuildKit/containerd.
+        "google.golang.org/grpc/cmd/protoc-gen-go-grpc", // Coordinate generator updates with gRPC.
+        "go.opentelemetry.io/**", // Align SDK, instrumentation, and exporters with BuildKit.
+        "google.golang.org/protobuf", // Coordinate protobuf runtime and generator updates with BuildKit.
+        "google.golang.org/genproto/**", // Keep generated APIs aligned with the shared protobuf stack.
+        "github.com/planetscale/vtprotobuf" // Coordinate optimized protobuf generation with BuildKit.
+      ],
+      "enabled": false
+    },
+    {
+      // Validate against the latest docs changes on main without pinning.
+      "matchManagers": ["github-actions"],
+      "matchDepNames": ["docker/docs"],
+      "enabled": false
+    },
+    {
+      // Track stable major.minor tags, excluding patch and prerelease tags.
+      "matchDatasources": ["docker"],
+      "matchDepNames": ["moby/moby-bin"],
+      "allowedVersions": "/^[0-9]+\\.[0-9]+$/"
+    },
+    {
+      // Exempt Docker and Moby dependencies from the release-age cooldown.
+      "matchDepNames": [
+        "github.com/docker/**",
+        "github.com/moby/**",
+        "docker/**",
+        "moby/**"
+      ],
+      "minimumReleaseAge": null
+    },
+    {
+      "matchFileNames": [
+        "**/*Dockerfile*"
+      ],
+      "commitMessagePrefix": "deps(dockerfile{{#if isVulnerabilityAlert}},security{{/if}}):"
+    },
+    {
+      "matchFileNames": [
+        ".github/workflows/**"
+      ],
+      "commitMessagePrefix": "deps(ci{{#if isVulnerabilityAlert}},security{{/if}}):"
+    },
+    {
+      // Test upcoming releases in integration tests, excluding non-semver tags.
+      "matchManagers": [
+        "custom.regex"
+      ],
+      "matchDatasources": [
+        "github-releases"
+      ],
+      "matchDepNames": [
+        "distribution/distribution",
+        "moby/buildkit",
+        "docker/compose",
+        "docker/scout-cli",
+        "crazy-max/undock"
+      ],
+      "versioning": "semver",
+      "ignoreUnstable": false,
+      "respectLatest": false
+    },
+    {
+      // Update the integration test image and stable matrix together, including major releases.
+      "matchManagers": ["custom.regex"],
+      "matchDepNames": ["moby/buildkit", "moby/buildkit/matrix-**"],
+      "groupName": "BuildKit integration tests",
+      "commitMessagePrefix": "deps(ci{{#if isVulnerabilityAlert}},security{{/if}}):",
+      "minimumReleaseAge": null,
+      "separateMajorMinor": false,
+      "separateMinorPatch": false
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "crazy-max/.github"
+      ],
+      "groupName": "crazy-max-dot-github"
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "github/codeql-action"
+      ],
+      "groupName": "codeql-actions"
+    },
+    {
+      "matchManagers": [
+        "github-actions"
+      ],
+      "matchDepNames": [
+        "docker/**"
+      ],
+      "groupName": "docker-actions"
+    },
+    {
+      "matchUpdateTypes": [
+        "major",
+        "minor",
+        "patch"
+      ],
+      "commitMessageAction": "bump",
+      "commitMessageTopic": "{{{depName}}}",
+      "commitMessageExtra": "from {{{replace '^v' '' currentValue}}} to {{{replace '^v' '' newValue}}}"
+    }
+  ]
+}

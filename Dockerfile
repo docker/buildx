@@ -1,18 +1,26 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.27
+# renovate: datasource=docker depName=alpine
 ARG ALPINE_VERSION=3.24
+# renovate: datasource=github-releases depName=tonistiigi/xx
 ARG XX_VERSION=1.10.0
 
 # for testing
+# renovate: datasource=docker depName=moby/moby-bin
 ARG DOCKER_VERSION=29.10
 ARG DOCKER_VERSION_ALT_28=28.5
 ARG DOCKER_VERSION_ALT_27=27.5.1
 ARG DOCKER_CLI_VERSION=${DOCKER_VERSION}
+# renovate: datasource=github-releases depName=gotestyourself/gotestsum
 ARG GOTESTSUM_VERSION=v1.13.0
+# renovate: datasource=github-releases depName=distribution/distribution
 ARG REGISTRY_VERSION=3.1.2
+# renovate: datasource=github-releases depName=moby/buildkit
 ARG BUILDKIT_VERSION=v0.35.1
+# renovate: datasource=github-releases depName=docker/compose
 ARG COMPOSE_VERSION=v5.8.0
+# renovate: datasource=github-releases depName=crazy-max/undock
 ARG UNDOCK_VERSION=0.15.0
 
 FROM --platform=$BUILDPLATFORM tonistiigi/xx:${XX_VERSION} AS xx
