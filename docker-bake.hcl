@@ -73,10 +73,10 @@ target "lint-gopls" {
   target = "gopls-analyze"
 }
 
-target "modernize-fix" {
+target "gopls-fix" {
   inherits = ["_common"]
   dockerfile = "./hack/dockerfiles/lint.Dockerfile"
-  target = "modernize-fix"
+  target = "gopls-fix"
   output = ["."]
 }
 
