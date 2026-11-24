@@ -546,7 +546,7 @@ workers0:
 		fmt.Fprintf(tw, "Status:\tCanceled\n")
 	}
 
-	fmt.Fprintf(tw, "Build Steps:\t%d/%d (%.0f%% cached)\n", out.NumCompletedSteps, out.NumTotalSteps, float64(out.NumCachedSteps)/float64(out.NumTotalSteps)*100)
+	fmt.Fprintf(tw, "Build Steps:\t%d/%d (%d cached)\n", out.NumCompletedSteps, out.NumTotalSteps, out.NumCachedSteps)
 	tw.Flush()
 
 	fmt.Fprintln(dockerCli.Out())
