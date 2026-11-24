@@ -492,6 +492,12 @@ type (
 		completed *waitmap.Map
 		parents   map[string][]string
 		children  map[string][]string
+		// evaluateAfter lists the ancestors that must finish evaluating before
+		// a dependent starts evaluating. See calculateTargetLinks.
+		evaluateAfter map[string][]string
+		// deferErrors classifies a failed dependent as aborted by its failed
+		// parent. See run.
+		deferErrors bool
 	}
 	linkedTargetHooks struct {
 		preEvaluate  func() error
@@ -511,13 +517,15 @@ const (
 	ExecutionModeDeferError  ExecutionMode = "defer-error"
 )
 
-func newLinkedTargetState(parents, children map[string][]string) *linkedTargetState {
+func newLinkedTargetState(parents, children, evaluateAfter map[string][]string, deferErrors bool) *linkedTargetState {
 	return &linkedTargetState{
-		results:   waitmap.New(),
-		evaluated: waitmap.New(),
-		completed: waitmap.New(),
-		parents:   parents,
-		children:  children,
+		results:       waitmap.New(),
+		evaluated:     waitmap.New(),
+		completed:     waitmap.New(),
+		parents:       parents,
+		children:      children,
+		evaluateAfter: evaluateAfter,
+		deferErrors:   deferErrors,
 	}
 }
 
@@ -535,6 +543,8 @@ func (s *linkedTargetState) fail(key string, err error) {
 	s.completed.Set(key, err)
 }
 
+const abortedDependencyMsg = "aborted: dependency target failed"
+
 func (s *linkedTargetState) run(ctx context.Context, key string, result any, hooks linkedTargetHooks) error {
 	// Registration flows from parents to children. Waiting for every direct child
 	// here preserves external-cache lookup before evaluation begins.
@@ -549,14 +559,33 @@ func (s *linkedTargetState) run(ctx context.Context, key string, result any, hoo
 			return err
 		}
 	}
-	// Evaluation follows dependency order so the target's own session is attached
-	// to shared solver vertices before a dependent can evaluate them.
-	if res, err := s.evaluated.Get(ctx, s.parents[key]...); err != nil {
+	// Ancestors whose session this target can't stand in for evaluate first, so
+	// their sessions are attached to shared solver vertices before this target
+	// can evaluate them.
+	if res, err := s.evaluated.Get(ctx, s.evaluateAfter[key]...); err != nil {
 		return err
-	} else if err := wrapResultError(res, "aborted: dependency target failed"); err != nil {
+	} else if err := wrapResultError(res, abortedDependencyMsg); err != nil {
 		return err
 	}
 	if err := hooks.evaluate(); err != nil {
+		// A dependent evaluating alongside its parents also fails on the solver
+		// vertices it shares with a failed parent. With deferred errors, report
+		// it as aborted by a parent that failed on the same vertex, the same as
+		// when it waited for the parent to evaluate. Every target runs to
+		// completion in that mode, so waiting for the parents doesn't delay the
+		// build. Otherwise the first error cancels the build, and waiting would
+		// only hold that back.
+		if s.deferErrors {
+			if res, waitErr := s.evaluated.Get(ctx, s.parents[key]...); waitErr == nil {
+				maps.DeleteFunc(res, func(_ string, v any) bool {
+					parentErr, ok := v.(error)
+					return !ok || !sameFailedVertex(err, parentErr)
+				})
+				if abortErr := wrapResultError(res, abortedDependencyMsg); abortErr != nil {
+					return abortErr
+				}
+			}
+		}
 		return err
 	}
 	s.evaluated.Set(key, struct{}{})
@@ -598,6 +627,17 @@ func wrapResultError(results map[string]any, msg string) error {
 		return targetAbortError{errors.Wrap(err, msg)}
 	}
 	return nil
+}
+
+// sameFailedVertex reports whether both errors come from the same failed solver
+// vertex.
+func sameFailedVertex(a, b error) bool {
+	va, ok := stderrors.AsType[*errdefs.VertexError](a)
+	if !ok {
+		return false
+	}
+	vb, ok := stderrors.AsType[*errdefs.VertexError](b)
+	return ok && va.Digest == vb.Digest
 }
 
 func newSyncTargetState(opts map[string]Options, drivers map[string][]*noderesolver.ResolvedNode) *syncTargetState {
@@ -707,7 +747,8 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 	var respMu sync.Mutex
 
 	multiTarget := len(opts) > 1
-	linkedTargets := newLinkedTargetState(calculateTargetLinks(reqForNodes, opts))
+	parents, children, evaluateAfter := calculateTargetLinks(reqForNodes, opts)
+	linkedTargets := newLinkedTargetState(parents, children, evaluateAfter, bh != nil && bh.Execution.Mode == ExecutionModeDeferError)
 	// linkedClients is only accessed from the synchronous part of the target
 	// loop below, before any goroutines are spawned; no mutex needed.
 	linkedClients := make(map[string]*client.Client)
@@ -1462,25 +1503,91 @@ func detectSharedMounts(ctx context.Context, reqs map[string][]*reqForNode) (_ m
 	return sessions, nil
 }
 
-// calculateTargetLinks returns direct dependencies and dependents for every linked target.
-func calculateTargetLinks(reqs map[string][]*reqForNode, opt map[string]Options) (map[string][]string, map[string][]string) {
-	parents := make(map[string][]string)
-	children := make(map[string][]string)
+// calculateTargetLinks returns direct dependencies and dependents for every
+// linked target, and the ancestors each dependent must wait for to finish
+// evaluating before it evaluates.
+//
+// A dependent's LLB embeds the LLB of its ancestors. BuildKit routes session
+// lookups for a solver vertex (secrets, SSH) to the sessions of the jobs that
+// have loaded that vertex, trying each one until one answers, and a job loads
+// its vertices only when it evaluates. A dependent evaluating before an
+// ancestor could run the ancestor's vertices with only its own session
+// attached, and one evaluating alongside it could answer lookups the
+// ancestor's session leaves unanswered. A dependent waits for every ancestor
+// whose session differs from its own, and evaluates alongside the others.
+func calculateTargetLinks(reqs map[string][]*reqForNode, opt map[string]Options) (parents, children, evaluateAfter map[string][]string) {
+	parents = make(map[string][]string)
+	children = make(map[string][]string)
+	evaluateAfter = make(map[string][]string)
+	names := make(map[string]string)
 	for name := range opt {
 		dps := reqs[name]
 		for i, dp := range dps {
 			so := reqs[name][i].so
 			for k, v := range so.FrontendAttrs {
 				if strings.HasPrefix(k, "context:") && strings.HasPrefix(v, "target:") {
-					parent := resultKey(dp.ResolvedNode, strings.TrimPrefix(v, "target:"))
+					parentName := strings.TrimPrefix(v, "target:")
+					parent := resultKey(dp.ResolvedNode, parentName)
 					child := resultKey(dp.ResolvedNode, name)
 					parents[child] = append(parents[child], parent)
 					children[parent] = append(children[parent], child)
+					names[parent], names[child] = parentName, name
 				}
 			}
 		}
 	}
-	return parents, children
+	for child := range parents {
+		childOpt := opt[names[child]]
+		visited := make(map[string]struct{})
+		var visit func(key string)
+		visit = func(key string) {
+			for _, ancestor := range parents[key] {
+				if _, ok := visited[ancestor]; ok {
+					continue
+				}
+				visited[ancestor] = struct{}{}
+				if !providesSessionOf(childOpt, opt[names[ancestor]]) {
+					evaluateAfter[child] = append(evaluateAfter[child], ancestor)
+				}
+				visit(ancestor)
+			}
+		}
+		visit(child)
+	}
+	return parents, children, evaluateAfter
+}
+
+// providesSessionOf reports whether the child target's session answers every
+// session lookup that BuildKit routes by session group for the parent target's
+// vertices the same way the parent's session would. Registry auth is not
+// compared because all targets share one auth provider. Local contexts and OCI
+// layout stores address the parent's session by ID, which stays alive until
+// its dependents complete.
+func providesSessionOf(child, parent Options) bool {
+	// A stdin tarball context is fetched through the upload session.
+	if parent.Inputs.ContextPath == "-" {
+		return false
+	}
+	return sameSpecs(child.SecretSpecs, parent.SecretSpecs, (*buildflags.Secret).Equal) &&
+		sameSpecs(child.SSHSpecs, parent.SSHSpecs, (*buildflags.SSH).Equal)
+}
+
+// sameSpecs reports whether a and b contain the same specs, ignoring order.
+func sameSpecs[T any](a, b []T, equal func(T, T) bool) bool {
+	contains := func(specs []T, s T) bool {
+		return slices.ContainsFunc(specs, func(o T) bool { return equal(s, o) })
+	}
+	for _, s := range a {
+		if !contains(b, s) {
+			return false
+		}
+	}
+	for _, s := range b {
+		if !contains(a, s) {
+			return false
+		}
+	}
+	return true
 }
 
 func waitContextDeps(ctx context.Context, node *noderesolver.ResolvedNode, results *waitmap.Map, so *client.SolveOpt) error {
