@@ -31,6 +31,10 @@ Inspect a build record to view metadata such as duration, status, build inputs,
 platforms, outputs, and attached artifacts. You can also use flags to extract
 provenance, SBOMs, or other detailed information.
 
+The cached count reflects steps reported as cached by BuildKit. Other steps may
+include setup and export operations and do not necessarily indicate rebuilt
+layers.
+
 ## Examples
 
 ### Inspect the most recent build
@@ -48,7 +52,7 @@ Keep Git Dir:   true
 
 Started:        2025-02-07 11:56:24
 Duration:       1m  1s
-Build Steps:    16/16 (25% cached)
+Build Steps:    16/16 (4 cached)
 
 Image Resolve Mode:     local
 
@@ -93,7 +97,7 @@ Keep Git Dir:   true
 
 Started:        2025-02-07 11:56:24
 Duration:       1m  1s
-Build Steps:    16/16 (25% cached)
+Build Steps:    16/16 (4 cached)
 
 Image Resolve Mode:     local
 
