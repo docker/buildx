@@ -983,7 +983,7 @@ func printTargetList(w io.Writer, format string, cfg *bake.Config) error {
 		Description string `json:"description,omitempty"`
 		Group       bool   `json:"group,omitempty"`
 	}
-	var targetsList []targetList
+	targetsList := []targetList{}
 
 	for _, tgt := range list {
 		if strings.HasPrefix(tgt.name, "_") {
