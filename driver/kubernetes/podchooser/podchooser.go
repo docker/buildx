@@ -32,7 +32,7 @@ func (pc *RandomPodChooser) ChoosePod(ctx context.Context) (*corev1.Pod, error) 
 		return nil, err
 	}
 	if len(pods) == 0 {
-		return nil, errors.New("no running buildkit pods found")
+		return nil, errors.New("no ready buildkit pods found")
 	}
 	n := rand.Intn(len(pods)) // #nosec G404 -- no strong seeding required
 	logrus.Debugf("RandomPodChooser.ChoosePod(): len(pods)=%d, n=%d", len(pods), n)
@@ -116,7 +116,7 @@ func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *app
 			logrus.Debugf("pod terminating, skipping: %q", pod.Name)
 			continue
 		}
-		if pod.Status.Phase == corev1.PodRunning {
+		if pod.Status.Phase == corev1.PodRunning && isPodReady(pod) {
 			logrus.Debugf("pod running: %q", pod.Name)
 			runningPods = append(runningPods, pod)
 		}
@@ -125,4 +125,15 @@ func ListRunningPods(ctx context.Context, client kubeclient.PodClient, depl *app
 		return cmp.Compare(a.Name, b.Name)
 	})
 	return runningPods, nil
+}
+
+// Running only describes the pod lifecycle, not whether the worker can accept
+// builds. Honor readiness gates and container readiness before opening a session.
+func isPodReady(pod *corev1.Pod) bool {
+	for _, condition := range pod.Status.Conditions {
+		if condition.Type == corev1.PodReady {
+			return condition.Status == corev1.ConditionTrue
+		}
+	}
+	return false
 }
