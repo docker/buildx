@@ -228,3 +228,20 @@ func waitClosed(t *testing.T, ch <-chan struct{}) {
 		t.Fatal("fake executor kept reading stdin after the stream ended")
 	}
 }
+
+func TestCloseCancelsExecStream(t *testing.T) {
+	ctx, cancel := context.WithCancelCause(context.Background())
+	defer cancel(context.Canceled)
+	fe := &fakeExecutor{unblock: make(chan struct{}), finished: make(chan struct{}), readerDone: make(chan struct{})}
+	conn, err := newExecConn(ctx, fe)
+	require.NoError(t, err)
+	require.NoError(t, conn.Close())
+	require.NoError(t, conn.Close())
+	select {
+	case <-fe.finished:
+	case <-time.After(5 * time.Second):
+		t.Fatal("closing the connection did not terminate the exec stream")
+	}
+	waitClosed(t, fe.readerDone)
+	require.NoError(t, context.Cause(ctx), "closing a connection must not cancel the build")
+}

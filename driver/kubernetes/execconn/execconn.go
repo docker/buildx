@@ -50,10 +50,12 @@ func ExecConn(ctx context.Context, restClient rest.Interface, restConfig *rest.C
 // already reported success and past its retry. The executor reads stdin only once the
 // stream is established, so the first stdin read is used as the readiness signal.
 func newExecConn(ctx context.Context, exec remotecommand.Executor) (net.Conn, error) {
+	streamCtx, cancel := context.WithCancelCause(ctx)
 	stdinR, stdinW := io.Pipe()
 	stdoutR, stdoutW := io.Pipe()
 	kc := &kubeConn{
 		stdin:      stdinW,
+		cancel:     cancel,
 		stdout:     stdoutR,
 		localAddr:  dummyAddr{network: "dummy", s: "dummy-0"},
 		remoteAddr: dummyAddr{network: "dummy", s: "dummy-1"},
@@ -64,7 +66,8 @@ func newExecConn(ctx context.Context, exec remotecommand.Executor) (net.Conn, er
 
 	streamErr := make(chan error, 1)
 	go func() {
-		serr := exec.StreamWithContext(ctx, remotecommand.StreamOptions{
+		defer cancel(context.Canceled)
+		serr := exec.StreamWithContext(streamCtx, remotecommand.StreamOptions{
 			Stdin:  stdin,
 			Stdout: stdoutW,
 			Stderr: os.Stderr,
@@ -108,6 +111,7 @@ func (r *readyReader) Read(p []byte) (int, error) {
 }
 
 type kubeConn struct {
+	cancel        context.CancelCauseFunc
 	stdin         io.WriteCloser
 	stdout        io.ReadCloser
 	stdioClosedMu sync.Mutex // for stdinClosed and stdoutClosed
@@ -141,6 +145,9 @@ func (c *kubeConn) CloseRead() error {
 }
 
 func (c *kubeConn) Close() error {
+	// Closing the pipes alone does not stop a remote command waiting for exit.
+	// Cancel this connection only; the parent build context remains usable.
+	c.cancel(context.Canceled)
 	var err error
 	c.stdioClosedMu.Lock()
 	stdinClosed := c.stdinClosed
