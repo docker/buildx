@@ -821,6 +821,12 @@ Attribute keys:
 
 - `name` - name (references) for the new image.
 - `push` - Boolean to automatically push the image.
+- `unpack` - Boolean to unpack the image after creation when using a containerd
+  image store.
+
+With the containerd image store, deferred unpacking can make an image's reported
+disk usage smaller than its base image's until the first run; use `unpack=true`
+to request unpacking during export.
 
 For more information, see
 [Image and registry exporters](https://docs.docker.com/build/exporters/image-registry/).
