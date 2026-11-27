@@ -2,6 +2,7 @@ package store
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -62,6 +63,26 @@ func TestNodeLocking(t *testing.T) {
 		require.Fail(t, "transaction should have completed")
 	case <-ready:
 	}
+}
+
+func TestListIgnoresInvalidInstanceNames(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(dir)))
+	require.NoError(t, err)
+	txn, release, err := s.Txn()
+	require.NoError(t, err)
+	defer release()
+
+	require.NoError(t, txn.Save(&NodeGroup{Name: "healthy"}))
+	stray := filepath.Join(dir, instanceDir, ".DS_Store")
+	require.NoError(t, os.WriteFile(stray, nil, 0600))
+
+	groups, err := txn.List()
+	require.NoError(t, err)
+	require.Len(t, groups, 1)
+	require.Equal(t, "healthy", groups[0].Name)
+	require.FileExists(t, stray)
 }
 
 func TestNodeManagement(t *testing.T) {
