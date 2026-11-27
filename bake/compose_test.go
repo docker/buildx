@@ -463,6 +463,32 @@ services:
 	require.Equal(t, []string{"nofile=1024:1024"}, c.Targets[1].Ulimits)
 }
 
+func TestComposeUlimitsSingleValue(t *testing.T) {
+	dt := []byte(`
+services:
+  app:
+    build:
+      context: .
+      ulimits:
+        nproc: 65535
+        core: 0
+        memlock: -1
+        nofile:
+          soft: 20000
+          hard: 40000
+`)
+
+	c, err := ParseCompose([]composetypes.ConfigFile{{Content: dt}}, nil)
+	require.NoError(t, err)
+	require.Len(t, c.Targets, 1)
+	require.ElementsMatch(t, []string{
+		"nproc=65535:65535",
+		"core=0:0",
+		"memlock=-1:-1",
+		"nofile=20000:40000",
+	}, c.Targets[0].Ulimits)
+}
+
 func TestComposeExtDedup(t *testing.T) {
 	dt := []byte(`
 services:
