@@ -90,7 +90,7 @@ func (t *Txn) NodeGroupByName(name string) (*NodeGroup, error) {
 	}
 	var ng NodeGroup
 	if err := json.Unmarshal(dt, &ng); err != nil {
-		return nil, err
+		return nil, errors.Wrapf(err, "decoding %s/%s", instanceDir, name)
 	}
 	if ng.LastActivity, err = t.GetLastActivity(&ng); err != nil {
 		return nil, err
@@ -198,7 +198,7 @@ func (t *Txn) Current(key string) (*NodeGroup, error) {
 	if err == nil {
 		var c current
 		if err := json.Unmarshal(dt, &c); err != nil {
-			return nil, err
+			return nil, errors.Wrap(err, "decoding current")
 		}
 		if c.Name != "" {
 			if c.Global {

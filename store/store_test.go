@@ -1,7 +1,9 @@
 package store
 
 import (
+	"encoding/json"
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -27,6 +29,27 @@ func TestEmptyStartup(t *testing.T) {
 	ng, err := txn.Current("foo")
 	require.NoError(t, err)
 	require.Nil(t, ng)
+}
+
+func TestInvalidStoreJSON(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(dir)))
+	require.NoError(t, err)
+	txn, release, err := s.Txn()
+	require.NoError(t, err)
+	defer release()
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "current"), []byte("."), 0600))
+	_, err = txn.Current("foo")
+	var syntaxErr *json.SyntaxError
+	require.ErrorAs(t, err, &syntaxErr)
+	require.EqualError(t, err, "decoding current: "+syntaxErr.Error())
+
+	require.NoError(t, os.WriteFile(filepath.Join(dir, instanceDir, "mybuild"), nil, 0600))
+	_, err = txn.List()
+	require.ErrorAs(t, err, &syntaxErr)
+	require.EqualError(t, err, "decoding instances/mybuild: "+syntaxErr.Error())
 }
 
 func TestNodeLocking(t *testing.T) {
