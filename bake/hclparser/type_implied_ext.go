@@ -107,6 +107,23 @@ func UnwrapCtyValue(in cty.Value) cty.Value {
 	if in.Type().Equals(want) {
 		return in
 	} else if out, err := convert.Convert(in, want); err == nil {
+		// Dynamic attributes retain their capsule during conversion. Unwrap
+		// them so expressions compare the underlying value, not the capsule.
+		out, _ = cty.Transform(out, func(_ cty.Path, v cty.Value) (cty.Value, error) {
+			if !v.Type().IsCapsuleType() || !toCtyValueType(v.Type()).Equals(cty.DynamicPseudoType) {
+				return v, nil
+			}
+			if v.IsNull() {
+				return cty.NullVal(cty.DynamicPseudoType), nil
+			}
+			if !v.IsKnown() {
+				return cty.DynamicVal, nil
+			}
+			if conv, ok := v.EncapsulatedValue().(ToCtyValueConverter); ok {
+				return conv.ToCtyValue(), nil
+			}
+			return v, nil
+		})
 		return out
 	}
 	return cty.NullVal(want)

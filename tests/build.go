@@ -53,6 +53,7 @@ func buildCmd(sb integration.Sandbox, opts ...cmdOpt) (string, error) {
 
 var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuild,
+	testBuildPullPolicy,
 	testBuildAlias,
 	testBuildStdin,
 	testBuildRemote,
@@ -102,6 +103,68 @@ func testBuild(t *testing.T, sb integration.Sandbox) {
 	dir := createTestProject(t)
 	out, err := buildCmd(sb, withArgs(dir))
 	require.NoError(t, err, string(out))
+}
+
+func testBuildPullPolicy(t *testing.T, sb integration.Sandbox) {
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", []byte("FROM scratch\nCOPY data /data\n"), 0o600), fstest.CreateFile("data", []byte("local image"), 0o600))
+	out, err := buildCmd(sb, withArgs("--pull=never", dir))
+	if err != nil && strings.Contains(out, "pull policy never is not supported by the builder") {
+		t.Log("builder correctly rejected unsupported never policy")
+		return
+	}
+	require.NoError(t, err, out)
+
+	registry, err := sb.NewRegistry()
+	require.NoError(t, err)
+	ref := registry + "/pull-policy:latest"
+	out, err = buildCmd(sb, withArgs("--provenance=false", "--output=type=image,push=true,name="+ref, dir))
+	require.NoError(t, err, out)
+	desc, _, err := contentutil.ProviderFromRef(sb.Context(), ref)
+	require.NoError(t, err)
+	digestRef := registry + "/pull-policy@" + desc.Digest.String()
+	require.NoError(t, os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte("FROM "+digestRef+"\n"), 0o600))
+	for _, policy := range []string{"always", "missing", "never"} {
+		t.Run(policy, func(t *testing.T) {
+			dest := t.TempDir()
+			out, err := buildCmd(sb, withArgs("--no-cache", "--pull="+policy, "--output=type=local,dest="+dest, dir))
+			require.NoError(t, err, out)
+			data, err := os.ReadFile(filepath.Join(dest, "data"))
+			require.NoError(t, err)
+			require.Equal(t, "local image", string(data))
+		})
+	}
+	for _, tc := range []struct {
+		name       string
+		dockerfile string
+		args       []string
+	}{
+		{
+			name:       "base",
+			dockerfile: "FROM " + registry + "/absent:latest\n",
+		},
+		{
+			name:       "syntax",
+			dockerfile: "#syntax=" + registry + "/frontend:latest\nFROM scratch\n",
+		},
+		{
+			name:       "syntax-arg",
+			dockerfile: "FROM scratch\n",
+			args:       []string{"--build-arg=BUILDKIT_SYNTAX=" + registry + "/frontend:latest"},
+		},
+		{
+			name:       "named-context",
+			dockerfile: "FROM base\n",
+			args:       []string{"--build-context=base=docker-image://" + registry + "/absent:latest"},
+		},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			require.NoError(t, os.WriteFile(filepath.Join(dir, "Dockerfile"), []byte(tc.dockerfile), 0o600))
+			args := append([]string{"--pull=never", dir}, tc.args...)
+			out, err := buildCmd(sb, withArgs(args...))
+			require.Error(t, err, out)
+			require.Contains(t, out, "pulling is disabled")
+		})
+	}
 }
 
 func testBuildAlias(t *testing.T, sb integration.Sandbox) {

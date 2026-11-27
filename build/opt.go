@@ -602,11 +602,23 @@ func toSolveOpt(ctx context.Context, np *noderesolver.ResolvedNode, multiDriver 
 		}
 	}
 
-	if opt.Pull {
+	switch opt.Pull {
+	case "true", buildflags.PullAlways:
 		so.FrontendAttrs["image-resolve-mode"] = pb.AttrImageResolveModeForcePull
-	} else if nodeDriver.IsMobyDriver() {
-		// moby driver always resolves local images by default
+	case buildflags.PullMissing:
 		so.FrontendAttrs["image-resolve-mode"] = pb.AttrImageResolveModePreferLocal
+	case buildflags.PullNever:
+		if err := bopts.LLBCaps.Supports(pb.CapSourceImageResolveModeNever); err != nil {
+			return nil, nil, errors.Wrap(err, "pull policy never is not supported by the builder")
+		}
+		so.FrontendAttrs["image-resolve-mode"] = pb.AttrImageResolveModeNever
+	case "", "false":
+		if nodeDriver.IsMobyDriver() {
+			// moby driver always resolves local images by default
+			so.FrontendAttrs["image-resolve-mode"] = pb.AttrImageResolveModePreferLocal
+		}
+	default:
+		return nil, nil, errors.Errorf("invalid pull policy %q", opt.Pull)
 	}
 	if opt.Target != "" {
 		so.FrontendAttrs["target"] = opt.Target

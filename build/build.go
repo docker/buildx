@@ -83,7 +83,7 @@ type Options struct {
 	NoCache                    bool
 	NoCacheFilter              []string
 	Platforms                  []ocispecs.Platform
-	Pull                       bool
+	Pull                       buildflags.PullPolicy
 	SecretSpecs                buildflags.Secrets
 	SSHSpecs                   []*buildflags.SSH
 	ShmSize                    opts.MemBytes

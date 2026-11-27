@@ -2,6 +2,7 @@ package bake
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"path/filepath"
@@ -14,6 +15,66 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )
+
+func TestPullPolicies(t *testing.T) {
+	for _, value := range []string{"true", "false", `"always"`, `"missing"`, `"never"`} {
+		for _, format := range []string{"hcl", "json"} {
+			t.Run(format+"/"+value, func(t *testing.T) {
+				data := fmt.Sprintf(`target "base" { pull = %s }
+target "app" { inherits = ["base"] }
+target "copy" { pull = target.base.pull }`, value)
+				if format == "json" {
+					data = fmt.Sprintf(`{"target":{"base":{"pull":%s},"app":{"inherits":["base"]}}}`, value)
+				}
+				files := []File{{Name: "docker-bake." + format, Data: []byte(data)}}
+				targets, _, err := ReadTargets(t.Context(), files, []string{"app"}, nil, nil, nil, &EntitlementConf{})
+				require.NoError(t, err)
+				require.NotNil(t, targets["app"].Pull)
+				dt, err := json.Marshal(targets["app"].Pull)
+				require.NoError(t, err)
+				require.JSONEq(t, value, string(dt))
+				if format == "hcl" {
+					targets, _, err = ReadTargets(t.Context(), files, []string{"copy"}, nil, nil, nil, &EntitlementConf{})
+					require.NoError(t, err)
+					dt, err = json.Marshal(targets["copy"].Pull)
+					require.NoError(t, err)
+					require.JSONEq(t, value, string(dt))
+				}
+				for _, override := range []string{"true", "false", "always", "missing", "never"} {
+					targets, _, err = ReadTargets(t.Context(), files, []string{"app"}, []string{"app.pull=" + override}, nil, nil, &EntitlementConf{})
+					require.NoError(t, err)
+					require.Equal(t, buildflags.PullPolicy(override), *targets["app"].Pull)
+				}
+			})
+		}
+	}
+	for _, value := range []string{`"invalid"`, "1"} {
+		_, _, err := ReadTargets(t.Context(), []File{{
+			Name: "docker-bake.hcl",
+			Data: fmt.Appendf(nil, `target "app" { pull = %s }`, value),
+		}}, []string{"app"}, nil, nil, nil, &EntitlementConf{})
+		require.Error(t, err)
+	}
+}
+
+func TestPullPolicyExpressions(t *testing.T) {
+	files := []File{{
+		Name: "docker-bake.hcl",
+		Data: []byte(`target "base" { pull = true }
+target "policy" { pull = "never" }
+target "unset" {}
+target "app" {
+  pull = target.base.pull ? target.policy.pull : "missing"
+  tags = [target.policy.pull == "never" ? "local" : "remote"]
+  args = { UNSET = target.unset.pull == null ? "yes" : "no" }
+}`),
+	}}
+	targets, _, err := ReadTargets(t.Context(), files, []string{"app"}, nil, nil, nil, &EntitlementConf{})
+	require.NoError(t, err)
+	require.Equal(t, buildflags.PullNever, *targets["app"].Pull)
+	require.Equal(t, []string{"local"}, targets["app"].Tags)
+	require.Equal(t, "yes", *targets["app"].Args["UNSET"])
+}
 
 func TestReadTargets(t *testing.T) {
 	fp := File{
@@ -538,7 +599,7 @@ target "webapp" {
 		t.Parallel()
 		m, g, err := ReadTargets(ctx, []File{fp}, []string{"webapp"}, []string{"webapp.pull=false"}, nil, nil, &EntitlementConf{})
 		require.NoError(t, err)
-		require.Equal(t, false, *m["webapp"].Pull)
+		require.Equal(t, buildflags.PullPolicy("false"), *m["webapp"].Pull)
 		require.Equal(t, 1, len(g))
 		require.Equal(t, []string{"webapp"}, g["default"].Targets)
 	})

@@ -30,7 +30,7 @@ Build from a file
 | [`--print`](#print)                 | `bool`        |             | Print the options without building                                                                                    |
 | [`--progress`](#progress)           | `string`      | `auto`      | Set type of progress output (`auto`, `none`,  `plain`, `quiet`, `rawjson`, `tty`). Use plain to show container output |
 | [`--provenance`](#provenance)       | `string`      |             | Shorthand for `--set=*.attest=type=provenance`                                                                        |
-| [`--pull`](#pull)                   | `bool`        |             | Always attempt to pull all referenced images                                                                          |
+| [`--pull`](#pull)                   | `string`      | `false`     | Image pull policy (`always`, `missing`, `never`)                                                                      |
 | [`--push`](#push)                   | `bool`        |             | Shorthand for `--set=*.output=type=registry`. Conditional.                                                            |
 | [`--sbom`](#sbom)                   | `string`      |             | Shorthand for `--set=*.attest=type=sbom`                                                                              |
 | [`--set`](#set)                     | `stringArray` |             | Override target value (e.g., `targetpattern.key=value`)                                                               |
@@ -463,9 +463,10 @@ Same as [`build --progress`](buildx_build.md#progress).
 
 Same as [`build --provenance`](buildx_build.md#provenance).
 
-### <a name="pull"></a> Always attempt to pull a newer version of the image (--pull)
+### <a name="pull"></a> Set the image pull policy (--pull)
 
-Same as `build --pull`.
+Same as [`build --pull`](buildx_build.md#pull). Overrides the `pull` setting for
+all selected targets.
 
 ### <a name="push"></a> Push images to a registry (--push)
 
