@@ -909,6 +909,67 @@ services:
 	require.Equal(t, "buildfoo", *c.Targets[1].Target)
 }
 
+func TestNestedIncludeContextPath(t *testing.T) {
+	tmpdir := t.TempDir()
+
+	err := os.MkdirAll(filepath.Join(tmpdir, "b"), 0755)
+	require.NoError(t, err)
+	err = os.MkdirAll(filepath.Join(tmpdir, "c"), 0755)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpdir, "b", "b.yml"), []byte(`
+include:
+  - path:
+      - ../c/c.yml
+
+services:
+  b:
+    build:
+      context: .
+      dockerfile_inline: FROM scratch
+`), 0644)
+	require.NoError(t, err)
+
+	err = os.WriteFile(filepath.Join(tmpdir, "c", "c.yml"), []byte(`
+services:
+  c:
+    build:
+      context: .
+      dockerfile_inline: FROM scratch
+`), 0644)
+	require.NoError(t, err)
+
+	dt := []byte(`
+include:
+  - path:
+      - ./b/b.yml
+
+services:
+  a:
+    build:
+      context: .
+      dockerfile_inline: FROM scratch
+`)
+
+	chdir(t, tmpdir)
+	c, err := ParseComposeFiles([]File{{
+		Name: "a.yml",
+		Data: dt,
+	}}, nil, ParseOpt{
+		FileRelativePaths: true,
+	})
+	require.NoError(t, err)
+
+	targets := map[string]*Target{}
+	for _, t := range c.Targets {
+		targets[t.Name] = t
+	}
+
+	require.Equal(t, ".", *targets["a"].Context)
+	require.Equal(t, "b", *targets["b"].Context)
+	require.Equal(t, "c", *targets["c"].Context)
+}
+
 func TestDevelop(t *testing.T) {
 	dt := []byte(`
 services:
@@ -1119,6 +1180,11 @@ func TestEmptyComposeFile(t *testing.T) {
 	_, err := ParseComposeFiles([]File{{Name: "compose.yml", Data: []byte(``)}}, nil)
 	require.Error(t, err)
 	require.ErrorContains(t, err, `empty compose file`) // https://github.com/compose-spec/compose-go/blob/a42e7579d813e64c0c1f598a666358bc0c0a0eb4/loader/loader.go#L542
+}
+
+func TestParseComposeNoFiles(t *testing.T) {
+	_, err := ParseCompose(nil, nil)
+	require.ErrorContains(t, err, "no compose file specified")
 }
 
 func TestParseComposeAttests(t *testing.T) {
