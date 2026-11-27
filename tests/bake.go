@@ -63,6 +63,9 @@ var bakeTests = []func(t *testing.T, sb integration.Sandbox){
 	testBakeRemoteCmdContext,
 	testBakeRemoteLocalOverride,
 	testBakeRemoteLinkedTargetSecrets,
+	testBakeLinkedTargetsEvaluateConcurrently,
+	testBakeLinkedTargetsChildSecretNotShared,
+	testBakeLinkedTargetsFailFast,
 	testBakeLocalCwdOverride,
 	testBakeRemoteCmdContextOverride,
 	testBakeRemoteContextSubdir,
@@ -890,6 +893,41 @@ target "c-dependent" {
 		require.Contains(t, out, "c-dependent: aborted done")
 		require.FileExists(t, filepath.Join(dir, "out", "foo"))
 	})
+	t.Run("linked-independent-failure", func(t *testing.T) {
+		integration.SkipOnPlatform(t, "windows")
+		// The dependent fails in its own stage well before the parent fails, so
+		// it is reported as failed rather than aborted by the parent.
+		cacheID := identity.NewID()
+		dir := tmpdir(t, fstest.CreateFile("docker-bake.hcl", fmt.Appendf(nil, `
+target "parent" {
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox
+RUN --mount=type=cache,id=%[1]s,target=/sync,sharing=shared for i in $(seq 60); do [ -f /sync/child ] && sleep 10 && exit 11; sleep 1; done
+EOT
+}
+
+target "child" {
+	contexts = {
+		parent = "target:parent"
+	}
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox AS independent
+RUN --mount=type=cache,id=%[1]s,target=/sync,sharing=shared touch /sync/child && exit 42
+
+FROM parent
+COPY --from=independent /etc/passwd /
+EOT
+}
+`, cacheID), 0600))
+		out, err := bakeCmd(sb, withDir(dir), withArgs("--jobs=defer-error", "--no-cache", "--progress=plain", "child"))
+		require.Error(t, err, out)
+		require.Contains(t, out, "child: failed done")
+		require.Contains(t, out, "parent: failed done")
+		require.Contains(t, out, "exit code: 42")
+		require.Contains(t, out, "exit code: 11")
+	})
 }
 
 func testBakeDeferErrorCancel(t *testing.T, sb integration.Sandbox) {
@@ -1545,6 +1583,127 @@ EOT
 		require.NoError(t, err)
 		require.Equal(t, "bar\n", string(secret2))
 	}
+}
+
+func testBakeLinkedTargetsEvaluateConcurrently(t *testing.T, sb integration.Sandbox) {
+	// Regression test for https://github.com/docker/buildx/issues/4216.
+	integration.SkipOnPlatform(t, "windows")
+
+	// The parent waits for a marker that only the dependent's independent stage
+	// writes, so the bake only succeeds if the dependent starts evaluating while
+	// the parent is still running.
+	cacheID := identity.NewID()
+	bakefile := fmt.Appendf(nil, `
+target "parent" {
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox
+RUN --mount=type=cache,id=%[1]s,target=/sync,sharing=shared for i in $(seq 60); do [ -f /sync/child ] && exit 0; sleep 1; done; exit 1
+EOT
+}
+
+target "child" {
+	contexts = {
+		parent = "target:parent"
+	}
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox AS independent
+RUN --mount=type=cache,id=%[1]s,target=/sync,sharing=shared touch /sync/child /independent
+
+FROM parent
+COPY --from=independent /independent /
+EOT
+}
+`, cacheID)
+	dir := tmpdir(t, fstest.CreateFile("docker-bake.hcl", bakefile, 0600))
+
+	// Cache mount IDs are not part of the cache key, so disable the cache to
+	// make sure both steps run.
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--no-cache", "--progress=plain", "child"))
+	require.NoError(t, err, out)
+}
+
+func testBakeLinkedTargetsChildSecretNotShared(t *testing.T, sb integration.Sandbox) {
+	integration.SkipOnPlatform(t, "windows")
+
+	// The parent waits until the dependent's independent stage has run, which
+	// means the dependent's session is attached to the parent's vertices, and
+	// then checks that its optional secret mount is not answered by the
+	// dependent's secret. A dependent with different secrets has to wait for the
+	// parent instead, so the marker never appears and the wait times out.
+	cacheID := identity.NewID()
+	bakefile := fmt.Appendf(nil, `
+target "parent" {
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox
+RUN --mount=type=cache,id=%[1]s,target=/sync,sharing=shared for i in $(seq 15); do [ -f /sync/child ] && break; sleep 1; done
+RUN --mount=type=secret,id=foo [ ! -e /run/secrets/foo ]
+EOT
+}
+
+target "child" {
+	contexts = {
+		parent = "target:parent"
+	}
+	secret = ["id=foo,src=secret.txt"]
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox AS independent
+RUN --mount=type=cache,id=%[1]s,target=/sync,sharing=shared touch /sync/child /independent
+
+FROM parent
+COPY --from=independent /independent /
+EOT
+}
+`, cacheID)
+	dir := tmpdir(
+		t,
+		fstest.CreateFile("docker-bake.hcl", bakefile, 0600),
+		fstest.CreateFile("secret.txt", []byte("child secret"), 0600),
+	)
+
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--no-cache", "--progress=plain", "child"))
+	require.NoError(t, err, out)
+}
+
+func testBakeLinkedTargetsFailFast(t *testing.T, sb integration.Sandbox) {
+	integration.SkipOnPlatform(t, "windows")
+
+	// A dependent that fails while its parent is still running cancels the
+	// parent instead of waiting for it to finish.
+	bakefile := []byte(`
+target "parent" {
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox
+RUN sleep 300
+EOT
+}
+
+target "child" {
+	contexts = {
+		parent = "target:parent"
+	}
+	output = ["type=cacheonly"]
+	dockerfile-inline = <<EOT
+FROM busybox AS independent
+RUN exit 1
+
+FROM parent
+COPY --from=independent /etc/passwd /
+EOT
+}
+`)
+	dir := tmpdir(t, fstest.CreateFile("docker-bake.hcl", bakefile, 0600))
+
+	start := time.Now()
+	out, err := bakeCmd(sb, withDir(dir), withArgs("--no-cache", "--progress=plain", "child"))
+	require.Error(t, err, out)
+	require.Less(t, time.Since(start), 2*time.Minute, out)
+	require.Contains(t, out, `process "/bin/sh -c exit 1" did not complete successfully`)
+	require.Contains(t, out, "CANCELED")
 }
 
 func testBakeLocalCwdOverride(t *testing.T, sb integration.Sandbox) {

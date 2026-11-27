@@ -5,7 +5,11 @@ import (
 	"testing"
 	"time"
 
+	noderesolver "github.com/docker/buildx/build/resolver"
+	"github.com/docker/buildx/util/buildflags"
 	"github.com/docker/buildx/util/waitmap"
+	"github.com/moby/buildkit/client"
+	"github.com/moby/buildkit/solver/errdefs"
 	"github.com/pkg/errors"
 	"github.com/stretchr/testify/require"
 )
@@ -14,6 +18,8 @@ func TestLinkedTargetStateIsLinked(t *testing.T) {
 	state := newLinkedTargetState(
 		map[string][]string{"child": {"parent"}},
 		map[string][]string{"parent": {"child"}},
+		nil,
+		false,
 	)
 	require.True(t, state.isLinked("parent"))
 	require.True(t, state.isLinked("child"))
@@ -29,7 +35,7 @@ func TestLinkedTargetStateChainRetainsParents(t *testing.T) {
 		"root":   {"middle"},
 		"middle": {"leaf"},
 	}
-	state := newLinkedTargetState(parents, children)
+	state := newLinkedTargetState(parents, children, nil, false)
 
 	leafStarted := make(chan struct{})
 	releaseLeaf := make(chan struct{})
@@ -83,7 +89,7 @@ func TestLinkedTargetStateDiamondEvaluatesBranchesInParallel(t *testing.T) {
 		"left":  {"leaf"},
 		"right": {"leaf"},
 	}
-	state := newLinkedTargetState(parents, children)
+	state := newLinkedTargetState(parents, children, parents, false)
 
 	branchesStarted := make(chan string, 2)
 	releaseBranches := make(chan struct{})
@@ -130,6 +136,8 @@ func TestLinkedTargetStateCancellation(t *testing.T) {
 	state := newLinkedTargetState(
 		map[string][]string{"child": {"missing-parent"}},
 		map[string][]string{},
+		map[string][]string{"child": {"missing-parent"}},
+		false,
 	)
 	ctx, cancel := context.WithCancelCause(t.Context())
 	cause := errors.New("target failed")
@@ -148,6 +156,8 @@ func TestLinkedTargetStateErrorDirection(t *testing.T) {
 		return newLinkedTargetState(
 			map[string][]string{"child": {"parent"}},
 			map[string][]string{"parent": {"child"}},
+			map[string][]string{"child": {"parent"}},
+			false,
 		)
 	}
 	t.Run("failed-parent", func(t *testing.T) {
@@ -178,10 +188,277 @@ func TestLinkedTargetStateErrorDirection(t *testing.T) {
 	})
 }
 
+func TestLinkedTargetStateEvaluatesAlongsideParent(t *testing.T) {
+	state := newLinkedTargetState(
+		map[string][]string{"child": {"parent"}},
+		map[string][]string{"parent": {"child"}},
+		nil,
+		false,
+	)
+	childStarted := make(chan struct{})
+	parentDone := make(chan error, 1)
+	go func() {
+		parentDone <- state.run(t.Context(), "parent", struct{}{}, linkedTargetHooks{
+			evaluate: func() error {
+				select {
+				case <-childStarted:
+					return nil
+				case <-time.After(5 * time.Second):
+					return errors.New("child did not evaluate alongside parent")
+				}
+			},
+		})
+	}()
+	err := state.run(t.Context(), "child", struct{}{}, linkedTargetHooks{
+		evaluate: func() error {
+			close(childStarted)
+			return nil
+		},
+	})
+	require.NoError(t, err)
+	require.NoError(t, <-parentDone)
+}
+
+func TestLinkedTargetStateAlongsideParentDeferredErrors(t *testing.T) {
+	// run evaluates parent and child concurrently and returns the child's error
+	// once both targets are done.
+	run := func(t *testing.T, parentErr, childErr error) error {
+		state := newLinkedTargetState(
+			map[string][]string{"child": {"parent"}},
+			map[string][]string{"parent": {"child"}},
+			nil,
+			true,
+		)
+		childStarted := make(chan struct{})
+		parentDone := make(chan struct{})
+		go func() {
+			defer close(parentDone)
+			err := state.run(t.Context(), "parent", struct{}{}, linkedTargetHooks{
+				evaluate: func() error {
+					<-childStarted
+					return parentErr
+				},
+			})
+			if err != nil {
+				state.fail("parent", err)
+			}
+		}()
+		err := state.run(t.Context(), "child", struct{}{}, linkedTargetHooks{
+			evaluate: func() error {
+				close(childStarted)
+				return childErr
+			},
+		})
+		if err != nil {
+			state.fail("child", err)
+		}
+		<-parentDone
+		return err
+	}
+
+	t.Run("failed-parent", func(t *testing.T) {
+		parentErr := errdefs.WrapVertex(errors.New("parent failed"), "sha256:shared")
+		err := run(t, parentErr, errdefs.WrapVertex(errors.New("shared vertex failed"), "sha256:shared"))
+		var abortErr targetAbortError
+		require.ErrorAs(t, err, &abortErr)
+		require.ErrorIs(t, err, parentErr)
+		require.ErrorContains(t, err, abortedDependencyMsg)
+	})
+	t.Run("independent-child-failure", func(t *testing.T) {
+		childErr := errdefs.WrapVertex(errors.New("child failed"), "sha256:child")
+		err := run(t, errdefs.WrapVertex(errors.New("parent failed"), "sha256:parent"), childErr)
+		var abortErr targetAbortError
+		require.False(t, errors.As(err, &abortErr))
+		require.ErrorIs(t, err, childErr)
+	})
+	t.Run("failed-child", func(t *testing.T) {
+		childErr := errors.New("child failed")
+		err := run(t, nil, childErr)
+		var abortErr targetAbortError
+		require.False(t, errors.As(err, &abortErr))
+		require.ErrorIs(t, err, childErr)
+	})
+}
+
+func TestLinkedTargetStateAlongsideParentFailFast(t *testing.T) {
+	state := newLinkedTargetState(
+		map[string][]string{"child": {"parent"}},
+		map[string][]string{"parent": {"child"}},
+		nil,
+		false,
+	)
+	childStarted := make(chan struct{})
+	releaseParent := make(chan struct{})
+	parentDone := make(chan error, 1)
+	go func() {
+		parentDone <- state.run(t.Context(), "parent", struct{}{}, linkedTargetHooks{
+			evaluate: func() error {
+				<-childStarted
+				<-releaseParent
+				return nil
+			},
+		})
+	}()
+	// Without deferred errors the child reports its failure while the parent is
+	// still evaluating, so the failure can cancel the build.
+	childErr := errors.New("child failed")
+	childDone := make(chan error, 1)
+	go func() {
+		childDone <- state.run(t.Context(), "child", struct{}{}, linkedTargetHooks{
+			evaluate: func() error {
+				close(childStarted)
+				return childErr
+			},
+		})
+	}()
+	var err error
+	select {
+	case err = <-childDone:
+	case <-time.After(5 * time.Second):
+		t.Fatal("child waited for the parent to finish evaluating")
+	}
+	var abortErr targetAbortError
+	require.False(t, errors.As(err, &abortErr))
+	require.ErrorIs(t, err, childErr)
+	state.fail("child", err)
+	close(releaseParent)
+	require.NoError(t, <-parentDone)
+}
+
+func TestCalculateTargetLinks(t *testing.T) {
+	node := &noderesolver.ResolvedNode{}
+	key := func(name string) string { return resultKey(node, name) }
+	secret := func(id, src string) *buildflags.Secret { return &buildflags.Secret{ID: id, FilePath: src} }
+
+	tcs := []struct {
+		name          string
+		opts          map[string]Options
+		evaluateAfter map[string][]string
+	}{
+		{
+			name: "no-session-attachables",
+			opts: map[string]Options{
+				"parent": {},
+				"child":  {},
+			},
+			evaluateAfter: map[string][]string{},
+		},
+		{
+			name: "parent-secret-missing-in-child",
+			opts: map[string]Options{
+				"parent": {SecretSpecs: buildflags.Secrets{secret("token", "a")}},
+				"child":  {},
+			},
+			evaluateAfter: map[string][]string{key("child"): {key("parent")}},
+		},
+		{
+			name: "same-secrets",
+			opts: map[string]Options{
+				"parent": {SecretSpecs: buildflags.Secrets{secret("token", "a"), secret("other", "b")}},
+				"child":  {SecretSpecs: buildflags.Secrets{secret("other", "b"), secret("token", "a")}},
+			},
+			evaluateAfter: map[string][]string{},
+		},
+		{
+			name: "extra-secret-in-child",
+			opts: map[string]Options{
+				"parent": {SecretSpecs: buildflags.Secrets{secret("token", "a")}},
+				"child":  {SecretSpecs: buildflags.Secrets{secret("other", "b"), secret("token", "a")}},
+			},
+			evaluateAfter: map[string][]string{key("child"): {key("parent")}},
+		},
+		{
+			name: "parent-secret-with-different-source-in-child",
+			opts: map[string]Options{
+				"parent": {SecretSpecs: buildflags.Secrets{secret("token", "a")}},
+				"child":  {SecretSpecs: buildflags.Secrets{secret("token", "b")}},
+			},
+			evaluateAfter: map[string][]string{key("child"): {key("parent")}},
+		},
+		{
+			name: "parent-ssh-missing-in-child",
+			opts: map[string]Options{
+				"parent": {SSHSpecs: []*buildflags.SSH{{ID: "default"}}},
+				"child":  {},
+			},
+			evaluateAfter: map[string][]string{key("child"): {key("parent")}},
+		},
+		{
+			name: "same-ssh",
+			opts: map[string]Options{
+				"parent": {SSHSpecs: []*buildflags.SSH{{ID: "default"}}},
+				"child":  {SSHSpecs: []*buildflags.SSH{{ID: "default"}}},
+			},
+			evaluateAfter: map[string][]string{},
+		},
+		{
+			name: "extra-ssh-in-child",
+			opts: map[string]Options{
+				"parent": {},
+				"child":  {SSHSpecs: []*buildflags.SSH{{ID: "default"}}},
+			},
+			evaluateAfter: map[string][]string{key("child"): {key("parent")}},
+		},
+		{
+			name: "parent-stdin-context",
+			opts: map[string]Options{
+				"parent": {Inputs: Inputs{ContextPath: "-"}},
+				"child":  {},
+			},
+			evaluateAfter: map[string][]string{key("child"): {key("parent")}},
+		},
+		{
+			name: "grandparent-secret-missing-in-child",
+			opts: map[string]Options{
+				"grandparent": {SecretSpecs: buildflags.Secrets{secret("token", "a")}},
+				"parent":      {SecretSpecs: buildflags.Secrets{secret("token", "a")}},
+				"child":       {},
+			},
+			evaluateAfter: map[string][]string{
+				key("child"): {key("parent"), key("grandparent")},
+			},
+		},
+		{
+			name: "grandparent-secret-in-child",
+			opts: map[string]Options{
+				"grandparent": {SecretSpecs: buildflags.Secrets{secret("token", "a")}},
+				"parent":      {},
+				"child":       {SecretSpecs: buildflags.Secrets{secret("token", "a")}},
+			},
+			evaluateAfter: map[string][]string{
+				key("parent"): {key("grandparent")},
+				key("child"):  {key("parent")},
+			},
+		},
+	}
+	contexts := map[string]string{
+		"parent": "grandparent",
+		"child":  "parent",
+	}
+	for _, tc := range tcs {
+		t.Run(tc.name, func(t *testing.T) {
+			reqs := map[string][]*reqForNode{}
+			for name := range tc.opts {
+				attrs := map[string]string{}
+				if parent, ok := contexts[name]; ok {
+					if _, ok := tc.opts[parent]; ok {
+						attrs["context:base"] = "target:" + parent
+					}
+				}
+				reqs[name] = []*reqForNode{{ResolvedNode: node, so: &client.SolveOpt{FrontendAttrs: attrs}}}
+			}
+			_, _, evaluateAfter := calculateTargetLinks(reqs, tc.opts)
+			require.Equal(t, tc.evaluateAfter, evaluateAfter)
+		})
+	}
+}
+
 func TestSyncEvaluateDoesNotDeadlockLinkedTargets(t *testing.T) {
 	linked := newLinkedTargetState(
 		map[string][]string{"child": {"parent"}},
 		map[string][]string{"parent": {"child"}},
+		map[string][]string{"child": {"parent"}},
+		false,
 	)
 	state := &syncTargetState{
 		targets:   []string{"parent", "child"},
@@ -215,7 +492,7 @@ func TestSyncEvaluateDoesNotDeadlockLinkedTargets(t *testing.T) {
 }
 
 func TestSyncEvaluatePropagatesEvaluationErrors(t *testing.T) {
-	linked := newLinkedTargetState(map[string][]string{}, map[string][]string{})
+	linked := newLinkedTargetState(map[string][]string{}, map[string][]string{}, nil, false)
 	state := &syncTargetState{
 		targets:   []string{"success", "failure"},
 		results:   waitmap.New(),
