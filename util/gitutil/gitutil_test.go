@@ -2,6 +2,8 @@ package gitutil_test
 
 import (
 	"context"
+	"os"
+	"path/filepath"
 	"strings"
 	"testing"
 
@@ -83,6 +85,58 @@ func TestGitShortCommitErr(t *testing.T) {
 	require.Error(t, err)
 	require.True(t, gitutil.IsUnknownRevision(err))
 	require.False(t, gittestutil.IsAmbiguousArgument(err))
+}
+
+func TestGitCommitWithHEADFile(t *testing.T) {
+	ctx := context.TODO()
+	gittestutil.Mktmp(t)
+	c, err := gitutil.New()
+	require.NoError(t, err)
+	gittestutil.GitInit(c, t)
+	require.NoError(t, os.WriteFile("HEAD", []byte("not a revision"), 0600))
+
+	full, err := c.FullCommit(ctx)
+	require.Error(t, err)
+	require.True(t, gitutil.IsUnknownRevision(err))
+	require.Empty(t, full)
+	short, err := c.ShortCommit(ctx)
+	require.Error(t, err)
+	require.True(t, gitutil.IsUnknownRevision(err))
+	require.Empty(t, short)
+}
+
+func TestGitCommitWithoutParentBlob(t *testing.T) {
+	ctx := context.TODO()
+	gittestutil.Mktmp(t)
+	c, err := gitutil.New()
+	require.NoError(t, err)
+	gittestutil.GitInit(c, t)
+	require.NoError(t, os.WriteFile("file", []byte("before"), 0600))
+	gittestutil.GitAdd(c, t, "file")
+	gittestutil.GitCommit(c, t, "before")
+	blob, err := c.Run(ctx, "rev-parse", "HEAD:file")
+	require.NoError(t, err)
+	_, err = c.Run(ctx, "config", "diff.renames", "true")
+	require.NoError(t, err)
+	require.NoError(t, os.Remove("file"))
+	require.NoError(t, os.WriteFile("other", []byte("something else entirely"), 0600))
+	gittestutil.GitAdd(c, t, "file", "other")
+	gittestutil.GitCommit(c, t, "after")
+	want, err := c.FullCommit(ctx)
+	require.NoError(t, err)
+	wantShort, err := c.ShortCommit(ctx)
+	require.NoError(t, err)
+
+	// git show reads the parent blob for rename detection even with --quiet.
+	// Resolving HEAD should not need that blob.
+	hash := strings.TrimSpace(string(blob))
+	require.NoError(t, os.Remove(filepath.Join(".git", "objects", hash[:2], hash[2:])))
+	full, err := c.FullCommit(ctx)
+	require.NoError(t, err)
+	require.Equal(t, want, full)
+	short, err := c.ShortCommit(ctx)
+	require.NoError(t, err)
+	require.Equal(t, wantShort, short)
 }
 
 func TestGitTagsPointsAt(t *testing.T) {
