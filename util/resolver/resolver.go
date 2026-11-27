@@ -5,7 +5,10 @@ import (
 	"crypto/x509"
 	"net"
 	"net/http"
+	"net/url"
+	"path"
 	"runtime"
+	"strings"
 	"time"
 
 	"github.com/containerd/containerd/v2/core/remotes/docker"
@@ -115,15 +118,16 @@ func NewRegistryConfig(m map[string]RegistryConfig) docker.RegistryHosts {
 			var out []docker.RegistryHost
 
 			for _, mirror := range c.Mirrors {
+				mirrorHost, mirrorPath := extractMirrorHostAndPath(mirror)
 				h := docker.RegistryHost{
 					Scheme:       "https",
 					Client:       newDefaultClient(),
-					Host:         mirror,
-					Path:         "/v2",
+					Host:         mirrorHost,
+					Path:         path.Join("/v2", mirrorPath),
 					Capabilities: docker.HostCapabilityPull | docker.HostCapabilityResolve,
 				}
 
-				hosts, err := fillInsecureOpts(mirror, m[mirror], h)
+				hosts, err := fillInsecureOpts(mirrorHost, m[mirrorHost], h)
 				if err != nil {
 					return nil, err
 				}
@@ -156,6 +160,19 @@ func NewRegistryConfig(m map[string]RegistryConfig) docker.RegistryHosts {
 			docker.WithPlainHTTP(docker.MatchLocalhost),
 		),
 	)
+}
+
+// extractMirrorHostAndPath splits a mirror like "host/path" into its host
+// and path, the same way BuildKit does for buildkitd.toml mirrors.
+func extractMirrorHostAndPath(mirror string) (string, string) {
+	u, err := url.Parse(mirror)
+	if err != nil || u.Host == "" {
+		u, err = url.Parse("//" + mirror)
+	}
+	if err != nil || u.Host == "" {
+		return mirror, ""
+	}
+	return u.Host, strings.TrimRight(u.Path, "/")
 }
 
 func newDefaultClient() *http.Client {
