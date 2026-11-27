@@ -439,33 +439,28 @@ func prepareMultiDriverExports(so *client.SolveOpt, pushNames *string, insecureP
 	var pushPrepared bool
 	for i := range so.Exports {
 		e := &so.Exports[i]
-		switch e.Type {
-		case "oci", "tar":
-			return errors.Errorf("%s for multi-node builds currently not supported", e.Type)
-		case "image":
-			if pushPrepared {
-				continue
-			}
-			if ok, _ := strconv.ParseBool(e.Attrs["push"]); !ok {
-				continue
-			}
-			if *pushNames == "" {
-				*pushNames = e.Attrs["name"]
-				if *pushNames == "" {
-					return errors.Errorf("tag is needed when pushing to registry")
-				}
-				if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
-					*insecurePush = true
-				}
-			}
-			names, err := toRepoOnly(e.Attrs["name"])
-			if err != nil {
-				return err
-			}
-			e.Attrs["name"] = names
-			e.Attrs["push-by-digest"] = "true"
-			pushPrepared = true
+		if e.Type != "image" || pushPrepared {
+			continue
 		}
+		if ok, _ := strconv.ParseBool(e.Attrs["push"]); !ok {
+			continue
+		}
+		if *pushNames == "" {
+			*pushNames = e.Attrs["name"]
+			if *pushNames == "" {
+				return errors.Errorf("tag is needed when pushing to registry")
+			}
+			if ok, _ := strconv.ParseBool(e.Attrs["registry.insecure"]); ok {
+				*insecurePush = true
+			}
+		}
+		names, err := toRepoOnly(e.Attrs["name"])
+		if err != nil {
+			return err
+		}
+		e.Attrs["name"] = names
+		e.Attrs["push-by-digest"] = "true"
+		pushPrepared = true
 	}
 	return nil
 }
@@ -775,6 +770,24 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 
 			var pushNames string
 			var insecurePush bool
+			var ociExport *multiNodeOCIExport
+			var tarExport *multiNodeTarExport
+			if multiDriver {
+				defer func() {
+					if err != nil {
+						_ = ociExport.Close()
+						_ = tarExport.Close()
+					}
+				}()
+				ociExport, err = prepareMultiNodeOCIExport(reqForNodes[k])
+				if err != nil {
+					return err
+				}
+				tarExport, err = prepareMultiNodeTarExport(reqForNodes[k])
+				if err != nil {
+					return err
+				}
+			}
 			// Finish setup for every node before starting any build for this target.
 			clients := make([]*client.Client, len(dps))
 			for i, dp := range dps {
@@ -1038,6 +1051,10 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 				defer func() {
 					bh.completed(baseCtx, k, err)
 				}()
+				defer func() {
+					_ = ociExport.Close()
+					_ = tarExport.Close()
+				}()
 				ctx := baseCtx
 				if releaseTarget != nil {
 					defer releaseTarget()
@@ -1065,6 +1082,42 @@ func Build(ctx context.Context, nodes []builder.Node, opts map[string]Options, d
 					resp[k] = response
 					respMu.Unlock()
 					return nil
+				}
+
+				if tarExport != nil {
+					err := progress.Write(pw, fmt.Sprintf("merging tarballs from %d nodes", len(res)), func() error {
+						return tarExport.Merge(ctx)
+					})
+					if err != nil {
+						return err
+					}
+				}
+
+				if ociExport != nil {
+					err := progress.Write(pw, fmt.Sprintf("merging oci image index from %d nodes", len(res)), func() error {
+						indexAnnotations, err := extractIndexAnnotations(opt.Exports)
+						if err != nil {
+							return err
+						}
+						desc, err := ociExport.Merge(ctx, res, indexAnnotations)
+						if err != nil {
+							return err
+						}
+						dt, err := json.Marshal(desc)
+						if err != nil {
+							return err
+						}
+						response = &client.SolveResponse{
+							ExporterResponse: map[string]string{
+								exptypes.ExporterImageDigestKey:     desc.Digest.String(),
+								exptypes.ExporterImageDescriptorKey: base64.StdEncoding.EncodeToString(dt),
+							},
+						}
+						return nil
+					})
+					if err != nil {
+						return err
+					}
 				}
 
 				if pushNames != "" {

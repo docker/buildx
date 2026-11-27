@@ -69,6 +69,8 @@ var buildTests = []func(t *testing.T, sb integration.Sandbox){
 	testBuildRegistryExportAttestations,
 	testBuildRegistryExportNoDefaultOCIArtifact,
 	testBuildMultiNodePushFailureDoesNotPublishTag,
+	testBuildMultiNodeOCIExport,
+	testBuildMultiNodeTarExport,
 	testBuildTarExport,
 	testBuildMobyFromLocalImage,
 	testBuildDetailsLink,
@@ -655,6 +657,115 @@ LABEL org.mobyproject.buildkit.test.platform=$TARGETPLATFORM
 	dgst := inspectDigest(target1)
 	require.Equal(t, dgst, inspectDigest(target2))
 	require.Equal(t, dgst, inspectDigest(target3))
+}
+
+func testBuildMultiNodeOCIExport(t *testing.T, sb integration.Sandbox) {
+	if !isRemoteMultiNodeWorker(sb) {
+		t.Skip("only testing with remote multi-node worker")
+	}
+
+	dir := tmpdir(t, fstest.CreateFile("Dockerfile", []byte(`
+FROM scratch
+ARG TARGETPLATFORM
+LABEL org.mobyproject.buildkit.test.platform=$TARGETPLATFORM
+`), 0o600))
+
+	requireIndex := func(t *testing.T, idx ocispecs.Index) {
+		t.Helper()
+		seen := map[string]struct{}{}
+		for _, desc := range idx.Manifests {
+			if desc.Platform == nil || desc.Platform.OS == "unknown" {
+				continue
+			}
+			seen[platforms.Format(*desc.Platform)] = struct{}{}
+		}
+		require.Contains(t, seen, "linux/amd64")
+		require.Contains(t, seen, "linux/arm64")
+	}
+
+	t.Run("tar", func(t *testing.T) {
+		outdir := t.TempDir()
+		out, err := buildCmd(sb, withArgs(
+			"--platform=linux/amd64,linux/arm64",
+			"-t", "buildx/multinode-oci:latest",
+			fmt.Sprintf("--output=type=oci,dest=%s/result.tar", outdir),
+			dir,
+		))
+		require.NoError(t, err, out)
+
+		dt, err := os.ReadFile(filepath.Join(outdir, "result.tar"))
+		require.NoError(t, err)
+		m, err := testutil.ReadTarToMap(dt, false)
+		require.NoError(t, err)
+
+		require.Contains(t, m, ocispecs.ImageIndexFile)
+		var layout ocispecs.Index
+		require.NoError(t, json.Unmarshal(m[ocispecs.ImageIndexFile].Data, &layout))
+		require.Len(t, layout.Manifests, 1)
+		require.Equal(t, "docker.io/buildx/multinode-oci:latest", layout.Manifests[0].Annotations["io.containerd.image.name"])
+
+		blob := "blobs/sha256/" + layout.Manifests[0].Digest.Encoded()
+		require.Contains(t, m, blob)
+		var idx ocispecs.Index
+		require.NoError(t, json.Unmarshal(m[blob].Data, &idx))
+		requireIndex(t, idx)
+		for _, desc := range idx.Manifests {
+			require.Contains(t, m, "blobs/sha256/"+desc.Digest.Encoded())
+		}
+	})
+
+	t.Run("dir", func(t *testing.T) {
+		outdir := filepath.Join(t.TempDir(), "layout")
+		out, err := buildCmd(sb, withArgs(
+			"--platform=linux/amd64,linux/arm64",
+			fmt.Sprintf("--output=type=oci,dest=%s,tar=false", outdir),
+			dir,
+		))
+		require.NoError(t, err, out)
+
+		desc, err := ociindex.NewStoreIndex(outdir).Get("latest")
+		require.NoError(t, err)
+		require.NotNil(t, desc)
+
+		dt, err := os.ReadFile(filepath.Join(outdir, "blobs", "sha256", desc.Digest.Encoded()))
+		require.NoError(t, err)
+		var idx ocispecs.Index
+		require.NoError(t, json.Unmarshal(dt, &idx))
+		requireIndex(t, idx)
+	})
+}
+
+func testBuildMultiNodeTarExport(t *testing.T, sb integration.Sandbox) {
+	if !isRemoteMultiNodeWorker(sb) {
+		t.Skip("only testing with remote multi-node worker")
+	}
+
+	dir := tmpdir(t,
+		fstest.CreateFile("Dockerfile", []byte(`
+FROM scratch
+COPY foo /foo
+`), 0o600),
+		fstest.CreateFile("foo", []byte("bar"), 0o600),
+	)
+
+	outdir := t.TempDir()
+	out, err := buildCmd(sb, withArgs(
+		"--platform=linux/amd64,linux/arm64",
+		"--provenance=false",
+		fmt.Sprintf("--output=type=tar,dest=%s/result.tar", outdir),
+		dir,
+	))
+	require.NoError(t, err, out)
+
+	dt, err := os.ReadFile(filepath.Join(outdir, "result.tar"))
+	require.NoError(t, err)
+	m, err := testutil.ReadTarToMap(dt, false)
+	require.NoError(t, err)
+
+	for _, p := range []string{"linux_amd64", "linux_arm64"} {
+		require.Contains(t, m, p+"/foo")
+		require.Equal(t, "bar", string(m[p+"/foo"].Data))
+	}
 }
 
 func testBuildRegistryExportAttestations(t *testing.T, sb integration.Sandbox) {
