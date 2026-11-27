@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	stderrors "errors"
 	"io"
+	"strings"
 	"testing"
 
 	"github.com/docker/buildx/build"
@@ -14,6 +15,61 @@ import (
 	"github.com/moby/buildkit/util/progress/progressui"
 	"github.com/stretchr/testify/require"
 )
+
+func TestBakeListJSON(t *testing.T) {
+	tests := []struct {
+		name     string
+		listType string
+		bakeFile string
+		want     string
+	}{
+		{
+			name:     "empty configuration",
+			listType: "targets",
+			bakeFile: "# No targets defined\n",
+			want:     `[]`,
+		},
+		{
+			name:     "private target only",
+			listType: "targets",
+			bakeFile: `target "_private" {}`,
+			want:     `[]`,
+		},
+		{
+			name:     "no variables",
+			listType: "variables",
+			bakeFile: `target "_private" {}`,
+			want:     `[]`,
+		},
+		{
+			name:     "public target and group",
+			listType: "targets",
+			bakeFile: `
+target "_private" {}
+target "app" { description = "Build the app" }
+group "default" { targets = ["app"] }
+`,
+			want: `[
+				{"name":"app","description":"Build the app"},
+				{"name":"default","description":"app","group":true}
+			]`,
+		},
+	}
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			var out bytes.Buffer
+			dockerCli, err := command.NewDockerCli(
+				command.WithInputStream(io.NopCloser(strings.NewReader(tt.bakeFile))),
+				command.WithOutputStream(&out),
+			)
+			require.NoError(t, err)
+			cmd := bakeCmd(dockerCli, &rootOptions{})
+			cmd.SetArgs([]string{"--file", "-", "--progress=quiet", "--list=type=" + tt.listType + ",format=json"})
+			require.NoError(t, cmd.ExecuteContext(t.Context()))
+			require.JSONEq(t, tt.want, out.String())
+		})
+	}
+}
 
 func TestWriteBakeTargetSummary(t *testing.T) {
 	names := []string{"a-success", "b-failure", "c-dependent", "d-pending"}
