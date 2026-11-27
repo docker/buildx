@@ -2,6 +2,7 @@ package store
 
 import (
 	"os"
+	"path/filepath"
 	"testing"
 	"time"
 
@@ -62,6 +63,26 @@ func TestNodeLocking(t *testing.T) {
 		require.Fail(t, "transaction should have completed")
 	case <-ready:
 	}
+}
+
+func TestListWithInvalidLastActivity(t *testing.T) {
+	t.Parallel()
+	dir := t.TempDir()
+	s, err := New(confutil.NewConfig(nil, confutil.WithDir(dir)))
+	require.NoError(t, err)
+	txn, release, err := s.Txn()
+	require.NoError(t, err)
+	defer release()
+
+	require.NoError(t, txn.Save(&NodeGroup{Name: "first"}))
+	require.NoError(t, txn.Save(&NodeGroup{Name: "second"}))
+	require.NoError(t, os.WriteFile(filepath.Join(dir, activityDir, "first"), []byte("invalid"), 0600))
+	groups, err := txn.List()
+	require.NoError(t, err)
+	require.Len(t, groups, 2)
+	require.Equal(t, "first", groups[0].Name)
+	require.True(t, groups[0].LastActivity.IsZero())
+	require.False(t, groups[1].LastActivity.IsZero())
 }
 
 func TestNodeManagement(t *testing.T) {

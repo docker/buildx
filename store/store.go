@@ -169,7 +169,12 @@ func (t *Txn) GetLastActivity(ng *NodeGroup) (la time.Time, _ error) {
 		}
 		return la, err
 	}
-	return time.Parse(time.RFC3339, string(dt))
+	// Treat a malformed activity timestamp like a missing one.
+	lastActivity, err := time.Parse(time.RFC3339, string(dt))
+	if err != nil {
+		return la, nil
+	}
+	return lastActivity, nil
 }
 
 func (t *Txn) RemoveLastActivity(name string) error {
