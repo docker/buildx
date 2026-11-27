@@ -1232,3 +1232,31 @@ func chdir(t *testing.T, dir string) {
 		}
 	})
 }
+
+// Nested includes resolve each build context relative to its own file.
+// Regression coverage for https://github.com/docker/buildx/issues/3099.
+func TestComposeNestedIncludeContext(t *testing.T) {
+	for _, fileRelative := range []bool{false, true} {
+		t.Run(fmt.Sprint(fileRelative), func(t *testing.T) {
+			dir := t.TempDir()
+			chdir(t, dir)
+			for name, content := range map[string]string{
+				"b/b.yml": "include:\n  - ../c/c.yml\nservices:\n  b:\n    build: .\n",
+				"c/c.yml": "services:\n  c:\n    build: .\n",
+			} {
+				require.NoError(t, os.MkdirAll(filepath.Dir(name), 0755))
+				require.NoError(t, os.WriteFile(name, []byte(content), 0644))
+			}
+			cfg, err := ParseComposeFiles([]File{{
+				Name: "a.yml",
+				Data: []byte("include:\n  - b/b.yml\nservices:\n  a:\n    build: .\n"),
+			}}, nil, ParseOpt{FileRelativePaths: fileRelative})
+			require.NoError(t, err)
+			contexts := map[string]string{}
+			for _, target := range cfg.Targets {
+				contexts[target.Name] = *target.Context
+			}
+			require.Equal(t, map[string]string{"a": ".", "b": "b", "c": "c"}, contexts)
+		})
+	}
+}

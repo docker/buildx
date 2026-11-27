@@ -177,15 +177,23 @@ func (l localResourceLoader) Accept(_ string) bool {
 }
 
 func (l localResourceLoader) Load(_ context.Context, p string) (string, error) {
-	return l.abs(p), nil
+	// Keep physical paths absolute so nested includes do not apply WorkingDir twice.
+	return filepath.Abs(l.abs(p))
 }
 
 func (l localResourceLoader) Dir(originalPath string) string {
-	path := l.abs(originalPath)
-	if !l.isDir(path) {
-		path = l.abs(filepath.Dir(originalPath))
+	path, err := filepath.Abs(l.abs(originalPath))
+	if err != nil {
+		return originalPath
 	}
-	rel, err := filepath.Rel(l.WorkingDir, path)
+	if !l.isDir(path) {
+		path = filepath.Dir(path)
+	}
+	base, err := filepath.Abs(l.WorkingDir)
+	if err != nil {
+		return path
+	}
+	rel, err := filepath.Rel(base, path)
 	if err != nil {
 		return path
 	}
