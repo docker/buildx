@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.27
+# renovate: datasource=docker depName=alpine
 ARG ALPINE_VERSION=3.24
 
+# renovate: datasource=github-releases depName=psampaz/go-mod-outdated
 ARG MODOUTDATED_VERSION=v0.9.0
 
 FROM golang:${GO_VERSION}-alpine${ALPINE_VERSION} AS base

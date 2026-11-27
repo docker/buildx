@@ -1,8 +1,10 @@
 # syntax=docker/dockerfile:1
 
 ARG GO_VERSION=1.27
+# renovate: datasource=docker depName=alpine
 ARG ALPINE_VERSION=3.24
 
+# renovate: datasource=github-tags depName=golang/vuln
 ARG GOVULNCHECK_VERSION=v1.10.0
 ARG FORMAT="text"
 
